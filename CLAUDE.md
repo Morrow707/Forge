@@ -773,6 +773,27 @@ can install. Delete entries as a `beta` ships them.
   transaction ONLY on that 410 (`verifyAndFinishOnce`), with nothing granted, so it never comes
   back. `apple-product-ids.test.ts` pins the list, the statuses and that 410 is the one branch
   that finishes. Client half needs a build; server half ships on Render.
+- **A PRODUCTION SERVER STILL VERIFIES A SANDBOX PURCHASE, OR APP REVIEW FAILS** (2026-10-08).
+  Found writing the launch-day instructions. Apple's `SignedDataVerifier` is bound to ONE
+  environment and throws `INVALID_ENVIRONMENT` for a payload signed in the other, and
+  `getVerifier` built exactly one from `APPLE_IAP_ENVIRONMENT`. So the moment Render was
+  switched to `production`, every sandbox-signed purchase would have been refused -- and App
+  Review tests in-app purchases in the SANDBOX, as does every TestFlight tester and every
+  sandbox Apple ID. The reviewer would have paid at the sheet and been told the purchase could
+  not be verified. Apple's own guidance is production first, sandbox on a mismatch, and that is
+  `verifyWithFallback` now: one verifier per environment, built lazily, the configured one
+  tried first, sandbox only on `INVALID_ENVIRONMENT` (a bad signature is never retried), and a
+  notification's nested transaction decoded by the verifier that accepted the outer payload.
+  The grant records the environment Apple stamped, so a sandbox purchase on a production server
+  is distinguishable forever, and a `console.warn` names each one. While configured for
+  sandbox nothing changes (the production verifier needs `APPLE_APP_APPLE_ID` and is not
+  tried). `apple-verifier-falls-back-to-sandbox.test.ts` fakes the library's verifier with the
+  same constructor contract and exception and drives both paths through every configuration.
+  **THE FOUR RENDER VARIABLES FOR LAUNCH DAY ARE FOUR, NOT THREE:** `APPLE_APP_APPLE_ID` (the
+  numeric Apple ID on the app's App Information page; the production verifier refuses to
+  construct without it, legibly, in the log), `APPLE_IAP_ENVIRONMENT=production`,
+  `APPLE_IAP_LIVE=true`, `BILLING_LIVE=true`. Set the first one any time; it is inert in sandbox.
+  Server-side: ships on Render, no build.
 - Build **614** was cut 2026-10-05 right after 613, from the locked demo Free Agent's screen:
   the All Classes card read "Free while Forge is in beta" with nothing to tap, because it gated
   the PHONE on `BILLING_LIVE` too. Both rails now follow their own switch, the split the tier

@@ -29,6 +29,8 @@ import {
   Environment,
   NotificationTypeV2,
   Subtype,
+  VerificationException,
+  VerificationStatus,
   type ResponseBodyV2DecodedPayload,
 } from "@apple/app-store-server-library";
 import {
@@ -85,51 +87,102 @@ export type VerifiedAppleTransaction = {
   environment: string;
 };
 
-let cachedVerifier: SignedDataVerifier | null = null;
-let verifierInitAttempted = false;
+// ONE VERIFIER PER ENVIRONMENT, PRODUCTION TRIED FIRST, SANDBOX AS THE FALLBACK (2026-10-08).
+// Apple's library binds a SignedDataVerifier to ONE environment and throws
+// VerificationException(INVALID_ENVIRONMENT) for a payload signed in the other. With a single
+// verifier, the launch-day switch to "production" would have refused every sandbox-signed
+// purchase from that moment -- and App Review tests in-app purchases in the SANDBOX, as does
+// every TestFlight tester and every sandbox Apple ID Scott uses. The reviewer would have paid
+// at the sheet and been told "could not be verified". Apple's own guidance for exactly this is
+// to verify against production and, on an environment mismatch, retry against sandbox; that is
+// what verifyWithFallback does, in that order, and only that order. While the configured
+// environment is sandbox there is no production verifier to build (it needs APPLE_APP_APPLE_ID)
+// and none is tried. Every grant records which environment Apple stamped on the transaction,
+// so a sandbox purchase verified on a production server is distinguishable forever.
+const verifiers: Partial<Record<Environment, SignedDataVerifier | null>> = {};
+let rootCertCache: Buffer | null | undefined;
 
-// Lazy + memoized rather than constructed at module load -- a missing root
-// cert file shouldn't crash the whole server on boot (this is still
-// "framework, not required" until APPLE_IAP_LIVE and real App Store Connect
-// products exist), just make every verification attempt fail closed with a
-// clear, one-time log instead of a silent null forever.
-function getVerifier(): SignedDataVerifier | null {
-  if (cachedVerifier) return cachedVerifier;
-  if (verifierInitAttempted) return null;
-  verifierInitAttempted = true;
-  let rootCert: Buffer;
+function readRootCert(): Buffer | null {
+  if (rootCertCache !== undefined) return rootCertCache;
   try {
-    rootCert = fs.readFileSync(APPLE_ROOT_CERT_PATH);
+    rootCertCache = fs.readFileSync(APPLE_ROOT_CERT_PATH);
   } catch {
     console.error(
       `Apple IAP: missing ${APPLE_ROOT_CERT_PATH} -- see server/apple-root-certs/README.md. ` +
         "Every Apple transaction/notification will fail verification until this is added.",
     );
+    rootCertCache = null;
+  }
+  return rootCertCache;
+}
+
+// Lazy + memoized rather than constructed at module load -- a missing root
+// cert file shouldn't crash the whole server on boot, just make every
+// verification attempt fail closed with a clear, one-time log instead of a
+// silent null forever. A misconfiguration (production with no app id) fails
+// the same way: legible in the log, never thrown out of a request.
+function getVerifier(environment: Environment = APPLE_IAP_ENVIRONMENT): SignedDataVerifier | null {
+  if (environment in verifiers) return verifiers[environment] ?? null;
+  const rootCert = readRootCert();
+  if (!rootCert) {
+    verifiers[environment] = null;
     return null;
   }
-  // Constructed inside the try for the same reason the file read is: a
-  // misconfiguration must fail closed with something legible in the log, not
-  // throw out of whichever request happened to be the first to verify
-  // anything.
   try {
-    cachedVerifier = new SignedDataVerifier(
-      [rootCert],
-      true,
-      APPLE_IAP_ENVIRONMENT,
-      APPLE_BUNDLE_ID,
-      APPLE_APP_APPLE_ID,
-    );
+    verifiers[environment] = new SignedDataVerifier([rootCert], true, environment, APPLE_BUNDLE_ID, APPLE_APP_APPLE_ID);
   } catch (err) {
     console.error(
-      "Apple IAP: could not build the verifier --",
+      `Apple IAP: could not build the ${environment} verifier --`,
       err instanceof Error ? err.message : err,
-      APPLE_IAP_ENVIRONMENT === Environment.PRODUCTION && APPLE_APP_APPLE_ID === undefined
+      environment === Environment.PRODUCTION && APPLE_APP_APPLE_ID === undefined
         ? "Set APPLE_APP_APPLE_ID (the numeric App Store Connect app id) -- it is required in the production environment."
         : "",
     );
-    return null;
+    verifiers[environment] = null;
   }
-  return cachedVerifier;
+  return verifiers[environment] ?? null;
+}
+
+/** The environments to try, in order: the configured one, then sandbox when the configured one
+ * is production. Exported for the test; nothing else reads it. */
+export function verifierEnvironmentsToTry(configured: Environment = APPLE_IAP_ENVIRONMENT): Environment[] {
+  return configured === Environment.PRODUCTION ? [Environment.PRODUCTION, Environment.SANDBOX] : [Environment.SANDBOX];
+}
+
+function isEnvironmentMismatch(err: unknown): boolean {
+  return err instanceof VerificationException && err.status === VerificationStatus.INVALID_ENVIRONMENT;
+}
+
+/** Runs `verify` against the configured environment's verifier and, on an environment
+ * mismatch alone, against the sandbox verifier. Any other failure is thrown as it was, so a
+ * bad signature is still a bad signature. Returns the verifier that ACCEPTED the payload
+ * beside the result, because a notification carries a nested transaction that has to be
+ * decoded by the same one. Throws when no verifier could be built at all. */
+async function verifyWithFallback<T>(
+  verify: (verifier: SignedDataVerifier) => Promise<T>,
+): Promise<{ result: T; verifier: SignedDataVerifier; environment: Environment } | null> {
+  let lastMismatch: unknown = null;
+  let tried = 0;
+  for (const environment of verifierEnvironmentsToTry()) {
+    const verifier = getVerifier(environment);
+    if (!verifier) continue;
+    tried++;
+    try {
+      const result = await verify(verifier);
+      if (environment !== APPLE_IAP_ENVIRONMENT) {
+        console.warn(`Apple IAP: payload verified in ${environment} while this server is configured for ${APPLE_IAP_ENVIRONMENT} (a sandbox tester or App Review)`);
+      }
+      return { result, verifier, environment };
+    } catch (err) {
+      if (isEnvironmentMismatch(err)) {
+        lastMismatch = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+  if (tried === 0) return null;
+  throw lastMismatch ?? new VerificationException(VerificationStatus.INVALID_ENVIRONMENT);
 }
 
 /** The one real caller (POST /api/athlete/apple-iap/verify in routes.ts)
@@ -148,10 +201,10 @@ export type AppleVerifyResult =
   | { ok: false; reason: AppleVerifyRefusalReason; productId?: string };
 
 export async function verifyAppleTransaction(signedTransactionInfo: string): Promise<AppleVerifyResult> {
-  const verifier = getVerifier();
-  if (!verifier) return { ok: false, reason: "not_configured" };
   try {
-    const decoded = await verifier.verifyAndDecodeTransaction(signedTransactionInfo);
+    const verified = await verifyWithFallback((v) => v.verifyAndDecodeTransaction(signedTransactionInfo));
+    if (!verified) return { ok: false, reason: "not_configured" };
+    const decoded = verified.result;
     if (!decoded.originalTransactionId || !decoded.productId || decoded.expiresDate == null) {
       console.error("Apple IAP: transaction decoded without an id, a product or an expiry", {
         originalTransactionId: decoded.originalTransactionId,
@@ -305,10 +358,11 @@ export type VerifiedAppleNotification = {
  * any verification failure -- same fail-closed contract as
  * verifyAppleTransaction. */
 export async function verifyAppleNotification(signedPayload: string): Promise<VerifiedAppleNotification | null> {
-  const verifier = getVerifier();
-  if (!verifier) return null;
   try {
-    const payload: ResponseBodyV2DecodedPayload = await verifier.verifyAndDecodeNotification(signedPayload);
+    const verified = await verifyWithFallback((v) => v.verifyAndDecodeNotification(signedPayload));
+    if (!verified) return null;
+    const { verifier } = verified;
+    const payload: ResponseBodyV2DecodedPayload = verified.result;
     const notificationType = payload.notificationType ?? "";
     const kind: VerifiedAppleNotification["kind"] = RENEWAL_TYPES.has(notificationType)
       ? "renewed"
