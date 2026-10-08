@@ -3360,7 +3360,8 @@ export type FormFaultEvidence = {
   suppressedBecause?:
     | "grip_span_too_short"
     | "perspective_rotates_the_grip"
-    | "no_samples";
+    | "no_samples"
+    | "movement_is_a_hinge";
   /** Whatever else the decision read. Free-form on purpose: a rule's inputs differ per rule, and
    *  a fixed shape here would be edited every time one is. */
   inputs?: Record<string, number | string | null>;
@@ -3383,6 +3384,37 @@ export type FormFaultEvidence = {
 // ROI landmarker off the same list -- knee/hip/ankle refinement is only
 // ever useful for the same movements this already gates knee faults to.
 export const LOWER_BODY_MOVEMENT_TYPES = new Set(["Squat", "Hinge", "Lunge"]);
+
+// A HINGE IS NOT A SHALLOW SQUAT.
+//
+// The set above answers "are the legs doing work here", which is the right
+// question for loading the ROI landmarker and for the knee/hip faults that
+// describe the legs. It is the WRONG question for the two faults whose
+// SENTENCE assumes a squat pattern:
+//
+//   "knees only reached ~148 degrees, aim to break parallel"
+//   "excessive forward lean (~N degrees from vertical) at the bottom"
+//
+// Both are correct coaching for a squat or a lunge and both are backwards for
+// a hinge, where soft knees and a folded torso ARE the movement. Scott's
+// Romanian Deadlift, 2026-10-08, 135lb x 5: the app told him his knees only
+// reached ~148deg and to break parallel, on a lift whose own library
+// instruction reads "Soft knees, push hips back". 148deg is a correct RDL.
+// There is no parallel on an RDL to break, and an athlete who followed that
+// cue would turn the lift into a bad squat.
+//
+// Third instance of one error class in four days -- the RDL's height ruler
+// (2026-10-05) and the shoulder press's seated label (2026-10-06) were both a
+// hinge or a posture being judged by a standing-squat assumption. The other
+// three lower-body faults (knee valgus, pelvic drop, heel rise) describe
+// something real on a hinge too and keep the wider gate; only the two whose
+// words contradict the movement are narrowed here.
+//
+// NOT a per-lift number (see CLAUDE.md, "what its own numbers means"): nothing
+// here is fitted and nothing could be fitted from one take. It is a rule about
+// which sentence belongs to which movement pattern, so it stays shared and
+// every hinge in the library gets it at once.
+export const SQUAT_PATTERN_MOVEMENT_TYPES = new Set(["Squat", "Lunge"]);
 
 // "Tilt" and "drifted off a straight line" only describe something real when
 // both hands share one rigid implement -- for anything else (dumbbells,
@@ -3738,6 +3770,12 @@ export function detectFormFaults(
   // that contradicts the exercise's own name.
   const isKneeDrivenMovement =
     movementType != null && LOWER_BODY_MOVEMENT_TYPES.has(movementType) && kneeRangeOfMotion > 25;
+  // The narrower gate for the two faults whose wording assumes a squat
+  // pattern -- see SQUAT_PATTERN_MOVEMENT_TYPES' own comment. A hinge still
+  // has the number measured and recorded below; it just never hears
+  // "break parallel".
+  const isSquatPatternMovement =
+    isKneeDrivenMovement && movementType != null && SQUAT_PATTERN_MOVEMENT_TYPES.has(movementType);
 
   // "Overhead" for the SET as a whole: most tracked frames had both wrists
   // above the nose (see frameIsOverhead in the loop above) -- an overhead
@@ -3749,21 +3787,51 @@ export function detectFormFaults(
     trackedOverheadFrameCount > 0 ? overheadFrameCount / trackedOverheadFrameCount : 0;
   const isOverheadSet = overheadFraction > 0.5;
 
-  if (context === "lift" && isKneeDrivenMovement && minKneeAngle > thresholds.minKneeAngleDeg) {
-    faults.push({
+  // THE NUMBER IS RECORDED WHETHER OR NOT THE SENTENCE IS SHOWN. Scott,
+  // 2026-10-08, reading the RDL's depth flag: "What's that number, and where
+  // did it come from?" -- and it could not be answered from the export,
+  // because no depth evidence had ever been written. The five lower-body
+  // faults below each note what they read and what they were judged against,
+  // so the next one of these is one column lookup rather than a code read.
+  if (context === "lift" && isKneeDrivenMovement && kneeAngles.length) {
+    const wouldFire = minKneeAngle > thresholds.minKneeAngleDeg;
+    const fired = wouldFire && isSquatPatternMovement;
+    if (fired) {
+      faults.push({
+        code: "shallow_depth",
+        label: `Depth: knees only reached ~${Math.round(minKneeAngle)}°, aim to break parallel`,
+      });
+    }
+    note({
       code: "shallow_depth",
-      label: `Depth: knees only reached ~${Math.round(minKneeAngle)}°, aim to break parallel`,
+      fired,
+      measured: Math.round(minKneeAngle * 10) / 10,
+      threshold: thresholds.minKneeAngleDeg,
+      ...(wouldFire && !fired ? { suppressedBecause: "movement_is_a_hinge" as const } : {}),
+      inputs: {
+        movementType: movementType ?? null,
+        kneeRangeOfMotionDeg: Math.round(kneeRangeOfMotion * 10) / 10,
+        kneeAngleSamples: kneeAngles.length,
+      },
     });
   }
 
   if (isKneeDrivenMovement && valgusRatios.length) {
     const minValgusRatio = percentile(valgusRatios, 0.05);
-    if (minValgusRatio < thresholds.valgusRatioMin) {
+    const fired = minValgusRatio < thresholds.valgusRatioMin;
+    if (fired) {
       faults.push({
         code: "knee_valgus",
         label: "Knees caved inward past the ankles on at least one rep",
       });
     }
+    note({
+      code: "knee_valgus",
+      fired,
+      measured: Math.round(minValgusRatio * 1000) / 1000,
+      threshold: thresholds.valgusRatioMin,
+      inputs: { movementType: movementType ?? null, samples: valgusRatios.length },
+    });
   }
 
   if (isKneeDrivenMovement && hipDropRatios.length) {
@@ -3773,12 +3841,20 @@ export function detectFormFaults(
     // Same cutoff as sprint-tracking.ts's DEFAULT_SKILL_FAULT_THRESHOLDS.
     // hipDropRatioThreshold -- same physical sign (Trendelenburg), same
     // reasonable default.
-    if (maxHipDropRatio > 0.12) {
+    const fired = maxHipDropRatio > 0.12;
+    if (fired) {
       faults.push({
         code: "pelvic_drop",
         label: "Hip dropped on one side during the rep, work on single-leg glute strength",
       });
     }
+    note({
+      code: "pelvic_drop",
+      fired,
+      measured: Math.round(maxHipDropRatio * 1000) / 1000,
+      threshold: 0.12,
+      inputs: { movementType: movementType ?? null, samples: hipDropRatios.length },
+    });
   }
 
   if (context === "lift" && isKneeDrivenMovement && heelRiseReadings.length) {
@@ -3788,12 +3864,20 @@ export function detectFormFaults(
     // jitter (this is a same-frame, real-world-meters measurement, same
     // reliability class as the knee/ankle width readings above), well
     // under a heel actually coming up onto the toes.
-    if (maxHeelRise > 0.03) {
+    const fired = maxHeelRise > 0.03;
+    if (fired) {
       faults.push({
         code: "ankle_mobility_limit",
         label: "Heel lifted off the ground at depth, likely limited ankle dorsiflexion",
       });
     }
+    note({
+      code: "ankle_mobility_limit",
+      fired,
+      measured: Math.round(maxHeelRise * 1000) / 1000,
+      threshold: 0.03,
+      inputs: { movementType: movementType ?? null, samples: heelRiseReadings.length },
+    });
   }
 
   if (isKneeDrivenMovement && torsoAngles.length) {
@@ -3806,16 +3890,42 @@ export function detectFormFaults(
     // additionally flagged for it, the OHS-specific fault already covers
     // the same underlying angle more precisely.
     if (movementType === "Squat" && isOverheadSet) {
-      if (maxTorsoAngle > 30) {
+      const fired = maxTorsoAngle > 30;
+      if (fired) {
         faults.push({
           code: "thoracic_extension_loss",
           label: `Losing thoracic extension, torso rounded ~${Math.round(maxTorsoAngle)}° from vertical, more than an overhead squat can afford`,
         });
       }
-    } else if (maxTorsoAngle > thresholds.maxTorsoLeanDeg) {
-      faults.push({
+      note({
+        code: "thoracic_extension_loss",
+        fired,
+        measured: Math.round(maxTorsoAngle * 10) / 10,
+        threshold: 30,
+        inputs: { movementType, samples: torsoAngles.length, overheadFraction: Math.round(overheadFraction * 100) / 100 },
+      });
+    } else {
+      // The shallow-depth fault's twin, and wrong on a hinge for the same
+      // reason: a folded torso IS the Romanian deadlift. It did not fire on
+      // Scott's 2026-10-08 RDL only because that take's torso read came back
+      // near-upright (measuredPosture.torsoFromVerticalDeg 7.1 on a hinge,
+      // itself open and recorded in docs/camera-tracking-notes.md) -- a
+      // second measurement problem is not a gate, so the gate goes in.
+      const wouldFire = maxTorsoAngle > thresholds.maxTorsoLeanDeg;
+      const fired = wouldFire && isSquatPatternMovement;
+      if (fired) {
+        faults.push({
+          code: "forward_lean",
+          label: `Excessive forward lean (~${Math.round(maxTorsoAngle)}° from vertical) at the bottom`,
+        });
+      }
+      note({
         code: "forward_lean",
-        label: `Excessive forward lean (~${Math.round(maxTorsoAngle)}° from vertical) at the bottom`,
+        fired,
+        measured: Math.round(maxTorsoAngle * 10) / 10,
+        threshold: thresholds.maxTorsoLeanDeg,
+        ...(wouldFire && !fired ? { suppressedBecause: "movement_is_a_hinge" as const } : {}),
+        inputs: { movementType: movementType ?? null, samples: torsoAngles.length },
       });
     }
   }

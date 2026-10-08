@@ -4161,3 +4161,131 @@ acting on a learned pattern) is the next step and wants the evidence first.
 object detector is inert and Rule #4's "name what it DOES have — a box, a ground plane — or
 record explicitly that it has none" is unmet. That is a separate change and is named here so it
 is not mistaken for finished.
+
+## Three lifts beside OVR, build 639, 2026-10-08 — and the sentence a hinge was told
+
+Scott filmed a Romanian Deadlift, a Box Jump and a Back Squat on 2026-10-08 and sent four OVR
+screenshots beside them, then asked one question about what the app had said to him:
+
+> "For the deadlift, knees only reached -148? What's that number, and where did it come from?"
+
+### The answer: 148 degrees, and it was squat coaching on a hinge
+
+It was **148 degrees**, not −148. The dash was the app's own `~`. The number is the interior
+hip–knee–ankle angle at the deepest point of the set — the 5th percentile across every tracked
+frame, read off the 3D body pose by `frameKneeAngles` → `percentile(kneeAngles, 0.05)` in
+`client/src/lib/pose-tracking.ts`. It cannot go negative: `worldAngleAtVertex` is an `acos` and
+returns 0–180.
+
+Where it came from is the finding. The sentence beside it read **"aim to break parallel"**, on a
+Romanian deadlift — a lift whose own library instruction reads *"Soft knees, push hips back and
+lower the bar along your legs."* **148 degrees IS a correct RDL.** An athlete who followed that
+cue would turn a hinge into a bad squat.
+
+The cause is one set doing two jobs. `LOWER_BODY_MOVEMENT_TYPES` = `{Squat, Hinge, Lunge}` answers
+*"are the legs doing work here"*, which is the right question for loading the ROI landmarker and
+for the faults that describe the legs. The depth fault was gated on it, and the depth fault's
+WORDS assume a squat pattern. So did `forward_lean`'s ("excessive forward lean at the bottom") —
+on a hinge, a folded torso is the rep.
+
+`SQUAT_PATTERN_MOVEMENT_TYPES` = `{Squat, Lunge}` is the narrower gate, and only those two faults
+move behind it. Knee valgus, pelvic drop and heel rise all describe something real on a deadlift —
+Scott's own take was flagged for a hip drop and that read is fair — so they keep the wider gate. A
+sweep that quietly took them too would be a refusal nobody asked for.
+
+**Third instance of one error class in four days.** The RDL's height ruler (2026-10-05, a hinge
+judged by a standing stature, −7.0%) and the Barbell Shoulder Press's seated label (2026-10-06, a
+posture that cost it a ruler) were the same shape. Here it is a SENTENCE rather than a ruler.
+It is a RULE, not a fitted number — so it is shared, `FITTED_OVERRIDES` stays empty, and every
+hinge in the library gets it at once.
+
+**`forward_lean` did not fire on this take, and that is not a reason to leave it.** It stayed quiet
+only because the capture's torso read came back near-upright on a hinge
+(`measuredPosture.torsoFromVerticalDeg` **7.13**, on 436 frames, where an RDL should approach 90).
+A second measurement problem is not a gate. That 7.13 is **open** and is the next thing to read on
+a hinge.
+
+### And the number never reached the export, which is why it had to be asked about
+
+`faultEvidence` carried `bar_path_drift` and `bar_tilt` and nothing else, so the depth figure the
+athlete was shown could not be looked up — it had to be reconstructed from the code. All five
+lower-body faults now note what they read and what they were judged against, firing or not, and a
+suppressed one says `suppressedBecause: "movement_is_a_hinge"`. Records and gates nothing
+(Rule #1). `a-hinge-is-not-a-shallow-squat.test.ts`, mutation-tested in both directions.
+
+Known gap, recorded not filled: only `av-bar-tracker-dialog.tsx` passes an evidence array.
+The web `bar-tracker-dialog.tsx` and `av-jump-tracker-dialog.tsx` pass none, so their notes go
+nowhere. The gate itself is inside `detectFormFaults` and applies to all three.
+
+### What the three takes measured
+
+| | Forge | OVR | |
+|---|---|---|---|
+| **Back Squat** 135lb × 5 | ROM 69.1 cm | 74.2 cm (29.22 in) | **−6.9%** |
+| | mean 0.75 | 0.852 | **−12.0%** |
+| | peak 1.29 | 1.27 | **+1.6%** |
+| **Romanian Deadlift** 135lb × 5 | ROM 61.8 cm | 64.2 cm (25.28 in) | **−3.7%** |
+| | mean 0.72 | 1.002 | **−28.1%** |
+| | peak 0.72 | 1.70 | **−57.6%** |
+| **Box Jump**, 24 in (61.0 cm) box | jump height 67.2 cm | — | clears the box by 6.2 cm |
+
+**The RDL's range of motion at −3.7% is the hinge fix holding.** Its scale candidates are
+`shoulder_width` and `body_3d` with **no height ruler** — exactly what build 621 arranged — and
+the result is the second-best hinge read this pipeline has produced.
+
+**The Back Squat is the refit case 2026-10-05 asked for, and it is now well-posed.** That note
+said `BIACROMIAL_HEIGHT_FRACTION` was "refittable only once a standing lift is read against the
+sensor with the hinge fix in — the thing to look for in the next export." This is that take, and
+it says something different from either earlier guess:
+
+| candidate | scale (m/unit) | weight | vs. the 0.0039867 the sensor requires |
+|---|---|---|---|
+| `height` | 0.0033565 | **66.7%** | **−15.8%** |
+| `body_3d:femur` | 0.0041736 | 16.7% | +4.7% |
+| `shoulder_width` | 0.0046111 | 16.7% | +15.7% |
+| `depth` | 0.0043049 | 0% (zeroed by design) | +8.0% |
+
+Truth sits between `body_3d` and `depth`, and **the dominant voter is the one furthest from it**:
+the height ruler carries two thirds of the blend on a correctly-labelled standing lift and reads
+15.8% low. **NOT refitted.** One standing take is one take, 2026-10-06 measured `shoulder_width` as
+the *least* biased voter across its own session (+5.5% median) and this take puts it at +15.7%,
+and a constant fitted at the end of a session is how a bad one gets in. The thing to look for is a
+second standing lift against the sensor with this build on the phone.
+
+### Two faults in the numbers, named and not fitted
+
+**THE RDL'S PEAK VELOCITY IS UNUSABLE AND THE EXPORT SAYS SO IN ONE FIELD.**
+`trace.repPeaksFlooredToMean: 4` — on **all four** reps the instantaneous peak came out *below*
+the rep's own mean (`peakFloored = rawPeak < mean` in `bar-tracking.ts`), which is impossible, so
+each peak was set equal to its mean. That is why Forge reports peak = mean = 0.72 against the
+OVR's 1.70. The Back Squat on the same session has `repPeaksFlooredToMean: 0`. Two more signs
+point the same way and all three are about the hinge's phases, not its scale: Forge found **4 reps
+on a 5-rep set**, and its eccentric reads *faster* than its concentric (1.01 against 0.72), which
+is backwards for an RDL. The suspicion is that the drive window is landing on the wrong phase for
+a movement that starts by going DOWN. **Not fitted** — this wants a hinge filmed with the window
+diagnostics read, not a constant.
+
+**The concentric window is long on both barbell lifts**, which the 2026-10-07 separation makes
+readable: Back Squat ROM −6.9% against mean −12.0% is a window **+5.8%** long; the RDL's −3.7%
+against −28.1% is **+33.9%**, on a set whose rep count is wrong, so it may be the segmentation
+rather than the trim.
+
+**The Box Jump is the first one in range.** 67.2 cm onto a 24 in (61.0 cm) box, clearing it by
+6.2 cm — against 238.4 cm before build 621's flagged-rep fix and 0.636 of truth before 619's
+gravity-ruler stand-down. It returned no rep breakdown (`trace: null`, `setRangeOfMotion: null`),
+which is the jump path and not a fault, but means nothing per-rep is readable on it.
+
+**The med-ball rotation has no Forge capture.** Scott filmed cleans in place of it and the OVR has
+the set; this export's only 2026-10-08 rows are the three above. Same shape as the 2026-10-04 med
+ball that never reached the server, and worth a look at the debug console's `SAVE` lines before
+the next session.
+
+### Also confirmed working on the phone from this export
+
+The RDL's `axisForeshortening.ratio` is **1.000** and the squat's **1.092**; `cadenceHeld` is
+0.934 / 1.000 with 0 dropouts on the squat; `objectGate.gripAcrossBodyFraction` 0.997 / 0.999;
+`measuredPosture` present on both. `plateScaleIfAdmitted` is 0.001113 and 0.001147 against the
+~0.0039 the takes need — **3.5× and 3.4× too small**, the same factor as 2026-10-07 and the same
+cause: the CoreML model was trained on close-ups. All 266 training images are labelled now
+(43 boxes → 1611, barbell 3 → 146) and **training the model has still not been run.** It is the
+highest-value camera work in the repo.

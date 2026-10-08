@@ -2753,3 +2753,44 @@ the athlete's own coaching; `researchDataConsent` is opt-IN inclusion in the mir
 "Didn't opt out" and "consented to research" are different populations. Any plan
 that says "keep the non-opted-out athletes' data" means widening mirror membership,
 which is a consent question, not a deletion change.
+- **THE APP TOLD A HINGE TO BREAK PARALLEL** (2026-10-08). Scott, on a Romanian Deadlift filmed
+  135lb x 5: "For the deadlift, knees only reached -148? What's that number, and where did it come
+  from?" It was **148 DEGREES**, not -148 -- the dash was the app's own `~`. The number is the
+  interior hip-knee-ankle angle at the deepest point of the set, the 5th percentile across every
+  tracked frame (`frameKneeAngles` -> `percentile(kneeAngles, 0.05)`); it cannot go negative,
+  `worldAngleAtVertex` is an `acos`.
+  **The sentence beside it is the bug.** "Aim to break parallel" is squat coaching, and the RDL's
+  own library instruction reads "Soft knees, push hips back". 148 degrees IS a correct RDL, and an
+  athlete who followed that cue would turn a hinge into a bad squat. `LOWER_BODY_MOVEMENT_TYPES`
+  (`{Squat, Hinge, Lunge}`) answers "are the legs doing work here" -- right for the ROI landmarker
+  and for the faults that describe the legs, wrong for the two faults whose WORDS assume a squat.
+  `SQUAT_PATTERN_MOVEMENT_TYPES` (`{Squat, Lunge}`) gates `shallow_depth` and its twin
+  `forward_lean` ("excessive forward lean at the bottom" -- on a hinge, a folded torso IS the rep).
+  Knee valgus, pelvic drop and heel rise describe something real on a deadlift and KEEP the wider
+  gate; taking them too would be a refusal nobody asked for. A RULE, not a fitted number, so it is
+  shared and `FITTED_OVERRIDES` stays empty. **Third instance of one error class in four days**
+  (the RDL's height ruler 10-05, the shoulder press's seated label 10-06) and the first where what
+  was wrong was a SENTENCE rather than a ruler.
+  **AND THE NUMBER HE ASKED ABOUT HAD NEVER REACHED AN EXPORT**, which is why it had to be
+  reconstructed from the code: `faultEvidence` carried `bar_path_drift` and `bar_tilt` and nothing
+  else. All five lower-body faults now note what they read and what they were judged against,
+  firing or not, with `suppressedBecause: "movement_is_a_hinge"` on a held sentence. Records and
+  gates nothing (Rule #1). `a-hinge-is-not-a-shallow-squat.test.ts`, mutation-tested both ways.
+  Known gap, recorded not filled: only `av-bar-tracker-dialog.tsx` passes an evidence array.
+  **`forward_lean` did not fire on this take and that is NOT a reason to leave it** -- it stayed
+  quiet only because `measuredPosture.torsoFromVerticalDeg` read **7.13** on a hinge over 436
+  frames, where an RDL should approach 90. A second measurement problem is not a gate. That 7.13
+  is open and is the next thing to read on a hinge.
+  **The same session is the refit case 2026-10-05 asked for, and NOTHING was refitted.** Back Squat
+  ROM -6.9% / mean -12.0% / peak +1.6%; RDL ROM **-3.7%** (the hinge fix holding, no height ruler
+  in its candidate list); Box Jump 67.2cm onto a 24in box, the first one in range. On the squat the
+  `height` ruler carries **66.7%** of the blend and reads **-15.8%** against the scale the sensor
+  requires, while `body_3d` (+4.7%) and `depth` (+8.0%) bracket it -- but 10-06 measured
+  `shoulder_width` as the LEAST biased voter and this take puts it at +15.7%, so one standing take
+  is not a fit. **And the RDL's peak velocity is unusable**: `trace.repPeaksFlooredToMean: 4`, all
+  four reps' instantaneous peak came out BELOW the rep's own mean and was set equal to it (hence
+  peak == mean == 0.72 against the OVR's 1.70), beside 4 reps found on a 5-rep set and an eccentric
+  reading faster than the concentric -- three signs pointing at the drive window landing on the
+  wrong phase for a movement that starts by going DOWN. Named, not fitted.
+  See docs/camera-tracking-notes.md, "Three lifts beside OVR, build 639, 2026-10-08".
+  Calibration work: uploaded on commit.
