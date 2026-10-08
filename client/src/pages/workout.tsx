@@ -60,6 +60,7 @@ import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog
 import { SetVideoPreviewDialog, SetVideoCompareDialog } from "@/components/set-video-review";
 import { extractVideoFrames } from "@/lib/video-frames";
 import type { RepMetrics } from "@/lib/bar-tracking";
+import { movementProfileKeyFor } from "@shared/movement-profile-key";
 import { repsForSetBest } from "@/lib/jump-tracking";
 import type { JumpSetMetrics } from "@/lib/jump-tracking";
 import type { PoseFrame } from "@/lib/pose-tracking";
@@ -3168,10 +3169,11 @@ function ExerciseLogContent({
     return preloadWhenIdle(TRACKER_DIALOGS_FOR_THIS_PLATFORM());
   }, [cameraAllowed, user?.trackingOptOut]);
 
-  const movementTypeForTracking =
-    item.trackingLevel === "bar_path" || item.trackingLevel === "full"
-      ? item.movementType
-      : item.trackingLevel;
+  // THE ONE DERIVATION, shared with the route that validates a published profile and the query
+  // that gathers evidence for one. This logic lived only here, and the admin apply route
+  // validated against a DIFFERENT key space -- so the profile this line asks for could never be
+  // published for a bar lift. See shared/movement-profile-key.ts.
+  const movementTypeForTracking = movementProfileKeyFor(item.trackingLevel, item.movementType);
   const { data: activeMovementProfile } = useQuery<MovementProfile | null>({
     queryKey: ["/api/movement-profiles/active", movementTypeForTracking],
     enabled: item.trackingLevel !== "none" && !!movementTypeForTracking,

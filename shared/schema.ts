@@ -1,4 +1,5 @@
 import { BRAND_HEADING_FONT_IDS, BRAND_SLUG_PATTERN } from "./branding-options";
+import { profileKeysFor } from "./movement-profile-key";
 import {
   pgTable,
   serial,
@@ -7944,9 +7945,15 @@ export type SendMovementKnowledgeChatMessageInput = z.infer<typeof sendMovementK
 //
 // Sourced from trackingLevelEnum's own values rather than retyped, minus "none" -- a profile for
 // "no tracking" is not a thing.
-export const PROFILED_MOVEMENT_TYPES = trackingLevelEnum.enumValues.filter(
-  (v) => v !== "none",
-) as Exclude<(typeof trackingLevelEnum.enumValues)[number], "none">[];
+/* EVERY KEY SOMETHING ACTUALLY ASKS FOR, which is not what this used to be.
+ *
+ * This was trackingLevelEnum minus "none" -- the CAPTURE MODES -- and workout.tsx asks for a bar
+ * lift's profile under its MOVEMENT PATTERN ("Squat", "Hinge") instead. So the apply route
+ * accepted exactly the keys nothing reads and rejected every key a barbell lift uses, and no bar
+ * lift could have a profile at all: every squat, bench, row, deadlift and press has run on the
+ * hardcoded defaults with a 201 coming back when an admin tried to change that. See
+ * shared/movement-profile-key.ts for the full account and the one derivation both sides share. */
+export const PROFILED_MOVEMENT_TYPES = profileKeysFor(trackingLevelEnum.enumValues);
 
 export const movementProfileTypeSchema = z.enum(
   PROFILED_MOVEMENT_TYPES as [string, ...string[]],
