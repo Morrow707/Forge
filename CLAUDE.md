@@ -2815,3 +2815,55 @@ which is a consent question, not a deletion change.
   wrong phase for a movement that starts by going DOWN. Named, not fitted.
   See docs/camera-tracking-notes.md, "Three lifts beside OVR, build 639, 2026-10-08".
   Calibration work: uploaded on commit.
+
+## Launch-checklist decisions, 2026-10-08 (Scott, working the next ten)
+
+Recorded here because every one of them is a question somebody will otherwise re-open, and two
+of them look like bugs to a fresh reader.
+
+- **THE FAST MODEL IS WHATEVER CLAUDE'S FASTEST IS, AND TODAY THAT IS HAIKU 5.5.** Scott: "i
+  want the fastest models that claude offers, which is haiku 5.5." The code default is already
+  `claude-haiku-5-5`. **The remaining step is NOT in the code**: `ANTHROPIC_FAST_MODEL` is
+  `sync: false` in `render.yaml:158`, so a value pinned in the Render dashboard silently wins.
+  Clear it or set it to `claude-haiku-5-5`, or the switch does nothing in production and the
+  bill stays 7-8x. When a faster model ships, this is a one-line change plus a `RATES` row --
+  see the Haiku 5.5 entry for the two properties (`tool_choice` forced, parse-by-type) that
+  keep the lane safe.
+- **THE COACHES CORNER TRACK QUIZ KEEPS SENDING ITS ANSWER KEY, DELIBERATELY. DO NOT "FIX" IT.**
+  Scott, asked directly: "keep it how it is, expand the answer after." `routes.ts` spreads the
+  question row so multiple-choice answers keep `isCorrect`, which means a coach can read the key
+  in the network tab before answering. That was raised as a finding, put to Scott with the
+  recommendation to strip it, and he declined. The reason the key is there is the behaviour he
+  wants: `academy-quiz.tsx` opens an answer's explanation on tap AFTER submitting ("Tap a
+  multiple-choice answer to see why"), which is self-development material working as intended.
+  The athlete class reader is the opposite and stays that way -- it strips the key before it goes
+  out, because a class quiz is a coach's view of an athlete. Two libraries, two answers, both
+  chosen.
+- **FULL PERSONALIZATION IS NOT GOING TO APPLE.** Scott: "we won't be adding to apple, which is
+  fine." It stays admin-assigned at $24.99, `COACH_PURCHASABLE_ADD_ON_ORDER` stays
+  `["coaches_corner"]`, and the four-step order trap recorded in the add-ons section is now moot
+  rather than pending. This is a working state, not an unfinished one.
+- **`INSTITUTIONAL_AGREEMENT_SIGNER_NAME` / `_TITLE` stay at the defaults**, "Scott Morrow" and
+  "Founder". Confirmed, not assumed.
+- **The six newer Forge classes are read and accepted** (Fundamentals, football receiving,
+  soccer attacking, volleyball, wrestling, track sprinting). Scott: "done."
+
+**FLAGGED AND NOT ACTED ON: "everything paid for by coaches will be through the website which
+bypasses apple" is TRUE of the coach plan and NOT true of Coaches Corner today.** Scott said it
+while declining Full Personalization at Apple, so it reads as being about that; but taken
+literally it would mean unselling something already built, tested and submitted, so it is
+written down rather than acted on.
+- The COACH PLAN ($4 an athlete in bands) is web-only and always was -- Guideline 3.1.3(c)
+  allows a program to be billed by card outside Apple, and the app may not price it or point at
+  it (`native-paywall-never-points-at-the-web.test.ts`). Nothing to change.
+- COACHES CORNER IS SOLD THROUGH APPLE TODAY. `client/src/pages/coach/coaches-corner.tsx:176`
+  calls `purchaseCoachAddOn("coaches_corner")` through StoreKit on iOS, the product exists in the
+  Coach Add-ons group, it was submitted with 1.1, the review notes say a coach can buy exactly
+  this one thing, and build 643 proved the purchase in sandbox.
+- **The two are different rules, not one.** A program's roster subscription is a B2B purchase;
+  Coaches Corner is a digital subscription a coach CONSUMES INSIDE THE APP, which 3.1.1 requires
+  to be sold through IAP. Moving it to the web and pointing the app at a browser is the exact
+  steer that guideline forbids and that the scan above exists to catch -- so it is not a switch,
+  it is a rejection risk during an open review. If that is genuinely wanted it is its own
+  decision, taken after 1.0 is approved, and it means removing the in-app purchase path
+  entirely rather than adding a web one beside it.
