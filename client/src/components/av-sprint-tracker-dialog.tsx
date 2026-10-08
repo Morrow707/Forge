@@ -204,6 +204,18 @@ export function AvSprintTrackerDialog({
   const manualStartRef = useRef<number | null>(null);
 
   const [step, setStepState] = useState<Step>("warning");
+  /* A FAILED READ RETURNS TO THE SETUP STEP, AND THE SETUP STEP PRESCRIBES A VIEW.
+   *
+   * stopCaptureAndAnalyze sends the athlete back to "calibrate" when the analysis comes back
+   * empty, "so the coach can just try again rather than getting stuck on a dead-end step" --
+   * which is right. But the calibrate banner reads "Make sure your whole body will be in frame
+   * during the run", and arriving there straight off a failed take turns a setup note into a
+   * verdict that names the athlete's framing as the fault. That is the sentence shape Rule #1's
+   * 2026-09-29 clause bans, reached by a route no scan was looking at.
+   *
+   * So the banner stays exactly what it is for SETUP, and a take that could not be read gets a
+   * sentence that states the fact and prescribes nothing. */
+  const [readFailed, setReadFailed] = useState(false);
   function changeStep(next: Step) {
     stepRef.current = next;
     setStepState(next);
@@ -372,12 +384,15 @@ export function AvSprintTrackerDialog({
   }
 
   async function stopCaptureAndAnalyze() {
+    // A new attempt clears the last one's verdict, so the setup guidance comes back for setup.
+    setReadFailed(false);
     if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
     changeStep("analyzing");
     const result = await stopRecordingAndAnalyze();
     if (!result) {
       // Error/cancellation already reported by the hook -- back to calibrate so the coach can
       // just try again rather than getting stuck on a dead-end step.
+      setReadFailed(true);
       changeStep("calibrate");
       return;
     }
@@ -699,9 +714,22 @@ export function AvSprintTrackerDialog({
                 </div>
               )}
 
-              {step === "calibrate" && (
+              {/* framing-exempt: SETUP guidance, shown on the calibrate step before any
+                  recording exists. Rule #1 bans prescribing a view AFTER a take, and explicitly
+                  allows describing one before -- which is what exercise-camera-profile.ts does
+                  for every lift. The `!readFailed` half is what keeps it that way: a failed
+                  analysis returns to this very step, so without it this sentence becomes a
+                  post-take verdict blaming the athlete's framing for a read the pipeline could
+                  not get. See the readFailed state. */}
+              {step === "calibrate" && !readFailed && (
                 <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-md bg-black/60 px-3 py-2 text-center text-sm text-white backdrop-blur-sm">
                   Make sure your whole body will be in frame during the run.
+                </div>
+              )}
+
+              {step === "calibrate" && readFailed && (
+                <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-md bg-black/60 px-3 py-2 text-center text-sm text-white backdrop-blur-sm">
+                  Couldn't get a clean read on that run. Record it again whenever you're ready.
                 </div>
               )}
 

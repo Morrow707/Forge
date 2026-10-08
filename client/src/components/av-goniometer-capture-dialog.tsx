@@ -179,7 +179,7 @@ export function AvGoniometerCaptureDialog({
             {noReading && !recording && !analyzing && (
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
-                Couldn't get a clear reading, make sure the joint stays fully in frame and try again.
+                Couldn't get a clear reading on that one. Record it again whenever you're ready.
               </div>
             )}
 

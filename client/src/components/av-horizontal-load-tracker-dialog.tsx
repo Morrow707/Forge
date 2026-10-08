@@ -220,6 +220,13 @@ export function AvHorizontalLoadTrackerDialog({
   const manualStartRef = useRef<number | null>(null);
 
   const [step, setStepState] = useState<Step>("calibrate");
+  /* A FAILED READ RETURNS TO THE SETUP STEP, AND THE SETUP STEP PRESCRIBES A VIEW. Arriving on
+   * "calibrate" straight off a take the pipeline could not read turns "Make sure the whole
+   * distance being covered will be in frame" from a setup note into a verdict naming the
+   * athlete's framing as the fault -- the shape Rule #1's 2026-09-29 clause bans, reached by a
+   * route no scan was looking at. The banner stays what it is for setup; a failed take gets a
+   * sentence that states the fact and prescribes nothing. */
+  const [readFailed, setReadFailed] = useState(false);
   function changeStep(next: Step) {
     stepRef.current = next;
     setStepState(next);
@@ -379,6 +386,7 @@ export function AvHorizontalLoadTrackerDialog({
           setSaving(false);
         }
       }
+      setReadFailed(true);
       changeStep("calibrate");
       return;
     }
@@ -555,9 +563,20 @@ export function AvHorizontalLoadTrackerDialog({
                 </div>
               )}
 
-              {step === "calibrate" && (
+              {/* framing-exempt: SETUP guidance, shown on the calibrate step before any
+                  recording exists. Rule #1 bans prescribing a view AFTER a take and explicitly
+                  allows describing one before. The `!readFailed` half is what keeps it that
+                  way: a failed analysis returns to this very step, so without it this sentence
+                  becomes a post-take verdict blaming the athlete's framing. */}
+              {step === "calibrate" && !readFailed && (
                 <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-md bg-black/60 px-3 py-2 text-center text-sm text-white backdrop-blur-sm">
                   Make sure the whole distance being covered will be in frame.
+                </div>
+              )}
+
+              {step === "calibrate" && readFailed && (
+                <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-md bg-black/60 px-3 py-2 text-center text-sm text-white backdrop-blur-sm">
+                  Couldn't get a clean read on that one. Record it again whenever you're ready.
                 </div>
               )}
 

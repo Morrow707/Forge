@@ -550,6 +550,14 @@ export function HorizontalLoadTrackerDialog({
                 </div>
               )}
 
+              {/* framing-exempt: SETUP guidance, shown on the calibrate step before any
+                  recording exists. Rule #1 bans prescribing a view AFTER a take and explicitly
+                  allows describing one before -- which is what exercise-camera-profile.ts does
+                  for every lift. Checked for the route that caught the other three: nothing on
+                  this path returns to "calibrate" because a read FAILED. The two that come back
+                  here are cancelCapture (the athlete stopped it) and retry (the athlete chose to
+                  re-record), and setup guidance is what both of those are walking into. The
+                  native sibling DOES have a failure route and carries a readFailed flag for it. */}
               {step === "calibrate" && (
                 <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-md bg-black/60 px-3 py-2 text-center text-sm text-white backdrop-blur-sm">
                   Make sure the whole distance being covered will be in frame.
