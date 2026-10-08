@@ -41,7 +41,7 @@ export const BASKETBALL_SHOOTING_CLASS: ForgeClassContent = {
           "The parts: base, pocket, lift, release. Fix the parts, not the whole.",
           "Arc gives the ball a bigger target; a high release and a held follow-through give you arc.",
           "Fingertips give backspin; backspin turns rim shots into makes.",
-          "Baseline: fifty form shots, twenty-five free throws, twenty-five catch-and-shoot, and a side video.",
+          "Baseline: fifty form shots, twenty-five free throws, twenty-five catch-and-shoot, and a video from wherever you have room.",
         ]),
       ],
       flashcards: [
