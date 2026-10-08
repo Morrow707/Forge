@@ -357,8 +357,8 @@ export function buildPathTrace(
 // OCCLUSION_MAX_GAP_MS the dropout is long enough that guessing what
 // happened in between would fabricate more than it recovers, so the caller
 // sees the real gap untouched, same as before this existed.
-const OCCLUSION_MIN_GAP_MS = 70;
-const OCCLUSION_MAX_GAP_MS = 200;
+export const OCCLUSION_MIN_GAP_MS = 70;
+export const OCCLUSION_MAX_GAP_MS = 200;
 const OCCLUSION_STEP_MS = 33;
 
 // How much to discount an interpolated point's confidence relative to a
@@ -664,7 +664,7 @@ export function savitzkyGolay(values: number[], window: number): number[] {
 // an aggressive Olympic-lift pull's turnaround) so this only ever catches a
 // genuine glitch, never a real explosive rep -- untuned against real footage
 // (this sandbox has no camera to test against).
-const MAX_PLAUSIBLE_ACCEL_G = 6;
+export const MAX_PLAUSIBLE_ACCEL_G = 6;
 
 export function rejectImplausibleAccelerationSpikes(
   points: TrackedPoint[],

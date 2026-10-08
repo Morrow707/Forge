@@ -70,6 +70,23 @@ export type CameraTunables = {
   depthRulerUncertainty: number;
   /** The 3D ankle ruler's uncertainty. */
   ankle3DRulerUncertainty: number;
+  /** How far a shoulder span may disagree with ITSELF across one set before the shoulder ruler
+   *  refuses to vote at all -- median absolute deviation as a fraction of the span.
+   *
+   *  HERE BECAUSE IT WAS FITTED ON ONE LIFT. 0.4 was chosen 2026-10-06 as the one value that
+   *  refuses build 632's Pendlay Row (0.464, and reinstating that ruler costs the row 17.5%)
+   *  while keeping the standing press (0.063) and the bench (0.21). The author checked it
+   *  against two other lifts, which is the discipline this repo requires -- but checking a
+   *  number against other lifts is not the same as it BELONGING to them, and as a shared module
+   *  constant one take's 0.464 decided whether the shoulder ruler votes on all 269 identities.
+   *  The shoulder ruler is the highest-weight voter on most takes, so that is the most
+   *  consequential thing in the registry to have left outside it.
+   *
+   *  Contrast DRIVE_ONSET_FRACTION, which stays SHARED on purpose: it was fitted across five
+   *  movements on thirteen sets, so it describes the pipeline rather than a lift. The test of a
+   *  split is not "is it a number" but "could somebody fit it from one take" -- and this one
+   *  already was. */
+  maxShoulderSpanSpread: number;
   // --- the gates: what the pipeline will believe about one frame ----------------------------
   //
   // SPLIT ON SCOTT'S SECOND INSTRUCTION, 2026-10-06: "Split those too, every single thing should
@@ -126,6 +143,7 @@ export const SHARED_CAMERA_TUNABLES: Readonly<CameraTunables> = Object.freeze({
   depthRulerBias: 0.9, // DEPTH_RULER_BIAS
   depthRulerUncertainty: 0.2, // DEPTH_RULER_UNCERTAINTY
   ankle3DRulerUncertainty: 0.2, // ANKLE_3D_RULER_UNCERTAINTY
+  maxShoulderSpanSpread: 0.4, // MAX_SHOULDER_SPAN_SPREAD
   maxPlausibleSpeedMps: 3, // MAX_PLAUSIBLE_LIFT_VELOCITY_MPS -- the bar's, overridden per tracker
   maxPlausibleAccelG: 6, // MAX_PLAUSIBLE_ACCEL_G
   maxPlausibleVelocityChangePct: 100, // MAX_PLAUSIBLE_VELOCITY_CHANGE_PCT

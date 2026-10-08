@@ -13,6 +13,8 @@
 //    one is invisible to the other. This is the whole point: a 40-yard dash calibration must not
 //    reach the bench press.
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   MAX_PLAUSIBLE_LIFT_VELOCITY_MPS,
@@ -28,10 +30,15 @@ import {
   MIN_ROM_FRACTION_OF_HEIGHT,
   TRAVEL_ONSET_MARGIN_BY_ROM_KIND_M,
   TRAVEL_ONSET_MARGIN_M,
+  MAX_PLAUSIBLE_ACCEL_G,
+  OCCLUSION_MIN_GAP_MS,
+  OCCLUSION_MAX_GAP_MS,
 } from "../client/src/lib/bar-tracking";
 import { ANKLE_3D_RULER_UNCERTAINTY } from "../client/src/lib/ankle-3d-ruler";
 import { DEPTH_RULER_BIAS, DEPTH_RULER_UNCERTAINTY } from "../client/src/lib/body-3d-ruler";
-import { HEIGHT_RULER_UNCERTAINTY } from "../client/src/lib/pose-tracking";
+import { HEIGHT_RULER_UNCERTAINTY,
+  MAX_SHOULDER_SPAN_SPREAD,
+} from "../client/src/lib/pose-tracking";
 import {
   MAX_LOCK_DISTANCE_IN_YARDSTICKS,
   MAX_PLATE_ASPECT_RATIO,
@@ -58,6 +65,41 @@ const ROM_BUCKETS = [
 ];
 
 describe("the per-lift numbers are a copy of today's numbers", () => {
+  it("HAS A PIN FOR EVERY FIELD, so a new one cannot arrive unchecked", () => {
+    /* The case above is a hand-written list, and a hand-written list is what let the id and the
+     * rate table drift apart in ai-usage.ts, and what this repo's scans exist to avoid.
+     *
+     * Proved by it on 2026-10-08: maxShoulderSpanSpread was added to the registry and this file
+     * stayed green, because nothing required the new key to be mentioned. A registry field with
+     * no pin is a number that can quietly stop equalling the constant it is a copy of -- which
+     * is the ONE property this whole file exists to hold.
+     *
+     * So the list may stay hand-written (each pin names the constant it checks, which a
+     * generated loop could not), and this makes the list complete. */
+    const src = readFileSync(join(process.cwd(), "shared/camera-tunables-are-a-copy.test.ts"), "utf8");
+    /* THE TWO FIELDS WITH NOTHING TO PIN AGAINST, named rather than silently skipped.
+     *
+     * The count-trim's two numbers no longer HAVE a module constant: bar-tracking.ts reads them
+     * straight off the record (`const MAX_COUNT_TRIM_PER_EDGE = tune.maxCountTrimPerEdge`), so
+     * the registry is their source and a pin would be circular. That is the end state this file
+     * is driving everything towards, so it is a graduation and not an exemption -- but it has to
+     * be written down, because "no pin" and "no pin yet" look identical in a filter. */
+    const REGISTRY_IS_THE_SOURCE = new Set(["maxCountTrimPerEdge", "minCountTrimOddness"]);
+    for (const k of REGISTRY_IS_THE_SOURCE) {
+      expect(
+        Object.keys(SHARED_CAMERA_TUNABLES),
+        `${k} is listed as registry-sourced but is not in the registry`,
+      ).toContain(k);
+    }
+    const unpinned = Object.keys(SHARED_CAMERA_TUNABLES).filter(
+      (k) => !REGISTRY_IS_THE_SOURCE.has(k) && !src.includes(`SHARED_CAMERA_TUNABLES.${k}`),
+    );
+    expect(
+      unpinned,
+      `these registry fields have no pin against the constant they were copied from: ${unpinned.join(", ")}`,
+    ).toEqual([]);
+  });
+
   it("copies every shared constant exactly", () => {
     expect(SHARED_CAMERA_TUNABLES.minRomFractionOfHeight).toBe(DEFAULT_MIN_ROM_FRACTION);
     expect(SHARED_CAMERA_TUNABLES.maxRomFractionOfHeight).toBe(DEFAULT_MAX_ROM_FRACTION);
@@ -69,6 +111,10 @@ describe("the per-lift numbers are a copy of today's numbers", () => {
     expect(SHARED_CAMERA_TUNABLES.depthRulerBias).toBe(DEPTH_RULER_BIAS);
     expect(SHARED_CAMERA_TUNABLES.depthRulerUncertainty).toBe(DEPTH_RULER_UNCERTAINTY);
     expect(SHARED_CAMERA_TUNABLES.ankle3DRulerUncertainty).toBe(ANKLE_3D_RULER_UNCERTAINTY);
+    expect(SHARED_CAMERA_TUNABLES.maxShoulderSpanSpread).toBe(MAX_SHOULDER_SPAN_SPREAD);
+    expect(SHARED_CAMERA_TUNABLES.maxPlausibleAccelG).toBe(MAX_PLAUSIBLE_ACCEL_G);
+    expect(SHARED_CAMERA_TUNABLES.occlusionMinGapMs).toBe(OCCLUSION_MIN_GAP_MS);
+    expect(SHARED_CAMERA_TUNABLES.occlusionMaxGapMs).toBe(OCCLUSION_MAX_GAP_MS);
     // The gates, split per tracker on Scott's second instruction.
     expect(SHARED_CAMERA_TUNABLES.maxPlausibleSpeedMps).toBe(MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
     expect(SHARED_CAMERA_TUNABLES.maxPlausibleVelocityChangePct).toBe(MAX_PLAUSIBLE_VELOCITY_CHANGE_PCT);

@@ -825,7 +825,7 @@ const MIN_SHOULDER_BROADSIDE_RATIO = 2;
  *  standing press (0.063) and the bench (0.21) -- both of which were accepted before and both of
  *  which this must not change. It replaces a body-length ratio that a hinge defeats; see
  *  shoulderWidthScaleFromFrames. */
-const MAX_SHOULDER_SPAN_SPREAD = 0.4;
+export const MAX_SHOULDER_SPAN_SPREAD = 0.4;
 
 /**
  * Real-world scale from the athlete's shoulder breadth, for a body whose length the camera
@@ -1439,6 +1439,12 @@ export function shoulderWidthScaleFromFrames(
   // lift is filmed, it is already known before a frame is read, and it cannot be defeated by
   // the landmark space the caller happens to pass.
   posture?: "standing" | "seated" | "lying" | "supported" | "hanging" | "bent_over",
+  /* THIS LIFT'S NUMBER, not the pipeline's. Defaulted to the module constant so a caller that
+   * passes nothing behaves exactly as it did -- the same arrangement robustPeakSpeed,
+   * plausibleMean and rejectImplausibleAccelerationSpikes already use for their gates. See
+   * maxShoulderSpanSpread in shared/camera-tunables-by-lift.ts for why a value fitted on one
+   * Pendlay Row should not be deciding whether the shoulder ruler votes on a 40-yard dash. */
+  maxSpanSpread: number = MAX_SHOULDER_SPAN_SPREAD,
 ): ShoulderScaleReading {
   const empty: ShoulderScaleReading = {
     scale: null,
@@ -1533,7 +1539,7 @@ export function shoulderWidthScaleFromFrames(
   // is not measuring shoulders whatever the posture is.
   const bodyLengthIsAStature =
     posture == null || posture === "standing" || posture === "seated" || posture === "supported";
-  if (spanSpreadFraction > MAX_SHOULDER_SPAN_SPREAD) {
+  if (spanSpreadFraction > maxSpanSpread) {
     return {
       ...empty,
       framesUsed: widths.length,

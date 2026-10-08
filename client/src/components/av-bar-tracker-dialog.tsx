@@ -1100,6 +1100,21 @@ export function AvBarTrackerDialog({
     // spanning only ~0.77 of their standing height, so the scale came out ~30% large on every
     // seated press, pulldown, row and leg machine, quietly enough to clear every other check.
     const posture = postureForExercise(exerciseName);
+    /* THE RULER UNCERTAINTIES THIS LIFT WAS HANDED, READ BY THE BLEND THAT USES THEM.
+     *
+     * These four numbers are per-lift in shared/camera-tunables-by-lift.ts, and until now the
+     * ONLY four reads of those fields anywhere in the repo were the four that write them into
+     * the export. The candidates below were built from the module constants instead, so the
+     * download reported "the ruler uncertainties THIS lift was handed" and the blend had used
+     * different ones. An entry in FITTED_OVERRIDES would have read as applied and not been --
+     * the worst version of this, because it is invisible and it is confirmed by the export.
+     *
+     * Reading them here costs nothing today (every record still carries the shared value, and
+     * FITTED_OVERRIDES is empty), and it is the whole point of the registry: the day one of
+     * these IS fitted on a lift, it moves that lift and no other. Rule #2 is untouched --
+     * reconcileScaleEstimates stays one blend across every movement, and only the variances it
+     * is handed are the lift's own. */
+    const scaleTunables = cameraTunablesFor(exerciseName, romBucketForExercise(exerciseName)).values;
     // What the FRAMES say about posture, recorded beside what the name claims. Measures only;
     // see measurePostureFromFrames for why it never overrides the profile.
     const measuredPosture = measurePostureFromFrames(calibrationInput);
@@ -1260,7 +1275,12 @@ export function AvBarTrackerDialog({
     // All three run now and reconcileScaleEstimates compares them: agreement between independent
     // sources is the strongest evidence available here, and disagreement is the signal that
     // something is wrong, which is worth far more than a single confident-looking number.
-    const shoulderScale = shoulderWidthScaleFromFrames(calibrationInput, heightIn, posture);
+    const shoulderScale = shoulderWidthScaleFromFrames(
+      calibrationInput,
+      heightIn,
+      posture,
+      scaleTunables.maxShoulderSpanSpread,
+    );
     // A measured grip needs no detector, no full body in frame and no population average, so it
     // is computed on every take where the athlete has given one -- the framing that defeats the
     // other rulers does not reach it.
@@ -1327,21 +1347,6 @@ export function AvBarTrackerDialog({
       ),
     };
     const body3DEstimate = body3DCandidate(body3DScale);
-    /* THE RULER UNCERTAINTIES THIS LIFT WAS HANDED, READ BY THE BLEND THAT USES THEM.
-     *
-     * These four numbers are per-lift in shared/camera-tunables-by-lift.ts, and until now the
-     * ONLY four reads of those fields anywhere in the repo were the four that write them into
-     * the export. The candidates below were built from the module constants instead, so the
-     * download reported "the ruler uncertainties THIS lift was handed" and the blend had used
-     * different ones. An entry in FITTED_OVERRIDES would have read as applied and not been --
-     * the worst version of this, because it is invisible and it is confirmed by the export.
-     *
-     * Reading them here costs nothing today (every record still carries the shared value, and
-     * FITTED_OVERRIDES is empty), and it is the whole point of the registry: the day one of
-     * these IS fitted on a lift, it moves that lift and no other. Rule #2 is untouched --
-     * reconcileScaleEstimates stays one blend across every movement, and only the variances it
-     * is handed are the lift's own. */
-    const scaleTunables = cameraTunablesFor(exerciseName, romBucketForExercise(exerciseName)).values;
     // THE DEPTH RULER AS A CANDIDATE, zeroed by what two sensor-paired takes measured -- see
     // DEPTH_RULER_BIAS. A peer among the body rulers; overwatch picks agreement.
     const depthEstimate: ScaleEstimate | null =
