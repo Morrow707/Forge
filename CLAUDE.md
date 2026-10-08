@@ -2881,22 +2881,30 @@ of them look like bugs to a fresh reader.
 - **The six newer Forge classes are read and accepted** (Fundamentals, football receiving,
   soccer attacking, volleyball, wrestling, track sprinting). Scott: "done."
 
-**FLAGGED AND NOT ACTED ON: "everything paid for by coaches will be through the website which
-bypasses apple" is TRUE of the coach plan and NOT true of Coaches Corner today.** Scott said it
-while declining Full Personalization at Apple, so it reads as being about that; but taken
-literally it would mean unselling something already built, tested and submitted, so it is
-written down rather than acted on.
+**RESOLVED, SAME DAY: COACHES CORNER STAYS ON APPLE, AND IT IS THE ONLY COACH-SIDE APPLE
+PRODUCT.** Scott, when the flag below was put to him: "coaches corner is the only thing listed on
+apple for the coaches side." Correct, and verifiable in one line --
+`COACH_PURCHASABLE_ADD_ON_ORDER` in `shared/billing-tiers.ts` is `["coaches_corner"]`, and every
+checkout enum, `missingPriceEnvVars()` and the Apple product map derive from it rather than
+naming ids. So "everything paid for by coaches will be through the website" was about what is NOT
+being ADDED to Apple (Full Personalization) and about the coach plan, which was always web-only.
+Nothing changes. Do not re-raise this as a contradiction.
+
+What was flagged and why, kept because the distinction is the part that will be re-litigated:
+the statement taken literally would have meant unselling something already built, tested,
+submitted and proven in sandbox, during an open review -- so it was written down rather than
+acted on.
 - The COACH PLAN ($4 an athlete in bands) is web-only and always was -- Guideline 3.1.3(c)
   allows a program to be billed by card outside Apple, and the app may not price it or point at
   it (`native-paywall-never-points-at-the-web.test.ts`). Nothing to change.
-- COACHES CORNER IS SOLD THROUGH APPLE TODAY. `client/src/pages/coach/coaches-corner.tsx:176`
-  calls `purchaseCoachAddOn("coaches_corner")` through StoreKit on iOS, the product exists in the
-  Coach Add-ons group, it was submitted with 1.1, the review notes say a coach can buy exactly
-  this one thing, and build 643 proved the purchase in sandbox.
-- **The two are different rules, not one.** A program's roster subscription is a B2B purchase;
-  Coaches Corner is a digital subscription a coach CONSUMES INSIDE THE APP, which 3.1.1 requires
-  to be sold through IAP. Moving it to the web and pointing the app at a browser is the exact
-  steer that guideline forbids and that the scan above exists to catch -- so it is not a switch,
-  it is a rejection risk during an open review. If that is genuinely wanted it is its own
+- COACHES CORNER IS SOLD THROUGH APPLE. `client/src/pages/coach/coaches-corner.tsx:176` calls
+  `purchaseCoachAddOn("coaches_corner")` through StoreKit on iOS, the product exists in the Coach
+  Add-ons group, it was submitted with 1.1, the review notes say a coach can buy exactly this one
+  thing, and build 643 proved the purchase in sandbox.
+- **The two are different rules, not one, and that is why both can be true at once.** A
+  program's roster subscription is a B2B purchase a school pays by card; Coaches Corner is a
+  digital subscription a coach CONSUMES INSIDE THE APP, which 3.1.1 requires to be sold through
+  IAP. Moving it to the web and pointing the app at a browser is the exact steer that guideline
+  forbids and that the scan above exists to catch. If it is ever genuinely wanted it is its own
   decision, taken after 1.0 is approved, and it means removing the in-app purchase path
   entirely rather than adding a web one beside it.
