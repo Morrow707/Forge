@@ -3,7 +3,24 @@ import type { AiProvider, NeutralRequest, NeutralResponse } from "./ai-provider"
 import { recordSystemFailure, recordSystemSuccess } from "./system-events";
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
-const defaultModel = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+// claude-sonnet-5 -> claude-sonnet-5-5, 2026-10-08. Same price ($2/$10 per
+// MTok, cache reads $0.20), same tokenizer, so no cost or token-budget
+// re-baselining -- this upgrade is free in money and was NOT free in work:
+// Sonnet 5.5 REJECTS a forced tool_choice with a 400, and all three structured
+// helpers below asked for one. See acceptsForcedToolChoice and
+// callToolForResult -- that is the whole reason this did not ship with the
+// Haiku switch.
+//
+// The other four changes in that generation, each checked against this file
+// rather than assumed: thinking `disabled` is a 400 (callAnthropic never sends
+// `thinking`, so nothing to change); thinking blocks are now bound to the
+// model and the conversation, which only bites a harness that EDITS earlier
+// turns -- askClaudeWithTools only ever appends, and it replays the whole
+// `data.content` back unmodified, which is what that check wants; the
+// `computer_20251124` tool is a 400 (not used anywhere); and the advisor tool
+// rejects older advisors (not used). Effort levels are recalibrated but
+// nothing here sets `effort`.
+export const defaultModel = process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
 const API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 
@@ -142,6 +159,26 @@ async function callAnthropic(
         console.error("Claude request truncated at max_tokens -- discarding partial result");
         return null;
       }
+      // A SAFETY DECLINE IS A 200, NOT AN ERROR. The Sonnet 5.5 / Haiku 5.5
+      // generation runs classifiers that can decline a request: HTTP 200,
+      // stop_reason "refusal", a stop_details category, and no content. The
+      // helpers below would find no text and no tool_use block and return
+      // null, which is the right answer for the caller -- but it would be
+      // indistinguishable from a timeout, a 500, or a model that simply had
+      // nothing to say, in a codebase whose whole AI contract is "null means
+      // no insight available". Named here so a decline reads as a decline on
+      // the system-health page instead of as a mystery. Warning, not error:
+      // this is the classifier doing its job, the same reasoning the 429
+      // branch above uses.
+      if (data.stop_reason === "refusal") {
+        const category = data.stop_details?.category ?? "unspecified";
+        console.error(`Claude declined a ${feature} request (${category})`);
+        recordSystemFailure("ai", `Claude declined a request (${category})`, {
+          detail: String(data.stop_details?.explanation ?? "").slice(0, 500),
+          severity: "warning",
+        });
+        return null;
+      }
       recordSystemSuccess("ai");
       // Every model call in the app comes through here, so recording usage
       // at this one point means a feature added later cannot spend money
@@ -234,9 +271,103 @@ export async function askClaudeVision(
   return typeof textBlock === "string" ? textBlock : null;
 }
 
-/** Structured extraction via forced tool use -- the reliable way to get
- * Claude to return actual JSON matching a shape, rather than asking for JSON
- * in prose and hoping it parses. Returns null on no-config/failure/refusal.
+// WHICH MODELS STILL ACCEPT A FORCED TOOL CALL.
+//
+// Every structured helper below asks for `tool_choice: {type: "tool"}` -- make
+// this exact call, with these arguments -- because that is the only way to get
+// reliable JSON out of a model rather than asking for JSON in prose and hoping
+// it parses. From the Sonnet 5.5 / Opus 5.5 / Fable 5.1 generation that is a
+// 400: `tool_choice: type "tool" and "any" are not supported for this model`.
+// `{type: "auto"}` and `{type: "none"}` are unaffected.
+//
+// So the choice is per MODEL, not per call site, and the list is a DENY list
+// on purpose. Guessing "forced" for an unknown model and being wrong is a 400:
+// loud, immediate, and traceable to this line. Guessing "auto" and being wrong
+// is silent -- the model is merely *asked* to call the tool, and on the fast
+// lane it would also start emitting thinking blocks into a 200-token cap (see
+// fastModel above). A loud failure beats a quiet one, so the default is forced
+// and a model earns its way onto this list by actually rejecting it.
+const FORCED_TOOL_CHOICE_REJECTED = [
+  "claude-sonnet-5-5",
+  "claude-opus-5-5",
+  "claude-fable-5-1",
+  "claude-mythos-5-1",
+];
+
+export function acceptsForcedToolChoice(model: string): boolean {
+  return !FORCED_TOOL_CHOICE_REJECTED.some((id) => model.startsWith(id));
+}
+
+/** Where forced tool use is rejected, `auto` is the replacement and the model
+ * has to be TOLD which tool to use -- `auto` does not guarantee a call. This
+ * appends that instruction to the last user turn, handling both message
+ * shapes the helpers below build (a bare string, and a content array whose
+ * last block is the text that follows an image or a document). */
+function steerTowardTool(messages: any[], toolName: string, insist: boolean): any[] {
+  const line = insist
+    ? `\n\nYou did not call the \`${toolName}\` tool. You must call it now. Do not reply in prose.`
+    : `\n\nUse the \`${toolName}\` tool to answer. Reply only by calling it.`;
+  const out = messages.slice();
+  const last = out[out.length - 1];
+  if (!last || last.role !== "user") return out;
+  if (typeof last.content === "string") {
+    out[out.length - 1] = { ...last, content: last.content + line };
+    return out;
+  }
+  if (Array.isArray(last.content)) {
+    const blocks = last.content.slice();
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      if (blocks[i]?.type === "text") {
+        blocks[i] = { ...blocks[i], text: String(blocks[i].text ?? "") + line };
+        out[out.length - 1] = { ...last, content: blocks };
+        return out;
+      }
+    }
+    blocks.push({ type: "text", text: line.trim() });
+    out[out.length - 1] = { ...last, content: blocks };
+  }
+  return out;
+}
+
+/** The one place a tool call is asked for, so the forced/auto split above is
+ * decided once rather than in each of the three helpers that wrap it.
+ *
+ * On the auto path a missing tool call is a real outcome, not an error: the
+ * model answered in prose instead. That gets ONE sharper retry before giving
+ * up, which is what the migration guidance asks for ("check that a call was
+ * made and retry if it wasn't") and what keeps a feature from silently doing
+ * nothing because the model felt chatty. Forced models skip the retry -- they
+ * cannot not call it. */
+async function callToolForResult<T>(
+  base: { model: string; max_tokens: number; system: unknown; messages: any[] },
+  tool: { name: string; description: string; input_schema: Record<string, unknown> },
+  feature?: string,
+): Promise<T | null> {
+  const forced = acceptsForcedToolChoice(base.model);
+  const attempts = forced ? 1 : 2;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const data = await callAnthropic(
+      {
+        ...base,
+        messages: forced ? base.messages : steerTowardTool(base.messages, tool.name, attempt > 0),
+        tools: [tool],
+        tool_choice: forced ? { type: "tool", name: tool.name } : { type: "auto" },
+      },
+      feature,
+    );
+    if (!data) return null;
+    const toolUse = data.content?.find((b: any) => b.type === "tool_use");
+    if (toolUse) return (toolUse.input as T) ?? null;
+    if (attempt + 1 < attempts) {
+      console.warn(`Claude answered ${feature ?? "a structured call"} in prose instead of calling ${tool.name}; asking again`);
+    }
+  }
+  return null;
+}
+
+/** Structured extraction via tool use -- the reliable way to get Claude to
+ * return actual JSON matching a shape, rather than asking for JSON in prose
+ * and hoping it parses. Returns null on no-config/failure/refusal.
  * Callers should still validate the result against a zod schema before
  * trusting it -- this only guarantees Claude called the tool, not that every
  * field is the type/shape the tool schema asked for. */
@@ -247,17 +378,12 @@ export async function askClaudeStructured<T>(
   { maxTokens = 1024, model, feature }: CallOptions = {},
 ): Promise<T | null> {
   if (!aiEnabled) return null;
-  const data = await callAnthropic({
+  return callToolForResult<T>({
     model: model || defaultModel,
     max_tokens: maxTokens,
     system: buildSystemField(system),
     messages: [{ role: "user", content: userPrompt }],
-    tools: [tool],
-    tool_choice: { type: "tool", name: tool.name },
-  }, feature);
-  if (!data) return null;
-  const toolUse = data.content?.find((b: any) => b.type === "tool_use");
-  return (toolUse?.input as T) ?? null;
+  }, tool, feature);
 }
 
 /** Structured extraction grounded in one or more images -- the vision
@@ -273,7 +399,7 @@ export async function askClaudeVisionStructured<T>(
   { maxTokens = 1024, model, feature }: CallOptions = {},
 ): Promise<T | null> {
   if (!aiEnabled) return null;
-  const data = await callAnthropic({
+  return callToolForResult<T>({
     model: model || defaultModel,
     max_tokens: maxTokens,
     system: buildSystemField(system),
@@ -289,12 +415,7 @@ export async function askClaudeVisionStructured<T>(
         ],
       },
     ],
-    tools: [tool],
-    tool_choice: { type: "tool", name: tool.name },
-  }, feature);
-  if (!data) return null;
-  const toolUse = data.content?.find((b: any) => b.type === "tool_use");
-  return (toolUse?.input as T) ?? null;
+  }, tool, feature);
 }
 
 /** Structured extraction from an uploaded FILE -- a PDF or a photograph of one.
@@ -327,17 +448,12 @@ export async function askClaudeFileStructured<T>(
           type: "image",
           source: { type: "base64", media_type: file.mediaType, data: file.data },
         };
-  const data = await callAnthropic({
+  return callToolForResult<T>({
     model: model || defaultModel,
     max_tokens: maxTokens,
     system: buildSystemField(system),
     messages: [{ role: "user", content: [fileBlock, { type: "text", text }] }],
-    tools: [tool],
-    tool_choice: { type: "tool", name: tool.name },
-  }, feature);
-  if (!data) return null;
-  const toolUse = data.content?.find((b: any) => b.type === "tool_use");
-  return (toolUse?.input as T) ?? null;
+  }, tool, feature);
 }
 
 /** Like askClaudeStructured, but offers Claude a choice between multiple

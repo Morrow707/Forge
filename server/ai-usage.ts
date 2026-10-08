@@ -39,6 +39,13 @@ async function withPool<T>(fn: (pool: Pool) => Promise<T>): Promise<T> {
  */
 const RATES: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
   "claude-opus-5": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  // The current default model (see defaultModel in ai.ts). Sonnet 5.5 succeeds
+  // Sonnet 5 at IDENTICAL rates, so this row is a copy -- recorded separately
+  // all the same, because the rollup is keyed on the id that spent the money
+  // and a shared row would make the switch invisible on the spend page.
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+  // Kept for rollup rows from before the 2026-10-08 switch, same as the Haiku
+  // 4.5 rows below.
   "claude-sonnet-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
   // The current fast model (see fastModel in ai.ts). ONE CAVEAT THIS TABLE'S
   // SHAPE CANNOT EXPRESS: Haiku 5.5 has two rate cards chosen by prompt

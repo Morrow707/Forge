@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { estimateUsd, ratesFor } from "./ai-usage";
-import { fastModel } from "./ai";
+import { fastModel, defaultModel } from "./ai";
 
 describe("AI cost estimation", () => {
   it("prices input, output and cache tiers separately", () => {
@@ -79,7 +79,8 @@ describe("AI cost estimation", () => {
   // deciding whether to spend. Derived from fastModel rather than hand-typed
   // on purpose: the hand-typed list is what let the id and the rate table
   // drift apart in the first place.
-  it("has a rate on file for whatever model the app is actually configured to call", () => {
+  it("has a rate on file for whatever models the app is actually configured to call", () => {
     expect(ratesFor(fastModel), `no rate on file for fastModel "${fastModel}"`).not.toBeNull();
+    expect(ratesFor(defaultModel), `no rate on file for defaultModel "${defaultModel}"`).not.toBeNull();
   });
 });
