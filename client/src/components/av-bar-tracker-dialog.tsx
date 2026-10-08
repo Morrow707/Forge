@@ -1327,11 +1327,30 @@ export function AvBarTrackerDialog({
       ),
     };
     const body3DEstimate = body3DCandidate(body3DScale);
+    /* THE RULER UNCERTAINTIES THIS LIFT WAS HANDED, READ BY THE BLEND THAT USES THEM.
+     *
+     * These four numbers are per-lift in shared/camera-tunables-by-lift.ts, and until now the
+     * ONLY four reads of those fields anywhere in the repo were the four that write them into
+     * the export. The candidates below were built from the module constants instead, so the
+     * download reported "the ruler uncertainties THIS lift was handed" and the blend had used
+     * different ones. An entry in FITTED_OVERRIDES would have read as applied and not been --
+     * the worst version of this, because it is invisible and it is confirmed by the export.
+     *
+     * Reading them here costs nothing today (every record still carries the shared value, and
+     * FITTED_OVERRIDES is empty), and it is the whole point of the registry: the day one of
+     * these IS fitted on a lift, it moves that lift and no other. Rule #2 is untouched --
+     * reconcileScaleEstimates stays one blend across every movement, and only the variances it
+     * is handed are the lift's own. */
+    const scaleTunables = cameraTunablesFor(exerciseName, romBucketForExercise(exerciseName)).values;
     // THE DEPTH RULER AS A CANDIDATE, zeroed by what two sensor-paired takes measured -- see
     // DEPTH_RULER_BIAS. A peer among the body rulers; overwatch picks agreement.
     const depthEstimate: ScaleEstimate | null =
       body3DRulerDiagnostics.depthRulerScale != null
-        ? { source: "depth", scale: body3DRulerDiagnostics.depthRulerScale / DEPTH_RULER_BIAS, uncertaintyFraction: DEPTH_RULER_UNCERTAINTY }
+        ? {
+            source: "depth",
+            scale: body3DRulerDiagnostics.depthRulerScale / scaleTunables.depthRulerBias,
+            uncertaintyFraction: scaleTunables.depthRulerUncertainty,
+          }
         : null;
 
     // Every candidate is checked against the athlete's own height before any of them is ranked --
@@ -1359,7 +1378,7 @@ export function AvBarTrackerDialog({
       ...(depthEstimate ? [depthEstimate] : []),
       ...(bodyModelScale != null ? [bodyModelScale] : []),
       ...(heightScaleFactor != null
-        ? [{ source: "height" as const, scale: heightScaleFactor, uncertaintyFraction: HEIGHT_RULER_UNCERTAINTY }]
+        ? [{ source: "height" as const, scale: heightScaleFactor, uncertaintyFraction: scaleTunables.heightRulerUncertainty }]
         : []),
       ...(shoulderScaleValue != null
         ? [

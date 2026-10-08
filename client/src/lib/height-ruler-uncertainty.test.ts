@@ -71,15 +71,30 @@ describe("the height ruler's uncertainty, fitted on the 2026-10-04 OVR pairing",
     expect(old(RDL) / RDL_SENSOR_SCALE).toBeLessThan(0.95);
   });
 
-  it("is the one constant both dialogs read", () => {
+  it("is never a literal on the height row, in any dialog that builds one", () => {
+    /* This asserted that both dialogs read HEIGHT_RULER_UNCERTAINTY by name, which is the
+     * MECHANISM rather than the rule. Its own comment says what the rule is: "a re-hardcoded
+     * 0.05 on the height row is the regression this catches."
+     *
+     * On 2026-10-08 the bar dialog started reading the uncertainty from this lift's record in
+     * shared/camera-tunables-by-lift.ts instead -- the same 0.1, pinned to this constant by
+     * camera-tunables-are-a-copy.test.ts, and routed so that the day one lift's uncertainty IS
+     * fitted it moves that lift and no other. The old assertion went red for that, which is a
+     * ratchet failing on an improvement to the thing it guards.
+     *
+     * So: a NAMED source, never a number typed on the row. Both spellings pass; a literal does
+     * not, which is the regression that was always the point. */
     for (const f of [
       "client/src/components/av-bar-tracker-dialog.tsx",
       "client/src/components/av-jump-tracker-dialog.tsx",
     ]) {
       const src = readFileSync(join(process.cwd(), f), "utf8");
-      expect(src).toContain("uncertaintyFraction: HEIGHT_RULER_UNCERTAINTY");
-      // A re-hardcoded 0.05 on the height row is the regression this catches.
-      expect(src).not.toMatch(/source: "height"[^}]*uncertaintyFraction: 0\.05/);
+      const named =
+        src.includes("uncertaintyFraction: HEIGHT_RULER_UNCERTAINTY") ||
+        src.includes("uncertaintyFraction: scaleTunables.heightRulerUncertainty");
+      expect(named, `${f}: the height row's uncertainty is not a named source`).toBe(true);
+      // The regression this has always been for.
+      expect(src).not.toMatch(/source: "height"[^}]*uncertaintyFraction: 0\.\d/);
     }
   });
 });
