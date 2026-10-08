@@ -9188,6 +9188,22 @@ export const repBreakdownEntrySchema = z.object({
       closeSpeedFraction: z.number().nullable().optional(),
       gapBeforeSeconds: z.number().nullable().optional(),
       gapAfterSeconds: z.number().nullable().optional(),
+      // WHAT THE PEAK WAS BEFORE THE FLOOR, AND WHAT IT WAS READ FROM. trace.repPeaksFlooredToMean
+      // is a COUNT, so a mild floor and a catastrophic one read identically: the 2026-10-08
+      // Romanian deadlift floored all four reps and reported peak = mean = 0.72 against the
+      // sensor's 1.70 (-57.6%) with "4" as the only evidence in the file. The floor fires on
+      // rawPeak < mean, which is impossible for one quantity and ordinary for two -- the mean is
+      // net displacement over elapsed time, the raw peak is a 95th percentile of the
+      // CONFIDENCE-FILTERED instantaneous speeds, and the samples that filter removes are biased
+      // fast because the quickest part of a rep is where the hands blur. These four separate a
+      // biased pool from a bad speed series on the next take instead of by argument.
+      // Diagnostics only; the floor still fires exactly as before. See bar-tracking.ts.
+      rawPeakMps: z.number().nullable().optional(),
+      peakFloored: z.boolean().nullable().optional(),
+      peakCapped: z.boolean().nullable().optional(),
+      peakSamplesInWindow: z.number().nullable().optional(),
+      peakSamplesBelowConfidence: z.number().nullable().optional(),
+      peakUsedRawFallback: z.boolean().nullable().optional(),
     })
     .optional()
     .nullable(),

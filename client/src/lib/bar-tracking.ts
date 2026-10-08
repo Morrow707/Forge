@@ -896,12 +896,17 @@ function robustPeakSpeed(
   // exactly as it did -- see shared/camera-tunables-by-lift.ts.
   maxSpeedMps = MAX_PLAUSIBLE_LIFT_VELOCITY_MPS,
   minConfidence = MIN_TRACKING_CONFIDENCE,
-): { peak: number; peakIdx: number } {
+): { peak: number; peakIdx: number; samplesInWindow: number; samplesBelowConfidence: number; usedRawFallback: boolean } {
   const samples: { v: number; idx: number }[] = [];
+  let belowConfidence = 0;
   for (let i = startIdx; i <= endIdx; i++) {
-    if (confidences && confidences[i] < minConfidence) continue;
+    if (confidences && confidences[i] < minConfidence) {
+      belowConfidence++;
+      continue;
+    }
     samples.push({ v: speedsMps[i], idx: i });
   }
+  const samplesInWindow = Math.max(0, endIdx - startIdx + 1);
   // Confidence filtering emptied the window (a genuinely bad stretch, not
   // just a couple of low frames) -- fall back to every raw sample rather
   // than reporting zero, same "never silently zero out a whole rep" stance
@@ -914,7 +919,8 @@ function robustPeakSpeed(
           for (let i = startIdx; i <= endIdx; i++) raw.push({ v: speedsMps[i], idx: i });
           return raw;
         })();
-  if (pool0.length === 0) return { peak: 0, peakIdx: startIdx };
+  const poolStats = { samplesInWindow, samplesBelowConfidence: belowConfidence, usedRawFallback: samples.length === 0 };
+  if (pool0.length === 0) return { peak: 0, peakIdx: startIdx, ...poolStats };
   // Filtered out BEFORE the percentile trim runs -- the 95th-percentile trim
   // alone assumes only a handful of frames are bad, which doesn't hold when a
   // contiguous smoothing-window edge effect corrupts several consecutive
@@ -928,11 +934,11 @@ function robustPeakSpeed(
   // reported "24 m/s" bar speed). Clamping to the ceiling keeps this
   // function's "never just report zero" stance -- still a non-zero,
   // physically-real number -- without ever surfacing an impossible one.
-  if (plausible.length === 0) return { peak: maxSpeedMps, peakIdx: pool0[0].idx };
+  if (plausible.length === 0) return { peak: maxSpeedMps, peakIdx: pool0[0].idx, ...poolStats };
   const sorted = [...plausible].sort((a, b) => a.v - b.v);
   const peak = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))].v;
   const peakIdx = plausible.find((s) => s.v >= peak)?.idx ?? startIdx;
-  return { peak, peakIdx };
+  return { peak, peakIdx, ...poolStats };
 }
 
 // Same outlier-exclusion reasoning as robustPeakSpeed's own comment -- a
@@ -1729,7 +1735,7 @@ export function summarizeTrackedSet(
     // robustPeakSpeed rather than a raw max -- see its own comment above.
     // Measured over the moving window too: time-to-peak-velocity counted from a turning point
     // the athlete then stood at for two seconds is not time to peak velocity.
-    const { peak: rawPeak, peakIdx } = robustPeakSpeed(speedsReportedMps, drive.startIdx, drive.endIdx, confidences, tune.maxPlausibleSpeedMps, tune.minTrackingConfidence);
+    const { peak: rawPeak, peakIdx, samplesInWindow: peakSamplesInWindow, samplesBelowConfidence: peakSamplesBelowConfidence, usedRawFallback: peakUsedRawFallback } = robustPeakSpeed(speedsReportedMps, drive.startIdx, drive.endIdx, confidences, tune.maxPlausibleSpeedMps, tune.minTrackingConfidence);
     // A REP'S PEAK IS BOUNDED BY ITS OWN MEAN. Set 10 beside OVR (build 576, 2026-09-30): rep 2
     // read a peak of 0.15 m/s against a mean of 0.52 -- impossible, a peak is never below the
     // average of the window it is read over -- because a hand dropout froze the trace mid-rep
@@ -1767,6 +1773,41 @@ export function summarizeTrackedSet(
         driveSeconds: Math.round(driveDuration * 1000) / 1000,
         phaseRomCm: Math.round(romM * 1000) / 10,
         driveRomCm: Math.round(driveRomM * 1000) / 10,
+        /* WHAT THE PEAK WAS BEFORE IT WAS OVERWRITTEN, AND WHAT IT WAS READ FROM.
+         *
+         * peakFloored is a COUNT in the export (trace.repPeaksFlooredToMean) and nothing says
+         * how far the floor moved the number. The 2026-10-08 Romanian deadlift floored all four
+         * reps and reported peak = mean = 0.72 against the sensor's 1.70, -57.6%, with a count
+         * of 4 as the only evidence -- a mild floor and a catastrophic one read identically.
+         *
+         * The floor fires when rawPeak < mean, which is physically impossible for one quantity
+         * and perfectly possible for two: `mean` is net displacement over elapsed time (immune
+         * to confidence and to sampling), while `rawPeak` is the 95th percentile of the
+         * CONFIDENCE-FILTERED instantaneous speeds over the same window. The fastest part of a
+         * rep is where the hands blur, so the samples the filter removes are biased FAST, and
+         * what survives can sit below the window's own average. That take dropped 105 of 451
+         * points below the visibility floor and carried 130 more from a lone hand.
+         *
+         * So these three say which it was, on the next take, without anyone guessing:
+         * a rawPeak far below the mean with most of the window filtered out is the biased pool;
+         * a rawPeak far below the mean with the window INTACT is the speed series itself.
+         * Diagnostics only -- the floor still fires exactly as before, because a peak below its
+         * own mean is not a number to publish (Rule #1 keeps the rep, the floor keeps it
+         * physical). */
+        rawPeakMps: Math.round(rawPeak * 1000) / 1000,
+        /** Whether THIS rep's peak was overwritten, and which way. The set carries only counts
+         *  (trace.repPeaksFlooredToMean / repPeaksCappedToMeanRatio), so "4 of 5 reps floored"
+         *  could not be resolved to WHICH four, and the rounding in the reported numbers is
+         *  coarse enough (2dp against this field's 3dp) that inferring it from peak == mean
+         *  finds rounding noise instead. Same arrangement as the box jump's per-rep outlier
+         *  flag: every rep keeps its row and its flag. */
+        peakFloored,
+        peakCapped,
+        peakSamplesInWindow,
+        peakSamplesBelowConfidence,
+        /** The confidence filter emptied the window and every raw sample was used instead. A
+         *  peak read this way is the whole window including the frames the tracker distrusted. */
+        peakUsedRawFallback,
         /** Samples in the drive window. A window of 3 or 4 is a fragment however long it reads. */
         driveSamples: drive.endIdx - drive.startIdx + 1,
         /** True when trimPhaseToDrive gave up and the travel window was used instead. */
