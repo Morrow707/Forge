@@ -1968,6 +1968,39 @@ see whats live on their profiles and whats missing"). State of the code:
   for the public set, plus `research_consent.pdf` served from the reviewed constant (an explicit
   branch BEFORE the enum lookup; it must never become an admin-editable row). Nothing leaving
   the app is titled "(Draft)".
+  **THAT WAS SEVEN OF EIGHT UNTIL 2026-10-08, AND IT TOOK A LIVE FETCH TO FIND THE EIGHTH.**
+  `parental_notice` was in `LEGAL_DOC_TYPES` (seeded, admin-editable, attorney-reviewed) and
+  absent from `PUBLIC_LEGAL_DOC_TYPES`, so both public routes 404'd where the other six served,
+  for as long as the public set has existed. It is the worst of the eight to lose: every other
+  document is addressed to somebody with an account, and this one is addressed to a guardian who
+  may have none and no reason to make one -- so the email IS its delivery, and a guardian who
+  deleted it, or who wanted to read the notice BEFORE claiming their child's account, had
+  nowhere to go. Now at `/parent-notice`, and emailable to a roster, which is the right outcome
+  rather than a side effect (it is the one document a coach has an obvious reason to send to
+  every guardian at once). Delivery is unchanged -- still emailed, still snapshotted into the
+  guardian's consent record at claim time, which is what makes it evidence.
+  **NOT `/guardian-notice`**, which it was called for one commit: robots.txt disallows the authed
+  prefixes wholesale, `/guardian` among them, so the page would have been sitemapped and blocked
+  from crawling at once. `seo-head.test.ts` caught it on the first run.
+  **THE LESSON IS THE ASSERTION'S DIRECTION, and it generalises past documents.** The one scan
+  covering this iterated `PUBLIC_LEGAL_DOC_TYPES` asserting each had a page -- which cannot see
+  a document that was never in the set it iterates. A subset assertion is blind to exactly the
+  omission it looks like it covers. The two lists are now held EQUAL, with a
+  `NOT_PUBLIC_ON_PURPOSE` list that is EMPTY and whose entries must carry a reason over forty
+  characters -- the same shape as `FITTED_OVERRIDES` in the camera registry: the machinery for a
+  divergence exists, the list is empty, and adding to it costs a sentence that shows up in a
+  grep. The reverse direction is pinned too, so a type cannot be served publicly with no admin
+  editor behind it. Five mutations, each caught by the right test.
+  Also fixed with it: `parental_notice_ack` in `shared/consent-catalog.ts` carried
+  `page: null, pdfType: null` because there had been nothing to point at, so "What you've agreed
+  to" listed the one document addressed to the reader and offered no way to reread it.
+- **A JSX STRING ATTRIBUTE IS A LITERAL, AND TWO PUBLIC LEGAL PAGES SHIPPED PROOF OF IT.** Found
+  2026-10-08. The AI Terms and Research Consent pages carried
+  `otherLabel="Privacy Policy \u2192"`, which renders those six characters on screen -- JSX
+  processes escapes inside `{"..."}`, never inside a quoted attribute. The five older pages had
+  the real character all along, and this was found by copying one of the two broken ones to make
+  a third, which is how the class spreads. All three carry the character now and
+  `documents-surfaces.test.ts` scans for a `\u` escape in any label or title on those pages.
 - **A waiver kind has to belong on the profile it is filed against.** The upload route accepts
   the target's checklist kinds (`uploadableKindsFor`) plus "other"; the institutional agreement
   only from the primary coach the server says owes one. Before this an athlete could file a
