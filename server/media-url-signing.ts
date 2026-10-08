@@ -113,6 +113,29 @@ const GATED_UPLOAD_DIRS = new Set([
   // path is what stops the link's underlying file being fetched directly after the token has
   // expired or been revoked.
   "reviews",
+  // reference-clips: THE ONE DIRECTORY A GATED FILE IS COPIED INTO, which is how a minor's
+  // form-check clip came to be public by URL. POST /api/coach/reference-clips/from-athlete
+  // calls copyUploadedFile(athleteClipUrl, "reference-clips") -- the source lives in
+  // form-videos and is gated, the copy landed here and was not, so a coach tapping "save as
+  // reference" on a 14-year-old's bench press turned that footage into a file anyone holding
+  // the URL could fetch, with no session, no signature and no expiry, forever. The row even
+  // records source: "from_athlete" and sourceAthleteId, so the server knew whose footage it
+  // was. Found 2026-10-08 by the launch audit's signed-out sweep.
+  //
+  // Gating the whole directory rather than only the from_athlete copies is deliberate: the
+  // gate is keyed on the PATH, a coach's own demo upload and an athlete's copied clip share
+  // this directory, and a scheme that has to consult a database row to decide whether to check
+  // a signature is one that fails open the day the lookup errors.
+  "reference-clips",
+  // knowledge-sources: the uploaded source PDFs for the AI knowledge library -- among them the
+  // purchased textbook. Only an admin is ever shown one of these paths, which is why this is
+  // the lower-severity half, but "only an admin knows the URL" is not an access control: the
+  // file was readable by anyone who came by it, and CLAUDE.md records at length that Forge is
+  // licensed to POSSESS that book and not to redistribute it (the publisher's EULA is the
+  // whole reason derivedContentLicensed exists). A signature costs nothing here -- nothing
+  // renders these as a bare <video>/<img>, and any response carrying one is signed by the
+  // res.json sweep in server/index.ts like every other gated path.
+  "knowledge-sources",
 ]);
 
 // Matches only a bare, freshly-stored path with no query string yet --
