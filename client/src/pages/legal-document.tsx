@@ -42,6 +42,7 @@ function LegalDocumentPage({
     | "biometric_waiver"
     | "assumption_of_risk"
     | "ai_terms_of_use"
+    | "parental_notice"
     // Not a legalDocuments row: served from shared/research-consent.ts by an explicit branch
     // on both public routes, so it reaches this page through the same two URLs as the rest.
     | "research_consent";
@@ -164,13 +165,27 @@ export function AssumptionOfRiskPage() {
   );
 }
 
+/** The Notice to Parent or Guardian. Public since 2026-10-08: it is addressed to somebody who
+ *  may have no account and no reason to make one, and until then the only copy was in an email
+ *  they could delete. See PUBLIC_LEGAL_DOC_TYPES for the full reasoning. */
+export function ParentNoticePage() {
+  return (
+    <LegalDocumentPage
+      docType="parental_notice"
+      title="Notice to Parent or Guardian"
+      otherHref="/privacy"
+      otherLabel="Privacy Policy →"
+    />
+  );
+}
+
 export function AiTermsOfUsePage() {
   return (
     <LegalDocumentPage
       docType="ai_terms_of_use"
       title="Artificial Intelligence Terms of Use"
       otherHref="/legal"
-      otherLabel="Signup Agreement \u2192"
+      otherLabel="Signup Agreement →"
     />
   );
 }
@@ -184,7 +199,7 @@ export function ResearchConsentPage() {
       docType="research_consent"
       title="Research Consent and Data Use Authorization"
       otherHref="/privacy"
-      otherLabel="Privacy Policy \u2192"
+      otherLabel="Privacy Policy →"
     />
   );
 }

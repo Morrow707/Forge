@@ -34,10 +34,13 @@ export const CONSENT_CATALOG: Record<ConsentType, ConsentCatalogEntry> = {
     pdfType: "assumption_of_risk",
   },
   research_data_use: { label: "Research consent", page: "/research-consent", pdfType: null },
+  /* Both were null until 2026-10-08, because the notice had no public page and no PDF -- so a
+   * guardian reading "What you've agreed to" saw the label of the one document addressed to
+   * THEM and no way to reread it. It has both now. */
   parental_notice_ack: {
     label: "Notice to Parent or Guardian",
-    page: null,
-    pdfType: null,
+    page: "/parent-notice",
+    pdfType: "parental_notice",
   },
   coach_coppa_consent: { label: "Coach's attestation for an under-13 account", page: null, pdfType: null },
   guardian_coppa_consent: { label: "Guardian's consent for an under-13 account", page: null, pdfType: null },

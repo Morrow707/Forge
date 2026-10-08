@@ -134,6 +134,100 @@ describe("the public legal pages", () => {
       expect(publicPage, type).toContain(`docType="${type}"`);
     }
   });
+
+  /* THE ASSERTION ABOVE CHECKS ONE DIRECTION, AND THE OTHER ONE IS WHERE THE BUG WAS.
+   *
+   * "Every public type has a page" cannot see a document that is seeded, attorney-reviewed,
+   * admin-editable and simply never made public -- the set it iterates does not contain it. On
+   * 2026-10-08 a fetch of the live host found `parental_notice` 404ing on both public routes
+   * where the other six served, and it had been missing since the public set was written. Seven
+   * documents served and the eighth did not, and no test in this repo could tell.
+   *
+   * The Notice to Parent or Guardian is also the worst one to lose: it is the single document
+   * addressed to somebody who may have no account and no reason to make one, so "it is emailed
+   * to them" is the whole of its delivery, and a guardian who deleted that email had nowhere
+   * to go. It is now public, and the two sets are exactly equal.
+   *
+   * Stated as an equality with a named-exemptions list rather than a subset, for the same
+   * reason FITTED_OVERRIDES is empty in the camera tunables registry: the machinery for a
+   * divergence exists, the list is empty, and putting something in it costs a sentence of
+   * justification that shows up in a grep. A subset assertion in either direction alone is
+   * what let this through.
+   */
+  const NOT_PUBLIC_ON_PURPOSE: { type: string; why: string }[] = [
+    // Empty. institutional_agreement is NOT a candidate: it is absent from LEGAL_DOC_TYPES too
+    // (a signed PDF a coach uploads, filled from shared/institutional-service-agreement.ts by
+    // its own route), so it is outside both sets rather than exempt from one.
+  ];
+
+  it("make every document an admin can resolve publicly readable, with no silent exceptions", () => {
+    const adminTypes = stringArray(routes, "LEGAL_DOC_TYPES");
+    const publicTypes = stringArray(routes, "PUBLIC_LEGAL_DOC_TYPES");
+    expect(adminTypes.length).toBeGreaterThanOrEqual(7);
+
+    const exempt = new Set(NOT_PUBLIC_ON_PURPOSE.map((e) => e.type));
+    for (const e of NOT_PUBLIC_ON_PURPOSE) {
+      // An entry with no reason is the silence this assertion exists to break.
+      expect(e.why.length, e.type).toBeGreaterThan(40);
+      expect(adminTypes, e.type).toContain(e.type);
+    }
+
+    const missing = adminTypes.filter((t) => !publicTypes.includes(t) && !exempt.has(t));
+    expect(missing, "seeded and reviewed, but has no public page or PDF").toEqual([]);
+
+    // And the other way, so a type can never be served publicly without the admin side that
+    // edits and emails it -- which is the surface an admin uses to correct a reviewed document.
+    const orphaned = publicTypes.filter((t) => !adminTypes.includes(t));
+    expect(orphaned, "publicly served with no admin editor behind it").toEqual([]);
+  });
+
+  it("gives the notice to a parent a page, a PDF and a link a guardian can find", () => {
+    // Named explicitly beside the scan, so a rename cannot leave the scan passing over a set
+    // that no longer contains this document. The three surfaces a guardian actually reaches:
+    // the route, the index of public documents, and the consent record that says they agreed.
+    expect(stringArray(routes, "PUBLIC_LEGAL_DOC_TYPES")).toContain("parental_notice");
+    expect(read("client/src/App.tsx")).toContain('path="/parent-notice"');
+    expect(read("client/src/pages/legal.tsx")).toContain('href: "/parent-notice"');
+    // The consent-catalog entry carried page: null and pdfType: null while there was nothing to
+    // point at, so "What you've agreed to" listed the one document addressed to the reader and
+    // offered no way to reread it.
+    const catalog = read("shared/consent-catalog.ts");
+    const entry = catalog.slice(catalog.indexOf("parental_notice_ack: {"));
+    const body = entry.slice(0, entry.indexOf("},"));
+    expect(body).toContain('page: "/parent-notice"');
+    expect(body).toContain('pdfType: "parental_notice"');
+  });
+
+  /* NOT "/guardian-notice", which is what this page was first called for one commit.
+   *
+   * robots.txt disallows the authed prefixes wholesale, "/guardian" among them, so a public page
+   * under it would have sat in the sitemap and been blocked from crawling at the same time --
+   * indexable by declaration and uncrawlable in fact. seo-head.test.ts caught it on the first
+   * run, which is the whole reason that assertion exists; this pins the outcome so the path does
+   * not drift back under a prefix on a later rename. */
+  it("sits outside every robots-disallowed prefix", () => {
+    const routesSrc = read("shared/public-routes.ts");
+    expect(routesSrc).toContain('path: "/parent-notice"');
+    expect(routesSrc).not.toContain('path: "/guardian-notice"');
+    expect(read("client/src/App.tsx")).not.toContain('path="/guardian-notice"');
+  });
+
+  /* A JSX STRING ATTRIBUTE IS A LITERAL, AND TWO PUBLIC LEGAL PAGES SHIPPED PROOF OF IT.
+   *
+   * The AI Terms of Use and the Research Consent pages both carried
+   * otherLabel="Privacy Policy \u2192", which renders those six characters on screen rather than
+   * an arrow -- JSX does not process escapes inside a quoted attribute, only inside a {"..."}
+   * expression. Found 2026-10-08 while adding a third page by copying one of them, which is how
+   * this class spreads. The five older pages had the real character all along. */
+  it("writes the arrow on a public legal page as a character, never as an escape", () => {
+    expect(publicPage).not.toMatch(/otherLabel="[^"]*\\u/);
+    expect(publicPage).not.toMatch(/title="[^"]*\\u/);
+    const labels = Array.from(publicPage.matchAll(/otherLabel="([^"]*)"/g), (m) => m[1]);
+    expect(labels.length).toBeGreaterThanOrEqual(7);
+    for (const label of labels) {
+      expect(label, label).toContain("\u2192");
+    }
+  });
 });
 
 describe("what people are told about an uploaded file", () => {

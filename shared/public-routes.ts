@@ -140,6 +140,18 @@ export const PUBLIC_ROUTES: PublicRoute[] = [
     priority: 0.3,
   },
   {
+    /* NOT "/guardian-notice". That path starts with "/guardian", which is an authed prefix that
+     * robots.txt disallows wholesale -- so the page would have sat in the sitemap and been
+     * blocked from crawling at the same time. seo-head.test.ts caught it on the first run,
+     * which is the whole reason that assertion exists. */
+    path: "/parent-notice",
+    title: "Notice to Parent or Guardian",
+    description:
+      "What Forge collects about an athlete under 18, what a guardian is agreeing to, and how to withdraw it.",
+    index: true,
+    priority: 0.3,
+  },
+  {
     path: "/assumption-of-risk",
     title: "Assumption of Risk",
     description: "The acknowledgement every athlete makes about the risks of physical training.",

@@ -18,6 +18,7 @@ const PUBLIC_DOCUMENT_LINKS: { href: string; label: string }[] = [
   { href: "/eula", label: "End User License Agreement" },
   { href: "/ai-terms", label: "Artificial Intelligence Terms of Use" },
   { href: "/biometric-release", label: BIOMETRIC_DOCUMENT_NAME },
+  { href: "/parent-notice", label: "Notice to Parent or Guardian" },
   { href: "/assumption-of-risk", label: "Assumption of Risk and Release" },
   { href: "/research-consent", label: "Research Consent and Data Use Authorization" },
 ];

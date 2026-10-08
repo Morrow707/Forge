@@ -42,6 +42,7 @@ import {
   PrivacyPolicyPage,
   EulaPage,
   BiometricReleasePage,
+  ParentNoticePage,
   AssumptionOfRiskPage,
   AiTermsOfUsePage,
   ResearchConsentPage,
@@ -455,6 +456,7 @@ function Router() {
             checkboxes. Public because the claim is reached from an emailed invite, before
             there is a session to authenticate. */}
         <Route path="/biometric-release" component={BiometricReleasePage} />
+        <Route path="/parent-notice" component={ParentNoticePage} />
         <Route path="/assumption-of-risk" component={AssumptionOfRiskPage} />
         {/* The research consent text (shared/research-consent.ts), readable without a session
             so a guardian deciding for a minor, or anyone who already said yes, can reread it. */}

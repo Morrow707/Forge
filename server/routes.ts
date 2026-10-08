@@ -5092,6 +5092,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // enum, seeded, routed and admin-editable, but never made public here. The runtime audit
     // of 2026-09-19 caught it; nothing static could.
     "ai_terms_of_use",
+    // THE NOTICE TO A PARENT, READABLE BY THAT PARENT. Added 2026-10-08 on Scott's instruction
+    // after a fetch of the live host found it 404ing where the other seven served.
+    //
+    // It was excluded on the grounds that it is "delivered by email to a guardian", which is
+    // true and is not a reason to withhold it: the guardian who deletes that email, or who
+    // wants to read the notice BEFORE deciding whether to claim their child's account, had
+    // nowhere to go. Every other attorney-reviewed document has a page and a PDF, and this is
+    // the one addressed to somebody who does not have an account yet. The same argument the
+    // comment above makes for the biometric waiver -- reached from an emailed invite before
+    // there is any session, so it has to be public rather than merely logged-in -- applies to
+    // this document more strongly, since a guardian may never create an account at all.
+    //
+    // Nothing about delivery changes: the notice is still emailed, and still snapshotted into
+    // the guardian's consent record at claim time (storage.ts, logConsentRecord), which is what
+    // makes it evidence. This only adds a way to read it.
+    "parental_notice",
   ] as const;
   const isPublicLegalDocType = (v: string): v is (typeof PUBLIC_LEGAL_DOC_TYPES)[number] =>
     (PUBLIC_LEGAL_DOC_TYPES as readonly string[]).includes(v);
@@ -9077,6 +9093,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     biometric_waiver: "/biometric-release",
     assumption_of_risk: "/assumption-of-risk",
     ai_terms_of_use: "/ai-terms",
+    // Added with the public page, 2026-10-08. It also makes this document emailable to a
+    // roster, which is the right outcome rather than a side effect: the Notice to Parent or
+    // Guardian is the one document a coach has an obvious reason to send to every guardian at
+    // once, and until now it was the one they could not.
+    parental_notice: "/parent-notice",
   };
 
   const rosterDocumentRecipients = async (roster: { id: number }[]) => {
