@@ -437,8 +437,11 @@ export default function CoachBilling() {
 
           {isNative ? (
             <p className="rounded-md bg-surface-elevated p-3 text-sm text-muted-foreground">
-              Coach plans are managed on the web. Open Forge in a browser to subscribe or change
-              your card.
+              {/* NO STEER TO AN OUTSIDE PURCHASE FROM INSIDE THE APP (2026-10-08). The coach plan
+                  is sold to programs on the web only (App Store guideline 3.1.3(c)); the app
+                  may show what the program has and must not tell a coach where to go and buy
+                  it. The old sentence here did exactly that. */}
+              Your program's plan is set up outside the app. This screen shows what it covers.
             </p>
           ) : !billingOpen ? (
             <p className="rounded-md bg-surface-elevated p-3 text-sm text-muted-foreground">

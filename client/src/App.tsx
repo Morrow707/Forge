@@ -337,6 +337,13 @@ function RouteMeta() {
   return null;
 }
 
+/** A page that exists for the web visitor and has no place in the native app. */
+function WebOnlyPage(Page: ComponentType): ComponentType {
+  return function WebOnly() {
+    return Capacitor.isNativePlatform() ? <Redirect to="/login" /> : <Page />;
+  };
+}
+
 /** Warms the chunks for the pages a visitor on / or /login is most likely to open next, once
  * the browser is idle -- so making them lazy costs the web visitor nothing on the click, and
  * costs the native app (which prefetches nothing it does not link to) nothing at boot. */
@@ -411,11 +418,13 @@ function Router() {
         <Route path="/login" component={LoginPage} />
         <Route path="/admin/login" component={AdminLoginPage} />
         <Route path="/signup" component={SignupPage} />
-        <Route path="/pricing" component={PricingPage} />
-        {/* The audience pages. Public and indexed -- see shared/public-routes.ts, which is also
-            what the sitemap and the prerenderer read. */}
-        <Route path="/for-high-schools" component={ForHighSchoolsPage} />
-        <Route path="/for-athletes" component={ForAthletesPage} />
+        {/* THE SALES PAGES ARE WEB PAGES. They price the coach plan, which is sold to programs on
+            the web and never through the App Store, so inside the native app they go to login
+            the way / does (App Store guideline 3.1.1: no pricing or call to action for a purchase
+            made outside the app). Public and indexed on the web -- see shared/public-routes.ts. */}
+        <Route path="/pricing" component={WebOnlyPage(PricingPage)} />
+        <Route path="/for-high-schools" component={WebOnlyPage(ForHighSchoolsPage)} />
+        <Route path="/for-athletes" component={WebOnlyPage(ForAthletesPage)} />
         {/* What the camera has actually been validated on. Public deliberately: the value of the
             page is entirely in it being readable before somebody buys. */}
         <Route path="/camera-validation" component={CameraValidationPage} />

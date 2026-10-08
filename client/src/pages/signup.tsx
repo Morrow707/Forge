@@ -40,6 +40,7 @@ import { derivePrivacyTier } from "@shared/privacy-tiers";
 import { SPORTS } from "@shared/exercise-taxonomy";
 import { todayIso } from "@/lib/local-date";
 import { bandForAthleteCount, formatCents, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
+import { Capacitor } from "@capacitor/core";
 
 /** The signup form only accepts a whole number of athletes in this range --
  * the upper bound is the server's own (MAX_EXPECTED_ATHLETES on signupSchema)
@@ -443,10 +444,14 @@ export default function SignupPage() {
                     onChange={(e) => setExpectedAthletes(e.target.value)}
                     placeholder="e.g. 34"
                   />
+                  {/* The price of the coach plan is a WEB sentence: the plan is sold to programs on
+                      the web and never through the App Store, so the native app states the band
+                      and not the money (guideline 3.1.1). The headcount still sets the band. */}
                   {expectedBand && (
                     <p className="rounded-md bg-surface-elevated p-3 text-sm font-semibold">
-                      {expectedBand.label} · {formatCents(expectedBand.monthlyPriceCents)}/month ·{" "}
-                      {formatCents(ORG_PER_ATHLETE_CENTS)} per athlete
+                      {Capacitor.isNativePlatform()
+                        ? expectedBand.label
+                        : `${expectedBand.label} · ${formatCents(expectedBand.monthlyPriceCents)}/month · ${formatCents(ORG_PER_ATHLETE_CENTS)} per athlete`}
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground">

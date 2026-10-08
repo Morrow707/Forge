@@ -42,6 +42,48 @@ describe("the in-app paywall never points a buyer at the website", () => {
     expect(readFileSync("client/src/pages/athlete/upgrade.tsx", "utf8")).toMatch(/Restore Purchases/);
   });
 
+  // THE COACH PLAN IS SOLD ON THE WEB AND NEVER IN THE APP (2026-10-08). $4 an athlete in bands
+  // is billed to a program by card, which guideline 3.1.3(c) allows outside Apple -- on the
+  // condition that the app never prices it, links to it, or tells a coach where to go and buy
+  // it. These pin the four places that did.
+  describe("the native app never prices or steers to the web-only coach plan", () => {
+    it("the coach billing screen describes the plan and does not say where to buy it", () => {
+      const src = readFileSync("client/src/pages/coach/billing.tsx", "utf8");
+      expect(src).not.toMatch(/Open Forge in a browser to (subscribe|pay|change)/i);
+      expect(src).toMatch(/Your program's plan is set up outside the app/);
+    });
+
+    it("the login screen links to pricing on the web only", () => {
+      const src = readFileSync("client/src/pages/login.tsx", "utf8");
+      const idx = src.indexOf('href="/pricing"');
+      expect(idx).toBeGreaterThan(0);
+      expect(src.slice(Math.max(0, idx - 400), idx)).toMatch(/!Capacitor\.isNativePlatform\(\) &&/);
+    });
+
+    it("the coach signup states the band and never the price on the phone", () => {
+      const src = readFileSync("client/src/pages/signup.tsx", "utf8");
+      expect(src).toMatch(
+        /Capacitor\.isNativePlatform\(\)\s*\?\s*expectedBand\.label\s*:/,
+      );
+    });
+
+    it("the sales pages are web pages: the native shell sends them to login", () => {
+      const src = readFileSync("client/src/App.tsx", "utf8");
+      for (const page of ["PricingPage", "ForHighSchoolsPage", "ForAthletesPage"]) {
+        expect(src).toMatch(new RegExp(`component=\\{WebOnlyPage\\(${page}\\)\\}`));
+      }
+      expect(src).toMatch(/Capacitor\.isNativePlatform\(\) \? <Redirect to="\/login" \/> : <Page \/>/);
+    });
+
+    it("the refusal a native client meets names no web checkout", () => {
+      const src = readFileSync("server/routes.ts", "utf8");
+      const idx = src.indexOf("function requireWebCheckout");
+      expect(idx).toBeGreaterThan(0);
+      const body = src.slice(idx, idx + 400);
+      expect(body).not.toMatch(/browser|website|pay by card/i);
+    });
+  });
+
   it("the Smart App Banner is injected from the App Store id and never hardcoded", () => {
     expect(readFileSync("vite.config.ts", "utf8")).toMatch(/VITE_APP_STORE_ID/);
     expect(readFileSync("client/index.html", "utf8")).not.toMatch(/apple-itunes-app/);

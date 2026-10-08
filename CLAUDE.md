@@ -2082,6 +2082,21 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   ones -- see FREE_AGENT_ADD_ON_ORDER -- and they are withdrawn and refused at checkout.
 - **The locked state for a non-comped account says "not available yet"**, never "free in beta":
   that branch is reached only by an account that is not comped.
+- **THE COACH PLAN ($4 AN ATHLETE IN BANDS) IS SOLD ON THE WEB AND NEVER THROUGH APPLE, AND THE
+  APP MAY NOT SAY SO** (2026-10-08). Scott: "we don't need to as i want coaches to do that through
+  the app [web]" and then "do a quick check and make sure nothing in the app says it so we stay
+  safe." Guideline 3.1.3(c) lets a program be billed by card outside Apple, on the condition that
+  the iOS app never prices that plan, links to its checkout, or tells a coach where to go and buy
+  it (3.1.1). Four places did and are fixed: the coach billing screen's native copy ("Open Forge
+  in a browser to subscribe" is exactly the steer; it now says the plan is set up outside the app
+  and shows what it covers), the login screen's "View pricing" link (web only), the coach signup's
+  band line (the band alone on the phone, the money on the web), and `requireWebCheckout`'s
+  refusal, which said "pay by card" in a browser. `/pricing`, `/for-high-schools` and
+  `/for-athletes` are wrapped in `WebOnlyPage` in App.tsx and go to login inside the native app;
+  on the web they are untouched and still indexed. `native-paywall-never-points-at-the-web.test.ts`
+  pins all of it. Do not add the coach plan to App Store Connect: a program's subscription is not
+  a consumer purchase, and selling it both ways would put the roster cap and the Stripe webhook
+  (`applyCoachSubscriptionBand`) on two rails.
 
 ## Skills are part of the camera tier
 

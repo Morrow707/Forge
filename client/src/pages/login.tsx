@@ -3,6 +3,7 @@ import { Link, Redirect, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { SignupLink } from "@/components/signup-cta";
+import { Capacitor } from "@capacitor/core";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
@@ -252,11 +253,15 @@ export default function LoginPage() {
                   Log in here
                 </Link>
               </p>
-              <p className="mt-2 text-center text-sm text-muted-foreground">
-                <Link href="/pricing" className="font-semibold text-primary hover:underline">
-                  View pricing
-                </Link>
-              </p>
+              {/* The pricing page lists the coach plan, which is sold on the web and never in
+                  the app, so the native app does not link to it (App Store guideline 3.1.1). */}
+              {!Capacitor.isNativePlatform() && (
+                <p className="mt-2 text-center text-sm text-muted-foreground">
+                  <Link href="/pricing" className="font-semibold text-primary hover:underline">
+                    View pricing
+                  </Link>
+                </p>
+              )}
             </CardContent>
           </Card>
         )}

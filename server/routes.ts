@@ -13708,7 +13708,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   function requireWebCheckout(req: any, res: any, next: any) {
     if (req.headers["x-forge-platform"]) {
       return res.status(403).json({
-        message: "In-app purchases go through the App Store. Open Forge in a browser to pay by card.",
+        message: "Purchases in the app go through the App Store.",
       });
     }
     next();
