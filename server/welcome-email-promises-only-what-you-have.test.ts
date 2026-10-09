@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildWelcomeEmail } from "./welcome-email";
 import { FREE_AGENT_TIERS } from "@shared/free-agent-tiers";
 import { readdirSync, readFileSync } from "node:fs";
+import { FORGE_EMAIL_HEADER_RE } from "./email-branding";
 import { join } from "node:path";
 
 /**
@@ -95,18 +96,43 @@ describe("the welcome email a Free Agent gets", () => {
  * COVERED below, with cases of its own beside the welcome email's.
  */
 describe("no other email builder makes a tier-gated feature claim", () => {
-  const COVERED = new Set(["welcome-email.ts"]);
+  /* A file in COVERED is one whose feature words are legitimate and which carries its own
+   * cases below, which is what this block's failure message instructs. progress-report.ts says
+   * "camera" because it carries the camera CAVEAT -- a warning about a number already shown, the
+   * opposite of promising a feature -- so it earns a case rather than a weakened regex. */
+  const COVERED = new Set(["welcome-email.ts", "progress-report.ts"]);
   // The entitlements a tier can lack. Phrased as the words a marketing sentence would use,
   // not as flag names: hasVideoFormCheck never appears in an email, "form check" does.
   const CLAIMS =
     /\bAI (?:coach|program builder|chat|training chat)\b|\bcamera\b|\bform check\b|\bvideo (?:analysis|review)\b|\bskills? (?:bank|library)\b/i;
 
-  const builders = readdirSync(join(process.cwd(), "server"))
-    .filter((f) => /email.*\.ts$/.test(f) && !/\.test\.ts$|\.itest\.ts$/.test(f));
+  /* DISCOVERED BY WHAT THE FILE EMITS AS WELL AS BY WHAT IT IS CALLED.
+   *
+   * This was a /email.*\.ts$/ glob alone until 2026-10-09, so it had never read
+   * progress-report.ts or terms-change-notice.ts -- two real email bodies whose filenames say
+   * nothing about email. The band (FORGE_EMAIL_HEADER_RE) is the reliable signal, because a body
+   * that does not carry it is not branded at all, which makes the predicate self-enforcing.
+   *
+   * The UNION of the two, not the band alone: dropping the glob would stop scanning
+   * email-roster-documents.ts, which emits its band through the shared shell and so no longer
+   * holds the literal. Either signal alone has a blind spot; the union has neither.
+   */
+  const dir = join(process.cwd(), "server");
+  const builders = readdirSync(dir)
+    .filter((f) => f.endsWith(".ts") && !/\.test\.ts$|\.itest\.ts$/.test(f))
+    .filter((f) => {
+      if (/email.*\.ts$/.test(f)) return true;
+      return FORGE_EMAIL_HEADER_RE.test(readFileSync(join(dir, f), "utf8"));
+    });
 
-  it("finds the email builders at all", () => {
-    expect(builders.length).toBeGreaterThanOrEqual(12);
+  it("finds the email builders at all, including the two a filename glob misses", () => {
+    expect(builders.length).toBeGreaterThanOrEqual(14);
     expect(builders).toContain("welcome-email.ts");
+    // The two the glob never saw. Named, so widening the discovery cannot silently revert.
+    expect(builders).toContain("progress-report.ts");
+    expect(builders).toContain("terms-change-notice.ts");
+    // And the one the band alone would drop, since its band now comes from the shared shell.
+    expect(builders).toContain("email-roster-documents.ts");
   });
 
   it.each(builders.filter((f) => !COVERED.has(f)))("%s makes no feature claim", (file) => {
@@ -128,5 +154,48 @@ describe("no other email builder makes a tier-gated feature claim", () => {
         `welcome email shipped. Either drop the sentence, or gate it on the entitlement and ` +
         `add this file to COVERED with cases of its own.`,
     ).toBeNull();
+  });
+});
+
+/* THE PROGRESS REPORT MAILS A CAMERA NUMBER, so it carries the caveat every camera number does.
+ *
+ * `recordCameraTimedCombineResult` writes a video-timed 40, pro agility or three-cone straight
+ * into users.fortyYardDash and friends, and `snapshotTestingResults` is shared with a coach's
+ * manual edit -- so there is no provenance column and a number in that table may be either. The
+ * email said nothing about it until 2026-10-09, and camera-caveat-coverage.test.ts could never
+ * have caught it: that scan reads client/src/pages, and no email was ever in its scope.
+ */
+describe("the progress report's camera numbers", () => {
+  const src = readFileSync(join(process.cwd(), "server", "progress-report.ts"), "utf8");
+
+  it("carries the shared caveat constant beside the Testing / Combine table", () => {
+    // The constant, never a retyped sentence: shared/camera-accuracy-copy.ts exists to be
+    // deleted in one place when calibration lands, and a copy here would survive that.
+    expect(src).toContain("CAMERA_ACCURACY_INLINE");
+    const at = src.indexOf("Testing / Combine");
+    expect(at).toBeGreaterThan(0);
+    // Within the same template block, not somewhere else in the file.
+    expect(src.slice(at, at + 600)).toContain("${CAMERA_ACCURACY_INLINE}");
+  });
+
+  it("says a time MAY be camera-timed, which is the only honest claim", () => {
+    // "These are camera numbers" would be wrong for a stopwatch time, and the columns cannot
+    // tell the two apart.
+    expect(src).toMatch(/may have been timed by the camera/);
+  });
+
+  it("promises no tier-gated feature, which is what the scan above was checking for", () => {
+    const copy = src
+      .split("\n")
+      .filter((l) => {
+        const t = l.trim();
+        return !t.startsWith("//") && !t.startsWith("*") && !t.startsWith("/*");
+      })
+      .join("\n");
+    // Every claim word EXCEPT the caveat's own "camera". If this file ever starts naming the AI
+    // coach, the form check or the skills bank, that is the bug the scan above exists for.
+    expect(copy).not.toMatch(
+      /\bAI (?:coach|program builder|chat|training chat)\b|\bform check\b|\bvideo (?:analysis|review)\b|\bskills? (?:bank|library)\b/i,
+    );
   });
 });

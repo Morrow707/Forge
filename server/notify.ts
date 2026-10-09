@@ -4,6 +4,7 @@ import { apnsEnabled } from "./apns";
 import { sendEmail, escapeHtml, emailEnabled } from "./email";
 import { categoryForNotificationType } from "@shared/notification-categories";
 import { recordDeliveryAttempt } from "./health-probes";
+import { emailShell } from "./email-shell";
 
 /** The one place all three notification channels (in-app inbox, push, email)
  * fan out from, so every targeted event -- a comment reply, a team
@@ -95,7 +96,18 @@ export async function notifyUser(
       to: user.email,
       subject: title,
       brandForUserId: userId,
-      html: `<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;">${escapeHtml(body)}</p><p style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#777;">Open Forge to see more.</p>`,
+      // THROUGH THE SHELL, because brandForUserId above does nothing without the band.
+      //
+      // This was two bare <p> tags until 2026-10-09. applyEmailBranding keys on
+      // FORGE_EMAIL_HEADER_RE and returns the html untouched when it is absent, so every in-app
+      // notification email carried the program in its From line and neither the program nor
+      // "Powered by Forge" in its body -- the half-branded state email-branding.ts describes as
+      // the thing it leaves alone rather than half-does. It was left alone because there was
+      // nothing here to recognise.
+      html: emailShell(
+        title,
+        `<p style="font-size:15px;">${escapeHtml(body)}</p><p style="font-size:12px;color:#777;">Open Forge to see more.</p>`,
+      ),
     });
     emailDelivered = result.sent;
     if (emailCounted) recordDeliveryAttempt("email", emailDelivered);

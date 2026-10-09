@@ -18,6 +18,7 @@ import {
   type InstitutionalAgreementForgeSide,
   type InstitutionalAgreementForm,
 } from "@shared/institutional-service-agreement";
+import { emailShell } from "./email-shell";
 
 /** A SCHOOL GETS ITS OWN AGREEMENT OUT OF THE APP.
  *
@@ -516,11 +517,20 @@ async function emailSignedCopy(input: {
     await sendEmail({
       to: input.noticeEmail,
       subject: "Your signed Forge Institutional Service Agreement",
-      html:
+      // Through the shell: this was the only email in the system with no Forge wordmark
+      // anywhere, which is indefensible for the confirmation of a signed agreement going to a
+      // school's notice address. Found 2026-10-09.
+      //
+      // Deliberately UNBRANDED by program (no brandForUserId): the recipient is the notice
+      // address named in the agreement, and the agreement is between the school and Forge. A
+      // confirmation of what was signed with Forge wears Forge.
+      html: emailShell(
+        "Your signed Institutional Service Agreement",
         `<p>${escapeHtml(input.signerName)} signed the Forge Institutional Service Agreement for ` +
-        `${escapeHtml(input.institutionName)} on ${escapeHtml(input.signedDate)}.</p>` +
-        `<p>Your signed copy is available in the app: open Documents and download the ` +
-        `Institutional Service Agreement. No paper copy is needed.</p>`,
+          `${escapeHtml(input.institutionName)} on ${escapeHtml(input.signedDate)}.</p>` +
+          `<p>Your signed copy is available in the app: open Documents and download the ` +
+          `Institutional Service Agreement. No paper copy is needed.</p>`,
+      ),
     });
   } catch (err) {
     console.error("Institutional agreement confirmation email failed:", err);

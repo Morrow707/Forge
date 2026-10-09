@@ -1,5 +1,6 @@
 import { TESTING_METRICS } from "@shared/testing-metrics";
 import { escapeHtml } from "./email";
+import { CAMERA_ACCURACY_INLINE } from "@shared/camera-accuracy-copy";
 
 type RosterAthlete = {
   name: string;
@@ -97,9 +98,22 @@ export function buildProgressReportEmail(
         }
 
         ${
+          /* THE CAVEAT EVERY CAMERA NUMBER CARRIES, which this email did not.
+           *
+           * `recordCameraTimedCombineResult` writes a video-timed 40, pro agility or three-cone
+           * straight into users.fortyYardDash and friends, and `snapshotTestingResults` is shared
+           * with a coach's manual edit -- so there is NO provenance column and a number in this
+           * table may be either. The sentence says "may have been", which is the honest claim; a
+           * flat "these are camera numbers" would be wrong for a stopwatch time.
+           *
+           * camera-caveat-coverage.test.ts scans client/src/pages, so no email was ever in its
+           * scope. Found 2026-10-09 by reading all sixteen bodies. CLAUDE.md's rule is that an
+           * exemption needs the reason "no reader sees a number here", and a coach's emailed
+           * progress report is the opposite of that. */
           testingRows
             ? `<h2 style="font-size:14px;text-transform:uppercase;color:#F65B23;margin:20px 0 8px;">Testing / Combine</h2>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">${testingRows}</table>`
+        <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">${testingRows}</table>
+        <p style="color:#777;font-size:12px;margin:0 0 8px;">A 40, a pro agility or a three-cone time here may have been timed by the camera. ${CAMERA_ACCURACY_INLINE}</p>`
             : ""
         }
 

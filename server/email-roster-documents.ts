@@ -1,4 +1,5 @@
 import { escapeHtml } from "./email";
+import { emailShell } from "./email-shell";
 
 /** THE TWO EMAILS A COACH CAN SEND THEIR ROSTER ABOUT PAPERWORK.
  *
@@ -12,19 +13,9 @@ import { escapeHtml } from "./email";
  * every other builder in this codebase -- see escapeHtml's own comment for why it is not optional.
  */
 
-function shell(title: string, body: string): string {
-  return `
-    <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;">
-      <div style="background:#F65B23;padding:20px 24px;">
-        <span style="color:#fff;font-size:20px;font-weight:bold;letter-spacing:0.5px;">FORGE</span>
-      </div>
-      <div style="padding:24px;">
-        <h1 style="font-size:20px;margin:0 0 12px;">${title}</h1>
-        ${body}
-      </div>
-    </div>
-  `;
-}
+/** This shell moved to ./email-shell on 2026-10-09 so a new builder has something to reach for;
+ *  two builders had none and went silently unbranded for want of it. Output is unchanged. */
+const shell = emailShell;
 
 const button = (href: string, text: string) =>
   `<p style="margin:16px 0;"><a href="${escapeHtml(href)}" style="display:inline-block;background:#F65B23;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:bold;">${escapeHtml(text)}</a></p>`;

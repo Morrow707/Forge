@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { SignupCta } from "@/components/signup-cta";
+import { MarketingShell } from "@/components/marketing-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -57,8 +58,18 @@ const PERSONALIZATION_FROM =
  * signup's footer. */
 export default function PricingPage() {
   return (
-    <div className="min-h-screen bg-background px-4 py-10">
-      <div className="mx-auto max-w-5xl">
+    // THE NAV AND FOOTER, which this page was the only one of the six marketing pages without.
+    //
+    // Found 2026-10-09: /pricing is indexable at priority 0.9 and reached from the login screen,
+    // the signup footer and the nav on every other page -- and once a visitor was on it the only
+    // way onward was the browser's back button. The footer is also the internal link graph (see
+    // MarketingNav's own comment), so a page outside it is one a crawler reaches only through the
+    // sitemap.
+    //
+    // No min-h-screen or bg-background here: MarketingShell supplies both, and nesting two
+    // min-h-screen wrappers makes the page at least two viewports tall with a dead second one.
+    <MarketingShell>
+      <div className="mx-auto max-w-5xl px-4 py-10">
         <div className="mb-10 flex flex-col items-center gap-3 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <Flame className="h-8 w-8" />
@@ -320,6 +331,6 @@ export default function PricingPage() {
           </p>
         </div>
       </div>
-    </div>
+    </MarketingShell>
   );
 }

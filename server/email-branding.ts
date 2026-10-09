@@ -30,10 +30,23 @@ export interface EmailBrand {
 /** The shared orange band every Forge email body carries. Exported because it is the one
  * reliable way to RECOGNISE an email body: the branding rewrite below keys on it, so a
  * builder that stops carrying it stops being branded, which makes this predicate
- * self-enforcing. welcome-email-promises-only-what-you-have.test.ts discovers the bodies
- * it scans with it rather than with a filename glob. */
+ * self-enforcing. welcome-email-promises-only-what-you-have.test.ts discovers the bodies it
+ * scans with it, which is what lets it see a builder whose filename says nothing about email
+ * -- it used a /email.*\.ts$/ glob until 2026-10-09 and so had never read notify.ts,
+ * terms-change-notice.ts or the institutional confirmation. */
 export const FORGE_EMAIL_HEADER_RE =
   /<div style="background:#F65B23;padding:20px 24px;">\s*<span style="color:#fff;font-size:20px;font-weight:bold;letter-spacing:0.5px;">FORGE<\/span>\s*<\/div>/;
+
+/** The same band as HTML, for a builder to emit.
+ *
+ * The regex above RECOGNISES a header; this is the one to WRITE. They are two spellings of one
+ * string and `email-shell.test.ts` asserts the regex matches this constant, because the day they
+ * drift is the day a builder emits a header nothing recognises and goes silently unbranded --
+ * which is exactly what notify.ts did until 2026-10-09, by emitting no header at all. */
+export const FORGE_EMAIL_HEADER =
+  '<div style="background:#F65B23;padding:20px 24px;">' +
+  '<span style="color:#fff;font-size:20px;font-weight:bold;letter-spacing:0.5px;">FORGE</span>' +
+  "</div>";
 
 /** Does this brand change anything an email shows? A logo or a name is enough; a colour alone
  * still recolours the band but keeps FORGE as the wordmark, since there is nothing to put there. */
