@@ -132,6 +132,45 @@ This step is the reason `tailwindcss-animate` was moved to devDependencies in Pa
 build-time packages in `dependencies`, the production tree carried six advisories permanently
 and a REAL one in the server's own tree would have been invisible among them. Keep it that way.
 
+### AND ONE MORE THAT IS REAL: A DEADLOCKED TRUNCATE IN THE TEST HARNESS (2026-10-09)
+
+Run 1757 on `b88d8850`. **`deploy` hangs off the integration job, so one aborted TRUNCATE stopped
+the commit reaching Render** -- same consequence as the audit above, different cause, and it
+presents as a plain red test rather than as anything about the deploy.
+
+Read the ANNOTATION, not the step name. Postgres named the cycle itself: "Process 693 waits for
+AccessExclusiveLock on relation 20622; blocked by process 694. Process 694 waits for
+AccessShareLock on relation 20606; blocked by process 693." One side is `resetDatabase`'s TRUNCATE
+(AccessExclusive on every table at once) and the other a plain reader. **The reader is deliberate
+product behaviour**: several writes in this app are documented as best-effort and never awaited
+(the AI usage counter, the session store's `touch()`, the fire-and-forget sends), so a request
+that already returned 200 can still have a statement in flight when the next test's `beforeEach`
+fires. `fileParallelism: false` does not help -- the race is inside one file, not between two.
+
+**This is the one place a retry is the cause-level fix and not a shrug**, and the distinction is
+worth keeping because "flake is not a root cause" is otherwise the rule. The cause is known and
+intended; the harness is what has to tolerate it; the competing statement finishes in
+milliseconds, so the re-sent TRUNCATE finds the locks free. `server/test-support/retry-on-deadlock.ts`
+retries on **SQLSTATE 40P01 alone**, is bounded at five, and rethrows the ORIGINAL error
+untouched, so nothing real can hide behind it. `resetDatabase` also takes its table list
+`ORDER BY tablename` -- which does not prevent the deadlock (a reader locks in its own order
+regardless) but stops an unordered `pg_tables` scan making the same race appear and vanish for no
+visible reason. `the-reset-survives-an-unawaited-write.test.ts` is a `.test.ts`, NOT an itest, so
+it runs on every `npm test` with no Postgres; mutation-tested seven ways. **Its two "gives up"
+cases throw a sentinel after twenty times the bound** on purpose: an unbounded retry whose sleep
+resolves immediately is a tight async loop that starves the timer queue, so the suite HANGS
+instead of failing, and a hang in CI is a 25-minute job timeout that reads as something else.
+
+### AND ONE THAT IS NEITHER: "Docker pull failed with exit code 1"
+
+Same day, runs 1759 and 1760 (and 1760's re-run). `Initialize containers` failed in 12-19 seconds
+with that message, retried three times with backoff by the runner itself. **`postgres:16` is an
+unpinned Docker Hub tag and the pull is rate-limited or the registry is down**; no step after it
+ran, so nothing about the code was tested either way and `deploy` was skipped. It is the same
+class as the CodeQL "failed to be acquired" entries below -- GitHub-side, self-healing, and NOT
+something a workflow change fixes. A job that fails at step 2 in under 20 seconds has not run a
+test; check the step number before reading a red integration job as a broken one.
+
 ## CI red that is not a test failure
 
 Added 2026-10-05, after six of them in one evening. **Check the REF and the SHA before reading a
@@ -1448,11 +1487,12 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 655** (2026-10-09,
-  `b88d8850`). Runs 652-655 were the four calibration betas of that day. The retrained detector
-  goes out in the two runs after it -- a `verify_build` then a `beta` -- and the exact numbers are
-  filled in below once they exist, never predicted.
-- **THE QUEUE IS EMPTY AS OF BUILD 655** (2026-10-09). Four betas went out this day, each one
+  branch `verify_build` for the arbiter plumbing. **The newest build is 657** (2026-10-09,
+  `8364564e`, the retrained detector), uploaded in 6m32s. Runs 652-655 were that day's four
+  calibration betas and **656 was the `verify_build` on the `.mlpackage` swap** -- the archive, the
+  signing and Apple's own `--validate-app` all passed on the new model before the upload was
+  spent, which is what makes a native change safe to ship rather than hopeful.
+- **THE QUEUE IS EMPTY AS OF BUILD 657** (2026-10-09). Five betas went out this day, each one
   calibration work and so exempt from the batch, each uploaded on commit:
   - **652** `e044c56d` -- `plateBoxToExpectedRatio` and `capture-repeatability.ts`: the diagnostic
     that says whether a detected box is the right SIZE, with no sensor needed, which is what made
@@ -1463,9 +1503,9 @@ halves before splitting anything else:
     uncertainty and floored. Row set 1: **+23.1% -> -7.4%**.
   - **655** `b88d8850` -- 654's own regression, found within the hour: loosening a ruler was
     buying it the power to drag others into a cluster. `MAX_SCALE_AGREEMENT_TOLERANCE`.
-  - **the retrained CoreML detector** goes out next, on the commit this entry ships in: a
-    `verify_build` first because the `.mlpackage` swap is a native change, then the `beta`. This
-    line gets the real run numbers when the runs finish.
+  - **657** `8364564e` -- the retrained CoreML detector (box 2-7x too big -> 1.01-1.03x on
+    held-out data) and the plate stating the detector's own measured noise. **656 was its
+    `verify_build`.** This is the build to film on.
   Across the nine sensor-paired takes of the day, median absolute error **10.6% -> 5.4%** and
   worst case **60.5% -> 20.7%**. The row is the one lift still outside 15% and the retrained
   detector is the only remaining candidate for it; what proves or disproves that is one filmed

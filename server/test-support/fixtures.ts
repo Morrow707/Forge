@@ -16,6 +16,7 @@ import {
   workoutSetEntries,
 } from "@shared/schema";
 import { UPLOADS_ROOT } from "../uploaded-files";
+import { retryOnDeadlock } from "./retry-on-deadlock";
 
 // Clears every table between tests.
 //
@@ -28,16 +29,37 @@ import { UPLOADS_ROOT } from "../uploaded-files";
 // One TRUNCATE for all of them, so CASCADE has nothing left to chase and
 // foreign-key order stops mattering. RESTART IDENTITY keeps ids small and
 // predictable across tests, which makes a failure easier to read.
+//
+// ORDER BY tablename, and the retry, are both about DEADLOCKS -- see
+// retry-on-deadlock.ts for the full account. In short: this statement needs
+// an AccessExclusiveLock on every table at once, and several writes in this
+// app are deliberately not awaited, so an already-returned request can still
+// have a statement in flight that holds a lock on one table and wants
+// another. Postgres kills one side of the cycle, and on 2026-10-09 it killed
+// this one and blocked a Render deploy, because `deploy` hangs off the
+// integration job.
+//
+// The ORDER BY does not prevent that on its own -- a reader takes its locks
+// in its own order whatever this does -- but an unordered pg_tables scan can
+// return a different order on two runs, which makes the same race present
+// and vanish for no visible reason. A deterministic order is the difference
+// between a reproducible failure and a ghost.
 export async function resetDatabase(): Promise<void> {
   const { rows } = await pool.query<{ name: string }>(`
     SELECT quote_ident(tablename) AS name
     FROM pg_tables
     WHERE schemaname = 'public'
+    ORDER BY tablename
   `);
   if (rows.length === 0) return;
-  await pool.query(
-    `TRUNCATE TABLE ${rows.map((r) => r.name).join(", ")} RESTART IDENTITY CASCADE`,
-  );
+  const truncate = `TRUNCATE TABLE ${rows.map((r) => r.name).join(", ")} RESTART IDENTITY CASCADE`;
+  await retryOnDeadlock(() => pool.query(truncate), {
+    onRetry: (attempt, err) =>
+      console.warn(
+        `resetDatabase: deadlock on attempt ${attempt}, re-sending the TRUNCATE`,
+        (err as { detail?: string } | null)?.detail ?? "",
+      ),
+  });
 }
 
 let sequence = 0;
