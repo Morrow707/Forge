@@ -1046,6 +1046,12 @@ export const IMPLAUSIBLE_GRIP_HIGH_M = 1.4;
 // and rejections this produces, so the next revision can be made from takes instead of from
 // reasoning. Do not widen these back without that data -- widening is what made the check
 // decorative the first time.
+/** The widest a barbell grip gets, in metres -- a wide competition bench grip.
+ *
+ *  The same 0.81 the plate-to-grip window above is derived from, named so the shoulder ruler
+ *  can divide by it rather than restating it. See WIDEST_PLAUSIBLE_GRIP_TO_BIACROMIAL. */
+export const WIDEST_BARBELL_GRIP_M = 0.81;
+
 const PLATE_TO_GRIP_RATIO_LOW = 0.45;
 const PLATE_TO_GRIP_RATIO_HIGH = 2.0;
 
@@ -1466,6 +1472,9 @@ export function shoulderWidthScaleFromFrames(
    * maxShoulderSpanSpread in shared/camera-tunables-by-lift.ts for why a value fitted on one
    * Pendlay Row should not be deciding whether the shoulder ruler votes on a 40-yard dash. */
   maxSpanSpread: number = MAX_SHOULDER_SPAN_SPREAD,
+  /* THE GRIP SPAN FROM THE SAME FRAMES, for the foreshortening floor below. Optional, and a
+   * caller that passes nothing gets exactly the old behaviour. */
+  gripWidthPx?: number | null,
 ): ShoulderScaleReading {
   const empty: ShoulderScaleReading = {
     scale: null,
@@ -1603,9 +1612,66 @@ export function shoulderWidthScaleFromFrames(
   // It moves nothing measurable today, and that is on purpose: the press's 6.3% is under the
   // floor, the bench's 21.0% changes its blend by 0.1cm, and the row is refused. What it buys
   // is that the next take's weight is attributable to a number the export carries.
+  // AND A THIRD FLOOR: THE GRIP SAYS WHEN THE SHOULDER SPAN CANNOT BE RIGHT. Added 2026-10-09.
+  //
+  // This ruler is BIACROMIAL_HEIGHT_FRACTION x height divided by one measured span, and nothing
+  // else -- on the six sensor-paired takes of 2026-10-09, scale x span came to 0.438 m every
+  // time for a 75in athlete. So when that span reads small the scale reads large, in exact
+  // proportion, and nothing inside this function can tell a small span from a near one.
+  //
+  // The grip can. Both are horizontal spans the body tracker measures in the same frames, so
+  // their RATIO is a pure number, and anatomy bounds it: the widest barbell grip is about
+  // 0.81 m (WIDEST_BARBELL_GRIP_M, the same figure the plate-to-grip window is derived from)
+  // against a biacromial breadth of BIACROMIAL_HEIGHT_FRACTION x stature. For this athlete that
+  // ceiling is 1.85, and a measured ratio above it is not a grip anyone can take -- it is a
+  // shoulder span read too small. The excess is how much too small, at minimum.
+  //
+  //     ratio   shoulder ruler vs the OVR          ratio   vs the OVR
+  //     1.47          +1.4%  (bench set 1)         2.16         +25.8%  (press set 2)
+  //     1.74          +8.3%  (bench set 2)         2.91         +62.0%  (row set 1)
+  //     2.06         +49.1%  (press set 1)         3.20         +69.2%  (row set 2)
+  //
+  // Five of the six order exactly, and the pair that inverts is the two presses. The two ROW
+  // sets are the important ones: same lift, same grip, same session, ratio 2.91 then 3.20 and
+  // error +62.0% then +69.2% -- which is the confound that stopped this being actionable on
+  // 2026-10-09 morning, when all three takes were different lifts with genuinely different
+  // grips, broken by a repeat of one lift.
+  //
+  // THE MECHANISM IS NOT SETTLED AND THE COMMENT SHOULD NOT PRETEND IT IS. Rotation about the
+  // vertical axis foreshortens the grip and the shoulders TOGETHER, which would leave the ratio
+  // invariant -- so plain turning does not explain this, and the likelier cause is the shoulder
+  // landmarks collapsing toward the spine on a hinged or supine athlete, where the two sets with
+  // ratios past 2.9 both sit. What IS established is that the ratio is measured from a signal
+  // this ruler does not produce, that it tracks this ruler's error across six paired takes, and
+  // that it is past anatomy on every take where the ruler is badly wrong.
+  //
+  // So it is carried as UNCERTAINTY, never as a correction: the blend is already inverse-variance
+  // weighted and has only ever been handed a guessed 0.2, so a measured floor is the honest
+  // version of a number that is currently invented. FLOORED like the spread above -- it can only
+  // ever LOOSEN this ruler, never tighten it -- and `FITTED_OVERRIDES` stays empty because the
+  // ceiling is DERIVED per athlete from two constants that already exist, not fitted to the
+  // error column above.
+  const biacromialM =
+    heightIn != null && heightIn > 0 ? BIACROMIAL_HEIGHT_FRACTION * heightIn * 0.0254 : null;
+  const gripToShoulderCeiling =
+    biacromialM != null && biacromialM > 0 ? WIDEST_BARBELL_GRIP_M / biacromialM : null;
+  const measuredGripToShoulder =
+    gripWidthPx != null && gripWidthPx > 0 && medianSpanUnits > 0
+      ? gripWidthPx / medianSpanUnits
+      : null;
+  const foreshorteningFloor =
+    measuredGripToShoulder != null && gripToShoulderCeiling != null
+      && measuredGripToShoulder > gripToShoulderCeiling
+      ? measuredGripToShoulder / gripToShoulderCeiling - 1
+      : 0;
+
   return {
     scale,
-    uncertaintyFraction: Math.max(BIACROMIAL_TOLERANCE_FRACTION, spanSpreadFraction),
+    uncertaintyFraction: Math.max(
+      BIACROMIAL_TOLERANCE_FRACTION,
+      spanSpreadFraction,
+      foreshorteningFloor,
+    ),
     framesUsed: widths.length,
     framesRejectedForAngle,
     medianSpanUnits,

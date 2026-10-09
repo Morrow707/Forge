@@ -3174,6 +3174,25 @@ read **1.000** -- a perfect score on the plate that was 60% wrong. It divides by
 the plate removed now. A diagnostic that scores a ruler against itself is worth nothing exactly
 when the ruler is the problem; check for that shape in any future "is this sensor right" measure.
 
+### AND THE GRIP SAYS WHEN THE SHOULDER SPAN CANNOT BE RIGHT
+
+Six paired takes, confound broken by filming each lift twice. grip/shoulder 1.47 -> +1.4%, 1.74
+-> +8.3%, 2.06 -> +49.1%, 2.16 -> +25.8%, 2.91 -> +62.0%, 3.20 -> +69.2%; five of six order
+exactly and the two ROW sets are the same lift and the same grip. Anatomy bounds that ratio --
+the widest barbell grip is ~0.81m against 0.23 x stature, a ceiling of 1.85 for this athlete --
+so a ratio past it is a shoulder span read too small, and the excess is how much.
+
+Carried as UNCERTAINTY, never a correction, FLOORED so it can only loosen, and the ceiling is
+DERIVED per athlete from two constants that already exist. `FITTED_OVERRIDES` stays empty.
+**The mechanism is NOT settled and the comment says so**: rotation foreshortens grip and
+shoulders together and would leave the ratio invariant, so the likelier cause is the shoulder
+landmarks collapsing on a hinged or supine athlete. What is established is that it is measured
+from a signal the ruler does not produce and tracks its error across six takes.
+
+Two of fourteen captures move: Pendlay Row set 1 **+23.1% -> -7.4%**, and the 10-08 Back Squat
+**-6.9% -> -9.0%**, which is recorded rather than smoothed over. Median absolute error across the
+six paired takes 6.1% -> 4.5%.
+
 ### THE BARBELL IS THE RULER SCOTT WANTS AND THE BOX IS 2-7x TOO BIG
 
 Scott, same day: "what happens when the camera can't find my shoulders, it should still be

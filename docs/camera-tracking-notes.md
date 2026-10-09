@@ -4467,3 +4467,50 @@ problem.
 - **The bench's mean is +16.4% on set 2 with ROM at +1.5%**, so the timing window is short again
   on a take whose scale is essentially exact. That is the cleanest look yet at the window error
   with scale held still.
+
+### The grip says when the shoulder span cannot be right (2026-10-09, after the plate fix)
+
+Six sensor-paired takes, and the confound that blocked this in the morning is broken by filming
+the same lift twice:
+
+| grip ÷ shoulder span | shoulder ruler vs OVR | take |
+|---|---|---|
+| 1.47 | +1.4% | Bench set 1 |
+| 1.74 | +8.3% | Bench set 2 |
+| 2.06 | +49.1% | Push Press set 1 |
+| 2.16 | +25.8% | Push Press set 2 |
+| 2.91 | +62.0% | Pendlay Row set 1 |
+| 3.20 | +69.2% | Pendlay Row set 2 |
+
+Five of six order exactly; the pair that inverts is the two presses. **The two row sets are the
+ones that matter** — same lift, same grip, same session, 2.91 → +62.0% then 3.20 → +69.2%.
+
+The ruler is `BIACROMIAL_HEIGHT_FRACTION × height ÷ one measured span` and nothing else (scale ×
+span = 0.438 m on all six). Anatomy bounds the ratio: the widest barbell grip is ~0.81 m against
+a biacromial breadth of 0.23 × stature, a ceiling of **1.85** for this athlete. A ratio above it
+is not a grip anyone can take.
+
+Carried as **uncertainty, never a correction**, and **floored** so it can only loosen — the blend
+is already inverse-variance weighted and has only ever been handed a guessed 0.2. The ceiling is
+**derived per athlete** from two constants that already exist, so `FITTED_OVERRIDES` stays empty.
+
+**THE MECHANISM IS NOT SETTLED AND THE CODE COMMENT SAYS SO.** Rotation about the vertical axis
+foreshortens grip and shoulders *together*, which would leave the ratio invariant — so plain
+turning does not explain it. The likelier cause is the shoulder landmarks collapsing toward the
+spine on a hinged or supine athlete, which is where both ratios past 2.9 sit. What is established
+is that the ratio is measured from a signal this ruler does not produce, tracks its error across
+six paired takes, and is past anatomy on every take where the ruler is badly wrong.
+
+**Replayed across all 14 captures: two moved.**
+
+| take | before | after | against the sensor |
+|---|---|---|---|
+| Pendlay Row set 1 | 0.004970 | 0.003740 | **+23.1% → −7.4%** |
+| Back Squat 2026-10-08 | 0.003713 | 0.003628 | **−6.9% → −9.0%**, worse |
+
+The squat moving the wrong way is recorded, not smoothed over: it is 2.3% against the row's 30,
+median absolute error across the six paired takes falls 6.1% → 4.5%, and the worst case falls
+from 23.1% to 20.7%. `the-grip-says-when-the-shoulder-span-is-wrong.test.ts`, mutation-tested
+four ways — and the "only ever loosens" case survived two drafts because the fixture's own spread
+moved the median below the ceiling, which is why the grip is now derived from the span the ruler
+actually measured.

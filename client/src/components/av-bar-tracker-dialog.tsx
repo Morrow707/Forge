@@ -1299,6 +1299,10 @@ export function AvBarTrackerDialog({
       heightIn,
       posture,
       scaleTunables.maxShoulderSpanSpread,
+      // The grip from the same frames, so this ruler can state the one noise term it cannot see
+      // from its own span -- see the foreshortening floor in shoulderWidthScaleFromFrames. It
+      // only ever loosens the ruler, and a take with no grip behaves exactly as before.
+      gripWidthPx,
     );
     // A measured grip needs no detector, no full body in frame and no population average, so it
     // is computed on every take where the athlete has given one -- the framing that defeats the
