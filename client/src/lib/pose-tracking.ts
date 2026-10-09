@@ -911,6 +911,36 @@ export type ScaleVerdict = {
 // apart without either being broken.
 const SCALE_AGREEMENT_MULTIPLE = 2;
 
+/** THE WIDEST AN AGREEMENT TEST IS ALLOWED TO BE BEFORE IT STOPS BEING A TEST. Added 2026-10-09.
+ *
+ *  The tolerance above is the LOOSER ruler's own uncertainty, doubled -- which is right while
+ *  every ruler states something like 0.2. It stops being right the moment a ruler is allowed to
+ *  say it is very unsure: the grip floor shipped in build 654 put the shoulder ruler at 0.587 on
+ *  a Pendlay row, its tolerance became 1.174, and at that width it "agreed" with a plate 3.5x
+ *  away from it and with a body ruler 1.85x away. All three landed in one cluster anchored on
+ *  the vaguest witness in the room, and the plate -- whose stated 0.0133 buys it 5,625 times the
+ *  weight of a body ruler -- then took 99.5% of the blend and the set read -58.4%.
+ *
+ *  A ruler that cannot tell 1.85x from agreement is not corroborating anything; it is abstaining,
+ *  and an abstention must not be able to vouch for a third witness. So the tolerance is capped at
+ *  what a NORMALLY-stated ruler would produce (BIACROMIAL_TOLERANCE_FRACTION x the multiple, the
+ *  0.4 every take used before any floor existed). Loosening a ruler still costs it weight in the
+ *  blend, which is the whole point of the floor -- it just no longer buys it the power to drag
+ *  other witnesses into a cluster.
+ *
+ *  This is a CEILING on a tolerance, not a floor on a ruler: it can only ever make the agreement
+ *  test stricter, never admit a pair the old code refused. */
+const MAX_SCALE_AGREEMENT_TOLERANCE = 0.2 * SCALE_AGREEMENT_MULTIPLE;
+
+/** The agreement window between two readings: the looser one's stated uncertainty, doubled, and
+ *  never wider than a ruler with an ordinary uncertainty would ask for. */
+function agreementTolerance(a: ScaleEstimate, b: ScaleEstimate): number {
+  return Math.min(
+    Math.max(a.uncertaintyFraction, b.uncertaintyFraction) * SCALE_AGREEMENT_MULTIPLE,
+    MAX_SCALE_AGREEMENT_TOLERANCE,
+  );
+}
+
 /**
  * Reconciles every real-world scale the take could produce, instead of taking the first one that
  * answered.
@@ -1135,8 +1165,7 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
   const pairwise: ScaleBlendTrace["pairwise"] = [];
   for (const anchor of ranked) {
     const cluster = ranked.filter((other) => {
-      const tolerance =
-        Math.max(anchor.uncertaintyFraction, other.uncertaintyFraction) * SCALE_AGREEMENT_MULTIPLE;
+      const tolerance = agreementTolerance(anchor, other);
       const ratio = other.scale / anchor.scale;
       const agrees = Math.abs(ratio - 1) <= tolerance;
       if (anchor !== other) {
@@ -1213,8 +1242,7 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
     let bestWithoutPlate: ScaleEstimate[] = [rerankedWithoutPlate[0]];
     for (const anchor of rerankedWithoutPlate) {
       const cluster = rerankedWithoutPlate.filter((other) => {
-        const tolerance =
-          Math.max(anchor.uncertaintyFraction, other.uncertaintyFraction) * SCALE_AGREEMENT_MULTIPLE;
+        const tolerance = agreementTolerance(anchor, other);
         return Math.abs(other.scale / anchor.scale - 1) <= tolerance;
       });
       if (cluster.length > bestWithoutPlate.length) bestWithoutPlate = cluster;

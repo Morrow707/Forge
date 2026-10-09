@@ -3193,6 +3193,28 @@ Two of fourteen captures move: Pendlay Row set 1 **+23.1% -> -7.4%**, and the 10
 **-6.9% -> -9.0%**, which is recorded rather than smoothed over. Median absolute error across the
 six paired takes 6.1% -> 4.5%.
 
+### AND LOOSENING A RULER MUST NOT LET IT VOUCH FOR ANYONE (the 654 regression)
+
+Set 3 of each lift, same day, found this within an hour of 654 shipping. The grip floor correctly
+put the shoulder ruler at 0.587 -- and the agreement tolerance was the looser ruler's uncertainty
+DOUBLED, so it became **1.174**. At that width the shoulder ruler "agreed" with a plate 3.5x away
+and a body ruler 1.85x away; all three formed ONE cluster anchored on the vaguest witness, and the
+plate (stated 0.0133 = 5,625x a body ruler's weight) took **99.5%** of the blend.
+
+**A ruler that cannot tell 1.85x from agreement is abstaining, and an abstention must not vouch
+for a third witness.** `MAX_SCALE_AGREEMENT_TOLERANCE` caps the window at 0.4, what a
+normally-stated ruler already asked for, so it can only ever make the test STRICTER. The loosened
+ruler still loses weight, which is the floor's whole purpose.
+
+**Nine paired takes: median absolute error 10.6% -> 5.4%, worst case 60.5% -> 20.7%.** Only the
+three rows and the 10-08 squat move; ten captures bit-identical.
+`a-vague-ruler-cannot-vouch-for-anyone.test.ts`. The "stricter only" assertion needs
+`corroborated`, NOT `agreedSources` -- two body rulers that disagree are averaged by the fallback
+anyway, so the weaker assertion cannot tell a real agreement from that rescue.
+
+**THE LESSON WORTH KEEPING: a change that widens an uncertainty widens a TOLERANCE somewhere.**
+Before loosening any ruler again, ask what reads its uncertainty besides the weighting.
+
 ### THE BARBELL IS THE RULER SCOTT WANTS AND THE BOX IS 2-7x TOO BIG
 
 Scott, same day: "what happens when the camera can't find my shoulders, it should still be

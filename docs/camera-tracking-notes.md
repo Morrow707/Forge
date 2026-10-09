@@ -4514,3 +4514,46 @@ from 23.1% to 20.7%. `the-grip-says-when-the-shoulder-span-is-wrong.test.ts`, mu
 four ways — and the "only ever loosens" case survived two drafts because the fixture's own spread
 moved the median below the ceiling, which is why the grip is now derived from the span the ruler
 actually measured.
+
+### Set 3, same day: build 654's own fix had a regression, and the three rows are what moved
+
+Scott filmed a third set of each and exported again (one capture looked duplicated on save; the
+export shows 20 distinct rows and no duplicate lift+set, so the second save was idempotent).
+
+| lift | set | before | **after both fixes** |
+|---|---|---|---|
+| Bench | 1 / 2 / 3 | −10.6% / +1.5% / −2.4% | unchanged |
+| Push Press | 1 / 2 / 3 | +20.7% / +1.3% / −5.4% | unchanged |
+| Pendlay Row | 1 / 2 / 3 | +23.1% / −60.5% / −58.4% | **−7.4% / −1.1% / −14.0%** |
+
+Median absolute error across the nine paired takes **10.6% → 5.4%**; worst case **60.5% → 20.7%**.
+Only the three rows and the 10-08 squat move; the other ten captures are bit-identical.
+
+**THE REGRESSION WAS MINE, FROM 654, AND SET 3 FOUND IT IN UNDER AN HOUR.** The grip floor
+correctly put the shoulder ruler at 0.587 on that take. The agreement tolerance was the looser
+ruler's uncertainty **doubled**, so it became **1.174** — and at that width the shoulder ruler
+"agreed" with a plate 3.5× away and a body ruler 1.85× away. All three formed ONE cluster
+anchored on the vaguest witness present, and the plate (stated 0.0133, so 5,625× a body ruler's
+weight) then took **99.5%** of the blend.
+
+So loosening a ruler was buying it the power to drag other witnesses into a cluster. A ruler that
+cannot tell 1.85× from agreement is abstaining, and an abstention must not vouch for a third
+witness. `MAX_SCALE_AGREEMENT_TOLERANCE` caps the window at 0.4 — what a normally-stated ruler
+already asked for — so it can only ever make the test **stricter**, never admit a pair the old
+code refused. The loosened ruler still loses weight in the blend, which is the point of the floor.
+
+`a-vague-ruler-cannot-vouch-for-anyone.test.ts`. Two of three mutations caught; the third
+("implement the cap by clamping each uncertainty instead") turned out to be algebraically
+identical, which is a refactor rather than a mutation. The "stricter only" assertion needed
+`corroborated` rather than `agreedSources`, because two body rulers that DISAGREE are averaged by
+the body-ruler fallback anyway and the weaker assertion could not tell the two apart.
+
+**Scott's own read confirms the diagnosis on the row**: "first 3 reps were .5 m/s in both
+directions, low then high then low". The export's reps 1–3 are 0.61 / 0.67 / 0.58 — low, high,
+low — against the OVR's 0.87 / 1.12 / 1.12. Concentric and eccentric both low by the same factor
+is the signature of a uniform SCALE error, not a segmentation one, which is exactly what the
+0.42× scale was.
+
+**Still open:** the row is the only lift not inside 15%, and no ruler on set 3 is right — truth
+sits between the body rulers (−21%) and the shoulder ruler (+46%). The press's set-1 +20.7% is
+also untouched by any of this.
