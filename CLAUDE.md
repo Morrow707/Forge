@@ -2998,3 +2998,62 @@ money-mentioning surface.
 collecting the signal); and `ratelimit-remaining` moves non-monotonically across requests, which
 reads as per-instance in-memory counters on Render -- so the effective limit is multiplied by the
 instance count, which matters only once there is real traffic.
+
+## Reading all sixteen email bodies, 2026-10-09
+
+Five findings, each one a surface nobody had read end to end. Worth keeping because three of them
+are the same shape -- a scan that discovers by the wrong signal -- and because two of the emails
+are the ones a parent or a school sees first.
+
+- **EVERY IN-APP NOTIFICATION EMAIL WAS SILENTLY UNBRANDED.** `notify.ts` passed
+  `brandForUserId: userId` and emitted two bare `<p>` tags. `applyEmailBranding` opens with
+  `if (!FORGE_EMAIL_HEADER_RE.test(html)) return html` -- it leaves a body it does not recognise
+  alone rather than half-branding it, which is the right rule and was also a silent one. So the
+  From line wore the program and the body wore neither the program nor "Powered by Forge", which
+  is the deal Full Personalization is sold on. It was left alone because there was nothing in it
+  to recognise.
+- **THE INSTITUTIONAL SIGNED-COPY CONFIRMATION HAD NO FORGE WORDMARK ANYWHERE** -- the only email
+  in the system without one, sent to the notice address named in a signed agreement. It is
+  deliberately NOT branded by program (no `brandForUserId`): the agreement is between the school
+  and Forge, so the confirmation of what was signed with Forge wears Forge.
+- **`server/email-shell.ts` is the one shell now**, moved out of `email-roster-documents.ts`
+  BYTE-IDENTICALLY (`email-shell.test.ts` asserts that against the previous implementation, so
+  none of the thirteen working emails changed shape) and beside a new `FORGE_EMAIL_HEADER`
+  constant. **The regex RECOGNISES a band; the constant is the one to WRITE**, and the test
+  asserts the regex matches the constant -- the day they drift is the day a builder emits a header
+  nothing matches and goes silently unbranded, which is what notify.ts did by emitting none.
+- **THE COACH'S PROGRESS REPORT EMAILED CAMERA-TIMED COMBINE NUMBERS WITH NO CAVEAT.**
+  `recordCameraTimedCombineResult` writes a video-timed 40, pro agility or three-cone straight
+  into `users.fortyYardDash` and friends, and `snapshotTestingResults` is shared with a coach's
+  manual edit -- so there is **no provenance column** and a number in that table may be either.
+  The sentence says a time **may** have been camera-timed, which is the only honest claim; a flat
+  "these are camera numbers" would be wrong for a stopwatch time. `CAMERA_ACCURACY_INLINE`, never
+  a retyped sentence, because `shared/camera-accuracy-copy.ts` exists to be deleted in one place
+  when calibration lands. **`camera-caveat-coverage.test.ts` could never have caught this**: that
+  scan reads `client/src/pages`, and no email was ever in its scope. CLAUDE.md's rule is that an
+  exemption needs the reason "no reader sees a number here", and an emailed progress report is the
+  opposite of that.
+- **`/pricing` HAD NO NAV AND NO FOOTER**, the only one of the six marketing pages outside
+  `MarketingShell` -- a bare `min-h-screen` div. It is indexable at priority 0.9 and reached from
+  the login screen, the signup footer and the nav on every other page, so a visitor who landed
+  there had the back button and nothing else. The footer is also the internal link graph (see
+  `MarketingNav`'s own comment, written when the audience pages were orphans), so a page outside
+  the shell is outside that graph in both directions.
+- **AND THE CLAIMS SCAN HAD NEVER READ THREE REAL EMAIL BUILDERS**, because it discovered them
+  with a `/email.*\.ts$/` FILENAME glob: `progress-report.ts`, `terms-change-notice.ts` and the
+  institutional confirmation say nothing about email in their names. It scans the **UNION** of
+  that glob and the band itself now -- the band alone would drop `email-roster-documents.ts`,
+  whose band comes from the shared shell and whose file no longer holds the literal, so either
+  signal alone has a blind spot and the union has neither.
+  **Third instance in two days of one shape**: the public legal-doc assertion iterating the set it
+  was meant to police (`parental_notice`), the upload-directory list that could not fail for a
+  directory nobody added, and now a glob that cannot see a file named something else. **The
+  direction of the assertion is the bug every time**, and the cure is always the same -- discover
+  from the real world (the table's columns, the filesystem, the emitted band) and require every
+  member to be classified.
+- **`every-marketing-page-has-a-way-out.test.ts` exists because mutation-testing the /pricing fix
+  turned nothing red anywhere.** It classifies every route in `PUBLIC_ROUTES` as a marketing page,
+  a legal document (ONE shared reason, because nine copies of "a legal document, as /terms" is
+  padding that a per-entry length check would have forced) or deliberately chrome-free with a
+  reason over 50 characters, and it refuses a second `min-h-screen` nested inside the shell --
+  which is exactly what the first draft of the /pricing fix did. Both mutations caught.
