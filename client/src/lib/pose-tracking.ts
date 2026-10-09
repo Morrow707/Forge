@@ -2255,17 +2255,55 @@ export function computePixelToMeterScale(
 // constant would silently understate error on every calibration that uses it. Passing 0 means
 // the caller supplied a real measurement (a coach's own tape-measure reading), not an
 // assumption -- the only case where uncertaintyFraction should come back 0.
+//
+// AND THE DENOMINATOR HAS ITS OWN ERROR, WHICH THIS IGNORED UNTIL 2026-10-09. The scale is
+// `knownRealSizeM / measuredPixelSize`, and only the NUMERATOR's uncertainty was propagated --
+// the measured pixel size was treated as exact. For a plate that denominator is a CoreML box's
+// long edge, and the box is the least certain thing in the calculation by a wide margin: the
+// plate's physical tolerance is 6mm on 450mm, 1.3%, while the detector's box noise is 5.6%
+// (see COREML_BOX_LONG_EDGE_UNCERTAINTY). So the plate ruler has been stating a confidence four
+// times too tight, and because the scale blend weights by 1/sigma^2 that overstated its weight
+// by roughly eighteen times -- which is how a plate took 100% of the vote on the 2026-10-09
+// Pendlay Row while two body rulers that agreed with each other to 3% carried nothing.
+// `measurementUncertaintyFraction` is that term, combined in quadrature because the two are
+// independent (how big the disc is, and how well the detector boxed it). It DEFAULTS TO ZERO,
+// so a caller that does not state one is bit-identical to before.
 export function computeReferenceObjectScale(
   measuredPixelSize: number,
   knownRealSizeM: number,
   toleranceM = 0,
+  measurementUncertaintyFraction = 0,
 ): { scale: number; uncertaintyFraction: number } | null {
   if (!(measuredPixelSize > 0) || !(knownRealSizeM > 0) || toleranceM < 0) return null;
+  if (!(measurementUncertaintyFraction >= 0)) return null;
   return {
     scale: knownRealSizeM / measuredPixelSize,
-    uncertaintyFraction: toleranceM / knownRealSizeM,
+    uncertaintyFraction: Math.hypot(toleranceM / knownRealSizeM, measurementUncertaintyFraction),
   };
 }
+
+/** How wrong a CoreML box's long edge is, MEASURED on held-out data rather than assumed.
+ *
+ *  `scripts/med-ball-detector/validate_box_size.py` IoU-matches the retrained detector's
+ *  predictions to ground truth on the 41 val images it never trained on and reports the ratio of
+ *  long edges -- the one quantity a scale ruler reads off a box. On the plate class (77 matched
+ *  boxes, the largest sample there is) the median is 1.011 and the relative MAD is **0.056**;
+ *  barbell is 0.049 over 19 and dumbbell 0.051 over 23, so the three agree and 0.056 is the
+ *  widest of them, which is the right one to state.
+ *
+ *  **It is a property of the DETECTOR, not of a movement, so it is shared and belongs nowhere
+ *  near the per-lift registry.** CLAUDE.md's test for a split is "is this a NUMBER somebody
+ *  could fit from one take?" -- this one is fitted on 77 boxes across 41 photographs of other
+ *  people's gyms, and splitting it 270 ways would invite exactly the per-lift fitting that
+ *  `FITTED_OVERRIDES` stays empty to prevent.
+ *
+ *  **Why the median over frames does not shrink it:** within one take the box error is largely
+ *  systematic -- same plate, same angle, same lighting -- so averaging frames removes jitter and
+ *  not bias. The spread measured here is ACROSS images, which is the right scale of variation
+ *  for a take's median, and the right thing to hand the blend.
+ *
+ *  **Re-measure this when the model is retrained.** It describes one specific set of weights. */
+export const COREML_BOX_LONG_EDGE_UNCERTAINTY = 0.056;
 
 // A named reference size with its own honest uncertainty, not a bare exact-looking number --
 // see computeReferenceObjectScale's own comment on why a single constant would be dishonest

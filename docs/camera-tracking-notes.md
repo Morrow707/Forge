@@ -4658,3 +4658,76 @@ substring, and that is load-bearing — each of the eight names also appears twi
 metadata, so on a doctored model with `barbell` dropped from the label vector the bare search
 passes and the tagged search fails. Four mutations caught: an unknown mode, an unknown secondary
 label, a missing model file, and the bare-substring discriminator.
+
+## The plate ruler claimed to be four times more precise than the detector it reads, 2026-10-09
+
+Found while projecting what the retrained detector does to the Pendlay Row, which is the right
+time to find it: the retrain is what makes the plate's weight matter.
+
+`computeReferenceObjectScale` returns `knownRealSizeM / measuredPixelSize` and propagated the
+**numerator's** uncertainty only — `toleranceM / knownRealSizeM`, the plate's casting tolerance,
+6mm on 450mm, **1.3%** — with nothing said about the denominator. That denominator is a CoreML
+box's long edge, and it is the least certain term in the calculation by a factor of four:
+`validate_box_size.py` measures its relative MAD at **0.056** on 77 held-out plate boxes (barbell
+0.049 over 19, dumbbell 0.051 over 23 — the three agree, and the widest is the one to state).
+
+The blend weights by 1/σ², so understating the noise fourfold overstated the plate's weight by
+**~18×**: 225× a body ruler's where the measurement supports 12×. That is the mechanism behind
+build 653's bug rather than a separate one — it is why a plate 60% wrong could carry 100% of a
+vote against two body rulers that agreed with each other to 3%.
+
+`measurementUncertaintyFraction` is the missing term, combined in quadrature because the two are
+independent (how big the disc is, and how well the detector boxed it). It **defaults to zero**, so
+a coach's own tape measure still states 0 and no other caller changes. A measurement replacing a
+term that was simply absent — the same move as the grip floor, and the one the learning-loop note
+argues for in words: the blend is already inverse-variance weighted and has only ever been handed
+guessed variances.
+
+**It is a property of the DETECTOR, not of a movement**, measured on 77 boxes across 41
+photographs of other people's gyms, so it is shared by all 269 identities and goes nowhere near
+the per-lift registry. `FITTED_OVERRIDES` stays empty.
+
+**NOTHING IN THE CORPUS MOVES.** Every 2026-10-09 take whose plate carried weight had it stepped
+out by 653/655, so no currently-correct take has a weighted plate. This takes effect only once the
+detector produces admissible plates, which is what the retrain is for. Whole unit suite green;
+`the-plate-states-the-detectors-own-noise.test.ts`, mutation-tested six ways (reverting to the
+tolerance alone, adding instead of quadrature, the constant at 0, the constant at 0.5, dropping
+the negative guard, and the ruler no longer passing it).
+
+### What a right-sized plate does to the row, projected
+
+Replaying row set 3's own candidates (`body_3d` and `depth` at −21%, `shoulder_width` at +46%,
+truth between them) against a plate at each box size, with the new uncertainty:
+
+| box size | plate vs truth | blend vs truth | plate weight |
+|---|---|---|---|
+| 1.00× | 0% | **−1.6%** | 92% |
+| **1.03×** (measured median) | −3% | **−4.3%** | 92% |
+| 1.10× | −9% | −10.0% | 92% |
+| 1.16× (measured p90) | −14% | −14.3% | 92% |
+| 1.25× | −20% | **−20.1%** | 92% |
+| 2.42× (what shipped) | −59% | −14.0% | **stepped out** |
+
+Today the row reads **−14.0%** on its body rulers alone.
+
+**THE TAIL IS OPEN AND NO GATE WAS INVENTED FOR IT.** Read that table honestly: the blend follows
+the plate at every box size the guards admit, and the step-out only fires when the plate is ~2.4×
+off. A plate 25% wrong still agrees with a body ruler inside the tolerance, carries 92%, and takes
+the row to −20% — **worse than no plate at all**. 6% of val plates box past 1.25×.
+
+Three reasons that is recorded rather than gated:
+
+- **The band has never been observed on a real take.** Every plate the pipeline has seen was
+  grossly wrong (2–7×) and correctly refused. Fitting a gate to a projection is how the refusals
+  this repo has already had to unship got written.
+- **`plateBoxToExpectedRatio` reports it directly and has never been read on a real take** — it
+  shipped in 652, hours ago. The measurement that would justify a gate arrives with the next
+  filmed set.
+- **A tighter agreement tolerance is the obvious lever and would break the body rulers.** 25%
+  disagreement is inside `max(σ)×2`, and the body rulers need that width to cluster at all.
+
+So: the honest uncertainty ships, the retrain ships, and what to read next is
+`plateBoxToExpectedRatio` beside `plateScaleIfAdmitted`. If the box lands near 1.0 the row is
+solved; if it lands at 1.2–1.5 the next piece of work is a corroboration rule that can tell a
+25% disagreement from agreement, and it will be written against a measured take rather than this
+table.

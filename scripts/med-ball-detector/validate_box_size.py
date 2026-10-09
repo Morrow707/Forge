@@ -112,17 +112,33 @@ def main() -> int:
                     matched[names[cls]].append(long_edge(preds[best_i][1]) / gt_edge)
 
     print(f"{len(images)} val images, conf>={CONF}, IoU>={IOU_MATCH}\n")
-    print(f"{'class':14}{'gt':>6}{'matched':>9}{'recall':>8}{'size ratio (median)':>22}")
+    header = f"{'class':14}{'gt':>6}{'match':>7}{'recall':>8}{'median':>9}{'relMAD':>9}{'p90':>7}{'max':>7}"
+    print(header)
     for cls in sorted(gt_count, key=lambda c: -gt_count[c]):
-        ratios = matched[cls]
+        ratios = sorted(matched[cls])
         recall = len(ratios) / gt_count[cls] if gt_count[cls] else 0.0
-        median = statistics.median(ratios) if ratios else float("nan")
-        print(f"{cls:14}{gt_count[cls]:>6}{len(ratios):>9}{recall:>7.0%}{median:>22.2f}")
+        if not ratios:
+            print(f"{cls:14}{gt_count[cls]:>6}{0:>7}{recall:>7.0%}{'-':>9}{'-':>9}{'-':>7}{'-':>7}")
+            continue
+        median = statistics.median(ratios)
+        # relMAD is the number COREML_BOX_LONG_EDGE_UNCERTAINTY is set from (the widest of the
+        # three classes with a real sample). MAD rather than stdev on purpose: a detector that
+        # boxed one frame's rack upright instead of the plate is exactly the tail this must not
+        # follow, which is the same argument plateScaleFromFrames makes for taking a median.
+        mad = statistics.median([abs(r - median) for r in ratios])
+        p90 = ratios[max(0, int(0.9 * len(ratios)) - 1)]
+        print(f"{cls:14}{gt_count[cls]:>6}{len(ratios):>7}{recall:>7.0%}"
+              f"{median:>9.3f}{mad / median:>9.3f}{p90:>7.2f}{ratios[-1]:>7.2f}")
 
-    every = [r for rs in matched.values() for r in rs]
+    every = sorted(r for rs in matched.values() for r in rs)
     if every:
-        print(f"\nall classes: n={len(every)} median={statistics.median(every):.2f} "
-              f"mean={statistics.fmean(every):.2f}")
+        med = statistics.median(every)
+        mad = statistics.median([abs(r - med) for r in every])
+        print(f"\nall classes: n={len(every)} median={med:.3f} relMAD={mad / med:.3f} "
+              f"mean={statistics.fmean(every):.3f}")
+    print("\nA class with fewer than ~20 matches has no usable spread -- do not set a constant "
+          "from it.\nrelMAD here is what client/src/lib/pose-tracking.ts's "
+          "COREML_BOX_LONG_EDGE_UNCERTAINTY states.")
     return 0
 
 

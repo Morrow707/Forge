@@ -67,6 +67,7 @@ import {
   calibrateFromFrames,
   calibrationMethodBreakdown,
   scaleWorldLandmarks,
+  COREML_BOX_LONG_EDGE_UNCERTAINTY,
   computeReferenceObjectScale,
   CALIBRATION_REFERENCES,
   MIN_CALIBRATION_SAMPLES,
@@ -471,6 +472,10 @@ function plateScaleFromFrames(
     medianPixelSize,
     reference.nominalSizeM,
     reference.toleranceM,
+    // The detector's own box noise, measured on held-out data. Without it this ruler stated the
+    // plate's 1.3% casting tolerance as the whole of its uncertainty and treated the CoreML box
+    // as exact -- see COREML_BOX_LONG_EDGE_UNCERTAINTY.
+    COREML_BOX_LONG_EDGE_UNCERTAINTY,
   );
   // The measured diameter travels with the scale. When a plate read goes wrong it is because the
   // detector measured the wrong thing -- a plate on the rack behind the lifter, a bench end, a

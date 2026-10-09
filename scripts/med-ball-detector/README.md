@@ -118,24 +118,42 @@ the ratio of LONG EDGES, which is the one quantity the pipeline reads. On
 the 41 held-out val images, at the pipeline's own `minDetectionConfidence`
 of 0.25:
 
-| class       | gt boxes | matched | recall | size ratio (median) |
-|-------------|---------:|--------:|-------:|--------------------:|
-| plate       |       96 |      77 |    80% |            **1.01** |
-| dumbbell    |       53 |      23 |    43% |                1.00 |
-| barbell     |       30 |      19 |    63% |            **1.03** |
-| baseball    |       20 |      10 |    50% |                1.08 |
-| golf_ball   |       11 |       4 |    36% |                1.10 |
-| kettlebell  |        6 |       5 |    83% |                1.13 |
-| tennis_ball |        6 |       5 |    83% |                1.12 |
-| med_ball    |        5 |       2 |    40% |                1.18 |
-| **all**     |      227 |     145 |    64% |            **1.03** |
+| class       | gt boxes | matched | recall |      median |  relMAD |  p90 |  max |
+|-------------|---------:|--------:|-------:|------------:|--------:|-----:|-----:|
+| plate       |       96 |      77 |    80% | **1.011**   | **0.056** | 1.16 | 1.50 |
+| dumbbell    |       53 |      23 |    43% |     1.005   |   0.051 | 1.08 | 1.33 |
+| barbell     |       30 |      19 |    63% | **1.031**   | **0.049** | 1.25 | 1.43 |
+| baseball    |       20 |      10 |    50% |     1.084   |   0.079 | 1.25 | 1.26 |
+| golf_ball   |       11 |       4 |    36% |     1.103   |   0.029 | 1.13 | 1.14 |
+| kettlebell  |        6 |       5 |    83% |     1.134   |   0.106 | 1.21 | 1.40 |
+| tennis_ball |        6 |       5 |    83% |     1.121   |   0.019 | 1.14 | 1.16 |
+| med_ball    |        5 |       2 |    40% |     1.184   |   0.011 | 1.17 | 1.20 |
+| **all**     |      227 |     145 |    64% |     1.031   |   0.066 |      |      |
+
+**`relMAD` on the plate row is where `COREML_BOX_LONG_EDGE_UNCERTAINTY` comes from.** Until
+2026-10-09 the plate ruler stated the disc's casting tolerance (6mm on 450mm, **1.3%**) as the
+whole of its uncertainty and treated the CoreML box as exact -- so it claimed to be four times
+more precise than the detector it reads, and because the blend weights by 1/sigma^2 that bought
+it ~18x the weight it had earned. **Re-measure and re-state that constant on every retrain**; it
+describes one specific set of weights.
 
 Read it with three caveats, none of them optional:
 
-- **`med_ball` (n=2) and `golf_ball` (n=4) medians mean nothing.** Two
-  matched boxes is not a measurement. The val split is 41 images chosen
-  before anybody knew which classes were thin; the two rows worth reading
-  are `plate` and `barbell`, which carry the barbell lifts.
+- **`med_ball` (n=2) and `golf_ball` (n=4) medians mean nothing**, and
+  neither do their suspiciously tight relMADs -- two matched boxes is not a
+  measurement and the script says so in its own output. The val split is 41
+  images chosen before anybody knew which classes were thin; the three rows
+  with a real sample are `plate`, `dumbbell` and `barbell`, and the first and
+  last carry the barbell lifts.
+- **The TAIL is not covered by anything yet and is the thing to watch.** 6% of
+  plates box past 1.25x, and a plate 25% wrong still agrees with a body ruler
+  inside the blend's tolerance, so it is not stepped out and carries ~92% of
+  the vote. On the 2026-10-09 Pendlay Row that projects to -20% where the body
+  rulers alone give -14%. The guards catch a GROSSLY wrong plate (2.4x+) and
+  nothing in the 1.1-2.0x band. No gate was invented for it: that band has
+  never been observed on a real take, `plateBoxToExpectedRatio` is already
+  shipping and reports it directly, and a gate fitted to a projection is how
+  the refusals this repo has had to unship got written.
 - **Recall is modest and that is the acceptable half of the trade.** A box
   the pipeline refuses is worth nothing, and the old model's boxes were
   refused on every take, so 80% of plates at the right size beats 100% at

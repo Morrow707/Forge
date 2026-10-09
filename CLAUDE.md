@@ -3307,3 +3307,37 @@ vector, every mode must be a class. It matches the **tagged** protobuf form (`0x
 model's metadata, so on a doctored model with `barbell` dropped from the label vector the bare
 search PASSES and the tagged search fails. Four mutations caught. It also pins the class ORDER
 and the 640x640 input, so a retrain that moves either has to say so.
+
+### THE PLATE RULER CLAIMED TO BE FOUR TIMES MORE PRECISE THAN THE DETECTOR IT READS
+
+Found 2026-10-09 while projecting what the retrained detector does to the row, which is exactly
+when it matters: the retrain is what makes the plate's weight consequential.
+
+`computeReferenceObjectScale` returns `knownRealSizeM / measuredPixelSize` and propagated the
+**numerator's** error only -- the plate's casting tolerance, 6mm on 450mm, **1.3%** -- and treated
+the denominator as exact. That denominator is a CoreML box's long edge, whose relative MAD is
+**0.056** measured on 77 held-out plate boxes. The blend weights by 1/sigma^2, so understating the
+noise fourfold overstated the plate's weight **~18x**: 225x a body ruler's where the measurement
+supports 12x. **That is the mechanism behind build 653's bug, not a separate one** -- it is why a
+plate 60% wrong could carry 100% against two body rulers agreeing to 3%.
+
+`measurementUncertaintyFraction` is the missing term, in quadrature (the two are independent: how
+big the disc is, how well it was boxed), **defaulting to zero** so a coach's own tape measure
+still states 0 and no other caller moves. A measurement replacing a term that was ABSENT -- the
+same move as the grip floor, and what the learning-loop note already argues for in words.
+**A property of the DETECTOR, not a movement**, so shared across all 269; `FITTED_OVERRIDES` stays
+empty. **Re-measure it on every retrain** -- `validate_box_size.py` prints it.
+**Nothing in the corpus moves**: every take whose plate carried weight had it stepped out by
+653/655. `the-plate-states-the-detectors-own-noise.test.ts`, mutation-tested six ways.
+
+**AND THE TAIL IS OPEN, WITH NO GATE INVENTED FOR IT.** Projected on row set 3's own candidates,
+the blend FOLLOWS the plate at every box size the guards admit -- 1.03x -> -4.3%, 1.16x -> -14.3%,
+**1.25x -> -20.1%, worse than the -14.0% the body rulers give alone** -- and the step-out only
+fires at ~2.4x. 6% of val plates box past 1.25x. Three reasons that is recorded rather than gated:
+the band has never been seen on a real take (every plate so far was 2-7x off and correctly
+refused, and a gate fitted to a projection is how the refusals this repo unshipped got written);
+`plateBoxToExpectedRatio` reports it directly and has not yet been read on one; and the obvious
+lever, a tighter agreement tolerance, is the width the body rulers need to cluster at all.
+**What to read on the next filmed set: `plateBoxToExpectedRatio`, then `plateScaleIfAdmitted`.**
+Near 1.0 and the row is solved. At 1.2-1.5 the next work is a corroboration rule that can tell a
+25% disagreement from agreement -- written against a measured take, never against that table.
