@@ -23,12 +23,12 @@ scripts/med-ball-detector/dataset/     (YOLO-format train/val split)
         v  train.py
 scripts/med-ball-detector/runs/.../weights/best.pt
         |
+        v  validate_box_size.py  (box size vs ground truth -- read this
+        |                         before shipping; mAP is not the headline)
         v  convert_to_coreml.py
 scripts/med-ball-detector/MedBallDetector.mlpackage
         |
-        v  (manual: drag into Xcode, add to AvBodyTrackingPlugin.swift's
-        |   target's "Copy Bundle Resources" build phase -- can't be
-        |   scripted without a real Xcode install)
+        v  cp -r (a plain in-place replace -- see step 6)
 ios/App/App/MedBallDetector.mlpackage
 ```
 
@@ -89,7 +89,66 @@ starting point, not a finished detector -- real diversity (lighting, gyms,
 angles, occlusion) matters more than raw count. This is meant to be re-run
 as `training-data/med-ball/raw/` grows, not a one-time step.
 
-### 4. `convert_to_coreml.py`
+**Trained 2026-10-09 on all 266 images / 1,611 boxes** (the previous model
+had 43 boxes across 41 images). 100 epochs requested; the run was stopped
+at epoch 84 by its time limit, and the best checkpoint is **epoch 59**
+(mAP50 0.4755, mAP50-95 0.2387, P 0.516, R 0.549) -- the 25 epochs after it
+never beat it, so `best.pt` is the right artifact and the extra 16 would
+very likely have changed nothing. Validation numbers are in step 4.
+
+### 4. `validate_box_size.py` -- the number that actually matters
+
+```
+python3 validate_box_size.py
+```
+
+**mAP is the wrong headline for this model and will mislead you.** The
+scale pipeline divides a plate's nominal diameter by the detected box's
+long edge in pixels, so a box 2x too large reports a scale 2x too small and
+halves the set's range of motion. A detector can post a respectable mAP
+with systematically oversized boxes, because a 0.5 IoU threshold tolerates
+a lot of slack -- and that is exactly what the old model did: measured
+against the OVR on 2026-10-07, `plateScaleIfAdmitted` was 3.9x / 4.7x /
+1.9x too small on three paired takes, so every gate in the pipeline
+correctly refused the object witness and the scale fell back to body rulers
+alone.
+
+So this script IoU-matches each prediction to its ground truth and reports
+the ratio of LONG EDGES, which is the one quantity the pipeline reads. On
+the 41 held-out val images, at the pipeline's own `minDetectionConfidence`
+of 0.25:
+
+| class       | gt boxes | matched | recall | size ratio (median) |
+|-------------|---------:|--------:|-------:|--------------------:|
+| plate       |       96 |      77 |    80% |            **1.01** |
+| dumbbell    |       53 |      23 |    43% |                1.00 |
+| barbell     |       30 |      19 |    63% |            **1.03** |
+| baseball    |       20 |      10 |    50% |                1.08 |
+| golf_ball   |       11 |       4 |    36% |                1.10 |
+| kettlebell  |        6 |       5 |    83% |                1.13 |
+| tennis_ball |        6 |       5 |    83% |                1.12 |
+| med_ball    |        5 |       2 |    40% |                1.18 |
+| **all**     |      227 |     145 |    64% |            **1.03** |
+
+Read it with three caveats, none of them optional:
+
+- **`med_ball` (n=2) and `golf_ball` (n=4) medians mean nothing.** Two
+  matched boxes is not a measurement. The val split is 41 images chosen
+  before anybody knew which classes were thin; the two rows worth reading
+  are `plate` and `barbell`, which carry the barbell lifts.
+- **Recall is modest and that is the acceptable half of the trade.** A box
+  the pipeline refuses is worth nothing, and the old model's boxes were
+  refused on every take, so 80% of plates at the right size beats 100% at
+  2x. Rule #1 is unaffected either way: a take with no object still writes
+  its numbers from the body rulers, with a caveat.
+- **This measures `best.pt`, not the shipped `.mlpackage`.** `coremltools`
+  can convert on Linux but cannot `predict()` -- that needs macOS. The
+  export is the same graph at fp16, which is a real if small difference.
+  **The shipped proof is `plateBoxToExpectedRatio` near 1.0** in the next
+  filmed set's `trackingDiagnostics.objectGate`; that diagnostic has been
+  in the export since build 652 and exists for exactly this question.
+
+### 5. `convert_to_coreml.py`
 
 ```
 python3 convert_to_coreml.py
@@ -99,20 +158,36 @@ Converts the trained `.pt` weights to `MedBallDetector.mlpackage` via
 ultralytics' built-in CoreML export (uses `coremltools` internally). This
 is the file that actually ships in the app.
 
-### 5. Bundling into the app
+### 6. Bundling into the app
 
-Copy `MedBallDetector.mlpackage` into `ios/App/App/`, then in Xcode add it
-to the `App` target's "Copy Bundle Resources" build phase. This step needs
-a real Xcode install and can't be scripted from here -- do it once, then
-every future retrain just replaces the same file (same target membership
-stays intact on an Xcode-side file replace).
+```
+rm -rf ../../ios/App/App/MedBallDetector.mlpackage
+cp -r MedBallDetector.mlpackage ../../ios/App/App/
+```
+
+**That is the whole step now, and no Xcode is involved.** The one-time
+Xcode work is done: `project.pbxproj` holds it as a PATH reference
+(`path = MedBallDetector.mlpackage`, `sourceTree = "<group>"`) already in
+the App target's Resources phase, so replacing the directory in place keeps
+target membership and the next build picks the new weights up. All three
+files inside it are tracked in git.
+
+**A retrain is a NATIVE change**: run `verify_build`, then `beta`.
+
+`shared/the-shipped-detector-knows-every-class-we-ask-for.test.ts` is the
+ratchet over this step. It reads the trackingModes out of the Swift
+allow-list and the class labels out of the shipped model's own protobuf,
+and fails when a mode has no class behind it -- which is the failure this
+step can produce silently, because Vision matching nothing looks exactly
+like a mode that never asked for an object (Rule #4). It also pins the
+class ORDER and the 640x640 input, so a retrain that moves either has to
+say so.
 
 ## Runtime behavior (Swift side)
 
 `AvBodyTrackingPlugin.swift`'s med-ball detection path checks whether
 `MedBallDetector.mlpackage` is actually present in the bundle before doing
-anything with it. No bundled model (the current state, until step 5 above
-happens at least once) -- it silently falls through to the existing
+anything with it. No bundled model -- it silently falls through to the existing
 `AvImplementTracker` motion-diff tracker, completely unchanged. A bundled
 model never blocks, delays, or fails a recording or its analysis; it's a
 strictly additive signal to seed `VNTrackObjectRequest` more reliably than

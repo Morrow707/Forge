@@ -835,14 +835,15 @@ can install. Delete entries as a `beta` ships them.
   0.4 -> 0.25 (the squat had 90 of 130 candidates refused by that floor), the static-decoy rule
   (a rack does not move and a barbell does), the source-agreement gap read at last, and
   scale-drift-per-rep. Calibration work: uploaded on commit.
-- **KNOWN AND NOT FIXED: the CoreML model is undertrained, and no constant fixes it.** All eight
-  classes exist and the mapping is right, but it was trained on 43 labelled boxes across 41
-  images -- med_ball 10, plate 12, kettlebell 12, **barbell 3**, dumbbell 1. That is why the
-  barbell class has never produced a single detection on any take
-  (`candidatesSeenOfClass: 0` on both barbell lifts, across 60 full-frame searches) and why the
-  secondary witness has never held a lock. **225 of the 266 raw images are unlabelled** in
-  `training-data/med-ball/raw`. Labelling them is the fix; see
-  `scripts/med-ball-detector/README.md`.
+- **THE CoreML MODEL WAS UNDERTRAINED AND IS RETRAINED AS OF 2026-10-09. HISTORY KEPT BECAUSE
+  THE SYMPTOM IS QUOTED ALL OVER THIS FILE.** All eight classes existed and the mapping was
+  right, but it was trained on 43 labelled boxes across 41 images -- med_ball 10, plate 12,
+  kettlebell 12, **barbell 3**, dumbbell 1. That is why the barbell class never produced a single
+  detection on any take (`candidatesSeenOfClass: 0` on both barbell lifts, across 60 full-frame
+  searches), why the secondary witness never held a lock, and why `plateScaleIfAdmitted` was
+  1.9-4.7x too small on every sensor-paired take. **Do not reason from those numbers as the
+  current state** -- see the 2026-10-09 retrain entry below for what shipped and what is still
+  unproven.
 - Build **620** was cut 2026-10-05 from `660b025d`, off Scott's debug console, and it is the one
   to film on. **EVERY FINISHED CAMERA SET WAS RE-UPLOADING EVERY EARLIER SET'S SKELETON
   FRAMES.** From one session's console: `sending 10472KB (traces 10362KB)` ok in 7712ms, then
@@ -1396,8 +1397,7 @@ halves before splitting anything else:
   950px on a 20-cell grid and verified by eye on a contact sheet, the ORB carry between a clip's
   frames only ever a starting point (dropped or replaced wherever it drifted), 22 honest
   negatives, and the dense dumbbell racks recorded as COARSE rather than quietly presented as
-  tight. `prepare_dataset.py` runs clean on all 266. **Training the model is the next step and
-  has not been run.**
+  tight. `prepare_dataset.py` runs clean on all 266.
 - **THE FAST MODEL IS `claude-haiku-5-5`** (2026-10-08, Scott: "switch the fast model to haiku
   5.5 ... everywhere"). `fastModel` in `server/ai.ts` was `claude-haiku-4-5-20251001`. Haiku 5.5
   REPLACES 4.5 and is newer AND cheaper, so this is not a downgrade and no quality call was made
@@ -1448,22 +1448,32 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 651** (2026-10-09); the next beta is 652 or later.
-- **THE QUEUE IS EMPTY AS OF BUILD 651** (2026-10-09, Scott: "we need to upload something, go ahead
-  and upload it now"). Run 651 from `d1d99340` uploaded in 6m14s, every step green including the lane
-  itself. It carries the six client-side commits that had accumulated since 648: the email shell and
-  the progress report's camera caveat and `/pricing`'s nav (`76b062e5`), the app shell that names no
-  URL (`e5f86c8b`), a gated upload directory gated at every DEPTH (`498eb472`), the three withdrawn
-  sport coaches that were still priced at $7.99 on a public page (`7ce93920`), the Notice to Parent or
-  Guardian made readable by a parent (`74bfb950`), and a Key Point that still told an athlete where to
-  film from (`405fa40b`). **649 and 650 were `verify_build` runs on two of those commits**, which is
-  what made spending the upload safe rather than hopeful -- the archive, the signing and Apple's own
-  `--validate-app` had already passed on this code.
-  **The line this replaces was eighteen builds stale**, and said the 270-record tunables registry and
-  the native arbiter plumbing were still queued on a branch. They have been on `main` and in every
-  build since the 620s. That is the third drift this entry's own heading warns about, and the cause is
-  the same each time: the queue is written down when something is ADDED to it and not when a `beta`
-  empties it. **Clear this entry on the next upload rather than adding to it.**
+  branch `verify_build` for the arbiter plumbing. **The newest build is 655** (2026-10-09,
+  `b88d8850`). Runs 652-655 were the four calibration betas of that day. The retrained detector
+  goes out in the two runs after it -- a `verify_build` then a `beta` -- and the exact numbers are
+  filled in below once they exist, never predicted.
+- **THE QUEUE IS EMPTY AS OF BUILD 655** (2026-10-09). Four betas went out this day, each one
+  calibration work and so exempt from the batch, each uploaded on commit:
+  - **652** `e044c56d` -- `plateBoxToExpectedRatio` and `capture-repeatability.ts`: the diagnostic
+    that says whether a detected box is the right SIZE, with no sensor needed, which is what made
+    everything after it scoreable on an ordinary day.
+  - **653** `cb67688a` -- a lone plate no longer takes the whole scale (the build-594 guard was
+    counting voters after the 3D-pose collapse). Row set 2: **-60.5% -> -1.1%**.
+  - **654** `d283ec85` -- the grip says when the shoulder span cannot be right, carried as
+    uncertainty and floored. Row set 1: **+23.1% -> -7.4%**.
+  - **655** `b88d8850` -- 654's own regression, found within the hour: loosening a ruler was
+    buying it the power to drag others into a cluster. `MAX_SCALE_AGREEMENT_TOLERANCE`.
+  - **the retrained CoreML detector** goes out next, on the commit this entry ships in: a
+    `verify_build` first because the `.mlpackage` swap is a native change, then the `beta`. This
+    line gets the real run numbers when the runs finish.
+  Across the nine sensor-paired takes of the day, median absolute error **10.6% -> 5.4%** and
+  worst case **60.5% -> 20.7%**. The row is the one lift still outside 15% and the retrained
+  detector is the only remaining candidate for it; what proves or disproves that is one filmed
+  set, read off `plateBoxToExpectedRatio`.
+  **The line this replaces named build 651 and was correct for sixteen hours**, which is the
+  shortest this entry has ever been accurate -- the cause of every earlier drift is that the queue
+  gets written down when something is ADDED and not when a `beta` empties it. **Clear this entry
+  on the next upload rather than adding to it.**
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
@@ -3235,3 +3245,65 @@ from the training data -- "a detector trained on close-ups predicts boxes TOO LA
 scale pipeline reads as a scale too small" -- and said training was the next step. It had still
 not been run. All 266 images are labelled (1611 boxes, barbell 146, plate 465) and
 `prepare_dataset.py` splits them 225/41 clean.
+
+### AND IT IS RUN NOW: THE RETRAINED DETECTOR DRAWS BOXES 1.01-1.03x, MEASURED ON HELD-OUT DATA
+
+Scott, on the three rows still being the one lift outside 15%: **"Why didn't you fix everything?
+It's no use testing the camera if everything isn't fixed and now we're wasting more time. Fix the
+row. Then reupload."** He is right, and the row is not fixable by weighting body rulers, which is
+why the three fixes above did not reach it: on set 3 the candidates BRACKET the truth (`body_3d`
+and `depth` -21%, `shoulder_width` +46%) and no combination lands on it. Fitting a bone preference
+to close that gap is one number fitted on one lift, and every ruler uncertainty is SHARED, so it
+would move the bench and press that are already inside 5%. What the row needs is the ruler whose
+real size is KNOWN, and that is the object.
+
+Trained on all 266 images / 1,611 boxes. 100 epochs requested, stopped at **epoch 84** by its
+time limit; best checkpoint **epoch 59** (mAP50 0.4755), and the 25 epochs after it never beat it,
+so the run had plateaued and `best.pt` is the artifact rather than a truncation.
+
+**mAP IS THE WRONG HEADLINE FOR THIS MODEL AND `scripts/med-ball-detector/validate_box_size.py`
+EXISTS BECAUSE OF IT.** The pipeline divides a plate's nominal diameter by the box's long edge in
+pixels, so a box 2x too large reports a scale 2x too small -- and a detector posts a respectable
+mAP with systematically oversized boxes, because a 0.5 IoU threshold tolerates that much slack.
+That is exactly what the old model did. So the measurement is the ratio of LONG EDGES against
+IoU-matched ground truth, at the pipeline's own `minDetectionConfidence` of 0.25, on the 41
+held-out val images: **plate 1.01 at 80% recall (96 boxes), barbell 1.03 at 63% (30)**, dumbbell
+1.00 at 43%, all classes median 1.03 over 145 matches. The two rows that carry the barbell lifts
+are the two that matter, against a shipped model whose boxes were 2.09x / 2.81x / 6.73x.
+
+**Three caveats, none optional.** `med_ball` (n=2) and `golf_ball` (n=4) medians mean nothing --
+the val split was fixed before anybody knew which classes were thin. Recall is modest and that is
+the acceptable half of the trade: a box the pipeline refuses is worth nothing and the old boxes
+were refused on every take, so 80% of plates at the right size beats 100% at 2x (Rule #1 is
+unaffected -- a take with no object still writes its numbers off the body rulers with the
+caveat). And this measures `best.pt`, not the shipped `.mlpackage`: `coremltools` converts on
+Linux but cannot `predict()`, which needs macOS, so the export is the same graph at fp16 and the
+difference is real if small.
+
+**NOTHING HERE SAYS THE ROW IS FIXED.** It says the row's remaining error has one candidate cause
+left, that cause is measurably better on held-out data, and the take that settles it has not been
+filmed. **No constant moved, no gate loosened, no ruler reweighted** -- if the new boxes are still
+wrong the gates refuse them exactly as before and the row reads what it reads today. That is
+correct and is why the gates were not touched in the same change. **The shipped proof is
+`plateBoxToExpectedRatio` near 1.0** in the next filmed set's `trackingDiagnostics.objectGate`
+(in the export since 652), beside `plateScaleIfAdmitted` against the sensor's required scale and
+`candidatesSeenOfClass` for the barbell, which is the secondary witness that has never held a
+lock.
+
+**A RETRAIN REPLACES THE `.mlpackage` IN PLACE AND NEEDS NO XCODE** -- `project.pbxproj` holds it
+as a path reference already in the App target's Resources phase, so `cp -r` is the whole step and
+all three files inside it are tracked. It IS a native change: `verify_build`, then `beta`. The
+README's old "drag into Xcode" step is corrected.
+
+**`shared/the-shipped-detector-knows-every-class-we-ask-for.test.ts` is the ratchet, and the
+failure it exists for is silent.** `targetLabel` hands Vision a class NAME; a name the model does
+not carry produces no error, no log and no detection, so the diagnostics read EXACTLY as they do
+for a mode that passes no `trackingMode` -- Rule #4's "indistinguishable from being off and
+worse". A retrain is where a class gets renamed, dropped or reordered, because the dataset yaml
+decides the list and nothing downstream complains. It scans both directions and holds no list of
+its own: modes out of the Swift allow-list, classes out of the shipped model's own protobuf label
+vector, every mode must be a class. It matches the **tagged** protobuf form (`0x0A <len>
+<bytes>`), not a bare substring, and that is load-bearing -- each name also appears twice in the
+model's metadata, so on a doctored model with `barbell` dropped from the label vector the bare
+search PASSES and the tagged search fails. Four mutations caught. It also pins the class ORDER
+and the 640x640 input, so a retrain that moves either has to say so.

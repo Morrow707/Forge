@@ -4557,3 +4557,104 @@ is the signature of a uniform SCALE error, not a segmentation one, which is exac
 **Still open:** the row is the only lift not inside 15%, and no ruler on set 3 is right — truth
 sits between the body rulers (−21%) and the shoulder ruler (+46%). The press's set-1 +20.7% is
 also untouched by any of this.
+
+## The detector was retrained, and this is the only thing left that can fix the row, 2026-10-09
+
+Scott, on the three rows still being the one lift outside 15%: *"Why didn't you fix everything?
+It's no use testing the camera if everything isn't fixed and now we're wasting more time. Fix the
+row. Then reupload."*
+
+**He is right, and the row cannot be fixed by weighting body rulers, which is why the morning's
+three fixes did not reach it.** On set 3 the four candidates bracket the truth and no combination
+of them lands on it: `body_3d` and `depth` read −21%, `shoulder_width` reads +46%, and truth sits
+between them. Set 1 is the same shape in the other direction. Fitting a bone preference or a
+per-ruler weight to close that gap would be fitting one number on one lift, which is what
+`FITTED_OVERRIDES` stays empty to prevent — and it would move the bench and the press, which are
+already inside 5%, because every ruler uncertainty is SHARED (see CLAUDE.md, "one code path,
+per-lift values").
+
+What the row needs is the one ruler in the scene whose real size is KNOWN, and that is the object
+(Rule #4: "a number corroborated by one system is not a trusted number, it is an assertion").
+That ruler has never worked. It is recorded here three sessions running:
+`plateScaleIfAdmitted` 3.9× / 4.7× / 1.9× too small on 2026-10-07, every gate refusing it
+correctly, and the barbell class producing `candidatesSeenOfClass: 0` on every barbell take ever
+filmed. The cause was recorded at the same time: the model was trained on **43 labelled boxes
+across 41 images**, barbell 3 of them.
+
+### What was done
+
+All 266 images were labelled on 2026-10-07 (1,611 boxes; barbell 3 → 146). The model is now
+trained on them. 100 epochs requested, stopped at **epoch 84** by its time limit; the best
+checkpoint is **epoch 59** (mAP50 0.4755) and the 25 epochs after it never beat it, so the run
+had plateaued and `best.pt` is the right artifact rather than a truncation.
+
+**mAP is the wrong headline and `scripts/med-ball-detector/validate_box_size.py` exists because
+of it.** The pipeline divides a plate's nominal diameter by the box's long edge in pixels, so a
+box 2× too large reports a scale 2× too small — and a detector can post a respectable mAP with
+systematically oversized boxes, because a 0.5 IoU threshold tolerates a lot of slack. That is
+precisely what the old model did. So the measurement is the ratio of long edges against
+IoU-matched ground truth, at the pipeline's own `minDetectionConfidence` of 0.25, on the 41
+held-out val images:
+
+| class | gt boxes | matched | recall | size ratio (median) |
+|---|---:|---:|---:|---:|
+| plate | 96 | 77 | 80% | **1.01** |
+| dumbbell | 53 | 23 | 43% | 1.00 |
+| barbell | 30 | 19 | 63% | **1.03** |
+| baseball | 20 | 10 | 50% | 1.08 |
+| golf_ball | 11 | 4 | 36% | 1.10 |
+| kettlebell | 6 | 5 | 83% | 1.13 |
+| tennis_ball | 6 | 5 | 83% | 1.12 |
+| med_ball | 5 | 2 | 40% | 1.18 |
+| **all** | 227 | 145 | 64% | **1.03** |
+
+The two rows that carry the barbell lifts are `plate` 1.01 at 80% recall and `barbell` 1.03 at
+63%, against a shipped model whose plate boxes were 2–7× too large on real takes and whose
+barbell class had never produced a single detection.
+
+**The 225 new images are also the half that matters**, which is why a box-size fix is plausible
+from labelling alone: they are 1440×1920 portrait with objects at 2–15% of the frame — the
+geometry the phone hands the detector — against 26–56% in the 41 close-ups the old model was
+trained on. A detector trained on close-ups predicts boxes too large, which a scale pipeline
+reads as a scale too small. The measured symptom and the dataset geometry agree.
+
+### Three caveats, none of them optional
+
+- **`med_ball` (n=2) and `golf_ball` (n=4) medians mean nothing.** Two matched boxes is not a
+  measurement. The val split was fixed before anybody knew which classes were thin.
+- **Recall is modest and that is the acceptable half of the trade.** A box the pipeline refuses is
+  worth nothing, and the old model's boxes were refused on every take — so 80% of plates at the
+  right size beats 100% at 2×. Rule #1 is unaffected: a take whose object is not found still
+  writes its numbers off the body rulers, with the caveat.
+- **This measures `best.pt`, not the shipped `.mlpackage`.** `coremltools` converts on Linux but
+  cannot `predict()` — that needs macOS. The export is the same graph at fp16, a real if small
+  difference. **The shipped proof is `plateBoxToExpectedRatio` near 1.0** in the next filmed set's
+  `trackingDiagnostics.objectGate`, which has been in the export since build 652 and exists for
+  exactly this question. Beside it, `plateScaleIfAdmitted` is the number to read against the
+  sensor's required scale, and `candidatesSeenOfClass` for the barbell is the one to read for the
+  secondary witness that has never held a lock.
+
+### What is NOT claimed
+
+**Nothing here says the row is fixed.** It says the row's remaining error has one candidate cause
+left, that cause is now measurably better on held-out data, and the take that proves or disproves
+it has not been filmed. No constant moved, no gate loosened, no ruler reweighted — if the new
+boxes are still wrong the gates will refuse them exactly as before and the row will read what it
+reads today. That is the correct behaviour and is the reason the gates were not touched in the
+same change.
+
+### The ratchet, and the failure it exists for
+
+`shared/the-shipped-detector-knows-every-class-we-ask-for.test.ts`. `targetLabel` hands Vision a
+class NAME; a name the model does not carry produces no error, no log and no detection, so the
+diagnostics read **exactly** as they do for a mode that passes no `trackingMode` at all — Rule
+#4's "indistinguishable from being off and worse". A retrain is where a class gets renamed,
+dropped or reordered, because the dataset yaml decides the list and nothing downstream complains.
+
+It scans in both directions and holds no list of its own: the modes come out of the Swift
+allow-list, the classes out of the shipped model's own protobuf label vector, and every mode must
+be a class. It matches the **tagged** protobuf form (`0x0A <len> <bytes>`) rather than a bare
+substring, and that is load-bearing — each of the eight names also appears twice in the model's
+metadata, so on a doctored model with `barbell` dropped from the label vector the bare search
+passes and the tagged search fails. Four mutations caught: an unknown mode, an unknown secondary
+label, a missing model file, and the bare-substring discriminator.
