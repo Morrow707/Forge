@@ -477,6 +477,31 @@ export type TrackingDiagnostics = {
       framesRejectedForAngle: number;
       rejectedBecause: string | null;
       spanSpreadFraction: number | null;
+      /** THE GRIP SPAN BESIDE THE SHOULDER SPAN, FROM THE SAME FRAMES. Added 2026-10-09.
+       *
+       *  This ruler is `BIACROMIAL_HEIGHT_FRACTION x height / measuredSpan` and nothing else --
+       *  confirmed on three sensor-paired takes, where scale x span came to 0.438 m every time
+       *  for a 75in athlete. So it is wholly at the mercy of one measured span, and that span
+       *  shrinks when the athlete turns away from square while the metres it is divided into do
+       *  not. The scale then comes out proportionally too large.
+       *
+       *  On 2026-10-09 the ordering was exact on all three takes: bench grip/shoulder 1.47 and
+       *  the ruler +1.4% against the OVR; push press 2.06 and +49.1%; Pendlay row 2.91 and
+       *  +62.0%. A bench grip really is about 1.5x biacromial breadth, so 2.9 is not anatomy, it
+       *  is a shoulder span read at roughly half size. `subjectFacing` read "oblique" on all
+       *  three and so separated none of them; this does.
+       *
+       *  IT RECORDS AND NOTHING READS IT. Three takes is not a fit, and there is a confound in
+       *  them that three takes cannot settle: each was a different lift, so each had a genuinely
+       *  different grip. What would settle it is the same lift filmed square and oblique, or
+       *  enough takes for the ratio to be tested against error within one exercise. Until then
+       *  this is the number that makes that test possible without re-deriving it from two fields
+       *  by hand, which is how 2026-10-09 found it.
+       *
+       *  NOT a replacement for `spanSpreadFraction`, which measures something else and was shown
+       *  the same day not to predict this error at all -- the press had the TIGHTEST spread
+       *  (0.042) and the second-worst error. */
+      gripToShoulderSpanRatio?: number | null;
     };
     /** HOW MUCH OF THE MOVEMENT THE IMAGE PLANE COULD NOT SEE, off the 3D pose. Measured,
      *  recorded, applied to NOTHING -- see axis-foreshortening.ts. The bench press of build 632
@@ -498,6 +523,29 @@ export type TrackingDiagnostics = {
       plateScaleIfAdmitted: number | null;
       rejectedReasons: string[];
       appliedCorrection: boolean;
+      /** IS THE DETECTOR'S BOX THE SIZE A PLATE WOULD BE? Added 2026-10-09.
+       *
+       *  `plateScaleIfAdmitted` (build 633) can only be scored against a sensor: it is a scale,
+       *  and knowing whether it is wrong needs a truth to divide by. Three sessions of it have
+       *  therefore only ever been readable on the days Scott filmed beside the OVR.
+       *
+       *  This is the same question asked against the take's OWN scale, so it needs no sensor and
+       *  lands on every take forever: a bumper plate is 0.45m, this take blended its own metres
+       *  per pixel, so a plate HERE would box `0.45 / scaleFactor` pixels on its long edge. The
+       *  ratio of what the detector actually boxed to that number is the whole bug report.
+       *
+       *  On 2026-10-09, against the OVR, it read 2.09 / 2.81 / 6.73 on press / row / bench --
+       *  the detector boxing something two to seven times a plate's size, which is why the scale
+       *  it implied came out two to seven times too small and all three were refused. That is
+       *  exactly what CLAUDE.md predicted on 2026-10-07 from the training data ("a detector
+       *  trained on close-ups predicts boxes TOO LARGE, which a scale pipeline reads as a scale
+       *  too small"), and it is the number that says whether a retrained model fixed it.
+       *
+       *  Near 1.0 is a box the right size. It RECORDS and gates nothing (Rule #1) -- the plate
+       *  gates are unchanged and still decide on aspect and size-vs-grip as they did. */
+      plateBoxLongEdgePx: number | null;
+      expectedPlateLongEdgePx: number | null;
+      plateBoxToExpectedRatio: number | null;
     };
     /** EVERY STEP THE SCALE BLEND TOOK, and whose numbers it was handed.
      *

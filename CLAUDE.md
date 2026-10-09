@@ -3070,3 +3070,96 @@ are the ones a parent or a school sees first.
   padding that a per-entry length check would have forced) or deliberately chrome-free with a
   reason over 50 characters, and it refuses a second `min-h-screen` nested inside the shell --
   which is exactly what the first draft of the /pricing fix did. Both mutations caught.
+
+## RULE #5: MEASURE THE SCATTER BEFORE FITTING THE BIAS
+
+Added 2026-10-09. Scott, after three sessions of comparisons against the OVR: **"I just feel like
+we're starting over everytime."** He was right, and it gets its own number because every
+calibration session for a week walked into it.
+
+**THE SAME LIFT DISAGREES WITH ITSELF BY AS MUCH AS IT DISAGREES WITH THE SENSOR.** Same athlete,
+same lift, same load, across the 20 captures in the 10-09 export:
+
+| Lift | Load | ROM across takes | hi/lo |
+|---|---|---|---|
+| Pendlay Row | 135 | 42.6, 46.9, **71.6** | **1.68x** |
+| Bench Press | 135 | 25.7, 28.4, 32.0, 32.5 | 1.26x |
+| Shoulder Press | 65 | 63.0, 68.1, 71.4, 75.4 | 1.20x |
+
+**It is not drift between builds and it is not me forgetting what I changed** -- the first thing
+to rule out, and it is ruled out by the takes that share a build. On 2026-10-07 sets 1 and 2 of
+each lift were both the pre-refit control on build **637** (set 3 was the first on 639, so the
+three-set groups are NOT one build -- an earlier draft of this entry said they were, and that was
+wrong). Sets 1 and 2 on that one build, minutes apart:
+
+| lift | set 1 | set 2 | hi/lo |
+|---|---|---|---|
+| Bench Press 135 | 25.7 | 32.5 | **1.26x** |
+| Shoulder Press 65 | 71.4 | 63.0 | 1.13x |
+| Pendlay Row 95 | 35.2 | 32.6 | 1.08x |
+
+A quarter of the bench's range of motion, between two sets, with no code change between them.
+The scatter is in the measurement.
+
+**So every session since 10-04 has been fitting a BIAS of 10-25% out of a signal whose
+take-to-take SPREAD is 6-24%.** That cannot converge. Each new session's single take lands
+somewhere in the cloud and reads as a win or a regression depending where it fell, which is
+exactly what "starting over" feels like from the outside. **Before proposing any correction
+constant, say what the spread is.** If the spread is the same size as the bias, the honest move
+is to reduce the spread, not to fit the mean of it.
+
+`shared/capture-repeatability.ts` computes this over whatever captures the export holds and rides
+in the admin capture download as `repeatability`. It records and gates nothing (Rule #1). The
+worst group sorts first, and `sameDay` marks the groups that rule out a build change.
+
+Per-ruler scatter, same 20 captures (median CV across lift/load groups, lower is steadier):
+**height 7%, body_3d 7%** (present 20/20), **shoulder_width 12%, depth 12%**. On the Pendlay Row
+body_3d's spread is **1%** and shoulder_width's is **17-21%**.
+
+- **This does NOT weaken "its own numbers".** The spread is a property of the shared MECHANISM,
+  not a number to split 270 ways. Read it beside that section: a RULE gets better for every lift
+  at once, and this is a rule about when a fit is admissible.
+- **It does not license a correction either.** `FITTED_OVERRIDES` is still empty.
+
+### The shoulder ruler is one span, and the span foreshortens
+
+Measured the same day. It is `BIACROMIAL_HEIGHT_FRACTION x height / measuredSpan` and nothing
+else -- scale x span came to **0.438 m** on all three takes, so it is wholly at the mercy of one
+measured span, and that span shrinks as the athlete turns while the metres it divides do not.
+
+| take | grip px / shoulder span | shoulder ruler vs sensor |
+|---|---|---|
+| Bench | **1.47** | **+1.4%** |
+| Push Press | **2.06** | **+49.1%** |
+| Pendlay Row | **2.91** | **+62.0%** |
+
+Exact ordering on 3/3. A bench grip is ~1.5x biacromial breadth, so 2.91 is a shoulder span read
+at half size, not anatomy. **`subjectFacing` read "oblique" on all three and separated none.**
+`calibration.shoulderRuler.gripToShoulderSpanRatio` records it and **NOTHING READS IT**: each take
+was a different lift and so a different grip, and three confounded points cannot choose an
+uncertainty. What settles it is one lift filmed square and oblique.
+**`spanSpreadFraction` does not predict this error** -- the press had the TIGHTEST spread (0.042)
+and the second-worst error. First evidence either way on a measure added 10-06 for this job.
+**Refusing the ruler is not available:** it is the only good voter on the bench (+1.4% against
+body_3d's -29.7%), so a blanket refusal takes the bench to -29.7%. Rule #1.
+
+### THE BARBELL IS THE RULER SCOTT WANTS AND THE BOX IS 2-7x TOO BIG
+
+Scott, same day: "what happens when the camera can't find my shoulders, it should still be
+relying on the barbell which can get an accurate frame almost everytime." Correct, and it is
+Rule #4 word for word -- the object is the only ruler whose real size is KNOWN. **The barbell is
+found**: the implement appeared on 438 / 135 / 431 frames of the three takes. **Sizing it is what
+fails.** Boxed 145x263, 164x314, 418x759 px where a 45cm plate at each take's own scale would be
+126 / 111 / 113 px: **2.09x, 2.81x, 6.73x too big**, all aspect ~0.55, all refused on
+`aspect_ratio`, and all three refusals correct.
+
+`calibration.objectGate.plateBoxToExpectedRatio` now ships that ratio on **every** take with no
+sensor needed -- `plateScaleIfAdmitted` (build 633) is a scale and could only ever be scored
+beside the OVR, which is why three sessions of it were unreadable on ordinary days. Near 1.0 is a
+box the right size. **It is the number that says whether the retrain worked.**
+
+**THE CAUSE WAS ALREADY WRITTEN DOWN AND THE FIX WAS NEVER RUN.** 10-07 predicted this exactly
+from the training data -- "a detector trained on close-ups predicts boxes TOO LARGE, which a
+scale pipeline reads as a scale too small" -- and said training was the next step. It had still
+not been run. All 266 images are labelled (1611 boxes, barbell 146, plate 465) and
+`prepare_dataset.py` splits them 225/41 clean.

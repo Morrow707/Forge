@@ -36,6 +36,10 @@ export type BodyScaleFallbacks = {
     framesRejectedForAngle: number;
     rejectedBecause: string | null;
     spanSpreadFraction: number | null;
+    /** The grip span measured in the SAME frames, divided by this ruler's shoulder span.
+     *  Filled by the caller, which is where the grip is already in hand. See the field's
+     *  comment in tracking-diagnostics.ts for what it is for and why it only records. */
+    gripToShoulderSpanRatio?: number | null;
   };
   /** The 3D ruler bone by bone, in the shape `calibration.body3DRuler` carries. */
   body3DRuler: {

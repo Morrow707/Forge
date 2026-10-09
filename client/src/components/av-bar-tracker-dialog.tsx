@@ -401,6 +401,18 @@ const PLATE_DISC_ASPECT_HIGH = 1.25;
 // about accepting a ruler the geometry has already ruled out.
 const PLATE_DISC_MAX_GRIP_RATIO = 2.6;
 
+/** The plate this pipeline measures against, as one value both readers share.
+ *
+ *  Derived from CALIBRATION_REFERENCES rather than typed as 0.45, because the ruler below and
+ *  the box-size diagnostic that scores it have to divide by the SAME number or the diagnostic
+ *  quietly grades the ruler against a different plate. Same rule as the Swift arbiter's
+ *  constants and `camera-tunables-are-a-copy.test.ts`: change one, change both -- except here
+ *  there is only one, which is better. */
+const PLATE_REFERENCE = CALIBRATION_REFERENCES.find(
+  (r) => r.id === "bumper_plate_perform_better",
+)!;
+export const PLATE_NOMINAL_SIZE_M = PLATE_REFERENCE.nominalSizeM;
+
 function plateScaleFromFrames(
   frames: NativePoseFrame[],
   trackingMode: string | undefined,
@@ -454,7 +466,7 @@ function plateScaleFromFrames(
   if (samples.length < MIN_CALIBRATION_SAMPLES) return null;
   samples.sort((a, b) => a - b);
   const medianPixelSize = samples[Math.floor(samples.length / 2)];
-  const reference = CALIBRATION_REFERENCES.find((r) => r.id === "bumper_plate_perform_better")!;
+  const reference = PLATE_REFERENCE;
   const computed = computeReferenceObjectScale(
     medianPixelSize,
     reference.nominalSizeM,
@@ -1241,6 +1253,13 @@ export function AvBarTrackerDialog({
           plateScaleRaw?.scale != null ? Math.round(plateScaleRaw.scale * 1e8) / 1e8 : null,
         rejectedReasons: plateRejectedReasons,
         appliedCorrection: false as const,
+        // Filled below, where the take's own blended scale is known. Null here rather than
+        // absent so the shape of this object never depends on how far the take got.
+        plateBoxLongEdgePx: plateScaleRaw?.measured != null
+          ? Math.round(plateScaleRaw.measured * 10) / 10
+          : null,
+        expectedPlateLongEdgePx: null as number | null,
+        plateBoxToExpectedRatio: null as number | null,
       };
     })();
 
@@ -2195,8 +2214,35 @@ export function AvBarTrackerDialog({
         framesRejectedForAngle: shoulderScale.framesRejectedForAngle,
         rejectedBecause: shoulderScale.rejectedBecause,
         spanSpreadFraction: shoulderScale.spanSpreadFraction,
+        // The grip span beside the shoulder span, from the same frames and the same tracker.
+        // Recorded because this ruler is nothing but a constant divided by that shoulder span,
+        // and the span foreshortens as the athlete turns while the constant does not. Reads
+        // and gates nothing -- see the field's comment in tracking-diagnostics.ts, and the
+        // confound in it that three takes could not settle.
+        gripToShoulderSpanRatio:
+          gripWidthPx != null && gripWidthPx > 0
+            && shoulderScale.medianSpanUnits != null && shoulderScale.medianSpanUnits > 0
+            ? Math.round((gripWidthPx / shoulderScale.medianSpanUnits) * 1000) / 1000
+            : null,
       };
       calibrationDiagnostics.axisForeshortening = axisForeshortening;
+      // THE DETECTOR'S BOX AGAINST THE SIZE A PLATE WOULD BE ON THIS TAKE.
+      //
+      // Needs the blended scale, which is why it is filled here rather than where the rest of
+      // the gate's record is built. A bumper plate is 0.45m (PLATE_NOMINAL_SIZE_M, the same
+      // constant the plate ruler itself divides by), so at this take's own metres-per-pixel a
+      // plate's long edge would be 0.45 / scaleFactor pixels. Dividing what was actually boxed
+      // by that turns three sessions of unscoreable `plateRejectedReasons` into one number that
+      // needs no sensor: 2.09 / 2.81 / 6.73 on 2026-10-09's press / row / bench.
+      //
+      // Guarded on a positive scale because a take that never resolved one has nothing to
+      // divide by -- and a null here is honest, where a zero would read as a perfect box.
+      if (scaleFactor != null && scaleFactor > 0 && plateScaleRaw?.measured != null) {
+        const expectedPx = PLATE_NOMINAL_SIZE_M / scaleFactor;
+        objectGateDiagnostics.expectedPlateLongEdgePx = Math.round(expectedPx * 10) / 10;
+        objectGateDiagnostics.plateBoxToExpectedRatio =
+          expectedPx > 0 ? Math.round((plateScaleRaw.measured / expectedPx) * 1000) / 1000 : null;
+      }
       calibrationDiagnostics.objectGate = objectGateDiagnostics;
       // EVERY STEP THE SCALE BLEND TOOK, plus WHICH of the 54 filmable identities' numbers were
       // in play. Scott, 2026-10-07: "if you can't see, and can't guess, then put it in the export

@@ -10038,6 +10038,10 @@ export const trackingDiagnosticsSchema = z.object({
           // never be the thing that makes an insert fail.
           rejectedBecause: z.string().max(60).nullable(),
           spanSpreadFraction: z.number().nullable(),
+          // The grip span beside the shoulder span, 2026-10-09. Optional because every capture
+          // stored before that date has no such key, and a required field would make those rows
+          // unreadable rather than merely older.
+          gripToShoulderSpanRatio: z.number().nullable().optional(),
         })
         .optional()
         .nullable(),
@@ -10062,6 +10066,12 @@ export const trackingDiagnosticsSchema = z.object({
           plateScaleIfAdmitted: z.number().nullable(),
           rejectedReasons: z.array(z.string().max(60)).max(12),
           appliedCorrection: z.boolean(),
+          // IS THE BOX THE SIZE A PLATE WOULD BE, at this take's own scale -- 2026-10-09. The
+          // question plateScaleIfAdmitted could only answer beside a sensor. Optional for the
+          // same reason as gripToShoulderSpanRatio: older rows do not carry it.
+          plateBoxLongEdgePx: z.number().nullable().optional(),
+          expectedPlateLongEdgePx: z.number().nullable().optional(),
+          plateBoxToExpectedRatio: z.number().nullable().optional(),
         })
         .optional()
         .nullable(),

@@ -4289,3 +4289,116 @@ The RDL's `axisForeshortening.ratio` is **1.000** and the squat's **1.092**; `ca
 cause: the CoreML model was trained on close-ups. All 266 training images are labelled now
 (43 boxes → 1611, barbell 3 → 146) and **training the model has still not been run.** It is the
 highest-value camera work in the repo.
+
+## Three lifts beside OVR, build 651, 2026-10-09 — the scatter is the finding, not the bias
+
+Bench Press 135×10, Pendlay Row 135×10, Push Press 65×10 (logged as Barbell Shoulder Press),
+filmed back to back and read against the OVR. **Nothing in build 651 touches the camera** — its
+six commits are emails, `/pricing`'s nav, upload-directory gating, a legal page and a class text
+fix — so nothing here is a regression from it, and the `git diff` over the camera paths is empty.
+
+| | ROM | mean | peak | reps | concentric window |
+|---|---|---|---|---|---|
+| Bench 135×10 | 32.0 vs 35.8 cm, **−10.6%** | +25.0% | +19.4% | 9 of 10 | −21.6% |
+| Pendlay Row 135×10 | 71.6 vs 58.2, **+23.1%** | +58.7% | +22.2% | 10 ✓ | −17.8% |
+| Push Press 65×10 | 75.4 vs 62.5, **+20.7%** | +25.9% | +33.3% | 9 of 10 | **+0.4%** |
+
+### THE SAME LIFT DISAGREES WITH ITSELF BY AS MUCH AS IT DISAGREES WITH THE SENSOR
+
+Scott: "I just feel like we're starting over everytime." He is right, and no session before this
+one measured it. Across the 20 captures in the export, same athlete, same lift, same load:
+
+| Lift | Load | ROM across takes | hi/lo |
+|---|---|---|---|
+| Pendlay Row | 135 | 42.6, 46.9, **71.6** | **1.68×** |
+| Pendlay Row | 95 | 32.6, 35.2, 43.1 | 1.32× |
+| Bench Press | 135 | 25.7, 28.4, 32.0, 32.5 | 1.26× |
+| Shoulder Press | 65 | 63.0, 68.1, 71.4, 75.4 | 1.20× |
+
+**And it is not drift between builds or between my sessions.** Ruled out on the takes that share
+one: on 2026-10-07 sets 1 and 2 of each lift were both build **637** (set 3 was the first on 639,
+so a three-set group spans two builds — an earlier draft of this section said otherwise and was
+wrong). On that one build, minutes apart: bench 25.7 vs 32.5 (**1.26×**), press 71.4 vs 63.0
+(1.13×), row 35.2 vs 32.6 (1.08×). A quarter of the bench's range of motion with no code change
+between the two sets.
+
+That reframes every session since 10-04. Each measured a BIAS on one take (the bench 39% low,
+then 26%, then 21%, then 11%) and proposed or declined a constant. **A bias of 10–25% cannot be
+fitted out of a measurement whose take-to-take spread is 6–24%** — each new session's single take
+lands somewhere in that cloud and reads as a win or a regression depending where. Until the
+spread comes down, a constant fitted on one session is fitted to noise. `shared/capture-
+repeatability.ts` computes this over whatever captures the export holds, so it is answerable from
+the file rather than from an afternoon of re-deriving it.
+
+Per-ruler scatter (median CV across lift/load groups; lower is steadier):
+
+| ruler | CV | present on |
+|---|---|---|
+| height | 7% | 9 of 20 |
+| body_3d | 7% | 20 of 20 |
+| shoulder_width | 12% | 19 of 20 |
+| depth | 12% | 19 of 20 |
+
+On the Pendlay Row, body_3d's spread is **1%** and shoulder_width's is **17–21%**.
+
+### THE SHOULDER RULER IS ONE SPAN, AND THE SPAN FORESHORTENS
+
+It is `BIACROMIAL_HEIGHT_FRACTION × height ÷ measuredSpan` and nothing else — confirmed on all
+three takes, where scale × span came to **0.438 m** every time (0.23 × this athlete's 75in). So it
+is wholly at the mercy of one measured span, and that span shrinks as the athlete turns while the
+metres it divides do not.
+
+| take | grip px ÷ shoulder span | shoulder ruler vs sensor |
+|---|---|---|
+| Bench | 159.2 / 108.2 = **1.47** | **+1.4%** |
+| Push Press | 169.8 / 82.4 = **2.06** | **+49.1%** |
+| Pendlay Row | 194.9 / 67.0 = **2.91** | **+62.0%** |
+
+Exact ordering on 3/3, and a bench grip really is ~1.5× biacromial breadth, so 2.91 is not
+anatomy — it is a shoulder span read at roughly half size. **`subjectFacing` read "oblique" on all
+three and separated none of them.** `calibration.shoulderRuler.gripToShoulderSpanRatio` records
+it; **nothing reads it**, because each take was a different lift and so had a genuinely different
+grip — three confounded points cannot choose an uncertainty. What settles it is the same lift
+filmed square and oblique.
+
+**`spanSpreadFraction` (added 10-06 for exactly this job) does NOT predict the error**: the press
+had the tightest spread, 0.042, and the second-worst error. First evidence either way on it.
+
+**NOT refitted, and the evidence forbids it both ways.** `shoulder_width` is the only good ruler
+on the bench (+1.4%, with body_3d at −29.7%), so refusing it takes the bench from −10.6% to
+−29.7% — a refusal before its replacement, which Rule #1 forbids and this repo has shipped once.
+On the row it is the opposite: body_3d −9.2%, shoulder +62.0%.
+
+### THE OBJECT BOX IS 2–7× TOO BIG, AND NOW SAYS SO WITHOUT A SENSOR
+
+Scott: "what happens when the camera can't find my shoulders, it should still be relying on the
+barbell which can get an accurate frame almost everytime." Right, and that is Rule #4. The
+implement IS found — 438, 135 and 431 frames on the three takes. What fails is sizing it:
+
+| take | boxed | a 45cm plate at this take's scale | ratio |
+|---|---|---|---|
+| Push Press | 145 × 263 px | 126 px | **2.09×** |
+| Pendlay Row | 164 × 314 px | 111 px | **2.81×** |
+| Bench | 418 × 759 px | 113 px | **6.73×** |
+
+All three aspect 0.52–0.55 (h/w ≈ 1.8), all three refused on `aspect_ratio`, all three correctly
+— admitting them would have been far worse. **This is exactly what 10-07 predicted from the
+training data**: a detector trained on close-ups predicts boxes too large, which a scale pipeline
+reads as a scale too small.
+
+`calibration.objectGate.plateBoxToExpectedRatio` ships it as a number on **every** take, with no
+sensor: a bumper plate is 0.45m and the take blended its own metres per pixel, so a plate here
+would box `0.45 / scaleFactor` px. `plateScaleIfAdmitted` (build 633) could only ever be scored
+beside the OVR; this cannot. It is the number that says whether the retrain worked.
+
+### Also recorded, not acted on
+
+- **The row's `axisForeshortening.ratio` is 1.21** with `displacementAlongLensM` **5.899 m** —
+  against 0.317 and 0.442 on the other two. 5.9 m of along-lens travel on a 10-rep row is not
+  physical; it is 3D-pose depth noise, the least reliable axis. It also points the wrong way to
+  explain a HIGH read. Not used.
+- **Sampling predicts the miscount again.** `cadenceHeld` 0.725 (bench) and 0.843 (press) both
+  returned 9 reps for a 10-rep set; the row at 0.939 returned 10. Third session of this pattern.
+- **The press was performed as a push press** and is logged as a Barbell Shoulder Press. Its
+  `axisForeshortening` is 1.006 here, against 1.452 on 10-07's push press, so this one was not
+  dipped the same way. Its +20.7% is still not cleanly comparable to a strict press.

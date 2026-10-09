@@ -1,5 +1,6 @@
 import express, { type Express, type Request } from "express";
 import { findSimilar } from "@shared/exercise-similarity";
+import { summarizeCaptureRepeatability } from "@shared/capture-repeatability";
 import { WITHDRAWN_ADD_ONS } from "@shared/free-agent-tiers";
 import {
   applyExerciseVideoBackfill,
@@ -3961,8 +3962,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // exists is the part worth reporting.
       hasVideo: c.hasVideo != null,
     }));
+    // HOW FAR APART THE SAME LIFT LANDED ON DIFFERENT TAKES, over the captures in this file.
+    //
+    // Scott, 2026-10-09, after three sessions of comparisons against the OVR: "I just feel like
+    // we're starting over everytime." He was right and nothing wrote it down -- every session
+    // measured the BIAS on one take and none measured the SCATTER across takes, which is the
+    // same size. See shared/capture-repeatability.ts for the numbers and why a constant fitted
+    // on one session cannot converge until this comes down.
+    //
+    // Computed over `captures`, which is already in hand: no new query, no new column, and it
+    // cannot change what any capture reports. Additive key, like skillCaptures before it.
+    const repeatability = summarizeCaptureRepeatability(
+      captures.map((c) => ({
+        athlete: c.athlete,
+        exerciseName: c.exerciseName,
+        loadRaw: c.loadRaw,
+        loadUnit: c.loadUnit,
+        romCm: c.reported.romCm,
+        // The scale the blend settled on, so a spread in range of motion can be told apart from
+        // a spread in what a pixel was worth.
+        scaleFactor:
+          (c.trackingDiagnostics as { calibration?: { scaleFactor?: number | null } } | null)
+            ?.calibration?.scaleFactor ?? null,
+        date: c.date,
+      })),
+    );
     res.send(
-      JSON.stringify({ exportedAt: new Date().toISOString(), captures, skillCaptures }, null, 2),
+      JSON.stringify(
+        { exportedAt: new Date().toISOString(), captures, skillCaptures, repeatability },
+        null,
+        2,
+      ),
     );
   });
 
