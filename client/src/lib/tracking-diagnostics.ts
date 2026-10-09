@@ -542,7 +542,14 @@ export type TrackingDiagnostics = {
        *  too small"), and it is the number that says whether a retrained model fixed it.
        *
        *  Near 1.0 is a box the right size. It RECORDS and gates nothing (Rule #1) -- the plate
-       *  gates are unchanged and still decide on aspect and size-vs-grip as they did. */
+       *  gates are unchanged and still decide on aspect and size-vs-grip as they did.
+       *
+       *  THE YARDSTICK IS THE BLEND WITH THE PLATE TAKEN OUT, not the take's final scale. The
+       *  first version divided by the final scale and the Pendlay Row of 2026-10-09 broke it the
+       *  same day: that plate WON the vote at 100%, so dividing 0.45 by the scale it set returns
+       *  its own box and the ratio read 1.000 -- a perfect score on the take whose plate was 60%
+       *  wrong. A diagnostic that scores a ruler against itself is worth nothing precisely when
+       *  the ruler is the problem. */
       plateBoxLongEdgePx: number | null;
       expectedPlateLongEdgePx: number | null;
       plateBoxToExpectedRatio: number | null;

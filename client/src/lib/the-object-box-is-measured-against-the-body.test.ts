@@ -64,20 +64,33 @@ describe("the plate box, judged against the take's own scale", () => {
     expect(gateBlock.slice(0, 1200)).not.toMatch(/0\.45\s*\//);
   });
 
-  it("computes the ratio from the blended scale, not from a sensor", () => {
+  it("computes the ratio from a scale the PLATE DID NOT HELP SET, or it is circular", () => {
+    // The first version divided by the take's final scaleFactor, and the Pendlay Row of
+    // 2026-10-09 broke it within hours: that plate won the vote at 100%, so 0.45/scaleFactor
+    // returned its own box and the ratio read 1.000 -- a perfect score on a plate 60% wrong.
     const at = src.indexOf("objectGateDiagnostics.expectedPlateLongEdgePx");
     expect(at).toBeGreaterThan(0);
-    const block = src.slice(at - 500, at + 500);
-    expect(block).toContain("PLATE_NOMINAL_SIZE_M / scaleFactor");
+    const block = src.slice(at - 900, at + 500);
+    expect(block).toContain("PLATE_NOMINAL_SIZE_M / plateFreeScale");
     expect(block).toContain("plateScaleRaw.measured / expectedPx");
+    // The plate-free scale is the blend re-run with the plate filtered out, not a guess.
+    expect(block).toMatch(/reconcileScaleEstimates\(\s*plausibleScales\.filter\(\(e\) => e\.source !== "plate"\)/);
+  });
+
+  it("never divides by the take's own scaleFactor, which is the circularity", () => {
+    // The regression that matters. If this line comes back, the diagnostic silently returns
+    // 1.000 on exactly the takes where the plate is the fault.
+    const at = src.indexOf("objectGateDiagnostics.expectedPlateLongEdgePx");
+    const block = src.slice(at - 900, at + 500);
+    expect(block).not.toContain("PLATE_NOMINAL_SIZE_M / scaleFactor");
   });
 
   it("is null rather than zero when the take never resolved a scale", () => {
     // A take with no scale has nothing to divide by. Zero would read as a box of no size, or
     // worse as a perfect ratio, on exactly the refused takes whose record matters most.
     const at = src.indexOf("objectGateDiagnostics.expectedPlateLongEdgePx");
-    const guard = src.slice(at - 300, at);
-    expect(guard).toMatch(/scaleFactor != null && scaleFactor > 0/);
+    const guard = src.slice(at - 400, at);
+    expect(guard).toMatch(/plateFreeScale != null && plateFreeScale > 0/);
     expect(guard).toContain("plateScaleRaw?.measured != null");
   });
 

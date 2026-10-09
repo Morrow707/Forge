@@ -2237,8 +2237,22 @@ export function AvBarTrackerDialog({
       //
       // Guarded on a positive scale because a take that never resolved one has nothing to
       // divide by -- and a null here is honest, where a zero would read as a perfect box.
-      if (scaleFactor != null && scaleFactor > 0 && plateScaleRaw?.measured != null) {
-        const expectedPx = PLATE_NOMINAL_SIZE_M / scaleFactor;
+      // JUDGED AGAINST A SCALE THE PLATE DID NOT HELP SET, or the answer is circular.
+      //
+      // The first version of this divided by `scaleFactor`, and the Pendlay Row of 2026-10-09
+      // showed within hours why that is useless exactly when it matters: on that take the plate
+      // WON the vote at 100%, so `0.45 / scaleFactor` returns the plate's own box and the ratio
+      // came back 1.000 -- a perfect score, on the take whose plate was 60% wrong and had just
+      // cost the set two thirds of its range of motion.
+      //
+      // So the yardstick is the blend with the plate taken out. On a take where the plate lost
+      // anyway this changes nothing; on a take where it won it is the difference between a
+      // measurement and a tautology.
+      const plateFreeScale = reconcileScaleEstimates(
+        plausibleScales.filter((e) => e.source !== "plate"),
+      ).scale;
+      if (plateFreeScale != null && plateFreeScale > 0 && plateScaleRaw?.measured != null) {
+        const expectedPx = PLATE_NOMINAL_SIZE_M / plateFreeScale;
         objectGateDiagnostics.expectedPlateLongEdgePx = Math.round(expectedPx * 10) / 10;
         objectGateDiagnostics.plateBoxToExpectedRatio =
           expectedPx > 0 ? Math.round((plateScaleRaw.measured / expectedPx) * 1000) / 1000 : null;

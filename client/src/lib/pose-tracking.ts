@@ -1179,8 +1179,29 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
   // of the vote and is reported as the outlier it is. A plate that agrees with anything keeps
   // its rank; a plate that is the only other ruler keeps it too (one against one is a tie
   // rank is allowed to break).
+  // THE COLLAPSE TURNED THIS GUARD OFF ON THE TAKE IT WAS WRITTEN FOR. Fixed 2026-10-09.
+  //
+  // The condition was `voters.length >= 3`, counted AFTER the 3D-pose collapse above folds
+  // body_3d and depth into one witness. So a take whose rulers are exactly {plate, body_3d,
+  // depth} -- the commonest shape there is -- arrives here with TWO voters, the guard does not
+  // fire, and a plate that agrees with nothing takes the whole scale.
+  //
+  // Pendlay Row set 2, 2026-10-09, measured against the OVR: plate 0.00139 at 100% of the
+  // weight, body_3d 0.00342 and depth 0.00353 at 0%. Truth was 0.00352. The two body readings
+  // were -2.7% and +0.4%; the plate was -60.5%, and the set reported 22.3 cm against a real
+  // 56.4. Set 1 of the same lift, minutes earlier, had no plate at all and read +23.1%, which
+  // is how one lift came to disagree with itself by 3.21x while the sensor's own two sets
+  // differed by 1.03x.
+  //
+  // The collapse exists to stop a CORRELATED PAIR out-voting a third witness on agreement, and
+  // that is right. Reusing its output to count CORROBORATION is a different question and gives
+  // the wrong answer: two readings that agree with each other to 3% and both disagree with the
+  // plate by 2.5x are not "one against one, a tie rank may break". So the count is taken on the
+  // independent non-plate READINGS, before the collapse. One non-plate ruler still leaves the
+  // plate its rank, which is the tie the original comment meant to protect.
+  const nonPlateReadings = usable.filter((e) => e.source !== "plate").length;
   let plateSteppedOut = false;
-  if (best.length === 1 && best[0].source === "plate" && voters.length >= 3) {
+  if (best.length === 1 && best[0].source === "plate" && nonPlateReadings >= 2) {
     const withoutPlate = voters.filter((e) => e.source !== "plate");
     const rerankedWithoutPlate = [...withoutPlate].sort((a, b) => rank(a) - rank(b));
     let bestWithoutPlate: ScaleEstimate[] = [rerankedWithoutPlate[0]];

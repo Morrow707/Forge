@@ -4402,3 +4402,68 @@ beside the OVR; this cannot. It is the number that says whether the retrain work
 - **The press was performed as a push press** and is logged as a Barbell Shoulder Press. Its
   `axisForeshortening` is 1.006 here, against 1.452 on 10-07's push press, so this one was not
   dipped the same way. Its +20.7% is still not cleanly comparable to a strict press.
+
+## Set 2 beside OVR, 2026-10-09 — a lone plate took the whole scale, and the fix lands all three inside 1.5%
+
+Scott filmed a second set of each lift an hour after the first and exported again. **This is the
+pairing that settles Rule #5**, because the sensor reports its own repeatability beside Forge's.
+
+| lift | OVR set1 → set2 | FORGE set1 → set2 |
+|---|---|---|
+| Bench Press 135 | 1.01× | 1.14× |
+| Push Press 65 | 1.05× | 1.14× |
+| Pendlay Row 135 | **1.03×** | **3.21×** |
+
+The athlete repeated to within 1–5%. Forge's two reads of those same sets differed by up to
+3.21×. There was never a bias to fit.
+
+### The error against the sensor, both sets
+
+| lift | set 1 ROM | set 2 ROM | set 2 after the fix |
+|---|---|---|---|
+| Bench 135×10 | −10.6% | **+1.5%** | +1.5% |
+| Push Press 65×10 | +20.7% | **+1.3%** | +1.3% |
+| Pendlay Row 135×10 | +23.1% | **−60.5%** | **−1.1%** |
+
+### THE BUG: `voters.length >= 3`, counted after the collapse
+
+Row set 2's blend: `source: plate`, `cluster: ["plate"]`, `plateSteppedOut: false`, plate at
+**100%** of the weight reading 0.00139 — while `body_3d` read 0.00342 (−2.7%) and `depth` read
+0.00353 (+0.4%) against a truth of 0.00352, both at **0%**. `pairwise` shows `agrees: false` in
+both directions, ratio 2.5 / 0.4.
+
+The guard that exists for exactly this ("a plate nobody agrees with is not a plate", build 594)
+tested `voters.length >= 3` — and `voters` is counted AFTER the 3D-pose collapse folds `body_3d`
+and `depth` into one witness. A take whose rulers are {plate, body_3d, depth} — the commonest
+shape there is — therefore arrives with TWO voters and the guard sleeps.
+
+The collapse is right about *agreement* (Rule #2: a correlated pair must not out-vote a third).
+Reusing its output as a *corroboration count* is a different question: two readings that agree
+with each other to 3% and both disagree with the plate by 2.5× are not "one against one, a tie
+rank may break". The count is now taken on independent non-plate READINGS, before the collapse.
+One non-plate ruler still leaves the plate its rank, which is the tie the original comment meant
+to protect.
+
+**Replayed over every capture in the export: ONE moved — the broken one, +150% — and 13 are
+bit-identical.** `a-lone-plate-never-takes-the-whole-scale.test.ts`, mutation-tested three ways
+(reverting the count, firing at one ruler, firing on a corroborated plate). A RULE, not a fitted
+number, so it is shared and `FITTED_OVERRIDES` stays empty.
+
+### And the box diagnostic shipped that morning was circular, proved by this take
+
+`plateBoxToExpectedRatio` divided by the take's final `scaleFactor`. On this row the plate WON at
+100%, so `0.45 / scaleFactor` returns the plate's own box and the ratio read **1.000** — a perfect
+score on the take whose plate was 60% wrong. It divides by the blend with the plate removed now.
+A diagnostic that scores a ruler against itself is worth nothing exactly when the ruler is the
+problem.
+
+### Still open after this
+
+- **The row's set-1 +23.1% is a different fault** — no plate at all that take (refused on
+  `aspect_ratio`), and `shoulder_width` at +62.0% took half the vote. The grip/shoulder ratio was
+  3.20 on set 2 and the ruler read +69.2% there, which is the same relationship as the morning's
+  three takes and now has a fourth point. Still not fitted: all four are different lifts or
+  different sets, and the confound stands.
+- **The bench's mean is +16.4% on set 2 with ROM at +1.5%**, so the timing window is short again
+  on a take whose scale is essentially exact. That is the cleanest look yet at the window error
+  with scale held still.

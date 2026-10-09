@@ -3143,6 +3143,37 @@ and the second-worst error. First evidence either way on a measure added 10-06 f
 **Refusing the ruler is not available:** it is the only good voter on the bench (+1.4% against
 body_3d's -29.7%), so a blanket refusal takes the bench to -29.7%. Rule #1.
 
+### THE SET-2 PAIRING SETTLED IT, AND A LONE PLATE WAS TAKING THE WHOLE SCALE
+
+Scott filmed a second set of each lift an hour later. The sensor reports its own repeatability
+beside Forge's, which is what makes this the pairing that proves the rule above:
+
+| lift | OVR set1 -> set2 | FORGE set1 -> set2 |
+|---|---|---|
+| Bench 135 | 1.01x | 1.14x |
+| Push Press 65 | 1.05x | 1.14x |
+| Pendlay Row 135 | **1.03x** | **3.21x** |
+
+**THE ROW SET 2 READ -60.5% BECAUSE A PLATE NOBODY AGREED WITH TOOK 100% OF THE SCALE.**
+`body_3d` was -2.7% and `depth` was +0.4%, both at 0% weight; the plate was 60% low at 100%.
+The guard for exactly this (build 594, "a plate nobody agrees with is not a plate") tested
+`voters.length >= 3`, and `voters` is counted AFTER the 3D-pose collapse folds body_3d and depth
+into one witness -- so the commonest ruler set there is, {plate, body_3d, depth}, arrives with
+TWO voters and the guard sleeps. **The collapse is right about agreement and wrong as a
+corroboration count.** It counts independent non-plate READINGS now, before the collapse; one
+non-plate ruler still leaves the plate its rank, which is the tie the original comment protected.
+
+**Replayed over every capture: ONE moved, 13 bit-identical.** After it, all three of the latest
+takes are inside 1.5% of the sensor -- bench +1.5%, press +1.3%, row -1.1%.
+`a-lone-plate-never-takes-the-whole-scale.test.ts`, mutation-tested three ways. A RULE, not a
+fitted number; `FITTED_OVERRIDES` stays empty.
+
+**AND THE BOX DIAGNOSTIC SHIPPED THAT MORNING WAS CIRCULAR.** `plateBoxToExpectedRatio` divided
+by the take's final scale, so on a take where the plate WON it returned the plate's own box and
+read **1.000** -- a perfect score on the plate that was 60% wrong. It divides by the blend with
+the plate removed now. A diagnostic that scores a ruler against itself is worth nothing exactly
+when the ruler is the problem; check for that shape in any future "is this sensor right" measure.
+
 ### THE BARBELL IS THE RULER SCOTT WANTS AND THE BOX IS 2-7x TOO BIG
 
 Scott, same day: "what happens when the camera can't find my shoulders, it should still be
