@@ -89,10 +89,42 @@ export function renderRouteHtml(
  * page -- the signed-in app, the token landings, and a URL that resolves to nothing. It carries
  * the fallback head and a noindex, because nothing served through it belongs in a search result.
  * Without this, the shell was the home page's HTML, and a crawler that reached /coach through a
- * footer link saw the home page's title and canonical on it. */
+ * footer link saw the home page's title and canonical on it.
+ *
+ * AND THE CANONICAL HAS TO GO, not be rewritten. One static file is served for /coach, /login and
+ * every 404 on the site, so there is no one URL it could name -- and the fallback canonical in
+ * client/index.html is the HOME page's, byte for byte, which is the half of the above bug that
+ * building from the untouched template did not actually fix. A noindex page needs no canonical
+ * and no og:url: both are claims about WHICH url this content belongs to, and a page that says
+ * "do not index me" while pointing at the home page is a contradiction search engines resolve by
+ * guessing -- at worst by carrying the noindex over to the target. The share card's title,
+ * description and image stay, because a coach sending another coach a link to /coach should still
+ * get a brand card; what goes is only the part that names a URL. og:url's absence makes a scraper
+ * use the URL it fetched, which is the right answer and the one this file cannot know.
+ *
+ * The client fills both in correctly once React mounts (applyPageMeta in client/src/lib/page-meta.ts
+ * CREATES either tag when it is missing), so nothing that runs JavaScript loses anything. */
 export function renderAppShell(template: string): string {
-  return replaceOrFail(
+  let html = replaceOrFail(
     template,
+    /<link rel="canonical" href="[^"]*"\s*\/>\n?\s*/,
+    "",
+    "the canonical link",
+  );
+  html = replaceOrFail(
+    html,
+    /<meta property="og:url" content="[^"]*"\s*\/>\n?\s*/,
+    "",
+    "og:url",
+  );
+  html = replaceOrFail(
+    html,
+    /<title>[\s\S]*?<\/title>/,
+    `<title>${esc(SITE_NAME)}</title>`,
+    "<title>",
+  );
+  return replaceOrFail(
+    html,
     /<\/head>/,
     `    <meta name="robots" content="noindex, nofollow" />\n  </head>`,
     "</head>",

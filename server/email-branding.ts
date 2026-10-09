@@ -27,7 +27,12 @@ export interface EmailBrand {
   brandSenderName: string | null;
 }
 
-const HEADER_RE =
+/** The shared orange band every Forge email body carries. Exported because it is the one
+ * reliable way to RECOGNISE an email body: the branding rewrite below keys on it, so a
+ * builder that stops carrying it stops being branded, which makes this predicate
+ * self-enforcing. welcome-email-promises-only-what-you-have.test.ts discovers the bodies
+ * it scans with it rather than with a filename glob. */
+export const FORGE_EMAIL_HEADER_RE =
   /<div style="background:#F65B23;padding:20px 24px;">\s*<span style="color:#fff;font-size:20px;font-weight:bold;letter-spacing:0.5px;">FORGE<\/span>\s*<\/div>/;
 
 /** Does this brand change anything an email shows? A logo or a name is enough; a colour alone
@@ -73,9 +78,9 @@ export function absoluteAssetUrl(url: string): string {
  * carries nothing, or when the HTML does not have the shared header to replace. */
 export function applyEmailBranding(html: string, brand: EmailBrand | null | undefined): string {
   if (!isBrandedForEmail(brand)) return html;
-  if (!HEADER_RE.test(html)) return html;
+  if (!FORGE_EMAIL_HEADER_RE.test(html)) return html;
   const color = brand.brandPrimaryColor || FORGE_EMAIL_ORANGE;
-  let out = html.replace(HEADER_RE, brandedEmailHeader(brand));
+  let out = html.replace(FORGE_EMAIL_HEADER_RE, brandedEmailHeader(brand));
   if (color.toLowerCase() !== FORGE_EMAIL_ORANGE.toLowerCase()) {
     // Buttons and links that were orange follow the band. The header has already been
     // replaced, so this touches only the body.

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { PUBLIC_ROUTES, NOINDEX_PREFIXES, AUTHED_PREFIXES } from "./public-routes";
-import { renderRouteHtml, renderAppShell, fullTitle, pngSize } from "./prerender-head";
+import { renderRouteHtml, renderAppShell, fullTitle, pngSize, SITE_NAME } from "./prerender-head";
 import { sitemapXml, robotsTxt, DEFAULT_ORIGIN } from "./seo-files";
 import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER } from "./free-agent-tiers";
 
@@ -112,6 +112,16 @@ describe("every prerendered public page", () => {
     const shell = renderAppShell(TEMPLATE);
     expect(shell).toContain('<meta name="robots" content="noindex, nofollow" />');
     expect(shell).not.toContain("application/ld+json");
+    // ONE FILE IS SERVED FOR /coach, /login AND EVERY 404, so it can name no URL. The fallback
+    // canonical in index.html is the home page's, so leaving it in place told every non-JS
+    // scraper that the canonical URL of /coach was the home page -- beside a noindex, which is a
+    // contradiction. Both tags that name a URL are dropped rather than rewritten.
+    expect(shell).not.toMatch(/rel="canonical"/);
+    expect(shell).not.toMatch(/property="og:url"/);
+    // The brand card survives: only the URL claims go.
+    expect(shell).toContain('property="og:title"');
+    expect(shell).toContain('property="og:image"');
+    expect(shell).toContain(`<title>${SITE_NAME}</title>`);
   });
 
   it("keeps the html lang attribute", () => {
