@@ -73,23 +73,50 @@ jobs:
     # If this ever needs raising again, speed the job up instead (the suite is ~30s locally, so
     # the time is in install and build) -- that is the Rule #2 instinct applied to CI.
     timeout-minutes: 25
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: forge_ci
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    # POSTGRES IS THE RUNNER'S OWN, NOT A DOCKER HUB SERVICE CONTAINER.
+    #
+    # It was `services: postgres: image: postgres:16` until 2026-10-09, and that put an
+    # unauthenticated Docker Hub pull on the critical path to the Render deploy -- `deploy`
+    # needs this job. On 2026-10-09 the pull failed with "Docker pull failed with exit code 1"
+    # on three consecutive commits and four attempts over ~35 minutes, each time at step 2 in
+    # under 20 seconds, with no step after it running. Actions runners share outbound IPs and
+    # Docker Hub rate-limits anonymous pulls per IP, so this is not rare and not ours to fix at
+    # the registry.
+    #
+    # The runner image already ships PostgreSQL 16, installed and stopped, so starting it costs
+    # a few seconds and removes a third-party registry from the path entirely. It is also the
+    # same shape as the local recipe in CLAUDE.md's Tests section, which has always used the
+    # sandbox's own installed Postgres rather than a container.
+    #
+    # Trade-offs taken knowingly:
+    #  - The version is whatever the runner image ships. The step PRINTS it and fails loudly if
+    #    no postgres service exists, rather than falling through to a cryptic connection error
+    #    forty lines later.
+    #  - It runs on the host, not in a container, so the port is the default 5432 and the DSN
+    #    below is unchanged -- nothing downstream of this job knows the difference.
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/forge_ci
     steps:
+      - name: Start PostgreSQL (the runner's own, no registry pull)
+        run: |
+          set -euo pipefail
+          if ! systemctl list-unit-files | grep -q '^postgresql'; then
+            echo "::error::No postgresql service on this runner image. The runner no longer" \
+                 "ships PostgreSQL; either pin a runner image that does, or restore a service" \
+                 "container (and accept the Docker Hub dependency)."
+            exit 1
+          fi
+          sudo systemctl start postgresql
+          # Wait for it rather than assuming: systemctl returns before the socket accepts.
+          for i in $(seq 1 30); do
+            if sudo -u postgres pg_isready -q; then break; fi
+            sleep 1
+          done
+          sudo -u postgres pg_isready
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER USER postgres PASSWORD 'postgres'"
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE forge_ci"
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -tAc "SELECT version()"
+
       - uses: actions/checkout@v7
         with:
           # The live-document migration test replays every historical version of the legal

@@ -2,10 +2,12 @@
 //
 // Derived from DATABASE_URL rather than configured separately, so the suite
 // points at whatever Postgres the surrounding environment already has: the
-// service container in .github/workflows/ci.yml, or a local server started
-// by hand. The database NAME is always overridden, never inherited -- these
-// tests truncate every table between cases, and inheriting the name would
-// make a mistyped env var wipe a real database.
+// runner's own server in .github/workflows/ci.yml (a service container until
+// 2026-10-09 -- see that file's comment on why the Docker Hub pull left the
+// path to the deploy), or a local server started by hand. The database NAME is
+// always overridden, never inherited -- these tests truncate every table
+// between cases, and inheriting the name would make a mistyped env var wipe a
+// real database.
 //
 // TEST_DATABASE_URL overrides the whole thing for anyone who wants the
 // suite pointed somewhere specific.

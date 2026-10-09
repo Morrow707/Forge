@@ -161,15 +161,26 @@ cases throw a sentinel after twenty times the bound** on purpose: an unbounded r
 resolves immediately is a tight async loop that starves the timer queue, so the suite HANGS
 instead of failing, and a hang in CI is a 25-minute job timeout that reads as something else.
 
-### AND ONE THAT IS NEITHER: "Docker pull failed with exit code 1"
+### AND THE THIRD: "Docker pull failed with exit code 1" -- FIXED BY REMOVING THE REGISTRY
 
-Same day, runs 1759 and 1760 (and 1760's re-run). `Initialize containers` failed in 12-19 seconds
-with that message, retried three times with backoff by the runner itself. **`postgres:16` is an
-unpinned Docker Hub tag and the pull is rate-limited or the registry is down**; no step after it
-ran, so nothing about the code was tested either way and `deploy` was skipped. It is the same
-class as the CodeQL "failed to be acquired" entries below -- GitHub-side, self-healing, and NOT
-something a workflow change fixes. A job that fails at step 2 in under 20 seconds has not run a
-test; check the step number before reading a red integration job as a broken one.
+Same day, runs 1759, 1760 (and its re-run) and 1761. `Initialize containers` failed in 12-19
+seconds with that message, retried three times with backoff by the runner itself, on **three
+consecutive commits across four attempts over ~35 minutes**. No step after it ran, so nothing
+about the code was tested either way and `deploy` was skipped each time. **A job that fails at
+step 2 in under 20 seconds has not run a test; check the step NUMBER before reading a red
+integration job as a broken one.**
+
+**AND THE FIRST VERSION OF THIS ENTRY SAID "NOT something a workflow change fixes", WHICH WAS
+WRONG.** It is true that nothing fixes Docker Hub from here -- and that is the argument for not
+depending on it. `services: postgres: image: postgres:16` put an unauthenticated Docker Hub pull
+on the critical path to the Render deploy, and Actions runners share outbound IPs while Docker
+Hub rate-limits anonymous pulls per IP, so this is neither rare nor ours to fix at the registry.
+The runner image already ships PostgreSQL 16, installed and stopped, so a step that starts it
+costs a few seconds and removes the registry from the path entirely -- the same shape as the
+local recipe in the Tests section, which has always used the sandbox's own Postgres. The DSN is
+unchanged (host service, default port), so nothing downstream of the job knows the difference,
+and the step FAILS LOUDLY with a named remedy if a future runner image stops shipping Postgres
+rather than falling through to a cryptic connection error forty lines later.
 
 ## CI red that is not a test failure
 
