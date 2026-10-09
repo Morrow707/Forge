@@ -578,7 +578,15 @@ The three parts and their jobs, which do not overlap:
 Flagged 2026-09-19. What is on `main`, verified, and NOT yet in a build anyone
 can install. Delete entries as a `beta` ships them.
 
-- Build **493** is the newest TestFlight build, cut from `8d1a4920` on 2026-09-21.
+**THE CURRENT BUILD NUMBER IS NOT IN THIS SECTION. IT IS IN "THE BUILD NUMBER IS THE iOS
+WORKFLOW'S `GITHUB_RUN_NUMBER`" BELOW, AND THE RUN LIST BEATS BOTH.** Four entries here read
+"is the newest TestFlight build" until 2026-10-09 -- 493, 576, 578 and 609 -- which cannot all
+be true and none of which was; each is now past tense with its date. The cause is the drift this
+file warns about three times: an entry is written when a build goes out and never revised when
+the next one does. Everything below is a HISTORY of what shipped in which build, which is its
+real value; read it that way and take the current number from the run list.
+
+- Build **493** was the newest build on 2026-09-21, cut from `8d1a4920`.
   It carries #158: the tap-a-muscle lift history (Forge-official only), the
   reader's-unit display with the date window, the demo-account device exemption,
   and bodyweight-at-the-time scoring.
@@ -591,7 +599,7 @@ can install. Delete entries as a `beta` ships them.
   been waiting since 488: #154 (SEO fixes, the 35% smaller eager bundle with lazy
   tracker dialogs and vision runtimes, server request memo and cache headers) and
   #155 (video review Phases 4b.1-4b.5, Phase 5 export, and the Phase 4 polish).
-- Build **609** is the newest TestFlight build, cut 2026-10-04 from `9503d966` (608 was the
+- Build **609** was the newest build on 2026-10-04, cut from `9503d966` (608 was the
   verify_build run) on Scott's "lets launch what we have so far": twenty-nine commits since
   600. Coaches Corner (Ask the library, scored quizzes, paths, the board, the digest, analytics,
   the eleven new tracks), the whole athlete classes batch (flashcards, four quiz shapes, notes,
@@ -687,7 +695,7 @@ can install. Delete entries as a `beta` ships them.
   `DRIVE_ONSET_FRACTION` 0.07) while the filters keep the travel margin, the set's mean and mean
   power are distance over time, and the typed grip width is gone from the profile and the
   tracker. See docs/camera-tracking-notes.md, "Build 578 beside OVR, the first squat".
-- Build **578** is the newest TestFlight build, cut 2026-09-30 from set 11: the two 3D-pose
+- Build **578** was the newest build on 2026-09-30 (evening), cut from set 11: the two 3D-pose
   rulers are one vote in `reconcileScaleEstimates`, the blend is inverse-variance weighted, and
   the 3D-pose uncertainties are set from seven sensor-paired benches (0.2). See
   docs/camera-tracking-notes.md, "Build 577 beside OVR, set 11".
@@ -698,7 +706,7 @@ can install. Delete entries as a `beta` ships them.
 - **Set 10 on build 576 landed on the OVR sensor** (10 reps, 0.80 against 0.78 m/s, range of
   motion within 3%): docs/camera-tracking-notes.md, "Build 576 beside OVR, set 10". Ground
   truth and fixture only; nothing waiting on an upload from it.
-- Build **576** is the newest TestFlight build, cut 2026-09-30 from set 9: the movement axis is
+- Build **576** was the newest build earlier on 2026-09-30, cut from set 9: the movement axis is
   gravity (`reconcileMovementAxis` reads CoreMotion's `cameraRollDeg`; `axisSource: "gravity"`),
   the grip's axis recorded beside it, and set 9 as ground truth. See
   docs/camera-tracking-notes.md, "Build 575 beside OVR, set 9".
