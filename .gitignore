@@ -175,3 +175,7 @@ server/test-support/.uploads/
 # that silently disagrees with the route list the moment a page is added.
 client/public/robots.txt
 client/public/sitemap.xml
+
+# Python bytecode from the detector scripts
+__pycache__/
+*.pyc
