@@ -1448,9 +1448,22 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. The next beta is therefore 628 or later.
-- **Queued, not yet in a build:** the 270-record per-lift tunables registry including the split
-  gates, and the native arbiter plumbing, on the branch.
+  branch `verify_build` for the arbiter plumbing. **The newest build is 651** (2026-10-09); the next beta is 652 or later.
+- **THE QUEUE IS EMPTY AS OF BUILD 651** (2026-10-09, Scott: "we need to upload something, go ahead
+  and upload it now"). Run 651 from `d1d99340` uploaded in 6m14s, every step green including the lane
+  itself. It carries the six client-side commits that had accumulated since 648: the email shell and
+  the progress report's camera caveat and `/pricing`'s nav (`76b062e5`), the app shell that names no
+  URL (`e5f86c8b`), a gated upload directory gated at every DEPTH (`498eb472`), the three withdrawn
+  sport coaches that were still priced at $7.99 on a public page (`7ce93920`), the Notice to Parent or
+  Guardian made readable by a parent (`74bfb950`), and a Key Point that still told an athlete where to
+  film from (`405fa40b`). **649 and 650 were `verify_build` runs on two of those commits**, which is
+  what made spending the upload safe rather than hopeful -- the archive, the signing and Apple's own
+  `--validate-app` had already passed on this code.
+  **The line this replaces was eighteen builds stale**, and said the 270-record tunables registry and
+  the native arbiter plumbing were still queued on a branch. They have been on `main` and in every
+  build since the 620s. That is the third drift this entry's own heading warns about, and the cause is
+  the same each time: the queue is written down when something is ADDED to it and not when a `beta`
+  empties it. **Clear this entry on the next upload rather than adding to it.**
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
