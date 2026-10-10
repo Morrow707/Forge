@@ -2430,6 +2430,11 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   error; an athlete's participation waiver uploads (201, "In review" on `/documents`) and an
   institutional agreement filed against an athlete is refused 400; a coach's nutrition targets
   land on the athlete's page with the food log against them and the seven-day strip.
+  **A NINTH AUDIT ACCOUNT, `scott.morrow+coach2@live.com`, is a coach in a different program with
+  no roster**, made to prove the athlete URLs refuse an outsider: every coach route for athlete 21
+  (roster, nutrition, food log, wellness, waivers, strength profile, a nutrition write, a team add)
+  answered 404 or 403 with no name, entry or number in the body, and the athlete pages drew
+  nothing. Delete it with the other eight (row E5).
 
 ## Skills are part of the camera tier
 
