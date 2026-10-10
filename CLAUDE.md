@@ -2362,6 +2362,30 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   (36 variables now). `PAYWALLS_DISABLED` stays set for now by his decision ("we will handle the
   paywall stuff later"); it is still on the launch-day order.
 
+- **THE EIGHT AUDIT ACCOUNTS EXIST ON PRODUCTION (2026-10-10), AND TWO DEFECTS CAME OUT OF THE
+  FIRST HOUR WITH THEM.** Scott: "you're the only one working. Do what you need." Made through the
+  real signup with the invite code in headless Chromium: `scott.morrow+coach@live.com` (primary,
+  planned 34, team "Audit Varsity"), `+staff` (by staff code, assigned to that team), `+athlete`
+  (adult, on the coach's code and the team), `+fa1`/`+fa2`/`+fa3` (Free Agents), `+minor` (DOB
+  2015, held for `+guardian`, who does not exist until the claim). The harness and screenshots
+  live in the session scratchpad, not the repo; the password is in `audit/creds.json` there.
+  Delete them through the real delete path (audit row E5) once Scott's rows are done; the admin
+  account was never used. What they found: **the coach billing page quoted two plans on one
+  screen** (the lower "Your plan" card read `bandForAthleteCount(roster.length)` while the plan
+  card read the billed count, so $160 and $20 sat together; it reads `plan.billedCount` now), and
+  **Ask the library returned 503 to an ordinary question** because the answer ran past
+  `maxTokens: 900` and `callAnthropic` discards a `max_tokens` result -- the right rule for JSON,
+  the wrong outcome for prose. The prompt now asks for under 350 words and the cap is 1,600;
+  the same question answers in 360 words with four citations. **Three things that look like
+  bugs and are not:** the leaderboard caveat is on the Speed & Agility tab only, because the
+  Strength tab ranks HAND-LOGGED 1RMs and carries no camera number; an adult athlete who does
+  not tick the biometric box at signup starts with `trackingOptOut: true` by design and can turn
+  it on later (`server/auth.ts`, the `agreedToBiometricRelease` branch); and a scoped-out athlete
+  URL draws "We couldn't load this athlete's profile" for a staff coach, which is a 404 shown as
+  a read failure, not a leak. **`api.resend.com` is refused by the Claude Code environment's
+  network policy**, so a session cannot read sent mail; email links (claim, reset, device
+  approval) come from Scott's inbox.
+
 ## Skills are part of the camera tier
 
 Added 2026-09-19. Scott: "The 4.99 and 9.99 should not have access to the skills and skills
