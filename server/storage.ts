@@ -14453,6 +14453,7 @@ Hard rules, no exceptions:
       "- Ground every claim in the lessons or principles. Cite a lesson by its bracketed number at the end of the sentence that uses it, like [2].",
       "- If the lessons do not cover the question, say so in one sentence and offer the nearest lesson, or say there is none. Never answer from general knowledge as if the library said it.",
       "- Write for a coach with a roster to run tomorrow: short paragraphs, plain words, what to do and why. No headers, no bullet lists, no markdown.",
+      "- Keep the whole answer under 350 words. A coach can ask a follow-up; a wall of text goes unread.",
       "- Nothing here is medical advice. An injury, pain or illness question gets the one-line answer that it is for a clinician, then whatever the lessons say about returning to training.",
       "- Never name a certification body or a certification.",
       "",
@@ -14470,7 +14471,12 @@ Hard rules, no exceptions:
     const text = await askClaude(
       system,
       [...history, { role: "user", content: input.question }],
-      { maxTokens: 900, feature: "coaches_corner_library_chat" },
+      // 1,600, not 900: a free-text answer that runs past the cap is DISCARDED by callAnthropic
+      // (the right rule for JSON, the wrong outcome here) and the coach reads "can't answer right
+      // now". The first question of the pre-launch audit, a four-week block for linebackers,
+      // hit exactly that on 2026-10-10. The word limit above is what keeps answers short; the
+      // cap is headroom so an answer that runs long still arrives instead of vanishing.
+      { maxTokens: 1600, feature: "coaches_corner_library_chat" },
     );
     if (!text) return null;
     // Only the lessons the answer actually cited travel back, in the order they were given.
