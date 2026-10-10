@@ -16730,13 +16730,55 @@ Swap out "${pe.exercise.name}" (${pe.exercise.category}, ${pe.exercise.muscleGro
       };
     }
     const nutritionAthleteProfile = await this.getUser(athleteId);
-    const [athleteContext, targets, taughtGuidelines, coachesCornerPrinciples, forgeAiContext] = await Promise.all([
-      this.getAthleteAiContext(athleteId),
-      this.getNutritionTargetsForAthlete(athleteId),
-      this.getNutritionKnowledgeGuidelines(),
-      this.getCoachesCornerPrinciplesForAi(),
-      this.buildForgeAiContext(nutritionAthleteProfile ?? undefined, "nutrition_qa"),
-    ]);
+    const [athleteContext, targets, taughtGuidelines, coachesCornerPrinciples, forgeAiContext, todayLog, weekTrend] =
+      await Promise.all([
+        this.getAthleteAiContext(athleteId),
+        this.getNutritionTargetsForAthlete(athleteId),
+        this.getNutritionKnowledgeGuidelines(),
+        this.getCoachesCornerPrinciplesForAi(),
+        this.buildForgeAiContext(nutritionAthleteProfile ?? undefined, "nutrition_qa"),
+        this.getFoodLogForDate(athleteId, formatISO(new Date(), { representation: "date" })),
+        this.getNutritionTrendForAthlete(athleteId),
+      ]);
+
+    // THE ATHLETE'S OWN LOG, SO THE ANSWER CAN READ IT. Until 2026-10-10 the assistant was shown
+    // the targets and never what was eaten, so "am I getting enough protein today" was answered
+    // with a general range and a request to type the day out again -- the log it was asking for
+    // was one table away. Scott, the same day: a coached athlete gets no AI (their staff coach
+    // reads this, and the route is Free Agent only), "the free agent yes, and can give
+    // recommendations." This is the record the recommendation reads. It does not loosen rule 1:
+    // comparing what was logged against the targets ON FILE is reading two of the athlete's
+    // own numbers side by side, not inventing a third.
+    const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+    const todayLines = todayLog.entries.map((e) => {
+      const parts = [
+        e.caloriesKcal != null ? `${fmt(e.caloriesKcal)} kcal` : null,
+        e.proteinG != null ? `${fmt(e.proteinG)}g protein` : null,
+        e.carbsG != null ? `${fmt(e.carbsG)}g carbs` : null,
+        e.fatG != null ? `${fmt(e.fatG)}g fat` : null,
+      ].filter(Boolean);
+      return `  - ${e.description}${e.servingDescription ? ` (${e.servingDescription})` : ""}${parts.length ? `: ${parts.join(", ")}` : ""}`;
+    });
+    const t = todayLog.totals;
+    const loggedDays = weekTrend.days.filter((d) => d.loggedEntryCount > 0);
+    const hitDays = weekTrend.days.filter((d) => d.hit === true);
+    const foodLogBlock = [
+      "What this athlete has logged in Forge (their own entries, self-reported, so treat the",
+      "amounts as approximate and under-reported where the research says logs usually are):",
+      todayLines.length
+        ? `- Today so far, ${todayLines.length} entr${todayLines.length === 1 ? "y" : "ies"}, totalling ${fmt(t.caloriesKcal)} kcal, ${fmt(t.proteinG)}g protein, ${fmt(t.carbsG)}g carbs, ${fmt(t.fatG)}g fat, ${fmt(t.fiberG)}g fiber:\n${todayLines.join("\n")}`
+        : "- Nothing logged today yet.",
+      `- Last 7 days: logged on ${loggedDays.length} of 7 days${targets ? `, met the calorie and protein targets on file on ${hitDays.length}` : ""}.${
+        loggedDays.length
+          ? ` By day: ${loggedDays.map((d) => `${d.date.slice(5)} ${fmt(d.caloriesKcal)} kcal / ${fmt(d.proteinG)}g protein`).join("; ")}.`
+          : ""
+      }`,
+      "When the question is about what they have eaten, read it off this log and compare it with",
+      "the targets on file -- that is their own record against their own plan, and you may",
+      "recommend food-first changes against it (what to add, swap or time differently). Never",
+      "invent an entry they did not log, never derive a new personal target from it (rule 1), and",
+      "if the log is empty for the day say so plainly rather than guessing what they ate.",
+    ].join("\n");
 
     const targetsSummary = targets
       ? [
@@ -16855,7 +16897,9 @@ Hard rules, no exceptions -- these exist because you are not a registered dietit
 
 Athlete context:
 ${athleteContext}
-- Nutrition targets already on file (set by a coach/nutritionist, or by the athlete themselves): ${targetsSummary || "none set yet"}${taughtGuidelines ? `\n\nAdditional guidance this platform's admin has taught you -- apply it alongside everything above:\n${taughtGuidelines}` : ""}${coachesCornerPrinciples ? `\n\nForge Coaches Corner principles -- this platform's coach-education curriculum; apply these too, subject to rule 1 above:\n${coachesCornerPrinciples}` : ""}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}${nutritionReference ? `\n\n${nutritionReference}` : ""}${nutritionNormBlock ? `\n\n${nutritionNormBlock}` : ""}${styleInstruction ? `\n\n${styleInstruction}` : ""}`;
+- Nutrition targets already on file (set by a coach/nutritionist, or by the athlete themselves): ${targetsSummary || "none set yet"}
+
+${foodLogBlock}${taughtGuidelines ? `\n\nAdditional guidance this platform's admin has taught you -- apply it alongside everything above:\n${taughtGuidelines}` : ""}${coachesCornerPrinciples ? `\n\nForge Coaches Corner principles -- this platform's coach-education curriculum; apply these too, subject to rule 1 above:\n${coachesCornerPrinciples}` : ""}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}${nutritionReference ? `\n\n${nutritionReference}` : ""}${nutritionNormBlock ? `\n\n${nutritionNormBlock}` : ""}${styleInstruction ? `\n\n${styleInstruction}` : ""}`;
 
     const system: SystemPrompt = [
       { text: staticSystem, cache: true },

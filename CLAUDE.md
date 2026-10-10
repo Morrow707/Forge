@@ -2435,6 +2435,18 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   (roster, nutrition, food log, wellness, waivers, strength profile, a nutrition write, a team add)
   answered 404 or 403 with no name, entry or number in the body, and the athlete pages drew
   nothing. Delete it with the other eight (row E5).
+  **AI ASSISTANCE IS FOR COACHES AND FREE AGENTS; A COACHED ATHLETE GETS NONE** (Scott,
+  2026-10-10, asked whether the nutrition assistant should see the athlete's food log: "the
+  athlete side is fine, athletes should have no ai assistance as they will be primarily coached
+  by the staff, the free agent yes, and can give recommendations"). That is what
+  `athlete-ai-gating.test.ts` already pins at the routes (`requireFreeAgent`, or null for a
+  coached athlete on readiness and the digest); it is now also the reason, in his words, so
+  nobody re-opens it as a gap. And the Free Agent's nutrition assistant NOW READS THE LOG:
+  `answerNutritionQuestion` carries today's entries and totals and the seven-day trend in the
+  prompt (`foodLogBlock`), marked self-reported, with rule 1 restated inside it -- comparing what
+  was logged with the targets ON FILE is two of the athlete's own numbers side by side, never a
+  prescribed third. `the-nutrition-assistant-reads-the-log.test.ts` pins the reads, the block's
+  place in the prompt, and the route gate. Server-side: ships on Render, no build.
 
 ## Skills are part of the camera tier
 
