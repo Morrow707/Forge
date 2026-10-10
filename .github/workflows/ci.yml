@@ -100,7 +100,14 @@ jobs:
       - name: Start PostgreSQL (the runner's own, no registry pull)
         run: |
           set -euo pipefail
-          if ! systemctl list-unit-files | grep -q '^postgresql'; then
+          # NOT `| grep -q`: under pipefail, grep -q exits on its first match and closes the
+          # pipe, systemctl then dies writing the rest of the table ("Failed to print table:
+          # Broken pipe"), the pipeline is non-zero, and this guard reported "no postgresql
+          # service" on an image that had one -- on about half of 2026-10-10's runs, same
+          # image version green and red (runs 1768, 1774, 1776, 1778 on main). A race on how
+          # fast systemctl writes against how fast grep reads. Reading the whole table to
+          # EOF is the fix; the pattern argument keeps the table one line.
+          if [ -z "$(systemctl list-unit-files --no-legend --no-pager 'postgresql*' | grep '^postgresql' || true)" ]; then
             echo "::error::No postgresql service on this runner image. The runner no longer" \
                  "ships PostgreSQL; either pin a runner image that does, or restore a service" \
                  "container (and accept the Docker Hub dependency)."

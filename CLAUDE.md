@@ -182,6 +182,21 @@ unchanged (host service, default port), so nothing downstream of the job knows t
 and the step FAILS LOUDLY with a named remedy if a future runner image stops shipping Postgres
 rather than falling through to a cryptic connection error forty lines later.
 
+**AND THAT GUARD CRIED WOLF ON HALF OF 2026-10-10's RUNS, FOR A REASON WORTH KNOWING BY HEART.**
+Runs 1768, 1774, 1776 and 1778 on main (and 1765, 1771, 1775 on the branch) died at step 2 in
+one second with "No postgresql service on this runner image" -- on the SAME image version
+(ubuntu-24.04 20261004.327.1) that passed the step on 1770, 1772 and 1777. Scott: "I've gotten
+alot of ci errors." The log's line above the error says it: `Failed to print table: Broken
+pipe`. The guard was `systemctl list-unit-files | grep -q '^postgresql'` under `set -o
+pipefail`: `grep -q` exits on its FIRST match and closes the pipe, systemctl then dies writing
+the rest of its table, the pipeline is non-zero, and `if !` reads that as "not found". Whether
+it fires depends on whether systemctl finished writing before grep quit -- a race, hence half.
+**`pipefail` and `grep -q` do not belong in the same pipeline**; read to EOF (`grep` without
+`-q`, output to /dev/null, or test the captured string). Reproduce in any shell:
+`set -o pipefail; yes | grep -q y; echo $?` prints 141. Nothing about the code was tested on
+those runs and `deploy` was skipped, but Render auto-deploys on push, so every commit still
+reached production -- the red was noise, loud noise, and the only cost was Scott's inbox.
+
 ## CI red that is not a test failure
 
 Added 2026-10-05, after six of them in one evening. **Check the REF and the SHA before reading a
