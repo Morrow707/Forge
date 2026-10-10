@@ -16188,6 +16188,13 @@ Respond to the user's latest message by calling ask_question or update_program.`
               restSeconds: ex.restSeconds ?? null,
               notes: ex.notes ?? null,
               supersetGroup: ex.supersetGroup ?? null,
+              // Missing until 2026-10-10, so the builder's REST toggle ("Between each" /
+              // "After the group") never persisted through Save Program: a new row took the
+              // column default and a reconciled row kept whatever it had. Found driving the
+              // real builder on production -- pressed, saved, read back false.
+              // every-program-exercise-field-is-saved.test.ts holds every field the input
+              // schema declares against this block.
+              restAfterGroupOnly: ex.restAfterGroupOnly ?? false,
               trackingLevel: ex.trackingLevel ?? "none",
               videoCheckEnabled: videoCheckMap.get(ex) ?? false,
             };

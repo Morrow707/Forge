@@ -2462,6 +2462,23 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   was logged with the targets ON FILE is two of the athlete's own numbers side by side, never a
   prescribed third. `the-nutrition-assistant-reads-the-log.test.ts` pins the reads, the block's
   place in the prompt, and the route gate. Server-side: ships on Render, no build.
+  **THE BUILDER'S REST TOGGLE NEVER PERSISTED, AND DRIVING THE REAL SCREEN IS WHAT FOUND IT**
+  (2026-10-10, third hour). The program-builder row was closed by driving the real builder in a
+  headless browser as the audit coach: Add Day, three exercises through the picker, the Link
+  chip, the REST toggle, a drag (Pendlay Row above Back Squat, PointerSensor at 4px), a delete,
+  a rest day added and removed, Save Program, Add to My Calendar (201, on the coach's calendar
+  the same minute) and the AI Program Builder panel, which added "Day 2: Romanian Deadlift,
+  Chest-Supported Dumbbell Row" at 3x8 from one sentence. Every control worked except one: the
+  REST toggle read back `restAfterGroupOnly: false` after save, and an API round-trip proved the
+  server dropped it -- `updateProgramStructure`'s `exValues` (the reconciling save every Save
+  Program takes) listed every other column and not that one, so a new row took the default and a
+  reconciled row kept whatever it had. `createProgram` carried it all along, which is why nothing
+  noticed. **The control had been cosmetic since the reconciling save was written** (build 598
+  shipped the chip and the toggle together). One line fixes it;
+  `every-program-exercise-field-is-saved.test.ts` reads the field list off
+  `programExerciseInputSchema` and requires each in that block, so the next field added to the
+  schema fails there until the save path writes it -- discover from the schema, never a list.
+  Server-side: ships on Render, no build.
 
 ## Skills are part of the camera tier
 
