@@ -2386,6 +2386,27 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   network policy**, so a session cannot read sent mail; email links (claim, reset, device
   approval) come from Scott's inbox.
 
+- **A NEW PAGE DREW THE APP'S 404 FOR EVERY EXISTING VISITOR UNTIL THEIR SERVICE WORKER UPDATED**
+  (2026-10-10). Scott, tapping "Notice to Parent or Guardian" in a roster email: "Notice to
+  guardian gave me a 404." The link was `/parent-notice`, the server answered it 200 with the
+  right title, the route was in `App.tsx`, and none of that reached his phone: `client/src/sw.ts`
+  handed EVERY navigation the index.html it had precached at install, online or not, and that
+  shell names the bundle it was built with, which carries the ROUTER. So for the window between a
+  deploy and the worker's background update, a route added in that deploy rendered `NotFound`
+  from a router that had never heard of it -- and that window is every deploy that adds a page,
+  for every visitor who had the app open before. The same mechanism explains "the confirm emails
+  works" minutes later: by then the worker had updated. A signed-out headless probe could never
+  reproduce it, because a fresh browser has no stale worker; the thing to suspect when a URL
+  answers from `curl` and 404s on a phone is the service worker, not the route table.
+  `answerNavigation` in `client/src/sw-shell.ts` is the fix: the LIVE shell from the server first
+  (sent `no-cache` with an ETag, so usually a 304), the precached shell only when the network
+  cannot answer -- offline, a 5s timeout, or the 502 a Render deploy serves for half a minute. A
+  404 from the server is served as it came, since the server decides what is a page. Offline deep
+  links work exactly as before. `the-shell-is-never-served-stale-online.test.ts` drives the
+  handler with real promises and reads `sw.ts` to prove it is the thing wired in; reverting the
+  worker turns two of its nine cases red. The native app is unaffected either way (no service
+  worker on the `capacitor://` scheme); the web bundle still ships in it, so `verify_build`.
+
 ## Skills are part of the camera tier
 
 Added 2026-09-19. Scott: "The 4.99 and 9.99 should not have access to the skills and skills

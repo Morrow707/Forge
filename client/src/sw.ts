@@ -2,6 +2,7 @@
 import { precacheAndRoute, createHandlerBoundToURL } from "workbox-precaching";
 import { registerRoute, NavigationRoute } from "workbox-routing";
 import { StaleWhileRevalidate } from "workbox-strategies";
+import { answerNavigation } from "./sw-shell";
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -33,16 +34,26 @@ registerRoute(
   new StaleWhileRevalidate({ cacheName: "onnxruntime-wasm" }),
 );
 
-// SPA navigation fallback (serve the cached app shell for any offline
-// deep link) -- excluding API routes so a request for JSON never gets
-// index.html back. API responses are never precached/served from here at
-// all; they go through the app's own localStorage-backed offline
-// cache/queue on the workout page instead, so live data is never served
-// stale by this worker.
+// Every navigation -- an emailed link, a typed address, a reload -- is answered by the LIVE
+// shell from the server first, and by the precached shell only when the network cannot
+// answer (offline, a timeout, or the 502 a deploy serves for half a minute). It used to be the
+// precached shell always, which meant that for the window between a deploy and this worker's
+// background update, a route added in that deploy rendered the 404 page: the stale shell names
+// a stale bundle, and the stale bundle carries the router. See sw-shell.ts for the take that
+// found it. API routes are excluded so a request for JSON never gets index.html back; API
+// responses are never precached or served from here at all (the workout page's own
+// localStorage-backed offline cache/queue handles those), so live data is never served stale
+// by this worker.
+const precachedShell = createHandlerBoundToURL("/index.html");
 registerRoute(
-  new NavigationRoute(createHandlerBoundToURL("/index.html"), {
-    denylist: [/^\/api\//],
-  }),
+  new NavigationRoute(
+    (params) =>
+      answerNavigation({
+        fetchLive: () => fetch(params.request),
+        precachedShell: () => precachedShell(params),
+      }),
+    { denylist: [/^\/api\//] },
+  ),
 );
 
 self.skipWaiting();
