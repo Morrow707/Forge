@@ -16871,7 +16871,15 @@ ${athleteContext}
       [...(Array.isArray(system) ? system : [{ text: system }]), { text: `\n\n${ASK_INSTEAD_OF_GUESSING}` }],
       question,
       [ASK_CLARIFYING_QUESTION_TOOL],
-      { maxTokens: 500, feature: "nutrition-answer" },
+      // 1200, not 500. Found on production 2026-10-10 with the audit Free Agent: an ordinary
+      // question ("am I getting enough protein ... what would you change?") was answered at
+      // length, the response stopped at max_tokens, and callAnthropic discards a truncated
+      // result -- the right rule for JSON and the wrong outcome for prose -- so the athlete
+      // read "Sorry, I couldn't come up with an answer". Twice in a row, in the Render log,
+      // then this route's 422. Same shape as Ask the library the same day. The prompt still
+      // asks for 3-5 sentences; the cap is headroom for the model running past that, not a
+      // licence to. The fallback call below carries the same number for the same reason.
+      { maxTokens: 1200, feature: "nutrition-answer" },
     );
 
     if (result?.toolName === "ask_clarifying_question") {
@@ -16892,7 +16900,7 @@ ${athleteContext}
       return { answer: result.text };
     }
 
-    const text = await askClaude(system, [{ role: "user", content: question }], { maxTokens: 500, feature: "nutrition-answer" });
+    const text = await askClaude(system, [{ role: "user", content: question }], { maxTokens: 1200, feature: "nutrition-answer" });
     if (!text?.trim()) {
       return { error: "Sorry, I couldn't come up with an answer just now -- try again in a bit." };
     }

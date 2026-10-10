@@ -111,6 +111,12 @@ export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
     ? { group: sorted[sorted.length - 1].group, score: sorted[sorted.length - 1].percentile! }
     : null;
   const hint = balanceHint(strongest, weakest);
+  // A lift on file with no percentile is a THIN COHORT, not an empty log. Found on production
+  // 2026-10-10 with the audit athlete: two lifts logged, cohort of zero, and the collapsed
+  // header read "Log a few lifts to see where you stand" -- an instruction they had already
+  // followed. Every athlete at launch is in this state for months (NORM_MIN_COHORT is 30 per
+  // group), so the header has to tell the truth the expanded card already tells.
+  const hasOwnLifts = data.groups.some((g) => g.ratio != null);
 
   // Tint only what has been scored. An unscored group stays neutral rather than reading as
   // zero -- an athlete who has never trained calves is not weak there, they are unmeasured.
@@ -132,9 +138,11 @@ export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
           <span className="min-w-0 flex-1">
             <span className="block font-semibold">Strength profile</span>
             <span className="block text-xs text-muted-foreground">
-              {overall == null
-                ? "Log a few lifts to see where you stand"
-                : `Ahead of ${overall}% of athletes your age, on average`}
+              {overall != null
+                ? `Ahead of ${overall}% of athletes your age, on average`
+                : hasOwnLifts
+                  ? "Not enough athletes your age on Forge yet to compare"
+                  : "Log a few lifts to see where you stand"}
             </span>
           </span>
           <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", open && "rotate-180")} />

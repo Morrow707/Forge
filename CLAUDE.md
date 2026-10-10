@@ -2407,6 +2407,30 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   worker turns two of its nine cases red. The native app is unaffected either way (no service
   worker on the `capacitor://` scheme); the web bundle still ships in it, so `verify_build`.
 
+- **THE NUTRITION Q&A FAILED THE SAME WAY ASK THE LIBRARY DID, AND THE STRENGTH CARD TOLD AN
+  ATHLETE WITH TWO LIFTS TO LOG A FEW** (2026-10-10, second hour with the audit accounts).
+  `POST /api/athlete/nutrition/ask` answered an ordinary protein question with 422 "Sorry, I
+  couldn't come up with an answer"; the Render log read `Claude request truncated at max_tokens
+  -- discarding partial result` twice, then the 422. `answerNutritionQuestion` ran at
+  `maxTokens: 500` on a prose answer, and `callAnthropic` discards a truncated result -- the
+  right rule for JSON, the wrong outcome for prose, exactly the Ask the library bug of the same
+  morning. Both calls in it are 1,200 now; the prompt still asks for 3-5 sentences. **The other
+  free-text call sites all state a sentence count in their prompt beside a cap sized to it**
+  (chat 500 for 2-4 sentences, form check 600 for 3-5); a prose call whose prompt names no length
+  or whose cap has no headroom is the shape to look for. Also: `strength-profile-card.tsx`'s
+  collapsed header read "Log a few lifts to see where you stand" for an athlete with a Back Squat
+  and a Pendlay Row on file and a cohort of zero -- the expanded card already said the true thing
+  ("Not enough athletes aged 20-24 on Forge yet"), the header did not, and every athlete at launch
+  is in that state for months (`NORM_MIN_COHORT` is 30 per group). `hasOwnLifts` picks the
+  sentence. The figure and the history sheet stay inside the scored branch by design; the Recent
+  PRs list on the same page opens the same lift's trend, so nothing is unreachable.
+  **Rows closed on evidence the same hour:** all eight public documents answer 200 as a page and
+  as a PDF with no "draft" in either (the ninth, the institutional agreement, was signed in B4);
+  thirteen public pages at 390px and 1280px with no horizontal overflow, no tiny text and no page
+  error; an athlete's participation waiver uploads (201, "In review" on `/documents`) and an
+  institutional agreement filed against an athlete is refused 400; a coach's nutrition targets
+  land on the athlete's page with the food log against them and the seven-day strip.
+
 ## Skills are part of the camera tier
 
 Added 2026-09-19. Scott: "The 4.99 and 9.99 should not have access to the skills and skills
