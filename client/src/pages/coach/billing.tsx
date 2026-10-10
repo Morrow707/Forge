@@ -182,7 +182,13 @@ export default function CoachBilling() {
   // The roster band, not a flat fee. This read ORG_BASE_CENTS, which was the
   // whole bill back when there was a flat account fee; there isn't one now,
   // so that same read would have quoted every coach $0.00 a month.
-  const band = bandForAthleteCount(roster.length);
+  // And it is the BILLED count, never the roster alone: billing charges the
+  // larger of what the coach planned for and what they have
+  // (getBilledAthleteCountForCoach), and the plan card above already says so.
+  // Reading roster.length here put "21-40 athletes · $160.00/month" and
+  // "Your plan $20.00/mo · 0-5 athletes" on the same screen for a coach who
+  // planned for 34 and had not added anyone yet (audit row B2, 2026-10-10).
+  const band = bandForAthleteCount(plan?.billedCount ?? roster.length);
   const monthlyCents = band.monthlyPriceCents;
 
   async function subscribe() {
