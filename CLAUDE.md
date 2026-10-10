@@ -2449,7 +2449,10 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   no roster**, made to prove the athlete URLs refuse an outsider: every coach route for athlete 21
   (roster, nutrition, food log, wellness, waivers, strength profile, a nutrition write, a team add)
   answered 404 or 403 with no name, entry or number in the body, and the athlete pages drew
-  nothing. Delete it with the other eight (row E5).
+  nothing. **Deleted again the same evening with `+fa1`, through the real delete path**: a wrong
+  password is refused, the right one answers 204, the session is dead on the next request, the old
+  password no longer signs in, and the head coach's roster and programs were untouched. Seven audit
+  accounts remain (row E5).
   **AI ASSISTANCE IS FOR COACHES AND FREE AGENTS; A COACHED ATHLETE GETS NONE** (Scott,
   2026-10-10, asked whether the nutrition assistant should see the athlete's food log: "the
   athlete side is fine, athletes should have no ai assistance as they will be primarily coached
