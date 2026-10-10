@@ -2332,6 +2332,26 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   a consumer purchase, and selling it both ways would put the roster cap and the Stripe webhook
   (`applyCoachSubscriptionBand`) on two rails.
 
+- **RENDER WAS READ DIRECTLY FOR THE FIRST TIME 2026-10-10, AND `PAYWALLS_DISABLED=true` IS SET ON
+  PRODUCTION.** A read-only Render API key is a Network secret in the Claude Code cloud environment
+  (Bearer injected by the proxy for `api.render.com`), so a session can read the service's env
+  vars, deploys and logs itself -- print switch values only, never a secret, and NEVER edit a
+  production variable without Scott's word. The flag matters because `hasAthletePaidForAiAccess`
+  returns true on it BEFORE reading `BILLING_LIVE` or the tier, and `cameraAccessFor`,
+  `skillsAccessFor` and `requirePaidAiAccess` all go through it: today EVERY Free Agent has the
+  camera, skills and AI chat whatever their tier. Two earlier notes in this file reasoned the
+  opposite from the code alone ("cameraAccessFor answers false for EVERY Free Agent except the
+  comped demo address") and are wrong while this flag is set. **Unsetting it is a launch-day
+  switch** (after `APPLE_IAP_ENVIRONMENT=production`, before Release) and is the one that makes a
+  Basic Free Agent's record button disappear, so audit row B6 cannot run before it. Also read off
+  the service: `APPLE_IAP_LIVE` is ALREADY true (the sandbox runs needed it), `APPLE_APP_APPLE_ID`
+  is set, `ANTHROPIC_FAST_MODEL` / `ANTHROPIC_MODEL` are absent (the Haiku 5.5 default is what
+  runs), all 56 names the code reads are present or deliberately absent, and `PII_ENCRYPTION_KEYS`
+  is an unread leftover beside `PII_ENCRYPTION_KEY`. **`/api/webhooks/apple` has received NOTHING
+  in 72 hours of logs** across every sandbox purchase, which a sandbox subscription's five-minute
+  renewals should have produced by the dozen -- the Sandbox server URL in App Store Connect is a
+  separate field from the Production one and is the first thing to check.
+
 ## Skills are part of the camera tier
 
 Added 2026-09-19. Scott: "The 4.99 and 9.99 should not have access to the skills and skills
