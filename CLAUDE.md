@@ -2352,6 +2352,16 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   renewals should have produced by the dozen -- the Sandbox server URL in App Store Connect is a
   separate field from the Production one and is the first thing to check.
 
+- **THE LAUNCH IS iPHONE ONLY; ANDROID IS PARKED** (Scott, 2026-10-10: "I don't have an android
+  phone to test anything on, will launch on iPhone only for now"). The Android shell, Health
+  Connect, Google Play Billing (`GOOGLE_PLAY_BILLING_LIVE` unset, so it sells nothing) and the
+  Play privacy URL stay BUILT and untested; nothing is removed and no Android row sits on the
+  launch checklist. Do not ask for an Android device to close an audit row, and do not treat an
+  Android-only path as launch-blocking. It comes back as its own pass when a phone is in hand.
+  Also the same day, on Scott's word: the leftover `PII_ENCRYPTION_KEYS` was deleted from Render
+  (36 variables now). `PAYWALLS_DISABLED` stays set for now by his decision ("we will handle the
+  paywall stuff later"); it is still on the launch-day order.
+
 ## Skills are part of the camera tier
 
 Added 2026-09-19. Scott: "The 4.99 and 9.99 should not have access to the skills and skills
