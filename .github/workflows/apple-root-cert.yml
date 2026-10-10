@@ -201,7 +201,10 @@ jobs:
             || { echo "::error::Certificate is not currently valid."; exit 1; }
           # -text, not -ext: the macOS runner's /usr/bin/openssl is LibreSSL,
           # which has no -ext flag.
-          openssl x509 -inform DER -in downloaded.cer -noout -text | grep -q "CA:TRUE" \
+          # grep without -q on purpose: under pipefail, grep -q quits on its first match and
+          # openssl dies on the broken pipe, which reads as "not a CA". See ci.yml's Postgres
+          # guard, which cried wolf exactly that way on 2026-10-10.
+          openssl x509 -inform DER -in downloaded.cer -noout -text | grep "CA:TRUE" >/dev/null \
             || { echo "::error::Certificate is not a CA certificate."; exit 1; }
 
           echo "sha256=$download_sha" >> "$GITHUB_OUTPUT"
