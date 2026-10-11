@@ -83,11 +83,6 @@ const OWNERSHIP_CHECKS = [
 // was read and judged, not because it was hard to classify -- adding to this
 // list is the thing to be suspicious of in review.
 const GLOBAL_BY_DESIGN = new Set([
-  // The Coaches Corner discussion board is one board for every coach with the add-on: a
-  // thread is read by all of them, and the gate on these routes is the entitlement
-  // (hasCoachesCornerAccess), not tenancy. No athlete is attached to a thread anywhere.
-  "/api/coach/discussion/threads/:id",
-  "/api/coach/discussion/threads/:id/report",
   // A learning path is platform-wide like a track; the progress on the certificate is read
   // by user.id inside academyProgressForCoach.
   "/api/coach/academy/paths/:id/certificate",
@@ -176,15 +171,6 @@ const RESOLVED_ANOTHER_WAY = new Map<string, string>([
     "academy_tracks has no owner column: Forge-authored Coaches Corner content, identical " +
       "for every account. hasCoachesCornerAccess on this route is an entitlement gate, not a " +
       "tenancy one.",
-  ],
-  [
-    "GET /api/coach/discussion/threads/:id::getDiscussionThread",
-    "One board for every coach with the add-on; see GLOBAL_BY_DESIGN. Hidden threads are " +
-      "withheld inside getDiscussionThread, and the entitlement gate runs first.",
-  ],
-  [
-    "POST /api/coach/discussion/threads/:id/report::getDiscussionThread",
-    "Same board; the read is only an existence check before a report is filed against it.",
   ],
   [
     "GET /api/coach/academy/paths/:id/certificate::getAcademyPath",

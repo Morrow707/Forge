@@ -23,9 +23,7 @@ type Analytics = {
     questions: { questionId: number; questionText: string; answered: number; missed: number; missRate: number | null }[];
   }[];
   hardestQuestions: { questionId: number; questionText: string; trackTitle: string; answered: number; missed: number; missRate: number | null }[];
-  discussionThreads: number;
   openQuestions: number;
-  openReports: number;
 };
 type CoachQuestion = { id: number; question: string; answerGiven: string | null; createdAt: string };
 type LessonFlag = { id: number; lessonId: number; reason: string; createdAt: string; trackId: number | null; trackTitle: string; lessonNumber: number | null; lessonTitle: string };
@@ -64,12 +62,10 @@ export default function AdminCoachesCornerAnalytics() {
         <div className="h-32 animate-pulse rounded-lg bg-surface" />
       ) : (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3">
             {[
               ["Tracks", a.data.tracks.length],
-              ["Board threads", a.data.discussionThreads],
               ["Open questions", a.data.openQuestions],
-              ["Open reports", a.data.openReports],
             ].map(([label, n]) => (
               <Card key={String(label)}>
                 <CardContent className="p-4">

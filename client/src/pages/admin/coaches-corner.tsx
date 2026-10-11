@@ -193,9 +193,6 @@ export default function AdminCoachesCorner() {
           <Button variant="outline" onClick={() => navigate("/admin/coaches-corner/analytics")}>
             Analytics
           </Button>
-          <Button variant="outline" onClick={() => navigate("/admin/coaches-corner/reports")}>
-            Discussion reports
-          </Button>
           <Button onClick={() => navigate("/admin/academy-tracks/new")}>
             <Plus className="h-4 w-4" />
             New Lesson

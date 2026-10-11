@@ -1335,44 +1335,12 @@ CREATE TABLE IF NOT EXISTS "academy_path_tracks" (
 );
 CREATE INDEX IF NOT EXISTS "academy_path_tracks_path_idx" ON "academy_path_tracks" ("path_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "academy_path_tracks_path_track_idx" ON "academy_path_tracks" ("path_id", "track_id");
--- Coaches Corner peer discussion (2026-10-03). No athlete column anywhere here, on purpose.
-CREATE TABLE IF NOT EXISTS "coach_discussion_threads" (
-  "id" serial PRIMARY KEY,
-  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
-  "track_id" integer REFERENCES "academy_tracks"("id") ON DELETE SET NULL,
-  "title" text NOT NULL,
-  "body" text NOT NULL,
-  "pinned" boolean NOT NULL DEFAULT false,
-  "locked" boolean NOT NULL DEFAULT false,
-  "hidden_at" timestamp,
-  "hidden_reason" text,
-  "reply_count" integer NOT NULL DEFAULT 0,
-  "last_activity_at" timestamp NOT NULL DEFAULT now(),
-  "created_at" timestamp NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS "coach_discussion_threads_activity_idx" ON "coach_discussion_threads" ("last_activity_at");
-CREATE INDEX IF NOT EXISTS "coach_discussion_threads_track_idx" ON "coach_discussion_threads" ("track_id");
-CREATE TABLE IF NOT EXISTS "coach_discussion_replies" (
-  "id" serial PRIMARY KEY,
-  "thread_id" integer NOT NULL REFERENCES "coach_discussion_threads"("id") ON DELETE CASCADE,
-  "author_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
-  "body" text NOT NULL,
-  "hidden_at" timestamp,
-  "hidden_reason" text,
-  "created_at" timestamp NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS "coach_discussion_replies_thread_idx" ON "coach_discussion_replies" ("thread_id");
-CREATE TABLE IF NOT EXISTS "coach_discussion_reports" (
-  "id" serial PRIMARY KEY,
-  "reporter_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
-  "thread_id" integer REFERENCES "coach_discussion_threads"("id") ON DELETE CASCADE,
-  "reply_id" integer REFERENCES "coach_discussion_replies"("id") ON DELETE CASCADE,
-  "reason" text NOT NULL,
-  "created_at" timestamp NOT NULL DEFAULT now(),
-  "resolved_at" timestamp,
-  "resolution" text
-);
-CREATE INDEX IF NOT EXISTS "coach_discussion_reports_open_idx" ON "coach_discussion_reports" ("resolved_at");
+-- The Coaches Corner peer discussion board (2026-10-03) was removed 2026-10-11 on Scott's word
+-- ("i don't want a discussion board"). Reports first, then replies, then threads: each references
+-- the one after it. IF EXISTS so a fresh database and an upgraded one both pass through.
+DROP TABLE IF EXISTS "coach_discussion_reports";
+DROP TABLE IF EXISTS "coach_discussion_replies";
+DROP TABLE IF EXISTS "coach_discussion_threads";
 
 -- A coach's private note on a lesson (2026-10-04).
 CREATE TABLE IF NOT EXISTS "academy_lesson_notes" (

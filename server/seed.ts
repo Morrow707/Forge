@@ -231,7 +231,7 @@ const SEEDED_ADMIN_OWN_ROWS_MAY_CASCADE = new Set([
   "exercise_usage_log.coach_id", "skill_exercise_usage_log.coach_id", "academy_lesson_completions.coach_id",
   "academy_lesson_flags.coach_id", "academy_lesson_notes.coach_id", "academy_quiz_attempts.coach_id",
   "coaches_corner_questions.coach_id", "redeem_code_redemptions.coach_id", "class_coach_settings.coach_id",
-  "coach_digests.coach_id", "athlete_digests.athlete_id", "coach_discussion_reports.reporter_id",
+  "coach_digests.coach_id", "athlete_digests.athlete_id",
   "video_review_exports.exported_by",
 ]);
 async function retireSeededAdmin(admin: { id: number }, scott: { id: number } | undefined | null): Promise<boolean> {

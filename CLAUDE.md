@@ -1650,13 +1650,16 @@ Later the same day, Scott: "what else can we build/add for the coaches corner?" 
 it all in order" less office hours, session plans, printable handouts, program templates and
 lesson video. What landed:
 
-- **Peer discussion** (`coach_discussion_threads`, `_replies`, `_reports`): the App Store
-  listing promised it. Coaches with the add-on post by name, optionally against a track; a
-  coach removes only their own (hidden, never deleted); anything can be reported; an admin
-  works `/admin/coaches-corner/reports` and can hide, unhide, pin and lock. There is NO athlete
-  column anywhere in it, on purpose, and the on-screen rule says never to name one. Hidden rows
-  are never served to a coach. Global by design in the scoping scan: one board, gated by the
-  entitlement, not by tenancy.
+- **THE PEER DISCUSSION BOARD IS GONE** (2026-10-11, Scott: "i don't want a discussion board so
+  delete that too"). It existed 2026-10-03 to 2026-10-11: `coach_discussion_threads`, `_replies`,
+  `_reports`, nine coach routes under `/api/coach/discussion`, six admin ones, the Discussion tab
+  on `/coach/coaches-corner`, `/admin/coaches-corner/reports`, the board paragraph of the monthly
+  digest draft and the two counters on the analytics page. All removed, and the three tables are
+  DROPPED by `reconcile-schema.ts` (IF EXISTS, reports then replies then threads, proven on a
+  database that had them and on a fresh one). **The App Store listing text for the add-on still
+  reads "Coach library, programs and peer discussion"** -- that is in App Store Connect, not the
+  repo, and is Scott's to edit; nothing in the app or the review notes points at a board now. Do
+  not rebuild it on the strength of that listing line.
 - **Learning paths** (`academy_paths`, `academy_path_tracks`): ordered sets of tracks for a kind
   of coach, three seeded (`COACHES_CORNER_PATHS_2026_10`, by track title, created once), edited
   on the admin Coaches Corner page. A path is complete when every track in it is, and earns its

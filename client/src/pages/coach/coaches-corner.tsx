@@ -17,7 +17,6 @@ import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
 import { AcademyQuiz, type QuizAttemptSummary } from "@/components/academy-quiz";
 import { CoachesCornerAsk } from "@/components/coaches-corner-ask";
-import { CoachesCornerDiscussion } from "@/components/coaches-corner-discussion";
 import {
   isAppleIapSupported,
   fetchCoachAddOnPrice,
@@ -111,7 +110,6 @@ export default function CoachesCorner() {
   const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
   const [sort, setSort] = useState<TrackSort>("unlocked");
-  const [view, setView] = useState<"library" | "discussion">("library");
   // "Continue" opens a track at its first unread lesson once the detail arrives.
   const [openFirstUnread, setOpenFirstUnread] = useState(false);
   // "Apply this to my roster" at the end of a track mounts the library chat, seeded.
@@ -334,7 +332,7 @@ export default function CoachesCorner() {
             key={selectedLesson.id}
             initial={selectedLesson.note ?? ""}
             title="My notes on this lesson"
-            placeholder="How this applies to your program, a cue to try, a question for the discussion board…"
+            placeholder="How this applies to your program, a cue to try, a question to bring to your staff…"
             savedLine="Saved. Only you can see this."
             emptyLine="Private to you. No one else, Forge included, reads these."
             save={async (text) => {
@@ -539,27 +537,7 @@ export default function CoachesCorner() {
           </CardContent>
         </Card>
       )}
-      {anyUnlocked && (
-        <div className="mb-4 flex items-center gap-1 rounded-md bg-secondary p-1">
-          {(["library", "discussion"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              className={cn(
-                "rounded px-3 py-1.5 text-xs font-semibold transition-colors",
-                view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {v === "library" ? "Library" : "Discussion"}
-            </button>
-          ))}
-        </div>
-      )}
-      {anyUnlocked && view === "discussion" && (
-        <CoachesCornerDiscussion tracks={tracks.map((t) => ({ id: t.id, title: t.title }))} />
-      )}
-      {view === "library" && anyUnlocked && (() => {
+      {anyUnlocked && (() => {
         const inProgress = tracks
           .filter((t) => t.unlocked && !t.completed && (t.lessonsRead ?? 0) > 0)
           .sort((a, b) => new Date(b.lastReadAt ?? 0).getTime() - new Date(a.lastReadAt ?? 0).getTime());
@@ -593,8 +571,8 @@ export default function CoachesCorner() {
           </div>
         );
       })()}
-      {view === "library" && <CoachesCornerPaths onOpenTrack={(id) => setSelectedTrackId(id)} />}
-      {anyUnlocked && view === "library" && (
+      <CoachesCornerPaths onOpenTrack={(id) => setSelectedTrackId(id)} />
+      {anyUnlocked && (
         <CoachesCornerAsk
           onOpenLesson={(trackId, lessonId) => {
             setSelectedTrackId(trackId);
@@ -602,7 +580,7 @@ export default function CoachesCorner() {
           }}
         />
       )}
-      {view === "library" && tracks.length > 1 && (
+      {tracks.length > 1 && (
         <div className="mb-4 flex items-center gap-1 rounded-md bg-secondary p-1">
           {TRACK_SORT_OPTIONS.map((opt) => (
             <button
@@ -621,7 +599,7 @@ export default function CoachesCorner() {
           ))}
         </div>
       )}
-      {view === "library" && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {[...tracks]
           .sort((a, b) => {
             if (sort === "unlocked") {
@@ -682,15 +660,15 @@ export default function CoachesCorner() {
             </CardContent>
           </Card>
         ))}
-      </div>}
-      {view === "library" && tracks.length > 0 && (
+      </div>
+      {tracks.length > 0 && (
         <p className="mt-3 text-xs text-muted-foreground">
           Every track shows the date it was released. New tracks wear a New badge for a month, and the monthly Coaches
           Corner email names each one.
         </p>
       )}
       {/* The certificate wall, at the bottom on purpose (Scott, 2026-10-04). */}
-      {view === "library" && anyUnlocked && <CoachesCornerCertificates tracks={tracks} />}
+      {anyUnlocked && <CoachesCornerCertificates tracks={tracks} />}
     </AppShell>
   );
 }
