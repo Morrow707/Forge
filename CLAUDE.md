@@ -2593,6 +2593,27 @@ branch through the real login route and the real email.
   the review notes in App Store Connect name accounts that no longer exist** -- Scott's call,
   made with that said; the replacement is a real coach and athlete login he creates, with both
   addresses in `DEVICE_VERIFICATION_EXEMPT_EMAILS`.
+  **Deployed 2026-10-11 00:27 UTC: the Render log shows all eight removed** (users 1, 2, 5-10),
+  the site answered 200 straight after, and the itest run that captured the emails below lost
+  exactly one file -- the demo-account itest deleted out from under it mid-run, not a real red.
+- **NINETEEN EMAILS RENDERED AT PHONE WIDTH, NONE OVERFLOW** (2026-10-11). The 10-09 read covered
+  the words; nobody had drawn them at 390px. Method, reusable: run the integration suite with a
+  setup file that wraps `testOutbox.push` and writes every captured body to disk (the suite sends
+  real emails through the real routes into that array), then render one per subject in headless
+  Chromium at a 390px desktop-mode viewport with a viewport meta injected -- `isMobile: true`
+  lays an email out at the 980px legacy width and hides every overflow, which is the first
+  thing the first run got wrong. Nineteen distinct subjects, no horizontal overflow, the Forge
+  band on all, no text under 12px bar one footer line. The progress report is the one email the
+  suite never sends and was not rendered. One thing to know when reading a captured guardian
+  email: its "Notice to Parent or Guardian" body is EMPTY in the test database because no legal
+  document is seeded there; on production it carries the notice.
+- **THE DROPPED-FIELD SWEEP FOUND ONLY THE ONE** (2026-10-11): `every-program-exercise-field-is-saved.test.ts`
+  now holds the program, program-day, skill-program, class-lesson and academy-lesson saves
+  against their input schemas, discovered from the schema source; the builder's exercise save
+  was the only hole. And every free-text AI call (readiness 350, athlete digest 450, coach digest
+  500, chat 500, form checks 600, library 1,600, nutrition 1,200, page transcription 4,096)
+  states a sentence count in its prompt beside a cap sized to it, which is the property that
+  keeps `callAnthropic`'s discard-on-truncation rule from eating a prose answer.
   `DEVICE_VERIFICATION_DISABLED=true` is the kill switch for an email-provider outage. With no
   email provider configured at all (a dev box) the gate stands down and says so once.
 - **The test harness pre-trusts its client.** `loginAs` calls `trustClientDevice` first, so the
