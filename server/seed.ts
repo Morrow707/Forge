@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { db } from "./db";
 import { storage } from "./storage";
-import { hashPassword } from "./auth-utils";
+import { hashPassword, comparePasswords } from "./auth-utils";
 import { randomBytes } from "crypto";
 import {
   users,
@@ -304,15 +304,31 @@ async function main() {
   // owner of last resort on a fresh environment; on an environment that has Scott it is never
   // created, and one that still holds it is retired at the end of this run (retireSeededAdmin).
   // Scott: "I thought I asked you to remove the admin@forge.app?"
+  //
+  // EXCEPT WHILE `SEEDED_ADMIN_PASSWORD` IS SET ON THE ENVIRONMENT (2026-10-11, the same night).
+  // Scott, needing a working admin login for the launch audit: "reactivate the admin@forge.app
+  // with password <his choice>". The variable is the switch and its value is the password HE
+  // issued, set in Render by hand: while it is set the account exists on every environment,
+  // signs in with that password (re-applied on each deploy, so rotating it is one variable
+  // change) and is neither locked nor retired below; the moment it is deleted and the service
+  // redeploys, the rule above takes over again and retireSeededAdmin hands its content to Scott
+  // and removes the row. Its address delivers nowhere, so the operator also lists it in
+  // DEVICE_VERIFICATION_EXEMPT_EMAILS for the same window. Never a password in this file.
+  const seededAdminPassword = process.env.SEEDED_ADMIN_PASSWORD?.trim() || null;
   let demoAdmin = await storage.getUserByEmail("admin@forge.app");
-  if (!demoAdmin && !scott) {
+  if (!demoAdmin && (!scott || seededAdminPassword)) {
     demoAdmin = await storage.createUser({
       email: "admin@forge.app",
-      passwordHash: await hashPassword(demoPassword("admin123")),
+      passwordHash: await hashPassword(seededAdminPassword ?? demoPassword("admin123")),
       name: "Forge Admin",
       role: "admin",
     });
+    console.log(`Seeded admin created (user ${demoAdmin.id})${seededAdminPassword ? " with the password SEEDED_ADMIN_PASSWORD holds" : ""}.`);
+  } else if (demoAdmin && seededAdminPassword && !(await comparePasswords(seededAdminPassword, demoAdmin.passwordHash))) {
+    await db.update(users).set({ passwordHash: await hashPassword(seededAdminPassword) }).where(eq(users.id, demoAdmin.id));
+    console.log(`Seeded admin (user ${demoAdmin.id}): password set from SEEDED_ADMIN_PASSWORD.`);
   }
+  if (demoAdmin && demoAdmin.role !== "admin") await storage.setUserRole(demoAdmin.id, "admin");
   const forgeOwner = scott ?? demoAdmin;
   if (!forgeOwner) throw new Error("seed: no Forge identity to own the library");
   const libraryOwner = forgeOwner;
@@ -5366,8 +5382,11 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   // not on their checklist, nothing reads it, and the upload route would refuse the same kind
   // from a real coach. What each account needs is its OWN required documents.
   await removeSeededDemoAccounts();
-  const seededAdminRemains = demoAdmin ? await retireSeededAdmin(demoAdmin, scott) : false;
-  if (demoAdmin && seededAdminRemains) await lockSeededAdminLogin(demoAdmin);
+  // SEEDED_ADMIN_PASSWORD set: the account is wanted, with its login, and is left alone.
+  if (demoAdmin && !seededAdminPassword) {
+    const seededAdminRemains = await retireSeededAdmin(demoAdmin, scott);
+    if (seededAdminRemains) await lockSeededAdminLogin(demoAdmin);
+  }
   await retireSeededTestProgram();
   await logAccountInventory();
 
