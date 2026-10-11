@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { Mail, Bell, ScanFace, Watch, Send } from "lucide-react";
 import type { PublicUser } from "@shared/schema";
 import { notificationCategoriesForRole } from "@shared/notification-categories";
+import { APPLE_HEALTH_DISCLOSURE } from "@shared/apple-health-disclosure";
 import {
   isPushSupported,
   getCurrentPushSubscription,
@@ -293,13 +294,7 @@ export function NotificationSettingsDialog({
                 <span className="text-xs text-muted-foreground">
                   Pre-fills sleep, resting heart rate, and heart rate variability on
                   your daily check-in from your watch or tracker, always editable
-                  before you submit. When Apple Health sync is enabled, Forge transmits
-                  pre-filled daily check-in metrics (including sleep, heart rate, HRV,
-                  VO2 max, respiratory rate, weight, and session heart rate) to our
-                  third-party AI provider strictly to generate real-time training
-                  recommendations. This data is processed securely, is never sold or
-                  used for advertising, and is never retained to train third-party AI
-                  models.
+                  before you submit. {APPLE_HEALTH_DISCLOSURE}
                 </span>
               </span>
             </label>

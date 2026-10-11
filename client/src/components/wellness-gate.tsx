@@ -36,12 +36,14 @@ import {
   isNativeHealthSupported,
   isHealthSyncEnabled,
   enableHealthSync,
-  promptHealthSyncOnce,
+  hasPromptedHealthSync,
+  markHealthSyncPrompted,
   fetchLatestHealthSnapshot,
   fetchTodaysHeartRateRecovery,
   nativeHealthName,
 } from "@/lib/native-health";
 import { useAuth } from "@/hooks/use-auth";
+import { APPLE_HEALTH_DISCLOSURE } from "@shared/apple-health-disclosure";
 
 type WellnessCheckin = {
   id: number;
@@ -183,16 +185,41 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
   // Explicit "Sync" tap -- unlike the automatic pull above, this works
   // any time, including after today's check-in is already submitted,
   // where the automatic effect deliberately goes quiet (see its own
-  // comment). Prompts for Health access on the spot if it was never
-  // granted, rather than requiring a trip to Notification Settings first,
-  // since tapping a button labeled "Sync" is as explicit an ask as the
-  // permission prompt itself.
-  const [manualSyncing, setManualSyncing] = useState(false);
-  async function handleManualSync() {
+  // comment). With sync not yet on it opens the disclosure card below
+  // rather than the permission sheet: tapping "Sync" is an explicit ask,
+  // but the sheet only says what Forge READS, and counsel's sentence about
+  // where it goes has to be read before it, not after.
+  // The disclosure card. Every path that can open the Health permission
+  // sheet from this screen goes through acceptHealthAsk, so the sheet is
+  // never the first thing the athlete sees about Health.
+  const [healthAsk, setHealthAsk] = useState(false);
+  async function acceptHealthAsk() {
+    if (healthUserId == null) return;
+    setHealthAsk(false);
     setManualSyncing(true);
     try {
-      if (healthUserId == null) return;
-      if (!isHealthSyncEnabled(healthUserId)) await enableHealthSync(healthUserId);
+      await enableHealthSync(healthUserId);
+      await syncFromHealth();
+      toast.success(`Synced with ${nativeHealthName()}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't sync with Health");
+    } finally {
+      setManualSyncing(false);
+    }
+  }
+  function declineHealthAsk() {
+    if (healthUserId != null) markHealthSyncPrompted(healthUserId);
+    setHealthAsk(false);
+  }
+  const [manualSyncing, setManualSyncing] = useState(false);
+  async function handleManualSync() {
+    if (healthUserId == null) return;
+    if (!isHealthSyncEnabled(healthUserId)) {
+      setHealthAsk(true);
+      return;
+    }
+    setManualSyncing(true);
+    try {
       await syncFromHealth();
       toast.success(`Synced with ${nativeHealthName()}`);
     } catch (err) {
@@ -202,10 +229,13 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
     }
   }
 
-  // Nothing on file yet for today -- ask for Health access right here, the
+  // Nothing on file yet for today -- ask about Health sync right here, the
   // first time it's actually relevant, instead of making the athlete find
   // a checkbox in settings first (same "ask in context" shape as the rest
-  // of the app's permission prompts). Then pre-fill, and keep pre-filling:
+  // of the app's permission prompts). The ask is the DISCLOSURE CARD, not
+  // the OS permission sheet: the sheet opens only from the card's "Turn on",
+  // after counsel's sentence has been on screen, and "Not now" is recorded
+  // so the card does not come back every day. Then pre-fill, and keep pre-filling:
   // a poll every few minutes plus a refresh on every app-foreground catches
   // a watch that finishes syncing to the phone after this screen already
   // opened, without needing true OS-level background execution (which
@@ -219,8 +249,14 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
     if (data || isLoading || !editable || !isNativeHealthSupported()) return;
     let cancelled = false;
 
+    if (
+      healthUserId != null &&
+      !isHealthSyncEnabled(healthUserId) &&
+      !hasPromptedHealthSync(healthUserId)
+    ) {
+      setHealthAsk(true);
+    }
     (async () => {
-      if (healthUserId != null) await promptHealthSyncOnce(healthUserId);
       if (!cancelled) await syncFromHealth();
     })();
 
@@ -415,6 +451,25 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
           )}
         </div>
       </div>
+      {healthAsk && healthUserId != null && (
+        <div className="space-y-2 rounded-md border border-border bg-background p-3" data-testid="health-disclosure">
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+            <Watch className="h-3.5 w-3.5" /> Sync {nativeHealthName()}?
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Pre-fills sleep, resting heart rate and heart rate variability on this check-in, always
+            editable before you submit. {APPLE_HEALTH_DISCLOSURE}
+          </p>
+          <div className="flex gap-2">
+            <Button type="button" size="sm" onClick={() => void acceptHealthAsk()}>
+              Turn on
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={declineHealthAsk}>
+              Not now
+            </Button>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="space-y-1.5">
           <Label htmlFor="wellness-sleep" className="flex items-center gap-1.5 text-xs">

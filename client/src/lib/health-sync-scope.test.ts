@@ -40,7 +40,7 @@ describe("Apple Health sync is remembered per account, not per device", () => {
       "isHealthSyncEnabled",
       "hasPromptedHealthSync",
       "enableHealthSync",
-      "promptHealthSyncOnce",
+      "markHealthSyncPrompted",
       "disableHealthSync",
       "fetchLatestHealthSnapshot",
       "fetchTodaysHeartRateRecovery",

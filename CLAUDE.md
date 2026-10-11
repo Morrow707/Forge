@@ -2701,6 +2701,31 @@ branch through the real login route and the real email.
   lookup stays for the support case it was written for.
   `admin-assigns-a-free-agent-tier-without-an-email.itest.ts` reads, assigns and reads back, and
   scans the panel so it can never be pointed back at the email route. Client change: `verify_build`.
+- **THE DAILY CHECK-IN OPENED THE HEALTH PERMISSION SHEET BEFORE COUNSEL'S DISCLOSURE, AND NOW
+  THE DISCLOSURE READS FIRST ON EVERY PATH** (2026-10-11). Scott, closing the launch row "Apple
+  Health switch: counsel's disclosure reads before the permission sheet": "build that out." The
+  Settings switch had the sentence beside its checkbox since build 597 and was fine. The other two
+  ways into HealthKit were not: `WellnessGate` called `promptHealthSyncOnce` on an athlete's first
+  check-in, which opened the OS sheet by itself with nothing read first, and its Sync button called
+  `enableHealthSync` straight away when sync was off -- so an athlete who never opened Settings met
+  the permission before the disclosure, every time. The sheet lists what Forge READS; counsel's
+  sentence says where it GOES (the third-party AI provider), which is the part Apple reads a
+  health app for. `shared/apple-health-disclosure.ts` is the one constant, verbatim from the
+  Privacy Policy's section 7 and pinned against it; the Settings switch renders it, and the
+  check-in now raises a card (the sentence, Turn on, Not now) in both cases -- `enableHealthSync`
+  is called from the card's Turn on alone, and Not now is recorded through `markHealthSyncPrompted`
+  so the card does not return every day and never reaches the sheet. `promptHealthSyncOnce` is
+  gone. `client/src/lib/apple-health-disclosure-reads-first.test.ts` scans every file under
+  `client/src` that can reach `Health.requestAuthorization` and requires the constant on each;
+  mutation-tested both ways. Client change: `verify_build`.
+- **THE VIDEO RETENTION SWEEP RUNS NIGHTLY ON PRODUCTION AND HAS NEVER HAD ANYTHING TO PURGE**
+  (2026-10-11, read off the Render log when the launch row was closed). `video-retention-cap-sweep`
+  starts 09:00 UTC every day and finishes ok in ~25ms; it logs a line only when it warned or purged
+  something, and no such line exists, because nobody has more than the cap's ten unfavorited videos
+  on one exercise yet. The purge keeping every number is proven by `minor-video-retention.test.ts`
+  and the "Purging a video never touches its metrics" invariant, not by a production event; the
+  first real purge will be the first time it is watched, and the log line to look for is "Video
+  retention sweep: warned N, purged N."
 - **NINETEEN EMAILS RENDERED AT PHONE WIDTH, NONE OVERFLOW** (2026-10-11). The 10-09 read covered
   the words; nobody had drawn them at 390px. Method, reusable: run the integration suite with a
   setup file that wraps `testOutbox.push` and writes every captured body to disk (the suite sends

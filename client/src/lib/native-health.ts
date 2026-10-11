@@ -24,10 +24,10 @@ import { Health } from "@capgo/capacitor-health";
 // their record. They were never asked either, since the prompted flag was
 // just as shared.
 const STORAGE_KEY = "forge-health-sync-enabled";
-// Separate from STORAGE_KEY -- tracks whether we've ever put the OS
-// permission sheet in front of the athlete, so WellnessGate can ask
-// automatically the first time (no settings hunt required) without
-// re-asking every single day someone said no. iOS gives apps no way to
+// Separate from STORAGE_KEY -- tracks whether we've ever asked the athlete
+// about Health sync (the OS permission sheet, or the check-in's disclosure
+// card declined before it), so WellnessGate can ask the first time (no
+// settings hunt required) without re-asking every single day someone said no. iOS gives apps no way to
 // distinguish "denied" from "not yet decided" after the first ask anyway,
 // so this is the only reliable signal for "already asked."
 const PROMPTED_KEY = "forge-health-sync-prompted";
@@ -115,18 +115,14 @@ export async function enableHealthSync(userId: number): Promise<void> {
   localStorage.setItem(scoped(STORAGE_KEY, userId), "1");
 }
 
-/** Same request as enableHealthSync(), but swallows the "denied" case
- * instead of throwing -- for the automatic first-ask in WellnessGate,
- * where a no-thanks should just leave the form blank, not surface an
- * error toast for something the athlete never explicitly clicked. */
-export async function promptHealthSyncOnce(userId: number): Promise<void> {
-  if (hasPromptedHealthSync(userId) || !isNativeHealthSupported()) return;
-  try {
-    await enableHealthSync(userId);
-  } catch {
-    // Denied -- hasPromptedHealthSync() is already true from inside
-    // enableHealthSync(), so this won't ask again.
-  }
+/** Records that the athlete has been asked about Health sync without the permission sheet
+ * ever opening -- the "Not now" on the daily check-in's disclosure card. Before this the
+ * check-in opened the OS sheet by itself on the first visit (a one-shot helper, gone now), which put
+ * the permission in front of the athlete before counsel's disclosure of where the data goes;
+ * now the card reads first and records the answer either way, so a no-thanks is not re-asked
+ * every day and never reaches the sheet. enableHealthSync marks this itself on a yes. */
+export function markHealthSyncPrompted(userId: number): void {
+  localStorage.setItem(scoped(PROMPTED_KEY, userId), "1");
 }
 
 export function disableHealthSync(userId: number) {
