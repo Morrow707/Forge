@@ -2381,7 +2381,7 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
 
 - **THE EIGHT AUDIT ACCOUNTS EXIST ON PRODUCTION (2026-10-10), AND TWO DEFECTS CAME OUT OF THE
   FIRST HOUR WITH THEM.** Scott: "you're the only one working. Do what you need." Made through the
-  real signup with the invite code in headless Chromium: `scott.morrow+coach@live.com` (primary,
+  real signup with the invite code in headless Chromium: a `+coach` plus-tag on Scott's inbox (primary,
   planned 34, team "Audit Varsity"), `+staff` (by staff code, assigned to that team), `+athlete`
   (adult, on the coach's code and the team), `+fa1`/`+fa2`/`+fa3` (Free Agents), `+minor` (DOB
   2015, held for `+guardian`, who does not exist until the claim). The harness and screenshots
@@ -2447,7 +2447,7 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   error; an athlete's participation waiver uploads (201, "In review" on `/documents`) and an
   institutional agreement filed against an athlete is refused 400; a coach's nutrition targets
   land on the athlete's page with the food log against them and the seven-day strip.
-  **A NINTH AUDIT ACCOUNT, `scott.morrow+coach2@live.com`, is a coach in a different program with
+  **A NINTH AUDIT ACCOUNT, a `+coach2` plus-tag, is a coach in a different program with
   no roster**, made to prove the athlete URLs refuse an outsider: every coach route for athlete 21
   (roster, nutrition, food log, wellness, waivers, strength profile, a nutrition write, a team add)
   answered 404 or 403 with no name, entry or number in the body, and the athlete pages drew
@@ -2599,24 +2599,37 @@ branch through the real login route and the real email.
 - **THE NINE LAUNCH-AUDIT ACCOUNTS ARE PURGED TOO (2026-10-11), AND A COACH'S LOGO OUTLIVED THE
   COACH.** Scott: "Delete all accounts that you created, there are emails that were added through
   the beta that belong to people keep those, purge every inch of data that belongs to all of your
-  generated beta accounts." `RETIRED_AUDIT_ACCOUNT_EMAILS` in `server/seed.ts` names the nine
-  plus-tag addresses from 2026-10-10 and hands each to `deleteUserRecord` in the same end-of-seed
-  pass as the demo accounts; the log line carries the id and role, never the address. **Guarded by
-  `AUDIT_ACCOUNTS_PURGED_AT`**: an account made under one of those addresses after 01:00 UTC that
-  day is a new account and is skipped, so the next audit pass can reuse the tags without a list
-  that deletes them on every boot -- proven on a throwaway database with a later signup planted
-  beside two old ones. The real beta accounts (ids 11-16 and 18 on production, made by people in
-  August and September) are not on any list and stay; so do the admin-owned "Strength" program and
-  "Mcconnell Raises" exercise, which Scott made, not the audit. **The gap this found:**
+  generated beta accounts." The nine plus-tag addresses the 2026-10-10 audit signed up were put on
+  a retired list in `server/seed.ts` for ONE deploy, each handed to `deleteUserRecord` in the same
+  end-of-seed pass as the demo accounts; the log carried the id and role, never the address.
+  **Deployed 2026-10-11 00:56 UTC: the Render log shows users 19, 20, 21, 23, 24 and 25 removed and
+  the inventory at nine accounts** -- 3 and 4 (admins), 11, 12, 15 (coaches), 13, 14, 16, 18 (Free
+  Agents), all from August and September, made by people, on no list. Every program, assignment,
+  logged day, waiver, nutrition row, team, consent record and upload they made cascaded or was
+  unlinked with the rows. **The list was then REMOVED from the seed the same hour**, on Scott's
+  "every single piece of code associated with" them: the purge had run, and the harness,
+  credentials file, cookie jars and screenshots in the session scratchpad went with it, so nothing
+  in the repo or the sandbox names those addresses any more. The admin-owned "Strength" program
+  and "Mcconnell Raises" exercise are Scott's, not the audit's, and stay. **The gap this found:**
   `deleteUserRecord`'s coach branch removed authored comment media only, so `users.brandLogoUrl`
   and `teams.brandLogoUrl` files stayed on disk after the row and the team cascaded -- in
   `team-logos`, the one upload directory that is public by URL on purpose, so an orphan there is
   the one kind anybody could still fetch. Both are removed now. The checklist rows that used these
   accounts (device email, three tiers, under-13 claim, the guardian's URLs) are made fresh from
-  `docs/pre-launch-audit-accounts.md` when Scott runs them. **Deployed 2026-10-11 00:56 UTC: the
-  Render log shows users 19, 20, 21, 23, 24 and 25 removed and the inventory at nine accounts** --
-  3 and 4 (admins), 11, 12, 15 (coaches), 13, 14, 16, 18 (Free Agents), all from August and
-  September. Production now holds nothing this session created.
+  `docs/pre-launch-audit-accounts.md` when Scott runs them.
+- **THE SEEDED ADMIN KEEPS ITS ROW AND LOSES ITS LOGIN** (2026-10-11). Scott: "I think you created
+  an admin account too? Delete just the login credentials." `admin@forge.app` is created by the
+  seed on a fresh environment and is the library owner wherever Scott's own account does not exist
+  (the library cascades from it), so the ROW stays; `lockSeededAdminLogin` in `server/seed.ts`
+  replaces its password hash with one no password can produce (a valid hash.salt shape, so
+  `comparePasswords` answers false instead of throwing) and drops its web and tracked sessions.
+  **Only an account nobody has ever signed in to**: `lastActivityAt` is written by every completed
+  login, so null means the seed made it and nobody used it, and a reset-and-sign-in later sets the
+  timestamp and the seed never re-locks it -- an admin somebody HAS used is their credential, not
+  the seed's, and the log says so instead. Proven three ways on a throwaway database (locked on
+  the first run with its session row gone and another user's kept, silent on the second, left
+  alone once used). On production this is account 3; Scott's own admin is account 4. The way back
+  in, if ever wanted, is the password reset to that address.
 - **NINETEEN EMAILS RENDERED AT PHONE WIDTH, NONE OVERFLOW** (2026-10-11). The 10-09 read covered
   the words; nobody had drawn them at 390px. Method, reusable: run the integration suite with a
   setup file that wraps `testOutbox.push` and writes every captured body to disk (the suite sends

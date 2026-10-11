@@ -2,8 +2,10 @@ import "dotenv/config";
 import { db } from "./db";
 import { storage } from "./storage";
 import { hashPassword } from "./auth-utils";
+import { randomBytes } from "crypto";
 import {
   users,
+  userSessions,
   programs,
   programExercises,
   exercises,
@@ -16,7 +18,7 @@ import {
   injuryHistory,
   legalDocumentTypeEnum,
 } from "@shared/schema";
-import { eq, isNull, and, asc } from "drizzle-orm";
+import { eq, isNull, and, asc, sql } from "drizzle-orm";
 import { normalizeInjuryRegion } from "@shared/injury-taxonomy";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
 import { seedForgeClasses } from "./seed-forge-classes";
@@ -165,30 +167,33 @@ async function logAccountInventory(): Promise<void> {
   }
 }
 
-/** THE LAUNCH-AUDIT ACCOUNTS ARE RETIRED THE SAME WAY (2026-10-11). Nine accounts were made
- * through the real signup on production on 2026-10-10 to run the launch audit's authenticated
- * rows (docs/pre-launch-audit-accounts.md), and two were deleted by hand through the real delete
- * path the same evening. Scott: "Delete all accounts that you created, there are emails that were
- * added through the beta that belong to people keep those, purge every inch of data that belongs
- * to all of your generated beta accounts." These are exactly the generated ones -- every address
- * is a plus-tag on Scott's own inbox, and no real person ever signed up under one -- and NOTHING
- * else: the beta accounts that belong to people are not on this list and never will be. Every
- * program, assignment, log, waiver, nutrition row, team and uploaded logo they made cascades or
- * is unlinked with the row (deleteUserRecord). The guardian address is listed in case the claim
- * ever ran; it had not when this was written. */
-const RETIRED_AUDIT_ACCOUNT_EMAILS = [
-  "scott.morrow+coach@live.com",
-  "scott.morrow+coach2@live.com",
-  "scott.morrow+staff@live.com",
-  "scott.morrow+athlete@live.com",
-  "scott.morrow+fa1@live.com",
-  "scott.morrow+fa2@live.com",
-  "scott.morrow+fa3@live.com",
-  "scott.morrow+minor@live.com",
-  "scott.morrow+guardian@live.com",
-] as const;
-/** When the purge above was ordered. Anything on the list created later is not the audit's. */
-const AUDIT_ACCOUNTS_PURGED_AT = new Date("2026-10-11T01:00:00Z");
+/** THE SEEDED ADMIN KEEPS ITS ROW AND LOSES ITS LOGIN (2026-10-11). Scott: "I think you created
+ * an admin account too? Delete just the login credentials." The row stays because it is the
+ * library owner on any environment where Scott's own account does not exist (exercises.coachId
+ * and programs.coachId cascade from users, so deleting it would take the Forge library with it);
+ * what goes is the password. The hash is replaced with one no password can produce -- a valid
+ * hash.salt shape, so comparePasswords runs its ordinary comparison and answers false rather than
+ * throwing -- and every web session the account holds is dropped. A password reset from the
+ * account's inbox is the one way back in, which is the same door every account has.
+ *
+ * ONLY an account nobody has ever signed in to. lastActivityAt is written by every completed
+ * login (completeLogin -> touchUserActivity), so null means the seed made it and nobody used it.
+ * That is also what keeps this from firing twice: a reset-and-sign-in sets the timestamp and the
+ * seed leaves the account alone from then on. An admin somebody HAS used is their credential,
+ * not the seed's, and is reported in the log rather than touched. */
+const LOCKED_PASSWORD_HASH_PREFIX = "0".repeat(128);
+async function lockSeededAdminLogin(admin: { id: number; passwordHash: string; lastActivityAt: Date | null }): Promise<void> {
+  if (admin.passwordHash.startsWith(LOCKED_PASSWORD_HASH_PREFIX)) return;
+  if (admin.lastActivityAt) {
+    console.log(`Seeded admin (user ${admin.id}) has been signed in to and keeps its own credentials.`);
+    return;
+  }
+  const salt = randomBytes(16).toString("hex");
+  await db.update(users).set({ passwordHash: `${LOCKED_PASSWORD_HASH_PREFIX}.${salt}` }).where(eq(users.id, admin.id));
+  await db.execute(sql`DELETE FROM "session" WHERE (sess->'passport'->>'user')::int = ${admin.id}`);
+  await db.delete(userSessions).where(eq(userSessions.userId, admin.id));
+  console.log(`Locked the seeded admin's login (user ${admin.id}): no password matches it and its sessions are gone.`);
+}
 
 async function removeSeededDemoAccounts(): Promise<void> {
   for (const email of RETIRED_DEMO_ACCOUNT_EMAILS) {
@@ -196,18 +201,6 @@ async function removeSeededDemoAccounts(): Promise<void> {
     if (!user) continue;
     await storage.deleteUserRecord(user.id);
     console.log(`Removed seeded demo account ${email} (user ${user.id}) and everything that hung off it.`);
-  }
-  // The audit accounts are logged by id only: the addresses are plus-tags on a real inbox, and
-  // the deploy log is not a place for an email.
-  for (const email of RETIRED_AUDIT_ACCOUNT_EMAILS) {
-    const user = await storage.getUserByEmail(email);
-    if (!user) continue;
-    // Only the accounts the audit made. An account signed up under one of these addresses AFTER
-    // the purge is a new account (the next audit pass will want the same tags), and a list that
-    // deleted it on every boot would be a trap nobody could see from the signup screen.
-    if (user.createdAt && new Date(user.createdAt) > AUDIT_ACCOUNTS_PURGED_AT) continue;
-    await storage.deleteUserRecord(user.id);
-    console.log(`Removed launch-audit account (user ${user.id}, ${user.role}) and everything that hung off it.`);
   }
 }
 
@@ -5292,6 +5285,7 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   // not on their checklist, nothing reads it, and the upload route would refuse the same kind
   // from a real coach. What each account needs is its OWN required documents.
   await removeSeededDemoAccounts();
+  await lockSeededAdminLogin(demoAdmin);
   await retireSeededTestProgram();
   await logAccountInventory();
 
