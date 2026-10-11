@@ -4452,6 +4452,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // THE BILLING PANEL READS BY ID, BECAUSE AN ADMIN IS NEVER SHOWN AN ATHLETE'S EMAIL.
+  // Found 2026-10-11, the first time an admin tried to assign a Free Agent tier after launch:
+  // the panel on More -> Users looked the account up through the email route above, the
+  // Users page withholds every athlete's email on purpose (admin-identity.ts), so the lookup
+  // was sent an empty address, got a 400, and the panel rendered NOTHING -- no tier could be
+  // assigned to any athlete, silently. The page already resolved the account by id to draw the
+  // row, so the billing fields are read by that id here. No identity rides along: this returns
+  // exactly what the email lookup returns and nothing a person could be recognised by, and it
+  // resolves nothing an admin did not already have, so it leaves no access-log row. The email
+  // route stays for the support case it was written for (an address somebody was GIVEN).
+  app.get("/api/admin/athletes/:id/billing", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
+    const athlete = await storage.getUser(id);
+    if (!athlete || athlete.role !== "athlete") {
+      return res.status(404).json({ message: "No athlete with that id" });
+    }
+    res.json({
+      id: athlete.id,
+      freeAgentTier: athlete.freeAgentTier,
+      freeAgentAddOns: athlete.freeAgentAddOns ?? [],
+      isBetaAccount: athlete.isBetaAccount,
+      hasVideoStorageAddOn: athlete.hasVideoStorageAddOn,
+      unlockedSkillSports: athlete.unlockedSkillSports ?? [],
+    });
+  });
+
   // Which SPORTS taxonomy entries have any real Skill Bank drill content --
   // the admin billing tool uses this to keep from unlocking (and someday
   // selling) a sport with nothing behind it. See

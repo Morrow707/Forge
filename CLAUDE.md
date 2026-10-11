@@ -2675,6 +2675,19 @@ branch through the real login route and the real email.
   run found a real bug: a coach WITHOUT Full Personalization saving only the gated branding fields
   arrived at `updateCoachBranding` with an empty patch, drizzle threw "No values to set" past the
   route, and the request hung. An empty patch is a read now (`branding-page.itest.ts`).
+- **NO FREE AGENT TIER COULD BE ASSIGNED BY AN ADMIN, AND THE FIRST ATTEMPT AFTER LAUNCH FOUND
+  IT** (2026-10-11). Scott, on More -> Users with the App Review athlete expanded: "This is all I
+  see" -- Reset MFA and Change role, no billing panel. `AdminBillingAssignment`'s athlete form
+  looked the account up through `GET /api/admin/athletes/lookup?email=`, and the Users page
+  withholds every athlete's email from admins on purpose (`admin-identity.ts`, "identity withheld
+  from admins" is the anonymity rule, not an age flag), so the form was handed "", the route
+  answered 400, and `if (!data) return null` made the whole panel vanish without a word. The coach
+  form never had the problem because a coach's email is shown. The read is by id now
+  (`GET /api/admin/athletes/:id/billing`, the same id the page used to draw the row, returning the
+  billing fields and nothing a person could be recognised by, so no access-log row); the email
+  lookup stays for the support case it was written for.
+  `admin-assigns-a-free-agent-tier-without-an-email.itest.ts` reads, assigns and reads back, and
+  scans the panel so it can never be pointed back at the email route. Client change: `verify_build`.
 - **NINETEEN EMAILS RENDERED AT PHONE WIDTH, NONE OVERFLOW** (2026-10-11). The 10-09 read covered
   the words; nobody had drawn them at 390px. Method, reusable: run the integration suite with a
   setup file that wraps `testOutbox.push` and writes every captured body to disk (the suite sends

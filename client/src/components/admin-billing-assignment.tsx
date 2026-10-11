@@ -188,12 +188,16 @@ function CoachBillingForm({ userId, email }: { userId: number; email: string }) 
   );
 }
 
-function AthleteBillingForm({ userId, email }: { userId: number; email: string }) {
+// Read by ID, never by email: the Users page withholds every athlete's email from admins on
+// purpose, so the email lookup this form used until 2026-10-11 was handed "" for every athlete,
+// got a 400, and the whole panel rendered nothing -- no Free Agent tier could be assigned to
+// anybody. The `email` prop is kept so the call site's shape is unchanged; it is not read.
+function AthleteBillingForm({ userId }: { userId: number; email: string }) {
   const qc = useQueryClient();
-  const lookupKey = [`/api/admin/athletes/lookup`, email];
+  const lookupKey = [`/api/admin/athletes`, userId, "billing"];
   const { data, isLoading } = useQuery<AthleteBilling>({
     queryKey: lookupKey,
-    queryFn: () => getJson(`/api/admin/athletes/lookup?email=${encodeURIComponent(email)}`),
+    queryFn: () => getJson(`/api/admin/athletes/${userId}/billing`),
   });
   // Only sports with real drill content behind them -- unlocking (and one day
   // selling) a sport with nothing in it is the mistake this route exists to stop.
