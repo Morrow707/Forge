@@ -172,13 +172,12 @@ once if you want row B5 exactly as written; the self-signup path exercises the s
 
 ## Two things to do once the eight exist
 
-**Confirm the device gate covers them and exempts only the demo accounts.** Sign in to one of the
-eight from a second browser: the email should name the device and location, carry **one** button
-to a review page, and the page has the two choices. Then confirm `coach@forge.app`,
-`athlete@forge.app` and `freeagent@forge.app` — and *only* those three — skip it. They are exempt
-in code (`DEMO_ACCOUNT_EMAILS` in `server/device-trust-policy.ts`), never by an environment
-variable; that was moved into code on 2026-10-21 after the variable was never set and locked
-Scott out of all three.
+**Confirm the device gate covers them.** Sign in to one of the eight from a second browser: the
+email should name the device and location, carry **one** button to a review page, and the page has
+the two choices. Nobody is exempt in code any more: the three seeded demo accounts that were
+(`coach@forge.app`, `athlete@forge.app`, `freeagent@forge.app`) were retired and deleted on
+2026-10-11, and `DEMO_ACCOUNT_EMAILS` is an empty list; only `DEVICE_VERIFICATION_EXEMPT_EMAILS`
+on Render can exempt an address now.
 
 **Do the Terms re-acceptance row (B9) last, and warn every tester first.** Editing the live
 agreement re-asks the whole platform, every adult meets a non-dismissable dialog once, and putting

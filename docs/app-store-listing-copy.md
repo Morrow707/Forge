@@ -206,10 +206,14 @@ build can show.
 > push notifications, and keeps every logged set and video in an on-device queue that uploads
 > when the network returns.
 >
-> DEMO ACCOUNTS (device verification is disabled for these three):
-> Coach: coach@forge.app / <password>
-> Athlete: athlete@forge.app / <password>
-> Free Agent: freeagent@forge.app / <password>
+> DEMO ACCOUNTS: <a coach login and an athlete login on accounts Scott creates for the review,
+> with DEVICE_VERIFICATION_EXEMPT_EMAILS on Render naming both addresses so the reviewer never
+> meets the new-device email>
+>
+> (The three seeded demo accounts that used to be listed here -- coach@, athlete@ and
+> freeagent@forge.app -- were retired and deleted on 2026-10-11. If a review is open when this
+> note is read, the accounts named in App Store Connect must be replaced before the reviewer
+> signs in.)
 >
 > THE CAMERA needs a real person lifting a real bar in frame. It will not produce a measurement
 > from a desk. A 60-second demo video of a tracked set is at <link>. Every number the camera

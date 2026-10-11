@@ -33,8 +33,6 @@ import { PRIVACY_POLICY_DRAFT, EULA_DRAFT, nextEula, nextParentalNotice, nextPri
 import { nextSignupAgreement, UNCONFIGURED_FALLBACK, patchLiveDocuments, HEALTHCARE_NOTICE_MARKER } from "./seed-data/signup-agreement";
 import { nextBiometricRelease } from "./seed-data/biometric-release";
 import { notifyGuardiansOfTermsChange } from "./terms-change-notice";
-import { DEMO_ACCOUNT_EMAILS } from "./device-trust-policy";
-import { coreAgreementText } from "./seed-data/signup-agreement";
 import { ASSUMPTION_OF_RISK_RELEASE, nextAssumptionOfRisk } from "./seed-data/assumption-of-risk";
 import { REQUIRED_DOCUMENTS, documentAudienceFor } from "@shared/required-documents";
 import { AI_TERMS_OF_USE, nextAiTermsOfUse } from "./seed-data/ai-terms-of-use-draft";
@@ -106,169 +104,54 @@ function demoPassword(publishedPassword: string): string {
   return process.env.NODE_ENV === "production" ? crypto.randomUUID() : publishedPassword;
 }
 
-/** THE REVIEW DEMO ACCOUNTS SIGN IN WITH THE PASSWORD ON RENDER.
+/** THE SEEDED DEMO ACCOUNTS ARE GONE, AND THIS IS WHAT REMOVES THEM FROM AN ENVIRONMENT THAT
+ * STILL HAS THEM.
  *
- * In production demoPassword() gives the three demo accounts a random password nobody holds,
- * and their @forge.app addresses deliver nowhere, so a reset is impossible too. That is the
- * right default for a seed. It also means an App Store reviewer could not sign in to any of
- * them. DEMO_ACCOUNT_PASSWORD on Render is the one password all three use while a review is
- * open: set it before submitting, hand it to Apple in the review notes, unset it after approval
- * and the next deploy puts a random one back. Only DEMO_ACCOUNT_EMAILS; no real account is ever
- * touched by this. Re-applied on every boot so a changed value takes effect. */
-async function applyDemoAccountPassword(): Promise<void> {
-  const configured = (process.env.DEMO_ACCOUNT_PASSWORD ?? "").trim();
-  if (!configured) return;
-  const passwordHash = await hashPassword(configured);
-  for (const email of DEMO_ACCOUNT_EMAILS) {
-    const user = await storage.getUserByEmail(email);
-    if (!user) continue;
-    await db.update(users).set({ passwordHash }).where(eq(users.id, user.id));
-  }
-  console.log("Demo accounts set to DEMO_ACCOUNT_PASSWORD for App Review.");
-}
+ * Scott, 2026-10-11: "scrub every data point that has ever existed for the beta accounts,
+ * especially Jordan athlete, he was 18 where I'm 36." The three review accounts (coach@,
+ * athlete@, freeagent@forge.app) and the five @example.com roster athletes carried fake testing
+ * numbers -- an 18-year-old's squat beside a real 36-year-old's, a roster of five invented
+ * teammates -- and every cohort, norm and leaderboard on the platform would have counted them.
+ * The seed no longer creates any of them; this deletes the ones an environment already holds,
+ * through the same cascade and file cleanup an account's own deletion takes (deleteUserRecord),
+ * so nothing of theirs outlives the row. Runs on every boot and finds nothing after the first.
+ *
+ * ORDER MATTERS: this runs at the END of the seed, after the exercise-library and flagship-program
+ * handoffs above have moved everything Forge-official off the demo coach. exercises.coachId and
+ * programs.coachId cascade from users, so deleting the coach first would take the library with it
+ * on any environment where the handoff had not yet run. */
+const RETIRED_DEMO_ACCOUNT_EMAILS = [
+  "coach@forge.app",
+  "athlete@forge.app",
+  "freeagent@forge.app",
+  "maya.chen@example.com",
+  "tyler.brooks@example.com",
+  "ava.thompson@example.com",
+  "marcus.webb@example.com",
+  "sofia.ramirez@example.com",
+] as const;
 
-async function keepDemoAccountsOnCurrentTerms(): Promise<void> {
-  const live = await storage.getLegalAgreement();
-  for (const email of DEMO_ACCOUNT_EMAILS) {
+async function removeSeededDemoAccounts(): Promise<void> {
+  for (const email of RETIRED_DEMO_ACCOUNT_EMAILS) {
     const user = await storage.getUserByEmail(email);
     if (!user) continue;
-    if (coreAgreementText(user.agreedToTermsText ?? "") === coreAgreementText(live)) continue;
-    await db.update(users).set({ agreedToTermsText: live, agreedToTermsAt: new Date() }).where(eq(users.id, user.id));
-    console.log(`Demo account ${email} kept on the current Terms of Use.`);
+    await storage.deleteUserRecord(user.id);
+    console.log(`Removed seeded demo account ${email} (user ${user.id}) and everything that hung off it.`);
   }
 }
 
 async function main() {
   console.log("Seeding Forge demo data...");
 
-  let coach = await storage.getUserByEmail("coach@forge.app");
-  if (!coach) {
-    coach = await storage.createUser({
-      email: "coach@forge.app",
-      passwordHash: await hashPassword(demoPassword("coach123")),
-      name: "Coach Riley",
-      role: "coach",
-    });
-  }
+  // The three review accounts and the five seeded roster athletes are RETIRED (2026-10-11):
+  // looked up here only so an environment that still has them can run the handoffs below one
+  // last time before removeSeededDemoAccounts() deletes them at the end of this run. Nothing is
+  // created, linked or backfilled for them any more. On every later boot all three are null and
+  // every block that reads them is skipped.
+  const coach = await storage.getUserByEmail("coach@forge.app");
+  const athlete = await storage.getUserByEmail("athlete@forge.app");
+  const freeAgent = await storage.getUserByEmail("freeagent@forge.app");
 
-  let athlete = await storage.getUserByEmail("athlete@forge.app");
-  if (!athlete) {
-    athlete = await storage.createUser({
-      email: "athlete@forge.app",
-      passwordHash: await hashPassword(demoPassword("athlete123")),
-      name: "Jordan Athlete",
-      role: "athlete",
-      // Adult. Without a date of birth the athlete gate refuses every request, so the demo
-      // login printed on the login page could not be used at all (runtime audit 2026-09-19).
-      dateOfBirth: "2001-03-15",
-    });
-  } else if (!athlete.dateOfBirth) {
-    await db.update(users).set({ dateOfBirth: "2001-03-15" }).where(eq(users.id, athlete.id));
-  }
-
-  await storage.linkAthleteToCoach(coach.id, athlete.id);
-
-  // Backfill sport/position for the demo athlete if missing -- only fires
-  // once (guarded on the field itself, not account creation) so a coach who
-  // later edits Jordan's real profile never gets overwritten by a future
-  // deploy's seed run.
-  if (!athlete.sport || !athlete.position) {
-    athlete = await storage.updateUserProfile(athlete.id, {
-      sport: athlete.sport ?? "Football",
-      position: athlete.position ?? "Running Back",
-    });
-  }
-
-  // Five more roster athletes for Coach Riley so there's a real roster to
-  // test filtering/search/multi-athlete views against, not just one demo
-  // athlete. Deliberately @example.com (not @forge.app) so these don't read
-  // as official shareable demo logins, and each password is a random UUID
-  // that's never logged or surfaced anywhere -- these accounts exist purely
-  // to populate the roster, not to be signed into.
-  const extraAthletes: Array<{
-    email: string;
-    name: string;
-    sport: string;
-    position: string;
-    gender: "male" | "female";
-    age: number;
-    heightIn: number;
-    bodyWeightLbs: number;
-  }> = [
-    {
-      email: "maya.chen@example.com",
-      name: "Maya Chen",
-      sport: "Soccer",
-      position: "Midfielder",
-      gender: "female",
-      age: 20,
-      heightIn: 65,
-      bodyWeightLbs: 138,
-    },
-    {
-      email: "tyler.brooks@example.com",
-      name: "Tyler Brooks",
-      sport: "Football",
-      position: "Linebacker",
-      gender: "male",
-      age: 21,
-      heightIn: 73,
-      bodyWeightLbs: 232,
-    },
-    {
-      email: "ava.thompson@example.com",
-      name: "Ava Thompson",
-      sport: "Track & Field",
-      position: "Sprinter",
-      gender: "female",
-      age: 19,
-      heightIn: 67,
-      bodyWeightLbs: 132,
-    },
-    {
-      email: "marcus.webb@example.com",
-      name: "Marcus Webb",
-      sport: "Basketball",
-      position: "Forward",
-      gender: "male",
-      age: 22,
-      heightIn: 79,
-      bodyWeightLbs: 218,
-    },
-    {
-      email: "sofia.ramirez@example.com",
-      name: "Sofia Ramirez",
-      sport: "Volleyball",
-      position: "Outside Hitter",
-      gender: "female",
-      age: 20,
-      heightIn: 70,
-      bodyWeightLbs: 155,
-    },
-  ];
-  for (const a of extraAthletes) {
-    let extraAthlete = await storage.getUserByEmail(a.email);
-    if (!extraAthlete) {
-      extraAthlete = await storage.createUser({
-        email: a.email,
-        passwordHash: await hashPassword(crypto.randomUUID()),
-        name: a.name,
-        role: "athlete",
-        sport: a.sport,
-        position: a.position,
-        gender: a.gender,
-        age: a.age,
-        heightIn: a.heightIn,
-        bodyWeightLbs: a.bodyWeightLbs,
-      });
-    }
-    await storage.linkAthleteToCoach(coach.id, extraAthlete.id);
-  }
-
-  // A pure admin account, shareable the same way the coach/athlete demo
-  // logins are -- Forge library curation, plus the same personal
-  // calendar/training/AI-program-chat features every admin account gets
-  // (no roster access, though -- that stays coach-only).
   let demoAdmin = await storage.getUserByEmail("admin@forge.app");
   if (!demoAdmin) {
     demoAdmin = await storage.createUser({
@@ -279,25 +162,15 @@ async function main() {
     });
   }
 
-  // A demo Free Agent: a normal athlete account, deliberately never linked
-  // to a coach (no linkAthleteToCoach call below, unlike the athlete demo
-  // account above) -- Free Agent status is purely derived from having zero
-  // coachAthletes rows, not a stored flag, so simply not linking one is the
-  // whole setup. Same sport as the demo athlete/coach's roster for a
-  // consistent demo story.
-  let freeAgent = await storage.getUserByEmail("freeagent@forge.app");
-  if (!freeAgent) {
-    freeAgent = await storage.createUser({
-      email: "freeagent@forge.app",
-      passwordHash: await hashPassword(demoPassword("freeagent123")),
-      name: "Morgan Freeagent",
-      role: "athlete",
-      sport: "Basketball",
-      dateOfBirth: "1999-08-22",
-    });
-  } else if (!freeAgent.dateOfBirth) {
-    await db.update(users).set({ dateOfBirth: "1999-08-22" }).where(eq(users.id, freeAgent.id));
+  // The Forge identity that owns every Forge-official exercise and program: Scott's real account
+  // once it exists, else the admin above. Library content is created under it DIRECTLY now --
+  // it used to be created under the demo coach and handed over on the next boot, and with the
+  // demo coach gone a fresh environment has nobody else to own it.
+  const scott = await storage.getUserByEmail("scott.morrow@live.com");
+  if (scott && scott.role !== "admin") {
+    await storage.setUserRole(scott.id, "admin");
   }
+  const libraryOwner = scott ?? demoAdmin;
 
   // Looked up system-wide (not scoped to this coach) since an exercise's
   // owner can change after seeding -- e.g. once transferred to the admin as
@@ -2230,7 +2103,7 @@ async function main() {
     ];
     for (const ex of seedExercises) {
       if (existingExerciseNames.has(ex.name)) continue;
-      const row = await storage.createExercise(coach.id, {
+      const row = await storage.createExercise(libraryOwner.id, {
         ...ex,
         videoUrl: videoSearchUrl(ex.name),
       });
@@ -2760,7 +2633,7 @@ async function main() {
     ];
     for (const ex of combinationExercises) {
       if (existingExerciseNames.has(ex.name)) continue;
-      const row = await storage.createExercise(coach.id, {
+      const row = await storage.createExercise(libraryOwner.id, {
         ...ex,
         videoUrl: videoSearchUrl(ex.name),
       });
@@ -2981,7 +2854,7 @@ async function main() {
     ];
     for (const ex of expansionExercises) {
       if (existingExerciseNames.has(ex.name)) continue;
-      const row = await storage.createExercise(coach.id, {
+      const row = await storage.createExercise(libraryOwner.id, {
         ...ex,
         videoUrl: videoSearchUrl(ex.name),
       });
@@ -3167,10 +3040,6 @@ async function main() {
   // set (shared with every coach, editable only by the admin) instead of
   // living under the demo coach account. Fully idempotent -- both steps
   // no-op on every subsequent deploy once already applied.
-  const scott = await storage.getUserByEmail("scott.morrow@live.com");
-  if (scott && scott.role !== "admin") {
-    await storage.setUserRole(scott.id, "admin");
-  }
   // scott ?? demoAdmin, the same Forge identity the skill bank, the classes
   // and the flagship program all fall back to. The handoff used to run only
   // when scott's account existed, which left every other environment with
@@ -3180,9 +3049,9 @@ async function main() {
   // an empty picker in their own program builder, and a 404 from every
   // /api/athlete/exercises/:id, while still being shown the Forge-official
   // PROGRAMS that the fallback at the bottom of this file did hand over.
-  const exerciseLibraryOwner = scott ?? demoAdmin;
-  if (exerciseLibraryOwner) {
-    await storage.transferExerciseOwnership(coach.id, exerciseLibraryOwner.id);
+  // Last handoff from an environment that still has the demo coach; a no-op everywhere else.
+  if (coach) {
+    await storage.transferExerciseOwnership(coach.id, libraryOwner.id);
   }
 
   // Skills system: seed the Forge official Skill Bank with real
@@ -4633,7 +4502,7 @@ async function main() {
   // to click/read/quiz through all 8 chapters first. Idempotent (see
   // grantFullClassAccessToAthlete) -- re-running this seed never resets an
   // athlete's real progress, it just tops up anything not yet active.
-  if (americanHittingClassId != null) {
+  if (americanHittingClassId != null && freeAgent) {
     await storage.grantFullClassAccessToAthlete(freeAgent.id, americanHittingClassId);
   }
 
@@ -4701,7 +4570,7 @@ async function main() {
   );
   let program;
   if (!demoProgramExists) {
-    program = await storage.createProgramWithStructure(coach.id, {
+    program = await storage.createProgramWithStructure(libraryOwner.id, {
       name: "Forge Strength Block",
       description: "4-day full body strength & conditioning program.",
       blocks: [],
@@ -4872,6 +4741,9 @@ async function main() {
       ],
     });
 
+    // Demo assignment and Jordan's logged week: only while an environment still has the demo pair
+    // (removed at the end of this run, never created again).
+    if (coach && athlete) {
     const startDate = new Date().toISOString().slice(0, 10);
 
     const { created } = await storage.createAssignment(
@@ -4943,6 +4815,7 @@ async function main() {
         ],
       });
     }
+    }
   }
 
   // One-time production fixup, same idempotent post-hoc pattern as the
@@ -4951,7 +4824,7 @@ async function main() {
   // make sure the flagship program and a full-coverage test program are
   // both owned by it under the right name. Runs on every deploy forever;
   // each half no-ops once it's already been applied.
-  const forgeIdentity = scott ?? demoAdmin;
+  const forgeIdentity = libraryOwner;
   if (forgeIdentity) {
     const strengthBlock = await db.query.programs.findFirst({
       where: eq(programs.name, "Forge Strength Block"),
@@ -5127,22 +5000,24 @@ async function main() {
       // Assigned by the demo coach (not the Forge identity, which has no
       // roster) so it shows up as a real assignment on the demo athlete,
       // exactly like a coach assigning a Forge-official program in practice.
-      const { created: testCreated } = await storage.createAssignment(
-        coach.id,
-        testProgram.id,
-        [{ athleteId: athlete.id, correctivesEnabled: true }],
-        testStartDate,
-        testDateOverrides,
-      );
+      if (coach && athlete) {
+        const { created: testCreated } = await storage.createAssignment(
+          coach.id,
+          testProgram.id,
+          [{ athleteId: athlete.id, correctivesEnabled: true }],
+          testStartDate,
+          testDateOverrides,
+        );
 
-      if (correctiveDay) {
-        await storage.updateCorrectivesForAssignmentDay(testCreated[0].id, correctiveDay.id, {
-          correctives: [
-            { exerciseId: testExerciseId("Ankle Dorsiflexion Mobilization"), orderIndex: 0, sets: 2, reps: "10/side", weight: null },
-            { exerciseId: testExerciseId("World's Greatest Stretch"), orderIndex: 1, sets: 2, reps: "6/side", weight: null },
-            { exerciseId: testExerciseId("Band External Rotation"), orderIndex: 2, sets: 2, reps: "15/side", weight: null },
-          ],
-        }, coach.id);
+        if (correctiveDay) {
+          await storage.updateCorrectivesForAssignmentDay(testCreated[0].id, correctiveDay.id, {
+            correctives: [
+              { exerciseId: testExerciseId("Ankle Dorsiflexion Mobilization"), orderIndex: 0, sets: 2, reps: "10/side", weight: null },
+              { exerciseId: testExerciseId("World's Greatest Stretch"), orderIndex: 1, sets: 2, reps: "6/side", weight: null },
+              { exerciseId: testExerciseId("Band External Rotation"), orderIndex: 2, sets: 2, reps: "15/side", weight: null },
+            ],
+          }, coach.id);
+        }
       }
 
       console.log(`Created "Test Program" (id ${testProgram.id}), owned by Forge identity ${forgeIdentity.id}.`);
@@ -5453,16 +5328,6 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   // a minor cannot answer at all, so their guardian is emailed once. See
   // server/terms-change-notice.ts for why the mark lives on the athlete's row. Best effort and
   // never allowed to fail the deploy -- a seed that dies here leaves the rest of it unrun.
-  // THE REVIEW DEMO ACCOUNTS NEVER MEET THE TERMS DIALOG. Every real account re-accepts a
-  // changed Terms of Use once (CLAUDE.md, "A changed Terms of Use is accepted again"), and that
-  // is correct for a person. The three seeded demo accounts are what an App Store reviewer
-  // signs in with, and a reviewer whose first screen is a non-dismissable legal dialog files
-  // the app as broken. Their snapshot is kept on the live text here, after the agreement above
-  // has been applied, so the gate they would otherwise meet is already satisfied. Only these
-  // three (DEMO_ACCOUNT_EMAILS, the same list the device-verification exemption uses); no real
-  // account is ever accepted on anyone's behalf.
-  await keepDemoAccountsOnCurrentTerms();
-  await applyDemoAccountPassword();
 
   if (agreement !== null && existingAgreement !== UNCONFIGURED_FALLBACK) {
     try {
@@ -5585,43 +5450,9 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   // certification and CPR. Filing a medical clearance against a coach would be invisible: it is
   // not on their checklist, nothing reads it, and the upload route would refuse the same kind
   // from a real coach. What each account needs is its OWN required documents.
-  for (const demo of [
-    { user: athlete, role: "athlete", hasCoach: true },
-    { user: freeAgent, role: "athlete", hasCoach: false },
-    { user: coach, role: "coach", hasCoach: false },
-  ]) {
-    const summary = await storage.externalWaiverSummary(demo.user.id);
-    const onFile = new Set(
-      summary.filter((line) => line.status === "accepted").map((line) => line.kind),
-    );
-    const audience = documentAudienceFor({ role: demo.role, hasCoach: demo.hasCoach });
-    for (const doc of REQUIRED_DOCUMENTS[audience]) {
-      if (!doc.required || onFile.has(doc.kind)) continue;
-      await storage.createExternalWaiver({
-        athleteId: demo.user.id,
-        uploadedByUserId: demo.user.id,
-        kind: doc.kind,
-        // No file is written: nothing reads it for a seeded row, and inventing a PDF that
-        // claims to be a physician's clearance is the one thing this must not do.
-        fileUrl: "seed://demo-account-placeholder",
-        issuingOrganization: "Forge demo data -- not a real document",
-        reviewStatus: "accepted",
-        reviewSource: "seed_demo_account",
-        reviewNote: "Seeded so the demo accounts are not blocked by the document gate.",
-      });
-    }
-  }
+  await removeSeededDemoAccounts();
 
   console.log("Seed complete.");
-  // The published passwords below are only real in dev -- see demoPassword's own comment.
-  // Printing them in a production log would be misleading (they're random there, not these
-  // literals) without being useful (nobody's meant to actually use these accounts in prod).
-  if (process.env.NODE_ENV !== "production") {
-    console.log("Coach login: coach@forge.app / coach123");
-    console.log("Athlete login: athlete@forge.app / athlete123");
-    console.log("Free Agent login: freeagent@forge.app / freeagent123");
-  }
-  console.log(`Coach code: ${coach.coachCode}`);
   process.exit(0);
 }
 

@@ -76,11 +76,13 @@ export function isMfaEnforcementDisabled(): boolean {
  * exact address -- a real user cannot land in it by accident. The env var still works and still
  * ADDS to this list, so an operator can exempt something else without a deploy.
  */
-export const DEMO_ACCOUNT_EMAILS = [
-  "coach@forge.app",
-  "athlete@forge.app",
-  "freeagent@forge.app",
-] as const;
+export const DEMO_ACCOUNT_EMAILS: readonly string[] = [
+  // EMPTY since 2026-10-11. The three review accounts are retired and deleted by the seed
+  // (server/seed.ts, removeSeededDemoAccounts); every account on the platform meets the
+  // new-device email now, and only DEVICE_VERIFICATION_EXEMPT_EMAILS can exempt one. The list
+  // stays so the comment above keeps its meaning: an entry here is a fact about the software,
+  // and there is no such fact any more.
+];
 
 /**
  * A TEMPORARY OPERATOR EXEMPTION, AND IT IS NOT THE SAME THING AS THE LIST ABOVE.

@@ -113,13 +113,6 @@ services:
         sync: false
       - key: DEVICE_VERIFICATION_EXEMPT_EMAILS
         sync: false
-      #   DEMO_ACCOUNT_PASSWORD: the one password the three seeded demo accounts
-      #   (coach@, athlete@, freeagent@forge.app) sign in with while an App Store
-      #   review is open. Unset, the seed gives them a random password nobody holds.
-      #   Set it before submitting, put it in the review notes, unset it after
-      #   approval. server/seed.ts applyDemoAccountPassword.
-      - key: DEMO_ACCOUNT_PASSWORD
-        sync: false
       # THE TWO SWITCHES THAT DECIDE WHETHER ANYONE CAN BE CHARGED.
       # Both absent, both therefore off. Declared here as sync:false rather
       # than left undeclared so that "can Forge take money right now" is a

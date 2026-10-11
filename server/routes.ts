@@ -892,14 +892,11 @@ const testingUnlockAllPaywalls = process.env.PAYWALLS_DISABLED === "true";
 // purely a route-gating concept, not stored data.
 type AiEntitlement = "strengthAi" | "skillsAi" | "video";
 
-// The seeded demo Free Agent account (see server/seed.ts) is the one
-// deliberate exception to the paywalls below -- it's used for demoing/
-// testing the full Free Agent AI experience without real billing existing
-// yet, so it's treated as permanently "paid" for all three entitlements. No
-// other account gets this.
-const COMPED_FREE_AGENT_ENTITLEMENTS: Record<string, Set<AiEntitlement>> = {
-  "freeagent@forge.app": new Set(["strengthAi", "skillsAi", "video"]),
-};
+// EMPTY since 2026-10-11: the seeded demo Free Agent that used to sit here is retired (Scott:
+// "scrub every data point that has ever existed for the beta accounts"), and no real account is
+// comped by address. The mechanism stays -- an entry is an address with every entitlement switched
+// on regardless of what it holds, which is why the list is empty and adding to it is a decision.
+const COMPED_FREE_AGENT_ENTITLEMENTS: Record<string, Set<AiEntitlement>> = {};
 
 // The future paywall requireFreeAgent's own comment anticipates: nothing
 // sets either entitlement true yet (no billing exists), so every route
@@ -1218,11 +1215,6 @@ async function requireFreeAgentAddOn(req: any, res: any, next: any) {
   next();
 }
 
-// Same demo/testing exception as COMPED_FREE_AGENT_ENTITLEMENTS above, for
-// per-lesson Class purchases -- no real billing exists yet, so this account
-// is the only way to ever actually reach a "purchased" lesson end to end.
-const COMPED_FREE_AGENT_LESSON_BUYER = "freeagent@forge.app";
-
 // Same demo/testing exception as the two stubs above -- a comped coach here
 // is a way (besides being an admin, or running a roster big enough to be
 // comped for real) to reach the unlocked Coaches Corner experience end to
@@ -1239,7 +1231,10 @@ const COMPED_COACHES_CORNER_COACHES = new Set<string>([]);
  * (users.freeAgentAddOns / users.billingAddOns, written by the Apple and Stripe paths). The
  * camera comp on the Free Agent (COMPED_FREE_AGENT_ENTITLEMENTS) is untouched: App Review needs
  * to reach the camera without buying. */
-const DEMO_ACCOUNTS_ALWAYS_SOLD_TO = new Set(["freeagent@forge.app", "coach@forge.app"]);
+// EMPTY since 2026-10-11: both demo accounts are retired and deleted (see server/seed.ts,
+// removeSeededDemoAccounts). The rule above is kept as written because it is the history of why
+// the wall could not be reached in sandbox; the set it names holds nobody now.
+const DEMO_ACCOUNTS_ALWAYS_SOLD_TO = new Set<string>([]);
 
 // Coaches Corner (coach education) paywall. Every route below reads through
 // this, never a role check of its own. Admins bypass since they're the ones
@@ -13434,7 +13429,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = currentUser(req);
       const id = Number(req.params.id);
       const lessonId = Number(req.params.lessonId);
-      if (!testingUnlockAllPaywalls && user.email !== COMPED_FREE_AGENT_LESSON_BUYER) {
+      // The comped demo buyer that used to pass here is retired (2026-10-11); nothing is sold
+      // per lesson while payments are closed, for anybody.
+      if (!testingUnlockAllPaywalls) {
         return res.status(402).json({
           message: "Lesson purchases aren't live yet, payments are coming soon.",
           freeAgentPaywall: true,

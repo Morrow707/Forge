@@ -2039,8 +2039,10 @@ them will read as an arbitrary constraint to somebody who wasn't here:
 **Three things parked by Scott, 2026-09-20 ("flag those 3 needs, we can do those later"):**
 1. **Smart App Banner: done.** `VITE_APP_STORE_ID` is set on Render (Scott, 2026-10-04); the
    banner is injected from it and shows in Safari once the app is released in the store.
-2. **FAQ on /for-high-schools with FAQPage JSON-LD.** Highest search payoff of the SEO
-   proposals. Questions come from facts in this file (FERPA does not apply; a minor's account is
+2. **FAQ on /for-high-schools with FAQPage JSON-LD: DONE 2026-10-08** (`shared/high-schools-faq.ts`,
+   ten questions, rendered on the page and emitted as the one FAQPage from the same list; confirmed
+   on the live host 2026-10-11). The rest of this entry is the history of what it was meant to be.
+   Highest search payoff of the SEO proposals. Questions come from facts in this file (FERPA does not apply; a minor's account is
    inert until a guardian claims it; where data lives; the four validated movements and the
    caveat; $4 an athlete in bands, not charging in beta; more than one coach per team; what
    deletion keeps). Scott reads the draft before it ships; `shared/structured-data.ts` has the
@@ -2570,11 +2572,27 @@ branch through the real login route and the real email.
   Matching is exact and `server/trusted-devices.test.ts` pins the three against the addresses
   `seed.ts` really creates, so a rename cannot leave a stale literal reading as covered.
   `admin@forge.app` is deliberately NOT exempt -- the admin account is Scott's, on a real inbox.
-  **DECIDED 2026-10-04, to do AFTER App Review approves 1.0** (Scott: "delete them, i will
-  keep using the admin role, so flag for later"): delete the three demo accounts, stop
-  `seed.ts` recreating them (`DEMO_ACCOUNT_PASSWORD` and the seed block go with them), and
-  remove them from `DEMO_ACCOUNT_EMAILS` and the review notes. Not before approval: the
-  reviewer may still be signed in to one.
+  **DONE 2026-10-11, ON SCOTT'S WORD, BEFORE THE APP REVIEW RESULT** (2026-10-04 he had said "delete
+  them, i will keep using the admin role, so flag for later"; 2026-10-11: "Let's do all 4 ... scrub
+  every data point that has ever existed for the beta accounts, especially Jordan athlete, he was
+  18 where I'm 36 and all my numbers I've ever recorded were lower weights at testing numbers
+  only"). The three review accounts AND the five seeded @example.com roster athletes are retired:
+  the seed creates none of them, Forge-official exercises and the flagship program are created
+  under the Forge identity directly (`libraryOwner`, Scott's account or `admin@forge.app`) instead
+  of under the demo coach and handed over later, and `removeSeededDemoAccounts()` at the END of
+  every seed run deletes any of the eight an environment still holds through
+  `storage.deleteUserRecord` -- the same cascade and file cleanup as an account's own deletion,
+  minus the password check, and the only other caller it may ever have. It runs last on purpose:
+  `exercises.coachId` and `programs.coachId` cascade from `users`, so deleting the demo coach
+  before the handoffs would take the library with it. `DEMO_ACCOUNT_EMAILS`,
+  `COMPED_FREE_AGENT_ENTITLEMENTS` and `DEMO_ACCOUNTS_ALWAYS_SOLD_TO` are empty with their
+  mechanisms kept; the per-lesson comped buyer, `DEMO_ACCOUNT_PASSWORD`, the terms-snapshot helper,
+  the login page's dev block and the Jordan test-program script are gone. What the cascade does not
+  reach is rebuilt or swept on its own: cohort norms rebuild nightly and the research mirror's
+  sweep removes an orphan that never consented. **If 1.0 is still in App Review when this deploys,
+  the review notes in App Store Connect name accounts that no longer exist** -- Scott's call,
+  made with that said; the replacement is a real coach and athlete login he creates, with both
+  addresses in `DEVICE_VERIFICATION_EXEMPT_EMAILS`.
   `DEVICE_VERIFICATION_DISABLED=true` is the kill switch for an email-provider outage. With no
   email provider configured at all (a dev box) the gate stands down and says so once.
 - **The test harness pre-trusts its client.** `loginAs` calls `trustClientDevice` first, so the

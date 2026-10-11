@@ -111,27 +111,32 @@ describe("the shape the code has to keep", () => {
  * The three seeded demo accounts have addresses nothing delivers to, so the new-device email is
  * a door with no key for them. This was an env var and one unset variable locked out App Review.
  */
-describe("the demo accounts never meet the new-device email", () => {
+describe("no seeded account is exempt from the new-device email any more", () => {
   const saved = process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS;
   afterEach(() => {
     if (saved === undefined) delete process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS;
     else process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS = saved;
   });
 
-  it("exempts all three with no environment variable set at all", () => {
+  // 2026-10-11: the three review accounts are retired and deleted by the seed, so the in-code
+  // exemption list is EMPTY and the old addresses are ordinary addresses that nobody holds.
+  it("holds nobody in code", () => {
+    expect([...DEMO_ACCOUNT_EMAILS]).toEqual([]);
+  });
+
+  it("no longer exempts the retired addresses with no environment variable set", () => {
     delete process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS;
     for (const email of ["coach@forge.app", "athlete@forge.app", "freeagent@forge.app"]) {
-      expect(isDeviceVerificationExempt(email)).toBe(true);
+      expect(isDeviceVerificationExempt(email)).toBe(false);
     }
   });
 
-  it("matches the addresses the seed actually creates", () => {
-    // If the seed renames an account, the exemption has to move with it -- a stale literal here
-    // would read as covered while locking the real account out.
+  it("and the seed no longer creates them", () => {
     const seed = readFileSync(resolve(__dirname, "seed.ts"), "utf-8");
-    for (const email of DEMO_ACCOUNT_EMAILS) {
-      expect(seed).toContain(`"${email}"`);
+    for (const email of ["coach@forge.app", "athlete@forge.app", "freeagent@forge.app"]) {
+      expect(seed).not.toContain(`email: "${email}"`);
     }
+    expect(seed).toContain("removeSeededDemoAccounts");
   });
 
   it("is exact-match, so no real account falls into it", () => {
@@ -143,7 +148,7 @@ describe("the demo accounts never meet the new-device email", () => {
   it("still adds whatever the environment variable lists", () => {
     process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS = "review@apple.test";
     expect(isDeviceVerificationExempt("review@apple.test")).toBe(true);
-    expect(isDeviceVerificationExempt("coach@forge.app")).toBe(true);
+    expect(isDeviceVerificationExempt("coach@forge.app")).toBe(false);
   });
 });
 

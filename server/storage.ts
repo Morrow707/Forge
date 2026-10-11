@@ -4316,6 +4316,19 @@ export const storage = {
     if (!(await comparePasswords(password, user.passwordHash))) {
       return { error: "Incorrect password." };
     }
+    await this.deleteUserRecord(userId);
+    return { ok: true };
+  },
+
+  /** The deletion itself, with no password check: every file the account owns, the research
+   * retention decision, then the row and everything that cascades from it. deleteOwnAccount is
+   * this behind the account holder's own password; the seed's removal of the retired demo
+   * accounts (server/seed.ts, removeSeededDemoAccounts) is this with no holder to ask. Nothing
+   * else may call it -- an admin route that deletes somebody's account is a decision this repo
+   * has not made. */
+  async deleteUserRecord(userId: number): Promise<void> {
+    const user = await this.getUser(userId);
+    if (!user) return;
 
     if (user.role === "athlete") {
       const [setVideos, skillVideos, commentVideos, skillCommentVideos] = await Promise.all([
@@ -4422,7 +4435,6 @@ export const storage = {
     }
 
     await db.delete(users).where(eq(users.id, userId));
-    return { ok: true };
   },
 
   // Self-service change while already logged in -- the only OTHER way to
