@@ -2770,6 +2770,27 @@ branch through the real login route and the real email.
   gone. `client/src/lib/apple-health-disclosure-reads-first.test.ts` scans every file under
   `client/src` that can reach `Health.requestAuthorization` and requires the constant on each;
   mutation-tested both ways. Client change: `verify_build`.
+- **A GUARDIAN INVITE LINK BOUNCED A SIGNED-IN PARENT TO THEIR OWN DASHBOARD** (2026-10-11, the
+  first under-13 run of the launch audit). Scott, tapping the emailed "set up your account" link on
+  the phone he is signed in on: "it brings me to my admin profile, but when i hover over it it gives
+  me this" -- the mail preview (no session) drew the claim form; the tap (his session) did not.
+  `guardian-claim.tsx` redirected ANY signed-in user to their own home, which is exactly the parent
+  who also has a Forge account -- a coach who signs their own child up, the commonest guardian a
+  school program will produce -- and it said nothing about the invite. The page now shows the
+  invite on the signed-in branch (who it is for, who you are signed in as) with one button, sign
+  out and continue: the logout keeps the URL, so the token survives and the claim form renders in
+  place once the session is gone. The preview query is no longer gated on `!user` (it is public
+  and the card needs the address). `a-guardian-link-opens-while-signed-in.test.ts` scans the page:
+  no redirect, no navigation on that branch, the preview not gated on a session. **`claim.tsx`
+  (an athlete claiming a coach-provisioned account) has the same redirect and is left alone** --
+  a coach-provisioned athlete has no account to be signed in as, so the bounce there is a stray
+  tap, not a parent locked out. Client change: `verify_build`.
+  **Also from this run, both on production with plus-tag accounts:** the device email is proven
+  both ways (approve from Scott's pasted link signed the waiting device in and trusted it; deny
+  from his inbox dropped every session, refused the waiting device and put him on the new-password
+  screen -- "it said everyone was signed out and made me change my password" is the design), and
+  the under-13 signup holds the minor with `guardian_link_required` on the camera route until the
+  guardian claims, which is where this bug was met.
 - **THE VIDEO RETENTION SWEEP RUNS NIGHTLY ON PRODUCTION AND HAS NEVER HAD ANYTHING TO PURGE**
   (2026-10-11, read off the Render log when the launch row was closed). `video-retention-cap-sweep`
   starts 09:00 UTC every day and finishes ok in ~25ms; it logs a line only when it warned or purged

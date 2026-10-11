@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from "react";
-import { Redirect } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -30,7 +29,7 @@ type InvitePreview = { athleteName: string; email: string; accountExists: boolea
  * existing password" for that case. */
 export default function GuardianClaimPage() {
   const token = new URLSearchParams(window.location.search).get("token") ?? "";
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, logoutMutation } = useAuth();
   const qc = useQueryClient();
   const [password, setPassword] = useState("");
   // Three separate boxes, not one. They are three different permissions -- what the guardian is
@@ -48,7 +47,9 @@ export default function GuardianClaimPage() {
   const { data: preview, isLoading: previewLoading, isError: previewError } = useQuery<InvitePreview>({
     queryKey: [`/api/guardian-invites/${token}`],
     queryFn: () => getJson(`/api/guardian-invites/${encodeURIComponent(token)}`),
-    enabled: !isLoading && !user && !!token,
+    // Not gated on `!user`: the preview is public, and the signed-in card below needs the
+    // invite's address to say who the link is for.
+    enabled: !isLoading && !!token,
   });
 
   const claimMutation = useMutation({
@@ -71,8 +72,40 @@ export default function GuardianClaimPage() {
     onError: (err: ApiError) => toast.error(err.message || "Could not set up this account"),
   });
 
+  // A SIGNED-IN PERSON OPENING THIS LINK IS SHOWN THE INVITE, NEVER BOUNCED. This used to
+  // redirect any signed-in user to their own dashboard, which is exactly what a parent who
+  // also has a Forge account meets: a coach who signs their own child up taps the emailed
+  // link on the phone they are signed in on and lands on their coach home with no word about
+  // the invite (Scott, 2026-10-11, signed in as himself: "it brings me to my admin profile").
+  // A guardian account is its own account on the invite's address, so the way forward is to
+  // sign out and claim -- offered here, on the same URL, so the token survives the sign-out
+  // and the form renders in place once the session is gone.
   if (!isLoading && user) {
-    return <Redirect to={user.role === "guardian" ? "/guardian" : "/"} />;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-sm" data-testid="guardian-claim-signed-in">
+          <CardHeader className="items-center text-center">
+            <ForgeMark className="mb-2 h-8 w-8" />
+            <CardTitle>You're signed in as someone else</CardTitle>
+            <CardDescription>
+              {preview
+                ? `This guardian invite for ${preview.athleteName} is for ${preview.email}. You're signed in as ${user.email}.`
+                : `This guardian invite is for a different account. You're signed in as ${user.email}.`}{" "}
+              Sign out and the invite opens right here.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              className="w-full"
+              onClick={() => logoutMutation.mutate()}
+              disabled={logoutMutation.isPending}
+            >
+              {logoutMutation.isPending ? "Signing out..." : "Sign out and set up guardian access"}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   if (!token || (!isLoading && (previewError || (!previewLoading && !preview)))) {
