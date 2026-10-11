@@ -536,6 +536,41 @@ export async function syncCoachSubscriptionBand(
  * this be bought here" are two questions and only the second one belongs in a
  * checkout. Same distinction FREE_AGENT_TIER_ORDER draws against
  * ALL_FREE_AGENT_TIER_IDS. */
+/** CANCEL THE SUBSCRIPTION A NEW PURCHASE HAS JUST REPLACED.
+ *
+ * Called from checkout.session.completed when the row already carried a DIFFERENT Stripe
+ * subscription id. Two live subscriptions on one account means the athlete or the school is
+ * billed twice for one thing, and Forge keeps only the newer id, so nothing downstream can
+ * ever find the older one again -- not a cancellation, not a refund, not an operator reading
+ * the account. The moment to catch it is the moment the replacement arrives.
+ *
+ * `prorate` + `invoice_now` credit the unused remainder of the superseded period straight
+ * away, which is what an upgrade should do and is no worse than right for a downgrade: the
+ * alternative is charging for a month of something the account no longer has.
+ *
+ * BEST-EFFORT, LOGGED BOTH WAYS, and never allowed to throw. The purchase has already
+ * succeeded and the entitlement is already written; losing the event here would roll back
+ * access somebody has paid for, to fix a billing duplicate. So a failure writes an audit row
+ * naming the subscription an operator has to cancel by hand -- the same posture, for the same
+ * reason, as the guardian-verification refund above. */
+async function cancelSupersededStripeSubscription(userId: number, subscriptionId: string) {
+  const stripe = getStripeClient();
+  if (!stripe) return;
+  try {
+    await stripe.subscriptions.cancel(subscriptionId, { prorate: true, invoice_now: true });
+    await storage.logBillingEvent(userId, "stripe.subscription.superseded", { subscriptionId });
+  } catch (err) {
+    console.error(
+      `superseded Stripe subscription ${subscriptionId} (user ${userId}) could not be cancelled and needs a hand:`,
+      err,
+    );
+    await storage.logBillingEvent(userId, "stripe.subscription.supersede_failed", {
+      subscriptionId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 /** The subscription a refunded invoice was for. Lives here rather than in storage.ts because it
  *  needs the Stripe client, and storage.ts must not import this module (the cycle its own
  *  comment warns about). Null whenever it cannot be established, which makes the refund a no-op
@@ -970,19 +1005,95 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
         kind === "free_agent_tier" && session.metadata?.tier && session.metadata.tier in FREE_AGENT_TIERS
           ? (session.metadata.tier as FreeAgentTierId)
           : null;
-      await storage.updateSubscriptionByUserId(userId, {
-        stripeCustomerId: customerId,
-        stripeSubscriptionId: session.subscription,
-        status: "active",
-        ...(purchasedFreeAgentTier
-          ? {
-              accountType: "free_agent" as const,
-              tier: entitlementTierForFreeAgentTier(purchasedFreeAgentTier),
-            }
-          : {}),
-      });
+
+      // WHAT THIS PURCHASE REPLACES, READ BEFORE IT IS OVERWRITTEN.
+      //
+      // subscriptions.userId is UNIQUE, so one account has at most one row and that row holds
+      // the TIER's (or the band's) Stripe subscription -- an add-on's id lives in
+      // users.addOnTerms and never here, which is what makes this read safe to act on: a
+      // different id already on the row can only be an earlier tier or band subscription.
+      //
+      // Nothing cancelled it. A Free Agent on Basic who bought AI Coach + Video on the web got
+      // a SECOND Stripe subscription, this handler overwrote the id with the new one, and the
+      // old one went on billing $4.99 a month forever with nothing in Forge remembering it
+      // existed. Apple cannot do this to us -- all three tiers share ONE App Store subscription
+      // group precisely so a swap replaces instead of stacking (see 2026-10-05, when they were
+      // recreated as _v3 for exactly this reason) -- and the web rail had no equivalent.
+      //
+      // ONE CASE IS STILL OPEN AND IS NAMED RATHER THAN PAPERED OVER: an account holding an
+      // APPLE subscription that then buys on the web. There is no Stripe id on the row to find,
+      // so nothing here fires, and an Apple subscription cannot be cancelled by this server at
+      // all -- only by the person, in iOS Settings. What the row records afterwards is both
+      // ids, against a schema comment saying exactly one is ever set. Left alone deliberately:
+      // clearing appleOriginalTransactionId would make the Apple notification path unable to
+      // find the account, which is a worse failure than a duplicate somebody can see on their
+      // own App Store receipt.
+      const priorSubscriptionId =
+        (await storage.getSubscriptionForUser(userId))?.stripeSubscriptionId ?? null;
+
       if (purchasedFreeAgentTier) {
+        // UPSERT, NOT UPDATE, and this is the Stripe half of a bug that was fixed on the Apple
+        // half on 2026-10-05 and left standing here. updateSubscriptionByUserId is a plain
+        // UPDATE: for an account with no subscriptions row it matches nothing and writes
+        // nothing. The row is only created at signup by createTrialSubscription, which a
+        // coached athlete never meets -- so an athlete who lost their coach, or who signed up
+        // before that code existed, is a Free Agent with no row.
+        //
+        // The tier itself was still granted (updateFreeAgentBilling writes users.freeAgentTier,
+        // which is what every gate reads), so the purchase LOOKED fine. What was lost was
+        // stripeSubscriptionId -- and that is the handle every later event matches on. So
+        // customer.subscription.deleted found nothing, the SKU was never cleared, and a
+        // cancelled or refunded tier went on working forever. Exactly the bug found on the
+        // first live cancellation, in the one case where the fix for it cannot fire at all.
+        await storage.upsertSubscriptionByUserId(userId, {
+          accountType: "free_agent",
+          tier: entitlementTierForFreeAgentTier(purchasedFreeAgentTier),
+          status: "active",
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: session.subscription,
+          // A fresh purchase is not a cancelled one: an account that cancelled at period end
+          // and came back would otherwise carry cancelAtPeriodEnd from the subscription it
+          // just replaced.
+          cancelAtPeriodEnd: false,
+        });
         await storage.updateFreeAgentBilling(userId, { freeAgentTier: purchasedFreeAgentTier });
+      } else if (kind === "coach_subscription") {
+        // THE COACH HAS THE SAME HOLE, through a different door. A coach gets a trial row from
+        // every SIGNUP path -- but storage.setUserRole, which is an admin's "Change role" on
+        // More -> Users, promotes an athlete to coach and creates no subscription row, and a
+        // COACHED athlete never had one. So a promoted coach buying their band would have had
+        // the band written (applyCoachSubscriptionBand writes users.billingTier directly, which
+        // is why it would have looked like it worked) and no stripeSubscriptionId -- leaving
+        // syncCoachSubscriptionBand answering "no_stripe_subscription" forever and the
+        // cancellation unable to clear the band.
+        //
+        // tier: "base" is exactly what createTrialSubscription writes for a coach, and nothing
+        // reads subscriptions.tier on the coach side any more: the Coaches Corner gate used to
+        // consult `tier === "pro"` and was moved onto the entitlements object (see
+        // hasCoachesCorner's own comment above), so this is the inert value the row would have
+        // carried had signup created it.
+        await storage.upsertSubscriptionByUserId(userId, {
+          accountType: "coach",
+          tier: "base",
+          status: "active",
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: session.subscription,
+          cancelAtPeriodEnd: false,
+        });
+      } else {
+        // Anything else that arrives in subscription mode without a kind this handler knows.
+        // A plain patch, because there is nothing here to build a row out of -- accountType and
+        // tier are both NOT NULL with no default, and guessing either would write a row whose
+        // meaning nobody chose.
+        await storage.updateSubscriptionByUserId(userId, {
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: session.subscription,
+          status: "active",
+        });
+      }
+
+      if (priorSubscriptionId && priorSubscriptionId !== session.subscription) {
+        await cancelSupersededStripeSubscription(userId, priorSubscriptionId);
       }
 
       // THE COACH SIDE OF THE SAME BUG. A school checked out on a band (the quantity and the
@@ -995,9 +1106,12 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       // that came back from an external system, and an unknown id would otherwise be written
       // onto the account as a tier nothing can resolve.
       //
-      // isBetaAccount is deliberately left alone. It defaults true and is the one per-account
-      // admin switch that makes any of this actually restrict anybody (see its comment in
-      // shared/schema.ts); a completed payment is not an instruction to begin enforcing.
+      // isBetaAccount is deliberately left alone. It is the one per-account admin switch that
+      // comps an account deliberately (see its comment in shared/schema.ts); a completed payment
+      // is not an instruction to change it either way. It defaulted TRUE when this was written
+      // and has defaulted FALSE since the beta ended on 2026-10-11 -- the sentence here said
+      // "defaults true" until then, which is the drift a comment stating a default always
+      // invites.
       if (kind === "coach_subscription") {
         const bandId = session.metadata?.band;
         const band = bandId && bandId in BILLING_TIERS ? BILLING_TIERS[bandId] : null;
@@ -1035,6 +1149,19 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
         // (above); this is the matching write on the way out. Coach rows carry no freeAgentTier.
         if (updated.accountType === "free_agent") {
           await storage.updateFreeAgentBilling(updated.userId, { freeAgentTier: null });
+        }
+        // AND THE COACH SIDE, which this missed entirely until 2026-10-11. The branch above was
+        // written for the Free Agent SKU and read accountType to avoid touching a coach row --
+        // correct as far as it went, except nothing else cleared the coach's band either:
+        // `billingTier: null` was never written anywhere in the server. So a program that
+        // cancelled kept its band, and with it Full Personalization and multi-team on any band
+        // above twenty athletes. Same shape as the Free Agent bug found the same day, on the
+        // other side of the same event.
+        //
+        // plannedAthleteCount is deliberately LEFT ALONE: it is what the school said they have,
+        // not something they bought, so it still quotes their price if they come back.
+        if (updated.accountType === "coach") {
+          await storage.clearCoachBand(updated.userId);
         }
       }
       break;

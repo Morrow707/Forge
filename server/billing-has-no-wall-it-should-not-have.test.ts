@@ -25,8 +25,12 @@ import { resolve } from "node:path";
 
 const SERVER = resolve(import.meta.dirname);
 const read = (f: string) => readFileSync(resolve(SERVER, f), "utf8");
+// LINE COMMENTS FIRST, THEN BLOCK -- the order is load-bearing. A `/*` inside a line comment
+// (server/auth.ts: "see the /api/auth/mfa/* routes below") pairs with the next real `*/` if the
+// block pass runs first, swallowing everything between and leaving a scan reading a fraction of
+// the file while still passing. Taking line comments off first removes the fake opener with them.
 const stripComments = (src: string) =>
-  src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  src.replace(/^[ \t]*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 
 describe("a coach's roster has no cap", () => {
   const storage = stripComments(read("storage.ts"));

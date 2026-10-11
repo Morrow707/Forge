@@ -29,6 +29,7 @@ import { LessonFlashcards } from "@/components/lesson-flashcards";
 import { DebouncedNote } from "@/components/lesson-page-notes";
 import { ReadAloud, fetchTrackLessonNarration } from "@/components/read-aloud";
 import { formatCents } from "@shared/billing-tiers";
+import { useAuth } from "@/hooks/use-auth";
 
 /** The Coaches Corner half of GET /api/coach/entitlements. `unlocked` is the same
  * answer the catalog routes gate on; the rest is only there so this page can tell
@@ -107,6 +108,7 @@ const TRACK_SORT_OPTIONS: { value: TrackSort; label: string }[] = [
 
 export default function CoachesCorner() {
   const qc = useQueryClient();
+  const { user: authUser } = useAuth();
   const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
   const [sort, setSort] = useState<TrackSort>("unlocked");
@@ -165,7 +167,13 @@ export default function CoachesCorner() {
       cancelled = true;
     };
   }, [appleSupported, appleLive?.enabled]);
-  const appleSellable = appleSupported && appleLive?.enabled === true && applePrice !== null;
+  // A COACH ADD-ON IS THE PROGRAM'S, NOT THE BUYER'S (2026-10-11). ownsCoachesCorner resolves
+  // off the PRIMARY coach's row, so an assistant who bought this unlocked it for nobody and
+  // paid $19.99 a month for it. The checkout route refuses an assistant now; this is what stops
+  // the iOS path, where StoreKit takes the money before the server is ever asked.
+  const isPrimaryCoach = authUser?.isPrimaryCoach === true;
+  const appleSellable =
+    isPrimaryCoach && appleSupported && appleLive?.enabled === true && applePrice !== null;
 
   async function buyCoachesCorner() {
     setBuying(true);
@@ -518,6 +526,11 @@ export default function CoachesCorner() {
                   {buying ? "Purchasing..." : "Get Coaches Corner"}
                 </Button>
               </div>
+            ) : !isPrimaryCoach ? (
+              <p className="text-sm font-semibold">
+                A paid add-on{corner ? ` (${formatCents(corner.monthlyPriceCents)}/month)` : ""} for
+                the program. Your head coach is the one who can add it.
+              </p>
             ) : !appleSupported && corner?.billingOpen ? (
               <div className="flex flex-col items-start gap-2">
                 <p className="text-sm font-semibold">

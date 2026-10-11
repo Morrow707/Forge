@@ -19,6 +19,7 @@ import { ApiError, apiRequest, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { CreditCard, Users } from "lucide-react";
 import { bandForAthleteCount, formatCents, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
+import { useAuth } from "@/hooks/use-auth";
 
 /** GET /api/coach/entitlements, the add-on half. purchasableAddOns is derived
  * server-side from COACH_PURCHASABLE_ADD_ON_ORDER, so this page never holds its
@@ -38,6 +39,9 @@ type CoachPlan = {
   plannedAthleteCount: number | null;
   rosterCount: number;
   billedCount: number;
+  /** What the subscription on file actually covers, which is NOT the quote below. Null until a
+   *  payment or an admin writes it -- see coachPlanPayload. */
+  paidBand: { id: string; label: string } | null;
   band: {
     id: string;
     label: string;
@@ -61,6 +65,26 @@ type CoachPlan = {
  * refuse anyway. */
 export default function CoachBilling() {
   const isNative = Capacitor.isNativePlatform();
+  // THE PROGRAM'S MONEY IS THE PRIMARY COACH'S, AND THIS PAGE NEVER ASKED (2026-10-11).
+  //
+  // The plan-edit control was already withheld from an assistant -- but by a 403 coming back
+  // from the server (planForbidden below), after the fact. Subscribe and the Coaches Corner buy
+  // button were drawn for anybody, and both charged the SESSION coach's card and wrote the
+  // purchase to the SESSION coach's row, which no entitlement reads: every one of them resolves
+  // off the primary (getEntitlementsForCoach takes coachIds[0], ownsCoachesCorner looks the
+  // primary up by hand). So an assistant could pay for the band, or $19.99 a month for Coaches
+  // Corner, and unlock nothing for anybody.
+  //
+  // The routes refuse it now (requirePrimaryCoachForBilling) and that is the real gate. This is
+  // the half that stops an assistant being shown a button that takes their card and gives the
+  // program nothing -- and it says who to ask instead of failing silently.
+  //
+  // `=== true` with no loading branch is safe here specifically: ProtectedRoute renders a
+  // spinner until /api/auth/me has answered and only mounts this page for a confirmed user, so
+  // `user` is never undefined by the time this runs and a primary coach can never be shown the
+  // assistant's sentence in a flash. Same pattern, same reason, as coach/branding.tsx.
+  const { user } = useAuth();
+  const isPrimaryCoach = user?.isPrimaryCoach === true;
   const [starting, setStarting] = useState(false);
   const [openingPortal, setOpeningPortal] = useState(false);
 
@@ -274,6 +298,18 @@ export default function CoachBilling() {
                       : `${plan.billedCount} athletes`}
                   </span>
                 </div>
+                {/* THE QUOTE AND THE PURCHASE ARE TWO FACTS, and until 2026-10-11 they were one
+                    column: users.billingTier, written at signup from the typed headcount, so the
+                    quote above was also what granted Full Personalization. Now the row above is
+                    what this roster costs and this one is what the subscription on file covers.
+                    Drawn only when it differs, so a coach whose plan matches their roster -- the
+                    ordinary case -- reads one number and not two. */}
+                {plan.paidBand && plan.paidBand.id !== plan.band?.id && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Your subscription covers</span>
+                    <span>{plan.paidBand.label}</span>
+                  </div>
+                )}
               </div>
 
               {planIsForbidden ? (
@@ -351,7 +387,19 @@ export default function CoachBilling() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {status}
                 </p>
-                {!unlocked && entitlements.billingOpen && !isNative && (
+                {/* A COACH ADD-ON IS THE PROGRAM'S, so only the primary coach is offered it.
+                    ownsCoachesCorner reads the primary's row, so an assistant's purchase landed
+                    where nothing looks -- see isPrimaryCoach above. On the web the route refuses
+                    it before any money moves; on iOS StoreKit takes the money first and the
+                    server then grants it to the primary's row rather than refusing a paid
+                    transaction (build 611's lesson), so withholding the button is what keeps an
+                    assistant from paying for the program by accident. */}
+                {!unlocked && !isPrimaryCoach ? (
+                  <p className="text-xs text-muted-foreground">
+                    Your head coach looks after the program's add-ons.
+                  </p>
+                ) : null}
+                {!unlocked && isPrimaryCoach && entitlements.billingOpen && !isNative && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -362,7 +410,7 @@ export default function CoachBilling() {
                     {buyingAddOn === addOn.id ? "Opening checkout..." : `Get ${addOn.label}`}
                   </Button>
                 )}
-                {!unlocked && appleSupported && applePrices[addOn.id] && (
+                {!unlocked && isPrimaryCoach && appleSupported && applePrices[addOn.id] && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -436,6 +484,11 @@ export default function CoachBilling() {
                   may show what the program has and must not tell a coach where to go and buy
                   it. The old sentence here did exactly that. */}
               Your program's plan is set up outside the app. This screen shows what it covers.
+            </p>
+          ) : !isPrimaryCoach ? (
+            <p className="rounded-md bg-surface-elevated p-3 text-sm text-muted-foreground">
+              Your head coach looks after the program's plan. The band above is what this roster
+              costs.
             </p>
           ) : !billingOpen ? (
             <p className="rounded-md bg-surface-elevated p-3 text-sm text-muted-foreground">

@@ -13,6 +13,7 @@ import { youTubeConfigured } from "./youtube-catalog";
 import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import { needsCoppaAttestation } from "@shared/coach-attestation";
 import {
+  bandForAthleteCount,
   coachesCornerCompedForRoster,
   COACHES_CORNER_MONTHLY_PRICE_CENTS,
   BILLING_ADD_ONS,
@@ -788,14 +789,39 @@ async function notifyEach<T>(items: T[], deliver: (item: T) => Promise<unknown>)
 // exercises the rest of getEffectiveCoachIds widens to every staff
 // member -- gated to specifically the primary coach so an assistant
 // can't repaint the whole program's colors or hide tabs for everyone.
-async function requirePrimaryCoach(req: any, res: any, next: any) {
-  const user = currentUser(req);
-  const coachIds = await storage.getEffectiveCoachIds(user.id);
-  if (coachIds[0] !== user.id) {
-    return res.status(403).json({ message: "Only the primary coach can change this" });
-  }
-  next();
+// ONE RULE, TWO SENTENCES. The billing routes needed the same check and a different thing to
+// say: "Only the primary coach can change this" reads wrong in front of a card, where what the
+// assistant needs to know is who to ask. A second copy of the check is how the two stop
+// agreeing, so the message is the parameter and the rule is not.
+function primaryCoachOnly(message: string) {
+  return async function (req: any, res: any, next: any) {
+    const user = currentUser(req);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    if (coachIds[0] !== user.id) {
+      return res.status(403).json({ message });
+    }
+    next();
+  };
 }
+
+const requirePrimaryCoach = primaryCoachOnly("Only the primary coach can change this");
+
+/** THE PROGRAM'S MONEY IS THE PRIMARY COACH'S, AND IT WAS NOT GATED AT ALL (found 2026-10-11).
+ *
+ * Both coach checkouts charged the SESSION user and wrote the purchase to the SESSION user's
+ * row -- `createCoachSubscriptionCheckout(user.id, ...)`, `addCoachBillingAddOn(user.id, ...)`
+ * -- while every read of either resolves off the PRIMARY's row: getEntitlementsForCoach takes
+ * `coachIds[0]`, and ownsCoachesCorner looks the primary up explicitly. So an assistant coach
+ * could pay the band price, or $19.99 for Coaches Corner, and the program would be granted
+ * nothing: the band and the add-on landed somewhere no entitlement looks.
+ *
+ * Not a direct-POST hole either. /coach/billing draws the Subscribe button and the Coaches
+ * Corner buy button for any staff coach, because that page never asked -- `user.isPrimaryCoach`
+ * is on the session user and only coach/branding.tsx reads it. An assistant could do this by
+ * tapping. */
+const requirePrimaryCoachForBilling = primaryCoachOnly(
+  "Your head coach looks after the program's plan and add-ons.",
+);
 
 // Entitlements are always resolved from the org's primary coach (billing
 // lives on that row, same as branding) -- see server/billing.ts. Safe to
@@ -13725,6 +13751,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post(
     "/api/billing/checkout/free-agent-tier",
     requireRole("athlete"),
+    // A COACHED ATHLETE IS NOT SOLD A FREE AGENT TIER. The add-on route immediately below has
+    // carried this guard since it was written and the tier route never did, so the one that
+    // takes the larger sum was the open one: $19.99 a month for AI Coach + Video, from an
+    // athlete whose camera, skills and AI already come from their coach and whose gates resolve
+    // through the coached branch, never through users.freeAgentTier. Money for nothing they did
+    // not already have.
+    //
+    // The client could not reach it -- athlete/upgrade.tsx sits behind FreeAgentGate -- which
+    // is exactly why it needed closing here: "hiding a button is not a permission check" is the
+    // standing rule in this repo, and a checkout route is the last place to rely on one.
+    requireFreeAgent,
     requireWebCheckout,
     async (req, res) => {
       const user = currentUser(req);
@@ -13881,6 +13918,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post(
     "/api/billing/checkout/coach-add-on",
     requireRole("coach"),
+    requirePrimaryCoachForBilling,
     requireWebCheckout,
     async (req, res) => {
       const user = currentUser(req);
@@ -13907,6 +13945,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post(
     "/api/billing/checkout/coach",
     requireRole("coach"),
+    requirePrimaryCoachForBilling,
     requireWebCheckout,
     async (req, res) => {
       const user = currentUser(req);
@@ -13943,7 +13982,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const primary = await storage.getUser(primaryId);
     const rosterCount = await storage.getRosterSeatCountForCoach(coachId);
     const billedCount = await storage.getBilledAthleteCountForCoach(coachId);
-    const band = primary?.billingTier ? BILLING_TIERS[primary.billingTier] ?? null : null;
+    // THE QUOTE IS DERIVED; THE BAND ON FILE IS WHAT WAS PAID FOR. These were one field until
+    // 2026-10-11, read off users.billingTier -- which signup wrote from the typed headcount, so
+    // the quote was free to show AND free to grant personalization from. Now the screen quotes
+    // what the program would be billed for the athletes it has or expects, and `paidBand` is the
+    // separate fact of what their subscription actually covers (null until the Stripe webhook
+    // writes it, or an admin does).
+    const band = BILLING_TIERS[bandForAthleteCount(billedCount).id] ?? null;
+    const paidBand = primary?.billingTier ? BILLING_TIERS[primary.billingTier] ?? null : null;
     const entitlements = await getEntitlementsForCoach(coachId);
     return {
       plannedAthleteCount: primary?.plannedAthleteCount ?? null,
@@ -13958,6 +14004,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             athleteFloor: band.athleteFloor,
           }
         : null,
+      // What the subscription actually covers, as opposed to the quote above. Null means nothing
+      // has been paid for yet, which is every coach who only typed a number.
+      paidBand: paidBand ? { id: paidBand.id, label: paidBand.label } : null,
       perAthleteCents: ORG_PER_ATHLETE_CENTS,
     };
   }

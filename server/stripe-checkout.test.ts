@@ -99,7 +99,14 @@ describe("web checkout never runs inside the native app", () => {
     ]) {
       const idx = routes.indexOf(path);
       expect(idx).toBeGreaterThan(-1);
-      expect(routes.slice(idx, idx + 220)).toContain("requireWebCheckout");
+      // THE MIDDLEWARE LIST, NOT A FIXED NUMBER OF CHARACTERS. This read
+      // `routes.slice(idx, idx + 220)` and went red on 2026-10-11 for a comment -- a guard added
+      // above requireWebCheckout, with the paragraph explaining it, pushed the word past 220. A
+      // window measured in characters fails for prose and, worse, PASSES for a route whose guard
+      // sits 219 characters away in an unrelated handler. The list runs from the path to the
+      // handler's own `async (`, which is exactly the middleware and nothing else.
+      const middleware = routes.slice(idx).split("async (")[0];
+      expect(middleware).toContain("requireWebCheckout");
     }
   });
 

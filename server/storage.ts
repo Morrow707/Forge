@@ -4984,16 +4984,38 @@ export const storage = {
     if (scope === "coach") {
       const coachAddOn = APPLE_PRODUCT_ID_TO_COACH_ADD_ON[verified.productId];
       if (!coachAddOn) return { ok: false, error: "Unrecognized product." };
+      // THE GRANT LANDS ON THE PRIMARY'S ROW, WHICH IS THE ROW THE ENTITLEMENT READS.
+      //
+      // ownsCoachesCorner looks the primary coach up explicitly and getEntitlementsForCoach
+      // takes coachIds[0], so a coach add-on is org-wide by construction. This wrote it to the
+      // buyer's own row, so an assistant coach who bought Coaches Corner in the app paid
+      // $19.99 a month and unlocked nothing for anybody, themselves included.
+      //
+      // RECORDED, NEVER REFUSED, and the distinction is load-bearing: Apple has already taken
+      // the money by the time this runs, and the phone does not finish a transaction the server
+      // refuses -- so refusing an assistant's purchase would leave it replaying at every launch
+      // forever, which is build 611's bug and the reason RETIRED_APPLE_PRODUCT_IDS exists. The
+      // web checkout refuses an assistant BEFORE any money moves
+      // (requirePrimaryCoachForBilling); here the only honest thing left to do is grant what
+      // was paid for, to the row that can carry it.
+      //
+      // The buyer is kept in the audit row. The add-on is the program's, the receipt is theirs,
+      // and the two have to stay tellable apart -- an Apple subscription is cancelled by the
+      // person who bought it in iOS Settings, never by this server.
+      const grantTo = await this.getPrimaryCoachId(userId);
       // The Apple id is recorded with the add-on so a REFUND or revocation naming that
-      // transaction can find this add-on later (revokeAddOnsForAppleTransaction). An Apple
-      // subscription is cancelled by the person in iOS Settings, never by this server.
-      await this.addCoachBillingAddOn(userId, coachAddOn, {
+      // transaction can find this add-on later (revokeAddOnsForAppleTransaction) -- on the row
+      // it was actually written to, which is why that lookup is by transaction and not by user.
+      await this.addCoachBillingAddOn(grantTo, coachAddOn, {
         appleOriginalTransactionId: verified.originalTransactionId,
       });
       await this.logBillingEvent(userId, "apple_iap.verified", {
         originalTransactionId: verified.originalTransactionId,
         productId: verified.productId,
         coachAddOn,
+        // Who it was granted to, when that is not the buyer: an assistant coach's receipt
+        // against the program's row.
+        ...(grantTo !== userId ? { grantedToPrimaryCoachId: grantTo } : {}),
         environment: verified.environment,
       });
       return { ok: true };
@@ -5284,17 +5306,21 @@ export const storage = {
     return Math.max(seats, primary?.plannedAthleteCount ?? 0);
   },
 
-  /** Restates how many athletes the org expects, and re-derives the band from it. The two are
-   * written together on purpose: a stated count with a tier that does not match it is how the
-   * quote on the billing page stops agreeing with the plan on the account. Primary coach only
-   * (the route refuses a staff coach outright); isBetaAccount is untouched, as everywhere else
-   * -- assigning a band is a price, not enforcement. */
+  /** Restates how many athletes the org expects. Primary coach only (the route refuses a staff
+   *  coach outright).
+   *
+   *  IT NO LONGER WRITES THE BAND (2026-10-11). It used to write both together, on the argument
+   *  that "a stated count with a tier that does not match it is how the quote stops agreeing
+   *  with the plan" -- which is true of a QUOTE and was the wrong conclusion, because the band
+   *  is also what getEntitlements derives Full Personalization and multi-team from. So this
+   *  route, guarded by nothing but the coach's own role, granted a $24.99 add-on to anybody who
+   *  raised their typed number past 20. The quote is derived from this count wherever it is
+   *  shown (coachPlanPayload), and billingTier is only ever what was PAID for. */
   async setPlannedAthleteCount(coachId: number, expectedAthletes: number) {
     const primaryId = await this.getPrimaryCoachId(coachId);
-    const band = bandForAthleteCount(expectedAthletes);
     const [row] = await db
       .update(users)
-      .set({ plannedAthleteCount: expectedAthletes, billingTier: band.id })
+      .set({ plannedAthleteCount: expectedAthletes })
       .where(eq(users.id, primaryId))
       .returning({ plannedAthleteCount: users.plannedAthleteCount, billingTier: users.billingTier });
     return row ?? null;
@@ -5500,6 +5526,21 @@ export const storage = {
       })
       .where(eq(users.id, userId))
       .returning({ id: users.id, billingAddOns: users.billingAddOns });
+    return row ?? null;
+  },
+
+  /** Forget the band a cancelled coach subscription paid for.
+   *
+   *  The mirror of applyCoachSubscriptionBand below. billingTier is the record of what was
+   *  BOUGHT, so a cancellation has to clear it or the program keeps the personalization and
+   *  multi-team entitlements its band carried. plannedAthleteCount stays: it is what the school
+   *  told us about itself, it is what the billing page quotes from, and it was never a purchase. */
+  async clearCoachBand(userId: number) {
+    const [row] = await db
+      .update(users)
+      .set({ billingTier: null })
+      .where(eq(users.id, userId))
+      .returning({ id: users.id, billingTier: users.billingTier });
     return row ?? null;
   },
 
@@ -31103,7 +31144,13 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         primaryCoachName: primaryCoach?.name ?? null,
       };
     }
-    if (!coach?.billingTier) {
+    // KEYED ON WHAT THE SCHOOL SAID, NOT ON WHAT THEY PAID. This read users.billingTier until
+    // 2026-10-11, which worked only because signup wrote a band from the typed headcount -- and
+    // that write is exactly what was handing out Full Personalization for free, so it had to go.
+    // The agreement is owed because this is a program with athletes, which is what
+    // plannedAthleteCount says; a paid band still counts, for an org an admin set a tier on
+    // without a headcount ever being typed.
+    if (!coach?.plannedAthleteCount && !coach?.billingTier) {
       return {
         required: false,
         onFile: false,

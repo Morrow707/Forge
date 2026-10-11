@@ -11,6 +11,13 @@ const logBillingEvent = vi.fn();
 const wasStripeEventProcessed = vi.fn();
 const applyCoachSubscriptionBand = vi.fn();
 const updateFreeAgentBilling = vi.fn();
+const clearCoachBand = vi.fn();
+const revokeAddOnsForStripeSubscription = vi.fn();
+// Read BEFORE the subscription id is overwritten, so a tier purchase can cancel the one it
+// supersedes -- see one-account-never-pays-twice.test.ts. Defaults to no row, which is the
+// first-purchase case every test in this file is about.
+const getSubscriptionForUser = vi.fn();
+const upsertSubscriptionByUserId = vi.fn();
 
 vi.mock("./storage", () => ({
   storage: {
@@ -20,6 +27,10 @@ vi.mock("./storage", () => ({
     wasStripeEventProcessed,
     applyCoachSubscriptionBand,
     updateFreeAgentBilling,
+    clearCoachBand,
+    revokeAddOnsForStripeSubscription,
+    getSubscriptionForUser,
+    upsertSubscriptionByUserId,
   },
 }));
 
@@ -38,6 +49,8 @@ function fakeEvent<T>(id: string, type: string, object: T): Stripe.Event {
 beforeEach(() => {
   vi.clearAllMocks();
   wasStripeEventProcessed.mockResolvedValue(false);
+  revokeAddOnsForStripeSubscription.mockResolvedValue({ userId: null, addOnIds: [] });
+  getSubscriptionForUser.mockResolvedValue(null);
 });
 
 describe("checkout.session.completed", () => {
@@ -217,10 +230,14 @@ describe("customer.subscription.deleted", () => {
     expect(updateFreeAgentBilling).toHaveBeenCalledWith(9, { freeAgentTier: null });
   });
 
-  it("leaves a coach row alone, which carries no Free Agent SKU", async () => {
+  // The other side of the same event, found the same day: nothing in the server ever wrote
+  // `billingTier: null`, so a program that cancelled kept its band -- and with it Full
+  // Personalization and multi-team on any band above twenty athletes.
+  it("takes the band off a coach whose subscription was cancelled, and never the Free Agent SKU", async () => {
     updateSubscriptionByStripeId.mockResolvedValue({ userId: 4, accountType: "coach" });
     await handleStripeWebhookEvent(fakeEvent("evt_7b", "customer.subscription.deleted", { id: "sub_coach" }));
 
+    expect(clearCoachBand).toHaveBeenCalledWith(4);
     expect(updateFreeAgentBilling).not.toHaveBeenCalled();
   });
 
@@ -229,6 +246,16 @@ describe("customer.subscription.deleted", () => {
     await handleStripeWebhookEvent(fakeEvent("evt_7c", "customer.subscription.deleted", { id: "sub_none" }));
 
     expect(updateFreeAgentBilling).not.toHaveBeenCalled();
+    expect(clearCoachBand).not.toHaveBeenCalled();
+  });
+
+  // A Free Agent's cancellation must not reach the coach-band write and vice versa: the two
+  // branches read the same `accountType` and a single `if` would have served both wrongly.
+  it("never clears a coach band on a Free Agent's cancellation", async () => {
+    updateSubscriptionByStripeId.mockResolvedValue({ userId: 9, accountType: "free_agent" });
+    await handleStripeWebhookEvent(fakeEvent("evt_7d", "customer.subscription.deleted", { id: "sub_abc" }));
+
+    expect(clearCoachBand).not.toHaveBeenCalled();
   });
 
   it("marks the matched subscription canceled and logs it", async () => {

@@ -23,9 +23,14 @@ describe("Coaches Corner on the App Store", () => {
     expect(storage).toMatch(/COACH_PURCHASABLE_ADD_ON_ORDER\.map\(\(addOn\) => \[appleProductIdForCoachAddOn\(addOn\), addOn\]\)/);
     expect(storage).toMatch(/scope: "free_agent" \| "coach" = "free_agent"/);
     // The call takes a third argument since 2026-10-11 -- the Apple transaction id, recorded
-    // so a refund naming it can revoke this add-on later (shared/add-on-terms.ts). What this
-    // pins is unchanged: inside the coach scope, a coach add-on is what gets granted.
-    expect(storage).toMatch(/if \(scope === "coach"\) \{[\s\S]*addCoachBillingAddOn\(userId, coachAddOn[,)]/);
+    // so a refund naming it can revoke this add-on later (shared/add-on-terms.ts). And since
+    // later the same day it is granted to the PRIMARY coach's row rather than the buyer's,
+    // because that is the row ownsCoachesCorner reads: an assistant's purchase unlocked the
+    // library for nobody (see a-checkout-only-takes-money-it-can-honour.test.ts, which pins the
+    // grant and the reason it is a grant rather than a refusal). What this pins is unchanged:
+    // inside the coach scope, a coach add-on is what gets granted.
+    expect(storage).toMatch(/if \(scope === "coach"\) \{[\s\S]*addCoachBillingAddOn\(grantTo, coachAddOn[,)]/);
+    expect(storage).toMatch(/if \(scope === "coach"\) \{[\s\S]*const grantTo = await this\.getPrimaryCoachId\(userId\)/);
   });
 
   it("is verified through the account route, which reads the role", () => {

@@ -24,7 +24,7 @@ import {
   addOnIsOffered,
   ALL_CLASSES_ADD_ON_ID,
 } from "@shared/free-agent-tiers";
-import { VIDEO_RETENTION, VIDEO_STORAGE_ADD_ON } from "@shared/video-retention";
+import { VIDEO_RETENTION } from "@shared/video-retention";
 import { Flame, Check, Video, AlertTriangle } from "lucide-react";
 import { CAMERA_ACCURACY_LONG } from "@shared/camera-accuracy-copy";
 import { CLASS_PRICING_LINE } from "@shared/class-pricing-rule";
@@ -301,17 +301,26 @@ export default function PricingPage() {
             </>
           )}
 
+          {/* WHAT EVERY PLAN KEEPS, AND NO PRICE ON SOMETHING NOBODY CAN BUY (fixed 2026-10-11).
+              This read "Extra video storage, $9.99/mo" on the one page a stranger reads, in the
+              sitemap at priority 0.9 -- and hasVideoStorageAddOn has no Stripe Price, no
+              checkout route, no App Store product and no control on the athlete's own upgrade
+              screen. The only way to get it is an admin ticking a box on /admin/billing. A card
+              with a price on it is an offer, and this one had nothing behind it.
+
+              The same bug as the three withdrawn sport coaches priced a few lines above, found
+              by the 10-08 price sweep -- which could not see this one, because it scanned for
+              SPORT_COACH_ADD_ON_IDS specifically. See
+              every-public-price-can-be-bought.test.ts, which discovers the prices instead.
+
+              The caps stay: they are what every plan includes, which is a pricing-page fact. */}
           <div className="mx-auto mt-6 flex max-w-lg items-start gap-3 rounded-md border border-border p-4 text-sm">
             <Video className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <p className="text-muted-foreground">
-              <span className="font-semibold text-foreground">
-                Extra video storage, {formatCents(VIDEO_STORAGE_ADD_ON.monthlyPriceCents)}/mo
-              </span>:{" "}
+              <span className="font-semibold text-foreground">Video storage is included</span>:{" "}
               every athlete keeps {VIDEO_RETENTION.favoritedCap} favorited clips per exercise or
-              skill drill, {VIDEO_RETENTION.totalCap} total on a rolling basis. This add-on bumps
-              that to {VIDEO_STORAGE_ADD_ON.favoritedCap} favorited / {VIDEO_STORAGE_ADD_ON.totalCap}{" "}
-              total, for both form-check videos and skill clips. Applies per athlete on any plan,
-              Free Agent or coached.
+              skill drill, {VIDEO_RETENTION.totalCap} total on a rolling basis, for both
+              form-check videos and skill clips. The same on every plan, Free Agent or coached.
             </p>
           </div>
         </div>

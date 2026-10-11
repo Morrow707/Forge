@@ -2793,6 +2793,102 @@ branch through the real login route and the real email.
   run found a real bug: a coach WITHOUT Full Personalization saving only the gated branding fields
   arrived at `updateCoachBranding` with an empty patch, drizzle threw "No values to set" past the
   route, and the request hung. An empty patch is a read now (`branding-page.itest.ts`).
+- **THE FOUR CHECKOUT ROUTES READ SIDE BY SIDE, AND THREE OF THEM TOOK MONEY THEY COULD NOT
+  HONOUR** (2026-10-11). Six claims about the billing paths were put to me; I checked each
+  against the code myself. **Five were real, one was not**, and the one that was not is worth
+  knowing because it looks identical to the others.
+  **A COACHED ATHLETE COULD BUY A FREE AGENT TIER.** `/api/billing/checkout/free-agent-tier` had
+  `requireRole("athlete")` and no `requireFreeAgent` -- while the ADD-ON route immediately below
+  it has carried that guard since the day it was written. So the route that takes four times as
+  much was the open one: $19.99 a month for AI Coach + Video from an athlete whose camera, skills
+  and AI already come from their coach, and whose gates resolve through the coached branch and
+  never through `users.freeAgentTier`. Money for something they already had. The client could not
+  reach it (`athlete/upgrade.tsx` is behind `FreeAgentGate`), which is exactly why it needed
+  closing at the route: **hiding a button is not a permission check** is the standing rule in
+  this file, and a checkout is the last place to lean on one.
+  **AND AN ASSISTANT COACH COULD BUY THE PROGRAM'S PLAN AND ADD-ONS ONTO THEIR OWN ROW.** Both
+  coach checkouts charged the SESSION coach and wrote the purchase to the SESSION coach's row,
+  while every read resolves off the PRIMARY's: `getEntitlementsForCoach` takes `coachIds[0]` and
+  `ownsCoachesCorner` looks the primary up by hand. So an assistant could pay the band price, or
+  $19.99 for Coaches Corner, and the program would be granted nothing -- the band landing in a
+  column nothing reads. **Not a direct-POST hole**: `/coach/billing` drew Subscribe and the
+  add-on buy button for any staff coach, because that page never asked. `user.isPrimaryCoach` has
+  been on `/api/auth/me` all along and only `coach/branding.tsx` read it. An assistant could do
+  this by tapping. Both routes carry `requirePrimaryCoachForBilling` now, and `primaryCoachOnly`
+  is the ONE implementation with the message as its parameter -- "Only the primary coach can
+  change this" reads wrong in front of a card, where what an assistant needs is who to ask.
+  **THE APPLE HALF IS A GRANT, NOT A REFUSAL, AND THE DISTINCTION IS LOAD-BEARING.** StoreKit
+  takes the money before the server is ever asked, and the phone does not finish a transaction
+  the server refuses -- so refusing an assistant's purchase would leave it replaying at every
+  launch forever, which is build 611's bug and the reason `RETIRED_APPLE_PRODUCT_IDS` exists. The
+  web route refuses before any money moves; `applyAppleIapVerification` now writes a coach add-on
+  to `getPrimaryCoachId(userId)`, the row that can carry it, with the buyer kept in the audit row
+  (`grantedToPrimaryCoachId`) since the add-on is the program's and the receipt is theirs. The
+  Coaches Corner upsell withholds its StoreKit button from an assistant, which is what stops them
+  paying by accident in the first place.
+  **A FREE AGENT UPGRADING ON THE WEB WAS BILLED FOR BOTH TIERS, FOREVER.** `subscriptions.userId`
+  is UNIQUE, so one account has one row and that row holds the TIER's Stripe subscription (an
+  add-on's lives in `users.addOnTerms`, which is what makes the fix safe). The handler overwrote
+  that id with whatever had just been bought and **nothing cancelled what it replaced** -- Basic
+  -> AI Coach + Video on the web meant $4.99 AND $19.99 a month with nothing left in Forge that
+  could find the older one. **Apple cannot do this to us, and that comparison is what makes it a
+  bug**: all three tiers share ONE App Store subscription group precisely so a swap replaces
+  instead of stacking, which is why the two AI ids were recreated as `_v3` on 2026-10-05. The web
+  rail had no equivalent. `cancelSupersededStripeSubscription` cancels it with
+  `prorate` + `invoice_now`, and is best-effort with an audit row naming what an operator must
+  finish by hand -- the purchase has already succeeded and throwing here would roll back access
+  somebody paid for to fix a billing duplicate. Same posture, same reason, as the
+  guardian-verification refund a few lines above it.
+  **AND THE SAME HANDLER COULD NOT RECORD THE SUBSCRIPTION ID AT ALL FOR AN ACCOUNT WITH NO ROW
+  -- SIX DAYS AFTER THE APPLE HALF OF THAT WAS FIXED.** `updateSubscriptionByUserId` is a plain
+  UPDATE; the row is created at signup by `createTrialSubscription`, which a COACHED athlete
+  never meets, so an athlete who later lost their coach is a Free Agent without one. The tier was
+  still granted (`updateFreeAgentBilling` writes `users.freeAgentTier`, which is what every gate
+  reads), so **the purchase looked fine** -- and `stripeSubscriptionId`, the handle every later
+  event matches on, was never written. So `customer.subscription.deleted` found nothing, the SKU
+  was never cleared, and a cancelled or refunded tier went on working forever: the bug found on
+  the first live cancellation, in the one case where the fix for it cannot fire at all. It
+  upserts now, exactly as `applyAppleIapVerification` has since 2026-10-05, and clears
+  `cancelAtPeriodEnd` so an account that cancelled and came back is not carrying the flag off the
+  subscription it replaced. **Fifth instance of the class this file keeps naming**: a correction
+  wired to one of the two paths, invisible because the path that IS taken looks like it worked.
+  **EXTRA VIDEO STORAGE WAS PRICED AT $9.99/mo ON `/pricing` WITH NOTHING BEHIND IT.**
+  `users.hasVideoStorageAddOn` has no Stripe Price, no checkout route, no App Store product and
+  no control on the athlete's own upgrade screen -- an admin ticks a box on `/admin/billing` and
+  that is the only way it has ever been granted. It is **the same bug as the three withdrawn
+  sport coaches a few lines above it on the same page**, which the 10-08 price sweep caught; that
+  sweep could not catch this one, because it scanned for `SPORT_COACH_ADD_ON_IDS` -- the thing it
+  already knew about. The page now states the included caps (5 favorited / 10 total, every plan)
+  and no price. `every-public-price-can-be-bought.test.ts` **discovers** the prices instead: it
+  reads `shared/` for everything that defines a `monthlyPriceCents`, reads each public marketing
+  page, and requires every price a page renders to be BUYABLE with its rail named or listed in
+  `PRICED_WITHOUT_A_CHECKOUT` with a reason over eighty characters. There is one such entry --
+  Full Personalization at $24.99, admin-assigned by Scott's decision ("we won't be adding to
+  apple, which is fine", 2026-10-08) -- so the machinery exists, the list is nearly empty, and a
+  third entry costs a sentence that shows up in a grep. Same shape as `FITTED_OVERRIDES` and
+  `NOT_PUBLIC_ON_PURPOSE`.
+  **THE ONE THAT WAS NOT A DEFECT, recorded so it is not re-raised**: the store verify paths map
+  every add-on in `FREE_AGENT_ADD_ON_ORDER`, withdrawn ones included, so an Apple transaction for
+  a withdrawn sport coach would be honoured. That is the DECIDED design, not an oversight --
+  `ALL_FREE_AGENT_TIER_IDS` exists precisely because "what is for sale" and "what has ever been
+  sold" are two questions, and `entitlementsForFreeAgentTier` ignores the withdrawal list "so a
+  withdrawal can never revoke a feature somebody is paying for". A withdrawal stops new SALES
+  (the checkout refuses, `addOnIsOffered` draws no card, the product is pulled at Apple) and
+  never refuses or revokes a purchase. The three sport coaches have no App Store product anyway.
+  **AND A TEST WENT RED FOR A COMMENT, WHICH IS ITS OWN LESSON.**
+  `stripe-checkout.test.ts` asserted `requireWebCheckout` appeared within `idx + 220` CHARACTERS
+  of each route's path; the paragraph explaining the new guard pushed it past 220. A window
+  measured in characters fails for prose and, worse, PASSES for a route whose guard sits 219
+  characters away in an unrelated handler. It reads the middleware list now -- from the path to
+  the handler's own `async (`, which is exactly the middleware and nothing else -- the same way
+  the new checkout scan discovers it.
+  Four files of tests, every one mutation-tested: `one-account-never-pays-twice.test.ts` (9 cases,
+  three mutations), `a-checkout-only-takes-money-it-can-honour.test.ts` (9, four mutations) and
+  its `.itest.ts` twin driving the real routes against Postgres, where each refusal asserts **403
+  and not 503** -- a refusal about WHO is asking has to come before anything about whether Stripe
+  is configured, or the guard is decorative on a correctly-configured server and nowhere else;
+  503 is what all three returned before this. Server-side except the two coach surfaces and
+  `/pricing`: `verify_build`.
 - **NO FREE AGENT TIER COULD BE ASSIGNED BY AN ADMIN, AND THE FIRST ATTEMPT AFTER LAUNCH FOUND
   IT** (2026-10-11). Scott, on More -> Users with the App Review athlete expanded: "This is all I
   see" -- Reset MFA and Change role, no billing panel. `AdminBillingAssignment`'s athlete form

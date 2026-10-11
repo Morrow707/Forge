@@ -10,7 +10,6 @@ import crypto from "crypto";
 import { z } from "zod";
 import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
-import { bandForAthleteCount } from "@shared/billing-tiers";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { pool } from "./db";
 import { sendEmail, isEmailConfigured } from "./email";
@@ -739,9 +738,23 @@ export function setupAuth(app: Express) {
         // A staff coach's own row never carries a plan: everything billing reads resolves
         // off the primary's row, and a tier here would be a second quote nobody asked for.
         plannedAthleteCount: role === "coach" && !joiningStaff ? expectedAthletes ?? null : null,
-        billingTier: role === "coach" && !joiningStaff && expectedAthletes !== undefined
-          ? bandForAthleteCount(expectedAthletes).id
-          : null,
+        // SIGNUP NO LONGER WRITES A BAND (2026-10-11), AND THAT IS THE WHOLE FIX.
+        //
+        // It used to write `bandForAthleteCount(expectedAthletes).id` straight onto the account
+        // from this form field -- before a card, before a payment, before anything. And
+        // getEntitlements derives four paid entitlements from the band (includesFullPersonalization
+        // is `lo > 20`), so typing 21 into "roughly how many athletes will you have" handed out
+        // Full Personalization at $24.99 a month and multi-team, free and permanently. PUT
+        // /api/coach/plan did it again for an existing coach, any time, from the same field.
+        //
+        // The number was designed as a PRICE QUOTE and that design is sound -- plannedAthleteCount
+        // is what the school said, the roster is what they have, billing charges the larger. The
+        // mistake was one column answering two different questions: what we would bill you, and
+        // what you have paid for. billingTier is now only ever the SECOND: written by the Stripe
+        // webhook (applyCoachSubscriptionBand) on payment, or by an admin deliberately. The quote
+        // is derived from plannedAthleteCount wherever it is shown, so nothing an honest coach
+        // sees has changed.
+        billingTier: null,
         // Every minor, not just 13-17: an under-13 athlete needs the
         // coach-facing "get a guardian waiver on file" nudge at least as
         // much as a 15-year-old does.

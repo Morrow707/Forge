@@ -35,8 +35,12 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
+// LINE COMMENTS FIRST, THEN BLOCK -- the order is load-bearing. A `/*` inside a line comment
+// (server/auth.ts: "see the /api/auth/mfa/* routes below") pairs with the next real `*/` if the
+// block pass runs first, swallowing everything between and leaving a scan reading a fraction of
+// the file while still passing. Taking line comments off first removes the fake opener with them.
 const stripComments = (src: string) =>
-  src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  src.replace(/^[ \t]*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 
 describe("the beta is over", () => {
   it("has no not-charging constant left to render", () => {
