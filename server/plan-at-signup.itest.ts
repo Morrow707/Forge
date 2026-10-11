@@ -72,22 +72,55 @@ describe("the plan a school picks at signup", () => {
     expect(await db.query.users.findFirst({ where: eq(users.email, body.email) })).toBeUndefined();
   });
 
-  it("keeps the stated number and derives the band from it, with no admin step", async () => {
+  it("keeps the stated number and BUYS NOTHING WITH IT", async () => {
+    // THIS USED TO ASSERT billingTier === "21-40", AND THAT WAS THE BUG (fixed 2026-10-11).
+    // Signup wrote the band straight from this form field -- before a card, before a payment --
+    // and getEntitlements derives four paid entitlements from it (includesFullPersonalization is
+    // `lo > ORG_BLOCK_SIZE`, which is 20). So typing 21 into "roughly how many athletes will you
+    // have" handed out Full Personalization at $24.99 a month and multi-team, permanently, free.
+    //
+    // The number itself is right and still kept: plannedAthleteCount is what the school SAID,
+    // the roster is what they HAVE, and billing charges the larger of the two
+    // (getBilledAthleteCountForCoach). What changed is that one column had been answering two
+    // different questions -- what we would bill you, and what you have paid for. billingTier is
+    // now only ever the second.
     const body = coachSignupBody({ expectedAthletes: 34 });
     const res = await new TestClient(server.baseUrl).post("/api/auth/signup", body);
     expect(res.status).toBe(201);
     const row = await db.query.users.findFirst({ where: eq(users.email, body.email) });
     expect(row!.plannedAthleteCount).toBe(34);
-    expect(row!.billingTier).toBe("21-40");
+    expect(row!.billingTier).toBeNull();
     // The tier is a price. Through the beta a signup was exempt from enforcing it (isBetaAccount
     // defaulted true); the beta ended 2026-10-11 and a new account is billed from its first day.
     // The admin billing panel's Beta box is the only thing that comps one now.
     expect(row!.isBetaAccount).toBe(false);
   });
 
+  it("still quotes the band that number lands in, which is all it was ever for", async () => {
+    // The other half, and the reason dropping the write costs a school nothing: the quote is
+    // DERIVED wherever it is shown (coachPlanPayload reads bandForAthleteCount(billedCount)), so
+    // a coach who typed 34 is still quoted the 21-40 band on their own billing page. Without
+    // this the test above would pass just as well against a change that lost the number.
+    const body = coachSignupBody({ expectedAthletes: 34 });
+    const client = new TestClient(server.baseUrl);
+    expect((await client.post("/api/auth/signup", body)).status).toBe(201);
+
+    const plan = await client.get("/api/coach/plan");
+    expect(plan.status).toBe(200);
+    expect(plan.body.billedCount).toBe(34);
+    expect(plan.body.band.id).toBe(bandForAthleteCount(34).id);
+    // And says, separately, that nothing has been paid for -- which is every coach who only
+    // typed a number.
+    expect(plan.body.paidBand).toBeNull();
+  });
+
   it("is what makes the Institutional Service Agreement get asked for at all", async () => {
-    // getInstitutionalAgreementStatus keys off billingTier, so before this a school was never
-    // asked for the agreement until an admin happened to put them on a plan.
+    // getInstitutionalAgreementStatus used to key off billingTier ALONE, so before the plan at
+    // signup existed a school was never asked for the agreement until an admin happened to put
+    // them on a plan. It reads `!plannedAthleteCount && !billingTier` since 2026-10-11, because
+    // signup stopped writing a band and this would otherwise have silently stopped asking every
+    // new school for a signed agreement -- a legal surface, failing quietly. This case is what
+    // proves it still asks; see a-typed-number-buys-nothing.test.ts for the condition itself.
     const body = coachSignupBody();
     const client = new TestClient(server.baseUrl);
     expect((await client.post("/api/auth/signup", body)).status).toBe(201);
@@ -180,15 +213,23 @@ describe("the plan a school picks at signup", () => {
     expect(await storage.getBilledAthleteCountForCoach(coach.id)).toBe(7);
   });
 
-  it("re-derives the band when the primary coach restates the number", async () => {
+  it("re-quotes when the primary coach restates the number, and buys nothing with it either", async () => {
+    // THE SAME BUG, REACHABLE AT ANY TIME. This asserted that restating the number re-wrote
+    // billingTier -- so a coach already on the platform could raise their typed headcount past
+    // twenty and be granted Full Personalization and multi-team, from a route guarded by nothing
+    // but their own primary-coach status. The quote moves; the purchase does not.
     const coach = await makeLoginableUser({ role: "coach", plannedAthleteCount: 4, billingTier: "0-5" });
     const client = await loginAs(server.baseUrl, coach);
     const res = await client.put("/api/coach/plan", { expectedAthletes: 120 });
     expect(res.status).toBe(200);
     expect(res.body.plannedAthleteCount).toBe(120);
+    // The QUOTE follows the number, which is the whole point of the field.
     expect(res.body.band.id).toBe(bandForAthleteCount(120).id);
+    // What they actually bought is untouched, and reported as its own fact so the billing page
+    // can show both rather than conflating them.
+    expect(res.body.paidBand?.id).toBe("0-5");
     const row = await db.query.users.findFirst({ where: eq(users.id, coach.id) });
-    expect(row!.billingTier).toBe(bandForAthleteCount(120).id);
+    expect(row!.billingTier).toBe("0-5");
     expect(row!.plannedAthleteCount).toBe(120);
   });
 
