@@ -43,6 +43,8 @@ import { resolveVideoRetentionLimits, type VideoRetentionLimits } from "@shared/
 // added there at all), so production stays off the same way local dev does
 // unless someone goes and sets this env var by hand. Combined with
 // isBetaAccount below, nothing is ever restricted by accident.
+import { activeAddOns, type AddOnTerms } from "@shared/add-on-terms";
+
 export const ENFORCEMENT_ENABLED = process.env.BILLING_ENFORCEMENT_ENABLED === "true";
 
 export interface Entitlements {
@@ -90,6 +92,10 @@ const UNLIMITED_ENTITLEMENTS: Entitlements = {
 export interface BillingAccount {
   billingTier: string | null;
   billingAddOns: string[] | null;
+  /** When each owned add-on stops being owed (shared/add-on-terms.ts). Optional so a caller
+   *  that predates cancellation keeps compiling; absent reads as "no cancellation, no refund",
+   *  which is what every account looked like before 2026-10-11. */
+  addOnTerms?: AddOnTerms | null;
   isBetaAccount: boolean;
   trialExpiresAt: Date | null;
 }
@@ -110,7 +116,12 @@ export function getEntitlements(account: BillingAccount): Entitlements {
   }
 
   const tier = account.billingTier ? BILLING_TIERS[account.billingTier as BillingTierId] : null;
-  const addOns = new Set<AddOnId>((account.billingAddOns ?? []) as AddOnId[]);
+  // ACTIVE, not merely owned. A cancelled add-on stays in the array until its paid month runs
+  // out (that is what lets it be turned back on for free) and a refunded one is stamped, so the
+  // array alone would keep answering yes to both. shared/add-on-terms.ts is the one rule.
+  const addOns = new Set<AddOnId>(
+    activeAddOns(account.billingAddOns, account.addOnTerms) as AddOnId[],
+  );
   const hasFullBundle = addOns.has("full_bundle");
 
   return {
@@ -172,6 +183,8 @@ const NONE_FREE_AGENT_ENTITLEMENTS: FreeAgentEntitlements = {
 
 export interface FreeAgentBillingAccount {
   freeAgentTier: string | null;
+  /** See BillingAccount.addOnTerms -- the same rule on the athlete side. */
+  addOnTerms?: AddOnTerms | null;
   /** The sport-coach add-ons this account actually owns (users.freeAgentAddOns).
    * Optional so an existing caller that only needed the tier flags keeps
    * compiling -- a missing value resolves to owning none, never to owning all. */
@@ -194,7 +207,7 @@ export function getFreeAgentEntitlements(account: FreeAgentBillingAccount): Free
     // Ownership, not the tier: the three sport coaches are bought one at a time
     // on top of whatever tier an athlete is on, which is why they live in their
     // own column rather than as flags on a SKU.
-    addOns: addOnMap(account.freeAgentAddOns),
+    addOns: addOnMap(activeAddOns(account.freeAgentAddOns, account.addOnTerms)),
   };
 }
 
@@ -523,6 +536,61 @@ export async function syncCoachSubscriptionBand(
  * this be bought here" are two questions and only the second one belongs in a
  * checkout. Same distinction FREE_AGENT_TIER_ORDER draws against
  * ALL_FREE_AGENT_TIER_IDS. */
+/** The subscription a refunded invoice was for. Lives here rather than in storage.ts because it
+ *  needs the Stripe client, and storage.ts must not import this module (the cycle its own
+ *  comment warns about). Null whenever it cannot be established, which makes the refund a no-op
+ *  rather than a guess at whose add-on to take away. */
+async function subscriptionIdForInvoice(invoiceId: string): Promise<string | null> {
+  const stripe = getStripeClient();
+  if (!stripe) return null;
+  try {
+    const invoice = await stripe.invoices.retrieve(invoiceId);
+    const sub =
+      (invoice as unknown as { subscription?: string | { id: string } }).subscription ??
+      invoice.parent?.subscription_details?.subscription;
+    return typeof sub === "string" ? sub : (sub?.id ?? null);
+  } catch (err) {
+    console.error("Could not resolve a refunded invoice's subscription:", (err as Error)?.message);
+    return null;
+  }
+}
+
+/**
+ * CANCEL AN ADD-ON AT THE PROVIDER, and report when the paid month runs out.
+ *
+ * Scott, 2026-10-11: "give them until the next billing cycle to have it as the billing is a
+ * month, so if they buy it the 16th, remove it the 1st, they have until the 16th to use it
+ * again with no refund." So this is `cancel_at_period_end`, never an immediate cancel: an
+ * immediate one would both end access early AND, on Stripe's side, leave a proration credit
+ * nobody asked for.
+ *
+ * Returns the period end so the caller can record it as the add-on's accessUntil. With no
+ * subscription id on file (an admin grant, or a purchase made through Apple, which is cancelled
+ * by the person in iOS Settings and never by this server) there is nothing to call and the
+ * caller falls back to a month from now -- stated rather than guessed at silently.
+ */
+export async function cancelAddOnAtProvider(
+  stripeSubscriptionId: string | undefined,
+): Promise<{ periodEnd: Date | null; error?: string }> {
+  if (!stripeSubscriptionId) return { periodEnd: null };
+  const stripe = getStripeClient();
+  if (!stripe) return { periodEnd: null, error: "not_configured" };
+  try {
+    const updated = await stripe.subscriptions.update(stripeSubscriptionId, {
+      cancel_at_period_end: true,
+    });
+    // Stripe moved the field onto the subscription's first item in newer API versions; read
+    // whichever this account's version actually sends rather than assuming one shape.
+    const seconds =
+      (updated as unknown as { current_period_end?: number }).current_period_end ??
+      updated.items?.data?.[0]?.current_period_end;
+    return { periodEnd: typeof seconds === "number" ? new Date(seconds * 1000) : null };
+  } catch (err) {
+    console.error("Could not cancel add-on subscription at Stripe:", (err as Error)?.message);
+    return { periodEnd: null, error: "provider_refused" };
+  }
+}
+
 export async function createCoachAddOnCheckout(
   userId: number,
   userEmail: string,
@@ -862,7 +930,10 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       if (kind === "free_agent_add_on") {
         const addOnId = session.metadata?.addOnId;
         if (!addOnId || !FREE_AGENT_ADD_ON_ORDER.includes(addOnId as FreeAgentAddOnId)) break;
-        await storage.addFreeAgentAddOn(userId, addOnId as FreeAgentAddOnId);
+        await storage.addFreeAgentAddOn(userId, addOnId as FreeAgentAddOnId, {
+          stripeSubscriptionId:
+            typeof session.subscription === "string" ? session.subscription : undefined,
+        });
         if (customerId) await storage.updateSubscriptionByUserId(userId, { stripeCustomerId: customerId });
         await storage.logBillingEvent(userId, event.type, { sessionId: session.id, kind, addOnId }, event.id);
         await recordPaymentVerification(userId, session.id, session.amount_total, "stripe");
@@ -872,7 +943,10 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       if (kind === "coach_add_on") {
         const addOnId = session.metadata?.addOnId;
         if (!addOnId || !COACH_PURCHASABLE_ADD_ON_ORDER.includes(addOnId as AddOnId)) break;
-        await storage.addCoachBillingAddOn(userId, addOnId as AddOnId);
+        await storage.addCoachBillingAddOn(userId, addOnId as AddOnId, {
+          stripeSubscriptionId:
+            typeof session.subscription === "string" ? session.subscription : undefined,
+        });
         if (customerId) await storage.updateSubscriptionByUserId(userId, { stripeCustomerId: customerId });
         await storage.logBillingEvent(userId, event.type, { sessionId: session.id, kind, addOnId }, event.id);
         await recordPaymentVerification(userId, session.id, session.amount_total, "stripe");
@@ -962,6 +1036,32 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
         if (updated.accountType === "free_agent") {
           await storage.updateFreeAgentBilling(updated.userId, { freeAgentTier: null });
         }
+      }
+      break;
+    }
+    // A STRIPE REFUND REVOKES AT ONCE. Scott, 2026-10-11: "if something is refunded then they
+    // don't have access obviously." A cancellation runs to the end of the paid month; a refund
+    // is the opposite event and must not wait for it. charge.refunded carries the charge, whose
+    // invoice names the subscription, which is the handle recorded in users.addOnTerms when the
+    // add-on was bought -- the only place it could be recorded, since subscriptions.userId is
+    // unique and that row belongs to the tier.
+    case "charge.refunded": {
+      const charge = event.data.object as Stripe.Charge;
+      // `invoice` is read through a cast: newer Stripe API versions have moved it off the
+      // top-level Charge, and this account's version decides which shape actually arrives --
+      // the same reason invoice.payment_failed below reads parent.subscription_details.
+      const rawInvoice = (charge as unknown as { invoice?: string | { id: string } }).invoice;
+      const invoiceId = typeof rawInvoice === "string" ? rawInvoice : rawInvoice?.id;
+      const subscriptionId = invoiceId ? await subscriptionIdForInvoice(invoiceId) : null;
+      if (!subscriptionId) break;
+      const revoked = await storage.revokeAddOnsForStripeSubscription(subscriptionId);
+      if (revoked.userId) {
+        await storage.logBillingEvent(
+          revoked.userId,
+          event.type,
+          { chargeId: charge.id, addOnIds: revoked.addOnIds },
+          event.id,
+        );
       }
       break;
     }

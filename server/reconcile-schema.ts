@@ -1579,6 +1579,10 @@ CREATE TABLE IF NOT EXISTS "family_groups" (
 
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "free_agent_tier" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "free_agent_add_ons" json;
+-- What each bought add-on is owed: purchase time, the end date a cancellation sets, a refund
+-- stamp, and the provider subscription id a cancellation needs to reach (2026-10-11). Until
+-- this column existed nothing could remove an add-on at all -- see shared/add-on-terms.ts.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "add_on_terms" json;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "family_group_id" integer REFERENCES "family_groups"("id") ON DELETE SET NULL;
 
 -- Form-check video retention (see shared/video-retention.ts). Reuses the

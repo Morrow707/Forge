@@ -21,6 +21,7 @@ import {
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import type { AddOnTerm } from "./add-on-terms";
 import { QUIZ_QUESTION_TYPES, type QuizQuestionType, type QuizQuestionPayload } from "./class-quiz-grading";
 import { CLASS_READING_LEVELS, type ClassReadingLevel } from "./class-reading-level";
 import { reviewEventPayloadSchema } from "./video-review";
@@ -684,6 +685,21 @@ export const users = pgTable(
     // no new safety switch needed for this second pricing track.
     freeAgentTier: text("free_agent_tier"),
     freeAgentAddOns: json("free_agent_add_ons").$type<string[]>(),
+    // WHAT EACH BOUGHT ADD-ON IS OWED, keyed by add-on id -- when it was bought, when a
+    // cancellation ends it, whether it was refunded, and the provider's own subscription id.
+    // See shared/add-on-terms.ts for the rule; this is where it is stored.
+    //
+    // ONE COLUMN FOR BOTH SIDES. The coach add-on ids (AddOnId) and the Free Agent ones
+    // (FreeAgentAddOnId) are disjoint and add-on-terms.test.ts holds them that way, so a
+    // coach's Coaches Corner record and an athlete's All Classes record can never collide.
+    //
+    // IT CARRIES THE SUBSCRIPTION ID BECAUSE subscriptions.userId IS UNIQUE. One account has
+    // exactly one subscriptions row, so an add-on's Stripe subscription had nowhere to be
+    // recorded -- which is why, until 2026-10-11, nothing could cancel an add-on even in
+    // principle: addFreeAgentAddOn and addCoachBillingAddOn were append-only and there was no
+    // removal function in the repo at all. A coach who cancelled Coaches Corner in the Stripe
+    // portal kept it.
+    addOnTerms: json("add_on_terms").$type<Record<string, AddOnTerm>>(),
     // Extra form-check video retention (see shared/video-retention.ts) --
     // applies to this account regardless of role/coached status, admin-
     // assignable the same way as everything else in this pass (no self-

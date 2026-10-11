@@ -20,6 +20,7 @@ import {
   COACH_PURCHASABLE_ADD_ON_ORDER,
   ORG_PER_ATHLETE_CENTS,
   type AddOnId,
+  ALL_ADD_ON_IDS,
 } from "@shared/billing-tiers";
 import { createServer, type Server } from "http";
 import path from "path";
@@ -74,6 +75,7 @@ import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
 import { notifyGuardiansOfTermsChange } from "./terms-change-notice";
 import { coreAgreementText } from "./seed-data/signup-agreement";
+import { addOnIsActive, withinRefundWindow, ADD_ON_CANCELLATION_POLICY } from "@shared/add-on-terms";
 import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier, ageFromDateOfBirth } from "@shared/privacy-tiers";
 import { BILLING_LIVE, ENFORCEMENT_ENABLED } from "./billing";
 import {
@@ -85,6 +87,7 @@ import {
   createGuardianVerificationCheckout,
   GUARDIAN_VERIFICATION_CHARGE_CENTS,
   createLessonCheckout,
+  cancelAddOnAtProvider,
 } from "./billing";
 import { missingPriceEnvVars } from "./stripe-prices";
 import { getHealthSnapshot } from "./health-probes";
@@ -1193,7 +1196,7 @@ async function sportCoachAccessFor(user: {
   const lockDemo = async (result: SportCoachAccess): Promise<SportCoachAccess> => {
     if (!DEMO_ACCOUNTS_ALWAYS_SOLD_TO.has(user.email)) return result;
     const account = await storage.getFreeAgentBillingAccount(user.id);
-    const owned = (account?.freeAgentAddOns ?? []).includes(ALL_CLASSES_ADD_ON_ID);
+    const owned = addOnIsActive(account?.freeAgentAddOns, account?.addOnTerms, ALL_CLASSES_ADD_ON_ID);
     return { addOns: { ...result.addOns, [ALL_CLASSES_ADD_ON_ID]: owned }, reason: owned ? "entitlements" : result.reason };
   };
 
@@ -1287,7 +1290,9 @@ const DEMO_ACCOUNTS_ALWAYS_SOLD_TO = new Set<string>([]);
 async function ownsCoachesCorner(user: { id: number; role: string }): Promise<boolean> {
   if (user.role !== "coach") return false;
   const primary = await storage.getUser((await storage.getEffectiveCoachIds(user.id))[0]);
-  return (primary?.billingAddOns ?? []).includes("coaches_corner");
+  // ACTIVE rather than owned: a cancelled Corner runs to the end of its paid month and a
+  // refunded one stops at once. shared/add-on-terms.ts is the one rule both sides read.
+  return addOnIsActive(primary?.billingAddOns, primary?.addOnTerms, "coaches_corner");
 }
 
 async function hasCoachesCornerAccess(user: { id: number; role: string; email: string }): Promise<boolean> {
@@ -13785,6 +13790,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(result);
     },
   );
+
+  /**
+   * TURN AN ADD-ON OFF, OR BACK ON. The half that did not exist until 2026-10-11.
+   *
+   * Until this, users.freeAgentAddOns and users.billingAddOns had exactly two writers between
+   * them, both append-only, and no removal function anywhere in the repo -- so an add-on bought
+   * once was owned for good, whatever happened at Stripe or Apple afterwards.
+   *
+   * Scott's rules are in shared/add-on-terms.ts and this route is their front door:
+   *   DELETE  -- stop renewing at the provider, and keep access to the end of the month already
+   *              paid for. No refund, because no money comes back for a month that was used.
+   *   POST    -- inside that window, turn it back on at no further cost: the month is paid, so
+   *              this just drops the end date. Past the window there is nothing to restore and
+   *              the buyer goes through checkout again.
+   *
+   * One route pair for both sides. Which column an id belongs to is decided by the id itself
+   * (the coach and Free Agent sets are disjoint and a test holds them that way), so a coach
+   * cannot cancel an athlete's add-on by naming it: the ids are checked against the set that
+   * matches the caller's own role before anything is written.
+   */
+  const addOnIdForRole = (role: string, addOnId: string): boolean =>
+    role === "coach"
+      ? (ALL_ADD_ON_IDS as readonly string[]).includes(addOnId)
+      : (FREE_AGENT_ADD_ON_ORDER as readonly string[]).includes(addOnId);
+
+  app.delete("/api/billing/add-on/:addOnId", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const addOnId = String(req.params.addOnId);
+    if (!addOnIdForRole(user.role, addOnId)) {
+      return res.status(400).json({ message: "That isn't an add-on on this account." });
+    }
+    const owner = user.role === "coach" ? (await storage.getEffectiveCoachIds(user.id))[0] : user.id;
+    const account = await storage.getUser(owner);
+    const owned = [...(account?.freeAgentAddOns ?? []), ...(account?.billingAddOns ?? [])];
+    if (!owned.includes(addOnId)) {
+      return res.status(404).json({ message: "You don't have that add-on." });
+    }
+    const term = account?.addOnTerms?.[addOnId];
+    const { periodEnd, error } = await cancelAddOnAtProvider(term?.stripeSubscriptionId);
+    // NO SUBSCRIPTION TO CALL IS NOT A FAILURE. An Apple purchase is cancelled by the person in
+    // iOS Settings and an admin grant has no provider at all, so in both cases Forge records the
+    // end of the month it knows about rather than refusing to let go of the add-on.
+    const accessUntil = periodEnd ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    await storage.scheduleAddOnRemoval(owner, addOnId, accessUntil);
+    await storage.logBillingEvent(owner, "add_on.cancelled", {
+      addOnId,
+      accessUntil: accessUntil.toISOString(),
+      provider: term?.stripeSubscriptionId ? "stripe" : term?.appleOriginalTransactionId ? "apple" : "none",
+      providerError: error ?? null,
+    });
+    res.json({
+      addOnId,
+      accessUntil: accessUntil.toISOString(),
+      refundable: withinRefundWindow(term),
+      policy: ADD_ON_CANCELLATION_POLICY,
+      // Said plainly, because an Apple subscription this server cannot touch keeps billing
+      // until the person stops it in Settings, and a silent "cancelled" here would be a lie.
+      alsoCancelInAppStore: Boolean(term?.appleOriginalTransactionId),
+    });
+  });
+
+  app.post("/api/billing/add-on/:addOnId/restore", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const addOnId = String(req.params.addOnId);
+    if (!addOnIdForRole(user.role, addOnId)) {
+      return res.status(400).json({ message: "That isn't an add-on on this account." });
+    }
+    const owner = user.role === "coach" ? (await storage.getEffectiveCoachIds(user.id))[0] : user.id;
+    const account = await storage.getUser(owner);
+    const term = account?.addOnTerms?.[addOnId];
+    const owned = [...(account?.freeAgentAddOns ?? []), ...(account?.billingAddOns ?? [])];
+    // A REFUNDED ADD-ON IS NOT RESTORABLE. The money went back, so turning it on again is a
+    // purchase, not a restore -- otherwise this route would hand back a product that was paid
+    // for and then un-paid for.
+    if (!owned.includes(addOnId) || term?.refundedAt != null) {
+      return res.status(404).json({ message: "Buy it again to turn it back on." });
+    }
+    if (term?.accessUntil == null) {
+      return res.json({ addOnId, alreadyActive: true });
+    }
+    if (Date.parse(term.accessUntil) <= Date.now()) {
+      return res.status(409).json({ message: "That month has ended. Buy it again to turn it back on." });
+    }
+    await storage.restoreAddOn(owner, addOnId);
+    await storage.logBillingEvent(owner, "add_on.restored", { addOnId });
+    res.json({ addOnId, alreadyActive: false });
+  });
 
   app.post(
     "/api/billing/checkout/coach-add-on",

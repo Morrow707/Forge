@@ -22,7 +22,10 @@ describe("Coaches Corner on the App Store", () => {
   it("is recognised by the server from the purchasable list, scoped to a coach", () => {
     expect(storage).toMatch(/COACH_PURCHASABLE_ADD_ON_ORDER\.map\(\(addOn\) => \[appleProductIdForCoachAddOn\(addOn\), addOn\]\)/);
     expect(storage).toMatch(/scope: "free_agent" \| "coach" = "free_agent"/);
-    expect(storage).toMatch(/if \(scope === "coach"\) \{[\s\S]*addCoachBillingAddOn\(userId, coachAddOn\)/);
+    // The call takes a third argument since 2026-10-11 -- the Apple transaction id, recorded
+    // so a refund naming it can revoke this add-on later (shared/add-on-terms.ts). What this
+    // pins is unchanged: inside the coach scope, a coach add-on is what gets granted.
+    expect(storage).toMatch(/if \(scope === "coach"\) \{[\s\S]*addCoachBillingAddOn\(userId, coachAddOn[,)]/);
   });
 
   it("is verified through the account route, which reads the role", () => {

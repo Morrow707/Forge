@@ -190,6 +190,7 @@ import {
   type PrivacyTier,
 } from "@shared/privacy-tiers";
 import { coreAgreementText } from "./seed-data/signup-agreement";
+import { type AddOnTerm, addOnIsActive } from "@shared/add-on-terms";
 import {
   REQUIRED_DOCUMENTS,
   documentAudienceFor,
@@ -3532,6 +3533,35 @@ function summariseWaivers(
  *  reader can reason about. */
 export const DELETION_STAMPING_BEGAN = "2026-09-23T00:00:00.000Z";
 
+/** Merge one add-on's terms into the stored map.
+ *
+ * A PURCHASE RESETS THE LIFECYCLE FIELDS; anything else merges. `purchasedAt` arriving means
+ * "this is a purchase", so accessUntil and refundedAt are dropped -- Scott's rule that turning
+ * an add-on back on inside its paid month costs nothing depends on the pending cancellation
+ * going away, and a re-purchase after a refund must not inherit the refund stamp that would
+ * keep it switched off. A cancellation or a refund carries no purchasedAt and so keeps the
+ * purchase time, which is what the 72-hour refund window is measured from. */
+function nextAddOnTerms(
+  existing: Record<string, AddOnTerm> | null | undefined,
+  addOnId: string,
+  patch: Partial<AddOnTerm>,
+): Record<string, AddOnTerm> {
+  const all = { ...(existing ?? {}) };
+  const prior = all[addOnId];
+  const base: AddOnTerm =
+    patch.purchasedAt != null
+      ? { ...prior, purchasedAt: patch.purchasedAt, accessUntil: undefined, refundedAt: undefined }
+      : { ...prior, purchasedAt: prior?.purchasedAt ?? new Date().toISOString() };
+  const merged: AddOnTerm = { ...base, ...patch };
+  // Undefined keys are dropped rather than stored as nulls: this is a json column, and a reader
+  // asking `term.accessUntil == null` must not have to care which of the two it got.
+  for (const k of Object.keys(merged) as (keyof AddOnTerm)[]) {
+    if (merged[k] === undefined) delete merged[k];
+  }
+  all[addOnId] = merged;
+  return all;
+}
+
 export const storage = {
   // ---------- Users ----------
   // Memoised for the life of one request (server/request-cache.ts): the auth layer loads this
@@ -3832,6 +3862,11 @@ export const storage = {
       .select({
         freeAgentTier: users.freeAgentTier,
         freeAgentAddOns: users.freeAgentAddOns,
+        // Selected because every reader of freeAgentAddOns now has to ask whether the add-on is
+        // still OWED, not just owned -- a cancelled one runs to the end of its paid month and a
+        // refunded one stops at once. Leaving it out of this select would have made the whole
+        // cancellation mechanism silently inert on the athlete side.
+        addOnTerms: users.addOnTerms,
         isBetaAccount: users.isBetaAccount,
         trialExpiresAt: users.trialExpiresAt,
       })
@@ -4949,7 +4984,12 @@ export const storage = {
     if (scope === "coach") {
       const coachAddOn = APPLE_PRODUCT_ID_TO_COACH_ADD_ON[verified.productId];
       if (!coachAddOn) return { ok: false, error: "Unrecognized product." };
-      await this.addCoachBillingAddOn(userId, coachAddOn);
+      // The Apple id is recorded with the add-on so a REFUND or revocation naming that
+      // transaction can find this add-on later (revokeAddOnsForAppleTransaction). An Apple
+      // subscription is cancelled by the person in iOS Settings, never by this server.
+      await this.addCoachBillingAddOn(userId, coachAddOn, {
+        appleOriginalTransactionId: verified.originalTransactionId,
+      });
       await this.logBillingEvent(userId, "apple_iap.verified", {
         originalTransactionId: verified.originalTransactionId,
         productId: verified.productId,
@@ -4962,7 +5002,9 @@ export const storage = {
     // users.freeAgentAddOns and leaves the subscription row's tier alone.
     const addOnId = APPLE_PRODUCT_ID_TO_ADD_ON[verified.productId];
     if (addOnId) {
-      await this.addFreeAgentAddOn(userId, addOnId);
+      await this.addFreeAgentAddOn(userId, addOnId, {
+        appleOriginalTransactionId: verified.originalTransactionId,
+      });
       await this.logBillingEvent(userId, "apple_iap.verified", {
         originalTransactionId: verified.originalTransactionId,
         productId: verified.productId,
@@ -5149,6 +5191,14 @@ export const storage = {
     if (notification.kind === "ignored" || !notification.transaction) return { ok: true };
     const { originalTransactionId, productId, expiresAt } = notification.transaction;
     if (notification.kind === "revoked") {
+      // AN ADD-ON IS REVOKED TOO, and it used to be missed entirely. This branch only ever
+      // touched the subscriptions row and users.freeAgentTier, so an All Classes or Coaches
+      // Corner purchase refunded or revoked at Apple went on working for good -- there was no
+      // removal path for an add-on anywhere in the repo until 2026-10-11. Done BEFORE the
+      // subscription lookup below, because an add-on purchase may have no subscriptions row of
+      // its own to find (subscriptions.userId is unique, so the row belongs to the tier) and an
+      // early return there would skip the revocation entirely.
+      await this.revokeAddOnsForAppleTransaction(originalTransactionId);
       const updated = await this.updateSubscriptionByAppleOriginalTransactionId(originalTransactionId, {
         status: "canceled",
       });
@@ -5268,30 +5318,186 @@ export const storage = {
    * users.freeAgentAddOns is a json column, not a Postgres array, so there is no
    * array_append for it. The Set is what makes a redelivered webhook idempotent --
    * buying the same add-on twice can only ever produce one entry. */
-  async addFreeAgentAddOn(athleteId: number, addOnId: string) {
+  async addFreeAgentAddOn(
+    athleteId: number,
+    addOnId: string,
+    /** The provider's handle on this add-on's own subscription, so a cancellation can reach it.
+     *  Absent for an admin grant, which has no subscription to cancel. */
+    provider?: { stripeSubscriptionId?: string; appleOriginalTransactionId?: string },
+  ) {
     const current = await this.getUser(athleteId);
     if (!current) return null;
     const owned = new Set(current.freeAgentAddOns ?? []);
     owned.add(addOnId);
     const [row] = await db
       .update(users)
-      .set({ freeAgentAddOns: [...owned] })
+      .set({
+        freeAgentAddOns: [...owned],
+        // A PURCHASE CLEARS ANY PENDING CANCELLATION. Scott's rule: cancel on the 1st having
+        // bought on the 16th and "they have until the 16th to use it again with no extra cost"
+        // -- so turning it back on inside the paid month is this same write, and it must drop
+        // accessUntil rather than leave the add-on expiring mid-month anyway. A refund stamp is
+        // dropped too: this is a NEW purchase, not the refunded one.
+        addOnTerms: nextAddOnTerms(current.addOnTerms, addOnId, {
+          purchasedAt: new Date().toISOString(),
+          ...(provider?.stripeSubscriptionId
+            ? { stripeSubscriptionId: provider.stripeSubscriptionId }
+            : {}),
+          ...(provider?.appleOriginalTransactionId
+            ? { appleOriginalTransactionId: provider.appleOriginalTransactionId }
+            : {}),
+        }),
+      })
       .where(eq(users.id, athleteId))
       .returning({ id: users.id, freeAgentAddOns: users.freeAgentAddOns });
+    return row ?? null;
+  },
+
+  /** CANCEL: the month is paid for, so access runs to `accessUntil` and no money goes back.
+   *  Scott, 2026-10-11: "give them until the next billing cycle to have it ... with no refund."
+   *  The add-on STAYS in the owned list -- that is what makes turning it back on free. */
+  async scheduleAddOnRemoval(userId: number, addOnId: string, accessUntil: Date) {
+    const current = await this.getUser(userId);
+    if (!current) return null;
+    const owned = new Set([...(current.freeAgentAddOns ?? []), ...(current.billingAddOns ?? [])]);
+    if (!owned.has(addOnId)) return null;
+    const [row] = await db
+      .update(users)
+      .set({
+        addOnTerms: nextAddOnTerms(current.addOnTerms, addOnId, {
+          accessUntil: accessUntil.toISOString(),
+        }),
+      })
+      .where(eq(users.id, userId))
+      .returning({ id: users.id, addOnTerms: users.addOnTerms });
+    return row ?? null;
+  },
+
+  /** Revoke the add-on a refunded Stripe subscription paid for.
+   *
+   *  Takes the subscription id rather than the charge, because resolving a charge to its
+   *  subscription needs the Stripe client and this module must not import billing.ts -- that
+   *  module imports `storage` from here, and the reverse import is the cycle its own comment
+   *  warns about. billing.ts does the lookup and hands the id down.
+   *
+   *  The id matched is the one addOnTerms recorded at purchase, which is the only place it
+   *  could be recorded: subscriptions.userId is unique, so that row belongs to the tier. A
+   *  refund of the tier's own charge therefore matches no add-on and is a no-op here -- the
+   *  tier's clear-down is customer.subscription.deleted's job and stays there. */
+  async revokeAddOnsForStripeSubscription(subscriptionId: string) {
+    const rows = await db
+      .select({ id: users.id, addOnTerms: users.addOnTerms })
+      .from(users)
+      .where(sql`${users.addOnTerms}::text LIKE ${"%" + subscriptionId + "%"}`);
+    const addOnIds: string[] = [];
+    let userId: number | null = null;
+    for (const row of rows) {
+      for (const [addOnId, term] of Object.entries(row.addOnTerms ?? {})) {
+        if (term?.stripeSubscriptionId !== subscriptionId) continue;
+        await this.revokeAddOnAfterRefund(row.id, addOnId);
+        addOnIds.push(addOnId);
+        userId = row.id;
+      }
+    }
+    return { userId, addOnIds };
+  },
+
+  /** Revoke every add-on recorded against one Apple transaction, for a refund or a revocation.
+   *
+   *  users.addOnTerms is where an add-on's appleOriginalTransactionId lives (it cannot live on
+   *  the subscriptions row, which is unique per user and belongs to the tier), so this is a scan
+   *  of the accounts that hold that id. Scoped by the id itself, so it can only ever reach the
+   *  account that bought under it. */
+  async revokeAddOnsForAppleTransaction(originalTransactionId: string) {
+    const rows = await db
+      .select({ id: users.id, addOnTerms: users.addOnTerms })
+      .from(users)
+      .where(sql`${users.addOnTerms}::text LIKE ${"%" + originalTransactionId + "%"}`);
+    let revoked = 0;
+    for (const row of rows) {
+      for (const [addOnId, term] of Object.entries(row.addOnTerms ?? {})) {
+        if (term?.appleOriginalTransactionId !== originalTransactionId) continue;
+        await this.revokeAddOnAfterRefund(row.id, addOnId);
+        await this.logBillingEvent(row.id, "add_on.revoked_by_apple", { addOnId, originalTransactionId });
+        revoked += 1;
+      }
+    }
+    return revoked;
+  },
+
+  /** RESTORE: drop the pending end date, inside the month already paid for.
+   *
+   *  Scott's rule is that cancelling on the 1st having bought on the 16th leaves the add-on
+   *  usable "until the 16th ... with no refund", so picking it back up in that window costs
+   *  nothing and is just this: the end date goes and the paid month carries on. Past the window
+   *  there is nothing to restore -- the route refuses and the buyer goes through checkout. */
+  async restoreAddOn(userId: number, addOnId: string) {
+    const current = await this.getUser(userId);
+    if (!current) return null;
+    const terms = { ...(current.addOnTerms ?? {}) };
+    const term = terms[addOnId];
+    if (!term) return null;
+    const { accessUntil: _dropped, ...kept } = term;
+    terms[addOnId] = kept;
+    const [row] = await db
+      .update(users)
+      .set({ addOnTerms: terms })
+      .where(eq(users.id, userId))
+      .returning({ id: users.id, addOnTerms: users.addOnTerms });
+    return row ?? null;
+  },
+
+  /** REFUND: the money went back, so access stops now -- not at a period end (Scott: "if
+   *  something is refunded then they don't have access obviously"). The add-on leaves the owned
+   *  list AND carries a refund stamp, so neither a stale array nor a future accessUntil can
+   *  hand it back. */
+  async revokeAddOnAfterRefund(userId: number, addOnId: string) {
+    const current = await this.getUser(userId);
+    if (!current) return null;
+    const freeAgent = (current.freeAgentAddOns ?? []).filter((id) => id !== addOnId);
+    const coach = (current.billingAddOns ?? []).filter((id) => id !== addOnId);
+    const [row] = await db
+      .update(users)
+      .set({
+        freeAgentAddOns: freeAgent,
+        billingAddOns: coach,
+        addOnTerms: nextAddOnTerms(current.addOnTerms, addOnId, {
+          refundedAt: new Date().toISOString(),
+        }),
+      })
+      .where(eq(users.id, userId))
+      .returning({ id: users.id, addOnTerms: users.addOnTerms });
     return row ?? null;
   },
 
   /** The coach-side twin of addFreeAgentAddOn, over users.billingAddOns -- which
    * is where Coaches Corner ownership is recorded (see AddOnId in
    * shared/billing-tiers.ts on why it shares the column rather than getting one). */
-  async addCoachBillingAddOn(userId: number, addOnId: string) {
+  async addCoachBillingAddOn(
+    userId: number,
+    addOnId: string,
+    provider?: { stripeSubscriptionId?: string; appleOriginalTransactionId?: string },
+  ) {
     const current = await this.getUser(userId);
     if (!current) return null;
     const owned = new Set(current.billingAddOns ?? []);
     owned.add(addOnId);
     const [row] = await db
       .update(users)
-      .set({ billingAddOns: [...owned] })
+      .set({
+        billingAddOns: [...owned],
+        // Same rule as the Free Agent twin above: a purchase clears a pending cancellation and
+        // any refund stamp, because this is a new purchase rather than the refunded one.
+        addOnTerms: nextAddOnTerms(current.addOnTerms, addOnId, {
+          purchasedAt: new Date().toISOString(),
+          ...(provider?.stripeSubscriptionId
+            ? { stripeSubscriptionId: provider.stripeSubscriptionId }
+            : {}),
+          ...(provider?.appleOriginalTransactionId
+            ? { appleOriginalTransactionId: provider.appleOriginalTransactionId }
+            : {}),
+        }),
+      })
       .where(eq(users.id, userId))
       .returning({ id: users.id, billingAddOns: users.billingAddOns });
     return row ?? null;
