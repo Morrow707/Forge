@@ -10,6 +10,28 @@ the screen that exists.
 
 ---
 
+## 2026-10-11: the first set was made, used and PURGED. The next set needs the same recipe.
+
+The nine accounts below were made on production on 2026-10-10 (`scott.morrow+coach@live.com`,
+`+coach2`, `+staff`, `+athlete`, `+fa1`, `+fa2`, `+fa3`, `+minor`; `+guardian` was never claimed)
+and every one of them is gone as of the 2026-10-11 deploy, on Scott's word: "Delete all accounts
+that you created, there are emails that were added through the beta that belong to people keep
+those, purge every inch of data that belongs to all of your generated beta accounts." Two went
+through the real delete path by hand on 10-10 (`+coach2`, `+fa1`); the other seven through
+`RETIRED_AUDIT_ACCOUNT_EMAILS` in `server/seed.ts`, which hands each to `deleteUserRecord` -- the
+same cascade and file cleanup an account's own deletion takes, now including the branding logo the
+audit coach had uploaded (that was a gap: `users.brandLogoUrl` and `teams.brandLogoUrl` files
+outlived a coach's row, in the one upload directory that is public by URL). Every program,
+assignment, logged day, waiver, nutrition row, team and consent record they made cascaded with
+them. The real beta accounts (made in August and September by people) were not touched.
+
+**The list is guarded by creation date** (`AUDIT_ACCOUNTS_PURGED_AT`): an account signed up under
+one of those addresses after 2026-10-11 01:00 UTC is a new account and is left alone, so the next
+audit pass can reuse the same plus-tags. Rows on the checklist that still need an account per role
+(the device email, the three tiers, the under-13 claim) are made fresh from the recipe below.
+
+---
+
 ## Read first: it is eight accounts, not six, and one of them is not a signup
 
 The checklist's sentence lists: "Admin (yours), a primary coach with a school plan, a staff coach

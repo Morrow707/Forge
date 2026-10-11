@@ -165,12 +165,49 @@ async function logAccountInventory(): Promise<void> {
   }
 }
 
+/** THE LAUNCH-AUDIT ACCOUNTS ARE RETIRED THE SAME WAY (2026-10-11). Nine accounts were made
+ * through the real signup on production on 2026-10-10 to run the launch audit's authenticated
+ * rows (docs/pre-launch-audit-accounts.md), and two were deleted by hand through the real delete
+ * path the same evening. Scott: "Delete all accounts that you created, there are emails that were
+ * added through the beta that belong to people keep those, purge every inch of data that belongs
+ * to all of your generated beta accounts." These are exactly the generated ones -- every address
+ * is a plus-tag on Scott's own inbox, and no real person ever signed up under one -- and NOTHING
+ * else: the beta accounts that belong to people are not on this list and never will be. Every
+ * program, assignment, log, waiver, nutrition row, team and uploaded logo they made cascades or
+ * is unlinked with the row (deleteUserRecord). The guardian address is listed in case the claim
+ * ever ran; it had not when this was written. */
+const RETIRED_AUDIT_ACCOUNT_EMAILS = [
+  "scott.morrow+coach@live.com",
+  "scott.morrow+coach2@live.com",
+  "scott.morrow+staff@live.com",
+  "scott.morrow+athlete@live.com",
+  "scott.morrow+fa1@live.com",
+  "scott.morrow+fa2@live.com",
+  "scott.morrow+fa3@live.com",
+  "scott.morrow+minor@live.com",
+  "scott.morrow+guardian@live.com",
+] as const;
+/** When the purge above was ordered. Anything on the list created later is not the audit's. */
+const AUDIT_ACCOUNTS_PURGED_AT = new Date("2026-10-11T01:00:00Z");
+
 async function removeSeededDemoAccounts(): Promise<void> {
   for (const email of RETIRED_DEMO_ACCOUNT_EMAILS) {
     const user = await storage.getUserByEmail(email);
     if (!user) continue;
     await storage.deleteUserRecord(user.id);
     console.log(`Removed seeded demo account ${email} (user ${user.id}) and everything that hung off it.`);
+  }
+  // The audit accounts are logged by id only: the addresses are plus-tags on a real inbox, and
+  // the deploy log is not a place for an email.
+  for (const email of RETIRED_AUDIT_ACCOUNT_EMAILS) {
+    const user = await storage.getUserByEmail(email);
+    if (!user) continue;
+    // Only the accounts the audit made. An account signed up under one of these addresses AFTER
+    // the purge is a new account (the next audit pass will want the same tags), and a list that
+    // deleted it on every boot would be a trap nobody could see from the signup screen.
+    if (user.createdAt && new Date(user.createdAt) > AUDIT_ACCOUNTS_PURGED_AT) continue;
+    await storage.deleteUserRecord(user.id);
+    console.log(`Removed launch-audit account (user ${user.id}, ${user.role}) and everything that hung off it.`);
   }
 }
 

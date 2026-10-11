@@ -2596,6 +2596,24 @@ branch through the real login route and the real email.
   **Deployed 2026-10-11 00:27 UTC: the Render log shows all eight removed** (users 1, 2, 5-10),
   the site answered 200 straight after, and the itest run that captured the emails below lost
   exactly one file -- the demo-account itest deleted out from under it mid-run, not a real red.
+- **THE NINE LAUNCH-AUDIT ACCOUNTS ARE PURGED TOO (2026-10-11), AND A COACH'S LOGO OUTLIVED THE
+  COACH.** Scott: "Delete all accounts that you created, there are emails that were added through
+  the beta that belong to people keep those, purge every inch of data that belongs to all of your
+  generated beta accounts." `RETIRED_AUDIT_ACCOUNT_EMAILS` in `server/seed.ts` names the nine
+  plus-tag addresses from 2026-10-10 and hands each to `deleteUserRecord` in the same end-of-seed
+  pass as the demo accounts; the log line carries the id and role, never the address. **Guarded by
+  `AUDIT_ACCOUNTS_PURGED_AT`**: an account made under one of those addresses after 01:00 UTC that
+  day is a new account and is skipped, so the next audit pass can reuse the tags without a list
+  that deletes them on every boot -- proven on a throwaway database with a later signup planted
+  beside two old ones. The real beta accounts (ids 11-16 and 18 on production, made by people in
+  August and September) are not on any list and stay; so do the admin-owned "Strength" program and
+  "Mcconnell Raises" exercise, which Scott made, not the audit. **The gap this found:**
+  `deleteUserRecord`'s coach branch removed authored comment media only, so `users.brandLogoUrl`
+  and `teams.brandLogoUrl` files stayed on disk after the row and the team cascaded -- in
+  `team-logos`, the one upload directory that is public by URL on purpose, so an orphan there is
+  the one kind anybody could still fetch. Both are removed now. The checklist rows that used these
+  accounts (device email, three tiers, under-13 claim, the guardian's URLs) are made fresh from
+  `docs/pre-launch-audit-accounts.md` when Scott runs them.
 - **NINETEEN EMAILS RENDERED AT PHONE WIDTH, NONE OVERFLOW** (2026-10-11). The 10-09 read covered
   the words; nobody had drawn them at 390px. Method, reusable: run the integration suite with a
   setup file that wraps `testOutbox.push` and writes every captured body to disk (the suite sends

@@ -4388,9 +4388,22 @@ export const storage = {
           .from(skillDayComments)
           .where(eq(skillDayComments.authorId, userId)),
       ]);
+      // And the program's branding: the logo uploaded on /coach/branding lives on the coach's
+      // own row (users.brandLogoUrl) and a team's override on teams.brandLogoUrl, and teams
+      // cascade from their coach -- so deleting a coach removed both rows and left the image
+      // files on disk. Found 2026-10-11 purging the launch-audit accounts, one of which had
+      // uploaded a logo through the real branding page. The logos directory is public by URL
+      // (it draws on the login screen before there is a session), which makes an orphan there
+      // the one kind of orphan anybody could still fetch.
+      const ownedTeams = await db
+        .select({ logo: teams.brandLogoUrl })
+        .from(teams)
+        .where(eq(teams.coachId, userId));
       await Promise.all([
         ...authoredComments.flatMap((c) => [deleteUploadedFile(c.url), deleteUploadedFile(c.image)]),
         ...authoredSkillComments.flatMap((c) => [deleteUploadedFile(c.url), deleteUploadedFile(c.image)]),
+        deleteUploadedFile(user.brandLogoUrl),
+        ...ownedTeams.map((t) => deleteUploadedFile(t.logo)),
       ]);
     }
 
