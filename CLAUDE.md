@@ -2661,6 +2661,34 @@ branch through the real login route and the real email.
   throwaway database: created when set, silent when unchanged, password rotated when the value
   changes, retired when unset. **The way to delete it is to delete the variable and the exemption
   and redeploy**, which is what closes the launch rows that needed an admin.
+- **AN ADMIN-ASSIGNED TIER WAS REFUSED WITH BILLING LIVE, AND THE REVIEW ATHLETE WAS THE FIRST TO
+  HIT IT** (2026-10-11, found the first time the launch audit assigned a tier through the admin
+  login above). `hasAthletePaidForAiAccess`'s live branch demanded an ACTIVE `subscriptions` row
+  before it would read `freeAgentTier`, so AI Coach + Video assigned on More -> Users to an
+  account with no row (every admin grant ever made) or a cancelled one (account 28, after the
+  live Stripe purchase and cancellation) assigned nothing: camera and skills answered
+  `tier_excludes_camera` / `tier_excludes_skills` while the upgrade screen showed the tier as
+  current. The row decides a TRIAL and nothing else now; a tier on file is a live purchase or an
+  admin's grant, because the Stripe webhook and the Apple expired/revoked/refund path CLEAR it
+  when a purchase lapses. `free-agent-tier-entitlements.test.ts` pins that the live branch has no
+  `return false` and no active/past_due test. Proven on production after the deploy: Basic and AI
+  Coach refused, AI Coach + Video allowed, and the review athlete is left on AI Coach + Video.
+  **Had this shipped to App Review as it was, the reviewer's camera would not have worked.**
+  **Rows closed with the admin login, all against production:** intake import -> claim at
+  /claim/:code -> on the roster -> deleted through the real path (needs the coach on a band:
+  a coach with no plan has a cap of zero, so the review coach wore the 0-5 band for the test and
+  was put back to none); the three tiers on one account; the reader with All Classes on (chapter
+  two reads `locked` behind chapter one's quiz, not `locked_tier`; a 60% attempt is graded and
+  fails the 80% bar; six cards in the review deck; Continue points at the quiz; streak 1;
+  certificate 409 until every lesson is finished) and `locked_tier` again the moment the add-on
+  came off; 55 of the 58 admin GET routes answer 200 (the three 400s want a date or a path) with
+  no review address on any analytics surface and no athlete email or name on the Users page; a
+  same-text PUT on the EULA, a Forge exercise created/renamed/deleted (an admin-created exercise
+  is `isForgeOfficial: false` until flipped, by design), a track and a class created/edited/deleted;
+  the four queues answer 200 and the DMCA agent address renders on the live Terms. The review
+  athlete keeps one Football-class enrolment, one read chapter and one failed quiz attempt from
+  this, which is what a reviewer would leave too. **The admin login was retired the same hour**
+  by deleting `SEEDED_ADMIN_PASSWORD` and its exemption and redeploying (see the entry above).
 - **TWO APP REVIEW ACCOUNTS EXIST ON PRODUCTION (2026-10-11), AND THEY ARE THE ONLY TWO.** Scott:
   "what two review addresses? can you just make them?" Made through the real signup with the invite
   code: account 27, a head coach (planned headcount 10, no plan, no Coaches Corner -- on purpose, so
