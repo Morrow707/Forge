@@ -2613,7 +2613,10 @@ branch through the real login route and the real email.
   `team-logos`, the one upload directory that is public by URL on purpose, so an orphan there is
   the one kind anybody could still fetch. Both are removed now. The checklist rows that used these
   accounts (device email, three tiers, under-13 claim, the guardian's URLs) are made fresh from
-  `docs/pre-launch-audit-accounts.md` when Scott runs them.
+  `docs/pre-launch-audit-accounts.md` when Scott runs them. **Deployed 2026-10-11 00:56 UTC: the
+  Render log shows users 19, 20, 21, 23, 24 and 25 removed and the inventory at nine accounts** --
+  3 and 4 (admins), 11, 12, 15 (coaches), 13, 14, 16, 18 (Free Agents), all from August and
+  September. Production now holds nothing this session created.
 - **NINETEEN EMAILS RENDERED AT PHONE WIDTH, NONE OVERFLOW** (2026-10-11). The 10-09 read covered
   the words; nobody had drawn them at 390px. Method, reusable: run the integration suite with a
   setup file that wraps `testOutbox.push` and writes every captured body to disk (the suite sends
