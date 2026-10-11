@@ -4863,7 +4863,12 @@ export const storage = {
         userId,
         accountType,
         tier: "base",
-        seatCap: accountType === "coach" ? 15 : null,
+        // NO SEAT CAP IS EVER WRITTEN (2026-10-11). This was `accountType === "coach" ? 15 : null`
+        // and was the only writer of the column in the repo, so every coach on a trial row was
+        // capped at fifteen athletes whatever band they went on to pay for. The cap is gone as a
+        // concept (see Entitlements in billing.ts); the column stays because it is data a future
+        // plan shape could want, and null is what "no cap" has always meant to every reader.
+        seatCap: null,
         status: "trialing",
         trialEndsAt,
       })
@@ -5304,33 +5309,13 @@ export const storage = {
     return row ?? null;
   },
 
-  // The actual roster-seat guardrail -- always true (unlimited roster,
-  // today's real behavior) unless BILLING_LIVE is set AND this coach has a
-  // real subscription row with a seatCap. No subscription row yet (every
-  // coach today) also means unlimited, same as BILLING_LIVE being off --
-  // this never has to distinguish "no billing configured" from "billing
-  // configured, unlimited plan," because neither exists as a real state
-  // yet either.
-  async hasRosterSeatAvailable(coachId: number): Promise<boolean> {
-    // Inlined rather than imported from billing.ts -- that module already
-    // imports `storage` from here, and a reverse import back would make
-    // the two files circularly dependent over what's just one env check.
-    if (process.env.BILLING_LIVE !== "true") return true;
-    const sub = await this.getSubscriptionForUser(coachId);
-    if (!sub || sub.seatCap == null) return true;
-    const current = await this.getRosterSeatCountForCoach(coachId);
-    return current < sub.seatCap;
-  },
-
-  // The actual fix for hasRosterSeatAvailable's own TOCTOU gap: checking
-  // the seat count and inserting the roster row as two separate calls
-  // leaves a window where two concurrent claims for the same coach's last
-  // open seat can both pass the check before either insert lands, letting
-  // a coach end up with more athletes than their seatCap allows. Every
-  // real "add this athlete to this coach's roster" path should call this
-  // instead of hasRosterSeatAvailable + linkAthleteToCoach separately --
-  // linkAthleteToCoach itself is left as-is for seed.ts's bulk demo-data
-  // inserts, where there's no concurrency and BILLING_LIVE is never true.
+  // THE ONE PLACE AN ATHLETE JOINS A ROSTER, and the reason it is a transaction with a lock.
+  // It carried the seat-cap check until 2026-10-11, when the cap was removed as a concept
+  // (there is no roster cap -- every athlete is $4, see Entitlements in billing.ts), so what is
+  // left to serialize is the de-dupe: reading "is this athlete already on this staff's roster"
+  // and inserting the row are two statements, and two concurrent joins for the same athlete
+  // would otherwise both miss the existing row and insert twice. `coachAthletes` has no unique
+  // index to fall back on, so the lock is the guarantee, not an optimisation.
   //
   // pg_advisory_xact_lock is keyed on the coach's own id and held only for
   // this transaction's lifetime (auto-released on commit or rollback) --
@@ -5349,19 +5334,6 @@ export const storage = {
         where: and(inArray(coachAthletes.coachId, coachIds), eq(coachAthletes.athleteId, athleteId)),
       });
       if (existing) return { ok: true as const, athlete: existing };
-
-      if (!(await this.hasRosterSeatAvailable(coachId))) {
-        // Says what is actually wrong and who can fix it: the program is full, and the fix is
-        // the coach moving up a band (the plan is roster bands -- see shared/billing-tiers.ts),
-        // not anything this athlete can do. The coach sees the same state from their side as
-        // atCap on GET /api/coach/plan. Enforcement semantics are unchanged -- this only fires
-        // where it already did.
-        return {
-          ok: false as const,
-          error:
-            "This program is full -- its coach needs to move up to a bigger plan before anyone else can join.",
-        };
-      }
 
       const [row] = await tx.insert(coachAthletes).values({ coachId, athleteId }).returning();
       return { ok: true as const, athlete: row };
@@ -5693,13 +5665,6 @@ export const storage = {
     });
     if (existing) return existing;
 
-    const primary = await this.getUser(coachIds[0]);
-    const entitlements = getEntitlements(primary!);
-    if (entitlements.athleteCap !== null) {
-      const roster = await this.getRosterForCoach(coachId);
-      if (roster.length >= entitlements.athleteCap) return null;
-    }
-
     const [row] = await db
       .insert(coachAthletes)
       .values({ coachId, athleteId })
@@ -5818,12 +5783,10 @@ export const storage = {
           .where(eq(coachAthleteRequests.id, requestId));
         return { ok: false as const, reason: "already_coached" as const };
       }
-      // Framework only -- BILLING_LIVE is unset in every environment
-      // today, so hasRosterSeatAvailable always returns true and this
-      // never actually blocks anyone yet. See server/billing.ts's own
-      // comment. claimRosterSeat (not hasRosterSeatAvailable +
-      // linkAthleteToCoach separately) is what actually closes the seat-
-      // count TOCTOU race once billing is live -- see its own comment.
+      // claimRosterSeat rather than a bare insert: it holds the per-coach advisory lock that
+      // makes the de-dupe race-safe. It can no longer refuse for a full roster -- the cap was
+      // removed on 2026-10-11 -- but it still refuses on a genuine database failure, so the
+      // result is checked.
       const claimed = await this.claimRosterSeat(request.coachId, athleteId);
       if (!claimed.ok) {
         return { ok: false as const, reason: "coach_seat_limit" as const };
@@ -28654,15 +28617,6 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   ) {
     const provisional = await this.getProvisionalAthleteByClaimCode(claimCode);
     if (!provisional) return { error: "This claim link isn't valid -- ask your coach for a new one." as const };
-    // The other onboarding path onto a coach's roster (the athlete-request
-    // approval flow) already checks this -- claim links skipped it
-    // entirely, so a coach at their seat cap could still be handed a new
-    // roster spot through a claim link even with BILLING_LIVE on. Checked
-    // before creating the account, not after, so a full roster fails
-    // cleanly instead of leaving an orphaned, unlinked user row behind.
-    if (!(await this.hasRosterSeatAvailable(provisional.coachId))) {
-      return { error: "This coach's roster is full -- ask them to free up a spot or upgrade their plan." as const };
-    }
     const existing = await this.getUserByEmail(input.email);
     if (existing) return { error: "That email is already in use." as const };
     // Whichever of the two actually has one -- the coach's intake sheet, or
@@ -28767,13 +28721,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       ipAddress: consentContext?.ipAddress,
       userAgent: consentContext?.userAgent,
     });
-    // The hasRosterSeatAvailable check above is a fast, non-atomic early
-    // exit (avoids creating an account when the roster is already
-    // obviously full) -- claimRosterSeat here is the real, race-safe
-    // enforcement point. By this point the account already exists, so a
-    // failure here (only possible from a genuine last-seat race, given how
-    // much human-paced form-filling separates the two checks) can't cleanly
-    // roll back the signup -- logged for a human to reconcile rather than
+    // claimRosterSeat is the race-safe join: it holds the per-coach advisory lock around the
+    // de-dupe. There is no roster cap to fail on any more (removed 2026-10-11), so the only
+    // failure left here is a database one. By this point the account already exists, so a
+    // failure cannot cleanly roll back the signup -- logged for a human to reconcile rather than
     // silently letting the coach exceed their seat cap.
     const claimed = await this.claimRosterSeat(provisional.coachId, user.id);
     if (!claimed.ok) {

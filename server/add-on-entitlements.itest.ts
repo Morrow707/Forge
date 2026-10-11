@@ -176,13 +176,14 @@ describe("Coaches Corner", () => {
   });
 });
 
-describe("nobody can be charged while Forge is in beta", () => {
-  it("refuses a sport-coach checkout with the beta answer", async () => {
+describe("nobody can be charged while the card rail is closed", () => {
+  it("refuses a sport-coach checkout with the closed-till answer", async () => {
     const res = await asBetaAthlete.post("/api/billing/checkout/free-agent-add-on", {
       addOnId: "pitching",
     });
     expect(res.status).toBe(503);
-    expect(res.body.message).toContain("beta");
+    expect(res.body.message).toMatch(/isn't taking payments right now/i);
+    expect(res.body.message).not.toMatch(/beta/i);
   });
 
   it("refuses a coach add-on checkout with the same answer", async () => {
@@ -190,13 +191,15 @@ describe("nobody can be charged while Forge is in beta", () => {
       addOnId: "coaches_corner",
     });
     expect(res.status).toBe(503);
-    expect(res.body.message).toContain("beta");
+    expect(res.body.message).toMatch(/isn't taking payments right now/i);
+    expect(res.body.message).not.toMatch(/beta/i);
   });
 
   it("answers the old unlock route with the same sentence rather than a dead end", async () => {
     const res = await asBetaCoach.post("/api/coach/academy/unlock", {});
     expect(res.status).toBe(402);
-    expect(res.body.message).toContain("beta");
+    expect(res.body.message).toMatch(/isn't taking payments right now/i);
+    expect(res.body.message).not.toMatch(/beta/i);
     // The old copy pointed at a "Pro coaching plan" -- a tier the roster-band
     // pricing model has no room for and nothing ever sold.
     expect(res.body.message).not.toContain("Pro");

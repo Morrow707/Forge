@@ -164,7 +164,10 @@ describe("the plan a school picks at signup", () => {
       athleteFloor: 21,
     });
     // False in beta: the cap is enforcement and enforcement is off.
-    expect(res.body.atCap).toBe(false);
+    // atCap is gone from this payload: a roster is never capped (Scott, 2026-10-11, "coaches
+    // should never have a roster cap as each athlete add on is $4 no matter what"), so there is
+    // no wall for it to report and the band is purely what the program is billed.
+    expect(res.body).not.toHaveProperty("atCap");
     expect(res.body.perAthleteCents).toBe(ORG_PER_ATHLETE_CENTS);
   });
 

@@ -71,7 +71,8 @@ describe("the beta gate", () => {
 
     for (const result of [tier, coach, lesson]) {
       expect(result).toHaveProperty("error");
-      expect((result as { error: string }).error).toMatch(/beta/i);
+      expect((result as { error: string }).error).toMatch(/isn't taking payments right now/i);
+      expect((result as { error: string }).error).not.toMatch(/beta/i);
     }
     expect(sessionsCreate).not.toHaveBeenCalled();
   });

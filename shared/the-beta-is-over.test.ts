@@ -17,7 +17,13 @@ import { join } from "node:path";
  * Classes card). Comments are stripped before matching so the history of the beta can still be
  * told in a code comment; what is refused is a sentence a person would read on screen. */
 
-const ROOTS = ["client/src/pages", "client/src/components", "shared"];
+// server/ IS IN THIS LIST BECAUSE LEAVING IT OUT COST A REAL SENTENCE. The welcome email
+// (server/welcome-email.ts), sent on every self-serve signup, ended "nothing is charged while
+// Forge is in beta" for as long as this scan covered only the client and shared/ -- so the one
+// test written to make that sentence leave every surface on the day BILLING_LIVE was set could
+// not see the surface a new customer actually read. Copy a person reads is not a client-only
+// concern: emails, PDFs and API refusal messages are all written on the server.
+const ROOTS = ["client/src/pages", "client/src/components", "shared", "server"];
 const FORBIDDEN = [/forge is in beta/i, /during the beta/i, /nothing is charged/i, /included in beta/i, /free while forge is in beta/i];
 
 function walk(dir: string, out: string[] = []): string[] {

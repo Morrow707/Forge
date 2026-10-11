@@ -46,8 +46,14 @@ import { resolveVideoRetentionLimits, type VideoRetentionLimits } from "@shared/
 export const ENFORCEMENT_ENABLED = process.env.BILLING_ENFORCEMENT_ENABLED === "true";
 
 export interface Entitlements {
-  /** null = unlimited. */
-  athleteCap: number | null;
+  // THERE IS NO ROSTER CAP. Scott, 2026-10-11: "coaches should never have a roster cap as each
+  // athlete add on is $4 no matter what." A band is a PRICE and never a wall -- the bill is
+  // roster x $4 at every size, so a cap could only ever stop a program growing a bill Forge
+  // wants. `athleteCap` lived here until that day and was enforced through
+  // subscriptions.seatCap, whose only writer ever set it to 15 for every coach regardless of
+  // the band they paid for: a program paying $4,000 a month for a thousand athletes was walled
+  // at fifteen, while a coach with no subscription row at all was unlimited. Removed rather
+  // than widened, so there is no number left to get wrong.
   hasCustomColors: boolean;
   hasTeamIdentity: boolean;
   hasWorkflowCustomization: boolean;
@@ -73,7 +79,6 @@ export interface Entitlements {
 }
 
 const UNLIMITED_ENTITLEMENTS: Entitlements = {
-  athleteCap: null,
   hasCustomColors: true,
   hasTeamIdentity: true,
   hasWorkflowCustomization: true,
@@ -109,7 +114,6 @@ export function getEntitlements(account: BillingAccount): Entitlements {
   const hasFullBundle = addOns.has("full_bundle");
 
   return {
-    athleteCap: tier?.athleteCapIncluded ?? 0,
     hasCustomColors: Boolean(tier?.includesFullPersonalization) || hasFullBundle || addOns.has("custom_colors"),
     hasTeamIdentity: Boolean(tier?.includesFullPersonalization) || hasFullBundle || addOns.has("team_identity"),
     hasWorkflowCustomization:
@@ -260,7 +264,12 @@ export const BILLING_LIVE = process.env.BILLING_LIVE === "true";
  */
 function chargingClosed(): { error: string } | null {
   if (BILLING_LIVE) return null;
-  return { error: "Forge is in beta -- nothing is for sale yet." };
+  // SAYS WHAT IS TRUE IN THE STATE IT IS REACHED FROM, which is no longer "beta". This is the
+  // refusal every checkout route returns while BILLING_LIVE is off, and with billing live on
+  // 2026-10-11 it is unreachable -- but it read "Forge is in beta" until the beta scan's roots
+  // were widened to server/ and found it, and a sentence nobody can reach today is exactly the
+  // one that gets read on the day somebody turns the switch back off.
+  return { error: "Forge isn't taking payments right now. Nothing has been charged." };
 }
 
 // Lazy -- STRIPE_SECRET_KEY doesn't exist in any environment yet, and
@@ -277,8 +286,7 @@ function getStripeClient(): Stripe | null {
 export type AccountType = "free_agent" | "coach";
 export type PlanTier = "base" | "pro";
 // Coach roster sizes as published on the landing page's pricing card --
-// null seatCap means "no roster" (a Free Agent).
-export type CoachSeatCap = 15 | 50 | 100 | 250;
+
 
 // Off-season hibernation is intentionally NOT priced anywhere: it's a free
 // status (see subscriptionStatusEnum's "hibernating" value), not a paid

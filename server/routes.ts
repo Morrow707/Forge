@@ -916,7 +916,29 @@ async function hasAthletePaidForAiAccess(
   // while the money switch is on (a trial is a sales device, and there is no sale with it off).
   if (BILLING_LIVE) {
     const sub = await storage.getSubscriptionForUser(athleteId);
-    if (sub?.accountType === "free_agent" && sub.status === "trialing") return true;
+    // AND IT HAS TO HAVE NOT RUN OUT, which this did not ask until 2026-10-11.
+    //
+    // createTrialSubscription stamps trialEndsAt fourteen days out and server/auth.ts creates
+    // the row at EVERY self-serve signup, so "status is trialing" was true for every Free Agent
+    // who ever signed themselves up -- and nothing in the repo ever moved a row off that status
+    // except a Stripe or Apple webhook keyed on an external id a trial row does not have, and
+    // there is no expiry job. trialEndsAt was written and read by nothing. So from the night
+    // BILLING_LIVE was set, this branch handed the camera, the skills library and the AI coach
+    // to every self-serve account, free and permanently, and no new Free Agent had any reason
+    // to buy a tier. The branch had been inert since 2026-09-05 behind the switch, which is why
+    // no test and no session ever met it.
+    //
+    // A NULL trialEndsAt IS EXPIRED, NOT OPEN. The column is nullable and the status column
+    // DEFAULTS to "trialing" (shared/schema.ts), so any row written without an explicit end
+    // date would otherwise be a permanent trial again by omission -- the same hole with a
+    // different cause. Fail closed: a trial is live only while there is a date and it is in the
+    // future.
+    const trialing =
+      sub?.accountType === "free_agent" &&
+      sub.status === "trialing" &&
+      sub.trialEndsAt != null &&
+      sub.trialEndsAt.getTime() > Date.now();
+    if (trialing) return true;
   }
   // EVERYTHING ELSE IS THE TIER ON FILE, WHATEVER THE SUBSCRIPTION ROW SAYS (2026-10-11).
   //
@@ -990,10 +1012,10 @@ function requirePaidAiAccess(entitlement: AiEntitlement) {
     if (!hasPaid) {
       const message =
         entitlement === "skillsAi"
-          ? "This is a paid upgrade for Free Agents, coming soon."
+          ? "The skills library is part of AI Coach + Video. Upgrade to unlock it."
           : entitlement === "video"
-            ? "Camera-tracking video is a paid upgrade for Free Agents, coming soon."
-            : "This AI feature is a paid upgrade for Free Agents, coming soon -- exercise substitution stays free in the meantime.";
+            ? "Camera-tracking video is part of AI Coach + Video. Upgrade to unlock it."
+            : "The AI coach is a paid upgrade -- exercise substitution stays free on every plan.";
       return res.status(402).json({
         message,
         freeAgentPaywall: true,
@@ -1099,7 +1121,7 @@ async function requireVideoTrackingAccess(req: any, res: any, next: any) {
   const access = await cameraAccessFor(user);
   if (!access.allowed) {
     return res.status(402).json({
-      message: "Camera-tracking video is a paid upgrade for Free Agents, coming soon.",
+      message: "Camera-tracking video is part of AI Coach + Video. Upgrade to unlock it.",
       freeAgentPaywall: true,
       entitlement: "video",
     });
@@ -13281,7 +13303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // per lesson while payments are closed, for anybody.
       if (!testingUnlockAllPaywalls) {
         return res.status(402).json({
-          message: "Lesson purchases aren't live yet, payments are coming soon.",
+          message: "This chapter isn't sold on its own. All Classes unlocks every chapter of every class.",
           freeAgentPaywall: true,
         });
       }
@@ -13819,9 +13841,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * are billed for, and which band that lands in. One builder for the GET and the PUT so the
    * two can never answer the same question differently.
    *
-   * atCap is entitlements, not the band: the band is a PRICE, the cap is enforcement, and
-   * enforcement is off for a beta account (athleteCap null), so this is false today. It exists
-   * so a coach can see the same wall an athlete meets at claimRosterSeat, from their side. */
+   * THERE IS NO `atCap`, because there is no cap (2026-10-11). It was reported here off
+   * entitlements.athleteCap and rendered on the coach billing page as "No one else can join
+   * until you move the plan up" -- a wall that, once the cap was removed, would have been a
+   * sentence about nothing. The band is a PRICE and only a price: growing past its ceiling
+   * moves the program to the next band and the next bill, and never stops anyone joining. */
   async function coachPlanPayload(coachId: number) {
     const primaryId = await storage.getPrimaryCoachId(coachId);
     const primary = await storage.getUser(primaryId);
@@ -13842,7 +13866,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             athleteFloor: band.athleteFloor,
           }
         : null,
-      atCap: entitlements.athleteCap !== null && rosterCount >= entitlements.athleteCap,
       perAthleteCents: ORG_PER_ATHLETE_CENTS,
     };
   }

@@ -49,7 +49,8 @@ describe("nothing can be charged while Forge is in beta", () => {
 
     for (const r of results) {
       expect(r).toHaveProperty("error");
-      expect((r as { error: string }).error).toMatch(/beta/i);
+      expect((r as { error: string }).error).toMatch(/isn't taking payments right now/i);
+      expect((r as { error: string }).error).not.toMatch(/beta/i);
     }
     // The decisive assertion: Stripe was never asked to create anything.
     expect(sessionsCreate).not.toHaveBeenCalled();

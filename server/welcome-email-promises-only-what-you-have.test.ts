@@ -48,10 +48,13 @@ describe("the welcome email a Free Agent gets", () => {
   });
 
   it("says the AI coach is a paid upgrade, the same as the signup screen does", () => {
-    expect(freeAgent).toMatch(/paid upgrade/i);
-    // And that nobody is charged for it yet, which is the true statement today and the one the
-    // pricing page and the Free Agent dialog both make.
-    expect(freeAgent).toMatch(/beta/i);
+    expect(freeAgent).toMatch(/paid upgrades?/i);
+    // AND NEVER THAT NOBODY IS CHARGED. This asserted /beta/i until 2026-10-11, pinning the
+    // clause "nothing is charged while Forge is in beta" into the one email every self-serve
+    // signup receives -- so when billing went live, the test was holding a false promise in
+    // place rather than catching it. Billing is live: the upgrade is real and it is charged.
+    expect(freeAgent).not.toMatch(/beta/i);
+    expect(freeAgent).not.toMatch(/nothing is charged/i);
   });
 
   it("does name the exercise substitution agent, which really is free", () => {

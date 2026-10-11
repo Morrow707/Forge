@@ -44,7 +44,6 @@ describe("flipping enforcement on restricts nobody who is still a beta account",
   it("leaves organisation entitlements unlimited", async () => {
     const { getEntitlements } = await billingWithEnforcement(true);
     expect(getEntitlements({ ...beta, billingTier: null, billingAddOns: [] } as any)).toMatchObject({
-      athleteCap: null,
       hasCustomColors: true,
       hasMultiTeam: true,
     });
@@ -117,9 +116,14 @@ describe("the flag is not inert -- a non-beta account really is restricted", () 
     // Without this, the assertions above would pass even if the flag did
     // nothing at all.
     const { getEntitlements } = await billingWithEnforcement(true);
+    // athleteCap was the control here and is gone -- a roster is never capped now (Scott,
+    // 2026-10-11: every athlete is $4 no matter what), so the restriction a tierless paying
+    // account really meets is the personalization set, which is what this reads instead.
     expect(getEntitlements({ ...paying, billingTier: null, billingAddOns: [] } as any)).toMatchObject({
-      athleteCap: 0,
       hasCustomColors: false,
+      hasTeamIdentity: false,
+      hasMultiTeam: false,
+      hasPersonalPage: false,
     });
   });
 

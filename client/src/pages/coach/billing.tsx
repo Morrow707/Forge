@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { ReadFailed } from "@/components/read-failed";
 import { ApiError, apiRequest, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { CreditCard, Users, AlertTriangle } from "lucide-react";
+import { CreditCard, Users } from "lucide-react";
 import { bandForAthleteCount, formatCents, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
 
 /** GET /api/coach/entitlements, the add-on half. purchasableAddOns is derived
@@ -45,7 +45,6 @@ type CoachPlan = {
     athleteCapIncluded: number;
     athleteFloor: number;
   } | null;
-  atCap: boolean;
   perAthleteCents: number;
 };
 
@@ -276,17 +275,6 @@ export default function CoachBilling() {
                   </span>
                 </div>
               </div>
-
-              {plan.atCap && (
-                <p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                  <span>
-                    Your roster has reached the top of this plan
-                    {plan.band ? ` (${plan.band.athleteCapIncluded} athletes)` : ""}. No one else
-                    can join until you move the plan up.
-                  </span>
-                </p>
-              )}
 
               {planIsForbidden ? (
                 <p className="text-xs text-muted-foreground">
