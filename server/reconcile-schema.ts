@@ -1572,18 +1572,14 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "is_beta_account" boolean NOT NULL 
 
 -- THE BETA ENDED 2026-10-11 (Scott: "Set all billing as live, everything true, the beta is
 -- over"). Two statements, each half of it. The default becomes false so every account made from
--- here on is billed; and every account that already existed is flipped ONCE -- through the
--- applied_backfills marker below, so an admin who later ticks "Beta account" on one row to comp
--- it is not undone on the next deploy. BILLING_ENFORCEMENT_ENABLED and BILLING_LIVE were set on
+-- here on is billed (here); and every account that already existed is flipped ONCE -- through the
+-- applied_backfills marker, so an admin who later ticks "Beta account" on one row to comp it is
+-- not undone on the next deploy. THAT HALF LIVES BELOW THE MARKER TABLE'S OWN CREATE (search
+-- beta_ended_2026_10_11): on a fresh database this file runs top to bottom, and the first version
+-- put the one-shot here, 1,700 lines before the table it reads -- production never noticed
+-- because the table already existed, and the integration harness, which starts empty, failed. BILLING_ENFORCEMENT_ENABLED and BILLING_LIVE were set on
 -- Render in the same hour; this is the per-row half that those switches read.
 ALTER TABLE "users" ALTER COLUMN "is_beta_account" SET DEFAULT false;
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'beta_ended_2026_10_11') THEN
-    UPDATE "users" SET "is_beta_account" = false WHERE "is_beta_account" = true;
-    INSERT INTO "applied_backfills" ("key") VALUES ('beta_ended_2026_10_11');
-  END IF;
-END $$;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "trial_expires_at" timestamp;
 
 CREATE TABLE IF NOT EXISTS "redeem_codes" (
@@ -3317,6 +3313,17 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'retire_family_plan_2026_09_11') THEN
     UPDATE "users" SET "free_agent_tier" = 'ai_coach_video' WHERE "free_agent_tier" = 'family';
     INSERT INTO "applied_backfills" ("key") VALUES ('retire_family_plan_2026_09_11');
+  END IF;
+END $$;
+
+-- THE BETA ENDED 2026-10-11: every account that existed is flipped off beta ONCE. The default
+-- half (ALTER COLUMN ... SET DEFAULT false) is up beside the column; this half has to sit below
+-- the applied_backfills CREATE above, which it reads.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'beta_ended_2026_10_11') THEN
+    UPDATE "users" SET "is_beta_account" = false WHERE "is_beta_account" = true;
+    INSERT INTO "applied_backfills" ("key") VALUES ('beta_ended_2026_10_11');
   END IF;
 END $$;
 

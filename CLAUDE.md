@@ -2643,6 +2643,27 @@ branch through the real login route and the real email.
   them. **Still Scott's:** assign the athlete AI Coach + Video on `/admin/billing` (enforcement is
   on, so an unassigned Free Agent has no camera, and the review notes describe one), and replace the
   demo logins in the App Store Connect review notes with these two.
+- **THE FIRST LIVE STRIPE PURCHASE AND CANCELLATION, 2026-10-11, AND THE TWO THINGS THEY FOUND.**
+  Scott bought Basic ($4.99) on the website with his own card as the review athlete (account 28)
+  and cancelled it from the Stripe dashboard minutes later. Both webhook deliveries landed on
+  `/api/billing/webhook` (04:50:07 and 04:54:25 UTC, 200, no retries), the tier was written on
+  purchase and the subscription row went `canceled` on the cancellation -- so the live key, the
+  endpoint URL (the service's own `forge-ebhd.onrender.com` host, which is fine; an earlier note
+  calling it the wrong path was wrong, the 404 it cited was a request to a different path) and the
+  signing secret are all proven. **Found 1: a cancelled Free Agent kept its SKU.** The paid gates
+  closed, because `hasAthletePaidForAiAccess` reads the subscription row's status first under
+  `BILLING_LIVE`, but `users.freeAgentTier` was never cleared, so the upgrade screen kept marking a
+  cancelled plan as current. `customer.subscription.deleted` and the Apple expired/revoked/refund
+  path now clear it for a `free_agent` row (`billing.test.ts`). Account 28 still reads `basic`
+  from before the fix; clear it on `/admin/billing` or leave it, it grants nothing.
+  **Found 2, mine: the beta-ending one-shot sat 1,700 lines ABOVE the `applied_backfills` CREATE
+  it reads**, so the reconciler failed on a FRESH database ("relation applied_backfills does not
+  exist") -- production never noticed because the table already existed there, and CI's
+  integration job, which starts empty, went red on `02c5bf47` and the two commits after it. Render
+  auto-deploys on push, so every commit still reached production. The one-shot now sits below the
+  table; the ALTER COLUMN SET DEFAULT stays beside the column. This is exactly the "migration
+  order matters" rule in the Coaches Corner section, and exactly the check the Tests section says
+  to run on any reconciler edit -- which was skipped that hour and cost three red runs.
 - **NINETEEN EMAILS RENDERED AT PHONE WIDTH, NONE OVERFLOW** (2026-10-11). The 10-09 read covered
   the words; nobody had drawn them at 390px. Method, reusable: run the integration suite with a
   setup file that wraps `testOutbox.push` and writes every captured body to disk (the suite sends

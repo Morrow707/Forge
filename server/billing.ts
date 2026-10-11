@@ -943,7 +943,18 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
     case "customer.subscription.deleted": {
       const sub = event.data.object as Stripe.Subscription;
       const updated = await storage.updateSubscriptionByStripeId(sub.id, { status: "canceled" });
-      if (updated) await storage.logBillingEvent(updated.userId, event.type, { subscriptionId: sub.id }, event.id);
+      if (updated) {
+        await storage.logBillingEvent(updated.userId, event.type, { subscriptionId: sub.id }, event.id);
+        // THE SKU COMES OFF WITH THE SUBSCRIPTION. Found 2026-10-11 on the first live cancellation:
+        // the paid gates already closed, because hasAthletePaidForAiAccess reads the subscription
+        // row's status first under BILLING_LIVE -- but users.freeAgentTier kept the cancelled SKU,
+        // so the upgrade screen went on marking a plan nobody held as "current" and
+        // /api/athlete/entitlements reported it. The checkout webhook writes the tier on purchase
+        // (above); this is the matching write on the way out. Coach rows carry no freeAgentTier.
+        if (updated.accountType === "free_agent") {
+          await storage.updateFreeAgentBilling(updated.userId, { freeAgentTier: null });
+        }
+      }
       break;
     }
     case "invoice.payment_failed": {

@@ -10,6 +10,7 @@ const updateSubscriptionByStripeId = vi.fn();
 const logBillingEvent = vi.fn();
 const wasStripeEventProcessed = vi.fn();
 const applyCoachSubscriptionBand = vi.fn();
+const updateFreeAgentBilling = vi.fn();
 
 vi.mock("./storage", () => ({
   storage: {
@@ -18,6 +19,7 @@ vi.mock("./storage", () => ({
     logBillingEvent,
     wasStripeEventProcessed,
     applyCoachSubscriptionBand,
+    updateFreeAgentBilling,
   },
 }));
 
@@ -206,8 +208,31 @@ describe("customer.subscription.updated", () => {
 });
 
 describe("customer.subscription.deleted", () => {
+  // The first live cancellation (2026-10-11) closed every paid gate and left users.freeAgentTier
+  // reading the cancelled SKU, so the upgrade screen kept calling it the current plan.
+  it("takes the SKU off a Free Agent whose subscription was cancelled", async () => {
+    updateSubscriptionByStripeId.mockResolvedValue({ userId: 9, accountType: "free_agent" });
+    await handleStripeWebhookEvent(fakeEvent("evt_7a", "customer.subscription.deleted", { id: "sub_abc" }));
+
+    expect(updateFreeAgentBilling).toHaveBeenCalledWith(9, { freeAgentTier: null });
+  });
+
+  it("leaves a coach row alone, which carries no Free Agent SKU", async () => {
+    updateSubscriptionByStripeId.mockResolvedValue({ userId: 4, accountType: "coach" });
+    await handleStripeWebhookEvent(fakeEvent("evt_7b", "customer.subscription.deleted", { id: "sub_coach" }));
+
+    expect(updateFreeAgentBilling).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing when no subscription row matches", async () => {
+    updateSubscriptionByStripeId.mockResolvedValue(null);
+    await handleStripeWebhookEvent(fakeEvent("evt_7c", "customer.subscription.deleted", { id: "sub_none" }));
+
+    expect(updateFreeAgentBilling).not.toHaveBeenCalled();
+  });
+
   it("marks the matched subscription canceled and logs it", async () => {
-    updateSubscriptionByStripeId.mockResolvedValue({ userId: 9 });
+    updateSubscriptionByStripeId.mockResolvedValue({ userId: 9, accountType: "free_agent" });
     const event = fakeEvent("evt_7", "customer.subscription.deleted", { id: "sub_abc" });
     await handleStripeWebhookEvent(event);
 

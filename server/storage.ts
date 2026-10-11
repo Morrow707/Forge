@@ -5156,6 +5156,12 @@ export const storage = {
         originalTransactionId,
         productId,
       });
+      // Same rule as the Stripe cancellation (handleStripeWebhookEvent, customer.subscription.deleted):
+      // an expired, revoked or refunded Apple subscription takes the SKU off the account, so the
+      // upgrade screen stops marking it as the current plan. The renewal branch below writes it.
+      if (updated.accountType === "free_agent") {
+        await this.updateFreeAgentBilling(updated.userId, { freeAgentTier: null });
+      }
       return { ok: true };
     }
     // "renewed" -- extend the access window Apple already confirmed, same
