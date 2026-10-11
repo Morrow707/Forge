@@ -908,38 +908,28 @@ async function hasAthletePaidForAiAccess(
   entitlement: AiEntitlement,
 ): Promise<boolean> {
   if (testingUnlockAllPaywalls) return true;
+  // A TRIAL IS FULL ACCESS, and it is the one thing the subscription ROW decides.
+  //
+  // storage.createTrialSubscription writes tier "base" with status "trialing", so a trial cannot
+  // resolve through a SKU the athlete has not bought yet; it is answered here, first, and only
+  // while the money switch is on (a trial is a sales device, and there is no sale with it off).
   if (BILLING_LIVE) {
-    // "strengthAi" needs any paid tier; "skillsAi" and "video" specifically
-    // need Pro -- Skills/FMS-style features and camera-tracking video are
-    // both Pro-tier features, Strength AI is included in Base.
-    //
-    // A trial is full Pro access, which is the whole point of a trial and
-    // what the landing page promises in those words. That has to be said
-    // here rather than assumed from the tier, because
-    // storage.createTrialSubscription writes tier "base" with status
-    // "trialing" -- so reading tier alone silently denied every trialing
-    // athlete the Skills/video features their trial is meant to sell them.
     const sub = await storage.getSubscriptionForUser(athleteId);
-    if (!sub || sub.accountType !== "free_agent") return false;
-    if (!["trialing", "active", "past_due"].includes(sub.status)) return false;
-    if (sub.status === "trialing") return true;
-
-    // The SKU they actually bought decides this, not the two-value base/pro
-    // column. subscriptions.tier only ever holds "base" or "pro", so the old
-    // `strengthAi ? true : tier === "pro"` handed a $4.99 Basic subscriber the AI
-    // chat coach, the AI program builder and the nutrition Q&A -- the three things
-    // Basic is priced to exclude and whose description says "No AI coach". It also
-    // meant two entitlement models existed for one product, which is how the Stripe
-    // webhook came to write the one nothing reads.
-    //
-    // Skills AI rides with the AI chat entitlement because there is no separate
-    // skills SKU to buy: FREE_AGENT_TIERS has exactly three, and AI Coach's own
-    // description is "AI chat coach and AI program builder", which is what the
-    // skills builder is. Video stays its own upgrade, which is the split the price
-    // list actually sells.
-    const account = await storage.getFreeAgentBillingAccount(athleteId);
-    return tierGrants(account?.freeAgentTier ?? null, entitlement);
+    if (sub?.accountType === "free_agent" && sub.status === "trialing") return true;
   }
+  // EVERYTHING ELSE IS THE TIER ON FILE, WHATEVER THE SUBSCRIPTION ROW SAYS (2026-10-11).
+  //
+  // Until this night the live branch first demanded an ACTIVE subscription row and only then
+  // read the tier -- so an admin assigning AI Coach + Video on More -> Users to an account with
+  // no row, or with a cancelled one, assigned nothing: the camera and the skills side stayed
+  // refused with "tier_excludes_camera" while the upgrade screen showed the tier as current.
+  // Found on the App Review athlete the first time the launch audit assigned it a tier, after
+  // Scott's live Stripe purchase and cancellation had left it a cancelled row; an account with
+  // no row at all (every admin assignment ever made) was refused the same way. The row's
+  // status is not a second opinion on the tier: the Stripe webhook and the Apple
+  // expired/revoked/refund path CLEAR freeAgentTier when a purchase lapses (billing.ts,
+  // applyAppleServerNotification), so a tier that is on file is either a live purchase or an
+  // admin's deliberate grant, and both are honoured.
   // A TIER ON FILE IS HONOURED WHETHER OR NOT THE MONEY SWITCH IS ON.
   //
   // Until 2026-10-08 this line was the whole of the not-live branch, so with BILLING_LIVE off

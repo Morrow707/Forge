@@ -104,6 +104,17 @@ describe("the Free Agent AI gate reads the SKU", () => {
     expect(gate).not.toContain('sub.tier === "pro"');
   });
 
+  it("honours an assigned tier whatever the subscription row says", () => {
+    // 2026-10-11: with billing live the gate demanded an ACTIVE subscription row before it
+    // would read the tier, so an admin assigning AI Coach + Video to an account with no row
+    // (every admin grant ever made) or a cancelled one assigned nothing. The row decides a
+    // TRIAL and nothing else; a lapsed purchase clears the tier itself.
+    const live = gate.slice(gate.indexOf("if (BILLING_LIVE)"), gate.indexOf("getFreeAgentBillingAccount"));
+    expect(live).not.toMatch(/return false/);
+    expect(live).not.toMatch(/"active"/);
+    expect(live).not.toMatch(/past_due/);
+  });
+
   it("still lets a trial through as full access", () => {
     // storage.createTrialSubscription writes tier "base" with status "trialing", and
     // a trial is meant to sell the paid features, so it cannot resolve through a SKU
