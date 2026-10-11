@@ -131,6 +131,40 @@ const RETIRED_DEMO_ACCOUNT_EMAILS = [
   "sofia.ramirez@example.com",
 ] as const;
 
+/** THE SEEDED "Test Program" IS RETIRED WITH THE DEMO ACCOUNTS (2026-10-11). It was a
+ * deliberately exhaustive device-testing program the seed created under the Forge identity, and
+ * because it was Forge-official every Free Agent on the platform could see and start it. Scott:
+ * "the exercises and programs the coach created, all of that stuff" are beta data. Matched on the
+ * seeded name AND the seeded description so a real program somebody happened to call "Test
+ * Program" is never touched; assignments and logs cascade with it. Runs on every boot, no-op after
+ * the first. The flagship "Forge Workout Program" stays. */
+async function retireSeededTestProgram(): Promise<void> {
+  const rows = await db.query.programs.findMany({ where: eq(programs.name, "Test Program") });
+  for (const row of rows) {
+    if (!(row.description ?? "").startsWith("A deliberately exhaustive program")) continue;
+    await db.delete(programs).where(eq(programs.id, row.id));
+    console.log(`Removed the seeded "Test Program" (id ${row.id}) and every assignment of it.`);
+  }
+}
+
+/** One line per account in the deploy log, so what the platform holds can be read off Render
+ * without a database console: id, role, whether an athlete has a coach, and the signup date.
+ * NO email, NO name -- Render's log is not a place for either. Added 2026-10-11 to answer "have
+ * you deleted all of the beta accounts?" for a database only the deploy can see. */
+async function logAccountInventory(): Promise<void> {
+  const all = await db.query.users.findMany({ columns: { id: true, role: true, createdAt: true } });
+  const links = await db.query.coachAthletes.findMany({ columns: { athleteId: true } });
+  const coached = new Set(links.map((l) => l.athleteId));
+  const byRole: Record<string, number> = {};
+  for (const u of all) byRole[u.role] = (byRole[u.role] ?? 0) + 1;
+  console.log(`Account inventory: ${all.length} accounts (${Object.entries(byRole).map(([r, n]) => `${r} ${n}`).join(", ")}).`);
+  for (const u of all.sort((x, y) => x.id - y.id)) {
+    const when = u.createdAt ? new Date(u.createdAt).toISOString().slice(0, 10) : "?";
+    const extra = u.role === "athlete" ? (coached.has(u.id) ? " coached" : " free-agent") : "";
+    console.log(`  account ${u.id}: ${u.role}${extra}, since ${when}`);
+  }
+}
+
 async function removeSeededDemoAccounts(): Promise<void> {
   for (const email of RETIRED_DEMO_ACCOUNT_EMAILS) {
     const user = await storage.getUserByEmail(email);
@@ -4837,238 +4871,8 @@ async function main() {
       console.log('Renamed "Forge Strength Block" -> "Forge Workout Program" and flagged it Forge-official.');
     }
 
-    if (!allPrograms.some((p) => p.name === "Test Program")) {
-      function testExerciseId(name: string) {
-        const found = exerciseMap[name];
-        if (!found) throw new Error(`Exercise not found while seeding Test Program: "${name}"`);
-        return found;
-      }
-
-      const testProgram = await storage.createProgramWithStructure(forgeIdentity.id, {
-        name: "Test Program",
-        description:
-          "A deliberately exhaustive program covering every Forge feature in one block: plain strength logging, multi-group supersets, bar-path/full velocity tracking, video-check uploads, %1RM auto-resolution, manual corrective work, and a big multi-exercise day.",
-        blocks: [],
-        weeks: [
-          {
-            weekNumber: 1,
-            name: "Week 1 — Everything, Round One",
-            days: [
-              {
-                dayNumber: 1,
-                title: "Baseline Strength Check",
-                isRestDay: false,
-                exercises: [
-                  { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 4, reps: "5", weight: "225 lbs", restSeconds: 150 },
-                  { exerciseId: testExerciseId("Bench Press"), orderIndex: 1, sets: 4, reps: "5", weight: "185 lbs", restSeconds: 150 },
-                  { exerciseId: testExerciseId("Bent-Over Row"), orderIndex: 2, sets: 3, reps: "8", weight: "135 lbs", restSeconds: 90 },
-                  { exerciseId: testExerciseId("Barbell Shoulder Press"), orderIndex: 3, sets: 3, reps: "8", weight: "95 lbs", restSeconds: 90 },
-                  { exerciseId: testExerciseId("Plank"), orderIndex: 4, sets: 3, reps: "60s hold", weight: "Bodyweight", restSeconds: 60 },
-                ],
-              },
-              {
-                dayNumber: 2,
-                title: "Superset Circuit",
-                isRestDay: false,
-                exercises: [
-                  { exerciseId: testExerciseId("Incline Dumbbell Press"), orderIndex: 0, sets: 3, reps: "10", weight: "60 lbs", restSeconds: 75, supersetGroup: "test-super-a" },
-                  { exerciseId: testExerciseId("Chest-Supported Row"), orderIndex: 1, sets: 3, reps: "10", weight: "50 lbs", restSeconds: 75, supersetGroup: "test-super-a" },
-                  { exerciseId: testExerciseId("Bulgarian Split Squat"), orderIndex: 2, sets: 3, reps: "8/side", weight: "30 lbs", restSeconds: 90, supersetGroup: "test-super-b" },
-                  { exerciseId: testExerciseId("Nordic Hamstring Curl"), orderIndex: 3, sets: 3, reps: "6", weight: "Bodyweight", restSeconds: 90, supersetGroup: "test-super-b" },
-                  { exerciseId: testExerciseId("Barbell Curl"), orderIndex: 4, sets: 3, reps: "10", weight: "60 lbs", restSeconds: 60, supersetGroup: "test-super-c" },
-                  { exerciseId: testExerciseId("Hammer Curl"), orderIndex: 5, sets: 3, reps: "10", weight: "30 lbs", restSeconds: 60, supersetGroup: "test-super-c" },
-                  { exerciseId: testExerciseId("Tricep Rope Pushdown"), orderIndex: 6, sets: 3, reps: "12", weight: "50 lbs", restSeconds: 60, supersetGroup: "test-super-c" },
-                ],
-              },
-              {
-                dayNumber: 3,
-                title: "Bar Speed & Jump Lab",
-                isRestDay: false,
-                // videoCheckEnabled paired with every trackingLevel below --
-                // written pre-unification (see video-tracking-toggle.tsx's
-                // own comment), when "tracking on, video off" was still a
-                // reachable state. Turning tracking on has meant capturing
-                // video too ever since that toggle collapsed to one control,
-                // so leaving these unpaired silently ran a real AR/MediaPipe
-                // tracked set that never saved a clip -- same trap
-                // (VideoTrackingToggle still *displays* "Video: On" for any
-                // non-"none" trackingLevel, whatever videoCheckEnabled
-                // actually holds) that toggle's comment already warns about
-                // for legacy data, just reproduced here instead of pre-dating
-                // the refactor by luck. Matches Week 2's "Kitchen Sink Day"
-                // below, which already pairs the two correctly.
-                exercises: [
-                  { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 5, reps: "3", weight: "245 lbs", restSeconds: 180, trackingLevel: "full", videoCheckEnabled: true },
-                  { exerciseId: testExerciseId("Bench Press"), orderIndex: 1, sets: 5, reps: "3", weight: "205 lbs", restSeconds: 180, trackingLevel: "full", videoCheckEnabled: true },
-                  { exerciseId: testExerciseId("Deadlift"), orderIndex: 2, sets: 3, reps: "5", weight: "315 lbs", restSeconds: 180, trackingLevel: "bar_path", videoCheckEnabled: true },
-                  { exerciseId: testExerciseId("Box Jump"), orderIndex: 3, sets: 4, reps: "5", weight: "Bodyweight", restSeconds: 90, trackingLevel: "jump", videoCheckEnabled: true },
-                  { exerciseId: testExerciseId("Broad Jump"), orderIndex: 4, sets: 3, reps: "3", weight: "Bodyweight", restSeconds: 90, trackingLevel: "jump", videoCheckEnabled: true },
-                  { exerciseId: testExerciseId("Hex Bar Jump"), orderIndex: 5, sets: 4, reps: "5", weight: "Bodyweight", restSeconds: 90, trackingLevel: "jump", videoCheckEnabled: true },
-                ],
-              },
-              { dayNumber: 4, title: "Rest Day", isRestDay: true, exercises: [] },
-              {
-                dayNumber: 5,
-                title: "Video Check Day",
-                isRestDay: false,
-                exercises: [
-                  { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 3, reps: "5", weight: "205 lbs", restSeconds: 150, videoCheckEnabled: true },
-                  { exerciseId: testExerciseId("Barbell Shoulder Press"), orderIndex: 1, sets: 3, reps: "6", weight: "85 lbs", restSeconds: 90, videoCheckEnabled: true },
-                  { exerciseId: testExerciseId("Bulgarian Split Squat"), orderIndex: 2, sets: 3, reps: "8/side", weight: "Bodyweight", restSeconds: 90, videoCheckEnabled: true },
-                  { exerciseId: testExerciseId("Deadlift"), orderIndex: 3, sets: 3, reps: "5", weight: "275 lbs", restSeconds: 150, videoCheckEnabled: true },
-                ],
-              },
-              { dayNumber: 6, title: "Rest Day", isRestDay: true, exercises: [] },
-              { dayNumber: 7, title: "Rest Day", isRestDay: true, exercises: [] },
-            ],
-          },
-          {
-            weekNumber: 2,
-            name: "Week 2 — Everything, Round Two",
-            days: [
-              {
-                dayNumber: 1,
-                title: "%1RM Auto-Adjust Day",
-                isRestDay: false,
-                exercises: [
-                  { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 4, reps: "3", weight: "80% 1RM", restSeconds: 180 },
-                  { exerciseId: testExerciseId("Bench Press"), orderIndex: 1, sets: 4, reps: "5", weight: "75% 1RM", restSeconds: 150 },
-                  { exerciseId: testExerciseId("Deadlift"), orderIndex: 2, sets: 3, reps: "3", weight: "85% 1RM", restSeconds: 180 },
-                  { exerciseId: testExerciseId("Barbell Shoulder Press"), orderIndex: 3, sets: 3, reps: "6", weight: "70% 1RM", restSeconds: 90 },
-                ],
-              },
-              {
-                dayNumber: 2,
-                title: "Kitchen Sink Day",
-                isRestDay: false,
-                exercises: [
-                  { exerciseId: testExerciseId("Back Squat"), orderIndex: 0, sets: 3, reps: "3", weight: "75% 1RM", restSeconds: 180, supersetGroup: "test-super-d", trackingLevel: "full", videoCheckEnabled: true },
-                  { exerciseId: testExerciseId("Deadlift"), orderIndex: 1, sets: 3, reps: "3", weight: "70% 1RM", restSeconds: 180, supersetGroup: "test-super-d", trackingLevel: "bar_path", videoCheckEnabled: true },
-                  { exerciseId: testExerciseId("Incline Dumbbell Press"), orderIndex: 2, sets: 3, reps: "10", weight: "65 lbs", restSeconds: 75, supersetGroup: "test-super-e" },
-                  { exerciseId: testExerciseId("Chest-Supported Row"), orderIndex: 3, sets: 3, reps: "10", weight: "55 lbs", restSeconds: 75, supersetGroup: "test-super-e" },
-                  { exerciseId: testExerciseId("Plank"), orderIndex: 4, sets: 3, reps: "60s hold", weight: "Bodyweight", restSeconds: 60 },
-                ],
-              },
-              {
-                dayNumber: 3,
-                title: "Corrective Focus Day",
-                isRestDay: false,
-                exercises: [
-                  { exerciseId: testExerciseId("Goblet Squat"), orderIndex: 0, sets: 3, reps: "10", weight: "53 lbs", restSeconds: 75 },
-                  { exerciseId: testExerciseId("Farmer's Carry"), orderIndex: 1, sets: 3, reps: "40yd", weight: "70 lbs/hand", restSeconds: 90 },
-                ],
-              },
-              { dayNumber: 4, title: "Rest Day", isRestDay: true, exercises: [] },
-              {
-                dayNumber: 5,
-                title: "Final Gauntlet",
-                isRestDay: false,
-                exercises: [
-                  { exerciseId: testExerciseId("Back Extension"), orderIndex: 0, sets: 3, reps: "12", weight: "Bodyweight", restSeconds: 60 },
-                  { exerciseId: testExerciseId("Barbell Shrug"), orderIndex: 1, sets: 3, reps: "10", weight: "185 lbs", restSeconds: 60 },
-                  { exerciseId: testExerciseId("Cable Crunch"), orderIndex: 2, sets: 3, reps: "15", weight: "60 lbs", restSeconds: 45 },
-                  { exerciseId: testExerciseId("Close-Grip Bench Press"), orderIndex: 3, sets: 3, reps: "8", weight: "135 lbs", restSeconds: 90 },
-                  { exerciseId: testExerciseId("Hip Thrust"), orderIndex: 4, sets: 3, reps: "10", weight: "185 lbs", restSeconds: 90 },
-                  { exerciseId: testExerciseId("Lat Pulldown"), orderIndex: 5, sets: 3, reps: "10", weight: "120 lbs", restSeconds: 75 },
-                  { exerciseId: testExerciseId("Pallof Press"), orderIndex: 6, sets: 3, reps: "10/side", weight: "30 lbs", restSeconds: 45 },
-                  { exerciseId: testExerciseId("Russian Twist"), orderIndex: 7, sets: 3, reps: "20", weight: "20 lbs", restSeconds: 45 },
-                  { exerciseId: testExerciseId("Standing Calf Raise"), orderIndex: 8, sets: 4, reps: "12", weight: "225 lbs", restSeconds: 60 },
-                ],
-              },
-              { dayNumber: 6, title: "Rest Day", isRestDay: true, exercises: [] },
-              { dayNumber: 7, title: "Rest Day", isRestDay: true, exercises: [] },
-            ],
-          },
-        ],
-      });
-
-      const fullTestProgram = await storage.getProgramFull(testProgram.id);
-      const correctiveDay = fullTestProgram?.weeks
-        .flatMap((w) => w.days)
-        .find((d) => d.title === "Corrective Focus Day");
-
-      const testStartDate = new Date().toISOString().slice(0, 10);
-      let testDateOverrides: Record<string, string> | undefined;
-      if (correctiveDay) {
-        const start = new Date(testStartDate + "T00:00:00Z");
-        const offsetDays = (2 - 1) * 7 + (correctiveDay.dayNumber - 1);
-        const defaultDate = new Date(start.getTime() + offsetDays * 86400000);
-        const overriddenDate = new Date(defaultDate.getTime() + 7 * 86400000);
-        testDateOverrides = { [String(correctiveDay.id)]: overriddenDate.toISOString().slice(0, 10) };
-      }
-
-      // Assigned by the demo coach (not the Forge identity, which has no
-      // roster) so it shows up as a real assignment on the demo athlete,
-      // exactly like a coach assigning a Forge-official program in practice.
-      if (coach && athlete) {
-        const { created: testCreated } = await storage.createAssignment(
-          coach.id,
-          testProgram.id,
-          [{ athleteId: athlete.id, correctivesEnabled: true }],
-          testStartDate,
-          testDateOverrides,
-        );
-
-        if (correctiveDay) {
-          await storage.updateCorrectivesForAssignmentDay(testCreated[0].id, correctiveDay.id, {
-            correctives: [
-              { exerciseId: testExerciseId("Ankle Dorsiflexion Mobilization"), orderIndex: 0, sets: 2, reps: "10/side", weight: null },
-              { exerciseId: testExerciseId("World's Greatest Stretch"), orderIndex: 1, sets: 2, reps: "6/side", weight: null },
-              { exerciseId: testExerciseId("Band External Rotation"), orderIndex: 2, sets: 2, reps: "15/side", weight: null },
-            ],
-          }, coach.id);
-        }
-      }
-
-      console.log(`Created "Test Program" (id ${testProgram.id}), owned by Forge identity ${forgeIdentity.id}.`);
-    }
   }
 
-  // One-time production fixup for "Bar Speed & Jump Lab" specifically: when
-  // that day was first seeded (2026-08-05, commit a0381a4) its
-  // trackingLevel-on exercises didn't set videoCheckEnabled -- still a valid
-  // independent choice at the time, since the coach-facing camera control
-  // didn't collapse the two into one toggle until later that same day (see
-  // video-tracking-toggle.tsx's own comment on the refactor and the legacy
-  // state it left reachable). Ever since, turning tracking on has always
-  // meant capturing video too, so any environment whose "Test Program" got
-  // created before the literal fix above landed is stuck with a day that
-  // silently never saves a clip no matter how many sets get tracked on it --
-  // the toggle still *displays* "Video: On" for it (isOn there reads
-  // trackingLevel alone), so nothing about the coach UI reveals the gap.
-  // This is the exact trap a coach hit testing the AR bar tracker on Jordan
-  // Athlete's seeded Bench Press set (that assignment is created above,
-  // straight onto the demo athlete's real roster -- see "Assigned by the
-  // demo coach" comment there). Runs on every deploy forever, like the
-  // fixups above; each no-ops once applied. Scoped to this one named day of
-  // this one seeded program, never a real coach's own data -- and routed
-  // through resolveVideoCheckEnabled so a since-restricted exercise still
-  // can't be flipped on here either.
-  {
-    const testProgramRow = await db.query.programs.findFirst({ where: eq(programs.name, "Test Program") });
-    if (testProgramRow) {
-      const full = await storage.getProgramFull(testProgramRow.id);
-      const staleDay = full?.weeks.flatMap((w) => w.days).find((d) => d.title === "Bar Speed & Jump Lab");
-      const staleExercises = (staleDay?.exercises ?? []).filter(
-        (ex) => ex.trackingLevel !== "none" && !ex.videoCheckEnabled,
-      );
-      if (staleExercises.length > 0) {
-        const requests = staleExercises.map((ex) => ({ ref: ex, exerciseId: ex.exerciseId, videoCheckEnabled: true }));
-        const videoCheckMap = await storage.resolveVideoCheckEnabled(requests);
-        let fixed = 0;
-        for (const req of requests) {
-          if (!videoCheckMap.get(req)) continue;
-          await db.update(programExercises).set({ videoCheckEnabled: true }).where(eq(programExercises.id, req.ref.id));
-          fixed++;
-        }
-        if (fixed > 0) {
-          console.log(
-            `Backfilled videoCheckEnabled=true on ${fixed} stale "Bar Speed & Jump Lab" exercise(s) in "Test Program" (id ${testProgramRow.id}).`,
-          );
-        }
-      }
-    }
-  }
 
   // One-time backfill (fully idempotent -- only ever touches rows where the
   // column is still NULL, never overwrites a coach's own choice): most of
@@ -5451,6 +5255,8 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   // not on their checklist, nothing reads it, and the upload route would refuse the same kind
   // from a real coach. What each account needs is its OWN required documents.
   await removeSeededDemoAccounts();
+  await retireSeededTestProgram();
+  await logAccountInventory();
 
   console.log("Seed complete.");
   process.exit(0);
