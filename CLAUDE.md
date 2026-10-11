@@ -1628,7 +1628,8 @@ questions 12 and 13), and the answers shape everything below.
   note per lesson (`academy_lesson_notes`, nobody else's route reads it). "Flag this lesson"
   needs a reason of at least ten characters (`academy_lesson_flags`; Scott: "flagging is
   useless if they can't say why"), worked on the admin analytics page. Every track shows its
-  release date and wears New for thirty days; the digest names new tracks with the date.
+  release date and wears New for thirty days (which since 2026-10-11 is the only thing that
+  tells a coach new content arrived -- the monthly digest that also named them is deleted).
   "Apply this to my roster" at the end of a track seeds Ask the library with the roster toggle
   on. The Continue row (in-progress tracks, most recently read first, opening at the first
   unread lesson) sits at the top of the library; the certificate wall (every finished track
@@ -1665,11 +1666,36 @@ lesson video. What landed:
   on the admin Coaches Corner page. A path is complete when every track in it is, and earns its
   own certificate (`/coach/coaches-corner/path-certificate/:id`). `academyProgressForCoach` in
   routes.ts is the one progress computation the catalog, the paths and both certificates read.
-- **The monthly digest** reuses the launch list's campaign table under `audience =
-  "coaches_corner"`: drafted from the last thirty days, tested on the admin, sent to every
-  coach who has the add-on and `notifyEmail`, with a coach footer and no unsubscribe token, each
-  wearing the coach's program. Recipients are resolved at send time through
-  `hasCoachesCornerAccess`. The launch-list screen lists only its own audience.
+- **THE MONTHLY DIGEST IS GONE** (2026-10-11, Scott: "remove the monthly digest i have no idea
+  what that even is, just delete it in totality, no need"). It existed 2026-10-03 to 2026-10-11:
+  an admin drafted "what's new in Coaches Corner" from the last thirty days, tested it on
+  themselves and sent it to every coach holding the add-on with `notifyEmail` on, reusing the
+  launch list's campaign table under `audience = "coaches_corner"`. All removed -- four admin
+  routes under `/api/admin/coaches-corner/digest*`, `coachesCornerDigestRecipients`,
+  `AdminCoachesCornerDigest` and its render on the admin Coaches Corner page, and
+  `coaches-corner-digest.itest.ts`.
+  **AND SO IS THE SHARED PLUMBING THAT ONLY IT USED, WHICH IS THE HALF A DELETION USUALLY
+  LEAVES BEHIND.** Four `storage.ts` methods (`listCoachesForDigest`, `findRunningCampaign`,
+  `createCampaign`, `listCampaigns`) had the digest as their ONLY caller -- the launch list runs
+  its own inline queries in `email-list.ts` -- so they went with it, and the
+  `emailListCampaigns` import with them. `runCampaign` loses its optional `recipients` list and
+  its `brandForUserId` pass-through (the launch list always took the `??` fallback), and
+  `CampaignRecipient.unsubscribeUrl` is `string` rather than `string | null`, because the
+  nullable link was what selected the SECOND footer: "your Forge account has Coaches Corner,
+  turn off email notifications". A sentence about an account entitlement in a renderer nothing
+  reaches with one is exactly the stale copy that reads as live.
+  **The simplification is now load-bearing, not incidental**: `email-list.test.ts` asserts every
+  rendered campaign email carries an Unsubscribe anchor and neither sentence of the old footer,
+  and that the nullable type has not come back -- a PUBLIC mailing with no way out of it is not
+  a style choice, and before this the renderer could represent one. Two mutations, both caught.
+  **What is NOT deleted, on purpose: any `audience = "coaches_corner"` row already in
+  `email_list_campaigns`.** A campaign row is the record that mail really went out, and erasing
+  a sending record is a different act from deleting a feature. The launch-list screen filters on
+  its own audience, so those rows are invisible rather than mislabelled; say the word and they
+  go in one statement. The column is plain `text` with a default and no enum or check
+  constraint, so none of this needed a migration.
+  **Not to be confused with the WEEKLY digest** (`athlete_digests`, `coach_digests`, the
+  dashboard cards, the AI calls at 450/500 tokens), which is a different feature and untouched.
 - **Ask the library takes the roster, opt in per question** (`getRosterContextForCoach`):
   aggregates only (count, ages, sports, positions, season phase, teams), never a name. The model
   does not need the names and so does not get them.

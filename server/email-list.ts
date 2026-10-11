@@ -105,15 +105,18 @@ async function activeSubscribers() {
     .orderBy(emailListSubscribers.id);
 }
 
-/** The delivery loop. Exported so the test can await it; the route does not. With no
- * `recipients`, the active launch list; the Coaches Corner digest passes its own. */
+/** The delivery loop: every active launch-list subscriber. Exported so the test can await it;
+ * the route does not. It took an optional `recipients` list until 2026-10-11, for the Coaches
+ * Corner monthly digest to hand it coaches instead -- with that feature deleted the launch list
+ * is the only caller there is, so the list is resolved here and nowhere else. */
 export async function runCampaign(
   campaignId: number,
-  args: { subject: string; body: string; origin: string; recipients?: CampaignRecipient[] },
+  args: { subject: string; body: string; origin: string },
 ): Promise<void> {
-  const recipients: CampaignRecipient[] =
-    args.recipients ??
-    (await activeSubscribers()).map((r) => ({ email: r.email, unsubscribeUrl: unsubscribeUrl(args.origin, r.token) }));
+  const recipients: CampaignRecipient[] = (await activeSubscribers()).map((r) => ({
+    email: r.email,
+    unsubscribeUrl: unsubscribeUrl(args.origin, r.token),
+  }));
   await db
     .update(emailListCampaigns)
     .set({ recipientCount: recipients.length })
@@ -125,7 +128,7 @@ export async function runCampaign(
     const html = buildCampaignEmail({ body: args.body, unsubscribeUrl: r.unsubscribeUrl });
     let ok = false;
     try {
-      ok = (await sendEmail({ to: r.email, subject: args.subject, html, brandForUserId: r.brandForUserId ?? null })).sent;
+      ok = (await sendEmail({ to: r.email, subject: args.subject, html })).sent;
     } catch {
       ok = false;
     }
@@ -182,8 +185,10 @@ export function registerEmailListRoutes(app: Express) {
       .from(emailListSubscribers)
       .orderBy(desc(emailListSubscribers.subscribedAt))
       .limit(50);
-    // Only the launch list's own mailings; the Coaches Corner digest shares the table under
-    // its own audience and is listed on the Coaches Corner admin page.
+    // Filtered to this audience even though it is the only one left: the Coaches Corner monthly
+    // digest shared this table under its own audience until 2026-10-11, and its rows are kept
+    // (a mailing that really went out), so an unfiltered list would show them here as launch
+    // mail they never were.
     const campaigns = await db
       .select()
       .from(emailListCampaigns)

@@ -112,7 +112,6 @@ import {
   academyPathTracks,
   classLessonFlashcardSchema,
   classLessonQuizQuestionInputSchema,
-  emailListCampaigns,
   academyQuizQuestions,
   academyQuizAnswers,
   aiKnowledgeMessages,
@@ -14636,28 +14635,6 @@ Hard rules, no exceptions:
       hardestQuestions: hardest,
       openQuestions: Number(openQuestions?.n ?? 0),
     };
-  },
-
-  // ---------- Campaigns and the Coaches Corner digest (2026-10-03) ----------
-
-  /** Coaches who want email, for the digest's recipient resolution. */
-  async listCoachesForDigest() {
-    return db
-      .select({ id: users.id, email: users.email, role: users.role })
-      .from(users)
-      .where(and(eq(users.role, "coach"), eq(users.notifyEmail, true)))
-      .orderBy(users.id);
-  },
-  async findRunningCampaign() {
-    const [row] = await db.select({ id: emailListCampaigns.id }).from(emailListCampaigns).where(isNull(emailListCampaigns.finishedAt)).limit(1);
-    return row ?? null;
-  },
-  async createCampaign(input: { sentByUserId: number; audience: string; subject: string; body: string }) {
-    const [row] = await db.insert(emailListCampaigns).values(input).returning({ id: emailListCampaigns.id });
-    return row.id;
-  },
-  async listCampaigns(audience: string) {
-    return db.select().from(emailListCampaigns).where(eq(emailListCampaigns.audience, audience)).orderBy(desc(emailListCampaigns.startedAt)).limit(20);
   },
 
   // ---------- Coaches Corner learning paths (2026-10-03) ----------

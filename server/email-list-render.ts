@@ -21,21 +21,20 @@ export function renderCampaignBody(body: string): string {
     .join("");
 }
 
-/** One recipient of a mailing: an address, and how they stop getting it. The launch list has a
- * token link; a coach with Coaches Corner turns off email notifications in the app, so their
- * footer says that instead and the email wears their program (brandForUserId). */
+/** One recipient of a mailing: an address, and how they stop getting it. Every mailing this
+ * renders is the public launch list, so the token link is the only footer there is -- the
+ * second one, for a coach with Coaches Corner, went with the monthly digest on 2026-10-11, and
+ * a sentence about an account entitlement has no business in a renderer nothing reaches with
+ * one. The unsubscribe link is therefore required, not nullable: a mailing with no way out of
+ * it is not a state this should be able to represent. */
 export type CampaignRecipient = {
   email: string;
-  unsubscribeUrl: string | null;
-  brandForUserId?: number | null;
+  unsubscribeUrl: string;
 };
 
-export function buildCampaignEmail(args: { body: string; unsubscribeUrl: string | null }): string {
-  const footer = args.unsubscribeUrl
-    ? `You're getting this because you asked Forge Performance Systems for launch updates.
-          <a href="${escapeHtml(args.unsubscribeUrl)}" style="color:#999;">Unsubscribe</a> at any time.`
-    : `You're getting this because your Forge account has Coaches Corner. Turn off email
-          notifications in the app's notification settings to stop these.`;
+export function buildCampaignEmail(args: { body: string; unsubscribeUrl: string }): string {
+  const footer = `You're getting this because you asked Forge Performance Systems for launch updates.
+          <a href="${escapeHtml(args.unsubscribeUrl)}" style="color:#999;">Unsubscribe</a> at any time.`;
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;">
       <div style="background:#F65B23;padding:20px 24px;">

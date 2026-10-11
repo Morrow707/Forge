@@ -3725,7 +3725,9 @@ CREATE TABLE IF NOT EXISTS "email_list_campaigns" (
   "started_at" timestamp NOT NULL DEFAULT now(),
   "finished_at" timestamp
 );
--- The monthly Coaches Corner digest reuses the campaign table with an audience (2026-10-03).
+-- Added 2026-10-03 so the monthly Coaches Corner digest could share this table under its own
+-- audience. That feature was deleted on 2026-10-11 and the column STAYS: the launch list's
+-- own listing filters on it, and any row a digest wrote is the record that mail really left.
 ALTER TABLE "email_list_campaigns" ADD COLUMN IF NOT EXISTS "audience" text NOT NULL DEFAULT 'launch_list';
 `;
 
