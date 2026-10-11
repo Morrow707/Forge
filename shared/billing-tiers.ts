@@ -257,23 +257,6 @@ export const ALL_ADD_ON_IDS: AddOnId[] = [
  * granted from the admin billing panel -- so they are deliberately not here. */
 export const COACH_PURCHASABLE_ADD_ON_ORDER: AddOnId[] = ["coaches_corner"];
 
-/** WHAT A PUBLIC PRICE PAGE HAS TO SAY WHILE NOTHING IS CHARGED, in one place.
- *
- * CLAUDE.md states as a fact that "the pricing page still says Forge is not charging yet, which
- * is the truthful statement of TODAY", and the launch checklist's row F3 repeats it. Neither was
- * true of what a visitor read: on 2026-10-08 the only such sentence anywhere was the <meta
- * name="description"> for /pricing, which nobody sees, plus one hardcoded clause inside a
- * /for-high-schools FAQ answer. /pricing and the landing page priced six products in silence
- * while every checkout refused all of them.
- *
- * So the sentence is a constant that all three surfaces read. That is the point: when billing
- * goes live this has to come off the pricing page, the landing page AND the FAQ at the same
- * moment, and before this it was three edits in three registers with nothing connecting them --
- * the shape that leaves one behind. See beta-pricing-notice.test.ts.
- *
- * DELETE THIS, and the surfaces that render it, on the day BILLING_LIVE is set.
- */
-export const BETA_NOT_CHARGING_NOTICE = "During the beta nothing is charged.";
 
 export function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;

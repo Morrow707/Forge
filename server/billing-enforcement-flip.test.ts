@@ -141,16 +141,39 @@ describe("the flag is not inert -- a non-beta account really is restricted", () 
   });
 });
 
-describe("the default that makes the flip safe", () => {
-  it("declares is_beta_account as NOT NULL DEFAULT true", () => {
+describe("the beta is over: the default is false, and every existing row was flipped once", () => {
+  // Until 2026-10-11 this block pinned DEFAULT true, the switch that kept every account exempt
+  // through the beta. Scott: "Set all billing as live, everything true, the beta is over."
+  it("declares is_beta_account as NOT NULL DEFAULT false", () => {
     const schema = readFileSync(join(__dirname, "..", "shared", "schema.ts"), "utf8");
-    expect(schema).toContain('isBetaAccount: boolean("is_beta_account").notNull().default(true)');
+    expect(schema).toContain('isBetaAccount: boolean("is_beta_account").notNull().default(false)');
   });
 
-  it("builds the column with that default in the migration too", () => {
+  it("moves the column default in the migration too, after the ADD COLUMN", () => {
     // A default declared only in the ORM is not what an existing database
-    // gets -- see check-schema-drift.ts on why those two drift.
+    // gets -- see check-schema-drift.ts on why those two drift. The ADD COLUMN keeps its
+    // original DEFAULT true (it is IF NOT EXISTS and only ever runs on a fresh database, where
+    // the next statement immediately corrects it); the ALTER is what a live database sees.
     const reconcile = readFileSync(join(__dirname, "reconcile-schema.ts"), "utf8");
-    expect(reconcile).toMatch(/"is_beta_account" boolean NOT NULL DEFAULT true/);
+    const add = reconcile.indexOf('"is_beta_account" boolean NOT NULL DEFAULT true');
+    const alter = reconcile.indexOf('ALTER TABLE "users" ALTER COLUMN "is_beta_account" SET DEFAULT false;');
+    expect(add).toBeGreaterThan(-1);
+    expect(alter).toBeGreaterThan(add);
+  });
+
+  it("flips the rows that existed exactly once, behind the applied_backfills marker", () => {
+    // Unguarded, the UPDATE would run on every deploy and undo an admin's deliberate "Beta
+    // account" comp on the next boot, so the tick would look broken rather than overridden.
+    const reconcile = readFileSync(join(__dirname, "reconcile-schema.ts"), "utf8");
+    const block = reconcile.slice(reconcile.indexOf("'beta_ended_2026_10_11'"));
+    expect(block).toContain('UPDATE "users" SET "is_beta_account" = false WHERE "is_beta_account" = true;');
+    expect(block).toContain(`INSERT INTO "applied_backfills" ("key") VALUES ('beta_ended_2026_10_11');`);
+    const before = reconcile.slice(0, reconcile.indexOf("'beta_ended_2026_10_11'"));
+    expect(before.slice(-200)).toContain('IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = ');
+  });
+
+  it("no server default or fallback reads a missing row as a beta account any more", () => {
+    const storage = readFileSync(join(__dirname, "storage.ts"), "utf8");
+    expect(storage).not.toMatch(/isBetaAccount:\s*[^,\n]*\?\?\s*true/);
   });
 });

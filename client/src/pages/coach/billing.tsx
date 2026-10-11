@@ -321,7 +321,7 @@ export default function CoachBilling() {
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Change it any time. Nothing is charged while Forge is in beta.
+                    Change it any time.
                   </p>
                 </div>
               )}
@@ -347,7 +347,7 @@ export default function CoachBilling() {
               : unlocked
                 ? entitlements.coachesCorner.compedForRoster
                   ? "Included with your roster size"
-                  : "Included in beta"
+                  : "Included with your account"
                 : entitlements.billingOpen
                   ? "Available"
                   : "Not available yet";
@@ -451,8 +451,7 @@ export default function CoachBilling() {
             </p>
           ) : !billingOpen ? (
             <p className="rounded-md bg-surface-elevated p-3 text-sm text-muted-foreground">
-              Free while Forge is in beta. Nothing is charged, and there is nothing to set up,
-              the band above is what this roster would cost once billing opens.
+              Billing is not open here yet. The band above is what this roster costs.
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">

@@ -89,14 +89,14 @@ services:
       # Master switch for every "no real billing yet" paywall stub in
       # server/routes.ts (testingUnlockAllPaywalls) -- Free Agent AI access
       # (strengthAi/skillsAi entitlements), Coaches Corner content, and Class
-      # lesson purchases. "true" comps everyone so no new coach or Free Agent
-      # signup hits a 402 during this pre-billing period; the underlying
-      # paywall functions (hasAthletePaidForAiAccess, hasCoachesCornerAccess,
-      # the lesson-purchase route) are untouched and start enforcing again
-      # the moment this is set back to "false" or removed -- see
-      # testingUnlockAllPaywalls's own comment for the exact routes it gates.
+      # lesson purchases. "true" comps everyone; it was pinned to "true" HERE
+      # through the beta, which is why it had to leave this file and not only
+      # the dashboard when the beta ended (2026-10-11): a blueprint value is
+      # re-applied on sync, and the paywalls would have reopened as comped on
+      # the next one. sync: false now, and UNSET on the live service. Set it
+      # back to "true" only to comp every account at once, on purpose.
       - key: PAYWALLS_DISABLED
-        value: "true"
+        sync: false
       # NEW-DEVICE APPROVAL -- see server/trusted-devices.ts. A password alone
       # signs in only on a device the account has used before; any other
       # device waits on an email. Two ways to stand it down, both off by

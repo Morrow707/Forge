@@ -2358,9 +2358,9 @@ pitching) and Coaches Corner, which the copy said came with a "Pro coaching plan
   `skillsAccessFor` and `requirePaidAiAccess` all go through it: today EVERY Free Agent has the
   camera, skills and AI chat whatever their tier. Two earlier notes in this file reasoned the
   opposite from the code alone ("cameraAccessFor answers false for EVERY Free Agent except the
-  comped demo address") and are wrong while this flag is set. **Unsetting it is a launch-day
-  switch** (after `APPLE_IAP_ENVIRONMENT=production`, before Release) and is the one that makes a
-  Basic Free Agent's record button disappear, so audit row B6 cannot run before it. Also read off
+  comped demo address") and are wrong while this flag is set. **UNSET 2026-10-11 with the rest
+  of the launch switches** (see "BILLING IS LIVE" under the settled questions); it was the one
+  that made a Basic Free Agent's record button disappear, and audit row B6 is runnable now. Also read off
   the service: `APPLE_IAP_LIVE` is ALREADY true (the sandbox runs needed it), `APPLE_APP_APPLE_ID`
   is set, `ANTHROPIC_FAST_MODEL` / `ANTHROPIC_MODEL` are absent (the Haiku 5.5 default is what
   runs), all 56 names the code reads are present or deliberately absent, and `PII_ENCRYPTION_KEYS`
@@ -2628,8 +2628,10 @@ branch through the real login route and the real email.
   timestamp and the seed never re-locks it -- an admin somebody HAS used is their credential, not
   the seed's, and the log says so instead. Proven three ways on a throwaway database (locked on
   the first run with its session row gone and another user's kept, silent on the second, left
-  alone once used). On production this is account 3; Scott's own admin is account 4. The way back
-  in, if ever wanted, is the password reset to that address.
+  alone once used). **Deployed 2026-10-11 01:09 UTC: the Render log reads "Locked the seeded
+  admin's login (user 4)"** -- so the seeded admin is account 4 (created 2026-08-02) and Scott's own
+  admin is account 3, the reverse of what this entry first guessed; the lastActivityAt rule chose
+  correctly without the guess. The way back in, if ever wanted, is the password reset to that address.
 - **NINETEEN EMAILS RENDERED AT PHONE WIDTH, NONE OVERFLOW** (2026-10-11). The 10-09 read covered
   the words; nobody had drawn them at 390px. Method, reusable: run the integration suite with a
   setup file that wraps `testOutbox.push` and writes every captured body to disk (the suite sends
@@ -3074,14 +3076,30 @@ change it HERE rather than arguing it again from scratch.
   never present at a session, so a treatment authorization has no recipient,
   and an emergency contact is a third party's personal data with no operational
   path. The coach knows who to call. Asked and answered, 2026-09-06.
-- **Payments stay off through beta, but the paperwork already describes them.**
-  Scott, 2026-09-17: "we are still in beta, so payments are turned off ... keep
-  payments off". Scott, 2026-09-19: "when it goes live I don't want to have to
-  change paperwork when we launch" -- so the Terms of Use s11 now
-  describes the paid plans (Apple in-app, Stripe on the web) even though
-  BILLING_LIVE is off and nobody is charged. The pricing page still says Forge
-  is not charging yet, which is the truthful statement of TODAY; the Terms
-  state the launch position. Do not "fix" either to match the other.
+- **BILLING IS LIVE AS OF 2026-10-11. THE BETA IS OVER.** Scott: "Set all billing as live,
+  everything true, the beta is over." This entry used to say payments stay off through beta (Scott,
+  2026-09-17 and 2026-09-19) while the Terms described the paid plans for launch; the Terms were
+  right and the launch position is now the only position. What was done, all in one hour: on
+  Render, `BILLING_LIVE=true` (the card rail), `BILLING_ENFORCEMENT_ENABLED=true` (a tier
+  restricts), `APPLE_IAP_ENVIRONMENT=production` (`APPLE_APP_APPLE_ID` was already set), and
+  `PAYWALLS_DISABLED` UNSET -- and taken out of `render.yaml`, where it had been pinned to
+  "true" as a blueprint value that a sync would have re-applied. In the code, `isBetaAccount`
+  defaults FALSE (schema and `ALTER COLUMN ... SET DEFAULT`) and every existing row was flipped
+  ONCE behind the `beta_ended_2026_10_11` marker in `applied_backfills`, so the admin billing
+  panel's "Beta account" tick still comps one account deliberately and is never undone by a
+  deploy (proven on a throwaway database: flipped once, a re-ticked row survives a second run, a
+  new row defaults false). And every sentence that told a reader Forge was in beta or that nothing
+  was charged is gone -- `BETA_NOT_CHARGING_NOTICE` and its three public surfaces, plus six
+  in-app sentences the old test never knew about; `shared/the-beta-is-over.test.ts` scans pages,
+  components and shared for the phrases so none returns. **What this means for the accounts that
+  exist:** the seven beta people (three coaches with no tier, four Free Agents with no tier) are
+  no longer comped; a coach with no tier has an athlete cap of zero (the roster they have stays,
+  new joins are refused until a plan is bought on the web) and a Free Agent with no tier has
+  logging and the library and buys the camera, skills and AI in the app. **NOT touched, each its
+  own decision:** `PUBLIC_SIGNUPS_OPEN` is still `false` (the coming-soon gate is the site launch,
+  not billing) and `GOOGLE_PLAY_BILLING_LIVE` is still unset (Android is parked). The Stripe keys
+  on Render are whatever Scott put there; a TEST-mode key with `BILLING_LIVE` on charges fake
+  cards, a LIVE-mode key charges real ones, and only the dashboard says which.
 
 ## What deletion keeps, and what it does not
 

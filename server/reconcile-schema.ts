@@ -1569,6 +1569,21 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "nav_label_overrides" json;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "billing_tier" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "billing_add_ons" json;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "is_beta_account" boolean NOT NULL DEFAULT true;
+
+-- THE BETA ENDED 2026-10-11 (Scott: "Set all billing as live, everything true, the beta is
+-- over"). Two statements, each half of it. The default becomes false so every account made from
+-- here on is billed; and every account that already existed is flipped ONCE -- through the
+-- applied_backfills marker below, so an admin who later ticks "Beta account" on one row to comp
+-- it is not undone on the next deploy. BILLING_ENFORCEMENT_ENABLED and BILLING_LIVE were set on
+-- Render in the same hour; this is the per-row half that those switches read.
+ALTER TABLE "users" ALTER COLUMN "is_beta_account" SET DEFAULT false;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'beta_ended_2026_10_11') THEN
+    UPDATE "users" SET "is_beta_account" = false WHERE "is_beta_account" = true;
+    INSERT INTO "applied_backfills" ("key") VALUES ('beta_ended_2026_10_11');
+  END IF;
+END $$;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "trial_expires_at" timestamp;
 
 CREATE TABLE IF NOT EXISTS "redeem_codes" (

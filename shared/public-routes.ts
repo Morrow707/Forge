@@ -54,7 +54,7 @@ export const PUBLIC_ROUTES: PublicRoute[] = [
     path: "/pricing",
     title: "Pricing",
     description:
-      "What Forge costs for a school, a club or an individual athlete. Forge is in beta and is not charging yet.",
+      "What Forge costs for a school, a club or an individual athlete, with no per-coach fee.",
     index: true,
     priority: 0.9,
     image: "/marketing/shot-dashboard.png",

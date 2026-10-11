@@ -163,7 +163,7 @@ export function AllClassesCard({ compact = false }: { compact?: boolean }) {
           </Button>
         ) : (
           <p className="mt-auto rounded-md border border-border px-3 py-2 text-center text-xs text-muted-foreground">
-            {billingOpen ? "Not available in the store yet." : "Free while Forge is in beta, nothing to pay yet."}
+            {billingOpen ? "Not available in the store yet." : "Not available yet."}
           </p>
         )}
       </CardContent>

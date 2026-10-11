@@ -22022,7 +22022,7 @@ ${catalog}`;
     const defaultWeightUnit = athlete?.preferredWeightUnit ?? "lbs";
     const retentionLimits = getVideoRetentionLimits({
       hasVideoStorageAddOn: athlete?.hasVideoStorageAddOn ?? false,
-      isBetaAccount: athlete?.isBetaAccount ?? true,
+      isBetaAccount: athlete?.isBetaAccount ?? false,
       trialExpiresAt: athlete?.trialExpiresAt ?? null,
       dateOfBirth: athlete?.dateOfBirth ?? null,
     });

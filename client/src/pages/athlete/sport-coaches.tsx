@@ -203,7 +203,7 @@ export default function AthleteSportCoaches() {
                     )}
                     {unlocked && !owned && (
                       <p className="text-center text-[11px] text-muted-foreground">
-                        Free while Forge is in beta.
+                        Included with your account.
                       </p>
                     )}
                   </CardContent>

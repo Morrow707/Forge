@@ -533,8 +533,7 @@ export default function CoachesCorner() {
             ) : (
               <p className="text-sm font-semibold text-amber-500">
                 A paid add-on{corner ? ` (${formatCents(corner.monthlyPriceCents)}/month)` : ""},
-                purchasable once billing opens. Free for rosters of 100+ athletes. Nothing is
-                charged while Forge is in beta.
+                purchasable once billing opens. Free for rosters of 100+ athletes.
               </p>
             )}
           </CardContent>

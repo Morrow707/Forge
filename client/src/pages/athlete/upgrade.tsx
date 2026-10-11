@@ -89,7 +89,7 @@ function SportCoachAddOns({ webCheckout }: { webCheckout: boolean }) {
           const status = owned
             ? "Owned"
             : unlocked
-              ? "Included in beta"
+              ? "Included with your account"
               : data?.billingOpen === true
                 ? "Available"
                 : "Not available yet";
@@ -351,7 +351,7 @@ export default function AthleteUpgrade() {
                       </Button>
                     ) : (
                       <p className="rounded-md border border-border px-3 py-2 text-center text-xs text-muted-foreground">
-                        Free while Forge is in beta, nothing to pay yet.
+                        Not available yet.
                       </p>
                     )}
                   </CardContent>

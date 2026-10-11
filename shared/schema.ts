@@ -662,13 +662,14 @@ export const users = pgTable(
     // field existed, and every staff coach, whose org's number lives on
     // the primary's row).
     plannedAthleteCount: integer("planned_athlete_count"),
-    // Defaults true so every existing row and every new signup starts
-    // exempt from billing enforcement -- flipping this to false (via the
-    // admin billing panel) is the only thing that makes billingTier/
-    // billingAddOns start actually restricting that account. Nothing in
-    // this codebase sets it false automatically; it's a deliberate,
-    // per-account admin action, on purpose, while still in beta.
-    isBetaAccount: boolean("is_beta_account").notNull().default(true),
+    // THE BETA IS OVER (Scott, 2026-10-11: "Set all billing as live, everything true, the beta
+    // is over"). Defaulted true from 2026-09 to 2026-10-11 so every row and every signup was
+    // exempt from billing enforcement; it defaults FALSE now, and the one-shot backfill
+    // `beta_ended_2026_10_11` in server/reconcile-schema.ts flipped every existing row once.
+    // True is still honoured everywhere it always was -- it is the admin billing panel's
+    // per-account comp, ticked deliberately, and nothing sets it automatically in either
+    // direction.
+    isBetaAccount: boolean("is_beta_account").notNull().default(false),
     // Set by storage.redeemCode() -- while in the future, entitlements
     // resolve fully unlocked regardless of isBetaAccount/billingTier (see
     // getEntitlements in server/billing.ts), the same way a beta account

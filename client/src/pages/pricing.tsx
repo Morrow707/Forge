@@ -14,7 +14,6 @@ import {
   formatCents,
   ORG_PER_ATHLETE_CENTS,
   ORG_BLOCK_SIZE,
-  BETA_NOT_CHARGING_NOTICE,
 } from "@shared/billing-tiers";
 import {
   FREE_AGENT_TIERS,
@@ -81,10 +80,6 @@ export default function PricingPage() {
             One roster-based plan per program. Every tier includes AI coaching, form-check video
             analysis, programming, and nutrition, personalization scales with you.
           </p>
-          {/* Said BEFORE any number on the page, because the page's whole job is to quote
-              numbers and none of them is being collected yet. One constant, three surfaces --
-              see BETA_NOT_CHARGING_NOTICE for why it is not three sentences. */}
-          <p className="text-sm font-semibold">{BETA_NOT_CHARGING_NOTICE}</p>
         </div>
 
         {/* Every tier above claims "form-check video analysis" as a real, working feature, and

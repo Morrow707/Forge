@@ -455,8 +455,7 @@ export default function SignupPage() {
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Just a starting point. You can change it any time, and nothing is charged
-                    while Forge is in beta.
+                    Just a starting point. You can change it any time.
                   </p>
                 </div>
               )}
@@ -693,7 +692,7 @@ function FreeAgentWelcomeDialog({ onContinue }: { onContinue: () => void }) {
             <p className="text-muted-foreground">
               The full AI coach is available as a paid upgrade: conversational AI program
               building, an AI form-check review of your lifts, and the AI chat coach. You can see the
-              plans any time under Upgrade in the app. Nothing is charged while Forge is in beta.
+              plans any time under Upgrade in the app.
             </p>
           </div>
         </div>
