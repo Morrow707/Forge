@@ -2632,6 +2632,17 @@ branch through the real login route and the real email.
   admin's login (user 4)"** -- so the seeded admin is account 4 (created 2026-08-02) and Scott's own
   admin is account 3, the reverse of what this entry first guessed; the lastActivityAt rule chose
   correctly without the guess. The way back in, if ever wanted, is the password reset to that address.
+- **TWO APP REVIEW ACCOUNTS EXIST ON PRODUCTION (2026-10-11), AND THEY ARE THE ONLY TWO.** Scott:
+  "what two review addresses? can you just make them?" Made through the real signup with the invite
+  code: account 27, a head coach (planned headcount 10, no plan, no Coaches Corner -- on purpose, so
+  the reviewer can BUY Coaches Corner in sandbox, which is what the review notes promise) and
+  account 28, an adult Free Agent with the biometric consent given. Both addresses are plus-tags on
+  Scott's inbox and both are in `DEVICE_VERIFICATION_EXEMPT_EMAILS` on Render (set by the API, read
+  back). The logins are in the session's scratchpad `review/` and were handed to Scott as a file,
+  never printed in a log or a commit. They are NOT on any retired list and the seed never touches
+  them. **Still Scott's:** assign the athlete AI Coach + Video on `/admin/billing` (enforcement is
+  on, so an unassigned Free Agent has no camera, and the review notes describe one), and replace the
+  demo logins in the App Store Connect review notes with these two.
 - **NINETEEN EMAILS RENDERED AT PHONE WIDTH, NONE OVERFLOW** (2026-10-11). The 10-09 read covered
   the words; nobody had drawn them at 390px. Method, reusable: run the integration suite with a
   setup file that wraps `testOutbox.push` and writes every captured body to disk (the suite sends
