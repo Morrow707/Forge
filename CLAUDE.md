@@ -2664,6 +2664,17 @@ branch through the real login route and the real email.
   table; the ALTER COLUMN SET DEFAULT stays beside the column. This is exactly the "migration
   order matters" rule in the Coaches Corner section, and exactly the check the Tests section says
   to run on any reconciler edit -- which was skipped that hour and cost three red runs.
+  **Found 3, also mine, on the run that fixed found 2: NINE INTEGRATION FILES ASSUMED A FRESH
+  ACCOUNT WAS COMPED.** The integration config runs with `BILLING_ENFORCEMENT_ENABLED=true` and
+  had only ever passed because `isBetaAccount` defaulted true on every fixture row; with the
+  column defaulting false, every feature test on the coach side met a real 402 (18 tests across
+  academy, Coaches Corner, discussion, digest, branding, plan-at-signup). **A test account is
+  comped unless the test says otherwise**: `makeCoach`, `makeAthlete` and `makeLoginableUser` set
+  `isBetaAccount: true`, and the five files that test the wall itself pass `false` explicitly and
+  are untouched. `plan-at-signup` now asserts a signup is billed, which is the new truth. The same
+  run found a real bug: a coach WITHOUT Full Personalization saving only the gated branding fields
+  arrived at `updateCoachBranding` with an empty patch, drizzle threw "No values to set" past the
+  route, and the request hung. An empty patch is a read now (`branding-page.itest.ts`).
 - **NINETEEN EMAILS RENDERED AT PHONE WIDTH, NONE OVERFLOW** (2026-10-11). The 10-09 read covered
   the words; nobody had drawn them at 390px. Method, reusable: run the integration suite with a
   setup file that wraps `testOutbox.push` and writes every captured body to disk (the suite sends

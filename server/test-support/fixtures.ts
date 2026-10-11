@@ -65,6 +65,14 @@ export async function resetDatabase(): Promise<void> {
 let sequence = 0;
 const unique = () => `${Date.now().toString(36)}-${sequence++}`;
 
+/** A TEST ACCOUNT IS COMPED UNLESS THE TEST SAYS OTHERWISE. The integration config runs with
+ * BILLING_ENFORCEMENT_ENABLED=true, and until 2026-10-11 every fresh row was exempt anyway because
+ * users.isBetaAccount defaulted true. The beta is over and the column defaults false now, so a
+ * fixture that inherited the column default would meet a real paywall in every feature test --
+ * nine files of 402s on the first CI run after the flip. The paywall itself is tested by the files
+ * that pass `isBetaAccount: false` explicitly (add-on-entitlements, class-pricing-rule, ...), and
+ * those still get exactly what they ask for; everything else is a test of a feature, not of the
+ * wall in front of it. */
 export async function makeCoach(overrides: Partial<typeof users.$inferInsert> = {}) {
   const [row] = await db
     .insert(users)
@@ -73,6 +81,7 @@ export async function makeCoach(overrides: Partial<typeof users.$inferInsert> = 
       passwordHash: "not-a-real-hash",
       name: "Test Coach",
       role: "coach",
+      isBetaAccount: true,
       ...overrides,
     })
     .returning();
@@ -87,6 +96,7 @@ export async function makeAthlete(overrides: Partial<typeof users.$inferInsert> 
       passwordHash: "not-a-real-hash",
       name: "Test Athlete",
       role: "athlete",
+      isBetaAccount: true,
       ...overrides,
     })
     .returning();

@@ -30,6 +30,20 @@ const BEARS = {
   senderName: "Cal Strength",
 };
 
+describe("a program without Full Personalization", () => {
+  it("saving only the gated fields is a read, not a hung request", async () => {
+    // Found 2026-10-11 on the first integration run with every account billed: the route strips
+    // every field the entitlements do not cover, the patch arrived empty, drizzle threw "No values
+    // to set" past the route, and the request hung until the test timed out.
+    const paying = await makeLoginableUser({ role: "coach", isBetaAccount: false });
+    const c = await loginAs(server.baseUrl, paying);
+    const res = await c.patch("/api/coach/branding", { slug: "nobody-paid-for-this", senderName: "Nope" });
+    expect(res.status).toBe(200);
+    expect(res.body.brandSlug).toBeNull();
+    expect(res.body.brandSenderName).toBeNull();
+  });
+});
+
 describe("the program's address", () => {
   it("is one per program: a second coach asking for the same slug gets a 409", async () => {
     const a = await makeLoginableUser({ role: "coach" });

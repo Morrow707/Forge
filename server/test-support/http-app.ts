@@ -173,6 +173,8 @@ export async function makeLoginableUser(
       // Adults unless a test says otherwise: the under-18 gate is its own
       // question and would otherwise silently answer several of these.
       dateOfBirth: "1995-06-15",
+      // Comped unless the test says otherwise -- see makeCoach in fixtures.ts for why.
+      isBetaAccount: true,
       ...overrides,
     })
     .returning();

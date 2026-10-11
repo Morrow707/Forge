@@ -79,9 +79,10 @@ describe("the plan a school picks at signup", () => {
     const row = await db.query.users.findFirst({ where: eq(users.email, body.email) });
     expect(row!.plannedAthleteCount).toBe(34);
     expect(row!.billingTier).toBe("21-40");
-    // The tier is a price, not enforcement -- the one switch that makes it restrict anybody is
-    // untouched by signing up. See users.isBetaAccount.
-    expect(row!.isBetaAccount).toBe(true);
+    // The tier is a price. Through the beta a signup was exempt from enforcing it (isBetaAccount
+    // defaulted true); the beta ended 2026-10-11 and a new account is billed from its first day.
+    // The admin billing panel's Beta box is the only thing that comps one now.
+    expect(row!.isBetaAccount).toBe(false);
   });
 
   it("is what makes the Institutional Service Agreement get asked for at all", async () => {

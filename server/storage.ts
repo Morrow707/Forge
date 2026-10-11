@@ -20262,9 +20262,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
   // would otherwise hand the response straight back to the client
   // including passwordHash.
   async updateCoachBranding(primaryCoachId: number, values: UpdateBrandingInput) {
-    const [row] = await db
-      .update(users)
-      .set({
+    const patch = {
         ...(values.teamName !== undefined && { brandTeamName: values.teamName }),
         ...(values.primaryColor !== undefined && { brandPrimaryColor: values.primaryColor }),
         ...(values.secondaryColor !== undefined && { brandSecondaryColor: values.secondaryColor }),
@@ -20277,7 +20275,21 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
         ...(values.headingFont !== undefined && { brandHeadingFont: values.headingFont }),
         ...(values.slug !== undefined && { brandSlug: values.slug }),
         ...(values.senderName !== undefined && { brandSenderName: values.senderName }),
-      })
+    };
+    // NOTHING TO WRITE IS A READ, NOT A CRASH. The route strips every field the program's
+    // entitlements do not cover before calling this, so a coach without Full Personalization who
+    // saves only the gated fields arrives here with an empty patch -- and drizzle throws "No
+    // values to set" on an empty .set(), which escaped the route as an unhandled rejection and
+    // left the request hanging. Found 2026-10-11, the first integration run with every account
+    // billed; the first draft of the fix put the guard in the route, but this is the function
+    // that knows the patch is empty.
+    if (Object.keys(patch).length === 0) {
+      const [current] = await db.select(BRANDING_COLUMNS_SQL).from(users).where(eq(users.id, primaryCoachId));
+      return current ?? null;
+    }
+    const [row] = await db
+      .update(users)
+      .set(patch)
       .where(eq(users.id, primaryCoachId))
       .returning(BRANDING_COLUMNS_SQL);
     return row ?? null;
