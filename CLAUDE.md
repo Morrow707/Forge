@@ -3096,8 +3096,9 @@ change it HERE rather than arguing it again from scratch.
   no longer comped; a coach with no tier has an athlete cap of zero (the roster they have stays,
   new joins are refused until a plan is bought on the web) and a Free Agent with no tier has
   logging and the library and buys the camera, skills and AI in the app. **NOT touched, each its
-  own decision:** `PUBLIC_SIGNUPS_OPEN` is still `false` (the coming-soon gate is the site launch,
-  not billing) and `GOOGLE_PLAY_BILLING_LIVE` is still unset (Android is parked). The Stripe keys
+  own decision:** `PUBLIC_SIGNUPS_OPEN` is still `false` and is HELD by Scott until the app is live
+  in the store (2026-10-11: "Don't open public signups yet, the app isn't live, I won't want Apple
+  getting pissed"; the hold lasts until he lifts it) and `GOOGLE_PLAY_BILLING_LIVE` is still unset (Android is parked). The Stripe keys
   on Render are whatever Scott put there; a TEST-mode key with `BILLING_LIVE` on charges fake
   cards, a LIVE-mode key charges real ones, and only the dashboard says which.
 
