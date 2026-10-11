@@ -195,6 +195,81 @@ async function lockSeededAdminLogin(admin: { id: number; passwordHash: string; l
   console.log(`Locked the seeded admin's login (user ${admin.id}): no password matches it and its sessions are gone.`);
 }
 
+/** THE SEEDED ADMIN IS REMOVED ONCE SCOTT'S ACCOUNT CAN OWN WHAT IT OWNED (2026-10-11). Scott:
+ * "I thought I asked you to remove the admin@forge.app?" The row had been kept with a locked
+ * login because it was the library owner on a fresh environment; on an environment that has
+ * Scott, it is not needed, and this hands over then deletes.
+ *
+ * Returns true when the row is KEPT (so the caller still locks its login). The rules, each the
+ * difference between a tidy-up and a data loss:
+ * - Every column that points at users.id is read off information_schema at run time, never from
+ *   a list in this file, so a table added later is classified or refused, never silently
+ *   cascaded.
+ * - CONTENT the admin owns (exercises, programs, classes, uploads, knowledge, reference clips...)
+ *   is REASSIGNED to Scott by plain UPDATE, so nothing Forge-official is lost.
+ * - The account's OWN rows (sessions, tokens, devices, notifications, its own audit trail...) are
+ *   allowed to cascade with it.
+ * - A CASCADE column on neither list that still holds a row for this account REFUSES the
+ *   deletion and names the table in the log. SET NULL columns are left to null out. */
+const SEEDED_ADMIN_CONTENT_TO_REASSIGN = new Set([
+  "exercises.coach_id", "programs.coach_id", "skill_exercises.coach_id", "skill_programs.coach_id",
+  "classes.coach_id", "knowledge_sources.uploaded_by_user_id", "movement_profiles.created_by",
+  "ai_knowledge_entries.taught_by", "ai_knowledge_changelog.changed_by", "ai_knowledge_messages.author_id",
+  "movement_knowledge_messages.author_id", "nutrition_knowledge_messages.author_id", "forge_ai_messages.author_id",
+  "uploaded_files.uploaded_by", "reference_clips.coach_id", "exercise_submissions.submitted_by",
+  "exercise_reports.reported_by", "movement_screen_batteries.coach_id", "coach_cues.coach_id",
+  "team_posts.author_id", "team_posts.coach_id", "program_chat_messages.author_id",
+  "skill_program_chat_messages.author_id", "admin_saved_views.created_by_admin_id",
+]);
+const SEEDED_ADMIN_OWN_ROWS_MAY_CASCADE = new Set([
+  "user_sessions.user_id", "trusted_devices.user_id", "device_approvals.user_id",
+  "password_reset_tokens.user_id", "email_verification_tokens.user_id", "notifications.user_id",
+  "push_subscriptions.user_id", "apns_device_tokens.user_id", "subscriptions.user_id",
+  "billing_audit_log.user_id", "consent_records.user_id", "aggregate_data_access_log.admin_id",
+  "research_exports.admin_id", "record_access_audit_logs.user_id", "external_waiver_view_grants.admin_user_id",
+  "problem_reports.user_id", "favorite_exercises.coach_id", "favorite_skill_exercises.coach_id",
+  "exercise_usage_log.coach_id", "skill_exercise_usage_log.coach_id", "academy_lesson_completions.coach_id",
+  "academy_lesson_flags.coach_id", "academy_lesson_notes.coach_id", "academy_quiz_attempts.coach_id",
+  "coaches_corner_questions.coach_id", "redeem_code_redemptions.coach_id", "class_coach_settings.coach_id",
+  "coach_digests.coach_id", "athlete_digests.athlete_id", "coach_discussion_reports.reporter_id",
+  "video_review_exports.exported_by",
+]);
+async function retireSeededAdmin(admin: { id: number }, scott: { id: number } | undefined | null): Promise<boolean> {
+  if (!scott || scott.id === admin.id) return true;
+  const fks = await db.execute(sql`
+    SELECT tc.table_name AS t, kcu.column_name AS c, rc.delete_rule AS rule
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kcu ON kcu.constraint_name = tc.constraint_name
+    JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
+    JOIN information_schema.referential_constraints rc ON rc.constraint_name = tc.constraint_name
+    WHERE tc.constraint_type = 'FOREIGN KEY' AND ccu.table_name = 'users' AND ccu.column_name = 'id'`);
+  const rows = (fks as unknown as { rows: Array<{ t: string; c: string; rule: string }> }).rows ?? (fks as unknown as Array<{ t: string; c: string; rule: string }>);
+  const refused: string[] = [];
+  const moved: string[] = [];
+  for (const { t, c, rule } of rows) {
+    const key = `${t}.${c}`;
+    const countRes = await db.execute(sql`SELECT count(*)::int AS n FROM ${sql.identifier(t)} WHERE ${sql.identifier(c)} = ${admin.id}`);
+    const n = ((countRes as unknown as { rows: Array<{ n: number }> }).rows ?? (countRes as unknown as Array<{ n: number }>))[0]?.n ?? 0;
+    if (n === 0) continue;
+    if (SEEDED_ADMIN_CONTENT_TO_REASSIGN.has(key)) {
+      await db.execute(sql`UPDATE ${sql.identifier(t)} SET ${sql.identifier(c)} = ${scott.id} WHERE ${sql.identifier(c)} = ${admin.id}`);
+      moved.push(`${key} x${n}`);
+    } else if (rule === "SET NULL" || SEEDED_ADMIN_OWN_ROWS_MAY_CASCADE.has(key)) {
+      continue;
+    } else {
+      refused.push(`${key} x${n}`);
+    }
+  }
+  if (refused.length > 0) {
+    console.log(`Seeded admin (user ${admin.id}) KEPT: it still owns rows this seed will not cascade -- ${refused.join(", ")}. Classify them in retireSeededAdmin.`);
+    return true;
+  }
+  if (moved.length > 0) console.log(`Seeded admin (user ${admin.id}): handed to user ${scott.id}: ${moved.join(", ")}.`);
+  await storage.deleteUserRecord(admin.id);
+  console.log(`Removed the seeded admin (user ${admin.id}); Scott's account owns the library.`);
+  return false;
+}
+
 async function removeSeededDemoAccounts(): Promise<void> {
   for (const email of RETIRED_DEMO_ACCOUNT_EMAILS) {
     const user = await storage.getUserByEmail(email);
@@ -216,8 +291,21 @@ async function main() {
   const athlete = await storage.getUserByEmail("athlete@forge.app");
   const freeAgent = await storage.getUserByEmail("freeagent@forge.app");
 
+  // The Forge identity that owns every Forge-official exercise and program: Scott's real account
+  // once it exists, else a seeded admin. Library content is created under it DIRECTLY now -- it
+  // used to be created under the demo coach and handed over on the next boot, and with the demo
+  // coach gone a fresh environment has nobody else to own it.
+  const scott = await storage.getUserByEmail("scott.morrow@live.com");
+  if (scott && scott.role !== "admin") {
+    await storage.setUserRole(scott.id, "admin");
+  }
+
+  // THE SEEDED ADMIN EXISTS ONLY WHERE SCOTT'S ACCOUNT DOES NOT (2026-10-11). It is the library
+  // owner of last resort on a fresh environment; on an environment that has Scott it is never
+  // created, and one that still holds it is retired at the end of this run (retireSeededAdmin).
+  // Scott: "I thought I asked you to remove the admin@forge.app?"
   let demoAdmin = await storage.getUserByEmail("admin@forge.app");
-  if (!demoAdmin) {
+  if (!demoAdmin && !scott) {
     demoAdmin = await storage.createUser({
       email: "admin@forge.app",
       passwordHash: await hashPassword(demoPassword("admin123")),
@@ -225,16 +313,9 @@ async function main() {
       role: "admin",
     });
   }
-
-  // The Forge identity that owns every Forge-official exercise and program: Scott's real account
-  // once it exists, else the admin above. Library content is created under it DIRECTLY now --
-  // it used to be created under the demo coach and handed over on the next boot, and with the
-  // demo coach gone a fresh environment has nobody else to own it.
-  const scott = await storage.getUserByEmail("scott.morrow@live.com");
-  if (scott && scott.role !== "admin") {
-    await storage.setUserRole(scott.id, "admin");
-  }
-  const libraryOwner = scott ?? demoAdmin;
+  const forgeOwner = scott ?? demoAdmin;
+  if (!forgeOwner) throw new Error("seed: no Forge identity to own the library");
+  const libraryOwner = forgeOwner;
 
   // Looked up system-wide (not scoped to this coach) since an exercise's
   // owner can change after seeding -- e.g. once transferred to the admin as
@@ -3128,7 +3209,7 @@ async function main() {
   // coach sees them immediately via getVisibleSkillExercisesForCoach's
   // admin-ownership union.
   {
-    const skillLibraryOwner = scott ?? demoAdmin;
+    const skillLibraryOwner = forgeOwner;
     const allSkillExercises = await storage.getAllSkillExercises();
     const existingSkillNames = new Set(allSkillExercises.map((e) => e.name));
 
@@ -4363,7 +4444,7 @@ async function main() {
   // classCoachSettings pacing override without touching this content.
   let americanHittingClassId: number | undefined;
   {
-    const classOwner = scott ?? demoAdmin;
+    const classOwner = forgeOwner;
     const AMERICAN_HITTING_CLASS_NAME = "American Hitting: Athletic Hitting Development Program";
     const existingClass = await db.query.classes.findFirst({
       where: and(eq(classes.name, AMERICAN_HITTING_CLASS_NAME), eq(classes.coachId, classOwner.id)),
@@ -4558,7 +4639,7 @@ async function main() {
 
   // The repo-written Forge classes (server/seed-data/forge-classes): created once by name,
   // content re-synced every deploy. Same owner as the hitting class.
-  await seedForgeClasses((scott ?? demoAdmin).id);
+  await seedForgeClasses(forgeOwner.id);
 
   // Demo Free Agent gets full, ungated access to the American Hitting
   // class -- every lesson active on their calendar, no payment/content/
@@ -5285,7 +5366,8 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
   // not on their checklist, nothing reads it, and the upload route would refuse the same kind
   // from a real coach. What each account needs is its OWN required documents.
   await removeSeededDemoAccounts();
-  await lockSeededAdminLogin(demoAdmin);
+  const seededAdminRemains = demoAdmin ? await retireSeededAdmin(demoAdmin, scott) : false;
+  if (demoAdmin && seededAdminRemains) await lockSeededAdminLogin(demoAdmin);
   await retireSeededTestProgram();
   await logAccountInventory();
 

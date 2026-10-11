@@ -2632,6 +2632,19 @@ branch through the real login route and the real email.
   admin's login (user 4)"** -- so the seeded admin is account 4 (created 2026-08-02) and Scott's own
   admin is account 3, the reverse of what this entry first guessed; the lastActivityAt rule chose
   correctly without the guess. The way back in, if ever wanted, is the password reset to that address.
+  **AND THEN REMOVED OUTRIGHT, SAME NIGHT.** Scott: "I thought I asked you to remove the
+  admin@forge.app?" The row had been kept as the library owner of last resort; on an environment
+  that has Scott's account it is not needed. `retireSeededAdmin` in `server/seed.ts` runs at the end
+  of the seed when Scott's account exists: it reads EVERY column that points at `users.id` off
+  `information_schema` at run time (never a list in the file, so a table added later is classified
+  or refused, never silently cascaded), REASSIGNS the content the admin owns to Scott by plain
+  UPDATE (exercises, programs, classes, uploads, knowledge, reference clips, ...), lets the
+  account's own rows cascade (sessions, tokens, devices, its own audit trail, ...), and REFUSES --
+  keeping the row, locked as before, and naming the table in the log -- if a CASCADE column on
+  neither list still holds a row for it. And the seed creates `admin@forge.app` only when Scott's
+  account does not exist, so a fresh dev database still has an owner and production never grows it
+  back. Proven three ways on a throwaway database: refused while it owned a roster link, handed its
+  lift and program to Scott and deleted once the link was cleared, absent on the run after.
 - **TWO APP REVIEW ACCOUNTS EXIST ON PRODUCTION (2026-10-11), AND THEY ARE THE ONLY TWO.** Scott:
   "what two review addresses? can you just make them?" Made through the real signup with the invite
   code: account 27, a head coach (planned headcount 10, no plan, no Coaches Corner -- on purpose, so
