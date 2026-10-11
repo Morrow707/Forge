@@ -157,21 +157,23 @@ describe("no seeded account is exempt from the new-device email any more", () =>
  * apart from the demo list so the difference stays visible, and so deleting it is one line.
  */
 describe("the temporary admin exemption", () => {
-  it("covers exactly one account, and says which", () => {
-    expect(TEMPORARY_ACCOUNT_EXEMPTIONS).toEqual(["scott.morrow@live.com"]);
-    expect(isDeviceVerificationExempt("scott.morrow@live.com")).toBe(true);
+  it("is empty: the owner's account meets the device email like everyone else", () => {
+    // 2026-10-11. Scott's address sat here from 2026-09-21 while the approval link 404'd; he
+    // confirmed the link works and the exemption went with it. An entry here is a real account
+    // trading a real protection for access, which is why the list stays and stays empty.
+    expect([...TEMPORARY_ACCOUNT_EXEMPTIONS]).toEqual([]);
+    delete process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS;
+    expect(isDeviceVerificationExempt("scott.morrow@live.com")).toBe(false);
   });
 
   it("is not confused with the demo accounts", () => {
-    // Different reasons, different lifetimes: the demo addresses do not exist and never will,
-    // this one is waiting on a bug fix.
     for (const e of TEMPORARY_ACCOUNT_EXEMPTIONS) {
       expect(DEMO_ACCOUNT_EMAILS).not.toContain(e);
     }
   });
 
-  it("carries the condition for its own removal", () => {
+  it("says where a standing exemption belongs instead", () => {
     const src = readFileSync(resolve(__dirname, "device-trust-policy.ts"), "utf-8");
-    expect(src).toMatch(/Remove once .*device-approval/i);
+    expect(src).toMatch(/DEVICE_VERIFICATION_EXEMPT_EMAILS on Render/);
   });
 });

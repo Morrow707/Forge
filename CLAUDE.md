@@ -2575,6 +2575,14 @@ branch through the real login route and the real email.
   Matching is exact and `server/trusted-devices.test.ts` pins the three against the addresses
   `seed.ts` really creates, so a rename cannot leave a stale literal reading as covered.
   `admin@forge.app` is deliberately NOT exempt -- the admin account is Scott's, on a real inbox.
+  **THE OWNER'S OWN TEMPORARY EXEMPTION IS GONE TOO (2026-10-11).** `TEMPORARY_ACCOUNT_EXEMPTIONS`
+  held Scott's address from 2026-09-21, when the approval link 404'd, with its removal condition
+  written on it; Scott confirmed the emailed link reaches the approval page ("that link worked")
+  and the list is empty. So his account meets the device email like everyone else, and the thing
+  to know for camera testing: **a deleted-and-reinstalled app forgets its device id, so the first
+  sign-in after a reinstall waits on one approval from his inbox.** That is the protection
+  working, not a bug; if it ever gets in the way of a filming session, the operator route is
+  `DEVICE_VERIFICATION_EXEMPT_EMAILS` on Render for the day, never this list.
   **DONE 2026-10-11, ON SCOTT'S WORD, BEFORE THE APP REVIEW RESULT** (2026-10-04 he had said "delete
   them, i will keep using the admin role, so flag for later"; 2026-10-11: "Let's do all 4 ... scrub
   every data point that has ever existed for the beta accounts, especially Jordan athlete, he was
