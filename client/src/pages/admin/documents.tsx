@@ -530,11 +530,31 @@ function SignupAgreementEditor() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("PUT", "/api/admin/legal-agreement", { content });
-      return res.json() as Promise<{ content: string }>;
+      return res.json() as Promise<{
+        content: string;
+        termsChanged: boolean;
+        guardiansEmailed: number;
+      }>;
     },
-    onSuccess: () => {
+    // SAYS WHAT A SAVE ACTUALLY DOES. This read "new signups will see this text", which stopped
+    // being the whole truth when the re-acceptance gate shipped (2026-09-19): a changed
+    // agreement makes every existing account's snapshot stale, so every adult meets a
+    // non-dismissable accept-or-sign-out dialog on their next request and every linked guardian
+    // is emailed. That is the point of the feature, not a side effect, and an admin pressing
+    // Save is entitled to know it happened before they hear about it from the platform.
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["/api/legal-agreement"] });
-      toast.success("Agreement updated, new signups will see this text");
+      if (!result.termsChanged) {
+        toast.success("Saved. The terms themselves did not change, so nobody is re-asked.");
+        return;
+      }
+      const emailed =
+        result.guardiansEmailed > 0
+          ? ` ${result.guardiansEmailed} guardian${result.guardiansEmailed === 1 ? "" : "s"} emailed.`
+          : "";
+      toast.success(
+        `Agreement updated. Every existing account will be asked to accept it again.${emailed}`,
+      );
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save"),
   });

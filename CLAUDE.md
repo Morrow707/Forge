@@ -2207,6 +2207,33 @@ so the software has to do it.
   the wrong trade.
 - **Every existing user meets the gate once** after the 2026-09-19 deploy, because counsel's
   text differs from whatever they accepted. That is the intended first run, not a bug.
+- **AN ADMIN'S OWN EDIT RE-ASKED EVERY ADULT AND EMAILED NO GUARDIAN, FOR THREE WEEKS**
+  (found 2026-10-11, working the launch row "edit the live agreement, every adult meets the
+  dialog once, the minor's guardian gets the email"). Parts 1 and 2 of that row have always
+  passed; part 3 could not. **The adult half needs nothing wired and the guardian half is a
+  call somebody has to make**, and only one of them was made: `getTermsAcceptanceStatus`
+  compares the live document with the snapshot on the account, so a changed document puts
+  itself in front of every adult at their next request, while
+  `notifyGuardiansOfTermsChange()` had exactly ONE non-test caller -- `server/seed.ts` --
+  and the seed only ever upgrades a document it still recognises as a version Forge shipped
+  (`nextSignupAgreement` returns null for an admin's own wording). So the moment the terms
+  were edited through `/admin/documents`, the seed went silent forever and the one population
+  that cannot answer for itself was the one nobody was told about.
+  `PUT /api/admin/legal-agreement` calls it now: the old document is read BEFORE the save,
+  both sides reduced by `coreAgreementText` (so a no-op re-save, and the clinician notice the
+  seed appends, email nobody), the call is inside a try/catch because **a mail problem must
+  never lose a saved legal document**, and the count comes back in the response.
+  **AND THE TOAST HAD BEEN WRONG SINCE THE GATE SHIPPED**: "new signups will see this text",
+  which reads as "existing users will not" -- it now says every existing account will be asked
+  again and how many guardians were written to, so an admin learns it from the Save button
+  rather than from the platform. Client half: `verify_build`.
+  `server/an-admin-edit-of-the-terms-notifies-the-guardians.test.ts` SCANS for a write path
+  with no notice beside it (seven mutations, each caught by the right case) and
+  `terms-reacceptance.itest.ts` drives the real route; three of its four new cases go red
+  against the pre-fix handler. **Fourth instance of one class in a week** -- the Coaches
+  Corner lesson re-sync, the Barbell Shoulder Press instructions, `videoEligible: false`
+  surviving the canonical-list swap, and now this: a correction or a notice wired only to a
+  path nobody takes, invisible because the path that IS taken looks like it worked.
 
 ## Per-team coach assignment
 

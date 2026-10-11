@@ -281,4 +281,85 @@ describe("the notice that goes to a guardian", () => {
     await notifyGuardiansOfTermsChange();
     expect(testOutbox.filter((m) => m.to === guardian.email)).toHaveLength(0);
   });
+
+  // THE PATH A HUMAN ACTUALLY TAKES. Everything above drives the notifier directly, which is how
+  // the seed calls it -- and the seed only ever upgrades a document it still recognises as a
+  // version Forge shipped, so the moment an admin writes their own wording through this route
+  // the seed goes silent forever. For three weeks that meant an edit here re-asked every adult
+  // (the text comparison needs nothing wired) and emailed no guardian at all. These four cases
+  // are the end-to-end proof, through the real route with the real admin role.
+  describe("an admin editing the live agreement", () => {
+    async function adminClient(): Promise<TestClient> {
+      return loginAs(server.baseUrl, await makeLoginableUser({ role: "admin" } as any));
+    }
+
+    it("emails the guardians of every stale minor", async () => {
+      const guardian = await makeLoginableUser({ role: "coach", name: "Dana Parent" } as any);
+      const minor = await signedUpUnderCurrentTerms({
+        role: "athlete",
+        name: "Minor Edited",
+        dateOfBirth: "2013-03-03",
+      });
+      await db.insert(guardianLinks).values({ guardianId: guardian.id, athleteId: minor.id });
+
+      const client = await adminClient();
+      const res = await client.put("/api/admin/legal-agreement", {
+        content: "FORGE -- TERMS OF USE\n\nAs an admin typed them.",
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.termsChanged).toBe(true);
+      // The count is reported so an admin is told it happened rather than having to read a log.
+      expect(res.body.guardiansEmailed).toBeGreaterThanOrEqual(1);
+
+      const mail = testOutbox.filter((m) => m.to === guardian.email);
+      expect(mail).toHaveLength(1);
+      expect(mail[0].html).toContain("Minor Edited");
+      // And the adult half needs no email: the stale snapshot is the notice.
+      expect((await storage.getTermsAcceptanceStatus(minor.id)).needsAcceptance).toBe(true);
+    });
+
+    it("sends nothing when the save does not change the terms", async () => {
+      const guardian = await makeLoginableUser({ role: "coach" } as any);
+      const minor = await signedUpUnderCurrentTerms({ role: "athlete", dateOfBirth: "2013-04-04" });
+      await db.insert(guardianLinks).values({ guardianId: guardian.id, athleteId: minor.id });
+      const live = await storage.getLegalAgreement();
+
+      const client = await adminClient();
+      const res = await client.put("/api/admin/legal-agreement", { content: live });
+      expect(res.status).toBe(200);
+      expect(res.body.termsChanged).toBe(false);
+      expect(res.body.guardiansEmailed).toBe(0);
+      expect(testOutbox.filter((m) => m.to === guardian.email)).toHaveLength(0);
+    });
+
+    it("does not read an appended clinician notice as a change of terms", async () => {
+      // The seed appends that notice to whatever is live, so the stored document is never the
+      // agreement on its own -- and an admin who saves the editor's contents back saves the
+      // append with it. Counting it would email every guardian on the platform for nothing.
+      const base = "FORGE -- TERMS OF USE\n\nThe version everybody is already on.";
+      await publishNewTerms(base);
+      const guardian = await makeLoginableUser({ role: "coach" } as any);
+      const minor = await signedUpUnderCurrentTerms({ role: "athlete", dateOfBirth: "2013-05-05" });
+      await db.insert(guardianLinks).values({ guardianId: guardian.id, athleteId: minor.id });
+
+      const client = await adminClient();
+      const res = await client.put("/api/admin/legal-agreement", {
+        content: `${base}\n\n${HEALTHCARE_NOTICE}`,
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.termsChanged).toBe(false);
+      expect(testOutbox.filter((m) => m.to === guardian.email)).toHaveLength(0);
+    });
+
+    it("saves the document even when there is no guardian to tell", async () => {
+      // The save is what this route exists for, and a mail problem must never cost it. Nothing
+      // is linked here, so the notifier runs and finds nobody, which is the same shape.
+      const client = await adminClient();
+      const content = "FORGE -- TERMS OF USE\n\nNobody linked, saved anyway.";
+      const res = await client.put("/api/admin/legal-agreement", { content });
+      expect(res.status).toBe(200);
+      expect(res.body.content).toBe(content);
+      expect(await storage.getLegalAgreement()).toBe(content);
+    });
+  });
 });

@@ -73,6 +73,8 @@ import {
 } from "./uploaded-files";
 import { buildComplianceReportPdf } from "./compliance-report";
 import { buildLegalDocumentPdf } from "./legal-document-export";
+import { notifyGuardiansOfTermsChange } from "./terms-change-notice";
+import { coreAgreementText } from "./seed-data/signup-agreement";
 import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier, ageFromDateOfBirth } from "@shared/privacy-tiers";
 import { BILLING_LIVE, ENFORCEMENT_ENABLED } from "./billing";
 import {
@@ -4941,15 +4943,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // A direct edit, not a propose-then-review chat flow like ai-knowledge
   // above -- this is a plain legal document an admin writes/pastes
   // themselves, not something an AI drafts. Never touches any existing
-  // user's own agreedToTermsText snapshot -- only future signups see the
-  // new text.
+  // user's own agreedToTermsText snapshot, so nobody's record of what they
+  // agreed to is rewritten; what a save DOES do is make every existing
+  // account's snapshot stale, which is the re-acceptance gate's whole
+  // mechanism (see storage.getTermsAcceptanceStatus).
+  //
+  // SO A SAVE HERE IS THE NOTICE, AND IT HAS TO SEND THE GUARDIAN HALF.
+  // Counsel's rule is actual notice plus a chance to accept or reject.
+  // An adult gets that by themselves: the text comparison on
+  // /api/auth/me puts the new terms in front of them at their next
+  // request, and nothing has to be sent. A MINOR CANNOT ANSWER, so the
+  // person who must is a guardian who may not open the app for weeks, and
+  // an email is the only channel that reaches them -- which is what
+  // notifyGuardiansOfTermsChange does. It was wired to the seed alone, and
+  // the seed only ever upgrades a document it still recognises as a
+  // version Forge shipped (nextSignupAgreement returns null for an admin's
+  // own wording), so an edit made HERE re-asked every adult on the
+  // platform and emailed no guardian at all. Same class of gap as the
+  // Coaches Corner lesson re-sync: a correction that only lands on a path
+  // nobody takes.
+  //
+  // Awaited rather than fired off, so the admin is told how many guardians
+  // were emailed instead of having to go and read a log. The notifier is
+  // per-guardian best-effort internally (a failed send leaves that
+  // athlete unmarked for the next attempt) and the outer catch is for the
+  // notifier itself failing -- a mail problem must never lose a saved
+  // document, which is the one thing this route exists to do.
   app.put("/api/admin/legal-agreement", requireRole("admin"), async (req, res) => {
     const parsed = updateLegalAgreementSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
+    // Reduced the same way the acceptance check reduces it, so appending or editing the
+    // clinician notice -- which the seed maintains and which every reader of this document
+    // already strips -- is not a change of terms and notifies nobody.
+    const before = coreAgreementText(await storage.getLegalAgreement());
     const content = await storage.updateLegalAgreement(parsed.data.content);
-    res.json({ content });
+    const termsChanged = coreAgreementText(content) !== before;
+    let guardiansEmailed = 0;
+    if (termsChanged) {
+      try {
+        ({ guardiansEmailed } = await notifyGuardiansOfTermsChange());
+      } catch (err) {
+        console.error("Terms saved, but the guardian notices could not be sent:", err);
+      }
+    }
+    res.json({ content, termsChanged, guardiansEmailed });
   });
 
   // Printable/shareable copy of the signup clickwrap itself -- the other
