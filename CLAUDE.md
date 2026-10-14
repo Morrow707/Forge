@@ -1544,6 +1544,14 @@ halves before splitting anything else:
   worst case **60.5% -> 20.7%**. The row is the one lift still outside 15% and the retrained
   detector is the only remaining candidate for it; what proves or disproves that is one filmed
   set, read off `plateBoxToExpectedRatio`.
+- **WAITING ON A BUILD SINCE 2026-10-11, client halves of the billing sweep** (every server half
+  of these shipped on Render as it was committed): the admin billing panel reading an add-on save's
+  answer and naming a subscription that is still billing, the athlete upgrade screen's App Store
+  notice before a second charge, the coach billing page and Coaches Corner upsell withholding
+  purchase from an assistant, `/pricing` with no unbuyable price on it, the admin Free Agent tier
+  panel reading by id, the guardian invite link opening while signed in, the Apple Health
+  disclosure on the check-in path, and the service worker serving the live shell. All
+  `verify_build`-verified; none is calibration work, so they batch.
   **The line this replaces named build 651 and was correct for sixteen hours**, which is the
   shortest this entry has ever been accurate -- the cause of every earlier drift is that the queue
   gets written down when something is ADDED and not when a `beta` empties it. **Clear this entry
@@ -2889,6 +2897,77 @@ branch through the real login route and the real email.
   is configured, or the guard is decorative on a correctly-configured server and nowhere else;
   503 is what all three returned before this. Server-side except the two coach surfaces and
   `/pricing`: `verify_build`.
+
+## THE 2026-10-14 BILLING SWEEP: EVERY PLACE A FACT ABOUT MONEY LIVES TWICE
+
+Scott, with every Apple and Stripe price in place and one real posted purchase and refund behind
+us: "sweep it then ... people can purchase our product, everything works from sandbox and a real
+posted purchase with a refund." The happy path is proven; this is what the sweep found around it.
+**ONE SHAPE ACCOUNTS FOR MOST OF IT, and it is the same shape the 10-11 sweep found: a fact about
+money lives in TWO places and a writer touched one of them.** The pairs, each load-bearing:
+`users.freeAgentTier` beside the `subscriptions` row; `freeAgentAddOns`/`billingAddOns` beside
+`users.addOnTerms`; and the subscriptions row's own per-rail handle columns. Before adding a
+writer to any of them, say which other place the same fact lives in.
+
+- **AN ADMIN COULD NEVER RE-GRANT A REFUNDED ADD-ON.** The admin billing panel is the only way an
+  add-on is ever comped, and it wrote the owned ARRAY alone -- while `addOnIsActive` reads the
+  TERM beside it, where a refund stamp is final and a cancellation's `accessUntil` can be in the
+  past. So ticking All Classes for a refunded account saved cleanly, read back ticked, and granted
+  nothing, **for good**: no other write in the repo clears `refundedAt`. `reconcileAdminAddOnSave`
+  in `shared/add-on-terms.ts` is the rule, beside `addOnIsActive` and with `nextAddOnTerms` moved
+  there unchanged so it is a pure function testable with no database. **AN ADMIN GRANT IS NOT A
+  PURCHASE** and that decides its shape: the stamps that make the grant inert are cleared, and
+  nothing is invented in their place -- no fresh `purchasedAt` (it would open a 72-hour refund
+  window on money nobody paid) and no provider handle (Forge sold nothing here). **And a removal
+  is REPORTED, never acted on**: un-ticking closes access, the provider keeps charging, and this
+  server does not cancel somebody's subscription as a side effect of a checkbox -- so the writer
+  warns with the subscription id, logs `add_on.removed_by_admin_still_billing`, and the panel
+  names it in a 30-second toast. Same posture as the self-serve cancel route's
+  `alsoCancelInAppStore`: say it plainly rather than report a cancellation that did not happen.
+  `an-admin-grant-reaches-the-add-on.test.ts` + `.itest.ts`, nine mutations.
+- **ONE SUBSCRIPTIONS ROW, TWO RAILS: EITHER ONE ENDING TOOK THE OTHER'S TIER AWAY.** The row is
+  UNIQUE on userId and has a column per rail, and neither purchase path cleared the other's. Buy
+  Basic in the app, upgrade on the web, then stop the App Store subscription in iOS Settings --
+  which is exactly what moving rails looks like -- and Apple's EXPIRED found the row by its Apple
+  id and nulled `users.freeAgentTier`, so the athlete paying Stripe $19.99 a month lost the
+  camera. The other direction is likelier still: cancel the web one in the Stripe portal and
+  `customer.subscription.deleted` nulls the SKU Apple is paying for. **THE RULE IS NOW: A PURCHASE
+  TAKES THE ROW, AND THE ROW NAMES ONE RAIL.** The loser's handle is cleared; a superseded Stripe
+  subscription is cancelled (Forge can), an App Store one is warned about and recorded (only the
+  person can, in iOS Settings) and the web upgrade screen says so BEFORE the second charge. A row
+  carrying both is a legacy account and **neither revocation branch clears its SKU** -- withholding
+  access from somebody who may be paying is the worse error. **The old comment on the checkout path
+  had named this case and left it alone**, judging it a cosmetic duplicate; the access loss is what
+  makes it a bug, and the objection it rested on (clearing the Apple id blinds the notification
+  lookup) is answered by the app's own verification writing the handle back at the next launch.
+- **`billing_audit_log.stripe_event_id` IS UNIQUE, AND `revokeEverythingForSubscription` PASSED ONE
+  DELIVERY'S ID TO TWO INSERTS.** It is the idempotency check `handleStripeWebhookEvent` makes, so
+  the second insert throws, 500s the refund webhook, and leaves Stripe retrying a delivery that has
+  already done half its work. Both halves can find something (an add-on's subscription id lives in
+  `users.addOnTerms`, matched by a text LIKE; a tier's in the subscriptions row). One row per
+  delivery claims the id now; the rest carry it in their detail. **Mocked storage has no constraint
+  to violate, which is why no unit test could see it** -- the itest drives the real handler against
+  real Postgres, and that is the general lesson: a uniqueness rule is only testable where the index
+  exists.
+- **AN APPLE REFUND REACHED ONE OF SEVERAL ACCOUNTS HOLDING THAT TRANSACTION.**
+  `appleOriginalTransactionId` carries no unique constraint and one subscription can land on two
+  accounts (detected and warned about since 10-13, never refused -- Apple has taken the money by
+  then). The handler took `[row]` off an `UPDATE ... RETURNING` that cancelled every row, so the
+  refund cleared one SKU and left the other account a free tier; the renewal branch granted the
+  tier to one of them for the same reason. Both branches loop every holder
+  (`subscriptionRowsForAppleTransaction`).
+- **VERIFIED REAL AND DELIBERATELY NOT FIXED: a Free Agent who self-enrols in Forge classes and
+  later joins a coach reads every paid chapter free.** `classTierGated` asks the ATHLETE ("do they
+  have a coach") where Scott's rule is about what the COACH gave ("only the ones their coach gives
+  to them"), and the catalog being Free-Agent-only is what was doing the work. The provenance for a
+  fix is already on the row -- `classEnrollments.coachId` equals `athleteId` for a self-enrollment
+  -- and both gate points (`recomputeClassProgress`, `getClassProgressForAthlete`) hold the
+  enrollment, so it is a small change. **What stops it is the other side**: `locked_tier` renders
+  `AllClassesCard`, and `requireFreeAgent` refuses that purchase to a coached athlete on both
+  rails, so the fix as specified puts a dead buy button in front of them or takes away chapters
+  they could read yesterday. That is a product decision about what a coached athlete is told, not
+  a thing to invent in a sweep. Reachable only by somebody who self-enrolled BEFORE joining, and
+  joining means landing on a real coach's roster at $4 a head.
 - **NO FREE AGENT TIER COULD BE ASSIGNED BY AN ADMIN, AND THE FIRST ATTEMPT AFTER LAUNCH FOUND
   IT** (2026-10-11). Scott, on More -> Users with the App Review athlete expanded: "This is all I
   see" -- Reset MFA and Change role, no billing panel. `AdminBillingAssignment`'s athlete form
