@@ -793,16 +793,29 @@ async function notifyEach<T>(items: T[], deliver: (item: T) => Promise<unknown>)
 // say: "Only the primary coach can change this" reads wrong in front of a card, where what the
 // assistant needs to know is who to ask. A second copy of the check is how the two stop
 // agreeing, so the message is the parameter and the rule is not.
+/** THE ONE COMPARISON. Every "is this the primary coach" question in the app resolves here, so
+ *  the rule cannot drift between the middleware that guards a page and the middleware that
+ *  guards a card. getEffectiveCoachIds puts the primary first; a solo coach is their own
+ *  primary and passes. */
+async function isPrimaryCoach(userId: number): Promise<boolean> {
+  const coachIds = await storage.getEffectiveCoachIds(userId);
+  return coachIds[0] === userId;
+}
+
 function primaryCoachOnly(message: string) {
   return async function (req: any, res: any, next: any) {
     const user = currentUser(req);
-    const coachIds = await storage.getEffectiveCoachIds(user.id);
-    if (coachIds[0] !== user.id) {
+    if (!(await isPrimaryCoach(user.id))) {
       return res.status(403).json({ message });
     }
     next();
   };
 }
+
+/** What an assistant is told in front of anything that costs the program money. One sentence,
+ *  one place: the checkout guard and the add-on lifecycle guard say the same thing because it is
+ *  the same fact about who decides. */
+const HEAD_COACH_OWNS_THE_MONEY = "Your head coach looks after the program's plan and add-ons.";
 
 const requirePrimaryCoach = primaryCoachOnly("Only the primary coach can change this");
 
@@ -819,9 +832,7 @@ const requirePrimaryCoach = primaryCoachOnly("Only the primary coach can change 
  * Corner buy button for any staff coach, because that page never asked -- `user.isPrimaryCoach`
  * is on the session user and only coach/branding.tsx reads it. An assistant could do this by
  * tapping. */
-const requirePrimaryCoachForBilling = primaryCoachOnly(
-  "Your head coach looks after the program's plan and add-ons.",
-);
+const requirePrimaryCoachForBilling = primaryCoachOnly(HEAD_COACH_OWNS_THE_MONEY);
 
 // Entitlements are always resolved from the org's primary coach (billing
 // lives on that row, same as branding) -- see server/billing.ts. Safe to
@@ -13852,7 +13863,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ? (ALL_ADD_ON_IDS as readonly string[]).includes(addOnId)
       : (FREE_AGENT_ADD_ON_ORDER as readonly string[]).includes(addOnId);
 
-  app.delete("/api/billing/add-on/:addOnId", requireAuth, async (req, res) => {
+  /** TURNING THE PROGRAM'S ADD-ON OFF IS THE PRIMARY COACH'S CALL TOO (fixed 2026-10-14).
+   *
+   * These two routes carried `requireAuth` and nothing else. `addOnIdForRole` above guards WHICH
+   * id a role may name -- a coach cannot cancel an athlete's All Classes -- and nothing guarded
+   * WHICH COACH. `owner` below resolves to `getEffectiveCoachIds(user.id)[0]`, the PRIMARY's row,
+   * because that is the row the entitlement reads; so an assistant coach could cancel the whole
+   * program's Coaches Corner, or restore one the primary had deliberately ended, writing to a row
+   * that is not theirs.
+   *
+   * Found by the billing sweep, and it is the same omission as the checkout routes three days
+   * earlier: those got `requirePrimaryCoachForBilling` and these, written in the same session,
+   * did not. A guard added to one path and not its siblings is the defect this repo keeps
+   * recording.
+   *
+   * An ATHLETE passes untouched: a Free Agent cancelling their own All Classes is their own
+   * business, `owner` is their own id, and no primary coach is involved. So the rule is
+   * conditional on the role rather than a blanket middleware -- a blanket one would lock a Free
+   * Agent out of their own add-on. */
+  async function requirePrimaryCoachForAddOnChange(req: any, res: any, next: any) {
+    const user = currentUser(req);
+    if (user.role !== "coach") return next();
+    if (!(await isPrimaryCoach(user.id))) {
+      return res.status(403).json({ message: HEAD_COACH_OWNS_THE_MONEY });
+    }
+    next();
+  }
+
+  app.delete("/api/billing/add-on/:addOnId", requireAuth, requirePrimaryCoachForAddOnChange, async (req, res) => {
     const user = currentUser(req);
     const addOnId = String(req.params.addOnId);
     if (!addOnIdForRole(user.role, addOnId)) {
@@ -13888,7 +13926,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.post("/api/billing/add-on/:addOnId/restore", requireAuth, async (req, res) => {
+  app.post("/api/billing/add-on/:addOnId/restore", requireAuth, requirePrimaryCoachForAddOnChange, async (req, res) => {
     const user = currentUser(req);
     const addOnId = String(req.params.addOnId);
     if (!addOnIdForRole(user.role, addOnId)) {

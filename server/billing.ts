@@ -1190,6 +1190,34 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
           event.id,
         );
       }
+
+      // AND THE TIER AND THE BAND, WHICH THIS HANDLER COULD NOT REACH AT ALL (fixed 2026-10-14).
+      //
+      // revokeAddOnsForStripeSubscription searches users.addOnTerms and nothing else, so a
+      // refunded ADD-ON was revoked and a refunded TIER or COACH BAND kept full access: the
+      // money went back and the entitlement stayed. Six of the ten dimensions in the billing
+      // sweep found this independently, and it is the same shape as the bug it sits beside --
+      // a handler written for one of the two places a Stripe subscription id can live.
+      //
+      // The tier's and the band's id lives on the subscriptions row (userId is UNIQUE, one row
+      // per account), so this is the matching lookup. A refund is at least as terminal as a
+      // cancellation, so it does exactly what customer.subscription.deleted does -- Scott's
+      // rule, in his words: "if something is refunded then they don't have access obviously."
+      const refundedSub = await storage.updateSubscriptionByStripeId(subscriptionId, { status: "canceled" });
+      if (refundedSub) {
+        if (refundedSub.accountType === "free_agent") {
+          await storage.updateFreeAgentBilling(refundedSub.userId, { freeAgentTier: null });
+        }
+        if (refundedSub.accountType === "coach") {
+          await storage.clearCoachBand(refundedSub.userId);
+        }
+        await storage.logBillingEvent(
+          refundedSub.userId,
+          event.type,
+          { chargeId: charge.id, subscriptionId, revoked: refundedSub.accountType === "coach" ? "band" : "tier" },
+          event.id,
+        );
+      }
       break;
     }
     case "invoice.payment_failed": {

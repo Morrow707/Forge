@@ -118,19 +118,28 @@ describe("every billing checkout establishes who it may charge", () => {
     expect(routes).toContain("function primaryCoachOnly(message: string)");
     expect(routes).toContain('const requirePrimaryCoach = primaryCoachOnly(');
     expect(routes).toContain("const requirePrimaryCoachForBilling = primaryCoachOnly(");
-    // One definition of the comparison itself.
-    const comparisons = routes.match(/coachIds\[0\] !== user\.id/g) ?? [];
+    // ONE definition of the comparison itself, and it moved on 2026-10-14. The add-on
+    // lifecycle routes needed the same rule with a different pass-through (an athlete may
+    // cancel their own), so a second copy of `coachIds[0] !== user.id` appeared -- and THIS
+    // assertion caught it, which is what it is for. The comparison now lives in isPrimaryCoach
+    // and every caller asks that.
+    expect(routes).toContain("async function isPrimaryCoach(userId: number)");
+    const comparisons = routes.match(/coachIds\[0\] (!==|===) (user\.id|userId)/g) ?? [];
     expect(comparisons.length).toBe(1);
+    // And one sentence for the refusal, shared by both money guards.
+    const sentences = routes.match(/Your head coach looks after the program's plan and add-ons\./g) ?? [];
+    expect(sentences.length).toBe(1);
   });
 
   it("tells an assistant who to ask instead of refusing them blankly", () => {
     // "Only the primary coach can change this" reads wrong in front of a card. The thing an
-    // assistant needs is the name of the person who can.
-    const billingMessage = routes.match(
-      /const requirePrimaryCoachForBilling = primaryCoachOnly\(\s*"([^"]+)"/,
-    )?.[1];
-    expect(billingMessage).toBeDefined();
-    expect(billingMessage).toMatch(/head coach/i);
+    // assistant needs is the name of the person who can. The sentence is a named constant since
+    // 2026-10-14, shared with the add-on lifecycle guard, so the two cannot drift apart.
+    expect(routes).toContain("const HEAD_COACH_OWNS_THE_MONEY =");
+    const sentence = routes.match(/const HEAD_COACH_OWNS_THE_MONEY = "([^"]+)"/)?.[1];
+    expect(sentence).toBeDefined();
+    expect(sentence).toMatch(/head coach/i);
+    expect(routes).toContain("primaryCoachOnly(HEAD_COACH_OWNS_THE_MONEY)");
   });
 });
 
@@ -165,5 +174,64 @@ describe("the surfaces that draw a buy button ask the same question", () => {
     // And the buyer stays in the audit row, because the receipt is theirs even though the add-on
     // is the program's -- an Apple subscription is cancelled by whoever bought it.
     expect(storage).toContain("grantedToPrimaryCoachId");
+  });
+});
+
+/* AND THE ROUTES THAT END A PURCHASE, WHICH THE FIRST VERSION OF THIS FILE DID NOT COVER.
+ *
+ * Found 2026-10-14 by the billing sweep. The scan above discovers every `app.post` under
+ * /api/billing/checkout -- which cannot see a route that is not a checkout. DELETE
+ * /api/billing/add-on/:addOnId and POST /api/billing/add-on/:addOnId/restore carried
+ * `requireAuth` and nothing else.
+ *
+ * That matters because of where they WRITE: `owner` in both is
+ * `getEffectiveCoachIds(user.id)[0]` for a coach -- the PRIMARY's row, correct for entitlements
+ * and exactly what makes the gap harmful. An assistant coach could cancel the whole program's
+ * Coaches Corner, or restore one the primary had deliberately ended.
+ *
+ * Same omission as the checkout routes three days earlier: those were given
+ * requirePrimaryCoachForBilling in the same session these were written, and these were missed.
+ * A guard added to one path and not its siblings is the defect this repo keeps recording -- so
+ * this file now discovers BOTH shapes of money route, not just the one that takes payment.
+ */
+describe("the routes that end a purchase are guarded too", () => {
+  const ROUTES = [
+    { verb: 'app.delete', path: '/api/billing/add-on/:addOnId' },
+    { verb: 'app.post', path: '/api/billing/add-on/:addOnId/restore' },
+  ];
+
+  it("finds both add-on lifecycle routes", () => {
+    for (const r of ROUTES) {
+      expect(routes, `${r.path} is not registered any more`).toContain(`${r.verb}("${r.path}"`);
+    }
+  });
+
+  it("carries the primary-coach guard on each", () => {
+    for (const r of ROUTES) {
+      const idx = routes.indexOf(`${r.verb}("${r.path}"`);
+      // The middleware list, never a character window -- see the lesson in the scan above.
+      const middleware = routes.slice(idx).split("async (")[0];
+      expect(middleware, `${r.path} can be called by any coach, not just the primary`).toContain(
+        "requirePrimaryCoachForAddOnChange",
+      );
+    }
+  });
+
+  it("lets a Free Agent through, because their add-on is their own", () => {
+    // The rule is conditional on the role rather than a blanket middleware. A blanket one would
+    // lock an athlete out of cancelling their own All Classes -- `owner` is their own id there
+    // and no primary coach is involved. That asymmetry is why this is its own guard.
+    const fn = routes.slice(routes.indexOf("async function requirePrimaryCoachForAddOnChange"));
+    const body = fn.slice(0, fn.indexOf("\n  }"));
+    expect(body).toContain('if (user.role !== "coach") return next()');
+    // DELEGATES the comparison, never copies it -- the duplication this file's one-rule
+    // assertion caught when this guard was first written.
+    expect(body).toContain("await isPrimaryCoach(user.id)");
+    expect(body).toContain("403");
+  });
+
+  it("says who to ask, reusing the checkout refusal's own sentence", () => {
+    const fn = routes.slice(routes.indexOf("async function requirePrimaryCoachForAddOnChange"));
+    expect(fn.slice(0, fn.indexOf("\n  }"))).toContain("HEAD_COACH_OWNS_THE_MONEY");
   });
 });
