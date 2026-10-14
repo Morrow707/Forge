@@ -4341,14 +4341,82 @@ export const storage = {
   // single video). Coach/admin accounts have no video files of their own
   // to clean up; their owned content (programs, exercises, etc.) cascades
   // via the same onDelete: cascade FKs everything else in this schema uses.
-  async deleteOwnAccount(userId: number, password: string): Promise<{ ok: true } | { error: string }> {
+  /** Every live billing handle this account holds, read BEFORE anything is deleted.
+   *
+   *  THE ONLY MOMENT THESE EXIST. `subscriptions` cascades from `users`, so the row carrying
+   *  stripeSubscriptionId is destroyed with the account, and users.addOnTerms goes with it --
+   *  after the delete there is no handle left anywhere in Forge to cancel anything with.
+   *
+   *  Two places, because a Stripe subscription id lives in two (see
+   *  endAddOnsForDeletedStripeSubscription): the TIER's or the BAND's on the subscriptions row,
+   *  and each ADD-ON's in users.addOnTerms. A reader that knew only one would leave the other
+   *  billing forever, which is the family of bug this was found alongside. */
+  async billingHandlesForAccount(userId: number) {
+    const user = await this.getUser(userId);
+    const sub = await db.query.subscriptions.findFirst({ where: eq(subscriptions.userId, userId) });
+    const stripeSubscriptionIds = new Set<string>();
+    if (sub?.stripeSubscriptionId) stripeSubscriptionIds.add(sub.stripeSubscriptionId);
+    for (const term of Object.values(user?.addOnTerms ?? {})) {
+      if (term?.stripeSubscriptionId) stripeSubscriptionIds.add(term.stripeSubscriptionId);
+    }
+    // Apple cannot be cancelled by this server AT ALL -- only by the person, in iOS Settings. So
+    // it is reported rather than attempted, and the caller tells them. A silent "deleted" over a
+    // subscription that keeps charging would be the worst outcome of the three.
+    const appleHandles = [
+      sub?.appleOriginalTransactionId,
+      ...Object.values(user?.addOnTerms ?? {}).map((t) => t?.appleOriginalTransactionId),
+    ].filter((v): v is string => Boolean(v));
+    return {
+      stripeSubscriptionIds: [...stripeSubscriptionIds],
+      appleOriginalTransactionIds: [...new Set(appleHandles)],
+    };
+  },
+
+  /** @param onBeforeDelete runs AFTER the password is accepted and BEFORE the row is destroyed,
+   *  handed every billing handle the account holds. That ordering is the whole point: the
+   *  handles cease to exist the moment deleteUserRecord runs, and a wrong password must never
+   *  cancel anybody's subscription. The callback's own failure is reported, never thrown -- a
+   *  payment API being down is not a reason to refuse somebody their deletion. */
+  async deleteOwnAccount(
+    userId: number,
+    password: string,
+    onBeforeDelete?: (handles: {
+      stripeSubscriptionIds: string[];
+      appleOriginalTransactionIds: string[];
+    }) => Promise<{ cancelled: string[]; failed: string[] }>,
+  ): Promise<{ ok: true; billing?: { cancelled: string[]; failed: string[]; alsoCancelInAppStore: boolean } } | { error: string }> {
     const user = await this.getUser(userId);
     if (!user) return { error: "Account not found." };
     if (!(await comparePasswords(password, user.passwordHash))) {
       return { error: "Incorrect password." };
     }
+
+    // DELETING AN ACCOUNT USED TO ABANDON A LIVE SUBSCRIPTION (fixed 2026-10-14). Nothing in
+    // this path touched Stripe, and the subscriptions row cascades from users -- so the card
+    // went on being charged forever with no account left to sign into and no handle left in
+    // Forge to cancel it with. Found by the billing sweep; the person had exercised the one
+    // control they had and the charges continued.
+    let billing: { cancelled: string[]; failed: string[]; alsoCancelInAppStore: boolean } | undefined;
+    if (onBeforeDelete) {
+      const handles = await this.billingHandlesForAccount(userId);
+      let outcome = { cancelled: [] as string[], failed: [] as string[] };
+      try {
+        outcome = await onBeforeDelete(handles);
+      } catch (err) {
+        // Never block the deletion. Logged with the ids an operator has to finish by hand,
+        // which is the same posture as the guardian-verification refund and the superseded
+        // subscription cancel in billing.ts.
+        console.error(
+          `account ${userId} deletion: could not cancel ${handles.stripeSubscriptionIds.join(", ")} and they need a hand:`,
+          err,
+        );
+        outcome = { cancelled: [], failed: handles.stripeSubscriptionIds };
+      }
+      billing = { ...outcome, alsoCancelInAppStore: handles.appleOriginalTransactionIds.length > 0 };
+    }
+
     await this.deleteUserRecord(userId);
-    return { ok: true };
+    return billing ? { ok: true, billing } : { ok: true };
   },
 
   /** The deletion itself, with no password check: every file the account owns, the research

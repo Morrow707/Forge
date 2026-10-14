@@ -536,6 +536,40 @@ export async function syncCoachSubscriptionBand(
  * this be bought here" are two questions and only the second one belongs in a
  * checkout. Same distinction FREE_AGENT_TIER_ORDER draws against
  * ALL_FREE_AGENT_TIER_IDS. */
+/** CANCEL EVERY SUBSCRIPTION AN ACCOUNT ABOUT TO BE DELETED IS STILL PAYING FOR.
+ *
+ * Handed to storage.deleteOwnAccount, which calls it after the password is accepted and before
+ * the row is destroyed -- the only moment the handles still exist, since `subscriptions`
+ * cascades from `users` and users.addOnTerms goes with it.
+ *
+ * `prorate` + `invoice_now` credit the unused remainder, because somebody closing their account
+ * should not be left having paid for a month of something they can no longer sign in to. Each
+ * id is cancelled on its own so one failure cannot take the others down with it, and the
+ * failures come back named rather than thrown: a payment API being down is not a reason to
+ * refuse a person their deletion, and the caller logs what needs finishing by hand. */
+export async function cancelSubscriptionsForDeletedAccount(handles: {
+  stripeSubscriptionIds: string[];
+}): Promise<{ cancelled: string[]; failed: string[] }> {
+  const stripe = getStripeClient();
+  const cancelled: string[] = [];
+  const failed: string[] = [];
+  if (!stripe) {
+    // Nothing configured means nothing to cancel, which is the dev and test case. Reporting the
+    // ids as failed would tell an operator to chase subscriptions that do not exist.
+    return { cancelled, failed };
+  }
+  for (const id of handles.stripeSubscriptionIds) {
+    try {
+      await stripe.subscriptions.cancel(id, { prorate: true, invoice_now: true });
+      cancelled.push(id);
+    } catch (err) {
+      console.error(`deleted account: Stripe subscription ${id} could not be cancelled:`, err);
+      failed.push(id);
+    }
+  }
+  return { cancelled, failed };
+}
+
 /** CANCEL THE SUBSCRIPTION A NEW PURCHASE HAS JUST REPLACED.
  *
  * Called from checkout.session.completed when the row already carried a DIFFERENT Stripe

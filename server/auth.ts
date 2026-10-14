@@ -10,6 +10,7 @@ import crypto from "crypto";
 import { z } from "zod";
 import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
+import { cancelSubscriptionsForDeletedAccount } from "./billing";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { pool } from "./db";
 import { sendEmail, isEmailConfigured } from "./email";
@@ -1789,12 +1790,31 @@ export function setupAuth(app: Express) {
     const user = req.user as { id: number };
     const password = typeof req.body?.password === "string" ? req.body.password : "";
     if (!password) return res.status(400).json({ message: "Password is required." });
-    const result = await storage.deleteOwnAccount(user.id, password);
+    // THE CARD IS STOPPED BEFORE THE ROW GOES (2026-10-14). Nothing here touched Stripe, and
+    // the subscriptions row cascades from users -- so a person who deleted their account went on
+    // being charged forever, with no account left to sign into and no handle left in Forge to
+    // cancel with. storage.deleteOwnAccount runs this after the password is accepted and before
+    // the delete, which is the only moment the handles exist.
+    const result = await storage.deleteOwnAccount(user.id, password, (handles) =>
+      cancelSubscriptionsForDeletedAccount(handles),
+    );
     if ("error" in result) return res.status(400).json({ message: result.error });
+    const billing = "billing" in result ? result.billing : undefined;
     req.logout((err) => {
       if (err) return next(err);
       req.session.destroy(() => {
         res.clearCookie("connect.sid");
+        // AN APPLE SUBSCRIPTION CANNOT BE CANCELLED BY THIS SERVER, only by the person in iOS
+        // Settings -- so when there was one, the response says so rather than letting a silent
+        // 204 read as "everything is stopped". Same rule, same words, as the add-on cancel route.
+        // A 200 with a body only when there is something to say; otherwise the 204 as before.
+        if (billing?.alsoCancelInAppStore || billing?.failed.length) {
+          return res.status(200).json({
+            deleted: true,
+            alsoCancelInAppStore: Boolean(billing.alsoCancelInAppStore),
+            subscriptionsNotCancelled: billing.failed.length,
+          });
+        }
         res.status(204).end();
       });
     });
