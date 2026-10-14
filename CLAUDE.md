@@ -2966,6 +2966,24 @@ writer to any of them, say which other place the same fact lives in.
   refund cleared one SKU and left the other account a free tier; the renewal branch granted the
   tier to one of them for the same reason. Both branches loop every holder
   (`subscriptionRowsForAppleTransaction`).
+- **VERIFIED REAL AND RECORDED, NOT FIXED: every writer of `users.addOnTerms` is a
+  read-modify-write of the WHOLE json object.** `addFreeAgentAddOn`, `addCoachBillingAddOn`,
+  `scheduleAddOnRemoval`, `restoreAddOn`, `revokeAddOnAfterRefund` and the admin save all
+  `getUser` then `set({ addOnTerms: nextAddOnTerms(...) })`, and the owned ARRAYS are written the
+  same way -- so two writes landing on one account inside the same few milliseconds lose one of
+  them entirely. The collision is across add-ons, not just within one: a Free Agent add-on and a
+  coach add-on write different array columns and the SAME terms object. **The consequence is this
+  file's recurring shape**: a lost term is an add-on whose `stripeSubscriptionId` was never
+  recorded, so nothing can ever cancel or refund it, silently and for good; a lost array append
+  is an add-on that was paid for and not granted. **The fix shape is one atomic statement** --
+  `jsonb_set(coalesce(add_on_terms::jsonb, '{}'), ARRAY[$id], $term::jsonb, true)::json` writes
+  ONE key and cannot clobber another add-on's, plus a containment-guarded `||` append for the
+  array. Not shipped in the 10-14 sweep on purpose: the window is milliseconds on a single
+  account, the SQL is fiddly on a `json` (not `jsonb`) column, and it sits on the one path that
+  grants paid access -- getting it wrong breaks every purchase, which is worse than the race.
+  **The term's VALUE would still be computed from a prior read** (a purchase clears `accessUntil`
+  and `refundedAt`, which needs the old record), so the narrower same-id race survives any
+  version of this; that part wants a transaction, not a cleverer statement.
 - **VERIFIED REAL AND DELIBERATELY NOT FIXED: a Free Agent who self-enrols in Forge classes and
   later joins a coach reads every paid chapter free.** `classTierGated` asks the ATHLETE ("do they
   have a coach") where Scott's rule is about what the COACH gave ("only the ones their coach gives
