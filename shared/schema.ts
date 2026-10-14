@@ -3101,9 +3101,19 @@ export const subscriptions = pgTable(
     trialEndsAt: timestamp("trial_ends_at"),
     currentPeriodEnd: timestamp("current_period_end"),
     cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
-    // Exactly one of the next two is ever set -- which channel originated
-    // this subscription (Stripe web checkout vs. StoreKit 2 IAP). Neither
-    // is populated by anything today; see server/billing.ts/apple-iap.ts.
+    // ONE OF THE SUBSCRIPTION HANDLES BELOW IS SET, AND IT NAMES THE RAIL THIS ROW BELONGS TO:
+    // stripeSubscriptionId (web checkout), appleOriginalTransactionId (StoreKit 2) or
+    // googlePlayPurchaseToken. The row is UNIQUE per user, so every lifecycle event finds it by
+    // its own rail's handle and then decides whether the tier ended -- which means two handles
+    // on one row let either rail's cancellation take away a tier the other was paying for. That
+    // really happened both ways round until 2026-10-14; a tier purchase on either rail now
+    // CLEARS the other's handle (see server/billing.ts' checkout.session.completed and
+    // storage.applyAppleIapVerification), so this sentence is enforced rather than hoped for,
+    // and a row carrying two of them is a legacy account both revocation branches refuse to
+    // clear the SKU for. one-rail-owns-the-subscription-row.test.ts holds all of it.
+    //
+    // stripeCustomerId is NOT one of those handles: it is how the billing portal is opened, it
+    // is not a subscription, and it survives a rail change.
     stripeCustomerId: text("stripe_customer_id"),
     stripeSubscriptionId: text("stripe_subscription_id"),
     appleOriginalTransactionId: text("apple_original_transaction_id"),

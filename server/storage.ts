@@ -5111,7 +5111,11 @@ export const storage = {
     // never land on an athlete's row and an athlete's tier must never land on a coach's; the
     // route that knows the role says so, and a product outside the scope is "Unrecognized".
     scope: "free_agent" | "coach" = "free_agent",
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    // `supersededStripeSubscriptionId` is the web subscription this in-app purchase took the row
+    // from, handed UP rather than cancelled here: cancelling needs the Stripe client and this
+    // module must not import billing.ts (the cycle its own comments warn about). The verify
+    // route cancels it -- see one-rail-owns-the-subscription-row.test.ts.
+  ): Promise<{ ok: true; supersededStripeSubscriptionId?: string } | { ok: false; error: string }> {
     // ONE APPLE SUBSCRIPTION, MORE THAN ONE FORGE ACCOUNT. Recorded, never refused -- see
     // accountsHoldingAppleTransaction for why withholding is its own change. A warn rather than
     // a log line because this is revenue leaving, and it is the one thing in the billing line
@@ -5179,13 +5183,34 @@ export const storage = {
     }
     const freeAgentTier = tierForAppleProductId(verified.productId);
     if (!freeAgentTier) return { ok: false, error: "Unrecognized product." };
+    // THE PURCHASE TAKES THE ROW, AND THE ROW NAMES ONE RAIL (2026-10-14). `subscriptions` is
+    // UNIQUE on userId and has a column per rail, and neither purchase path used to clear the
+    // other's -- so an account that bought on both carried both handles, and then EVERY
+    // lifecycle event found this row by its own handle and acted as though it owned the tier. A
+    // Stripe cancellation nulled the SKU Apple was paying for, and an Apple expiry nulled the
+    // SKU Stripe was paying for. See one-rail-owns-the-subscription-row.test.ts for both.
+    //
+    // stripeCustomerId is deliberately KEPT: it is how the billing portal is opened and it is
+    // not a subscription. Only the subscription handle moves.
+    const priorRow = await this.getSubscriptionForUser(userId);
+    const supersededStripeSubscriptionId = priorRow?.stripeSubscriptionId ?? null;
     await this.upsertSubscriptionByUserId(userId, {
       accountType: "free_agent",
       tier: entitlementTierForFreeAgentTier(freeAgentTier),
       status: "active",
       appleOriginalTransactionId: verified.originalTransactionId,
       currentPeriodEnd: verified.expiresAt,
+      // Sent only when there is one to clear, so an ordinary in-app purchase does not rewrite a
+      // column nobody asked about.
+      ...(supersededStripeSubscriptionId ? { stripeSubscriptionId: null } : {}),
     });
+    if (supersededStripeSubscriptionId) {
+      await this.logBillingEvent(userId, "subscription.rail_changed", {
+        to: "apple",
+        appleOriginalTransactionId: verified.originalTransactionId,
+        supersededStripeSubscriptionId,
+      });
+    }
     // The SKU the entitlements read is users.freeAgentTier (see hasPaidFreeAgentEntitlement in
     // routes.ts); the subscriptions row only ever holds base/pro. The Stripe webhook has written
     // both since the day that was found; this path wrote only the row, so a verified Apple
@@ -5222,7 +5247,10 @@ export const storage = {
         console.error("failed to record Apple IAP as parental verification:", err);
       }
     }
-    return { ok: true };
+    return {
+      ok: true,
+      ...(supersededStripeSubscriptionId ? { supersededStripeSubscriptionId } : {}),
+    };
   },
 
   // THE GOOGLE PLAY TWIN of applyAppleIapVerification, 2026-10-01. Same two kinds of purchase
@@ -5329,6 +5357,28 @@ export const storage = {
   // originalTransactionId, never by userId, so renewal/revocation events
   // need the same lookup-by-external-id shape the Stripe webhook already
   // has for stripeSubscriptionId.
+  /** EVERY account whose subscription row names this Apple transaction, not just the first.
+   *
+   *  `subscriptions.appleOriginalTransactionId` carries no unique constraint -- only userId does
+   *  -- and one App Store subscription CAN land on several Forge accounts, which
+   *  accountsHoldingAppleTransaction detects and warns about rather than refusing (Apple has
+   *  taken the money by then, and the phone never finishes a transaction the server refuses).
+   *  The updater below is an UPDATE ... RETURNING whose callers took `[row]`, so a refund
+   *  cancelled every row and then cleared the SKU on ONE of them, and a renewal granted the
+   *  tier to one of them: either way the other account's entitlement was decided by which row
+   *  Postgres returned first. Read BEFORE the update, so the rows are known whatever it does.
+   */
+  async subscriptionRowsForAppleTransaction(originalTransactionId: string) {
+    return db
+      .select({
+        userId: subscriptions.userId,
+        accountType: subscriptions.accountType,
+        stripeSubscriptionId: subscriptions.stripeSubscriptionId,
+      })
+      .from(subscriptions)
+      .where(eq(subscriptions.appleOriginalTransactionId, originalTransactionId));
+  },
+
   async updateSubscriptionByAppleOriginalTransactionId(
     originalTransactionId: string,
     patch: Partial<typeof subscriptions.$inferInsert>,
@@ -5354,28 +5404,55 @@ export const storage = {
   ): Promise<{ ok: true } | { ok: false; error: string }> {
     if (notification.kind === "ignored" || !notification.transaction) return { ok: true };
     const { originalTransactionId, productId, expiresAt } = notification.transaction;
+    // EVERY ROW THAT NAMES THIS TRANSACTION, not just the first -- see
+    // subscriptionRowsForAppleTransaction. Read before either branch writes anything.
+    const held = await this.subscriptionRowsForAppleTransaction(originalTransactionId);
+    const eventName = `apple_iap.${notification.notificationType.toLowerCase()}`;
+    const detail = {
+      originalTransactionId,
+      productId,
+      // Named when there was more than one, so a row says why it is not the only one.
+      ...(held.length > 1 ? { accountsHoldingThisTransaction: held.length } : {}),
+    };
     if (notification.kind === "revoked") {
       // AN ADD-ON IS REVOKED TOO, and it used to be missed entirely. This branch only ever
       // touched the subscriptions row and users.freeAgentTier, so an All Classes or Coaches
       // Corner purchase refunded or revoked at Apple went on working for good -- there was no
       // removal path for an add-on anywhere in the repo until 2026-10-11. Done BEFORE the
-      // subscription lookup below, because an add-on purchase may have no subscriptions row of
-      // its own to find (subscriptions.userId is unique, so the row belongs to the tier) and an
+      // subscription lookup, because an add-on purchase may have no subscriptions row of its
+      // own to find (subscriptions.userId is unique, so the row belongs to the tier) and an
       // early return there would skip the revocation entirely.
       await this.revokeAddOnsForAppleTransaction(originalTransactionId);
-      const updated = await this.updateSubscriptionByAppleOriginalTransactionId(originalTransactionId, {
+      await this.updateSubscriptionByAppleOriginalTransactionId(originalTransactionId, {
         status: "canceled",
       });
-      if (!updated) return { ok: false, error: "No subscription found for this transaction." };
-      await this.logBillingEvent(updated.userId, `apple_iap.${notification.notificationType.toLowerCase()}`, {
-        originalTransactionId,
-        productId,
-      });
-      // Same rule as the Stripe cancellation (handleStripeWebhookEvent, customer.subscription.deleted):
-      // an expired, revoked or refunded Apple subscription takes the SKU off the account, so the
-      // upgrade screen stops marking it as the current plan. The renewal branch below writes it.
-      if (updated.accountType === "free_agent") {
-        await this.updateFreeAgentBilling(updated.userId, { freeAgentTier: null });
+      if (held.length === 0) return { ok: false, error: "No subscription found for this transaction." };
+      for (const row of held) {
+        await this.logBillingEvent(row.userId, eventName, detail);
+        // Same rule as the Stripe cancellation (handleStripeWebhookEvent,
+        // customer.subscription.deleted): an expired, revoked or refunded Apple subscription
+        // takes the SKU off the account, so the upgrade screen stops marking it as the current
+        // plan. The renewal branch below writes it.
+        //
+        // UNLESS THE OTHER RAIL IS ON THE ROW -- a legacy cross-rail account (a purchase clears
+        // the loser's handle since 2026-10-14, so nothing bought after that can reach this). The
+        // athlete may be paying Stripe for the tier on file, and withholding access from
+        // somebody who is paying is the worse of the two errors. Recorded for an operator.
+        if (row.accountType !== "free_agent") continue;
+        if (row.stripeSubscriptionId) {
+          console.warn(
+            `Apple subscription ${originalTransactionId} (user ${row.userId}) ended but the row ` +
+              `also carries Stripe subscription ${row.stripeSubscriptionId}; the Free Agent tier ` +
+              `is left on file rather than withheld from a possible payer`,
+          );
+          await this.logBillingEvent(row.userId, "subscription.other_rail_still_on_file", {
+            endedRail: "apple",
+            originalTransactionId,
+            stripeSubscriptionId: row.stripeSubscriptionId,
+          });
+        } else {
+          await this.updateFreeAgentBilling(row.userId, { freeAgentTier: null });
+        }
       }
       return { ok: true };
     }
@@ -5383,18 +5460,19 @@ export const storage = {
     // shape applyAppleIapVerification uses for the initial purchase.
     const freeAgentTier = tierForAppleProductId(productId);
     if (!freeAgentTier) return { ok: false, error: "Unrecognized product." };
-    const updated = await this.updateSubscriptionByAppleOriginalTransactionId(originalTransactionId, {
+    await this.updateSubscriptionByAppleOriginalTransactionId(originalTransactionId, {
       tier: entitlementTierForFreeAgentTier(freeAgentTier),
       status: "active",
       currentPeriodEnd: expiresAt,
     });
-    if (!updated) return { ok: false, error: "No subscription found for this transaction." };
-    // A renewal after an upgrade or downgrade carries the NEW product; the SKU column follows it.
-    await this.updateFreeAgentBilling(updated.userId, { freeAgentTier });
-    await this.logBillingEvent(updated.userId, `apple_iap.${notification.notificationType.toLowerCase()}`, {
-      originalTransactionId,
-      productId,
-    });
+    if (held.length === 0) return { ok: false, error: "No subscription found for this transaction." };
+    for (const row of held) {
+      // A renewal after an upgrade or downgrade carries the NEW product; the SKU column follows
+      // it. Every holder, for the same reason the revocation reaches every holder: one of them
+      // keeping a stale SKU is the same bug in the other direction.
+      await this.updateFreeAgentBilling(row.userId, { freeAgentTier });
+      await this.logBillingEvent(row.userId, eventName, detail);
+    }
     return { ok: true };
   },
 

@@ -587,7 +587,7 @@ export async function cancelSubscriptionsForDeletedAccount(handles: {
  * access somebody has paid for, to fix a billing duplicate. So a failure writes an audit row
  * naming the subscription an operator has to cancel by hand -- the same posture, for the same
  * reason, as the guardian-verification refund above. */
-async function cancelSupersededStripeSubscription(userId: number, subscriptionId: string) {
+export async function cancelSupersededStripeSubscription(userId: number, subscriptionId: string) {
   const stripe = getStripeClient();
   if (!stripe) return;
   try {
@@ -851,9 +851,28 @@ async function revokeEverythingForSubscription(
   eventId: string,
   detail: Record<string, unknown>,
 ): Promise<void> {
+  // ONE ROW PER DELIVERY MAY CARRY THE STRIPE EVENT ID, because
+  // billing_audit_log.stripe_event_id is UNIQUE (it is the idempotency check
+  // handleStripeWebhookEvent makes). Both halves below can find something -- an add-on's
+  // subscription id lives in users.addOnTerms and a tier's in the subscriptions row, and the
+  // add-on lookup is a text LIKE over that column -- so whichever writes first takes the id and
+  // the other records it in its detail. Latent until 2026-10-14: the second insert would have
+  // thrown, 500'd the refund webhook and left Stripe retrying a delivery that had already done
+  // half its work.
+  let eventIdClaimed = false;
+  const claimEventId = () => {
+    if (eventIdClaimed) return undefined;
+    eventIdClaimed = true;
+    return eventId;
+  };
   const revoked = await storage.revokeAddOnsForStripeSubscription(subscriptionId);
   if (revoked.userId) {
-    await storage.logBillingEvent(revoked.userId, eventType, { ...detail, addOnIds: revoked.addOnIds }, eventId);
+    await storage.logBillingEvent(
+      revoked.userId,
+      eventType,
+      { ...detail, addOnIds: revoked.addOnIds, stripeEventId: eventId },
+      claimEventId(),
+    );
   }
 
   const sub = await storage.updateSubscriptionByStripeId(subscriptionId, { status: "canceled" });
@@ -867,8 +886,8 @@ async function revokeEverythingForSubscription(
     await storage.logBillingEvent(
       sub.userId,
       eventType,
-      { ...detail, subscriptionId, revoked: sub.accountType === "coach" ? "band" : "tier" },
-      eventId,
+      { ...detail, subscriptionId, revoked: sub.accountType === "coach" ? "band" : "tier", stripeEventId: eventId },
+      claimEventId(),
     );
   }
 }
@@ -1093,16 +1112,30 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       // group precisely so a swap replaces instead of stacking (see 2026-10-05, when they were
       // recreated as _v3 for exactly this reason) -- and the web rail had no equivalent.
       //
-      // ONE CASE IS STILL OPEN AND IS NAMED RATHER THAN PAPERED OVER: an account holding an
-      // APPLE subscription that then buys on the web. There is no Stripe id on the row to find,
-      // so nothing here fires, and an Apple subscription cannot be cancelled by this server at
-      // all -- only by the person, in iOS Settings. What the row records afterwards is both
-      // ids, against a schema comment saying exactly one is ever set. Left alone deliberately:
-      // clearing appleOriginalTransactionId would make the Apple notification path unable to
-      // find the account, which is a worse failure than a duplicate somebody can see on their
-      // own App Store receipt.
-      const priorSubscriptionId =
-        (await storage.getSubscriptionForUser(userId))?.stripeSubscriptionId ?? null;
+      // AND THE CROSS-RAIL CASE, WHICH THIS COMMENT USED TO CALL OPEN AND LEAVE ALONE (closed
+      // 2026-10-14). An account holding an APPLE subscription that then buys on the web kept
+      // both handles on one row -- and that is not a cosmetic duplicate, which is what the old
+      // note had it as. `subscriptions` is UNIQUE on userId, so every lifecycle event finds
+      // THIS row by its own rail's handle and then acts as though it owns the tier: the Apple
+      // EXPIRED that arrives when the person stops the old subscription in iOS Settings nulls
+      // users.freeAgentTier, and the athlete paying Stripe $19.99 a month loses the camera.
+      // See one-rail-owns-the-subscription-row.test.ts for both directions.
+      //
+      // SO A PURCHASE TAKES THE ROW, AND THE ROW NAMES ONE RAIL. The old note's objection was
+      // that clearing appleOriginalTransactionId stops the Apple notification path finding the
+      // account -- true, and it is the right trade now that the cost of keeping it is measured:
+      // the row no longer represents that subscription, so a renewal or expiry notification for
+      // it has nothing to update here, and if the athlete comes back to the App Store rail the
+      // app's own verification writes the handle back at the next launch
+      // (applyAppleIapVerification, which does the mirror of this and clears the Stripe one).
+      //
+      // WHAT HAPPENS TO THE RAIL THAT LOST THE ROW DEPENDS ON WHETHER FORGE CAN REACH IT: a
+      // Stripe subscription is cancelled below, and an App Store subscription can only be
+      // stopped by the person who bought it, so that one is warned about and recorded. Same
+      // posture, same reason, as the self-serve cancel route's `alsoCancelInAppStore`.
+      const priorRow = await storage.getSubscriptionForUser(userId);
+      const priorSubscriptionId = priorRow?.stripeSubscriptionId ?? null;
+      const supersededAppleTransactionId = priorRow?.appleOriginalTransactionId ?? null;
 
       if (purchasedFreeAgentTier) {
         // UPSERT, NOT UPDATE, and this is the Stripe half of a bug that was fixed on the Apple
@@ -1128,8 +1161,33 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
           // and came back would otherwise carry cancelAtPeriodEnd from the subscription it
           // just replaced.
           cancelAtPeriodEnd: false,
+          // The key is sent ONLY when there is a handle to clear, so an ordinary web purchase
+          // does not rewrite a column nobody asked about.
+          ...(supersededAppleTransactionId ? { appleOriginalTransactionId: null } : {}),
         });
         await storage.updateFreeAgentBilling(userId, { freeAgentTier: purchasedFreeAgentTier });
+        if (supersededAppleTransactionId) {
+          // LOUD, because this is money leaving and nothing else in the system will notice: the
+          // App Store subscription carries on charging until the person stops it in iOS
+          // Settings, and no server call can do it for them.
+          console.warn(
+            `user ${userId} bought a Free Agent tier on the web while App Store subscription ` +
+              `${supersededAppleTransactionId} was on file; the web purchase now owns the row and ` +
+              `the App Store subscription has to be stopped by the person in iOS Settings`,
+          );
+          // NO stripeEventId ON A SECOND ROW FROM ONE DELIVERY. billing_audit_log.stripe_event_id
+          // is UNIQUE -- deliberately, since it is the idempotency check handleStripeWebhookEvent
+          // makes before processing anything -- so the delivery's id belongs to the one
+          // `event.type` row below and a supplementary row like this carries none. Writing it
+          // twice would throw on the second insert and 500 the webhook.
+          await storage.logBillingEvent(userId, "subscription.rail_changed", {
+            to: "stripe",
+            stripeEventId: event.id,
+            stripeSubscriptionId: session.subscription,
+            supersededAppleOriginalTransactionId: supersededAppleTransactionId,
+            alsoCancelInAppStore: true,
+          });
+        }
       } else if (kind === "coach_subscription") {
         // THE COACH HAS THE SAME HOLE, through a different door. A coach gets a trial row from
         // every SIGNUP path -- but storage.setUserRole, which is an admin's "Change role" on
@@ -1220,8 +1278,33 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
         // so the upgrade screen went on marking a plan nobody held as "current" and
         // /api/athlete/entitlements reported it. The checkout webhook writes the tier on purchase
         // (above); this is the matching write on the way out. Coach rows carry no freeAgentTier.
+        //
+        // UNLESS THE OTHER RAIL IS ON THE ROW. A row carrying an appleOriginalTransactionId as
+        // well is an account that bought on both rails before the takeover rule above existed
+        // (a purchase now clears the loser's handle, so this cannot be reached by anything
+        // bought after 2026-10-14). Clearing the SKU there would take away a tier the App Store
+        // may still be paying for -- and between leaving a tier on file a little too long and
+        // withholding access from somebody who is paying, this file's standing posture is that
+        // withholding is the worse error. Recorded so an operator can settle it by hand.
         if (updated.accountType === "free_agent") {
-          await storage.updateFreeAgentBilling(updated.userId, { freeAgentTier: null });
+          if (updated.appleOriginalTransactionId) {
+            console.warn(
+              `Stripe subscription ${sub.id} (user ${updated.userId}) was deleted but the row ` +
+                `also carries App Store subscription ${updated.appleOriginalTransactionId}; the ` +
+                `Free Agent tier is left on file rather than withheld from a possible payer`,
+            );
+            // The delivery's id is already on the `event.type` row above; see the
+            // rail_changed call in checkout.session.completed on why a second row may not
+            // claim it. It travels in the detail instead, where it is just as findable.
+            await storage.logBillingEvent(updated.userId, "subscription.other_rail_still_on_file", {
+              endedRail: "stripe",
+              stripeEventId: event.id,
+              stripeSubscriptionId: sub.id,
+              appleOriginalTransactionId: updated.appleOriginalTransactionId,
+            });
+          } else {
+            await storage.updateFreeAgentBilling(updated.userId, { freeAgentTier: null });
+          }
         }
         // AND THE COACH SIDE, which this missed entirely until 2026-10-11. The branch above was
         // written for the Free Agent SKU and read accountType to avoid touching a coach row --

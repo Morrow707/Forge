@@ -89,6 +89,7 @@ import {
   GUARDIAN_VERIFICATION_CHARGE_CENTS,
   createLessonCheckout,
   cancelAddOnAtProvider,
+  cancelSupersededStripeSubscription,
 } from "./billing";
 import { missingPriceEnvVars } from "./stripe-prices";
 import { getHealthSnapshot } from "./health-probes";
@@ -10907,6 +10908,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const result = await storage.applyAppleIapVerification(user.id, verified.transaction);
       if (!result.ok) return res.status(422).json({ message: result.error });
+      // AN IN-APP PURCHASE TAKES THE ROW FROM THE WEB, so the web subscription it replaced is
+      // cancelled -- the same best-effort call the Stripe -> Stripe swap makes, for the same
+      // reason: one account, one tier, one bill. storage.ts cannot do it (it must not import
+      // billing.ts), so it hands the id up. Nothing to cancel is the ordinary case.
+      if (result.supersededStripeSubscriptionId) {
+        await cancelSupersededStripeSubscription(user.id, result.supersededStripeSubscriptionId);
+      }
       res.status(204).end();
     },
   );
@@ -10939,6 +10947,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       user.role === "coach" ? "coach" : "free_agent",
     );
     if (!result.ok) return res.status(422).json({ message: result.error });
+    // As on the athlete route above. A coach's purchase is an add-on and supersedes no tier
+    // subscription, so this is only ever reached by the Free Agent scope.
+    if (result.supersededStripeSubscriptionId) {
+      await cancelSupersededStripeSubscription(user.id, result.supersededStripeSubscriptionId);
+    }
     res.status(204).end();
   });
 
@@ -11012,6 +11025,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // The SKU on file (users.freeAgentTier), so the upgrade screen can mark the current plan.
       // Null for an athlete who has never bought one; beta and trials do not set it.
       freeAgentTier: account?.freeAgentTier ?? null,
+      // WHICH RAIL IS BILLING THIS PLAN, so the web page can stop somebody paying twice. A
+      // subscription handle on the row names the rail that owns it (shared/schema.ts on
+      // subscriptions.stripeSubscriptionId), and since 2026-10-14 a purchase on either rail
+      // clears the other's -- which is what makes this answerable at all. Buying on the web
+      // does not cancel an App Store subscription and no server call can: only the person, in
+      // iOS Settings. Saying so before the second charge beats recording it afterwards.
+      appleSubscriptionOnFile: Boolean(
+        (await storage.getSubscriptionForUser(user.id))?.appleOriginalTransactionId,
+      ),
       addOns: access.addOns,
       // WHICH OF THOSE WERE PAID FOR. Beta, a live trial and enforcement being off
       // all turn an add-on on without anybody having bought it, and a surface that

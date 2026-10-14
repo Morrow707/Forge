@@ -52,6 +52,9 @@ type AddOnEntitlements = {
   addOns: Record<FreeAgentAddOnId, boolean>;
   ownedAddOns: Record<FreeAgentAddOnId, boolean>;
   billingOpen: boolean;
+  /** The plan on this account is billed through the App Store. Only ever true for somebody who
+   *  bought in the app, and only read on the WEB grid below -- see its own comment. */
+  appleSubscriptionOnFile?: boolean;
 };
 
 /** The sport-coach add-ons, with price and status, on the one page an athlete
@@ -313,6 +316,22 @@ export default function AthleteUpgrade() {
               <p className="mt-2">
                 Everything you already have access to keeps working. Plans will be sold here through Google Play
                 once that is ready.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+        {/* BUYING HERE DOES NOT CANCEL AN APP STORE SUBSCRIPTION, and nothing Forge can call
+            will: only the person, in iOS Settings. Until 2026-10-14 the two rails could both
+            bill one account with nothing said, so this is the sentence that stops the second
+            charge rather than recording it afterwards. Web only -- inside the app a tier swap
+            stays inside the one StoreKit subscription group, which is why they share one. */}
+        {!supported && !androidNative && entitlements?.appleSubscriptionOnFile && (
+          <Card className="mt-6 border-amber-500/40">
+            <CardContent className="p-5 text-sm">
+              <p className="font-semibold">Your plan is billed through the App Store.</p>
+              <p className="mt-1 text-muted-foreground">
+                Changing plans here starts a new card subscription and does not stop that one. Cancel
+                it in iOS Settings first, or you will be charged by both.
               </p>
             </CardContent>
           </Card>
