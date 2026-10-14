@@ -18,6 +18,10 @@ const revokeAddOnsForStripeSubscription = vi.fn();
 // first-purchase case every test in this file is about.
 const getSubscriptionForUser = vi.fn();
 const upsertSubscriptionByUserId = vi.fn();
+// customer.subscription.deleted reaches the add-on half too since 2026-10-14 -- an add-on's
+// subscription id lives in users.addOnTerms, not the subscriptions table, so the handler has to
+// look in both. See one-account-never-pays-twice.test.ts for the behaviour itself.
+const endAddOnsForDeletedStripeSubscription = vi.fn();
 
 vi.mock("./storage", () => ({
   storage: {
@@ -31,6 +35,7 @@ vi.mock("./storage", () => ({
     revokeAddOnsForStripeSubscription,
     getSubscriptionForUser,
     upsertSubscriptionByUserId,
+    endAddOnsForDeletedStripeSubscription,
   },
 }));
 
@@ -51,6 +56,7 @@ beforeEach(() => {
   wasStripeEventProcessed.mockResolvedValue(false);
   revokeAddOnsForStripeSubscription.mockResolvedValue({ userId: null, addOnIds: [] });
   getSubscriptionForUser.mockResolvedValue(null);
+  endAddOnsForDeletedStripeSubscription.mockResolvedValue({ userId: null, addOnIds: [] });
 });
 
 describe("checkout.session.completed", () => {

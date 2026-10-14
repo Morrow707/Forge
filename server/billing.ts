@@ -1164,6 +1164,41 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
           await storage.clearCoachBand(updated.userId);
         }
       }
+
+      // AND THE ADD-ON, WHICH NO STRIPE LIFECYCLE EVENT COULD REACH (fixed 2026-10-14).
+      //
+      // updateSubscriptionByStripeId above matches the `subscriptions` table, and an add-on's
+      // subscription id is NOT there -- it lives in users.addOnTerms, because
+      // subscriptions.userId is UNIQUE and that one row belongs to the TIER. So `updated` is
+      // null for an add-on and this handler did nothing at all: a coach who cancelled Coaches
+      // Corner in the Stripe billing portal -- the portal Forge itself opens for them at
+      // /api/billing/portal -- kept the add-on forever after the billing stopped, as did anyone
+      // whose card failed until Stripe gave up and deleted the subscription. Access nobody was
+      // paying for, with no event left to take it away.
+      //
+      // Found by the billing sweep, and the third in one family: revokeAddOnsForStripeSubscription
+      // had exactly ONE caller (charge.refunded), so every other lifecycle event was blind to
+      // half the places a subscription id can live.
+      //
+      // THE PAID MONTH IS HONOURED. A cancellation is not a refund (shared/add-on-terms.ts):
+      // a cancelled add-on runs to the end of the month already bought. Stripe reports that
+      // period on the subscription it is deleting, so that is what is passed down; an ordinary
+      // cancel-at-period-end arrives when the period has already ended and so revokes at once.
+      const deletedPeriodEnd = (sub as unknown as { current_period_end?: number }).current_period_end;
+      const addOnAccessUntil = deletedPeriodEnd ? new Date(deletedPeriodEnd * 1000) : new Date();
+      const endedAddOns = await storage.endAddOnsForDeletedStripeSubscription(sub.id, addOnAccessUntil);
+      if (endedAddOns.userId) {
+        await storage.logBillingEvent(
+          endedAddOns.userId,
+          event.type,
+          {
+            subscriptionId: sub.id,
+            addOnIds: endedAddOns.addOnIds,
+            accessUntil: addOnAccessUntil.toISOString(),
+          },
+          event.id,
+        );
+      }
       break;
     }
     // A STRIPE REFUND REVOKES AT ONCE. Scott, 2026-10-11: "if something is refunded then they

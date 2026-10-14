@@ -5399,6 +5399,47 @@ export const storage = {
     return row ?? null;
   },
 
+  /** END the add-on whose own Stripe subscription has gone away, honouring the paid month.
+   *
+   *  THE MIRROR OF revokeAddOnsForStripeSubscription BELOW, AND THE REASON BOTH EXIST (added
+   *  2026-10-14). That one had exactly ONE caller -- charge.refunded -- so no other Stripe
+   *  lifecycle event could reach an add-on at all: customer.subscription.deleted matches on the
+   *  `subscriptions` table, and an add-on's subscription id lives in users.addOnTerms and never
+   *  there (subscriptions.userId is UNIQUE and that row belongs to the TIER). So a coach who
+   *  cancelled Coaches Corner in the Stripe billing portal -- the portal Forge itself opens for
+   *  them at /api/billing/portal -- kept the add-on forever after the billing stopped. Same for
+   *  a card that fails until Stripe gives up and deletes the subscription.
+   *
+   *  A CANCELLATION IS NOT A REFUND, which is why this is a separate method and not a second
+   *  caller of that one. Scott's rule: a cancelled add-on runs to the end of the month already
+   *  paid for, and a refunded one stops dead. So this SCHEDULES the end at the period Stripe
+   *  reports, and only revokes at once when that period is already past -- which it is for an
+   *  ordinary cancel-at-period-end, since the event arrives when the period ends.
+   *
+   *  Returns every add-on it ended, because one Stripe subscription could in principle be named
+   *  by more than one term record, and a loop that stops at the first would leave the rest live. */
+  async endAddOnsForDeletedStripeSubscription(subscriptionId: string, accessUntil: Date) {
+    const rows = await db
+      .select({ id: users.id, addOnTerms: users.addOnTerms })
+      .from(users)
+      .where(sql`${users.addOnTerms}::text LIKE ${"%" + subscriptionId + "%"}`);
+    const addOnIds: string[] = [];
+    let userId: number | null = null;
+    for (const row of rows) {
+      for (const [addOnId, term] of Object.entries(row.addOnTerms ?? {})) {
+        if (term?.stripeSubscriptionId !== subscriptionId) continue;
+        if (accessUntil.getTime() <= Date.now()) {
+          await this.revokeAddOnAfterRefund(row.id, addOnId);
+        } else {
+          await this.scheduleAddOnRemoval(row.id, addOnId, accessUntil);
+        }
+        addOnIds.push(addOnId);
+        userId = row.id;
+      }
+    }
+    return { userId, addOnIds };
+  },
+
   /** Revoke the add-on a refunded Stripe subscription paid for.
    *
    *  Takes the subscription id rather than the charge, because resolving a charge to its

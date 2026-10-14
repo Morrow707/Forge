@@ -39,6 +39,8 @@ const clearCoachBand = vi.fn();
 const revokeAddOnsForStripeSubscription = vi.fn();
 const addFreeAgentAddOn = vi.fn();
 const recordPaymentAsParentalVerification = vi.fn();
+const endAddOnsForDeletedStripeSubscription = vi.fn();
+const clearCoachBandFn = vi.fn();
 
 vi.mock("./storage", () => ({
   storage: {
@@ -54,6 +56,7 @@ vi.mock("./storage", () => ({
     revokeAddOnsForStripeSubscription,
     addFreeAgentAddOn,
     recordPaymentAsParentalVerification,
+    endAddOnsForDeletedStripeSubscription,
   },
 }));
 
@@ -96,7 +99,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   wasStripeEventProcessed.mockResolvedValue(false);
   getSubscriptionForUser.mockResolvedValue(null);
-  cancel.mockResolvedValue({});
+  cancel.mockResolvedValue({})
+  endAddOnsForDeletedStripeSubscription.mockResolvedValue({ userId: null, addOnIds: [] });
 });
 
 describe("a tier purchase replaces the subscription it supersedes", () => {
@@ -265,3 +269,76 @@ describe("a Free Agent with no subscriptions row still gets their purchase recor
     expect(upsertSubscriptionByUserId).not.toHaveBeenCalled();
   });
 });
+
+/* AND THE ADD-ON NOBODY COULD CANCEL (added 2026-10-14).
+ *
+ * customer.subscription.deleted matched the `subscriptions` table only, and an add-on's
+ * subscription id is not there -- it is in users.addOnTerms, because subscriptions.userId is
+ * UNIQUE and that row holds the TIER. So the handler did nothing at all for an add-on, and a
+ * coach who cancelled Coaches Corner in the Stripe billing portal (the portal Forge opens for
+ * them) kept it forever after the billing stopped.
+ *
+ * revokeAddOnsForStripeSubscription existed and had exactly ONE caller, charge.refunded -- which
+ * is how a whole family of lifecycle events ended up blind to half the places an id can live.
+ */
+describe("a deleted Stripe subscription ends the add-on it was paying for", () => {
+  function deleted(id: string, subscriptionId: string, periodEnd: number | undefined) {
+    return {
+      id,
+      type: "customer.subscription.deleted",
+      data: { object: { id: subscriptionId, current_period_end: periodEnd } },
+    } as unknown as Stripe.Event
+  }
+
+  it("ends the add-on even though the subscriptions table knows nothing about it", async () => {
+    updateSubscriptionByStripeId.mockResolvedValue(null)   // not the tier's subscription
+    endAddOnsForDeletedStripeSubscription.mockResolvedValue({ userId: 4, addOnIds: ["coaches_corner"] })
+    await handleStripeWebhookEvent(deleted("evt_d1", "sub_corner", 1800000000))
+
+    expect(endAddOnsForDeletedStripeSubscription).toHaveBeenCalledWith("sub_corner", new Date(1800000000 * 1000))
+    expect(logBillingEvent).toHaveBeenCalledWith(
+      4,
+      "customer.subscription.deleted",
+      expect.objectContaining({ addOnIds: ["coaches_corner"] }),
+      "evt_d1",
+    )
+  })
+
+  it("honours the month already paid for, rather than cutting it off", async () => {
+    // A cancellation is not a refund: shared/add-on-terms.ts gives a cancelled add-on until the
+    // end of the month that was bought. Stripe reports that period on the subscription it is
+    // deleting, so it is passed down rather than invented here.
+    updateSubscriptionByStripeId.mockResolvedValue(null)
+    const future = Math.floor(Date.now() / 1000) + 10 * 24 * 60 * 60
+    await handleStripeWebhookEvent(deleted("evt_d2", "sub_corner", future))
+
+    const [, accessUntil] = endAddOnsForDeletedStripeSubscription.mock.calls[0]
+    expect(accessUntil.getTime()).toBeGreaterThan(Date.now())
+  })
+
+  it("falls back to now when Stripe reports no period", async () => {
+    updateSubscriptionByStripeId.mockResolvedValue(null)
+    await handleStripeWebhookEvent(deleted("evt_d3", "sub_corner", undefined))
+
+    const [, accessUntil] = endAddOnsForDeletedStripeSubscription.mock.calls[0]
+    expect(accessUntil.getTime()).toBeLessThanOrEqual(Date.now() + 1000)
+  })
+
+  it("still clears a Free Agent tier, which is what this handler always did", async () => {
+    updateSubscriptionByStripeId.mockResolvedValue({ userId: 9, accountType: "free_agent" })
+    await handleStripeWebhookEvent(deleted("evt_d4", "sub_tier", 1800000000))
+
+    expect(updateFreeAgentBilling).toHaveBeenCalledWith(9, { freeAgentTier: null })
+    // And the add-on lookup runs regardless -- a tier subscription simply matches no add-on.
+    expect(endAddOnsForDeletedStripeSubscription).toHaveBeenCalled()
+  })
+
+  it("logs nothing extra when the subscription paid for no add-on", async () => {
+    updateSubscriptionByStripeId.mockResolvedValue({ userId: 9, accountType: "free_agent" })
+    endAddOnsForDeletedStripeSubscription.mockResolvedValue({ userId: null, addOnIds: [] })
+    await handleStripeWebhookEvent(deleted("evt_d5", "sub_tier", 1800000000))
+
+    const addOnLogs = logBillingEvent.mock.calls.filter((c) => c[2] && "addOnIds" in c[2])
+    expect(addOnLogs).toEqual([])
+  })
+})
