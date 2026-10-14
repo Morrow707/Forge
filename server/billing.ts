@@ -834,6 +834,45 @@ export async function createBillingPortalSession(
 
 
 
+/** EVERYTHING A SUBSCRIPTION PAID FOR, TAKEN BACK WHEN THE MONEY IS.
+ *
+ * Shared by charge.refunded and charge.dispute.created, because a chargeback is a refund the
+ * customer forced and the two have no business revoking different sets of things. Written out
+ * once for that reason: the refund path was already the ONLY caller of
+ * revokeAddOnsForStripeSubscription, and copying it for disputes would have produced the fifth
+ * instance of this sweep's recurring defect -- one handler knowing one of the two places a
+ * subscription id can live.
+ *
+ * Both halves, always: an ADD-ON's id lives in users.addOnTerms, and the TIER's or the BAND's
+ * on the subscriptions row (userId is UNIQUE, so that row is the tier's). */
+async function revokeEverythingForSubscription(
+  subscriptionId: string,
+  eventType: string,
+  eventId: string,
+  detail: Record<string, unknown>,
+): Promise<void> {
+  const revoked = await storage.revokeAddOnsForStripeSubscription(subscriptionId);
+  if (revoked.userId) {
+    await storage.logBillingEvent(revoked.userId, eventType, { ...detail, addOnIds: revoked.addOnIds }, eventId);
+  }
+
+  const sub = await storage.updateSubscriptionByStripeId(subscriptionId, { status: "canceled" });
+  if (sub) {
+    if (sub.accountType === "free_agent") {
+      await storage.updateFreeAgentBilling(sub.userId, { freeAgentTier: null });
+    }
+    if (sub.accountType === "coach") {
+      await storage.clearCoachBand(sub.userId);
+    }
+    await storage.logBillingEvent(
+      sub.userId,
+      eventType,
+      { ...detail, subscriptionId, revoked: sub.accountType === "coach" ? "band" : "tier" },
+      eventId,
+    );
+  }
+}
+
 /** Verifies the raw webhook body against STRIPE_WEBHOOK_SECRET and returns
  * the parsed event, or null if billing isn't configured/the signature is
  * invalid. Mounted in index.ts on a route registered BEFORE the global
@@ -1250,43 +1289,55 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       const invoiceId = typeof rawInvoice === "string" ? rawInvoice : rawInvoice?.id;
       const subscriptionId = invoiceId ? await subscriptionIdForInvoice(invoiceId) : null;
       if (!subscriptionId) break;
-      const revoked = await storage.revokeAddOnsForStripeSubscription(subscriptionId);
-      if (revoked.userId) {
-        await storage.logBillingEvent(
-          revoked.userId,
-          event.type,
-          { chargeId: charge.id, addOnIds: revoked.addOnIds },
-          event.id,
-        );
+      await revokeEverythingForSubscription(subscriptionId, event.type, event.id, { chargeId: charge.id });
+      break;
+    }
+    // A CHARGEBACK IS A REFUND THE CUSTOMER FORCED, AND NOTHING HANDLED ONE (added 2026-10-14).
+    //
+    // There was no dispute branch anywhere in the server: a person could charge back through
+    // their bank, get the money, and keep the tier or the add-on indefinitely, because the only
+    // thing that revoked anything was a refund Forge itself issued. Found by the billing sweep.
+    //
+    // REVOKED ON `created`, NOT ON `closed`, and that is a decision rather than impatience: the
+    // bank withdraws the funds when the dispute is opened, so access from that moment is access
+    // nobody is paying for, and a dispute can run for weeks. The cost is the rare case Forge
+    // wins -- there the dispute's closure is logged below with its outcome, and an admin
+    // re-grants on /admin/billing, which is a conversation with one customer rather than weeks
+    // of unpaid access for every disputer.
+    case "charge.dispute.created": {
+      const dispute = event.data.object as Stripe.Dispute;
+      const rawCharge = dispute.charge;
+      const chargeId = typeof rawCharge === "string" ? rawCharge : rawCharge?.id;
+      if (!chargeId) break;
+      const stripe = getStripeClient();
+      if (!stripe) break;
+      // A dispute names its CHARGE, not its invoice, so the invoice has to be read off the
+      // charge before the same subscription lookup the refund path uses can run.
+      let subscriptionId: string | null = null;
+      try {
+        const charge = await stripe.charges.retrieve(chargeId);
+        const rawInvoice = (charge as unknown as { invoice?: string | { id: string } }).invoice;
+        const invoiceId = typeof rawInvoice === "string" ? rawInvoice : rawInvoice?.id;
+        subscriptionId = invoiceId ? await subscriptionIdForInvoice(invoiceId) : null;
+      } catch (err) {
+        console.error(`dispute ${dispute.id}: could not resolve charge ${chargeId} to a subscription:`, err);
       }
-
-      // AND THE TIER AND THE BAND, WHICH THIS HANDLER COULD NOT REACH AT ALL (fixed 2026-10-14).
-      //
-      // revokeAddOnsForStripeSubscription searches users.addOnTerms and nothing else, so a
-      // refunded ADD-ON was revoked and a refunded TIER or COACH BAND kept full access: the
-      // money went back and the entitlement stayed. Six of the ten dimensions in the billing
-      // sweep found this independently, and it is the same shape as the bug it sits beside --
-      // a handler written for one of the two places a Stripe subscription id can live.
-      //
-      // The tier's and the band's id lives on the subscriptions row (userId is UNIQUE, one row
-      // per account), so this is the matching lookup. A refund is at least as terminal as a
-      // cancellation, so it does exactly what customer.subscription.deleted does -- Scott's
-      // rule, in his words: "if something is refunded then they don't have access obviously."
-      const refundedSub = await storage.updateSubscriptionByStripeId(subscriptionId, { status: "canceled" });
-      if (refundedSub) {
-        if (refundedSub.accountType === "free_agent") {
-          await storage.updateFreeAgentBilling(refundedSub.userId, { freeAgentTier: null });
-        }
-        if (refundedSub.accountType === "coach") {
-          await storage.clearCoachBand(refundedSub.userId);
-        }
-        await storage.logBillingEvent(
-          refundedSub.userId,
-          event.type,
-          { chargeId: charge.id, subscriptionId, revoked: refundedSub.accountType === "coach" ? "band" : "tier" },
-          event.id,
-        );
-      }
+      if (!subscriptionId) break;
+      await revokeEverythingForSubscription(subscriptionId, event.type, event.id, {
+        disputeId: dispute.id,
+        chargeId,
+        reason: dispute.reason ?? null,
+      });
+      break;
+    }
+    // The outcome, recorded and never acted on. A dispute Forge WINS does not restore access
+    // automatically: re-granting from a webhook would hand back a paid tier on an event that
+    // can also arrive for a dispute merely withdrawn, and the account has been revoked for
+    // weeks by then anyway. An admin re-grants on /admin/billing. What this is for is making
+    // that case findable at all, since a lost dispute and a won one look identical afterwards.
+    case "charge.dispute.closed": {
+      const dispute = event.data.object as Stripe.Dispute;
+      console.log(`Stripe dispute ${dispute.id} closed as ${dispute.status}; access was revoked when it opened`);
       break;
     }
     case "invoice.payment_failed": {
