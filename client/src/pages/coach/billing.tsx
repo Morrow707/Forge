@@ -292,9 +292,19 @@ export default function CoachBilling() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Billed for</span>
+                  {/* NO PRICE FOR THE COACH PLAN INSIDE THE APP (fixed 2026-10-14). The plan is
+                      sold to programs on the web only, which App Store guideline 3.1.3(c) allows
+                      -- on the condition that the app does not price it (3.1.1). This row printed
+                      "21-40 athletes · $160.00/month" on the phone. The BAND still shows, because
+                      what the program is on is a fact about their account rather than an offer;
+                      the money is what may not appear. Found by the billing sweep, which also
+                      found that the compliance scan covering this page only ever asserted the
+                      COPY and never the money. */}
                   <span>
                     {plan.band
-                      ? `${plan.band.label} · ${formatCents(plan.band.monthlyPriceCents)}/month`
+                      ? isNative
+                        ? plan.band.label
+                        : `${plan.band.label} · ${formatCents(plan.band.monthlyPriceCents)}/month`
                       : `${plan.billedCount} athletes`}
                   </span>
                 </div>
@@ -315,6 +325,18 @@ export default function CoachBilling() {
               {planIsForbidden ? (
                 <p className="text-xs text-muted-foreground">
                   Only the primary coach can change the plan size.
+                </p>
+              ) : isNative ? (
+                /* AND THE EDITOR ITSELF IS NOT REACHABLE FROM INSIDE THE APP. Update calls
+                   PUT /api/coach/plan, which syncs the band onto the Stripe subscription and
+                   PRORATES A CHARGE -- a payment taken outside in-app purchase, initiated by a
+                   control in the app, which is the thing 3.1.1 forbids. It also previewed the
+                   new band's monthly price under the input while doing it.
+                   The cost of withholding it is that a coach cannot change their headcount from
+                   the phone, which is the same cost already accepted for Subscribe below and the
+                   same answer: the program's money is handled on the web. */
+                <p className="text-xs text-muted-foreground">
+                  Your program's plan size is changed outside the app.
                 </p>
               ) : (
                 <div className="flex flex-col gap-2 border-t border-border pt-4">
