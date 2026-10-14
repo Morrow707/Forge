@@ -4341,6 +4341,41 @@ export const storage = {
   // single video). Coach/admin accounts have no video files of their own
   // to clean up; their owned content (programs, exercises, etc.) cascades
   // via the same onDelete: cascade FKs everything else in this schema uses.
+  /** WHICH OTHER ACCOUNTS ALREADY HOLD THIS APPLE TRANSACTION.
+   *
+   * subscriptions.appleOriginalTransactionId is NOT unique and nothing has ever checked reuse,
+   * so one paid App Store subscription can entitle any number of Forge accounts. This is not
+   * even an attack: the app HOLDS a StoreKit transaction that arrives before a session is known
+   * and re-sends it after sign-in (flushAppleIapTransactionsHeldForSignIn, build 613), so one
+   * phone signing into a second Forge account -- a coach's own account and their child's, say --
+   * presents the same genuine transaction, Apple's verifier confirms it, and the second account
+   * is granted the tier. Found by the billing sweep.
+   *
+   * ** THIS REPORTS AND REFUSES NOTHING. ** Deliberately, and it is the riskiest thing in this
+   * sweep to get wrong: the purchase path is confirmed working on real money, and the phone does
+   * NOT finish a transaction the server refuses (build 611) -- so a refusal that is wrong, or
+   * that returns a status the client does not treat as final, replays at every launch forever.
+   * Arming it means a new status contract on both halves, which is its own change made against
+   * evidence. So the grant records the sharing and says so in the log, and whether it is
+   * actually happening becomes a question somebody can answer before anything is withheld.
+   *
+   * Both places a transaction can be recorded, for the reason every other reader in this file
+   * now reads both: the subscriptions row for a TIER, users.addOnTerms for an ADD-ON. */
+  async accountsHoldingAppleTransaction(originalTransactionId: string, exceptUserId: number) {
+    const subRows = await db
+      .select({ userId: subscriptions.userId })
+      .from(subscriptions)
+      .where(eq(subscriptions.appleOriginalTransactionId, originalTransactionId));
+    const addOnRows = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(sql`${users.addOnTerms}::text LIKE ${"%" + originalTransactionId + "%"}`);
+    const others = new Set<number>();
+    for (const r of subRows) if (r.userId !== exceptUserId) others.add(r.userId);
+    for (const r of addOnRows) if (r.id !== exceptUserId) others.add(r.id);
+    return [...others];
+  },
+
   /** Every live billing handle this account holds, read BEFORE anything is deleted.
    *
    *  THE ONLY MOMENT THESE EXIST. `subscriptions` cascades from `users`, so the row carrying
@@ -5049,6 +5084,17 @@ export const storage = {
     // route that knows the role says so, and a product outside the scope is "Unrecognized".
     scope: "free_agent" | "coach" = "free_agent",
   ): Promise<{ ok: true } | { ok: false; error: string }> {
+    // ONE APPLE SUBSCRIPTION, MORE THAN ONE FORGE ACCOUNT. Recorded, never refused -- see
+    // accountsHoldingAppleTransaction for why withholding is its own change. A warn rather than
+    // a log line because this is revenue leaving, and it is the one thing in the billing line
+    // that nothing could previously have told anybody about.
+    const alsoHeldBy = await this.accountsHoldingAppleTransaction(verified.originalTransactionId, userId);
+    if (alsoHeldBy.length) {
+      console.warn(
+        `Apple transaction ${verified.originalTransactionId} (${verified.productId}) is being granted to account ${userId} and is already held by ${alsoHeldBy.length} other account(s): ${alsoHeldBy.join(", ")}. One subscription, several accounts -- granted anyway, see accountsHoldingAppleTransaction.`,
+      );
+    }
+
     if (scope === "coach") {
       const coachAddOn = APPLE_PRODUCT_ID_TO_COACH_ADD_ON[verified.productId];
       if (!coachAddOn) return { ok: false, error: "Unrecognized product." };
