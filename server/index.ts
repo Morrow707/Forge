@@ -91,6 +91,7 @@ import { startDataRetentionJob } from "./data-retention-job";
 import { startVideoRetentionJob } from "./video-retention-job";
 import { startResearchMirrorJob } from "./research-mirror-job";
 import { startCohortNormsJob } from "./cohort-norms-job";
+import { startCoachBandDriftJob } from "./coach-band-drift-job";
 import { verifyStripeWebhook, handleStripeWebhookEvent } from "./billing";
 import { verifyAppleNotification } from "./apple-iap";
 import { decodeRtdnPush, rtdnPushAuthorized, verifyGooglePlayPurchase } from "./google-play-billing";
@@ -539,6 +540,9 @@ app.get("/healthz", async (_req, res) => {
     startDataRetentionJob();
     startVideoRetentionJob();
     startResearchMirrorJob();
+    // Reports which programs have outgrown the band they pay for. Moves no money until
+    // COACH_BAND_DRIFT_REBILL is set -- see the job's own comment for why that switch exists.
+    startCoachBandDriftJob();
     startCohortNormsJob();
     // One-time backlog cleanup for the dev-testing account's accumulated
     // video volume -- see oneTimeCleanupPreexistingVideosForAccount's own

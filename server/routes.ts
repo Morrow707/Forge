@@ -14080,9 +14080,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // The band follows the plan onto the Stripe subscription (syncCoachSubscriptionBand): a
     // bigger band is prorated now, a smaller one bills from the next invoice. A failure at
     // Stripe does not undo the recorded number; it is logged and the coach's screen says so.
+    //
+    // THE LARGER OF THE TWO, NEVER THE TYPED NUMBER (fixed 2026-10-14). This passed
+    // `parsed.data.expectedAthletes` straight through, so a coach could type 1 and drop the
+    // Stripe quantity to the cheapest band while keeping a roster of two hundred -- the program
+    // then pays the 0-5 price for 0-5 athletes it does not have and 195 it does.
+    // getBilledAthleteCountForCoach is max(planned, roster) and is what the CHECKOUT route has
+    // always used (`const seats = await storage.getBilledAthleteCountForCoach(user.id)`), so the
+    // two halves of one question were answering it differently and the difference favoured
+    // whoever typed the smaller number. setPlannedAthleteCount above has already run, so this
+    // reads the new typed number against the real roster. Found by the billing sweep.
+    const billedAfterChange = await storage.getBilledAthleteCountForCoach(user.id);
     let stripeSync: Awaited<ReturnType<typeof syncCoachSubscriptionBand>>;
     try {
-      stripeSync = await syncCoachSubscriptionBand(user.id, parsed.data.expectedAthletes);
+      stripeSync = await syncCoachSubscriptionBand(user.id, billedAfterChange);
     } catch (err) {
       console.error("coach plan: Stripe band sync failed", err);
       stripeSync = { synced: false, reason: "stripe_error" };
