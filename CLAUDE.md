@@ -264,6 +264,16 @@ same SHA shows a success on `main` and a failure elsewhere, nothing is broken.
   hand, `npm run db:reconcile` against a throwaway one is also the fastest way
   to prove a migration edit actually executes -- worth doing for any change to
   `server/reconcile-schema.ts`, since a broken statement there fails the deploy.
+- **NEVER RUN TWO INTEGRATION SUITES AGAINST ONE DATABASE.** `TEST_DATABASE_URL` names the
+  database, every test file's `beforeEach` TRUNCATEs every table in it, and nothing coordinates
+  two `vitest` processes -- so a quick four-file run started while a full run is in flight
+  truncates tables under it and both sides report failures that are not there. Cost an hour on
+  2026-10-14: twelve tests in `add-on-entitlements.itest.ts` failed with 401 on every request
+  (the session rows had been truncated mid-file), read as a real regression, and passed 20/20 the
+  moment they were re-run on a database of their own. A 401 or an empty read on EVERY case in a
+  file is the signature; the fix is a second URL
+  (`...localhost:5433/forge_itest_adhoc`), which the harness creates and reconciles on first
+  use. Keep the full run on `forge_integration_test` and send every ad-hoc run elsewhere.
 
 ## Working alongside other Claude sessions
 
