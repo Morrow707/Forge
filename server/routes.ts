@@ -2962,7 +2962,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // stub every other paywall stub uses, post-billing it points the coach at
   // the real fix instead of a message claiming this can never be purchased
   // even once it actually can.
-  app.post("/api/coach/academy/unlock", requireRole("coach"), async (req, res) => {
+  /* A THIRD DOOR ONTO THE SAME PURCHASE, WITH NEITHER GUARD (fixed 2026-10-14).
+   *
+   * This calls createCoachAddOnCheckout for coaches_corner exactly as
+   * /api/billing/checkout/coach-add-on does, and carried requireRole("coach") alone:
+   *
+   *   - No primary-coach guard, so an assistant could start a checkout that lands the add-on on
+   *     their OWN row -- which ownsCoachesCorner does not read, since it resolves off the
+   *     primary. The same bug fixed on the other two coach checkouts, through a third door.
+   *   - No requireWebCheckout, so the route answered from INSIDE the native app with a Stripe
+   *     checkout URL. Coaches Corner is sold through StoreKit on iOS; a web checkout reachable
+   *     from the app is the 3.1.1 exposure requireWebCheckout exists to close, and
+   *     stripe-checkout.test.ts names four routes by hand and never knew about this one.
+   *
+   * Found by the billing sweep. The scan that should have caught it discovers routes by the
+   * "/api/billing/checkout/" path prefix, and this one is not under it -- so the scan now
+   * discovers by what a handler CALLS instead. */
+  app.post(
+    "/api/coach/academy/unlock",
+    requireRole("coach"),
+    requirePrimaryCoachForBilling,
+    requireWebCheckout,
+    async (req, res) => {
     if (testingUnlockAllPaywalls) return res.status(204).end();
     const { successUrl, cancelUrl } = checkoutReturnUrls(req, "/coach/coaches-corner");
     const user = currentUser(req);
@@ -2977,8 +2998,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // the same answer /api/billing/checkout/coach-add-on gives -- one message for
     // "nothing is for sale yet", not a second one invented here.
     if ("error" in result) return res.status(402).json({ message: result.error });
-    res.json(result);
-  });
+      res.json(result);
+    },
+  );
 
   // WHAT THIS COACH MAY DO, resolved server-side. Same standing as
   // /api/athlete/camera-access: a convenience for the interface, never the

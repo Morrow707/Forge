@@ -33,13 +33,38 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dirname, "..");
 const routes = readFileSync(join(ROOT, "server/routes.ts"), "utf8");
 
-/** Every checkout route's registration, from `app.post("/api/billing/checkout/...` up to the
- * handler's own `async (req, res)` -- which is exactly the middleware list and nothing else. */
+/** EVERY ROUTE THAT STARTS A CHECKOUT, DISCOVERED BY WHAT IT CALLS -- NOT BY ITS PATH.
+ *
+ * This matched `app.post("/api/billing/checkout/...` for its first two days, and on 2026-10-14
+ * the billing sweep found POST /api/coach/academy/unlock: a third door onto the Coaches Corner
+ * purchase, calling createCoachAddOnCheckout with requireRole("coach") alone -- no primary-coach
+ * guard and no requireWebCheckout -- which this scan could not see, because it is not under that
+ * prefix.
+ *
+ * So the axis is wrong, and it is the THIRD time in one sweep that a scan's discovery axis
+ * missed a member it looked like it covered (the money-route scan that knew only checkouts, the
+ * compliance scan that asserted copy and not prices, this). A route is a checkout because it
+ * CREATES one, so that is what gets matched: every app.post whose handler calls a create*Checkout
+ * function, wherever it lives.
+ *
+ * Returns the middleware list -- from the path to the handler's own `async (` -- which is
+ * exactly the middleware and nothing else. */
 function checkoutRoutes(): Record<string, string> {
   const found: Record<string, string> = {};
-  const re = /app\.post\(\s*\n?\s*"(\/api\/billing\/checkout\/[a-z-]+)"([\s\S]*?)async \(/g;
+  const re = /app\.post\(\s*\n?\s*"([^"]+)"([\s\S]*?)async \(req[^)]*\) => \{([\s\S]*?)\n  \}?\)?;?\n/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(routes))) found[m[1]] = m[2];
+  while ((m = re.exec(routes))) {
+    const [, path, middleware, body] = m;
+    // BOUNDED AT THE NEXT REGISTRATION, not at a character count. A fixed window bleeds into
+    // the route below and attributes its checkout call to this one -- the first run of this axis
+    // reported /api/billing/add-on/:addOnId/restore as a checkout for exactly that reason, since
+    // the route after it creates one. Same lesson as the 220-character window this file already
+    // rewrote: a window measured in characters is a window measured in the wrong thing.
+    const rest = routes.slice(m.index + 10);
+    const nextRoute = rest.search(/\n  app\.(post|get|put|patch|delete)\(/);
+    const window = nextRoute > -1 ? rest.slice(0, nextRoute) : rest;
+    if (/create[A-Za-z]*Checkout\(/.test(window)) found[path] = middleware;
+  }
   return found;
 }
 
@@ -71,6 +96,25 @@ const REQUIRED_GUARD: Record<string, { guard: string; because: string }> = {
       "ownsCoachesCorner looks the primary coach up explicitly, so a coach add-on is org-wide " +
       "by construction and an assistant's $19.99 unlocked it for nobody, themselves included.",
   },
+  "/api/coach/academy/unlock": {
+    guard: "requirePrimaryCoachForBilling",
+    because:
+      "A third door onto the Coaches Corner purchase, calling createCoachAddOnCheckout exactly " +
+      "as /api/billing/checkout/coach-add-on does. It had requireRole(\"coach\") alone, so an " +
+      "assistant could land the program's add-on on their own row -- which ownsCoachesCorner " +
+      "does not read -- and the route answered a Stripe URL from inside the native app, which " +
+      "is the 3.1.1 exposure requireWebCheckout exists to close.",
+  },
+  "/api/guardian/athletes/:athleteId/parental-verification": {
+    guard: "requireGuardianAccess",
+    because:
+      "The 50c charge-and-refund that verifies a guardian's card under COPPA, which is NOT a " +
+      "sale: nothing digital is bought, the money is returned, and it does not sit behind " +
+      "BILLING_LIVE. requireGuardianAccess is the right gate because the question is whether " +
+      "this adult may act for THIS child, not whether they may spend the program's money, and " +
+      "it carries no requireWebCheckout on purpose -- a guardian claims on whatever device the " +
+      "emailed link opened on, and refusing the native app would strand the commonest case.",
+  },
   "/api/billing/checkout/class-lesson": {
     guard: "requireRole(\"athlete\")",
     because:
@@ -101,6 +145,23 @@ describe("every billing checkout establishes who it may charge", () => {
       const middleware = found[path];
       expect(middleware, `${path} is not registered any more`).toBeDefined();
       if (!middleware.includes(guard)) missing.push(`${path} is missing ${guard}`);
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it("every checkout refuses the native app, wherever it lives", () => {
+    // requireWebCheckout is the 3.1.1 guard: a Stripe checkout reachable from inside the app is
+    // what puts a submission at risk. stripe-checkout.test.ts names four routes BY HAND and so
+    // could not fail for the fifth -- /api/coach/academy/unlock, which had no such guard. This
+    // asserts it on every route discovered above, by what it calls rather than by a list.
+    // The guardian verification is the one exception and is stated as one: it sells nothing,
+    // refunds the money, and a guardian claims on whatever device opened the emailed link.
+    // Everything that SELLS must refuse the app.
+    const SELLS_NOTHING = ["/api/guardian/athletes/:athleteId/parental-verification"];
+    const missing: string[] = [];
+    for (const [path, middleware] of Object.entries(found)) {
+      if (SELLS_NOTHING.includes(path)) continue;
+      if (!middleware.includes("requireWebCheckout")) missing.push(path);
     }
     expect(missing).toEqual([]);
   });
