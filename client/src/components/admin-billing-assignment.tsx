@@ -27,6 +27,7 @@ import {
   FREE_AGENT_ADD_ON_ORDER,
 } from "@shared/free-agent-tiers";
 import { VIDEO_STORAGE_ADD_ON } from "@shared/video-retention";
+import type { AddOnStillBilling } from "@shared/add-on-terms";
 
 /**
  * Per-account billing assignment, on the admin user detail panel.
@@ -65,6 +66,47 @@ type AthleteBilling = {
 
 const NONE = "__none__";
 
+/**
+ * SAY WHAT UN-TICKING AN ADD-ON DID NOT DO.
+ *
+ * Un-ticking the box closes access the moment it saves, and that is all it does: the add-on's
+ * own Stripe subscription (or the Apple one, which this server cannot touch at all) carries on
+ * charging the card until somebody stops it at the provider. Until 2026-10-14 the screen said
+ * "Billing updated" and nothing else, so an admin removing a bought add-on had no way to know
+ * the money was still moving -- the same lie the self-serve cancel route refuses to tell with
+ * its `alsoCancelInAppStore`. Forge does not cancel a customer's subscription as a side effect
+ * of a checkbox, so the honest version is this: name the subscription, and leave it to the
+ * person who meant it.
+ *
+ * Long duration on purpose. This is the one message on the panel that is an instruction to go
+ * and do something somewhere else, and a four-second toast is how it gets missed.
+ */
+function reportStillBilling(stillBilling: AddOnStillBilling[] | undefined) {
+  for (const entry of stillBilling ?? []) {
+    // Both maps, because one column (users.addOnTerms) carries the coach ids and the Free Agent
+    // ids and they are disjoint by test -- so whichever side this panel is on, the label is in
+    // one of the two. The raw id is the fallback rather than a blank: an admin chasing a
+    // subscription needs to know which product it is even if the maps are reorganised.
+    const label =
+      (FREE_AGENT_ADD_ONS as Record<string, { label: string }>)[entry.addOnId]?.label ??
+      (BILLING_ADD_ONS as Record<string, { label: string }>)[entry.addOnId]?.label ??
+      entry.addOnId;
+    const handle = entry.stripeSubscriptionId
+      ? `Stripe subscription ${entry.stripeSubscriptionId}`
+      : `Apple subscription ${entry.appleOriginalTransactionId}`;
+    toast.warning(
+      `Access to ${label} is closed, but ${handle} is still billing. Cancel it at the ` +
+        `provider — saving here does not.`,
+      { duration: 30000 },
+    );
+  }
+}
+
+type AdminBillingSaveResult = {
+  addOnsGranted?: string[];
+  addOnsStillBilling?: AddOnStillBilling[];
+};
+
 export function AdminBillingAssignment({
   userId,
   email,
@@ -101,16 +143,18 @@ function CoachBillingForm({ userId, email }: { userId: number; email: string }) 
 
   const save = useMutation({
     mutationFn: async () => {
-      await apiRequest("PATCH", `/api/admin/coaches/${userId}/billing`, {
+      const res = await apiRequest("PATCH", `/api/admin/coaches/${userId}/billing`, {
         billingTier: tier === NONE ? null : tier,
         billingAddOns: addOns,
         isBetaAccount: beta,
       });
+      return (await res.json()) as AdminBillingSaveResult;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: lookupKey });
       qc.invalidateQueries({ queryKey: ["/api/admin/users", userId] });
       toast.success("Billing updated");
+      reportStillBilling(result.addOnsStillBilling);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not update billing"),
   });
@@ -222,18 +266,20 @@ function AthleteBillingForm({ userId }: { userId: number; email: string }) {
 
   const save = useMutation({
     mutationFn: async () => {
-      await apiRequest("PATCH", `/api/admin/athletes/${userId}/billing`, {
+      const res = await apiRequest("PATCH", `/api/admin/athletes/${userId}/billing`, {
         freeAgentTier: tier === NONE ? null : tier,
         freeAgentAddOns: addOns,
         isBetaAccount: beta,
         hasVideoStorageAddOn: videoStorage,
         unlockedSkillSports: sports,
       });
+      return (await res.json()) as AdminBillingSaveResult;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: lookupKey });
       qc.invalidateQueries({ queryKey: ["/api/admin/users", userId] });
       toast.success("Billing updated");
+      reportStillBilling(result.addOnsStillBilling);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not update billing"),
   });

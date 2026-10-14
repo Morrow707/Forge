@@ -190,7 +190,12 @@ import {
   type PrivacyTier,
 } from "@shared/privacy-tiers";
 import { coreAgreementText } from "./seed-data/signup-agreement";
-import { type AddOnTerm, addOnIsActive } from "@shared/add-on-terms";
+import {
+  type AddOnStillBilling,
+  addOnIsActive,
+  nextAddOnTerms,
+  reconcileAdminAddOnSave,
+} from "@shared/add-on-terms";
 import {
   REQUIRED_DOCUMENTS,
   documentAudienceFor,
@@ -3533,34 +3538,6 @@ function summariseWaivers(
  *  reader can reason about. */
 export const DELETION_STAMPING_BEGAN = "2026-09-23T00:00:00.000Z";
 
-/** Merge one add-on's terms into the stored map.
- *
- * A PURCHASE RESETS THE LIFECYCLE FIELDS; anything else merges. `purchasedAt` arriving means
- * "this is a purchase", so accessUntil and refundedAt are dropped -- Scott's rule that turning
- * an add-on back on inside its paid month costs nothing depends on the pending cancellation
- * going away, and a re-purchase after a refund must not inherit the refund stamp that would
- * keep it switched off. A cancellation or a refund carries no purchasedAt and so keeps the
- * purchase time, which is what the 72-hour refund window is measured from. */
-function nextAddOnTerms(
-  existing: Record<string, AddOnTerm> | null | undefined,
-  addOnId: string,
-  patch: Partial<AddOnTerm>,
-): Record<string, AddOnTerm> {
-  const all = { ...(existing ?? {}) };
-  const prior = all[addOnId];
-  const base: AddOnTerm =
-    patch.purchasedAt != null
-      ? { ...prior, purchasedAt: patch.purchasedAt, accessUntil: undefined, refundedAt: undefined }
-      : { ...prior, purchasedAt: prior?.purchasedAt ?? new Date().toISOString() };
-  const merged: AddOnTerm = { ...base, ...patch };
-  // Undefined keys are dropped rather than stored as nulls: this is a json column, and a reader
-  // asking `term.accessUntil == null` must not have to care which of the two it got.
-  for (const k of Object.keys(merged) as (keyof AddOnTerm)[]) {
-    if (merged[k] === undefined) delete merged[k];
-  }
-  all[addOnId] = merged;
-  return all;
-}
 
 export const storage = {
   // ---------- Users ----------
@@ -3655,16 +3632,51 @@ export const storage = {
     return scrubUserForAdmin(user);
   },
 
+  /** Record what an admin's add-on save did, once the row is written. Grants are logged
+   *  because a grant that repairs a refund stamp is otherwise indistinguishable from a no-op;
+   *  removals that leave a provider subscription running are logged AND warned, loudly, because
+   *  nothing else in the system will notice and the card keeps being charged. */
+  async _logAdminAddOnSave(
+    userId: number,
+    save: { granted: string[]; stillBilling: AddOnStillBilling[] },
+  ) {
+    for (const addOnId of save.granted) {
+      await this.logBillingEvent(userId, "add_on.granted_by_admin", { addOnId });
+    }
+    for (const entry of save.stillBilling) {
+      const handle = entry.stripeSubscriptionId
+        ? `Stripe subscription ${entry.stripeSubscriptionId}`
+        : `Apple transaction ${entry.appleOriginalTransactionId}`;
+      console.warn(
+        `[billing] an admin removed add-on ${entry.addOnId} from user ${userId}; access is ` +
+          `closed but ${handle} is still billing and has to be stopped at the provider`,
+      );
+      await this.logBillingEvent(userId, "add_on.removed_by_admin_still_billing", entry);
+    }
+  },
+
   // Admin-only (see /api/admin/coaches* in routes.ts) -- the only way a
   // real billingTier/billingAddOns/isBetaAccount gets set anywhere in this
   // codebase right now, since there's no self-serve checkout yet.
   async updateCoachBilling(coachId: number, values: UpdateCoachBillingInput) {
+    // AN ADMIN'S TICK-BOX HAS TO REACH THE TERMS, NOT JUST THE ARRAY -- see
+    // reconcileAdminAddOnSave in shared/add-on-terms.ts for why ticking a refunded add-on
+    // saved cleanly and granted nothing. The array only ever arrives from the admin panel's
+    // PATCH; every other caller of this method patches the tier or the beta flag alone, and a
+    // real purchase goes through addFreeAgentAddOn / addCoachBillingAddOn, which write both
+    // places already. `an-admin-grant-reaches-the-add-on.test.ts` holds that.
+    let save: ReturnType<typeof reconcileAdminAddOnSave> | null = null;
+    if (values.billingAddOns !== undefined) {
+      const current = await this.getUser(coachId);
+      save = reconcileAdminAddOnSave(current?.addOnTerms, current?.billingAddOns, values.billingAddOns);
+    }
     const [row] = await db
       .update(users)
       .set({
         ...(values.billingTier !== undefined && { billingTier: values.billingTier }),
         ...(values.billingAddOns !== undefined && { billingAddOns: values.billingAddOns }),
         ...(values.isBetaAccount !== undefined && { isBetaAccount: values.isBetaAccount }),
+        ...(save?.terms !== undefined && { addOnTerms: save.terms }),
       })
       .where(eq(users.id, coachId))
       .returning({
@@ -3673,7 +3685,9 @@ export const storage = {
         billingAddOns: users.billingAddOns,
         isBetaAccount: users.isBetaAccount,
       });
-    return row ?? null;
+    if (!row) return null;
+    if (save) await this._logAdminAddOnSave(coachId, save);
+    return { ...row, addOnsGranted: save?.granted ?? [], addOnsStillBilling: save?.stillBilling ?? [] };
   },
 
   // ---------- Redeem codes (trial promos) ----------
@@ -3826,11 +3840,23 @@ export const storage = {
   // assignment pattern as updateCoachBilling since there's no self-serve
   // checkout for this either. ----------
   async updateFreeAgentBilling(athleteId: number, values: UpdateFreeAgentBillingInput) {
+    // AN ADMIN'S TICK-BOX HAS TO REACH THE TERMS, NOT JUST THE ARRAY -- see
+    // reconcileAdminAddOnSave in shared/add-on-terms.ts for why ticking a refunded add-on
+    // saved cleanly and granted nothing. The array only ever arrives from the admin panel's
+    // PATCH; every other caller of this method patches the tier or the beta flag alone, and a
+    // real purchase goes through addFreeAgentAddOn / addCoachBillingAddOn, which write both
+    // places already. `an-admin-grant-reaches-the-add-on.test.ts` holds that.
+    let save: ReturnType<typeof reconcileAdminAddOnSave> | null = null;
+    if (values.freeAgentAddOns !== undefined) {
+      const current = await this.getUser(athleteId);
+      save = reconcileAdminAddOnSave(current?.addOnTerms, current?.freeAgentAddOns, values.freeAgentAddOns);
+    }
     const [row] = await db
       .update(users)
       .set({
         ...(values.freeAgentTier !== undefined && { freeAgentTier: values.freeAgentTier }),
         ...(values.freeAgentAddOns !== undefined && { freeAgentAddOns: values.freeAgentAddOns }),
+        ...(save?.terms !== undefined && { addOnTerms: save.terms }),
         ...(values.isBetaAccount !== undefined && { isBetaAccount: values.isBetaAccount }),
         ...(values.hasVideoStorageAddOn !== undefined && {
           hasVideoStorageAddOn: values.hasVideoStorageAddOn,
@@ -3848,7 +3874,9 @@ export const storage = {
         hasVideoStorageAddOn: users.hasVideoStorageAddOn,
         unlockedSkillSports: users.unlockedSkillSports,
       });
-    return row ?? null;
+    if (!row) return null;
+    if (save) await this._logAdminAddOnSave(athleteId, save);
+    return { ...row, addOnsGranted: save?.granted ?? [], addOnsStillBilling: save?.stillBilling ?? [] };
   },
 
   /** The columns a Free Agent entitlement decision reads: the SKU they bought, the

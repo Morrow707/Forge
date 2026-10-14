@@ -120,3 +120,108 @@ export const ADD_ON_CANCELLATION_POLICY =
   `Cancel any time. You keep the add-on until the end of the month you have paid for, and you ` +
   `can turn it back on before then at no extra cost. Refunds are available within ` +
   `${ADD_ON_REFUND_WINDOW_HOURS} hours of purchase; a refunded add-on stops working straight away.`;
+
+/** Merge one add-on's terms into the stored map.
+ *
+ * A PURCHASE RESETS THE LIFECYCLE FIELDS; anything else merges. `purchasedAt` arriving means
+ * "this is a purchase", so accessUntil and refundedAt are dropped -- Scott's rule that turning
+ * an add-on back on inside its paid month costs nothing depends on the pending cancellation
+ * going away, and a re-purchase after a refund must not inherit the refund stamp that would
+ * keep it switched off. A cancellation or a refund carries no purchasedAt and so keeps the
+ * purchase time, which is what the 72-hour refund window is measured from.
+ *
+ * Lived in server/storage.ts until 2026-10-14 and moved here unchanged, so that
+ * reconcileAdminAddOnSave below -- which has to clear the same two fields without claiming a
+ * purchase -- can be a pure function in the module that owns what an add-on is owed, and can
+ * be unit-tested without a database. */
+export function nextAddOnTerms(
+  existing: AddOnTerms | null | undefined,
+  addOnId: string,
+  patch: Partial<AddOnTerm>,
+): AddOnTerms {
+  const all = { ...(existing ?? {}) };
+  const prior = all[addOnId];
+  const base: AddOnTerm =
+    patch.purchasedAt != null
+      ? { ...prior, purchasedAt: patch.purchasedAt, accessUntil: undefined, refundedAt: undefined }
+      : { ...prior, purchasedAt: prior?.purchasedAt ?? new Date().toISOString() };
+  const merged: AddOnTerm = { ...base, ...patch };
+  // Undefined keys are dropped rather than stored as nulls: this is a json column, and a reader
+  // asking `term.accessUntil == null` must not have to care which of the two it got.
+  for (const k of Object.keys(merged) as (keyof AddOnTerm)[]) {
+    if (merged[k] === undefined) delete merged[k];
+  }
+  all[addOnId] = merged;
+  return all;
+}
+
+/** A provider subscription that outlived the add-on an admin just removed. */
+export interface AddOnStillBilling {
+  addOnId: string;
+  stripeSubscriptionId?: string;
+  appleOriginalTransactionId?: string;
+}
+
+/**
+ * RECONCILE users.addOnTerms WITH THE ADD-ON LIST AN ADMIN JUST SAVED.
+ *
+ * Added 2026-10-14. The admin billing panel writes the owned ARRAY (users.freeAgentAddOns /
+ * users.billingAddOns) and nothing else -- and ownership is only half of what decides whether
+ * an add-on works, because addOnIsActive reads the TERM beside it, where a refund stamp is
+ * final and a cancellation's accessUntil can already be in the past. So ticking the box for a
+ * refunded add-on saved cleanly, read back ticked, and granted nothing, for good: no other
+ * write in the repo clears refundedAt. Re-ticking one whose paid month had run out did the
+ * same. **Both halves of that are the same bug as the five this file's own history records --
+ * add-on state lives in TWO places and a writer touched one of them.**
+ *
+ * AN ADMIN GRANT IS NOT A PURCHASE, which is what decides the shape of the fix: the stamps
+ * that would make the grant inert are CLEARED, and nothing is invented in their place. No
+ * fresh purchasedAt, because that would open a 72-hour refund window on money nobody paid
+ * (withinRefundWindow above), and no provider handle, because Forge has not sold anything
+ * here. The original purchasedAt and any provider handle already on the record are left
+ * exactly as they are: they are the history of a real purchase, and a subscription this server
+ * may still have to reach is the last thing to forget.
+ *
+ * A REMOVAL IS REPORTED, NEVER ACTED ON. Un-ticking the box closes access -- the array is the
+ * first thing addOnIsActive asks -- but the provider is still charging the card, and this
+ * server does not cancel somebody's subscription as a side effect of an admin's checkbox.
+ * `stillBilling` is what the writer logs and hands back so the screen can name the
+ * subscription an operator has to go and stop, which is the same posture as the self-serve
+ * cancel route's `alsoCancelInAppStore`: say it plainly rather than report a cancellation that
+ * did not happen.
+ */
+export function reconcileAdminAddOnSave(
+  priorTerms: AddOnTerms | null | undefined,
+  ownedBefore: readonly string[] | null | undefined,
+  ownedAfter: readonly string[],
+): { terms: AddOnTerms | undefined; granted: string[]; stillBilling: AddOnStillBilling[] } {
+  // Only the ids the TERMS would veto need a write. An id with no term at all is already live
+  // ("bought before terms were recorded: owned is all there is to go on"), so this is a no-op
+  // for every ordinary save -- and it is asked of addOnIsActive itself rather than re-stating
+  // its rule, so a fourth way for an add-on to end is covered here the day it is added there.
+  const granted = ownedAfter.filter((id) => !addOnIsActive(ownedAfter, priorTerms, id));
+  let terms: AddOnTerms | undefined = priorTerms ?? undefined;
+  for (const id of granted) {
+    terms = nextAddOnTerms(terms, id, { accessUntil: undefined, refundedAt: undefined });
+  }
+
+  const stillBilling: AddOnStillBilling[] = [];
+  for (const id of ownedBefore ?? []) {
+    if (ownedAfter.includes(id)) continue;
+    const term = priorTerms?.[id];
+    // A refunded term is not still billing: the money already went back.
+    if (!term || term.refundedAt != null) continue;
+    if (!term.stripeSubscriptionId && !term.appleOriginalTransactionId) continue;
+    stillBilling.push({
+      addOnId: id,
+      ...(term.stripeSubscriptionId ? { stripeSubscriptionId: term.stripeSubscriptionId } : {}),
+      ...(term.appleOriginalTransactionId
+        ? { appleOriginalTransactionId: term.appleOriginalTransactionId }
+        : {}),
+    });
+  }
+
+  // undefined, not the unchanged map, so an ordinary save leaves the column alone rather than
+  // rewriting it to itself.
+  return { terms: granted.length > 0 ? terms : undefined, granted, stillBilling };
+}
