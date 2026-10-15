@@ -3247,6 +3247,51 @@ type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // slow/failed notification can't silently start deleting anyone's footage.
 // No-ops entirely when limits are unlimited (beta/enforcement-off/active
 // trial) -- see getVideoRetentionLimits in server/billing.ts.
+// THE SKILL TWIN, and the reason it exists (2026-10-15). enforceVideoRetention below is the
+// synchronous favoritedCap trim and it reads workout tables only, so a favorited SKILL clip was
+// never trimmed to the cap -- the nightly sweep covers both sides for the TOTAL cap
+// (video-retention-job.ts, source "set" | "skill") and nothing capped favorites on the drill
+// side at all. An athlete could keep as many favorited drill clips as they liked, which is
+// exactly the storage the paid add-on raises the cap for. Found by the 2026-10-14 audit panel.
+//
+// Same rule, same order, same no-op conditions as its twin: oldest favorite first, un-favoriting
+// deletes nothing, and unlimited limits (comped, enforcement off) do nothing at all.
+async function enforceSkillVideoRetention(
+  athleteId: number,
+  skillProgramExerciseId: number,
+  limits: { favoritedCap: number },
+): Promise<void> {
+  if (!Number.isFinite(limits.favoritedCap)) return;
+  // Filtered on skillSessionLogs.athleteId rather than joined through skillDayLogs on purpose:
+  // skillDayLogId is NULLABLE and the plain-append fallback in logSkillSession (a client that
+  // sent no date/setNumber) leaves it null, so a join would silently skip exactly those rows and
+  // the cap would be unenforceable for them. The column is denormalised on the row already and
+  // carries its own index (skill_session_logs_athlete_idx).
+  const rows = await db
+    .select({
+      id: skillSessionLogs.id,
+      favorited: skillSessionLogs.videoFavorited,
+    })
+    .from(skillSessionLogs)
+    .where(
+      and(
+        eq(skillSessionLogs.athleteId, athleteId),
+        isNotNull(skillSessionLogs.videoUrl),
+        eq(skillSessionLogs.skillProgramExerciseId, skillProgramExerciseId),
+      ),
+    )
+    .orderBy(asc(skillSessionLogs.createdAt));
+
+  const favorited = rows.filter((r) => r.favorited);
+  if (favorited.length > limits.favoritedCap) {
+    const toUnfavorite = favorited.slice(0, favorited.length - limits.favoritedCap);
+    await db
+      .update(skillSessionLogs)
+      .set({ videoFavorited: false })
+      .where(inArray(skillSessionLogs.id, toUnfavorite.map((r) => r.id)));
+  }
+}
+
 async function enforceVideoRetention(
   tx: DbTx,
   athleteId: number,
@@ -12203,6 +12248,29 @@ Hard rules, no exceptions:
       throw new Error("That drill isn't on this day.");
     }
     const videoUrl = input.videoUrl ? await this.assertUploadedFileOwnedBy(input.videoUrl, athleteId) : null;
+
+    // Trim the athlete's favorited clips for THIS drill back to the cap, on every save rather
+    // than only on a save that carries a video. The set that matters can change without this
+    // capture having a clip of its own -- re-recording a set replaces one favorite with another,
+    // and favoriting happens on a separate request -- which is the same reason submitWorkoutLog
+    // calls the strength twin once per exercise touched rather than once per video sent. Applied
+    // at every exit from this method (there are three: the re-record update, the slotted insert
+    // and the plain append) because a cap enforced on two of three paths is not a cap.
+    const capFavorites = async <T>(row: T): Promise<T> => {
+      const athlete = await this.getUser(athleteId);
+      await enforceSkillVideoRetention(
+        athleteId,
+        input.skillProgramExerciseId,
+        getVideoRetentionLimits({
+          hasVideoStorageAddOn: athlete?.hasVideoStorageAddOn ?? false,
+          isBetaAccount: athlete?.isBetaAccount ?? false,
+          trialExpiresAt: athlete?.trialExpiresAt ?? null,
+          dateOfBirth: athlete?.dateOfBirth ?? null,
+        }),
+      );
+      return row;
+    };
+
     const values = {
       skillAssignmentId: input.skillAssignmentId,
       skillProgramDayId: input.skillProgramDayId,
@@ -12292,17 +12360,17 @@ Hard rules, no exceptions:
           await deleteUploadedFile(existing.videoUrl);
           await deleteUploadedFile(existing.coachAnnotationUrl);
         }
-        return row;
+        return capFavorites(row);
       }
       const [row] = await db
         .insert(skillSessionLogs)
         .values({ ...values, skillDayLogId: dayLog.id, setNumber: input.setNumber })
         .returning();
-      return row;
+      return capFavorites(row);
     }
 
     const [row] = await db.insert(skillSessionLogs).values(values).returning();
-    return row;
+    return capFavorites(row);
   },
 
   // Which coach owns this skill assignment -- looked up only when a just-
