@@ -5010,8 +5010,77 @@ export const storage = {
         values.staffInviteCode = staffCode;
       }
     }
+    // A ROLE CHANGE STRANDS WHATEVER THE OLD ROLE WAS PAYING FOR (recorded 2026-10-15).
+    //
+    // The two sides of the app read different columns: a Free Agent's entitlements come off
+    // users.freeAgentTier and a coach's off users.billingTier and the add-on arrays. So an
+    // athlete promoted to coach stops reading the tier they are still being charged $19.99 a
+    // month for, and a coach demoted to athlete stops reading the band their school is still
+    // paying $4 a head for -- in both directions, money keeps moving for something nobody can
+    // use any more, and nothing in Forge said so.
+    //
+    // REPORTED, NOT CANCELLED, and the reason is the same as the admin add-on removal's: a
+    // subscription is the customer's, this is an admin tidying an account (often a mis-signup
+    // minutes old), and cancelling somebody's billing as a side effect of a dropdown is not
+    // this server's call to make. The handles are named so an operator can finish it, and the
+    // route tells the admin on the screen where they did it.
+    const stranded = await this.liveBillingHandlesForRoleChange(userId, role);
     const [row] = await db.update(users).set(values).where(eq(users.id, userId)).returning();
-    return row;
+    if (stranded.length > 0) {
+      console.warn(
+        `user ${userId} changed role to ${role} while still being billed: ` +
+          `${stranded.map((h) => `${h.what} (${h.handle})`).join(", ")}; nothing was cancelled`,
+      );
+      await this.logBillingEvent(userId, "role_changed_while_billing", { role, stranded });
+    }
+    return { ...row, strandedBilling: stranded };
+  },
+
+  /** What is still being charged for on an account whose role is about to change.
+   *
+   *  Both rails, both columns: the `subscriptions` row (a tier or a coach band) and every
+   *  add-on term in users.addOnTerms. Only a LIVE handle counts -- a cancelled or refunded term
+   *  and a row with no provider id are nothing for an operator to chase. */
+  async liveBillingHandlesForRoleChange(
+    userId: number,
+    nextRole: "coach" | "athlete" | "admin",
+  ): Promise<Array<{ what: string; handle: string; provider: "stripe" | "apple" }>> {
+    const out: Array<{ what: string; handle: string; provider: "stripe" | "apple" }> = [];
+    const [sub] = await db
+      .select({
+        accountType: subscriptions.accountType,
+        status: subscriptions.status,
+        stripeSubscriptionId: subscriptions.stripeSubscriptionId,
+        appleOriginalTransactionId: subscriptions.appleOriginalTransactionId,
+      })
+      .from(subscriptions)
+      .where(eq(subscriptions.userId, userId))
+      .limit(1);
+    const liveStatus = sub && (sub.status === "active" || sub.status === "trialing" || sub.status === "past_due");
+    // The row only strands something when the NEW role stops reading it: a Free Agent's tier is
+    // unreadable to a coach or an admin, and a coach's band to an athlete.
+    const rowIsStranded =
+      liveStatus && (sub.accountType === "free_agent" ? nextRole !== "athlete" : nextRole !== "coach");
+    if (rowIsStranded && sub.stripeSubscriptionId) {
+      out.push({ what: `${sub.accountType} subscription`, handle: sub.stripeSubscriptionId, provider: "stripe" });
+    }
+    if (rowIsStranded && sub.appleOriginalTransactionId) {
+      out.push({ what: `${sub.accountType} subscription`, handle: sub.appleOriginalTransactionId, provider: "apple" });
+    }
+    const current = await this.getUser(userId);
+    for (const [addOnId, term] of Object.entries(current?.addOnTerms ?? {})) {
+      if (!term || term.refundedAt != null || term.accessUntil != null) continue;
+      // An add-on id belongs to one side (the two sets are disjoint by test), so a role change
+      // strands it exactly when the account can no longer own that side's add-ons.
+      const isCoachAddOn = (current?.billingAddOns ?? []).includes(addOnId);
+      if (isCoachAddOn ? nextRole === "coach" : nextRole === "athlete") continue;
+      if (term.stripeSubscriptionId) {
+        out.push({ what: `add-on ${addOnId}`, handle: term.stripeSubscriptionId, provider: "stripe" });
+      } else if (term.appleOriginalTransactionId) {
+        out.push({ what: `add-on ${addOnId}`, handle: term.appleOriginalTransactionId, provider: "apple" });
+      }
+    }
+    return out;
   },
 
   // ---------- Billing (framework only -- see server/billing.ts's own
@@ -5348,6 +5417,26 @@ export const storage = {
       });
       if (!updated) return { ok: false, error: "No subscription found for this purchase token." };
       await this.logBillingEvent(updated.userId, event, { purchaseToken: notification.purchaseToken });
+      // AND THE SKU COMES OFF, which only the Apple twin did (2026-10-15). Every gate reads
+      // users.freeAgentTier, not this row's status, so recording the cancellation and stopping
+      // left a revoked Play subscription granting the camera, skills and AI chat for good.
+      // Android is parked and untested, which is exactly why this is worth fixing now rather
+      // than later: the half that was missing is the half nobody will be watching for.
+      //
+      // The cross-rail guard the other two paths carry applies here too -- a row that also
+      // names a Stripe subscription may still be paid for, and withholding access from a
+      // possible payer is the worse error.
+      if (updated.accountType === "free_agent") {
+        if (updated.stripeSubscriptionId) {
+          await this.logBillingEvent(updated.userId, "subscription.other_rail_still_on_file", {
+            endedRail: "google_play",
+            purchaseToken: notification.purchaseToken,
+            stripeSubscriptionId: updated.stripeSubscriptionId,
+          });
+        } else {
+          await this.updateFreeAgentBilling(updated.userId, { freeAgentTier: null });
+        }
+      }
       return { ok: true };
     }
     const freeAgentTier = tierForGooglePlayProductId(verified.productId);
@@ -5689,6 +5778,35 @@ export const storage = {
       }
     }
     return { userId, addOnIds };
+  },
+
+  /** WHOSE account a Stripe subscription belongs to, read-only, wherever its id is recorded.
+   *
+   *  A subscription id lives in one of two places -- the `subscriptions` row for a tier or a
+   *  coach's band, and users.addOnTerms for an add-on (subscriptions.userId is UNIQUE, so that
+   *  row belongs to the tier). Every revoking path already searches both; this is the same
+   *  search with nothing written, for the cases that need to RECORD something against the right
+   *  account rather than change it -- a partial refund being the first.
+   *
+   *  Null when neither place names it, which makes the caller's log a console line rather than
+   *  an audit row written against an account that does not exist. */
+  async accountForStripeSubscription(subscriptionId: string): Promise<number | null> {
+    const [row] = await db
+      .select({ userId: subscriptions.userId })
+      .from(subscriptions)
+      .where(eq(subscriptions.stripeSubscriptionId, subscriptionId))
+      .limit(1);
+    if (row) return row.userId;
+    const holders = await db
+      .select({ id: users.id, addOnTerms: users.addOnTerms })
+      .from(users)
+      .where(sql`${users.addOnTerms}::text LIKE ${"%" + subscriptionId + "%"}`);
+    for (const holder of holders) {
+      for (const term of Object.values(holder.addOnTerms ?? {})) {
+        if (term?.stripeSubscriptionId === subscriptionId) return holder.id;
+      }
+    }
+    return null;
   },
 
   /** Revoke the add-on a refunded Stripe subscription paid for.

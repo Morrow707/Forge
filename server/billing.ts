@@ -197,8 +197,23 @@ export interface FreeAgentBillingAccount {
 // price list it reads -- it is a property of the SKUs, not of this module, and
 // keeping it there lets it be tested without a database.
 export function getFreeAgentEntitlements(account: FreeAgentBillingAccount): FreeAgentEntitlements {
-  const trialActive = account.trialExpiresAt != null && account.trialExpiresAt.getTime() > Date.now();
-  if (!ENFORCEMENT_ENABLED || account.isBetaAccount || trialActive) {
+  // `trialExpiresAt` IS NOT A FREE AGENT TRIAL, and reading it here was a leak (2026-10-15).
+  //
+  // The only writer of users.trialExpiresAt in this repo is storage.redeemCode, which is called
+  // from POST /api/coach/redeem-code behind requireRole("coach") + requirePrimaryCoach: it is a
+  // COACH promo code, extending a program's trial. Nothing on the athlete side has ever set it.
+  // So this branch could only ever fire for an account that was a coach when it redeemed one --
+  // and an admin demoting that coach to athlete handed them the whole $19.99 tier (camera,
+  // skills, AI chat) free for the rest of the promo window, which on a 90-day code is a quarter.
+  // No real Free Agent could benefit; only a role change could reach it.
+  //
+  // A Free Agent trial does not exist today. The day one does it gets its own column or a check
+  // on the subscription row's accountType, rather than borrowing the coach's -- which is what
+  // made this invisible: the column name says "trial" and says nothing about whose.
+  //
+  // getEntitlements (the COACH side, above) still honours it, because there it is the thing it
+  // was written for.
+  if (!ENFORCEMENT_ENABLED || account.isBetaAccount) {
     return UNLIMITED_FREE_AGENT_ENTITLEMENTS;
   }
 
@@ -657,6 +672,32 @@ export async function cancelAddOnAtProvider(
   } catch (err) {
     console.error("Could not cancel add-on subscription at Stripe:", (err as Error)?.message);
     return { periodEnd: null, error: "provider_refused" };
+  }
+}
+
+/** UN-CANCEL the add-on's own Stripe subscription, which is what a restore has to do.
+ *
+ *  Added 2026-10-15. Cancelling an add-on sets `cancel_at_period_end: true` at Stripe
+ *  (cancelAddOnAtProvider above) and RESTORING it only cleared Forge's own `accessUntil` -- so
+ *  the add-on worked again and Stripe still stopped billing at the end of the month. Access
+ *  nobody would ever pay for, for good, on the one route whose entire purpose is "I changed my
+ *  mind inside the paid month".
+ *
+ *  A failure is REPORTED, never swallowed: the route restores access either way (the month is
+ *  paid for, so withholding it is the wrong error) and says the subscription is still winding
+ *  down, which is a thing the buyer can act on and an operator can finish by hand. */
+export async function resumeAddOnAtProvider(
+  stripeSubscriptionId: string | undefined,
+): Promise<{ resumed: boolean; error?: string }> {
+  if (!stripeSubscriptionId) return { resumed: false };
+  const stripe = getStripeClient();
+  if (!stripe) return { resumed: false, error: "not_configured" };
+  try {
+    await stripe.subscriptions.update(stripeSubscriptionId, { cancel_at_period_end: false });
+    return { resumed: true };
+  } catch (err) {
+    console.error("Could not resume add-on subscription at Stripe:", (err as Error)?.message);
+    return { resumed: false, error: "provider_refused" };
   }
 }
 
@@ -1451,6 +1492,45 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       const invoiceId = typeof rawInvoice === "string" ? rawInvoice : rawInvoice?.id;
       const subscriptionId = invoiceId ? await subscriptionIdForInvoice(invoiceId) : null;
       if (!subscriptionId) break;
+      // A PARTIAL REFUND IS NOT A REFUND, and treating one as a refund was permanent.
+      //
+      // Stripe sends charge.refunded for ANY refund, including a $1 goodwill gesture on a
+      // $19.99 add-on and a prorated partial. revokeEverythingForSubscription stamps
+      // addOnTerms.refundedAt, which addOnIsActive treats as final and the restore route
+      // refuses to clear -- so a support credit took the product away for good from a customer
+      // who is still being billed for it every month. Scott's rule is "if something is refunded
+      // then they don't have access obviously", and a customer who got $1 back out of $19.99
+      // has not been refunded.
+      //
+      // `refunded` is Stripe's own fully-refunded flag; the amounts are checked as well because
+      // the flag is what a future API version is most likely to move, and a full refund read as
+      // partial would silently stop revoking.
+      const fullyRefunded =
+        charge.refunded === true || (charge.amount_refunded ?? 0) >= (charge.amount ?? 0);
+      if (!fullyRefunded) {
+        console.warn(
+          `partial refund on charge ${charge.id} (${charge.amount_refunded} of ${charge.amount}): ` +
+            `subscription ${subscriptionId} keeps its access and keeps billing`,
+        );
+        // Recorded against the account that holds the subscription, wherever its id lives --
+        // an audit row against a userId nobody has would fail the foreign key and vanish.
+        const partialOwner = await storage.accountForStripeSubscription(subscriptionId);
+        if (partialOwner) {
+          await storage.logBillingEvent(
+            partialOwner,
+            "stripe.partial_refund_ignored",
+            {
+              chargeId: charge.id,
+              subscriptionId,
+              amountRefunded: charge.amount_refunded,
+              amount: charge.amount,
+              stripeEventId: event.id,
+            },
+            event.id,
+          );
+        }
+        break;
+      }
       await revokeEverythingForSubscription(subscriptionId, event.type, event.id, { chargeId: charge.id });
       break;
     }

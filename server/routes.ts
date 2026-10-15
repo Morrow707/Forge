@@ -89,6 +89,7 @@ import {
   GUARDIAN_VERIFICATION_CHARGE_CENTS,
   createLessonCheckout,
   cancelAddOnAtProvider,
+  resumeAddOnAtProvider,
   cancelSupersededStripeSubscription,
 } from "./billing";
 import { missingPriceEnvVars } from "./stripe-prices";
@@ -5515,7 +5516,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/coach/widget-prefs", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     if (!(await getEntitlementsForCoach(user.id)).hasWorkflowCustomization) {
-      return res.status(402).json({ message: "Dashboard customization requires the Workflow add-on or a Growth plan or higher" });
+      return res.status(402).json({ message: "Dashboard customization comes with Full Personalization, or with any plan above 20 athletes." });
     }
     const parsed = widgetLayoutSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -9483,7 +9484,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
     const updated = await storage.setUserRole(userId, parsed.data.role);
-    res.json({ id: updated.id, role: updated.role });
+    // What the new role can no longer read but the card is still paying for. Named on the
+    // screen where the change was made, because nothing else in Forge would ever mention it
+    // again -- see setUserRole on why this is reported rather than cancelled.
+    res.json({ id: updated.id, role: updated.role, strandedBilling: updated.strandedBilling ?? [] });
   });
 
   app.put("/api/coach/features", requireRole("coach"), async (req, res) => {
@@ -9910,7 +9914,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Team not found" });
     }
     if (!(await getEntitlementsForCoach(user.id)).hasMultiTeam) {
-      return res.status(402).json({ message: "Per-team branding requires a Growth plan or higher" });
+      return res.status(402).json({ message: "Per-team branding comes with a plan above 20 athletes." });
     }
     const parsed = updateTeamBrandingSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -9932,7 +9936,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Team not found" });
       }
       if (!(await getEntitlementsForCoach(user.id)).hasMultiTeam) {
-        return res.status(402).json({ message: "Per-team branding requires a Growth plan or higher" });
+        return res.status(402).json({ message: "Per-team branding comes with a plan above 20 athletes." });
       }
       if (!req.file) return res.status(400).json({ message: "No image file provided" });
       const team = await storage.updateTeamLogo(teamId, `/uploads/team-branding/${req.file.filename}`);
@@ -9947,7 +9951,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Team not found" });
     }
     if (!(await getEntitlementsForCoach(user.id)).hasMultiTeam) {
-      return res.status(402).json({ message: "Per-team branding requires a Growth plan or higher" });
+      return res.status(402).json({ message: "Per-team branding comes with a plan above 20 athletes." });
     }
     const team = await storage.updateTeamLogo(teamId, null);
     res.json(team);
@@ -13184,6 +13188,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/my/skill-assignments",
     requireRole("athlete"),
     requireFreeAgent,
+    // THE SAME GATE THE SKILL BANK HAS (2026-10-15). A Free Agent on Basic or AI Coach -- tiers
+    // sold without skills -- could not LIST the Skill Bank and could still assign themselves a
+    // drill out of it, which then ran the camera-timed session the tier does not include. The
+    // skill-PROGRAM writes were gated when that was found and this one was missed; it is the
+    // same rule for the same reason.
+    requirePaidAiAccess("skillsAi"),
     async (req, res) => {
       const user = currentUser(req);
       const schema = z.object({
@@ -13405,7 +13415,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!enrollment) return res.status(404).json({ message: "Not enrolled in this class" });
       const newlyUnlocked = await storage.markLessonPurchased(enrollment.id, lessonId);
       await notifyNewlyUnlockedLessons(newlyUnlocked);
-      const progress = await storage.getClassProgressForAthlete(user.id, id);
+      const progress = await storage.getClassProgressForAthlete(user.id, id, undefined, await classTierGated(user));
       res.json(progress);
     },
   );
@@ -13444,7 +13454,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           `/coach/classes/${notifyCoach.classId}`,
         );
       }
-      const progress = await storage.getClassProgressForAthlete(user.id, id);
+      const progress = await storage.getClassProgressForAthlete(user.id, id, undefined, await classTierGated(user));
       res.json(progress);
     },
   );
@@ -13517,7 +13527,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const newlyUnlocked = await storage.activateClassLesson(enrollment.id, lessonId);
         await notifyNewlyUnlockedLessons(newlyUnlocked);
-        const progress = await storage.getClassProgressForAthlete(user.id, id);
+        const progress = await storage.getClassProgressForAthlete(user.id, id, undefined, await classTierGated(user));
         res.json(progress);
       } catch (err) {
         res.status(400).json({ message: err instanceof Error ? err.message : "Could not add this lesson to your calendar" });
@@ -13695,7 +13705,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/coach/nav-prefs", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
     const user = currentUser(req);
     if (!(await getEntitlementsForCoach(user.id)).hasWorkflowCustomization) {
-      return res.status(402).json({ message: "Nav customization requires the Workflow add-on or a Growth plan or higher" });
+      return res.status(402).json({ message: "Nav customization comes with Full Personalization, or with any plan above 20 athletes." });
     }
     const parsed = updateNavPrefsSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -14000,9 +14010,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (Date.parse(term.accessUntil) <= Date.now()) {
       return res.status(409).json({ message: "That month has ended. Buy it again to turn it back on." });
     }
+    // AND IT HAS TO REACH STRIPE. Cancelling set `cancel_at_period_end: true` there, so a
+    // restore that only cleared Forge's own accessUntil left the add-on working and the billing
+    // still winding down -- access nobody would ever pay for, for good, on the one route whose
+    // whole purpose is "I changed my mind inside the month I paid for".
+    //
+    // The local restore happens EITHER WAY: the month is paid for, so withholding it because a
+    // provider call failed is the wrong error. What a failure changes is what the buyer is told.
+    const resumed = await resumeAddOnAtProvider(term?.stripeSubscriptionId);
     await storage.restoreAddOn(owner, addOnId);
-    await storage.logBillingEvent(owner, "add_on.restored", { addOnId });
-    res.json({ addOnId, alreadyActive: false });
+    await storage.logBillingEvent(owner, "add_on.restored", {
+      addOnId,
+      provider: term?.stripeSubscriptionId ? "stripe" : term?.appleOriginalTransactionId ? "apple" : "none",
+      resumedAtProvider: resumed.resumed,
+      providerError: resumed.error ?? null,
+    });
+    res.json({
+      addOnId,
+      alreadyActive: false,
+      // Said plainly rather than implied: an Apple subscription is resumed by the person in iOS
+      // Settings and nothing here can do it, and a Stripe call that failed leaves a
+      // cancel-at-period-end somebody has to undo.
+      stillCancellingAtProvider: Boolean(term?.stripeSubscriptionId) && !resumed.resumed,
+      alsoResumeInAppStore: Boolean(term?.appleOriginalTransactionId),
+    });
   });
 
   app.post(
