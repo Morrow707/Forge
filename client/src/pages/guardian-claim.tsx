@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ export default function GuardianClaimPage() {
   const token = new URLSearchParams(window.location.search).get("token") ?? "";
   const { user, isLoading, logoutMutation } = useAuth();
   const qc = useQueryClient();
+  const [, setLocation] = useLocation();
   const [password, setPassword] = useState("");
   // Three separate boxes, not one. They are three different permissions -- what the guardian is
   // bound by, what is collected about their child, and that their child will be filmed and
@@ -68,6 +70,13 @@ export default function GuardianClaimPage() {
     onSuccess: ({ nativeToken, ...claimedUser }) => {
       setNativeToken(nativeToken);
       qc.setQueryData(["/api/auth/me"], claimedUser);
+      // A CLAIMED INVITE LEAVES THIS PAGE (fixed 2026-10-15). The 10-11 change removed the
+      // render-time redirect that used to carry a just-claimed guardian to their dashboard, so a
+      // successful claim then fell into the branches below: the signed-in card ("You're signed
+      // in as someone else", to the person who had just signed in) or, once the preview
+      // refetched the now-consumed token and got its 404, "Link not valid" -- over a claim
+      // that had succeeded. Scott, 2026-10-15, screenshot in hand: "It did work but."
+      setLocation("/guardian");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not set up this account"),
   });
@@ -80,6 +89,33 @@ export default function GuardianClaimPage() {
   // A guardian account is its own account on the invite's address, so the way forward is to
   // sign out and claim -- offered here, on the same URL, so the token survives the sign-out
   // and the form renders in place once the session is gone.
+  // A GUARDIAN WHO IS ALREADY SIGNED IN HAS NOTHING TO CLAIM HERE. Opening the emailed link
+  // a second time after claiming it -- or any guardian link while signed in as a guardian --
+  // used to land on the sign-out card below or on "Link not valid" (the token is consumed
+  // once claimed, so the preview 404s). The way forward is their dashboard, where a second
+  // child's invite is also linked from.
+  if (!isLoading && user?.role === "guardian") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-sm" data-testid="guardian-claim-already-guardian">
+          <CardHeader className="items-center text-center">
+            <ForgeMark className="mb-2 h-8 w-8" />
+            <CardTitle>Guardian access is set up</CardTitle>
+            <CardDescription>
+              You're signed in as {user.email}. Anything still to do for your athlete is on your
+              dashboard.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full" onClick={() => setLocation("/guardian")}>
+              Go to my dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!isLoading && user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -115,8 +151,8 @@ export default function GuardianClaimPage() {
           <CardHeader>
             <CardTitle>Link not valid</CardTitle>
             <CardDescription>
-              This invite has already been used or has expired, ask the athlete's coach or
-              program for a new one.
+              This invite has already been used or has expired. The athlete can send a new one
+              from their account page, or their coach or program can.
             </CardDescription>
           </CardHeader>
         </Card>

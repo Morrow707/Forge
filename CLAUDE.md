@@ -3261,6 +3261,18 @@ writer to any of them, say which other place the same fact lives in.
   (an athlete claiming a coach-provisioned account) has the same redirect and is left alone** --
   a coach-provisioned athlete has no account to be signed in as, so the bounce there is a stray
   tap, not a parent locked out. Client change: `verify_build`.
+  **AND THAT FIX BROKE THE SUCCESSFUL CLAIM, FOUND ON THE FIRST REAL ONE (2026-10-15).** The
+  render-time redirect it removed was also the only thing that carried a JUST-CLAIMED guardian
+  off the page. Off the Render log: preview 200, claim 201, then three seconds later the preview
+  again -> 404, because a claimed token is consumed -- and the page drew "Link not valid" over a
+  claim that had worked (Scott, screenshot: "It did work but."). The claim's `onSuccess` now sets
+  the session and `setLocation("/guardian")`; a signed-in GUARDIAN opening any invite link gets a
+  "Guardian access is set up" card with one button to the dashboard, checked BEFORE the sign-out
+  card so a parent re-tapping their own email is never told to sign out; and the invalid-link copy
+  names the athlete's own resend (`POST /api/account/guardian-invite/resend`), since a Free Agent
+  minor has no coach to ask. The test now forbids a render-time `<Redirect` only and requires the
+  post-claim navigation. **The guardian account and link were created correctly both times**; the
+  server was never wrong, the page was. Client change: `verify_build`.
   **Also from this run, both on production with plus-tag accounts:** the device email is proven
   both ways (approve from Scott's pasted link signed the waiting device in and trusted it; deny
   from his inbox dropped every session, refused the waiting device and put him on the new-password
