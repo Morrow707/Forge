@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { resetDatabase, db } from "./test-support/fixtures";
 import { coachAthletes } from "@shared/schema";
@@ -75,10 +75,26 @@ function fillParams(path: string, ids: { athleteId: number; coachId: number }): 
 
 type AdminRoute = { verb: "get" | "post" | "put" | "patch" | "delete"; path: string };
 
-/** Every admin route in routes.ts, whatever its verb, both registration shapes. */
+/**
+ * Every admin route, whatever its verb, in every file that registers one.
+ *
+ * READS routes.ts AND ITS SIBLINGS (2026-10-15). This swept routes.ts alone, which left the four
+ * /api/admin/email-list* routes in email-list.ts outside it -- two of which hand back the launch
+ * mailing list, addresses and all. A sweep that names its own input cannot fail for a file nobody
+ * added to it; the file list is discovered, the same way cross-tenant-scoping.test.ts now does it.
+ */
+function routeSourceFiles(): string[] {
+  const dir = __dirname;
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(".ts"))
+    .filter((f) => !/\.(test|itest)\.ts$/.test(f))
+    .map((f) => readFileSync(join(dir, f), "utf8"))
+    .filter((src) => /app\.(get|post|put|patch|delete)\(\s*\n?\s*"\/api\/admin\//.test(src));
+}
+
 function adminRoutes(): AdminRoute[] {
-  const src = readFileSync(join(__dirname, "routes.ts"), "utf8");
-  const lines = src.split("\n");
+  const sources = routeSourceFiles();
+  const lines = sources.join("\n@@FILE-BOUNDARY@@\n").split("\n");
   const found = new Map<string, AdminRoute>();
   const add = (verb: string, path: string) => found.set(`${verb} ${path}`, { verb: verb as AdminRoute["verb"], path });
   for (let i = 0; i < lines.length; i++) {
@@ -167,6 +183,10 @@ describe("no admin route hands back an athlete's identity", () => {
     // Guards against the parser matching nothing and the whole file passing
     // without having asked a single question.
     expect(adminGetRoutes().length).toBeGreaterThan(40);
+    // And against the discovery collapsing back to one file, which every count above would still
+    // satisfy -- that is the thing that was actually wrong until 2026-10-15.
+    expect(routeSourceFiles().length).toBeGreaterThan(1);
+    expect(adminGetRoutes()).toContain("/api/admin/email-list");
   });
 
   it("sweeps every admin GET and finds no name, email, phone or birthdate", async () => {

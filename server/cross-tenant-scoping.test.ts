@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 // Forge is multi-tenant: coaches, their rosters, guardians and their linked
@@ -18,11 +18,37 @@ import { join } from "node:path";
 // which is a fact about how the routes are written; a runtime test would
 // need a fixture per route and would still only cover the routes somebody
 // remembered to write one for.
-const routesSrc = readFileSync(join(__dirname, "routes.ts"), "utf8");
+/**
+ * EVERY FILE THAT REGISTERS A ROUTE, DISCOVERED -- not routes.ts alone (2026-10-15).
+ *
+ * This scan read `routes.ts` and nothing else, and so did admin-identity-sweep.itest.ts. Between
+ * them that left 42 production routes outside BOTH: all 35 in auth.ts (login, password reset, MFA,
+ * trusted devices, sessions, account deletion, the claim and guardian-invite flows) and six in
+ * email-list.ts. Two of them are parameterised writes gated on requireAuth alone --
+ * POST /api/auth/sessions/:id/revoke and POST /api/auth/trusted-devices/:id/forget -- and if
+ * either stopped scoping its id, one signed-in account could log another out at will or strip its
+ * device trust, which is precisely the bug class this file exists to catch. Both are correct
+ * today; nothing would have said so tomorrow.
+ *
+ * So the input is DISCOVERED from the filesystem rather than named. A scan that names its own
+ * input cannot fail for a file nobody added to it, which is the same assertion-direction mistake
+ * as the public legal-doc set that iterated the set it was meant to police, the upload-directory
+ * list that could not fail for an unlisted directory, and the email-claims glob that could not see
+ * a builder named something else.
+ */
+function routeSourceFiles(): { name: string; src: string }[] {
+  const dir = __dirname;
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(".ts"))
+    .filter((f) => !/\.(test|itest)\.ts$/.test(f))
+    .map((name) => ({ name, src: readFileSync(join(dir, name), "utf8") }))
+    .filter((f) => /app\.(get|post|put|patch|delete)\(\s*\n?\s*"\//.test(f.src))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
 
-type Route = { line: number; verb: string; path: string; body: string };
+type Route = { line: number; verb: string; path: string; body: string; file: string };
 
-function parseRoutes(src: string): Route[] {
+function parseRoutes(src: string): Omit<Route, "file">[] {
   const lines = src.split("\n");
   const decls: { i: number; verb: string; path: string }[] = [];
   for (let i = 0; i < lines.length; i++) {
@@ -76,6 +102,11 @@ const OWNERSHIP_CHECKS = [
   // admin, who reviews these rather than uploading them, so the waiver routes gate on it plus
   // an explicit admin branch where reading is allowed.
   "canManageWaiversFor",
+  // Not on `storage.`, so the scopes-in-query regex below cannot see it: a module function in
+  // trusted-devices.ts that takes the caller's id first and filters on it
+  // (eq(trustedDevices.userId, userId)). Its sibling POST /api/auth/sessions/:id/revoke passes
+  // the same way through storage.revokeSession(user.id, ...) and needs no entry.
+  "forgetDeviceById",
 ];
 
 // Routes whose path parameter names global Forge content or a deliberately
@@ -111,9 +142,26 @@ const GLOBAL_BY_DESIGN = new Set([
   // expired and revoked all answer 404 alike) and in the fact that the underlying file stays
   // behind the signed-URL gate, so the link stops working when the row says it should.
   "/api/review-exports/:token",
+  // THE FOUR CLAIM FLOWS IN auth.ts, brought into this scan on 2026-10-15 when it stopped
+  // reading routes.ts alone. Every one of them is reached by somebody with NO account -- that is
+  // the entire point of a claim link -- so there is no caller to scope against and the parameter
+  // IS the credential, exactly as for the calendar token and the review export above.
+  //
+  // What bounds them instead: the code or token is the only way in, it resolves to exactly one
+  // pending account, it is consumed by the claim, and both POSTs sit behind signupLimiter. The
+  // GETs return a preview bounded to what the recipient needs to recognise the invitation --
+  // see each route's own comment, and guardian-invite-delivery.itest.ts for what the preview may
+  // and may not carry.
+  "/api/claim/:code",
+  "/api/claim/:code/signup",
+  "/api/guardian-invites/:token",
+  "/api/guardian-invites/:token/claim",
 ]);
 
-const routes = parseRoutes(routesSrc);
+const SOURCES = routeSourceFiles();
+const routes: Route[] = SOURCES.flatMap((f) =>
+  parseRoutes(f.src).map((r) => ({ ...r, file: f.name })),
+);
 
 describe("every parameterised route resolves its ids against the requester", () => {
   it("finds the routes at all", () => {
@@ -122,6 +170,10 @@ describe("every parameterised route resolves its ids against the requester", () 
     // rots into decoration.
     expect(routes.length).toBeGreaterThan(400);
     expect(routes.filter((r) => r.path.includes(":")).length).toBeGreaterThan(100);
+    // And the discovery itself: routes.ts alone would satisfy every count above, so the thing
+    // that actually went wrong here is asserted directly.
+    expect(SOURCES.map((f) => f.name)).toEqual(expect.arrayContaining(["routes.ts", "auth.ts"]));
+    expect(SOURCES.length).toBeGreaterThan(2);
   });
 
   const parameterised = routes.filter((r) => /:\w+/.test(r.path));
@@ -133,7 +185,7 @@ describe("every parameterised route resolves its ids against the requester", () 
     if (head.includes('requireRole("admin")')) continue;
     if (GLOBAL_BY_DESIGN.has(route.path)) continue;
 
-    it(`${route.verb} ${route.path} (routes.ts:${route.line})`, () => {
+    it(`${route.verb} ${route.path} (${route.file}:${route.line})`, () => {
       const usesCheck = OWNERSHIP_CHECKS.some((c) => route.body.includes(c));
       // The other correct pattern: hand the requester's own id to the query
       // and let it scope in SQL. Either argument position -- getExerciseDetail
@@ -281,7 +333,7 @@ describe("no second, unscoped id slips past a route that scopes somewhere else",
 
     if (suspect.length === 0) continue;
 
-    it(`${route.verb} ${route.path} (routes.ts:${route.line})`, () => {
+    it(`${route.verb} ${route.path} (${route.file}:${route.line})`, () => {
       for (const call of suspect) {
         const key = `${route.verb} ${route.path}::${call.fn}`;
         expect(
@@ -316,6 +368,9 @@ describe("no second, unscoped id slips past a route that scopes somewhere else",
 
 describe("the guardian read surface stays read-only and scoped", () => {
   it("routes every guardian read through the one authorization helper", () => {
+    // guardianRead is declared in routes.ts specifically; this reads that file by name because
+    // the assertion is about that one helper, not about the route surface as a whole.
+    const routesSrc = SOURCES.find((f) => f.name === "routes.ts")!.src;
     const helper = routesSrc.slice(routesSrc.indexOf("function guardianRead("));
     expect(helper.slice(0, helper.indexOf("\n  }\n"))).toContain("getAthleteForGuardianScoped");
   });
