@@ -141,3 +141,32 @@ describe("the parts that have to hold for the storage to be safe", () => {
     expect(ADD_ON_CANCELLATION_POLICY).toMatch(/straight away/i);
   });
 });
+
+describe("an add-on bought before terms were recorded never gains a fresh refund window", () => {
+  // Fixed 2026-10-15 (the security review's item 7). nextAddOnTerms used to invent
+  // `new Date()` as purchasedAt when a cancellation or refund first gave a pre-terms add-on a
+  // term, so cancelling an add-on bought in September answered `refundable: true` that second.
+  it("records the epoch, which is outside every window and honest about what is known", async () => {
+    const { nextAddOnTerms, PURCHASED_BEFORE_TERMS_WERE_RECORDED } = await import("./add-on-terms");
+    const terms = nextAddOnTerms(undefined, "all_classes", { accessUntil: CANCELLED_TO });
+    expect(terms.all_classes.purchasedAt).toBe(PURCHASED_BEFORE_TERMS_WERE_RECORDED);
+    expect(withinRefundWindow(terms.all_classes)).toBe(false);
+    // It still parses, so a screen printing the date prints a date rather than crashing.
+    expect(Number.isNaN(Date.parse(terms.all_classes.purchasedAt))).toBe(false);
+  });
+
+  it("a real purchase is unaffected: purchasedAt is what the purchase said", async () => {
+    const { nextAddOnTerms } = await import("./add-on-terms");
+    const terms = nextAddOnTerms(undefined, "all_classes", { purchasedAt: BOUGHT_16TH });
+    expect(terms.all_classes.purchasedAt).toBe(BOUGHT_16TH);
+    expect(withinRefundWindow(terms.all_classes, AT("2026-10-17T12:00:00.000Z"))).toBe(true);
+  });
+
+  it("and a prior purchase time is kept through a cancellation", async () => {
+    const { nextAddOnTerms } = await import("./add-on-terms");
+    const terms = nextAddOnTerms({ all_classes: { purchasedAt: BOUGHT_16TH } }, "all_classes", {
+      accessUntil: CANCELLED_TO,
+    });
+    expect(terms.all_classes.purchasedAt).toBe(BOUGHT_16TH);
+  });
+});

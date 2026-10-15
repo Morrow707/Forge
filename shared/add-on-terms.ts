@@ -30,6 +30,16 @@
 /** How long after a purchase a refund may be requested. Scott, 2026-10-11: a 72 hour policy. */
 export const ADD_ON_REFUND_WINDOW_HOURS = 72;
 
+/** The purchase time recorded for an add-on that was bought BEFORE terms were recorded, when a
+ *  cancellation or refund first gives it a term (added 2026-10-15).
+ *
+ *  nextAddOnTerms used to invent `new Date()` here, so cancelling an add-on bought in September
+ *  stamped it as bought that second and the cancel route answered `refundable: true` -- a fresh
+ *  72-hour refund window opened on a purchase months old, by the act of cancelling it. The epoch
+ *  is outside every window there will ever be, it is honest about what is known (nothing), and
+ *  it parses, so a reader printing the date gets 1970 rather than a crash or a guess at today. */
+export const PURCHASED_BEFORE_TERMS_WERE_RECORDED = "1970-01-01T00:00:00.000Z";
+
 /** The per-add-on record. Keyed by add-on id in users.addOnTerms.
  *
  * The coach ids (shared/billing-tiers.ts AddOnId) and the Free Agent ids
@@ -144,7 +154,7 @@ export function nextAddOnTerms(
   const base: AddOnTerm =
     patch.purchasedAt != null
       ? { ...prior, purchasedAt: patch.purchasedAt, accessUntil: undefined, refundedAt: undefined }
-      : { ...prior, purchasedAt: prior?.purchasedAt ?? new Date().toISOString() };
+      : { ...prior, purchasedAt: prior?.purchasedAt ?? PURCHASED_BEFORE_TERMS_WERE_RECORDED };
   const merged: AddOnTerm = { ...base, ...patch };
   // Undefined keys are dropped rather than stored as nulls: this is a json column, and a reader
   // asking `term.accessUntil == null` must not have to care which of the two it got.

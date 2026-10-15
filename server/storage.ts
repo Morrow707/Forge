@@ -4697,18 +4697,78 @@ export const storage = {
    * Both places a transaction can be recorded, for the reason every other reader in this file
    * now reads both: the subscriptions row for a TIER, users.addOnTerms for an ADD-ON. */
   async accountsHoldingAppleTransaction(originalTransactionId: string, exceptUserId: number) {
+    // A HOLDER IS AN ACCOUNT THE SUBSCRIPTION STILL ENTITLES (fixed 2026-10-15). Apple keeps the
+    // SAME originalTransactionId when a subscription in a group is bought again after it expired
+    // or was refunded, so a transaction that ended on one account comes back under the same id
+    // when the family's Apple ID subscribes on another. This counted every row that ever named
+    // the id -- a `canceled` tier row, a refunded or lapsed add-on term -- and since the 10-15
+    // enforcement the second account met the 409, the phone finished the transaction, and a
+    // paid subscription entitled nobody, for good. The siblings that act on an Apple id
+    // (revokeAddOnsForAppleTransaction, endAddOnsForDeletedStripeSubscription) already match the
+    // term's handle EXACTLY in code after the text prefilter; this one did not, so a numeric id
+    // that is a prefix of another counted too.
     const subRows = await db
       .select({ userId: subscriptions.userId })
       .from(subscriptions)
-      .where(eq(subscriptions.appleOriginalTransactionId, originalTransactionId));
+      .where(
+        and(
+          eq(subscriptions.appleOriginalTransactionId, originalTransactionId),
+          ne(subscriptions.status, "canceled"),
+        ),
+      );
     const addOnRows = await db
-      .select({ id: users.id })
+      .select({
+        id: users.id,
+        freeAgentAddOns: users.freeAgentAddOns,
+        billingAddOns: users.billingAddOns,
+        addOnTerms: users.addOnTerms,
+      })
       .from(users)
       .where(sql`${users.addOnTerms}::text LIKE ${"%" + originalTransactionId + "%"}`);
     const others = new Set<number>();
     for (const r of subRows) if (r.userId !== exceptUserId) others.add(r.userId);
-    for (const r of addOnRows) if (r.id !== exceptUserId) others.add(r.id);
+    for (const r of addOnRows) {
+      if (r.id === exceptUserId) continue;
+      const owned = [...(r.freeAgentAddOns ?? []), ...(r.billingAddOns ?? [])];
+      const stillEntitled = Object.entries(r.addOnTerms ?? {}).some(
+        ([addOnId, term]) =>
+          term?.appleOriginalTransactionId === originalTransactionId &&
+          addOnIsActive(owned, r.addOnTerms, addOnId),
+      );
+      if (stillEntitled) others.add(r.id);
+    }
     return [...others];
+  },
+
+  /** FORGET AN APPLE HANDLE ON EVERY ENDED TIER ROW THAT STILL NAMES IT, except the account
+   *  about to be granted it (added 2026-10-15, beside the holder rule above).
+   *
+   *  A `canceled` row keeps the handle it ended under, and nothing reads a canceled row's
+   *  handle for access -- except the Apple notification path, which looks rows up BY that
+   *  handle and loops EVERY holder: a DID_RENEW for the id would write the new tier onto the
+   *  dead row's account as well (applyAppleServerNotification, "every holder"), reviving a
+   *  subscription that account no longer has. So the moment another account legitimately takes
+   *  the transaction over, the ended rows let go of it. Only `canceled` rows, only other
+   *  accounts, and the audit row names the account that now carries it. */
+  async releaseAppleTransactionFromEndedRows(originalTransactionId: string, nowHeldBy: number) {
+    const released = await db
+      .update(subscriptions)
+      .set({ appleOriginalTransactionId: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(subscriptions.appleOriginalTransactionId, originalTransactionId),
+          eq(subscriptions.status, "canceled"),
+          ne(subscriptions.userId, nowHeldBy),
+        ),
+      )
+      .returning({ userId: subscriptions.userId });
+    for (const row of released) {
+      await this.logBillingEvent(row.userId, "apple_iap.handle_released_from_ended_row", {
+        originalTransactionId,
+        nowHeldBy,
+      });
+    }
+    return released.map((r) => r.userId);
   },
 
   /** Every live billing handle this account holds, read BEFORE anything is deleted.
@@ -5598,6 +5658,10 @@ export const storage = {
         alreadyBoundElsewhere: true,
       };
     }
+    // And the ended rows that still name it let go, so a renewal cannot revive them -- see
+    // releaseAppleTransactionFromEndedRows. Granted anyway either way; this writes to no row
+    // the subscription still entitles.
+    await this.releaseAppleTransactionFromEndedRows(verified.originalTransactionId, userId);
 
     if (scope === "coach") {
       const coachAddOn = APPLE_PRODUCT_ID_TO_COACH_ADD_ON[verified.productId];
@@ -5626,7 +5690,29 @@ export const storage = {
       // it was actually written to, which is why that lookup is by transaction and not by user.
       const grantedCoachAddOn = await this.addCoachBillingAddOn(grantTo, coachAddOn, {
         appleOriginalTransactionId: verified.originalTransactionId,
-      });
+      }, { boughtBy: userId });
+      // AN ASSISTANT PAYING APPLE FOR WHAT THE PROGRAM ALREADY PAYS FOR is recorded, never
+      // refused and never granted (fixed 2026-10-15 -- see addCoachBillingAddOn on why the
+      // program's own subscription is left exactly where it is). Same posture as a coached
+      // athlete's tier receipt on the verify route: the phone finishes the transaction, the
+      // audit row names both coaches and the transaction, and the one person who can stop the
+      // charge is the buyer, in iOS Settings.
+      if (grantedCoachAddOn?.programAlreadyPays) {
+        console.warn(
+          `user ${userId} bought ${verified.productId} in the app for a program (primary coach ` +
+            `${grantTo}) that already pays for it; nothing granted, nothing replaced -- only they ` +
+            `can cancel it in iOS Settings`,
+        );
+        await this.logBillingEvent(userId, "apple_iap.program_already_pays", {
+          originalTransactionId: verified.originalTransactionId,
+          productId: verified.productId,
+          coachAddOn,
+          primaryCoachId: grantTo,
+          alsoCancelInAppStore: true,
+          environment: verified.environment,
+        });
+        return { ok: true };
+      }
       // An App Store subscription this purchase replaced is NAMED here and nowhere else: only
       // the person can stop one, in iOS Settings, so the audit row is the entire remedy. The
       // Stripe side is cancellable and is cancelled by the route.
@@ -6223,17 +6309,37 @@ export const storage = {
   /** CANCEL: the month is paid for, so access runs to `accessUntil` and no money goes back.
    *  Scott, 2026-10-11: "give them until the next billing cycle to have it ... with no refund."
    *  The add-on STAYS in the owned list -- that is what makes turning it back on free. */
-  async scheduleAddOnRemoval(userId: number, addOnId: string, accessUntil: Date) {
+  async scheduleAddOnRemoval(
+    userId: number,
+    addOnId: string,
+    accessUntil: Date,
+    /** THE TERM THE CALLER DECIDED ON (added 2026-10-15). The self-serve cancel route reads the
+     *  term, cancels the subscription it names at the provider, and only then comes here -- so
+     *  between its read and this write a purchase can have replaced the term with a new
+     *  subscription, and the end date would land on a month that was just paid for. The lock
+     *  cannot see a read made outside it; this can. When given and the handles no longer match,
+     *  nothing is written and `stale` comes back, and the route tells the person to try again.
+     *  The webhook caller passes nothing: it matched the term by the very id Stripe just ended. */
+    expected?: { stripeSubscriptionId?: string | null; appleOriginalTransactionId?: string | null },
+  ) {
     // LOCKED: see mutateAddOnsAtomically. The ownership check and the write are one statement
     // apart, so without the lock a cancellation could be scheduled against a term a concurrent
     // purchase had just replaced -- ending access inside a month that had just been paid for.
     return mutateAddOnsAtomically(userId, (current) => {
       const owned = new Set([...(current.freeAgentAddOns ?? []), ...(current.billingAddOns ?? [])]);
       if (!owned.has(addOnId)) return null;
+      const term = current.addOnTerms?.[addOnId];
+      if (
+        expected &&
+        ((expected.stripeSubscriptionId ?? null) !== (term?.stripeSubscriptionId ?? null) ||
+          (expected.appleOriginalTransactionId ?? null) !== (term?.appleOriginalTransactionId ?? null))
+      ) {
+        return { set: {}, result: { id: current.id, addOnTerms: current.addOnTerms, stale: true as boolean } };
+      }
       const addOnTerms = nextAddOnTerms(current.addOnTerms, addOnId, {
         accessUntil: accessUntil.toISOString(),
       });
-      return { set: { addOnTerms }, result: { id: current.id, addOnTerms } };
+      return { set: { addOnTerms }, result: { id: current.id, addOnTerms, stale: false as boolean } };
     });
   },
 
@@ -6407,12 +6513,47 @@ export const storage = {
     userId: number,
     addOnId: string,
     provider?: { stripeSubscriptionId?: string; appleOriginalTransactionId?: string },
+    /** Who paid, when that is not the row being written: an assistant coach's App Store receipt
+     *  landing on the primary's row. Absent means the row's owner bought it themselves. */
+    opts?: { boughtBy?: number },
   ) {
     // LOCKED, exactly as the Free Agent twin above -- and this pair is the clearest reason the
     // lock is needed: the two write DIFFERENT owned arrays and the SAME terms object, so one
     // account buying a Free Agent add-on and a coach add-on at once lost a whole term.
     const row = await mutateAddOnsAtomically(userId, (current) => {
       const prior = current.addOnTerms?.[addOnId];
+      // SOMEBODY ELSE'S RECEIPT NEVER DISPLACES A SUBSCRIPTION THE PROGRAM IS ALREADY PAYING FOR
+      // (fixed 2026-10-15). An assistant's in-app Coaches Corner purchase is granted to the
+      // primary's row (applyAppleIapVerification, "the row that can carry it"), and that write
+      // used to go through the purchase branch below like any other: it set the assistant's Apple
+      // handle on the program's term, CLEARED the program's own Stripe handle, and handed that
+      // Stripe id up as superseded -- so the verify route cancelled the program's card
+      // subscription, with proration, and the program's add-on from then on rode an App Store
+      // subscription on an assistant's personal Apple ID that nobody at the program could see or
+      // stop. The one-rail rule is about ONE ACCOUNT buying on two rails; two people paying for
+      // one program is not that. Found by the 2026-10-15 security review.
+      //
+      // So when the buyer is not the row's owner and the row already holds this add-on LIVE from a
+      // provider (a Stripe or Apple handle on an active term), nothing is written: the caller
+      // records that the buyer is paying Apple for what the program already has, which only they
+      // can stop in iOS Settings. An admin grant (no handle) or a lapsed term is not "already
+      // paying", so those are still taken over, exactly as before.
+      if (opts?.boughtBy != null && opts.boughtBy !== userId) {
+        const liveFromProvider =
+          addOnIsActive(current.billingAddOns, current.addOnTerms, addOnId) &&
+          Boolean(prior?.stripeSubscriptionId || prior?.appleOriginalTransactionId);
+        if (liveFromProvider) {
+          return {
+            set: {},
+            result: {
+              id: current.id,
+              billingAddOns: current.billingAddOns ?? [],
+              prior,
+              programAlreadyPays: true as boolean,
+            },
+          };
+        }
+      }
       const owned = new Set(current.billingAddOns ?? []);
       owned.add(addOnId);
       const billingAddOns = [...owned];
@@ -6443,10 +6584,13 @@ export const storage = {
             : {}),
           }),
         },
-        result: { id: current.id, billingAddOns, prior },
+        result: { id: current.id, billingAddOns, prior, programAlreadyPays: false as boolean },
       };
     });
     if (!row) return null;
+    // Nothing was written and nothing was replaced, so nothing is handed up to cancel: the
+    // program's own subscription is exactly what this exists to leave alone.
+    if (row.programAlreadyPays) return { ...row };
     const prior = row.prior;
     // THE SUBSCRIPTION THIS PURCHASE REPLACED, handed up so the caller can cancel it.
     //

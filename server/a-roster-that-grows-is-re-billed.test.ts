@@ -135,8 +135,23 @@ describe("the band follows a seat the moment it is taken", () => {
   it("asks for the BILLED count, the same rule the plan page and the sweep use", () => {
     const fn = billing.slice(billing.indexOf("export async function rebillCoachBandAfterJoin("));
     const body = fn.slice(0, fn.indexOf("\n}\n"));
-    expect(body).toMatch(/const billed = await storage\.getBilledAthleteCountForCoach\(coachId\);/);
-    expect(body).toMatch(/syncCoachSubscriptionBand\(coachId, billed\)/);
+    expect(body).toMatch(/const billed = await storage\.getBilledAthleteCountForCoach\(primaryId\);/);
+    expect(body).toMatch(/syncCoachSubscriptionBand\(primaryId, billed\)/);
+  });
+
+  it("syncs the PRIMARY's row, whichever coach's code the athlete typed", () => {
+    // A staff coach has a coachCode of their own, and the program's subscription is on the
+    // primary's row. Passing the typed coach straight through meant a join through an
+    // assistant's code read getSubscriptionForUser(assistant), found nothing, and returned
+    // `no_stripe_subscription` as an ordinary no-op -- under-billing the program until the
+    // primary opened the plan page. The resolution has to come BEFORE the sync.
+    const fn = billing.slice(billing.indexOf("export async function rebillCoachBandAfterJoin("));
+    const body = fn.slice(0, fn.indexOf("\n}\n"));
+    const resolve = body.indexOf("const primaryId = await storage.getPrimaryCoachId(coachId);");
+    expect(resolve).toBeGreaterThan(-1);
+    expect(resolve).toBeLessThan(body.indexOf("syncCoachSubscriptionBand("));
+    // The typed id must not reach the sync by any spelling.
+    expect(body).not.toMatch(/syncCoachSubscriptionBand\(coachId/);
   });
 
   it("never fails the join", () => {

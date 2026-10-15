@@ -3156,6 +3156,66 @@ writer to any of them, say which other place the same fact lives in.
   it goes through `vi.stubEnv` now; eight full runs clean after. **I first said a new test file
   caused it, on one run each way, and that was wrong** -- one run either way proves nothing about
   a flake, and the hazard was never in the new file.
+- **SEVEN FROM THE 2026-10-15 SECURITY REVIEW, ALL ON THE MONEY PATH, NONE REACHABLE BY AN
+  OUTSIDER.** Scott: "can we run security checks" and then "great fix what you can." Three review
+  passes over `1085235d..fe0ea07c` found no authorization hole, no cross-account read, no mass
+  assignment, no injection, signatures verified on all three provider rails, idempotency sound and
+  the add-on writers all under the lock; what they found was Forge's own billing doing the wrong
+  thing with money somebody really paid. Every claim was read off the code before anything moved,
+  and one of the seven was reported against the wrong route (the dead `/api/athlete/apple-iap/verify`
+  guard, which nothing calls; a test now pins which route the client uses).
+  **A join through an ASSISTANT coach's code was never re-billed.** Both callers in `auth.ts` hand
+  `rebillCoachBandAfterJoin` the coach resolved from the typed code, a staff coach has a code of
+  their own, and `syncCoachSubscriptionBand` read `getSubscriptionForUser(assistant)` -- no row,
+  `no_stripe_subscription`, silent no-op. The seat counted against the program (both seat reads use
+  the effective ids) and the Stripe quantity never moved until the primary opened the plan page. It
+  resolves `getPrimaryCoachId` first now, and the audit row names the code it came through.
+  **A full refund or a dispute revoked access and never cancelled the subscription at Stripe.**
+  Refunding an invoice in the dashboard does not cancel the subscription; that is a second click,
+  the one skipped on a goodwill refund. So the row went `canceled` and the SKU came off while the
+  card went on being charged every month, and the next `customer.subscription.updated` (every
+  renewal is one) wrote the live status straight back with nothing re-granting the tier.
+  `revokeEverythingForSubscription` now cancels at Stripe after revoking -- best-effort, no
+  proration (the money already went back), an audit row either way, never thrown -- and carries the
+  cross-rail guard the cancellation path already had.
+  **An assistant's in-app Coaches Corner receipt cancelled the PROGRAM's card subscription.** The
+  grant correctly lands on the primary's row (10-11), and that write went through the purchase
+  branch like any other: it set the assistant's Apple handle on the program's term, cleared the
+  program's Stripe handle, handed it up as superseded, and the verify route cancelled it with
+  proration -- leaving the program's add-on riding an App Store subscription on an assistant's
+  personal Apple ID that nobody at the program could see or stop. The one-rail rule is about ONE
+  ACCOUNT on two rails; two people paying for one program is not that. `addCoachBillingAddOn`
+  takes `boughtBy`, and when the buyer is not the row's owner and the row already holds the add-on
+  LIVE from a provider it writes nothing and reports `programAlreadyPays`; the verify path records
+  `apple_iap.program_already_pays` with `alsoCancelInAppStore` and returns ok, the same posture as a
+  coached athlete's tier receipt. An admin grant (no handle) or a lapsed term is still taken over.
+  **A subscription that died in dunning handed its add-ons the whole UNPAID month.** The period
+  Stripe reports on an `unpaid` subscription is the period of the invoice that was never paid, and
+  `endStripeSubscription` passed it down as the paid month while the tier on the same event ended at
+  once. `unpaid` ends the add-ons now; a cancellation still honours the month that was paid for.
+  **The Apple holder check counted ENDED rows.** Apple keeps the same `originalTransactionId` when
+  a subscription in a group is bought again after it expired or was refunded, so a family Apple ID
+  subscribing on a second account met the 10-15 enforcement's 409, the phone finished the
+  transaction, and a paid subscription entitled nobody, for good. `accountsHoldingAppleTransaction`
+  counts only rows the subscription still entitles (not `canceled`; an add-on term matched EXACTLY
+  and active, where the text prefilter alone also matched a numeric id that is a prefix of
+  another), and `releaseAppleTransactionFromEndedRows` nulls the handle on other accounts'
+  `canceled` rows at the grant -- because `applyAppleServerNotification` loops EVERY row naming
+  the id on a renewal and would otherwise revive the dead one.
+  **The self-serve cancel route wrote the end date onto whatever term existed by then.** Read the
+  term, call Stripe, write -- three steps, and a purchase landing between them replaced the term
+  with a new subscription whose paid month the end date then closed. `scheduleAddOnRemoval` takes
+  the handles the caller decided on and compares them UNDER the lock; a mismatch writes nothing
+  and the route answers 409. The webhook caller passes none: it matched by the id Stripe ended.
+  **Cancelling an add-on bought before terms were recorded invented a purchase time of now**, so a
+  months-old purchase answered `refundable: true` the second it was cancelled.
+  `PURCHASED_BEFORE_TERMS_WERE_RECORDED` (the epoch) is what `nextAddOnTerms` records instead:
+  outside every window, honest, and it parses.
+  `the-security-review-fixes-2026-10-15.test.ts` (mocked billing.ts behaviour with controls, plus
+  the source scans) and its `.itest.ts` twin (the three lock-and-SQL rules on real Postgres, 17
+  cases). Whole unit suite and the neighbouring itests green. Server-side: ships on Render, no
+  build (`shared/add-on-terms.ts` gains one export the client never references).
+  **Open and Scott's:** the repository is PUBLIC on GitHub.
 - **NO FREE AGENT TIER COULD BE ASSIGNED BY AN ADMIN, AND THE FIRST ATTEMPT AFTER LAUNCH FOUND
   IT** (2026-10-11). Scott, on More -> Users with the App Review athlete expanded: "This is all I
   see" -- Reset MFA and Change role, no billing panel. `AdminBillingAssignment`'s athlete form

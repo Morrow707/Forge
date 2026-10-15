@@ -11028,8 +11028,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...(result.alreadyBoundElsewhere ? { alreadyBoundElsewhere: true } : {}),
         });
     }
-    // As on the athlete route above. A coach's purchase is an add-on and supersedes no tier
-    // subscription, so this is only ever reached by the Free Agent scope.
+    // As on the athlete route above, for EITHER scope: a Free Agent's tier or add-on takes the
+    // row from the web subscription it replaced, and so does a coach's add-on bought on the
+    // primary's own account. (This comment used to say only the Free Agent scope reached it;
+    // addCoachBillingAddOn hands an id up too. What it never hands up any more is the PROGRAM's
+    // subscription when an ASSISTANT's receipt is the one being verified -- see its
+    // `boughtBy` rule, fixed 2026-10-15.)
     if (result.supersededStripeSubscriptionId) {
       await cancelSupersededStripeSubscription(user.id, result.supersededStripeSubscriptionId);
     }
@@ -14067,7 +14071,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // iOS Settings and an admin grant has no provider at all, so in both cases Forge records the
     // end of the month it knows about rather than refusing to let go of the add-on.
     const accessUntil = periodEnd ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    await storage.scheduleAddOnRemoval(owner, addOnId, accessUntil);
+    // THE TERM READ ABOVE IS THE TERM THE END DATE IS WRITTEN TO, or nothing is written (fixed
+    // 2026-10-15). The read, the provider call and this write are three steps, and a purchase
+    // landing between them (a re-buy through checkout, an in-app purchase verifying) replaces
+    // the term with a NEW subscription: the end date would then close a month that was just
+    // paid for, on a subscription this route never cancelled. The lock inside
+    // scheduleAddOnRemoval cannot see a read made outside it, so the handles are passed in and
+    // compared under it. A stale answer is a 409, and the subscription cancelled above was the
+    // superseded one, which the purchase that replaced it cancels anyway.
+    const scheduled = await storage.scheduleAddOnRemoval(owner, addOnId, accessUntil, {
+      stripeSubscriptionId: term?.stripeSubscriptionId ?? null,
+      appleOriginalTransactionId: term?.appleOriginalTransactionId ?? null,
+    });
+    if (scheduled?.stale) {
+      await storage.logBillingEvent(owner, "add_on.cancel_raced_a_purchase", { addOnId });
+      return res.status(409).json({
+        message: "That add-on was just changed on this account. Refresh and try again.",
+      });
+    }
     await storage.logBillingEvent(owner, "add_on.cancelled", {
       addOnId,
       accessUntil: accessUntil.toISOString(),

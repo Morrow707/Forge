@@ -534,16 +534,35 @@ export async function createFreeAgentAddOnCheckout(
  */
 export async function rebillCoachBandAfterJoin(coachId: number): Promise<void> {
   try {
+    // THE PRIMARY'S ROW IS THE ONE WITH THE SUBSCRIPTION (fixed 2026-10-15). Both callers in
+    // auth.ts pass the coach resolved from the code the athlete TYPED, and a staff coach has a
+    // coachCode of their own -- so a join through an assistant's code arrived here with the
+    // assistant's id, syncCoachSubscriptionBand read getSubscriptionForUser(assistant), found no
+    // row (the program's subscription is on the primary's), and returned
+    // `no_stripe_subscription` as an ordinary no-op. The seat counted against the program
+    // (claimRosterSeat and getRosterSeatCountForCoach both read the effective coach ids), the
+    // Stripe quantity never moved, and the program was under-billed until the primary happened to
+    // open the plan page. Found by the 2026-10-15 security review, by two reviewers independently.
+    //
+    // getBilledAthleteCountForCoach already resolves the primary for the planned number and the
+    // effective ids for the roster, so it answers the same either way; it is the sync that has to
+    // be handed the row that can carry a subscription.
+    const primaryId = await storage.getPrimaryCoachId(coachId);
     // The BILLED count, which is the larger of the typed number and the roster -- the same
     // rule the plan page and the drift sweep use, so three callers cannot disagree about what a
     // program owes (storage.getBilledAthleteCountForCoach).
-    const billed = await storage.getBilledAthleteCountForCoach(coachId);
-    const result = await syncCoachSubscriptionBand(coachId, billed);
+    const billed = await storage.getBilledAthleteCountForCoach(primaryId);
+    const result = await syncCoachSubscriptionBand(primaryId, billed);
     // `synced` is the one that moved money; every `reason` is an ordinary no-op (no plan, no
     // Stripe subscription, the join stayed inside the band) and is not worth an audit row each
     // time an athlete joins.
     if (result.synced) {
-      await storage.logBillingEvent(coachId, "coach.plan.rebilled_on_join", result);
+      await storage.logBillingEvent(primaryId, "coach.plan.rebilled_on_join", {
+        ...result,
+        // Named when the join came through an assistant's code, so the row says why the
+        // program's quantity moved on a code that is not the primary's.
+        ...(primaryId !== coachId ? { joinedThroughCoachId: coachId } : {}),
+      });
     }
   } catch (err) {
     console.error(`could not re-bill coach ${coachId} after a roster join:`, err);
@@ -1006,7 +1025,25 @@ async function revokeEverythingForSubscription(
   const sub = await storage.updateSubscriptionByStripeId(subscriptionId, { status: "canceled" });
   if (sub) {
     if (sub.accountType === "free_agent") {
-      await storage.updateFreeAgentBilling(sub.userId, { freeAgentTier: null });
+      // THE SAME CROSS-RAIL GUARD endStripeSubscription CARRIES (added 2026-10-15). A legacy row
+      // holding both handles is an account the App Store may still be paying for; a Stripe
+      // refund on it revoked the SKU anyway, which is the error that path calls the worse one.
+      // Recorded for an operator, exactly as the cancellation path records it.
+      if (sub.appleOriginalTransactionId) {
+        console.warn(
+          `Stripe subscription ${subscriptionId} (user ${sub.userId}) was refunded or disputed but the ` +
+            `row also carries App Store subscription ${sub.appleOriginalTransactionId}; the Free ` +
+            `Agent tier is left on file rather than withheld from a possible payer`,
+        );
+        await storage.logBillingEvent(sub.userId, "subscription.other_rail_still_on_file", {
+          endedRail: "stripe",
+          stripeEventId: eventId,
+          stripeSubscriptionId: subscriptionId,
+          appleOriginalTransactionId: sub.appleOriginalTransactionId,
+        });
+      } else {
+        await storage.updateFreeAgentBilling(sub.userId, { freeAgentTier: null });
+      }
     }
     if (sub.accountType === "coach") {
       await storage.clearCoachBand(sub.userId);
@@ -1017,6 +1054,56 @@ async function revokeEverythingForSubscription(
       { ...detail, subscriptionId, revoked: sub.accountType === "coach" ? "band" : "tier", stripeEventId: eventId },
       claimEventId(),
     );
+  }
+
+  // AND THE SUBSCRIPTION IS CANCELLED AT STRIPE, WHICH NOTHING HERE EVER DID (fixed 2026-10-15).
+  //
+  // A refund is issued from the Stripe dashboard, and refunding an invoice does not cancel the
+  // subscription it was for -- that is a second click, and the one most likely to be skipped on
+  // a goodwill refund. Before this, the row above went `canceled` and the SKU came off, while
+  // Stripe went on billing the card every month for a product the account no longer had; and the
+  // next `customer.subscription.updated` (every renewal is one) wrote the live status straight
+  // back onto the row with nothing re-granting the tier. Money taken, nothing given, month after
+  // month, from one refund. A dispute is the same shape with the bank doing the refunding. Found
+  // by the 2026-10-15 security review.
+  //
+  // BEST-EFFORT, as every provider call on a webhook is: the revocation above is the thing that
+  // must land, and a Stripe API failure here is an audit row naming what an operator has to
+  // finish by hand, never a thrown event that Stripe retries into a second revocation. No
+  // proration and no final invoice -- the money for this period has already gone back, and a
+  // credit note against a refunded invoice is noise on the customer's statement.
+  const owner = sub?.userId ?? revoked.userId;
+  const stripe = getStripeClient();
+  if (stripe && owner) {
+    try {
+      const live = await stripe.subscriptions.retrieve(subscriptionId);
+      if (live.status === "canceled") {
+        // Refunded on cancellation, or the operator did click twice: nothing left to stop.
+        await storage.logBillingEvent(owner, "stripe.subscription.already_cancelled_at_provider", {
+          subscriptionId,
+          stripeEventId: eventId,
+        });
+      } else {
+        await stripe.subscriptions.cancel(subscriptionId);
+        await storage.logBillingEvent(owner, "stripe.subscription.cancelled_after_revocation", {
+          subscriptionId,
+          because: eventType,
+          stripeEventId: eventId,
+        });
+      }
+    } catch (err) {
+      console.error(
+        `Stripe subscription ${subscriptionId} (user ${owner}) was revoked on ${eventType} but could not ` +
+          `be cancelled at Stripe and is still billing; needs a hand:`,
+        err,
+      );
+      await storage.logBillingEvent(owner, "stripe.subscription.cancel_after_revocation_failed", {
+        subscriptionId,
+        because: eventType,
+        stripeEventId: eventId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 }
 
@@ -1234,7 +1321,14 @@ async function endStripeSubscription(
     const deletedPeriodEnd =
       (sub as unknown as { current_period_end?: number }).current_period_end ??
       sub.items?.data?.[0]?.current_period_end;
-    const addOnAccessUntil = deletedPeriodEnd ? new Date(deletedPeriodEnd * 1000) : new Date();
+    // AN UNPAID PERIOD IS NOT A PAID MONTH (fixed 2026-10-15). `unpaid` is where dunning ends:
+    // the invoice for the CURRENT period was never paid, and that is the period Stripe reports
+    // on the item -- so passing it down here granted every add-on on the subscription the whole
+    // month nobody paid for, while the tier on the same event (above) ended at once. The paid
+    // month rule in shared/add-on-terms.ts is about a month that was PAID; this one was not.
+    const periodWasPaid = sub.status !== "unpaid";
+    const addOnAccessUntil =
+      periodWasPaid && deletedPeriodEnd ? new Date(deletedPeriodEnd * 1000) : new Date();
     const endedAddOns = await storage.endAddOnsForDeletedStripeSubscription(sub.id, addOnAccessUntil);
     if (endedAddOns.userId) {
       await storage.logBillingEvent(
