@@ -3839,17 +3839,31 @@ export const storage = {
       save = out.save;
       row = out.row;
     } else {
-      const [updated] = await db
-        .update(users)
-        .set(patch)
-        .where(eq(users.id, coachId))
-        .returning({
-          id: users.id,
-          billingTier: users.billingTier,
-          billingAddOns: users.billingAddOns,
-          isBetaAccount: users.isBetaAccount,
-        });
-      row = updated ?? null;
+      // NOTHING TO WRITE IS A READ, NOT A CRASH -- the second instance of this exact class, after
+      // updateCoachBranding on 2026-10-11. drizzle throws "No values to set" on an empty .set(),
+      // and neither this nor the admin route above it catches, so it escaped as an UNHANDLED
+      // REJECTION and left the request hanging: no status, no error, the panel spinning forever.
+      // An admin PATCHing the panel with nothing changed is the ordinary way to reach it, and a
+      // read is what that request means. Found 2026-10-15 by the first run of the admin-write
+      // half of admin-identity-sweep.itest.ts, on an empty body -- which is the whole argument
+      // for sweeping writes and not only GETs.
+      const FIELDS = {
+        id: users.id,
+        billingTier: users.billingTier,
+        billingAddOns: users.billingAddOns,
+        isBetaAccount: users.isBetaAccount,
+      };
+      if (Object.keys(patch).length === 0) {
+        const [current] = await db.select(FIELDS).from(users).where(eq(users.id, coachId));
+        row = current ?? null;
+      } else {
+        const [updated] = await db
+          .update(users)
+          .set(patch)
+          .where(eq(users.id, coachId))
+          .returning(FIELDS);
+        row = updated ?? null;
+      }
     }
     if (!row) return null;
     if (save) await this._logAdminAddOnSave(coachId, save);
@@ -4079,19 +4093,33 @@ export const storage = {
     } else {
       // No add-on array in the patch: every other caller sets the tier or the comp flag alone,
       // touches addOnTerms not at all, and so needs no lock.
-      const [updated] = await db
-        .update(users)
-        .set(patch)
-        .where(eq(users.id, athleteId))
-        .returning({
-          id: users.id,
-          freeAgentTier: users.freeAgentTier,
-          freeAgentAddOns: users.freeAgentAddOns,
-          isBetaAccount: users.isBetaAccount,
-          hasVideoStorageAddOn: users.hasVideoStorageAddOn,
-          unlockedSkillSports: users.unlockedSkillSports,
-        });
-      row = updated ?? null;
+      // NOTHING TO WRITE IS A READ, NOT A CRASH -- the second instance of this exact class, after
+      // updateCoachBranding on 2026-10-11. drizzle throws "No values to set" on an empty .set(),
+      // and neither this nor the admin route above it catches, so it escaped as an UNHANDLED
+      // REJECTION and left the request hanging: no status, no error, the panel spinning forever.
+      // An admin PATCHing the panel with nothing changed is the ordinary way to reach it, and a
+      // read is what that request means. Found 2026-10-15 by the first run of the admin-write
+      // half of admin-identity-sweep.itest.ts, on an empty body -- which is the whole argument
+      // for sweeping writes and not only GETs.
+      const FIELDS = {
+        id: users.id,
+        freeAgentTier: users.freeAgentTier,
+        freeAgentAddOns: users.freeAgentAddOns,
+        isBetaAccount: users.isBetaAccount,
+        hasVideoStorageAddOn: users.hasVideoStorageAddOn,
+        unlockedSkillSports: users.unlockedSkillSports,
+      };
+      if (Object.keys(patch).length === 0) {
+        const [current] = await db.select(FIELDS).from(users).where(eq(users.id, athleteId));
+        row = current ?? null;
+      } else {
+        const [updated] = await db
+          .update(users)
+          .set(patch)
+          .where(eq(users.id, athleteId))
+          .returning(FIELDS);
+        row = updated ?? null;
+      }
     }
     if (!row) return null;
     if (save) await this._logAdminAddOnSave(athleteId, save);

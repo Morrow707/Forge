@@ -73,22 +73,31 @@ function fillParams(path: string, ids: { athleteId: number; coachId: number }): 
   return filled.includes(":") ? null : filled;
 }
 
-function adminGetRoutes(): string[] {
+type AdminRoute = { verb: "get" | "post" | "put" | "patch" | "delete"; path: string };
+
+/** Every admin route in routes.ts, whatever its verb, both registration shapes. */
+function adminRoutes(): AdminRoute[] {
   const src = readFileSync(join(__dirname, "routes.ts"), "utf8");
   const lines = src.split("\n");
-  const found = new Set<string>();
+  const found = new Map<string, AdminRoute>();
+  const add = (verb: string, path: string) => found.set(`${verb} ${path}`, { verb: verb as AdminRoute["verb"], path });
   for (let i = 0; i < lines.length; i++) {
-    const inline = lines[i].match(/^\s*app\.get\(\s*"(\/api\/admin\/[^"]+)"/);
+    const inline = lines[i].match(/^\s*app\.(get|post|put|patch|delete)\(\s*"(\/api\/admin\/[^"]+)"/);
     if (inline) {
-      found.add(inline[1]);
+      add(inline[1], inline[2]);
       continue;
     }
-    if (/^\s*app\.get\(\s*$/.test(lines[i])) {
+    const wrapped = lines[i].match(/^\s*app\.(get|post|put|patch|delete)\(\s*$/);
+    if (wrapped) {
       const next = lines[i + 1]?.match(/^\s*"(\/api\/admin\/[^"]+)"/);
-      if (next) found.add(next[1]);
+      if (next) add(wrapped[1], next[1]);
     }
   }
-  return [...found].sort();
+  return [...found.values()].sort((a, b) => (a.path + a.verb).localeCompare(b.path + b.verb));
+}
+
+function adminGetRoutes(): string[] {
+  return adminRoutes().filter((r) => r.verb === "get").map((r) => r.path);
 }
 
 let server: TestServer;
@@ -132,6 +141,27 @@ afterAll(async () => {
   await server?.close();
 });
 
+/**
+ * The one identity rule, so the GET sweep and the WRITE sweep below cannot drift on what counts
+ * as a leak. Error bodies are checked too: a 500 that echoes a failed query can carry the row it
+ * choked on, and a stack trace is not an exemption.
+ */
+function identityIn(res: { status: number; body: unknown }, label: string): string[] {
+  const body = typeof res.body === "string" ? res.body : JSON.stringify(res.body ?? "");
+  const hits: string[] = [];
+  for (const [what, needle] of [
+    ["athlete name", ATHLETE_NAME],
+    ["athlete email", ATHLETE_EMAIL],
+    ["athlete phone", ATHLETE_PHONE],
+    ["athlete date of birth", ATHLETE_DOB],
+    ["guardian name", GUARDIAN_NAME],
+    ["guardian email", GUARDIAN_EMAIL],
+  ] as const) {
+    if (body.includes(needle)) hits.push(`${label} (${res.status}) returned the ${what}`);
+  }
+  return hits;
+}
+
 describe("no admin route hands back an athlete's identity", () => {
   it("finds the admin routes at all", () => {
     // Guards against the parser matching nothing and the whole file passing
@@ -151,27 +181,82 @@ describe("no admin route hands back an athlete's identity", () => {
       const res = await asAdmin.get(path);
       called.push(`${path} -> ${res.status}`);
 
-      // Error bodies are checked too. A 500 that echoes a failed query can
-      // carry the row it choked on, and a stack trace is not an exemption.
-      const body = typeof res.body === "string" ? res.body : JSON.stringify(res.body ?? "");
-      for (const [label, needle] of [
-        ["athlete name", ATHLETE_NAME],
-        ["athlete email", ATHLETE_EMAIL],
-        ["athlete phone", ATHLETE_PHONE],
-        ["athlete date of birth", ATHLETE_DOB],
-        ["guardian name", GUARDIAN_NAME],
-        ["guardian email", GUARDIAN_EMAIL],
-      ] as const) {
-        if (body.includes(needle)) {
-          leaked.push(`${path} (${res.status}) returned the ${label}`);
-        }
-      }
+      leaked.push(...identityIn(res, path));
     }
 
     // A sweep that called almost nothing proves almost nothing, so the count
     // is asserted rather than assumed.
     expect(called.length, "the sweep reached almost no routes").toBeGreaterThan(30);
     expect(leaked, `admin routes leaked athlete identity:\n${leaked.join("\n")}`).toEqual([]);
+  });
+});
+
+/**
+ * AND THE SAME RULE ON EVERY ADMIN *WRITE*, which nothing asked until 2026-10-15.
+ *
+ * The sweep above discovers 80 admin GETs. There are 67 admin POST/PUT/PATCH/DELETE routes beside
+ * them and not one of them was ever called by this file -- the header's reasoning was that they
+ * "mutate or stream and are not GETs of athlete data", which is a judgement about what a write
+ * RETURNS, and it is the kind this repo keeps finding wrong. A write that hands back the row it
+ * just changed leaks exactly as a GET does, and so does a 400 whose message quotes what it
+ * refused. /api/admin/athletes/query is the sharpest case: it is the Query Engine, the one
+ * surface with a recorded history of returning a bare users.id that /api/admin/users/:id turns
+ * into a name and a birthdate -- and it is a POST, so this file has never called it.
+ *
+ * EVERY REQUEST IS SENT WITH AN EMPTY BODY, deliberately, and the status is not asserted. Most
+ * will refuse on their input schema, and a refusal is a perfectly good observation: the question
+ * is only ever "is an athlete's identity in this response", which a 400 can answer wrongly just
+ * as well as a 200. Supplying a plausible body per route would mean 67 fixtures nobody maintains,
+ * and the routes that need one are exactly the ones already covered by a test of their own.
+ *
+ * DELETEs RUN LAST. An empty-bodied DELETE can succeed, and a fixture deleted halfway through
+ * would turn every later route into a 404 -- harmless for this assertion (a 404 carries no
+ * identity) but it would quietly hollow the sweep out. Ordering keeps the reads meaningful; the
+ * count assertion below is what would catch it if that stopped being true.
+ */
+describe("no admin write hands back an athlete's identity either", () => {
+  it("finds the admin writes at all", () => {
+    // Same vacuity guard as the GET sweep: a parser that matches nothing passes silently.
+    expect(adminRoutes().filter((r) => r.verb !== "get").length).toBeGreaterThan(40);
+  });
+
+  it("sweeps every admin write and finds no name, email, phone or birthdate", async () => {
+    const DESTRUCTIVE = { delete: 2, put: 1, patch: 1, post: 0, get: 0 };
+    const writes = adminRoutes()
+      .filter((r) => r.verb !== "get" && !SKIP.has(r.path))
+      .sort((a, b) => DESTRUCTIVE[a.verb] - DESTRUCTIVE[b.verb]);
+
+    const called: string[] = [];
+    const leaked: string[] = [];
+    const mutatedOnAnEmptyBody: string[] = [];
+
+    for (const route of writes) {
+      const path = fillParams(route.path, { athleteId, coachId });
+      if (!path) continue;
+      const res =
+        route.verb === "delete"
+          ? await asAdmin.delete(path)
+          : route.verb === "put"
+            ? await asAdmin.put(path, {})
+            : route.verb === "patch"
+              ? await asAdmin.patch(path, {})
+              : await asAdmin.post(path, {});
+      const label = `${route.verb.toUpperCase()} ${path}`;
+      called.push(`${label} -> ${res.status}`);
+      leaked.push(...identityIn(res, label));
+      if (res.status >= 200 && res.status < 300) mutatedOnAnEmptyBody.push(label);
+    }
+
+    expect(called.length, "the write sweep reached almost no routes").toBeGreaterThan(40);
+    expect(leaked, `admin writes leaked athlete identity:\n${leaked.join("\n")}`).toEqual([]);
+    // Not an assertion -- a record. A write that accepts an empty body is worth a human's eye,
+    // and printing it here is cheaper than a separate test that would go stale.
+    if (mutatedOnAnEmptyBody.length > 0) {
+      console.log(
+        `admin writes that answered 2xx to an EMPTY body (${mutatedOnAnEmptyBody.length}):\n  ` +
+          mutatedOnAnEmptyBody.join("\n  "),
+      );
+    }
   });
 });
 
