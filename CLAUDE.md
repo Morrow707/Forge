@@ -1562,6 +1562,13 @@ halves before splitting anything else:
   panel reading by id, the guardian invite link opening while signed in, the Apple Health
   disclosure on the check-in path, and the service worker serving the live shell. All
   `verify_build`-verified; none is calibration work, so they batch.
+  Joined 2026-10-14/15 by the billing sweep's client halves: the admin panel's still-billing
+  warning toast, the athlete upgrade screen's App Store notice, the Apple 409 that finishes a
+  bound transaction, the restore loop that no longer gives up on one bad transaction, the Coaches
+  Corner StoreKit button, the five reworded 402s, and the class gate's new `ClassAccessGate` in
+  `shared/class-pricing-rule.ts` (which four client pages import, so it compiles into the
+  bundle -- the server decides the gate either way, and nothing on screen changes until a build
+  carries the type).
   **The line this replaces named build 651 and was correct for sixteen hours**, which is the
   shortest this entry has ever been accurate -- the cause of every earlier drift is that the queue
   gets written down when something is ADDED and not when a `beta` empties it. **Clear this entry
