@@ -172,8 +172,13 @@ export default function CoachesCorner() {
   // paid $19.99 a month for it. The checkout route refuses an assistant now; this is what stops
   // the iOS path, where StoreKit takes the money before the server is ever asked.
   const isPrimaryCoach = authUser?.isPrimaryCoach === true;
-  const appleSellable =
-    isPrimaryCoach && appleSupported && appleLive?.enabled === true && applePrice !== null;
+  // THE PRICE IS NOT WHAT DECIDES WHETHER IT IS FOR SALE (2026-10-15). Requiring `applePrice`
+  // here meant an iOS primary coach whose StoreKit product list had not answered yet -- or
+  // failed to -- fell through to "purchasable once billing opens" on a store where it IS on
+  // sale, which is the one sentence on this card that is simply false in that state. The sheet
+  // shows Apple's own price anyway, so the button is honest without it; the price is rendered
+  // when it arrives and the label stands in for it until then.
+  const appleSellable = isPrimaryCoach && appleSupported && appleLive?.enabled === true;
 
   async function buyCoachesCorner() {
     setBuying(true);
@@ -520,7 +525,8 @@ export default function CoachesCorner() {
             {appleSellable ? (
               <div className="flex flex-col items-start gap-2">
                 <p className="text-sm font-semibold">
-                  {applePrice}/month, on top of your plan. Free for rosters of 100+ athletes.
+                  {applePrice ? `${applePrice}/month` : "A paid add-on"}, on top of your plan. Free
+                  for rosters of 100+ athletes.
                 </p>
                 <Button onClick={buyCoachesCorner} disabled={buying}>
                   {buying ? "Purchasing..." : "Get Coaches Corner"}

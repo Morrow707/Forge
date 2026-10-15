@@ -3687,6 +3687,14 @@ export const storage = {
       });
     if (!row) return null;
     if (save) await this._logAdminAddOnSave(coachId, save);
+    // As the Free Agent twin: the band an admin assigns is a manual override and belongs in the
+    // record beside every other money change.
+    if (values.billingTier !== undefined) {
+      await this.logBillingEvent(coachId, "admin.coach_band_set", { billingTier: values.billingTier });
+    }
+    if (values.isBetaAccount !== undefined) {
+      await this.logBillingEvent(coachId, "admin.comp_flag_set", { isBetaAccount: values.isBetaAccount });
+    }
     return { ...row, addOnsGranted: save?.granted ?? [], addOnsStillBilling: save?.stillBilling ?? [] };
   },
 
@@ -3876,6 +3884,18 @@ export const storage = {
       });
     if (!row) return null;
     if (save) await this._logAdminAddOnSave(athleteId, save);
+    // AND THE TIER ITSELF, which nothing recorded. billingAuditLog's own schema comment says it
+    // is where manual overrides are kept, and an admin assigning or clearing a $19.99 SKU is the
+    // manual override -- the add-on half was logged on 2026-10-14 and the tier was not, so the
+    // one column that decides every Free Agent gate changed with no trace of who or when.
+    if (values.freeAgentTier !== undefined) {
+      await this.logBillingEvent(athleteId, "admin.free_agent_tier_set", {
+        freeAgentTier: values.freeAgentTier,
+      });
+    }
+    if (values.isBetaAccount !== undefined) {
+      await this.logBillingEvent(athleteId, "admin.comp_flag_set", { isBetaAccount: values.isBetaAccount });
+    }
     return { ...row, addOnsGranted: save?.granted ?? [], addOnsStillBilling: save?.stillBilling ?? [] };
   },
 
@@ -5149,6 +5169,33 @@ export const storage = {
     return row;
   },
 
+  /** Record the Stripe CUSTOMER id without needing a subscription row to already exist.
+   *
+   *  updateSubscriptionByUserId is a plain UPDATE, so for an account whose only purchase is an
+   *  add-on -- no tier, so no row from createTrialSubscription -- it matched nothing and the
+   *  customer id was silently dropped. That id is how /api/billing/portal is opened, so the
+   *  customer had no way to manage or cancel the thing they were paying for.
+   *
+   *  accountType and tier are NOT NULL with no default, so an upsert has to supply them: the
+   *  caller knows which side bought (an add-on id belongs to one), and "base" is the inert tier
+   *  createTrialSubscription writes. An EXISTING row keeps its own accountType, tier and status
+   *  -- only the customer id moves. */
+  async upsertStripeCustomerId(
+    userId: number,
+    stripeCustomerId: string,
+    accountType: "free_agent" | "coach",
+  ) {
+    const [row] = await db
+      .insert(subscriptions)
+      .values({ userId, accountType, tier: "base", stripeCustomerId })
+      .onConflictDoUpdate({
+        target: subscriptions.userId,
+        set: { stripeCustomerId, updatedAt: new Date() },
+      })
+      .returning();
+    return row;
+  },
+
   async updateSubscriptionByUserId(userId: number, patch: Partial<typeof subscriptions.$inferInsert>) {
     const [row] = await db
       .update(subscriptions)
@@ -5512,6 +5559,10 @@ export const storage = {
         userId: subscriptions.userId,
         accountType: subscriptions.accountType,
         stripeSubscriptionId: subscriptions.stripeSubscriptionId,
+        // Read so the renewal branch can refuse a notification that does not move the window
+        // forward -- Apple retries for days and promises no order.
+        currentPeriodEnd: subscriptions.currentPeriodEnd,
+        status: subscriptions.status,
       })
       .from(subscriptions)
       .where(eq(subscriptions.appleOriginalTransactionId, originalTransactionId));
@@ -5596,6 +5647,23 @@ export const storage = {
     }
     // "renewed" -- extend the access window Apple already confirmed, same
     // shape applyAppleIapVerification uses for the initial purchase.
+    //
+    // ONLY FORWARDS. Apple does not promise delivery order and retries for days, so a DID_RENEW
+    // for a period that has already been superseded -- or one that arrives AFTER the REFUND that
+    // ended the subscription -- used to re-grant the tier and re-open the access window. The
+    // guard is monotonic rather than a list of statuses: a renewal that does not extend the
+    // window past what is already recorded has nothing to add, whatever order it arrived in.
+    // Found by the 2026-10-14 audit panel.
+    const alreadyRecorded = held.find((row) => row.currentPeriodEnd != null);
+    if (alreadyRecorded?.currentPeriodEnd && expiresAt <= alreadyRecorded.currentPeriodEnd) {
+      await this.logBillingEvent(alreadyRecorded.userId, "apple_iap.stale_renewal_ignored", {
+        originalTransactionId,
+        productId,
+        notificationExpiresAt: expiresAt.toISOString(),
+        recordedPeriodEnd: alreadyRecorded.currentPeriodEnd.toISOString(),
+      });
+      return { ok: true };
+    }
     const freeAgentTier = tierForAppleProductId(productId);
     if (!freeAgentTier) return { ok: false, error: "Unrecognized product." };
     await this.updateSubscriptionByAppleOriginalTransactionId(originalTransactionId, {

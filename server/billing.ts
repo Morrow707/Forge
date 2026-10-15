@@ -1247,7 +1247,20 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
         if (!Number.isInteger(enrollmentId) || !Number.isInteger(lessonId)) break;
         if (session.payment_status !== "paid") break;
         await storage.markLessonPurchased(enrollmentId, lessonId);
-        if (customerId) await storage.updateSubscriptionByUserId(userId, { stripeCustomerId: customerId });
+        // UPSERT, because updateSubscriptionByUserId is a plain UPDATE and an account that
+        // bought ONLY an add-on may have no subscriptions row at all (the row is created by
+        // createTrialSubscription, which a coached athlete never meets). The customer id is how
+        // /api/billing/portal is opened, so dropping it left a paying customer with no way to
+        // manage or cancel their own add-on -- the same class as the tier's lost
+        // stripeSubscriptionId on 2026-10-11, one column over. The accountType comes from the
+        // kind of purchase, and tier "base" is the inert value createTrialSubscription writes.
+        if (customerId) {
+          await storage.upsertStripeCustomerId(
+            userId,
+            customerId,
+            "free_agent",
+          );
+        }
         await storage.logBillingEvent(
           userId,
           event.type,
@@ -1286,7 +1299,20 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
         if (granted?.supersededStripeSubscriptionId) {
           await cancelSupersededStripeSubscription(userId, granted.supersededStripeSubscriptionId);
         }
-        if (customerId) await storage.updateSubscriptionByUserId(userId, { stripeCustomerId: customerId });
+        // UPSERT, because updateSubscriptionByUserId is a plain UPDATE and an account that
+        // bought ONLY an add-on may have no subscriptions row at all (the row is created by
+        // createTrialSubscription, which a coached athlete never meets). The customer id is how
+        // /api/billing/portal is opened, so dropping it left a paying customer with no way to
+        // manage or cancel their own add-on -- the same class as the tier's lost
+        // stripeSubscriptionId on 2026-10-11, one column over. The accountType comes from the
+        // kind of purchase, and tier "base" is the inert value createTrialSubscription writes.
+        if (customerId) {
+          await storage.upsertStripeCustomerId(
+            userId,
+            customerId,
+            "free_agent",
+          );
+        }
         await storage.logBillingEvent(userId, event.type, { sessionId: session.id, kind, addOnId }, event.id);
         await recordPaymentVerification(userId, session.id, session.amount_total, "stripe");
         break;
@@ -1308,7 +1334,20 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
         if (granted?.supersededStripeSubscriptionId) {
           await cancelSupersededStripeSubscription(userId, granted.supersededStripeSubscriptionId);
         }
-        if (customerId) await storage.updateSubscriptionByUserId(userId, { stripeCustomerId: customerId });
+        // UPSERT, because updateSubscriptionByUserId is a plain UPDATE and an account that
+        // bought ONLY an add-on may have no subscriptions row at all (the row is created by
+        // createTrialSubscription, which a coached athlete never meets). The customer id is how
+        // /api/billing/portal is opened, so dropping it left a paying customer with no way to
+        // manage or cancel their own add-on -- the same class as the tier's lost
+        // stripeSubscriptionId on 2026-10-11, one column over. The accountType comes from the
+        // kind of purchase, and tier "base" is the inert value createTrialSubscription writes.
+        if (customerId) {
+          await storage.upsertStripeCustomerId(
+            userId,
+            customerId,
+            "coach",
+          );
+        }
         await storage.logBillingEvent(userId, event.type, { sessionId: session.id, kind, addOnId }, event.id);
         await recordPaymentVerification(userId, session.id, session.amount_total, "stripe");
         break;
@@ -1370,6 +1409,22 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       const priorRow = await storage.getSubscriptionForUser(userId);
       const priorSubscriptionId = priorRow?.stripeSubscriptionId ?? null;
       const supersededAppleTransactionId = priorRow?.appleOriginalTransactionId ?? null;
+
+      // CANCEL BEFORE THE ROW IS OVERWRITTEN, which is what makes a retried delivery safe.
+      //
+      // This used to run AFTER the upsert, and Stripe retries a delivery whose handler threw.
+      // On the retry `priorSubscriptionId` is read back as the id just written, so
+      // `prior !== session.subscription` is false, the cancel is skipped, and the FIRST
+      // subscription bills forever -- reinstating the exact double bill this call was added to
+      // stop (2026-10-11), through the one path nobody exercises by hand. Found by the
+      // 2026-10-14 audit panel.
+      //
+      // Cancel-first is the safe order: if the cancel lands and the grant then fails, the retry
+      // grants what was paid for and the cancel is a no-op at Stripe; the other way round
+      // leaves two live subscriptions and nothing left in Forge that can find the older one.
+      if (priorSubscriptionId && priorSubscriptionId !== session.subscription) {
+        await cancelSupersededStripeSubscription(userId, priorSubscriptionId);
+      }
 
       if (purchasedFreeAgentTier) {
         // UPSERT, NOT UPDATE, and this is the Stripe half of a bug that was fixed on the Apple
@@ -1457,9 +1512,7 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
         });
       }
 
-      if (priorSubscriptionId && priorSubscriptionId !== session.subscription) {
-        await cancelSupersededStripeSubscription(userId, priorSubscriptionId);
-      }
+
 
       // THE COACH SIDE OF THE SAME BUG. A school checked out on a band (the quantity and the
       // metadata both say which one -- see createCoachSubscriptionCheckout) and this handler

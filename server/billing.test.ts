@@ -6,6 +6,7 @@ import type Stripe from "stripe";
 // DATABASE_URL (not set in a plain test run). Mocking the module here means
 // the real storage.ts/db.ts never actually load.
 const updateSubscriptionByUserId = vi.fn();
+const upsertStripeCustomerId = vi.fn();
 const updateSubscriptionByStripeId = vi.fn();
 const logBillingEvent = vi.fn();
 const wasStripeEventProcessed = vi.fn();
@@ -26,6 +27,7 @@ const endAddOnsForDeletedStripeSubscription = vi.fn();
 vi.mock("./storage", () => ({
   storage: {
     updateSubscriptionByUserId,
+    upsertStripeCustomerId,
     updateSubscriptionByStripeId,
     logBillingEvent,
     wasStripeEventProcessed,

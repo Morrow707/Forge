@@ -951,6 +951,16 @@ async function hasAthletePaidForAiAccess(
   entitlement: AiEntitlement,
 ): Promise<boolean> {
   if (testingUnlockAllPaywalls) return true;
+  // THE ADMIN'S OWN COMP TICK MEANS WHAT THE PANEL SAYS IT MEANS (2026-10-15).
+  //
+  // isBetaAccount is the one per-account switch an admin sets deliberately, and the billing
+  // panel's own label reads "Exempt from every paywall, whatever the tier above says". The
+  // ADD-ON gates have always honoured it (getFreeAgentEntitlements returns the unlimited set),
+  // and this one -- the camera, the skills side and the AI chat -- never consulted it, so a
+  // comped athlete got every add-on and none of the three things anybody comps an account FOR.
+  // Found by the 2026-10-14 audit panel reading the two gates side by side.
+  const comped = await storage.getFreeAgentBillingAccount(athleteId);
+  if (comped?.isBetaAccount) return true;
   // A TRIAL IS FULL ACCESS, and it is the one thing the subscription ROW decides.
   //
   // storage.createTrialSubscription writes tier "base" with status "trialing", so a trial cannot

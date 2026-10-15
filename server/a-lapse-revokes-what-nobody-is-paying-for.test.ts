@@ -35,6 +35,7 @@ const revokeAddOnsForStripeSubscription = vi.fn();
 const getSubscriptionForUser = vi.fn();
 const upsertSubscriptionByUserId = vi.fn();
 const updateSubscriptionByUserId = vi.fn();
+const upsertStripeCustomerId = vi.fn();
 const applyCoachSubscriptionBand = vi.fn();
 
 vi.mock("./storage", () => ({
@@ -49,6 +50,7 @@ vi.mock("./storage", () => ({
     getSubscriptionForUser,
     upsertSubscriptionByUserId,
     updateSubscriptionByUserId,
+    upsertStripeCustomerId,
     applyCoachSubscriptionBand,
   },
 }));

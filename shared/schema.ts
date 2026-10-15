@@ -45,6 +45,7 @@ import {
   ALL_ADD_ON_IDS,
   type BillingTierId,
   type AddOnId,
+  MAX_BANDED_ATHLETES,
 } from "./billing-tiers";
 import {
   FREE_AGENT_TIERS,
@@ -8326,10 +8327,15 @@ export const workoutSetEntriesRelations = relations(
 // ---------- Zod insert schemas ----------
 
 /** Upper bound on the "how many athletes do you expect?" answer, shared by signupSchema,
- * PUT /api/coach/plan and the signup form. 5,000 is well past the largest band the pricing
- * table enumerates (1,000) -- bandForAthleteCount clamps above that rather than failing -- and
- * is here to refuse a typo, not to cap a customer. */
-export const MAX_EXPECTED_ATHLETES = 5000;
+ * PUT /api/coach/plan and the signup form. It is here to refuse a typo, not to cap a customer.
+ *
+ * DERIVED from the bands rather than written down a second time (2026-10-15). It used to say
+ * 5,000 beside a comment noting that the bands only reached 1,000 and "bandForAthleteCount
+ * clamps above that rather than failing" -- which is exactly the bug the audit panel found: a
+ * school that typed 2,000 was accepted and then billed the 981-1,000 price. The bands now run
+ * to MAX_BANDED_ATHLETES, so every headcount this form accepts has a band of its own and the
+ * two numbers cannot drift apart again. */
+export const MAX_EXPECTED_ATHLETES = MAX_BANDED_ATHLETES;
 
 // role is deliberately restricted to coach/athlete -- admin accounts are
 // never self-service, only promoted directly in the database.

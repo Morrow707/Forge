@@ -102,10 +102,24 @@ export const ORG_BLOCK_SIZE = 20;
 // blocks above them are sized to real squads: 20 completes a volleyball
 // roster, 40 covers baseball, 120 covers an FBS football roster.
 //
-// Nothing stops a roster bigger than 1,000; buildBands only enumerates this
-// far because that is as far as anyone has asked to see priced out. A school
-// beyond it prices the same way: $4.00 x their band ceiling, in the next
-// 20-athlete step.
+// THE BANDS GO AS FAR AS THE FORM ACCEPTS, AND THAT USED TO BE TWO DIFFERENT NUMBERS.
+//
+// This stopped at 1,000 on the reasoning that nobody had asked to see further priced out, and
+// `bandForAthleteCount` clamps to the last band -- so a school that typed 2,000 (which signup
+// accepts, up to MAX_BANDED_ATHLETES) was billed the 981-1,000 price: $4,000 a month of roster
+// charged as $4,000 for a quarter of it. Found by the 2026-10-14 audit panel.
+//
+// The fix is the comment this replaces, made true: a school beyond the enumerated bands "prices
+// the same way: $4.00 x their band ceiling, in the next 20-athlete step", so the enumeration
+// runs to the ceiling the FORM enforces and the two cannot disagree again. MAX_BANDED_ATHLETES
+// is that one ceiling; shared/schema.ts's MAX_EXPECTED_ATHLETES is derived from it rather than
+// written down a second time.
+//
+// Nothing public grows: /pricing renders the fives and the blocks up to 120 and then states the
+// arithmetic. The admin band dropdown is the only surface that lists them all, and a band is
+// normally written by the Stripe webhook rather than chosen by hand there.
+export const MAX_BANDED_ATHLETES = 5000;
+
 function buildBands(): BillingTierDef[] {
   const ranges: [number, number][] = [
     [0, 5],
@@ -114,8 +128,8 @@ function buildBands(): BillingTierDef[] {
     [16, 20],
   ];
   let start = 21;
-  while (start <= 1000) {
-    const end = Math.min(start + ORG_BLOCK_SIZE - 1, 1000);
+  while (start <= MAX_BANDED_ATHLETES) {
+    const end = Math.min(start + ORG_BLOCK_SIZE - 1, MAX_BANDED_ATHLETES);
     ranges.push([start, end]);
     start += ORG_BLOCK_SIZE;
   }
@@ -154,6 +168,9 @@ export function bandForAthleteCount(n: number): BillingTierDef {
   for (const tier of BILLING_BANDS) {
     if (n <= tier.athleteCapIncluded) return tier;
   }
+  // Only reachable above MAX_BANDED_ATHLETES, which every form that takes a headcount refuses --
+  // so a clamp here can no longer under-bill a school that signup accepted. Kept rather than
+  // thrown: a stored count from before the bands reached this far must still resolve to a band.
   return BILLING_BANDS[BILLING_BANDS.length - 1];
 }
 

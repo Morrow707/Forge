@@ -29,6 +29,7 @@ import type Stripe from "stripe";
  */
 const upsertSubscriptionByUserId = vi.fn();
 const updateSubscriptionByUserId = vi.fn();
+const upsertStripeCustomerId = vi.fn();
 const updateSubscriptionByStripeId = vi.fn();
 const getSubscriptionForUser = vi.fn();
 const updateFreeAgentBilling = vi.fn();
@@ -46,6 +47,7 @@ vi.mock("./storage", () => ({
   storage: {
     upsertSubscriptionByUserId,
     updateSubscriptionByUserId,
+    upsertStripeCustomerId,
     updateSubscriptionByStripeId,
     getSubscriptionForUser,
     updateFreeAgentBilling,
