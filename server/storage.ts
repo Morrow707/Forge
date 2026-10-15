@@ -5152,7 +5152,7 @@ export const storage = {
       // The Apple id is recorded with the add-on so a REFUND or revocation naming that
       // transaction can find this add-on later (revokeAddOnsForAppleTransaction) -- on the row
       // it was actually written to, which is why that lookup is by transaction and not by user.
-      await this.addCoachBillingAddOn(grantTo, coachAddOn, {
+      const grantedCoachAddOn = await this.addCoachBillingAddOn(grantTo, coachAddOn, {
         appleOriginalTransactionId: verified.originalTransactionId,
       });
       await this.logBillingEvent(userId, "apple_iap.verified", {
@@ -5164,13 +5164,21 @@ export const storage = {
         ...(grantTo !== userId ? { grantedToPrimaryCoachId: grantTo } : {}),
         environment: verified.environment,
       });
-      return { ok: true };
+      // An add-on bought in the app supersedes the live Stripe subscription for the same add-on,
+      // exactly as a tier does below: one account, one subscription per product. The route
+      // cancels it (storage must not import billing.ts).
+      return {
+        ok: true,
+        ...(grantedCoachAddOn?.supersededStripeSubscriptionId
+          ? { supersededStripeSubscriptionId: grantedCoachAddOn.supersededStripeSubscriptionId }
+          : {}),
+      };
     }
     // An add-on first, because it is a different KIND of purchase: it appends to
     // users.freeAgentAddOns and leaves the subscription row's tier alone.
     const addOnId = APPLE_PRODUCT_ID_TO_ADD_ON[verified.productId];
     if (addOnId) {
-      await this.addFreeAgentAddOn(userId, addOnId, {
+      const grantedAddOn = await this.addFreeAgentAddOn(userId, addOnId, {
         appleOriginalTransactionId: verified.originalTransactionId,
       });
       await this.logBillingEvent(userId, "apple_iap.verified", {
@@ -5179,7 +5187,13 @@ export const storage = {
         freeAgentAddOn: addOnId,
         environment: verified.environment,
       });
-      return { ok: true };
+      // As the coach branch above: the Stripe subscription for this same add-on is superseded.
+      return {
+        ok: true,
+        ...(grantedAddOn?.supersededStripeSubscriptionId
+          ? { supersededStripeSubscriptionId: grantedAddOn.supersededStripeSubscriptionId }
+          : {}),
+      };
     }
     const freeAgentTier = tierForAppleProductId(verified.productId);
     if (!freeAgentTier) return { ok: false, error: "Unrecognized product." };
@@ -5572,6 +5586,7 @@ export const storage = {
     provider?: { stripeSubscriptionId?: string; appleOriginalTransactionId?: string },
   ) {
     const current = await this.getUser(athleteId);
+    const prior = current?.addOnTerms?.[addOnId];
     if (!current) return null;
     const owned = new Set(current.freeAgentAddOns ?? []);
     owned.add(addOnId);
@@ -5596,7 +5611,23 @@ export const storage = {
       })
       .where(eq(users.id, athleteId))
       .returning({ id: users.id, freeAgentAddOns: users.freeAgentAddOns });
-    return row ?? null;
+    if (!row) return null;
+    // THE SUBSCRIPTION THIS PURCHASE REPLACED, handed up so the caller can cancel it.
+    //
+    // Buying an add-on the account already has a live Stripe subscription for OVERWROTE
+    // that id in the term above and left the first subscription billing, with nothing in
+    // Forge able to find it any more -- the same bug the TIER had until 2026-10-11
+    // (cancelSupersededStripeSubscription), in the one place a second subscription id can
+    // live. Reachable: a cancelled add-on inside its paid month can be bought again
+    // through checkout rather than restored, and the refund window makes that an ordinary
+    // thing to do. Cancelling needs the Stripe client and this module must not import
+    // billing.ts, so the id goes up rather than being acted on here.
+    const priorStripeId = prior?.stripeSubscriptionId;
+    const supersededStripeSubscriptionId =
+      priorStripeId && priorStripeId !== provider?.stripeSubscriptionId && prior?.refundedAt == null
+        ? priorStripeId
+        : undefined;
+    return { ...row, ...(supersededStripeSubscriptionId ? { supersededStripeSubscriptionId } : {}) };
   },
 
   /** CANCEL: the month is paid for, so access runs to `accessUntil` and no money goes back.
@@ -5766,6 +5797,7 @@ export const storage = {
     provider?: { stripeSubscriptionId?: string; appleOriginalTransactionId?: string },
   ) {
     const current = await this.getUser(userId);
+    const prior = current?.addOnTerms?.[addOnId];
     if (!current) return null;
     const owned = new Set(current.billingAddOns ?? []);
     owned.add(addOnId);
@@ -5787,7 +5819,23 @@ export const storage = {
       })
       .where(eq(users.id, userId))
       .returning({ id: users.id, billingAddOns: users.billingAddOns });
-    return row ?? null;
+    if (!row) return null;
+    // THE SUBSCRIPTION THIS PURCHASE REPLACED, handed up so the caller can cancel it.
+    //
+    // Buying an add-on the account already has a live Stripe subscription for OVERWROTE
+    // that id in the term above and left the first subscription billing, with nothing in
+    // Forge able to find it any more -- the same bug the TIER had until 2026-10-11
+    // (cancelSupersededStripeSubscription), in the one place a second subscription id can
+    // live. Reachable: a cancelled add-on inside its paid month can be bought again
+    // through checkout rather than restored, and the refund window makes that an ordinary
+    // thing to do. Cancelling needs the Stripe client and this module must not import
+    // billing.ts, so the id goes up rather than being acted on here.
+    const priorStripeId = prior?.stripeSubscriptionId;
+    const supersededStripeSubscriptionId =
+      priorStripeId && priorStripeId !== provider?.stripeSubscriptionId && prior?.refundedAt == null
+        ? priorStripeId
+        : undefined;
+    return { ...row, ...(supersededStripeSubscriptionId ? { supersededStripeSubscriptionId } : {}) };
   },
 
   /** Forget the band a cancelled coach subscription paid for.

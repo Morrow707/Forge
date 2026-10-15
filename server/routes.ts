@@ -12961,6 +12961,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/skill-exercises/:id",
     requireRole("athlete"),
     requireFreeAgent,
+    // THE DETAIL ROUTE NEEDS THE SAME GATE AS THE LIST (2026-10-15). The list above was gated
+    // when "browsing was never gated" was found; this one was missed, and it is the route that
+    // serves the drill itself -- its cues, its video, its whole payload -- by id. So a Basic or
+    // AI Coach Free Agent, on a tier sold WITHOUT skills, could read every drill in the Skill
+    // Bank one id at a time while the list that advertises them refused. Hiding a list is not a
+    // permission check, which is this file's standing rule about buttons and applies exactly as
+    // well to the route behind one.
+    requirePaidAiAccess("skillsAi"),
     async (req, res) => {
       const user = currentUser(req);
       const id = Number(req.params.id);

@@ -69,11 +69,19 @@ describe("a cancellation forgets the band", () => {
   const storage = stripComments(read("storage.ts"));
 
   it("clears it for a coach, as the Free Agent branch does for a tier", () => {
+    // Lived inside customer.subscription.deleted until 2026-10-15, when it was factored into
+    // endStripeSubscription so the two OTHER ways a Stripe subscription ends -- Stripe cancelling
+    // through an `updated` event, and dunning finishing in `unpaid` -- revoke the same things.
+    // Re-pointed at its new home rather than relaxed: the assertion is about the band coming off
+    // with the subscription, and that is now true on three paths instead of one.
+    const fn = billing.slice(billing.indexOf("async function endStripeSubscription"));
+    const body = fn.slice(0, fn.indexOf("\n}\n"));
+    expect(body).toContain('updated.accountType === "free_agent"');
+    expect(body).toContain('updated.accountType === "coach"');
+    expect(body).toContain("clearCoachBand");
+    // And the branch it came out of reaches it, rather than having quietly lost it.
     const branch = billing.slice(billing.indexOf('case "customer.subscription.deleted"'));
-    const head = branch.slice(0, branch.indexOf("break;"));
-    expect(head).toContain('updated.accountType === "free_agent"');
-    expect(head).toContain('updated.accountType === "coach"');
-    expect(head).toContain("clearCoachBand");
+    expect(branch.slice(0, branch.indexOf("break;"))).toContain("endStripeSubscription(");
   });
 
   it("keeps the stated headcount, which was never a purchase", () => {

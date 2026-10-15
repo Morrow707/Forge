@@ -968,6 +968,138 @@ async function recordPaymentVerification(
   }
 }
 
+/** ONE DELIVERY MAY CLAIM THE STRIPE EVENT ID ONCE -- billing_audit_log.stripe_event_id is
+ *  UNIQUE, and it is the idempotency check handleStripeWebhookEvent makes. The first row to ask
+ *  gets it; the rest carry it in their detail, where it is just as findable. */
+function oneEventId(eventId: string): () => string | undefined {
+  let claimed = false;
+  return () => {
+    if (claimed) return undefined;
+    claimed = true;
+    return eventId;
+  };
+}
+
+/**
+ * THE CLEAR-DOWN WHEN A STRIPE SUBSCRIPTION STOPS BEING PAID FOR.
+ *
+ * Factored out of customer.subscription.deleted on 2026-10-15, because that event is NOT the
+ * only way a subscription ends and every revocation lived inside it. Two others reach the same
+ * state and revoked nothing:
+ *
+ *   - **Stripe cancels through an `updated` event.** mapStripeStatus' own comment has said so
+ *     since it was written ("a subscription Stripe canceled via an *updated* event rather than a
+ *     separate deleted event"), and that path recorded the status and stopped -- so the tier, the
+ *     band and the add-ons all survived a cancellation Forge had been told about.
+ *   - **`unpaid` is where dunning ENDS.** Stripe retries a failed card for weeks and then, on a
+ *     subscription set to "mark unpaid" rather than "cancel", stops retrying and never deletes
+ *     anything. Nothing cleared the tier, and since 2026-10-11 the gates read
+ *     users.freeAgentTier rather than the row's status -- so a card that failed weeks ago was
+ *     paying for nothing and still granting everything.
+ *
+ * The RAW Stripe status is what decides, never the mapped column: mapStripeStatus collapses
+ * `unpaid` into `past_due` (the enum has no `unpaid`), so the column cannot tell "still trying"
+ * from "given up", and acting on it would revoke an account inside its grace period.
+ *
+ * `past_due` deliberately does NOT reach here. A failed card inside Stripe's retry window is an
+ * account somebody is still trying to pay for, and withholding access from a possible payer is
+ * the worse error -- the same posture this file takes on the cross-rail row below.
+ */
+async function endStripeSubscription(
+  sub: Stripe.Subscription,
+  eventType: string,
+  eventId: string,
+  claim: () => string | undefined = oneEventId(eventId),
+): Promise<void> {
+    const updated = await storage.updateSubscriptionByStripeId(sub.id, { status: "canceled" });
+    if (updated) {
+      await storage.logBillingEvent(updated.userId, eventType, { subscriptionId: sub.id }, claim());
+      // THE SKU COMES OFF WITH THE SUBSCRIPTION. Found 2026-10-11 on the first live cancellation:
+      // the paid gates already closed, because hasAthletePaidForAiAccess reads the subscription
+      // row's status first under BILLING_LIVE -- but users.freeAgentTier kept the cancelled SKU,
+      // so the upgrade screen went on marking a plan nobody held as "current" and
+      // /api/athlete/entitlements reported it. The checkout webhook writes the tier on purchase
+      // (above); this is the matching write on the way out. Coach rows carry no freeAgentTier.
+      //
+      // UNLESS THE OTHER RAIL IS ON THE ROW. A row carrying an appleOriginalTransactionId as
+      // well is an account that bought on both rails before the takeover rule above existed
+      // (a purchase now clears the loser's handle, so this cannot be reached by anything
+      // bought after 2026-10-14). Clearing the SKU there would take away a tier the App Store
+      // may still be paying for -- and between leaving a tier on file a little too long and
+      // withholding access from somebody who is paying, this file's standing posture is that
+      // withholding is the worse error. Recorded so an operator can settle it by hand.
+      if (updated.accountType === "free_agent") {
+        if (updated.appleOriginalTransactionId) {
+          console.warn(
+            `Stripe subscription ${sub.id} (user ${updated.userId}) was deleted but the row ` +
+              `also carries App Store subscription ${updated.appleOriginalTransactionId}; the ` +
+              `Free Agent tier is left on file rather than withheld from a possible payer`,
+          );
+          // The delivery's id is already on the `eventType` row above; see the
+          // rail_changed call in checkout.session.completed on why a second row may not
+          // claim it. It travels in the detail instead, where it is just as findable.
+          await storage.logBillingEvent(updated.userId, "subscription.other_rail_still_on_file", {
+            endedRail: "stripe",
+            stripeEventId: eventId,
+            stripeSubscriptionId: sub.id,
+            appleOriginalTransactionId: updated.appleOriginalTransactionId,
+          });
+        } else {
+          await storage.updateFreeAgentBilling(updated.userId, { freeAgentTier: null });
+        }
+      }
+      // AND THE COACH SIDE, which this missed entirely until 2026-10-11. The branch above was
+      // written for the Free Agent SKU and read accountType to avoid touching a coach row --
+      // correct as far as it went, except nothing else cleared the coach's band either:
+      // `billingTier: null` was never written anywhere in the server. So a program that
+      // cancelled kept its band, and with it Full Personalization and multi-team on any band
+      // above twenty athletes. Same shape as the Free Agent bug found the same day, on the
+      // other side of the same event.
+      //
+      // plannedAthleteCount is deliberately LEFT ALONE: it is what the school said they have,
+      // not something they bought, so it still quotes their price if they come back.
+      if (updated.accountType === "coach") {
+        await storage.clearCoachBand(updated.userId);
+      }
+    }
+
+    // AND THE ADD-ON, WHICH NO STRIPE LIFECYCLE EVENT COULD REACH (fixed 2026-10-14).
+    //
+    // updateSubscriptionByStripeId above matches the `subscriptions` table, and an add-on's
+    // subscription id is NOT there -- it lives in users.addOnTerms, because
+    // subscriptions.userId is UNIQUE and that one row belongs to the TIER. So `updated` is
+    // null for an add-on and this handler did nothing at all: a coach who cancelled Coaches
+    // Corner in the Stripe billing portal -- the portal Forge itself opens for them at
+    // /api/billing/portal -- kept the add-on forever after the billing stopped, as did anyone
+    // whose card failed until Stripe gave up and deleted the subscription. Access nobody was
+    // paying for, with no event left to take it away.
+    //
+    // Found by the billing sweep, and the third in one family: revokeAddOnsForStripeSubscription
+    // had exactly ONE caller (charge.refunded), so every other lifecycle event was blind to
+    // half the places a subscription id can live.
+    //
+    // THE PAID MONTH IS HONOURED. A cancellation is not a refund (shared/add-on-terms.ts):
+    // a cancelled add-on runs to the end of the month already bought. Stripe reports that
+    // period on the subscription it is deleting, so that is what is passed down; an ordinary
+    // cancel-at-period-end arrives when the period has already ended and so revokes at once.
+    const deletedPeriodEnd = (sub as unknown as { current_period_end?: number }).current_period_end;
+    const addOnAccessUntil = deletedPeriodEnd ? new Date(deletedPeriodEnd * 1000) : new Date();
+    const endedAddOns = await storage.endAddOnsForDeletedStripeSubscription(sub.id, addOnAccessUntil);
+    if (endedAddOns.userId) {
+      await storage.logBillingEvent(
+        endedAddOns.userId,
+        eventType,
+        {
+          subscriptionId: sub.id,
+          addOnIds: endedAddOns.addOnIds,
+          accessUntil: addOnAccessUntil.toISOString(),
+          stripeEventId: eventId,
+        },
+        claim(),
+      );
+    }
+}
+
 export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<void> {
   // Stripe's own delivery guarantee is at-least-once, not exactly-once --
   // a redelivered event (a slow response, a retry after a transient 5xx,
@@ -1057,10 +1189,19 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       if (kind === "free_agent_add_on") {
         const addOnId = session.metadata?.addOnId;
         if (!addOnId || !FREE_AGENT_ADD_ON_ORDER.includes(addOnId as FreeAgentAddOnId)) break;
-        await storage.addFreeAgentAddOn(userId, addOnId as FreeAgentAddOnId, {
+        const granted = await storage.addFreeAgentAddOn(userId, addOnId as FreeAgentAddOnId, {
           stripeSubscriptionId:
             typeof session.subscription === "string" ? session.subscription : undefined,
         });
+        // ONE ACCOUNT, ONE SUBSCRIPTION PER ADD-ON. Re-buying an add-on that already had a live
+        // Stripe subscription used to overwrite its id and leave the first one billing forever
+        // with nothing left to find it -- the tier's own bug of 2026-10-11, in the other place a
+        // subscription id lives. Best-effort and audited, for the same reason as the tier's: the
+        // purchase has already succeeded and throwing here would take away access somebody just
+        // paid for in order to tidy a duplicate.
+        if (granted?.supersededStripeSubscriptionId) {
+          await cancelSupersededStripeSubscription(userId, granted.supersededStripeSubscriptionId);
+        }
         if (customerId) await storage.updateSubscriptionByUserId(userId, { stripeCustomerId: customerId });
         await storage.logBillingEvent(userId, event.type, { sessionId: session.id, kind, addOnId }, event.id);
         await recordPaymentVerification(userId, session.id, session.amount_total, "stripe");
@@ -1070,10 +1211,19 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       if (kind === "coach_add_on") {
         const addOnId = session.metadata?.addOnId;
         if (!addOnId || !COACH_PURCHASABLE_ADD_ON_ORDER.includes(addOnId as AddOnId)) break;
-        await storage.addCoachBillingAddOn(userId, addOnId as AddOnId, {
+        const granted = await storage.addCoachBillingAddOn(userId, addOnId as AddOnId, {
           stripeSubscriptionId:
             typeof session.subscription === "string" ? session.subscription : undefined,
         });
+        // ONE ACCOUNT, ONE SUBSCRIPTION PER ADD-ON. Re-buying an add-on that already had a live
+        // Stripe subscription used to overwrite its id and leave the first one billing forever
+        // with nothing left to find it -- the tier's own bug of 2026-10-11, in the other place a
+        // subscription id lives. Best-effort and audited, for the same reason as the tier's: the
+        // purchase has already succeeded and throwing here would take away access somebody just
+        // paid for in order to tidy a duplicate.
+        if (granted?.supersededStripeSubscriptionId) {
+          await cancelSupersededStripeSubscription(userId, granted.supersededStripeSubscriptionId);
+        }
         if (customerId) await storage.updateSubscriptionByUserId(userId, { stripeCustomerId: customerId });
         await storage.logBillingEvent(userId, event.type, { sessionId: session.id, kind, addOnId }, event.id);
         await recordPaymentVerification(userId, session.id, session.amount_total, "stripe");
@@ -1259,102 +1409,31 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
     case "customer.subscription.updated": {
       const sub = event.data.object as Stripe.Subscription;
       const currentPeriodEndSec = sub.items.data[0]?.current_period_end;
+      const claim = oneEventId(event.id);
       const updated = await storage.updateSubscriptionByStripeId(sub.id, {
         status: mapStripeStatus(sub.status) ?? undefined,
         cancelAtPeriodEnd: sub.cancel_at_period_end,
         currentPeriodEnd: currentPeriodEndSec != null ? new Date(currentPeriodEndSec * 1000) : undefined,
       });
-      if (updated) await storage.logBillingEvent(updated.userId, event.type, { subscriptionId: sub.id }, event.id);
+      if (updated) {
+        await storage.logBillingEvent(
+          updated.userId,
+          event.type,
+          { subscriptionId: sub.id },
+          claim(),
+        );
+      }
+      // A SUBSCRIPTION CAN END THROUGH THIS EVENT, and until 2026-10-15 ending it here revoked
+      // nothing -- see endStripeSubscription for the two shapes (Stripe cancelling through an
+      // `updated` event, and dunning finishing in `unpaid` with no deletion ever sent). The RAW
+      // status decides; the column collapses `unpaid` into `past_due`.
+      if (sub.status === "canceled" || sub.status === "unpaid") {
+        await endStripeSubscription(sub, event.type, event.id, claim);
+      }
       break;
     }
     case "customer.subscription.deleted": {
-      const sub = event.data.object as Stripe.Subscription;
-      const updated = await storage.updateSubscriptionByStripeId(sub.id, { status: "canceled" });
-      if (updated) {
-        await storage.logBillingEvent(updated.userId, event.type, { subscriptionId: sub.id }, event.id);
-        // THE SKU COMES OFF WITH THE SUBSCRIPTION. Found 2026-10-11 on the first live cancellation:
-        // the paid gates already closed, because hasAthletePaidForAiAccess reads the subscription
-        // row's status first under BILLING_LIVE -- but users.freeAgentTier kept the cancelled SKU,
-        // so the upgrade screen went on marking a plan nobody held as "current" and
-        // /api/athlete/entitlements reported it. The checkout webhook writes the tier on purchase
-        // (above); this is the matching write on the way out. Coach rows carry no freeAgentTier.
-        //
-        // UNLESS THE OTHER RAIL IS ON THE ROW. A row carrying an appleOriginalTransactionId as
-        // well is an account that bought on both rails before the takeover rule above existed
-        // (a purchase now clears the loser's handle, so this cannot be reached by anything
-        // bought after 2026-10-14). Clearing the SKU there would take away a tier the App Store
-        // may still be paying for -- and between leaving a tier on file a little too long and
-        // withholding access from somebody who is paying, this file's standing posture is that
-        // withholding is the worse error. Recorded so an operator can settle it by hand.
-        if (updated.accountType === "free_agent") {
-          if (updated.appleOriginalTransactionId) {
-            console.warn(
-              `Stripe subscription ${sub.id} (user ${updated.userId}) was deleted but the row ` +
-                `also carries App Store subscription ${updated.appleOriginalTransactionId}; the ` +
-                `Free Agent tier is left on file rather than withheld from a possible payer`,
-            );
-            // The delivery's id is already on the `event.type` row above; see the
-            // rail_changed call in checkout.session.completed on why a second row may not
-            // claim it. It travels in the detail instead, where it is just as findable.
-            await storage.logBillingEvent(updated.userId, "subscription.other_rail_still_on_file", {
-              endedRail: "stripe",
-              stripeEventId: event.id,
-              stripeSubscriptionId: sub.id,
-              appleOriginalTransactionId: updated.appleOriginalTransactionId,
-            });
-          } else {
-            await storage.updateFreeAgentBilling(updated.userId, { freeAgentTier: null });
-          }
-        }
-        // AND THE COACH SIDE, which this missed entirely until 2026-10-11. The branch above was
-        // written for the Free Agent SKU and read accountType to avoid touching a coach row --
-        // correct as far as it went, except nothing else cleared the coach's band either:
-        // `billingTier: null` was never written anywhere in the server. So a program that
-        // cancelled kept its band, and with it Full Personalization and multi-team on any band
-        // above twenty athletes. Same shape as the Free Agent bug found the same day, on the
-        // other side of the same event.
-        //
-        // plannedAthleteCount is deliberately LEFT ALONE: it is what the school said they have,
-        // not something they bought, so it still quotes their price if they come back.
-        if (updated.accountType === "coach") {
-          await storage.clearCoachBand(updated.userId);
-        }
-      }
-
-      // AND THE ADD-ON, WHICH NO STRIPE LIFECYCLE EVENT COULD REACH (fixed 2026-10-14).
-      //
-      // updateSubscriptionByStripeId above matches the `subscriptions` table, and an add-on's
-      // subscription id is NOT there -- it lives in users.addOnTerms, because
-      // subscriptions.userId is UNIQUE and that one row belongs to the TIER. So `updated` is
-      // null for an add-on and this handler did nothing at all: a coach who cancelled Coaches
-      // Corner in the Stripe billing portal -- the portal Forge itself opens for them at
-      // /api/billing/portal -- kept the add-on forever after the billing stopped, as did anyone
-      // whose card failed until Stripe gave up and deleted the subscription. Access nobody was
-      // paying for, with no event left to take it away.
-      //
-      // Found by the billing sweep, and the third in one family: revokeAddOnsForStripeSubscription
-      // had exactly ONE caller (charge.refunded), so every other lifecycle event was blind to
-      // half the places a subscription id can live.
-      //
-      // THE PAID MONTH IS HONOURED. A cancellation is not a refund (shared/add-on-terms.ts):
-      // a cancelled add-on runs to the end of the month already bought. Stripe reports that
-      // period on the subscription it is deleting, so that is what is passed down; an ordinary
-      // cancel-at-period-end arrives when the period has already ended and so revokes at once.
-      const deletedPeriodEnd = (sub as unknown as { current_period_end?: number }).current_period_end;
-      const addOnAccessUntil = deletedPeriodEnd ? new Date(deletedPeriodEnd * 1000) : new Date();
-      const endedAddOns = await storage.endAddOnsForDeletedStripeSubscription(sub.id, addOnAccessUntil);
-      if (endedAddOns.userId) {
-        await storage.logBillingEvent(
-          endedAddOns.userId,
-          event.type,
-          {
-            subscriptionId: sub.id,
-            addOnIds: endedAddOns.addOnIds,
-            accessUntil: addOnAccessUntil.toISOString(),
-          },
-          event.id,
-        );
-      }
+      await endStripeSubscription(event.data.object as Stripe.Subscription, event.type, event.id);
       break;
     }
     // A STRIPE REFUND REVOKES AT ONCE. Scott, 2026-10-11: "if something is refunded then they
