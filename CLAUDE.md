@@ -1531,8 +1531,11 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 657** (2026-10-09,
-  `8364564e`, the retrained detector), uploaded in 6m32s. Runs 652-655 were that day's four
+  branch `verify_build` for the arbiter plumbing. **The newest build is 673** (2026-10-15,
+  `34574c60`, the billing sweep's client halves and the twenty-commit backlog; 672 was its
+  `verify_build`). Before it, **657** (2026-10-09, `8364564e`, the retrained detector) was the
+  newest for six days while 658-672 were all `verify_build` -- which is how the app came to be
+  twenty commits behind. Runs 652-655 were that day's four
   calibration betas and **656 was the `verify_build` on the `.mlpackage` swap** -- the archive, the
   signing and Apple's own `--validate-app` all passed on the new model before the upload was
   spent, which is what makes a native change safe to ship rather than hopeful.
@@ -1554,25 +1557,24 @@ halves before splitting anything else:
   worst case **60.5% -> 20.7%**. The row is the one lift still outside 15% and the retrained
   detector is the only remaining candidate for it; what proves or disproves that is one filmed
   set, read off `plateBoxToExpectedRatio`.
-- **WAITING ON A BUILD SINCE 2026-10-11, client halves of the billing sweep** (every server half
-  of these shipped on Render as it was committed): the admin billing panel reading an add-on save's
-  answer and naming a subscription that is still billing, the athlete upgrade screen's App Store
-  notice before a second charge, the coach billing page and Coaches Corner upsell withholding
-  purchase from an assistant, `/pricing` with no unbuyable price on it, the admin Free Agent tier
-  panel reading by id, the guardian invite link opening while signed in, the Apple Health
-  disclosure on the check-in path, and the service worker serving the live shell. All
-  `verify_build`-verified; none is calibration work, so they batch.
-  Joined 2026-10-14/15 by the billing sweep's client halves: the admin panel's still-billing
-  warning toast, the athlete upgrade screen's App Store notice, the Apple 409 that finishes a
-  bound transaction, the restore loop that no longer gives up on one bad transaction, the Coaches
-  Corner StoreKit button, the five reworded 402s, and the class gate's new `ClassAccessGate` in
-  `shared/class-pricing-rule.ts` (which four client pages import, so it compiles into the
-  bundle -- the server decides the gate either way, and nothing on screen changes until a build
-  carries the type).
-  **The line this replaces named build 651 and was correct for sixteen hours**, which is the
-  shortest this entry has ever been accurate -- the cause of every earlier drift is that the queue
-  gets written down when something is ADDED and not when a `beta` empties it. **Clear this entry
-  on the next upload rather than adding to it.**
+- **THE QUEUE IS EMPTY AS OF BUILD 673** (2026-10-15, `34574c60`, run 672 was its `verify_build`).
+  It shipped the whole billing sweep's client halves plus everything else that had piled up since
+  **657** -- twenty client-affecting commits over six days, which is the batch working as intended
+  and also the longest the app has ever been behind the server. Three of them were not optional:
+  **`ac372ece`**, the Guideline 3.1.1 fix (the app never prices the coach plan or points at its
+  checkout) -- App Review compliance sitting on `main` and on no phone; **`02c5bf47`**, "the beta
+  is over", without which the installed app still told users nothing was being charged while
+  Stripe was charging real cards; and **`c2ba7a2e`**, the Apple 409 that finishes an
+  already-bound transaction, without which that transaction replays at every app launch forever
+  (build 611's class). Also in it: the Health disclosure reading before the permission sheet, the
+  admin billing panel reading an athlete by id (nothing else can assign a tier), the guardian
+  invite link opening while signed in, the service worker serving the live shell, `/pricing` with
+  no unbuyable price, and the add-on removal flow.
+  **THE LESSON IS THAT THE BATCH RULE NEEDS A SECOND TRIGGER.** "One `beta` every ~20 changes" is
+  right for ordinary work and says nothing about CONTENT, so a compliance fix and a
+  we-are-charging-you correction waited behind the count like a copy tweak. A change that alters
+  what the app CLAIMS about money, or that App Review would read, ships on its own upload the way
+  calibration work does. **Clear this entry on the next upload rather than adding to it.**
 
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
