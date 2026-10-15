@@ -2966,8 +2966,8 @@ writer to any of them, say which other place the same fact lives in.
   refund cleared one SKU and left the other account a free tier; the renewal branch granted the
   tier to one of them for the same reason. Both branches loop every holder
   (`subscriptionRowsForAppleTransaction`).
-- **VERIFIED REAL AND RECORDED, NOT FIXED: every writer of `users.addOnTerms` is a
-  read-modify-write of the WHOLE json object.** `addFreeAgentAddOn`, `addCoachBillingAddOn`,
+- **FIXED 2026-10-15, WITH A LOCK RATHER THAN THE SQL THE SWEEP SKETCHED: every writer of
+  `users.addOnTerms` was a read-modify-write of the WHOLE json object.** `addFreeAgentAddOn`, `addCoachBillingAddOn`,
   `scheduleAddOnRemoval`, `restoreAddOn`, `revokeAddOnAfterRefund` and the admin save all
   `getUser` then `set({ addOnTerms: nextAddOnTerms(...) })`, and the owned ARRAYS are written the
   same way -- so two writes landing on one account inside the same few milliseconds lose one of
@@ -2975,27 +2975,107 @@ writer to any of them, say which other place the same fact lives in.
   coach add-on write different array columns and the SAME terms object. **The consequence is this
   file's recurring shape**: a lost term is an add-on whose `stripeSubscriptionId` was never
   recorded, so nothing can ever cancel or refund it, silently and for good; a lost array append
-  is an add-on that was paid for and not granted. **The fix shape is one atomic statement** --
-  `jsonb_set(coalesce(add_on_terms::jsonb, '{}'), ARRAY[$id], $term::jsonb, true)::json` writes
-  ONE key and cannot clobber another add-on's, plus a containment-guarded `||` append for the
-  array. Not shipped in the 10-14 sweep on purpose: the window is milliseconds on a single
-  account, the SQL is fiddly on a `json` (not `jsonb`) column, and it sits on the one path that
-  grants paid access -- getting it wrong breaks every purchase, which is worse than the race.
-  **The term's VALUE would still be computed from a prior read** (a purchase clears `accessUntil`
-  and `refundedAt`, which needs the old record), so the narrower same-id race survives any
-  version of this; that part wants a transaction, not a cleverer statement.
-- **VERIFIED REAL AND DELIBERATELY NOT FIXED: a Free Agent who self-enrols in Forge classes and
-  later joins a coach reads every paid chapter free.** `classTierGated` asks the ATHLETE ("do they
-  have a coach") where Scott's rule is about what the COACH gave ("only the ones their coach gives
-  to them"), and the catalog being Free-Agent-only is what was doing the work. The provenance for a
-  fix is already on the row -- `classEnrollments.coachId` equals `athleteId` for a self-enrollment
-  -- and both gate points (`recomputeClassProgress`, `getClassProgressForAthlete`) hold the
-  enrollment, so it is a small change. **What stops it is the other side**: `locked_tier` renders
-  `AllClassesCard`, and `requireFreeAgent` refuses that purchase to a coached athlete on both
-  rails, so the fix as specified puts a dead buy button in front of them or takes away chapters
-  they could read yesterday. That is a product decision about what a coached athlete is told, not
-  a thing to invent in a sweep. Reachable only by somebody who self-enrolled BEFORE joining, and
-  joining means landing on a real coach's roster at $4 a head.
+  is an add-on that was paid for and not granted. **The sketch in the first version of this entry was the
+  worse answer and is kept because the reasoning is what decided it**:
+  `jsonb_set(coalesce(add_on_terms::jsonb,'{}'), ARRAY[$id], $term::jsonb, true)::json` writes one
+  key and cannot clobber another add-on's, plus a containment-guarded `||` append for the array --
+  but it is fiddly on a `json` (not `jsonb`) column, it needs two statements, and **it does
+  nothing for the narrower same-id race**, because a purchase's term is COMPUTED from the prior
+  record (it clears `accessUntil` and `refundedAt`). That last clause is the answer: the thing
+  wanted was a transaction, so the transaction is the whole fix.
+  **`mutateAddOnsAtomically` in `storage.ts` is it** -- one `db.transaction` that reads the row
+  `.for("update")` and writes it on the transaction's own handle, with a PURE `decide` callback
+  returning the patch plus whatever the caller reports. All seven writers go through it
+  (`addFreeAgentAddOn`, `addCoachBillingAddOn`, `scheduleAddOnRemoval`, `restoreAddOn`,
+  `revokeAddOnAfterRefund` and both admin saves), in the idiom `publishMovementProfile` already
+  used. The read deliberately does NOT go through `getUser`: that is memoised per request, and a
+  memo filled before the lock was taken is exactly the stale read this exists to stop.
+  **The admin saves BRANCH, and that is load-bearing.** `updateFreeAgentBilling` is also how the
+  Stripe and Apple paths write `users.freeAgentTier` -- the hot path every purchase takes -- so
+  only the branch carrying an owned array (the admin panel's PATCH, the only caller that sends
+  one) takes the lock; the WHOLE patch goes inside it, since writing the arrays and the terms in
+  two statements leaves them able to disagree. The returned row is built from the locked row plus
+  the patch rather than from a RETURNING clause, so what it reports is exactly what that
+  transaction wrote.
+  **`two-add-on-writes-never-lose-one.itest.ts` is REAL concurrency**, not a simulation:
+  `Promise.all` over the actual methods against real Postgres, twelve rounds a case. Remove the
+  `for("update")` and SEVEN of its eight cases go red -- the transaction alone is not the fix, the
+  lock is. The eighth states the same-id property and says in its own comment that it still passes
+  without the lock, so nobody reads it as proof.
+  `every-add-on-write-takes-the-lock.test.ts` is the ratchet beside it and DISCOVERS the writers
+  from the source: an `addOnTerms:` write anywhere outside the named seven fails it, which is the
+  assertion direction this file keeps having to relearn.
+- **FIXED 2026-10-15: a Free Agent who self-enrolled in Forge classes and later joined a coach
+  read every paid chapter free.** `classTierGated` asked the ATHLETE ("do they have a coach")
+  where Scott's rule is about what the COACH gave ("only the ones their coach gives to them"), and
+  the catalog being Free-Agent-only was what did the work -- a coached athlete had no other way to
+  hold a Forge enrolment they were not given.
+  **THE DECISION IS PER ENROLMENT NOW, NOT PER ATHLETE**, which is what a boolean could not
+  express: `classGateFor` returns a `ClassAccessGate` (`shared/class-pricing-rule.ts`) and
+  `classGateStateFor` applies it against `classEnrollments.coachId`, which equals the athlete for
+  a self-enrolment. One account can hold one of each and they are gated differently, which an
+  itest case asserts head-on.
+  **The state is `locked`, NOT `locked_tier`** -- the half the 10-14 note correctly named as the
+  blocker. `locked_tier` renders `AllClassesCard` and `requireFreeAgent` refuses that purchase to
+  a coached athlete on both rails, so gating them that way is a dead buy button; plain `locked` is
+  the ordinary not-open-yet state and the thing to do about it is ask their coach. No new state,
+  no client change, server-only deploy. The copy is the generic one, which is the known cost.
+  **AND THE ADD-ON IS CHECKED BEFORE THE COACH**, which is what keeps the fix from costing
+  somebody something: All Classes was sold as "the whole catalog, current and future, for any
+  athlete on any plan or with any coach", so an athlete who BOUGHT it and then joined a program
+  keeps every chapter. Closing a free-access hole by taking away chapters somebody paid for would
+  be the worse bug, and asking about the coach first does exactly that -- there is a mutation test
+  for the ordering. `shared/a-class-the-coach-did-not-give.test.ts` (pure, four combinations plus
+  the ordering scan) and three new cases in `server/class-pricing-rule.itest.ts`.
+- **AND FOUR MORE, 2026-10-15, FINISHING THE SWEEP'S OWN LIST.** Each one the sweep had either
+  named as open or not reached at all:
+  **A RETRIED CHECKOUT GRANTED A TIER NOBODY WAS PAYING FOR, PERMANENTLY.** Stripe retries a
+  failed delivery with backoff for up to three days and promises no ordering BETWEEN event types,
+  so a `checkout.session.completed` can be re-delivered long after the subscription it created was
+  cancelled or died in dunning -- and that subscription's `customer.subscription.deleted` can be
+  processed FIRST, match on an id this handler has not written yet, find nothing, and do nothing.
+  Either way the retry grants with no live subscription behind it and **nothing is left that can
+  ever take it back**: the revocation already ran, and `wasStripeEventProcessed` refuses to run it
+  twice. Free access for good, out of one transient 500. `stripeSubscriptionIsDead` asks Stripe
+  for the CURRENT status (terminal only -- `past_due` is dunning still trying and `trialing` is a
+  live subscription that has not charged), and the guard sits ABOVE every subscription-mode branch
+  rather than with the tier: an add-on has its own Stripe subscription, its id lives in
+  `users.addOnTerms`, and both add-on revocation paths match on that id, so it is the same hole one
+  table over. **FAIL-OPEN** on an unreadable answer or no Stripe client, in the direction that
+  costs Forge rather than the buyer -- the common delivery is the first one, seconds after a
+  successful checkout, and refusing on unknown lets an API blip take away access somebody just
+  paid for. Same posture as the guardian-verification refund. The delivery's id is claimed on the
+  refusal row so Stripe stops retrying. `a-grant-needs-a-live-subscription.test.ts`, 15 cases,
+  four mutations.
+  **A FAVORITED DRILL CLIP WAS EXEMPT FROM THE CAP THE STORAGE ADD-ON RAISES.** Two retention
+  rules, two places. The TOTAL cap is the nightly sweep and has always covered both sides (its
+  rows carry `source: "set" | "skill"`); the FAVORITED cap is a synchronous trim on save --
+  because un-favoriting deletes nothing and so needs no grace window -- and it read workout tables
+  only, with one caller, `submitWorkoutLog`. So an athlete could favorite every drill clip they
+  ever recorded. That is the cap the $9.99 add-on raises (5 -> 10), which makes an unenforced cap
+  on one side something somebody paid for and did not get, and on a minor's account it is a
+  data-minimisation promise going unkept for every drill. `enforceSkillVideoRetention` is the
+  twin, and two things about it are load-bearing: it filters on `skillSessionLogs.athleteId`
+  rather than joining through `skillDayLogs`, because `skillDayLogId` is NULLABLE and
+  `createSkillSessionLog`'s plain-append fallback leaves it null (the mutation that passes every
+  other assertion); and it runs at all THREE exits from that method and on every save, not only
+  one carrying a video. `the-favorited-cap-covers-drills-too.test.ts` + `.itest.ts`, seven
+  mutations; the unlimited no-op is scan-only on purpose, since with the guard gone the comparison
+  is `length > Infinity` and nothing observable changes.
+  **A PROMOTED COACH RAN A ROSTER AND WAS NEVER ASKED FOR THE INSTITUTIONAL SERVICE AGREEMENT.**
+  `getInstitutionalAgreementStatus` keyed on `plannedAthleteCount || billingTier` -- what the
+  school SAID or what they PAID, both statements -- and three ordinary paths produce a primary
+  coach with neither: `setUserRole` (an admin's "Change role") writes no plan; an assistant who
+  joined by staff invite code is deliberately given none and becomes primary the moment they
+  leave the staff; and a coach can clear their own number. Each then builds a roster and the
+  documents page draws nothing, which is a **legal surface failing silently** -- the shape this
+  file has now found five times. The roster is consulted LAST and only when both columns are
+  absent, so neither existing behaviour moves (a school that stated a number and added nobody
+  still owes it), and ONE athlete is enough, because the agreement is about handling a program's
+  athletes at all. A staff coach still reads the primary's and never signs their own.
+  `a-roster-is-asked-for-the-agreement.itest.ts`. No money impact; it is the paperwork.
+  **AND THE SKILL BANK / SELF-ENROLMENT / `addOnTerms` ITEMS the sweep left open are closed in
+  the entries above.**
 - **NO FREE AGENT TIER COULD BE ASSIGNED BY AN ADMIN, AND THE FIRST ATTEMPT AFTER LAUNCH FOUND
   IT** (2026-10-11). Scott, on More -> Users with the App Review athlete expanded: "This is all I
   see" -- Reset MFA and Change role, no billing panel. `AdminBillingAssignment`'s athlete form

@@ -186,7 +186,13 @@ describe("both admin writers go through the one rule", () => {
     it(`${name} reconciles the terms and writes addOnTerms`, () => {
       const body = writerBody(name);
       expect(body).toMatch(/reconcileAdminAddOnSave\(/);
-      expect(body).toMatch(/addOnTerms: save\.terms/);
+      // Re-pointed 2026-10-15, not relaxed: the read and the write moved inside
+      // mutateAddOnsAtomically (see every-add-on-write-takes-the-lock.test.ts), so the reconcile's
+      // terms are now spread into that transaction's patch under the name `decided` rather than
+      // assigned from a `save` built one statement earlier. Same assertion -- the reconciled
+      // terms reach the addOnTerms column -- against the shape that performs it.
+      expect(body).toMatch(/decided\.terms !== undefined && \{ addOnTerms: decided\.terms \}/);
+      expect(body).toMatch(/mutateAddOnsAtomically\(/);
       expect(body).toMatch(new RegExp(`values\\.${column} !== undefined`));
       // The result reaches the caller, or the screen cannot say what is still billing.
       expect(body).toMatch(/addOnsStillBilling/);

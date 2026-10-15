@@ -91,7 +91,11 @@ describe("a gated chapter is never activated by a read", () => {
     // gated chapter as open -- it can put one on the calendar, which the pricing rule says
     // never happens.
     expect(routes).not.toMatch(/getClassProgressForAthlete\(user\.id, id\)/);
-    const gated = routes.match(/getClassProgressForAthlete\(user\.id, id, undefined, await classTierGated\(user\)\)/g);
+    // Re-pointed 2026-10-15, not relaxed: classTierGated became classGateFor and returns WHO is
+    // gated rather than a boolean, because a boolean could not express a coached athlete's
+    // self-enrolled class (shared/class-pricing-rule.ts, ClassAccessGate). The assertion is the
+    // same one -- every read passes the gate -- and the count is the same count.
+    const gated = routes.match(/getClassProgressForAthlete\(user\.id, id, undefined, await classGateFor\(user\)\)/g);
     expect(gated?.length).toBeGreaterThanOrEqual(4);
   });
 });

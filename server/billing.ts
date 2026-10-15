@@ -663,6 +663,50 @@ export async function cancelSupersededStripeSubscription(userId: number, subscri
   }
 }
 
+/**
+ * IS THE SUBSCRIPTION THIS CHECKOUT PAID FOR STILL ALIVE?
+ *
+ * Stripe retries a failed delivery with backoff for up to three days, and does NOT promise
+ * ordering between event types. Both facts bite the same way here: a
+ * `checkout.session.completed` whose first delivery threw can be re-delivered long after the
+ * subscription it created has been cancelled or has died in dunning -- and a
+ * `customer.subscription.deleted` for that same subscription can be processed FIRST, since it
+ * matches on an id this handler has not written yet, find nothing, and do nothing.
+ *
+ * The result is a grant with no live subscription behind it and nothing left that can ever take
+ * it back: the revocation already ran, and `wasStripeEventProcessed` will refuse to run it again.
+ * Free access, permanently, from one transient 500.
+ *
+ * So the grant asks Stripe for the subscription's CURRENT state rather than trusting the
+ * session's age. Terminal statuses only -- `past_due` is recoverable (dunning is still trying,
+ * and endStripeSubscription handles it if it ends in `unpaid`) and `trialing` is a live
+ * subscription that simply has not charged yet, so neither is refused here.
+ *
+ * FAIL-OPEN, deliberately and in the direction that costs Forge rather than the buyer. Without a
+ * Stripe client, or on a network error, the honest answer is "unknown", and the overwhelmingly
+ * common case is a first delivery seconds after a successful checkout. Refusing on unknown would
+ * mean a Stripe API blip takes away access somebody has just paid for -- the same posture as the
+ * guardian-verification refund and the superseded cancel, both of which record and carry on
+ * rather than roll back a purchase that succeeded.
+ */
+const DEAD_STRIPE_SUBSCRIPTION_STATUSES = new Set(["canceled", "unpaid", "incomplete_expired"]);
+
+async function stripeSubscriptionIsDead(subscriptionId: string): Promise<string | null> {
+  const stripe = getStripeClient();
+  if (!stripe) return null;
+  try {
+    const sub = await stripe.subscriptions.retrieve(subscriptionId);
+    return DEAD_STRIPE_SUBSCRIPTION_STATUSES.has(sub.status) ? sub.status : null;
+  } catch (err) {
+    console.error(
+      `Could not read Stripe subscription ${subscriptionId} while granting a checkout; ` +
+        `granting anyway (a purchase that succeeded must not be undone by a read failure):`,
+      (err as Error)?.message,
+    );
+    return null;
+  }
+}
+
 /** The subscription a refunded invoice was for. Lives here rather than in storage.ts because it
  *  needs the Stripe client, and storage.ts must not import this module (the cycle its own
  *  comment warns about). Null whenever it cannot be established, which makes the refund a no-op
@@ -1211,6 +1255,36 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       const kind = session.metadata?.kind;
       const customerId = typeof session.customer === "string" ? session.customer : null;
 
+      // A RETRIED OR RE-ORDERED DELIVERY MUST NOT GRANT WHAT NOBODY IS PAYING FOR. See
+      // stripeSubscriptionIsDead above for why this is asked of Stripe rather than inferred from
+      // the session's age: the revocation for this subscription may already have run and been
+      // recorded, and wasStripeEventProcessed will not let it run twice.
+      //
+      // Placed ABOVE every branch that buys a subscription -- the two add-ons as much as the tier
+      // and the band -- because an add-on has its own Stripe subscription (its id lives in
+      // users.addOnTerms) and the same two revocation paths, endAddOnsForDeletedStripeSubscription
+      // and revokeAddOnAfterRefund, which match on that id and so find nothing on a delivery that
+      // has not landed yet. The one-off kinds above this are `payment` mode and carry no
+      // subscription at all, so the guard is skipped for them rather than having to exempt them.
+      if (typeof session.subscription === "string") {
+        const deadStatus = await stripeSubscriptionIsDead(session.subscription);
+        if (deadStatus) {
+          console.warn(
+            `checkout ${session.id} (user ${userId}) arrived for Stripe subscription ` +
+              `${session.subscription}, which is already ${deadStatus}; granting nothing`,
+          );
+          // The delivery's id is claimed here so the event counts as processed and Stripe stops
+          // retrying it -- there is nothing a later attempt could do differently.
+          await storage.logBillingEvent(
+            userId,
+            "stripe.checkout_for_dead_subscription",
+            { sessionId: session.id, kind, subscriptionId: session.subscription, status: deadStatus },
+            event.id,
+          );
+          break;
+        }
+      }
+
       // A one-off lesson purchase has no subscription at all, so it is
       // handled before the subscription branch rather than being dropped by
       // it. The enrolment is what scopes the purchase to a single athlete --
@@ -1354,6 +1428,8 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       }
 
       if (typeof session.subscription !== "string") break;
+
+
       // What they actually bought. Without this the subscription row goes
       // active carrying whatever tier it was created with, so a Free Agent
       // who paid for AI Coach + Video would be entitled to the cheapest

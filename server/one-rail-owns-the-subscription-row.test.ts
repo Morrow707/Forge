@@ -72,9 +72,15 @@ const cancel = vi.fn();
 // leaves the process, and the key is stubbed because without one getStripeClient() returns null
 // and charge.refunded is a silent no-op -- which would make the event-id case below vacuous.
 const invoiceRetrieve = vi.fn();
+// `subscriptions.retrieve` resolves ACTIVE: every checkout.session.completed now asks Stripe
+// whether the subscription it is granting for is still alive (see
+// a-grant-needs-a-live-subscription.test.ts). A bare vi.fn() resolves undefined, which the guard
+// catches and fails OPEN on, so these cases would still pass -- but on an error path, logging a
+// read failure that did not happen. Stating it keeps them on the ordinary path.
+const subscriptionRetrieve = vi.fn().mockResolvedValue({ id: "sub_live", status: "active" });
 vi.mock("stripe", () => ({
   default: class {
-    subscriptions = { cancel, retrieve: vi.fn(), update: vi.fn() };
+    subscriptions = { cancel, retrieve: subscriptionRetrieve, update: vi.fn() };
     checkout = { sessions: { create: vi.fn() } };
     refunds = { create: vi.fn() };
     invoices = { retrieve: invoiceRetrieve };

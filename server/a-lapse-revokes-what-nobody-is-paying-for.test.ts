@@ -207,8 +207,13 @@ describe("one account never pays twice for one add-on", () => {
     it(`${fn} hands up the Stripe subscription it replaced`, () => {
       const start = storageSrc.indexOf(`async ${fn}(`);
       const body = storageSrc.slice(start, storageSrc.indexOf("\n  },\n", start));
-      // Read BEFORE the write, or the prior id is already gone.
-      expect(body).toMatch(/const prior = current\?\.addOnTerms\?\.\[addOnId\]/);
+      // Read BEFORE the write, or the prior id is already gone -- and since 2026-10-15 read
+      // UNDER THE LOCK that the write takes, so the id handed up is the one this write really
+      // replaced rather than one a concurrent writer had already moved past (see
+      // every-add-on-write-takes-the-lock.test.ts). Re-pointed at the shape that does it, not
+      // relaxed: the assertion is still that the prior term is read from the row before the set.
+      expect(body).toMatch(/mutateAddOnsAtomically\(/);
+      expect(body).toMatch(/const prior = current\.addOnTerms\?\.\[addOnId\];/);
       expect(body).toMatch(/supersededStripeSubscriptionId/);
       // Never the id just bought, and never a refunded term's -- nothing is billing there.
       expect(body).toMatch(/priorStripeId !== provider\?\.stripeSubscriptionId/);

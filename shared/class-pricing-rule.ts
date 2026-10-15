@@ -17,3 +17,52 @@ export function chapterNeedsClassPass(lessonNumber: number, isForgeOfficial: boo
 /** The sentence every surface uses to say it. */
 export const CLASS_PRICING_LINE =
   "Chapter 1 of every Forge class is free to try. All Classes, $19.99 a month, opens every chapter of every class, now and as new ones are added.";
+
+/**
+ * WHO IS BEING GATED, AND WHAT THEY SHOULD BE SHOWN INSTEAD.
+ *
+ * A boolean could not express the case that was missing (found by the 2026-10-14 audit panel). The
+ * old `tierGated` flag was decided per ATHLETE and answered "is this a Free Agent without All
+ * Classes", short-circuiting to false for anybody with a coach -- which was the whole gate, since
+ * the catalog is Free-Agent-only, so a coached athlete had no way to be enrolled in a Forge class
+ * they had not been GIVEN.
+ *
+ * Except one: a Free Agent self-enrols (chapter one free), then joins a coach. The enrolment
+ * survives, the short-circuit now applies, and they read every paid chapter of it for nothing.
+ * Scott's rule is about what the COACH gave -- "they have access to the classes, but only the ones
+ * their coach gives to them" -- and a class they enrolled themselves in is not one of those.
+ *
+ * So the decision is per ENROLMENT, and `classEnrollments.coachId` already carries the provenance:
+ * it equals athleteId for a self-enrolment and is the coach's id otherwise.
+ *
+ * AND THE STATE MATTERS AS MUCH AS THE GATE. `locked_tier` renders the All Classes buy card, and
+ * `requireFreeAgent` refuses that purchase to a coached athlete on both rails -- so gating them
+ * that way would put a dead buy button in front of them. They get `locked`, the ordinary
+ * not-open-yet state, because the thing to do about it is ask their coach.
+ *
+ * `holdsAllClasses` is honoured either way: the add-on was sold as "the whole catalog, current and
+ * future, for any athlete on any plan or with any coach" (see the rule above), so an athlete who
+ * BOUGHT it and then joined a coach keeps every chapter. Taking away chapters somebody paid for
+ * in order to close a free-access hole would be the worse bug.
+ */
+export interface ClassAccessGate {
+  /** A Free Agent without All Classes: paid chapters read `locked_tier` and offer the add-on. */
+  tierGated: boolean;
+  /** A coached athlete without All Classes: paid chapters of a class they enrolled THEMSELVES in
+   *  read `locked`, with no offer, because they cannot buy it. A class their coach enrolled them
+   *  in is never gated. */
+  selfEnrolledGated: boolean;
+}
+
+export const OPEN_CLASS_ACCESS: ClassAccessGate = { tierGated: false, selfEnrolledGated: false };
+
+/** Does this enrolment's paid chapters get withheld, and as which state? Null means open.
+ *  `enrollment` is the row; a self-enrolment is the one whose coachId is the athlete. */
+export function classGateStateFor(
+  gate: ClassAccessGate,
+  enrollment: { athleteId: number; coachId: number },
+): "locked_tier" | "locked" | null {
+  if (gate.tierGated) return "locked_tier";
+  if (gate.selfEnrolledGated && enrollment.coachId === enrollment.athleteId) return "locked";
+  return null;
+}

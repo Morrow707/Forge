@@ -150,6 +150,10 @@ import {
   isSportCoachAddOn,
 } from "@shared/free-agent-tiers";
 import {
+  OPEN_CLASS_ACCESS,
+  type ClassAccessGate,
+} from "@shared/class-pricing-rule";
+import {
   insertExerciseSchema,
   insertSkillExerciseSchema,
   programStructureSchema,
@@ -1454,21 +1458,34 @@ async function assertAdminOwnsForgeClass(classId: number) {
 // add-on reads chapter one of a Forge class and nothing after it, whatever their tier. A
 // coach's own class is never gated this way. Beta, a trial and enforcement-off open it like every add-on
 // (getFreeAgentEntitlements), so nobody meets this wall while nothing is charged.
-async function classTierGated(user: { id: number; email: string; role: string }): Promise<boolean> {
-  if (user.role !== "athlete") return false;
-  // A coached athlete reads the classes their coach enrolled them in, every chapter; the
-  // add-on is a Free Agent thing and is refused to them (Scott: "they have access to the
-  // classes, but only the ones their coach gives to them").
-  if (await athleteHasCoach(user.id)) return false;
+//
+// RETURNS WHO IS GATED, NOT A BOOLEAN, since 2026-10-15 -- see ClassAccessGate for the case a
+// boolean could not express. The short version: this used to answer false for anybody with a
+// coach, on the reasoning that a coached athlete only ever reads what their coach gave them, and
+// the catalog being Free-Agent-only is what made that true. A Free Agent who self-enrols and
+// THEN joins a coach is the exception, and they read every paid chapter of that class free.
+//
+// The add-on is checked BEFORE the coach, which is the other half: it was sold as "the whole
+// catalog ... for any athlete on any plan or with any coach", so somebody who bought it and then
+// joined a coach keeps every chapter. Closing a free-access hole by taking away chapters
+// somebody paid for would be the worse bug.
+async function classGateFor(user: { id: number; email: string; role: string }): Promise<ClassAccessGate> {
+  if (user.role !== "athlete") return OPEN_CLASS_ACCESS;
   const access = await sportCoachAccessFor(user);
-  return access.addOns[ALL_CLASSES_ADD_ON_ID] !== true;
+  if (access.addOns[ALL_CLASSES_ADD_ON_ID] === true) return OPEN_CLASS_ACCESS;
+  // Scott: "they have access to the classes, but only the ones their coach gives to them." The
+  // gate for a coached athlete is therefore per enrolment, and storage applies it from
+  // classEnrollments.coachId; the add-on's buy card is withheld from them because
+  // requireFreeAgent refuses that purchase on both rails.
+  const coached = await athleteHasCoach(user.id);
+  return { tierGated: !coached, selfEnrolledGated: coached };
 }
 
 async function requireReadableClassLesson(user: { id: number; email: string; role: string }, classId: number, lessonId: number) {
   const userId = user.id;
   const enrollment = await storage.getClassEnrollmentForAthlete(userId, classId);
   if (!enrollment) return null;
-  const progress = await storage.getClassProgressForAthlete(userId, classId, undefined, await classTierGated(user));
+  const progress = await storage.getClassProgressForAthlete(userId, classId, undefined, await classGateFor(user));
   const lesson = progress?.lessons.find((l) => l.id === lessonId);
   if (!lesson || (lesson.state !== "ready" && lesson.state !== "active")) return null;
   return enrollment;
@@ -13265,7 +13282,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/athlete/my-classes", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
-    const list = await storage.getEnrolledClassesForAthlete(user.id, await classTierGated(user));
+    const list = await storage.getEnrolledClassesForAthlete(user.id, await classGateFor(user));
     res.json(list);
   });
 
@@ -13276,7 +13293,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const list = await storage.getVisibleClassesForFreeAgent(user.id);
     // `fullAccess`: this athlete's plan opens every chapter (shared/class-pricing-rule.ts).
-    const fullAccess = !(await classTierGated(user));
+    // This route is requireFreeAgent, so selfEnrolledGated is never the live half here -- a
+    // coached athlete does not see the catalog at all -- but it is read rather than ignored, so
+    // the card cannot claim full access on the strength of only half the gate being open.
+    const gate = await classGateFor(user);
+    const fullAccess = !gate.tierGated && !gate.selfEnrolledGated;
     res.json(list.map((c) => ({ ...c, forYourSport: classCategoryMatchesSport(c.category, user.sport), fullAccess })));
   });
 
@@ -13315,7 +13336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const [streak, enrolled, deck] = await Promise.all([
       storage.getLearningStreakForAthlete(user.id),
-      storage.getEnrolledClassesForAthlete(user.id, await classTierGated(user)),
+      storage.getEnrolledClassesForAthlete(user.id, await classGateFor(user)),
       storage.getFlashcardDeckForAthlete(user.id),
     ]);
     res.json({
@@ -13348,10 +13369,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // This is the one place an automatic (time/reps/sessions) unlock
       // actually gets detected, since nothing runs on a schedule -- the
       // athlete opening their own progress page IS the trigger.
-      const newlyUnlocked = await storage.recomputeClassProgress(enrollment.id, undefined, await classTierGated(user));
+      const newlyUnlocked = await storage.recomputeClassProgress(enrollment.id, undefined, await classGateFor(user));
       await notifyNewlyUnlockedLessons(newlyUnlocked);
     }
-    const progress = await storage.getClassProgressForAthlete(user.id, id, undefined, await classTierGated(user));
+    const progress = await storage.getClassProgressForAthlete(user.id, id, undefined, await classGateFor(user));
     if (!progress || (!enrollment && !progress.class.isForgeOfficial)) {
       return res.status(404).json({ message: "Class not found" });
     }
@@ -13414,7 +13435,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user.id,
         id,
         parsed.data.startDate,
-        await classTierGated(user),
+        await classGateFor(user),
       );
       await notifyNewlyUnlockedLessons(newlyUnlocked);
       res.status(201).json(enrollment);
@@ -13447,7 +13468,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!enrollment) return res.status(404).json({ message: "Not enrolled in this class" });
       const newlyUnlocked = await storage.markLessonPurchased(enrollment.id, lessonId);
       await notifyNewlyUnlockedLessons(newlyUnlocked);
-      const progress = await storage.getClassProgressForAthlete(user.id, id, undefined, await classTierGated(user));
+      const progress = await storage.getClassProgressForAthlete(user.id, id, undefined, await classGateFor(user));
       res.json(progress);
     },
   );
@@ -13486,7 +13507,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           `/coach/classes/${notifyCoach.classId}`,
         );
       }
-      const progress = await storage.getClassProgressForAthlete(user.id, id, undefined, await classTierGated(user));
+      const progress = await storage.getClassProgressForAthlete(user.id, id, undefined, await classGateFor(user));
       res.json(progress);
     },
   );
@@ -13559,7 +13580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const newlyUnlocked = await storage.activateClassLesson(enrollment.id, lessonId);
         await notifyNewlyUnlockedLessons(newlyUnlocked);
-        const progress = await storage.getClassProgressForAthlete(user.id, id, undefined, await classTierGated(user));
+        const progress = await storage.getClassProgressForAthlete(user.id, id, undefined, await classGateFor(user));
         res.json(progress);
       } catch (err) {
         res.status(400).json({ message: err instanceof Error ? err.message : "Could not add this lesson to your calendar" });

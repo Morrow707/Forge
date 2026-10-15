@@ -192,6 +192,7 @@ import {
 import { coreAgreementText } from "./seed-data/signup-agreement";
 import {
   type AddOnStillBilling,
+  type AddOnTerms,
   addOnIsActive,
   nextAddOnTerms,
   reconcileAdminAddOnSave,
@@ -370,7 +371,12 @@ import type { RosterGroup } from "@shared/roster-groups";
 import { findVerbatimLesson } from "./academy-draft-guard";
 import { academyQuizPassed } from "@shared/academy-quiz";
 import { gradeQuestion, athleteFacingPayload, type QuizSubmission, type QuizQuestionType } from "@shared/class-quiz-grading";
-import { chapterNeedsClassPass } from "@shared/class-pricing-rule";
+import {
+  chapterNeedsClassPass,
+  classGateStateFor,
+  OPEN_CLASS_ACCESS,
+  type ClassAccessGate,
+} from "@shared/class-pricing-rule";
 import { readingLevelInstruction, type ClassReadingLevel } from "@shared/class-reading-level";
 import { learningStreakFromDays } from "@shared/learning-streak";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
@@ -3256,6 +3262,92 @@ type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 //
 // Same rule, same order, same no-op conditions as its twin: oldest favorite first, un-favoriting
 // deletes nothing, and unlimited limits (comped, enforcement off) do nothing at all.
+/**
+ * ONE ATOMIC READ-MODIFY-WRITE OF AN ACCOUNT'S ADD-ON STATE.
+ *
+ * EVERY WRITER OF users.addOnTerms REPLACES THE WHOLE JSON OBJECT. nextAddOnTerms spreads the
+ * record it is handed and sets one key, so each of the six writers below -- addFreeAgentAddOn,
+ * addCoachBillingAddOn, scheduleAddOnRemoval, restoreAddOn, revokeAddOnAfterRefund and the
+ * admin save -- was a `getUser` followed, milliseconds later, by a `.set({ addOnTerms: ... })`
+ * built from that read. Two of them landing on one account inside that window lost one of the
+ * two ENTIRELY, and the collision is ACROSS add-ons rather than only within one: a Free Agent
+ * add-on and a coach add-on write different owned ARRAYS and the same terms object.
+ *
+ * The consequence is this repo's recurring shape -- a correction that looks like it worked. A
+ * lost term is an add-on whose stripeSubscriptionId was never recorded, so nothing can ever
+ * cancel or refund it, silently and for good; a lost array append is an add-on somebody paid
+ * for and was not granted.
+ *
+ * SO THE READ AND THE WRITE SHARE ONE TRANSACTION AND THE ROW IS LOCKED BETWEEN THEM. A second
+ * writer waits at the `for("update")` and then builds its patch from what the first one left,
+ * which is what makes the CROSS-add-on clobber impossible AND fixes the narrower same-id value
+ * race in the same move (a purchase's term is computed from the prior record -- it clears
+ * accessUntil and refundedAt -- so even one key needs the read it is derived from to be the
+ * state that is still there when the write lands).
+ *
+ * The 2026-10-14 sweep recorded this as verified-real-and-not-fixed with a jsonb_set shape
+ * sketched out. A lock is the better answer and the sketch was the worse one: `jsonb_set` on a
+ * `json` (not jsonb) column is fiddly to get right on the one path that grants paid access, it
+ * does nothing for the value race, and it needs a second containment-guarded statement for the
+ * owned array. This is one mechanism for all three problems, in the idiom the repo already uses
+ * for publishMovementProfile.
+ *
+ * `decide` is PURE and must stay that way: it is called with the row as the lock sees it and
+ * returns the patch to write plus whatever the caller reports. Returning null writes nothing and
+ * is how a writer says "not applicable" (no such account, an add-on that is not owned), which is
+ * the same null those methods returned before. The read deliberately does NOT go through getUser:
+ * that is memoised per request (server/request-cache.ts) and a memo filled before the lock was
+ * taken is exactly the stale read this exists to stop.
+ */
+type AddOnAccountState = {
+  id: number;
+  freeAgentAddOns: string[] | null;
+  billingAddOns: string[] | null;
+  addOnTerms: AddOnTerms | null;
+  // The rest of the billing columns, so the admin panel's save -- which sets a tier or a band, a
+  // comp flag and the owned array in ONE statement -- can write its whole patch under this same
+  // lock and still report what the row now holds, without a second read that a concurrent writer
+  // could land in between.
+  freeAgentTier: string | null;
+  billingTier: string | null;
+  isBetaAccount: boolean;
+  hasVideoStorageAddOn: boolean;
+  unlockedSkillSports: string[] | null;
+};
+
+async function mutateAddOnsAtomically<T>(
+  userId: number,
+  decide: (current: AddOnAccountState) => { set: Record<string, unknown>; result: T } | null,
+): Promise<T | null> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        id: users.id,
+        freeAgentAddOns: users.freeAgentAddOns,
+        billingAddOns: users.billingAddOns,
+        addOnTerms: users.addOnTerms,
+        freeAgentTier: users.freeAgentTier,
+        billingTier: users.billingTier,
+        isBetaAccount: users.isBetaAccount,
+        hasVideoStorageAddOn: users.hasVideoStorageAddOn,
+        unlockedSkillSports: users.unlockedSkillSports,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .for("update");
+    if (!current) return null;
+    const decided = decide(current as AddOnAccountState);
+    if (!decided) return null;
+    if (Object.keys(decided.set).length > 0) {
+      await tx
+        .update(users)
+        .set(decided.set as Partial<typeof users.$inferInsert>)
+        .where(eq(users.id, userId));
+    }
+    return decided.result;
+  });
+}
+
 async function enforceSkillVideoRetention(
   athleteId: number,
   skillProgramExerciseId: number,
@@ -3710,26 +3802,55 @@ export const storage = {
     // PATCH; every other caller of this method patches the tier or the beta flag alone, and a
     // real purchase goes through addFreeAgentAddOn / addCoachBillingAddOn, which write both
     // places already. `an-admin-grant-reaches-the-add-on.test.ts` holds that.
+    const patch = {
+      ...(values.billingTier !== undefined && { billingTier: values.billingTier }),
+      ...(values.billingAddOns !== undefined && { billingAddOns: values.billingAddOns }),
+      ...(values.isBetaAccount !== undefined && { isBetaAccount: values.isBetaAccount }),
+    };
     let save: ReturnType<typeof reconcileAdminAddOnSave> | null = null;
+    let row: {
+      id: number;
+      billingTier: string | null;
+      billingAddOns: string[] | null;
+      isBetaAccount: boolean;
+    } | null = null;
+
     if (values.billingAddOns !== undefined) {
-      const current = await this.getUser(coachId);
-      save = reconcileAdminAddOnSave(current?.addOnTerms, current?.billingAddOns, values.billingAddOns);
-    }
-    const [row] = await db
-      .update(users)
-      .set({
-        ...(values.billingTier !== undefined && { billingTier: values.billingTier }),
-        ...(values.billingAddOns !== undefined && { billingAddOns: values.billingAddOns }),
-        ...(values.isBetaAccount !== undefined && { isBetaAccount: values.isBetaAccount }),
-        ...(save?.terms !== undefined && { addOnTerms: save.terms }),
-      })
-      .where(eq(users.id, coachId))
-      .returning({
-        id: users.id,
-        billingTier: users.billingTier,
-        billingAddOns: users.billingAddOns,
-        isBetaAccount: users.isBetaAccount,
+      // LOCKED, exactly as the Free Agent twin above -- same reconcile, same two places one fact
+      // lives in. See mutateAddOnsAtomically.
+      const owned = values.billingAddOns;
+      const out = await mutateAddOnsAtomically(coachId, (current) => {
+        const decided = reconcileAdminAddOnSave(current.addOnTerms, current.billingAddOns, owned);
+        return {
+          set: { ...patch, ...(decided.terms !== undefined && { addOnTerms: decided.terms }) },
+          result: {
+            save: decided,
+            row: {
+              id: current.id,
+              billingTier: values.billingTier !== undefined ? values.billingTier : current.billingTier,
+              billingAddOns: owned,
+              isBetaAccount:
+                values.isBetaAccount !== undefined ? values.isBetaAccount : current.isBetaAccount,
+            },
+          },
+        };
       });
+      if (!out) return null;
+      save = out.save;
+      row = out.row;
+    } else {
+      const [updated] = await db
+        .update(users)
+        .set(patch)
+        .where(eq(users.id, coachId))
+        .returning({
+          id: users.id,
+          billingTier: users.billingTier,
+          billingAddOns: users.billingAddOns,
+          isBetaAccount: users.isBetaAccount,
+        });
+      row = updated ?? null;
+    }
     if (!row) return null;
     if (save) await this._logAdminAddOnSave(coachId, save);
     // As the Free Agent twin: the band an admin assigns is a manual override and belongs in the
@@ -3899,34 +4020,79 @@ export const storage = {
     // PATCH; every other caller of this method patches the tier or the beta flag alone, and a
     // real purchase goes through addFreeAgentAddOn / addCoachBillingAddOn, which write both
     // places already. `an-admin-grant-reaches-the-add-on.test.ts` holds that.
+    const patch = {
+      ...(values.freeAgentTier !== undefined && { freeAgentTier: values.freeAgentTier }),
+      ...(values.freeAgentAddOns !== undefined && { freeAgentAddOns: values.freeAgentAddOns }),
+      ...(values.isBetaAccount !== undefined && { isBetaAccount: values.isBetaAccount }),
+      ...(values.hasVideoStorageAddOn !== undefined && {
+        hasVideoStorageAddOn: values.hasVideoStorageAddOn,
+      }),
+      ...(values.unlockedSkillSports !== undefined && {
+        unlockedSkillSports: values.unlockedSkillSports,
+      }),
+    };
     let save: ReturnType<typeof reconcileAdminAddOnSave> | null = null;
+    let row: {
+      id: number;
+      freeAgentTier: string | null;
+      freeAgentAddOns: string[] | null;
+      isBetaAccount: boolean;
+      hasVideoStorageAddOn: boolean;
+      unlockedSkillSports: string[] | null;
+    } | null = null;
+
     if (values.freeAgentAddOns !== undefined) {
-      const current = await this.getUser(athleteId);
-      save = reconcileAdminAddOnSave(current?.addOnTerms, current?.freeAgentAddOns, values.freeAgentAddOns);
-    }
-    const [row] = await db
-      .update(users)
-      .set({
-        ...(values.freeAgentTier !== undefined && { freeAgentTier: values.freeAgentTier }),
-        ...(values.freeAgentAddOns !== undefined && { freeAgentAddOns: values.freeAgentAddOns }),
-        ...(save?.terms !== undefined && { addOnTerms: save.terms }),
-        ...(values.isBetaAccount !== undefined && { isBetaAccount: values.isBetaAccount }),
-        ...(values.hasVideoStorageAddOn !== undefined && {
-          hasVideoStorageAddOn: values.hasVideoStorageAddOn,
-        }),
-        ...(values.unlockedSkillSports !== undefined && {
-          unlockedSkillSports: values.unlockedSkillSports,
-        }),
-      })
-      .where(eq(users.id, athleteId))
-      .returning({
-        id: users.id,
-        freeAgentTier: users.freeAgentTier,
-        freeAgentAddOns: users.freeAgentAddOns,
-        isBetaAccount: users.isBetaAccount,
-        hasVideoStorageAddOn: users.hasVideoStorageAddOn,
-        unlockedSkillSports: users.unlockedSkillSports,
+      // LOCKED, because the reconcile READS addOnTerms and the save WRITES it -- see
+      // mutateAddOnsAtomically. This is the one path that writes several billing columns at
+      // once, so the whole patch goes inside the lock rather than only the add-on half; writing
+      // it in two statements would leave the arrays and the terms able to disagree.
+      const owned = values.freeAgentAddOns;
+      const out = await mutateAddOnsAtomically(athleteId, (current) => {
+        const decided = reconcileAdminAddOnSave(current.addOnTerms, current.freeAgentAddOns, owned);
+        return {
+          set: { ...patch, ...(decided.terms !== undefined && { addOnTerms: decided.terms }) },
+          // Built from the locked row plus the patch rather than from a RETURNING clause, so the
+          // values reported are exactly the ones this transaction wrote.
+          result: {
+            save: decided,
+            row: {
+              id: current.id,
+              freeAgentTier: values.freeAgentTier !== undefined ? values.freeAgentTier : current.freeAgentTier,
+              freeAgentAddOns: owned,
+              isBetaAccount:
+                values.isBetaAccount !== undefined ? values.isBetaAccount : current.isBetaAccount,
+              hasVideoStorageAddOn:
+                values.hasVideoStorageAddOn !== undefined
+                  ? values.hasVideoStorageAddOn
+                  : current.hasVideoStorageAddOn,
+              unlockedSkillSports:
+                values.unlockedSkillSports !== undefined
+                  ? values.unlockedSkillSports
+                  : current.unlockedSkillSports,
+            },
+          },
+        };
       });
+      if (!out) return null;
+      save = out.save;
+      row = out.row;
+    } else {
+      // No add-on array in the patch: every other caller sets the tier or the comp flag alone,
+      // touches addOnTerms not at all, and so needs no lock.
+      const [updated] = await db
+        .update(users)
+        .set(patch)
+        .where(eq(users.id, athleteId))
+        .returning({
+          id: users.id,
+          freeAgentTier: users.freeAgentTier,
+          freeAgentAddOns: users.freeAgentAddOns,
+          isBetaAccount: users.isBetaAccount,
+          hasVideoStorageAddOn: users.hasVideoStorageAddOn,
+          unlockedSkillSports: users.unlockedSkillSports,
+        });
+      row = updated ?? null;
+    }
     if (!row) return null;
     if (save) await this._logAdminAddOnSave(athleteId, save);
     // AND THE TIER ITSELF, which nothing recorded. billingAuditLog's own schema comment says it
@@ -5822,33 +5988,37 @@ export const storage = {
      *  Absent for an admin grant, which has no subscription to cancel. */
     provider?: { stripeSubscriptionId?: string; appleOriginalTransactionId?: string },
   ) {
-    const current = await this.getUser(athleteId);
-    const prior = current?.addOnTerms?.[addOnId];
-    if (!current) return null;
-    const owned = new Set(current.freeAgentAddOns ?? []);
-    owned.add(addOnId);
-    const [row] = await db
-      .update(users)
-      .set({
-        freeAgentAddOns: [...owned],
-        // A PURCHASE CLEARS ANY PENDING CANCELLATION. Scott's rule: cancel on the 1st having
-        // bought on the 16th and "they have until the 16th to use it again with no extra cost"
-        // -- so turning it back on inside the paid month is this same write, and it must drop
-        // accessUntil rather than leave the add-on expiring mid-month anyway. A refund stamp is
-        // dropped too: this is a NEW purchase, not the refunded one.
-        addOnTerms: nextAddOnTerms(current.addOnTerms, addOnId, {
-          purchasedAt: new Date().toISOString(),
-          ...(provider?.stripeSubscriptionId
-            ? { stripeSubscriptionId: provider.stripeSubscriptionId }
-            : {}),
-          ...(provider?.appleOriginalTransactionId
-            ? { appleOriginalTransactionId: provider.appleOriginalTransactionId }
-            : {}),
-        }),
-      })
-      .where(eq(users.id, athleteId))
-      .returning({ id: users.id, freeAgentAddOns: users.freeAgentAddOns });
+    // LOCKED: see mutateAddOnsAtomically. The prior term is read inside the lock, which is
+    // what makes `supersededStripeSubscriptionId` below the id this write really replaced
+    // rather than one a concurrent writer had already moved on from.
+    const row = await mutateAddOnsAtomically(athleteId, (current) => {
+      const prior = current.addOnTerms?.[addOnId];
+      const owned = new Set(current.freeAgentAddOns ?? []);
+      owned.add(addOnId);
+      const freeAgentAddOns = [...owned];
+      return {
+        set: {
+          freeAgentAddOns,
+          // A PURCHASE CLEARS ANY PENDING CANCELLATION. Scott's rule: cancel on the 1st having
+          // bought on the 16th and "they have until the 16th to use it again with no extra cost"
+          // -- so turning it back on inside the paid month is this same write, and it must drop
+          // accessUntil rather than leave the add-on expiring mid-month anyway. A refund stamp is
+          // dropped too: this is a NEW purchase, not the refunded one.
+          addOnTerms: nextAddOnTerms(current.addOnTerms, addOnId, {
+            purchasedAt: new Date().toISOString(),
+            ...(provider?.stripeSubscriptionId
+              ? { stripeSubscriptionId: provider.stripeSubscriptionId }
+              : {}),
+            ...(provider?.appleOriginalTransactionId
+              ? { appleOriginalTransactionId: provider.appleOriginalTransactionId }
+              : {}),
+          }),
+        },
+        result: { id: current.id, freeAgentAddOns, prior },
+      };
+    });
     if (!row) return null;
+    const prior = row.prior;
     // THE SUBSCRIPTION THIS PURCHASE REPLACED, handed up so the caller can cancel it.
     //
     // Buying an add-on the account already has a live Stripe subscription for OVERWROTE
@@ -5871,20 +6041,17 @@ export const storage = {
    *  Scott, 2026-10-11: "give them until the next billing cycle to have it ... with no refund."
    *  The add-on STAYS in the owned list -- that is what makes turning it back on free. */
   async scheduleAddOnRemoval(userId: number, addOnId: string, accessUntil: Date) {
-    const current = await this.getUser(userId);
-    if (!current) return null;
-    const owned = new Set([...(current.freeAgentAddOns ?? []), ...(current.billingAddOns ?? [])]);
-    if (!owned.has(addOnId)) return null;
-    const [row] = await db
-      .update(users)
-      .set({
-        addOnTerms: nextAddOnTerms(current.addOnTerms, addOnId, {
-          accessUntil: accessUntil.toISOString(),
-        }),
-      })
-      .where(eq(users.id, userId))
-      .returning({ id: users.id, addOnTerms: users.addOnTerms });
-    return row ?? null;
+    // LOCKED: see mutateAddOnsAtomically. The ownership check and the write are one statement
+    // apart, so without the lock a cancellation could be scheduled against a term a concurrent
+    // purchase had just replaced -- ending access inside a month that had just been paid for.
+    return mutateAddOnsAtomically(userId, (current) => {
+      const owned = new Set([...(current.freeAgentAddOns ?? []), ...(current.billingAddOns ?? [])]);
+      if (!owned.has(addOnId)) return null;
+      const addOnTerms = nextAddOnTerms(current.addOnTerms, addOnId, {
+        accessUntil: accessUntil.toISOString(),
+      });
+      return { set: { addOnTerms }, result: { id: current.id, addOnTerms } };
+    });
   },
 
   /** END the add-on whose own Stripe subscription has gone away, honouring the paid month.
@@ -6016,19 +6183,17 @@ export const storage = {
    *  nothing and is just this: the end date goes and the paid month carries on. Past the window
    *  there is nothing to restore -- the route refuses and the buyer goes through checkout. */
   async restoreAddOn(userId: number, addOnId: string) {
-    const current = await this.getUser(userId);
-    if (!current) return null;
-    const terms = { ...(current.addOnTerms ?? {}) };
-    const term = terms[addOnId];
-    if (!term) return null;
-    const { accessUntil: _dropped, ...kept } = term;
-    terms[addOnId] = kept;
-    const [row] = await db
-      .update(users)
-      .set({ addOnTerms: terms })
-      .where(eq(users.id, userId))
-      .returning({ id: users.id, addOnTerms: users.addOnTerms });
-    return row ?? null;
+    // LOCKED: see mutateAddOnsAtomically. This one writes the terms object wholesale rather
+    // than through nextAddOnTerms (it DROPS a key), so it is the writer most able to erase
+    // another add-on's term outright.
+    return mutateAddOnsAtomically(userId, (current) => {
+      const terms = { ...(current.addOnTerms ?? {}) };
+      const term = terms[addOnId];
+      if (!term) return null;
+      const { accessUntil: _dropped, ...kept } = term;
+      terms[addOnId] = kept;
+      return { set: { addOnTerms: terms }, result: { id: current.id, addOnTerms: terms } };
+    });
   },
 
   /** REFUND: the money went back, so access stops now -- not at a period end (Scott: "if
@@ -6036,22 +6201,20 @@ export const storage = {
    *  list AND carries a refund stamp, so neither a stale array nor a future accessUntil can
    *  hand it back. */
   async revokeAddOnAfterRefund(userId: number, addOnId: string) {
-    const current = await this.getUser(userId);
-    if (!current) return null;
-    const freeAgent = (current.freeAgentAddOns ?? []).filter((id) => id !== addOnId);
-    const coach = (current.billingAddOns ?? []).filter((id) => id !== addOnId);
-    const [row] = await db
-      .update(users)
-      .set({
-        freeAgentAddOns: freeAgent,
-        billingAddOns: coach,
-        addOnTerms: nextAddOnTerms(current.addOnTerms, addOnId, {
-          refundedAt: new Date().toISOString(),
-        }),
-      })
-      .where(eq(users.id, userId))
-      .returning({ id: users.id, addOnTerms: users.addOnTerms });
-    return row ?? null;
+    // LOCKED: see mutateAddOnsAtomically. A refund that lost its stamp is the worst version of
+    // the race -- the add-on stays owned, nothing else ever writes refundedAt, and the account
+    // keeps what the money went back for.
+    return mutateAddOnsAtomically(userId, (current) => {
+      const freeAgent = (current.freeAgentAddOns ?? []).filter((id) => id !== addOnId);
+      const coach = (current.billingAddOns ?? []).filter((id) => id !== addOnId);
+      const addOnTerms = nextAddOnTerms(current.addOnTerms, addOnId, {
+        refundedAt: new Date().toISOString(),
+      });
+      return {
+        set: { freeAgentAddOns: freeAgent, billingAddOns: coach, addOnTerms },
+        result: { id: current.id, addOnTerms },
+      };
+    });
   },
 
   /** The coach-side twin of addFreeAgentAddOn, over users.billingAddOns -- which
@@ -6062,30 +6225,34 @@ export const storage = {
     addOnId: string,
     provider?: { stripeSubscriptionId?: string; appleOriginalTransactionId?: string },
   ) {
-    const current = await this.getUser(userId);
-    const prior = current?.addOnTerms?.[addOnId];
-    if (!current) return null;
-    const owned = new Set(current.billingAddOns ?? []);
-    owned.add(addOnId);
-    const [row] = await db
-      .update(users)
-      .set({
-        billingAddOns: [...owned],
-        // Same rule as the Free Agent twin above: a purchase clears a pending cancellation and
-        // any refund stamp, because this is a new purchase rather than the refunded one.
-        addOnTerms: nextAddOnTerms(current.addOnTerms, addOnId, {
-          purchasedAt: new Date().toISOString(),
-          ...(provider?.stripeSubscriptionId
-            ? { stripeSubscriptionId: provider.stripeSubscriptionId }
-            : {}),
-          ...(provider?.appleOriginalTransactionId
-            ? { appleOriginalTransactionId: provider.appleOriginalTransactionId }
-            : {}),
-        }),
-      })
-      .where(eq(users.id, userId))
-      .returning({ id: users.id, billingAddOns: users.billingAddOns });
+    // LOCKED, exactly as the Free Agent twin above -- and this pair is the clearest reason the
+    // lock is needed: the two write DIFFERENT owned arrays and the SAME terms object, so one
+    // account buying a Free Agent add-on and a coach add-on at once lost a whole term.
+    const row = await mutateAddOnsAtomically(userId, (current) => {
+      const prior = current.addOnTerms?.[addOnId];
+      const owned = new Set(current.billingAddOns ?? []);
+      owned.add(addOnId);
+      const billingAddOns = [...owned];
+      return {
+        set: {
+          billingAddOns,
+          // Same rule as the Free Agent twin above: a purchase clears a pending cancellation and
+          // any refund stamp, because this is a new purchase rather than the refunded one.
+          addOnTerms: nextAddOnTerms(current.addOnTerms, addOnId, {
+            purchasedAt: new Date().toISOString(),
+            ...(provider?.stripeSubscriptionId
+              ? { stripeSubscriptionId: provider.stripeSubscriptionId }
+              : {}),
+            ...(provider?.appleOriginalTransactionId
+              ? { appleOriginalTransactionId: provider.appleOriginalTransactionId }
+              : {}),
+          }),
+        },
+        result: { id: current.id, billingAddOns, prior },
+      };
+    });
     if (!row) return null;
+    const prior = row.prior;
     // THE SUBSCRIPTION THIS PURCHASE REPLACED, handed up so the caller can cancel it.
     //
     // Buying an add-on the account already has a live Stripe subscription for OVERWROTE
@@ -13272,7 +13439,7 @@ Hard rules, no exceptions:
   // them -- their own coach (the common case for a coached athlete) or
   // themself (a Free Agent's self-enrollment into a Forge Class). Not
   // gated to Free Agents at all, unlike getVisibleClassesForFreeAgent.
-  async getEnrolledClassesForAthlete(athleteId: number, tierGated = false) {
+  async getEnrolledClassesForAthlete(athleteId: number, gate: ClassAccessGate = OPEN_CLASS_ACCESS) {
     const rows = await db.query.classEnrollments.findMany({
       where: eq(classEnrollments.athleteId, athleteId),
       with: { class: { with: { lessons: true } } },
@@ -13280,7 +13447,7 @@ Hard rules, no exceptions:
     });
     const results = [];
     for (const enrollment of rows) {
-      await this.recomputeClassProgress(enrollment.id, undefined, tierGated);
+      await this.recomputeClassProgress(enrollment.id, undefined, gate);
       const progressRows = await db.query.classLessonProgress.findMany({
         where: eq(classLessonProgress.enrollmentId, enrollment.id),
       });
@@ -13342,7 +13509,13 @@ Hard rules, no exceptions:
     return { satisfied: !!prereqEnrollment?.completedAt, prerequisiteName: prereq.name };
   },
 
-  async enrollAthleteInClass(coachId: number, classId: number, athleteId: number, startDate: string, tierGated = false) {
+  async enrollAthleteInClass(
+    coachId: number,
+    classId: number,
+    athleteId: number,
+    startDate: string,
+    gate: ClassAccessGate = OPEN_CLASS_ACCESS,
+  ) {
     // onConflictDoNothing against the (classId, athleteId) unique index,
     // not a check-then-insert -- see that index's own comment for the race
     // this used to allow.
@@ -13355,15 +13528,15 @@ Hard rules, no exceptions:
       const existing = await this.getClassEnrollmentForAthlete(athleteId, classId);
       return { enrollment: existing!, newlyUnlocked: [] };
     }
-    const newlyUnlocked = await this.recomputeClassProgress(enrollment.id, undefined, tierGated);
+    const newlyUnlocked = await this.recomputeClassProgress(enrollment.id, undefined, gate);
     return { enrollment, newlyUnlocked };
   },
 
   // Only a Forge-official class can ever be self-enrolled -- a coach's own
   // Class has no self-service path, same as skill programs/programs. `tierGated` is the
   // one pricing rule (shared/class-pricing-rule.ts), decided by the route.
-  async enrollSelfInClass(athleteId: number, classId: number, startDate: string, tierGated = false) {
-    return this.enrollAthleteInClass(athleteId, classId, athleteId, startDate, tierGated);
+  async enrollSelfInClass(athleteId: number, classId: number, startDate: string, gate: ClassAccessGate = OPEN_CLASS_ACCESS) {
+    return this.enrollAthleteInClass(athleteId, classId, athleteId, startDate, gate);
   },
 
   // Admin/ops escape hatch -- enrolls (if not already) and fully activates
@@ -13560,10 +13733,12 @@ Hard rules, no exceptions:
       lessonsWithQuiz: Set<number>;
       coachSettings: typeof classCoachSettings.$inferSelect | undefined;
     },
-    // True for an athlete without All Classes (shared/class-pricing-rule.ts): no chapter after
-    // the first is activated for them, so nothing lands on their calendar that they cannot
-    // open. The routes decide it (allClassesAccessFor); storage only honours it.
-    tierGated = false,
+    // Who is being gated, and as what -- see ClassAccessGate in shared/class-pricing-rule.ts.
+    // No chapter past the first is activated for a gated enrolment, so nothing lands on a
+    // calendar that cannot be opened. The routes decide it (classGateFor); storage only honours
+    // it, and the decision is per ENROLMENT rather than per athlete because a class somebody
+    // enrolled themselves in before they had a coach is not a class their coach gave them.
+    gate: ClassAccessGate = OPEN_CLASS_ACCESS,
   ): Promise<
     Array<{ lessonId: number; lessonNumber: number; title: string; classId: number; className: string; athleteId: number }>
   > {
@@ -13579,6 +13754,10 @@ Hard rules, no exceptions:
       ? ctx.enrollment
       : await db.query.classEnrollments.findFirst({ where: eq(classEnrollments.id, enrollmentId) });
     if (!enrollment) return newlyUnlocked;
+    // Resolved once from the enrolment's own provenance (classEnrollments.coachId equals the
+    // athlete for a self-enrolment), not from the athlete, so two enrolments on one account can
+    // be gated differently -- which is the whole point.
+    const gateState = classGateStateFor(gate, enrollment);
     const cls = ctx?.cls ?? (await db.query.classes.findFirst({ where: eq(classes.id, enrollment.classId) }));
     if (!cls) return newlyUnlocked;
     const lessons =
@@ -13624,7 +13803,7 @@ Hard rules, no exceptions:
         (previousProgress != null &&
           (await this.isClassUnlockRuleSatisfied(lesson, previousProgress, coachSettings)));
       if (!reachable) break;
-      if (tierGated && chapterNeedsClassPass(lesson.lessonNumber, cls.isForgeOfficial)) break;
+      if (gateState && chapterNeedsClassPass(lesson.lessonNumber, cls.isForgeOfficial)) break;
 
       // A priced lesson is an INDIVIDUAL purchase. Every athlete buys it for
       // themselves; a coach buying it does not grant it to their roster, and
@@ -13707,9 +13886,10 @@ Hard rules, no exceptions:
       coachSettings: typeof classCoachSettings.$inferSelect | undefined;
       enrollment: typeof classEnrollments.$inferSelect | undefined;
     },
-    // See recomputeClassProgress: an athlete without All Classes sees every chapter after
-    // the first as "locked_tier".
-    tierGated = false,
+    // See recomputeClassProgress. A Free Agent without All Classes sees every chapter after the
+    // first as "locked_tier" (which offers the add-on); a coached athlete without it sees the
+    // ones of a SELF-enrolled class as plain "locked", since they cannot buy it.
+    gate: ClassAccessGate = OPEN_CLASS_ACCESS,
   ) {
     const cls = ctx?.cls ?? (await db.query.classes.findFirst({ where: eq(classes.id, classId) }));
     if (!cls) return null;
@@ -13749,10 +13929,13 @@ Hard rules, no exceptions:
       };
     }
 
+    // Same resolution as recomputeClassProgress' -- and from the same row, so the state this
+    // reports and the chapters that one activates can never disagree.
+    const gateState = classGateStateFor(gate, enrollment);
     await this.recomputeClassProgress(
       enrollment.id,
       ctx && { enrollment, cls, lessons, lessonsWithQuiz, coachSettings: ctx.coachSettings },
-      tierGated,
+      gate,
     );
     const progressRows = await db.query.classLessonProgress.findMany({
       where: eq(classLessonProgress.enrollmentId, enrollment.id),
@@ -13785,10 +13968,10 @@ Hard rules, no exceptions:
       const progress = progressByLesson.get(lesson.id) ?? null;
       let state: "active" | "ready" | "locked_preview" | "locked_tier" | "locked";
 
-      if (tierGated && chapterNeedsClassPass(lesson.lessonNumber, cls.isForgeOfficial)) {
+      if (gateState && chapterNeedsClassPass(lesson.lessonNumber, cls.isForgeOfficial)) {
         // The one pricing rule (shared/class-pricing-rule.ts), checked before anything else so
         // a chapter activated before the rule, or before a downgrade, is gated the same way.
-        state = "locked_tier";
+        state = gateState;
       } else if (progress?.skillAssignmentId) {
         state = "active";
       } else if (frontierPassed) {
@@ -31748,7 +31931,27 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     // The agreement is owed because this is a program with athletes, which is what
     // plannedAthleteCount says; a paid band still counts, for an org an admin set a tier on
     // without a headcount ever being typed.
-    if (!coach?.plannedAthleteCount && !coach?.billingTier) {
+    //
+    // AND ON WHAT THEY ACTUALLY HAVE, which neither of those columns covers (2026-10-15). A
+    // primary coach can hold a roster with NEITHER a typed headcount nor a paid band:
+    // storage.setUserRole -- an admin's "Change role" on More -> Users -- promotes an athlete to
+    // coach and writes no plan; an assistant who signed up with a staff invite code is
+    // deliberately given no plan of their own and becomes primary the moment they leave the
+    // staff; and a coach can simply clear their stated number. Every one of them then builds a
+    // roster and was never asked for the agreement, which is a LEGAL surface failing silently --
+    // the same shape as the correction wired only to the path nobody takes that this repo has
+    // now found five times.
+    //
+    // The roster is the ground truth and the other two columns are statements of intent, so it is
+    // consulted LAST and only when both are absent: a school that has signed up and not yet added
+    // anybody still owes the agreement on the strength of its own typed number, and a school with
+    // athletes owes it whatever it typed. The count is seats, not teams, so one athlete is enough
+    // -- the agreement is about handling a program's athletes at all, not about how many.
+    const rosterSeats =
+      !coach?.plannedAthleteCount && !coach?.billingTier
+        ? await this.getRosterSeatCountForCoach(coachId)
+        : 0;
+    if (!coach?.plannedAthleteCount && !coach?.billingTier && rosterSeats === 0) {
       return {
         required: false,
         onFile: false,

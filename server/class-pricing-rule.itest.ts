@@ -52,7 +52,10 @@ describe("the one pricing rule", () => {
     const { cls, lessons } = await forgeClass(admin.id);
     // Not a beta account: beta opens every add-on, All Classes included, which is the point.
     const freeAgent = await makeLoginableUser({ role: "athlete", isBetaAccount: false });
-    await storage.enrollSelfInClass(freeAgent.id, cls.id, "2026-09-14", true);
+    await storage.enrollSelfInClass(freeAgent.id, cls.id, "2026-09-14", {
+      tierGated: true,
+      selfEnrolledGated: false,
+    });
     const fa = await loginAs(server.baseUrl, freeAgent);
 
     const progress = await fa.get(`/api/athlete/classes/${cls.id}/progress`);
@@ -87,6 +90,82 @@ describe("the one pricing rule", () => {
     const c = await loginAs(server.baseUrl, athlete);
     const res = await c.post("/api/billing/checkout/free-agent-add-on", { addOnId: "all_classes" });
     expect([400, 403]).toContain(res.status);
+  });
+
+  // THE SELF-ENROLMENT HOLE (closed 2026-10-15). The gate used to be a boolean decided per
+  // ATHLETE and answered false for anybody with a coach, because the catalog is Free-Agent-only
+  // and a coached athlete therefore had no way to hold a Forge enrolment they were not GIVEN.
+  // Except one: self-enrol as a Free Agent, then join a coach. These four cases are the whole
+  // rule, and the fourth is the one that would otherwise take something away.
+  it("keeps a self-enrolled class's paid chapters shut when the athlete joins a coach", async () => {
+    const admin = await makeCoach({ role: "admin" });
+    const { cls, lessons } = await forgeClass(admin.id);
+    const athlete = await makeLoginableUser({ role: "athlete", isBetaAccount: false });
+    // Enrolled as a Free Agent: chapter one free, the rest behind the add-on.
+    await storage.enrollSelfInClass(athlete.id, cls.id, "2026-09-14", {
+      tierGated: true,
+      selfEnrolledGated: false,
+    });
+    // ...and then joins a program.
+    const coach = await makeCoach();
+    await addToRoster(coach.id, athlete.id);
+    const c = await loginAs(server.baseUrl, athlete);
+
+    const progress = await c.get(`/api/athlete/classes/${cls.id}/progress`);
+    expect(progress.body.lessons.map((l: any) => l.state)).toEqual(["active", "locked", "locked"]);
+    // NOT locked_tier: that state renders the All Classes buy card, and requireFreeAgent refuses
+    // that purchase to a coached athlete on both rails, so it would be a dead button.
+    expect(progress.body.lessons.map((l: any) => l.state)).not.toContain("locked_tier");
+    expect((await c.get(`/api/athlete/classes/${cls.id}/lessons/${lessons[0].id}/content`)).status).toBe(200);
+    expect((await c.get(`/api/athlete/classes/${cls.id}/lessons/${lessons[1].id}/content`)).status).toBe(404);
+    // And nothing after chapter one is sitting on their calendar waiting to be opened.
+    expect(
+      progress.body.lessons.filter((l: any) => l.skillAssignmentId != null).map((l: any) => l.lessonNumber),
+    ).toEqual([1]);
+  });
+
+  it("still opens a class the coach enrolled them in, on the same account, at the same time", async () => {
+    // The decision is per ENROLMENT, so one athlete can hold one of each -- which is the thing a
+    // boolean could not express and the reason the gate reads classEnrollments.coachId.
+    const admin = await makeCoach({ role: "admin" });
+    const mine = await forgeClass(admin.id);
+    const theirs = await forgeClass(admin.id);
+    const athlete = await makeLoginableUser({ role: "athlete", isBetaAccount: false });
+    await storage.enrollSelfInClass(athlete.id, mine.cls.id, "2026-09-14", {
+      tierGated: true,
+      selfEnrolledGated: false,
+    });
+    const coach = await makeCoach();
+    await addToRoster(coach.id, athlete.id);
+    await storage.enrollAthleteInClass(coach.id, theirs.cls.id, athlete.id, "2026-09-14");
+    const c = await loginAs(server.baseUrl, athlete);
+
+    const own = await c.get(`/api/athlete/classes/${mine.cls.id}/progress`);
+    expect(own.body.lessons.map((l: any) => l.state)).toEqual(["active", "locked", "locked"]);
+    const given = await c.get(`/api/athlete/classes/${theirs.cls.id}/progress`);
+    expect(given.body.lessons.map((l: any) => l.state)).toEqual(["active", "active", "active"]);
+    expect((await c.get(`/api/athlete/classes/${theirs.cls.id}/lessons/${theirs.lessons[2].id}/content`)).status).toBe(200);
+  });
+
+  it("keeps every chapter for a coached athlete who BOUGHT All Classes before joining", async () => {
+    // The add-on was sold as "the whole catalog, current and future, for any athlete on any plan
+    // or with any coach". Closing the hole above by taking away chapters somebody paid for would
+    // be the worse bug, so the add-on is checked before the coach, not after.
+    const admin = await makeCoach({ role: "admin" });
+    const { cls, lessons } = await forgeClass(admin.id);
+    const athlete = await makeLoginableUser({ role: "athlete", isBetaAccount: false });
+    await storage.enrollSelfInClass(athlete.id, cls.id, "2026-09-14", {
+      tierGated: true,
+      selfEnrolledGated: false,
+    });
+    await storage.addFreeAgentAddOn(athlete.id, "all_classes");
+    const coach = await makeCoach();
+    await addToRoster(coach.id, athlete.id);
+    const c = await loginAs(server.baseUrl, athlete);
+
+    const progress = await c.get(`/api/athlete/classes/${cls.id}/progress`);
+    expect(progress.body.lessons.map((l: any) => l.state)).toEqual(["active", "active", "active"]);
+    expect((await c.get(`/api/athlete/classes/${cls.id}/lessons/${lessons[2].id}/content`)).status).toBe(200);
   });
 
   it("opens every chapter to a coached athlete, and every chapter stays unpriced", async () => {
