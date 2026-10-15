@@ -512,6 +512,49 @@ export async function createFreeAgentAddOnCheckout(
  * Stripe subscription (beta, trial, Apple-less and card-less) gets the recorded number and
  * nothing happens here; checkout picks the band up when they subscribe. Returns what it did,
  * for the route's own answer and the log. */
+/** RE-BILL A PROGRAM WHOSE ROSTER JUST GREW, at the moment it grew.
+ *
+ * Added 2026-10-15 from the audit panel's "nothing re-bills a roster that grows".
+ * syncCoachSubscriptionBand had exactly one caller -- the coach's own plan page -- so a program
+ * that typed 10 at signup and then had 40 athletes join was billed for 10 until somebody
+ * happened to open that screen. $4 a head is the whole pricing model, and
+ * getBilledAthleteCountForCoach has always said the billed count is the LARGER of the typed
+ * number and the roster; nothing was asking it.
+ *
+ * AT THE JOIN, rather than nightly: a seat claim is a thing a person just did, so the charge
+ * moves while somebody is watching, and the coach sees the new band on the billing page
+ * immediately rather than at 11:00 UTC. The nightly drift sweep
+ * (server/coach-band-drift-job.ts) stays as the backstop for whatever this misses -- a seat
+ * taken while Stripe was down, a roster that shrank, an import that bypassed the claim.
+ *
+ * BEST-EFFORT AND AUDITED, never in the way: an athlete's signup or roster claim must not fail
+ * because Stripe refused a quantity change. syncCoachSubscriptionBand already returns a reason
+ * rather than throwing, and the reasons that mean "nothing to do" (no subscription, no band
+ * change) are the ordinary case -- a coach with no plan, or a join that stays inside the band.
+ */
+export async function rebillCoachBandAfterJoin(coachId: number): Promise<void> {
+  try {
+    // The BILLED count, which is the larger of the typed number and the roster -- the same
+    // rule the plan page and the drift sweep use, so three callers cannot disagree about what a
+    // program owes (storage.getBilledAthleteCountForCoach).
+    const billed = await storage.getBilledAthleteCountForCoach(coachId);
+    const result = await syncCoachSubscriptionBand(coachId, billed);
+    // `synced` is the one that moved money; every `reason` is an ordinary no-op (no plan, no
+    // Stripe subscription, the join stayed inside the band) and is not worth an audit row each
+    // time an athlete joins.
+    if (result.synced) {
+      await storage.logBillingEvent(coachId, "coach.plan.rebilled_on_join", result);
+    }
+  } catch (err) {
+    console.error(`could not re-bill coach ${coachId} after a roster join:`, err);
+    await storage
+      .logBillingEvent(coachId, "coach.plan.rebill_on_join_failed", {
+        error: err instanceof Error ? err.message : String(err),
+      })
+      .catch(() => {});
+  }
+}
+
 export async function syncCoachSubscriptionBand(
   userId: number,
   athleteCount: number,

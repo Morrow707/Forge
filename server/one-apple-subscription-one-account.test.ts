@@ -91,3 +91,89 @@ describe("the reason it is detection and not enforcement is written down", () =>
     expect(line.slice(0, 120)).not.toContain(".unique()");
   });
 });
+
+/* AND IT IS ENFORCED NOW, NOT ONLY DETECTED (2026-10-15).
+ *
+ * The 10-13 pass recorded the collision and granted anyway, on the stated grounds that Apple has
+ * already taken the money and the phone does not finish a transaction the server refuses -- so
+ * refusing would replay it at every launch forever (build 611). That objection is answered
+ * rather than dropped: the refusal is a 409, the phone finishes a 409, and both accounts are
+ * named in the audit row so the remedy is a person's rather than a silent grant.
+ */
+describe("one App Store subscription entitles one Forge account", () => {
+  const src = readFileSync(join(import.meta.dirname, "storage.ts"), "utf8");
+  const fn = src.slice(src.indexOf("async applyAppleIapVerification("));
+  const body = fn.slice(0, fn.indexOf("\n  },\n"));
+
+  it("refuses the second account rather than granting it", () => {
+    expect(body).toMatch(/alreadyBoundElsewhere: true/);
+    expect(body).toMatch(/return \{\s*ok: false/);
+  });
+
+  it("refuses BEFORE anything is written", () => {
+    // The whole point: a grant that happens and is then complained about is not a refusal.
+    const refuseAt = body.indexOf("alreadyBoundElsewhere");
+    for (const writer of ["addFreeAgentAddOn", "addCoachBillingAddOn", "upsertSubscriptionByUserId"]) {
+      const at = body.indexOf(writer);
+      expect(at, writer).toBeGreaterThan(refuseAt);
+    }
+  });
+
+  it("names both accounts in the record, because the remedy is a person's", () => {
+    expect(body).toMatch(/apple_iap\.refused_already_bound/);
+    expect(body).toMatch(/heldBy: alsoHeldBy/);
+  });
+
+  it("says what to do, rather than 'try again'", () => {
+    expect(body).toMatch(/already in use on another Forge account/);
+  });
+
+  it("the routes map it to the one status the phone finishes", () => {
+    const routes = readFileSync(join(import.meta.dirname, "routes.ts"), "utf8");
+    const mapped = routes.match(/result\.alreadyBoundElsewhere \? 409 : 422/g) ?? [];
+    // Both Apple verify routes: the athlete's and the account-scoped one.
+    expect(mapped).toHaveLength(2);
+  });
+
+  it("first claim wins, which needs no judgement about which account deserves it", () => {
+    // accountsHoldingAppleTransaction excludes the asking account, so re-verifying on the
+    // account that already holds it is never refused -- which is what makes a relaunch, a
+    // restore and a renewal on the right account keep working.
+    const holder = src.slice(src.indexOf("async accountsHoldingAppleTransaction("));
+    expect(holder.slice(0, holder.indexOf("\n  },\n"))).toMatch(/exceptUserId/);
+  });
+});
+
+/* ONE REFUSED TRANSACTION DOES NOT ABORT THE WHOLE RESTORE (2026-10-15).
+ *
+ * `await` in a bare for-loop over transactions that can throw meant the FIRST refusal -- a
+ * retired sandbox id, a product this build does not sell, a subscription bound to another
+ * account -- took every later transaction with it. Somebody holding Basic AND All Classes could
+ * lose the restore of the one that was fine because of the one that was not, and the toast
+ * blamed the whole restore.
+ */
+describe("a restore attempts every transaction", () => {
+  const src = readFileSync(join(import.meta.dirname, "..", "client", "src", "lib", "apple-iap.ts"), "utf8");
+  const fn = src.slice(src.indexOf("export async function restoreFreeAgentPurchases("));
+  const body = fn.slice(0, fn.indexOf("\n}\n"));
+
+  it("catches per transaction rather than once around the loop", () => {
+    const loopAt = body.indexOf("for (const transaction of transactions)");
+    expect(loopAt).toBeGreaterThan(-1);
+    const tryAt = body.indexOf("try {");
+    const catchAt = body.indexOf("catch (err)");
+    // Both inside the loop, which is what makes it per transaction.
+    expect(tryAt).toBeGreaterThan(loopAt);
+    expect(catchAt).toBeGreaterThan(tryAt);
+  });
+
+  it("keeps going, and says so", () => {
+    expect(body).toMatch(/carrying on with the rest/);
+    expect(body).toMatch(/restored \+= 1/);
+  });
+
+  it("still reports a restore that recovered nothing", () => {
+    // Swallowing every failure would turn "none of your purchases came back" into silence.
+    expect(body).toMatch(/if \(restored === 0 && lastError\) throw lastError;/);
+  });
+});

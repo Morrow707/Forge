@@ -58,13 +58,21 @@ describe("a StoreKit transaction is verified once, however many paths deliver it
     const recorded = body.indexOf("server recorded");
     expect(recorded).toBeGreaterThan(0);
     expect(body.indexOf("AppleIap.finishTransaction(", recorded)).toBeGreaterThan(recorded);
-    // The ONE finish allowed before the grant is for a retired product (the server's 410,
-    // RETIRED_APPLE_PRODUCT_IDS): nothing is ever granted for it and StoreKit would replay it
-    // forever otherwise (2026-10-08). Any other early finish would throw a real receipt away.
+    // The finishes allowed BEFORE the grant are the refusals that can never become a grant, and
+    // they are named rather than counted so a third cannot join them unnoticed:
+    //   410 retired product       -- RETIRED_APPLE_PRODUCT_IDS; nothing is ever owed on it
+    //                                (2026-10-08).
+    //   409 already bound         -- one App Store subscription entitles one Forge account, so
+    //                                THIS account will never be granted it (2026-10-15).
+    // StoreKit replays an unfinished transaction at every launch forever, which is why those two
+    // are finished; any OTHER early finish would throw a real receipt away.
     const before = body.slice(0, recorded);
-    expect((before.match(/AppleIap\.finishTransaction\(/g) ?? []).length).toBe(1);
-    const retiredBranch = before.indexOf("err.status === 410");
-    expect(retiredBranch).toBeGreaterThan(0);
-    expect(before.indexOf("AppleIap.finishTransaction(")).toBeGreaterThan(retiredBranch);
+    const earlyFinishes = (before.match(/AppleIap\.finishTransaction\(/g) ?? []).length;
+    expect(earlyFinishes).toBe(2);
+    for (const status of [410, 409]) {
+      const branch = before.indexOf(`err.status === ${status}`);
+      expect(branch, `no branch for ${status}`).toBeGreaterThan(0);
+      expect(before.indexOf("AppleIap.finishTransaction(", branch)).toBeGreaterThan(branch);
+    }
   });
 });

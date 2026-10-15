@@ -10,7 +10,7 @@ import crypto from "crypto";
 import { z } from "zod";
 import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
-import { cancelSubscriptionsForDeletedAccount } from "./billing";
+import { cancelSubscriptionsForDeletedAccount, rebillCoachBandAfterJoin } from "./billing";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { pool } from "./db";
 import { sendEmail, isEmailConfigured } from "./email";
@@ -870,6 +870,12 @@ export function setupAuth(app: Express) {
         // email) without duplicating that logic here.
         const claimed = await storage.claimRosterSeat(coach.id, user.id);
         if (!claimed.ok) coach = null;
+        // THE BAND FOLLOWS THE ROSTER, at the moment it grows. Until 2026-10-15
+        // syncCoachSubscriptionBand had one caller -- the coach's own plan page -- so a program
+        // that typed 10 at signup and then had 40 athletes join was billed for 10 until somebody
+        // opened that screen. Best-effort: a signup must never fail because Stripe refused a
+        // quantity change.
+        else await rebillCoachBandAfterJoin(coach.id);
       }
       if (coach) {
         if (team) await storage.addAthleteToTeam(team.id, user.id);
@@ -2130,6 +2136,8 @@ export function setupAuth(app: Express) {
       if (!claimed.ok) {
         return res.status(422).json({ message: claimed.error });
       }
+      // As the signup path above: the billed quantity follows the seat that was just taken.
+      await rebillCoachBandAfterJoin(coach.id);
       if (team) await storage.addAthleteToTeam(team.id, user.id);
       res.json({ coachId: coach.id, coachName: coach.name });
     } catch (err) {

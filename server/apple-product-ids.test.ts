@@ -142,15 +142,32 @@ describe("the verifier recognises every product Forge sells at Apple", () => {
     expect(appleVerifyRefusal({ ok: false, reason: "invalid" }).status).toBe(422);
   });
 
-  it("the phone finishes a retired transaction on 410 and nothing else", () => {
+  it("the phone finishes ONLY the refusals that can never be granted", () => {
+    // The rule (build 643, 2026-10-08) is not "410 and nothing else" -- it is that a
+    // transaction the server will NEVER grant must be finished, because an unfinished one
+    // replays at every launch forever (build 611), and everything else must stay open so a
+    // purchase the server does not yet know about is retried.
+    //
+    // Two refusals are in that category and they are named here rather than counted, so a third
+    // cannot join them without this assertion being re-decided:
+    //   410 retired_product        -- the product is gone; nothing is owed on it.
+    //   409 alreadyBoundElsewhere  -- one App Store subscription entitles one Forge account
+    //                                 (2026-10-15), so this account will never be granted it.
     const src = readFileSync("client/src/lib/apple-iap.ts", "utf8");
-    const idx = src.indexOf("err.status === 410");
-    expect(idx).toBeGreaterThan(0);
-    const branch = src.slice(idx, idx + 700);
-    expect(branch).toMatch(/AppleIap\.finishTransaction\(\{ transactionId: transaction\.transactionId \}\)/);
-    expect(branch).toMatch(/return;/);
+    const finishable = [410, 409];
+    for (const status of finishable) {
+      const idx = src.indexOf(`err.status === ${status}`);
+      expect(idx, `no branch for ${status}`).toBeGreaterThan(0);
+      const branch = src.slice(idx, idx + 900);
+      expect(branch).toMatch(/AppleIap\.finishTransaction\(\{ transactionId: transaction\.transactionId \}\)/);
+    }
+    // And no more than those two, plus the one on the success path.
+    expect((src.match(/AppleIap\.finishTransaction\(/g) ?? []).length).toBe(3);
     // The 401 and the generic branches still throw, so an unknown product stays unfinished.
     expect(src).toMatch(/err\.status === 401\)[\s\S]{0,200}not signed in yet/);
-    expect((src.match(/AppleIap\.finishTransaction\(/g) ?? []).length).toBe(2);
+    // 409 still reports the failure to the caller -- finishing it is about StoreKit, not about
+    // pretending the purchase worked.
+    const at409 = src.indexOf("err.status === 409");
+    expect(src.slice(at409, at409 + 900)).toMatch(/throw err;/);
   });
 });

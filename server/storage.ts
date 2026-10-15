@@ -5184,16 +5184,51 @@ export const storage = {
     // from, handed UP rather than cancelled here: cancelling needs the Stripe client and this
     // module must not import billing.ts (the cycle its own comments warn about). The verify
     // route cancels it -- see one-rail-owns-the-subscription-row.test.ts.
-  ): Promise<{ ok: true; supersededStripeSubscriptionId?: string } | { ok: false; error: string }> {
+    //
+    // `alreadyBoundElsewhere` is the one refusal the PHONE acts on besides a retired product:
+    // see the binding rule below for why it has to be finishable.
+  ): Promise<
+    | { ok: true; supersededStripeSubscriptionId?: string }
+    | { ok: false; error: string; alreadyBoundElsewhere?: true }
+  > {
     // ONE APPLE SUBSCRIPTION, MORE THAN ONE FORGE ACCOUNT. Recorded, never refused -- see
     // accountsHoldingAppleTransaction for why withholding is its own change. A warn rather than
     // a log line because this is revenue leaving, and it is the one thing in the billing line
     // that nothing could previously have told anybody about.
+    // ONE APPLE SUBSCRIPTION, ONE FORGE ACCOUNT -- enforced since 2026-10-15, detected since
+    // 2026-10-13.
+    //
+    // `subscriptions.appleOriginalTransactionId` carries no unique constraint and
+    // users.addOnTerms none either, so one paid subscription could be verified onto any number
+    // of accounts: a shared family Apple ID gave two children the camera for one $19.99, and
+    // nothing refused it. The 10-13 pass recorded it and granted anyway, on the stated grounds
+    // that Apple has already taken the money and THE PHONE DOES NOT FINISH A TRANSACTION THE
+    // SERVER REFUSES -- so a refusal would leave it replaying at every launch forever, which is
+    // build 611's bug and the reason RETIRED_APPLE_PRODUCT_IDS exists.
+    //
+    // That objection is answered rather than ignored: this refusal is mapped to 409 and the
+    // phone FINISHES a 409 the way it finishes a 410, with nothing granted, so it is asked once
+    // and never replays. Both accounts are named in the audit row, because the honest remedy is
+    // a person moving the subscription or support merging the accounts -- not a silent grant.
+    //
+    // The account that holds it keeps it. First claim wins, which is the only rule that needs no
+    // judgement about which of two accounts "should" have it.
     const alsoHeldBy = await this.accountsHoldingAppleTransaction(verified.originalTransactionId, userId);
     if (alsoHeldBy.length) {
       console.warn(
-        `Apple transaction ${verified.originalTransactionId} (${verified.productId}) is being granted to account ${userId} and is already held by ${alsoHeldBy.length} other account(s): ${alsoHeldBy.join(", ")}. One subscription, several accounts -- granted anyway, see accountsHoldingAppleTransaction.`,
+        `Apple transaction ${verified.originalTransactionId} (${verified.productId}) is already held by account(s) ${alsoHeldBy.join(", ")}; refusing to grant it to account ${userId} as well.`,
       );
+      await this.logBillingEvent(userId, "apple_iap.refused_already_bound", {
+        originalTransactionId: verified.originalTransactionId,
+        productId: verified.productId,
+        heldBy: alsoHeldBy,
+      });
+      return {
+        ok: false,
+        error:
+          "That App Store subscription is already in use on another Forge account. Sign in to that account to use it, or contact support to move it.",
+        alreadyBoundElsewhere: true,
+      };
     }
 
     if (scope === "coach") {

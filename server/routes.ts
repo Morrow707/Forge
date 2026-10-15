@@ -10911,7 +10911,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(refusal.status).json(refusal.body);
       }
       const result = await storage.applyAppleIapVerification(user.id, verified.transaction);
-      if (!result.ok) return res.status(422).json({ message: result.error });
+      if (!result.ok) {
+        // 409 IS FINISHABLE BY THE PHONE, like the retired product's 410: an Apple
+        // subscription already bound to another Forge account will never be granted
+        // here, so leaving the transaction open replays it at every launch forever
+        // (build 611's bug). See storage.applyAppleIapVerification on the binding rule.
+        return res
+          .status(result.alreadyBoundElsewhere ? 409 : 422)
+          .json({
+            message: result.error,
+            ...(result.alreadyBoundElsewhere ? { alreadyBoundElsewhere: true } : {}),
+          });
+      }
       // AN IN-APP PURCHASE TAKES THE ROW FROM THE WEB, so the web subscription it replaced is
       // cancelled -- the same best-effort call the Stripe -> Stripe swap makes, for the same
       // reason: one account, one tier, one bill. storage.ts cannot do it (it must not import
@@ -10950,7 +10961,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       verified.transaction,
       user.role === "coach" ? "coach" : "free_agent",
     );
-    if (!result.ok) return res.status(422).json({ message: result.error });
+    if (!result.ok) {
+      // 409 IS FINISHABLE BY THE PHONE, like the retired product's 410: an Apple
+      // subscription already bound to another Forge account will never be granted
+      // here, so leaving the transaction open replays it at every launch forever
+      // (build 611's bug). See storage.applyAppleIapVerification on the binding rule.
+      return res
+        .status(result.alreadyBoundElsewhere ? 409 : 422)
+        .json({
+          message: result.error,
+          ...(result.alreadyBoundElsewhere ? { alreadyBoundElsewhere: true } : {}),
+        });
+    }
     // As on the athlete route above. A coach's purchase is an add-on and supersedes no tier
     // subscription, so this is only ever reached by the Free Agent scope.
     if (result.supersededStripeSubscriptionId) {

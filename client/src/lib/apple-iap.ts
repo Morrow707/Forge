@@ -172,6 +172,15 @@ async function verifyAndFinishOnce(transaction: AppleIapTransaction): Promise<vo
     // anywhere of which step refused it.
     if (err instanceof ApiError && err.status === 401) {
       logDebug("IAP", `${transaction.productId}: not signed in yet, will retry after sign-in`);
+    } else if (err instanceof ApiError && err.status === 409) {
+      // ALREADY BOUND TO ANOTHER FORGE ACCOUNT. One App Store subscription entitles one account
+      // (storage.applyAppleIapVerification), so this transaction will never be granted here --
+      // and an unfinished transaction replays at every launch forever, which is build 611's bug.
+      // Finished with nothing granted, and the message says what happened rather than "try
+      // again": the remedy is signing in to the account that holds it, or support moving it.
+      logDebug("IAP", `${transaction.productId}: already in use on another Forge account, finishing so it stops replaying`);
+      await AppleIap.finishTransaction({ transactionId: transaction.transactionId });
+      throw err;
     } else if (err instanceof ApiError && err.status === 410) {
       // A RETIRED PRODUCT (RETIRED_APPLE_PRODUCT_IDS): a sandbox transaction for an id that was
       // created wrong and replaced. The server will never record it and StoreKit will replay it
@@ -288,9 +297,28 @@ export async function purchaseFreeAgentAddOn(addOn: FreeAgentAddOnId): Promise<v
 export async function restoreFreeAgentPurchases(): Promise<void> {
   const { transactions } = await AppleIap.restorePurchases();
   logDebug("IAP", `restore: StoreKit returned ${transactions.length} transaction(s)`);
+  // ONE REFUSED TRANSACTION USED TO ABORT THE WHOLE RESTORE. `await` in a bare loop over an
+  // array that throws means the FIRST refusal -- a retired sandbox id, a product this build
+  // does not sell, a subscription bound to another account -- took every later transaction with
+  // it. So somebody holding Basic AND All Classes could lose the restore of the one that was
+  // fine because of the one that was not, with the toast blaming the whole restore.
+  //
+  // Every transaction is attempted; the failures are counted and re-thrown as one at the end,
+  // so a restore that recovered something reports success and a restore that recovered nothing
+  // still tells the caller.
+  let restored = 0;
+  let lastError: unknown = null;
   for (const transaction of transactions) {
-    await verifyAndFinish(transaction);
+    try {
+      await verifyAndFinish(transaction);
+      restored += 1;
+    } catch (err) {
+      lastError = err;
+      logDebug("IAP", `restore: ${transaction.productId} could not be restored, carrying on with the rest`);
+    }
   }
+  logDebug("IAP", `restore: ${restored} of ${transactions.length} restored`);
+  if (restored === 0 && lastError) throw lastError;
 }
 
 /** Call once, near app startup on iOS -- catches a transaction that

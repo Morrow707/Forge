@@ -108,3 +108,52 @@ describe("the drift sweep measures before it ever moves money", () => {
     expect(loopBody).toContain("failed++");
   });
 });
+
+/* AND IT RE-BILLS AT THE JOIN NOW, NOT ONLY NIGHTLY (2026-10-15).
+ *
+ * The sweep above is the backstop and stays report-only until somebody arms it. What the audit
+ * panel's finding was actually about is that syncCoachSubscriptionBand had ONE caller -- the
+ * coach's own plan page -- so a program that typed 10 at signup and then had 40 athletes join
+ * was billed for 10 until a human happened to open that screen. $4 a head is the whole pricing
+ * model.
+ *
+ * At the JOIN rather than at 11:00 UTC: a seat claim is something a person just did, so the
+ * charge moves while somebody is watching and the coach sees the new band immediately.
+ */
+describe("the band follows a seat the moment it is taken", () => {
+  const auth = readFileSync(join(import.meta.dirname, "auth.ts"), "utf8");
+  const billing = readFileSync(join(import.meta.dirname, "billing.ts"), "utf8");
+
+  it("every roster claim re-bills", () => {
+    const claims = auth.match(/storage\.claimRosterSeat\(/g) ?? [];
+    const rebills = auth.match(/rebillCoachBandAfterJoin\(/g) ?? [];
+    // One per claim: the signup path and the invite-code path.
+    expect(claims.length).toBeGreaterThanOrEqual(2);
+    expect(rebills).toHaveLength(claims.length);
+  });
+
+  it("asks for the BILLED count, the same rule the plan page and the sweep use", () => {
+    const fn = billing.slice(billing.indexOf("export async function rebillCoachBandAfterJoin("));
+    const body = fn.slice(0, fn.indexOf("\n}\n"));
+    expect(body).toMatch(/const billed = await storage\.getBilledAthleteCountForCoach\(coachId\);/);
+    expect(body).toMatch(/syncCoachSubscriptionBand\(coachId, billed\)/);
+  });
+
+  it("never fails the join", () => {
+    // An athlete's signup must not break because Stripe refused a quantity change.
+    const fn = billing.slice(billing.indexOf("export async function rebillCoachBandAfterJoin("));
+    const body = fn.slice(0, fn.indexOf("\n}\n"));
+    expect(body).toMatch(/try \{/);
+    expect(body).toMatch(/catch \(err\)/);
+    expect(body).toMatch(/Promise<void>/);
+  });
+
+  it("records only the saves that moved money", () => {
+    const fn = billing.slice(billing.indexOf("export async function rebillCoachBandAfterJoin("));
+    const body = fn.slice(0, fn.indexOf("\n}\n"));
+    // Every `reason` is an ordinary no-op (no plan, no subscription, same band); an audit row
+    // per join would bury the ones that charged somebody.
+    expect(body).toMatch(/if \(result\.synced\)/);
+    expect(body).toMatch(/coach\.plan\.rebilled_on_join/);
+  });
+});
