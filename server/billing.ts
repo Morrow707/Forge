@@ -1210,7 +1210,30 @@ async function endStripeSubscription(
     // a cancelled add-on runs to the end of the month already bought. Stripe reports that
     // period on the subscription it is deleting, so that is what is passed down; an ordinary
     // cancel-at-period-end arrives when the period has already ended and so revokes at once.
-    const deletedPeriodEnd = (sub as unknown as { current_period_end?: number }).current_period_end;
+    //
+    // AND THE PERIOD IS READ OFF THE ITEM, WHICH IS THE ONLY PLACE IT EXISTS (fixed 2026-10-15).
+    // The paragraph above has promised the paid month since it was written and never delivered
+    // one: Stripe removed `current_period_end` from `Subscription` and moved it to
+    // `SubscriptionItem` (SDK 22.5.0, API 2026-07-29.dahlia; the CHANGELOG says so in two lines),
+    // so this read was ALWAYS undefined, `addOnAccessUntil` was ALWAYS `new Date()`, and
+    // endAddOnsForDeletedStripeSubscription therefore took the `accessUntil <= now` branch on
+    // every single cancellation -- revokeAddOnAfterRefund, which strips the add-on from the owned
+    // array AND stamps `refundedAt`. So a coach who cancelled Coaches Corner in the Stripe portal
+    // lost it that second rather than at the end of the month they had paid for, and the refund
+    // stamp meant `restoreAddOn` could not give it back either: only an admin tick clears that.
+    // Exactly the opposite of Scott's rule ("give them until the next billing cycle to have it
+    // ... with no refund") and of a refund being the thing that stops access dead.
+    //
+    // `as unknown as` is what hid it: the cast silenced the one compiler error that would have
+    // said the field was gone. Two other reads in this file (the add-on resume at ~756 and
+    // customer.subscription.updated at ~1624) already fall back to or read the item, so this was
+    // the one site left on the removed field -- and the only one whose wrong answer is silent
+    // rather than a missing timestamp. The top-level read is KEPT as the first choice, because a
+    // webhook endpoint pinned to an older API version still sends it and would otherwise lose the
+    // period it does report.
+    const deletedPeriodEnd =
+      (sub as unknown as { current_period_end?: number }).current_period_end ??
+      sub.items?.data?.[0]?.current_period_end;
     const addOnAccessUntil = deletedPeriodEnd ? new Date(deletedPeriodEnd * 1000) : new Date();
     const endedAddOns = await storage.endAddOnsForDeletedStripeSubscription(sub.id, addOnAccessUntil);
     if (endedAddOns.userId) {

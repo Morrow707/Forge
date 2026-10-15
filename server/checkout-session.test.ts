@@ -30,15 +30,25 @@ vi.mock("./storage", () => ({
   storage: { getSubscriptionForUser },
 }));
 
-/** BILLING_LIVE is read once at module load, so each posture needs its own import. */
+/** BILLING_LIVE is read once at module load, so each posture needs its own import.
+ *
+ *  EVERY WRITE GOES THROUGH vi.stubEnv, AND THE REASON IS CROSS-FILE (2026-10-15). This file
+ *  assigned `process.env.X = ...` directly and restored with `process.env = { ...savedEnv }`,
+ *  which REPLACES the process-wide object rather than editing it. vitest runs several test files
+ *  per worker thread, and `vi.stubEnv` records its restores against the object reference it saw --
+ *  so swapping the object out from under a sibling file stranded that bookkeeping, and this file
+ *  and billing-enforcement-flip.test.ts (which stubs properly and re-imports ./billing for each
+ *  posture) failed together on roughly one full run in five. They pass alone every time, which is
+ *  what made it read as unrelated to either of them.
+ *
+ *  Found while adding a 386th test file shifted which files share a worker. The flake was never
+ *  about the new file; the hazard was here, and `vi.unstubAllEnvs` now restores what this sets. */
 async function loadBilling(billingLive: boolean) {
   vi.resetModules();
-  process.env.BILLING_LIVE = billingLive ? "true" : "";
-  process.env.STRIPE_SECRET_KEY = "sk_test_stub";
+  vi.stubEnv("BILLING_LIVE", billingLive ? "true" : "");
+  vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_stub");
   return import("./billing");
 }
-
-const savedEnv = { ...process.env };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -47,7 +57,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  process.env = { ...savedEnv };
+  vi.unstubAllEnvs();
+  vi.resetModules();
 });
 
 describe("the beta gate", () => {
@@ -56,8 +67,8 @@ describe("the beta gate", () => {
     // rather than a hope is that it holds even with a real key and real prices configured, which
     // is exactly the state this account is in right now.
     const billing = await loadBilling(false);
-    process.env.STRIPE_PRICE_FREE_AGENT_BASIC = "price_basic";
-    process.env.STRIPE_PRICE_COACH_PER_ATHLETE = "price_per_athlete";
+    vi.stubEnv("STRIPE_PRICE_FREE_AGENT_BASIC", "price_basic");
+    vi.stubEnv("STRIPE_PRICE_COACH_PER_ATHLETE", "price_per_athlete");
 
     const tier = await billing.createFreeAgentTierCheckout(1, "a@b.test", "basic", "s", "c");
     const coach = await billing.createCoachSubscriptionCheckout(2, "c@d.test", 12, "s", "c");
@@ -81,7 +92,7 @@ describe("the beta gate", () => {
 describe("a Free Agent's own tier", () => {
   it("refuses when that tier has no price configured, rather than charging something else", async () => {
     const billing = await loadBilling(true);
-    delete process.env.STRIPE_PRICE_FREE_AGENT_AI_COACH;
+    vi.stubEnv("STRIPE_PRICE_FREE_AGENT_AI_COACH", undefined);
 
     const result = await billing.createFreeAgentTierCheckout(1, "a@b.test", "ai_coach", "s", "c");
     expect((result as { error: string }).error).toMatch(/no stripe price/i);
@@ -90,8 +101,8 @@ describe("a Free Agent's own tier", () => {
 
   it("sends the price for the tier asked for, and carries the user and tier in metadata", async () => {
     const billing = await loadBilling(true);
-    process.env.STRIPE_PRICE_FREE_AGENT_AI_COACH_VIDEO = "price_video";
-    process.env.STRIPE_PRICE_FREE_AGENT_AI_COACH = "price_coach";
+    vi.stubEnv("STRIPE_PRICE_FREE_AGENT_AI_COACH_VIDEO", "price_video");
+    vi.stubEnv("STRIPE_PRICE_FREE_AGENT_AI_COACH", "price_coach");
 
     await billing.createFreeAgentTierCheckout(42, "a@b.test", "ai_coach_video", "s", "c");
 
@@ -108,7 +119,7 @@ describe("a Free Agent's own tier", () => {
 
   it("identifies a returning subscriber by customer id, and a new one by email", async () => {
     const billing = await loadBilling(true);
-    process.env.STRIPE_PRICE_FREE_AGENT_BASIC = "price_basic";
+    vi.stubEnv("STRIPE_PRICE_FREE_AGENT_BASIC", "price_basic");
 
     await billing.createFreeAgentTierCheckout(7, "new@b.test", "basic", "s", "c");
     expect(sessionsCreate.mock.calls[0][0]).toMatchObject({
@@ -132,7 +143,7 @@ describe("a coach organisation's roster", () => {
     // entirely by the quantity. A quantity of 1 here would charge a fifty-athlete school $4.00 a
     // month and look perfectly successful doing it.
     const billing = await loadBilling(true);
-    process.env.STRIPE_PRICE_COACH_PER_ATHLETE = "price_per_athlete";
+    vi.stubEnv("STRIPE_PRICE_COACH_PER_ATHLETE", "price_per_athlete");
 
     await billing.createCoachSubscriptionCheckout(9, "coach@b.test", 37, "s", "c");
 
@@ -149,8 +160,8 @@ describe("a coach organisation's roster", () => {
     // Line-iteming a $0 price is how the old checkout managed to look configured and bill
     // nothing at all.
     const billing = await loadBilling(true);
-    process.env.STRIPE_PRICE_COACH_PER_ATHLETE = "price_per_athlete";
-    delete process.env.STRIPE_PRICE_COACH_BASE;
+    vi.stubEnv("STRIPE_PRICE_COACH_PER_ATHLETE", "price_per_athlete");
+    vi.stubEnv("STRIPE_PRICE_COACH_BASE", undefined);
 
     await billing.createCoachSubscriptionCheckout(9, "coach@b.test", 5, "s", "c");
 
@@ -160,7 +171,7 @@ describe("a coach organisation's roster", () => {
 
   it("refuses without the per-athlete price rather than falling back to the account fee", async () => {
     const billing = await loadBilling(true);
-    delete process.env.STRIPE_PRICE_COACH_PER_ATHLETE;
+    vi.stubEnv("STRIPE_PRICE_COACH_PER_ATHLETE", undefined);
 
     const result = await billing.createCoachSubscriptionCheckout(9, "coach@b.test", 5, "s", "c");
     expect((result as { error: string }).error).toMatch(/no stripe price/i);
@@ -209,7 +220,7 @@ describe("a one-off class lesson", () => {
 describe("when Stripe answers without a URL", () => {
   it("reports an error rather than handing the caller nothing to redirect to", async () => {
     const billing = await loadBilling(true);
-    process.env.STRIPE_PRICE_FREE_AGENT_BASIC = "price_basic";
+    vi.stubEnv("STRIPE_PRICE_FREE_AGENT_BASIC", "price_basic");
     sessionsCreate.mockResolvedValue({ url: null });
 
     const result = await billing.createFreeAgentTierCheckout(1, "a@b.test", "basic", "s", "c");

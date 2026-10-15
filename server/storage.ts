@@ -5545,6 +5545,20 @@ export const storage = {
       const grantedCoachAddOn = await this.addCoachBillingAddOn(grantTo, coachAddOn, {
         appleOriginalTransactionId: verified.originalTransactionId,
       });
+      // An App Store subscription this purchase replaced is NAMED here and nowhere else: only
+      // the person can stop one, in iOS Settings, so the audit row is the entire remedy. The
+      // Stripe side is cancellable and is cancelled by the route.
+      if (grantedCoachAddOn?.supersededAppleOriginalTransactionId) {
+        console.warn(
+          `user ${userId}: add-on purchase supersedes App Store subscription ` +
+            `${grantedCoachAddOn.supersededAppleOriginalTransactionId}, which only they can stop in iOS Settings`,
+        );
+        await this.logBillingEvent(userId, "add_on.rail_changed", {
+          to: "apple",
+          supersededAppleOriginalTransactionId: grantedCoachAddOn.supersededAppleOriginalTransactionId,
+          alsoCancelInAppStore: true,
+        });
+      }
       await this.logBillingEvent(userId, "apple_iap.verified", {
         originalTransactionId: verified.originalTransactionId,
         productId: verified.productId,
@@ -5571,6 +5585,20 @@ export const storage = {
       const grantedAddOn = await this.addFreeAgentAddOn(userId, addOnId, {
         appleOriginalTransactionId: verified.originalTransactionId,
       });
+      // An App Store subscription this purchase replaced is NAMED here and nowhere else: only
+      // the person can stop one, in iOS Settings, so the audit row is the entire remedy. The
+      // Stripe side is cancellable and is cancelled by the route.
+      if (grantedAddOn?.supersededAppleOriginalTransactionId) {
+        console.warn(
+          `user ${userId}: add-on purchase supersedes App Store subscription ` +
+            `${grantedAddOn.supersededAppleOriginalTransactionId}, which only they can stop in iOS Settings`,
+        );
+        await this.logBillingEvent(userId, "add_on.rail_changed", {
+          to: "apple",
+          supersededAppleOriginalTransactionId: grantedAddOn.supersededAppleOriginalTransactionId,
+          alsoCancelInAppStore: true,
+        });
+      }
       await this.logBillingEvent(userId, "apple_iap.verified", {
         originalTransactionId: verified.originalTransactionId,
         productId: verified.productId,
@@ -6016,6 +6044,24 @@ export const storage = {
      *  Absent for an admin grant, which has no subscription to cancel. */
     provider?: { stripeSubscriptionId?: string; appleOriginalTransactionId?: string },
   ) {
+    // ONE RAIL OWNS THE TERM, exactly as one rail owns the subscriptions ROW (fixed 2026-10-15).
+    //
+    // nextAddOnTerms. purchase branch is `{ ...prior, purchasedAt, accessUntil: undefined,
+    // refundedAt: undefined }`, so it carries every OTHER key of the prior term through -- the
+    // other rail.s handle among them. An Apple purchase over an account that had bought the same
+    // add-on on the web therefore left BOTH handles on one term, and that is not a cosmetic
+    // duplicate: `supersededStripeSubscriptionId` below then names the old Stripe id (an Apple
+    // purchase passes no `provider.stripeSubscriptionId` to compare it against), the verify route
+    // cancels it at Stripe, Stripe sends customer.subscription.deleted, and
+    // endAddOnsForDeletedStripeSubscription matches `term.stripeSubscriptionId === S` -- STILL S,
+    // because nothing cleared it -- and revokes the add-on that was just paid for.
+    //
+    // The TIER has had both halves of this rule since 2026-10-14: the row clears the loser.s
+    // handle, and each revocation branch refuses to clear a SKU while the other rail.s handle is
+    // on file. The add-on had neither, one table over, which is why the sweep that fixed the tier
+    // did not see it -- one-rail-owns-the-subscription-row.itest.ts exercises a TIER product and
+    // the term was never in its scope.
+    //
     // LOCKED: see mutateAddOnsAtomically. The prior term is read inside the lock, which is
     // what makes `supersededStripeSubscriptionId` below the id this write really replaced
     // rather than one a concurrent writer had already moved on from.
@@ -6040,6 +6086,18 @@ export const storage = {
             ...(provider?.appleOriginalTransactionId
               ? { appleOriginalTransactionId: provider.appleOriginalTransactionId }
               : {}),
+          // The losing rail's handle is CLEARED, and only when this purchase actually names a
+          // rail: an ADMIN grant passes no provider at all and must not wipe the handle of a
+          // subscription that is still billing -- that handle is the only thing that can ever
+          // cancel or refund it. Passing `undefined` DELETES the key rather than storing a null,
+          // which is nextAddOnTerms' documented behaviour, so a reader asking
+          // `term.stripeSubscriptionId == null` never has to care which it got.
+          ...(provider?.appleOriginalTransactionId && !provider?.stripeSubscriptionId
+            ? { stripeSubscriptionId: undefined }
+            : {}),
+          ...(provider?.stripeSubscriptionId && !provider?.appleOriginalTransactionId
+            ? { appleOriginalTransactionId: undefined }
+            : {}),
           }),
         },
         result: { id: current.id, freeAgentAddOns, prior },
@@ -6062,7 +6120,22 @@ export const storage = {
       priorStripeId && priorStripeId !== provider?.stripeSubscriptionId && prior?.refundedAt == null
         ? priorStripeId
         : undefined;
-    return { ...row, ...(supersededStripeSubscriptionId ? { supersededStripeSubscriptionId } : {}) };
+    // AND THE OTHER DIRECTION, which Forge cannot act on and therefore has to say out loud: an
+    // App Store subscription is stopped by the person who bought it, in iOS Settings, and no
+    // server call can do it for them. Same posture, same reason, as the tier's
+    // `subscription.rail_changed` audit row and the cancel route's `alsoCancelInAppStore`.
+    const priorAppleId = prior?.appleOriginalTransactionId;
+    const supersededAppleOriginalTransactionId =
+      priorAppleId &&
+      priorAppleId !== provider?.appleOriginalTransactionId &&
+      prior?.refundedAt == null
+        ? priorAppleId
+        : undefined;
+    return {
+      ...row,
+      ...(supersededStripeSubscriptionId ? { supersededStripeSubscriptionId } : {}),
+      ...(supersededAppleOriginalTransactionId ? { supersededAppleOriginalTransactionId } : {}),
+    };
   },
 
   /** CANCEL: the month is paid for, so access runs to `accessUntil` and no money goes back.
@@ -6274,6 +6347,18 @@ export const storage = {
             ...(provider?.appleOriginalTransactionId
               ? { appleOriginalTransactionId: provider.appleOriginalTransactionId }
               : {}),
+          // The losing rail's handle is CLEARED, and only when this purchase actually names a
+          // rail: an ADMIN grant passes no provider at all and must not wipe the handle of a
+          // subscription that is still billing -- that handle is the only thing that can ever
+          // cancel or refund it. Passing `undefined` DELETES the key rather than storing a null,
+          // which is nextAddOnTerms' documented behaviour, so a reader asking
+          // `term.stripeSubscriptionId == null` never has to care which it got.
+          ...(provider?.appleOriginalTransactionId && !provider?.stripeSubscriptionId
+            ? { stripeSubscriptionId: undefined }
+            : {}),
+          ...(provider?.stripeSubscriptionId && !provider?.appleOriginalTransactionId
+            ? { appleOriginalTransactionId: undefined }
+            : {}),
           }),
         },
         result: { id: current.id, billingAddOns, prior },
@@ -6296,7 +6381,22 @@ export const storage = {
       priorStripeId && priorStripeId !== provider?.stripeSubscriptionId && prior?.refundedAt == null
         ? priorStripeId
         : undefined;
-    return { ...row, ...(supersededStripeSubscriptionId ? { supersededStripeSubscriptionId } : {}) };
+    // AND THE OTHER DIRECTION, which Forge cannot act on and therefore has to say out loud: an
+    // App Store subscription is stopped by the person who bought it, in iOS Settings, and no
+    // server call can do it for them. Same posture, same reason, as the tier's
+    // `subscription.rail_changed` audit row and the cancel route's `alsoCancelInAppStore`.
+    const priorAppleId = prior?.appleOriginalTransactionId;
+    const supersededAppleOriginalTransactionId =
+      priorAppleId &&
+      priorAppleId !== provider?.appleOriginalTransactionId &&
+      prior?.refundedAt == null
+        ? priorAppleId
+        : undefined;
+    return {
+      ...row,
+      ...(supersededStripeSubscriptionId ? { supersededStripeSubscriptionId } : {}),
+      ...(supersededAppleOriginalTransactionId ? { supersededAppleOriginalTransactionId } : {}),
+    };
   },
 
   /** Forget the band a cancelled coach subscription paid for.
