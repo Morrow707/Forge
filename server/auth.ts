@@ -612,6 +612,7 @@ export function setupAuth(app: Express) {
         agreedToAssumptionOfRisk,
         expectedAthletes,
         staffInviteCode,
+        promoCode,
       } = parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {
@@ -650,6 +651,33 @@ export function setupAuth(app: Express) {
       const joiningStaff = staffPrimary !== null;
       if (role === "coach" && !joiningStaff && expectedAthletes === undefined) {
         return res.status(400).json({ message: "Tell us roughly how many athletes you'll have" });
+      }
+
+      // A LAUNCH CODE IS CHECKED BEFORE THE ACCOUNT EXISTS (2026-10-15), for the same reason the
+      // staff code above is: a mistyped, expired or used-up code is a 400 the person can fix on
+      // the form, never an account that quietly got no offer. Only an account that will carry
+      // its own plan can take one -- a coach joining a program's staff and an athlete signing
+      // up under a coach's code are covered by that program, so the code has nothing to unlock
+      // and saying so now beats a redemption that silently lands nowhere. The redemption itself
+      // happens after the trial row exists, below; shared/promo-trial.ts says why the free time
+      // counts from the signup date.
+      const promoCodeTyped = promoCode?.trim() ? promoCode.trim() : null;
+      if (promoCodeTyped) {
+        if (role === "coach" && joiningStaff) {
+          return res.status(400).json({
+            message: "A promo code applies to a program's plan. Your head coach can redeem it.",
+          });
+        }
+        if (role === "athlete" && coachCode) {
+          return res.status(400).json({
+            message:
+              "Your coach's program covers your plan, so a promo code has nothing to unlock. Leave it blank to continue.",
+          });
+        }
+        const redeemable = await storage.findRedeemableCode(promoCodeTyped);
+        if (!redeemable.ok) {
+          return res.status(400).json({ message: redeemable.message });
+        }
       }
 
       // Same "required by the route, not the schema" posture as sport/position above -- height
@@ -904,6 +932,18 @@ export function setupAuth(app: Express) {
         await storage.createTrialSubscription(user.id, role === "coach" ? "coach" : "free_agent");
       }
 
+      // The code was verified redeemable above, so this can only fail on something that changed
+      // in the same second (the last redemption going to somebody else). The account exists
+      // either way -- it is what they asked for -- and the response says whether the offer
+      // landed, so the screen can tell them rather than leaving it to the billing page.
+      let promoTrialEndsAt: Date | null = null;
+      let promoCodeMessage: string | null = null;
+      if (promoCodeTyped) {
+        const redeemed = await storage.redeemCode(user.id, promoCodeTyped);
+        if (redeemed.ok) promoTrialEndsAt = redeemed.trialExpiresAt;
+        else promoCodeMessage = redeemed.message;
+      }
+
       loginWithFreshSession(req, user, async (err: any) => {
         if (err) return next(err);
         // Fire-and-forget: sendEmail never throws (see email.ts) and a slow
@@ -932,7 +972,11 @@ export function setupAuth(app: Express) {
           // minute of the product on the inbox.
           const createdOn = requestDeviceId(req);
           if (createdOn) await trustDevice(user.id, createdOn, deviceMeta(req));
-          res.status(201).json({ ...(await toPublicUserWithSections(user)), nativeToken });
+          res.status(201).json({
+            ...(await toPublicUserWithSections(user)),
+            nativeToken,
+            ...(promoCodeTyped ? { promoTrialEndsAt, promoCodeMessage } : {}),
+          });
         } catch (sessionErr) {
           next(sessionErr);
         }

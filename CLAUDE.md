@@ -3861,6 +3861,32 @@ and his answer to each, so none is re-opened:
   Forge; the transaction it produces comes back through the existing watcher and is verified like
   a purchase. **Still Scott's: create the offer codes per subscription in App Store Connect and the
   promotion codes in Stripe.** `a-launch-code-can-be-redeemed-on-both-rails.test.ts`.
+  **AND THE LAUNCH CODE ITSELF IS FORGE'S OWN, BUILT THE SAME NIGHT** (Scott: "I want 30 days
+  free so new users whenever they sign up get 30 days from their original signup date, if they
+  sign up October 17th they have until November 17th, if they sign up the 23rd they have until
+  November 23rd and so on"). It is the existing redeem-code machinery (`redeemCodes`, created on
+  `/admin/billing`, default now 30 days) generalised from head coaches to every new account, and
+  two things in his sentence decide the arithmetic in `shared/promo-trial.ts`: **the anchor is
+  the signup, never the day the code is typed** (`promoTrialFor(user.createdAt, trialDays)`; typed
+  at signup or a week later it ends on the same date, and typed after the window has closed it
+  unlocks nothing and says why), and **"the 17th to the 17th" is a calendar month, not 30 x 24
+  hours** -- October has 31 days, so a whole number of thirties runs that many months, same day
+  and time, clamped to the month's last day; any other count is literal days. A head coach's
+  trial is `users.trialExpiresAt` as before; **a Free Agent's is the `subscriptions` row's
+  trialing end**, because that is the one thing `hasAthletePaidForAiAccess` lets a trial decide
+  (the camera, skills and AI tiers), and `users.trialExpiresAt` stays the coach's. The code is
+  checked BEFORE the account exists (`findRedeemableCode` in the signup handler: a typo, an
+  expired or a spent code is a 400 with no account), refused for a staff-joining coach and an
+  athlete signing up under a coach's code (the program is their plan), and a paying Free Agent is
+  left on their plan. Surfaces: the optional field on `/signup`, the Forge-code box on
+  `/athlete/upgrade` (beside the renamed "App Store code" button, which is Apple's sheet and a
+  different thing), the coach's existing box in account settings,
+  `POST /api/athlete/redeem-code`, and `trialEndsAt` on `/api/athlete/entitlements` so the page
+  says "free through". **The code VALUE is never in this public repository**: Scott creates it on
+  More -> Billing -> Redeem codes. `a-launch-code-is-thirty-days-from-the-signup.itest.ts` drives
+  all of it through the real routes (anchoring the window to the redemption instead turns five of
+  its eleven cases red); `shared/promo-trial.test.ts` pins his two examples. Client halves:
+  `verify_build`.
 - **ZERO COMMUNICATION BETWEEN USERS WHO ARE NOT BEING COACHED.** "keep the social layer all the
   way out, we will have underage athletes and i want 0, absolute 0 communication between users
   when they aren't being coached." Already true (the discussion board went 10-11) and now a

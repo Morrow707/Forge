@@ -15,6 +15,7 @@ import { AppShell } from "@/components/app-shell";
 import { FreeAgentGate } from "@/components/free-agent-gate";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
@@ -56,6 +57,8 @@ type AddOnEntitlements = {
   /** The plan on this account is billed through the App Store. Only ever true for somebody who
    *  bought in the app, and only read on the WEB grid below -- see its own comment. */
   appleSubscriptionOnFile?: boolean;
+  /** When a running free trial ends (the signup trial or a promo code's month), else null. */
+  trialEndsAt?: string | null;
 };
 
 /** The sport-coach add-ons, with price and status, on the one page an athlete
@@ -292,10 +295,11 @@ export default function AthleteUpgrade() {
     }
   }
 
-  // A LAUNCH OR HOLIDAY CODE (2026-10-15). On iOS that is an App Store offer code, redeemed on
-  // Apple's own sheet; the transaction it produces comes back through the same watcher a
-  // purchase does, so nothing here grants anything. The web checkout takes a Stripe promotion
-  // code on the checkout page itself and needs no button.
+  // AN APP STORE OFFER CODE (2026-10-15), redeemed on Apple's own sheet; the transaction it
+  // produces comes back through the same watcher a purchase does, so nothing here grants
+  // anything. The web checkout takes a Stripe promotion code on the checkout page itself and
+  // needs no button. A FORGE code (the launch offer, "30 days free from the day you signed up")
+  // is the box below, on every platform -- it is Forge's own trial row, not a store product.
   async function handleRedeemCode() {
     try {
       await redeemAppleOfferCode();
@@ -304,6 +308,31 @@ export default function AthleteUpgrade() {
       toast.error("Couldn't open the code sheet, try again");
     }
   }
+
+  const [forgeCode, setForgeCode] = useState("");
+  const [redeemingForgeCode, setRedeemingForgeCode] = useState(false);
+  async function redeemForgeCode() {
+    const code = forgeCode.trim();
+    if (!code) return;
+    setRedeemingForgeCode(true);
+    try {
+      const res = await apiRequest("POST", "/api/athlete/redeem-code", { code });
+      const { trialExpiresAt } = (await res.json()) as { trialExpiresAt: string };
+      // Every gate the app draws reads one of these; without the invalidation the toast says
+      // unlocked while the record button stays missing until a reload.
+      qc.invalidateQueries({ queryKey: ["/api/athlete/entitlements"] });
+      qc.invalidateQueries({ queryKey: ["/api/athlete/camera-access"] });
+      qc.invalidateQueries({ queryKey: ["/api/athlete/skills-access"] });
+      qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast.success(`Code applied: full access is free through ${new Date(trialExpiresAt).toLocaleDateString()}`);
+      setForgeCode("");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't redeem that code");
+    } finally {
+      setRedeemingForgeCode(false);
+    }
+  }
+  const trialEndsAt = entitlements?.trialEndsAt ? new Date(entitlements.trialEndsAt) : null;
 
   return (
     <FreeAgentGate title="Upgrade">
@@ -314,7 +343,7 @@ export default function AthleteUpgrade() {
             <div className="flex items-center gap-2">
               {supported && (
                 <Button variant="outline" size="sm" onClick={handleRedeemCode}>
-                  Have a code?
+                  App Store code
                 </Button>
               )}
               <Button variant="outline" size="sm" onClick={handleRestore} disabled={restoring}>
@@ -330,6 +359,43 @@ export default function AthleteUpgrade() {
           ) : undefined
         }
       >
+        {/* A FORGE CODE, on every platform. It is not a store product -- it writes Forge's own
+            trial row (storage.redeemCode), so Apple's rules on where a purchase happens do not
+            reach it, and the App Store offer-code sheet above is a different thing. */}
+        <Card className="mt-6" data-testid="forge-promo-code">
+          <CardContent className="space-y-3 p-5">
+            {trialEndsAt ? (
+              <p className="text-sm font-semibold">
+                Full access is free through {trialEndsAt.toLocaleDateString()}.
+              </p>
+            ) : (
+              <p className="text-sm font-semibold">Have a Forge code?</p>
+            )}
+            <div className="flex items-center gap-2">
+              <Input
+                value={forgeCode}
+                onChange={(e) => setForgeCode(e.target.value.toUpperCase())}
+                placeholder="CODE"
+                autoCapitalize="characters"
+                autoComplete="off"
+                maxLength={30}
+                className="font-mono uppercase"
+                aria-label="Forge code"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={redeemForgeCode}
+                disabled={!forgeCode.trim() || redeemingForgeCode}
+              >
+                {redeemingForgeCode ? "Checking…" : "Redeem"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Free time on a code counts from the day you signed up.
+            </p>
+          </CardContent>
+        </Card>
         {androidNative && !live && (
           <Card className="mt-6">
             <CardContent className="p-6 text-sm text-muted-foreground">

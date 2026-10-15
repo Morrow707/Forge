@@ -32,6 +32,9 @@ type SignupPayload = {
   // for why this is a separate box from the terms, and why the server
   // ignores it for a minor.
   researchDataConsent?: boolean;
+  /** A launch or holiday code typed on the signup form; its free time counts from this signup
+   *  (shared/promo-trial.ts). Checked server-side before the account exists. */
+  promoCode?: string;
 };
 
 type LoginPayload = { email: string; password: string };
@@ -153,10 +156,21 @@ function useSignupMutation() {
   return useMutation({
     mutationFn: async (payload: SignupPayload) => {
       const res = await apiRequest("POST", "/api/auth/signup", payload);
-      return (await res.json()) as PublicUser & { nativeToken?: string };
+      return (await res.json()) as PublicUser & {
+        nativeToken?: string;
+        promoTrialEndsAt?: string | null;
+        promoCodeMessage?: string | null;
+      };
     },
-    onSuccess: ({ nativeToken, ...user }, variables) => {
+    onSuccess: ({ nativeToken, promoTrialEndsAt, promoCodeMessage, ...user }, variables) => {
       applyLoginSuccess(qc, nativeToken, user, variables);
+      // The account was created either way; whether the code landed is said here, once,
+      // rather than left for the billing page to imply.
+      if (promoTrialEndsAt) {
+        toast.success(`Code applied: full access is free through ${new Date(promoTrialEndsAt).toLocaleDateString()}`);
+      } else if (promoCodeMessage) {
+        toast.error(promoCodeMessage);
+      }
     },
     onError: (err: ApiError) => {
       toast.error(err.message || "Signup failed");

@@ -191,6 +191,7 @@ import {
 } from "@shared/privacy-tiers";
 import { coreAgreementText } from "./seed-data/signup-agreement";
 import { autoregulateLoad } from "@shared/autoregulation";
+import { promoTrialFor } from "@shared/promo-trial";
 import {
   type AddOnStillBilling,
   type AddOnTerms,
@@ -4010,10 +4011,13 @@ export const storage = {
   // top, not reset to whichever code they typed most recently. Returns a
   // discriminated result rather than throwing so the route can turn any
   // failure into a clear, specific message instead of a generic 500.
-  async redeemCode(
-    coachId: number,
+  /** IS THIS CODE STILL REDEEMABLE AT ALL -- exists, not expired, not used up -- before anything
+   *  is created or written. The signup handler asks this BEFORE it creates the account, so a
+   *  mistyped or exhausted code is a 400 the person can fix rather than an account that silently
+   *  got no offer. Per-account checks (already redeemed, which row it lands on) are redeemCode's. */
+  async findRedeemableCode(
     code: string,
-  ): Promise<{ ok: true; trialExpiresAt: Date } | { ok: false; message: string }> {
+  ): Promise<{ ok: true; record: typeof redeemCodes.$inferSelect } | { ok: false; message: string }> {
     const record = await db.query.redeemCodes.findFirst({
       where: eq(redeemCodes.code, code.trim().toUpperCase()),
     });
@@ -4021,12 +4025,6 @@ export const storage = {
     if (record.expiresAt && record.expiresAt.getTime() < Date.now()) {
       return { ok: false, message: "That code has expired" };
     }
-
-    const alreadyRedeemed = await db.query.redeemCodeRedemptions.findFirst({
-      where: and(eq(redeemCodeRedemptions.codeId, record.id), eq(redeemCodeRedemptions.coachId, coachId)),
-    });
-    if (alreadyRedeemed) return { ok: false, message: "You've already redeemed this code" };
-
     if (record.maxRedemptions != null) {
       const [{ count }] = await db
         .select({ count: sql<number>`count(*)::int` })
@@ -4036,16 +4034,88 @@ export const storage = {
         return { ok: false, message: "That code has reached its redemption limit" };
       }
     }
+    return { ok: true, record };
+  },
 
-    const coach = await this.getUser(coachId);
-    const now = new Date();
-    const base = coach?.trialExpiresAt && coach.trialExpiresAt.getTime() > now.getTime() ? coach.trialExpiresAt : now;
-    const trialExpiresAt = new Date(base.getTime() + record.trialDays * 24 * 60 * 60 * 1000);
+  /** REDEEM A PROMO CODE ONTO THE ACCOUNT THAT CAN CARRY IT (generalised 2026-10-15).
+   *
+   *  Until this it was a COACH mechanism alone: it extended users.trialExpiresAt from "now" (or
+   *  stacked on a running trial), which is what the coach entitlements read. Scott's launch
+   *  offer is for every new account -- "new users whenever they sign up get 30 days from their
+   *  original signup date" -- so:
+   *
+   *   - THE WINDOW IS ANCHORED TO THE SIGNUP, never to the redemption (shared/promo-trial.ts).
+   *     October 17th runs to November 17th whether the code is typed at signup or a week later,
+   *     and a code typed after the window has closed is refused with the reason. The old
+   *     stacking is gone with it: a second code cannot push the end past what the longest code
+   *     gives from the signup date, which is the point of anchoring.
+   *   - A PRIMARY COACH's trial is users.trialExpiresAt, as before (getEntitlements reads it for
+   *     the whole program). A staff coach is refused: the plan is the primary's row.
+   *   - A FREE AGENT's trial is the SUBSCRIPTIONS ROW -- status "trialing" with trialEndsAt --
+   *     because that is the one thing hasAthletePaidForAiAccess lets a trial decide, and it
+   *     opens the top tier (camera, skills, AI). users.trialExpiresAt is never written for an
+   *     athlete: getFreeAgentEntitlements documents at length why that column is the coach's.
+   *     An account already on a live paid plan (a Stripe or App Store subscription on the row)
+   *     is refused rather than flipped off it; a coached athlete is refused, their program is
+   *     their plan.
+   *
+   *  The redemption row's column is still called coachId; it holds whichever user redeemed. */
+  async redeemCode(
+    userId: number,
+    code: string,
+  ): Promise<{ ok: true; trialExpiresAt: Date } | { ok: false; message: string }> {
+    const found = await this.findRedeemableCode(code);
+    if (!found.ok) return found;
+    const record = found.record;
 
-    await db.insert(redeemCodeRedemptions).values({ codeId: record.id, coachId });
-    await db.update(users).set({ trialExpiresAt }).where(eq(users.id, coachId));
+    const alreadyRedeemed = await db.query.redeemCodeRedemptions.findFirst({
+      where: and(eq(redeemCodeRedemptions.codeId, record.id), eq(redeemCodeRedemptions.coachId, userId)),
+    });
+    if (alreadyRedeemed) return { ok: false, message: "You've already redeemed this code" };
 
-    return { ok: true, trialExpiresAt };
+    const user = await this.getUser(userId);
+    if (!user) return { ok: false, message: "That code isn't valid" };
+    const verdict = promoTrialFor(user.createdAt, record.trialDays);
+    if (!verdict.ok) return verdict;
+    const trialExpiresAt = verdict.trialEndsAt;
+
+    if (user.role === "coach") {
+      if ((await this.getPrimaryCoachId(userId)) !== userId) {
+        return { ok: false, message: "Your program's head coach holds the plan. Ask them to redeem it." };
+      }
+      const current = user.trialExpiresAt;
+      await db.insert(redeemCodeRedemptions).values({ codeId: record.id, coachId: userId });
+      if (!current || current.getTime() < trialExpiresAt.getTime()) {
+        await db.update(users).set({ trialExpiresAt }).where(eq(users.id, userId));
+        return { ok: true, trialExpiresAt };
+      }
+      return { ok: true, trialExpiresAt: current };
+    }
+
+    if (user.role !== "athlete") return { ok: false, message: "That code isn't valid for this account" };
+    if ((await this.getCoachesForAthlete(userId)).length > 0) {
+      return { ok: false, message: "Your coach's program covers your plan, so there's nothing for this code to unlock." };
+    }
+    const sub = await this.getSubscriptionForUser(userId);
+    const paying =
+      sub != null &&
+      (sub.status === "active" || sub.status === "past_due") &&
+      Boolean(sub.stripeSubscriptionId || sub.appleOriginalTransactionId);
+    if (paying) {
+      return { ok: false, message: "Your account already has a plan, so there's nothing for this code to unlock." };
+    }
+    await db.insert(redeemCodeRedemptions).values({ codeId: record.id, coachId: userId });
+    const currentEnd = sub?.status === "trialing" ? sub.trialEndsAt : null;
+    if (!currentEnd || currentEnd.getTime() < trialExpiresAt.getTime()) {
+      await this.upsertSubscriptionByUserId(userId, {
+        accountType: "free_agent",
+        tier: "base",
+        status: "trialing",
+        trialEndsAt: trialExpiresAt,
+      });
+      return { ok: true, trialExpiresAt };
+    }
+    return { ok: true, trialExpiresAt: currentEnd };
   },
 
   // ---------- Free Agent billing (separate track from coach/org billing

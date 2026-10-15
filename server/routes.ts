@@ -4308,6 +4308,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ trialExpiresAt: result.trialExpiresAt });
   });
 
+  // A FREE AGENT REDEEMS THE SAME CODES (2026-10-15). Scott's launch offer is for every new
+  // account, and a Free Agent's trial is the subscriptions row rather than users.trialExpiresAt
+  // (storage.redeemCode says which row each role's trial lives on). requireFreeAgent is the
+  // route-level half of the rule redeemCode repeats: a coached athlete's plan is their program's.
+  app.post("/api/athlete/redeem-code", requireRole("athlete"), requireFreeAgent, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = redeemCodeInputSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const result = await storage.redeemCode(user.id, parsed.data.code);
+    if (!result.ok) {
+      return res.status(400).json({ message: result.message });
+    }
+    res.json({ trialExpiresAt: result.trialExpiresAt });
+  });
+
   // Free Agent (individual athlete) billing -- a separate track from the
   // coach/org billing above, see shared/free-agent-tiers.ts. Same
   // manual/pilot-program admin-assignment approach for now.
@@ -11121,6 +11138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const access = await sportCoachAccessFor(user);
     const account = await storage.getFreeAgentBillingAccount(user.id);
+    const subscription = await storage.getSubscriptionForUser(user.id);
     const bought = new Set(account?.freeAgentAddOns ?? []);
     res.json({
       // The SKU on file (users.freeAgentTier), so the upgrade screen can mark the current plan.
@@ -11132,9 +11150,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // clears the other's -- which is what makes this answerable at all. Buying on the web
       // does not cancel an App Store subscription and no server call can: only the person, in
       // iOS Settings. Saying so before the second charge beats recording it afterwards.
-      appleSubscriptionOnFile: Boolean(
-        (await storage.getSubscriptionForUser(user.id))?.appleOriginalTransactionId,
-      ),
+      appleSubscriptionOnFile: Boolean(subscription?.appleOriginalTransactionId),
+      // WHEN A FREE TRIAL ENDS, if one is running -- the signup trial or a promo code's month
+      // (storage.redeemCode). Null otherwise, so the page says "free through" only when true.
+      trialEndsAt:
+        subscription?.status === "trialing" &&
+        subscription.trialEndsAt &&
+        subscription.trialEndsAt.getTime() > Date.now()
+          ? subscription.trialEndsAt
+          : null,
       addOns: access.addOns,
       // WHICH OF THOSE WERE PAID FOR. Beta, a live trial and enforcement being off
       // all turn an add-on on without anybody having bought it, and a surface that

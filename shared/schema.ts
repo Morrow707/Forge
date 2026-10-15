@@ -8348,6 +8348,10 @@ export const signupSchema = z.object({
   // The pilot invite code, read while public sign-up is closed (server/signup-availability.ts).
   // Ignored when sign-up is open; never stored.
   inviteCode: z.string().trim().max(64).optional(),
+  // A promo code (redeemCodes) typed at signup. Checked BEFORE the account is created, so a
+  // mistyped code is a 400 the person can fix rather than an account with no offer on it; the
+  // free time it grants is anchored to the signup date (shared/promo-trial.ts). Never stored.
+  promoCode: z.string().trim().max(30).optional(),
   // Required for every signup (coach and athlete both) so the route can
   // derive a privacy tier (see shared/privacy-tiers.ts) before the account
   // is ever created -- an athlete signup that resolves to Tier 1 (under 13)

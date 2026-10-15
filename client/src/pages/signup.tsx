@@ -97,6 +97,11 @@ export default function SignupPage() {
   // coach's staff invite code instead of a headcount.
   const [joiningStaff, setJoiningStaff] = useState(false);
   const [staffInviteCode, setStaffInviteCode] = useState("");
+  // A launch or holiday code. Its free time counts from the signup date whether it is typed
+  // here or later on the billing page (shared/promo-trial.ts), so the field is optional and
+  // the server checks it before the account exists -- a typo is a message on this form, never
+  // an account that quietly got no offer.
+  const [promoCode, setPromoCode] = useState("");
   // Plain-English validation message, shown above the submit button. The
   // page had no error display of its own -- signup failures come back as a
   // toast from the mutation -- so this is only for the things we can catch
@@ -190,6 +195,11 @@ export default function SignupPage() {
     expectedAthletesNum >= MIN_EXPECTED_ATHLETES &&
     expectedAthletesNum <= MAX_EXPECTED_ATHLETES;
   const expectedBand = expectedAthletesValid ? bandForAthleteCount(expectedAthletesNum) : null;
+  // Only an account that will carry its own plan can take a code: a coach joining a program's
+  // staff and an athlete joining under a coach's code are covered by that program. The field
+  // is withheld for them rather than drawn and refused, same as the headcount above.
+  const promoCodeApplies =
+    (role === "coach" && !joiningStaff) || (role === "athlete" && !coachCode.trim());
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -224,6 +234,7 @@ export default function SignupPage() {
       expectedAthletes: role === "coach" && !joiningStaff ? expectedAthletesNum : undefined,
       agreedToTerms: true,
       researchDataConsent: researchConsent,
+      promoCode: promoCodeApplies && promoCode.trim() ? promoCode.trim().toUpperCase() : undefined,
     });
   }
 
@@ -542,6 +553,26 @@ export default function SignupPage() {
                     {prefilledCode
                       ? "Filled in from your invite link/QR code."
                       : "Ask your coach for their code (or a team code) to join now, or add it later."}
+                  </p>
+                </div>
+              )}
+              {promoCodeApplies && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="promoCode">Promo code (optional)</Label>
+                  <Input
+                    id="promoCode"
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                    maxLength={30}
+                    value={promoCode}
+                    onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                    placeholder="Have a code?"
+                    className="font-mono uppercase"
+                    data-testid="signup-promo-code"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Free time on a code counts from the day you sign up. You can also enter it later
+                    from your billing page.
                   </p>
                 </div>
               )}

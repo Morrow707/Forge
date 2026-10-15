@@ -120,7 +120,7 @@ export default function AdminBilling() {
   const qc = useQueryClient();
 
   const [newCode, setNewCode] = useState("");
-  const [newTrialDays, setNewTrialDays] = useState("14");
+  const [newTrialDays, setNewTrialDays] = useState("30");
   const [newMaxRedemptions, setNewMaxRedemptions] = useState("");
 
   const { data: codes = [], isError: codesFailed, refetch: refetchCodes } = useQuery<RedeemCode[]>({
@@ -184,8 +184,11 @@ export default function AdminBilling() {
               Redeem codes
             </CardTitle>
             <CardDescription>
-              Trial promos a coach can redeem for temporary full access (e.g. a 14-day new-coach
-              offer, a seasonal free month), doesn't require a tier to be assigned first.
+              Promo codes a new head coach or Free Agent can enter at signup or later on their
+              billing page. The free time counts from the day the account was created, not the day
+              the code is typed: 30 days from an October 17th signup runs to November 17th, and a
+              code typed after that window has closed unlocks nothing. Doesn't require a tier to be
+              assigned first.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -193,7 +196,7 @@ export default function AdminBilling() {
               <Input
                 value={newCode}
                 onChange={(e) => setNewCode(e.target.value.toUpperCase())}
-                placeholder="WELCOME14"
+                placeholder="LAUNCH30"
                 className="col-span-3 font-mono uppercase sm:col-span-1"
               />
               <Input
