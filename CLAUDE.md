@@ -3817,6 +3817,53 @@ which is a consent question, not a deletion change.
   See docs/camera-tracking-notes.md, "Three lifts beside OVR, build 639, 2026-10-08".
   Calibration work: uploaded on commit.
 
+## The top-twenty list, 2026-10-15: what Scott decided and what shipped
+
+Scott handed over a table of the twenty biggest consumer fitness apps (Hevy, Fitbod, Strong,
+MyFitnessPal, Cronometer, Caliber, Ladder, RP, Fitness+, NTC, Peloton, Future, JEFIT, Freeletics,
+FitOn, Centr, SmartGym, Down Dog, pliability, Garmin Connect) and asked how Forge matches up.
+None of them is what Forge is -- a coach-and-roster platform with a Free Agent lane -- and the
+real competitors (TeamBuildr, TrainHeroic, Bridge, Volt) were not on it. The fifteen-item read-out
+and his answer to each, so none is re-opened:
+
+- **Watch app: not now.** Asked whether people actually log from a watch -- a minority do; the
+  wrist's real uses are the rest timer and live heart rate, and the athletes here are teenagers
+  logging on phones in a weight room. Apple Health is already read after the fact.
+- **Android: parked** (no device; "I'm not going to blind launch it"). Still built, still untested.
+- **Exercise demo media: in progress.** Mobility and warm-up content comes AFTER the video library,
+  maybe as a class or as something the AI learns to program; flagged, not built.
+- **AUTOREGULATION IS FOR FREE AGENTS ONLY, SHIPPED.** Scott: "lets have it auto regulate for the
+  free agent classes, not the athletes as they are controlled by the coach."
+  `shared/autoregulation.ts`: today's readiness (the check-in's 0-100 score) overlaid on the lift's
+  last RPE -- red 10% off, yellow 5% off, green plus 2.5% after an easy session, repeat after a
+  hard one, 5% off after a 10, nothing without a check-in. Attached per exercise in
+  `getWorkoutDayDetail` ONLY when `getCoachesForAthlete` is empty, and drawn on the workout card
+  as a sentence with a Use button beside the existing last-session suggestion. It never rewrites
+  the prescription; `autoregulation-is-for-free-agents-only.itest.ts` proves the same athlete gets
+  nothing the moment a coach_athletes row exists. No camera number is read.
+- **No free tier.** "I don't need it free to start, we will be offering limited coupon codes at
+  launch and other holiday things." **AND NOTHING ACCEPTED A CODE**, which is fixed:
+  `allow_promotion_codes: true` on the five sale checkouts (never the guardian's 50-cent card
+  check), and on iOS a "Have a code?" button on the upgrade screen that opens Apple's own offer
+  code sheet (`redeemOfferCode` in `AppleIapPlugin.swift`, iOS 16+). The code is never seen by
+  Forge; the transaction it produces comes back through the existing watcher and is verified like
+  a purchase. **Still Scott's: create the offer codes per subscription in App Store Connect and the
+  promotion codes in Stripe.** `a-launch-code-can-be-redeemed-on-both-rails.test.ts`.
+- **ZERO COMMUNICATION BETWEEN USERS WHO ARE NOT BEING COACHED.** "keep the social layer all the
+  way out, we will have underage athletes and i want 0, absolute 0 communication between users
+  when they aren't being coached." Already true (the discussion board went 10-11) and now a
+  ratchet: `no-athlete-to-athlete-communication.test.ts` discovers every table from the schema and
+  every athlete write route from the source; a table named like a message must be an AI
+  transcript by SHAPE (a role enum whose values include "assistant", one person, no recipient),
+  and no table anywhere may carry two people and a body. The eight `*_messages` tables are all
+  person-to-model.
+- **Widgets, Live Activity, Siri: asked for recommendations**, given in chat: a Live Activity rest
+  timer first (lock screen and Dynamic Island, the one thing used mid-set), a Today widget (next
+  session, readiness tap) second, Siri through App Intents last. All three need a WidgetKit
+  extension target in the Xcode project fed through an App Group by a small plugin; built by the
+  same fastlane lane, verified by `verify_build`, tested only on Scott's phone.
+- **Camera calibration: coming, slowly.** Demo clips: in progress. Mobility library: in progress.
+
 ## Launch-checklist decisions, 2026-10-08 (Scott, working the next ten)
 
 Recorded here because every one of them is a question somebody will otherwise re-open, and two

@@ -27,6 +27,7 @@ interface AppleIapPluginInterface {
   purchase(options: { productId: string }): Promise<AppleIapTransaction>;
   finishTransaction(options: { transactionId: string }): Promise<void>;
   restorePurchases(): Promise<{ transactions: AppleIapTransaction[] }>;
+  redeemOfferCode(): Promise<void>;
   addListener(
     eventName: "transactionUpdated",
     listenerFunc: (transaction: AppleIapTransaction) => void,
@@ -319,6 +320,20 @@ export async function restoreFreeAgentPurchases(): Promise<void> {
   }
   logDebug("IAP", `restore: ${restored} of ${transactions.length} restored`);
   if (restored === 0 && lastError) throw lastError;
+}
+
+/** OPEN APPLE'S OFFER CODE SHEET (added 2026-10-15 for the launch codes).
+ *
+ * Scott: "we will be offering limited coupon codes at launch and other holiday things." On the
+ * web that is a Stripe promotion code typed on the checkout page (allow_promotion_codes in
+ * server/billing.ts). In the app a code is an App Store OFFER CODE, created per subscription in
+ * App Store Connect and redeemed through Apple's own sheet -- this app never sees the code. A
+ * redemption produces a transaction that arrives through Transaction.updates, which
+ * watchAppleIapTransactionUpdates below verifies and finishes exactly like a purchase, so no new
+ * grant path exists for it. iOS 16 and up; the plugin rejects on older. */
+export async function redeemAppleOfferCode(): Promise<void> {
+  logDebug("IAP", "offer code: opening Apple's redeem sheet");
+  await AppleIap.redeemOfferCode();
 }
 
 /** Call once, near app startup on iOS -- catches a transaction that

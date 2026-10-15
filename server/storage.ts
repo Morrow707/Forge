@@ -190,6 +190,7 @@ import {
   type PrivacyTier,
 } from "@shared/privacy-tiers";
 import { coreAgreementText } from "./seed-data/signup-agreement";
+import { autoregulateLoad } from "@shared/autoregulation";
 import {
   type AddOnStillBilling,
   type AddOnTerms,
@@ -22772,6 +22773,13 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     // each re-fetching the same last-60-logs window and only differing in
     // which exerciseId it filtered for afterward).
     const recentLogs = await this.getRecentWorkoutLogsForAthlete(athleteId, date);
+    // AUTOREGULATION IS FOR A FREE AGENT AND NOBODY ELSE (2026-10-15). Scott: "lets have it
+    // auto regulate for the free agent classes, not the athletes as they are controlled by the
+    // coach." A coached athlete's day never reads today's check-in here; the coach's numbers are
+    // the coach's. See shared/autoregulation.ts for the rule and its test for this gate.
+    const autoregulates = (await this.getCoachesForAthlete(athleteId)).length === 0;
+    const todayCheckin = autoregulates ? await this.getWellnessCheckin(athleteId, date) : null;
+    const todayReadiness = todayCheckin ? computeReadiness(todayCheckin) : null;
     const exercisesWithHistory = day.exercises.map((pe) => {
       const override = overrideByProgramExerciseId.get(pe.id);
       // Sets/reps/rest/notes stay the coach's prescription -- only which
@@ -22808,6 +22816,19 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
           : null,
         lastPerformance,
         setHistory,
+        // Today's readiness overlaid on this lift's last RPE, for a Free Agent only (above).
+        // A suggestion with a Use button, like lastPerformance.suggestion; the prescription
+        // itself is untouched.
+        autoregulation: autoregulates && todayReadiness
+          ? autoregulateLoad({
+              readiness: todayReadiness,
+              lastRpe: lastPerformance?.rpe ?? null,
+              lastWeight:
+                lastPerformance?.weightMode === "numeric" && lastPerformance.weight
+                  ? parseFloat(lastPerformance.weight)
+                  : null,
+            })
+          : null,
       };
     });
     const correctivesWithHistory = correctives.map((c) => {

@@ -29,7 +29,8 @@ public class AppleIapPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getProducts", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "purchase", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "finishTransaction", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "restorePurchases", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "restorePurchases", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "redeemOfferCode", returnType: CAPPluginReturnPromise)
     ]
 
     // Must match FREE_AGENT_TIER_ORDER's ids via
@@ -189,6 +190,32 @@ public class AppleIapPlugin: CAPPlugin, CAPBridgedPlugin {
                 ])
             }
             call.resolve(["transactions": restored])
+        }
+    }
+
+    // APPLE'S OWN OFFER CODE SHEET (added 2026-10-15 for the launch codes). An offer code is
+    // created per subscription in App Store Connect and redeemed by Apple, never by this app:
+    // the sheet takes the code, and the resulting transaction arrives through
+    // Transaction.updates like any purchase, where the transactionUpdated listener already
+    // hands it to the server to verify and finish. No new grant path, no code ever seen here.
+    @objc func redeemOfferCode(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            guard #available(iOS 16.0, *) else {
+                call.reject("Redeeming a code needs iOS 16 or later")
+                return
+            }
+            guard let scene = self.bridge?.viewController?.view.window?.windowScene else {
+                call.reject("No window to present the redeem sheet in")
+                return
+            }
+            Task {
+                do {
+                    try await AppStore.presentOfferCodeRedeemSheet(in: scene)
+                    call.resolve([:])
+                } catch {
+                    call.reject(error.localizedDescription)
+                }
+            }
         }
     }
 }

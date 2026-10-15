@@ -438,6 +438,7 @@ export async function createFreeAgentTierCheckout(
   if (!priceId) return { error: `No Stripe price configured for the ${tier} tier yet.` };
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
+    allow_promotion_codes: true,
     ...(await baseSessionParams(userId, userEmail)),
     line_items: [{ price: priceId, quantity: 1 }],
     metadata: { kind: "free_agent_tier", userId: String(userId), tier },
@@ -489,6 +490,7 @@ export async function createFreeAgentAddOnCheckout(
   const metadata = { kind: "free_agent_add_on", userId: String(userId), addOnId: addOn };
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
+    allow_promotion_codes: true,
     ...(await baseSessionParams(userId, userEmail)),
     line_items: [{ price: priceId, quantity: 1 }],
     metadata,
@@ -828,6 +830,7 @@ export async function createCoachAddOnCheckout(
   const metadata = { kind: "coach_add_on", userId: String(userId), addOnId: addOn };
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
+    allow_promotion_codes: true,
     ...(await baseSessionParams(userId, userEmail)),
     line_items: [{ price: priceId, quantity: 1 }],
     metadata,
@@ -897,6 +900,7 @@ export async function createCoachSubscriptionCheckout(
   };
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
+    allow_promotion_codes: true,
     ...(await baseSessionParams(userId, userEmail)),
     line_items: lineItems,
     metadata,
@@ -934,6 +938,7 @@ export async function createLessonCheckout(
   }
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
+    allow_promotion_codes: true,
     ...(await baseSessionParams(userId, userEmail)),
     line_items: [
       {

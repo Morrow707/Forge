@@ -23,6 +23,7 @@ import {
   fetchFreeAgentTierProducts,
   purchaseFreeAgentTier,
   restoreFreeAgentPurchases,
+  redeemAppleOfferCode,
   ApplePurchaseCancelledError,
   ApplePurchasePendingError,
   type FreeAgentTierProduct,
@@ -291,16 +292,36 @@ export default function AthleteUpgrade() {
     }
   }
 
+  // A LAUNCH OR HOLIDAY CODE (2026-10-15). On iOS that is an App Store offer code, redeemed on
+  // Apple's own sheet; the transaction it produces comes back through the same watcher a
+  // purchase does, so nothing here grants anything. The web checkout takes a Stripe promotion
+  // code on the checkout page itself and needs no button.
+  async function handleRedeemCode() {
+    try {
+      await redeemAppleOfferCode();
+      refetch();
+    } catch {
+      toast.error("Couldn't open the code sheet, try again");
+    }
+  }
+
   return (
     <FreeAgentGate title="Upgrade">
       <AppShell
         title="Upgrade"
         actions={
           live ? (
-            <Button variant="outline" size="sm" onClick={handleRestore} disabled={restoring}>
-              <RotateCcw className="h-4 w-4" />
-              {restoring ? "Restoring..." : "Restore Purchases"}
-            </Button>
+            <div className="flex items-center gap-2">
+              {supported && (
+                <Button variant="outline" size="sm" onClick={handleRedeemCode}>
+                  Have a code?
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={handleRestore} disabled={restoring}>
+                <RotateCcw className="h-4 w-4" />
+                {restoring ? "Restoring..." : "Restore Purchases"}
+              </Button>
+            </div>
           ) : webBillingOpen ? (
             <Button variant="outline" size="sm" onClick={openBillingPortal} disabled={openingPortal}>
               <CreditCard className="h-4 w-4" />

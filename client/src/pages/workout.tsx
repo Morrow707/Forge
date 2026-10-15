@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type TouchEvent } from "react";
 import { eachSideSuffix } from "@shared/prescription-laterality";
+import type { Autoregulation } from "@shared/autoregulation";
 import { shedTracesToFit, describeShed } from "@shared/shed-traces-to-fit";
 import { useParams, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -110,6 +111,7 @@ import {
   ChevronDown,
   TrendingUp,
   TrendingDown,
+  Activity,
   WifiOff,
   CloudUpload,
   Camera,
@@ -307,6 +309,10 @@ type PrescribedExercise = {
   exercise: ExerciseInfo;
   lastPerformance: LastPerformance;
   setHistory: SetHistoryPoint[];
+  // Today's readiness overlaid on this lift's last RPE. Sent for a Free Agent with a check-in
+  // today and null otherwise -- a coached athlete's numbers are the coach's
+  // (shared/autoregulation.ts). A suggestion with a Use button, never applied by itself.
+  autoregulation?: Autoregulation | null;
   // Original exercise's name when this slot has been auto-swapped for
   // today's flagged pain (see the restricted-workout banner below) -- null
   // for anything still as prescribed.
@@ -673,6 +679,7 @@ export type ItemState = {
   videoCheckEnabled: boolean;
   lastPerformance: LastPerformance;
   setHistory: SetHistoryPoint[];
+  autoregulation: Autoregulation | null;
   materials: Materials;
   weightMode: WeightMode;
   // Per-exercise, not a single page-wide setting -- a superset can pair a
@@ -789,6 +796,8 @@ function buildItem(
       kind === "exercise" ? (prescribed as PrescribedExercise).videoCheckEnabled : false,
     lastPerformance: prescribed.lastPerformance,
     setHistory: prescribed.setHistory,
+    autoregulation:
+      kind === "exercise" ? ((prescribed as PrescribedExercise).autoregulation ?? null) : null,
     materials,
     weightMode: deriveWeightMode(materials),
     // Every set within one exercise shares a single unit (see
@@ -3614,6 +3623,23 @@ function ExerciseLogContent({
                     Use
                   </button>
                 )}
+            </div>
+          )}
+          {item.autoregulation && (
+            <div className="mt-0.5 flex items-center gap-1.5 text-xs" data-testid="autoregulation">
+              <Activity className="h-3 w-3 shrink-0 text-sky-500" />
+              <span className="font-medium text-sky-700 dark:text-sky-300">
+                {item.autoregulation.text}
+              </span>
+              {item.autoregulation.suggestedWeight != null && item.weightMode === "numeric" && (
+                <button
+                  type="button"
+                  onClick={() => fillSuggestedWeight(String(item.autoregulation!.suggestedWeight))}
+                  className="font-semibold text-primary hover:underline"
+                >
+                  Use
+                </button>
+              )}
             </div>
           )}
         </div>
