@@ -102,10 +102,32 @@ function reportStillBilling(stillBilling: AddOnStillBilling[] | undefined) {
   }
 }
 
+type PlanStillBilling = { what: string; handle: string; provider: "stripe" | "apple" } | null;
+
 type AdminBillingSaveResult = {
   addOnsGranted?: string[];
   addOnsStillBilling?: AddOnStillBilling[];
+  planStillBilling?: PlanStillBilling;
 };
+
+/** CLEARING A PLAN CLOSES ACCESS AND DOES NOT STOP THE MONEY.
+ *
+ *  The add-on half of this panel has warned since 2026-10-14; the tier and the band never did,
+ *  which is the asymmetry the 2026-10-15 audit named. Same rule as un-ticking an add-on: the
+ *  server does not cancel somebody's subscription as a side effect of a dropdown, so the admin is
+ *  told plainly and given the handle to chase. An App Store subscription cannot be cancelled from
+ *  here at all -- only the person can, in iOS Settings -- so the sentence says which rail it is. */
+function reportPlanStillBilling(plan: PlanStillBilling | undefined) {
+  if (!plan) return;
+  toast.warning(
+    plan.provider === "apple"
+      ? `Plan cleared, but the App Store is still billing this account (${plan.handle}). ` +
+          `Only the account holder can stop it, in iOS Settings.`
+      : `Plan cleared, but Stripe is still billing this account (${plan.handle}). ` +
+          `Nothing was cancelled -- end it in the Stripe dashboard.`,
+    { duration: 30000 },
+  );
+}
 
 export function AdminBillingAssignment({
   userId,
@@ -155,6 +177,7 @@ function CoachBillingForm({ userId, email }: { userId: number; email: string }) 
       qc.invalidateQueries({ queryKey: ["/api/admin/users", userId] });
       toast.success("Billing updated");
       reportStillBilling(result.addOnsStillBilling);
+      reportPlanStillBilling(result.planStillBilling);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not update billing"),
   });
@@ -280,6 +303,7 @@ function AthleteBillingForm({ userId }: { userId: number; email: string }) {
       qc.invalidateQueries({ queryKey: ["/api/admin/users", userId] });
       toast.success("Billing updated");
       reportStillBilling(result.addOnsStillBilling);
+      reportPlanStillBilling(result.planStillBilling);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not update billing"),
   });

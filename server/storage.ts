@@ -3807,6 +3807,7 @@ export const storage = {
       ...(values.billingAddOns !== undefined && { billingAddOns: values.billingAddOns }),
       ...(values.isBetaAccount !== undefined && { isBetaAccount: values.isBetaAccount }),
     };
+    let stillBilling: { what: string; handle: string; provider: "stripe" | "apple" } | null = null;
     let save: ReturnType<typeof reconcileAdminAddOnSave> | null = null;
     let row: {
       id: number;
@@ -3869,13 +3870,36 @@ export const storage = {
     if (save) await this._logAdminAddOnSave(coachId, save);
     // As the Free Agent twin: the band an admin assigns is a manual override and belongs in the
     // record beside every other money change.
+    // CLEARING A PLAN CLOSES ACCESS AND DOES NOT STOP THE MONEY, so it is REPORTED -- the same
+    // rule and the same reason as un-ticking an add-on (reconcileAdminAddOnSave): this server
+    // does not cancel somebody's subscription as a side effect of an admin's dropdown, and an
+    // admin who is not told keeps a card being charged for a plan the account no longer has.
+    // The add-on half of the panel has warned since 2026-10-14 and the tier and band never did,
+    // which is the asymmetry the 2026-10-15 audit named.
+    if (values.billingTier === null) {
+      const billing = await this.liveSubscriptionHandleFor(coachId);
+      if (billing) {
+        console.warn(
+          `admin cleared user ${coachId}'s plan while ${billing.provider} is still billing ` +
+            `${billing.handle}; nothing was cancelled`,
+        );
+        await this.logBillingEvent(coachId, "plan.cleared_by_admin_still_billing", billing);
+        stillBilling = billing;
+      }
+    }
     if (values.billingTier !== undefined) {
       await this.logBillingEvent(coachId, "admin.coach_band_set", { billingTier: values.billingTier });
     }
     if (values.isBetaAccount !== undefined) {
       await this.logBillingEvent(coachId, "admin.comp_flag_set", { isBetaAccount: values.isBetaAccount });
     }
-    return { ...row, addOnsGranted: save?.granted ?? [], addOnsStillBilling: save?.stillBilling ?? [] };
+    return {
+      ...row,
+      addOnsGranted: save?.granted ?? [],
+      addOnsStillBilling: save?.stillBilling ?? [],
+      // Null unless this save CLEARED the plan and a provider is still charging for it.
+      planStillBilling: stillBilling,
+    };
   },
 
   // ---------- Redeem codes (trial promos) ----------
@@ -4045,6 +4069,7 @@ export const storage = {
         unlockedSkillSports: values.unlockedSkillSports,
       }),
     };
+    let stillBilling: { what: string; handle: string; provider: "stripe" | "apple" } | null = null;
     let save: ReturnType<typeof reconcileAdminAddOnSave> | null = null;
     let row: {
       id: number;
@@ -4127,6 +4152,23 @@ export const storage = {
     // is where manual overrides are kept, and an admin assigning or clearing a $19.99 SKU is the
     // manual override -- the add-on half was logged on 2026-10-14 and the tier was not, so the
     // one column that decides every Free Agent gate changed with no trace of who or when.
+    // CLEARING A PLAN CLOSES ACCESS AND DOES NOT STOP THE MONEY, so it is REPORTED -- the same
+    // rule and the same reason as un-ticking an add-on (reconcileAdminAddOnSave): this server
+    // does not cancel somebody's subscription as a side effect of an admin's dropdown, and an
+    // admin who is not told keeps a card being charged for a plan the account no longer has.
+    // The add-on half of the panel has warned since 2026-10-14 and the tier and band never did,
+    // which is the asymmetry the 2026-10-15 audit named.
+    if (values.freeAgentTier === null) {
+      const billing = await this.liveSubscriptionHandleFor(athleteId);
+      if (billing) {
+        console.warn(
+          `admin cleared user ${athleteId}'s plan while ${billing.provider} is still billing ` +
+            `${billing.handle}; nothing was cancelled`,
+        );
+        await this.logBillingEvent(athleteId, "plan.cleared_by_admin_still_billing", billing);
+        stillBilling = billing;
+      }
+    }
     if (values.freeAgentTier !== undefined) {
       await this.logBillingEvent(athleteId, "admin.free_agent_tier_set", {
         freeAgentTier: values.freeAgentTier,
@@ -4135,7 +4177,13 @@ export const storage = {
     if (values.isBetaAccount !== undefined) {
       await this.logBillingEvent(athleteId, "admin.comp_flag_set", { isBetaAccount: values.isBetaAccount });
     }
-    return { ...row, addOnsGranted: save?.granted ?? [], addOnsStillBilling: save?.stillBilling ?? [] };
+    return {
+      ...row,
+      addOnsGranted: save?.granted ?? [],
+      addOnsStillBilling: save?.stillBilling ?? [],
+      // Null unless this save CLEARED the plan and a provider is still charging for it.
+      planStillBilling: stillBilling,
+    };
   },
 
   /** The columns a Free Agent entitlement decision reads: the SKU they bought, the
@@ -5340,6 +5388,40 @@ export const storage = {
       }
     }
     return out;
+  },
+
+  /** The live provider handle on an account's `subscriptions` row, whatever its role.
+   *
+   *  THE SIBLING OF liveBillingHandlesForRoleChange ABOVE, and narrower on purpose: that one asks
+   *  "what does the NEW role stop reading", which needs a role to compare against. This asks the
+   *  question an admin clearing a tier or a band has -- "is this account still being charged" --
+   *  where the role is not changing and only the row matters (an add-on is reported separately by
+   *  reconcileAdminAddOnSave, which is what made the asymmetry visible).
+   *
+   *  Only a LIVE status counts. A cancelled or incomplete row and a row with no provider id are
+   *  nothing for an operator to chase. */
+  async liveSubscriptionHandleFor(
+    userId: number,
+  ): Promise<{ what: string; handle: string; provider: "stripe" | "apple" } | null> {
+    const [sub] = await db
+      .select({
+        accountType: subscriptions.accountType,
+        status: subscriptions.status,
+        stripeSubscriptionId: subscriptions.stripeSubscriptionId,
+        appleOriginalTransactionId: subscriptions.appleOriginalTransactionId,
+      })
+      .from(subscriptions)
+      .where(eq(subscriptions.userId, userId))
+      .limit(1);
+    if (!sub) return null;
+    if (sub.status !== "active" && sub.status !== "trialing" && sub.status !== "past_due") return null;
+    if (sub.stripeSubscriptionId) {
+      return { what: `${sub.accountType} subscription`, handle: sub.stripeSubscriptionId, provider: "stripe" };
+    }
+    if (sub.appleOriginalTransactionId) {
+      return { what: `${sub.accountType} subscription`, handle: sub.appleOriginalTransactionId, provider: "apple" };
+    }
+    return null;
   },
 
   // ---------- Billing (framework only -- see server/billing.ts's own

@@ -199,6 +199,43 @@ describe("both admin writers go through the one rule", () => {
     });
   }
 
+  it("warns about a CLEARED PLAN the same way, which the add-on half did and the tier never did", () => {
+    // The asymmetry the 2026-10-15 audit named. Un-ticking an add-on has warned since 2026-10-14;
+    // setting a tier or a band to null closed access and said nothing, while the card went on
+    // being charged. Same rule, same reason: this server does not cancel somebody's subscription
+    // as a side effect of an admin's dropdown, so it reports and hands over the handle.
+    for (const name of ["updateFreeAgentBilling", "updateCoachBilling"]) {
+      const body = writerBody(name);
+      expect(body, name).toContain("liveSubscriptionHandleFor");
+      expect(body, name).toContain('"plan.cleared_by_admin_still_billing"');
+      expect(body, name).toContain("planStillBilling");
+      // Only on a CLEAR. Assigning a tier is not the case this is about, and warning on every
+      // save would make the real one noise.
+      expect(body, name).toMatch(/if \(values\.(freeAgentTier|billingTier) === null\) \{/);
+    }
+  });
+
+  it("only counts a subscription a provider is actually charging for", () => {
+    // A cancelled or incomplete row, and a row with no provider id, are nothing for an operator
+    // to chase -- a warning about those is the kind nobody reads twice.
+    const fn = writerBody("liveSubscriptionHandleFor");
+    expect(fn).not.toBe("");
+    expect(fn).toContain('sub.status !== "active" && sub.status !== "trialing" && sub.status !== "past_due"');
+    expect(fn).toContain("if (!sub) return null;");
+  });
+
+  it("the panel says it, and says which rail, because one of them it cannot act on", () => {
+    const page = readFileSync(
+      join(import.meta.dirname, "../client/src/components/admin-billing-assignment.tsx"),
+      "utf8",
+    );
+    expect(page).toContain("reportPlanStillBilling(result.planStillBilling)");
+    // An App Store subscription cannot be cancelled from here by anyone but the buyer.
+    expect(page).toContain("iOS Settings");
+    expect(page).toContain("Stripe dashboard");
+    expect(page).toContain("duration: 30000");
+  });
+
   it("logs every grant and warns loudly about every removal that left a subscription", () => {
     const body = writerBody("_logAdminAddOnSave");
     expect(body).toMatch(/add_on\.granted_by_admin/);

@@ -3135,6 +3135,18 @@ writer to any of them, say which other place the same fact lives in.
   `/api/athlete/apple-iap/verify`**, whose `requireFreeAgent` guard would do the same thing and
   which NOTHING calls -- a test now pins which route the client uses, because the day that flips
   the dead guard becomes live and the bug returns.
+  **AND CLEARING A PLAN NOW WARNS, WHICH THE ADD-ON HALF DID AND THE TIER NEVER DID.** The last
+  item on the panel's list, and the mildest: an admin setting `freeAgentTier` or `billingTier` to
+  null closed access correctly and said nothing, while the provider went on charging. Un-ticking
+  an add-on has warned since 10-14 with exactly this rule -- "a removal is REPORTED, never acted
+  on" -- so the asymmetry was the whole defect. `liveSubscriptionHandleFor` is the narrower
+  sibling of `liveBillingHandlesForRoleChange`: that one asks what the NEW role stops reading and
+  needs a role to compare against, this one asks the question an admin clearing a plan has, where
+  the role is not changing and only the row matters. Only a LIVE status counts (a cancelled row
+  and a row with no provider id are nothing to chase, and a warning about those is the kind
+  nobody reads twice), it fires only on a CLEAR rather than on every save, and the panel's toast
+  names the RAIL -- a Stripe subscription an operator can end in the dashboard, an App Store one
+  only the buyer can stop in iOS Settings. Client half: `verify_build`.
   **AND A 1-IN-5 FLAKE IN THE BILLING SUITE, found on the way and worth the detour** because one
   of its two tests is "the beta gate refuses every checkout path". `checkout-session.test.ts`
   restored env with `process.env = { ...savedEnv }`, which REPLACES the process-wide object rather
