@@ -36,8 +36,16 @@ describe("Coaches Corner on the App Store", () => {
   it("is verified through the account route, which reads the role", () => {
     expect(routes).toContain('app.post("/api/account/apple-iap/verify", requireAuth');
     expect(routes).toMatch(/user\.role === "coach" \? "coach" : "free_agent"/);
-    // A coached athlete cannot buy a tier through it either, same rule as the athlete route.
-    expect(routes).toMatch(/getCoachesForAthlete\(user\.id\)\)\.length > 0\) \{\s*\n\s*return res\.status\(403\)/);
+    // A COACHED ATHLETE IS STILL RECOGNISED HERE -- but recorded rather than refused, since
+    // 2026-10-15. This asserted the 403 that used to answer them, and that 403 was the bug: the
+    // phone finishes a transaction only on 410 and 409, so the refusal replayed at every launch
+    // forever while Apple charged (see a-coached-athletes-receipt-is-recorded.test.ts for the
+    // whole chain and for why a grant, not a third finishable status, is the fix). Re-pointed at
+    // the property this case is actually about -- the route reads the role and the coach link --
+    // rather than at the answer it used to give.
+    expect(routes).toMatch(/const coachedAthlete =\s*\n?\s*user\.role === "athlete" && \(await storage\.getCoachesForAthlete\(user\.id\)\)\.length > 0;/);
+    // And a role with nothing to buy at all is still refused, which is the 403 that stays.
+    expect(routes).toMatch(/user\.role !== "athlete" && user\.role !== "coach"\) \{\s*\n\s*return res\.status\(403\)/);
     expect(client).toContain('"/api/account/apple-iap/verify"');
     expect(client).toContain("export async function purchaseCoachAddOn(");
   });

@@ -10972,9 +10972,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const schema = z.object({ signedTransactionInfo: z.string().min(1) });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    if (user.role === "athlete" && (await storage.getCoachesForAthlete(user.id)).length > 0) {
-      return res.status(403).json({ message: "A coached athlete's plan is their program's." });
-    }
+    // A COACHED ATHLETE'S RECEIPT IS RECORDED, NOT REFUSED (fixed 2026-10-15).
+    //
+    // This answered 403 "A coached athlete's plan is their program's", which is a true sentence
+    // and the wrong act. StoreKit takes the money BEFORE the server is ever asked, and
+    // verifyAndFinishOnce finishes a transaction on exactly two statuses -- 410 (retired product)
+    // and 409 (bound to another account), the two refusals that can NEVER become a grant. A 403
+    // fell through to its bare `throw`, so the transaction was never finished and StoreKit
+    // replayed it at every single app launch, forever, while Apple went on charging. Build 611's
+    // bug, and the same shape CLAUDE.md already settled for an assistant coach's add-on receipt:
+    // "the only honest thing left to do is grant what was paid for, to the row that can carry it."
+    //
+    // Reachable without anyone doing anything odd: buy a tier as a Free Agent, then join a
+    // program (a coach adds you by code, or an intake import claims you). The next renewal or
+    // cold-start replay meets this.
+    //
+    // FINISHING IT INSTEAD WOULD BE WRONG, which is why the grant is the fix rather than a third
+    // finishable status: unlike 410 and 409, this refusal is temporary -- leave the program and
+    // the subscription is grantable again -- so finishing it would throw away a subscription they
+    // are still paying for.
+    //
+    // AND RECORDING IT GRANTS THEM NOTHING EXTRA, which is what makes this safe rather than a
+    // free-access hole: cameraAccessFor, skillsAccessFor and hasAthletePaidForAiAccess all return
+    // on the coached branch BEFORE the tier is read ("the tier question never arises for them"),
+    // so users.freeAgentTier sits on the row inert. It stops being inert the day they leave the
+    // program, which is the right outcome for money they paid.
+    //
+    // `programCoversThis` is how the app says so: they are paying Apple for something their
+    // program already gives them, and that is worth one sentence pointing at iOS Settings. A
+    // warning, never a refusal.
+    const coachedAthlete =
+      user.role === "athlete" && (await storage.getCoachesForAthlete(user.id)).length > 0;
     if (user.role !== "athlete" && user.role !== "coach") {
       return res.status(403).json({ message: "Nothing is sold to this account in the app." });
     }
@@ -11004,6 +11032,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // subscription, so this is only ever reached by the Free Agent scope.
     if (result.supersededStripeSubscriptionId) {
       await cancelSupersededStripeSubscription(user.id, result.supersededStripeSubscriptionId);
+    }
+    if (coachedAthlete) {
+      // Recorded loudly: they are paying Apple for what their program already covers, and the
+      // only person who can stop that is them, in iOS Settings.
+      console.warn(
+        `user ${user.id} is coached and bought ${verified.transaction.productId} in the app; ` +
+          `recorded on their row (inert while they are coached) -- only they can cancel it in iOS Settings`,
+      );
+      await storage.logBillingEvent(user.id, "apple_iap.coached_athlete_purchase", {
+        productId: verified.transaction.productId,
+        originalTransactionId: verified.transaction.originalTransactionId,
+        alsoCancelInAppStore: true,
+      });
+      // 200, not 204: the phone finishes the transaction either way, and the body is what lets it
+      // say the program already covers this rather than "You're upgraded".
+      return res.json({ ok: true, programCoversThis: true });
     }
     res.status(204).end();
   });

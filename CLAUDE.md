@@ -3085,6 +3085,65 @@ writer to any of them, say which other place the same fact lives in.
   `a-roster-is-asked-for-the-agreement.itest.ts`. No money impact; it is the paperwork.
   **AND THE SKILL BANK / SELF-ENROLMENT / `addOnTerms` ITEMS the sweep left open are closed in
   the entries above.**
+- **AND THREE MORE ON THE ADD-ON RAIL, 2026-10-15, FROM AN AUDIT THAT DIED HALFWAY.** The panel
+  lost 29 of 63 agents to a session limit, including its completeness critic, so one finding
+  reached both verification lenses and the rest arrived unverified. Every claim below was checked
+  against the code before anything moved, and **one of the three was reported against the wrong
+  route** -- the consequence held and the mechanism was one route over, which is the argument for
+  never acting on an agent's report directly.
+  **AN APPLE ADD-ON PURCHASE CANCELLED THE CARD SUBSCRIPTION AND THEN REVOKED WHAT IT HAD JUST
+  SOLD.** `nextAddOnTerms`' purchase branch is `{ ...prior, purchasedAt, accessUntil: undefined,
+  refundedAt: undefined }` -- it resets the two stamps and carries every OTHER key of the prior
+  term through, the other rail's handle among them. So buying All Classes or Coaches Corner in the
+  app on an account that had bought it on the web left BOTH handles on one term:
+  `supersededStripeSubscriptionId` then names the old Stripe id (an Apple purchase passes no
+  `provider.stripeSubscriptionId` to compare against), the route cancels it, Stripe sends
+  `customer.subscription.deleted`, and `endAddOnsForDeletedStripeSubscription` matches
+  `term.stripeSubscriptionId === S` -- still S -- and ends the add-on just paid for. The TIER has
+  had both halves of this rule since 10-14; the add-on had neither, one table over, which is why
+  the sweep that fixed the tier missed it (its itest exercises a TIER product and the term was
+  never in scope). The clear is guarded on the purchase NAMING a rail, so an admin grant -- which
+  passes no provider -- never wipes the handle of a subscription still billing, that handle being
+  the only thing that can ever cancel or refund it. The superseded APPLE id is handed up and
+  recorded, never acted on: only the person can stop an App Store subscription.
+  **AND THE PAID MONTH HAD NEVER ONCE BEEN HONOURED.** `billing.ts` read `current_period_end` off
+  the `Subscription`, and Stripe REMOVED that field and moved it to `SubscriptionItem` (SDK
+  22.5.0, API 2026-07-29.dahlia; the CHANGELOG says so in two lines and the installed interface
+  carries only `cancel_at_period_end` -- there is now a case asserting that against the package on
+  disk). An `as unknown as` cast silenced the one compiler error that would have said so. So the
+  read was ALWAYS undefined, `addOnAccessUntil` ALWAYS `new Date()`, and every Stripe add-on
+  cancellation took the `accessUntil <= now` branch: `revokeAddOnAfterRefund`, which strips the
+  add-on AND stamps `refundedAt`. A coach who cancelled Coaches Corner in the Stripe portal lost
+  it that second instead of at the end of the month they had paid for, and the stamp meant
+  `restoreAddOn` could not give it back -- only an admin tick clears that. The exact inverse of
+  Scott's rule, under a comment that had promised the paid month since the day it was written.
+  **A COACHED ATHLETE'S RECEIPT REPLAYED AT EVERY LAUNCH, FOREVER, WHILE APPLE CHARGED.**
+  `POST /api/account/apple-iap/verify` -- the route the app actually calls -- answered 403 "A
+  coached athlete's plan is their program's", a true sentence and the wrong act. `verifyAndFinishOnce`
+  finishes on exactly 410 and 409, the two refusals that can never become a grant; a 403 fell to
+  the bare `throw`, so StoreKit re-sent it at every launch indefinitely. Reachable with nobody
+  doing anything odd: buy a tier as a Free Agent, then join a program. **Finishing it would have
+  been the wrong fix** and that is why this is a GRANT: unlike 410 and 409 this refusal is
+  TEMPORARY -- leave the program and the subscription is grantable again -- so finishing it
+  discards a subscription somebody is still paying for. Same answer CLAUDE.md already settled for
+  an assistant coach's add-on receipt. **Recording it grants nothing extra**, which is what makes
+  it safe rather than a free-access hole: `cameraAccessFor` and `skillsAccessFor` return on the
+  coached branch BEFORE the tier is read, so `users.freeAgentTier` sits inert and stops being
+  inert the day they leave the program -- the right outcome for money they paid. The warning and
+  the `apple_iap.coached_athlete_purchase` row say they are paying Apple for what their program
+  already covers; a sentence, never a refusal. **The panel reported this against
+  `/api/athlete/apple-iap/verify`**, whose `requireFreeAgent` guard would do the same thing and
+  which NOTHING calls -- a test now pins which route the client uses, because the day that flips
+  the dead guard becomes live and the bug returns.
+  **AND A 1-IN-5 FLAKE IN THE BILLING SUITE, found on the way and worth the detour** because one
+  of its two tests is "the beta gate refuses every checkout path". `checkout-session.test.ts`
+  restored env with `process.env = { ...savedEnv }`, which REPLACES the process-wide object rather
+  than editing it; vitest runs several files per worker and `vi.stubEnv` records its restores
+  against the reference it saw, so swapping the object out from under a sibling stranded that
+  bookkeeping and this file and `billing-enforcement-flip.test.ts` failed together. Every write in
+  it goes through `vi.stubEnv` now; eight full runs clean after. **I first said a new test file
+  caused it, on one run each way, and that was wrong** -- one run either way proves nothing about
+  a flake, and the hazard was never in the new file.
 - **NO FREE AGENT TIER COULD BE ASSIGNED BY AN ADMIN, AND THE FIRST ATTEMPT AFTER LAUNCH FOUND
   IT** (2026-10-11). Scott, on More -> Users with the App Review athlete expanded: "This is all I
   see" -- Reset MFA and Change role, no billing panel. `AdminBillingAssignment`'s athlete form
