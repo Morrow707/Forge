@@ -1149,6 +1149,21 @@ real value; read it that way and take the current number from the run list.
   last take (a stale static would be exactly the leak this exists to stop, and invisible).
   `the-arbiter-reads-this-lifts-numbers.test.ts` is the ratchet and was mutation-tested in both
   directions. Native change: needs `verify_build`.
+  **VERIFIED SEPARATE ON 2026-10-16, AND THE WORD "SEPARATE" NEEDS ITS LIMITS SAID OUT LOUD.**
+  Scott: "make sure each camera is actually separate." The 270 fresh records, the twelve lift
+  numbers and the eleven per-tracker gates are real and the tests hold (38 cases). But
+  `FITTED_OVERRIDES` is EMPTY, so every record holds the same values today -- the registry lets a
+  bench-only fit stay bench-only; it is not evidence the bench was calibrated apart from the
+  squat. And seven constants are STILL SHARED by design and read straight off their modules
+  (`BIACROMIAL_HEIGHT_FRACTION`, `BIACROMIAL_TOLERANCE_FRACTION`, `MAX_SCALE_AGREEMENT_TOLERANCE`,
+  the three `BODY_3D_*_UNCERTAINTY` values, `COREML_BOX_LONG_EDGE_UNCERTAINTY`,
+  `EDGE_OVERSIZED_AMPLITUDE_RATIO`); each has its reason in docs/camera-tracking-notes.md, "State
+  of the per-lift registry, verified 2026-10-16". **The one to watch is
+  `BODY_3D_CORRECTED_UNCERTAINTY` (0.2)**: fitted on seven paired benches on 2026-09-30, before
+  the registry existed, and shared -- by this file's own test it belongs in the registry the way
+  `maxShoulderSpanSpread` was moved there (`12eb33ac`, 2026-10-08). Next candidate to move; not
+  moved on a filming morning. The three 2026-10-08 commits that had no note (`12eb33ac`,
+  `894849c8`, `45bd0815`) are written up in the same section.
 
 ## WHAT "ITS OWN NUMBERS" MEANS, AND WHAT IT DOES NOT MEAN
 

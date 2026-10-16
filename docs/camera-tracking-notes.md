@@ -4731,3 +4731,92 @@ So: the honest uncertainty ships, the retrain ships, and what to read next is
 solved; if it lands at 1.2–1.5 the next piece of work is a corroboration rule that can tell a
 25% disagreement from agreement, and it will be written against a measured take rather than this
 table.
+
+## State of the per-lift registry, verified 2026-10-16 (before the upper-body session)
+
+Scott, about to film: "I had opus separate the cameras ... it's close to almost 300 camera
+systems, that way changing accuracy on the bench press didn't change accuracy on squats ... Go
+over what opus did, make sure each camera is actually separate."
+
+Checked against the code on `3aedf553`, with the registry's own tests re-run (38 cases, green):
+
+**What IS separate.** `shared/camera-tunables-by-lift.ts` hands out one fresh record per
+identity -- 54 filmable exercises plus 216 skill drills, 270 records -- and
+`every-filmable-thing-has-its-own-numbers.test.ts` scribbles on one to prove the other 269 are
+untouched. Each record carries twelve lift numbers (`minRomFractionOfHeight`,
+`maxRomFractionOfHeight`, `travelOnsetMarginM`, `maxPeakToMeanRatio`, `driveOnsetFraction`,
+`maxDeviationFractionOfHeight`, `maxCountTrimPerEdge`, `minCountTrimOddness`,
+`heightRulerUncertainty`, `depthRulerBias`, `depthRulerUncertainty`, `maxShoulderSpanSpread`) and
+eleven gates copied per TRACKER (nineteen trackers: bar, squat, deadlift, overhead_press,
+olympic, kb_swing, med_ball, golf_swing, baseball_swing, jump, sprint, mechanics,
+horizontal_load and the rest). `summarizeTrackedSet` reads them off the record; the arbiter
+takes them per capture at both native entry points.
+
+**What that separation MEANS, and what it does not.** Every one of the 270 records holds the
+SAME values today, because `FITTED_OVERRIDES` is empty: no number has yet been fitted on one
+lift in isolation. The registry is the machinery that lets a bench-only fit stay bench-only; it
+is not evidence that the bench has been calibrated apart from the squat. Every refit so far was
+applied to the shared mechanism on purpose and moved all 270 together, because each was fitted
+across several movements or is a rule rather than a number: `DRIVE_ONSET_FRACTION` 0.07 -> 0.04
+(thirteen sets, five movements), the plate stating the detector's own noise, the agreement cap,
+the lone-plate step-out, the grip floor.
+
+**What is STILL SHARED, read straight off a module constant, each with its reason.** A reader
+should know these before concluding that a bench change cannot reach the squat:
+
+| constant | value | where | why it is shared |
+|---|---|---|---|
+| `BIACROMIAL_HEIGHT_FRACTION` | 0.23 | pose-tracking.ts | anatomy, not a fit |
+| `BIACROMIAL_TOLERANCE_FRACTION` | 0.2 | pose-tracking.ts | the shoulder ruler's stated noise floor; a property of the landmarks |
+| `MAX_SCALE_AGREEMENT_TOLERANCE` | 0.4 | pose-tracking.ts | the blend's agreement window, a rule (the 654 regression) |
+| `BODY_3D_CORRECTED_UNCERTAINTY` | 0.2 | body-3d-ruler.ts | set from seven paired benches on 2026-09-30, BEFORE the registry existed; the one shared number with a single-lift pedigree |
+| `BODY_3D_MEASURED/UNCORRECTED_UNCERTAINTY` | 0.05 / 0.3 | body-3d-ruler.ts | 3D-pose properties |
+| `COREML_BOX_LONG_EDGE_UNCERTAINTY` | 0.056 | pose-tracking.ts | measured on the detector's held-out boxes; a property of the detector |
+| `EDGE_OVERSIZED_AMPLITUDE_RATIO` | 1.6 | bar-tracking.ts (local) | the row's pickup rule |
+
+The `BODY_3D_CORRECTED_UNCERTAINTY` row is the one to watch: it was fitted on benches and sits
+shared. By CLAUDE.md's own test ("could somebody fit this from one take") it belongs in the
+registry the way `maxShoulderSpanSpread` was moved there on 2026-10-08. Not moved today -- a
+move on the morning of a filming session is how a number drifts -- but it is the next
+candidate, and until then a bench-fitted body_3d uncertainty would move the squat.
+
+**Why "5% one day, 40% a few days later" is not the registry failing.** Rule #5 (2026-10-09):
+the same lift on the same build disagrees with itself by 6-24% between two sets minutes apart
+(bench ROM 25.7 vs 32.5cm on build 637). A single take lands anywhere in that cloud, so one
+session reads as a win and the next as a regression with no code change between them. The
+`repeatability` block in the admin capture download measures it per lift. Before any constant
+moves today, the spread across today's sets is read first.
+
+## Three 2026-10-08 changes that never got a section here, written down 2026-10-16
+
+Each shipped with a full commit message and no note in this file or CLAUDE.md, which is the
+drift the notes exist to prevent. Recorded from the commits, nothing re-derived.
+
+- **`12eb33ac` -- `MAX_SHOULDER_SPAN_SPREAD` was a number fitted on one Pendlay Row and sat as a
+  shared constant deciding whether the shoulder ruler votes on all 269.** 0.4 was chosen
+  2026-10-06 to refuse build 632's row (self-disagreement 0.464) while keeping the press (0.063)
+  and the bench (0.21). It is `maxShoulderSpanSpread` in the registry now, copied identically into
+  every record, and `shoulderWidthScaleFromFrames` takes it as a defaulted parameter. No number
+  moved. **And the copy test had no exhaustiveness check**, which is how the field arrived
+  unpinned: `camera-tunables-are-a-copy.test.ts` now asserts every key in
+  `SHARED_CAMERA_TUNABLES` has a pin, which found five more unpinned since the registry landed
+  (`maxPlausibleAccelG`, `occlusionMinGapMs`, `occlusionMaxGapMs`, and `maxCountTrimPerEdge` /
+  `minCountTrimOddness`, which have no constant left to pin against because bar-tracking.ts reads
+  them straight off the record -- named in `REGISTRY_IS_THE_SOURCE` as the end state, not an
+  exemption).
+- **`894849c8` -- a hinge is visible at its extreme, not at its median.** The 2026-10-08 RDL
+  recorded `measuredPosture.torsoFromVerticalDeg` 7.13 over 436 frames beside a comment promising
+  "approaching 90 on a hinge". The statistic is a MEDIAN and a hinging athlete is upright between
+  reps, through the setup and at the finish, so the median sits near zero however deep the hinge
+  goes; the 2026-10-06 claim that this field would have caught the mislabelled RDL was wrong.
+  `torsoFromVerticalP90Deg` (the 90th percentile, the bottom of the rep) and
+  `torsoAtLongestSpanDeg` (the torso angle on the frame whose nose-to-ankle span was longest, the
+  frame the height ruler is most wrong on) are recorded beside it. Records and gates nothing.
+- **`45bd0815` -- a floored peak says how far it was floored, and what it was read from.** The
+  same RDL reported peak = mean = 0.72 m/s on every rep against the OVR's 1.70, and the only
+  trace in the export was `trace.repPeaksFlooredToMean: 4` -- a count, so a rep floored by a hair
+  and one floored by a factor of two read identically. Each rep now carries `rawPeakMps` (what the
+  instantaneous peak was before the floor or cap), `peakFloored`, `peakCapped`,
+  `peakSamplesInWindow`, `peakSamplesBelowConfidence` and `peakUsedRawFallback`. Records and
+  gates nothing; the next hinge take says whether the floor is hiding a drive window on the wrong
+  phase.
