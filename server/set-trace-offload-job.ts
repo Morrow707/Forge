@@ -114,27 +114,29 @@ export async function offloadSetTraces(opts: { timeBudgetMs?: number; batch?: nu
       );
       const o = orphans[0];
       // "Every set has no entry" cannot be true of a working app (the day view and the capture
-      // export both join sets to entries), so the shape of both tables is logged beside it:
-      // id ranges, row counts, the search path and the column list. Metadata, never a value.
-      const shape = readRows<Record<string, unknown>>(
-        await db.execute(sql`
-          SELECT current_schema() AS schema, current_setting('search_path') AS search_path,
-            (SELECT count(*)::int FROM workout_log_entries) AS entries,
-            (SELECT min(id) FROM workout_log_entries) AS entry_min_id,
-            (SELECT max(id) FROM workout_log_entries) AS entry_max_id,
-            (SELECT min(log_entry_id) FROM workout_set_entries) AS set_entry_min,
-            (SELECT max(log_entry_id) FROM workout_set_entries) AS set_entry_max,
-            (SELECT count(*)::int FROM workout_set_entries wse JOIN workout_log_entries wle ON wle.id = wse.log_entry_id) AS joined,
-            (SELECT string_agg(column_name || ':' || data_type, ',' ORDER BY ordinal_position)
-               FROM information_schema.columns WHERE table_name = 'workout_set_entries' AND column_name IN ('id','log_entry_id','skeleton_frames','skeleton_frames_path')) AS set_cols,
-            (SELECT string_agg(column_name || ':' || data_type, ',' ORDER BY ordinal_position)
-               FROM information_schema.columns WHERE table_name = 'workout_log_entries' AND column_name IN ('id','workout_log_id')) AS entry_cols,
-            (SELECT string_agg(n.nspname || '.' || c.relname || ':' || c.relkind, ',')
-               FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-               WHERE c.relname IN ('workout_set_entries','workout_log_entries')) AS relations
-        `),
-      );
-      console.warn(`[job:${SET_TRACE_OFFLOAD_JOB}] shape: ${JSON.stringify(shape[0] ?? {})}`);
+      // export both join sets to entries), so the shape of both tables is logged beside it, one
+      // probe at a time so one failing probe does not hide the others. Metadata, never a value.
+      const probes: Record<string, ReturnType<typeof sql>> = {
+        schema: sql`SELECT current_schema() AS v`,
+        search_path: sql`SELECT current_setting('search_path') AS v`,
+        entries: sql`SELECT count(*)::int AS v FROM workout_log_entries`,
+        entry_ids: sql`SELECT min(id) || '..' || max(id) AS v FROM workout_log_entries`,
+        set_entry_ids: sql`SELECT min(log_entry_id) || '..' || max(log_entry_id) AS v FROM workout_set_entries`,
+        joined: sql`SELECT count(*)::int AS v FROM workout_set_entries wse JOIN workout_log_entries wle ON wle.id = wse.log_entry_id`,
+        set_cols: sql`SELECT string_agg(column_name || ':' || data_type, ',') AS v FROM information_schema.columns WHERE table_name = 'workout_set_entries' AND column_name IN ('id','log_entry_id','skeleton_frames','skeleton_frames_path')`,
+        entry_cols: sql`SELECT string_agg(column_name || ':' || data_type, ',') AS v FROM information_schema.columns WHERE table_name = 'workout_log_entries' AND column_name IN ('id','workout_log_id')`,
+        relations: sql`SELECT string_agg(n.nspname || '.' || c.relname || ':' || c.relkind, ',') AS v FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relname IN ('workout_set_entries','workout_log_entries')`,
+      };
+      const shape: Record<string, unknown> = {};
+      for (const [name, q] of Object.entries(probes)) {
+        try {
+          shape[name] = readRows<{ v: unknown }>(await db.execute(q))[0]?.v ?? null;
+        } catch (e) {
+          const cause = (e as { cause?: { message?: string } }).cause?.message;
+          shape[name] = `ERROR ${cause ?? (e instanceof Error ? e.message : String(e))}`.slice(0, 200);
+        }
+      }
+      console.warn(`[job:${SET_TRACE_OFFLOAD_JOB}] shape: ${JSON.stringify(shape)}`);
       console.warn(
         `[job:${SET_TRACE_OFFLOAD_JOB}] ${remaining} rows hold frames but none joined to a day: ` +
           `${o?.no_entry ?? "?"} have no entry, ${o?.no_log ?? "?"} have an entry with no log; ` +
@@ -146,7 +148,8 @@ export async function offloadSetTraces(opts: { timeBudgetMs?: number; batch?: nu
     }
     console.log(`[job:${SET_TRACE_OFFLOAD_JOB}] moved ${moved} sets' skeleton frames to files; ${remaining} still in the table.`);
   } catch (err) {
-    console.error(`[job:${SET_TRACE_OFFLOAD_JOB}] stopped on an error after moving ${moved}:`, err instanceof Error ? err.message : String(err));
+    const cause = (err as { cause?: { message?: string } }).cause?.message;
+    console.error(`[job:${SET_TRACE_OFFLOAD_JOB}] stopped on an error after moving ${moved}: ${cause ?? (err instanceof Error ? err.message : String(err))}`.slice(0, 600));
     reportJobFailure(SET_TRACE_OFFLOAD_JOB, err, { moved });
   }
   return { moved, remaining };
