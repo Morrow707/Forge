@@ -3915,6 +3915,21 @@ Render API for the instance and the database) and fixed second. What the measure
   deploy's log answers it. Read that line before anything else: if it is the skeleton traces, the
   retention sweep needs a row cap; if it is the knowledge library, the plan goes up. A full disk
   stops every write on the platform at once.
+  **ANSWERED ON THE FIRST BOOT (2026-10-16 20:02 UTC):** `Database size: 488.6 MB total;
+  workout_set_entries 450.5 MB (~17,643 rows); knowledge_passages 13.1 MB; everything else under
+  1 MB.` One table is 92% of the database, and it is the one that carries `skeleton_frames`, the
+  per-capture skeleton trace that the build-620 console measured at ~10 MB a set. The 134 MB
+  between that total and Render's 623 MB of disk is WAL and dead tuples, which is ordinary.
+  **The video retention sweep never touches this column** -- "purging a video never touches its
+  metrics" is the standing rule and the skeleton frames are among what survives -- so the table
+  grows by the trace of every filmed set, forever, and never shrinks. At ~10 MB a take, the
+  remaining ~400 MB of the 1 GB disk is roughly forty more filmed sets, which is a calibration
+  week. **Two moves, Scott's call, not made:** the cheap one is the next Render disk size
+  (basic_4gb); the right one is to keep a capture's trace where its video is kept -- a file under
+  `STORAGE_PATH`, with the row holding its path -- which is the shape `pending-log-files.ts`
+  already uses on the phone for the same object and the same reason. The research mirror, the
+  replay harness and the admin tracking report read the column, so that is a migration with
+  readers to move, not an evening. Not touched during App Review.
 - **Recorded, not changed:** the sitemap's `lastmod` is the commit date (fine); the HTML ships
   ~2.5 KB of its own comments, which brotli makes nearly free; `/api/auth/me` and the two
   Capacitor web-plugin chunks are the only requests between the entry and the first React paint.
