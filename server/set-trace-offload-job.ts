@@ -125,7 +125,7 @@ export async function offloadSetTraces(opts: { timeBudgetMs?: number; batch?: nu
         joined: sql`SELECT count(*)::int AS v FROM workout_set_entries wse JOIN workout_log_entries wle ON wle.id = wse.log_entry_id`,
         set_cols: sql`SELECT string_agg(column_name || ':' || data_type, ',') AS v FROM information_schema.columns WHERE table_name = 'workout_set_entries' AND column_name IN ('id','log_entry_id','skeleton_frames','skeleton_frames_path')`,
         entry_cols: sql`SELECT string_agg(column_name || ':' || data_type, ',') AS v FROM information_schema.columns WHERE table_name = 'workout_log_entries' AND column_name IN ('id','workout_log_id')`,
-        relations: sql`SELECT string_agg(n.nspname || '.' || c.relname || ':' || c.relkind, ',') AS v FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relname IN ('workout_set_entries','workout_log_entries')`,
+        relations: sql`SELECT string_agg(n.nspname || '.' || c.relname || ':' || c.relkind::text, ',') AS v FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relname IN ('workout_set_entries','workout_log_entries')`,
       };
       const shape: Record<string, unknown> = {};
       for (const [name, q] of Object.entries(probes)) {
