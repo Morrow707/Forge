@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { describePromoCode, type PromoAudience, type PromoKind } from "@shared/promo-codes";
 import { ReadFailed } from "@/components/read-failed";
 import { toast } from "sonner";
 import { Ticket, DollarSign, GraduationCap } from "lucide-react";
@@ -14,6 +16,12 @@ type RedeemCode = {
   id: number;
   code: string;
   trialDays: number;
+  audience: string;
+  kind: string;
+  percentOff: number | null;
+  discountMonths: number | null;
+  stripeCouponId: string | null;
+  stripePromotionCodeId: string | null;
   maxRedemptions: number | null;
   redemptionCount: number;
   expiresAt: string | null;
@@ -122,6 +130,12 @@ export default function AdminBilling() {
   const [newCode, setNewCode] = useState("");
   const [newTrialDays, setNewTrialDays] = useState("30");
   const [newMaxRedemptions, setNewMaxRedemptions] = useState("");
+  // WHO AND WHAT (shared/promo-codes.ts): a launch month for new accounts is a different code
+  // from a half-price holiday for everybody, and the admin picks both here.
+  const [newAudience, setNewAudience] = useState<PromoAudience>("new_accounts");
+  const [newKind, setNewKind] = useState<PromoKind>("free_time");
+  const [newPercentOff, setNewPercentOff] = useState("50");
+  const [newDiscountMonths, setNewDiscountMonths] = useState("1");
 
   const { data: codes = [], isError: codesFailed, refetch: refetchCodes } = useQuery<RedeemCode[]>({
     queryKey: ["/api/admin/redeem-codes"],
@@ -140,16 +154,25 @@ export default function AdminBilling() {
 
   const createCodeMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/admin/redeem-codes", {
+      const res = await apiRequest("POST", "/api/admin/redeem-codes", {
         code: newCode.trim(),
-        trialDays: Number(newTrialDays),
+        audience: newAudience,
+        kind: newKind,
+        trialDays: newKind === "free_time" ? Number(newTrialDays) : undefined,
+        percentOff: newKind === "percent_off" ? Number(newPercentOff) : null,
+        discountMonths: newKind === "percent_off" ? Number(newDiscountMonths) : null,
         maxRedemptions: newMaxRedemptions.trim() ? Number(newMaxRedemptions) : null,
       });
+      return (await res.json()) as RedeemCode & { stripe: string | null };
     },
-    onSuccess: () => {
-      toast.success("Code created");
+    onSuccess: (created) => {
+      // Stripe is told at creation so a card subscription can be discounted and the web
+      // checkout accepts the same code. When it could not be, say so now rather than at the
+      // first redemption that needs it.
+      if (created.stripeCouponId) toast.success("Code created, and set up at Stripe");
+      else toast.success(`Code created. Stripe wasn't reachable (${created.stripe ?? "not configured"}): free time on unbilled accounts works, card discounts won't until it is.`, { duration: 12000 });
       setNewCode("");
-      setNewTrialDays("14");
+      setNewTrialDays("30");
       setNewMaxRedemptions("");
       qc.invalidateQueries({ queryKey: ["/api/admin/redeem-codes"] });
     },
@@ -184,27 +207,23 @@ export default function AdminBilling() {
               Redeem codes
             </CardTitle>
             <CardDescription>
-              Promo codes a new head coach or Free Agent can enter at signup or later on their
-              billing page. The free time counts from the day the account was created, not the day
-              the code is typed: 30 days from an October 17th signup runs to November 17th, and a
-              code typed after that window has closed unlocks nothing. Doesn't require a tier to be
-              assigned first.
+              Promo codes a head coach or Free Agent types in, at signup or later on their billing
+              page. Two choices: who it is for, and what it gives. For new accounts, free time counts
+              from the day the account was created (30 days from an October 17th signup runs to
+              November 17th, and a code typed after that window unlocks nothing); for everyone, it
+              counts from the day the code is typed. A percent-off code discounts a plan billed by
+              card, and the same code works on the web checkout. Plans billed through the App Store
+              can only be discounted by Apple: create the same code as an App Store offer code too.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Input
                 value={newCode}
                 onChange={(e) => setNewCode(e.target.value.toUpperCase())}
                 placeholder="LAUNCH30"
-                className="col-span-3 font-mono uppercase sm:col-span-1"
-              />
-              <Input
-                type="number"
-                min={1}
-                value={newTrialDays}
-                onChange={(e) => setNewTrialDays(e.target.value)}
-                placeholder="Trial days"
+                className="col-span-2 font-mono uppercase sm:col-span-1"
+                aria-label="Code"
               />
               <Input
                 type="number"
@@ -212,13 +231,78 @@ export default function AdminBilling() {
                 value={newMaxRedemptions}
                 onChange={(e) => setNewMaxRedemptions(e.target.value)}
                 placeholder="Max uses (blank = unlimited)"
+                className="col-span-2 sm:col-span-1"
               />
+              <Select value={newAudience} onValueChange={(v) => setNewAudience(v as PromoAudience)}>
+                <SelectTrigger aria-label="Who can redeem it">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new_accounts">New accounts only</SelectItem>
+                  <SelectItem value="everyone">Everyone, new and existing</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={newKind} onValueChange={(v) => setNewKind(v as PromoKind)}>
+                <SelectTrigger aria-label="What it gives">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="free_time">Free time</SelectItem>
+                  <SelectItem value="percent_off">Percent off</SelectItem>
+                </SelectContent>
+              </Select>
+              {newKind === "free_time" ? (
+                <Input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={newTrialDays}
+                  onChange={(e) => setNewTrialDays(e.target.value)}
+                  placeholder="Free days (30 = one month)"
+                  aria-label="Free days"
+                  className="col-span-2"
+                />
+              ) : (
+                <>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={newPercentOff}
+                    onChange={(e) => setNewPercentOff(e.target.value)}
+                    placeholder="Percent off"
+                    aria-label="Percent off"
+                  />
+                  <Input
+                    type="number"
+                    min={1}
+                    max={24}
+                    value={newDiscountMonths}
+                    onChange={(e) => setNewDiscountMonths(e.target.value)}
+                    placeholder="For how many months"
+                    aria-label="Discount months"
+                  />
+                </>
+              )}
             </div>
+            <p className="text-xs text-muted-foreground">
+              {describePromoCode({
+                audience: newAudience,
+                kind: newKind,
+                trialDays: Number(newTrialDays) || 0,
+                percentOff: Number(newPercentOff) || null,
+                discountMonths: Number(newDiscountMonths) || null,
+              })}
+            </p>
             <Button
               type="button"
               variant="outline"
               onClick={() => createCodeMutation.mutate()}
-              disabled={!newCode.trim() || !newTrialDays.trim() || createCodeMutation.isPending}
+              disabled={
+                !newCode.trim() ||
+                (newKind === "free_time" ? !newTrialDays.trim() : !newPercentOff.trim()) ||
+                createCodeMutation.isPending
+              }
             >
               Create code
             </Button>
@@ -242,7 +326,8 @@ export default function AdminBilling() {
                   >
                     <span className="font-mono font-semibold">{c.code}</span>
                     <span className="text-xs text-muted-foreground">
-                      {c.trialDays}d trial ·{" "}
+                      {describePromoCode(c)} ·{" "}
+                      {c.stripeCouponId ? "" : "no Stripe coupon · "}
                       {c.maxRedemptions
                         ? `${c.redemptionCount ?? 0} of ${c.maxRedemptions} used`
                         : `${c.redemptionCount ?? 0} redeemed`}

@@ -143,10 +143,10 @@ export function AccountSettingsDialog({
   const redeemMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/coach/redeem-code", { code: redeemCode.trim() });
-      return (await res.json()) as { trialExpiresAt: string };
+      return (await res.json()) as { trialExpiresAt: string | null; message?: string };
     },
     onSuccess: (data) => {
-      const until = new Date(data.trialExpiresAt).toLocaleDateString();
+      const until = data.trialExpiresAt ? new Date(data.trialExpiresAt).toLocaleDateString() : null;
       // Redeeming writes trialExpiresAt onto the user row, and every
       // entitlement gate in the app reads that off the CACHED /api/auth/me.
       // Without this the toast said "full access unlocked" while the app
@@ -154,7 +154,9 @@ export function AccountSettingsDialog({
       // most confusing possible outcome for a coach who just paid or was
       // comped.
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast.success(`Code redeemed, full access unlocked through ${until}`);
+      // The server's sentence says what the code did: a trial through a date, or a discount on
+      // the card plan (shared/promo-codes.ts). The date form is kept for an older server.
+      toast.success(data.message ?? (until ? `Code redeemed, full access unlocked through ${until}` : "Code redeemed"));
       setRedeemCode("");
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't redeem that code"),

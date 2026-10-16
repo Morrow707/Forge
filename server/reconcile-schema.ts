@@ -1559,6 +1559,14 @@ CREATE TABLE IF NOT EXISTS "redeem_codes" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "redeem_codes_code_idx" ON "redeem_codes" ("code");
+-- 2026-10-16: who a code is for and what it gives (shared/promo-codes.ts). Existing rows read
+-- as the only kind that existed: free time for a new account.
+ALTER TABLE "redeem_codes" ADD COLUMN IF NOT EXISTS "audience" text NOT NULL DEFAULT 'new_accounts';
+ALTER TABLE "redeem_codes" ADD COLUMN IF NOT EXISTS "kind" text NOT NULL DEFAULT 'free_time';
+ALTER TABLE "redeem_codes" ADD COLUMN IF NOT EXISTS "percent_off" integer;
+ALTER TABLE "redeem_codes" ADD COLUMN IF NOT EXISTS "discount_months" integer;
+ALTER TABLE "redeem_codes" ADD COLUMN IF NOT EXISTS "stripe_coupon_id" text;
+ALTER TABLE "redeem_codes" ADD COLUMN IF NOT EXISTS "stripe_promotion_code_id" text;
 
 CREATE TABLE IF NOT EXISTS "redeem_code_redemptions" (
   "id" serial PRIMARY KEY,

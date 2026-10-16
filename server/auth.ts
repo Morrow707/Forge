@@ -10,6 +10,7 @@ import crypto from "crypto";
 import { z } from "zod";
 import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
+import { redeemPromoCode } from "./promo-codes";
 import { cancelSubscriptionsForDeletedAccount, rebillCoachBandAfterJoin } from "./billing";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import { pool } from "./db";
@@ -939,9 +940,9 @@ export function setupAuth(app: Express) {
       let promoTrialEndsAt: Date | null = null;
       let promoCodeMessage: string | null = null;
       if (promoCodeTyped) {
-        const redeemed = await storage.redeemCode(user.id, promoCodeTyped);
+        const redeemed = await redeemPromoCode(user.id, promoCodeTyped);
+        promoCodeMessage = redeemed.message;
         if (redeemed.ok) promoTrialEndsAt = redeemed.trialExpiresAt;
-        else promoCodeMessage = redeemed.message;
       }
 
       loginWithFreshSession(req, user, async (err: any) => {

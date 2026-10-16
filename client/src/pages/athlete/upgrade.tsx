@@ -317,14 +317,17 @@ export default function AthleteUpgrade() {
     setRedeemingForgeCode(true);
     try {
       const res = await apiRequest("POST", "/api/athlete/redeem-code", { code });
-      const { trialExpiresAt } = (await res.json()) as { trialExpiresAt: string };
+      const { trialExpiresAt, message } = (await res.json()) as { trialExpiresAt: string | null; message?: string };
       // Every gate the app draws reads one of these; without the invalidation the toast says
       // unlocked while the record button stays missing until a reload.
       qc.invalidateQueries({ queryKey: ["/api/athlete/entitlements"] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/camera-access"] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/skills-access"] });
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast.success(`Code applied: full access is free through ${new Date(trialExpiresAt).toLocaleDateString()}`);
+      toast.success(
+        message ??
+          (trialExpiresAt ? `Code applied: full access is free through ${new Date(trialExpiresAt).toLocaleDateString()}` : "Code applied"),
+      );
       setForgeCode("");
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Couldn't redeem that code");

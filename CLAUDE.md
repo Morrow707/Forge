@@ -3887,6 +3887,31 @@ and his answer to each, so none is re-opened:
   all of it through the real routes (anchoring the window to the redemption instead turns five of
   its eleven cases red); `shared/promo-trial.test.ts` pins his two examples. Client halves:
   `verify_build`.
+  **AND A CODE FOR EXISTING USERS IS A DIFFERENT CODE, SO THE ADMIN PICKS TWO THINGS** (2026-10-16,
+  Scott: "one month free for new users would be different than 50% off for existing users, a 4th
+  of July sale might be 50% off where a new years/Christmas sale might be one month free for all
+  users" / "Obviously they have to type the code in to redeem it, but, gives us the option").
+  `shared/promo-codes.ts` is the vocabulary: AUDIENCE `new_accounts` (the window after signup, free
+  time counting from the signup) or `everyone` (any account, free time counting from the
+  redemption, on top of a trial still running); KIND `free_time` or `percent_off`
+  (`percentOff` for `discountMonths`). `server/promo-codes.ts` (`redeemPromoCode`) is the ONE
+  place the rules meet, called by signup and both redeem routes; storage keeps the queries
+  (`findRedeemableCode`, `hasRedeemedCode`, `recordCodeRedemption`, `extendCoachTrial`,
+  `extendFreeAgentTrial`) because it cannot import billing. **The card rail is where "existing
+  users" live**: a code is created at Stripe WITH the Forge code (`createStripePromoForCode` --
+  a coupon, 100% for a free-time code's months, plus a promotion code of the same name so the
+  web checkout accepts it; best-effort, the admin toast says when Stripe was not reached), and a
+  redemption on an account Forge bills by card puts the coupon on every live Stripe subscription
+  (`liveStripeSubscriptionIdsFor`: the tier or coach plan row plus each active add-on's handle)
+  -- NEVER a trialing row over a live plan. A percent-off code on an account with no card plan is
+  told to type the same code at checkout and spends no redemption. **A plan billed through the
+  App Store is Apple's to discount**: either kind is refused with the App Store sheet named, the
+  admin copy says to create the same code as an App Store offer code, and nothing is spent. A
+  redemption row is written only when something was given. `promo-codes.test.ts` (server, Stripe
+  faked) drives the card branches; the itest drives the database ones (17 cases);
+  `shared/promo-codes.test.ts` pins the sentences. Migration: six columns on `redeem_codes`,
+  proven on a fresh database and on one that had the table. Client: the admin form's two
+  selectors and the toasts carry the server's sentence. `verify_build`.
 - **ZERO COMMUNICATION BETWEEN USERS WHO ARE NOT BEING COACHED.** "keep the social layer all the
   way out, we will have underage athletes and i want 0, absolute 0 communication between users
   when they aren't being coached." Already true (the discussion board went 10-11) and now a

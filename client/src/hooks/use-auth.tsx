@@ -167,9 +167,11 @@ function useSignupMutation() {
       // The account was created either way; whether the code landed is said here, once,
       // rather than left for the billing page to imply.
       if (promoTrialEndsAt) {
-        toast.success(`Code applied: full access is free through ${new Date(promoTrialEndsAt).toLocaleDateString()}`);
+        toast.success(promoCodeMessage ?? `Code applied: full access is free through ${new Date(promoTrialEndsAt).toLocaleDateString()}`);
       } else if (promoCodeMessage) {
-        toast.error(promoCodeMessage);
+        // A percent-off code on a brand-new account has nothing to discount yet; the sentence
+        // says to type it at checkout, which is information rather than an error.
+        toast.info(promoCodeMessage, { duration: 10000 });
       }
     },
     onError: (err: ApiError) => {

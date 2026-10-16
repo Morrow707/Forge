@@ -191,7 +191,6 @@ import {
 } from "@shared/privacy-tiers";
 import { coreAgreementText } from "./seed-data/signup-agreement";
 import { autoregulateLoad } from "@shared/autoregulation";
-import { promoTrialFor } from "@shared/promo-trial";
 import {
   type AddOnStillBilling,
   type AddOnTerms,
@@ -291,7 +290,7 @@ import type {
   UpdateTeamBrandingInput,
   UpdateNavPrefsInput,
   UpdateCoachBillingInput,
-  CreateRedeemCodeInput,
+  CreateRedeemCodeDraft,
   UpdateFreeAgentBillingInput,
   MovementKnowledgeMessage,
   MovementProfile,
@@ -343,7 +342,7 @@ const APPLE_PRODUCT_ID_TO_COACH_ADD_ON: Record<string, AddOnId> = Object.fromEnt
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
 import { CAMERA_CAPTURE_EVIDENCE_COLUMNS, CAMERA_EVIDENCE_NEEDS_A_VALUE } from "@shared/schema";
 import type { ClipSource, ClipSummary } from "@shared/video-clips";
-import { classAiDraftSchema } from "@shared/schema";
+import { classAiDraftSchema, createRedeemCodeSchema } from "@shared/schema";
 import { getEntitlements, getVideoRetentionLimits } from "./billing";
 import type { VideoRetentionLimits } from "@shared/video-retention";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
@@ -3905,12 +3904,22 @@ export const storage = {
   },
 
   // ---------- Redeem codes (trial promos) ----------
-  async createRedeemCode(input: CreateRedeemCodeInput) {
+  async createRedeemCode(
+    draft: CreateRedeemCodeDraft,
+    stripe?: { couponId: string | null; promotionCodeId: string | null },
+  ) {
+    const input = createRedeemCodeSchema.parse(draft);
     const [row] = await db
       .insert(redeemCodes)
       .values({
         code: input.code.trim().toUpperCase(),
-        trialDays: input.trialDays,
+        trialDays: input.kind === "percent_off" ? 0 : (input.trialDays ?? 0),
+        audience: input.audience,
+        kind: input.kind,
+        percentOff: input.kind === "percent_off" ? (input.percentOff ?? null) : null,
+        discountMonths: input.kind === "percent_off" ? (input.discountMonths ?? 1) : null,
+        stripeCouponId: stripe?.couponId ?? null,
+        stripePromotionCodeId: stripe?.promotionCodeId ?? null,
         maxRedemptions: input.maxRedemptions ?? null,
         expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
       })
@@ -4037,85 +4046,47 @@ export const storage = {
     return { ok: true, record };
   },
 
-  /** REDEEM A PROMO CODE ONTO THE ACCOUNT THAT CAN CARRY IT (generalised 2026-10-15).
-   *
-   *  Until this it was a COACH mechanism alone: it extended users.trialExpiresAt from "now" (or
-   *  stacked on a running trial), which is what the coach entitlements read. Scott's launch
-   *  offer is for every new account -- "new users whenever they sign up get 30 days from their
-   *  original signup date" -- so:
-   *
-   *   - THE WINDOW IS ANCHORED TO THE SIGNUP, never to the redemption (shared/promo-trial.ts).
-   *     October 17th runs to November 17th whether the code is typed at signup or a week later,
-   *     and a code typed after the window has closed is refused with the reason. The old
-   *     stacking is gone with it: a second code cannot push the end past what the longest code
-   *     gives from the signup date, which is the point of anchoring.
-   *   - A PRIMARY COACH's trial is users.trialExpiresAt, as before (getEntitlements reads it for
-   *     the whole program). A staff coach is refused: the plan is the primary's row.
-   *   - A FREE AGENT's trial is the SUBSCRIPTIONS ROW -- status "trialing" with trialEndsAt --
-   *     because that is the one thing hasAthletePaidForAiAccess lets a trial decide, and it
-   *     opens the top tier (camera, skills, AI). users.trialExpiresAt is never written for an
-   *     athlete: getFreeAgentEntitlements documents at length why that column is the coach's.
-   *     An account already on a live paid plan (a Stripe or App Store subscription on the row)
-   *     is refused rather than flipped off it; a coached athlete is refused, their program is
-   *     their plan.
-   *
-   *  The redemption row's column is still called coachId; it holds whichever user redeemed. */
-  async redeemCode(
-    userId: number,
-    code: string,
-  ): Promise<{ ok: true; trialExpiresAt: Date } | { ok: false; message: string }> {
-    const found = await this.findRedeemableCode(code);
-    if (!found.ok) return found;
-    const record = found.record;
-
-    const alreadyRedeemed = await db.query.redeemCodeRedemptions.findFirst({
-      where: and(eq(redeemCodeRedemptions.codeId, record.id), eq(redeemCodeRedemptions.coachId, userId)),
+  /** THE DATABASE HALF OF A REDEMPTION. The rules -- who may carry a code, what each kind gives,
+   *  which rail is billing the account -- live in server/promo-codes.ts, which also talks to
+   *  Stripe; this file cannot import billing.ts (billing imports storage), so it holds only the
+   *  pieces that are a query. The redemption row's column is still called coachId; it holds
+   *  whichever user redeemed. */
+  async hasRedeemedCode(userId: number, codeId: number): Promise<boolean> {
+    const row = await db.query.redeemCodeRedemptions.findFirst({
+      where: and(eq(redeemCodeRedemptions.codeId, codeId), eq(redeemCodeRedemptions.coachId, userId)),
     });
-    if (alreadyRedeemed) return { ok: false, message: "You've already redeemed this code" };
+    return row != null;
+  },
 
+  async recordCodeRedemption(userId: number, codeId: number): Promise<void> {
+    await db.insert(redeemCodeRedemptions).values({ codeId, coachId: userId });
+  },
+
+  /** Moves a coach's trial (users.trialExpiresAt, what getEntitlements reads for the whole
+   *  program) out to `end` if that is later than what is there. Returns the end in force. */
+  async extendCoachTrial(userId: number, end: Date): Promise<Date> {
     const user = await this.getUser(userId);
-    if (!user) return { ok: false, message: "That code isn't valid" };
-    const verdict = promoTrialFor(user.createdAt, record.trialDays);
-    if (!verdict.ok) return verdict;
-    const trialExpiresAt = verdict.trialEndsAt;
+    const current = user?.trialExpiresAt ?? null;
+    if (current && current.getTime() >= end.getTime()) return current;
+    await db.update(users).set({ trialExpiresAt: end }).where(eq(users.id, userId));
+    return end;
+  },
 
-    if (user.role === "coach") {
-      if ((await this.getPrimaryCoachId(userId)) !== userId) {
-        return { ok: false, message: "Your program's head coach holds the plan. Ask them to redeem it." };
-      }
-      const current = user.trialExpiresAt;
-      await db.insert(redeemCodeRedemptions).values({ codeId: record.id, coachId: userId });
-      if (!current || current.getTime() < trialExpiresAt.getTime()) {
-        await db.update(users).set({ trialExpiresAt }).where(eq(users.id, userId));
-        return { ok: true, trialExpiresAt };
-      }
-      return { ok: true, trialExpiresAt: current };
-    }
-
-    if (user.role !== "athlete") return { ok: false, message: "That code isn't valid for this account" };
-    if ((await this.getCoachesForAthlete(userId)).length > 0) {
-      return { ok: false, message: "Your coach's program covers your plan, so there's nothing for this code to unlock." };
-    }
+  /** Moves a Free Agent's trial (the subscriptions row, status trialing -- the one thing
+   *  hasAthletePaidForAiAccess lets a trial decide) out to `end` if later. users.trialExpiresAt
+   *  is never written for an athlete: getFreeAgentEntitlements says why that column is the
+   *  coach's. Returns the end in force. */
+  async extendFreeAgentTrial(userId: number, end: Date): Promise<Date> {
     const sub = await this.getSubscriptionForUser(userId);
-    const paying =
-      sub != null &&
-      (sub.status === "active" || sub.status === "past_due") &&
-      Boolean(sub.stripeSubscriptionId || sub.appleOriginalTransactionId);
-    if (paying) {
-      return { ok: false, message: "Your account already has a plan, so there's nothing for this code to unlock." };
-    }
-    await db.insert(redeemCodeRedemptions).values({ codeId: record.id, coachId: userId });
-    const currentEnd = sub?.status === "trialing" ? sub.trialEndsAt : null;
-    if (!currentEnd || currentEnd.getTime() < trialExpiresAt.getTime()) {
-      await this.upsertSubscriptionByUserId(userId, {
-        accountType: "free_agent",
-        tier: "base",
-        status: "trialing",
-        trialEndsAt: trialExpiresAt,
-      });
-      return { ok: true, trialExpiresAt };
-    }
-    return { ok: true, trialExpiresAt: currentEnd };
+    const current = sub?.status === "trialing" ? sub.trialEndsAt : null;
+    if (current && current.getTime() >= end.getTime()) return current;
+    await this.upsertSubscriptionByUserId(userId, {
+      accountType: "free_agent",
+      tier: "base",
+      status: "trialing",
+      trialEndsAt: end,
+    });
+    return end;
   },
 
   // ---------- Free Agent billing (separate track from coach/org billing

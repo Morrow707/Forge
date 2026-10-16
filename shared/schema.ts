@@ -762,7 +762,24 @@ export const redeemCodes = pgTable(
   {
     id: serial("id").primaryKey(),
     code: text("code").notNull(),
+    // Free days for a "free_time" code; 0 on a "percent_off" code. See shared/promo-codes.ts.
     trialDays: integer("trial_days").notNull(),
+    // WHO MAY REDEEM IT (2026-10-16, Scott: "one month free for new users would be different
+    // than 50% off for existing users"). "new_accounts": only within the window after signup,
+    // and free time counts FROM the signup. "everyone": any account, free time counts from the
+    // redemption. shared/promo-codes.ts holds the values and the rules.
+    audience: text("audience").notNull().default("new_accounts"),
+    // WHAT IT GIVES. "free_time": trialDays of full access. "percent_off": percentOff off the
+    // next discountMonths of a plan billed by card (a Stripe coupon, created with the code).
+    kind: text("kind").notNull().default("free_time"),
+    percentOff: integer("percent_off"),
+    discountMonths: integer("discount_months"),
+    // Created at Stripe when the code is, when Stripe is configured: the coupon a redemption
+    // applies to a subscription Forge bills by card, and the promotion code of the same name
+    // that the web checkout accepts. Null when Stripe was not reachable; the code still works
+    // for everything that is not a card subscription.
+    stripeCouponId: text("stripe_coupon_id"),
+    stripePromotionCodeId: text("stripe_promotion_code_id"),
     // null = unlimited redemptions.
     maxRedemptions: integer("max_redemptions"),
     // null = never expires.
@@ -8625,12 +8642,26 @@ export const updateCoachBillingSchema = z.object({
 });
 
 // Admin-only -- creates a redeemable code (see redeemCodes table above).
-export const createRedeemCodeSchema = z.object({
-  code: z.string().trim().min(3).max(30),
-  trialDays: z.number().int().min(1).max(365),
-  maxRedemptions: z.number().int().min(1).optional().nullable(),
-  expiresAt: z.string().datetime().optional().nullable(),
-});
+export const createRedeemCodeSchema = z
+  .object({
+    code: z.string().trim().min(3).max(30),
+    // Required for a free_time code, ignored (stored as 0) for percent_off.
+    trialDays: z.number().int().min(1).max(365).optional(),
+    audience: z.enum(["new_accounts", "everyone"]).default("new_accounts"),
+    kind: z.enum(["free_time", "percent_off"]).default("free_time"),
+    percentOff: z.number().int().min(1).max(100).optional().nullable(),
+    discountMonths: z.number().int().min(1).max(24).optional().nullable(),
+    maxRedemptions: z.number().int().min(1).optional().nullable(),
+    expiresAt: z.string().datetime().optional().nullable(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.kind === "free_time" && !v.trialDays) {
+      ctx.addIssue({ code: "custom", path: ["trialDays"], message: "Say how many free days the code gives" });
+    }
+    if (v.kind === "percent_off" && !v.percentOff) {
+      ctx.addIssue({ code: "custom", path: ["percentOff"], message: "Say what percentage the code takes off" });
+    }
+  });
 
 // Coach-facing -- what a primary coach types into the redeem box.
 export const redeemCodeInputSchema = z.object({
@@ -10496,6 +10527,8 @@ export type UpdatePersonalThemeInput = z.infer<typeof updatePersonalThemeSchema>
 export type UpdateCoachingPhilosophyInput = z.infer<typeof updateCoachingPhilosophySchema>;
 export type UpdateCoachBillingInput = z.infer<typeof updateCoachBillingSchema>;
 export type CreateRedeemCodeInput = z.infer<typeof createRedeemCodeSchema>;
+/** What a caller may hand createRedeemCode: the defaults (a new-account free-time code) apply. */
+export type CreateRedeemCodeDraft = z.input<typeof createRedeemCodeSchema>;
 export type RedeemCodeInput = z.infer<typeof redeemCodeInputSchema>;
 export type UpdateFreeAgentBillingInput = z.infer<typeof updateFreeAgentBillingSchema>;
 export type CreateWorkoutCommentInput = z.infer<typeof createWorkoutCommentSchema>;

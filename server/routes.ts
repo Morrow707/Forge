@@ -33,9 +33,11 @@ import { setupAuth, requireAuth, requireRole, toPublicUser } from "./auth";
 import { registerInstitutionalAgreementRoutes } from "./institutional-agreement-routes";
 import { registerEmailListRoutes } from "./email-list";
 import { hashPassword, comparePasswords } from "./auth-utils";
-import { getEntitlements, type Entitlements, getFreeAgentEntitlements, syncCoachSubscriptionBand } from "./billing";
+import { getEntitlements, type Entitlements, getFreeAgentEntitlements, syncCoachSubscriptionBand, createStripePromoForCode } from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
 import { storage, CohortQueryBudgetExceeded, CohortQueryDifferencingRefused } from "./storage";
+import { redeemPromoCode } from "./promo-codes";
+import { promoDiscountMonths, promoPercentOff } from "@shared/promo-codes";
 import { formatTrackingReport, buildTrackingReportEntries } from "./tracking-report";
 import { PRICING_CATALOG_KEYS } from "./pricing-catalog";
 import { buildIcsFeed } from "./ics";
@@ -4262,8 +4264,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const code = await storage.createRedeemCode(parsed.data);
-    res.status(201).json(code);
+    // The Stripe coupon (what a redemption puts on a card subscription) and the promotion code
+    // of the same name (what the web checkout accepts) are created WITH the code, best-effort:
+    // shared/promo-codes.ts. A free-time code is a 100% coupon for its months.
+    const stripe = await createStripePromoForCode({
+      code: parsed.data.code.trim().toUpperCase(),
+      percentOff: promoPercentOff({ ...parsed.data, trialDays: parsed.data.trialDays ?? 0, percentOff: parsed.data.percentOff ?? null, discountMonths: parsed.data.discountMonths ?? null }),
+      months: promoDiscountMonths({ ...parsed.data, trialDays: parsed.data.trialDays ?? 0, percentOff: parsed.data.percentOff ?? null, discountMonths: parsed.data.discountMonths ?? null }),
+      maxRedemptions: parsed.data.maxRedemptions ?? null,
+      expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
+    });
+    const code = await storage.createRedeemCode(parsed.data, stripe);
+    res.status(201).json({ ...code, stripe: stripe.reason ?? null });
   });
 
   // Every priced thing on the platform, read-only -- see pricing-catalog.ts.
@@ -4301,11 +4313,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const result = await storage.redeemCode(user.id, parsed.data.code);
+    const result = await redeemPromoCode(user.id, parsed.data.code);
     if (!result.ok) {
       return res.status(400).json({ message: result.message });
     }
-    res.json({ trialExpiresAt: result.trialExpiresAt });
+    res.json({ trialExpiresAt: result.trialExpiresAt, applied: result.applied, message: result.message });
   });
 
   // A FREE AGENT REDEEMS THE SAME CODES (2026-10-15). Scott's launch offer is for every new
@@ -4318,11 +4330,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const result = await storage.redeemCode(user.id, parsed.data.code);
+    const result = await redeemPromoCode(user.id, parsed.data.code);
     if (!result.ok) {
       return res.status(400).json({ message: result.message });
     }
-    res.json({ trialExpiresAt: result.trialExpiresAt });
+    res.json({ trialExpiresAt: result.trialExpiresAt, applied: result.applied, message: result.message });
   });
 
   // Free Agent (individual athlete) billing -- a separate track from the

@@ -1891,3 +1891,111 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       break;
   }
 }
+
+// ---------------------------------------------------------------------------
+// PROMO CODES ON THE CARD RAIL (2026-10-16). shared/promo-codes.ts says what a code is; this is
+// the half of a redemption Stripe has to do. Both helpers are BEST-EFFORT and never throw: a
+// code is still created, and a trial still extended, when Stripe is unreachable -- the audit
+// row says what was not done, so an operator can finish it in the dashboard.
+// ---------------------------------------------------------------------------
+
+/** Creates the Stripe coupon a redemption applies to a card subscription, and a promotion
+ *  code of the same name so the web checkout honours the code typed there. Returns null ids
+ *  with a reason when Stripe is not configured or refuses; the Forge code is created either
+ *  way, because free time on an unbilled account needs nothing from Stripe. */
+export async function createStripePromoForCode(input: {
+  code: string;
+  percentOff: number;
+  months: number;
+  maxRedemptions?: number | null;
+  expiresAt?: Date | null;
+}): Promise<{ couponId: string | null; promotionCodeId: string | null; reason?: string }> {
+  const stripe = getStripeClient();
+  if (!stripe) return { couponId: null, promotionCodeId: null, reason: "stripe_not_configured" };
+  try {
+    const coupon = await stripe.coupons.create({
+      name: input.code,
+      percent_off: input.percentOff,
+      ...(input.months > 1 ? { duration: "repeating", duration_in_months: input.months } : { duration: "once" }),
+      ...(input.maxRedemptions ? { max_redemptions: input.maxRedemptions } : {}),
+      ...(input.expiresAt ? { redeem_by: Math.floor(input.expiresAt.getTime() / 1000) } : {}),
+    });
+    // A Stripe promotion code is letters and digits; the Forge code may carry a dash or an
+    // underscore, which is dropped here. The web checkout then accepts the stripped form.
+    const stripeCode = input.code.replace(/[^A-Z0-9]/gi, "").toUpperCase();
+    let promotionCodeId: string | null = null;
+    try {
+      const promo = await stripe.promotionCodes.create({
+        promotion: { type: "coupon", coupon: coupon.id },
+        code: stripeCode,
+        ...(input.maxRedemptions ? { max_redemptions: input.maxRedemptions } : {}),
+        ...(input.expiresAt ? { expires_at: Math.floor(input.expiresAt.getTime() / 1000) } : {}),
+      });
+      promotionCodeId = promo.id;
+    } catch (err) {
+      console.warn(`Stripe promotion code for ${input.code} not created: ${(err as Error).message}`);
+    }
+    return { couponId: coupon.id, promotionCodeId };
+  } catch (err) {
+    console.warn(`Stripe coupon for ${input.code} not created: ${(err as Error).message}`);
+    return { couponId: null, promotionCodeId: null, reason: (err as Error).message };
+  }
+}
+
+/** Every subscription Forge bills this account by CARD for, live: the plan on the
+ *  subscriptions row (a Free Agent tier or the coach plan) and each active add-on whose term
+ *  carries a Stripe handle. Apple-billed ones are not here -- only Apple can discount those. */
+export async function liveStripeSubscriptionIdsFor(userId: number): Promise<string[]> {
+  const ids: string[] = [];
+  const sub = await storage.getSubscriptionForUser(userId);
+  if (sub?.stripeSubscriptionId && (sub.status === "active" || sub.status === "past_due" || sub.status === "trialing")) {
+    ids.push(sub.stripeSubscriptionId);
+  }
+  const user = await storage.getUser(userId);
+  if (user) {
+    const owned = [...(user.freeAgentAddOns ?? []), ...(user.billingAddOns ?? [])];
+    for (const id of activeAddOns(owned, user.addOnTerms)) {
+      const handle = user.addOnTerms?.[id]?.stripeSubscriptionId;
+      if (handle && !ids.includes(handle)) ids.push(handle);
+    }
+  }
+  return ids;
+}
+
+/** Puts the coupon on each subscription. Returns the ids it reached; the ones it did not are
+ *  named in the audit row rather than thrown, because the redemption is recorded either way. */
+export async function applyStripeCouponToSubscriptions(
+  userId: number,
+  subscriptionIds: readonly string[],
+  couponId: string,
+  code: string,
+): Promise<{ applied: string[]; failed: string[] }> {
+  const stripe = getStripeClient();
+  const applied: string[] = [];
+  const failed: string[] = [];
+  if (!stripe) {
+    await storage.logBillingEvent(userId, "promo.coupon_not_applied", {
+      code,
+      couponId,
+      subscriptionIds: [...subscriptionIds],
+      reason: "stripe_not_configured",
+    });
+    return { applied, failed: [...subscriptionIds] };
+  }
+  for (const id of subscriptionIds) {
+    try {
+      await stripe.subscriptions.update(id, { discounts: [{ coupon: couponId }] });
+      applied.push(id);
+    } catch (err) {
+      failed.push(id);
+      console.warn(`Stripe coupon ${couponId} not applied to ${id}: ${(err as Error).message}`);
+    }
+  }
+  await storage.logBillingEvent(userId, failed.length ? "promo.coupon_partly_applied" : "promo.coupon_applied", {
+    code,
+    couponId,
+    applied,
+    failed,
+  });
+  return { applied, failed };
+}

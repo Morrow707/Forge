@@ -4,6 +4,7 @@ import { db } from "./db";
 import { redeemCodeRedemptions, subscriptions, users } from "@shared/schema";
 import { promoTrialEndFromSignup } from "@shared/promo-trial";
 import { storage } from "./storage";
+import { redeemPromoCode } from "./promo-codes";
 import { resetDatabase } from "./test-support/fixtures";
 import {
   addToRoster,
@@ -86,7 +87,7 @@ describe("a launch code is thirty days from the signup", () => {
     expect(user).toBeDefined();
     const expected = promoTrialEndFromSignup(user!.createdAt, 30);
     expect(res.body.promoTrialEndsAt).toBe(expected.toISOString());
-    expect(res.body.promoCodeMessage).toBeNull();
+    expect(res.body.promoCodeMessage).toContain("free through");
 
     const sub = await subscriptionFor(user!.id);
     expect(sub?.accountType).toBe("free_agent");
@@ -202,7 +203,7 @@ describe("a launch code is thirty days from the signup", () => {
     expect(await subscriptionFor(athlete.id)).toBeUndefined();
 
     const staff = await makeLoginableUser({ role: "coach", isBetaAccount: false });
-    const verdict = await storage.redeemCode(staff.id, "LAUNCH30");
+    const verdict = await redeemPromoCode(staff.id, "LAUNCH30");
     // Not on anybody's staff, so primary of their own program: redeemable. The staff refusal
     // itself is the route's requirePrimaryCoach, exercised by plan-at-signup.itest.ts.
     expect(verdict.ok).toBe(true);
@@ -221,7 +222,10 @@ describe("a launch code is thirty days from the signup", () => {
     expect(other.body.trialExpiresAt).toBe(promoTrialEndFromSignup(athlete.createdAt, 30).toISOString());
   });
 
-  it("a Free Agent already paying is left on their plan rather than flipped onto a trial", async () => {
+  it("a Free Agent paying by card is never flipped onto a trial: the free month is a coupon on the card plan, or nothing", async () => {
+    // With no Stripe configured in this suite the code has no coupon, so the honest answer is
+    // that the card plan cannot be discounted yet -- never a trialing row over a live plan, and
+    // never a spent redemption. The coupon branch itself is driven in promo-codes.test.ts.
     const athlete = await makeLoginableUser({ role: "athlete", isBetaAccount: false, freeAgentTier: "basic" });
     await storage.upsertSubscriptionByUserId(athlete.id, {
       accountType: "free_agent",
@@ -232,7 +236,100 @@ describe("a launch code is thirty days from the signup", () => {
     const client = await loginAs(server.baseUrl, athlete);
     const res = await client.post("/api/athlete/redeem-code", { code: "LAUNCH30" });
     expect(res.status).toBe(400);
-    expect(res.body.message).toContain("already has a plan");
+    expect(res.body.message).toContain("card billing");
     expect((await subscriptionFor(athlete.id))?.status).toBe("active");
+    expect(await db.query.redeemCodeRedemptions.findFirst({ where: eq(redeemCodeRedemptions.coachId, athlete.id) })).toBeUndefined();
+  });
+
+  it("an EVERYONE free-time code counts from the redemption, so an old account gets its month too", async () => {
+    await storage.createRedeemCode({ code: "XMAS30", trialDays: 30, audience: "everyone" });
+    const athlete = await makeLoginableUser({
+      role: "athlete",
+      isBetaAccount: false,
+      createdAt: new Date(Date.now() - 400 * DAY),
+    });
+    const client = await loginAs(server.baseUrl, athlete);
+    const res = await client.post("/api/athlete/redeem-code", { code: "xmas30" });
+    expect(res.status).toBe(200);
+    expect(res.body.applied).toBe("trial");
+    const end = new Date(res.body.trialExpiresAt);
+    // A calendar month from now, not from a signup four hundred days ago.
+    expect(end.getTime() - Date.now()).toBeGreaterThan(27 * DAY);
+    expect(end.getTime() - Date.now()).toBeLessThan(32 * DAY);
+    expect((await subscriptionFor(athlete.id))?.trialEndsAt?.toISOString()).toBe(end.toISOString());
+    expect(res.body.message).toContain("free through");
+  });
+
+  it("an EVERYONE free-time code on a head coach moves the program's trial from today", async () => {
+    await storage.createRedeemCode({ code: "XMAS30", trialDays: 30, audience: "everyone" });
+    const coach = await makeLoginableUser({
+      role: "coach",
+      isBetaAccount: false,
+      createdAt: new Date(Date.now() - 200 * DAY),
+    });
+    const client = await loginAs(server.baseUrl, coach);
+    const res = await client.post("/api/coach/redeem-code", { code: "XMAS30" });
+    expect(res.status).toBe(200);
+    const row = await db.query.users.findFirst({ where: eq(users.id, coach.id) });
+    expect(row!.trialExpiresAt!.getTime() - Date.now()).toBeGreaterThan(27 * DAY);
+    const ent = await client.get("/api/coach/entitlements");
+    expect(ent.body.hasMultiTeam).toBe(true);
+  });
+
+  it("a percent-off code on an account with no card plan says to type it at checkout, and spends nothing", async () => {
+    await storage.createRedeemCode({ code: "JULY50", kind: "percent_off", percentOff: 50, discountMonths: 1, audience: "everyone", maxRedemptions: 1 });
+    const athlete = await makeLoginableUser({ role: "athlete", isBetaAccount: false });
+    const client = await loginAs(server.baseUrl, athlete);
+    const res = await client.post("/api/athlete/redeem-code", { code: "JULY50" });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain("50% off");
+    expect(res.body.message).toContain("checkout");
+    expect(await db.query.redeemCodeRedemptions.findFirst({ where: eq(redeemCodeRedemptions.coachId, athlete.id) })).toBeUndefined();
+    // Not spent: the one redemption is still available.
+    const again = await storage.findRedeemableCode("JULY50");
+    expect(again.ok).toBe(true);
+  });
+
+  it("a new-accounts percent-off code is refused on an account past its first thirty days", async () => {
+    await storage.createRedeemCode({ code: "NEW50", kind: "percent_off", percentOff: 50, audience: "new_accounts" });
+    const athlete = await makeLoginableUser({
+      role: "athlete",
+      isBetaAccount: false,
+      createdAt: new Date(Date.now() - 45 * DAY),
+    });
+    const client = await loginAs(server.baseUrl, athlete);
+    const res = await client.post("/api/athlete/redeem-code", { code: "NEW50" });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain("first 30 days");
+  });
+
+  it("any code on a plan billed through the App Store says to use the App Store sheet, and spends nothing", async () => {
+    await storage.createRedeemCode({ code: "XMAS30", trialDays: 30, audience: "everyone" });
+    const athlete = await makeLoginableUser({ role: "athlete", isBetaAccount: false, freeAgentTier: "basic" });
+    await storage.upsertSubscriptionByUserId(athlete.id, {
+      accountType: "free_agent",
+      tier: "base",
+      status: "active",
+      appleOriginalTransactionId: "2000000123",
+    });
+    const client = await loginAs(server.baseUrl, athlete);
+    const res = await client.post("/api/athlete/redeem-code", { code: "XMAS30" });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain("App Store");
+    expect(await db.query.redeemCodeRedemptions.findFirst({ where: eq(redeemCodeRedemptions.coachId, athlete.id) })).toBeUndefined();
+  });
+
+  it("the admin's list says what each code gives and to whom", async () => {
+    await storage.createRedeemCode({ code: "JULY50", kind: "percent_off", percentOff: 50, discountMonths: 2, audience: "everyone" });
+    const rows = await storage.listRedeemCodes();
+    const july = rows.find((r) => r.code === "JULY50")!;
+    expect(july.kind).toBe("percent_off");
+    expect(july.audience).toBe("everyone");
+    expect(july.percentOff).toBe(50);
+    expect(july.discountMonths).toBe(2);
+    expect(july.trialDays).toBe(0);
+    const launch = rows.find((r) => r.code === "LAUNCH30")!;
+    expect(launch.kind).toBe("free_time");
+    expect(launch.audience).toBe("new_accounts");
   });
 });
