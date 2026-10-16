@@ -94,6 +94,31 @@ export async function offloadSetTraces(opts: { timeBudgetMs?: number; batch?: nu
       await db.execute(sql`SELECT count(*)::int AS n FROM workout_set_entries WHERE skeleton_frames IS NOT NULL`),
     );
     remaining = Number(left[0]?.n ?? 0);
+    if (remaining > 0 && moved === 0) {
+      // Rows the SELECT above cannot see are rows the join loses: a set whose entry is gone, or
+      // an entry whose log is gone. Neither should exist under the declared foreign keys, so
+      // say how many there are and whether the keys are on the table at all (counts only).
+      const orphans = readRows<{ no_entry: number; no_log: number; fks: number; total_sets: number; orphan_sets_all: number }>(
+        await db.execute(sql`
+          SELECT
+            (SELECT count(*)::int FROM workout_set_entries wse LEFT JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+              WHERE wse.skeleton_frames IS NOT NULL AND wle.id IS NULL) AS no_entry,
+            (SELECT count(*)::int FROM workout_set_entries wse JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+              LEFT JOIN workout_logs wl ON wl.id = wle.workout_log_id
+              WHERE wse.skeleton_frames IS NOT NULL AND wl.id IS NULL) AS no_log,
+            (SELECT count(*)::int FROM pg_constraint WHERE conrelid = 'workout_set_entries'::regclass AND contype = 'f') AS fks,
+            (SELECT count(*)::int FROM workout_set_entries) AS total_sets,
+            (SELECT count(*)::int FROM workout_set_entries wse LEFT JOIN workout_log_entries wle ON wle.id = wse.log_entry_id
+              WHERE wle.id IS NULL) AS orphan_sets_all
+        `),
+      );
+      const o = orphans[0];
+      console.warn(
+        `[job:${SET_TRACE_OFFLOAD_JOB}] ${remaining} rows hold frames but none joined to a day: ` +
+          `${o?.no_entry ?? "?"} have no entry, ${o?.no_log ?? "?"} have an entry with no log; ` +
+          `the table has ${o?.fks ?? "?"} foreign keys, ${o?.total_sets ?? "?"} sets in all, ${o?.orphan_sets_all ?? "?"} with no entry.`,
+      );
+    }
     if (moved > 0) {
       await db.execute(sql`VACUUM (ANALYZE) workout_set_entries`);
     }
