@@ -2,7 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Applies a saved light-mode choice before the first paint -- dark is
+    <!-- Two things read off localStorage before the first paint, in the ONE inline script this
+         app has (it is allowed into the Content Security Policy by its hash, so an edit here,
+         even to whitespace, has to be followed through server/csp-inline-scripts.ts).
+         Second: a browser that has signed in before (lib/session-hint.ts) gets the had-session
+         class, and index.css hides any prerendered public-page body under it -- that person is
+         on their way to their dashboard, and the landing page should not show on the way.
+         First, and the original reason for the script:
+         Applies a saved light-mode choice before the first paint -- dark is
          the default and needs no class at all (see index.css's :root vs
          :root.light), so this only ever has to ADD the class, never flip a
          separate default one off. Keep this in sync with applyTheme in
@@ -13,6 +20,9 @@
       try {
         if (localStorage.getItem("forge:theme") === "light") {
           document.documentElement.classList.add("light");
+        }
+        if (localStorage.getItem("forge:had-session") === "1") {
+          document.documentElement.classList.add("had-session");
         }
       } catch (e) {}
     </script>

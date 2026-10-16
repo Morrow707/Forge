@@ -25,6 +25,11 @@ describe("cacheControlForStaticPath", () => {
       "/models/MedBallDetector.onnx",
       "/mediapipe-wasm/vision_wasm_internal.wasm",
       "/onnxruntime-wasm/ort-wasm-simd-threaded.wasm",
+      "/fonts/barlow-condensed-700.woff2",
+      "/marketing/shot-dashboard.webp",
+      "/favicon-32.png",
+      "/apple-touch-icon.png",
+      "/icon-maskable-512.png",
     ]) {
       expect(cacheControlForStaticPath(p), p).toBe(LONG_LIVED_CACHE_CONTROL);
     }
@@ -32,7 +37,7 @@ describe("cacheControlForStaticPath", () => {
   });
 
   it("revalidates every entry point: the shell, prerendered pages, the service worker, the manifest", () => {
-    for (const p of ["/index.html", "/pricing.html", "/movements/back-squat.html", "/sw.js", "/manifest.webmanifest", "/favicon-32.png"]) {
+    for (const p of ["/index.html", "/pricing.html", "/movements/back-squat.html", "/sw.js", "/manifest.webmanifest", "/registerSW.js", "/app-shell.html"]) {
       expect(cacheControlForStaticPath(p), p).toBe(REVALIDATE_CACHE_CONTROL);
     }
     expect(REVALIDATE_CACHE_CONTROL).toBe("no-cache");

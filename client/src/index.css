@@ -436,3 +436,12 @@ html [data-sonner-toaster][data-theme="dark"] {
     scroll-behavior: auto !important;
   }
 }
+
+/* A public page arrives with its body prerendered (client/src/entry-prerender.tsx). A browser
+   that has signed in before is most likely on its way to a dashboard, so the landing page is
+   not shown to it while the auth check runs: index.html's inline script adds had-session, and
+   this hides the server-rendered markup until React mounts and replaces it. visibility, not
+   display, so the layout keeps its height and nothing jumps. */
+html.had-session [data-prerendered] {
+  visibility: hidden;
+}

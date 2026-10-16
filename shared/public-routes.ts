@@ -216,7 +216,8 @@ export const PUBLIC_ROUTES: PublicRoute[] = [
  * Four today, and more when the validation set grows. */
 /** "Pendlay row" keeps its capital: it is somebody's name, and a search result that spells it
  * "pendlay" reads as a typo on the one page meant to rank for it. */
-const inSentence = (name: string) => name.replace(/\b(?!Pendlay\b)([A-Z])/g, (c) => c.toLowerCase());
+export const movementInSentence = (name: string) => name.replace(/\b(?!Pendlay\b)([A-Z])/g, (c) => c.toLowerCase());
+const inSentence = movementInSentence;
 for (const m of MOVEMENTS) {
   PUBLIC_ROUTES.push({
     path: `/movements/${m.slug}`,

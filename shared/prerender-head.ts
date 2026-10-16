@@ -38,6 +38,10 @@ export function renderRouteHtml(
   route: PublicRoute,
   origin: string,
   imageSizeOf: (imagePath: string) => ImageSize | undefined,
+  /** The route's rendered body (client/src/entry-prerender.tsx), put inside `<div id="root">` so
+   * a crawler that runs no JavaScript reads the page's words. Omitted for a route whose content
+   * is only known at runtime (the legal documents), which keeps the empty root. */
+  body?: string,
 ): string {
   const base = origin.replace(/\/$/, "");
   const title = fullTitle(route.title);
@@ -82,7 +86,9 @@ export function renderRouteHtml(
   // "</" inside a JSON string would close the script element early; escape it as JSON allows.
   const json = JSON.stringify(jsonLdForRoute(base, route, image)).replace(/<\//g, "<\\/");
   extras.push(`<script type="application/ld+json">${json}</script>`);
-  return replaceOrFail(html, /<\/head>/, `    ${extras.join("\n    ")}\n  </head>`, "</head>");
+  html = replaceOrFail(html, /<\/head>/, `    ${extras.join("\n    ")}\n  </head>`, "</head>");
+  if (body) html = replaceOrFail(html, /<div id="root"><\/div>/, `<div id="root">${body}</div>`, "the empty root");
+  return html;
 }
 
 /** The SPA shell: what the server hands out for every path that is NOT a prerendered public

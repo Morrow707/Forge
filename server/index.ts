@@ -79,6 +79,7 @@ import "express-async-errors";
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import compression from "compression";
+import { THEME_SCRIPT_SHA256 } from "./csp-inline-scripts";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
@@ -89,6 +90,7 @@ import { startReflectionJob } from "./reflection-job";
 import { assertFieldEncryptionConfigured } from "./field-encryption";
 import { startDataRetentionJob } from "./data-retention-job";
 import { startVideoRetentionJob } from "./video-retention-job";
+import { startDatabaseSizeJob } from "./database-size-job";
 import { startResearchMirrorJob } from "./research-mirror-job";
 import { startCohortNormsJob } from "./cohort-norms-job";
 import { startCoachBandDriftJob } from "./coach-band-drift-job";
@@ -136,10 +138,13 @@ app.use(
         // default directives include it; explicitly unset it here rather
         // than let it ride along doing nothing but spamming the console.
         upgradeInsecureRequests: null,
-        // No inline <script> tags and no third-party script host anywhere
-        // in client/src or index.html -- the single script is the app's
-        // own Vite-built bundle.
-        scriptSrc: ["'self'"],
+        // No third-party script host anywhere in client/src or index.html,
+        // and ONE inline script: the four-line theme snippet in index.html
+        // that adds the `light` class before the first paint. It is allowed
+        // by its hash (server/csp-inline-scripts.ts), which admits exactly
+        // those bytes. Before the hash, every page load by every visitor
+        // reported a violation here and POSTed it to /api/csp-report.
+        scriptSrc: ["'self'", THEME_SCRIPT_SHA256],
         // React's style={{...}} prop renders as a literal inline
         // style="..." attribute (41 call sites across the client) -- CSP's
         // style-src governs that the same as a <style> tag, and a
@@ -544,6 +549,9 @@ app.get("/healthz", async (_req, res) => {
     // COACH_BAND_DRIFT_REBILL is set -- see the job's own comment for why that switch exists.
     startCoachBandDriftJob();
     startCohortNormsJob();
+    // One line a day (and now) saying how full the database is and which tables fill it --
+    // see database-size-job.ts for the 61%-full disk that made it worth writing down.
+    startDatabaseSizeJob();
     // One-time backlog cleanup for the dev-testing account's accumulated
     // video volume -- see oneTimeCleanupPreexistingVideosForAccount's own
     // comment for why this is safe to leave as permanent boot-time code

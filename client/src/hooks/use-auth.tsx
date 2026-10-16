@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { App } from "@capacitor/app";
 import { useMutation, useQuery, useQueryClient, useIsRestoring } from "@tanstack/react-query";
+import { hasSessionHint, rememberSessionState } from "@/lib/session-hint";
 import { apiRequest, ApiError, getQueryFn, setNativeToken } from "@/lib/queryClient";
 import { flushPendingLogs } from "@/lib/offline-queue";
 import { toast } from "sonner";
@@ -50,6 +51,10 @@ type AuthContextValue = {
   // distinct from user === null, which means the server actively said "no
   // one is logged in." See AuthProvider's own comment on the query above.
   isError: boolean;
+  /** True while the first auth check of a visit is in flight with nothing restored from the
+   * persisted cache and no session hint in this browser -- see lib/session-hint.ts. The home
+   * route reads it to draw the landing page instead of a spinner for that one round trip. */
+  checkingFirstVisit: boolean;
   /** The error that failed check produced, so a caller can tell a rate limit (ApiError 429)
    * apart from an unreachable server. Undefined whenever isError is false. */
   error: unknown;
@@ -237,6 +242,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // into isLoading closes that window.
   const isRestoring = useIsRestoring();
   const isLoading = isFetching || isRestoring;
+  // The restore is done, it held nothing, and the network check is still out: the state a
+  // first-time visitor is in for one round trip. HomeRedirect paints the landing page through
+  // it instead of a spinner, unless the session hint says this browser has signed in before.
+  const checkingFirstVisit = !isRestoring && isFetching && user === undefined && !hasSessionHint();
 
   const loginMutation = useLoginMutation();
   const mfaVerifyMutation = useMfaVerifyMutation();
@@ -244,9 +253,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signupMutation = useSignupMutation();
   const logoutMutation = useLogoutMutation();
 
+  // Remember, for the next page load, whether this browser had a session: the home route
+  // reads it to decide whether to paint the landing page while the next check is in flight
+  // (see lib/session-hint.ts). Only a real answer moves it -- a failed check (isError) says
+  // nothing about who is signed in and leaves the hint as it was.
   useEffect(() => {
-    if (isLoading) return;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (isLoading || isError || user === undefined) return;
+    rememberSessionState(user !== null);
   }, [isLoading, isError, user]);
 
   // Who the offline queues may flush for right now. Set from the resolved
@@ -322,6 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isLoading,
         isError,
+        checkingFirstVisit,
         error,
         loginMutation,
         mfaVerifyMutation,

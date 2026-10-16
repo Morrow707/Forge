@@ -7,6 +7,7 @@ import { startOfflineVideoSync } from "@/lib/video-offline-store";
 import { bootstrapNativeShell } from "@/lib/native-bootstrap";
 import { startDynamicType } from "@/lib/dynamic-type";
 import { recoverFromStuckChunkLoad } from "@/lib/lazy-load-recovery";
+import { markBootFromPrerender } from "@/lib/prerendered-boot";
 import "./index.css";
 
 const EMAIL_PATTERN = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
@@ -102,7 +103,11 @@ function ErrorFallback() {
 
 startOfflineLogSync();
 startOfflineVideoSync();
-createRoot(document.getElementById("root")!).render(
+const rootElement = document.getElementById("root")!;
+// Before createRoot: React's first commit replaces whatever the server put in the root, and the
+// router wants to know it was there (lib/prerendered-boot.ts).
+markBootFromPrerender(rootElement);
+createRoot(rootElement).render(
   <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
     <App />
   </Sentry.ErrorBoundary>,

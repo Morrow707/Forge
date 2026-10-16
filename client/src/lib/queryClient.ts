@@ -307,7 +307,10 @@ export const queryClient = new QueryClient({
 // staleTime. localStorage (not IndexedDB) is enough here: query results are
 // JSON metadata, not the media itself, so the volume is small.
 export const persister = createSyncStoragePersister({
-  storage: window.localStorage,
+  // Guarded because this module is also loaded by the build-time prerender of the public pages
+  // (client/src/entry-prerender.tsx), where there is no window; the persister then persists
+  // nothing, which is what a render with no browser should do.
+  storage: typeof window === "undefined" ? undefined : window.localStorage,
   key: "forge-query-cache",
 });
 

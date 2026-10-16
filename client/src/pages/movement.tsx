@@ -1,4 +1,6 @@
 import { Link, useParams } from "wouter";
+// The same spelling the prerendered head uses: "Pendlay" keeps its capital, it is a name.
+import { movementInSentence } from "@shared/public-routes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Check, AlertTriangle, ArrowRight, Video, Camera } from "lucide-react";
@@ -77,9 +79,9 @@ export default function MovementPage() {
   const movement = movementBySlug(slug);
 
   usePageMeta({
-    title: movement ? `Filming a ${movement.name.toLowerCase()}` : "Movement",
+    title: movement ? `Filming a ${movementInSentence(movement.name)}` : "Movement",
     description: movement
-      ? `Where to put the camera for a ${movement.name.toLowerCase()}, what Forge measures from the footage, and what is not reliable on this movement.`
+      ? `Where to put the camera for a ${movementInSentence(movement.name)}, what Forge measures from the footage, and what is not reliable on this movement.`
       : "A movement in Forge's camera tracking library.",
     path: `/movements/${slug}`,
     image: "/marketing/shot-analytics.png",
@@ -119,7 +121,7 @@ export default function MovementPage() {
             Validated against real lifts
           </span>
           <h1 className="mt-5 font-display text-4xl font-extrabold uppercase leading-tight tracking-wide md:text-5xl">
-            Filming a {movement.name.toLowerCase()}
+            Filming a {movementInSentence(movement.name)}
           </h1>
           <p className="mt-3 text-sm uppercase tracking-wide text-muted-foreground">
             {movement.mode} tracking

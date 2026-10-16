@@ -15,14 +15,22 @@ import { join } from "node:path";
  * Going over is not automatically wrong -- a genuinely new eager dependency is a reason to raise
  * it, in this file, with a sentence -- but it cannot happen silently.
  *
+ * RAISED 2026-10-16, 510 -> 560 kB (156 -> 172 kB gzipped), for the six public pages going eager
+ * (pricing, for-high-schools, for-athletes, camera-validation, the movement index and page):
+ * measured at +40 kB / +9.4 kB gzipped on the entry. They are eager because their bodies are now
+ * prerendered into the HTML (client/src/entry-prerender.tsx), and a lazy page would replace the
+ * content a visitor is already reading with a Suspense spinner for a round trip. The native app
+ * pays that 9 kB for pages it never shows; that is the known cost and it is why nothing larger
+ * goes eager on the same reasoning without a number beside it here.
+ *
  * Runs only when dist/public exists (CI builds after `npm test`; a developer who has not built
  * sees it skipped, not failed). scripts/check-first-paint.mjs is the build-time twin that always
  * runs; this one carries the byte budget. */
 const DIST = join(__dirname, "..", "..", "..", "dist", "public");
 const built = existsSync(join(DIST, "index.html"));
 
-const EAGER_BUDGET_BYTES = 510 * 1024;
-const EAGER_BUDGET_GZIP_BYTES = 156 * 1024;
+const EAGER_BUDGET_BYTES = 560 * 1024;
+const EAGER_BUDGET_GZIP_BYTES = 172 * 1024;
 
 /** Chunks that must never be on the first paint, and what each one is. */
 const MUST_BE_LAZY: Array<[string, string]> = [

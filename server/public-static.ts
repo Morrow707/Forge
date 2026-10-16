@@ -57,6 +57,15 @@ export const PUBLIC_STATIC_OPTIONS: ServeStaticOptions = {
  * canonical and structured data on it, which is the wrong thing to hand out for /coach. */
 export const APP_SHELL_FILE = "app-shell.html";
 
+/** The HOME page with its body prerendered, served at "/" on the web. It is a separate file
+ * from index.html on purpose: index.html is what the native app boots from (capacitor.config
+ * webDir), and a landing page baked into its body would show inside the app for the instant
+ * before React mounts and sends it to the login screen. So index.html keeps the home page's
+ * HEAD and an empty root, as before, and this file is the same head with the landing page's
+ * words in it. Written by scripts/prerender.ts; absent on a dist built before 2026-10-16, in
+ * which case "/" falls through to express.static and index.html as it always did. */
+export const HOME_PAGE_FILE = "home.html";
+
 /** Where the prerendered HTML for a public route lives, relative to the dist root. */
 export function prerenderedFileFor(routePath: string): string {
   if (routePath === "/") return "index.html";
@@ -70,7 +79,11 @@ export function servePrerendered(distPath: string): RequestHandler {
   const root = path.resolve(distPath);
   return (req, res, next) => {
     if (req.method !== "GET" && req.method !== "HEAD") return next();
-    if (req.path === "/" || /\.[a-zA-Z0-9]+$/.test(req.path)) return next();
+    if (req.path === "/") {
+      const home = path.resolve(root, HOME_PAGE_FILE);
+      return fs.stat(home, (err, stat) => (err || !stat.isFile() ? next() : res.sendFile(home)));
+    }
+    if (/\.[a-zA-Z0-9]+$/.test(req.path)) return next();
     let decoded: string;
     try {
       decoded = decodeURIComponent(req.path);

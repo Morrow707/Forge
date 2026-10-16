@@ -2105,7 +2105,9 @@ them will read as an arbitrary constraint to somebody who wasn't here:
 - **SEO is data-driven from `shared/public-routes.ts`**: sitemap, prerender, per-page head,
   robots and JSON-LD all read it. Unknown paths get 404 with a noindex app shell. No ratings,
   social profiles or accuracy claims in structured data; `shared/seo-head.test.ts` scans.
-  Open: whether to SSR the six marketing pages.
+  CLOSED 2026-10-16: the public pages' BODIES are prerendered at build time (see "The 2026-10-16
+  SEO and speed pass" below); the legal documents keep an empty root because their text is the
+  API's.
 
 **Three things parked by Scott, 2026-09-20 ("flag those 3 needs, we can do those later"):**
 1. **Smart App Banner: done.** `VITE_APP_STORE_ID` is set on Render (Scott, 2026-10-04); the
@@ -3843,6 +3845,83 @@ which is a consent question, not a deletion change.
   wrong phase for a movement that starts by going DOWN. Named, not fitted.
   See docs/camera-tracking-notes.md, "Three lifts beside OVR, build 639, 2026-10-08".
   Calibration work: uploaded on commit.
+
+## The 2026-10-16 SEO and speed pass, read off the live host
+
+Scott, with 1.0 in App Review and no sensor to film beside: "let's do some search engine
+optimization, we did do this before, but let's check again, and then can we try to speed up the
+app at all?" Everything below was MEASURED on forgeperformancesystems.com first (curl for
+headers and sizes, headless Chromium at 390px for paint timings and the request waterfall, the
+Render API for the instance and the database) and fixed second. What the measurements said:
+
+- **The server is idle.** Render Starter in Oregon, one instance, CPU under 1% and memory
+  170-280 MB of 512 over the last day. Nothing here is compute; every cost is a round trip, and
+  a round trip to Oregon is 250-700 ms from the east coast because NOTHING is edge-cached:
+  `cf-cache-status: DYNAMIC` on every response, hashed `/assets/*` included. Render's own
+  Cloudflare layer does not cache a web service's responses. **The one lever this repo cannot
+  pull is Scott's: put Cloudflare (free plan) in front of the domain** -- nameservers moved from
+  GoDaddy, proxy on, SSL "Full (strict)" -- and the immutable assets, fonts and screenshots are
+  served from the edge, which takes ~300 ms off every asset for everyone outside Oregon. Render
+  documents the setup. Not done; a DNS change is his to make.
+- **Every page load was reporting a CSP violation.** The inline theme script in index.html
+  (added after the CSP comment that said there were no inline scripts) failed `script-src
+  'self'` under the report-only policy, so every visitor POSTed /api/csp-report once per page
+  and the server logged a warning per visit. Allowed by its SHA-256 now
+  (`server/csp-inline-scripts.ts`); the test DERIVES the hash from client/index.html, so an edit
+  to the script -- even its indentation -- fails until the constant is updated. **That is the
+  rule for the one inline script**: hash, never `'unsafe-inline'`.
+- **Fonts, the marketing screenshots and the root icons were `no-cache`** and re-asked for on
+  every visit (a conditional request each, a 304 each, a round trip each). A day now, like the
+  pose runtimes (`static-cache-policy.ts`).
+- **The home page painted nothing for a whole round trip.** `HomeRedirect` drew a full-screen
+  spinner until /api/auth/me answered, for a FIRST-TIME visitor -- the one person the marketing
+  page is for; first contentful paint measured at 2.5 s with the HTML at 0.6 s. It paints the
+  landing page through the check now, on the web, unless `lib/session-hint.ts` says this browser
+  has signed in before (set on a signed-in answer, cleared on a signed-out one, so a coach whose
+  24 h persisted cache has aged out keeps the spinner and never sees the marketing page flash).
+- **THE BODY OF EVERY PUBLIC PAGE WAS `<div id="root"></div>`.** The 2026-10-02 prerender baked
+  the head only, by design ("the deliberate cheap 90%"). To Google that is a page rendered later
+  in its queue; to Bing, DuckDuckGo, the LLM-backed engines and every link unfurler it was a site
+  with titles and no words. `client/src/entry-prerender.tsx` renders the REAL page components
+  with react-dom/server (a second Vite build, `vite.prerender.config.ts`, into dist/prerender;
+  `scripts/prerender.ts` puts the markup inside the root). Ten routes carry their body: the
+  landing, pricing, for-high-schools, for-athletes, camera-validation, the movement index and
+  the four movement pages. The legal documents do not and cannot: their text comes from the
+  API, where an admin edits it. Three things keep it from being a worse experience than the
+  spinner it replaces, each pinned by `public-pages-prerender-their-bodies.test.ts`:
+  - **The home page's body goes to `home.html`, served at "/" by `servePrerendered`; index.html
+    keeps an empty root.** index.html is what the native app boots from, and a landing page in
+    its body would flash inside the app before React sends it to the login screen.
+  - **The public pages are EAGER imports now** (+40 kB / +9.4 kB gzipped on the entry; the
+    budget in `bundle-budget.test.ts` is raised by exactly that with the reason). A lazy page
+    would replace content the visitor is already reading with a Suspense spinner for one more
+    round trip. The native app pays those 9 kB for pages it never shows; known, and the reason
+    nothing larger goes eager on the same argument.
+  - **The first mount holds still** (`lib/prerendered-boot.ts`, read by the router's page
+    transition) so the content does not blink out and fade back in; and a browser with the
+    session hint gets `html.had-session` from the same inline script, under which index.css
+    hides the prerendered markup until React mounts -- that person is on their way to a
+    dashboard.
+  React mounts with `createRoot().render()`, not `hydrateRoot`: the markup is replaced, not
+  hydrated, which costs nothing visible (identical output) and avoids every hydration mismatch
+  the providers would produce. Verified on the built dist in headless Chromium: with JavaScript
+  off, every prerendered route carries its H1 and 1,100-4,900 characters of text and /terms
+  carries none; with it on, React mounts over all of them with no console error and no spinner.
+- **THE PRODUCTION DATABASE IS 61% FULL WITH NO USERS.** Off the Render metrics API: forge-db
+  (basic_1gb, Postgres 18, Oregon, point-in-time recovery available from 2026-10-08) holds
+  623 MB of a 1,020 MB disk, and nothing in Forge could say what. `server/database-size-job.ts`
+  logs one line at every boot and daily at 08:00 UTC -- total size and the twelve largest tables
+  by `pg_total_relation_size` with row estimates, sizes only, never a value -- so the next
+  deploy's log answers it. Read that line before anything else: if it is the skeleton traces, the
+  retention sweep needs a row cap; if it is the knowledge library, the plan goes up. A full disk
+  stops every write on the platform at once.
+- **Recorded, not changed:** the sitemap's `lastmod` is the commit date (fine); the HTML ships
+  ~2.5 KB of its own comments, which brotli makes nearly free; `/api/auth/me` and the two
+  Capacitor web-plugin chunks are the only requests between the entry and the first React paint.
+- **Could not be checked from this sandbox:** the domain's mail authentication (SPF, DKIM,
+  DMARC) -- DNS is refused by the environment's network policy. The Resend dashboard's domain
+  page says whether the records are verified; if they are not, every email to a parent is a
+  spam-folder candidate. Scott's to read.
 
 ## The top-twenty list, 2026-10-15: what Scott decided and what shipped
 

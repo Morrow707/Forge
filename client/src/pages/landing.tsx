@@ -81,8 +81,10 @@ function BrowserFrame({
           alt={alt}
           className="block w-full"
           loading={eager ? "eager" : "lazy"}
-          fetchPriority={eager ? "high" : undefined}
           decoding="async"
+          // Lowercase on purpose: React 18 does not know `fetchPriority` and warns on it (seen
+          // on the build-time render); as a plain attribute it reaches the browser unchanged.
+          {...(eager ? { fetchpriority: "high" } : {})}
         />
       </picture>
     </div>

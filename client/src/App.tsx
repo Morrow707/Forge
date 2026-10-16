@@ -3,7 +3,7 @@ import { DocumentsGate } from "@/components/document-gate";
 import { useQueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Toaster } from "sonner";
-import { lazy, Suspense, useEffect, type ComponentType } from "react";
+import { lazy, Suspense, useEffect, useState, type ComponentType } from "react";
 import { PUBLIC_ROUTES, isIndexable } from "@shared/public-routes";
 import { SITE_NAME, usePageMeta } from "@/lib/page-meta";
 import { trackPageView } from "@/lib/analytics";
@@ -26,6 +26,18 @@ import { withLoadTimeout } from "@/lib/lazy-load-recovery";
 // program builder, analytics charts, or the CV bar-tracking pipeline just
 // to see their calendar.
 import LandingPage from "@/pages/landing";
+import { bootedFromPrerender } from "@/lib/prerendered-boot";
+// THE PUBLIC PAGES ARE EAGER, AND THAT IS WHAT MAKES THEIR PRERENDERED BODIES HOLD STILL. Each
+// is prerendered into its HTML at build time (client/src/entry-prerender.tsx), so a visitor is
+// reading the page before the bundle has arrived. A lazy page would then be replaced by the
+// Suspense spinner for one more round trip while its chunk was fetched -- content, then a
+// spinner, then the same content -- which is worse than the spinner alone was. They cost about
+// 13 kB gzipped between them (client/src/lib/bundle-budget.test.ts holds the budget).
+import PricingPage from "@/pages/pricing";
+import ForHighSchoolsPage from "@/pages/for-high-schools";
+import ForAthletesPage from "@/pages/for-athletes";
+import CameraValidationPage from "@/pages/camera-validation";
+import MovementPage, { MovementIndexPage } from "@/pages/movement";
 import LoginPage from "@/pages/login";
 import AdminLoginPage from "@/pages/admin-login";
 import PublicTeamPage from "@/pages/public-team";
@@ -57,16 +69,9 @@ import NotFound from "@/pages/not-found";
 // the two pages that link to them (see PrefetchLikelyNextPages), so the click still lands
 // without a spinner on the web.
 const signupLoader = () => import("@/pages/signup");
-const pricingLoader = () => import("@/pages/pricing");
 const SignupPage = lazy(withLoadTimeout(signupLoader));
-const PricingPage = lazy(withLoadTimeout(pricingLoader));
 const ClaimPage = lazy(withLoadTimeout(() => import("@/pages/claim")));
 const GuardianClaimPage = lazy(withLoadTimeout(() => import("@/pages/guardian-claim")));
-const ForHighSchoolsPage = lazy(withLoadTimeout(() => import("@/pages/for-high-schools")));
-const ForAthletesPage = lazy(withLoadTimeout(() => import("@/pages/for-athletes")));
-const CameraValidationPage = lazy(withLoadTimeout(() => import("@/pages/camera-validation")));
-const MovementIndexPage = lazy(withLoadTimeout(() => import("@/pages/movement").then((m) => ({ default: m.MovementIndexPage }))));
-const MovementPage = lazy(withLoadTimeout(() => import("@/pages/movement")));
 const AvPreviewTestPage = lazy(withLoadTimeout(() => import("@/pages/dev/av-preview-test")));
 
 const CoachDashboard = lazy(withLoadTimeout(() => import("@/pages/coach/dashboard")));
@@ -284,8 +289,17 @@ function ProtectedRoute({
 }
 
 function HomeRedirect() {
-  const { user, isLoading, isError } = useAuth();
-  if (isLoading) return <FullScreenSpinner />;
+  const { user, isLoading, isError, checkingFirstVisit } = useAuth();
+  // A first-time visitor on the web gets the landing page NOW, not a spinner for the round
+  // trip the auth check takes: this is the one route where the person waiting is most likely
+  // somebody who has never signed in, and the prerendered HTML they were just handed is this
+  // page. If the check then finds a session, the redirect below takes over. A browser that has
+  // signed in before keeps the spinner (lib/session-hint.ts), and the native app never shows the
+  // marketing page at all.
+  if (isLoading) {
+    if (checkingFirstVisit && !Capacitor.isNativePlatform()) return <LandingPage />;
+    return <FullScreenSpinner />;
+  }
   // Same isError-before-!user ordering as ProtectedRoute, and for the same
   // reason -- a failed check isn't a confirmed "not logged in".
   if (isError) return <ConnectionProblem />;
@@ -344,17 +358,15 @@ function WebOnlyPage(Page: ComponentType): ComponentType {
   };
 }
 
-/** Warms the chunks for the pages a visitor on / or /login is most likely to open next, once
- * the browser is idle -- so making them lazy costs the web visitor nothing on the click, and
- * costs the native app (which prefetches nothing it does not link to) nothing at boot. */
+/** Warms the chunk for the page a visitor on / or /login is most likely to open next (signup),
+ * once the browser is idle -- so making it lazy costs the visitor nothing on the click. The
+ * other public pages are eager since 2026-10-16 (see their imports above) and need no warming. */
 function PrefetchLikelyNextPages() {
   const [location] = useLocation();
   useEffect(() => {
     if (location !== "/" && location !== "/login") return;
-    const native = Capacitor.isNativePlatform();
     const run = () => {
       void signupLoader().catch(() => {});
-      if (!native) void pricingLoader().catch(() => {});
     };
     if (typeof window.requestIdleCallback === "function") {
       const id = window.requestIdleCallback(run, { timeout: 4000 });
@@ -368,6 +380,11 @@ function PrefetchLikelyNextPages() {
 
 function Router() {
   const [location] = useLocation();
+  // The page transition below replays on every navigation. On the FIRST mount of a page that
+  // arrived prerendered, the person is already reading it, so fading it in would blink the
+  // content out and back; that one mount keeps the wrapper still (lib/prerendered-boot.ts).
+  const [bootLocation] = useState(location);
+  const holdStill = bootedFromPrerender() && location === bootLocation;
 
   // A Dialog that's still "open" the instant its own success handler
   // navigates away (e.g. create-program-then-jump-to-the-builder) can leave
@@ -412,7 +429,7 @@ function Router() {
           time. motion-safe: (rather than a plain class) makes the animation
           disappear entirely under prefers-reduced-motion instead of just
           running at zero duration. */}
-      <div key={location} className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200">
+      <div key={location} className={holdStill ? undefined : "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200"}>
       <Switch>
         <Route path="/" component={HomeRedirect} />
         <Route path="/login" component={LoginPage} />

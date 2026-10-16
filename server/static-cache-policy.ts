@@ -11,7 +11,12 @@
  *   session). A day, with the ETag express.static already sends for the revalidation after it.
  *   The service worker keeps its own stale-while-revalidate copy on top; that is the client's
  *   business, this is the server's answer to whoever asks it directly.
- * - Everything else (`index.html`, the prerendered pages, `sw.js`, the manifest, icons) is
+ * - The fonts (`/fonts/*`), the marketing screenshots (`/marketing/*`) and the root icons are
+ *   unhashed too and effectively never change, so they take the same day. Until 2026-10-16 they
+ *   were `no-cache`, so a returning visitor's browser re-asked for every one of them on every
+ *   page load: a conditional request per font, per screenshot and per icon, each a full round
+ *   trip to Oregon for a 304, through the static rate limiter.
+ * - Everything else (`index.html`, the prerendered pages, `sw.js`, the manifest) is
  *   the entry point to the next deploy and must be revalidated on every load: `no-cache` says
  *   "keep it, but ask", and the ETag makes the ask a 304 when nothing changed. That is what
  *   `express.static` did implicitly with `max-age=0`; it is stated here so nobody has to
@@ -20,7 +25,10 @@
  * `server/static-cache-headers.test.ts` reads this policy and the middleware wiring in vite.ts.
  */
 export const IMMUTABLE_ASSET_PREFIX = "/assets/";
-export const LONG_LIVED_UNHASHED_PREFIXES = ["/mediapipe-wasm/", "/onnxruntime-wasm/", "/models/"];
+export const LONG_LIVED_UNHASHED_PREFIXES = ["/mediapipe-wasm/", "/onnxruntime-wasm/", "/models/", "/fonts/", "/marketing/"];
+/** The icons at the root (`/favicon-32.png`, `/apple-touch-icon.png`, `/icon-192.png`, ...):
+ * unhashed, a few KB, and the kind of file that changes once a year. A day, like the fonts. */
+export const LONG_LIVED_ROOT_FILE = /^\/[^/]+\.(png|ico|svg|webp|jpg|woff2?)$/;
 export const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 export const LONG_LIVED_CACHE_CONTROL = "public, max-age=86400";
 export const REVALIDATE_CACHE_CONTROL = "no-cache";
@@ -28,6 +36,7 @@ export const REVALIDATE_CACHE_CONTROL = "no-cache";
 export function cacheControlForStaticPath(requestPath: string): string {
   if (requestPath.startsWith(IMMUTABLE_ASSET_PREFIX)) return IMMUTABLE_CACHE_CONTROL;
   if (LONG_LIVED_UNHASHED_PREFIXES.some((prefix) => requestPath.startsWith(prefix))) return LONG_LIVED_CACHE_CONTROL;
+  if (LONG_LIVED_ROOT_FILE.test(requestPath)) return LONG_LIVED_CACHE_CONTROL;
   return REVALIDATE_CACHE_CONTROL;
 }
 

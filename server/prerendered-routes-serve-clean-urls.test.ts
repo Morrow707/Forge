@@ -10,6 +10,7 @@ import {
   servePrerendered,
   spaFallback,
   staticLimiter,
+  HOME_PAGE_FILE,
 } from "./public-static";
 
 /** A prerendered public route has to answer at its CLEAN URL with a 200 and its own head.
@@ -29,6 +30,9 @@ let base: string;
 beforeAll(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "forge-prerender-"));
   fs.writeFileSync(path.join(dir, "index.html"), "<title>ROOT</title>");
+  // The home page with its body prerendered, served at "/" on the web; index.html (the native
+  // app's entry, empty root) stays what express.static would hand out without it.
+  fs.writeFileSync(path.join(dir, HOME_PAGE_FILE), "<title>HOME WITH BODY</title>");
   for (const r of routes) {
     const out = path.join(dir, prerenderedFileFor(r));
     fs.mkdirSync(path.dirname(out), { recursive: true });
@@ -82,6 +86,15 @@ describe("prerendered public routes", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("location")).toBeNull();
     expect(await res.text()).toBe(`<title>${r}</title>`);
+  });
+
+  it("serves the home page WITH its body at /, and never that file to the native entry", async () => {
+    const res = await fetch(`${base}/`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("<title>HOME WITH BODY</title>");
+    // index.html itself is still the empty-root template the native app boots from.
+    expect(await (await fetch(`${base}/index.html`)).text()).toBe("<title>ROOT</title>");
+    expect(HOME_PAGE_FILE).not.toBe(prerenderedFileFor("/"));
   });
 
   it("names the root as index.html and everything else as a flat .html file", () => {
