@@ -59,6 +59,10 @@ export async function offloadSetTraces(opts: { timeBudgetMs?: number; batch?: nu
         `),
       );
       if (rows.length === 0) break;
+      // Says what each batch found: ids only, never a frame. The first production run reported
+      // "moved 0 ... 1213 still in the table" in 100 ms, which neither branch below explains
+      // on its own, so the batch narrates itself until that is understood.
+      console.log(`[job:${SET_TRACE_OFFLOAD_JOB}] batch of ${rows.length}: ids ${rows.map((r) => r.id).join(",")}`);
       for (const row of rows) {
         const frames = Array.isArray(row.skeleton_frames) ? row.skeleton_frames : [];
         const exerciseKey = row.program_exercise_id != null ? `pe:${row.program_exercise_id}` : `c:${row.corrective_id}`;
@@ -78,6 +82,7 @@ export async function offloadSetTraces(opts: { timeBudgetMs?: number; batch?: nu
             sql`INSERT INTO uploaded_files (path, uploaded_by) VALUES (${url}, ${Number(row.athlete_id)}) ON CONFLICT (path) DO NOTHING`,
           );
         } else {
+          console.log(`[job:${SET_TRACE_OFFLOAD_JOB}] set ${row.id} was gone or already moved before its UPDATE.`);
           // A save of that day landed between the read and the write: it re-inserted the set
           // (a new id) and this row is gone, so the file just written has no row to belong to.
           // The next run finds the new row. Nothing is lost; the orphan is removed here.
@@ -94,6 +99,7 @@ export async function offloadSetTraces(opts: { timeBudgetMs?: number; batch?: nu
     }
     console.log(`[job:${SET_TRACE_OFFLOAD_JOB}] moved ${moved} sets' skeleton frames to files; ${remaining} still in the table.`);
   } catch (err) {
+    console.error(`[job:${SET_TRACE_OFFLOAD_JOB}] stopped on an error after moving ${moved}:`, err instanceof Error ? err.message : String(err));
     reportJobFailure(SET_TRACE_OFFLOAD_JOB, err, { moved });
   }
   return { moved, remaining };
