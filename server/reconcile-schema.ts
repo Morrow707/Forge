@@ -2498,6 +2498,10 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "mean_eai" real;
 -- see skeletonReplayFrameSchema's own comment in shared/schema.ts for why this exists (Vision
 -- framework has no "re-run the model against a stored clip" replay path the way MediaPipe does).
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "skeleton_frames" json;
+-- The frames' file on the persistent disk (server/set-trace-files.ts), 2026-10-16: the json column
+-- above was 92% of the database. New captures write the file; set-trace-offload-job.ts moves the
+-- old rows; the column stays until every row's is null.
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "skeleton_frames_path" text;
 -- ---------------------------------------------------------------------------
 -- Foreign-key indexes.
 --

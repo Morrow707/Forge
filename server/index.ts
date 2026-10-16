@@ -91,6 +91,7 @@ import { assertFieldEncryptionConfigured } from "./field-encryption";
 import { startDataRetentionJob } from "./data-retention-job";
 import { startVideoRetentionJob } from "./video-retention-job";
 import { startDatabaseSizeJob } from "./database-size-job";
+import { startSetTraceOffloadJob } from "./set-trace-offload-job";
 import { startResearchMirrorJob } from "./research-mirror-job";
 import { startCohortNormsJob } from "./cohort-norms-job";
 import { startCoachBandDriftJob } from "./coach-band-drift-job";
@@ -552,6 +553,9 @@ app.get("/healthz", async (_req, res) => {
     // One line a day (and now) saying how full the database is and which tables fill it --
     // see database-size-job.ts for the 61%-full disk that made it worth writing down.
     startDatabaseSizeJob();
+    // Moves the skeleton frames still inside workout_set_entries (450 MB of a 1 GB disk on
+    // 2026-10-16) out to files, a few rows a minute, until none are left.
+    startSetTraceOffloadJob();
     // One-time backlog cleanup for the dev-testing account's accumulated
     // video volume -- see oneTimeCleanupPreexistingVideosForAccount's own
     // comment for why this is safe to leave as permanent boot-time code

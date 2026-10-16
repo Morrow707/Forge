@@ -382,6 +382,13 @@ import { readingLevelInstruction, type ClassReadingLevel } from "@shared/class-r
 import { learningStreakFromDays } from "@shared/learning-streak";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { deleteUploadedFile, statUploadedFile, getUploadsDiskFreeBytes } from "./uploaded-files";
+import {
+  setTracePathFor,
+  writeSetTraceFile,
+  readSetTraceFile,
+  deleteSetTraceFile,
+  deleteAthleteTraceDir,
+} from "./set-trace-files";
 import { learnFromTake, type BodyModelWithHistory } from "./body-model-learning";
 import { scaleSourceIsAnchored, type AnchoredScaleSource } from "@shared/load-velocity-profile";
 import { LBS_PER_KG } from "@shared/weight-units";
@@ -4930,6 +4937,8 @@ export const storage = {
           .where(eq(skillAssignments.athleteId, userId)),
       ]);
       await Promise.all([
+        // Every skeleton-frame file the athlete's sets ever wrote (set-trace-files.ts).
+        deleteAthleteTraceDir(userId),
         ...setVideos.map((v) => deleteUploadedFile(v.url)),
         ...skillVideos.flatMap((v) => [deleteUploadedFile(v.url), deleteUploadedFile(v.annotation)]),
         ...commentVideos.flatMap((v) => [deleteUploadedFile(v.url), deleteUploadedFile(v.image)]),
@@ -23259,6 +23268,14 @@ ${catalog}`;
     // it can only ever delete a file nothing points at any more.
     const retainedVideoUrls = new Set<string>();
 
+    // The same three for a set's skeleton-frames FILE (set-trace-files.ts): every path a prior
+    // set carried is a candidate for deletion, every path this save writes or carries forward is
+    // retained, and every file written during the transaction is removed again if it rolls
+    // back -- a file is not transactional, so the rollback has to be done by hand.
+    const supersededTracePaths = new Set<string>();
+    const retainedTracePaths = new Set<string>();
+    const writtenTracePaths: string[] = [];
+
     // Collected during the entries loop below, returned alongside the log
     // so the client can show a real celebration for a newly-set PR the
     // moment this save lands -- same "collect during the transaction,
@@ -23315,7 +23332,7 @@ ${catalog}`;
       // `.nullable()` keeps a null. Without it these columns would become impossible to delete.
       const priorCaptureByKey = new Map<
         string,
-        { skeletonFrames: unknown; barPathTrace: unknown; armPathTrace: unknown }
+        { skeletonFrames: unknown; skeletonFramesPath: string | null; barPathTrace: unknown; armPathTrace: unknown }
       >();
       if (log) {
         const priorEntries = await tx.query.workoutLogEntries.findMany({
@@ -23334,12 +23351,19 @@ ${catalog}`;
             }
             // Same snapshot, same key, for the frame-by-frame capture columns -- see
             // priorCaptureByKey's own comment on why a client is now allowed to omit them.
-            if (s.skeletonFrames != null || s.barPathTrace != null || s.armPathTrace != null) {
+            if (
+              s.skeletonFrames != null ||
+              s.skeletonFramesPath != null ||
+              s.barPathTrace != null ||
+              s.armPathTrace != null
+            ) {
               priorCaptureByKey.set(`${exerciseKey}:${s.setNumber}`, {
                 skeletonFrames: s.skeletonFrames ?? null,
+                skeletonFramesPath: s.skeletonFramesPath ?? null,
                 barPathTrace: s.barPathTrace ?? null,
                 armPathTrace: s.armPathTrace ?? null,
               });
+              if (s.skeletonFramesPath) supersededTracePaths.add(s.skeletonFramesPath);
             }
           }
         }
@@ -23547,7 +23571,7 @@ ${catalog}`;
           const captureField = (
             set: Record<string, unknown>,
             setNumber: number,
-            field: "skeletonFrames" | "barPathTrace" | "armPathTrace",
+            field: "barPathTrace" | "armPathTrace",
           ) => {
             const prior = priorCaptureByKey.get(`${exerciseKey}:${setNumber}`)?.[field] ?? null;
             if (!biometricConsentOnFile) return prior;
@@ -23645,6 +23669,33 @@ ${catalog}`;
             }
           }
 
+          // THE SKELETON FRAMES GO TO A FILE, AND THE ROW GETS THE PATH (set-trace-files.ts).
+          // Same three rules as captureField above -- an omitted key carries the prior forward,
+          // an explicit null clears, no consent on file means nothing new lands -- with one
+          // difference: "forward" is the prior PATH (or, for a row the offload job has not
+          // reached yet, its inline frames, untouched), never a re-written blob. Decided here,
+          // before the insert, because writing the file is async and the values() map is not.
+          const traceByKey = new Map<number, { skeletonFrames: unknown; skeletonFramesPath: string | null }>();
+          for (const s of entry.sets) {
+            const prior = priorCaptureByKey.get(`${exerciseKey}:${s.setNumber}`);
+            let frames: unknown = prior?.skeletonFrames ?? null;
+            let tracePath: string | null = prior?.skeletonFramesPath ?? null;
+            if (biometricConsentOnFile && "skeletonFrames" in s) {
+              const sent = (s as Record<string, unknown>).skeletonFrames;
+              if (Array.isArray(sent)) {
+                const url = setTracePathFor(athleteId, log.id, exerciseKey, s.setNumber);
+                await writeSetTraceFile(url, sent);
+                writtenTracePaths.push(url);
+                frames = null;
+                tracePath = url;
+              } else {
+                frames = null;
+                tracePath = null;
+              }
+            }
+            if (tracePath) retainedTracePaths.add(tracePath);
+            traceByKey.set(s.setNumber, { skeletonFrames: frames, skeletonFramesPath: tracePath });
+          }
           const insertedSets = await tx.insert(workoutSetEntries).values(
             entry.sets.map((s) => {
               const prior = priorVideoByKey.get(`${exerciseKey}:${s.setNumber}`);
@@ -23767,7 +23818,8 @@ ${catalog}`;
                 horizontalLoadAvgSpeedYardsPerSec: s.horizontalLoadAvgSpeedYardsPerSec ?? null,
                 captureDeviceInfo: s.captureDeviceInfo ?? null,
                 trackingDiagnostics: s.trackingDiagnostics ?? null,
-                skeletonFrames: captureField(s as Record<string, unknown>, s.setNumber, "skeletonFrames"),
+                skeletonFrames: traceByKey.get(s.setNumber)?.skeletonFrames ?? null,
+                skeletonFramesPath: traceByKey.get(s.setNumber)?.skeletonFramesPath ?? null,
               };
             }),
           ).returning({ id: workoutSetEntries.id, setNumber: workoutSetEntries.setNumber });
@@ -23825,6 +23877,10 @@ ${catalog}`;
       }
 
       return log;
+    }).catch(async (err: unknown) => {
+      // A file written for a save that did not commit is an orphan nobody will ever read.
+      for (const url of writtenTracePaths) await deleteSetTraceFile(url);
+      throw err;
     });
 
     // Outside the transaction (a filesystem delete isn't transactional, and shouldn't be able to
@@ -23835,6 +23891,13 @@ ${catalog}`;
     for (const url of supersededVideoUrls) {
       if (!retainedVideoUrls.has(url)) await deleteUploadedFile(url);
     }
+    // The same rule for the skeleton-frame files: a prior set's file goes only when nothing
+    // this save wrote still names it (a retake wrote a new one, or the set was cleared).
+    for (const url of supersededTracePaths) {
+      if (!retainedTracePaths.has(url)) await deleteSetTraceFile(url);
+    }
+    // The ledger row for each file this save wrote, so the admin reconciliation knows it.
+    for (const url of writtenTracePaths) await this.recordUploadedFile(url, athleteId);
 
     return { ...log, newPRs, savedSetRowIds };
   },
@@ -25748,7 +25811,7 @@ ${catalog}`;
     opts: { includeTraces?: boolean; includeSkeleton?: boolean } = {},
   ) {
     const { includeTraces = true, includeSkeleton = false } = opts;
-    return db
+    const rows = await db
       .select({
         setId: workoutSetEntries.id,
         athleteId: users.id,
@@ -25814,7 +25877,9 @@ ${catalog}`;
               armPathTrace: workoutSetEntries.armPathTrace,
             }
           : {}),
-        ...(includeSkeleton ? { skeletonFrames: workoutSetEntries.skeletonFrames } : {}),
+        ...(includeSkeleton
+          ? { skeletonFrames: workoutSetEntries.skeletonFrames, skeletonFramesPath: workoutSetEntries.skeletonFramesPath }
+          : {}),
       })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
@@ -25846,6 +25911,17 @@ ${catalog}`;
       )
       .orderBy(desc(workoutSetEntries.id))
       .limit(limit);
+    if (includeSkeleton) {
+      // Frames written as a file since 2026-10-16 (set-trace-files.ts) come back in the same
+      // field the export has always carried, so a replay reads nothing new.
+      for (const row of rows as Array<{ skeletonFrames?: unknown; skeletonFramesPath?: string | null }>) {
+        if (!Array.isArray(row.skeletonFrames) && row.skeletonFramesPath) {
+          row.skeletonFrames = await readSetTraceFile(row.skeletonFramesPath);
+        }
+        delete row.skeletonFramesPath;
+      }
+    }
+    return rows;
   },
   /** THE SKILL HALF OF THE CAPTURE REPORT, which did not exist until 2026-10-07.
    *
@@ -30667,7 +30743,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
           wse.form_check_video_url AS video_url,
           coalesce(e.name, 'Exercise') AS exercise_name,
           wse.set_number AS set_number,
-          (wse.skeleton_frames IS NOT NULL) AS has_skeleton_frames,
+          (wse.skeleton_frames IS NOT NULL OR wse.skeleton_frames_path IS NOT NULL) AS has_skeleton_frames,
           wse.rep_breakdown AS rep_breakdown,
           coalesce(wl.completed_at, wl.date::timestamp) AS reference_time
         FROM workout_set_entries wse
@@ -30748,7 +30824,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     setId: number,
   ): Promise<{ skeletonFrames: unknown[] } | null> {
     const rows = await db
-      .select({ skeletonFrames: workoutSetEntries.skeletonFrames })
+      .select({ skeletonFrames: workoutSetEntries.skeletonFrames, skeletonFramesPath: workoutSetEntries.skeletonFramesPath })
       .from(workoutSetEntries)
       .innerJoin(workoutLogEntries, eq(workoutLogEntries.id, workoutSetEntries.logEntryId))
       .innerJoin(workoutLogs, eq(workoutLogs.id, workoutLogEntries.workoutLogId))
@@ -30762,7 +30838,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .limit(1);
     const row = rows[0];
     if (!row) return null;
-    return { skeletonFrames: Array.isArray(row.skeletonFrames) ? row.skeletonFrames : [] };
+    if (Array.isArray(row.skeletonFrames)) return { skeletonFrames: row.skeletonFrames };
+    // Written as a file since 2026-10-16 (set-trace-files.ts); the answer is the same frames.
+    return { skeletonFrames: (await readSetTraceFile(row.skeletonFramesPath)) ?? [] };
   },
 
   async getVideosForAthlete(athleteId: number): Promise<

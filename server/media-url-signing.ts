@@ -136,6 +136,12 @@ const GATED_UPLOAD_DIRS = new Set([
   // renders these as a bare <video>/<img>, and any response carrying one is signed by the
   // res.json sweep in server/index.ts like every other gated path.
   "knowledge-sources",
+  // set-traces: a tracked set's skeleton frames as a file (server/set-trace-files.ts) -- the
+  // positions of a named athlete's joints, thirty times a second, which is the biometric the
+  // consent is about. Nothing signs one and nothing fetches one by URL: both readers open the
+  // file on the server. Gated so the static route refuses the bare path, which is the whole
+  // reason the files can sit under UPLOADS_ROOT at all.
+  "set-traces",
 ]);
 
 // Matches only a bare, freshly-stored path with no query string yet --

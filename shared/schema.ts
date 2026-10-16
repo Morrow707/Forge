@@ -2704,6 +2704,12 @@ export const workoutSetEntries = pgTable(
   // have saved the joints live, during the original capture, and play those back. Null for
   // every set that isn't camera-tracked on iOS, and for sets logged before this existed.
   skeletonFrames: json("skeleton_frames"),
+  // WHERE THE FRAMES LIVE NOW: a file under UPLOADS_ROOT/set-traces, written by submitWorkoutLog
+  // since 2026-10-16, with the `/uploads/...` path here and `skeletonFrames` null. The column
+  // above stays for the rows written before that until set-trace-offload-job.ts has moved each
+  // one, and the readers accept either. See server/set-trace-files.ts for why (this one column
+  // was 92% of the database).
+  skeletonFramesPath: text("skeleton_frames_path"),
   },
   (table) => ({
     // Same reasoning as workoutLogEntries.workoutLogIdx just above -- the
@@ -9351,6 +9357,7 @@ export const CAMERA_DERIVED_SET_COLUMNS = [
   "captureDeviceInfo",
   "trackingDiagnostics",
   "skeletonFrames",
+  "skeletonFramesPath",
 ] as const;
 
 /**

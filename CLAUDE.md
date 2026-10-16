@@ -3929,7 +3929,31 @@ Render API for the instance and the database) and fixed second. What the measure
   `STORAGE_PATH`, with the row holding its path -- which is the shape `pending-log-files.ts`
   already uses on the phone for the same object and the same reason. The research mirror, the
   replay harness and the admin tracking report read the column, so that is a migration with
-  readers to move, not an evening. Not touched during App Review.
+  readers to move, not an evening.
+  **DONE THE SAME NIGHT, SERVER-SIDE, ON SCOTT'S "PUSH NOW"** (a server deploy cannot touch the
+  binary Apple is reviewing). `server/set-trace-files.ts`: a new capture's frames go to
+  `UPLOADS_ROOT/set-traces/<athleteId>/<logId>-<exerciseKey>-<set>-<random>.json`, the row carries
+  the `/uploads/...` path in the new `skeleton_frames_path` column and `skeleton_frames` null.
+  The three rules the inline column had (an omitted key carries the prior forward, an explicit
+  null clears, no consent on file means nothing new lands) are kept exactly -- "forward" is now
+  the PATH, a string, where it used to be ten megabytes re-inserted on every save of the day. A
+  retake writes a new file and deletes the old after the commit; a rollback deletes what it
+  wrote; the ledger (`uploaded_files`) is told about each. `set-traces` is in `GATED_UPLOAD_DIRS`
+  and nothing ever signs or fetches one: both readers (`getSetClipFramesForAthlete`, the replay
+  export) open the file on the server and answer the same frames as before, and the clip list
+  counts either column. Account deletion removes the athlete's directory. The retention sweep
+  is untouched: a trace is a metric and lives as long as its row.
+  **`server/set-trace-offload-job.ts` moves the old rows**, five at a time for a minute at boot
+  and daily at 07:00 UTC, each nulled by an UPDATE guarded on the column still being non-null,
+  and runs a plain `VACUUM (ANALYZE)` after a batch that moved anything. The Render disk-usage
+  number does NOT fall after it -- the space is reusable, not returned; that needs a `VACUUM FULL
+  workout_set_entries` in a quiet hour, by hand, which takes an exclusive lock on the busiest
+  table in the app and is why the job never runs it. Read `[job:set-trace-offload]` in the log:
+  "moved N ... M still in the table" until M is 0. `skeleton-frames-live-on-disk.itest.ts` (8
+  cases on real Postgres and a real disk: the write, the carry-forward with an untouched file,
+  the retake, the null, no consent, both readers plus the clip list, the offload and its second
+  idempotent run, the account deletion) and the `.test.ts` scan beside it. Sixteen neighbouring
+  itests (90 cases) green on the same database.
 - **Recorded, not changed:** the sitemap's `lastmod` is the commit date (fine); the HTML ships
   ~2.5 KB of its own comments, which brotli makes nearly free; `/api/auth/me` and the two
   Capacitor web-plugin chunks are the only requests between the entry and the first React paint.
