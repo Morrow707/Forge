@@ -3749,6 +3749,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!codes.has(athleteId)) codes.set(athleteId, `Athlete ${codes.size + 1}`);
       return codes.get(athleteId)!;
     };
+    // WHY A ROW HAS NO TRACE, in words, beside the row. The capture gate (captureField in
+    // submitWorkoutLog) withholds skeleton frames and path traces from an account with no
+    // biometric release on file and stores everything else, so a capture can be here with full
+    // numbers and an empty trace. The first time that happened (2026-10-19, the admin account
+    // filming three lifts beside the OVR) the export was simply empty. One consent read per
+    // athlete in the file, cached, and nothing that resolves to a person.
+    const releaseByAthlete = new Map<number, boolean>();
+    const hasRelease = async (athleteId: number) => {
+      if (!releaseByAthlete.has(athleteId)) {
+        releaseByAthlete.set(athleteId, await storage.hasBiometricConsent(athleteId));
+      }
+      return releaseByAthlete.get(athleteId)!;
+    };
+    const traceStoredFor = (r: { barPathTrace?: unknown }) =>
+      Array.isArray(r.barPathTrace) && r.barPathTrace.length > 0;
+    const traceAbsentBecause = new Map<number, string | null>();
+    for (const r of rows) {
+      if (includeTraces && !traceStoredFor(r)) {
+        traceAbsentBecause.set(
+          r.setId,
+          (await hasRelease(r.athleteId))
+            ? "no_trace_stored"
+            : "no_biometric_release_on_file_for_this_account",
+        );
+      }
+    }
     const captures = rows.map((r, index) => ({
       // setId deliberately absent. It is workoutSetEntries.id, stable
       // forever, and it was sitting next to a per-export athlete code whose
@@ -3836,7 +3862,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       captureDeviceInfo: r.captureDeviceInfo,
 
       ...("barPathTrace" in r
-        ? { barPathTrace: r.barPathTrace, armPathTrace: r.armPathTrace }
+        ? {
+            barPathTrace: r.barPathTrace,
+            armPathTrace: r.armPathTrace,
+            // A row whose trace is null or [] is still a capture (its numbers and diagnostics are
+            // above); this says so, and says why, so an empty-trace row is never read as a set
+            // nobody filmed. Null when the trace is present.
+            traceAbsentBecause: traceAbsentBecause.get(r.setId) ?? null,
+          }
         : {}),
       ...("skeletonFrames" in r ? { skeletonFrames: r.skeletonFrames } : {}),
     }));

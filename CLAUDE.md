@@ -3365,6 +3365,24 @@ carries the purchase warning (see the section above). `requireVideoTrackingAcces
   something away rather than withholding something unbought, and it would bite hardest on sets
   filmed before a subscription lapsed.
 
+**THE BIOMETRIC RELEASE IS ASKED OF EVERY ROLE THAT FILMS, NOT OF ATHLETES ALONE** (2026-10-19,
+the first calibration session on the admin account). Three lifts saved beside the OVR, every save
+200, every clip 201, and the capture export came back EMPTY. Four athlete-only gates in a row:
+`captureField` withholds the trace with no release on file (right); `toPublicUserWithSections`
+computed `biometricReleaseRequired` for athletes only, so a coach or admin was offered Record and
+never asked; `recordBiometricRelease` refused any role but athlete; and the export's query asked
+for a non-empty trace, the one thing the gate withholds. `shared/roles-that-film-their-own-training.ts`
+is the set {athlete, coach, admin} that `cameraAccessFor` already grants, both flags and the
+recording method read it (adult test role-first: an admin row may have no birthday), and
+`cameraCaptureEvidence()` is the ONE membership rule for the report AND the export -- a trace-less
+capture is a row with `traceAbsentBecause` naming the consent, never an absent row. **Today's
+three traces are gone for good (correctly); the numbers and diagnostics are not** and arrive in
+the next export download. **Scott accepts the release once on the admin account and every set after
+carries its trace.** Also: the 20-capture corpus of 10-09 was filmed on the purged demo athlete and
+is gone from production (1213 orphan `workout_set_entries` rows holding frames, 0 foreign keys --
+cleanup awaits his word); the repo's replay fixtures are unaffected. Server-side: ships on Render.
+See docs/camera-tracking-notes.md, "Three lifts beside OVR, 2026-10-19".
+
 **TRUST -- the caveat goes on every surface that shows a camera number.**
 `shared/camera-accuracy-copy.ts` is the one copy module and still exists to be deleted when
 calibration lands. What was missing was any check that it had been PUT everywhere.

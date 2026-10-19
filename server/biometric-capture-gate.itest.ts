@@ -169,4 +169,54 @@ describe("the capture-time biometric gate", () => {
     expect(granted.status).toBe(200);
     expect((await client.get("/api/auth/me")).body?.biometricReleaseRequired).toBe(false);
   });
+
+  // THE ROLES THAT FILM BY RIGHT WERE NEVER ASKED. cameraAccessFor lets a coach or admin film
+  // their own training by role alone, the capture gate above is role-blind, and until 2026-10-19
+  // the flag that makes the workout screen ask was computed for athletes only -- so an admin
+  // was offered Record, filmed three lifts beside the bar sensor, and lost every trace in
+  // silence. An admin row may carry no date of birth and must still be asked, not told a
+  // guardian can answer.
+  it("asks an admin and a coach filming their own training, and stops once they have agreed", async () => {
+    for (const role of ["admin", "coach"] as const) {
+      const user = await makeLoginableUser({ role });
+      const client = await loginAs(server.baseUrl, user);
+      const me = (await client.get("/api/auth/me")).body;
+      expect(me?.biometricReleaseRequired, role).toBe(true);
+      expect(me?.biometricReleaseAwaitingGuardian, role).toBe(false);
+      expect((await client.post("/api/account/biometric-release", {})).status).toBe(200);
+      expect((await client.get("/api/auth/me")).body?.biometricReleaseRequired, role).toBe(false);
+      expect(await storage.hasBiometricConsent(user.id)).toBe(true);
+    }
+  });
+
+  // THE EXPORT SHOWS THE CAPTURE THE GATE STRIPPED, AND SAYS WHY. Before 2026-10-19 its WHERE
+  // asked for a non-empty trace, which is the one thing the gate withholds -- so the three
+  // lifts above produced an empty file, with nothing in it to say the numbers had landed.
+  it("lists a capture whose trace was withheld in the admin export, naming the consent", async () => {
+    const ctx = await setup();
+    const withDiagnostics = payload(ctx, TRACE);
+    (withDiagnostics.entries[0].sets[0] as Record<string, unknown>).trackingDiagnostics = {
+      outcome: "ok",
+      recording: { frameCount: 300, trackedFrameCount: 290, elapsedSeconds: 10 },
+    };
+    await storage.submitWorkoutLog(ctx.athlete.id, withDiagnostics as never);
+    expect(await storedTrace(ctx.athlete.id)).toBeNull();
+
+    const admin = await makeLoginableUser({ role: "admin" });
+    const client = await loginAs(server.baseUrl, admin);
+    const before = await client.get("/api/admin/capture-export.json?limit=20");
+    expect(before.status).toBe(200);
+    expect(before.body.captures).toHaveLength(1);
+    expect(before.body.captures[0].barPathTrace).toBeNull();
+    expect(before.body.captures[0].traceAbsentBecause).toBe(
+      "no_biometric_release_on_file_for_this_account",
+    );
+
+    expect((await storage.recordBiometricRelease(ctx.athlete.id)).ok).toBe(true);
+    await storage.submitWorkoutLog(ctx.athlete.id, withDiagnostics as never);
+    const after = await client.get("/api/admin/capture-export.json?limit=20");
+    expect(after.body.captures).toHaveLength(1);
+    expect(after.body.captures[0].barPathTrace).toHaveLength(TRACE.length);
+    expect(after.body.captures[0].traceAbsentBecause).toBeNull();
+  });
 });

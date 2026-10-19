@@ -4820,3 +4820,146 @@ drift the notes exist to prevent. Recorded from the commits, nothing re-derived.
   `peakSamplesInWindow`, `peakSamplesBelowConfidence` and `peakUsedRawFallback`. Records and
   gates nothing; the next hinge take says whether the floor is hiding a drive window on the wrong
   phase.
+
+## Three lifts beside OVR, 2026-10-19 — the export came back empty, and why
+
+Scott, opening the session: "remember take notes on what we've tried so we don't keep doing
+wrong things, I'm using jump squat for box jump on the OVR, my camera didn't record the first 5,
+so count just the last 5 reps." This section is the running log for the day. Nothing below moves
+a constant; `FITTED_OVERRIDES` stays empty.
+
+### What was filmed, and what the server saw
+
+Three lifts on the **admin account** (the first calibration session there -- every earlier
+corpus was filmed on the demo athlete, see below), each saved through `POST /api/admin/my/log`:
+
+| UTC | save | clip | lift (OVR) |
+|---|---|---|---|
+| 19:13:54 – 19:15:11 | 200 ×4 (one 401 at 19:13:56, a stale session, retried) | 201 at 19:14:40 | Back Squat 135 × 5 |
+| 19:17:18 | 200 | 201 at 19:17:17 | Box jump; OVR running **Jump Squat 1 lb × 12** |
+| 19:20:24 – 19:21:16 | 200 ×3 | 201 at 19:21:15 | Deadlift 135 × 8 |
+
+Then at 19:21:42 `GET /api/admin/capture-export.json` answered in 13 ms with
+`captures: [], skillCaptures: []`. Every save landed and every clip uploaded; the one file
+calibration reads showed nothing.
+
+### Why: four athlete-only gates in a row, each correct on its own
+
+Read off the code, not guessed; each one names its function:
+
+1. **`captureField` in `submitWorkoutLog` (server/storage.ts)** withholds `barPathTrace`,
+   `armPathTrace` and the skeleton frames from an account with no `biometric_waiver` consent on
+   file, and stores everything else. Correct, and role-blind.
+2. **`toPublicUserWithSections` (server/auth.ts)** computed `biometricReleaseRequired` -- the
+   flag that makes the workout screen ASK before opening the camera -- inside
+   `if (user.role === "athlete")`. A coach or admin, whom `cameraAccessFor` lets film by role
+   alone, got no flag, so `startTracking` in workout.tsx opened the tracker without asking.
+3. **`recordBiometricRelease` (server/storage.ts)** answered "Not found." to any role but
+   athlete, so even a coach who found the dialog could not have agreed. The route above it
+   (`POST /api/account/biometric-release`) took any signed-in account from the day it was
+   written -- the middleware was honest and the method was not.
+4. **`getStoredCapturesForReplay` (server/storage.ts)** -- the export's query -- required a
+   non-empty `barPathTrace`, which is precisely the column gate 1 withholds. The tracking
+   report (`getRecentTrackedSetsForAdmin`) uses the evidence-column rule and would have shown
+   the three sets; the export did not, and said nothing about why.
+
+So: offered Record, filmed, numbers stored, trace withheld by consent, export blind to a set
+without a trace. The same shape as the day's other find (Opus, the profile dialog: "a trigger
+must never be gated more loosely than the thing it opens"), in the consent direction.
+
+### What changed (server-side, ships on Render; no number moved)
+
+- `shared/roles-that-film-their-own-training.ts` names the set {athlete, coach, admin} once.
+  `toPublicUserWithSections` computes both release flags for that set, with the adult test
+  role-first (an admin row may carry no date of birth and must not read as a minor waiting on a
+  guardian); `recordBiometricRelease` accepts the same set and keeps the guardian rule for an
+  athlete minor. `a-filming-role-is-asked-for-the-release.test.ts` holds the set equal to what
+  `cameraAccessFor` grants by role.
+- `cameraCaptureEvidence()` is the ONE membership rule, read by the tracking report and the
+  export alike. A capture whose trace was withheld is a row in the export with
+  `barPathTrace: null` and `traceAbsentBecause: "no_biometric_release_on_file_for_this_account"`
+  (or `"no_trace_stored"` when consent is on file and the trace is still absent). Same principle
+  as the report: a capture that lost part of itself is visible AS that, never absent.
+- `biometric-capture-gate.itest.ts` drives both on real Postgres: an admin and a coach are
+  asked and can agree; a trace-less capture appears in the export with the reason, and after
+  the release the same save carries its trace.
+
+### What is lost, and what is not
+
+The three traces from today were never stored -- the gate was right to withhold them and there
+is nothing to recover. The velocity, range of motion, jump height, rep breakdowns, trust scores
+and `trackingDiagnostics` for all three sets ARE in the database and will be in the next export
+download. The video is on the server too. **Next:** Scott accepts the biometric release once
+(the workout screen now asks before Record on the admin account); every set after that carries
+its trace and its skeleton frames.
+
+### The old corpus is gone from production, and why
+
+The capture export on 2026-10-09 carried 20 captures; today it would carry 0 even with the fix,
+before today's three. Those sets were filmed on the demo athlete (Scott, 2026-10-11: "all my
+numbers I've ever recorded were lower weights at testing numbers only" -- on Jordan), and that
+account was purged with the other seven on 2026-10-11. `workout_set_entries` has **no foreign
+keys** (the offload job's own line this morning: "1213 rows hold frames but none joined to a
+day: 1213 have no entry ... the table has 0 foreign keys"), so the set rows survived the cascade
+as orphans while their log entries did not -- and every reader joins through the entry. The
+20-capture replay corpus in the repo (`count-trim-never-empties-a-set.test.ts` and the OVR
+fixtures) is unaffected. Deleting the orphans and restoring the keys is a separate change
+awaiting Scott's word, not part of this one.
+
+### What was tried today, in order
+
+1. Suspected the saves never left the phone (build 625's class). Ruled out by the Render log
+   above: every POST answered 200, every clip 201.
+2. Suspected the export query. Confirmed: `isNotNull(barPathTrace)` and the consent gate.
+3. Tried to read today's numbers straight off the production database from the sandbox -- not
+   possible (the environment's network policy refuses the Postgres host; HTTPS only). The
+   numbers wait on the re-downloaded export.
+4. Nothing fitted. Rule #5: with no Forge number in hand there is no scatter to measure and no
+   bias to fit.
+
+### OVR ground truth, 2026-10-19 (Scott, 36, all 135 lb except the jump squat at 1 lb)
+
+Per rep: Avg m/s / Peak m/s / ROM in / Avg W / Peak W / TPV s / EAI.
+
+**Back Squat 135 × 5** -- set 0.86 / 1.30 / 29.3 / 516 / 781 / 0.60 / 2.17
+
+| rep | avg | peak | ROM | avg W | peak W | TPV | EAI |
+|---|---|---|---|---|---|---|---|
+| 1 | 0.93 | 1.47 | 28.5 | 561 | 884 | 0.54 | 2.68 |
+| 2 | 0.95 | 1.49 | 28.9 | 570 | 892 | 0.53 | 2.76 |
+| 3 | 0.86 | 1.29 | 29.1 | 514 | 776 | 0.56 | 2.21 |
+| 4 | 0.75 | 1.03 | 29.4 | 450 | 619 | 0.63 | 1.61 |
+| 5 | 0.82 | 1.22 | 30.9 | 489 | 735 | 0.76 | 1.60 |
+
+**Jump Squat 1 lb × 12, the OVR stand-in for the box jump.** The camera missed the first reps,
+so **Forge's box jump is compared against OVR reps 8–12 only** (set-level OVR numbers include
+the seven the camera never saw and are NOT the comparison):
+
+| rep | avg | peak | ROM | avg W | peak W | TPV | EAI |
+|---|---|---|---|---|---|---|---|
+| 8 | 1.59 | 2.99 | 28.0 | 7 | 13 | 0.13 | 22.12 |
+| 9 | 1.48 | 2.73 | 26.8 | 6 | 12 | 0.10 | 25.23 |
+| 10 | 1.46 | 3.00 | 26.9 | 6 | 13 | 0.17 | 17.55 |
+| 11 | 1.59 | 2.67 | 27.7 | 7 | 11 | 0.17 | 15.61 |
+| 12 | 1.49 | 3.07 | 26.9 | 6 | 13 | 0.16 | 18.94 |
+
+(For the record, reps 1–7: 0.32/0.73/35.2; 1.59/2.82/28.5; 1.60/3.07/28.8; 1.51/2.82/28.9;
+1.52/3.00/27.9; 1.50/3.03/28.5; 1.06/1.65/30.6. Set 1.39 / 2.63 / 28.7 / 5 / 11 / 0.21 / 16.75.)
+Note the OVR's ROM here is the bar's travel on a loaded jump squat, not a jump height; the
+comparable Forge number is the hip's takeoff velocity and the countermovement, not
+`jumpHeightCm`. A 1 lb load makes the OVR's power columns meaningless.
+
+**Deadlift 135 × 8** -- set 0.89 / 1.59 / 22.0 / 538 / 955 / 0.33 / 4.74
+
+| rep | avg | peak | ROM | avg W | peak W | TPV | EAI |
+|---|---|---|---|---|---|---|---|
+| 1 | 0.89 | 1.58 | 22.1 | 537 | 950 | 0.35 | 4.50 |
+| 2 | 0.98 | 1.78 | 22.5 | 589 | 1066 | 0.32 | 5.51 |
+| 3 | 0.97 | 1.73 | 22.4 | 583 | 1041 | 0.31 | 5.50 |
+| 4 | 0.92 | 1.65 | 21.5 | 551 | 991 | 0.31 | 5.24 |
+| 5 | 0.84 | 1.49 | 21.4 | 505 | 892 | 0.33 | 4.48 |
+| 6 | 0.88 | 1.53 | 22.3 | 526 | 917 | 0.34 | 4.49 |
+| 7 | 0.93 | 1.68 | 23.2 | 556 | 1008 | 0.34 | 4.80 |
+| 8 | 0.77 | 1.29 | 20.9 | 461 | 776 | 0.37 | 3.43 |
+
+The Forge columns for all three go beside these the moment the re-downloaded export is in hand.

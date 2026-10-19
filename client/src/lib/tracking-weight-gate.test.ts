@@ -87,7 +87,17 @@ describe("the tracking report's membership test", () => {
     // which is exactly how a capture that ran and FAILED reads. Reported from a real session
     // on 2026-09-21. A failed capture still qualifies through trackingDiagnostics, so this
     // narrowing does not repeat the three silent drops this query has already suffered.
-    expect(fn).toContain("CAMERA_CAPTURE_EVIDENCE_COLUMNS.map");
+    //
+    // THE RULE LIVES IN ONE PLACE SINCE 2026-10-19. The query reads cameraCaptureEvidence(), a
+    // module-level helper, because the capture EXPORT had its own membership test ("has a
+    // trace") and went empty the first time the capture gate withheld a trace. Both read the
+    // helper now; this pins that the report still does, and that the helper reads the list.
+    expect(fn).toContain("cameraCaptureEvidence()");
+    const helper = storage
+      .slice(storage.indexOf("function cameraCaptureEvidence()"), storage.indexOf("export const storage = {"))
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(helper).toContain("CAMERA_CAPTURE_EVIDENCE_COLUMNS.map");
+    expect(helper).not.toContain("CAMERA_DERIVED_SET_COLUMNS.map");
     expect(fn).not.toContain("CAMERA_DERIVED_SET_COLUMNS.map");
   });
 

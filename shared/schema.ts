@@ -10578,13 +10578,15 @@ export type PublicUser = Omit<
   // nothing the athlete can act on, while a missing birthdate is one field they fill in
   // themselves, and showing them the wrong one hands them an instruction they cannot follow.
   dateOfBirthRequired?: boolean;
-  // Athletes only. True for an ADULT athlete who has not agreed to the biometric release -- a
-  // minor's comes from their guardian at claim time. While true, the capture gate in
+  // Every role that films its own training (athlete, coach, admin -- see
+  // ROLES_THAT_FILM_THEIR_OWN_TRAINING in server/auth.ts). True for an ADULT who has not agreed
+  // to the biometric release -- a minor athlete's comes from their guardian at claim time, and a
+  // coach or admin account is an adult account. While true, the capture gate in
   // submitWorkoutLog refuses to store new skeleton frames or path traces for them, so this is
   // what lets the client ask before they film rather than dropping what they filmed afterwards.
   // Never a substitute for that gate: a client flag is a convenience, not a rule.
   biometricReleaseRequired?: boolean;
-  // Athletes only. The minor's counterpart: no biometric consent on file, and the athlete cannot
+  // Minor athletes only. The minor's counterpart: no biometric consent on file, and the athlete cannot
   // give it -- their guardian can, from the guardian dashboard (recordBiometricReleaseAsGuardian).
   // Lets the workout screen say so before the tracker opens rather than after the capture gate
   // has silently dropped the numbers. Convenience only; the gate is the rule.

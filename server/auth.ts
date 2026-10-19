@@ -58,6 +58,7 @@ import {
   type PublicUser,
 } from "@shared/schema";
 import { derivePrivacyTier, GUARDIAN_NOTICE_LIVE, type PrivacyTier } from "@shared/privacy-tiers";
+import { ROLES_THAT_FILM_THEIR_OWN_TRAINING } from "@shared/roles-that-film-their-own-training";
 import { notifyUser } from "./notify";
 
 const PgStore = connectPgSimple(session);
@@ -292,23 +293,42 @@ export function toPublicUser(user: any): PublicUser {
 // requirePrimaryCoach guard in routes.ts.
 async function toPublicUserWithSections(user: any): Promise<PublicUser> {
   const publicUser = toPublicUser(user);
-  if (user.role === "athlete") {
-    // What the client needs to render the blocked screen instead of an app
-    // full of controls that all answer 403 -- see the guardian gate in
-    // routes.ts, which is the thing actually enforcing this. This flag is a
-    // convenience for the UI and is never the enforcement.
-    // Whether to ask this athlete for the biometric release. True only where it would actually
+  // THE BIOMETRIC RELEASE IS ASKED OF EVERY ROLE THAT CAN FILM ITS OWN TRAINING, not of athletes
+  // alone. Found 2026-10-19, the first calibration session filmed on the admin account: three
+  // lifts saved, every number landed, and the capture export came back EMPTY, because the
+  // capture gate in submitWorkoutLog refuses to store skeleton frames and path traces for an
+  // account with no release on file (correct), the workout screen asks for the release only when
+  // this flag says so (correct), and this flag was computed inside `if (user.role === "athlete")`
+  // -- so a coach or admin was offered Record, filmed, and lost the trace in silence. Same shape
+  // as the day's other find (a trigger gated more loosely than the thing it opens): the server
+  // route that records the release has taken any signed-in account since it was written; only
+  // the question was never put to them.
+  //
+  // The roles are the ones cameraAccessFor lets film their own training by role alone (coach,
+  // admin) plus the athlete. A coach or admin account is an adult account by construction (a
+  // coach signs the Terms as an adult; the admin is the operator), so no date of birth is
+  // consulted for them -- an admin row with no birthday on file must not read as a minor waiting
+  // on a guardian.
+  if (ROLES_THAT_FILM_THEIR_OWN_TRAINING.has(user.role)) {
+    const hasBiometricConsent = await storage.hasBiometricConsent(user.id);
+    const isAdult =
+      user.role !== "athlete" ||
+      (user.dateOfBirth != null && derivePrivacyTier(user.dateOfBirth) === "tier3_adult_18plus");
+    // Whether to ask this person for the biometric release. True only where it would actually
     // change anything: an adult (a minor's comes from their guardian) who has not agreed. The
     // capture gate in submitWorkoutLog is the enforcement; this is what lets the client ask
     // rather than silently dropping what they film.
-    const hasBiometricConsent = await storage.hasBiometricConsent(user.id);
-    const isAdult =
-      user.dateOfBirth != null && derivePrivacyTier(user.dateOfBirth) === "tier3_adult_18plus";
     publicUser.biometricReleaseRequired = isAdult && !hasBiometricConsent;
     // The other half of the same question, for a minor: nothing on file and nothing THEY can do
     // about it. The workout screen tells them who can (their guardian, from the guardian
     // dashboard) instead of opening a tracker whose numbers the capture gate will then drop.
     publicUser.biometricReleaseAwaitingGuardian = !isAdult && !hasBiometricConsent;
+  }
+  if (user.role === "athlete") {
+    // What the client needs to render the blocked screen instead of an app
+    // full of controls that all answer 403 -- see the guardian gate in
+    // routes.ts, which is the thing actually enforcing this. This flag is a
+    // convenience for the UI and is never the enforcement.
     // Whether to show this athlete the risk terms themselves. EVERY athlete, not only adults --
     // that is the whole point. For a minor the guardian's agreement is the legal instrument and
     // this changes nothing about it; what it changes is that the person actually lifting has

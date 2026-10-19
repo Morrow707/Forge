@@ -1,4 +1,5 @@
 import type { MuscleLoadBreakdown } from "@shared/muscle-map";
+import { ROLES_THAT_FILM_THEIR_OWN_TRAINING } from "@shared/roles-that-film-their-own-training";
 import { db } from "./db";
 import {
   COACH_COPPA_ATTESTATION,
@@ -3683,6 +3684,34 @@ function summariseWaivers(
  *  reader can reason about. */
 export const DELETION_STAMPING_BEGAN = "2026-09-23T00:00:00.000Z";
 
+
+/** THE ONE MEMBERSHIP RULE FOR "THIS SET WENT THROUGH THE CAMERA", read by the admin tracking
+ *  report and the capture export alike. The argument for every clause is on the WHERE in
+ *  getRecentTrackedSetsForAdmin, which is where it lived alone until 2026-10-19.
+ *
+ *  That day the capture export was EMPTY after three filmed lifts, because its own WHERE asked
+ *  for a non-empty bar-path trace -- and the capture gate had (rightly) withheld the trace for an
+ *  account with no biometric release on file. The numbers, the diagnostics and the video all
+ *  landed; the one file calibration reads showed none of it, and nothing said why. A capture
+ *  without a trace is the report's "a capture that lost its own explanation" one column over:
+ *  it has to be visible AS that, with the reason beside it, never absent. */
+function cameraCaptureEvidence() {
+  return or(
+    ...CAMERA_CAPTURE_EVIDENCE_COLUMNS.map((c) => {
+      const col = workoutSetEntries[c as keyof typeof workoutSetEntries] as never;
+      // BY THE COLUMN'S TYPE, NOT BY A LIST OF COLUMNS -- see the report's WHERE for why.
+      const kind = (col as unknown as { dataType?: string }).dataType;
+      if (kind === "number") return and(isNotNull(col), ne(col, 0 as never));
+      if (kind === "json") {
+        return and(
+          isNotNull(col),
+          sql`(jsonb_typeof(${col}::jsonb) <> 'array' or jsonb_array_length(${col}::jsonb) > 0)`,
+        );
+      }
+      return isNotNull(col);
+    }),
+  );
+}
 
 export const storage = {
   // ---------- Users ----------
@@ -25903,12 +25932,13 @@ ${catalog}`;
       // Those rows are still worth reading -- they are the only record of a capture that failed
       // outright -- but through the tracking report, which is built to show them, rather than
       // through a replay export that cannot do anything with them.
-      .where(
-        and(
-          isNotNull(workoutSetEntries.barPathTrace),
-          sql`json_array_length(${workoutSetEntries.barPathTrace}::json) > 0`,
-        ),
-      )
+      // THE SAME MEMBERSHIP AS THE TRACKING REPORT, not "has a trace". Until 2026-10-19 this asked
+      // for a non-empty barPathTrace, and the one thing the capture gate withholds from an
+      // account with no biometric release is exactly that trace -- so three filmed lifts whose
+      // numbers and diagnostics all landed produced an EMPTY export, with nothing in it to say
+      // why. The route marks a trace-less row and names the reason; the replay harness skips
+      // what it cannot replay.
+      .where(cameraCaptureEvidence())
       .orderBy(desc(workoutSetEntries.id))
       .limit(limit);
     if (includeSkeleton) {
@@ -26221,35 +26251,23 @@ ${catalog}`;
           // for them -- so isNotNull read five columns of nothing as proof of a capture. See
           // CAMERA_EVIDENCE_NEEDS_A_VALUE. A real refusal still qualifies through
           // trackingDiagnostics, which is the blob that exists to explain an empty take.
-          or(
-            ...CAMERA_CAPTURE_EVIDENCE_COLUMNS.map((c) => {
-              const col = workoutSetEntries[c as keyof typeof workoutSetEntries] as never;
-              // BY THE COLUMN'S TYPE, NOT BY A LIST OF COLUMNS.
-              //
-              // The first version of this narrowing named five columns by hand -- the ones the
-              // bar tracker's EMPTY_REP_METRICS fills with 0 and [] -- and missed every other
-              // mode: the jump dialog writes bestJumpHeightCm 0 and pathTrace [], the kettlebell
-              // one peakSpeedMps/peakHeightCm/meanSpeedMps 0, the swing one rotationTrace [].
-              // Scott, on being shown sets he had never filmed: "If the video hasn't been
-              // recorded yet, REGARDLESS OF THE EXERCISE, it shouldn't show up."
-              //
-              // A hand-written list is how the next mode slips through, the same way the first
-              // list did. The rule is derived from the column instead: a number that is 0 and an
-              // array that is empty are not evidence of anything, whichever capture mode wrote
-              // them. A real capture has at least one non-zero number or one non-empty trace,
-              // and a REFUSED one still qualifies through trackingDiagnostics -- the blob that
-              // exists precisely to explain an empty take.
-              const kind = (col as unknown as { dataType?: string }).dataType;
-              if (kind === "number") return and(isNotNull(col), ne(col, 0 as never));
-              if (kind === "json") {
-                return and(
-                  isNotNull(col),
-                  sql`(jsonb_typeof(${col}::jsonb) <> 'array' or jsonb_array_length(${col}::jsonb) > 0)`,
-                );
-              }
-              return isNotNull(col);
-            }),
-          ),
+          // BY THE COLUMN'S TYPE, NOT BY A LIST OF COLUMNS.
+          //
+          // The first version of this narrowing named five columns by hand -- the ones the
+          // bar tracker's EMPTY_REP_METRICS fills with 0 and [] -- and missed every other
+          // mode: the jump dialog writes bestJumpHeightCm 0 and pathTrace [], the kettlebell
+          // one peakSpeedMps/peakHeightCm/meanSpeedMps 0, the swing one rotationTrace [].
+          // Scott, on being shown sets he had never filmed: "If the video hasn't been
+          // recorded yet, REGARDLESS OF THE EXERCISE, it shouldn't show up."
+          //
+          // A hand-written list is how the next mode slips through, the same way the first
+          // list did. The rule is derived from the column instead: a number that is 0 and an
+          // array that is empty are not evidence of anything, whichever capture mode wrote
+          // them. A real capture has at least one non-zero number or one non-empty trace,
+          // and a REFUSED one still qualifies through trackingDiagnostics -- the blob that
+          // exists precisely to explain an empty take. The expression is cameraCaptureEvidence
+          // (module level) since 2026-10-19, so the capture export reads the SAME rule.
+          cameraCaptureEvidence(),
           // WHAT THE PROGRAM ROW SAYS TODAY IS NOT WHAT THE CAMERA DID THEN.
           //
           // There used to be a second condition here excluding any set whose program row is
@@ -31945,10 +31963,20 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     context?: { ipAddress?: string; userAgent?: string },
   ): Promise<{ ok: true } | { ok: false; error: string }> {
     const athlete = await this.getUser(athleteId);
-    if (!athlete || athlete.role !== "athlete") return { ok: false, error: "Not found." };
+    // ANY ROLE THAT CAN BE OFFERED RECORD CAN GIVE THIS. Until 2026-10-19 it was athletes only,
+    // while cameraAccessFor lets a coach or admin film by role alone -- so the route that takes
+    // any signed-in account answered "Not found." to the two roles the capture gate was silently
+    // stripping. The adult test is the athlete's: a coach or admin account is an adult account
+    // by construction and may carry no date of birth at all.
+    if (!athlete || !ROLES_THAT_FILM_THEIR_OWN_TRAINING.has(athlete.role)) {
+      return { ok: false, error: "Not found." };
+    }
     // A minor cannot give this for themselves; their guardian gives it at claim time. Checked
     // here and not only at the route, for the same reason every other consent check is.
-    if (!athlete.dateOfBirth || derivePrivacyTier(athlete.dateOfBirth) !== "tier3_adult_18plus") {
+    if (
+      athlete.role === "athlete" &&
+      (!athlete.dateOfBirth || derivePrivacyTier(athlete.dateOfBirth) !== "tier3_adult_18plus")
+    ) {
       return { ok: false, error: GUARDIAN_GIVES_BIOMETRIC_CONSENT };
     }
     const release = await this.getLegalDocument("biometric_waiver");
