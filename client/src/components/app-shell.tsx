@@ -806,7 +806,23 @@ export function AppShell({
                       Account settings
                     </button>
                   )}
-                  {user?.role === "athlete" && (
+                  {/* EVERY ROLE THAT CAN FILM ITS OWN TRAINING CAN EDIT THE PROFILE THE CAMERA
+                      READS. Scott, 2026-10-19, on his admin account: "I don't have a profile
+                      setting in the app, only account."
+
+                      The dialog below is mounted for every role already, and PATCH
+                      /api/athlete/profile accepts any signed-in caller for their own row -- this
+                      menu item was the only thing in the way, and it is the half that is easy to
+                      miss, because the server refusing a write and a menu never drawing the entry
+                      look identical from the outside.
+
+                      athlete, admin and coach, which is exactly the set cameraAccessFor lets film
+                      their own training ("a coach or admin filming their own training always
+                      may"). The athlete's height is a scale ruler -- calibrateFromFrames,
+                      body3DScaleFromFrames and repAmplitudeGateCm all read it -- so a role that
+                      can film and cannot state its height films worse, silently. Guardians are
+                      left out: they manage a minor's account, they do not train on it. */}
+                  {(user?.role === "athlete" || user?.role === "admin" || user?.role === "coach") && (
                     <button
                       type="button"
                       role="menuitem"
