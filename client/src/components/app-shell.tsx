@@ -1433,8 +1433,16 @@ export function AppShell({
       {user && (
         <AccountSettingsDialog user={user} open={accountSettingsOpen} onOpenChange={setAccountSettingsOpen} />
       )}
-      {user?.role === "athlete" && (
-        <EditMyProfileDialog user={user} open={profileOpen} onOpenChange={setProfileOpen} />
+      {/* THE MOUNT IS THE FOURTH GATE, AND THE ONLY ONE THAT FAILS IN COMPLETE SILENCE.
+          Scott, 2026-10-19: "the other profiles work, why is this one different?" This was why.
+          The route, the desktop menu and the mobile menu were all widened before anyone looked
+          here, so the entry drew, the click fired, setProfileOpen(true) ran -- and no dialog was
+          mounted to observe the state, so nothing rendered, nothing errored and nothing was
+          fetched. A trigger whose consumer is gated more narrowly than the trigger is a button
+          that cannot do anything, and it is invisible from the outside in a way the other three
+          were not. Same condition as the menus that open it, by construction. */}
+      {canEditTrainingProfile && (
+        <EditMyProfileDialog user={user!} open={profileOpen} onOpenChange={setProfileOpen} />
       )}
       {(user?.role === "coach" || user?.role === "athlete") && (
         <NotificationSettingsDialog

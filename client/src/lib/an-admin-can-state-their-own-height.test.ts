@@ -51,7 +51,9 @@ describe("an admin can state their own height", () => {
    *
    * So: find every trigger, require a count, and require each one to be gated by the single
    * named condition. A third menu added later fails here until it is gated too. */
-  const triggers = [...shell.matchAll(/setProfileOpen\(true\)/g)].map((m) => m.index!);
+  // The semicolon is load-bearing: prose in a nearby comment mentions setProfileOpen(true)
+  // without one, and matching that made this case fail against a comment rather than a button.
+  const triggers = [...shell.matchAll(/setProfileOpen\(true\);/g)].map((m) => m.index!);
 
   it("has more than one Edit profile trigger, so a single-site check cannot pass vacuously", () => {
     expect(triggers.length).toBeGreaterThanOrEqual(2);
@@ -63,6 +65,22 @@ describe("an admin can state their own height", () => {
     expect(preceding).toContain("canEditTrainingProfile");
     // And not a hand-rolled copy, which is exactly how the two menus drifted apart.
     expect(preceding).not.toMatch(/user\?\.role === "athlete" &&/);
+  });
+
+  /** THE FOURTH GATE, AND THE ONLY SILENT ONE. The route, the desktop menu and the mobile menu
+   * were each widened in turn, and the dialog's own MOUNT stayed athlete-only behind all of them
+   * -- so the entry drew, the click fired, the state flipped, and no component was mounted to
+   * observe it. Nothing rendered, nothing errored, nothing was fetched.
+   *
+   * The general rule this pins: a trigger must never be gated more loosely than the thing it
+   * opens. Three green assertions about the triggers meant nothing while the consumer was out of
+   * reach, which is the same assertion-direction failure as checking one menu out of two. */
+  it("mounts the dialog behind the same condition as the triggers that open it", () => {
+    const i = shell.indexOf("<EditMyProfileDialog");
+    expect(i).toBeGreaterThan(-1);
+    const preceding = shell.slice(Math.max(0, i - 700), i);
+    expect(preceding).toContain("canEditTrainingProfile");
+    expect(preceding).not.toMatch(/\{user\?\.role === "athlete" && \($/m);
   });
 
   it("defines that condition once, naming every role that can film its own training", () => {
