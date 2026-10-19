@@ -40,18 +40,38 @@ describe("an admin can state their own height", () => {
     expect(body).not.toMatch(/req\.params/);
   });
 
-  it("draws the Edit profile menu item for every role that can film its own training", () => {
-    const i = shell.indexOf("setProfileOpen(true)");
-    expect(i).toBeGreaterThan(-1);
-    const gate = shell.slice(Math.max(0, i - 900), i);
-    for (const role of ["athlete", "admin", "coach"]) {
-      expect(gate).toContain(`user?.role === "${role}"`);
-    }
+  /** THE SHELL HAS MORE THAN ONE ACCOUNT MENU, AND THE FIRST FIX ONLY REACHED ONE.
+   *
+   * The desktop dropdown and the mobile nav each render their own Edit profile entry, each with
+   * its own gate. Widening the dropdown's left Scott -- on a phone -- still looking at a menu
+   * with no profile entry in it. The first version of this case asserted against a window before
+   * the FIRST setProfileOpen(true) in the file, so it passed with the mobile menu still broken:
+   * the assertion-direction bug this repo keeps rediscovering, checking one instance of a thing
+   * instead of discovering every instance and requiring each to be classified.
+   *
+   * So: find every trigger, require a count, and require each one to be gated by the single
+   * named condition. A third menu added later fails here until it is gated too. */
+  const triggers = [...shell.matchAll(/setProfileOpen\(true\)/g)].map((m) => m.index!);
+
+  it("has more than one Edit profile trigger, so a single-site check cannot pass vacuously", () => {
+    expect(triggers.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("does not draw it for a guardian, who manages an account rather than training on it", () => {
-    const i = shell.indexOf("setProfileOpen(true)");
-    const gate = shell.slice(Math.max(0, i - 900), i);
-    expect(gate).not.toContain('user?.role === "guardian"');
+  it.each(triggers)("the trigger at %i is gated by the one shared condition", (at) => {
+    // The gate sits just above its button; 400 chars covers the JSX between them in both menus.
+    const preceding = shell.slice(Math.max(0, at - 400), at);
+    expect(preceding).toContain("canEditTrainingProfile");
+    // And not a hand-rolled copy, which is exactly how the two menus drifted apart.
+    expect(preceding).not.toMatch(/user\?\.role === "athlete" &&/);
+  });
+
+  it("defines that condition once, naming every role that can film its own training", () => {
+    const i = shell.indexOf("const canEditTrainingProfile");
+    expect(i).toBeGreaterThan(-1);
+    const decl = shell.slice(i, i + 260);
+    for (const role of ["athlete", "admin", "coach"]) {
+      expect(decl).toContain(`user?.role === "${role}"`);
+    }
+    expect(decl).not.toContain("guardian");
   });
 });

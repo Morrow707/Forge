@@ -303,6 +303,23 @@ export function AppShell({
   }, []);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  // ONE CONDITION, BECAUSE THE SHELL HAS TWO ACCOUNT MENUS AND ONLY ONE GOT FIXED THE FIRST TIME.
+  //
+  // 2026-10-19: Scott could not set a height on his admin account. The server route was widened,
+  // then the desktop dropdown's gate was widened -- and he was on a phone, where a SECOND menu
+  // (setMobileNavOpen, further down this file) carried its own copy of role === "athlete" and
+  // still drew nothing. Two menus, two gates, one fixed: the same shape as the route-and-menu
+  // pair that caused the original report, one level down.
+  //
+  // So the condition is named once and read twice. Duplicating it is what made the first fix a
+  // half fix, and a third menu added later inherits the answer instead of a fresh guess.
+  //
+  // athlete, admin and coach -- exactly the set cameraAccessFor lets film their own training. The
+  // height is a scale ruler (calibrateFromFrames, body3DScaleFromFrames, repAmplitudeGateCm all
+  // read it), so a role that can film and cannot state its height films worse, silently.
+  // Guardians are out: they manage a minor's account rather than training on it.
+  const canEditTrainingProfile =
+    user?.role === "athlete" || user?.role === "admin" || user?.role === "coach";
   const [notifSettingsOpen, setNotifSettingsOpen] = useState(false);
   const [coachingStaffOpen, setCoachingStaffOpen] = useState(false);
   const [exerciseThemeOpen, setExerciseThemeOpen] = useState(false);
@@ -822,7 +839,7 @@ export function AppShell({
                       body3DScaleFromFrames and repAmplitudeGateCm all read it -- so a role that
                       can film and cannot state its height films worse, silently. Guardians are
                       left out: they manage a minor's account, they do not train on it. */}
-                  {(user?.role === "athlete" || user?.role === "admin" || user?.role === "coach") && (
+                  {canEditTrainingProfile && (
                     <button
                       type="button"
                       role="menuitem"
@@ -1203,7 +1220,7 @@ export function AppShell({
                     Account
                   </button>
                 )}
-                {user?.role === "athlete" && (
+                {canEditTrainingProfile && (
                   <button
                     type="button"
                     onClick={() => {
