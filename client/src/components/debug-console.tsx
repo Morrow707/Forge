@@ -4,6 +4,7 @@ import { Bug, X, Trash2 } from "lucide-react";
 import { subscribeDebug, clearDebug, logDebug, type DebugEntry } from "@/lib/debug-console";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
+import { useAuth } from "@/hooks/use-auth";
 
 /** Temporary, on-screen debug console -- a floating toggle that opens a
  * scrollable, timestamped log of AUTH/NAV events so they can be screenshotted
@@ -13,6 +14,26 @@ import { Capacitor } from "@capacitor/core";
  * it's deliberately a single self-contained component easy to delete along
  * with its one mount point in App.tsx and its lib/debug-console.ts module. */
 export function DebugConsole() {
+  // ADMIN ONLY, AND THE LOGGING IS DELIBERATELY NOT.
+  //
+  // Scott, 2026-10-19, reading his own console on an admin account: "make sure the debug is only
+  // for the admin, never for the other users." Until now the only gate was the mount site's
+  // Capacitor.isNativePlatform() in App.tsx, which is a statement about the PLATFORM and says
+  // nothing about who is signed in -- so every athlete, Free Agent and coach on the native app
+  // got a floating bug icon over their training screen, minors included, opening a log of their
+  // own navigation and in-app-purchase traffic. A debugging tool shipped to people who are not
+  // debugging, which is the exact thing the mount site's own comment says it is gated to prevent.
+  //
+  // The gate is on the RENDER, not on the hooks above it, and that is the point: every hook below
+  // still runs for everybody, so the NAV lines and the pre-sign-in [IAP] lines keep being
+  // recorded. They have to be -- the console's most useful lines are the ones written BEFORE
+  // anyone signs in (a held StoreKit transaction, a relaunch marker), and a log that only starts
+  // once an admin is already signed in would have nothing to say about how they got there. The
+  // store is local to the device and goes nowhere; what changes here is only who can OPEN it.
+  //
+  // Explicit === "admin": unknown is not yes. user is undefined while /api/auth/me is in flight,
+  // and the icon must not flash up and vanish on every cold start for everybody.
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<DebugEntry[]>([]);
   const [location] = useLocation();
@@ -53,6 +74,10 @@ export function DebugConsole() {
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     if (nearBottom) el.scrollTop = el.scrollHeight;
   }, [entries]);
+
+  // Below every hook, never above one: an early return placed higher would change the hook order
+  // the moment a sign-in resolves, which React treats as a different component.
+  if (user?.role !== "admin") return null;
 
   return (
     <>
