@@ -11245,7 +11245,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(toPublicUser(updated));
   });
 
-  app.patch("/api/athlete/profile", requireRole("athlete"), async (req, res) => {
+  // EVERY ROLE EDITS ITS OWN PROFILE, BECAUSE THE DIALOG WAS ALREADY DRAWN FOR EVERY ROLE.
+  //
+  // Scott, 2026-10-19, on his admin account the day he set out to film: "I can't upload a height
+  // and weight to my admin profile, will the camera be accurate?" He could not, and it would not.
+  // EditMyProfileDialog is mounted in app-shell.tsx, which every signed-in role renders, so the
+  // height and weight fields were on screen for him -- and its save has always gone to this
+  // route, which was requireRole("athlete"), so the server refused the write. A form that is
+  // drawn and cannot save is worse than one that is absent: it reads as a broken app rather than
+  // as a rule.
+  //
+  // It is also a CAMERA bug, which is why it was not left for the next tidy-up. The athlete's
+  // height is a scale ruler -- calibrateFromFrames takes it, body3DScaleFromFrames takes it to
+  // correct a Vision skeleton scaled to a reference stature, and repAmplitudeGateCm scales the
+  // rep gate by it. An account with no height on file loses the single heaviest voter in
+  // reconcileScaleEstimates (44.4% of the blend on the 2026-10-05 RDL, 66.7% on the 10-08 squat),
+  // and its reps are gated against a default built for a reference-height athlete. So "the admin
+  // cannot type a height" reads downstream as "the admin's numbers are worse", silently.
+  //
+  // requireAuth rather than a wider role list: the handler only ever writes currentUser(req).id,
+  // so this can edit nobody else's row whatever the caller's role, and updateProfileSchema holds
+  // nothing privileged -- no role, no billing, and dateOfBirth is excluded from it ON PURPOSE
+  // (see its own comment), so widening this cannot be a way around the minor gates.
+  //
+  // This does NOT contradict "the camera measures the athlete, the athlete never types a body
+  // measurement for it". That rule retired gripWidthIn and forbids NEW body dimensions added for
+  // the camera's benefit; height and body weight predate the camera and are training facts, which
+  // that same section says in as many words.
+  app.patch("/api/athlete/profile", requireAuth, async (req, res) => {
     const user = currentUser(req);
     const parsed = updateProfileSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -11254,6 +11281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const updated = await storage.updateUserProfile(user.id, parsed.data);
     res.json(toPublicUser(updated));
   });
+
 
   // Read-only for every athlete -- whoever set these (a coach, or the
   // athlete themselves while a Free Agent) is visible to the athlete either
