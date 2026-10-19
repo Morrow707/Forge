@@ -563,7 +563,16 @@ export type TrackingDiagnostics = {
     scaleBlend?: {
       inputs: { source: string; scale: number; uncertaintyFraction: number; demoted?: boolean }[];
       toleranceMultiple: number;
-      collapsedPose3d: { from: string[]; scale: number; uncertaintyFraction: number } | null;
+      collapsedPose3d: {
+        from: string[];
+        scale: number;
+        uncertaintyFraction: number;
+        /** How far apart the two readings were, high over low. The RDL of 2026-10-19 read
+         *  0.285 here while its blended answer looked like one confident witness. */
+        disagreement: number;
+        /** Which of the pair read high -- `depth` on all four takes of 2026-10-19. */
+        higher: string;
+      } | null;
       voters: { source: string; scale: number; uncertaintyFraction: number }[];
       clusterAnchor: string | null;
       cluster: string[];

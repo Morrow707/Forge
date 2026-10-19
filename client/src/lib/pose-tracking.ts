@@ -853,8 +853,24 @@ export type ScaleBlendTrace = {
   inputs: { source: string; scale: number; uncertaintyFraction: number; demoted?: boolean }[];
   toleranceMultiple: number;
   /** The in-plane 3D ruler and the depth ruler are one sensor, so they vote once -- this is the
-   *  witness they became, and null when the take had only one of them. */
-  collapsedPose3d: { from: string[]; scale: number; uncertaintyFraction: number } | null;
+   *  witness they became, and null when the take had only one of them.
+   *
+   *  `disagreement` IS THE NUMBER THIS BLOCK EXISTS FOR, added 2026-10-19 after the Romanian
+   *  Deadlift read +12.0% of the OVR and the collapse turned out to BE the whole error: body_3d
+   *  was -1.1% and depth +27.1%, and their geometric mean is +12.1%. The collapse is right that
+   *  the pair is one sensor (Rule #2) and says nothing about the pair AGREEING, so a near-perfect
+   *  reading and a badly-wrong one average into a confident wrong answer with no trace of it.
+   *  Order-independent (high over low, so never negative) and `higher` names the source that read
+   *  high -- on all four takes of 2026-10-19 that was `depth`, which is the pattern to watch.
+   *  Per-source scales are in `inputs`; this is here so nobody has to divide them by hand.
+   *  RECORDS AND GATES NOTHING (Rule #1): the collapse is unchanged and still averages the pair. */
+  collapsedPose3d: {
+    from: string[];
+    scale: number;
+    uncertaintyFraction: number;
+    disagreement: number;
+    higher: string;
+  } | null;
   voters: { source: string; scale: number; uncertaintyFraction: number }[];
   /** The candidate the winning cluster was anchored on. The agreement test is asymmetric --
    *  `|other/anchor - 1|` is a different number read each way -- so which anchor won decides
@@ -1300,6 +1316,11 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
           from: pose3d.map((p) => p.source),
           scale: round(collapsed.scale),
           uncertaintyFraction: collapsed.uncertaintyFraction,
+          // High over low, so the figure reads the same whichever order `usable` held them in.
+          disagreement: round(
+            Math.max(...pose3d.map((p) => p.scale)) / Math.min(...pose3d.map((p) => p.scale)) - 1,
+          ),
+          higher: pose3d.reduce((a, b) => (b.scale > a.scale ? b : a)).source,
         }
       : null,
     voters: voters.map((e) => ({

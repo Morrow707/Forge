@@ -10066,6 +10066,9 @@ export const trackingDiagnosticsSchema = z.object({
           toleranceMultiple: z.number(),
           collapsedPose3d: z.object({
             from: z.array(z.string().max(80)).max(4), scale: z.number(), uncertaintyFraction: z.number(),
+            // Optional because a build already on a phone predates them; zod strips what it does
+            // not declare, silently, which is how two earlier diagnostics were lost.
+            disagreement: z.number().optional(), higher: z.string().max(80).optional(),
           }).nullable(),
           voters: z.array(z.object({
             source: z.string().max(80), scale: z.number(), uncertaintyFraction: z.number(),

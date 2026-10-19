@@ -35,7 +35,21 @@ const TAKES: Record<string, ScaleEstimate[]> = {
     { source: "height", scale: 0.004207531779166245, uncertaintyFraction: 0.1 },
     { source: "shoulder_width", scale: 0.005892483991013325, uncertaintyFraction: 0.2 },
   ],
+  /** ROMANIAN DEADLIFT set 2, 2026-10-19, exactly as the export recorded it. The take that
+   *  prompted `disagreement`: it needs 0.003597 to reach the OVR, body_3d is 1.1% under that and
+   *  depth 27.1% over, and the pair collapses to +12.1% -- which is the set's whole error. No
+   *  `height` candidate because an RDL is a hinge and `postureAllowsHeightCalibration` is false
+   *  for `bent_over` (the 2026-10-05 fix, which is correct and is NOT what went wrong here). */
+  rdl: [
+    { source: "plate", scale: 0.00205555, uncertaintyFraction: 0.05756542171979441 },
+    { source: "body_3d", scale: 0.00355661, uncertaintyFraction: 0.2 },
+    { source: "depth", scale: 0.0045721, uncertaintyFraction: 0.2 },
+    { source: "shoulder_width", scale: 0.00402663, uncertaintyFraction: 0.2 },
+  ],
 };
+
+/** What the Romanian Deadlift of 2026-10-19 needs to land on the OVR's 57.4 cm. */
+const RDL_SCALE_THE_SENSOR_REQUIRES = 0.003597;
 
 describe("the scale blend shows its work", () => {
   it("RECORDS AND NOTHING ELSE -- the scale is the same whatever the trace says (Rule #1)", () => {
@@ -100,6 +114,59 @@ describe("the scale blend shows its work", () => {
     expect(v.collapsedPose3d).not.toBeNull();
     expect(v.collapsedPose3d!.from.sort()).toEqual(["body_3d", "depth"]);
     expect(v.voters.map((x) => x.source).sort()).toEqual(["body_3d", "shoulder_width"]);
+  });
+
+  // THE COLLAPSE SAYS HOW FAR APART THE PAIR WAS, because averaging a good reading with a bad one
+  // produced a confident wrong answer and left no trace of having done so.
+  describe("the 3D pair's own disagreement", () => {
+    it("records how far apart the two readings were, high over low", () => {
+      const v = reconcileScaleEstimates(TAKES.rdl).blendTrace!.collapsedPose3d!;
+      // depth 0.0045721 / body_3d 0.00355661 - 1
+      expect(v.disagreement).toBeCloseTo(0.2855, 3);
+      expect(v.higher).toBe("depth");
+    });
+
+    it("is the same figure whichever order the candidates arrived in", () => {
+      const forward = reconcileScaleEstimates(TAKES.rdl).blendTrace!.collapsedPose3d!;
+      const reversed = reconcileScaleEstimates([...TAKES.rdl].reverse()).blendTrace!.collapsedPose3d!;
+      expect(reversed.disagreement).toBeCloseTo(forward.disagreement, 10);
+      expect(reversed.higher).toBe(forward.higher);
+      // Order-independent means never negative, on any take.
+      for (const est of Object.values(TAKES)) {
+        const c = reconcileScaleEstimates(est).blendTrace!.collapsedPose3d;
+        if (c) expect(c.disagreement).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it("names the source that read high on every take that collapsed a pair", () => {
+      for (const [name, est] of Object.entries(TAKES)) {
+        const c = reconcileScaleEstimates(est).blendTrace!.collapsedPose3d;
+        if (!c) continue;
+        const pair = est.filter((e) => e.source === "body_3d" || e.source === "depth");
+        const highest = pair.reduce((a, b) => (b.scale > a.scale ? b : a)).source;
+        expect(c.higher, `${name} named the wrong source`).toBe(highest);
+      }
+    });
+
+    it("WOULD HAVE MADE THE RDL'S ERROR READABLE ON THE TAKE, which is the whole point", () => {
+      const trace = reconcileScaleEstimates(TAKES.rdl).blendTrace!;
+      const c = trace.collapsedPose3d!;
+      const inPlane = TAKES.rdl.find((e) => e.source === "body_3d")!;
+      // The collapsed witness is 12% over what the sensor needs while one of its two halves is
+      // within 2%. A reader of the export can now see that in one field instead of dividing.
+      expect(c.scale / RDL_SCALE_THE_SENSOR_REQUIRES - 1).toBeGreaterThan(0.1);
+      expect(Math.abs(inPlane.scale / RDL_SCALE_THE_SENSOR_REQUIRES - 1)).toBeLessThan(0.02);
+      expect(c.disagreement).toBeGreaterThan(0.25);
+    });
+
+    it("GATES NOTHING -- the RDL's scale is identical with the field ignored (Rule #1)", () => {
+      const v = reconcileScaleEstimates(TAKES.rdl);
+      // The collapse still averages the pair; this change added a reading, not a rule.
+      expect(v.scale).toBeCloseTo(0.00403, 5);
+      const again = reconcileScaleEstimates(TAKES.rdl.map((e) => ({ ...e })));
+      expect(again.scale).toBe(v.scale);
+      expect(again.weights).toEqual(v.weights);
+    });
   });
 
   it("reports the tolerance it judged against, not just the verdict", () => {
