@@ -87,6 +87,66 @@ export type CameraTunables = {
    *  split is not "is it a number" but "could somebody fit it from one take" -- and this one
    *  already was. */
   maxShoulderSpanSpread: number;
+  // --- the scale blend's own numbers -------------------------------------------------------
+  //
+  // MOVED IN 2026-10-20, AND THE AUDIT THAT FOUND THEM IS WHY. Scott: "I want everything
+  // separate, everything needs its own place." A sixteen-agent pass over every numeric constant
+  // the Back Squat, the Romanian Deadlift and the Box Jump read -- each claim challenged once on
+  // its provenance and once on whether those three lifts actually reach it -- found SEVEN shared
+  // FITTED numbers whose evidence is a lift he was not filming. Six of the seven are a BENCH
+  // PRESS and one is a Pendlay Row, which is why an earlier search for "Pendlay" found almost
+  // nothing and reported two.
+  //
+  // Three of the seven already had their own place (depthRulerBias, maxPeakToMeanRatio,
+  // maxPlateSizeInYardsticks). These are the four that did not, plus the one derived from them.
+  // EVERY RECORD HOLDS THE SAME VALUE and FITTED_OVERRIDES stays empty, so this moves no number
+  // on any lift -- it is the same copy-and-paste the first twelve were, and
+  // camera-tunables-are-a-copy.test.ts asserts each against the constant it came from.
+
+  /** The floor on the shoulder ruler's stated uncertainty.
+   *
+   *  FITTED ON NINE TAKES ACROSS THREE LIFTS, 2026-10-06 (`e70cc096`): bench, Pendlay row and
+   *  push press, same athlete, same room, NONE of them one of the three now being filmed. Here
+   *  because it is the floor on the highest-weight voter: replayed on the 2026-10-19 candidates
+   *  it moves the BOX JUMP +4.3% at 0.1 and -1.8% at 0.4, and the Back Squat -1.7% / +0.7%. The
+   *  RDL is inert to it (±0.04%) only because that take's two voters agree to 0.146%. */
+  biacromialToleranceFraction: number;
+  /** The widest an agreement test may be before it stops being a test -- a CEILING that can only
+   *  ever make the test stricter.
+   *
+   *  IT IS HERE BECAUSE IT IS DERIVED FROM THE FIELD ABOVE, and separating one without the other
+   *  breaks the link. Its value is written `0.2 * SCALE_AGREEMENT_MULTIPLE` in pose-tracking.ts
+   *  -- a hardcoded literal whose comment claims it is `BIACROMIAL_TOLERANCE_FRACTION x the
+   *  multiple`. Identical today, linked only by that sentence, so the day the floor is fitted on
+   *  one lift this silently stops tracking it. The 2026-10-09 Pendlay row DIAGNOSED the pathology
+   *  it exists for (a floored ruler's doubled tolerance reached 1.174 and vouched for a plate 3.5x
+   *  away); it did not choose the number, which is the width every take used before any floor
+   *  existed. Verified inert on all four 2026-10-19 takes -- each sat at the natural tolerance. */
+  maxScaleAgreementTolerance: number;
+  /** The 3D body ruler's uncertainty once the skeleton has been corrected by a stated height.
+   *
+   *  FITTED ON SEVEN SENSOR-PAIRED BENCHES, 2026-09-30 (`260d479b`), and named in CLAUDE.md as
+   *  "the one to watch ... Next candidate to move" since 2026-10-16. The BOX JUMP is the lift it
+   *  is live on: +3.3% at 0.1, +7.0% at 0.05. The Back Squat is one-sided (-1.6% at 0.3 and
+   *  exactly 0.00% at or below 0.2, because the 3D-pose collapse takes `Math.max` of the pair's
+   *  uncertainties and depth's own 0.2 masks it) and the RDL moves under 0.05%. */
+  body3DCorrectedUncertainty: number;
+  /** How long the position trace is smoothed over before velocity is differenced from it, in ms.
+   *
+   *  FITTED ON ONE BENCH TAKE, 2026-09-23 (`59c95751`), and the file says so in its own words:
+   *  "Untuned against more than one paired set." It sets the reported PEAK and its peak index
+   *  anchors BOTH window trims, so it also moves the window the mean is measured over -- and no
+   *  sweep of it exists, so its effect on a squat or a hinge is unmeasured rather than small. */
+  velocitySmoothingMs: number;
+  /** How much larger than the set's own median a first or last concentric may be before it is
+   *  read as a rack move rather than a rep.
+   *
+   *  TWO-SIDED, AND ONLY THE UPPER BOUND IS A PENDLAY ROW: that take's pickup was 1.79x its set's
+   *  median (`7df011e0`), and the lower bound is the deepest genuine edge rep across fourteen
+   *  sensor-paired sets spanning movements (1.3x). 1.6 sits in the gap. It deletes a rep when it
+   *  fires, so it changes the rep count and every set mean with it; edge reps only, and it needs
+   *  at least three concentrics to be consulted at all. */
+  edgeOversizedAmplitudeRatio: number;
   // --- the gates: what the pipeline will believe about one frame ----------------------------
   //
   // SPLIT ON SCOTT'S SECOND INSTRUCTION, 2026-10-06: "Split those too, every single thing should
@@ -144,6 +204,11 @@ export const SHARED_CAMERA_TUNABLES: Readonly<CameraTunables> = Object.freeze({
   depthRulerUncertainty: 0.2, // DEPTH_RULER_UNCERTAINTY
   ankle3DRulerUncertainty: 0.2, // ANKLE_3D_RULER_UNCERTAINTY
   maxShoulderSpanSpread: 0.4, // MAX_SHOULDER_SPAN_SPREAD
+  biacromialToleranceFraction: 0.2, // BIACROMIAL_TOLERANCE_FRACTION
+  maxScaleAgreementTolerance: 0.4, // MAX_SCALE_AGREEMENT_TOLERANCE
+  body3DCorrectedUncertainty: 0.2, // BODY_3D_CORRECTED_UNCERTAINTY
+  velocitySmoothingMs: 165, // VELOCITY_SMOOTHING_MS
+  edgeOversizedAmplitudeRatio: 1.6, // EDGE_OVERSIZED_AMPLITUDE_RATIO
   maxPlausibleSpeedMps: 3, // MAX_PLAUSIBLE_LIFT_VELOCITY_MPS -- the bar's, overridden per tracker
   maxPlausibleAccelG: 6, // MAX_PLAUSIBLE_ACCEL_G
   maxPlausibleVelocityChangePct: 100, // MAX_PLAUSIBLE_VELOCITY_CHANGE_PCT

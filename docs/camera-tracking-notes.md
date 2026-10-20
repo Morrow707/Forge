@@ -5232,3 +5232,140 @@ to pendlay."* Correct, and the record:
   be shared; the other two are numbers and are the open question.
 - **Every figure in the tables above** is from the four barbell takes of 2026-10-19 plus their OVR
   readings, replayed offline on this commit.
+
+## THE PROVENANCE AUDIT, 2026-10-20: SEVEN LEAKS, SIX OF THEM A BENCH, AND ONE TRACKER OF FIFTEEN
+
+Scott, reading yesterday's RDL comparison: *"Why did you ship pendlay rows? We are only testing
+squat, box jumps, and rdls, you don't have data to ship to pendlay."* Then, on the finding below:
+*"I want everything separate, everything needs its own place."*
+
+**He was right, and he was right about the wrong direction.** Nothing in this repo has ever shipped
+a Pendlay-specific number -- `FITTED_OVERRIDES` is empty and no lift carries a value fitted on
+itself. What was happening is the reverse: constants fitted on lifts he is NOT filming decide the
+numbers for the three he is.
+
+### How it was counted, and why two earlier counts were both wrong
+
+Sixteen agents, one per file per lens: each read its file once and challenged every constant in it
+twice -- once on PROVENANCE (what evidence really chose this value) and once on REACHABILITY (does
+a Back Squat, an RDL, a Box Jump actually reach it at run time). 60 unique constants, 36 candidates,
+105 claims checked.
+
+- **"Two" was wrong because it searched for the wrong word.** A grep for Pendlay finds almost
+  nothing; **six of the seven real leaks are a BENCH PRESS.**
+- **"Thirty-six" was wrong because it counted rules and anthropometry as leaks.** A shared RULE is
+  correct by design (CLAUDE.md, "judgement is allowed to be shared"), and a bench grip used as an
+  arithmetic example is where a calculation was DONE, not evidence that was measured.
+
+### The seven, with what each could move on HIS lifts
+
+Sensitivities from replaying the real `reconcileScaleEstimates` on his own 2026-10-19 exported
+candidates, which reproduce the shipped `scaleFactor` on all four barbell takes.
+
+| constant | value | fitted on | his 3 | could move |
+|---|---|---|---|---|
+| `DEPTH_RULER_BIAS` | 0.9 | **4 bench takes**, 09-29 | RDL, squat | **RDL ±2.6% per 0.1.** Worst of the seven: it divides the depth value directly, and depth is half the collapsed pair that IS the RDL's whole +12% |
+| `VELOCITY_SMOOTHING_MS` | 165ms | **ONE bench take**, 09-23; file says "untuned against more than one paired set" | RDL, squat | sets the reported peak, whose index anchors BOTH window trims. **No sweep exists -- unmeasured, not small** |
+| `BIACROMIAL_TOLERANCE_FRACTION` | 0.2 | **9 takes**, bench + row + press, 10-06 | **all 3** | box jump **+4.3% at 0.1**, squat -1.7%; RDL inert (±0.04%) only because its two voters agree to 0.146% |
+| `BODY_3D_CORRECTED_UNCERTAINTY` | 0.2 | **7 bench takes**, 09-30 | all 3 | **box jump the only live one: +3.3% at 0.1.** Squat one-sided and exactly 0.00% at or below 0.2 -- the collapse's `Math.max` lets depth's own 0.2 mask it |
+| `MAX_PEAK_TO_MEAN_RATIO` | 2.0 | **60 bench reps** | RDL, squat | rewrites the reported peak to `mean x 2.0`; its own comment concedes "a squat's is higher", so it bites likelier on a squat than on the bench it came from |
+| `maxPlateSizeInYardsticks` | 2.0 | a bench filmed from the foot, 09-29 | RDL, squat | decides whether a plate becomes a scale voter. Mitigated: the move was 1.25 -> 2.0, a loosening |
+| `EDGE_OVERSIZED_AMPLITUDE_RATIO` | 1.6 | upper bound **one Pendlay row** (1.79x); lower bound 14 cross-movement sets | RDL, squat | deletes an edge rep, so it changes rep count and every set mean. **The one Pendlay number** |
+
+### What looks like a leak and is not -- do not "fix" these
+
+- **`HEIGHT_RULER_UNCERTAINTY` 0.1 was fitted jointly on HIS Back Squat and HIS RDL** (10-04). It
+  is the HEAVIEST lever on two of his three lifts (66.7% of the squat's blend). His own data set it.
+- **`minDetectionConfidence` 0.25** -- fitted on his own squat and RDL telemetry, 10-04.
+- **`PHANTOM_OVERSHOOT_RATIO` 2.0** -- the VALUE was measured on **back squat and box jump**
+  calibration sets. The bench corpus only showed the fault existed. The clearest misattribution in
+  the set, and it runs the reassuring direction.
+- **`RELATIVE_REP_AMPLITUDE_FRACTION` 0.4** -- predates every sensor pairing (`d152018d`, 09-04).
+- **`MIN_SAMPLES_TO_PEAK`, `PLATE_TO_GRIP_RATIO_*`, `IMPLAUSIBLE_GRIP_*`, `repAmplitudeGateCm`** --
+  first-principles geometry and anthropometry.
+- **`MAX_COUNT_TRIM_PER_EDGE` / `MIN_COUNT_TRIM_ODDNESS` as module constants DO NOT EXIST** --
+  function-local aliases of registry fields. The readers double-counted them.
+- **`travelOnsetMarginM` is already genuinely separated**: squat/RDL/box jump 0.01, bench/row
+  0.0075. It is the ONE field of the twelve that is not identical everywhere.
+- **`driveOnsetFraction` 0.04** -- thirteen sets across FIVE movements including two back squats.
+  Cross-movement, declared shared in the file itself, and that is the right call.
+- **`MAX_SCALE_AGREEMENT_TOLERANCE` 0.4** -- true but harmless. Its value is the width every take
+  used before any floor existed, restored as a CEILING that can only tighten; the 10-09 Pendlay row
+  diagnosed the pathology, it did not choose the number. **Verified inert on all four 10-19 takes.**
+  An earlier reply to Scott called this a Pendlay-fitted number and that was wrong.
+- **`BODY_3D_UNCORRECTED_UNCERTAINTY` 0.3** -- not read on any of his three any more: with
+  `heightIn` 75 on file every take goes down the `reference_corrected` branch. **It was live on all
+  three until 2026-10-19.**
+
+### AND THE STRUCTURAL FINDING: ONE TRACKER OF FIFTEEN READS THE REGISTRY
+
+`cameraTunablesFor` appears in **`av-bar-tracker-dialog.tsx` and nowhere else.** Fourteen dialogs
+never resolve a record, and `jump-tracking.ts` contains no reference to `tune` at all. So the
+separation ratified 2026-10-06 was built as a data structure -- 270 records, 23 fields, tests
+proving no two share -- and wired to ONE tracker. **The Box Jump under test, and all 216 skill
+drills, run entirely off shared module constants.**
+
+That is why `MAX_SHOULDER_SPAN_SPREAD` reaches his lifts by two routes: the squat and RDL read
+their own record, the box jump reads the raw constant. Same 0.4 today, and nothing in any export
+says which route a take took. CLAUDE.md's 2026-10-16 check verified the records were real and
+`FITTED_OVERRIDES` empty -- both true -- and never asked how many trackers READ them.
+
+### WHAT SHIPPED: FIVE FIELDS INTO THE REGISTRY, NO NUMBER MOVED
+
+Of the seven, three already had their own place (`depthRulerBias`, `maxPeakToMeanRatio`,
+`maxPlateSizeInYardsticks`). The four that did not are now fields, plus the one derived from them:
+
+`biacromialToleranceFraction` 0.2, `maxScaleAgreementTolerance` 0.4, `body3DCorrectedUncertainty`
+0.2, `velocitySmoothingMs` 165, `edgeOversizedAmplitudeRatio` 1.6.
+
+- **Every one is a DEFAULTED PARAMETER**, the pattern `robustPeakSpeed` and `plausibleMean` already
+  use, so every un-plumbed caller -- the replay harness, the fixtures, the fourteen dialogs -- keeps
+  exactly today's value. `EDGE_OVERSIZED_AMPLITUDE_RATIO` was lifted from a function-local to a
+  module export to make that possible.
+- **`maxScaleAgreementTolerance` HAD to move with `biacromialToleranceFraction`**, because it is
+  derived from it -- written `0.2 * SCALE_AGREEMENT_MULTIPLE`, a hardcoded literal whose comment
+  claims it tracks the floor. A sentence is not a link, so the copy test now asserts
+  `maxScaleAgreementTolerance === biacromialToleranceFraction * 2`: the day somebody fits the floor
+  on one lift, that fails rather than silently drifting.
+- **NOTHING MOVED, proved not asserted**: 401 files / 4717 tests, identical to the baseline before
+  the change, OVR fixtures and the 20-capture replay corpus included. `FITTED_OVERRIDES` is still
+  empty. The registry makes a per-lift fit SAFE TO DO; it is not evidence one happened.
+- **Two source scans went red and neither was behaviour** (`velocity-comes-from-displacement`,
+  `set-two-beside-ovr-2026-10-02`): both matched EXACT call text that an added argument broke. Both
+  now match the shape, because an assertion that fails for an added argument also passes for the
+  wrong line -- the same lesson `stripe-checkout.test.ts` learned from a 220-character window.
+
+### CORRECTION TO THE 2026-10-19 NOTE ABOVE: THE HEIGHT MOVED THE REP GATES TOO
+
+That section attributes the day's movement entirely to the scale rulers. The audit found the rest
+of it. `heightIn` 75 arriving also moved every rep gate, because they are fractions of stature:
+
+| gate | before | after |
+|---|---|---|
+| Back Squat `repAmplitudeGateCm` | 20.00 | **19.05** (looser) |
+| RDL `repAmplitudeGateCm` | 20.00 | **22.86** (14.3% tighter) |
+| Box jump flight floor | 15.00 | **16.30** |
+
+Nothing on those takes was near a gate (the RDL's reps ran 61.9-66.4 cm), so no rep count changed
+-- but the note implied the gates were untouched and they were not. **This is exactly the
+5%-then-40% mechanism**: one input arrived and moved eight things at once, and the session note
+caught five of them.
+
+### STILL OPEN, AND NOT GUESSED AT
+
+- **The box jump's scale cannot be reproduced offline.** The box enters the vote in the **`plate`
+  slot at uncertainty 0.05** (`av-jump-tracker-dialog.tsx:346`) and is renamed "box" only in the
+  diagnostics. With it voting it takes 72.7% and the set reads ~-29%, not the -12.9% recorded -- so
+  something dropped it (`rejectImplausibleScales`) and **the export does not say which**. Every box
+  jump figure in this section is from the no-box reconstruction. Rule #4: the box IS that take's
+  object witness, and its rejection is unrecorded.
+- `VELOCITY_SMOOTHING_MS` has never been swept on a squat or a hinge.
+- `MAX_PEAK_TO_MEAN_RATIO`'s cap has never been scored against the sensor on either.
+- `measuredPosture.torsoFromVerticalDeg` still reads **1.53** on the hinge. Open since 10-08.
+
+### THE ONE NEXT STEP
+
+**Film one more RDL with the height on file and read `collapsedPose3d.higher` and `.disagreement`.**
+`depth` read high on all four takes of 10-19; a fifth and sixth make `DEPTH_RULER_BIAS` -- the worst
+of the seven, and now separable per lift -- fittable on evidence instead of inherited from four
+benches.

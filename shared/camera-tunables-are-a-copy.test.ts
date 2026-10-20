@@ -30,14 +30,22 @@ import {
   MIN_ROM_FRACTION_OF_HEIGHT,
   TRAVEL_ONSET_MARGIN_BY_ROM_KIND_M,
   TRAVEL_ONSET_MARGIN_M,
+  VELOCITY_SMOOTHING_MS,
+  EDGE_OVERSIZED_AMPLITUDE_RATIO,
   MAX_PLAUSIBLE_ACCEL_G,
   OCCLUSION_MIN_GAP_MS,
   OCCLUSION_MAX_GAP_MS,
 } from "../client/src/lib/bar-tracking";
 import { ANKLE_3D_RULER_UNCERTAINTY } from "../client/src/lib/ankle-3d-ruler";
-import { DEPTH_RULER_BIAS, DEPTH_RULER_UNCERTAINTY } from "../client/src/lib/body-3d-ruler";
+import {
+  DEPTH_RULER_BIAS,
+  DEPTH_RULER_UNCERTAINTY,
+  BODY_3D_CORRECTED_UNCERTAINTY,
+} from "../client/src/lib/body-3d-ruler";
 import { HEIGHT_RULER_UNCERTAINTY,
   MAX_SHOULDER_SPAN_SPREAD,
+  BIACROMIAL_TOLERANCE_FRACTION,
+  MAX_SCALE_AGREEMENT_TOLERANCE,
 } from "../client/src/lib/pose-tracking";
 import {
   MAX_LOCK_DISTANCE_IN_YARDSTICKS,
@@ -112,6 +120,21 @@ describe("the per-lift numbers are a copy of today's numbers", () => {
     expect(SHARED_CAMERA_TUNABLES.depthRulerUncertainty).toBe(DEPTH_RULER_UNCERTAINTY);
     expect(SHARED_CAMERA_TUNABLES.ankle3DRulerUncertainty).toBe(ANKLE_3D_RULER_UNCERTAINTY);
     expect(SHARED_CAMERA_TUNABLES.maxShoulderSpanSpread).toBe(MAX_SHOULDER_SPAN_SPREAD);
+    // THE FIVE MOVED IN 2026-10-20 (the provenance audit; see the registry's own comment). Each
+    // is a FITTED number whose evidence was a lift nobody was filming -- six of the seven the
+    // audit confirmed are a bench press -- and each must keep the value it was copied from.
+    expect(SHARED_CAMERA_TUNABLES.biacromialToleranceFraction).toBe(BIACROMIAL_TOLERANCE_FRACTION);
+    expect(SHARED_CAMERA_TUNABLES.maxScaleAgreementTolerance).toBe(MAX_SCALE_AGREEMENT_TOLERANCE);
+    expect(SHARED_CAMERA_TUNABLES.body3DCorrectedUncertainty).toBe(BODY_3D_CORRECTED_UNCERTAINTY);
+    expect(SHARED_CAMERA_TUNABLES.velocitySmoothingMs).toBe(VELOCITY_SMOOTHING_MS);
+    expect(SHARED_CAMERA_TUNABLES.edgeOversizedAmplitudeRatio).toBe(EDGE_OVERSIZED_AMPLITUDE_RATIO);
+    // AND THE DERIVED ONE STAYS DERIVED. maxScaleAgreementTolerance is the floor times the
+    // agreement multiple, and pose-tracking.ts writes it as a hardcoded `0.2 * MULTIPLE` whose
+    // comment claims it tracks the floor. That sentence is not a link, so this is: the day
+    // somebody fits the floor on one lift, this fails rather than silently drifting apart.
+    expect(SHARED_CAMERA_TUNABLES.maxScaleAgreementTolerance).toBe(
+      SHARED_CAMERA_TUNABLES.biacromialToleranceFraction * 2,
+    );
     expect(SHARED_CAMERA_TUNABLES.maxPlausibleAccelG).toBe(MAX_PLAUSIBLE_ACCEL_G);
     expect(SHARED_CAMERA_TUNABLES.occlusionMinGapMs).toBe(OCCLUSION_MIN_GAP_MS);
     expect(SHARED_CAMERA_TUNABLES.occlusionMaxGapMs).toBe(OCCLUSION_MAX_GAP_MS);

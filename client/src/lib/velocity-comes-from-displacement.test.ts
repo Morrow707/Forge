@@ -29,7 +29,14 @@ describe("reported velocity is differenced over a smoothed position", () => {
   // the boundaries, moved the durations, and let a phantom through the duration-ratio filter.
   // Anything that DECIDES keeps the series it was tuned against; only reported numbers change.
   it("leaves the structural decisions on the unsmoothed series", () => {
-    expect(bar).toContain("const speedsReportedMps = computeSpeeds(points, ySmoothed, true)");
+    // MATCHED AS A SHAPE, NOT AS A LINE. This was a toContain on the exact call text and it
+    // broke on 2026-10-20 when the smoothing window became this lift's own argument -- an
+    // assertion that fails for an ADDED argument also passes for the wrong line, which is the
+    // same lesson stripe-checkout.test.ts learned from a 220-character window. What matters is
+    // that the REPORTED series is the smoothed one; how many arguments say so is not the point.
+    expect(bar).toMatch(/const speedsReportedMps = computeSpeeds\(\s*points,\s*ySmoothed,\s*true\b/);
+    // ...and that the structural series is NOT. One call, smoothed omitted or false.
+    expect(bar).toMatch(/const speedsMps = computeSpeeds\(points, ySmoothed\)/);
     // The phase trimmer must still read the raw one.
     expect(bar).toMatch(/trimPhaseToTravel\(ySmoothed,/);
     // ...and the reported numbers must read the smoothed one.

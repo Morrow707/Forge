@@ -1308,6 +1308,7 @@ export function AvBarTrackerDialog({
       // from its own span -- see the foreshortening floor in shoulderWidthScaleFromFrames. It
       // only ever loosens the ruler, and a take with no grip behaves exactly as before.
       gripWidthPx,
+      scaleTunables.biacromialToleranceFraction,
     );
     // A measured grip needs no detector, no full body in frame and no population average, so it
     // is computed on every take where the athlete has given one -- the framing that defeats the
@@ -1352,7 +1353,12 @@ export function AvBarTrackerDialog({
     const shoulderScaleValue = shoulderScale.scale;
     // THE 3D SKELETON, IN METRES, ON THIS TAKE -- see body-3d-ruler.ts. A peer under overwatch
     // like every other candidate below; it decides nothing on its own.
-    const body3DScale = body3DScaleFromFrames(rawFrames, heightIn, limbSpansUnits);
+    const body3DScale = body3DScaleFromFrames(
+      rawFrames,
+      heightIn,
+      limbSpansUnits,
+      scaleTunables.body3DCorrectedUncertainty,
+    );
     // HOW MUCH OF THE MOVEMENT POINTED DOWN THE LENS -- see axis-foreshortening.ts. Measured off
     // the 3D pose that is already running, recorded, and applied to NOTHING.
     const axisForeshortening = measureAxisForeshortening(rawFrames);
@@ -1431,7 +1437,10 @@ export function AvBarTrackerDialog({
       // athlete (0 of 914 frames on the 09-29 bench), and the grip is measured on every frame.
       gripWidthPx,
     );
-    const scaleVerdict = reconcileScaleEstimates(plausibleScales);
+    const scaleVerdict = reconcileScaleEstimates(
+      plausibleScales,
+      scaleTunables.maxScaleAgreementTolerance,
+    );
 
     const scaleFactor = scaleVerdict.scale;
 
@@ -2259,6 +2268,9 @@ export function AvBarTrackerDialog({
       // measurement and a tautology.
       const plateFreeScale = reconcileScaleEstimates(
         plausibleScales.filter((e) => e.source !== "plate"),
+        // The same ceiling the real blend used, or this yardstick would be judged by a different
+        // agreement test than the thing it is scoring.
+        scaleTunables.maxScaleAgreementTolerance,
       ).scale;
       if (plateFreeScale != null && plateFreeScale > 0 && plateScaleRaw?.measured != null) {
         const expectedPx = PLATE_NOMINAL_SIZE_M / plateFreeScale;

@@ -1165,6 +1165,57 @@ real value; read it that way and take the current number from the run list.
   moved on a filming morning. The three 2026-10-08 commits that had no note (`12eb33ac`,
   `894849c8`, `45bd0815`) are written up in the same section.
 
+  **AND THE 2026-10-20 PROVENANCE AUDIT ANSWERED "HOW MANY LEAK" WITH A NUMBER: SEVEN, SIX OF THEM
+  A BENCH.** Scott, on the 10-19 RDL comparison: "Why did you ship pendlay rows? We are only
+  testing squat, box jumps, and rdls, you don't have data to ship to pendlay." Then: "I want
+  everything separate, everything needs its own place."
+  **Nothing has ever shipped a Pendlay-specific number** -- `FITTED_OVERRIDES` is empty. The leak
+  runs the OTHER way: values fitted on lifts he is not filming decide the three he is. Sixteen
+  agents, one per file per lens, each claim challenged on PROVENANCE and on REACHABILITY; 60
+  constants, 105 claims. **Two earlier counts were both wrong and the reasons generalise**: "two"
+  searched for the word *Pendlay* and the leak is mostly *bench*; "thirty-six" counted shared RULES
+  and first-principles anthropometry as leaks, which this file's own rule says they are not.
+  **The seven, worst first, with sensitivities replayed on his own 10-19 candidates:**
+  `DEPTH_RULER_BIAS` 0.9 (4 benches; **RDL ±2.6% per 0.1**, and it divides the depth value that is
+  half the collapsed pair the RDL's whole +12% comes from), `VELOCITY_SMOOTHING_MS` 165 (**ONE**
+  bench take, never swept), `BIACROMIAL_TOLERANCE_FRACTION` 0.2 (9 takes, bench+row+press; the only
+  one reaching **all three**, box jump +4.3% at 0.1), `BODY_3D_CORRECTED_UNCERTAINTY` 0.2 (7
+  benches; box jump the live one at +3.3%), `MAX_PEAK_TO_MEAN_RATIO` 2.0 (60 bench reps, and its own
+  comment concedes a squat's is higher), `maxPlateSizeInYardsticks` 2.0, and
+  `EDGE_OVERSIZED_AMPLITUDE_RATIO` 1.6 -- the one Pendlay number, and only its upper bound.
+  **FIVE WENT INTO THE REGISTRY AND NO NUMBER MOVED.** Three of the seven already had their own
+  place; the four that did not are fields now, plus `maxScaleAgreementTolerance`, which HAD to
+  follow `biacromialToleranceFraction` because it is derived from it -- written as a hardcoded
+  `0.2 * SCALE_AGREEMENT_MULTIPLE` whose comment claims it tracks the floor. A sentence is not a
+  link, so the copy test now asserts the product. All five are DEFAULTED PARAMETERS (the
+  `robustPeakSpeed` pattern), so every un-plumbed caller keeps today's value; 401 files / 4717
+  tests identical to the baseline, OVR fixtures and the 20-capture corpus included.
+  **DO NOT "FIX" THESE -- each looked like a leak and is not:** `HEIGHT_RULER_UNCERTAINTY` 0.1 was
+  fitted jointly on HIS squat and HIS RDL and is the heaviest lever on two of the three;
+  `PHANTOM_OVERSHOOT_RATIO`'s value was measured on **back squat and box jump** (the bench only
+  showed the fault existed); `RELATIVE_REP_AMPLITUDE_FRACTION` predates every sensor pairing;
+  `MAX_COUNT_TRIM_PER_EDGE` and `MIN_COUNT_TRIM_ODDNESS` as module constants **do not exist** (they
+  are function-local aliases, double-counted by the readers); `travelOnsetMarginM` is already
+  genuinely split (squat/RDL/jump 0.01, bench/row 0.0075 -- the one field of the twelve that is not
+  identical everywhere); `MAX_SCALE_AGREEMENT_TOLERANCE` is a ceiling that can only tighten and was
+  **inert on all four 10-19 takes** (an earlier reply called it Pendlay-fitted; that was wrong).
+  **AND THE STRUCTURAL FINDING, WHICH IS THE BIGGER ONE: `cameraTunablesFor` IS CALLED BY ONE
+  TRACKER OF FIFTEEN.** `av-bar-tracker-dialog.tsx` and nowhere else; `jump-tracking.ts` has no
+  reference to `tune` at all. The separation ratified 10-06 was built as a data structure and wired
+  to one tracker, so **the Box Jump under test and all 216 skill drills run entirely off shared
+  module constants.** That is why `MAX_SHOULDER_SPAN_SPREAD` reaches his lifts by two routes -- the
+  squat and RDL from their own record, the box jump from the raw constant, same 0.4, and no export
+  says which. The 10-16 check verified the records were real and never asked who READ them.
+  **NEXT, named so it is not mistaken for done:** wire the other fourteen dialogs, Box Jump first
+  (it moves no number -- every record is identical today), with a ratchet in the
+  `NOT_PUBLIC_ON_PURPOSE` shape so the unplumbed list must shrink.
+  **Also corrected in the notes:** the 10-19 session note attributed that day's movement to the
+  scale rulers alone, and `heightIn` arriving also moved every rep gate (squat 20.00 -> 19.05, RDL
+  20.00 -> 22.86, box jump floor 15.00 -> 16.30). No count changed, but eight things moved on one
+  input and the note caught five -- the 5%-then-40% mechanism exactly.
+  See docs/camera-tracking-notes.md, "The provenance audit, 2026-10-20". Calibration work: uploaded
+  on commit.
+
 ## WHAT "ITS OWN NUMBERS" MEANS, AND WHAT IT DOES NOT MEAN
 
 Scott, 2026-10-06, settling it in one sentence: **"the overwatch is fine, it can learn to

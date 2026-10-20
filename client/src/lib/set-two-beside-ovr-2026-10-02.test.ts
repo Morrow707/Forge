@@ -30,8 +30,16 @@ describe("the Pendlay row's pickup is not a rep", () => {
   });
   it("is an edge rule with a stated ratio", () => {
     const src = read("client/src/lib/bar-tracking.ts");
-    expect(src).toMatch(/const EDGE_OVERSIZED_AMPLITUDE_RATIO = 1\.6;/);
-    expect(src).toMatch(/amplitude > medianConcentricAmplitude \* EDGE_OVERSIZED_AMPLITUDE_RATIO/);
+    // The DEFAULT is still the 1.6 this take chose -- it moved to module scope on 2026-10-20 so
+    // it could take its place in the per-lift registry, and the value did not move with it.
+    expect(src).toMatch(/export const EDGE_OVERSIZED_AMPLITUDE_RATIO = 1\.6;/);
+    // The edge comparison still happens...
+    expect(src).toMatch(/amplitude > medianConcentricAmplitude \* edgeOversizedAmplitudeRatio/);
+    // ...and now reads THIS LIFT's number rather than a constant in this file, which is the
+    // whole point: the ratio was set by this row's pickup and must not decide another lift's
+    // rep count. `camera-tunables-are-a-copy.test.ts` holds the registry value against the
+    // default above, so the two cannot drift.
+    expect(src).toMatch(/edgeOversizedAmplitudeRatio = tune\.edgeOversizedAmplitudeRatio/);
   });
 });
 

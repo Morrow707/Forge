@@ -775,8 +775,15 @@ const MIN_VELOCITY_BASELINE_MS = 33;
 // working. Untuned against more than one paired set -- the next one moves it.
 export const VELOCITY_SMOOTHING_MS = 165;
 
-function smoothForSpeed(points: TrackedPoint[], positions: number[]): number[] {
-  const half = VELOCITY_SMOOTHING_MS / 2;
+function smoothForSpeed(
+  points: TrackedPoint[],
+  positions: number[],
+  // THIS LIFT'S OWN WINDOW (2026-10-20), defaulted so every existing caller is unchanged. The
+  // 165 default was fitted on ONE bench take (2026-09-23) and the comment above says so; the
+  // registry lets a squat or a hinge carry its own once one has been filmed against the sensor.
+  windowMs: number = VELOCITY_SMOOTHING_MS,
+): number[] {
+  const half = windowMs / 2;
   const out = new Array(positions.length);
   for (let i = 0; i < positions.length; i++) {
     let sum = 0;
@@ -811,8 +818,12 @@ function computeSpeeds(
   // real) keeps the series it was tuned against, and only the velocities Forge reports are
   // smoothed. A change that improves a number must not silently move a rep count.
   smoothed = false,
+  // The smoothing window, when `smoothed` is true. Defaulted, and note what this can and cannot
+  // reach: smoothForSpeed runs ONLY on the reported series, never the one trimPhaseToMovement
+  // reads, so this moves the peak and the mean and can never move a rep count.
+  windowMs: number = VELOCITY_SMOOTHING_MS,
 ): number[] {
-  const positions = smoothed ? smoothForSpeed(points, rawPositions) : rawPositions;
+  const positions = smoothed ? smoothForSpeed(points, rawPositions, windowMs) : rawPositions;
   const speeds: number[] = new Array(points.length).fill(0);
   for (let i = 1; i < points.length - 1; i++) {
     let lo = i - 1;
@@ -1292,6 +1303,14 @@ export function trimPhaseToTravel(
 export const MERGED_PHASE_MIN_DIP = 0.5;
 export const MERGED_PHASE_MIN_SPAN_RATIO = 1.5;
 
+/** How much larger than the set's own median a first or last concentric may be before it reads
+ *  as a rack move rather than a rep. Lifted out of `summarizeTrackedSet` 2026-10-20 so it could
+ *  take its place in the per-lift registry (`edgeOversizedAmplitudeRatio`) -- it is two-sided and
+ *  only its UPPER bound is a Pendlay Row (that take's pickup, 1.79x its median); the lower bound
+ *  is the deepest genuine edge rep across fourteen sensor-paired sets spanning movements, 1.3x.
+ *  The default is what every caller got before the registry existed. */
+export const EDGE_OVERSIZED_AMPLITUDE_RATIO = 1.6;
+
 export function splitMergedPhases(
   phases: { startIdx: number; endIdx: number }[],
   positions: number[],
@@ -1603,7 +1622,7 @@ export function summarizeTrackedSet(
   const speedsMps = computeSpeeds(points, ySmoothed);
   // The same trace differenced over a smoothed position -- see computeSpeeds. Read ONLY where a
   // velocity is reported, never where one is used to decide something.
-  const speedsReportedMps = computeSpeeds(points, ySmoothed, true);
+  const speedsReportedMps = computeSpeeds(points, ySmoothed, true, tune.velocitySmoothingMs);
   // Same array robustPeakSpeed/plausibleMean already read for the physical-
   // ceiling filter, indexed identically to speedsMps/points -- lets both
   // also exclude a frame the implement tracker itself barely trusted, not
@@ -1965,7 +1984,9 @@ export function summarizeTrackedSet(
   // The pickup on the 2026-10-02 row was 1.79x its set's median; the deepest genuine rep at an
   // edge across the fourteen sensor-paired sets to date reached 1.3x. 1.6 sits nearer the real
   // reps, so a deep first rep after a pause survives -- under-counting is the worse failure.
-  const EDGE_OVERSIZED_AMPLITUDE_RATIO = 1.6;
+  // THIS LIFT'S OWN VALUE (2026-10-20). Was a function-local 1.6; the registry now hands it over
+  // so a rack-move threshold fitted on one movement's pickup cannot decide another's rep count.
+  const edgeOversizedAmplitudeRatio = tune.edgeOversizedAmplitudeRatio;
   // AND THE OTHER HALF OF WHAT A RACK ARTIFACT LOOKS LIKE: IT IS SLOW.
   //
   // The amplitude test above catches a rack move that is SHORT. It does not catch one that
@@ -2053,7 +2074,7 @@ export function summarizeTrackedSet(
     // middle of a set is a deeper rep, and it stays.
     if (
       medianConcentricAmplitude > 0 &&
-      amplitude > medianConcentricAmplitude * EDGE_OVERSIZED_AMPLITUDE_RATIO
+      amplitude > medianConcentricAmplitude * edgeOversizedAmplitudeRatio
     ) {
       return true;
     }

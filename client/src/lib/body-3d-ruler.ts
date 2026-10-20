@@ -320,6 +320,13 @@ export function body3DScaleFromFrames(
   frames: NativePoseFrame[],
   heightIn: number | null | undefined,
   spansUnits: Partial<Record<LimbKey, number>>,
+  /** THIS LIFT'S UNCERTAINTY FOR A HEIGHT-CORRECTED 3D READING, defaulted so every existing
+   *  caller is unchanged. Separated 2026-10-20: the 0.2 default was fitted on seven sensor-paired
+   *  BENCHES (2026-09-30) and CLAUDE.md has named it "the one to watch ... Next candidate to
+   *  move" since 2026-10-16. The box jump is the lift it is live on -- replayed on the 2026-10-19
+   *  candidates it is worth +3.3% at 0.1 -- while the squat is one-sided and the hinge inert,
+   *  because the 3D-pose collapse takes `Math.max` of the pair and depth's own 0.2 masks it. */
+  correctedUncertainty: number = BODY_3D_CORRECTED_UNCERTAINTY,
 ): Body3DScaleReading {
   const empty: Body3DScaleReading = {
     scale: null,
@@ -357,7 +364,7 @@ export function body3DScaleFromFrames(
     if (ratio >= 1 / MAX_HEIGHT_CORRECTION_RATIO && ratio <= MAX_HEIGHT_CORRECTION_RATIO) {
       correction = ratio;
       heightSource = "reference_corrected";
-      uncertaintyFraction = BODY_3D_CORRECTED_UNCERTAINTY;
+      uncertaintyFraction = correctedUncertainty;
     } else {
       rejectedBecause = "implausible_correction";
     }

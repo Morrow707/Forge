@@ -752,7 +752,7 @@ const BIACROMIAL_HEIGHT_FRACTION = 0.23;
 // This CORRECTS the 10-06 morning note, which read shoulder_width's low BIAS (+5.5% median, the
 // least biased of the four) as a reason to leave its uncertainty alone. Bias and variance are
 // different numbers and the blend needs the second one.
-const BIACROMIAL_TOLERANCE_FRACTION = 0.2;
+export const BIACROMIAL_TOLERANCE_FRACTION = 0.2;
 
 /* THE HEIGHT RULER IS NOT THE MOST RELIABLE RULER IN THE SYSTEM, AND 0.05 CLAIMED IT WAS.
  *
@@ -946,14 +946,18 @@ const SCALE_AGREEMENT_MULTIPLE = 2;
  *
  *  This is a CEILING on a tolerance, not a floor on a ruler: it can only ever make the agreement
  *  test stricter, never admit a pair the old code refused. */
-const MAX_SCALE_AGREEMENT_TOLERANCE = 0.2 * SCALE_AGREEMENT_MULTIPLE;
+export const MAX_SCALE_AGREEMENT_TOLERANCE = 0.2 * SCALE_AGREEMENT_MULTIPLE;
 
 /** The agreement window between two readings: the looser one's stated uncertainty, doubled, and
  *  never wider than a ruler with an ordinary uncertainty would ask for. */
-function agreementTolerance(a: ScaleEstimate, b: ScaleEstimate): number {
+function agreementTolerance(
+  a: ScaleEstimate,
+  b: ScaleEstimate,
+  ceiling: number = MAX_SCALE_AGREEMENT_TOLERANCE,
+): number {
   return Math.min(
     Math.max(a.uncertaintyFraction, b.uncertaintyFraction) * SCALE_AGREEMENT_MULTIPLE,
-    MAX_SCALE_AGREEMENT_TOLERANCE,
+    ceiling,
   );
 }
 
@@ -1110,7 +1114,15 @@ export function plateReadIsPlausibleAgainstGrip(
   return ratio >= PLATE_TO_GRIP_RATIO_LOW && ratio <= PLATE_TO_GRIP_RATIO_HIGH;
 }
 
-export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdict {
+export function reconcileScaleEstimates(
+  estimates: ScaleEstimate[],
+  /** THIS LIFT'S CEILING ON THE AGREEMENT WINDOW, defaulted so every existing caller -- the
+   *  replay harness, the fixtures, the trackers that have not been plumbed yet -- is unchanged.
+   *  Separated 2026-10-20 because it is DERIVED from BIACROMIAL_TOLERANCE_FRACTION, so leaving
+   *  it shared while that became per-lift would have broken the link between a ruler's floor and
+   *  the ceiling meant to mirror it. It can only ever make the agreement test stricter. */
+  maxAgreementTolerance: number = MAX_SCALE_AGREEMENT_TOLERANCE,
+): ScaleVerdict {
   const usable = estimates.filter((e) => Number.isFinite(e.scale) && e.scale > 0);
   if (usable.length === 0) {
     return { scale: null, agreedSources: [], outliers: [], corroborated: false, weights: [] };
@@ -1181,7 +1193,7 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
   const pairwise: ScaleBlendTrace["pairwise"] = [];
   for (const anchor of ranked) {
     const cluster = ranked.filter((other) => {
-      const tolerance = agreementTolerance(anchor, other);
+      const tolerance = agreementTolerance(anchor, other, maxAgreementTolerance);
       const ratio = other.scale / anchor.scale;
       const agrees = Math.abs(ratio - 1) <= tolerance;
       if (anchor !== other) {
@@ -1258,7 +1270,7 @@ export function reconcileScaleEstimates(estimates: ScaleEstimate[]): ScaleVerdic
     let bestWithoutPlate: ScaleEstimate[] = [rerankedWithoutPlate[0]];
     for (const anchor of rerankedWithoutPlate) {
       const cluster = rerankedWithoutPlate.filter((other) => {
-        const tolerance = agreementTolerance(anchor, other);
+        const tolerance = agreementTolerance(anchor, other, maxAgreementTolerance);
         return Math.abs(other.scale / anchor.scale - 1) <= tolerance;
       });
       if (cluster.length > bestWithoutPlate.length) bestWithoutPlate = cluster;
@@ -1524,10 +1536,15 @@ export function shoulderWidthScaleFromFrames(
   /* THE GRIP SPAN FROM THE SAME FRAMES, for the foreshortening floor below. Optional, and a
    * caller that passes nothing gets exactly the old behaviour. */
   gripWidthPx?: number | null,
+  /* THIS LIFT'S FLOOR ON ITS OWN UNCERTAINTY, defaulted exactly like maxSpanSpread above.
+   * Separated 2026-10-20: the 0.2 default was fitted on nine takes of bench, Pendlay row and
+   * push press (2026-10-06) and on none of the three lifts being filmed against the sensor, and
+   * replayed on the 2026-10-19 candidates it is worth +4.3% to the box jump at 0.1. */
+  toleranceFraction: number = BIACROMIAL_TOLERANCE_FRACTION,
 ): ShoulderScaleReading {
   const empty: ShoulderScaleReading = {
     scale: null,
-    uncertaintyFraction: BIACROMIAL_TOLERANCE_FRACTION,
+    uncertaintyFraction: toleranceFraction,
     framesUsed: 0,
     spanSpreadFraction: null,
     framesRejectedForAngle: 0,
@@ -1717,7 +1734,7 @@ export function shoulderWidthScaleFromFrames(
   return {
     scale,
     uncertaintyFraction: Math.max(
-      BIACROMIAL_TOLERANCE_FRACTION,
+      toleranceFraction,
       spanSpreadFraction,
       foreshorteningFloor,
     ),
