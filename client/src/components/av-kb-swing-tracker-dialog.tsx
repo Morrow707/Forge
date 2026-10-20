@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
+import { cameraTunablesFor, TRACKER_FOR_TRACKING_LEVEL } from "@shared/camera-tunables-by-lift";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
 import {
   visionJointsToWorldLandmarks,
@@ -103,6 +104,7 @@ const KB_SENSOR_STRIDES = { body3DStride: 120, handPoseStride: 12 } as const;
 export function AvKbSwingTrackerDialog({
   open,
   onOpenChange,
+  exerciseName,
   heightIn,
   recordVideo,
   movementProfile,
@@ -114,6 +116,12 @@ export function AvKbSwingTrackerDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** WHICH FILMABLE THING THIS IS, so the take can resolve its own numbers
+   *  (shared/camera-tunables-by-lift.ts). Optional, and the fallback is honest rather than
+   *  convenient: an unnamed take resolves this tracker's shared record, which is what this
+   *  dialog read for its whole life before 2026-10-20, so a caller that forgets the prop loses
+   *  the separation and nothing else. */
+  exerciseName?: string | null;
   heightIn?: number | null;
   recordVideo?: boolean;
   /** The active MovementProfile for this capture mode, when an admin has applied one --
@@ -342,11 +350,31 @@ export function AvKbSwingTrackerDialog({
     // way the bar tracker does it; the empty path below is reached only when no body was seen
     // at all.
     const heightScale = calibrateFromFrames(calibrationInput, heightIn);
-    const bodyFallbacks = bodyScaleFallbacks(rawFrames, calibrationInput, heightIn, "standing");
-    const scaleVerdict = reconcileScaleEstimates([
-      ...(heightScale != null ? [{ source: "height" as const, scale: heightScale, uncertaintyFraction: 0.05 }] : []),
-      ...bodyFallbacks.candidates,
-    ]);
+    // THIS MOVEMENT'S OWN NUMBERS. Wired 2026-10-20; before that this dialog read every ruler
+    // uncertainty straight off the shared module constants. Scott: "I want everything separate,
+    // everything needs its own place." The tracker goes through TRACKER_FOR_TRACKING_LEVEL rather
+    // than a literal because `cameraTunablesFor` DEFAULTS to "bar", and a jump or a throw handed
+    // the bar's 3 m/s frame ceiling is Scott's own example of what must never happen.
+    //
+    // It moves no number: every field resolves to the constant this file read before, and the two
+    // that already differed per tracker are copied into GATES_BY_TRACKER at their current value
+    // rather than unified (see `heightRulerUncertainty` there).
+    const liftTunables = cameraTunablesFor(exerciseName, null, TRACKER_FOR_TRACKING_LEVEL.kb_swing ?? "kb_swing");
+    const t = liftTunables.values;
+    const bodyFallbacks = bodyScaleFallbacks(rawFrames, calibrationInput, heightIn, "standing", {
+      maxShoulderSpanSpread: t.maxShoulderSpanSpread,
+      biacromialToleranceFraction: t.biacromialToleranceFraction,
+      body3DCorrectedUncertainty: t.body3DCorrectedUncertainty,
+    });
+    const scaleVerdict = reconcileScaleEstimates(
+      [
+        ...(heightScale != null
+          ? [{ source: "height" as const, scale: heightScale, uncertaintyFraction: t.heightRulerUncertainty }]
+          : []),
+        ...bodyFallbacks.candidates,
+      ],
+      t.maxScaleAgreementTolerance,
+    );
     const scaleFactor = scaleVerdict.scale ?? heightScale ?? bodyFallbacks.candidates[0]?.scale ?? null;
     const scaleDiagnostics = {
       scaleSource: (scaleVerdict.agreedSources.length > 1 ? "both" : (scaleVerdict.agreedSources[0] ?? null)) as

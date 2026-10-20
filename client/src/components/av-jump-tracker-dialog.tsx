@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { declareObjectSystem } from "@shared/capture-object-system";
+import { cameraTunablesFor, TRACKER_FOR_TRACKING_LEVEL } from "@shared/camera-tunables-by-lift";
 import { ankleRiseFrom3D, ankle3DScaleErrorRatio } from "@/lib/ankle-3d-ruler";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,6 @@ import {
   impliedBodyLengthUnits,
   rejectImplausibleScales,
   reconcileScaleEstimates,
-  HEIGHT_RULER_UNCERTAINTY,
   calibrationMethodBreakdown,
   scaleWorldLandmarks,
   POSE_LANDMARKS,
@@ -85,6 +85,7 @@ const EMPTY_JUMP_METRICS: JumpSetMetrics = {
 export function AvJumpTrackerDialog({
   open,
   onOpenChange,
+  exerciseName,
   heightIn,
   boxHeightIn,
   movementType,
@@ -103,6 +104,12 @@ export function AvJumpTrackerDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** WHICH OF THE 54 FILMABLE LIFTS THIS IS, so the take can resolve its own numbers
+   *  (shared/camera-tunables-by-lift.ts). Optional, and the fallback is honest rather than
+   *  convenient: an unnamed take resolves the jump tracker's shared record, which is what this
+   *  dialog read for its whole life before 2026-10-20, so a caller that forgets the prop loses
+   *  the separation and nothing else. */
+  exerciseName?: string | null;
   heightIn?: number | null;
   movementType?: string | null;
   equipment?: string | null;
@@ -296,7 +303,31 @@ export function AvJumpTrackerDialog({
     const bodyScale = calibrateFromFrames(rawFrames, heightIn);
     // THE RULERS THAT DO NOT NEED THE WHOLE BODY IN FRAME -- see body-scale-fallback.ts. A jump
     // used to have one ruler (height) and refused the take when it failed (Rule #1).
-    const bodyFallbacks = bodyScaleFallbacks(nativeRawFrames, rawFrames, heightIn);
+    // THIS JUMP'S OWN NUMBERS. Wired 2026-10-20; before that this dialog read every ruler
+    // uncertainty and every frame gate straight off the shared module constants, so the Box Jump
+    // under test was scaled by numbers fitted on a BENCH PRESS and nothing in the export said so.
+    // Scott, 2026-10-20: "I want everything separate, everything needs its own place."
+    //
+    // The tracking level is "jump" here by construction -- workout.tsx only renders this dialog
+    // on it -- but it goes through TRACKER_FOR_TRACKING_LEVEL rather than a literal, because
+    // `cameraTunablesFor`'s tracker parameter DEFAULTS to "bar" and a literal is one rename away
+    // from silently handing a jump the bar's gates.
+    //
+    // IT MOVES NO NUMBER TODAY: FITTED_OVERRIDES is empty and the jump tracker overrides no gate,
+    // so every field resolves to exactly the constant this file read before
+    // (`camera-tunables-are-a-copy.test.ts` asserts each against its source). What changes is
+    // that a number fitted on a jump now has somewhere to go that cannot reach the bench.
+    const jumpTunables = cameraTunablesFor(
+      exerciseName,
+      null,
+      TRACKER_FOR_TRACKING_LEVEL.jump ?? "jump",
+    );
+    const t = jumpTunables.values;
+    const bodyFallbacks = bodyScaleFallbacks(nativeRawFrames, rawFrames, heightIn, undefined, {
+      maxShoulderSpanSpread: t.maxShoulderSpanSpread,
+      biacromialToleranceFraction: t.biacromialToleranceFraction,
+      body3DCorrectedUncertainty: t.body3DCorrectedUncertainty,
+    });
     const calibrationFrames = calibrationMethodBreakdown(rawFrames);
 
     // THE BOX IS THE ONE THING IN A JUMP TAKE WHOSE SIZE WE ACTUALLY KNOW.
@@ -344,10 +375,14 @@ export function AvJumpTrackerDialog({
     const jumpBodySpan = impliedBodyLengthUnits(rawFrames);
     const jumpScaleCandidates = [
       ...(boxScale != null
-        ? [{ source: "plate" as const, scale: boxScale, uncertaintyFraction: 0.05 }]
+        // The 0.05 was a bare literal here until 2026-10-20 -- no name, no comment, and the
+        // tightest uncertainty any ruler in this pipeline states, so it decides a box jump's
+        // scale almost by itself. It is `boxRulerUncertainty` in this jump's own record now; see
+        // that field's comment for what is and is not known about where 0.05 came from.
+        ? [{ source: "plate" as const, scale: boxScale, uncertaintyFraction: t.boxRulerUncertainty }]
         : []),
       ...(bodyScale != null
-        ? [{ source: "height" as const, scale: bodyScale, uncertaintyFraction: HEIGHT_RULER_UNCERTAINTY }]
+        ? [{ source: "height" as const, scale: bodyScale, uncertaintyFraction: t.heightRulerUncertainty }]
         : []),
       ...bodyFallbacks.candidates,
     ];
@@ -356,7 +391,7 @@ export function AvJumpTrackerDialog({
       jumpBodySpan,
       heightIn,
     );
-    const jumpVerdict = reconcileScaleEstimates(jumpScalesKept);
+    const jumpVerdict = reconcileScaleEstimates(jumpScalesKept, t.maxScaleAgreementTolerance);
     const scaleFactor = jumpVerdict.scale ?? bodyScale ?? bodyFallbacks.candidates[0]?.scale ?? null;
 
     // What each source said, and what was thrown out. Same two lines the barbell report carries,
@@ -400,6 +435,38 @@ export function AvJumpTrackerDialog({
         source: r.source === "plate" ? "box" : r.source,
         impliedHeightIn: r.impliedHeightIn,
       })),
+      // EVERY STEP THIS JUMP'S SCALE BLEND TOOK, AND WHOSE NUMBERS IT WAS HANDED. The bar tracker
+      // has carried this since build 635 and the jump never has, which is why the 2026-10-19 Box
+      // Jump could not be attributed: every field in that export was consistent with the box
+      // jump's own record and equally consistent with the shared constants it was actually
+      // reading, because nothing wrote the identity down. Scott, 2026-10-07: "if you can't see,
+      // and can't guess, then put it in the export file I download."
+      //
+      // `boxRuler` is in here and not on the bar's row because the box is the jump's only object
+      // of known size -- it is the field to read first on a box jump whose scale is wrong, and
+      // `rulerUncertainties` is a free-form record on both sides of the wire (z.record), so a
+      // ruler that only one tracker has needs no schema change to be reported.
+      //
+      // A RECORDING. It gates nothing and withholds nothing (Rule #1): the scale returned is
+      // identical with this block deleted.
+      ...(jumpVerdict.blendTrace
+        ? {
+            scaleBlend: {
+              ...jumpVerdict.blendTrace,
+              identity: exerciseName ?? "(unnamed)",
+              romBucket: null,
+              rulerUncertainties: {
+                height: t.heightRulerUncertainty,
+                depth: t.depthRulerUncertainty,
+                depthBias: t.depthRulerBias,
+                ankle3d: t.ankle3DRulerUncertainty,
+                boxRuler: t.boxRulerUncertainty,
+                shoulderFloor: t.biacromialToleranceFraction,
+                body3dCorrected: t.body3DCorrectedUncertainty,
+              },
+            },
+          }
+        : {}),
     };
 
     if (scaleFactor == null) {

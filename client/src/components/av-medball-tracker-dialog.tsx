@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { Circle, Square, X, XCircle, AlertTriangle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
+import { cameraTunablesFor, TRACKER_FOR_TRACKING_LEVEL } from "@shared/camera-tunables-by-lift";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
 import {
   visionJointsToWorldLandmarks,
@@ -150,6 +151,7 @@ const MEDBALL_SENSOR_STRIDES = { body3DStride: 120, handPoseStride: 12 } as cons
 export function AvMedballTrackerDialog({
   open,
   onOpenChange,
+  exerciseName,
   heightIn,
   recordVideo,
   movementProfile,
@@ -161,6 +163,12 @@ export function AvMedballTrackerDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** WHICH FILMABLE THING THIS IS, so the take can resolve its own numbers
+   *  (shared/camera-tunables-by-lift.ts). Optional, and the fallback is honest rather than
+   *  convenient: an unnamed take resolves this tracker's shared record, which is what this
+   *  dialog read for its whole life before 2026-10-20, so a caller that forgets the prop loses
+   *  the separation and nothing else. */
+  exerciseName?: string | null;
   heightIn?: number | null;
   recordVideo?: boolean;
   /** The active MovementProfile for this capture mode, when an admin has applied one --
@@ -456,11 +464,32 @@ export function AvMedballTrackerDialog({
     // way the bar tracker does it; the empty path below is reached only when no body was seen
     // at all.
     const heightScale = calibrateFromFrames(calibrationInput, heightIn);
-    const bodyFallbacks = bodyScaleFallbacks(rawFrames, calibrationInput, heightIn, undefined);
-    const scaleVerdict = reconcileScaleEstimates([
-      ...(heightScale != null ? [{ source: "height" as const, scale: heightScale, uncertaintyFraction: 0.05 }] : []),
-      ...bodyFallbacks.candidates,
-    ]);
+    // THIS MOVEMENT'S OWN NUMBERS. Wired 2026-10-20; before that this dialog read every ruler
+    // uncertainty straight off the shared module constants. Scott: "I want everything separate,
+    // everything needs its own place." The tracker is named through the mapping rather than a
+    // literal because `cameraTunablesFor` DEFAULTS to the bar, and a thrown ball handed the bar's
+    // 3 m/s frame ceiling is Scott's own example of what must never happen.
+    //
+    // It moves no number: every field resolves to what this file read before, the stale 0.05
+    // height-ruler uncertainty included -- that one is copied into GATES_BY_TRACKER at its
+    // current value rather than corrected, because correcting it is a number moving and needs a
+    // paired take behind it. See `heightRulerUncertainty` there for what went wrong and when.
+    const liftTunables = cameraTunablesFor(exerciseName, null, TRACKER_FOR_TRACKING_LEVEL.med_ball ?? "med_ball");
+    const t = liftTunables.values;
+    const bodyFallbacks = bodyScaleFallbacks(rawFrames, calibrationInput, heightIn, undefined, {
+      maxShoulderSpanSpread: t.maxShoulderSpanSpread,
+      biacromialToleranceFraction: t.biacromialToleranceFraction,
+      body3DCorrectedUncertainty: t.body3DCorrectedUncertainty,
+    });
+    const scaleVerdict = reconcileScaleEstimates(
+      [
+        ...(heightScale != null
+          ? [{ source: "height" as const, scale: heightScale, uncertaintyFraction: t.heightRulerUncertainty }]
+          : []),
+        ...bodyFallbacks.candidates,
+      ],
+      t.maxScaleAgreementTolerance,
+    );
     const scaleFactor = scaleVerdict.scale ?? heightScale ?? bodyFallbacks.candidates[0]?.scale ?? null;
     const scaleDiagnostics = {
       scaleSource: (scaleVerdict.agreedSources.length > 1 ? "both" : (scaleVerdict.agreedSources[0] ?? null)) as

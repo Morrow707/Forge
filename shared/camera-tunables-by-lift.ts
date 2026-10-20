@@ -147,6 +147,23 @@ export type CameraTunables = {
    *  fires, so it changes the rep count and every set mean with it; edge reps only, and it needs
    *  at least three concentrics to be consulted at all. */
   edgeOversizedAmplitudeRatio: number;
+  /** The box ruler's uncertainty: the typed box height over the measured pixel gap between the
+   *  athlete's own ankle floor and the box top Vision found.
+   *
+   *  HERE BECAUSE IT WAS A BARE `0.05` IN av-jump-tracker-dialog.tsx WITH NO NAME AND NO
+   *  COMMENT, found by the 2026-10-20 plumbing pass. It is the most confident uncertainty any
+   *  ruler in this pipeline states -- four times tighter than a body ruler's 0.2 and tighter
+   *  than COREML_BOX_LONG_EDGE_UNCERTAINTY's measured 0.056 -- so it decides the box jump's
+   *  scale almost by itself whenever the box is found at all. Nothing is recorded about where
+   *  0.05 came from, and the only lift it has ever reached is the Box Jump, which is one of the
+   *  three now being filmed.
+   *
+   *  NOT the same thing as COREML_BOX_LONG_EDGE_UNCERTAINTY, which is a property of the CoreML
+   *  detector and is correctly shared: this ruler's denominator is a Vision box-top read plus a
+   *  tenth-percentile ankle floor, two different measurements with their own error. Unmeasured
+   *  either way -- a jump filmed beside the sensor with the box ruler's own error written down
+   *  is what would let it be fitted, and until then it keeps the value it has always had. */
+  boxRulerUncertainty: number;
   // --- the gates: what the pipeline will believe about one frame ----------------------------
   //
   // SPLIT ON SCOTT'S SECOND INSTRUCTION, 2026-10-06: "Split those too, every single thing should
@@ -209,6 +226,7 @@ export const SHARED_CAMERA_TUNABLES: Readonly<CameraTunables> = Object.freeze({
   body3DCorrectedUncertainty: 0.2, // BODY_3D_CORRECTED_UNCERTAINTY
   velocitySmoothingMs: 165, // VELOCITY_SMOOTHING_MS
   edgeOversizedAmplitudeRatio: 1.6, // EDGE_OVERSIZED_AMPLITUDE_RATIO
+  boxRulerUncertainty: 0.05, // av-jump-tracker-dialog.tsx's box scale, a bare literal until 10-20
   maxPlausibleSpeedMps: 3, // MAX_PLAUSIBLE_LIFT_VELOCITY_MPS -- the bar's, overridden per tracker
   maxPlausibleAccelG: 6, // MAX_PLAUSIBLE_ACCEL_G
   maxPlausibleVelocityChangePct: 100, // MAX_PLAUSIBLE_VELOCITY_CHANGE_PCT
@@ -236,6 +254,50 @@ export type FilmingTracker =
   | "mechanics"
   | "horizontal_load";
 
+/** The `trackingLevel` a set is saved with, which is what every tracker dialog branches on.
+ *  Written out here rather than imported from shared/schema.ts because this module is in the
+ *  CLIENT bundle and the schema is deliberately kept out of it (CLAUDE.md, "Speed and
+ *  findability"). `every-tracker-reads-its-own-numbers.test.ts` holds this union against the real
+ *  pgEnum, so a level added to the database cannot stay missing from here. */
+export type CaptureTrackingLevel =
+  | "none"
+  | "bar_path"
+  | "full"
+  | "jump"
+  | "sprint"
+  | "mechanics"
+  | "golf_swing"
+  | "baseball_swing"
+  | "med_ball"
+  | "kb_swing"
+  | "horizontal_load";
+
+/** WHICH RECORD A SAVED TRACKING LEVEL READS. Exhaustive on purpose, and the reason is the
+ *  defect this mapping was written to stop: `cameraTunablesFor`'s third parameter DEFAULTS to
+ *  "bar", so a dialog that resolves a record without naming its tracker silently gets the bar's
+ *  gates -- a 3 m/s frame ceiling on a thrown med ball, which is Scott's own example of what
+ *  must never happen ("if we change the gate on med ball throws it might change the gate on a
+ *  golf swing"). A `Record` over the whole union means a new level is a type error here instead
+ *  of a quiet default, and `null` says "this level never films" rather than leaving it to a
+ *  falsy check.
+ *
+ *  `bar_path` and `full` are the two GENERIC levels -- see resolve-tracking-mode.ts, which
+ *  resolves them against the exercise's name and equipment before a dialog is chosen -- so by
+ *  the time a dialog is on screen they mean the bar tracker. */
+export const TRACKER_FOR_TRACKING_LEVEL: Record<CaptureTrackingLevel, FilmingTracker | null> = {
+  none: null,
+  bar_path: "bar",
+  full: "bar",
+  jump: "jump",
+  sprint: "sprint",
+  mechanics: "mechanics",
+  golf_swing: "golf_swing",
+  baseball_swing: "baseball_swing",
+  med_ball: "med_ball",
+  kb_swing: "kb_swing",
+  horizontal_load: "horizontal_load",
+};
+
 /** THE GATES EACH TRACKER USES TODAY, copied from the tracker's own constant. These are the
  *  numbers that were already per-tracker; copying them in is what makes an identity's record
  *  complete, so no lift reads half its numbers from its own record and half from somewhere
@@ -248,9 +310,27 @@ const GATES_BY_TRACKER: Record<FilmingTracker, Partial<CameraTunables>> = {
   jump: {},
   // MAX_PLAUSIBLE_BALL_SPEED_MPS, av-medball-tracker-dialog.tsx. A thrown ball leaves the hand
   // far faster than any bar moves, which is the whole of Scott's point.
-  med_ball: { maxPlausibleSpeedMps: 25 },
+  //
+  // AND `heightRulerUncertainty: 0.05` IS NOT A CHOICE ANYBODY MADE -- it is what these two
+  // dialogs have hardcoded since `2436110b` (2026-09-29), when the shared constant was also
+  // 0.05. `HEIGHT_RULER_UNCERTAINTY` was refit to 0.1 on 2026-10-05 (`812becb7`, the stopgap
+  // over the failing object system) and the refit could not reach a LITERAL, so for six weeks
+  // the med ball and kettlebell trackers have stated their height ruler as twice as confident
+  // as the pipeline believes -- which in an inverse-variance blend is FOUR TIMES the weight.
+  // Sixth instance of the class CLAUDE.md keeps naming: a correction wired to one path,
+  // invisible because the path that IS taken looks like it worked.
+  //
+  // IT IS COPIED HERE AT TODAY'S VALUE, NOT CORRECTED, and the distinction is the whole point of
+  // this file. Setting it to 0.1 would move a number on two trackers inside a commit whose
+  // claim is that it moves none -- and 0.1 was fitted on a BENCH and a SQUAT, so applying it to
+  // a thrown ball is the leak this registry exists to stop, just pointing the other way. Nobody
+  // has filmed a med ball throw or a kettlebell swing beside the sensor with the height ruler's
+  // own error written down, so neither value has evidence behind it on these two movements.
+  // What settles it is one paired take; until then the separation is recorded and visible,
+  // which is the thing that was missing.
+  med_ball: { maxPlausibleSpeedMps: 25, heightRulerUncertainty: 0.05 },
   // MAX_PLAUSIBLE_KB_SWING_SPEED_MPS, kb-swing-tracking.ts.
-  kb_swing: { maxPlausibleSpeedMps: 8 },
+  kb_swing: { maxPlausibleSpeedMps: 8, heightRulerUncertainty: 0.05 },
   // MAX_PLAUSIBLE_GRIP_SPEED_MPS, swing-tracking.ts -- the GRIP, not the club head.
   golf_swing: { maxPlausibleSpeedMps: 15 },
   baseball_swing: { maxPlausibleSpeedMps: 15 },

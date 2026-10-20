@@ -148,6 +148,48 @@ describe("the per-lift numbers are a copy of today's numbers", () => {
     expect(SHARED_CAMERA_TUNABLES.maxYardstickDeviationRatio).toBe(MAX_YARDSTICK_DEVIATION_RATIO);
   });
 
+  it("copies the box ruler's uncertainty from the literal av-jump-tracker-dialog used to carry", () => {
+    // Read off the dialog itself, not a constant, because until 2026-10-20 there WAS no constant
+    // -- this was a bare `uncertaintyFraction: 0.05` in the box-scale candidate with no name and
+    // no comment. The scan is the only thing that can keep the registry honest about where the
+    // value came from, so it reads the source rather than trusting the number typed here.
+    expect(SHARED_CAMERA_TUNABLES.boxRulerUncertainty).toBe(0.05);
+    const jump = readFileSync(
+      join(__dirname, "..", "client", "src", "components", "av-jump-tracker-dialog.tsx"),
+      "utf8",
+    );
+    // The literal is gone and the field is what is read.
+    expect(jump).toMatch(/uncertaintyFraction: t\.boxRulerUncertainty/);
+    expect(jump).not.toMatch(/scale: boxScale, uncertaintyFraction: 0\.05/);
+  });
+
+  it("KEEPS THE MED BALL AND KETTLEBELL HEIGHT RULER AT 0.05, WHICH IS NOT THE SHARED 0.1", () => {
+    // NOT A PREFERENCE -- A REFIT THAT NEVER REACHED TWO FILES. `HEIGHT_RULER_UNCERTAINTY` went
+    // 0.05 -> 0.1 on 2026-10-05 (`812becb7`); these two dialogs had hardcoded 0.05 since
+    // `2436110b` (2026-09-29), when the shared constant was also 0.05, and a refit cannot reach a
+    // literal. So for six weeks they stated the height ruler as twice as confident as the
+    // pipeline believed -- four times the weight in an inverse-variance blend.
+    //
+    // This test pins the value AS IT IS, not as it should be. Correcting it is a number moving on
+    // two trackers and needs a paired take behind it; 0.1 was fitted on a bench and a squat, so
+    // applying it to a thrown ball is the same leak pointing the other way. The day somebody
+    // films a med ball throw beside the sensor, this assertion is what they come and change.
+    expect(cameraTunablesFor("Med Ball Chest Pass", null, "med_ball").values.heightRulerUncertainty).toBe(0.05);
+    expect(cameraTunablesFor("Kettlebell Swing", null, "kb_swing").values.heightRulerUncertainty).toBe(0.05);
+    expect(cameraTunablesFor("Back Squat", "squat", "bar").values.heightRulerUncertainty).toBe(
+      HEIGHT_RULER_UNCERTAINTY,
+    );
+    // And the two dialogs read the FIELD now, so the next refit reaches them.
+    for (const f of ["av-medball", "av-kb-swing"]) {
+      const src = readFileSync(
+        join(__dirname, "..", "client", "src", "components", `${f}-tracker-dialog.tsx`),
+        "utf8",
+      );
+      expect(src).toMatch(/uncertaintyFraction: t\.heightRulerUncertainty/);
+      expect(src).not.toMatch(/scale: heightScale, uncertaintyFraction: 0\.05/);
+    }
+  });
+
   it("copies each tracker's own speed gate, from that tracker's own file", () => {
     // Read off the trackers themselves: MAX_PLAUSIBLE_BALL_SPEED_MPS (av-medball-tracker-dialog),
     // MAX_PLAUSIBLE_KB_SWING_SPEED_MPS (kb-swing-tracking), MAX_PLAUSIBLE_GRIP_SPEED_MPS

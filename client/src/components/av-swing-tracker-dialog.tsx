@@ -15,12 +15,12 @@ import {
 import { toast } from "sonner";
 import { Circle, Square, AlertTriangle, X, XCircle } from "lucide-react";
 import { useAvBodyTracking } from "@/lib/use-av-body-tracking";
+import { cameraTunablesFor, TRACKER_FOR_TRACKING_LEVEL } from "@shared/camera-tunables-by-lift";
 import { AvCameraChrome } from "@/components/av-camera-chrome";
 import { visionJointsToWorldLandmarks } from "@/lib/vision-body-landmarks";
 import {
   calibrateFromFrames,
   reconcileScaleEstimates,
-  HEIGHT_RULER_UNCERTAINTY,
   calibrationMethodBreakdown,
   scaleWorldLandmarks,
   type PoseFrame,
@@ -115,6 +115,7 @@ type OnCaptureFn = (metrics: AvSwingSetMetrics, videoUrl?: string, skeletonFrame
 export function AvSwingTrackerDialog({
   open,
   onOpenChange,
+  exerciseName,
   sport,
   heightIn,
   recordVideo,
@@ -127,6 +128,12 @@ export function AvSwingTrackerDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** WHICH FILMABLE THING THIS IS, so the take can resolve its own numbers
+   *  (shared/camera-tunables-by-lift.ts). Optional, and the fallback is honest rather than
+   *  convenient: an unnamed take resolves this tracker's shared record, which is what this
+   *  dialog read for its whole life before 2026-10-20, so a caller that forgets the prop loses
+   *  the separation and nothing else. */
+  exerciseName?: string | null;
   sport: "golf" | "baseball";
   heightIn?: number | null;
   recordVideo?: boolean;
@@ -308,13 +315,32 @@ export function AvSwingTrackerDialog({
     // framing that single ruler fails on, and when it failed there was nothing behind it.
     // bodyScaleFallbacks is the piece the 2026-09-29 audit already built for exactly this.
     const heightScale = calibrateFromFrames(rawFrames, heightIn);
-    const bodyFallbacks = bodyScaleFallbacks(nativeRawFrames, rawFrames, heightIn, undefined);
-    const scaleVerdict = reconcileScaleEstimates([
-      ...(heightScale != null
-        ? [{ source: "height" as const, scale: heightScale, uncertaintyFraction: HEIGHT_RULER_UNCERTAINTY }]
-        : []),
-      ...bodyFallbacks.candidates,
-    ]);
+    // THIS SWING'S OWN NUMBERS. Wired 2026-10-20; before that every ruler uncertainty here came
+    // off the shared module constants. Scott: "I want everything separate, everything needs its
+    // own place." Golf and baseball are SEPARATE identities in the registry and always were (both
+    // in FilmingTracker, both with their own 15 m/s grip ceiling) -- `sport` is what tells them
+    // apart, and it decides which record this take reads. Moves no number: every field resolves
+    // to the constant this file read before.
+    const liftTunables = cameraTunablesFor(
+      exerciseName,
+      null,
+      sport === "golf" ? TRACKER_FOR_TRACKING_LEVEL.golf_swing ?? "golf_swing" : TRACKER_FOR_TRACKING_LEVEL.baseball_swing ?? "baseball_swing",
+    );
+    const t = liftTunables.values;
+    const bodyFallbacks = bodyScaleFallbacks(nativeRawFrames, rawFrames, heightIn, undefined, {
+      maxShoulderSpanSpread: t.maxShoulderSpanSpread,
+      biacromialToleranceFraction: t.biacromialToleranceFraction,
+      body3DCorrectedUncertainty: t.body3DCorrectedUncertainty,
+    });
+    const scaleVerdict = reconcileScaleEstimates(
+      [
+        ...(heightScale != null
+          ? [{ source: "height" as const, scale: heightScale, uncertaintyFraction: t.heightRulerUncertainty }]
+          : []),
+        ...bodyFallbacks.candidates,
+      ],
+      t.maxScaleAgreementTolerance,
+    );
     const scaleFactor = scaleVerdict.scale ?? heightScale;
     const calibrationFrames = calibrationMethodBreakdown(rawFrames);
 

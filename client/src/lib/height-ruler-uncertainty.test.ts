@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { HEIGHT_RULER_UNCERTAINTY, reconcileScaleEstimates } from "./pose-tracking";
 
@@ -77,24 +77,51 @@ describe("the height ruler's uncertainty, fitted on the 2026-10-04 OVR pairing",
      * 0.05 on the height row is the regression this catches."
      *
      * On 2026-10-08 the bar dialog started reading the uncertainty from this lift's record in
-     * shared/camera-tunables-by-lift.ts instead -- the same 0.1, pinned to this constant by
-     * camera-tunables-are-a-copy.test.ts, and routed so that the day one lift's uncertainty IS
-     * fitted it moves that lift and no other. The old assertion went red for that, which is a
-     * ratchet failing on an improvement to the thing it guards.
+     * shared/camera-tunables-by-lift.ts instead, and the old assertion went red for that -- a
+     * ratchet failing on an improvement to the thing it guards. It was fixed by accepting a
+     * SECOND spelling, `scaleTunables.heightRulerUncertainty`, and on 2026-10-20 it went red
+     * again for a THIRD (`t.heightRulerUncertainty`, four more dialogs wired to their own
+     * record). Twice is the pattern: a list of accepted spellings can only recognise the ones
+     * somebody thought to add, which is the assertion direction CLAUDE.md keeps having to
+     * relearn, and every failure it produced was on a change that satisfied the actual rule.
      *
-     * So: a NAMED source, never a number typed on the row. Both spellings pass; a literal does
-     * not, which is the regression that was always the point. */
-    for (const f of [
-      "client/src/components/av-bar-tracker-dialog.tsx",
-      "client/src/components/av-jump-tracker-dialog.tsx",
-    ]) {
-      const src = readFileSync(join(process.cwd(), f), "utf8");
-      const named =
-        src.includes("uncertaintyFraction: HEIGHT_RULER_UNCERTAINTY") ||
-        src.includes("uncertaintyFraction: scaleTunables.heightRulerUncertainty");
-      expect(named, `${f}: the height row's uncertainty is not a named source`).toBe(true);
-      // The regression this has always been for.
-      expect(src).not.toMatch(/source: "height"[^}]*uncertaintyFraction: 0\.\d/);
+     * SO IT ASSERTS THE RULE AND NOTHING ELSE: on every height row in every tracker dialog, the
+     * uncertainty must be a NAME -- an identifier or a member expression -- and never a number
+     * typed on the row. Any spelling passes; `0.05` and `0.1` alike do not, which is the
+     * regression that was always the point. And it reads the DIRECTORY rather than two named
+     * files, so a tracker added later cannot hardcode one unnoticed. */
+    const dir = join(process.cwd(), "client", "src", "components");
+    const dialogs = readdirSync(dir).filter((f) => f.endsWith("-tracker-dialog.tsx"));
+    expect(dialogs.length).toBeGreaterThanOrEqual(15);
+
+    // A height row that carries an uncertainty at all. `scaleCandidates` rows carry `measured`
+    // and `samples` instead and are diagnostics, not voters, so they are not matched.
+    const HEIGHT_ROW = /source: "height"(?: as const)?, scale: \w+, uncertaintyFraction: ([^\s,}]+)/g;
+    let rowsSeen = 0;
+    for (const f of dialogs) {
+      const src = readFileSync(join(dir, f), "utf8");
+      for (const m of src.matchAll(HEIGHT_ROW)) {
+        rowsSeen++;
+        const expr = m[1];
+        // The rule, stated as what it forbids: a bare number.
+        expect(
+          /^[\d.]+$/.test(expr),
+          `${f}: the height row's uncertainty is the literal ${expr} -- it must be a named field, ` +
+            `so a refit reaches it. This is how av-medball and av-kb-swing sat at 0.05 for six ` +
+            `weeks after the constant moved to 0.1 (CLAUDE.md, 2026-10-20).`,
+        ).toBe(false);
+        // And a name that resolves to something: an identifier or a member expression.
+        expect(expr, `${f}: ${expr} is not a name`).toMatch(/^[A-Za-z_$][\w$]*(?:\.[\w$]+)*$/);
+      }
+      // The original regression, kept verbatim as a second net in case the row is ever written
+      // in an order this regex does not match.
+      expect(src, `${f} hardcodes a height uncertainty`).not.toMatch(
+        /source: "height"[^}]*uncertaintyFraction: 0\.\d/,
+      );
     }
+    // Five today (av-bar, av-jump, av-kb-swing, av-medball, av-swing). A floor rather than an
+    // equality, so wiring a sixth tracker does not fail this file -- but a regex that silently
+    // stops matching cannot turn the whole case green either.
+    expect(rowsSeen).toBeGreaterThanOrEqual(5);
   });
 });

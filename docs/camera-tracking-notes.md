@@ -5369,3 +5369,197 @@ caught five of them.
 `depth` read high on all four takes of 10-19; a fifth and sixth make `DEPTH_RULER_BIAS` -- the worst
 of the seven, and now separable per lift -- fittable on evidence instead of inherited from four
 benches.
+
+## Fourteen trackers were handed their own numbers and never asked for them, 2026-10-20
+
+Scott, after the provenance audit: **"I want everything separate, everything needs its own
+place."** The audit's structural finding was that `cameraTunablesFor` is called by ONE tracker of
+fifteen. This is the pass that fixes the half of it that can be tested on an iPhone, and it found
+one real defect doing it.
+
+### What was actually wrong, stated plainly
+
+The per-lift registry has existed since 2026-10-06 and is real: 270 identities, a fresh record per
+call, every value copied from the constant it came from, three tests proving the copy. The
+2026-10-16 verification confirmed all of that and **never asked who READS it**. The answer was
+`av-bar-tracker-dialog.tsx` and nothing else.
+
+So on 2026-10-19, when the Back Squat, the Romanian Deadlift and the Box Jump were filmed beside
+the OVR:
+
+- the **squat and the RDL** resolved their own records (the bar dialog), and
+- the **Box Jump** read `MAX_SHOULDER_SPAN_SPREAD`, `BIACROMIAL_TOLERANCE_FRACTION`,
+  `BODY_3D_CORRECTED_UNCERTAINTY` and `HEIGHT_RULER_UNCERTAINTY` **straight off the shared module
+  constants** -- three of the four fitted on a bench press -- and no field in any export said
+  which route a number arrived by.
+
+`MAX_SHOULDER_SPAN_SPREAD` is the clearest instance: it reaches his three lifts by TWO different
+routes, the squat and RDL from their own record and the box jump from the raw constant, same 0.4,
+indistinguishable in the diagnostics.
+
+### THE DEFECT: THE HEIGHT RULER'S REFIT NEVER REACHED TWO TRACKERS
+
+Found while wiring, not predicted. `av-medball-tracker-dialog.tsx` and
+`av-kb-swing-tracker-dialog.tsx` state their height ruler's uncertainty as a **bare literal
+`0.05`**, written in `2436110b` (2026-09-29) -- when `HEIGHT_RULER_UNCERTAINTY` was also 0.05.
+
+`812becb7` (2026-10-05) refit that constant to **0.1**, as the stopgap over the failing object
+system. **A refit cannot reach a literal.** So for six weeks the med ball and kettlebell trackers
+have stated the height ruler as **twice as confident as the pipeline believes**, which in an
+inverse-variance blend is **four times the weight**. The height ruler is the heaviest voter on
+most takes it is present on.
+
+**Sixth instance of the class CLAUDE.md keeps naming**, after the Coaches Corner lesson re-sync,
+the Barbell Shoulder Press instructions, `videoEligible: false` surviving the canonical-list swap,
+the terms-change guardian notice, and the Stripe `updateSubscriptionByUserId` upsert: a correction
+wired to one path, invisible because the path that IS taken looks like it worked.
+
+**IT IS NOT CORRECTED HERE, and the reason is the registry's own rule.** Setting it to 0.1 moves a
+number on two trackers inside a commit whose whole claim is that it moves none -- and 0.1 was
+fitted on a bench and a squat, so applying it to a thrown ball is the same leak pointing the other
+way. Nobody has filmed a med ball throw or a kettlebell swing beside the sensor with the height
+ruler's own error written down, so neither value has evidence behind it on those two movements.
+It is copied into `GATES_BY_TRACKER` at **today's value** (0.05 for those two, 0.1 everywhere
+else), where the divergence is visible and a grep finds it, and
+`camera-tunables-are-a-copy.test.ts` pins it **as it is, not as it should be** -- the assertion
+somebody comes and changes the day a paired throw exists.
+
+### What shipped
+
+| | before | after |
+|---|---|---|
+| Registry fields | 28 | **29** (`boxRulerUncertainty`) |
+| Dialogs resolving a record | 1 of 15 | **5 of 15** |
+| Scale-blending dialogs wired | 1 of 5 | **5 of 5** |
+| `FITTED_OVERRIDES` | empty | **empty** |
+
+**The five scale-blending trackers are all wired** -- av-bar, av-jump, av-kb-swing, av-medball,
+av-swing -- and those are the ones where an unplumbed record is not a tidiness problem, because
+every one of them decides a take's SCALE, which is the error every sensor pairing since 2026-10-04
+has been chasing. Golf and baseball resolve as **separate identities** off the `sport` prop, which
+they always were in `FilmingTracker` and never were at the call site.
+
+**`boxRulerUncertainty` is the new field and it was a bare `0.05`** in the jump dialog's box-scale
+candidate -- no name, no comment, nothing recorded about where it came from. It is the tightest
+uncertainty any ruler in this pipeline states, **tighter than the CoreML detector's own measured
+0.056**, so it decides a box jump's scale almost by itself whenever the box is found at all. It is
+NOT `COREML_BOX_LONG_EDGE_UNCERTAINTY`, which is a property of the detector and correctly shared:
+this ruler's denominator is a Vision box-top read divided against a tenth-percentile ankle floor,
+two different measurements with their own error. Unmeasured either way, and now findable.
+
+### How it moves no number
+
+Every separation is a **defaulted parameter** -- the `robustPeakSpeed` pattern this repo already
+uses -- so every caller not yet plumbed keeps the value it read before, bit for bit.
+`bodyScaleFallbacks` gained an optional `tunables` argument carrying the three ruler numbers and
+is where they reach the four trackers that could not name a lift until today. `FITTED_OVERRIDES`
+is empty, the jump tracker overrides no gate, and the two per-tracker height uncertainties are
+copies. Whole unit suite identical to the baseline, OVR fixtures and the 20-capture replay corpus
+included.
+
+### The ratchet, and the flaw in its first draft
+
+`shared/every-tracker-reads-its-own-numbers.test.ts` reads the dialog DIRECTORY and requires every
+file to resolve a record or appear in `NOT_PLUMBED_YET` with a reason over eighty characters that
+names a file, field, gate, module or blocker. Ten entries today, each one a sentence that shows up
+in a grep -- the `FITTED_OVERRIDES` / `NOT_PUBLIC_ON_PURPOSE` / `PRICED_WITHOUT_A_CHECKOUT` shape.
+It also **refuses a stale exemption**: a dialog that got wired must leave the list, which is the
+direction that makes it a ratchet rather than a record, and the absence of which is how the
+registry came to look finished on 2026-10-16.
+
+`TRACKER_FOR_TRACKING_LEVEL` is an exhaustive `Record` over every `trackingLevel` the database can
+store, and it exists because **`cameraTunablesFor`'s tracker parameter DEFAULTS to `"bar"`** -- a
+dialog that resolves a record without naming its tracker silently gets a 3 m/s frame ceiling on a
+thrown med ball, which is Scott's own example of what must never happen. The union is hand-written
+(that module is in the client bundle and the schema is deliberately kept out of it) and the test
+holds it **equal** to the real pgEnum, so a level added to the database fails there instead of
+resolving to `undefined` and reading every gate as NaN.
+
+**AND THE FIRST VERSION OF THE DEFAULT CASE WAS WORTHLESS, which is worth knowing by heart.** It
+asserted the FILE contained `TRACKER_FOR_TRACKING_LEVEL`. The comment above the call contains
+those words, so replacing the call's mapping with a bare `"jump"` literal left the test **green**.
+That is CLAUDE.md's `stripe-checkout.test.ts` lesson inverted -- there a paragraph pushed a guard
+out of a character window and turned a test red; here a paragraph turned one green, which is the
+worse direction because nothing announces it. It paren-matches the call's own arguments now and
+asserts against those. Five mutations, each caught by the right case: unwiring the jump dialog
+reds two, listing a wired dialog reds the stale-exemption case, the bare literal reds the default
+case, and restoring medball's stale `0.05` reds the copy test.
+
+### What is NOT done, named so it is not mistaken for finished
+
+Ten dialogs remain unwired and the list says why for each. They fall in three groups:
+
+- **Four web/Android halves** (bar, kb-swing, medball, swing) are the same shape as their wired
+  iOS twins and should be wired identically. They wait because the launch is iPhone only and there
+  is no Android device to film a set on -- an untested change to a capture path is worth less than
+  the separation it buys. `medball-tracker-dialog.tsx` carries the **same stale 0.05** and the
+  same fix.
+- **Mechanics (both halves)** are blocked on one thing: `MAX_PLAUSIBLE_WRIST_SPEED_MPS` IS in the
+  registry as the mechanics tracker's `maxPlausibleSpeedMps` (20), but the gate is applied inside
+  `mechanics-tracking.ts` rather than at the dialog, so that module needs the defaulted parameter
+  first.
+- **Sprint and horizontal load (both halves each)** have nothing in the record to read yet. A
+  timed sprint runs no scale blend and its gate is in yards per second;  a sled push takes its
+  scale from a known distance. Wiring either means putting that mode's own number in the registry
+  first, in its own units -- and for horizontal load it is the same one job as the open half of
+  Rule #4 for that mode, which names no object system either.
+
+**And `FITTED_OVERRIDES` is still empty**, so all 270 records still hold identical values. Five of
+fifteen trackers CAN now be calibrated apart. None has been. Those are two different claims and
+this pass only advances the first.
+
+### AND THE JUMP NOW SAYS WHOSE NUMBERS IT READ, which is what made 10-19 unattributable
+
+`calibration.scaleBlend` has been on the bar tracker since build 635 and the jump has never had
+it. That is why the 2026-10-19 Box Jump could not be attributed after the fact: every field in
+that export was equally consistent with the box jump's own record and with the shared constants it
+was actually reading, because **nothing wrote the identity down**. Scott, 2026-10-07: "if you can't
+see, and can't guess, then put it in the export file I download."
+
+The jump emits it now -- the blend's inputs, the collapsed 3D witness, the voters, the winning
+cluster and its anchor, every pair in both directions, plus `identity` and the seven ruler
+uncertainties THIS take was handed. `boxRuler` is on the jump's row and not the bar's, because the
+box is the jump's only object of known size and is the field to read first on a box jump whose
+scale is wrong. **No schema change was needed**: `rulerUncertainties` is `z.record(z.string(),
+z.number())` on both sides of the wire, so a ruler only one tracker has is reportable without
+touching `trackingDiagnosticsSchema` -- which matters, because zod strips what it does not declare,
+silently, and that has cost two diagnostics already. Records and gates nothing (Rule #1): the scale
+returned is identical with the block deleted.
+
+### TWO EXISTING TESTS WENT RED ON THE IMPROVEMENT, AND BOTH WERE RIGHT TO
+
+Worth recording because they are the same defect in two forms, and one of them had already been
+patched once the wrong way.
+
+**`the-blend-reads-this-lifts-uncertainties.test.ts` had a case called "RECORDED, NOT FIXED: three
+rulers still cannot be handed their lift's number"**, and its own comment said what to do: "When
+one of these is wired, its line here fails and gets deleted -- the list is meant to shrink." Two of
+the three were wired, so the assertions **invert** rather than vanish: the height ruler must now
+come from the record on av-jump and av-swing, and `HEIGHT_RULER_UNCERTAINTY` must be GONE from
+both, which is what stops a later edit quietly putting the shared value back. The third is still
+open for a reason that is not "nobody got to it": `ankle3DRulerUncertainty` is baked into
+`ankle-3d-ruler.ts`'s returned reading and the ankle ruler is computed AFTER the scale vote has
+closed, so its uncertainty is inert whichever number it carries. **The gap to close first is the
+order, not the constant.**
+
+**`height-ruler-uncertainty.test.ts` went red for the SECOND time on a change that satisfied its
+own stated rule.** It asserted the height row read one of two accepted SPELLINGS; mine was a third.
+Its comment already records the first instance -- on 2026-10-08 the bar dialog moved to the
+registry and "the old assertion went red for that, which is a ratchet failing on an improvement to
+the thing it guards" -- and the fix then was to **add a second spelling**, which is the patch that
+guarantees a third failure. Twice is the pattern.
+
+It asserts the RULE now and nothing else: on every height row in every tracker dialog the
+uncertainty must be a NAME -- an identifier or a member expression -- and never a number typed on
+the row. Any spelling passes; `0.05` and `0.1` alike do not, which is the regression that was
+always the point. And it reads the DIRECTORY rather than two named files, so a tracker added later
+cannot hardcode one unnoticed. Five rows today and it catches nothing retroactively -- the web
+halves build no height uncertainty row at all -- so it is purely forward-looking. Two mutations,
+both caught: the stale `0.05` back on kb-swing, and a plausible-looking `0.1` in its place.
+
+**The general lesson, which this repo has now paid for three times in one file:** a scan that
+enumerates accepted FORMS fails on every correct change that uses a new one, and each failure gets
+"fixed" by lengthening the list. A scan that states the rule as what it FORBIDS accepts every
+correct change and refuses every wrong one. The same sentence applies to the ratchet written today,
+whose first draft asserted a file CONTAINED `TRACKER_FOR_TRACKING_LEVEL` and was satisfied by the
+comment above the call.

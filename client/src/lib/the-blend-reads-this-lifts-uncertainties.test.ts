@@ -91,23 +91,33 @@ describe("the blend is handed this lift's uncertainties", () => {
     }
   });
 
-  it("RECORDED, NOT FIXED: three rulers still cannot be handed their lift's number", () => {
-    // Named so these read as known gaps rather than as something this commit covered.
-    //
-    // 1. av-jump and av-swing build a `height` candidate from the module constant and have no
-    //    exercise-name prop at all, so they cannot resolve a record. The eight plyometrics are
-    //    among the 54 and each HAS one; threading the identity in is its own change.
-    // 2. ankle3DRulerUncertainty is baked into ankle-3d-ruler.ts's returned reading, and the
-    //    ankle ruler is computed after the scale vote has already closed, so its uncertainty is
-    //    inert whichever number it carries. Plumbing it before fixing that would be decoration
-    //    on decoration.
+  it("TWO OF THE THREE ARE WIRED NOW, AND THE LIST SHRANK AS IT WAS MEANT TO", () => {
+    // This case used to record three rulers that could not be handed their lift's number, with
+    // the instruction that each line fails and gets deleted the day it is wired. Two were, on
+    // 2026-10-20: av-jump and av-swing gained an `exerciseName` prop and resolve their own record
+    // (see every-tracker-reads-its-own-numbers.test.ts for the directory-wide ratchet). So the
+    // assertions invert rather than disappear -- the height ruler must now come from the record
+    // on both, and the module constant must be GONE from them, which is what stops a later edit
+    // quietly putting the shared value back.
     const jump = read("client/src/components/av-jump-tracker-dialog.tsx");
     const swing = read("client/src/components/av-swing-tracker-dialog.tsx");
-    expect(jump).toContain("uncertaintyFraction: HEIGHT_RULER_UNCERTAINTY");
-    expect(swing).toContain("uncertaintyFraction: HEIGHT_RULER_UNCERTAINTY");
-    expect(read("client/src/lib/ankle-3d-ruler.ts")).toContain("uncertaintyFraction: ANKLE_3D_RULER_UNCERTAINTY");
-    // When one of these is wired, its line here fails and gets deleted -- the list is meant to
-    // shrink, which is how count-trim-never-empties-a-set.test.ts carries its own known list.
+    for (const [name, src] of [["av-jump", jump], ["av-swing", swing]] as const) {
+      expect(src, `${name} does not read its own height uncertainty`).toContain(
+        "uncertaintyFraction: t.heightRulerUncertainty",
+      );
+      expect(src, `${name} still carries the shared constant`).not.toContain(
+        "uncertaintyFraction: HEIGHT_RULER_UNCERTAINTY",
+      );
+    }
+
+    // STILL OPEN, AND THE REASON IS NOT "nobody got to it": ankle3DRulerUncertainty is baked into
+    // ankle-3d-ruler.ts's returned reading, and the ankle ruler is computed AFTER the scale vote
+    // has already closed -- so its uncertainty is inert whichever number it carries. Plumbing it
+    // before fixing that would be decoration on decoration. The gap to close first is the order,
+    // not the constant.
+    expect(read("client/src/lib/ankle-3d-ruler.ts")).toContain(
+      "uncertaintyFraction: ANKLE_3D_RULER_UNCERTAINTY",
+    );
     expect(UNCERTAINTY_FIELDS.length).toBe(4);
   });
 });

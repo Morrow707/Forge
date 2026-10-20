@@ -4546,6 +4546,7 @@ function ExerciseLogContent({
               if (item.trackingLevel === "kb_swing") {
                 return (
                   <AvKbSwingTrackerDialog
+                    exerciseName={item.exerciseName}
                     open={trackingSet !== null}
                     onOpenChange={(open) => !open && setTrackingSet(null)}
                     heightIn={user?.heightIn}
@@ -4611,6 +4612,7 @@ function ExerciseLogContent({
             if (isAvPreviewPlatform()) {
               return (
                 <AvMedballTrackerDialog
+                  exerciseName={item.exerciseName}
                   open={trackingSet !== null}
                   onOpenChange={(open) => !open && setTrackingSet(null)}
                   heightIn={user?.heightIn}
@@ -4654,6 +4656,7 @@ function ExerciseLogContent({
             if (isAvPreviewPlatform()) {
               return (
                 <AvSwingTrackerDialog
+                  exerciseName={item.exerciseName}
                   open={trackingSet !== null}
                   onOpenChange={(open) => !open && setTrackingSet(null)}
                   sport={item.trackingLevel === "golf_swing" ? "golf" : "baseball"}
@@ -4704,6 +4707,7 @@ function ExerciseLogContent({
           if (isAvPreviewPlatform() && item.trackingLevel === "jump") {
             return (
               <AvJumpTrackerDialog
+                exerciseName={item.exerciseName}
                 open={trackingSet !== null}
                 onOpenChange={(open) => !open && setTrackingSet(null)}
                 heightIn={user?.heightIn}

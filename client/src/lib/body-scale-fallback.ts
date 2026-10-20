@@ -67,14 +67,49 @@ export function body3DCandidate(body3D: Body3DScaleReading): ScaleEstimate | nul
   };
 }
 
+/** THIS LIFT'S OWN RULER NUMBERS, or today's shared ones when the caller does not name them.
+ *
+ *  A DEFAULTED PARAMETER, which is the pattern this repo already uses for exactly this
+ *  (`robustPeakSpeed`, `plausibleMean`, `reconcileScaleEstimates`): every caller that has not
+ *  been plumbed yet keeps the value it read before, bit for bit, so threading a tracker through
+ *  can never move a number on its own. Both fields were fitted on a BENCH PRESS -- see their
+ *  entries in shared/camera-tunables-by-lift.ts -- and this function is how they reach the jump,
+ *  kettlebell, med ball and swing trackers, none of which could name a lift until 2026-10-20. */
+export type BodyRulerTunables = {
+  /** `maxShoulderSpanSpread` -- when the shoulder ruler refuses on its own self-disagreement. */
+  maxShoulderSpanSpread?: number;
+  /** `biacromialToleranceFraction` -- the floor on what the shoulder ruler claims to know. */
+  biacromialToleranceFraction?: number;
+  /** `body3DCorrectedUncertainty` -- the 3D skeleton's uncertainty once a height has corrected
+   *  it. The live one on a box jump: +3.3% at 0.1 against today's 0.2. */
+  body3DCorrectedUncertainty?: number;
+};
+
 export function bodyScaleFallbacks(
   nativeFrames: NativePoseFrame[],
   calibrationInput: { worldLandmarks: Landmark[] }[],
   heightIn: number | null | undefined,
   posture?: Parameters<typeof shoulderWidthScaleFromFrames>[2],
+  tunables?: BodyRulerTunables,
 ): BodyScaleFallbacks {
-  const body3D = body3DScaleFromFrames(nativeFrames, heightIn, measureLimbSpansInUnits(calibrationInput));
-  const shoulders = shoulderWidthScaleFromFrames(calibrationInput, heightIn, posture);
+  const body3D = body3DScaleFromFrames(
+    nativeFrames,
+    heightIn,
+    measureLimbSpansInUnits(calibrationInput),
+    tunables?.body3DCorrectedUncertainty,
+  );
+  const shoulders = shoulderWidthScaleFromFrames(
+    calibrationInput,
+    heightIn,
+    posture,
+    // Positional, and the order matters: (… posture, maxSpanSpread, gripWidthPx,
+    // toleranceFraction). No fallback caller has a grip span to offer -- that is the bar
+    // tracker's, which does not come through here -- so the fifth stays undefined and takes its
+    // own default rather than being skipped.
+    tunables?.maxShoulderSpanSpread,
+    undefined,
+    tunables?.biacromialToleranceFraction,
+  );
   const body3DEstimate = body3DCandidate(body3D);
   const candidates: ScaleEstimate[] = [
     ...(body3DEstimate ? [body3DEstimate] : []),
