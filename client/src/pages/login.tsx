@@ -14,6 +14,7 @@ import { computeBrandingStyle, ensureBrandFontLoaded } from "@/lib/branding-styl
 import { MfaLoginStep } from "@/components/mfa-login-step";
 import { DeviceApprovalStep } from "@/components/device-approval-step";
 import { isNativeLoginAvailable, presentNativeLogin } from "@/lib/native-auth";
+import { homeRouteForRole } from "@shared/home-route-by-role";
 
 export default function LoginPage() {
   const { user, isLoading, loginMutation, deviceApprovalCompleteMutation } = useAuth();
@@ -81,17 +82,10 @@ export default function LoginPage() {
 
   if (!isLoading && user) {
     return (
-      <Redirect
-        to={
-          user.role === "coach"
-            ? "/coach"
-            : user.role === "admin"
-              ? "/admin"
-              : user.role === "guardian"
-                ? "/guardian"
-                : "/athlete"
-        }
-      />
+      // The same four-way decision App.tsx makes, read off the one shared record rather than
+      // transcribed a second time -- see shared/home-route-by-role.ts for why two copies of it
+      // was the defect rather than the duplication being merely untidy.
+      <Redirect to={homeRouteForRole(user.role)} />
     );
   }
 

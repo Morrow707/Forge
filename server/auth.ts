@@ -291,6 +291,32 @@ export function toPublicUser(user: any): PublicUser {
 // (branding, nav customization) to the one account whose call it should
 // actually be, not any staff member sharing the roster -- see the
 // requirePrimaryCoach guard in routes.ts.
+// EXPORTED SINCE 2026-10-22, AND THE REASON IS A SILENT CAMERA TRACE LOSS.
+//
+// For as long as both serializers have existed, this one was module-private and `toPublicUser`
+// was the exported one -- so every user object server/routes.ts handed back was flag-free BY
+// CONSTRUCTION, and three client dialogs seed the /api/auth/me cache from exactly those
+// responses with a wholesale `setQueryData` replace. The consequence closed a loop between the
+// two bugs of 2026-10-19: a coach or admin opens Edit My Profile and types the height that bug
+// #2's fix exists to let them add, the response comes back without
+// `biometricReleaseRequired`, the workout screen stops asking for the release that bug #1's fix
+// exists to put in front of them, and the capture gate goes on dropping their traces in
+// silence. The recovery path for one bug re-armed the other.
+//
+// `isPrimaryCoach` rode along on the same write: a primary coach who saved a notification
+// preference read "ask your primary coach" on billing and Coaches Corner until a refetch, and
+// `hiddenSections` stopped hiding -- the exact failure this function's own comment above warns
+// about in words.
+//
+// WHAT MADE IT INVISIBLE, worth keeping because it is not a role bug and no amount of reading
+// role conditionals finds it: there is no role comparison anywhere in the mechanism. The
+// twelve flags are declared OPTIONAL on PublicUser (shared/schema.ts), legitimately -- most do
+// not apply to most roles -- so "not applicable to you" and "not computed on this response"
+// are the same value, and `toPublicUser(updated)` type-checks as a PublicUser either way. The
+// one test over these serializers (server/coach-profile-response.test.ts) asserts what must be
+// STRIPPED and is structurally blind to what must be ATTACHED, which is the assertion-direction
+// lesson CLAUDE.md has now paid for with NOT_PUBLIC_ON_PURPOSE, the upload-directory list and
+// the email-builder glob.
 async function toPublicUserWithSections(user: any): Promise<PublicUser> {
   const publicUser = toPublicUser(user);
   // THE BIOMETRIC RELEASE IS ASKED OF EVERY ROLE THAT CAN FILM ITS OWN TRAINING, not of athletes
@@ -365,6 +391,18 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
   }
   return publicUser;
 }
+
+/** THE SERIALIZER EVERY RESPONSE CARRYING THE CALLER'S OWN IDENTITY MUST USE.
+ *
+ *  `toPublicUser` alone is correct for exactly one thing: a response carrying SOMEONE ELSE's
+ *  row (a coach reading or editing an athlete on their roster). Those must NOT carry the flags
+ *  -- they are "what YOU must do next" and mean nothing about a third party, and shipping an
+ *  athlete's consent state to their coach is a leak rather than a convenience.
+ *
+ *  `server/every-self-response-carries-the-flags.test.ts` discovers every `toPublicUser(` call
+ *  in routes.ts and holds each to one of those two readings, so a new route cannot land on the
+ *  flag-free one by omission. */
+export { toPublicUserWithSections };
 
 // Bearer-token fallback for the native app, alongside (not instead of) the
 // cookie session above. iOS's WKWebView is subject to Apple's Intelligent
@@ -774,8 +812,28 @@ export function setupAuth(app: Express) {
         dateOfBirth,
         sport: role === "athlete" ? sport : null,
         position: role === "athlete" ? position : null,
-        heightIn: role === "athlete" ? heightIn : null,
-        bodyWeightLbs: role === "athlete" ? bodyWeightLbs : null,
+        // STORED FOR ANY ROLE THAT FILMS ITS OWN TRAINING, not for athletes alone.
+        //
+        // This was `role === "athlete" ? heightIn : null`, which DISCARDED a height the caller
+        // had supplied. Height is the heaviest voter in the camera's scale blend -- it is what
+        // calibrateFromFrames converts pixels with -- and coach and admin are two of the three
+        // roles in ROLES_THAT_FILM_THEIR_OWN_TRAINING, so writing them null by rule is the data
+        // half of the bug whose consent half was fixed on 2026-10-19. It is also why the admin
+        // account carried no height for weeks, and why the first height to arrive moved eight
+        // numbers at once and left a Romanian deadlift reading +12% against the bar sensor with
+        // no code change between the two sessions (docs/camera-tracking-notes.md, 2026-10-19).
+        //
+        // LATENT UNTIL THE FORM ASKS. signup.tsx:232 strips it the same way, so nothing sends a
+        // coach's height today and this changes no observable behaviour on its own -- it stops
+        // the server being the thing that throws it away. Whether the coach signup form should
+        // ASK is a product decision about friction on the acquisition path, not a bug, and is
+        // left alone deliberately. The reachable path today is Edit My Profile, which stopped
+        // wiping the role flags in the same change as this comment.
+        //
+        // The REQUIREMENT stays athlete-only (see the 400 above): a coach is not blocked from
+        // signing up for want of a height they may never film with.
+        heightIn: ROLES_THAT_FILM_THEIR_OWN_TRAINING.has(role) ? heightIn ?? null : null,
+        bodyWeightLbs: ROLES_THAT_FILM_THEIR_OWN_TRAINING.has(role) ? bodyWeightLbs ?? null : null,
         // Snapshotted once, here, at creation -- see users.signupSport's
         // own comment for why this never gets touched again even if the
         // athlete's `sport` profile field changes later.

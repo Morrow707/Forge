@@ -61,6 +61,7 @@ import {
 } from "@/pages/legal-document";
 import DeleteAccountPage from "@/pages/delete-account";
 import NotFound from "@/pages/not-found";
+import { homeRouteForRole } from "@shared/home-route-by-role";
 // The signup, claim and pricing pages are one click past the front door rather than on it: a
 // visitor lands on / or /login, and only some of them go on to one of these. Together they were
 // 60 kB of the entry chunk (the sport picker's Select, the checkbox, the plan bands), paid by
@@ -183,12 +184,12 @@ function FullScreenSpinner() {
   );
 }
 
-function homeFor(role: "coach" | "athlete" | "admin" | "guardian") {
-  if (role === "coach") return "/coach";
-  if (role === "admin") return "/admin";
-  if (role === "guardian") return "/guardian";
-  return "/athlete";
-}
+// ONE MAPPING, IN shared/home-route-by-role.ts. This was an if-chain here and a nested ternary
+// in pages/login.tsx -- two hand-written copies of one four-way decision, each with a trailing
+// `return "/athlete"` that silently absorbed any role it had not been told about. Consolidated
+// 2026-10-22; the shared record is exhaustive over the role enum, so a fifth role is a type
+// error rather than a guardian landing on an athlete dashboard.
+const homeFor = homeRouteForRole;
 
 // Shown instead of a hard redirect-to-login when the "who am I" check
 // itself couldn't complete (dropped connection, server hiccup) -- as

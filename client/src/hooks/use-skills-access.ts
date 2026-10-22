@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { ROLES_THAT_FILM_THEIR_OWN_TRAINING } from "@shared/roles-that-film-their-own-training";
 
 export type SkillsAccessReason =
   | "coach_or_admin"
@@ -41,7 +42,14 @@ export type SkillsAccessState = {
  */
 export function useSkillsAccess(): SkillsAccessState {
   const { user } = useAuth();
-  const eligible = !!user && ["athlete", "coach", "admin"].includes(user.role);
+  // THE SET, NOT A HAND-TYPED COPY OF IT. Consolidated 2026-10-22: this line was
+  // `["athlete", "coach", "admin"].includes(user.role)`, a third transcription of
+  // ROLES_THAT_FILM_THEIR_OWN_TRAINING beside the two in server/auth.ts and
+  // server/storage.ts. A divergence here is SILENT -- the hook decides whether to ASK
+  // the server at all, so a role dropped from the array never reaches the resolver and
+  // reads as a refusal rather than an error. That is how an admin came to be offered
+  // Record while the capture gate dropped every trace (2026-10-19).
+  const eligible = !!user && ROLES_THAT_FILM_THEIR_OWN_TRAINING.has(user.role);
   const { data, isError, refetch } = useQuery<SkillsAccess>({
     queryKey: ["/api/athlete/skills-access"],
     enabled: eligible,

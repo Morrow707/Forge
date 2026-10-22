@@ -16,6 +16,26 @@ const auth = readFileSync(join(__dirname, "auth.ts"), "utf8");
 // property of this route: open MFA to athletes and it becomes a live
 // credential leak with no change here.
 
+/** A route's OWN handler text: from its declaration to the next route declaration.
+ *
+ *  NOT a character window. `routes.slice(start, start + 2000)` is how both cases below were
+ *  written, and on 2026-10-22 a nine-line comment added above one `res.json` pushed it past the
+ *  window and turned the case red on a change that was correct -- the third time in one session.
+ *  CLAUDE.md already records this exact failure in stripe-checkout.test.ts, including the half
+ *  that is worse than a false red: a fixed window also PASSES for a route whose match sits just
+ *  inside it but belongs to an unrelated handler further down the file. Bounding by the next
+ *  `app.<verb>(` is the thing that is actually meant by "this route's handler". */
+function handlerFor(route: string): string {
+  const start = routes.indexOf(route);
+  if (start < 0) return "";
+  const next = routes.slice(start + route.length).search(/\n  app\.(get|post|patch|put|delete)\(/);
+  return next < 0 ? routes.slice(start) : routes.slice(start, start + route.length + next);
+}
+
+/** Serialized through one of the two serializers rather than by hand. WHICH one is a separate
+ *  question, owned by server/every-self-response-carries-the-flags.test.ts. */
+const SERIALIZED = /res\.json\(\s*(await\s+)?toPublicUser(WithSections)?\(updated\)\s*\)/;
+
 describe("no user-shaped response hand-rolls its own field stripping", () => {
   it("toPublicUser still strips every credential field", () => {
     const fn = auth.slice(auth.indexOf("export function toPublicUser"));
@@ -45,11 +65,22 @@ describe("no user-shaped response hand-rolls its own field stripping", () => {
     expect(routes).not.toMatch(/const \{[^}]*\bpasswordHash\b[^}]*\.\.\./);
   });
 
-  it("the self-serve preference and profile routes return toPublicUser", () => {
+  it("every self-serve preference and profile route serializes through a serializer", () => {
     // The six that were destructuring by hand. Own-account routes, so this was the caller's own
     // TOTP seed rather than someone else's -- which still reaches browser memory, any proxy
     // logging bodies, and anything that can run script on the page, each of them a working
     // second factor.
+    //
+    // AND THIS CASE HAD THE SAME DEFECT THE ONE ABOVE IS A MONUMENT TO -- found 2026-10-22, the
+    // second time in one file. It asserted the literal string `toPublicUser(updated)`, so when
+    // all six were correctly moved to `await toPublicUserWithSections(updated)` (which CALLS
+    // toPublicUser and then attaches the role flags, so it satisfies this test's whole purpose
+    // strictly better) this case went RED on the fix. A scan that enumerates an accepted FORM
+    // fails on every correct change that uses a new one, and gets "fixed" by lengthening the
+    // list; a scan that states what is FORBIDDEN accepts every correct change and refuses every
+    // wrong one. The forbidden thing is a hand-rolled strip, and the case above already bans it.
+    //
+    // So this now asserts the RULE: the response goes through one of the serializers, by name.
     for (const route of [
       'app.patch("/api/admin/my/preferences"',
       'app.patch("/api/coach/my/preferences"',
@@ -58,18 +89,23 @@ describe("no user-shaped response hand-rolls its own field stripping", () => {
       'app.patch("/api/notification-prefs"',
       'app.patch("/api/notification-prefs/push-categories"',
     ]) {
-      const start = routes.indexOf(route);
-      expect(start, `${route} should exist`).toBeGreaterThan(-1);
-      expect(routes.slice(start, start + 2500), `${route} must use toPublicUser`).toContain(
-        "toPublicUser(updated)",
-      );
+      const handler = handlerFor(route);
+      expect(handler.length, `${route} should exist`).toBeGreaterThan(0);
+      expect(
+        handler,
+        `${route} must serialize through toPublicUser or toPublicUserWithSections`,
+      ).toMatch(SERIALIZED);
     }
   });
 
-  it("the coach profile-edit route returns toPublicUser", () => {
-    const start = routes.indexOf('app.patch("/api/coach/roster/:athleteId/profile"');
-    expect(start).toBeGreaterThan(-1);
-    const handler = routes.slice(start, start + 2000);
-    expect(handler).toContain("toPublicUser(updated)");
+  it("the coach profile-edit route serializes through a serializer", () => {
+    // WHICH serializer this one uses is a different question with a different answer, and it is
+    // owned by server/every-self-response-carries-the-flags.test.ts: this route returns the
+    // ATHLETE's row to a coach, so it must use the flag-free toPublicUser while the six above
+    // must not. That test states the rule and holds the exemption with its reason; this file's
+    // only business is that nothing here strips fields by hand.
+    const handler = handlerFor('app.patch("/api/coach/roster/:athleteId/profile"');
+    expect(handler.length).toBeGreaterThan(0);
+    expect(handler).toMatch(SERIALIZED);
   });
 });

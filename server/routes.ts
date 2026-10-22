@@ -29,7 +29,7 @@ import fs from "fs";
 import fsPromises from "fs/promises";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
-import { setupAuth, requireAuth, requireRole, toPublicUser } from "./auth";
+import { setupAuth, requireAuth, requireRole, toPublicUser, toPublicUserWithSections } from "./auth";
 import { registerInstitutionalAgreementRoutes } from "./institutional-agreement-routes";
 import { registerEmailListRoutes } from "./email-list";
 import { hashPassword, comparePasswords } from "./auth-utils";
@@ -4005,7 +4005,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateUserPreferences(user.id, parsed.data);
-    res.json(toPublicUser(updated));
+    res.json(await toPublicUserWithSections(updated));
   });
 
   // Platform-wide, anonymized -- see buildPlatformTrends in storage.ts for
@@ -6522,6 +6522,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // enrol, not a property of this route -- open MFA to athletes and it
     // becomes a real credential leak with no code change here. A coach is not
     // entitled to an athlete's second factor under any configuration.
+    // THE ONE ROUTE THAT MUST STAY FLAG-FREE, and the reason is not performance.
+    //
+    // `updated` here is the ATHLETE's row, not the caller's: this is a coach editing someone on
+    // their roster. The flags toPublicUserWithSections attaches are all "what YOU must do next"
+    // -- biometricReleaseRequired, assumptionOfRiskRequired, needsTermsAcceptance,
+    // guardianLinkRequired -- so on a third party's row they are meaningless to the reader and a
+    // leak of that athlete's consent state to their coach. The sibling six routes on this file
+    // return the caller's own identity and carry the flags for exactly the inverse reason.
+    //
+    // The response body is also discarded: athlete-profile-dialog.tsx's onSuccess takes no
+    // argument and only invalidates roster keys. Nothing seeds an auth cache from it.
     res.json(toPublicUser(updated));
   });
 
@@ -10414,7 +10425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateUserPreferences(user.id, parsed.data);
-    res.json(toPublicUser(updated));
+    res.json(await toPublicUserWithSections(updated));
   });
 
   // Self-assignment: coachId and athleteId are both the coach's own id.
@@ -11275,7 +11286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateUserPreferences(user.id, parsed.data);
-    res.json(toPublicUser(updated));
+    res.json(await toPublicUserWithSections(updated));
   });
 
   // EVERY ROLE EDITS ITS OWN PROFILE, BECAUSE THE DIALOG WAS ALREADY DRAWN FOR EVERY ROLE.
@@ -11312,7 +11323,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateUserProfile(user.id, parsed.data);
-    res.json(toPublicUser(updated));
+    res.json(await toPublicUserWithSections(updated));
   });
 
 
@@ -13763,7 +13774,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateNotificationPrefs(user.id, parsed.data);
-    res.json(toPublicUser(updated));
+    res.json(await toPublicUserWithSections(updated));
   });
 
   // Push-channel-only category opt-out -- see shared/notification-
@@ -13781,7 +13792,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: `Unknown notification categories: ${unknown.join(", ")}` });
     }
     const updated = await storage.updateNotificationPushCategoryPrefs(user.id, parsed.data.categories);
-    res.json(toPublicUser(updated));
+    res.json(await toPublicUserWithSections(updated));
   });
 
   // ---------------- Account self-service ----------------

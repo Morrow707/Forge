@@ -5355,6 +5355,14 @@ export const storage = {
   // form always resends the full set) never creates a phantom entry.
   async updateUserProfile(userId: number, input: UpdateProfileInput) {
     const before = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    // AN EMPTY PATCH IS A READ, NOT A CRASH. Every field on updateProfileSchema is optional, so
+    // `{}` is a valid body -- and `db.update().set({})` throws "No values to set" in drizzle,
+    // which escapes past the route and HANGS the request rather than answering it. That is the
+    // same defect, with the same symptom, that updateCoachBranding paid for on 2026-10-11 (a
+    // coach without Full Personalization saving only the gated fields). Found 2026-10-22 while
+    // changing this route's serializer; unreachable from edit-my-profile-dialog.tsx, which always
+    // resends the full set, and reachable by any direct call.
+    if (Object.keys(input).length === 0) return before!;
     const [row] = await db.update(users).set(input).where(eq(users.id, userId)).returning();
 
     const testingChanged = TESTING_FIELDS.some(
