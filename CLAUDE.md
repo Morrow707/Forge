@@ -264,6 +264,43 @@ same SHA shows a success on `main` and a failure elsewhere, nothing is broken.
   hand, `npm run db:reconcile` against a throwaway one is also the fastest way
   to prove a migration edit actually executes -- worth doing for any change to
   `server/reconcile-schema.ts`, since a broken statement there fails the deploy.
+- **A NEGATIVE SOURCE ASSERTION MUST STRIP COMMENTS FIRST. THIS COST FOUR FALSE RESULTS IN ONE
+  DAY (2026-10-22) AND IS THE MOST REPEATED SELF-INFLICTED FAILURE IN THIS REPO.**
+  A POSITIVE assertion is safe against raw source: a comment mentioning the right thing while the
+  code does the wrong thing fails for other reasons. A NEGATIVE one is not -- **prose about what
+  the code no longer does is indistinguishable from the code still doing it**, and the comment
+  explaining a fix is exactly where the old form gets quoted.
+  The four, all on the same day, three of them in tests written that day:
+  - the camera ratchet's first draft asserted a FILE contained `TRACKER_FOR_TRACKING_LEVEL`, and
+    the comment above the call contains those words -- so replacing the call's mapping with a bare
+    `"jump"` literal left the test GREEN (2026-10-20);
+  - `height-ruler-uncertainty.test.ts` went red because a comment quoted the removed
+    `uncertaintyFraction: 0.05`;
+  - `the-filming-roles-are-one-set.test.ts` went red because its own comment quoted the
+    `["athlete","coach","admin"]` array it was documenting the removal of;
+  - and the inverse, which is worse because nothing announces it: `/export \{ X \}/` unanchored
+    matched `// export { X };`, so commenting the export out passed under mutation. Anchor to line
+    start (`/^export \{ X \};/m`).
+  **The cure is two lines and belongs in any test with a `.not.toMatch` or `.not.toContain` on
+  source:** strip `/* */` blocks, then strip `//` to end of line, then match. Mutation-test every
+  negative assertion -- a negative that has not been broken on purpose is not known to work.
+- **AND A SCAN THAT ENUMERATES ACCEPTED FORMS FAILS ON EVERY CORRECT CHANGE, THEN GETS "FIXED" BY
+  LENGTHENING THE LIST.** State what is FORBIDDEN instead; it accepts every correct change and
+  refuses every wrong one. `height-ruler-uncertainty.test.ts` went red TWICE on correct changes
+  because it listed two accepted spellings of the height row and the fix each time was to add a
+  third; `coach-profile-response.test.ts` -- itself a monument to this lesson, with a long comment
+  about a regex that "encoded the shape of the single instance that prompted it" and so "certified
+  five live leaks as absent" -- had the identical flaw in two more cases, asserting the literal
+  `toPublicUser(updated)` and going red on a change that served its purpose strictly better. Both
+  now assert the rule.
+- **AND NEVER BOUND A SOURCE SCAN BY A CHARACTER COUNT.** `routes.slice(start, start + 2000)` is
+  how `coach-profile-response.test.ts` found a route's handler, and a nine-line comment pushed the
+  `res.json` past the window. CLAUDE.md already records this as `stripe-checkout.test.ts`'s bug
+  including the half that is worse than a false red -- a fixed window also PASSES for a match that
+  sits inside it but belongs to an unrelated handler further down the file. Bound by the next
+  `app.<verb>(` (see `handlerFor` in that file), which is what "this route's handler" actually
+  means. Proven by mutation: deleting the route's own call reds it instead of finding the next
+  one's.
 - **NEVER RUN TWO INTEGRATION SUITES AGAINST ONE DATABASE.** `TEST_DATABASE_URL` names the
   database, every test file's `beforeEach` TRUNCATEs every table in it, and nothing coordinates
   two `vitest` processes -- so a quick four-file run started while a full run is in flight
@@ -394,6 +431,109 @@ Read off `trackingDiagnostics.objectDetection` and `.objectLock`:
   mandatory to RUN and to RECORD, never mandatory to succeed.
 - **Neither detector leads** (Rule #2). This rule adds no hierarchy. It says all three must be
   PRESENT so overwatch has something to arbitrate. One witness is not unison.
+
+## THE FOUR ROLE "PROFILES" ARE NOT FOUR, AND THE SPLIT HE WANTED IS ALREADY THERE 446 TIMES
+
+Added 2026-10-22. Scott, after the camera registry: "There's 4 unique 'profiles' each with
+profile setting, calendar settings, so on and so forth ... I want there to be 4 different
+heights, one for free agent, one for athlete, one for coach, one for admin ... if I want to
+adjust the admin profile, I don't want it to change the free agents profile settings. Does that
+work? **We aren't 'calibrating' anything, but would it be better to keep it the same?**"
+
+**HIS OWN PARENTHESIS IS THE ANSWER.** A read-only survey of all 260 role conditionals (22
+agents, 0 errors; `docs/role-conditional-survey-2026-10-22.md`) says do not split, for five
+reasons, and found one live defect that **has no role conditional in it at all**.
+
+- **TWO OF THE FOUR ARE NOT WHAT THEY LOOK LIKE.** `shared/schema.ts:88` is
+  `pgEnum("role", ["coach","athlete","admin","guardian"])`. **"Free agent" is not a role** -- it
+  is `role === "athlete" && coaches.length === 0`, recomputed per request -- so a record keyed on
+  it is keyed on a LIVE DERIVED STATE: an athlete who joins a program would switch which record
+  they read mid-account, and their height would appear to change. No migration, no event, nothing
+  logged. **"Guardian" IS a role**, with its own dashboard and its own profile surface, and it was
+  missing from the four. Three slices found this independently.
+- **THE SEPARATION ALREADY EXISTS, 446 TIMES, IN THE GATES.** `requireRole` is 284 `"coach"`,
+  162 `"admin"`, 154 `"athlete"`, 2 `"guardian"`, plus 95 `ProtectedRoute` declarations each
+  naming one role. **Coach and admin are not two settings of one surface; they are 446 disjoint
+  gates.** Giving an admin a coach capability is 284 edits, not a set-membership change.
+- **NOTHING HERE IS FITTED**, which is this file's own test for a split. Height is typed by a
+  person; no measurement, no drift, nothing to leak.
+- **FOUR COPIES WOULD MULTIPLY THE LEGAL SURFACE BY FOUR.** Profile surfaces carry the biometric
+  release, research consent, the terms snapshot, `trackingOptOut`, the guardian link and the date
+  of birth that gates under-13. A legal surface has failed silently FIVE times on record here. A
+  wrong camera number is a caveated number; a wrong consent flag is unlawful collection from a
+  child.
+- **AND THE CAMERA REGISTRY'S OWN COST IS NOW MEASURABLE**: 270 records shipped 10-06, and the
+  10-20 audit found `cameraTunablesFor` was read by 1 of 15 trackers with `FITTED_OVERRIDES`
+  still empty. Two weeks to learn it was mostly unwired, for a problem that needed the shape.
+- **74% OF THE BRANCHING IS CORRECT.** Of 194 classified: 143 correctly inert, 24 visibly
+  degraded, 17 silently wrong, 10 unreachable. The concentration is permission gates (73) and
+  data shape (46), not profile settings (27).
+- **THE SEPARATION THAT DOES EXIST IN PROFILE CODE IS PER-ACTION, AND THAT IS THE BETTER AXIS.**
+  Three `heightIn` validators -- `signupSchema` and `claimProvisionalAthleteSchema` at `min(1)`,
+  `updateProfileSchema` at `min(0).nullable()` -- because signup must REQUIRE what a later edit
+  may CLEAR. `min(0)` is benign (`!heightIn || heightIn <= 0` is guarded in six places in the
+  camera code, so 0 is fail-closed). `updateProfileSchema` is ONE role-agnostic write path.
+  Four roles x three actions would be twelve validators for a field nobody measures.
+
+**WHAT TO DO INSTEAD, AND IT IS ALREADY THE REPO'S OWN PATTERN:** separate the DECLARATIONS,
+share the MECHANISM. `ROLES_THAT_FILM_THEIR_OWN_TRAINING` is the model -- one named set in
+`shared/`, read by the flag and the writer, held in step by a test. That was the fix for the
+2026-10-19 bug and it is the fix for this class. 12 further sites want that same set; the
+survey lists the rest.
+
+### THE LIVE DEFECT: A RESPONSE THAT CARRIED THE CALLER'S IDENTITY AND NOT THEIR FLAGS
+
+`toPublicUser` (exported) strips secrets and returns the row. `toPublicUserWithSections` (which
+was NOT exported) calls it and attaches twelve flags needing storage. So **every user object
+`routes.ts` handed back was flag-free by construction**, and three client dialogs seed the
+`/api/auth/me` cache from exactly those responses with a wholesale `setQueryData` replace.
+
+**A coach or admin opens Edit My Profile, types their height, saves -- and the response unsets
+`biometricReleaseRequired`.** The workout screen stops asking for the release, the capture gate
+goes on dropping their traces, nothing logs it. **The recovery path built for bug #2 of 10-19
+re-armed bug #1 of the same day.** `isPrimaryCoach` rode the same write, so a primary coach who
+saved a notification preference read "ask your primary coach" on billing and Coaches Corner until
+a refetch, and `hiddenSections` stopped hiding -- the exact failure `auth.ts:281-293` warns about
+in words.
+
+**IT HAS NO ROLE COMPARISON IN IT**, which is why seven slices of `role ===` greps were blind and
+the completeness critic is what found it. Two things kept it invisible: the twelve flags are
+declared OPTIONAL on `PublicUser`, legitimately, so "not applicable to you" and "not computed on
+this response" are the same value; and the one test over these serializers asserted what must be
+STRIPPED and was blind to what must be ATTACHED.
+
+**SIX ROUTES CARRY THE FLAGS NOW, NOT THREE AND NOT SEVEN.** The survey named three; three more
+had the same defect. `PATCH /api/coach/roster/:athleteId/profile` is deliberately left flag-free:
+it returns the ATHLETE's row to a coach, where the flags are meaningless to the reader and a leak
+of that athlete's consent state (its body is discarded anyway).
+`every-self-response-carries-the-flags.test.ts` discovers every `toPublicUser(` and holds each to
+one of two readings -- **a rule about whose row it is, never an exception list**, because a list
+rots and this one would rot toward the bug.
+
+**Also shipped:** both client hooks read the filming set instead of re-typing it (a divergence
+there is SILENT -- the hook decides whether to ASK the server); the 14 `requireRole([...])` gates
+are deliberately NOT rewritten, because `requireRole` is typed against the `Role` union so a
+`ReadonlySet<string>` would trade a compiler check on a permission gate for cosmetics, and a
+divergence there is LOUD -- a ratchet holds them equal instead; `admin/users.tsx` and the
+`z.enum` role-change schema name the same three strings and answer a different question (which
+roles an admin may ASSIGN) and the test asserts they stay separate;
+`shared/home-route-by-role.ts` replaces two hand-written four-way chains, each with a trailing
+`return "/athlete"` that silently absorbed any role it had not been told about; the signup height
+DISCARD is fixed while the athlete-only REQUIREMENT stands (whether the coach form should ask is
+acquisition friction and is Scott's); and an empty profile patch is a read rather than a drizzle
+throw that hangs the request -- `updateCoachBranding`'s bug of 10-11, one table over.
+
+**STILL OPEN, NAMED SO IT IS NOT MISTAKEN FOR DONE:** nine silently-wrong findings survived both
+adversarial lenses and seven are unfixed. Three are one job in `storage.ts` -- account deletion,
+the video retention cap and the stale-account purge are all scoped `role = 'athlete'`, so a coach
+or admin who films their own training is exempt from the cap the $9.99 add-on raises and leaves
+files behind on deletion; they want the filming set at all three sites and were left because each
+changes what gets DELETED, which wants its own commit and its own itest. And
+`documentAudienceFor` serves a **guardian** the athlete document checklist, because `/documents`
+is open to every signed-in role and that helper has three audiences and tests two. 17 files no
+slice reached, `debug-console.tsx:80` among them: the camera is granted to {athlete, coach, admin}
+and the only on-phone diagnostic readout is admin-only, so a coach filming their own training
+cannot see a save outcome. Server-side except four client files: `verify_build`.
 
 ## RULE #3: A VIDEO SHOWS THE REAL APP. NOTHING IN IT IS INVENTED.
 
