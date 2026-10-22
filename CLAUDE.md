@@ -132,6 +132,49 @@ This step is the reason `tailwindcss-animate` was moved to devDependencies in Pa
 build-time packages in `dependencies`, the production tree carried six advisories permanently
 and a REAL one in the server's own tree would have been invisible among them. Keep it that way.
 
+**IT FIRED AGAIN 2026-10-22, ON THE SIBLING STEP, AND THE CURE CRASHES ON THE SANDBOX'S OWN NPM.**
+`Audit build tooling` (the whole tree at `--audit-level=moderate`, step 10) went red on
+`6157bae9` and `685fe491` -- **four CI runs, both refs, two commits**, which is NOT the
+duplicate-run pattern below (there one of the two succeeds). Read the step NUMBER: step 10 of 16
+means typecheck, the unit suite and the production audit all PASSED and nothing about the code
+was the problem; it also means steps 11-16 -- the build, the reconciler, the seed, the FK-drift
+check and **the whole integration suite** -- never ran, so a commit that dies here is unproven
+by everything after it, not just unaudited. Four advisories published between 10-20 and 10-22:
+`vite` <=6.4.3 (high, five CVEs incl. cross-origin script execution through custom middleware),
+`@vitest/mocker` and `vitest` <=4.1.11 (moderate, code injection via unauthenticated manual mock
+registration) and `ip-address` <=10.7.3 (moderate, quadratic zone-identifier match). **The last
+one is in the PRODUCTION tree** -- `express-rate-limit` -> `ip-address`, so it reaches every rate
+limiter -- and it passed step 9 at 18:23 and failed it locally two hours later, i.e. the deploy
+blocker above was minutes from firing on its own. Fix inside the declared ranges, so only
+`package-lock.json` moved: vite 6.4.3 -> 6.4.5, the seven vitest packages 4.1.11 -> 4.1.12,
+chai 6.2.2 -> 6.3.0, tinyrainbow 3.1.1 -> 3.2.0, ip-address 10.7.2 -> 10.7.4.
+
+**`npm audit fix` AND `npm update` BOTH CRASH HERE, AND `--legacy-peer-deps` IS NOT THE
+WORKAROUND -- IT SILENTLY DELETES PACKAGES.** On npm 10.9.7 (what Node 22 ships, so what the CI
+runner and this sandbox both have) every form of the fix dies with
+`Cannot read properties of null (reading 'edgesOut')` in arborist's `#loadPeerSet`, while
+resolving vitest's five OPTIONAL peers (`@vitest/browser`, `@vitest/ui`, `happy-dom`, `jsdom`,
+`canvas`). A plain `npm install` is fine; it is only the ideal-tree rebuild that a version change
+forces. `--legacy-peer-deps` makes the command SUCCEED and is the trap: it skips peer resolution
+altogether, so it dropped **`react-is`, `ts-custom-error` and `@zxing/library`** from the tree
+(the net -33 lines in the lockfile diff were the tell, and the diff is the only place it is
+visible -- npm reports nothing). The next `npm run build` then failed with
+`Rollup failed to resolve import "react-is" from recharts/es6/util/ReactUtils.js`, which would
+have been a RED STEP 11 on top of the red step 10 and reads as a code problem. **A flag that
+makes a resolver stop resolving is not a bypass for a resolver bug.**
+**What works: run the update with a NEWER NPM, from a scratchpad, without installing it.**
+`npm install --no-save npm@11.21.1` into a temp directory, then
+`<that>/node_modules/.bin/npm update vite vitest ip-address` -- 56 insertions / 56 deletions,
+**zero packages added or removed**, `lockfileVersion` still 3, `package.json` untouched. Then
+prove CI can use it with CI's own npm: `npm ci` on 10.9.7 installed all 905 packages from the
+npm-11-written lock with no error, and typecheck, the 405-file unit suite (4744 passed,
+unchanged), `npm run build` and BOTH audits are green on that tree. Do not install a newer npm
+globally in the sandbox to do this -- the lock is the only artifact, and it has to be readable by
+the npm the runner actually has.
+**A vite bump reaches the phone.** The web bundle is compiled into the native binary, so the
+build tool that produces it moving two patches is a client change: `verify_build`, same argument
+as the Capacitor paragraph above.
+
 ### AND ONE MORE THAT IS REAL: A DEADLOCKED TRUNCATE IN THE TEST HARNESS (2026-10-09)
 
 Run 1757 on `b88d8850`. **`deploy` hangs off the integration job, so one aborted TRUNCATE stopped
