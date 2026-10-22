@@ -578,6 +578,67 @@ slice reached, `debug-console.tsx:80` among them: the camera is granted to {athl
 and the only on-phone diagnostic readout is admin-only, so a coach filming their own training
 cannot see a save outcome. Server-side except four client files: `verify_build`.
 
+### THE THREE RETENTION PATHS ARE DONE (2026-10-22), AND THEY TURNED OUT TO BE FOUR PLUS A LINK
+
+Scott: "Fix the paths too." The three named above now read
+`ROLES_THAT_FILM_THEIR_OWN_TRAINING` -- `deleteUserRecord`, `sweepVideoRetentionCap`,
+`sweepStaleAccountVideos` -- plus a **fourth of the same shape the survey did not name**,
+`getVideosEligibleForRetentionPurge` (the MINOR tier purge, 30 days under 13 / 90 days 13-17).
+That fourth was the only one where the role word was defensible, and the reason it still moved is
+worth keeping: `shared/roles-that-film-their-own-training.ts` says a coach or admin is "an adult
+account by construction", which is a CONVENTION and not an enforcement -- `signupSchema` requires
+a date of birth from a coach exactly as it does from an athlete and nothing refuses a minor coach.
+That sweep is DOB-gated anyway, so for every real coach it is a no-op; a minor's
+data-minimisation promise is the wrong place to rest on a convention.
+
+**`deleteUserRecord`'s TWO BRANCHES WERE EXCLUSIVE AND A COACH WHO FILMS IS BOTH.** The athlete
+branch cleans the account's OWN training files (set clips in `form-videos`, skeleton traces in
+`set-traces/<id>/`, skill clips, the comment media on their assignments); the `else` cleans what
+the account UPLOADED ABOUT SOMEBODY ELSE (authored comment video and stills, the brand logo).
+Those answer different questions and a coach needs both, so they are two sequential `if`s now,
+not an if/else. **The second branch is still `!== "athlete"` rather than coach-or-admin**, on
+purpose: narrowing it would silently stop cleaning up for a GUARDIAN, and a branch that used to
+run for a role must not stop running for it as a side effect of widening the branch above.
+`retainSubjectAfterDeletion` is widened too and is INERT today -- it refuses without a
+`researchSubjectId` and the mirror is athlete-scoped -- so it is there against the day mirror
+membership changes, which is a CONSENT decision and not that function's to make.
+
+**AND THE WIDENING COULD NOT SHIP WITHOUT A NEW MODULE, BECAUSE THE WARNING'S LINK IS
+ATHLETE-ONLY.** The cap warning says "tap the heart within 7 days to keep it" and the grace clock
+starts the moment the notice is DELIVERED -- and `/athlete/day/...` and `/athlete/calendar` are
+`<ProtectedRoute role="athlete">`, so a coach handed that link is REFUSED while the countdown
+runs. That is a silent deletion with a notice attached, which is the shape Rule #1 exists to
+refuse. `shared/own-training-routes.ts` is the fix: athlete `/athlete/...`, coach `/coach/my/...`,
+admin `/admin/my/...` (all three already routed; the coach and admin pages are `my-calendar.tsx`
+and `AdminMyWorkout`), built from the account's own role, which both sweeps now select alongside
+the id. **NOT merged into `shared/home-route-by-role.ts`**, which names the same three roles and
+answers where signing in LANDS somebody -- the same QUESTION test the camera registry uses.
+A skill warning still links to the calendar, because no role has a standalone skill-day URL.
+
+**WHAT THIS CHANGES IN PRODUCTION, SAID PLAINLY BECAUSE IT IS SCOTT'S OWN ACCOUNT.** Enforcement
+is on and `isBetaAccount` has defaulted false since 10-11, so from the next deploy the nightly
+sweep really does cap a coach's and an admin's own training videos at **10 unfavorited per
+exercise** (5 favorited exempt, 20/10 with the $9.99 add-on), with a 7-day warned grace. The
+calibration account is an admin that films the same four lifts over and over, so it is the one
+account on the platform likely to cross that. Two things take the edge off and one lever closes
+it: **purging a video never touches its metrics** (the numbers, `trackingDiagnostics`, the scale
+blend and the skeleton trace all survive -- the export that calibration is actually read from is
+unaffected), the warning now links somewhere an admin can open, and ticking **Beta account** or
+**Extra video storage** for that account on `/admin/billing` makes it unlimited again. The
+stale-account sweep cannot touch it at all (12 months inactive). Nothing is deleted on the deploy
+itself: the first run only warns.
+
+`server/a-coach-who-films-is-swept-too.itest.ts` (11 cases on real Postgres: a coach and an admin
+over the cap, a coach under it, a GUARDIAN never swept, all three link shapes, the files really
+gone on deletion for each role, and the rows proven present first),
+`shared/own-training-routes.test.ts` (reads `App.tsx` and asserts every path is routed FOR THAT
+ROLE -- a path typed in the map and not in the router is a link that refuses, and nothing else
+would notice) and `server/the-retention-paths-cover-every-filming-role.test.ts`, which states
+what is FORBIDDEN rather than listing the sites that were fixed, so a fifth retention path
+written next year fails the day it is added. Nine mutations, each caught by the right case, and
+under the three that revert a fix the ATHLETE cases stay green -- which is exactly what made this
+invisible for as long as it was.
+
 ## RULE #3: A VIDEO SHOWS THE REAL APP. NOTHING IN IT IS INVENTED.
 
 Added 2026-10-02, after a build-a-program reel shipped with a program builder nobody has ever

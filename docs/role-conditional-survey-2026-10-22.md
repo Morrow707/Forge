@@ -184,16 +184,42 @@ rest, worst first:
 
 | at | what |
 |---|---|
-| `storage.ts:4940` | `deleteUserRecord`'s athlete branch is the ONLY caller of `deleteAthleteTraceDir` and the only path that deletes `formCheckVideoUrl`. A coach or admin who filmed their own training and then deletes their account leaves files behind. |
-| `storage.ts:32833` | `sweepVideoRetentionCap` builds its per-athlete cap from an athlete-only query, so a coach's or admin's own clips are exempt from the cap the $9.99 add-on raises. |
-| `storage.ts:33045` | The stale-account video purge is scoped `role = 'athlete'` in SQL, so a coach or admin who filmed and stopped using Forge is never swept. |
+| ~~`storage.ts:4940`~~ **FIXED 2026-10-22** | `deleteUserRecord`'s athlete branch is the ONLY caller of `deleteAthleteTraceDir` and the only path that deletes `formCheckVideoUrl`. A coach or admin who filmed their own training and then deletes their account leaves files behind. — The two branches were EXCLUSIVE and a coach who films is both; they are two sequential `if`s now, the second still `!== "athlete"` so a guardian does not lose its cleanup. |
+| ~~`storage.ts:32833`~~ **FIXED 2026-10-22** | `sweepVideoRetentionCap` builds its per-athlete cap from an athlete-only query, so a coach's or admin's own clips are exempt from the cap the $9.99 add-on raises. — Now `inArray(users.role, ROLES_THAT_FILM_THEIR_OWN_TRAINING_LIST)`. It also had to select the ROLE: the warning's link was athlete-only and the grace clock starts on delivery. |
+| ~~`storage.ts:33045`~~ **FIXED 2026-10-22** | The stale-account video purge is scoped `role = 'athlete'` in SQL, so a coach or admin who filmed and stopped using Forge is never swept. — Same widening, same role-aware link. |
 | `storage.ts:4292`, `:7850` | Two ABSENCES: the coach-code lookup has no role check where its twin `joinCoachStaffByCode` does, and `athleteHasCoach` — the definition of "has a coach" for the whole platform — is role-blind. |
 | `storage.ts:11832` | "Forge-official" inferred from admin ownership where `exercises.isForgeOfficial` is now an explicit column; the comment is stale. |
 | `documents.tsx:158` + `shared/required-documents.ts:132` | `documentAudienceFor` is `if (coach\|\|admin) return "coach"; return hasCoach ? …`, and `DocumentAudience` has three values — so a **guardian** opening `/documents` (an `AuthedRoute`, open to every signed-in role) is served the athlete checklist. The call site at `routes.ts:9317` is the right shape; the helper is not. |
 
-The three `storage.ts` camera-retention ones are one job and want `ROLES_THAT_FILM_THEIR_OWN_TRAINING`
-at all three sites; they were left because each changes what gets DELETED, and a deletion change
-wants its own commit, its own itest and a deliberate read rather than riding along.
+The three `storage.ts` camera-retention ones were one job and wanted `ROLES_THAT_FILM_THEIR_OWN_TRAINING`
+at all three sites; they were left out of the first pass because each changes what gets DELETED,
+and a deletion change wants its own commit, its own itest and a deliberate read rather than
+riding along.
+
+**DONE 2026-10-22, and the deliberate read found two things this survey missed.** First, a
+FOURTH site of the same shape that no slice reported: `getVideosEligibleForRetentionPurge`, the
+MINOR tier purge (30 days under 13, 90 days 13-17), also keyed on `role = 'athlete'`. It is the
+one place the role word was defensible -- `shared/roles-that-film-their-own-training.ts` calls a
+coach or admin "an adult account by construction" -- and it moved anyway, because that is a
+CONVENTION and not an enforcement: `signupSchema` requires a date of birth from a coach exactly
+as it does from an athlete and nothing refuses a minor coach. The sweep is DOB-gated, so for
+every real coach it is a no-op.
+
+Second, **the widening could not ship on its own.** The cap warning says "tap the heart within 7
+days to keep it" and the grace clock starts when the notice is DELIVERED -- and
+`/athlete/day/...` and `/athlete/calendar` are `<ProtectedRoute role="athlete">`, so a coach
+handed that link is refused while the countdown runs. A silent deletion with a notice attached is
+worse than no warning, so `shared/own-training-routes.ts` now builds the link from the account's
+own role (athlete `/athlete/...`, coach `/coach/my/...`, admin `/admin/my/...`) and both sweeps
+select the role alongside the id. Deliberately NOT merged into `shared/home-route-by-role.ts`,
+which names the same three roles and answers a different question.
+
+Tests: `server/a-coach-who-films-is-swept-too.itest.ts` (11 cases on real Postgres, including a
+GUARDIAN that must NOT be swept -- widening to the filming set and widening to every role are
+different changes), `shared/own-training-routes.test.ts` (reads `App.tsx` and asserts each path is
+routed FOR THAT ROLE) and `server/the-retention-paths-cover-every-filming-role.test.ts`, which
+states what is FORBIDDEN rather than listing the four sites. Nine mutations; under each one that
+reverts a fix the athlete cases stay green, which is what made this invisible.
 
 **The critic also named 17 files no slice reported on**, including `account-settings-dialog.tsx`
 (app-shell reported the mount; nobody read the body, where research consent is athlete-only at

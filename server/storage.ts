@@ -1,5 +1,9 @@
 import type { MuscleLoadBreakdown } from "@shared/muscle-map";
-import { ROLES_THAT_FILM_THEIR_OWN_TRAINING } from "@shared/roles-that-film-their-own-training";
+import {
+  ROLES_THAT_FILM_THEIR_OWN_TRAINING,
+  ROLES_THAT_FILM_THEIR_OWN_TRAINING_LIST,
+} from "@shared/roles-that-film-their-own-training";
+import { ownTrainingCalendarRoute, ownTrainingDayRoute } from "@shared/own-training-routes";
 import { db } from "./db";
 import {
   COACH_COPPA_ATTESTATION,
@@ -2722,6 +2726,23 @@ const researchDatasetAthlete = () =>
  */
 const trackedAthlete = () => and(eq(users.role, "athlete"), eq(users.trackingOptOut, false));
 
+/** The roles whose OWN training the camera films, as a SQL `IN` list for the two raw-query
+ *  retention sweeps (the third reads the same roles through drizzle's `inArray`).
+ *
+ *  A FUNCTION rather than a module constant on purpose: a drizzle `SQL` chunk built once and
+ *  spliced into several templates is the kind of shared mutable-looking value that is fine today
+ *  and a debugging session the day the builder stops being pure. It is three string params.
+ *
+ *  Deliberately NOT used by trackedAthlete() above: research-mirror membership is a CONSENT
+ *  decision about who agreed to be in an extract, not a question about who films, and the two
+ *  happening to name the same role today is not a reason to couple them (see CLAUDE.md on the
+ *  camera registry -- is this the same QUESTION, not does it have the same value). */
+const filmingRolesSql = () =>
+  sql.join(
+    ROLES_THAT_FILM_THEIR_OWN_TRAINING_LIST.map((r) => sql`${r}`),
+    sql`, `,
+  );
+
 /** Athletes with at least one recorded injury in any of `regions`. */
 async function athletesWithInjuryInRegions(
   athleteIds: number[],
@@ -4937,7 +4958,21 @@ export const storage = {
     const user = await this.getUser(userId);
     if (!user) return;
 
-    if (user.role === "athlete") {
+    // THE TWO BRANCHES BELOW WERE EXCLUSIVE AND A COACH WHO FILMS IS BOTH (fixed 2026-10-22).
+    // Only an athlete's own training files were cleaned up here, and `cameraAccessFor` grants
+    // the camera to a coach and an admin by role alone -- so an account in
+    // ROLES_THAT_FILM_THEIR_OWN_TRAINING that is not an athlete wrote set clips under
+    // form-videos, skeleton traces under set-traces/<id>/ and skill-session clips, and deleting
+    // it took every row away and left every file on the mounted disk with nothing pointing at
+    // it. Same gap as the authored-comment media the `else` below was written for, on the other
+    // half of the same account.
+    //
+    // So the filming cleanup runs for the filming set and the coach/admin cleanup runs for a
+    // coach or admin, and a coach gets BOTH -- two sequential `if`s rather than an if/else,
+    // because the question each answers is different ("whose training is this" vs "what did
+    // this account upload about somebody else's"). An athlete reaches only the first, which is
+    // exactly what it did before.
+    if (ROLES_THAT_FILM_THEIR_OWN_TRAINING.has(user.role)) {
       const [setVideos, skillVideos, commentVideos, skillCommentVideos] = await Promise.all([
         db
           .select({ url: workoutSetEntries.formCheckVideoUrl })
@@ -4973,7 +5008,15 @@ export const storage = {
         ...commentVideos.flatMap((v) => [deleteUploadedFile(v.url), deleteUploadedFile(v.image)]),
         ...skillCommentVideos.flatMap((v) => [deleteUploadedFile(v.url), deleteUploadedFile(v.image)]),
       ]);
-    } else {
+    }
+
+    // Left as "not an athlete" rather than narrowed to coach-or-admin, which is what this
+    // started as when it was the `else`: narrowing it would silently stop cleaning up for a
+    // GUARDIAN, and a branch that used to run for a role must not stop running for it as a side
+    // effect of widening the branch above. A guardian authors no workout comment and owns no
+    // team today, so for them this is a no-op either way -- which is the argument for leaving it
+    // alone, not for tightening it.
+    if (user.role !== "athlete") {
       // A coach or admin DOES have files of their own, contrary to what
       // this function assumed when it only cleaned up for athletes. Every
       // comment they wrote can carry a video and a drawn-on still (see
@@ -5048,7 +5091,15 @@ export const storage = {
     // leaves the rows unmarked, so the nightly sweep reaps them -- the wrong
     // outcome, but the safe direction to be wrong in, and the account is still
     // gone.
-    if (user.role === "athlete") {
+    //
+    // Widened from athlete-only to the filming set 2026-10-22, and it is INERT today:
+    // retainSubjectAfterDeletion refuses unless the row carries a researchSubjectId, and the
+    // mirror is athlete-scoped (trackedAthlete() in this file), so no coach or admin has one.
+    // It is here against the day mirror membership changes -- that is a CONSENT decision and
+    // not this function's to make, but if it is ever made, a retain call still keyed on the word
+    // "athlete" would reap the record of somebody who had been promised it survives, silently.
+    // The guard that makes this safe lives in the callee, so widening the caller costs nothing.
+    if (ROLES_THAT_FILM_THEIR_OWN_TRAINING.has(user.role)) {
       try {
         await retainSubjectAfterDeletion(userId);
       } catch (err) {
@@ -32794,7 +32845,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         JOIN skill_assignments sa ON sa.id = sdc.skill_assignment_id
         WHERE sdc.video_url IS NOT NULL OR sdc.image_url IS NOT NULL
       ) v
-      JOIN users u ON u.id = v.athlete_id AND u.role = 'athlete'
+      JOIN users u ON u.id = v.athlete_id AND u.role IN (${filmingRolesSql()})
       WHERE u.date_of_birth IS NOT NULL
         AND u.date_of_birth > (current_date - interval '18 years')
         AND (
@@ -32830,6 +32881,11 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     const athleteRows = await db
       .select({
         id: users.id,
+        // The warning's link is per ROLE now (ownTrainingDayRoute): every own-training route is
+        // declared for exactly one role, so a coach sent an /athlete/... link is REFUSED -- and
+        // the grace clock starts on DELIVERY, which would make that a silent deletion with a
+        // notice attached. See shared/own-training-routes.ts.
+        role: users.role,
         hasVideoStorageAddOn: users.hasVideoStorageAddOn,
         isBetaAccount: users.isBetaAccount,
         trialExpiresAt: users.trialExpiresAt,
@@ -32838,14 +32894,16 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         dateOfBirth: users.dateOfBirth,
       })
       .from(users)
-      .where(eq(users.role, "athlete"));
+      .where(inArray(users.role, [...ROLES_THAT_FILM_THEIR_OWN_TRAINING_LIST]));
     // Unlimited (beta/trial/enforcement-off) accounts have nothing to
     // sweep -- skipped up front so the queries below, and the per-row work
     // after them, never touch a row that could never actually be evicted.
     const capByAthlete = new Map<number, number>();
+    const roleByAthlete = new Map<number, string>();
     for (const a of athleteRows) {
       const limits = getVideoRetentionLimits(a);
       if (Number.isFinite(limits.totalCap)) capByAthlete.set(a.id, limits.totalCap);
+      roleByAthlete.set(a.id, a.role);
     }
     if (capByAthlete.size === 0) return { warned: [], purged: 0 };
 
@@ -32899,7 +32957,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         // (see the sort comment below for why that matters).
         sortKey: `${row.date}-${String(row.id).padStart(10, "0")}`,
         itemName: row.exerciseName,
-        link: `/athlete/day/${row.assignmentId}/${row.programDayId}/${row.date}`,
+        link: ownTrainingDayRoute(
+          roleByAthlete.get(row.athleteId) ?? "athlete",
+          row.assignmentId,
+          row.programDayId,
+          row.date,
+        ),
       });
     }
 
@@ -32938,7 +33001,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         // its own URL -- see SkillDayViewDialog's call sites), unlike the
         // exercise side's /athlete/day/... route above. The calendar is the
         // closest real destination.
-        link: "/athlete/calendar",
+        // ...and the calendar that belongs to THIS account's role, since /athlete/calendar
+        // refuses a coach.
+        link: ownTrainingCalendarRoute(roleByAthlete.get(row.athleteId) ?? "athlete"),
       });
     }
 
@@ -33047,10 +33112,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     const STALE_ACCOUNT_INACTIVE_MONTHS = 12;
     const STALE_ACCOUNT_GRACE_DAYS = 7;
 
-    const staleAthleteRows = await db.execute<{ id: number }>(sql`
-      SELECT u.id
+    // The role comes back with the id for the same reason the cap sweep selects it: the
+    // warning's link has to be the one THIS account's role can open.
+    const staleAthleteRows = await db.execute<{ id: number; role: string }>(sql`
+      SELECT u.id, u.role
       FROM users u
-      WHERE u.role = 'athlete'
+      WHERE u.role IN (${filmingRolesSql()})
         AND (
           SELECT greatest(
             u.last_activity_at,
@@ -33061,6 +33128,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         ) < (now() - (${STALE_ACCOUNT_INACTIVE_MONTHS} || ' months')::interval)
     `);
     const staleAthleteIds = new Set(staleAthleteRows.rows.map((r) => r.id));
+    const roleByAthlete = new Map<number, string>(staleAthleteRows.rows.map((r) => [r.id, r.role]));
 
     // Clear any grace-window flag left over from a PAST staleness episode
     // that this athlete has since recovered from (a real login, workout, or
@@ -33132,7 +33200,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         staleAccountPendingDeletionAt: row.staleAccountPendingDeletionAt,
         athleteId: row.athleteId,
         itemName: row.exerciseName,
-        link: `/athlete/day/${row.assignmentId}/${row.programDayId}/${row.date}`,
+        link: ownTrainingDayRoute(
+          roleByAthlete.get(row.athleteId) ?? "athlete",
+          row.assignmentId,
+          row.programDayId,
+          row.date,
+        ),
       });
     }
 
@@ -33156,7 +33229,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         staleAccountPendingDeletionAt: row.staleAccountPendingDeletionAt,
         athleteId: row.athleteId,
         itemName: row.skillExerciseName,
-        link: "/athlete/calendar",
+        // ...and the calendar that belongs to THIS account's role, since /athlete/calendar
+        // refuses a coach.
+        link: ownTrainingCalendarRoute(roleByAthlete.get(row.athleteId) ?? "athlete"),
       });
     }
 
