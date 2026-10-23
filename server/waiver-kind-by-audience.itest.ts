@@ -63,6 +63,45 @@ describe("which kinds a profile accepts", () => {
     expect((await upload(server.baseUrl, cookie, free.id, "medical_clearance")).status).toBe(201);
   });
 
+  it("A GUARDIAN'S OWN PROFILE TAKES NO DOCUMENT BUT 'other'", async () => {
+    // The defect this closes, found 2026-10-22. `documentAudienceFor` tested two role strings
+    // where the pgEnum has four, so a guardian fell through to the ATHLETE branch -- and the two
+    // halves then disagreed: the page resolved `athlete_rostered` (it passes
+    // `hasCoach: isFreeAgent !== true`, and useIsFreeAgent returns false for a non-athlete) while
+    // both server call sites resolved `athlete_free_agent` (they pass `hasCoach: false`).
+    //
+    // So the parent was shown two red rows about their own training. One of them, the
+    // participation waiver, 400'd when tapped -- a dead end on the row the page pre-selected.
+    // The other, medical_clearance, was ACCEPTED: an adult's own physician's letter filed into
+    // the admin review queue of children's medical records, where the query joins `users` for an
+    // `athleteName` with no role filter.
+    //
+    // Both assertions matter and they are different: the FIRST is the one that was already
+    // refused (so it guards the audience not silently widening), the SECOND is the live bug.
+    const guardian = await makeLoginableUser({ role: "guardian" });
+    const cookie = (await loginAs(server.baseUrl, guardian)).cookieHeader();
+
+    expect((await upload(server.baseUrl, cookie, guardian.id, "participation_waiver")).status).toBe(400);
+    const clearance = await upload(server.baseUrl, cookie, guardian.id, "medical_clearance");
+    expect(clearance.status).toBe(400);
+    expect((await clearance.json()).message).toMatch(/does not belong on this profile/);
+
+    // "other" survives on every profile on purpose -- it is the escape hatch for a form no list
+    // anticipated, and taking it away from a guardian would be a refusal nobody asked for.
+    expect((await upload(server.baseUrl, cookie, guardian.id, "other")).status).toBe(201);
+  });
+
+  it("and the guardian's compliance answer is complete rather than two documents they can never owe", async () => {
+    const guardian = await makeLoginableUser({ role: "guardian" });
+    const cookie = (await loginAs(server.baseUrl, guardian)).cookieHeader();
+    const res = await fetch(`${server.baseUrl}/api/account/document-compliance`, { headers: { cookie } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Before the fix this named participation_waiver and medical_clearance for a parent.
+    expect(body.missing).toEqual([]);
+    expect(body.complete).toBe(true);
+  });
+
   it("accepts a paper institutional agreement only from the primary coach who owes one", async () => {
     const coach = await makeLoginableUser({ role: "coach" });
     const cookie = (await loginAs(server.baseUrl, coach)).cookieHeader();

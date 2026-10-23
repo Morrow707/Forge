@@ -31,6 +31,7 @@ import {
   DOCUMENT_LABEL,
   REQUIRED_DOCUMENTS,
   documentAudienceFor,
+  uploadableKindsFor,
   documentNeedsAction,
   type DocumentKind,
   type DocumentStatus,
@@ -140,7 +141,13 @@ export default function DocumentsPage() {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLDivElement>(null);
-  const [kind, setKind] = useState<DocumentKind>("participation_waiver");
+  // THE CHOICE, which is not yet a kind -- see `kind` below the audience. This was
+  // `useState<DocumentKind>("participation_waiver")`, a literal that is wrong for two of the
+  // four audiences: it is not among a COACH's SelectItems (their kinds are the four credentials,
+  // so <SelectValue/> drew an empty box and a coach who picked a file without touching the
+  // selector POSTed a kind the server refuses with a 400), and it is not among a GUARDIAN's
+  // either, who now has none of their own at all.
+  const [kindChoice, setKindChoice] = useState<DocumentKind | null>(null);
   const [org, setOrg] = useState("");
   const [signedOn, setSignedOn] = useState("");
   const [expiresOn, setExpiresOn] = useState("");
@@ -160,6 +167,22 @@ export default function DocumentsPage() {
         hasCoach: isFreeAgent !== true,
       });
   const checklist = REQUIRED_DOCUMENTS[audience];
+
+  // THE KIND THE FORM WILL ACTUALLY SEND, derived from the audience rather than defaulted to a
+  // literal. The rule: the viewer's own choice if they have made one and this audience can file
+  // it, otherwise the first kind this audience CAN file, otherwise "other" -- which is the whole
+  // answer for a guardian, whose checklist is deliberately empty and whose server-side
+  // allowedKinds is ["other"] alone.
+  //
+  // Stated as a derivation because every hardcoded alternative is wrong for somebody: the
+  // previous literal `participation_waiver` is not among a coach's four credentials, so the
+  // selector rendered blank for every coach and a file picked without touching it was POSTed
+  // with a kind the upload route refuses.
+  const uploadableHere = uploadableKindsFor(audience);
+  const kind: DocumentKind =
+    kindChoice && (uploadableHere.includes(kindChoice) || kindChoice === "other")
+      ? kindChoice
+      : ((uploadableHere[0] ?? "other") as DocumentKind);
 
   // An org's primary coach files their signed Service Agreement here too. It is not on the coach
   // checklist -- it belongs to the ORGANISATION, not to the person, and a staff coach has nothing
@@ -220,7 +243,7 @@ export default function DocumentsPage() {
 
   /** Pick the row's kind and jump to the form, so a red cross is one tap from being fixed. */
   function startUpload(k: DocumentKind) {
-    setKind(k);
+    setKindChoice(k);
     uploadRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
@@ -254,16 +277,24 @@ export default function DocumentsPage() {
                 ? `${who}'s forms`
                 : audience === "coach"
                   ? "Your coaching credentials"
-                  : "Your forms"}
+                  : audience === "guardian"
+                    ? "Nothing on file for you"
+                    : "Your forms"}
             </CardTitle>
             <CardDescription>
               {forSomeoneElse
                 ? `Filing on ${who}'s behalf. Whatever their school or club already had signed, upload it here and it lands on their record, not yours.`
                 : audience === "coach"
                 ? "Certifications and clearances you already hold. Upload a copy so it's on file."
-                : audience === "athlete_rostered"
-                  ? "If your school or club already had these signed, upload those instead of filling in ours again."
-                  : "You train without a coach on Forge, so there's no school waiver to upload. These two still matter."}{" "}
+                : audience === "guardian"
+                  ? // An empty checklist with "Your forms" over it reads as a page that failed to
+                    // load, so the copy says the emptiness is the answer and points at the two
+                    // things a guardian DOES have here: their child's paperwork, which is filed
+                    // against the child, and their own consent ledger below.
+                    "Forge asks nothing of you here -- you don't train on Forge and you don't supervise through it. Your child's paperwork is filed on their own page, which the link in any request we send you opens."
+                  : audience === "athlete_rostered"
+                    ? "If your school or club already had these signed, upload those instead of filling in ours again."
+                    : "You train without a coach on Forge, so there's no school waiver to upload. These two still matter."}{" "}
               Nothing here replaces the agreements {forSomeoneElse ? "they" : "you"} accepted when
               {forSomeoneElse ? " they" : " you"} signed up, this is a copy of what was signed
               elsewhere, so we know it exists.
@@ -356,7 +387,7 @@ export default function DocumentsPage() {
           <CardContent className="space-y-3">
             <div className="space-y-1.5">
               <Label className="text-xs">What is it?</Label>
-              <Select value={kind} onValueChange={(v) => setKind(v as DocumentKind)}>
+              <Select value={kind} onValueChange={(v) => setKindChoice(v as DocumentKind)}>
                 <SelectTrigger className="h-9 text-sm">
                   <SelectValue />
                 </SelectTrigger>

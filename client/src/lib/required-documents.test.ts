@@ -6,7 +6,8 @@ import {
   DOCUMENT_LABEL,
   documentAudienceFor,
 } from "@shared/required-documents";
-import { externalWaiverKindEnum } from "@shared/schema";
+import { externalWaiverKindEnum, roleEnum } from "@shared/schema";
+import { ROLES_THAT_FILM_THEIR_OWN_TRAINING } from "@shared/roles-that-film-their-own-training";
 
 // ONE FLOW, THREE PEOPLE BEING ASKED DIFFERENT QUESTIONS.
 //
@@ -39,6 +40,58 @@ describe("who is asked for what", () => {
     expect(documentAudienceFor({ role: "athlete", hasCoach: true })).toBe("athlete_rostered");
     expect(documentAudienceFor({ role: "athlete", hasCoach: false })).toBe("athlete_free_agent");
     expect(documentAudienceFor({ role: "coach", hasCoach: false })).toBe("coach");
+  });
+
+  // EVERY ROLE THE DATABASE CAN STORE IS ONE THIS HELPER HAS BEEN TOLD ABOUT.
+  //
+  // The three cases above enumerate the profiles somebody thought of, which is exactly how the
+  // guardian was missed for three weeks: `documentAudienceFor` tested two role strings, the
+  // pgEnum has four, and the untested one fell through to the ATHLETE branch -- so /documents
+  // told a parent in red that they owed their school's participation waiver and a physician's
+  // clearance to train. A fall-through to a training checklist is silent by construction: there
+  // is no error, just the wrong list.
+  //
+  // So this discovers the roles from `roleEnum` instead of listing them, and states what is
+  // FORBIDDEN: no role may land on an ATHLETE audience unless it actually trains.
+  it("NO ROLE FALLS THROUGH TO AN ATHLETE'S CHECKLIST UNLESS IT TRAINS", () => {
+    const athleteAudiences = new Set(["athlete_rostered", "athlete_free_agent"]);
+    for (const role of roleEnum.enumValues) {
+      for (const hasCoach of [true, false]) {
+        const audience = documentAudienceFor({ role, hasCoach });
+        // Every answer has to be a declared audience -- a typo would otherwise index
+        // REQUIRED_DOCUMENTS to undefined and render an empty page that reads as a failed load.
+        expect(REQUIRED_DOCUMENTS[audience], `${role} resolved to an unknown audience`).toBeDefined();
+        if (athleteAudiences.has(audience)) {
+          expect(
+            ROLES_THAT_FILM_THEIR_OWN_TRAINING.has(role),
+            `${role} is served an athlete's checklist -- participation waiver, medical clearance ` +
+              `-- and does not train on Forge. That is the guardian defect of 2026-10-22.`,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("a guardian is asked for NOTHING, and the emptiness is the answer", () => {
+    // Asserted as the rule rather than as "length is 0", so a future change that gives a
+    // guardian a row has to say which row and why: nothing on this list may be about the
+    // holder's own training or their supervising through Forge, and those are the only two
+    // things this checklist is for.
+    expect(documentAudienceFor({ role: "guardian", hasCoach: false })).toBe("guardian");
+    expect(documentAudienceFor({ role: "guardian", hasCoach: true })).toBe("guardian");
+    expect(REQUIRED_DOCUMENTS.guardian).toEqual([]);
+    // And the two rows the fall-through used to show them, named so a regression is legible.
+    const guardianKinds = REQUIRED_DOCUMENTS.guardian.map((d) => d.kind);
+    expect(guardianKinds).not.toContain("participation_waiver");
+    expect(guardianKinds).not.toContain("medical_clearance");
+  });
+
+  it("every audience in the type has a list, and every list an audience", () => {
+    // The two halves held EQUAL rather than one iterating the other: a subset assertion is
+    // blind to exactly the omission it looks like it covers, which is the lesson the public
+    // legal documents paid for when `parental_notice` 404'd for as long as the set existed.
+    const declared = Object.keys(REQUIRED_DOCUMENTS).sort();
+    expect(declared).toEqual(["athlete_free_agent", "athlete_rostered", "coach", "guardian"]);
   });
 
   it("every kind the database accepts has a label", () => {

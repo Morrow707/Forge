@@ -17,11 +17,32 @@ export type DocumentKind = (typeof externalWaiverKindEnum.enumValues)[number];
  * - A COACH is not being cleared to participate, they are being cleared to SUPERVISE. Their
  *   documents are credentials -- certification, background check, CPR, insurance -- and calling
  *   any of that a "waiver" would be wrong in a way that matters if anyone ever reads this list.
+ * - A GUARDIAN is asked for NOTHING about themselves, and the empty list below is the answer
+ *   rather than an oversight. They do not train (ROLES_THAT_FILM_THEIR_OWN_TRAINING is athlete,
+ *   coach, admin), so no clearance and no school waiver describes them; and they do not
+ *   supervise through Forge, so the credential list is not theirs either -- `background_check`'s
+ *   own `why` below reads "You coach minors through Forge", which is false of a parent. What a
+ *   guardian signs is accepted IN the app and lives in the consent ledger
+ *   (/api/account/consents, which the page already renders for them correctly); their CHILD's
+ *   paperwork is filed against the child at /documents/:athleteId.
  *
  * Declared once, here, so the checklist a person sees and the checklist anything server-side
- * reasons about cannot drift apart.
+ * reasons about cannot drift apart. IT DRIFTED ANYWAY, and for the one role this comment had
+ * never named: `documentAudienceFor` tested two role strings where the pgEnum has four, so a
+ * guardian fell through to the ATHLETE branch -- `athlete_rostered` on the page (the client
+ * passes `hasCoach: isFreeAgent !== true`, and `useIsFreeAgent` returns false for any non-athlete)
+ * and `athlete_free_agent` in both server call sites (which pass `hasCoach: false`). So
+ * /documents told a parent in red that they owed their school's participation waiver and a
+ * physician's clearance to train, with a footer counting two things for them to do; the waiver
+ * row then 400'd because the server had resolved a different audience, and the clearance row
+ * did NOT -- it filed an adult's own medical letter into the admin review queue of children's
+ * medical records. Every audience below is now a role this helper has been told about.
  */
-export type DocumentAudience = "athlete_rostered" | "athlete_free_agent" | "coach";
+export type DocumentAudience =
+  | "athlete_rostered"
+  | "athlete_free_agent"
+  | "coach"
+  | "guardian";
 
 export type RequiredDocument = {
   kind: DocumentKind;
@@ -113,6 +134,13 @@ export const REQUIRED_DOCUMENTS: Record<DocumentAudience, RequiredDocument[]> = 
       why: "If you coach independently rather than under a school's policy.",
     },
   ],
+  // EMPTY ON PURPOSE -- the GUARDIAN bullet at the top of this file is the argument. It is load
+  // bearing rather than decorative: `uploadableKindsFor` derives from this, so routes.ts's
+  // `allowedKinds` for a guardian becomes ["other"] alone and their own profile can no longer
+  // take a medical clearance, and `missingRequiredDocuments` returns [] so the compliance route
+  // answers complete instead of naming two documents they can never owe. A row nobody can ever
+  // satisfy is worse than no row; this is the case where the honest number of rows is zero.
+  guardian: [],
 };
 
 /** The kinds a profile of this audience may have FILED against it. The checklist is what the
@@ -126,14 +154,24 @@ export function uploadableKindsFor(audience: DocumentAudience): DocumentKind[] {
   return REQUIRED_DOCUMENTS[audience].map((d) => d.kind);
 }
 
-/** Which checklist applies. A coach is a coach; an athlete splits on whether anybody actually
- * coaches them, because that is what decides whether an institution exists to have issued
- * anything. */
+/** Which checklist applies. A coach is a coach; a guardian is asked for nothing; an athlete
+ * splits on whether anybody actually coaches them, because that is what decides whether an
+ * institution exists to have issued anything.
+ *
+ * EVERY ROLE IN THE pgEnum IS NAMED HERE, and the trailing branch is the ATHLETE's. That
+ * trailing branch is what served a guardian a school waiver for three weeks: a role this
+ * function had not been told about looked exactly like an athlete, and the fall-through is
+ * silent by construction. `role` stays `string` rather than the enum union because routes.ts
+ * reads it off the session user and a type there would not be checked at the boundary that
+ * matters; the ratchet in required-documents.test.ts is the real guard, and it discovers the
+ * roles from `roleEnum` so a fifth role fails the day it is added rather than quietly
+ * inheriting a training checklist. */
 export function documentAudienceFor(input: {
   role: string;
   hasCoach: boolean;
 }): DocumentAudience {
   if (input.role === "coach" || input.role === "admin") return "coach";
+  if (input.role === "guardian") return "guardian";
   return input.hasCoach ? "athlete_rostered" : "athlete_free_agent";
 }
 

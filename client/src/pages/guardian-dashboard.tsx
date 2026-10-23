@@ -9,6 +9,7 @@ import { getJson, apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/notification-bell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -305,6 +306,28 @@ export default function GuardianDashboardPage() {
             a problem, or delete their account: the routes all accept them
             (requireAuth), only the doors were missing. */}
         <div className="flex items-center gap-1.5">
+          {/* AND THE BELL WAS THE DOOR THAT PASS MISSED. Same sentence as the comment above,
+              one control over: `GET /api/notifications` and its unread count are plain
+              `requireAuth` (routes.ts), so every notification Forge writes to a role-"guardian"
+              account was being stored and shown to nobody -- the bell in AppShell is rendered
+              for `coach | athlete | admin` only, and a guardian never renders AppShell.
+
+              What that cost, and it is not hypothetical: `storage.requestDocuments` writes a
+              `documents_requested` row to each linked guardian and then tries the email. When
+              the email cannot go -- no address on the guardian row, Resend unconfigured, or the
+              send failed on a mistyped address -- it returns `delivery: "in_app_only"` and the
+              coach's toast reads "the email couldn't be sent", which asserts a delivery that
+              reached nobody. So the coach stops chasing, and the parent is never told their
+              child's medical clearance and participation waiver are missing -- the two documents
+              that gate whether a 13-year-old may train.
+              A previous pass had already fixed that notification's LINK to point at the child's
+              page rather than the guardian's own empty checklist (see its comment in
+              storage.ts), which is the same fix being made a third time in a third layer.
+
+              The same reasoning as the account menu applies to every other notice a guardian can
+              receive -- the terms re-acceptance, a consent request -- which is why this is the
+              bell itself rather than a documents-specific banner. */}
+          <NotificationBell />
           <div className="relative">
             <Button
               variant="ghost"
