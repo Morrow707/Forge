@@ -2036,11 +2036,13 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 673** (2026-10-15,
-  `34574c60`, the billing sweep's client halves and the twenty-commit backlog; 672 was its
-  `verify_build`). Before it, **657** (2026-10-09, `8364564e`, the retrained detector) was the
-  newest for six days while 658-672 were all `verify_build` -- which is how the app came to be
-  twenty commits behind. Runs 652-655 were that day's four
+  branch `verify_build` for the arbiter plumbing. **The newest build is 686** (2026-10-23,
+  `a0ef9305`, the eighteen-commit batch including four held calibration commits; 685 was its
+  `verify_build`). Before it, **673** (2026-10-15, `34574c60`, the billing sweep's client halves
+  and the twenty-commit backlog; 672 was its `verify_build`), and before that **657** (2026-10-09,
+  `8364564e`, the retrained detector) was the newest for six days while 658-672 were all
+  `verify_build` -- which is how the app came to be twenty commits behind. 674-684 were all
+  `verify_build` runs too, which is why 686 follows 673 with twelve numbers between them. Runs 652-655 were that day's four
   calibration betas and **656 was the `verify_build` on the `.mlpackage` swap** -- the archive, the
   signing and Apple's own `--validate-app` all passed on the new model before the upload was
   spent, which is what makes a native change safe to ship rather than hopeful.
@@ -2062,24 +2064,47 @@ halves before splitting anything else:
   worst case **60.5% -> 20.7%**. The row is the one lift still outside 15% and the retrained
   detector is the only remaining candidate for it; what proves or disproves that is one filmed
   set, read off `plateBoxToExpectedRatio`.
-- **THE QUEUE IS EMPTY AS OF BUILD 673** (2026-10-15, `34574c60`, run 672 was its `verify_build`).
-  It shipped the whole billing sweep's client halves plus everything else that had piled up since
-  **657** -- twenty client-affecting commits over six days, which is the batch working as intended
-  and also the longest the app has ever been behind the server. Three of them were not optional:
-  **`ac372ece`**, the Guideline 3.1.1 fix (the app never prices the coach plan or points at its
-  checkout) -- App Review compliance sitting on `main` and on no phone; **`02c5bf47`**, "the beta
-  is over", without which the installed app still told users nothing was being charged while
-  Stripe was charging real cards; and **`c2ba7a2e`**, the Apple 409 that finishes an
-  already-bound transaction, without which that transaction replays at every app launch forever
-  (build 611's class). Also in it: the Health disclosure reading before the permission sheet, the
-  admin billing panel reading an athlete by id (nothing else can assign a tier), the guardian
-  invite link opening while signed in, the service worker serving the live shell, `/pricing` with
-  no unbuyable price, and the add-on removal flow.
-  **THE LESSON IS THAT THE BATCH RULE NEEDS A SECOND TRIGGER.** "One `beta` every ~20 changes" is
-  right for ordinary work and says nothing about CONTENT, so a compliance fix and a
-  we-are-charging-you correction waited behind the count like a copy tweak. A change that alters
-  what the app CLAIMS about money, or that App Review would read, ships on its own upload the way
-  calibration work does. **Clear this entry on the next upload rather than adding to it.**
+- **THE QUEUE IS EMPTY AS OF BUILD 686** (2026-10-23, `a0ef9305`, run 685 was its `verify_build`,
+  which passed Apple's own `--validate-app`). Eighteen client-affecting commits over eight days
+  since **673**, which is the batch working to its count -- and **four of them should never have
+  been in the batch at all**, which is the lesson and the second time this rule has swallowed
+  something its own exemption covers.
+  **THE CALIBRATION WORK WAS HELD, AND HOLDING IT IS WHAT STOPS THE EVIDENCE.** This file says a
+  change "whose whole purpose is to make the next filmed set measurable ... is worthless on
+  `main`: it only produces evidence once it is on the phone that does the filming", and to push
+  `beta` the moment such a change is committed. Four such commits waited three to eight days:
+  **`839f8756`** (the biometric release asked of every role that films), **`d361e679`** (the RDL's
+  3D-pose collapse diagnostic), **`e91220e1`** (five fitted numbers into the registry) and
+  **`46b6df51`** (four more trackers reading their own record, plus the height ruler's refit that
+  had never reached two of them).
+  **`839f8756` IS THE ONE THAT WAS BLOCKING EVERYTHING BEHIND IT.** The 10-19 session filmed three
+  lifts beside the OVR, every save returned 200, every clip 201, and the capture export came back
+  EMPTY -- four athlete-only gates in a row, so an admin was offered Record and never asked for the
+  release the capture gate requires. Until that client half is on a phone Scott cannot accept the
+  release on the admin account, and until he does every filmed set keeps losing its trace. So this
+  upload is the prerequisite for the next calibration session, and it sat on `main` four days
+  behind a counter.
+  **THE SECOND TRIGGER THE 673 ENTRY ADDED WAS THE RIGHT IDEA AND THE WRONG ONE.** It said a change
+  that alters what the app CLAIMS about money, or that App Review would read, ships on its own
+  upload. True, and it names a category the exemption list already had: calibration. The rule to
+  read off both failures is that **the batch counter governs only work whose value is not
+  time-sensitive**, and anything with a named consequence for being late -- a compliance fix, a
+  we-are-charging-you correction, a change that unblocks a filming session -- is not that.
+  **Two lockfile bumps reach the phone and are why 685 ran.** `vite` 6.4.3 -> 6.4.5 is the build
+  tool that produces the bundle compiled into the binary, and `@capacitor/ios` 8.5.0 -> 8.5.2 is
+  native through SPM (`ios/App/CapApp-SPM`, regenerated by `npx cap sync ios`), so a lockfile-only
+  diff was a native change -- the same argument the 10-06 Capacitor entry makes.
+  Also in it: the role survey's two client halves (**`6157bae9`**, every self response carrying the
+  twelve flags, and **`6e2a63c1`**, the guardian asked for nothing and finally able to read their
+  notifications); the profile-dialog chain of 10-19 (**`64a237f9`** never mounted for an admin,
+  **`4cc6f798`** the shell's second account menu, **`89934668`** the Edit profile item for every
+  filming role); **`a07e0412`**, the prerendered public page bodies (+9.4 kB gzipped on the eager
+  entry, which the native app pays for pages it never shows -- known, and the reason nothing larger
+  goes eager on that argument); the launch and promo codes (**`d07ea61f`**, **`3aedf553`**,
+  **`c5868870`**); **`d1a25474`**, a claimed guardian invite leaving the page instead of drawing
+  "Link not valid" over a claim that worked; **`b6a0ba32`**, the debug console; and **`fe0ea07c`**,
+  clearing a plan warning that the provider is still charging.
+  **Clear this entry on the next upload rather than adding to it.**
 - **THE RDL'S +12% IS THE 3D-POSE COLLAPSE, AND NO CONSTANT MOVED FOR IT** (2026-10-19, the
   first calibration session on the admin account; three lifts beside the OVR -- Back Squat,
   Romanian Deadlift, Box Jump, and only those three).
