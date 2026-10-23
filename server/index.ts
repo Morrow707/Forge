@@ -92,6 +92,8 @@ import { startDataRetentionJob } from "./data-retention-job";
 import { startVideoRetentionJob } from "./video-retention-job";
 import { startDatabaseSizeJob } from "./database-size-job";
 import { startSetTraceOffloadJob } from "./set-trace-offload-job";
+import { startFkDriftJob } from "./fk-drift-job";
+import { startOrphanSetRowsCleanup } from "./orphan-set-rows-cleanup";
 import { startResearchMirrorJob } from "./research-mirror-job";
 import { startCohortNormsJob } from "./cohort-norms-job";
 import { startCoachBandDriftJob } from "./coach-band-drift-job";
@@ -553,8 +555,21 @@ app.get("/healthz", async (_req, res) => {
     // One line a day (and now) saying how full the database is and which tables fill it --
     // see database-size-job.ts for the 61%-full disk that made it worth writing down.
     startDatabaseSizeJob();
+    // Which declared foreign keys the LIVE database is missing. BEFORE the cleanup below, so
+    // the log reads in the order it happened: the drift that let the orphans accumulate, then
+    // the orphans going. It repairs nothing -- see fk-drift-job.ts for why that restraint is
+    // deliberate.
+    startFkDriftJob();
+    // Removes the workout_set_entries rows whose parent entry no longer exists -- the residue
+    // of the accounts retired on 2026-10-11, which the cascade schema.ts declares would have
+    // taken with them if production had ever had it -- and then adds that one foreign key so it
+    // cannot recur. One-shot, behind an applied_backfills marker. Scott gave the word
+    // 2026-10-22; see orphan-set-rows-cleanup.ts for what it counts before it acts.
+    startOrphanSetRowsCleanup();
     // Moves the skeleton frames still inside workout_set_entries (450 MB of a 1 GB disk on
-    // 2026-10-16) out to files, a few rows a minute, until none are left.
+    // 2026-10-16) out to files, a few rows a minute, until none are left. AFTER the cleanup on
+    // purpose: every row it could not move was an orphan, so on the first boot after this it
+    // has nothing to do and goes quiet, which is itself the signal that the cleanup worked.
     startSetTraceOffloadJob();
     // One-time backlog cleanup for the dev-testing account's accumulated
     // video volume -- see oneTimeCleanupPreexistingVideosForAccount's own
