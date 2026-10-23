@@ -35,6 +35,7 @@ import {
   declaredForeignKeys,
   describeFk,
   type ActualFk,
+  type DeclaredFk,
   type FkDrift,
 } from "./foreign-key-drift";
 
@@ -64,6 +65,64 @@ export function formatFkDrift(drift: FkDrift): string {
   );
 }
 
+/** How many rows each MISSING key would take with it if it were added.
+ *
+ *  THE NUMBER THAT MAKES THE REPORT ACTIONABLE. The first run of this job, 2026-10-23, said four
+ *  of 225 keys were missing -- one of them the `workout_set_entries` cascade whose absence had
+ *  left 19,683 orphan rows and 451 MB. The other three were on a table nobody had looked at.
+ *  "Missing" alone does not say whether adding one is free or whether it would fail outright on
+ *  rows that survived precisely because it was absent, and that difference is the whole decision
+ *  (see foreign-key-drift.ts). So the report counts.
+ *
+ *  Read-only and counts only. The identifiers come from Drizzle's own table metadata -- the
+ *  declaration, never a request -- and are quoted anyway, because a query built by string
+ *  concatenation should not depend on where its pieces came from to be safe.
+ *
+ *  A count that cannot be taken (a table the declaration names and the database does not have
+ *  yet, the ordinary state between a schema change and its migration) is reported as null rather
+ *  than as zero: "no orphans" and "could not look" must not read the same, which is the mistake
+ *  the optional-flags bug of 2026-10-22 was made of. */
+export async function countOrphansForMissingKeys(
+  missing: DeclaredFk[],
+): Promise<{ fk: DeclaredFk; orphans: number | null }[]> {
+  const out: { fk: DeclaredFk; orphans: number | null }[] = [];
+  for (const fk of missing) {
+    const q = (id: string) => `"${id.replace(/"/g, '""')}"`;
+    const on = fk.columns
+      .map((c, i) => `p.${q(fk.refColumns[i])} = c.${q(c)}`)
+      .join(" AND ");
+    // A NULL in a nullable child column is not an orphan -- an unenforced NULL is exactly what
+    // `ON DELETE SET NULL` leaves behind, and a FOREIGN KEY permits it. Only a non-null value
+    // with no parent would break the constraint.
+    const notNull = fk.columns.map((c) => `c.${q(c)} IS NOT NULL`).join(" AND ");
+    const text =
+      `SELECT count(*)::int AS n FROM ${q(fk.table)} c ` +
+      `LEFT JOIN ${q(fk.refTable)} p ON ${on} ` +
+      `WHERE ${notNull} AND p.${q(fk.refColumns[0])} IS NULL`;
+    try {
+      const r = (await db.execute(sql.raw(text))) as unknown as { rows: { n: number }[] };
+      out.push({ fk, orphans: Number(r.rows[0]?.n ?? 0) });
+    } catch {
+      out.push({ fk, orphans: null });
+    }
+  }
+  return out;
+}
+
+export function formatOrphanCensus(rows: { fk: DeclaredFk; orphans: number | null }[]): string {
+  if (rows.length === 0) return "";
+  const free = rows.filter((r) => r.orphans === 0).length;
+  const parts = rows.map(
+    ({ fk, orphans }) =>
+      `${fk.table}.${fk.columns.join(",")} -> ${fk.refTable}: ` +
+      (orphans === null ? "could not count" : `${orphans} orphan row(s)`),
+  );
+  return (
+    `[job:${FK_DRIFT_JOB}] what each missing key would take: ${parts.join("; ")}. ` +
+    `${free} of ${rows.length} can be added with nothing to clean up first.`
+  );
+}
+
 export async function runFkDriftReport() {
   const declared = declaredForeignKeys();
   const actual = await actualForeignKeys(
@@ -71,10 +130,19 @@ export async function runFkDriftReport() {
   );
   const drift = compareForeignKeys(declared, actual);
   console.log(formatFkDrift(drift));
+
+  let addableNow = 0;
+  if (drift.missing.length > 0) {
+    const census = await countOrphansForMissingKeys(drift.missing);
+    console.log(formatOrphanCensus(census));
+    addableNow = census.filter((c) => c.orphans === 0).length;
+  }
+
   return {
     declared: drift.declaredCount,
     missing: drift.missing.length,
     wrongDeleteRule: drift.wrongAction.length,
+    addableWithNoCleanup: addableNow,
   };
 }
 

@@ -19,7 +19,7 @@ vi.mock("./uploaded-files", () => ({ deleteUploadedFile: vi.fn() }));
 import fs from "node:fs";
 import path from "node:path";
 import { formatOrphanCleanup, ORPHAN_SET_ROWS_MARKER, SET_ENTRY_PARENT_FK } from "./orphan-set-rows-cleanup";
-import { formatFkDrift } from "./fk-drift-job";
+import { formatFkDrift, formatOrphanCensus } from "./fk-drift-job";
 
 /** Source with comments removed, for a NEGATIVE assertion. CLAUDE.md's most repeated
  *  self-inflicted failure: prose about what the code does not do is indistinguishable from the
@@ -156,6 +156,55 @@ describe("the foreign-key drift report", () => {
     const line = formatFkDrift({ declaredCount: 212, missing: many, wrongAction: [] });
     expect(line).toContain("90 of 212 declared foreign keys are MISSING");
     expect(line).toContain("(+65 more)");
+  });
+
+  it("says what each missing key would take with it, which is what makes the list actionable", () => {
+    const line = formatOrphanCensus([
+      {
+        fk: { table: "assignment_correctives", columns: ["assignment_id"], refTable: "assignments", refColumns: ["id"], onDelete: "cascade" },
+        orphans: 0,
+      },
+      {
+        fk: { table: "workout_set_entries", columns: ["log_entry_id"], refTable: "workout_log_entries", refColumns: ["id"], onDelete: "cascade" },
+        orphans: 19683,
+      },
+    ]);
+    expect(line).toContain("assignment_correctives.assignment_id -> assignments: 0 orphan row(s)");
+    expect(line).toContain("workout_set_entries.log_entry_id -> workout_log_entries: 19683 orphan row(s)");
+    // The summary is the decision: a key with nothing behind it is a one-line migration; one
+    // with 19,683 rows behind it is a deletion that needs its own commit and its own count.
+    expect(line).toContain("1 of 2 can be added with nothing to clean up first");
+  });
+
+  it("a count that could not be taken is NOT reported as zero", () => {
+    // "No orphans" and "could not look" must not read the same. That conflation is what the
+    // optional-flags defect of 2026-10-22 was made of: a flag that was not computed and a flag
+    // that did not apply were the same value, so a live leak certified as absent.
+    const line = formatOrphanCensus([
+      {
+        fk: { table: "later_table", columns: ["x_id"], refTable: "x", refColumns: ["id"], onDelete: "cascade" },
+        orphans: null,
+      },
+    ]);
+    expect(line).toContain("could not count");
+    expect(line).not.toContain("0 orphan row(s)");
+    expect(line).toContain("0 of 1 can be added");
+  });
+
+  it("the census counts and never changes anything", () => {
+    // Its queries are built by concatenation from Drizzle's table metadata, so the shape of
+    // what it may emit is worth stating as a rule: SELECT count only.
+    const code = codeOnly(DRIFT);
+    const at = code.indexOf("countOrphansForMissingKeys");
+    expect(at).toBeGreaterThan(0);
+    const body = code.slice(at, code.indexOf("export function formatOrphanCensus"));
+    expect(body).toContain("SELECT count(*)");
+    for (const forbidden of [/\bINSERT\b/i, /\bUPDATE\b/i, /\bDELETE\b/i, /\bALTER\b/i, /\bDROP\b/i]) {
+      expect(body, `the census must not ${forbidden}`).not.toMatch(forbidden);
+    }
+    // Identifiers are quoted even though they come from the declaration rather than a request:
+    // a query assembled by concatenation should not need its provenance to be safe.
+    expect(body).toContain('replace(/"/g');
   });
 
   it("repairs nothing: no ALTER, no DROP, no DELETE anywhere in it", () => {

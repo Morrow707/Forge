@@ -55,23 +55,46 @@ const NOT_PLUMBED_YET: Record<string, string> = {
     "from that distance, not from a body ruler or an object; it runs no scale blend at all. The " +
     "registry has no horizontal_load field it would read today, which is the open half of Rule " +
     "#4 for this mode (it names no object system either) and is one job, not two.",
+  // THESE FOUR REASONS WERE REWRITTEN 2026-10-23 BECAUSE THEY WERE WRONG IN THREE WAYS, and the
+  // wrongness all pointed the same way: it made these files sound unreachable and identical to
+  // their twins, so nobody looked at them.
+  //
+  // (1) "Android is parked" is not why they are not wired. `isAvPreviewPlatform()` is
+  //     `Capacitor.isNativePlatform() && getPlatform() === "ios"`, so these four run on EVERY
+  //     BROWSER -- including the live website on a laptop. They are the web path, not an Android
+  //     path, and nothing about them is parked.
+  // (2) "Same shape as the av- dialog" is false for three of the four: kb-swing and swing hold
+  //     no registry-eligible constant at all, and medball holds exactly one (its 25 m/s ball
+  //     gate, which is already the registry's `med_ball.maxPlausibleSpeedMps`).
+  // (3) The claim that medball "carries the same stale literal" -- the 0.05 height-ruler
+  //     uncertainty -- is simply not true: that file runs no scale blend, has no height ruler
+  //     and contains no 0.05. CLAUDE.md repeats the claim and is wrong about it too.
   "bar-tracker-dialog.tsx":
-    "The WEB/Android half of the bar tracker (MediaPipe, deliberately a separate implementation " +
-    "from its iOS twin). Same shape as the av- dialog and should be wired the same way; left for " +
-    "the pass that can be tested, since the launch is iPhone only and no Android device exists to " +
-    "film a set on (CLAUDE.md, 'THE LAUNCH IS iPHONE ONLY; ANDROID IS PARKED').",
+    "The WEB half of the bar tracker (MediaPipe, a separate implementation from its iOS twin), " +
+    "and it runs in any browser -- not an Android-only path. NOT the same shape as the av- " +
+    "dialog: its per-frame plausibility gate is a module-level MAX_PLAUSIBLE_VELOCITY_MPS of 4 " +
+    "where the iOS dialog's is a function-local 3 and the registry's bar value is 3. Three " +
+    "copies, two values, none reading the record. Wiring it is a NUMBER MOVING on the web path " +
+    "(4 -> 3) and no web capture has been filmed beside the sensor, so it waits on evidence " +
+    "rather than on a device -- Rule #5.",
   "kb-swing-tracker-dialog.tsx":
-    "The web/Android half of the kettlebell swing tracker; its iOS twin av-kb-swing is wired. " +
-    "Android is parked with no device to test on, and an untested change to a capture path is " +
-    "worth less than the separation it buys, so it waits for the pass that can film a swing.",
+    "The web half of the kettlebell swing tracker, live in any browser. It holds NO " +
+    "registry-eligible constant: no scale blend, no ruler uncertainty, and its only module " +
+    "constant is MIN_BELL_SPEED_SAMPLES, which is a sample count rather than a fitted gate. " +
+    "There is nothing here for a record to hand it, so wiring it would be cosmetic and would " +
+    "take it off this list under false pretences.",
   "medball-tracker-dialog.tsx":
-    "The web/Android half of the med ball tracker; its iOS twin av-medball is wired, including " +
-    "the 0.05 height-ruler uncertainty that the 2026-10-05 refit never reached. Android is parked " +
-    "with no device to test on; this file carries the same stale literal and the same fix.",
+    "The web half of the med ball tracker, live in any browser. Its one registry-eligible " +
+    "constant is MAX_PLAUSIBLE_BALL_SPEED_MPS = 25, which already equals the registry's " +
+    "med_ball.maxPlausibleSpeedMps, and it is read behind a movementProfile override. It runs no " +
+    "scale blend, so it has no height ruler and none of the stale 0.05 its iOS twin carries. " +
+    "Wiring the one gate moves no number and is the smallest of the four; it waits only so the " +
+    "web halves land together with the bar's 4-vs-3 decision above.",
   "swing-tracker-dialog.tsx":
-    "The web/Android half of the golf and baseball swing tracker; its iOS twin av-swing is wired " +
-    "and resolves golf and baseball as separate identities off the sport prop. Android is parked " +
-    "with no device to test on, so this follows in the same pass as the other three web halves.",
+    "The web half of the golf and baseball swing tracker, live in any browser. Like kb-swing it " +
+    "declares no module constant at all -- the registry has nothing to give it today, and its " +
+    "iOS twin's separation (golf and baseball as distinct identities off the sport prop) is " +
+    "about a scale blend this file does not run.",
   "sprint-tracker-dialog.tsx":
     "The web/Android half of the sprint tracker, and blocked by the same thing as its iOS twin: a " +
     "timed sprint reads no ruler uncertainty and its speed gate is in yards per second, so the " +
@@ -160,6 +183,35 @@ describe("every tracker reads its own numbers", () => {
   it("names a dialog in the list that no longer exists", () => {
     const gone = Object.keys(NOT_PLUMBED_YET).filter((f) => !dialogs.includes(f));
     expect(gone).toEqual([]);
+  });
+
+  it("NO EXEMPTION MAY BLAME ANDROID, because none of these is an Android-only path", () => {
+    // The misreading this list carried from 2026-10-20 to 2026-10-23. Four reasons said the
+    // non-`av-` dialogs waited on an Android device, which made them sound unreachable and so
+    // unexamined. They are the WEB path: `isAvPreviewPlatform()` is
+    // `Capacitor.isNativePlatform() && getPlatform() === "ios"`, so every one of them runs in an
+    // ordinary browser, on the live website, today.
+    //
+    // Stated as what is FORBIDDEN rather than as the shape of today's reasons: a future entry
+    // may be blocked by anything real, but not by a platform these files do not depend on.
+    const chooser = readFileSync(
+      join(__dirname, "..", "client", "src", "lib", "native-av-preview.ts"),
+      "utf8",
+    );
+    // The premise, read off the chooser rather than asserted: iOS-native is the ONLY branch that
+    // selects an `av-` dialog, so everything else is the browser.
+    expect(chooser).toMatch(
+      /export function isAvPreviewPlatform\(\): boolean \{\s*return Capacitor\.isNativePlatform\(\) && Capacitor\.getPlatform\(\) === "ios";/,
+    );
+    for (const [file, reason] of Object.entries(NOT_PLUMBED_YET)) {
+      // "Android is parked" / "no Android device" as the BLOCKER. The word may appear in a
+      // reason that explains the platform split; what it may not do is carry the excuse, so the
+      // test looks for it next to the language of being blocked.
+      expect(
+        /no android device|android is parked with no device|waits? (?:for|on) the pass that can/i.test(reason),
+        `${file}'s reason blames Android or an untestable device; it runs in every browser`,
+      ).toBe(false);
+    }
   });
 
   it("THE FIVE SCALE-BLENDING TRACKERS ARE ALL WIRED, which is what a filmed set reads", () => {
