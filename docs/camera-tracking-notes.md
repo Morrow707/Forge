@@ -5050,6 +5050,37 @@ Forge's barbell repeatability is now comparable to the sensor's own, against 1.2
 2026-10-09 corpus. **The jump is the exception and is 2.4x the sensor's spread**, which is where
 the remaining scatter work is -- not on the bar.
 
+### THESE THREE TAKES BELONG IN THE ACCURACY LEDGER AND ARE NOT IN IT YET (2026-10-23)
+
+`shared/accuracy-ledger.ts` is the committed record this session's own finding asked for -- "we
+got 5% accuracy one week then the next week we started at 40%, that cannot happen" -- a row per
+sensor-paired take carrying its INPUTS beside its error, replayed twice: at the uncertainties it
+was measured with, which must reproduce the scale the phone shipped, and through the live
+constants, whose answer is pinned so the next refit reds a test instead of silently rewriting
+what an old comparison meant.
+
+**It has four rows, from 2026-10-04 and 2026-10-05, and none of these three.** They were tried
+and refused, which is worth recording because the refusal is the mechanism working. The candidate
+scales written down above are real but the `body_3d` figure in them is the POST-COLLAPSE witness
+-- the geometric mean of the raw body_3d and depth candidates, which vote once (Rule #2, build
+578) -- so the raw `depth` is absent, and a row without it cannot reproduce its own shipped
+scale. A row that cannot be replayed is exactly the fiction the ledger exists to refuse, so prose
+is not a source for one; the faithful-record assertion would have caught it rather than a reader.
+
+**What the next export has to yield per take, so the entry is mechanical:**
+`calibration.scaleBlend.blendTrace.inputs` (the RAW candidate rows, before the collapse),
+`calibration.scaleBlend.rulerUncertainties` (what each ruler stated ON THE DAY -- the half that
+keeps going missing), the take's own `scaleFactor`, the reported range of motion, the sensor's
+reading, `calibration.posture` and `heightIn`. Everything but the sensor's number is already in
+the admin capture download, so this is transcription, not new instrumentation.
+
+**And the ledger's first use found the drift it was built for, in the test suite rather than in a
+session.** Two pinned OVR guards had been blending a frozen shoulder-ruler uncertainty with a
+LIVE `HEIGHT_RULER_UNCERTAINTY`, so `e70cc096`'s refit of `BIACROMIAL_TOLERANCE_FRACTION`
+(0.1 -> 0.2, 2026-10-06) moved all four sealed takes by 4.2 to 9.6 points -- the 10-05 Back Squat
+changing SIGN, +5.97% to -3.58% -- with nothing going red for seventeen days. See CLAUDE.md,
+"THE LEDGER, AND THE TWO GUARDS THAT CERTIFIED A BLEND NO BUILD EVER PRODUCED".
+
 ### THE JUMP SET MEASURED A BOX THAT WAS NOT THERE
 
 Scott filmed JUMP SQUATS and logged them against Forge's `Box Jump`, which is the filmable

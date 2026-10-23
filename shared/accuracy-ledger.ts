@@ -123,6 +123,25 @@ export function candidatesAsFilmed(row: LedgerRow): readonly LedgerCandidate[] {
  * export and are to be filled in for the next take filmed beside a sensor, not back-guessed for
  * these. A row added from a live export carries them; `heightInOnFile` is deliberately absent
  * rather than assumed, because an invented input is worse than a missing one.
+ *
+ * AND THE 2026-10-19 SESSION -- THE ONE SCOTT ACTUALLY FILMED -- IS NOT HERE, DELIBERATELY.
+ * Its three takes are the rows this file most wants, and `docs/camera-tracking-notes.md` records
+ * real candidate scales for two of them (Back Squat set 2: height 0.00339639, shoulder_width
+ * 0.00433825, body_3d 0.00412932; RDL set 2: shoulder_width 0.00402663, body_3d 0.00403251,
+ * plate 0.00205555, required 0.00359453). **They are not enough for a row, and the replay would
+ * have caught it rather than me.** That `body_3d` is the POST-COLLAPSE witness -- the geometric
+ * mean of the raw body_3d and depth candidates, which vote once (Rule #2, build 578) -- so the
+ * raw `depth` is missing, and with it any chance of reproducing the scale the phone shipped. A
+ * row that cannot be replayed is the fiction this file exists to refuse, so prose is not a
+ * source for one.
+ *
+ * WHAT THE NEXT EXPORT HAS TO YIELD for each sensor-paired take, so the entry is mechanical:
+ * `calibration.scaleCandidates` (the RAW rows, before the collapse -- `calibration.scaleBlend`
+ * carries `blendTrace.inputs`, which is exactly that), `calibration.scaleBlend.rulerUncertainties`
+ * (the uncertainty each ruler stated ON THE DAY -- the half that keeps going missing), the take's
+ * `scaleFactor`, the reported range of motion and the sensor's own reading, plus
+ * `calibration.posture` and `heightIn`. Everything but the sensor's number is already in the
+ * admin capture download.
  */
 export const ACCURACY_LEDGER: readonly LedgerRow[] = [
   {
