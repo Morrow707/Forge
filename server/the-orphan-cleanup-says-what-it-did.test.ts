@@ -19,7 +19,8 @@ vi.mock("./uploaded-files", () => ({ deleteUploadedFile: vi.fn() }));
 import fs from "node:fs";
 import path from "node:path";
 import { formatOrphanCleanup, ORPHAN_SET_ROWS_MARKER, SET_ENTRY_PARENT_FK } from "./orphan-set-rows-cleanup";
-import { formatFkDrift, formatOrphanCensus } from "./fk-drift-job";
+import { formatCascadeExposure, formatFkDrift, formatOrphanCensus } from "./fk-drift-job";
+import { cascadePathsFrom, deepestCascadePath } from "./foreign-key-drift";
 
 /** Source with comments removed, for a NEGATIVE assertion. CLAUDE.md's most repeated
  *  self-inflicted failure: prose about what the code does not do is indistinguishable from the
@@ -173,7 +174,7 @@ describe("the foreign-key drift report", () => {
     expect(line).toContain("workout_set_entries.log_entry_id -> workout_log_entries: 19683 orphan row(s)");
     // The summary is the decision: a key with nothing behind it is a one-line migration; one
     // with 19,683 rows behind it is a deletion that needs its own commit and its own count.
-    expect(line).toContain("1 of 2 can be added with nothing to clean up first");
+    expect(line).toContain("1 of 2 would be ADDABLE with nothing to clean up first");
   });
 
   it("a count that could not be taken is NOT reported as zero", () => {
@@ -188,7 +189,54 @@ describe("the foreign-key drift report", () => {
     ]);
     expect(line).toContain("could not count");
     expect(line).not.toContain("0 orphan row(s)");
-    expect(line).toContain("0 of 1 can be added");
+    expect(line).toContain("0 of 1 would be ADDABLE");
+  });
+
+  it("A ZERO ORPHAN COUNT IS NOT A GREEN LIGHT, and the report says so next to the count", () => {
+    // The whole reason the cascade line exists. 2026-10-23's census said
+    // assignment_correctives.exercise_id -> exercises had ZERO orphans, which reads as free to
+    // add -- and the declaration behind it makes storage.deleteExercise (an unguarded DELETE an
+    // admin reaches from the exercise library) cascade through correctives into logged entries,
+    // logged sets and their camera metrics, where the column one line away is deliberately
+    // `set null` to preserve exactly that history.
+    const census = formatOrphanCensus([
+      {
+        fk: { table: "assignment_correctives", columns: ["exercise_id"], refTable: "exercises", refColumns: ["id"], onDelete: "cascade" },
+        orphans: 0,
+      },
+    ]);
+    expect(census).toContain("would be ADDABLE");
+    expect(census).toContain("not\nthe same as safe".replace("\n", " "));
+
+    const exposure = formatCascadeExposure([
+      { table: "assignment_correctives", columns: ["exercise_id"], refTable: "exercises", refColumns: ["id"], onDelete: "cascade" },
+    ]);
+    // Read off the real declaration, not a fixture: if somebody changes one of these cascades to
+    // `set null` or `restrict`, this path shortens and the case says so.
+    expect(exposure).toContain("exercises -> assignment_correctives -> workout_log_entries");
+    expect(exposure).toContain("never that the cascade is wanted");
+  });
+
+  it("the cascade walk terminates on a cycle and ignores a one-hop key", () => {
+    // A self-referencing table would otherwise not terminate, and a key whose parent cascades
+    // nowhere interesting tells a reader nothing -- so it is dropped rather than printed.
+    const selfRef = [
+      { table: "t", columns: ["parent_id"], refTable: "t", refColumns: ["id"], onDelete: "cascade" },
+    ];
+    expect(() => cascadePathsFrom("t", selfRef)).not.toThrow();
+    expect(deepestCascadePath("t", selfRef)).toBe("t -> t");
+
+    const oneHop = [
+      { table: "leaf", columns: ["x_id"], refTable: "x", refColumns: ["id"], onDelete: "cascade" },
+    ];
+    expect(formatCascadeExposure(oneHop)).toBe("");
+
+    // And a non-cascade rule is not a cascade: `set null` must not appear in a path.
+    const setNull = [
+      { table: "keeps_history", columns: ["x_id"], refTable: "x", refColumns: ["id"], onDelete: "set null" },
+      { table: "goes", columns: ["kh_id"], refTable: "keeps_history", refColumns: ["id"], onDelete: "cascade" },
+    ];
+    expect(deepestCascadePath("x", setNull)).toBeNull();
   });
 
   it("the census counts and never changes anything", () => {

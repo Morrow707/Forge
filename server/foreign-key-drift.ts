@@ -156,3 +156,76 @@ export function compareForeignKeys(declared: DeclaredFk[], actual: ActualFk[]): 
 export function describeFk(fk: DeclaredFk): string {
   return `${fk.table}.${fk.columns.join(",")} -> ${fk.refTable}.${fk.refColumns.join(",")} (on delete ${fk.onDelete})`;
 }
+
+/** Every table a delete on `table` would reach through DECLARED cascades, transitively.
+ *
+ * WHY THIS EXISTS, AND IT IS THE OPPOSITE OF WHAT THE DRIFT LIST FIRST LOOKED LIKE. On
+ * 2026-10-23 the report named three missing keys on `assignment_correctives`, one of them with
+ * ZERO orphans -- which reads as "free to add". It is not. The declaration is:
+ *
+ *   assignment_correctives.exercise_id -> exercises  ON DELETE CASCADE   (and .notNull())
+ *   workout_log_entries.corrective_id -> assignment_correctives  ON DELETE CASCADE
+ *   workout_set_entries.log_entry_id  -> workout_log_entries     ON DELETE CASCADE
+ *
+ * so adding that one key would make `storage.deleteExercise` -- a bare DELETE with no guard,
+ * which an admin reaches from the exercise library -- destroy every logged set ever recorded
+ * against that exercise, and the camera metrics on them. One column away,
+ * `workoutLogEntries.exerciseId` is deliberately `onDelete: "set null"` with a comment about
+ * historical reads resolving identity through it, so the schema's intent for deleting an
+ * exercise is plainly NOT to erase the training. The missing constraint has been PROTECTING
+ * production from its own declaration.
+ *
+ * That is the case `check-schema-drift.ts` could not express: an orphan count of zero says
+ * adding a key will SUCCEED, and says nothing about what it would then permit. So the report
+ * prints the cascade path too, and a reader sees `exercises -> assignment_correctives ->
+ * workout_log_entries -> workout_set_entries` before deciding.
+ *
+ * PURE AND DECLARATION-ONLY: it reads Drizzle's metadata and touches no database, so it is the
+ * same answer in CI, in a test and on production. Cycles are handled by visiting each table
+ * once -- a self-referencing table (a thread's parent reply) would otherwise not terminate. */
+export function cascadePathsFrom(table: string, declared = declaredForeignKeys()): string[][] {
+  const childrenOf = new Map<string, DeclaredFk[]>();
+  for (const fk of declared) {
+    if (fk.onDelete !== "cascade") continue;
+    const list = childrenOf.get(fk.refTable);
+    if (list) list.push(fk);
+    else childrenOf.set(fk.refTable, [fk]);
+  }
+  const paths: string[][] = [];
+  const walk = (current: string, path: string[], seen: Set<string>) => {
+    const children = childrenOf.get(current) ?? [];
+    // A leaf of the cascade graph ends a path. A path of one is not a path, so it is dropped by
+    // the caller rather than reported as "deleting this reaches itself".
+    if (children.length === 0) {
+      if (path.length > 1) paths.push(path);
+      return;
+    }
+    let advanced = false;
+    for (const fk of children) {
+      if (seen.has(fk.table)) {
+        // A cycle. Recorded with the repeat visible rather than dropped, because "deleting one of
+        // these reaches others of the same kind" is a real property a reader wants (a thread's
+        // parent reply, a corrective that references a corrective), and then NOT followed, which
+        // is what makes this terminate.
+        paths.push([...path, fk.table]);
+        advanced = true;
+        continue;
+      }
+      advanced = true;
+      walk(fk.table, [...path, fk.table], new Set([...seen, fk.table]));
+    }
+    if (!advanced && path.length > 1) paths.push(path);
+  };
+  walk(table, [table], new Set([table]));
+  return paths;
+}
+
+/** The longest cascade path a delete on `table` would follow, as a readable arrow chain, or null
+ *  when a delete there reaches nothing else. The LONGEST rather than all of them because the
+ *  question a reader has is how far this can go. */
+export function deepestCascadePath(table: string, declared = declaredForeignKeys()): string | null {
+  const paths = cascadePathsFrom(table, declared);
+  if (paths.length === 0) return null;
+  const deepest = paths.reduce((a, b) => (b.length > a.length ? b : a));
+  return deepest.join(" -> ");
+}

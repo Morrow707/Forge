@@ -34,6 +34,7 @@ import {
   compareForeignKeys,
   declaredForeignKeys,
   describeFk,
+  deepestCascadePath,
   type ActualFk,
   type DeclaredFk,
   type FkDrift,
@@ -119,7 +120,32 @@ export function formatOrphanCensus(rows: { fk: DeclaredFk; orphans: number | nul
   );
   return (
     `[job:${FK_DRIFT_JOB}] what each missing key would take: ${parts.join("; ")}. ` +
-    `${free} of ${rows.length} can be added with nothing to clean up first.`
+    `${free} of ${rows.length} would be ADDABLE with nothing to clean up first -- which is not ` +
+    `the same as safe, see the cascade line below.`
+  );
+}
+
+/** What a delete on each missing key's PARENT would then reach, if the key were added.
+ *
+ *  THE LINE THAT STOPPED A "FREE" MIGRATION. 2026-10-23's census said
+ *  `assignment_correctives.exercise_id -> exercises` had ZERO orphans, which reads as free to
+ *  add. The declaration behind it makes `storage.deleteExercise` -- an unguarded DELETE an admin
+ *  reaches from the exercise library -- cascade through correctives into logged entries, logged
+ *  sets and their camera metrics. An orphan count says the ALTER would succeed; it says nothing
+ *  about what the constraint would then permit, and those are different questions. */
+export function formatCascadeExposure(missing: DeclaredFk[]): string {
+  const lines: string[] = [];
+  for (const fk of missing) {
+    const path = deepestCascadePath(fk.refTable);
+    if (!path) continue;
+    const hops = path.split(" -> ").length - 1;
+    if (hops < 2) continue; // one hop is the key itself and tells a reader nothing new.
+    lines.push(`deleting a ${fk.refTable} row would reach: ${path}`);
+  }
+  if (lines.length === 0) return "";
+  return (
+    `[job:${FK_DRIFT_JOB}] cascade exposure if these were added -- ${lines.join("; ")}. ` +
+    `A zero orphan count means the ALTER succeeds, never that the cascade is wanted.`
   );
 }
 
@@ -136,6 +162,10 @@ export async function runFkDriftReport() {
     const census = await countOrphansForMissingKeys(drift.missing);
     console.log(formatOrphanCensus(census));
     addableNow = census.filter((c) => c.orphans === 0).length;
+    // Printed second and deliberately AFTER the counts, because the counts are what reads as a
+    // green light and this is the sentence that qualifies them.
+    const exposure = formatCascadeExposure(drift.missing);
+    if (exposure) console.log(exposure);
   }
 
   return {
