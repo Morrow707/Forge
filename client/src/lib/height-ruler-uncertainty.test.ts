@@ -1,74 +1,113 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { HEIGHT_RULER_UNCERTAINTY, reconcileScaleEstimates } from "./pose-tracking";
+import { HEIGHT_RULER_UNCERTAINTY, BIACROMIAL_TOLERANCE_FRACTION, reconcileScaleEstimates } from "./pose-tracking";
+import { candidatesAsFilmed, errorPctAgainstSensor, ledgerRow } from "@shared/accuracy-ledger";
 
 /* THE HEIGHT RULER'S CONFIDENCE, HELD AGAINST THE SENSOR IT WAS FITTED ON.
  *
- * Fitted from the 2026-10-04 OVR pairing: range of motion read 8% low on both barbell lifts
- * (0.920 and 0.921), because 0.05 gave the height ruler 400 units of inverse-variance weight
- * against the 3D ruler's 25 -- so the blend WAS the height ruler, and on both lifts the height
- * ruler was the lowest candidate while the one that matched the sensor sat above it.
+ * Fitted from the 2026-10-04 OVR pairing: range of motion read 8% low on both barbell lifts,
+ * because 0.05 gave the height ruler 400 units of inverse-variance weight against the 3D ruler's
+ * 25 -- so the blend WAS the height ruler, and on both lifts the height ruler was the lowest
+ * candidate while the one that matched the sensor sat above it.
  *
- * The real candidate lists from that export are the fixtures. The test asserts the OUTCOME
- * (both lifts inside 2% of the sensor) rather than the constant, so a future refit that holds
- * the same accuracy passes and one that undoes it fails.
+ * THIS FILE USED TO ASSERT A BLEND NO BUILD EVER PRODUCED, and the correction is the reason it
+ * now reads its inputs off the ledger instead of holding its own. It hand-rolled the blend with
+ * `const USHOULDER = 0.1` beside an imported `HEIGHT_RULER_UNCERTAINTY`. The 0.1 is CORRECT
+ * HISTORY -- `BIACROMIAL_TOLERANCE_FRACTION` was 0.1 from 2a19782c (2026-09-09) until e70cc096
+ * (2026-10-06) made it 0.2 and a FLOOR -- and the import is LIVE, so half the blend was sealed at
+ * the values of the day and half followed every later refit. The result was a third thing: both
+ * takes read 8.0% and 7.9% LOW as filmed, read -6.0% and +3.6% through today's pipeline, and this
+ * file asserted +1.2% and -2.3% inside a 2.5% threshold. It passed 5/5 for seventeen days and
+ * could not have failed, because the only input a refit could reach was typed by hand.
+ *
+ * A review proposed deleting the 0.1 as stale. That would have been the wrong half: replaying
+ * both takes at the recorded uncertainties reproduces the scale the phone shipped to 0.0000%, on
+ * four takes across two sessions, so the literal was a faithful record and the IMPORT was the
+ * defect. `shared/accuracy-ledger.ts` holds both takes with every uncertainty they were measured
+ * with, and `the-ledger-replays-every-paired-take.test.ts` is where the accuracy is now pinned --
+ * twice per take, as filmed and as the pipeline stands.
+ *
+ * What is left here is what is specific to this constant.
  */
-const U3D = 0.2;
-const UDEPTH = 0.2;
-const USHOULDER = 0.1;
 
-// Scales x1000, straight off trackingDiagnostics.calibration.scaleCandidates.
-const SQUAT = { body3d: 3.969567544340341, depth: 4.644838614278044, height: 3.3809652356778645, shoulder: 4.59032418468343 };
-const RDL = { body3d: 3.388318439849525, depth: 4.113168590661936, height: 3.2753940478179103, shoulder: 3.990397918112161 };
-// What each take's reported range of motion implies the true scale was:
-// squat 68.0cm read against the sensor's 73.9, RDL 54.7 against 59.4.
-const SQUAT_SENSOR_SCALE = 3.6547947529533787 / (68.0 / 73.9);
-const RDL_SENSOR_SCALE = 3.43338517946498 / (54.7 / 59.4);
+const SQUAT = ledgerRow("2026-10-04-back-squat");
+const RDL = ledgerRow("2026-10-04-romanian-deadlift");
 
-function blend(c: { body3d: number; depth: number; height: number; shoulder: number }) {
-  const verdict = reconcileScaleEstimates([
-    { source: "body_3d", scale: c.body3d / 1000, uncertaintyFraction: U3D },
-    { source: "depth", scale: c.depth / 1000, uncertaintyFraction: UDEPTH },
-    { source: "height", scale: c.height / 1000, uncertaintyFraction: HEIGHT_RULER_UNCERTAINTY },
-    { source: "shoulder_width", scale: c.shoulder / 1000, uncertaintyFraction: USHOULDER },
-  ]);
+/** The take exactly as the build that filmed it blended, from the row's own record. Every
+ *  uncertainty comes from one era, which is the property this file lost. */
+function asFilmed(row: typeof SQUAT, overrides: Record<string, number> = {}): number {
+  const verdict = reconcileScaleEstimates(
+    candidatesAsFilmed(row).map((c) => ({
+      source: c.source as "body_3d",
+      scale: c.scaleX1000 / 1000,
+      uncertaintyFraction: overrides[c.source] ?? row.uncertaintiesAsFilmed[c.source],
+    })),
+  );
   if (verdict.scale == null) throw new Error("no scale");
   return verdict.scale * 1000;
 }
 
 describe("the height ruler's uncertainty, fitted on the 2026-10-04 OVR pairing", () => {
-  it("is not tighter than the shoulder ruler -- both are body spans off the same landmarks", () => {
-    expect(HEIGHT_RULER_UNCERTAINTY).toBeGreaterThanOrEqual(USHOULDER);
+  /* RECORDED, NOT FIXED: THE HEIGHT RULER IS NOW TWICE AS CONFIDENT AS THE SHOULDER RULER, AND
+   * THIS CASE USED TO FORBID EXACTLY THAT.
+   *
+   * It asserted `HEIGHT_RULER_UNCERTAINTY >= USHOULDER` on the argument that both are body spans
+   * off the same landmarks, so neither has earned a tighter claim than the other. It passed
+   * because USHOULDER was the frozen 0.1 and the constant is 0.1 -- an equality, by coincidence
+   * of two numbers that stopped being the same number on 2026-10-06. Against the live floor the
+   * relation is 0.1 vs 0.2: the height ruler states FOUR TIMES the weight of the shoulder ruler,
+   * which is the thing the case existed to refuse, and it has been true and unasserted since
+   * e70cc096.
+   *
+   * NOT FIXED HERE, and the reason is this repo's own rule rather than reluctance. Moving either
+   * constant is a calibration decision: HEIGHT_RULER_UNCERTAINTY was fitted jointly on the squat
+   * and the RDL and the 2026-10-20 provenance audit calls it the heaviest lever on two of the
+   * three lifts under test, while the shoulder's 0.2 was fitted across nine takes and is a FLOOR
+   * that can only loosen. Refitting one to restore a symmetry argument, on a day with no sensor
+   * beside the bar, is how a bad constant gets in -- and the ledger now makes the cost of any
+   * such move visible on four already-measured takes, which is the thing that was missing.
+   *
+   * So the inversion is asserted AS IT IS. The day either constant moves, this case fails and
+   * somebody decides deliberately which way the relation should go. That is the inverse of the
+   * assertion it replaces, which is the only honest form while the asymmetry is real.
+   */
+  it("RECORDED: the height ruler is tighter than the shoulder ruler's floor, and that is open", () => {
+    expect(HEIGHT_RULER_UNCERTAINTY).toBe(0.1);
+    expect(BIACROMIAL_TOLERANCE_FRACTION).toBe(0.2);
+    // Stated as the ratio, because the ratio is what the inverse-variance blend reads: four.
+    const weightRatio = (BIACROMIAL_TOLERANCE_FRACTION / HEIGHT_RULER_UNCERTAINTY) ** 2;
+    expect(weightRatio).toBeCloseTo(4, 6);
   });
 
-  // 2.5%, because the measured fit is +1.2% on the squat and -2.3% on the RDL and the threshold
-  // has to admit the number that was actually chosen. It is the ACCURACY that is pinned, not the
-  // constant: a later refit that holds both lifts this close passes, one that gives the 8% back
-  // fails. Tightening this is the right thing to do when a pairing supports it.
-  it("puts the Back Squat's scale within 2.5% of the sensor", () => {
-    const ratio = blend(SQUAT) / SQUAT_SENSOR_SCALE;
-    expect(Math.abs(ratio - 1)).toBeLessThan(0.025);
+  /* THE REFIT'S OWN JUSTIFICATION, held against the take it was made on and nothing else.
+   *
+   * This is the only comparison in this file that is well-posed: both sides are the SAME sealed
+   * take, differing in one uncertainty, so the counterfactual literal is a question about history
+   * rather than a blend half-following today's constants. The old 0.05 is 2.4 and 2.4 points
+   * worse on the two lifts -- a real improvement, smaller than the "inside 2.5%" this file used
+   * to claim, and the honest size of it.
+   */
+  it("beats the old 0.05 on both lifts of the take it was fitted on", () => {
+    for (const row of [SQUAT, RDL]) {
+      const atTheRefit = errorPctAgainstSensor(asFilmed(row, { height: HEIGHT_RULER_UNCERTAINTY }), row);
+      const atTheOldValue = errorPctAgainstSensor(asFilmed(row, { height: 0.05 }), row);
+      // Both still read low; the refit moves each of them toward the sensor.
+      expect(atTheOldValue, row.id).toBeLessThan(-7);
+      expect(Math.abs(atTheRefit), row.id).toBeLessThan(Math.abs(atTheOldValue));
+      expect(Math.abs(atTheOldValue) - Math.abs(atTheRefit), row.id).toBeGreaterThan(1.5);
+    }
   });
 
-  it("puts the RDL's scale within 2.5% of the sensor", () => {
-    const ratio = blend(RDL) / RDL_SENSOR_SCALE;
-    expect(Math.abs(ratio - 1)).toBeLessThan(0.025);
-  });
-
-  it("would have been 7% low on both at the old 0.05", () => {
-    // The bug as a test, so the constant cannot read as arbitrary.
-    const old = (c: typeof SQUAT) => {
-      const v = reconcileScaleEstimates([
-        { source: "body_3d", scale: c.body3d / 1000, uncertaintyFraction: U3D },
-        { source: "depth", scale: c.depth / 1000, uncertaintyFraction: UDEPTH },
-        { source: "height", scale: c.height / 1000, uncertaintyFraction: 0.05 },
-        { source: "shoulder_width", scale: c.shoulder / 1000, uncertaintyFraction: USHOULDER },
-      ]);
-      return v.scale! * 1000;
-    };
-    expect(old(SQUAT) / SQUAT_SENSOR_SCALE).toBeLessThan(0.95);
-    expect(old(RDL) / RDL_SENSOR_SCALE).toBeLessThan(0.95);
+  it("reproduces what each take really shipped, which is what makes the line above a measurement", () => {
+    // The guard on the guard. Kept here as well as in the ledger's own replay because this
+    // file's counterfactual is only meaningful if its baseline is the real take.
+    for (const row of [SQUAT, RDL]) {
+      expect(
+        Math.abs(asFilmed(row) / row.shippedScaleX1000 - 1),
+        row.id,
+      ).toBeLessThan(0.0001);
+    }
   });
 
   it("is never a literal on the height row, in any dialog that builds one", () => {

@@ -1,48 +1,49 @@
 import { describe, it, expect } from "vitest";
 import { postureForExercise, postureAllowsHeightCalibration } from "./exercise-camera-profile";
-import { reconcileScaleEstimates, HEIGHT_RULER_UNCERTAINTY } from "./pose-tracking";
+import { reconcileScaleEstimates } from "./pose-tracking";
+import { candidatesAsFilmed, errorPctAgainstSensor, ledgerRow, type LedgerRow } from "@shared/accuracy-ledger";
 
 /* BUILD 620 BESIDE THE OVR, 2026-10-05. See docs/camera-tracking-notes.md.
  *
- * Two findings, each pinned by the take it was found on. Both fixtures are real numbers off
+ * Two findings, each pinned by the take it was found on. Both takes are real numbers off
  * trackingDiagnostics in the 2026-10-05 export, not hand-rolled.
+ *
+ * THE FIXTURES MOVED INTO shared/accuracy-ledger.ts ON 2026-10-23, and the reason is a defect in
+ * how they were held here. This file hand-rolled the blend with the rulers' uncertainties typed
+ * as `0.2, 0.2, 0.1` beside an imported `HEIGHT_RULER_UNCERTAINTY`. The literals are CORRECT
+ * HISTORY -- `BIACROMIAL_TOLERANCE_FRACTION` was 0.1 until e70cc096 (2026-10-06) made it 0.2 and
+ * a FLOOR -- and the import is LIVE, so half the blend was sealed at the values of the day and
+ * half followed every later refit, which is a comparison that is a record of nothing. Replaying
+ * both takes at the uncertainties the ledger records reproduces the scale the phone shipped to
+ * 0.0000%, so the literals were faithful and the import was the defect.
+ *
+ * EVERY NUMBER IN THIS FILE IS NOW AS-FILMED, on purpose. "-7.0% with its height ruler, 0.0%
+ * without" is a fact about BUILD 620 and about the change that was made on it, which is what this
+ * file is for; it is not a standing property of the pipeline. The same two takes read -3.6% and
+ * -2.0% today, and that is pinned in the ledger's own replay rather than here, so a later refit
+ * moves one number in one place instead of silently rewriting this file's meaning.
  */
 
-// trackingDiagnostics.calibration.scaleCandidates, scales x1000. "truth" is the scale the
-// sensor's range of motion requires: the shipped scaleFactor times sensorRom/reportedRom.
-const SQUAT = {
-  body3d: 4.3906832628553705,
-  depth: 6.182978508470917,
-  height: 3.468957241363022,
-  shoulder: 5.263465218260532,
-  shipped: 4.460001794224457,
-  romRead: 78.1,
-  romSensor: 73.7,
-};
-const RDL = {
-  body3d: 3.385283084489443,
-  depth: 4.393551787195805,
-  height: 3.4297664588115316,
-  shoulder: 4.12703743774313,
-  shipped: 3.7870913839708666,
-  romRead: 60.0,
-  romSensor: 64.5,
-};
-const truthOf = (c: typeof SQUAT) => c.shipped * (c.romSensor / c.romRead);
+const SQUAT = ledgerRow("2026-10-05-back-squat");
+const RDL = ledgerRow("2026-10-05-romanian-deadlift");
 
-function blend(c: typeof SQUAT, withHeight: boolean) {
-  const v = reconcileScaleEstimates([
-    { source: "body_3d", scale: c.body3d / 1000, uncertaintyFraction: 0.2 },
-    { source: "depth", scale: c.depth / 1000, uncertaintyFraction: 0.2 },
-    ...(withHeight
-      ? [{ source: "height" as const, scale: c.height / 1000, uncertaintyFraction: HEIGHT_RULER_UNCERTAINTY }]
-      : []),
-    { source: "shoulder_width", scale: c.shoulder / 1000, uncertaintyFraction: 0.1 },
-  ]);
+/** The take exactly as build 620 blended it. `withHeight` is the one thing the hinge fix changed,
+ *  so it is the one thing this file varies -- every uncertainty still comes from one era. */
+function blend(row: LedgerRow, withHeight: boolean): number {
+  const candidates = withHeight
+    ? candidatesAsFilmed(row)
+    : candidatesAsFilmed(row).filter((c) => c.source !== "height");
+  const v = reconcileScaleEstimates(
+    candidates.map((c) => ({
+      source: c.source as "body_3d",
+      scale: c.scaleX1000 / 1000,
+      uncertaintyFraction: row.uncertaintiesAsFilmed[c.source],
+    })),
+  );
   if (v.scale == null) throw new Error("no scale");
   return v.scale * 1000;
 }
-const errPct = (c: typeof SQUAT, withHeight: boolean) => (blend(c, withHeight) / truthOf(c) - 1) * 100;
+const errPct = (row: LedgerRow, withHeight: boolean) => errorPctAgainstSensor(blend(row, withHeight), row);
 
 describe("the hip hinge is a bent-over posture (the RDL beside the OVR)", () => {
   it("classifies every hinge the library spells out, and the aliases, as bent_over", () => {
@@ -76,7 +77,7 @@ describe("the hip hinge is a bent-over posture (the RDL beside the OVR)", () => 
   /* THE OUTCOME, NOT THE MECHANISM. A later change that holds the same accuracy another way
    * passes; one that undoes it fails. The RDL's height ruler read 16% below the scale the
    * sensor requires while carrying 44.4% of the weight. */
-  it("puts the RDL on the sensor: -7.0% with its height ruler, 0.0% without", () => {
+  it("puts the RDL on the sensor AS BUILD 620 BLENDED IT: -7.0% with its height ruler, 0.0% without", () => {
     expect(errPct(RDL, true)).toBeLessThan(-5);
     expect(Math.abs(errPct(RDL, false))).toBeLessThan(1.5);
   });
@@ -84,6 +85,15 @@ describe("the hip hinge is a bent-over posture (the RDL beside the OVR)", () => 
   it("and the Back Squat keeps its height ruler, because dropping it is 25% high", () => {
     expect(Math.abs(errPct(SQUAT, true))).toBeLessThan(7);
     expect(errPct(SQUAT, false)).toBeGreaterThan(20);
+  });
+
+  /* THE BASELINE IS THE REAL TAKE, which is what makes the two cases above measurements of the
+   * change rather than of an arithmetic fixture. Both are blended with the height ruler in, as
+   * build 620 shipped them, so this is the same number the phone used. */
+  it("blends what each take really shipped", () => {
+    for (const row of [SQUAT, RDL]) {
+      expect(Math.abs(blend(row, true) / row.shippedScaleX1000 - 1), row.id).toBeLessThan(0.0001);
+    }
   });
 });
 
