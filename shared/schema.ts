@@ -1437,10 +1437,21 @@ export const exercises = pgTable("exercises", {
    * PLATFORM CONTENT, and the gate on strength scoring (Scott, 2026-09-21: "we will only
    * allow tracking for Forge created exercises, keeps the percentiles more accurate").
    *
-   * An explicit flag rather than "owned by an admin", for the same reason classes.isForgeOfficial
-   * is one: ownership cannot be inferred. Every exercise row has a coachId, admins included, so
-   * inferring it would silently enrol an admin's own personal exercise into the standards every
-   * athlete on the platform is measured against -- and nothing would say it had happened.
+   * An explicit flag rather than "owned by an admin": ownership cannot be inferred. Every
+   * exercise row has a coachId, admins included, so inferring it would silently enrol an admin's
+   * own personal exercise into the standards every athlete on the platform is measured against --
+   * and nothing would say it had happened.
+   *
+   * THIS COMMENT USED TO CITE classes.isForgeOfficial AS THE PATTERN IT FOLLOWS, and that
+   * citation was circular (corrected 2026-10-23). The classes column exists, is NOT NULL DEFAULT
+   * false, and has never been written true by any backfill, seed or route -- so classes and
+   * programs are still decided by `coach.role === "admin"` at read time, in eight places in
+   * storage.ts, which is the opposite of what this paragraph argues for. THIS column is the one
+   * that is real: reconcile-schema.ts adds it, backfills it for admin-owned rows and indexes it.
+   * Pointing the class read sites at their column before writing that backfill would make every
+   * Forge class and program invisible to every coach, so the order is forced -- backfill first,
+   * read sites after. server/forge-official-is-inferred-for-classes.test.ts holds the divergence
+   * so it stays visible, and says which sites are free to move once the backfill lands.
    *
    * Backfilled true for admin-owned rows, which is exactly what the library means by Forge
    * content today; after that the two can diverge on purpose.
