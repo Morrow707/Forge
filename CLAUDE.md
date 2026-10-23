@@ -639,6 +639,92 @@ written next year fails the day it is added. Nine mutations, each caught by the 
 under the three that revert a fix the ATHLETE cases stay green -- which is exactly what made this
 invisible for as long as it was.
 
+### AND THE FOURTH ROLE WAS ASKED FOR A PHYSICIAN'S CLEARANCE TO TRAIN (2026-10-22)
+
+The role survey named "guardian" as the role missing from Scott's four. Two defects on the one
+surface that asks a person for paperwork, both found by a read-only panel and verified against
+the code before anything moved.
+
+**`documentAudienceFor` TESTED TWO ROLE STRINGS WHERE THE pgEnum HAS FOUR**, so a guardian fell
+through to the ATHLETE branch -- and the two halves then disagreed about WHICH athlete. The page
+resolved `athlete_rostered` (it passes `hasCoach: isFreeAgent !== true`, and `useIsFreeAgent`
+returns false for any non-athlete, so that is the steady state and not a flicker); both server
+call sites resolved `athlete_free_agent` (they pass `hasCoach: false`). A parent saw "Your forms"
+over two red REQUIRED rows about their own training and a footer counting two things for them to
+do. **Both halves of acting on it were broken in OPPOSITE directions**: the participation waiver
+-- the row the page PRE-SELECTED -- 400'd, because the server had resolved a different audience;
+the medical clearance did NOT, so an adult's own physician's letter entered the admin review queue
+of children's medical records, where the query joins `users` for an `athleteName` with no role
+filter.
+
+**A GUARDIAN'S CORRECT CHECKLIST IS EMPTY, and that is a positive answer from this file's own
+rules rather than an omission.** They do not train (`ROLES_THAT_FILM_THEIR_OWN_TRAINING` is
+athlete, coach, admin), so no clearance and no school waiver describes them; they do not supervise
+through Forge, so the credential list is not theirs either -- `background_check`'s own `why` reads
+"You coach minors through Forge", which is false of a parent. What a guardian signs is accepted IN
+the app and lives in the consent ledger, which the page already rendered for them correctly, and
+their child's paperwork is filed against the CHILD at `/documents/:athleteId`.
+
+**AND THE SAME FIX CAUGHT A COACH BUG ONE LINE AWAY.** `documents.tsx` defaulted the upload kind
+to the literal `"participation_waiver"`, which is not among a coach's four credentials either --
+so the selector drew an empty box for every coach and a file picked without touching it POSTed a
+kind the route refuses. The kind is derived from the audience now. **`"other"` survives on every
+profile including a guardian's**, because it is the escape hatch for a form no list anticipated
+and taking it away would be a refusal nobody asked for.
+
+**AND A GUARDIAN COULD NOT SEE ANY NOTIFICATION FORGE HAS EVER WRITTEN THEM.** The bell is
+rendered in `AppShell` for coach | athlete | admin, and a guardian never renders `AppShell` --
+every other `ProtectedRoute` redirects them to `/guardian`, which draws its own header.
+`GET /api/notifications` and its unread count are plain `requireAuth`, so the rows were being
+written and shown to nobody. **What that cost is not hypothetical**: `storage.requestDocuments`
+writes a `documents_requested` row to each linked guardian and then tries the email, and when the
+email cannot go -- no address, Resend unconfigured, a send that failed on a mistyped address -- it
+returns `delivery: "in_app_only"` and the coach's toast reads "the email couldn't be sent". That
+asserts a delivery that reached nobody, so the coach stops chasing and the parent is never told
+their child's medical clearance and participation waiver are missing.
+**THE SAME PASS HAD ALREADY MADE THIS ARGUMENT IN THIS FILE AND MISSED THE BELL.**
+`guardian-dashboard.tsx`'s own comment reads "a guardian had no way to change their password, see
+or revoke their active sessions, report a problem, or delete their account: the routes all accept
+them (`requireAuth`), only the doors were missing" -- one control over. And `storage.ts` records a
+THIRD pass that fixed that notification's LINK to point at the child's page rather than the
+guardian's own empty checklist. Three layers of one fix, each done partially.
+
+**TWO DROPPED BY THE ADVERSARIAL LENSES AND NOT ACTED ON**, which is the panel working: the
+admin-only debug console is a DECIDED state with no code change to make, and the two `storage.ts`
+role-check findings are real but their proposed patch was refused as unsafe -- the third of its
+three parts regresses something. Those stay open and named rather than half-fixed, along with the
+17 files no slice reached.
+
+The ratchet discovers roles from `roleEnum` and states what is FORBIDDEN (no role lands on an
+athlete audience unless it trains), the audience type and the checklist map are held EQUAL rather
+than one iterating the other, and two itest cases drive the real upload route and the real
+compliance route. Client halves: `verify_build`.
+
+### A ZERO ORPHAN COUNT IS NOT A GREEN LIGHT: THE FK REPORT PRINTS THE CASCADE IT WOULD EXPOSE
+
+Added 2026-10-23, from the orphan cleanup's own follow-up. `reconcile-schema.ts` is additive-only
+and `CREATE TABLE IF NOT EXISTS` is a no-op on a table that exists, so a `REFERENCES` clause
+written inside such a block **never reaches the one database that is never fresh**. CI's drift
+check passes trivially against an empty database, which is why `4 of 225 declared foreign keys are
+MISSING` on production went unnoticed.
+
+**THE 0-ORPHAN KEY IS THE DANGEROUS ONE, WHICH IS THE OPPOSITE OF HOW A CENSUS READS.** The
+census found `assignment_correctives.assignment_id` with 9 orphans, `program_day_id` with 9, and
+`exercise_id` with **0**. Nine orphans means the constraint cannot be added until they are
+cleaned; zero means it can be added **right now** -- and adding it completes
+`exercises -> assignment_correctives -> workout_log_entries -> workout_set_entries ->
+video_review_requests`, every hop declared CASCADE, with `deleteExercise` an unguarded bare
+DELETE. One line away, `workoutLogEntries.exerciseId` is deliberately `set null`. **The missing
+constraint has been protecting production from its own declaration**, and the FK added for
+`workout_set_entries` extended that latent chain by one hop.
+
+So `server/fk-drift-job.ts` prints the orphan census AND the deepest CASCADE path each missing key
+would open, and `cascadePathsFrom` is pure and declaration-only (cycle-safe by recording the
+repeat and not following it). **The three `assignment_correctives` decisions are Scott's and were
+reported, not acted on.** And nothing the server imports may `process.exit` -- the drift CLI did,
+so importing it from `index.ts` would have crash-looped the service on the very drift it reports;
+the logic is in `server/foreign-key-drift.ts` now and a test forbids the path.
+
 ## RULE #3: A VIDEO SHOWS THE REAL APP. NOTHING IN IT IS INVENTED.
 
 Added 2026-10-02, after a build-a-program reel shipped with a program builder nobody has ever
@@ -2003,9 +2089,13 @@ halves before splitting anything else:
   `body_3d` and `depth` through `correction = 1.905 / 1.80 = 1.0583`. **So an RDL that read -3.7%
   on 10-08 reads +12.0% today with no code change between them** -- the 5%-then-40% shape Scott
   named, caused by a new input rather than drift, and invisible to every test because no test has
-  a height on file. **The accuracy ledger is the answer to that and is NOT yet built:** a
-  committed row per sensor-paired take carrying its INPUTS (heightIn present, posture, which
-  rulers voted) beside its error, so the next jump is attributable in one read.
+  a height on file. **The accuracy ledger is the answer to that and is BUILT as of
+  2026-10-23** (`shared/accuracy-ledger.ts`; see "THE LEDGER, AND THE TWO GUARDS THAT CERTIFIED A
+  BLEND NO BUILD EVER PRODUCED" below): a committed row per sensor-paired take carrying its INPUTS
+  (every ruler's stated uncertainty, whether the height ruler voted, the shipped scale, both
+  ranges of motion) beside its error, so the next jump is attributable in one read. Four rows
+  today and none of them this session's -- these takes' own inputs are still unrecorded, and a row
+  for them wants the export rather than a back-guess.
   **The collapse IS the whole error, measured.** `body_3d` is **-1.1%** of the scale the sensor
   requires and `depth` **+27.1%**; they are one sensor and vote once at their geometric mean
   (Rule #2, build 578), which is **+12.1%** against a blend of +12.0%. Set 1 repeats it exactly
@@ -4802,6 +4892,100 @@ are the ones a parent or a school sees first.
   padding that a per-entry length check would have forced) or deliberately chrome-free with a
   reason over 50 characters, and it refuses a second `min-h-screen` nested inside the shell --
   which is exactly what the first draft of the /pricing fix did. Both mutations caught.
+
+## THE LEDGER, AND THE TWO GUARDS THAT CERTIFIED A BLEND NO BUILD EVER PRODUCED
+
+Added 2026-10-23. This is the accuracy ledger the 10-19 session asked for, and it is here in this
+shape because of the defect found while verifying whether it was needed.
+
+**A SEALED COMPARISON MAY NOT READ A LIVE CONSTANT. THAT IS THE WHOLE RULE.**
+`height-ruler-uncertainty.test.ts` and `four-lifts-beside-ovr-2026-10-05.test.ts` each hand-rolled
+their take's blend from real export candidates, typed the shoulder ruler's uncertainty as `0.1`,
+and imported `HEIGHT_RULER_UNCERTAINTY` **by name**. Each half was right when it was written.
+Together they are a comparison that is a record of nothing: the sealed half cannot move and the
+live half is rewritten by every refit.
+
+**A REVIEW CALLED THE `0.1` STALE AND PROPOSED DELETING IT. THAT IS THE WRONG HALF, AND THE REPLAY
+SAYS SO IN ONE NUMBER.** At the uncertainties the ledger now records, all four takes reproduce the
+scale the phone really shipped to **0.0000%**. `BIACROMIAL_TOLERANCE_FRACTION` was 0.1 from
+`2a19782c` (2026-09-09) until `e70cc096` (2026-10-06) made it 0.2 **and a floor**, so the literal
+is faithful history and the IMPORT is the defect. Deleting it would have replaced four records
+with four fictions. **This is why an agent's report is verified against the code before anything
+moves** -- the consequence it named was real and its cause was backwards.
+
+| take | as filmed | the guard asserted | pipeline today |
+|---|---|---|---|
+| 10-04 Back Squat | -7.98% | **+1.21%** | -5.97% |
+| 10-04 RDL | -7.91% | **-2.26%** | +3.58% |
+| 10-05 Back Squat | +5.97% | +5.97% | -3.58% |
+| 10-05 RDL | -6.98% | -6.98% | -1.95% |
+
+The 10-04 pair asserted "within 2.5% of the sensor" and passed 5/5 for seventeen days on a blend
+that was never on a phone. **It could not have failed**: the one input a refit could reach was
+typed by hand. And the 10-05 squat **changed sign** across `e70cc096`, so "the squat reads high"
+and "the squat reads low" are both true of one take depending which build is asked -- Rule #5
+exactly, from a constant rather than from scatter.
+
+**A THIRD FINDING, AND IT IS IN THE LIVE PIPELINE RATHER THAN A TEST: THE HEIGHT RULER IS NOW
+FOUR TIMES AS CONFIDENT AS THE SHOULDER RULER.** That file's first case forbade precisely this --
+both are body spans off the same landmarks, so neither has earned the tighter claim -- and it
+passed as an EQUALITY between the frozen `0.1` and `HEIGHT_RULER_UNCERTAINTY`, two numbers that
+stopped being the same on 2026-10-06. Against the live floor it is 0.1 against 0.2, which is 4x
+the inverse-variance weight. **NOT FIXED**: `HEIGHT_RULER_UNCERTAINTY` was fitted jointly on
+Scott's squat and his RDL and the 10-20 provenance audit calls it the heaviest lever on two of the
+three lifts under test, while the shoulder's 0.2 was fitted across nine takes and is a FLOOR that
+can only loosen. Refitting either to restore a symmetry argument, on a day with no sensor beside
+the bar, is how a bad constant gets in. The case is **inverted** to assert the asymmetry as it is,
+so the day either constant moves somebody decides deliberately which way the relation should go.
+
+**HOW A ROW WORKS.** `shared/accuracy-ledger.ts` carries, per take: the candidates as the export
+gives them, **the uncertainty EVERY ruler stated**, whether the height ruler voted (a separate
+fact from its uncertainty, because a posture LABEL decides it -- both RDLs shipped WITH a height
+ruler and today's pipeline admits none), the shipped scale, and both ranges of motion. **No
+imports on purpose**: the replay needs `reconcileScaleEstimates`, which `bundle-budget.test.ts`
+keeps out of the eager entry, so importing it from `shared/` would be a route into that bundle for
+every page. Each take is replayed **twice**:
+- **as filmed**, which must reproduce the scale the phone shipped. That is what makes a row a
+  record rather than a reconstruction, and it is the check that proved the `0.1` was history.
+- **through the live constants**, whose answer is recorded as `liveErrorPct`. A refit moves it,
+  the replay reds, and updating it is where a constant's cost on every already-measured take lands
+  in the diff instead of seventeen days later.
+
+**`liveErrorPct` IS PINNED TO A TWENTIETH OF A POINT, NOT TO A THRESHOLD.** A threshold is what
+let this sit still: "inside 2.5%" is satisfied by a wide band of wrong answers, and the point is
+to notice a MOVE, not to clear a bar. Red here is information, not a failure.
+
+**STATED LIMITS, so the file is not read as more complete than it is.** The four rows were rebuilt
+from what those two tests happened to keep, so they carry no `heightInOnFile`,
+`spanSpreadFraction`, grip ratio, `cadenceHeld` or rep count -- those are in the export and are to
+be filled in for the next take filmed beside a sensor, **never back-guessed**. A sealed row has no
+frames, so the replay can only know the shoulder ruler's FLOOR, not what the spread or the grip
+floor would have loosened it to. And the hybrid scan does not follow a value computed inside a
+helper function.
+
+**THE SCAN STATES WHAT IS FORBIDDEN** -- a frozen value beside a live constant in one
+`reconcileScaleEstimates` call -- bounds each call and each property value by **matching its own
+brackets** rather than a character window, discovers the live names from each file's OWN import of
+`./pose-tracking`, resolves local `const X = <number>` declarations, and strips comments first.
+**Its first draft captured the first token after the colon**, so
+`c.source === "height" ? HEIGHT_RULER_UNCERTAINTY : 0.1` read as neither frozen nor live -- the
+enumerate-accepted-forms trap in a new guise, since matching one spelling of an EXPRESSION passes
+for every spelling nobody thought of. Containment over the whole value catches all three
+spellings. A counterfactual literal beside a LEDGER lookup stays legal: the row is frozen, so
+"what would 0.05 have given on this take" is well-posed, and that is the only comparison in the
+height file that ever was.
+
+Eight mutations, each caught by the right case: one row's `liveErrorPct` reds one case; an
+as-filmed uncertainty reds the faithful-record replay; **the `e70cc096` refit itself reds FIVE**;
+undoing the height refit reds four; the hybrid reds the scan in all three spellings; dropping the
+posture gate reds the two RDL rows; a bracket matcher that finds nothing reds the floor. **The
+first draft of `liveUncertainty` typed `0.2` for the two 3D rulers** -- the same defect, in the
+file that exists to catch it -- so all four are read by name.
+
+Records and gates nothing (Rule #1). No constant moved, no capture is refused, `FITTED_OVERRIDES`
+stays empty. A ledger is a MECHANISM, so it is shared across every movement -- the test the
+"what 'its own numbers' means" section sets. Tests plus a shared module nothing in the client
+bundle references: no build.
 
 ## RULE #5: MEASURE THE SCATTER BEFORE FITTING THE BIAS
 
