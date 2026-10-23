@@ -1507,9 +1507,34 @@ real value; read it that way and take the current number from the run list.
   The `stripe-checkout.test.ts` lesson inverted: there prose turned a test red, here prose turned
   one green, which is worse because nothing announces it. It paren-matches the call's own
   arguments now. Five mutations, each caught by the right case.
-  **STILL NOT DONE, ten dialogs, grouped by what blocks them:** four web/Android halves (bar,
-  kb-swing, medball, swing) are the same shape as their wired twins and wait only on a device to
-  test on -- `medball-tracker-dialog.tsx` carries the same stale 0.05; mechanics (both halves)
+  **STILL NOT DONE, ten dialogs, grouped by what blocks them. THE FIRST GROUP'S REASON WAS WRONG
+  IN THREE WAYS AND IS CORRECTED BELOW (2026-10-23); the sentence it replaces read "four
+  web/Android halves (bar, kb-swing, medball, swing) are the same shape as their wired twins and
+  wait only on a device to test on -- `medball-tracker-dialog.tsx` carries the same stale 0.05",
+  and every clause of that is false:**
+  - **They are not an Android path.** `isAvPreviewPlatform()` is
+    `Capacitor.isNativePlatform() && getPlatform() === "ios"`, so all four run in EVERY BROWSER,
+    on the live website, today. "Android is parked" excused them and made them sound unreachable,
+    which is why nobody read them for three days.
+  - **They are not the same shape as their twins.** `kb-swing-tracker-dialog.tsx` and
+    `swing-tracker-dialog.tsx` declare no registry-eligible constant at all (no scale blend, no
+    ruler uncertainty), and `medball-tracker-dialog.tsx` declares exactly one -- its 25 m/s ball
+    gate, which already equals the registry's `med_ball.maxPlausibleSpeedMps`. Wiring the two
+    empty ones would be cosmetic AND would take them off the list under false pretences.
+  - **`medball-tracker-dialog.tsx` does not carry the stale 0.05.** It runs no scale blend, has
+    no height ruler, and contains no 0.05. The claim was carried from its iOS twin by assumption.
+  - **AND THE REAL FINDING UNDERNEATH, which the wrong reason hid: the bar's per-frame
+    plausibility gate exists THREE times at TWO values.** `bar-tracking.ts` reads
+    `tune.maxPlausibleSpeedMps` (the registry, bar = 3); `av-bar-tracker-dialog.tsx:567` has a
+    function-local `MAX_PLAUSIBLE_VELOCITY_MPS = 3`; `bar-tracker-dialog.tsx:298` has a
+    module-level `MAX_PLAUSIBLE_VELOCITY_MPS = 4`. Neither dialog reads the record and they
+    disagree, so the same gate is **3 on a phone and 4 in a browser**, and neither value has a
+    comment justifying it. **RECORDED, NOT CHANGED:** wiring the web one moves a number on a path
+    no capture has ever been filmed on beside the sensor, which is Rule #5 exactly. A new case in
+    the ratchet forbids any exemption from blaming Android and reads that premise off
+    `native-av-preview.ts` rather than asserting it.
+
+  The rest of the list stands as written: mechanics (both halves)
   needs the wrist gate threaded through `mechanics-tracking.ts` first, where it is applied;
   sprint and horizontal load (both halves each) have nothing in the record to read -- a timed
   sprint runs no scale blend and its gate is in yards per second, a sled push scales off a known
@@ -4403,6 +4428,66 @@ Render API for the instance and the database) and fixed second. What the measure
   the retake, the null, no consent, both readers plus the clip list, the offload and its second
   idempotent run, the account deletion) and the `.test.ts` scan beside it. Sixteen neighbouring
   itests (90 cases) green on the same database.
+
+  **AND THE OFFLOAD JOB MOVED ZERO ROWS FOR A WEEK, BECAUSE ALL 1,213 WERE ORPHANS. CLEARED
+  2026-10-22 ON SCOTT'S "DO IT ALL", AND IT WAS NOT A SPACE SAVING.** Off the log the job itself
+  started printing: `1213 rows hold frames but none joined to a day ... the table has 0 foreign
+  keys, 19797 sets in all, 19683 with no entry`. The offload cannot move a row whose entry is
+  gone -- it resolves the athlete id through the day to name the file -- so it reported `moved 0`
+  every boot while 451 MB of a 489 MB database sat in that one column.
+  **THE ROWS BELONG TO ACCOUNTS THAT WERE DELETED, AND THE CASCADE THAT SHOULD HAVE TAKEN THEM
+  HAS NEVER EXISTED ON PRODUCTION.** `shared/schema.ts` declares `logEntryId` with
+  `onDelete: "cascade"`; the live table had ZERO foreign keys. `server/check-schema-drift.ts` had
+  already written down why: the reconciler is additive-only, `CREATE TABLE IF NOT EXISTS` is a
+  no-op against an existing table, so a `REFERENCES` inside one of those blocks only ever reached
+  databases where the table did not yet exist -- and production is the one database that is never
+  fresh. The set ids reference entries 2..6595 while entries only exist from 6229, so everything
+  below is residue of the accounts retired 2026-10-11. **A deleted account's skeleton trace is the
+  one leftover this repo's deletion promise does not allow** (Scott that day: "purge every inch of
+  data"), so this is a deletion finishing, not a disk tidy.
+  `server/orphan-set-rows-cleanup.ts` does both halves in ONE order and that order is the whole
+  design: the orphans go first, the cascade goes on second, and **the cascade is attempted only
+  once the orphan count is zero** -- the guard `check-schema-drift.ts` demands in words ("adding a
+  cascade to a table that has accumulated orphans will either fail outright or start deleting rows
+  that survived precisely because the constraint was missing"). It is a JOB rather than SQL in the
+  reconciler because two of the columns are FILES (`skeleton_frames_path`, `form_check_video_url`)
+  and SQL cannot unlink one; a row removed with its path on disk trades a database orphan for a
+  filesystem orphan plus an `uploaded_files` row pointing at nothing.
+  **`cleanupOrphanedVideoRows` IS WHY THERE WERE 1,213 AND NOT 1,078.** That method found this
+  exact class in 2026-08, nulled the video columns, kept the rows and never added the constraint
+  -- and `check-schema-drift.ts` names the episode as the mistake not to repeat. A cleanup without
+  the constraint comes back.
+  **RAN ON PRODUCTION 2026-10-23 00:19 UTC:** `cleaned: 19683 orphan set rows deleted (19683
+  found, 1224 held skeleton frames, 11 files removed); 0 remain; foreign key ADDED.` The Render
+  disk number does NOT fall from this -- the space is reusable, not returned; that still wants a
+  `VACUUM FULL workout_set_entries` by hand in a quiet hour.
+  Ten itest cases on real Postgres, each **dropping the cascade first** because the test database
+  HAS it -- the same asymmetry that hid this for months. The guard case needed a TRIGGER to reach
+  at all (an orphan re-inserted as the last one is removed, which is the real race), and without
+  that case nothing noticed when the guard was taken out. Five mutations, each caught by the right
+  case.
+
+  **AND THE DRIFT CHECK HAD NEVER ONCE RUN AGAINST PRODUCTION, WHICH IS WHY NONE OF THIS WAS
+  VISIBLE.** `npm run db:check-drift` is wired into CI's "Check for foreign-key drift" step, and
+  CI runs it against a database the same job created minutes earlier, where every constraint was
+  written by the `CREATE TABLE` that made the table. **It passes trivially there, every time.**
+  `server/fk-drift-job.ts` runs the same comparison at every boot and daily and **repairs
+  nothing** -- a boot job IS a build step, which is exactly what that file says must not decide
+  this. First run, 2026-10-23: **4 of 225 declared keys missing** -- the `workout_set_entries` one
+  above, plus THREE on `assignment_correctives` (`assignment_id`, `program_day_id`, `exercise_id`)
+  that no audit had ever looked at. It also counts what each missing key WOULD take with it, per
+  key, because "missing" alone does not separate a one-line migration from a 19,683-row deletion;
+  a count that cannot be taken reads "could not count" and never zero.
+  **ONE BUG FOUND IN WRITING IT THAT WOULD HAVE CRASH-LOOPED THE DEPLOY**, and it is the reason
+  for the three-file split: the job first imported `check-schema-drift.ts` to reuse its
+  comparison, and that file is a CLI -- `main()` at module scope, `process.exit(1)` on drift. The
+  server importing it would have connected, compared and killed the process on any database with
+  drift, and **production has drift, which is the entire reason the report exists.** Caught as an
+  unhandled "process.exit unexpectedly called with 1" in the unit run. The logic is its own
+  side-effect-free module now (`server/foreign-key-drift.ts`), the CLI keeps its exit code, and a
+  test forbids `process.exit`, a top-level `main()` and any path from the server to the CLI.
+  **THE GENERAL RULE: NOTHING THE SERVER IMPORTS MAY EXIT THE PROCESS**, and `reconcile-schema.ts`
+  and `seed.ts` are the other two files in this repo with a bare top-level `main()`.
 - **Recorded, not changed:** the sitemap's `lastmod` is the commit date (fine); the HTML ships
   ~2.5 KB of its own comments, which brotli makes nearly free; `/api/auth/me` and the two
   Capacitor web-plugin chunks are the only requests between the entry and the first React paint.
