@@ -182,3 +182,7 @@ __pycache__/
 
 # Forge Studio renders (the mod's work dir)
 .studio/
+
+# Written by the Claude Code engine beside a loaded plugin; never committed.
+.claude/skills/*/tsconfig.json
+.claude/skills/*/.claude-plugin/types/

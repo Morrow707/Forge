@@ -10,6 +10,16 @@ import type { StudioVersion } from '../types'
 
 const PLUGIN = 'forge-studio'
 
+/** The repository the pipeline lives in. Taken from the session's own working directory at
+ *  session.start -- NOT derived from `$.plugin.root`, which is wherever the plugin was loaded
+ *  from (a symlink in a session's mods folder on the first run, where stripping
+ *  `.claude/skills/forge-studio` off it finds nothing and every tool looked for the pipeline
+ *  in the wrong place). The derivation stays as the fallback for a hook that runs before
+ *  session.start has. */
+let repoRoot: string | null = null
+const repoRootFor = ($: { plugin: { root: string } }) =>
+  repoRoot ?? $.plugin.root.replace(/\/\.claude\/skills\/forge-studio$/, '')
+
 /** A tool answer the model reads as text. `result` is what the engine stores; `text` what it shows. */
 const ok = (text: string) => ({ result: text, text })
 const fail = (text: string) => ({ isError: true as const, result: text, text })
@@ -111,6 +121,7 @@ async function showImage($: any, cwd: string, path: string, label?: string, kind
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
+    repoRoot = e.cwd
     await $.command.register({ name: 'studio', description: 'Open the Forge Studio pane (renders, Approve / Redo / Compare).' })
     await $.command.register({ name: 'tune', description: 'Turn a body-map knob and re-render: /tune striations 0.12 denoise 6 | list | reset', argumentHint: 'knob value ... | list | reset' })
     await $.tool.register({
@@ -146,7 +157,7 @@ export const register: Register = on => {
 
   on('command.run', { command: 'tune' }, async ($, e) => {
     const words = e.args.trim().split(/\s+/).filter(Boolean)
-    const cwd = $.plugin.root.replace(/\/\.claude\/skills\/forge-studio$/, '')
+    const cwd = repoRootFor($)
     if (!words.length || words[0] === 'list') {
       const cur = (await read($, versions)).slice().reverse().find(v => v.kind === 'bodymap')
       return { text: `Body-map knobs (default in brackets):\n  ${KNOB_HELP}\n\nIn force: ${cur?.knobs ? JSON.stringify(cur.knobs) : 'defaults (nothing rendered yet)'}\n\n/tune striations 0.12 denoise 6` }
@@ -175,21 +186,21 @@ export const register: Register = on => {
   })
 
   on('tool.call', { tool: 'mcp__forge-studio__render' }, async ($, e) => {
-    const cwd = $.plugin.root.replace(/\/\.claude\/skills\/forge-studio$/, '')
+    const cwd = repoRootFor($)
     const input = e as unknown as { stage?: string; knobs?: Record<string, number>; label?: string; reset?: boolean }
     const r = await renderBodyMap($, cwd, input)
     return r.ok ? ok(r.text) : fail(r.text)
   })
 
   on('tool.call', { tool: 'mcp__forge-studio__show' }, async ($, e) => {
-    const cwd = $.plugin.root.replace(/\/\.claude\/skills\/forge-studio$/, '')
+    const cwd = repoRootFor($)
     const input = e as unknown as { path: string; label?: string }
     const r = await showImage($, cwd, input.path, input.label)
     return r.ok ? ok(r.text) : fail(r.text)
   })
 
   on('tool.call', { tool: 'mcp__forge-studio__cloudinary_enhance' }, async ($, e) => {
-    const cwd = $.plugin.root.replace(/\/\.claude\/skills\/forge-studio$/, '')
+    const cwd = repoRootFor($)
     const input = e as unknown as { path: string; out?: string; effects?: string[]; label?: string }
     const out = input.out ?? input.path.replace(/\.[a-z0-9]+$/i, '') + `.cloudinary.png`
     await update($, busy, () => 'asking Cloudinary')
