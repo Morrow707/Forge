@@ -4628,6 +4628,42 @@ Render API for the instance and the database) and fixed second. What the measure
   page says whether the records are verified; if they are not, every email to a parent is a
   spam-folder candidate. Scott's to read.
 
+## FORGE STUDIO: THE ART MOD, 2026-10-24
+
+Scott: "lets just add pure art to you, such as smoothing out the body map, upgrading your
+capability to draw and smooth and render" / "build them all in order". It is a Claude Code mod
+(a plugin of function hooks) checked into the repo at `.claude/skills/forge-studio/`, so every
+session on Forge -- this one and the Opus one -- loads the same tools. Nothing in it reaches the
+app: no build, no Render deploy.
+
+- **`/studio`** opens a pane beside the chat showing the current render with a strip of earlier
+  versions and three buttons: **Approve** (recorded on the version, and Claude is told to treat
+  it as the keeper), **Redo** (fills the prompt with "another pass on ...", Scott finishes the
+  sentence) and **Compare** (the previous version beside the current one).
+- **`/tune knob value [knob value ...]`** reruns the body-map FINISH stage with those knobs,
+  shows the result in the pane and asks Claude to republish the review artifact
+  (https://claude.ai/artifact/547k9BLoUmuYF12LvyA3dM is in `register.tsx` as `ARTIFACT`).
+  `/tune list` prints the fourteen knobs with defaults; `/tune reset` goes back to them.
+- **Tools Claude calls:** `render` (the pipeline, any stage, with knobs), `show` (any image file
+  into the pane), `cloudinary_enhance` (improve / upscale / enhance / background_removal through
+  Cloudinary; needs `CLOUDINARY_URL` as a secret and `api.cloudinary.com` + `res.cloudinary.com`
+  on the network policy, neither set yet -- the tool says so and exits 2 without them).
+- **`tools/body-map/`** is the pipeline that produced the body-map artifact, moved out of the
+  session scratchpad so it survives the container: `pipeline.py --work DIR --stage all|hd|preview
+  --set knob=value` runs extract -> components -> assign -> cleanup -> face -> hd -> preview and
+  prints one `RESULT {json}` line; the four source renders are in `source/`; the artifact page
+  in `page/`. A full run is ~75 s here; `hd` alone is the fast path `/tune` takes. Renders land
+  in `.studio/` at the repo root, git-ignored.
+- **Loading:** a project plugin in `.claude/skills/` loads with the session; this session also
+  symlinked it into its mods folder. `claude plugin validate` and `claude plugin test` both
+  pass (two tests, four surfaces); the hooks module type-checks against the 2.1.310 API with
+  the tsconfig recipe in the types file header. Two things that cost a round each: an `atom`
+  ref's plugin and key must be STRING LITERALS (the scan reads them), and a tool hook's answer
+  is `{ result, text }` or `{ isError: true, result, text }`, never `{ text, isError }`.
+- **The body map itself is NOT wired into the app.** Scott, 2026-10-24: "no don't wire, i want
+  to work, give me the artifact." He works it through the artifact and `/tune`; the wiring into
+  `client/src/components/body-map.tsx` waits on his word.
+
 ## The top-twenty list, 2026-10-15: what Scott decided and what shipped
 
 Scott handed over a table of the twenty biggest consumer fitness apps (Hevy, Fitbod, Strong,

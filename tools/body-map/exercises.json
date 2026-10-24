@@ -1,0 +1,233 @@
+{
+ "Quads": {
+  "count": 53,
+  "examples": [
+   "Back Squat",
+   "Box Squat",
+   "Box Jump",
+   "Dumbbell Box Step-Up",
+   "Foam Roll Quads",
+   "Goblet Squat"
+  ]
+ },
+ "Chest": {
+  "count": 26,
+  "examples": [
+   "Bench Press",
+   "Incline Dumbbell Press",
+   "Dumbbell Bench Press",
+   "Paused Bench Press",
+   "Push-Up",
+   "Incline Barbell Bench Press"
+  ]
+ },
+ "Hamstrings": {
+  "count": 20,
+  "examples": [
+   "Deadlift",
+   "Nordic Hamstring Curl",
+   "Romanian Deadlift",
+   "Dumbbell Romanian Deadlift",
+   "Barbell Good Morning",
+   "Hex Bar Deadlift"
+  ]
+ },
+ "Lats": {
+  "count": 11,
+  "examples": [
+   "Pull-Up",
+   "Assisted Pull-Up",
+   "Lat Pulldown",
+   "Chin-Up",
+   "Straight-Arm Pulldown",
+   "Reverse-Grip Lat Pulldown"
+  ]
+ },
+ "Glutes": {
+  "count": 19,
+  "examples": [
+   "Kettlebell Swing",
+   "Hip Thrust",
+   "Broad Jump",
+   "Clamshell",
+   "Fire Hydrant",
+   "Lateral Band Walk"
+  ]
+ },
+ "Full Body": {
+  "count": 87,
+  "examples": [
+   "Clean & Jerk",
+   "Snatch",
+   "Hang Snatch",
+   "Snatch Pull",
+   "Hang Clean",
+   "Clean Pull"
+  ]
+ },
+ "Ankle": {
+  "count": 6,
+  "examples": [
+   "Ankle Dorsiflexion Mobilization",
+   "Banded Ankle Eversion",
+   "Banded Ankle Inversion",
+   "Tibialis Raise",
+   "Single-Leg Balance Reach",
+   "Ankle CARs"
+  ]
+ },
+ "Shoulders": {
+  "count": 51,
+  "examples": [
+   "Band Pull-Apart",
+   "Band External Rotation",
+   "Split Jerk",
+   "Push Press",
+   "Dumbbell Shoulder Press",
+   "Barbell Shoulder Press"
+  ]
+ },
+ "Hip Flexors": {
+  "count": 14,
+  "examples": [
+   "90/90 Hip Switch",
+   "World's Greatest Stretch",
+   "Couch Stretch",
+   "Standing Hip Circle",
+   "A-Skip",
+   "Wall Sprint Drill"
+  ]
+ },
+ "Calves": {
+  "count": 10,
+  "examples": [
+   "Standing Calf Raise",
+   "Seated Calf Raise",
+   "Calf Stretch (Wall)",
+   "Jump Rope",
+   "Single-Leg Hop",
+   "Lateral Hurdle Hop"
+  ]
+ },
+ "Adductors": {
+  "count": 7,
+  "examples": [
+   "Copenhagen Plank",
+   "Cossack Squat",
+   "Frog Stretch",
+   "Lateral Lunge",
+   "Hip Adduction Machine",
+   "Adductor Rock Back"
+  ]
+ },
+ "Back": {
+  "count": 22,
+  "examples": [
+   "Bent-Over Row",
+   "Chest-Supported Row",
+   "Single-Arm Dumbbell Row",
+   "Seated Cable Row",
+   "Machine Row",
+   "Pendlay Row"
+  ]
+ },
+ "Traps": {
+  "count": 2,
+  "examples": [
+   "Barbell Shrug",
+   "Farmer's Carry"
+  ]
+ },
+ "Biceps": {
+  "count": 15,
+  "examples": [
+   "Barbell Curl",
+   "Dumbbell Curl",
+   "Hammer Curl",
+   "EZ-Bar Curl",
+   "Preacher Curl",
+   "Concentration Curl"
+  ]
+ },
+ "Triceps": {
+  "count": 12,
+  "examples": [
+   "Close-Grip Bench Press",
+   "Tricep Rope Pushdown",
+   "Dip",
+   "Diamond Push-Up",
+   "Skull Crusher",
+   "Overhead Tricep Extension"
+  ]
+ },
+ "Forearms": {
+  "count": 9,
+  "examples": [
+   "Dead Hang",
+   "Suitcase Carry",
+   "Wrist Flexor Stretch",
+   "Wrist Extensor Stretch",
+   "Farmer's Hold",
+   "Plate Pinch Hold"
+  ]
+ },
+ "Core": {
+  "count": 14,
+  "examples": [
+   "Plank",
+   "Pallof Press",
+   "Bird Dog",
+   "Open Book Stretch",
+   "Quadruped Thoracic Rotation",
+   "Suitcase Hold"
+  ]
+ },
+ "Abs": {
+  "count": 10,
+  "examples": [
+   "Hanging Leg Raise",
+   "Cable Crunch",
+   "McGill Curl-Up",
+   "Ab Wheel Rollout",
+   "V-Up",
+   "Toes-to-Bar"
+  ]
+ },
+ "Obliques": {
+  "count": 9,
+  "examples": [
+   "Russian Twist",
+   "Side Plank",
+   "Cable Woodchop",
+   "Landmine Rotation",
+   "Medicine Ball Rotational Throw",
+   "Bicycle Crunch"
+  ]
+ },
+ "Lower Back": {
+  "count": 8,
+  "examples": [
+   "Back Extension",
+   "Superman Hold",
+   "Cat-Cow",
+   "Reverse Hyper",
+   "Seated Good Morning",
+   "Jefferson Curl"
+  ]
+ },
+ "Neck": {
+  "count": 4,
+  "examples": [
+   "Neck Flexion Hold",
+   "Neck Lateral Flexion Hold",
+   "Chin Tuck",
+   "Neck Bridge"
+  ]
+ },
+ "Hips": {
+  "count": 1,
+  "examples": [
+   "Medicine Ball Scoop Toss"
+  ]
+ }
+}

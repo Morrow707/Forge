@@ -1,0 +1,332 @@
+<title>Forge Body Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: one screen. The figure owns the height; labels sit in two gutters beside it; the
+   detail for a tapped muscle slides up as a sheet on a phone and docks right on a desktop. */
+:root {
+  --bg: #0b0b0f; --panel: #15151b; --panel-2: #1d1d25; --line: #2a2a33;
+  --fg: #f3f1ec; --muted: #b0ada6; --faint: #6f6d68; --accent: #f65b23; --accent-ink: #0b0b0f;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif; --body: "Barlow", system-ui, sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #f6f4ef; --panel: #ffffff; --panel-2: #efece5; --line: #d9d5cc; --fg: #15151b; --muted: #5f5c55; --faint: #9a968e; --accent: #e04e1b; --accent-ink: #fff; color-scheme: light; } }
+:root[data-theme="light"] {
+  --bg: #f6f4ef; --panel: #ffffff; --panel-2: #efece5; --line: #d9d5cc; --fg: #15151b; --muted: #5f5c55; --faint: #9a968e; --accent: #e04e1b; --accent-ink: #fff; color-scheme: light; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; overflow: hidden;
+  padding-left: max(0px, env(safe-area-inset-left, 0px)); padding-right: max(0px, env(safe-area-inset-right, 0px)); box-sizing: border-box; }
+.app { height: 100%; min-width: 0; display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .app { grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: auto 1fr auto; } .app > .sheet { grid-column: 2; grid-row: 1 / -1; } }
+header { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; flex-wrap: wrap; padding: 10px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); }
+h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 24px; text-transform: uppercase; letter-spacing: 0.02em; line-height: 1; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { background: transparent; color: var(--muted); border: 0; padding: 0 12px; font: inherit; font-weight: 600; min-height: 40px; cursor: pointer; }
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+.seg button:focus-visible, .lbl:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stage { position: relative; min-height: 0; margin: 0 max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px)); border-radius: 16px; overflow: hidden;
+  background: radial-gradient(ellipse 62% 55% at 50% 40%, #2a2a34 0%, #15151b 55%, #0d0d12 100%); user-select: none; touch-action: manipulation; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.stage svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+.lbl { cursor: pointer; }
+.lbl text { font-family: var(--body); font-weight: 500; fill: #c9c6bf; letter-spacing: 0.02em; }
+.lbl line, .lbl polyline { stroke: #8a877f; stroke-width: 1; fill: none; }
+.lbl circle { fill: #a7a49c; }
+.lbl.hot text { fill: var(--accent); font-weight: 600; }
+.lbl.hot line, .lbl.hot polyline { stroke: var(--accent); stroke-width: 1.6; }
+.lbl.hot circle { fill: var(--accent); }
+.lbl rect { fill: transparent; }
+@media (max-width: 519px) { #viewSeg { display: none; } h1 { font-size: 22px; } .seg button { padding: 0 10px; min-height: 36px; font-size: 14px; } }
+.tip { position: absolute; pointer-events: none; background: #f3f1ec; color: #0b0b0f; font-weight: 600; font-size: 13px; padding: 4px 9px; border-radius: 999px; transform: translate(-50%, -140%); white-space: nowrap; opacity: 0; transition: opacity .12s; }
+.tip.on { opacity: 1; }
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px max(16px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.bar .hint { color: var(--faint); font-size: 12.5px; }
+.btn { background: var(--panel-2); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; padding: 0 14px; min-height: 40px; font: inherit; font-weight: 600; cursor: pointer; }
+.btn.flip { display: inline-flex; align-items: center; gap: 8px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+/* The detail sheet */
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 78%; background: var(--panel); border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; transform: translateY(104%); transition: transform .24s ease; z-index: 5; display: flex; flex-direction: column; box-shadow: 0 -12px 40px rgba(0,0,0,.35);
+  padding-left: max(0px, env(safe-area-inset-left, 0px)); padding-right: max(0px, env(safe-area-inset-right, 0px)); }
+.sheet.open { transform: translateY(0); }
+@media (min-width: 900px) { .sheet { position: static; max-height: none; transform: none; border-radius: 0; border-top: 0; border-left: 1px solid var(--line); box-shadow: none; } .sheet:not(.open) .body { opacity: .55; } }
+.sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 10px auto 0; }
+@media (min-width: 900px) { .sheet .grab { display: none; } }
+.sheet .body { overflow: auto; padding: 14px 18px max(18px, env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.sheet .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.sheet h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 34px; line-height: 1; text-transform: uppercase; }
+.sheet .sub { color: var(--muted); font-size: 14px; margin-top: 4px; }
+.close { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 999px; width: 36px; height: 36px; font-size: 18px; cursor: pointer; flex: none; }
+.badge { display: inline-block; font-family: var(--display); font-weight: 700; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 9px; }
+.card { background: var(--panel-2); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.card .k { font-family: var(--display); font-weight: 700; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.card .v { font-size: 16px; line-height: 1.35; }
+.card .big { font-family: var(--display); font-weight: 800; font-size: 30px; line-height: 1; }
+.band { display: inline-flex; align-items: center; gap: 8px; }
+.band i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.meter { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.meter b { display: block; height: 100%; background: var(--accent); }
+.rows { display: flex; flex-direction: column; }
+.row { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14.5px; align-items: baseline; }
+.row:first-child { border-top: 0; }
+.row .d { color: var(--muted); font-variant-numeric: tabular-nums; }
+.row .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .w { font-variant-numeric: tabular-nums; font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips span { border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; font-size: 13.5px; color: var(--fg); }
+.chips span.more { color: var(--muted); }
+.win { display: inline-flex; gap: 2px; }
+.win button { background: transparent; border: 1px solid var(--line); color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 999px; cursor: pointer; }
+.win button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.note { color: var(--faint); font-size: 12.5px; line-height: 1.4; }
+.empty { color: var(--muted); font-size: 15px; line-height: 1.45; }
+@media (prefers-reduced-motion: reduce) { .sheet, .tip { transition: none; } }
+</style>
+
+<div class="app">
+  <header>
+    <h1>Body Map</h1>
+    <div style="display:flex; gap:8px; align-items:center">
+      <div class="seg" role="group" aria-label="Figure"><button id="sexF" class="on">Female</button><button id="sexM">Male</button></div>
+      <div class="seg" id="viewSeg" role="group" aria-label="View"><button id="vFront" class="on">Front</button><button id="vBack">Back</button></div>
+    </div>
+  </header>
+
+  <div class="stage" id="stage" aria-label="Body map">
+    <canvas id="canvas"></canvas>
+    <svg id="labels" aria-hidden="false"></svg>
+    <div class="tip" id="tip"></div>
+  </div>
+
+  <div class="bar">
+    <span class="hint" id="hint">Tap a muscle or a label</span>
+    <button class="btn flip" id="flip" aria-label="Flip the figure">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg>
+      <span id="flipText">Show back</span>
+    </button>
+  </div>
+
+  <aside class="sheet" id="sheet" aria-label="Muscle detail">
+    <div class="grab"></div>
+    <div class="body" id="sheetBody">
+      <div class="empty">Tap a muscle on the figure, or one of its labels. What Forge holds for that muscle shows here: your strength score, how much you have trained it, your recent lifts, and the exercises that train it.</div>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function () {
+  const LABEL = { "Core": "Obliques", "Back": "Upper back", "Lower Back": "Lower back", "Hip Flexors": "Hip flexors" };
+  const MUSCLES = {
+    "Chest": "Pectoralis major and minor", "Shoulders": "Deltoids, front, side and rear", "Biceps": "Biceps brachii, brachialis",
+    "Forearms": "Brachioradialis, wrist flexors and extensors", "Abs": "Rectus abdominis", "Core": "External and internal obliques",
+    "Quads": "Rectus femoris, vastus lateralis, medialis and intermedius", "Calves": "Gastrocnemius, soleus, tibialis anterior",
+    "Lats": "Latissimus dorsi", "Back": "Rhomboids, teres, infraspinatus", "Traps": "Trapezius, upper, middle and lower",
+    "Triceps": "Triceps brachii", "Lower Back": "Erector spinae", "Glutes": "Gluteus maximus and medius",
+    "Hamstrings": "Biceps femoris, semitendinosus, semimembranosus", "Hip Flexors": "Iliopsoas, sartorius, tensor fasciae latae",
+    "Adductors": "Adductor longus, brevis, magnus, gracilis", "Neck": "Sternocleidomastoid, scalenes",
+  };
+  const SCORABLE = ["Chest","Back","Lats","Shoulders","Biceps","Triceps","Forearms","Quads","Hamstrings","Glutes","Calves","Core","Abs","Lower Back"];
+  const BANDS = [["Beginner",0,"#ef4444"],["Novice",20,"#f59e0b"],["Intermediate",40,"#22c55e"],["Advanced",60,"#3b82f6"],["Elite",80,"#a855f7"],["World Class",95,"#ec4899"]];
+  const REGION = { Neck:"neck", Shoulders:"shoulders", Chest:"chest", Back:"upper back", Lats:"upper back", Traps:"upper back", "Lower Back":"lower back", Biceps:"biceps", Triceps:"triceps", Forearms:"forearms", Abs:"abs", Core:"abs", Glutes:"glutes", "Hip Flexors":"hips", Adductors:"adductors", Quads:"quads", Hamstrings:"hamstrings", Calves:"calves" };
+
+  // ---- Example athlete. Deterministic per group so the demo is stable; clearly marked on screen.
+  function seeded(str) { let h = 2166136261; for (const c of str) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return ((h >>> 0) % 10000) / 10000; }; }
+  const DEMO_LIFTS = { Chest:["Bench Press","Incline Dumbbell Press","Dip"], Shoulders:["Barbell Shoulder Press","Push Press","Lateral Raise"], Biceps:["Barbell Curl","Chin-Up","Hammer Curl"], Forearms:["Farmer's Carry","Dead Hang","Barbell Curl"], Abs:["Hanging Leg Raise","Cable Crunch","Plank"], Core:["Pallof Press","Side Plank","Russian Twist"], Quads:["Back Squat","Front Squat","Walking Lunge"], Calves:["Standing Calf Raise","Seated Calf Raise","Jump Rope"], Lats:["Pull-Up","Lat Pulldown","Chest-Supported Row"], Back:["Bent-Over Row","Pendlay Row","Seated Cable Row"], Traps:["Barbell Shrug","Farmer's Carry","Power Clean"], Triceps:["Close-Grip Bench Press","Dip","Tricep Rope Pushdown"], "Lower Back":["Romanian Deadlift","Back Extension","Good Morning"], Glutes:["Hip Thrust","Deadlift","Bulgarian Split Squat"], Hamstrings:["Romanian Deadlift","Nordic Hamstring Curl","Deadlift"], "Hip Flexors":["Hanging Leg Raise","Couch Stretch","90/90 Hip Switch"], Adductors:["Cossack Squat","Copenhagen Plank","Lateral Lunge"], Neck:["Neck Flexion Hold","Chin Tuck","Neck Lateral Flexion Hold"] };
+  function demoFor(g) {
+    const r = seeded(g); const lifts = DEMO_LIFTS[g] || ["Logged lift"];
+    const pct = Math.round(18 + r() * 70); const sets = { 7: Math.round(4 + r() * 14), 28: 0, 90: 0 }; sets[28] = sets[7] * 3 + Math.round(r() * 10); sets[90] = sets[28] * 3 + Math.round(r() * 20);
+    const heavy = ["Quads","Hamstrings","Glutes","Lower Back","Chest","Back","Lats"].includes(g);
+    const base = heavy ? 135 + Math.round(r() * 24) * 5 : 25 + Math.round(r() * 12) * 5;
+    const days = ["Oct 16","Oct 13","Oct 9","Oct 6"];
+    const rows = [0, 1, 2].map((i) => ({ d: days[i], n: lifts[i % lifts.length], reps: 3 + Math.round(r() * 7), w: base - i * 5 * (r() > 0.5 ? 1 : 0) }));
+    return { pct, band: BANDS.filter((b) => pct >= b[1]).pop(), sets, best: { n: lifts[0], reps: rows[0].reps, w: base, d: days[0] }, rows, rank: 1 + Math.round(r() * 8) };
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const stage = $("stage"), canvas = $("canvas"), ctx = canvas.getContext("2d"), svg = $("labels"), tip = $("tip"), sheet = $("sheet");
+  const state = { sex: "female", view: "front", selected: null, hover: null, win: 28 };
+  let MAN = null, EX = {};
+  const assets = {}, overlayCache = new Map();
+  let fit = { s: 1, ox: 0, oy: 0, w: 0, h: 0 };
+
+  function load(key) {
+    if (assets[key]) return assets[key].ready;
+    const entry = { ready: null }; assets[key] = entry;
+    entry.ready = new Promise((resolve) => {
+      const img = new Image(), lab = new Image(); let n = 0;
+      const done = () => { if (++n < 2) return;
+        const w = img.naturalWidth, h = img.naturalHeight;
+        const off = document.createElement("canvas"); off.width = w; off.height = h;
+        const c = off.getContext("2d", { willReadFrequently: true });
+        c.drawImage(lab, 0, 0); const ld = c.getImageData(0, 0, w, h).data;
+        c.clearRect(0, 0, w, h); c.drawImage(img, 0, 0); const id = c.getImageData(0, 0, w, h).data;
+        const label = new Uint8Array(w * h), alpha = new Uint8Array(w * h);
+        for (let i = 0; i < w * h; i++) { label[i] = ld[i * 4]; alpha[i] = id[i * 4 + 3]; }
+        Object.assign(entry, { img, w, h, label, alpha }); resolve(entry); };
+      img.onload = done; lab.onload = done; img.src = `img/${key}.webp`; lab.src = `lab/${key}.png`;
+    });
+    return entry.ready;
+  }
+
+  function overlayFor(key, a, gi) {
+    const ck = `${key}:${gi}`; if (overlayCache.has(ck)) return overlayCache.get(ck);
+    const { w, h, label, alpha } = a; const out = new ImageData(w, h), d = out.data;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x; if (!alpha[i]) continue; const o = i * 4;
+      if (label[i] === gi) {
+        const edge = (x > 0 && label[i - 1] !== gi) || (x < w - 1 && label[i + 1] !== gi) || (y > 0 && label[i - w] !== gi) || (y < h - 1 && label[i + w] !== gi);
+        if (edge) { d[o] = 255; d[o + 1] = 255; d[o + 2] = 255; d[o + 3] = 240; }
+      } else { d[o] = 0; d[o + 1] = 0; d[o + 2] = 0; d[o + 3] = 135; }
+    }
+    const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").putImageData(out, 0, 0);
+    overlayCache.set(ck, c); return c;
+  }
+
+  const key = () => `${state.sex}-${state.view}`;
+  function gutter(boxW) { return boxW < 520 ? 42 : 100; }
+
+  async function draw() {
+    const k = key(); const a = await load(k);
+    const box = stage.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(box.width * dpr); canvas.height = Math.round(box.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, box.width, box.height);
+    const g = gutter(box.width), padY = 14;
+    const s = Math.min((box.width - g * 2 - 8) / a.w, (box.height - padY * 2) / a.h);
+    const dw = a.w * s, dh = a.h * s, ox = (box.width - dw) / 2, oy = (box.height - dh) / 2;
+    fit = { s, ox, oy, w: a.w, h: a.h };
+    // floor shadow
+    const fy = oy + dh * 0.985, fw = dw * 0.4, fh = Math.max(8, dh * 0.025);
+    const grad = ctx.createRadialGradient(box.width / 2, fy, 0, box.width / 2, fy, fw);
+    grad.addColorStop(0, "rgba(0,0,0,0.5)"); grad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.ellipse(box.width / 2, fy, fw, fh, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.imageSmoothingQuality = "high"; ctx.drawImage(a.img, ox, oy, dw, dh);
+    const hot = state.selected || state.hover;
+    if (hot) { const gi = MAN.groups.indexOf(hot) + 1; const ov = overlayFor(k, a, gi); ctx.globalAlpha = state.selected ? 1 : 0.55; ctx.drawImage(ov, ox, oy, dw, dh); ctx.globalAlpha = 1; }
+    drawLabels(box, g);
+  }
+
+  function drawLabels(box, g) {
+    const t = MAN.tiles[key()]; svg.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
+    const small = box.width < 520, fs = small ? 11 : 13.5, cw = fs * 0.56;
+    const items = Object.entries(t.groups).filter(([, v]) => v.count > 400).map(([name, v]) => ({ name, text: LABEL[name] || name, x: fit.ox + v.ax * fit.s, y: fit.oy + v.ay * fit.s, side: v.ax < t.w / 2 ? "L" : "R" }));
+    // The body's edge at a given stage y, from the silhouette extents the build recorded.
+    const edgeAt = (sy, side, pad) => {
+      const ty = (sy - fit.oy) / fit.s; let best = side === "L" ? Infinity : -Infinity;
+      for (let d = -pad; d <= pad; d += 4) {
+        const r = Math.max(0, Math.min(t.edges.length - 1, Math.floor((ty + d / fit.s) / t.edgeStep)));
+        const e = t.edges[r][side === "L" ? 0 : 1]; best = side === "L" ? Math.min(best, e) : Math.max(best, e);
+      }
+      return fit.ox + best * fit.s;
+    };
+    const gap = small ? 17 : 22;
+    for (const side of ["L", "R"]) {
+      const col = items.filter((i) => i.side === side).sort((a, b) => a.y - b.y);
+      col.forEach((i) => { i.ly = i.y; });
+      for (let p = 0; p < 8; p++) {
+        for (let i = 1; i < col.length; i++) if (col[i].ly < col[i - 1].ly + gap) col[i].ly = col[i - 1].ly + gap;
+        const over = col.length ? col[col.length - 1].ly - (box.height - 10) : 0; if (over > 0) col.forEach((i) => { i.ly -= over; });
+        for (let i = col.length - 2; i >= 0; i--) if (col[i].ly > col[i + 1].ly - gap) col[i].ly = col[i + 1].ly - gap;
+        if (col.length && col[0].ly < 14) { const d = 14 - col[0].ly; col.forEach((i) => { i.ly += d; }); }
+      }
+    }
+    svg.innerHTML = "";
+    const ns = "http://www.w3.org/2000/svg";
+    for (const i of items) {
+      const w = i.text.length * cw, e = edgeAt(i.ly, i.side, 9);
+      // Text sits just off the body at its own row; the leader is short and straight.
+      let tx = i.side === "L" ? e - 14 : e + 14;
+      if (i.side === "L") tx = Math.max(4 + w, tx); else tx = Math.min(box.width - 4 - w, tx);
+      const lx = i.side === "L" ? tx + 4 : tx - 4;
+      const grp = document.createElementNS(ns, "g"); grp.setAttribute("class", "lbl" + ((state.selected || state.hover) === i.name ? " hot" : ""));
+      grp.setAttribute("tabindex", "0"); grp.setAttribute("role", "button"); grp.setAttribute("aria-label", i.text); grp.dataset.group = i.name;
+      const ln = document.createElementNS(ns, "line"); ln.setAttribute("x1", lx); ln.setAttribute("y1", i.ly - 4); ln.setAttribute("x2", i.x); ln.setAttribute("y2", i.y); grp.appendChild(ln);
+      const c = document.createElementNS(ns, "circle"); c.setAttribute("cx", i.x); c.setAttribute("cy", i.y); c.setAttribute("r", 2.6); grp.appendChild(c);
+      const txt = document.createElementNS(ns, "text"); txt.setAttribute("x", tx); txt.setAttribute("y", i.ly); txt.setAttribute("font-size", fs); txt.setAttribute("text-anchor", i.side === "L" ? "end" : "start"); txt.textContent = i.text; grp.appendChild(txt);
+      const hit = document.createElementNS(ns, "rect"); hit.setAttribute("x", i.side === "L" ? tx - w - 6 : tx - 6); hit.setAttribute("y", i.ly - 14); hit.setAttribute("width", w + 12); hit.setAttribute("height", 22); grp.appendChild(hit);
+      grp.addEventListener("click", (ev) => { ev.stopPropagation(); select(state.selected === i.name ? null : i.name); });
+      grp.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); select(state.selected === i.name ? null : i.name); } });
+      grp.addEventListener("pointerenter", () => { if (!state.selected) { state.hover = i.name; draw(); } else grp.classList.add("hot"); });
+      grp.addEventListener("pointerleave", () => { if (!state.selected) { state.hover = null; draw(); } else if (state.selected !== i.name) grp.classList.remove("hot"); });
+      svg.appendChild(grp);
+    }
+  }
+
+  function labelAt(cx, cy) {
+    const a = assets[key()]; if (!a || !a.w) return 0;
+    const box = stage.getBoundingClientRect();
+    const x = Math.floor((cx - box.left - fit.ox) / fit.s), y = Math.floor((cy - box.top - fit.oy) / fit.s);
+    if (x < 0 || y < 0 || x >= a.w || y >= a.h) return 0; return a.label[y * a.w + x];
+  }
+
+  // ---- The detail sheet
+  function fmtW(w) { return `${w} lb`; }
+  function render(g) {
+    const body = $("sheetBody");
+    if (!g) { body.innerHTML = `<div class="empty">Tap a muscle on the figure, or one of its labels. What Forge holds for that muscle shows here: your strength score, how much you have trained it, your recent lifts, and the exercises that train it.</div>`; return; }
+    const d = demoFor(g), lib = EX[g] || { count: 0, examples: [] }, scorable = SCORABLE.includes(g);
+    const win = state.win;
+    body.innerHTML = `
+      <div class="top"><div><h2>${LABEL[g] || g}</h2><div class="sub">${MUSCLES[g] || ""}</div></div><button class="close" id="close" aria-label="Close">&times;</button></div>
+      <div><span class="badge">Example athlete</span></div>
+      ${scorable ? `<div class="card"><div class="k">Strength score <span>Hand-logged lifts only</span></div>
+        <div class="band"><i style="background:${d.band[2]}"></i><span class="big">${d.band[0]}</span></div>
+        <div class="meter"><b style="width:${d.pct}%"></b></div>
+        <div class="v">Ahead of ${d.pct}% of athletes aged 16-17 on Forge. Best: ${d.best.n}, ${d.best.reps} &times; ${fmtW(d.best.w)} on ${d.best.d}.</div></div>`
+      : `<div class="card"><div class="k">Strength score</div><div class="v" style="color:var(--muted)">Not scored. Strength scores cover the lifts the camera and the leaderboard do not: the main barbell and bodyweight patterns.</div></div>`}
+      <div class="card"><div class="k">Muscle load <span class="win" id="win">${[7, 28, 90].map((w) => `<button data-w="${w}" class="${w === win ? "on" : ""}">${w}d</button>`).join("")}</span></div>
+        <div class="v"><span class="big">${d.sets[win]}</span> sets in the last ${win} days, counted from the ${REGION[g]} region. ${ordinal(d.rank)} most worked.</div></div>
+      <div class="card"><div class="k">Recent lifts <span>${LABEL[g] || g}</span></div>
+        <div class="rows">${d.rows.map((r) => `<div class="row"><span class="d">${r.d}</span><span class="n">${r.n}</span><span class="w">${r.reps} &times; ${fmtW(r.w)}</span></div>`).join("")}</div></div>
+      <div class="card"><div class="k">In the exercise library <span>${lib.count} exercises</span></div>
+        <div class="chips">${lib.examples.slice(0, 5).map((e) => `<span>${e}</span>`).join("")}${lib.count > 5 ? `<span class="more">+${lib.count - 5} more</span>` : ""}</div></div>
+      <div class="actions"><button class="btn primary" id="filter">Filter exercises</button><button class="btn" id="history">Full history</button></div>
+      <div class="note">In the app, these are your own numbers: the strength score from the strength profile, load from the Muscle Load Map, lifts from your log. Camera numbers are never used here.</div>`;
+    $("close").addEventListener("click", () => select(null));
+    $("win").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; state.win = +b.dataset.w; render(g); });
+    $("filter").addEventListener("click", () => { $("hint").textContent = `Would open the exercise picker filtered to ${LABEL[g] || g}`; });
+    $("history").addEventListener("click", () => { $("hint").textContent = `Would open every ${LABEL[g] || g} lift on file, by date`; });
+  }
+  const ordinal = (n) => n + (["th","st","nd","rd"][(n % 100 >> 3 ^ 1 && n % 10) || 0] || "th");
+
+  function bestViewFor(g) {
+    const here = MAN.tiles[key()].groups[g]; if (here && here.count > 400) return state.view;
+    const other = state.view === "front" ? "back" : "front";
+    const there = MAN.tiles[`${state.sex}-${other}`].groups[g]; return there && there.count > 400 ? other : state.view;
+  }
+  function select(g, turn = true) {
+    state.selected = g; state.hover = null;
+    if (g && turn) { const v = bestViewFor(g); if (v !== state.view) setView(v, false); }
+    sheet.classList.toggle("open", !!g); render(g); $("hint").textContent = g ? `${LABEL[g] || g} selected` : "Tap a muscle or a label"; draw();
+  }
+  function setView(v, redraw = true) { state.view = v; $("vFront").classList.toggle("on", v === "front"); $("vBack").classList.toggle("on", v === "back"); $("flipText").textContent = v === "front" ? "Show back" : "Show front"; if (redraw) draw(); }
+  function setSex(s) { state.sex = s; $("sexF").classList.toggle("on", s === "female"); $("sexM").classList.toggle("on", s === "male"); draw(); }
+
+  $("flip").addEventListener("click", () => setView(state.view === "front" ? "back" : "front"));
+  $("vFront").addEventListener("click", () => setView("front")); $("vBack").addEventListener("click", () => setView("back"));
+  $("sexF").addEventListener("click", () => setSex("female")); $("sexM").addEventListener("click", () => setSex("male"));
+  document.addEventListener("keydown", (e) => { if (e.key === "f" || e.key === "F") setView(state.view === "front" ? "back" : "front"); if (e.key === "Escape") select(null); });
+
+  let down = null;
+  stage.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY }; });
+  stage.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const l = labelAt(e.clientX, e.clientY); stage.style.cursor = l ? "pointer" : "default";
+    const name = l ? MAN.groups[l - 1] : null;
+    if (name) { tip.textContent = LABEL[name] || name; const b = stage.getBoundingClientRect(); tip.style.left = (e.clientX - b.left) + "px"; tip.style.top = (e.clientY - b.top) + "px"; tip.classList.add("on"); } else tip.classList.remove("on");
+    if (!state.selected && name !== state.hover) { state.hover = name; draw(); }
+  });
+  stage.addEventListener("pointerleave", () => { tip.classList.remove("on"); if (!state.selected && state.hover) { state.hover = null; draw(); } });
+  stage.addEventListener("pointerup", (e) => {
+    if (!down) return; const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8; down = null; if (moved) return;
+    const l = labelAt(e.clientX, e.clientY); if (!l) { if (state.selected) select(null); return; }
+    const g = MAN.groups[l - 1]; select(state.selected === g ? null : g, false);
+  });
+  window.addEventListener("resize", () => draw());
+
+  Promise.all([fetch("manifest.json").then((r) => r.json()), fetch("exercises.json").then((r) => r.json())]).then(([m, ex]) => {
+    MAN = m; EX = ex; ["female-front", "female-back", "male-front", "male-back"].forEach(load); draw();
+  });
+})();
+</script>

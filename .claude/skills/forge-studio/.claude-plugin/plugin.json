@@ -1,0 +1,10 @@
+{
+  "name": "forge-studio",
+  "version": "0.1.0",
+  "description": "A studio pane for Forge's art: renders of the body map and any image beside the chat, Approve / Redo / Compare, /tune for the body-map knobs, and tools to render, show and enhance pictures.",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Forge Performance Systems"
+  },
+  "license": "UNLICENSED"
+}

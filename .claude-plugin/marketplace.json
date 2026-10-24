@@ -1,0 +1,7 @@
+{
+  "name": "forge",
+  "owner": { "name": "Forge Performance Systems" },
+  "plugins": [
+    { "name": "forge-studio", "source": "./.claude/skills/forge-studio", "description": "The Forge Studio pane: body-map renders, Approve / Redo / Compare, /tune, and image tools." }
+  ]
+}
