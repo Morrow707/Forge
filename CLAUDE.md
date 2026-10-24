@@ -725,6 +725,82 @@ reported, not acted on.** And nothing the server imports may `process.exit` -- t
 so importing it from `index.ts` would have crash-looped the service on the very drift it reports;
 the logic is in `server/foreign-key-drift.ts` now and a test forbids the path.
 
+## ONE SCHOOL'S EXECUTED CONTRACT WAS A BUTTON-TAP AWAY FROM ANOTHER SCHOOL
+
+Added 2026-10-24, from the same sweep. **The most serious thing it found, and I refuted it wrongly
+on the first read** -- which is the part worth keeping, because the refutation was of a claim the
+report was not making.
+
+**THE DEFECT.** `getAcceptedInstitutionalAgreementWaiver` resolved
+`inArray(externalWaivers.athleteId, getEffectiveCoachIds(coachId))` and took
+`orderBy(desc(createdAt)).limit(1)` -- **the most recently accepted agreement held by ANYONE on the
+staff.** And a coach carries their own agreement onto a staff they join: `/api/coach/staff/join`
+refuses only a coach who already has a staff of their own, so a head coach who signed School 1's
+agreement and then joined School 2's staff put School 1's row inside School 2's effective ids,
+NEWER than School 2's own. School 2's primary coach taps **Download signed copy** and receives
+School 1's executed contract. The reverse is wrong too: the joining coach reads their own old
+contract while their card shows their new school's.
+
+**WHAT THE WRONG PDF CARRIES, which is why this is not a cosmetic scoping slip.**
+`buildAgreementPdf`'s `executed` branch prints, by design, "so the PDF stands on its own if it is
+ever produced away from the database": the institution's legal name, its signer's name and title,
+the typed signature, and **the signer's IP address**. So the wrong answer is another organisation's
+executed legal instrument plus its signer's personal data, handed over by tapping a button, with
+nothing logged. The only hint was the `Content-Disposition` filename, built from the other school's
+`issuingOrganization`.
+
+**EVERY OTHER READ ON THAT SURFACE IS CORRECTLY SCOPED, WHICH IS WHY IT WAS INVISIBLE.**
+`getLatestInstitutionalAgreementSignature` is `eq(coachUserId, coachId)`, and the staff branch of
+`getInstitutionalAgreementStatus` RECURSES into the primary's -- so the card on /documents names
+the right signature in every case. The card was right and the button was wrong, and nothing on
+screen could show the difference. Both that function's comment and the route's own promise the
+correct behaviour in words: "Resolved through getEffectiveCoachIds so the primary's row is what
+everyone reads" and "A STAFF COACH READS THE PRIMARY'S AGREEMENT". `inArray` over the whole set
+with newest-wins is simply not that -- **intent and code differed and the comment is what made it
+look settled.**
+
+**THE FIX IS `eq(athleteId, coachIds[0])`** -- the primary, since `getEffectiveCoachIds` returns
+`[primaryId, ...staff]`, the same idiom `getEntitlementsForCoach` and `/api/coach/team-roster`
+already use. **It is a NARROWING, which is the hazard this file names** (`deleteUserRecord`'s
+second branch is still `!== "athlete"` so a guardian keeps its cleanup), so what it stops serving
+was checked and is in the itest as its own two cases: an ordinary staff coach whose primary has an
+accepted agreement is unaffected and now really reads the row the comment always promised; a staff
+coach whose primary has NONE but who personally holds one now gets a 404, **which AGREES with the
+card they were already shown** -- the staff branch reports the primary's `onFile`, so that card
+said "nothing on file" while the button handed over a PDF. Signing and uploading are the primary's
+acts, so a staff coach cannot file one for the program at all; the only way they hold a row is
+having been primary somewhere else, which is exactly the leak. Their row is not deleted, just not
+served here, and comes back the moment they are a primary again.
+
+**I REFUTED IT FIRST, AND THE REASON GENERALISES.** My first pass read the claim as a cross-program
+leak, checked `getEffectiveCoachIds`, found it returns only the caller's own staff, and filed the
+finding as "an intentional, documented design". That was correct about the question I asked and
+irrelevant to the one the report asked -- **the staff set is not one school forever, because a
+coach moves schools.** Then the full claim text (recovered from the workflow run's own JSON on
+disk, after compaction had dropped it) showed the mechanism was `limit(1)`, not the staff scope.
+**Verifying a report means verifying the claim it makes, not the claim it resembles** -- and a
+summary of a finding is not the finding.
+
+**AND THE EXISTING SUITE COULD NOT HAVE CAUGHT IT, for a reason about FIXTURES rather than
+assertions.** `institutional-agreement-sign.itest.ts` creates its staff coach with
+`makeLoginableUser` and signs only as the primary, so no staff coach in it has ever carried a prior
+agreement of their own -- the single fact the leak needs. Nor had anything ever exercised the join
+DOOR: every test inserts `coachStaff` rows by hand, so `staffInviteCode` is never minted and
+`joinCoachStaffByCode` was never driven.
+`server/one-schools-contract-never-reaches-another.itest.ts` drives the real sign route, the real
+join and the real PDF: **four of its six cases red against the pre-fix code, and the two that stay
+green are the patch-safety pair** -- which is the right signature for a narrowing, since those two
+must pass before AND after.
+
+**Also from the sweep, and NOT a defect** (recorded so it is not re-raised): the classifier in the
+workflow script read `survived: live.length > 0 && refuted === 0`, so a finding whose three
+verification lenses all died on the session limit was filed as **refuted** rather than unverified,
+and a finding with ONE surviving lens was reported as having survived all three. Five of the 2026-10-23
+sweep's sixteen candidates have empty claim text and zero lenses -- their READ agents died too, so
+they are not findings at all and their targets (`admin/waivers.tsx`, `coach-section-gate.tsx`,
+`admin-billing-assignment.tsx`, `notification-bell.tsx`, `team-chat-quick-summary.tsx`) are simply
+**unread**, along with the completeness critic that never ran. Server-side: ships on Render, no build.
+
 ## THE STRENGTH PERCENTILE SCORED NOBODY ON EVERY DATABASE BUT PRODUCTION
 
 Added 2026-10-24, from the role-conditional sweep's own report, verified against the code and

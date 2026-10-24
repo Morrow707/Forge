@@ -32664,7 +32664,35 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
 
   /** The accepted agreement row for a staff, so any coach on it can read the signed PDF back.
    * Kind and status are both part of the question: a rejected or superseded row is not the
-   * document, and returning one would serve a school a copy of something not in force. */
+   * document, and returning one would serve a school a copy of something not in force.
+   *
+   * THE PRIMARY'S ROW, NOT THE NEWEST ON THE STAFF (2026-10-24). This was
+   * `inArray(athleteId, coachIds)` with `orderBy(desc(createdAt)).limit(1)`, i.e. the most
+   * recently accepted agreement held by ANYONE on the staff -- and a coach carries their own
+   * agreement onto a staff they join. `/api/coach/staff/join` refuses only a coach who already
+   * has a staff of their own, so a head coach who signed School 1's agreement and then joined
+   * School 2's staff put School 1's row inside School 2's effective ids, newer than School 2's
+   * own. School 2's primary then opened /documents, read a card correctly naming THEIR OWN
+   * signature (getLatestInstitutionalAgreementSignature is `eq(coachUserId, coachId)`, and the
+   * staff branch of getInstitutionalAgreementStatus recurses into the primary's, so the card is
+   * right in every case), tapped Download signed copy, and received SCHOOL 1'S EXECUTED
+   * CONTRACT -- which prints that school's name, its signer's name and title, their typed
+   * signature and their IP ADDRESS on its face (see buildAgreementPdf's `executed` branch).
+   * Nothing was logged; the only hint was the Content-Disposition filename, built from the other
+   * school's issuingOrganization. The reverse direction was wrong too: the joining coach read
+   * their own old contract while the card showed their new school's.
+   *
+   * `coachIds[0]` IS the primary (getEffectiveCoachIds returns `[primaryId, ...staff]`), the
+   * same idiom getEntitlementsForCoach and /api/coach/team-roster already use. This is a
+   * NARROWING, which is the hazard this repo names -- so what it stops serving was checked: a
+   * staff coach whose primary has an accepted agreement is unaffected and now really reads the
+   * row the comment always promised; a staff coach whose primary has NONE but who personally
+   * holds one now gets a 404, which AGREES with the card they were already shown (the staff
+   * branch reports the primary's `onFile`, so that card said "nothing on file" while the button
+   * handed over a PDF). Signing and uploading are the primary's acts, so a staff coach cannot
+   * file one for the program at all -- the only way they hold a row is having been primary
+   * somewhere else, which is exactly the leak. Their own row is not deleted, just not served
+   * here; it comes back the moment they are a primary again. */
   async getAcceptedInstitutionalAgreementWaiver(coachId: number): Promise<ExternalWaiver | null> {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const [row] = await db
@@ -32672,7 +32700,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .from(externalWaivers)
       .where(
         and(
-          inArray(externalWaivers.athleteId, coachIds),
+          eq(externalWaivers.athleteId, coachIds[0]),
           eq(externalWaivers.kind, "institutional_agreement"),
           eq(externalWaivers.reviewStatus, "accepted"),
         ),
