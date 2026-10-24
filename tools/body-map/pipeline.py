@@ -22,6 +22,18 @@ KNOBS = {
     "stripe_min_area": 1400, # blobs smaller than this get no lines
     "edge_shade": 0.07,    # darkening at the silhouette edge
     "feather": 1.6,        # alpha blur at the edge
+    # hd.py: the smoothing pass (2026-10-24)
+    "outline_smooth": 2.5, # gaussian sigma on the silhouette before it is thresholded, at 2x
+    "label_smooth": 4.0,   # sigma on each group's soft mask before the argmax; 0 = the old staircase
+    "label_min_island": 2500, # a group speck under this many 2x pixels joins its neighbour
+    "label_close": 3,      # radius (1x px) each group's mask is closed and hole-filled by first
+    "hand_zone": 0.08,     # fraction of the FIGURE's height above each arm's lowest point that is hand: skin, no group
+    "foot_zone": 0.075,    # fraction of the figure's height, from the bottom, that is foot (ankle included)
+    "flatten": 0.6,        # 0..1, how far each blob is pulled toward its own median colour
+    "flatten_blur": 3.0,   # sigma on the flat image, softens the seams between blobs
+    "skin_smooth": 0.85,   # 0..1, how far ungrouped body pixels (hands, feet, tendon) go to smooth skin
+    "skin_sigma": 7.0,     # how wide that skin blur is, at 2x
+    "match_color": 1.0,    # 0..1, how far each tile's muscle saturation/value is matched to the male front
     # face.py: the graft
     "face_scale": 0.96,    # male head width relative to the female head box
     "face_fade": 14,       # rows the graft fades over at the neck

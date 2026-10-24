@@ -37,6 +37,12 @@ const KNOB_HELP = [
   'denoise 8 (grain removal; 0 off)', 'blur 1.8', 'sharpen 0.38', 'sharpen_sigma 3.0', 'gamma 0.92',
   'color 1.05', 'striations 0.17 (fibre-line darkness; 0 off)', 'stripe_period 13', 'stripe_min_area 1400',
   'edge_shade 0.07', 'feather 1.6', 'face_scale 0.96', 'face_fade 14', 'preview_height 520',
+  '-- the smoothing pass (2026-10-24) --',
+  'outline_smooth 2.5 (silhouette blur before threshold)', 'label_smooth 4 (hover-shape blur; 0 = staircase)',
+  'label_min_island 2500 (a group speck under this many px joins its neighbour)', 'label_close 3 (close + fill each group first)',
+  'hand_zone 0.08 (hand = this fraction of figure height above each arm\'s end: skin, no group)', 'foot_zone 0.075 (same, from the bottom)',
+  'flatten 0.6 (pull each blob toward its median colour)', 'flatten_blur 3 (soften the seams)',
+  'skin_smooth 0.85 (ungrouped body pixels toward smooth skin)', 'skin_sigma 7', 'match_color 1 (match each tile to the male front)',
 ].join('\n  ')
 
 function parseResult(stdout: string, tag: string): Record<string, unknown> | null {
@@ -126,7 +132,7 @@ export const register: Register = on => {
     await $.command.register({ name: 'tune', description: 'Turn a body-map knob and re-render: /tune striations 0.12 denoise 6 | list | reset', argumentHint: 'knob value ... | list | reset' })
     await $.tool.register({
       name: 'render', isDeferred: false,
-      description: 'Run the Forge body-map pipeline (tools/body-map) and show the result in the studio pane. stage "hd" reruns the finish with the knobs given (fast); "all" rebuilds from the source renders. Knobs: denoise, blur, sharpen, sharpen_sigma, gamma, color, striations, stripe_period, stripe_min_area, edge_shade, feather, face_scale, face_fade, preview_height. Returns the knobs in force and the site folder to publish the artifact from.',
+      description: 'Run the Forge body-map pipeline (tools/body-map) and show the result in the studio pane. stage "hd" reruns the finish with the knobs given (fast); "all" rebuilds from the source renders. Knobs: denoise, blur, sharpen, sharpen_sigma, gamma, color, striations, stripe_period, stripe_min_area, edge_shade, feather, outline_smooth, label_smooth, label_min_island, label_close, hand_zone, foot_zone, flatten, flatten_blur, skin_smooth, skin_sigma, match_color, face_scale, face_fade, preview_height. Returns the knobs in force and the site folder to publish the artifact from.',
       inputSchema: { type: 'object', properties: {
         stage: { type: 'string', enum: ['hd', 'all'] },
         knobs: { type: 'object', additionalProperties: { type: 'number' } },

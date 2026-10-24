@@ -176,12 +176,15 @@ h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 24px; 
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const i = y * w + x; if (!alpha[i]) continue; const o = i * 4;
       if (label[i] === gi) {
-        const edge = (x > 0 && label[i - 1] !== gi) || (x < w - 1 && label[i + 1] !== gi) || (y > 0 && label[i - w] !== gi) || (y < h - 1 && label[i + w] !== gi);
+        const edge = (x > 1 && label[i - 2] !== gi) || (x < w - 2 && label[i + 2] !== gi) || (y > 1 && label[i - 2 * w] !== gi) || (y < h - 2 && label[i + 2 * w] !== gi);
         if (edge) { d[o] = 255; d[o + 1] = 255; d[o + 2] = 255; d[o + 3] = 240; }
       } else { d[o] = 0; d[o + 1] = 0; d[o + 2] = 0; d[o + 3] = 135; }
     }
     const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").putImageData(out, 0, 0);
-    overlayCache.set(ck, c); return c;
+    // Soften the pixel-level overlay so the outline reads as a curve, not a staircase.
+    const soft = document.createElement("canvas"); soft.width = w; soft.height = h;
+    const sc = soft.getContext("2d"); sc.filter = "blur(0.9px)"; sc.drawImage(c, 0, 0);
+    overlayCache.set(ck, soft); return soft;
   }
 
   const key = () => `${state.sex}-${state.view}`;
