@@ -175,6 +175,34 @@ the npm the runner actually has.
 build tool that produces it moving two patches is a client change: `verify_build`, same argument
 as the Capacitor paragraph above.
 
+**IT FIRED A THIRD TIME 2026-10-24, ON THE PRODUCTION STEP, AND ONE OF THE THREE HAS NO LOCKFILE
+FIX.** Run 1919 on `fa0b7166` (the branch mirror) died at step 9 in zero seconds where run 1918,
+the SAME SHA on `main` a day earlier, had passed it -- so this is not the duplicate-run pattern
+(same SHA, different DAY) and the next push to `main` fails the same way with `deploy` skipped.
+Three high advisories in the production tree: `body-parser` <1.20.9 (DoS via trailing bytes after
+a compressed body, through `express`), `multer` 2.0.0-2.4.0 (DoS via a pending async `fileFilter`
+after teardown -- every one of the six upload handlers in `routes.ts` passes a `fileFilter`), and
+`zod` <4.6.6 (GHSA-mrhx-c7xc-m3w5, memory exhaustion validating a large array against a schema
+with no length constraint). Both fixes for the first two were published 2026-10-22 and sit inside
+the declared ranges, so `npm update body-parser multer` moved only `package-lock.json`: 1.20.6 ->
+1.20.9 (and its `qs` ~6.15.1 -> ~6.16.0), 2.4.0 -> 2.5.0, seven lines each way, zero packages
+added or removed, no resolver crash on npm 10.9.4. Server-only dependencies: no build.
+**THE ZOD ONE IS A MAJOR, NOT A BUMP, AND IS NOT DONE HERE.** The only release the advisory
+names as patched is 4.6.6; there is no zod 3.x past 3.25.76 (only canaries), and its text names
+zod 4 internals (`$ZodArray`, `handleArrayResult`) and never mentions 3.x -- but npm's `<4.6.6`
+range covers 3.x by semver, so the step stays red until zod is either upgraded or allowlisted.
+What the upgrade costs, counted off the tree: 11 files import zod directly; 15 single-argument
+`z.record(...)` calls (zod 4 requires the key schema), 8 `errorMap` uses, 5 `.superRefine`,
+3 `z.string().email()`, 2 `.flatten()`, 1 `.errors`; `drizzle-zod` 0.7.1 peers `>=3.0.0` so it
+does not block. What an allowlist entry would be accepting: 133 `z.array(` sites in `server/` and
+`shared/`, 64 with no `.max`/`.length` on the statement, behind an `express.json` cap of 25mb (64kb
+on one router). Either is Scott's call; the braces precedent for the allowlist was "no fix exists",
+which is not true here. **Until one lands, `main`'s CI is red at step 9 on every push and the
+`deploy` job is skipped** (Render still auto-deploys on push, so commits reach production; the
+red is the audit doing its job, not a broken build).
+The one unit test that reds on a FRESH CLONE of this repo is `live-document-migration.test.ts`,
+by design: it needs more than one revision of the legal documents in `git log`, and the cloud
+sandbox clones shallow. `git fetch --unshallow origin` is the fix, not the test.
 ### AND ONE MORE THAT IS REAL: A DEADLOCKED TRUNCATE IN THE TEST HARNESS (2026-10-09)
 
 Run 1757 on `b88d8850`. **`deploy` hangs off the integration job, so one aborted TRUNCATE stopped
