@@ -70,6 +70,7 @@ import { useDistanceUnit, formatDistanceCm } from "@/lib/distance-unit";
 import { DistanceUnitToggle } from "@/components/distance-unit-toggle";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { formCheckDestination } from "@/lib/form-check-destination";
 import { hapticLight, hapticSuccess } from "@/lib/haptics";
 import { playSuccessChime, playStreakMilestoneChime } from "@/lib/audio-cues";
 import {
@@ -3394,14 +3395,51 @@ function ExerciseLogContent({
     onError: (err: ApiError) => toast.error(err.message || "Could not get AI feedback on that video"),
   });
 
+  /** WHERE A FORM-CHECK VIDEO GOES, FOR ALL THREE ANSWERS (2026-10-24).
+   *
+   * `videoCheckMode` is "comment" | "ai" | "off", and every one of the seven call sites below
+   * used to be `if (mode === "ai") aiFormCheck(...); else postFormVideo(...)` -- a two-way branch
+   * over a three-valued mode, so "off" took the COACH path. "off" is exactly the case with no
+   * coach in the loop for this day and no AI-authored program, so a Free Agent on a hand-built
+   * self-assigned program (or a coached athlete on their own self-assigned day) got:
+   *
+   *   - a workout_comments row written to a thread the page never mounts, because the thread is
+   *     drawn behind `hasCoachForThisProgram` and that is the same flag that made the mode "off";
+   *   - a self-assignment's coachId is the athlete's OWN id, so the notification went to them;
+   *   - and the toast "Form check video sent to your coach", to somebody who has no coach.
+   *
+   * None of it reads as a failure. The POST succeeds, so there is no error; the comment is real,
+   * so nothing is lost; and the only wrong thing on screen is a sentence that sounds like success.
+   *
+   * ONE function rather than a third branch at seven call sites: seven copies of a two-way test
+   * is how this went wrong once already, and the eighth caller would get it wrong the same way.
+   * The CLIP is not affected and never was -- it is attached to the set by `onUpdateSet` before
+   * any of this, and "a tracked set always keeps its clip whatever the form-check switch says".
+   * So "off" has nothing left to do but say so honestly. */
+  function submitFormCheck(setNumber: number, videoUrl: string) {
+    switch (formCheckDestination(videoCheckMode)) {
+      case "ai_feedback":
+        aiFormCheckMutation.mutate({ setNumber, videoUrl });
+        return;
+      case "coach_comment":
+        postFormVideoMutation.mutate({ setNumber, videoUrl });
+        return;
+      case "saved_to_set_only":
+        // Saved against the set, with nobody to send it to. The athlete asked for a form check
+        // and deserves to know the video is kept -- silence here would read as a failed upload.
+        toast.success("Form check video saved to this set");
+        return;
+    }
+  }
+
+
   // A queued clip's form check, run when the clip finally reattaches. Same branch the capture
   // handlers take, one event later. Above every early return so the hook count is stable.
   useEffect(() => {
     function onReattached(e: Event) {
       const d = (e as CustomEvent<FormCheckAfterReattachDetail>).detail;
       if (d.itemKey !== item.key) return;
-      if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: d.setNumber, videoUrl: d.videoUrl });
-      else postFormVideoMutation.mutate({ setNumber: d.setNumber, videoUrl: d.videoUrl });
+      submitFormCheck(d.setNumber, d.videoUrl);
     }
     window.addEventListener(FORM_CHECK_AFTER_REATTACH_EVENT, onReattached);
     return () => window.removeEventListener(FORM_CHECK_AFTER_REATTACH_EVENT, onReattached);
@@ -4402,8 +4440,7 @@ function ExerciseLogContent({
             // real form-check clip as a standalone one. Only when the row asked for a form
             // check: a clip kept for the athlete's own replay is not a review request.
             if (videoUrl && videoRequired) {
-              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSetNumber, videoUrl });
-              else postFormVideoMutation.mutate({ setNumber: targetSetNumber, videoUrl });
+              submitFormCheck(targetSetNumber, videoUrl);
             }
           }
 
@@ -4437,8 +4474,7 @@ function ExerciseLogContent({
               { immediate: true },
             );
             if (videoUrl && videoRequired) {
-              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSet, videoUrl });
-              else postFormVideoMutation.mutate({ setNumber: targetSet, videoUrl });
+              submitFormCheck(targetSet, videoUrl);
             }
           }
 
@@ -4467,8 +4503,7 @@ function ExerciseLogContent({
               { immediate: true },
             );
             if (videoUrl && videoRequired) {
-              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSet, videoUrl });
-              else postFormVideoMutation.mutate({ setNumber: targetSet, videoUrl });
+              submitFormCheck(targetSet, videoUrl);
             }
           }
 
@@ -4496,8 +4531,7 @@ function ExerciseLogContent({
               { immediate: true },
             );
             if (videoUrl && videoRequired) {
-              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: targetSet, videoUrl });
-              else postFormVideoMutation.mutate({ setNumber: targetSet, videoUrl });
+              submitFormCheck(targetSet, videoUrl);
             }
           }
 
@@ -4530,8 +4564,7 @@ function ExerciseLogContent({
               { immediate: true },
             );
             if (videoUrl && videoRequired) {
-              if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: trackingSet, videoUrl });
-              else postFormVideoMutation.mutate({ setNumber: trackingSet, videoUrl });
+              submitFormCheck(trackingSet, videoUrl);
             }
           }
 
@@ -4856,8 +4889,7 @@ function ExerciseLogContent({
           onSaved={(url) => {
             if (recordingSetNumber == null) return;
             onUpdateSet(recordingSetNumber, { formCheckVideoUrl: url }, { immediate: true });
-            if (videoCheckMode === "ai") aiFormCheckMutation.mutate({ setNumber: recordingSetNumber, videoUrl: url });
-            else postFormVideoMutation.mutate({ setNumber: recordingSetNumber, videoUrl: url });
+            submitFormCheck(recordingSetNumber, url);
             setRecordingSetNumber(null);
           }}
           onQueued={() => setRecordingSetNumber(null)}

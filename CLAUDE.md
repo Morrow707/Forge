@@ -725,6 +725,45 @@ reported, not acted on.** And nothing the server imports may `process.exit` -- t
 so importing it from `index.ts` would have crash-looped the service on the very drift it reports;
 the logic is in `server/foreign-key-drift.ts` now and a test forbids the path.
 
+## "FORM CHECK VIDEO SENT TO YOUR COACH", TO SOMEBODY WITH NO COACH
+
+Added 2026-10-24. `videoCheckMode` is `"comment" | "ai" | "off"` and all SEVEN places that
+dispatched a form-check video were the same TWO-way branch over it --
+`if (mode === "ai") aiFormCheck(...); else postFormVideo(...)` -- so **"off" took the COACH
+path.** "off" is exactly the case with no coach in the loop for this day and no AI-authored
+program: a Free Agent on a hand-built self-assigned program, or a coached athlete on a day they
+assigned themselves. Three things followed and not one reads as a failure:
+
+- a `workout_comments` row written to a thread **the page never mounts**, because the thread is
+  drawn behind `hasCoachForThisProgram` -- the same flag that made the mode "off";
+- a self-assignment's `coachId` is the athlete's OWN id, so the notification went to them;
+- and the toast **"Form check video sent to your coach"**, to somebody who has no coach.
+
+The POST succeeds, so there is no error; the comment is real, so nothing is lost; the only wrong
+thing on screen is a sentence that sounds like success. **The CLIP was never affected** --
+`onUpdateSet` attaches it before any of this, and "a tracked set always keeps its clip whatever
+the form-check switch says" -- so "off" has nothing left to do but say so honestly.
+
+**THE FIX IS ONE FUNCTION, NOT A THIRD BRANCH AT SEVEN CALL SITES.** Seven copies of a two-way
+test over a three-valued union is how this happened once; the eighth caller would get it wrong the
+same way. All seven now call `submitFormCheck`.
+
+**AND THE DECISION IS A PURE MAPPING IN ITS OWN MODULE, BECAUSE A SCAN COULD NOT PROVE IT.**
+`client/src/lib/form-check-destination.ts` maps the mode to `ai_feedback` / `coach_comment` /
+`saved_to_set_only` in an EXHAUSTIVE switch with no default, so a fourth mode is a compiler error
+here rather than a silent fall-through at seven sites. The reason it is a module and not a local
+helper is a mutation that got past the first ratchet: that version asserted the helper's body
+contained `=== "ai"`, `=== "comment"` and an `else`, and a mutation routing "off" into the comment
+branch (`=== "comment" || true`, with the real third branch left behind `else if (false)`)
+satisfied **all three and passed**. **A scan over a decision can only see the words the decision
+is written with; it cannot see which way the decision goes.** So the test calls the mapping
+instead -- three mappings, distinctness, and `formCheckDestination("off") !== "coach_comment"` as
+the bug in one assertion -- and keeps one scan for the thing worth scanning: each mutation's
+`.mutate` has exactly ONE caller, so a new call site cannot re-implement the branch.
+
+Four mutations, each caught by the right case, including the one the scan version missed.
+Client-side: `verify_build`, and it batches -- no camera number moves.
+
 ## A FREE AGENT WAS TOLD THEY HAD A COACH, AND SHOWN NO LIST OF WHAT THEY HAD SAVED
 
 Added 2026-10-24. Three findings of one family, all client-side. **"Does this athlete have a
