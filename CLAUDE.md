@@ -1346,6 +1346,55 @@ next case added will not know that. 418 files / 4857 tests, the delta exactly th
 retention, admin-identity and billing-assignment itests green on the new mechanism. Server plus two
 admin client files: `verify_build`.
 
+## THE TEAM CHAT CARD SHOWED THE COACH'S FIRST EVER POST AS THE LATEST ONE
+
+Added 2026-10-24, the last two of the role survey's unread targets. Three findings in one pair of
+files, **none of which has a role conditional in it** -- the blind spot the survey's own report
+named, and the reason seven slices of `role ===` greps never reached either file.
+
+**`getTeamBoardPosts` ORDERS `desc(createdAt)`, AND THE CARD TOOK `posts[posts.length - 1]`.** So
+the Team Chat quick-view on the athlete's landing page rendered the OLDEST post their coach ever
+wrote, under a heading that means the newest, with its own perfectly correct "3 months ago" beside
+it -- and a live unread dot above it for a post the athlete had not seen. **The full board has
+always been right**: `TeamBoard` renders the same list in the order it arrives, so only this card
+re-derived the ordering, and got it backwards. Nothing on screen could show the difference, which
+is why a wrong post reads as a quiet team.
+
+**NEITHER TEAM-BOARD READER TOLD A FAILED READ FROM AN EMPTY ONE**, the family this file has now
+fixed on five surfaces. The card said "No posts yet." and the board said "No posts yet, be the
+first to ask something" -- **an invitation to repeat a question the board had already answered**.
+It is worse on the card, because the unread dot comes from a SEPARATE query: a dot that loaded
+beside a list that did not is self-contradictory on screen, which reads as a broken card rather
+than a quiet one. The composer stays rendered on the board's failure, since posting still works
+when only the read failed.
+
+**AND THE BELL TOLD A GUARDIAN TO EXPECT TWO THINGS NOTHING WILL EVER SEND THEM.** Its empty state
+was coach-or-everyone-else, so a parent read "You'll see coach replies and team announcements
+here" -- they do not comment on sets and they are not on a team. `storage.requestDocuments` is the
+**only writer in the repo that addresses a guardian** ("Documents needed for \<child\>"), and that
+was the one kind the sentence omitted. **This bell exists because of exactly that notification**:
+the 10-22 entry's argument for building it is that when the email cannot go, the in-app row is how
+a parent learns their child's medical clearance and participation waiver are missing while the
+coach's toast says delivery failed. So the surface built for one message described every message
+but that one.
+
+**THE RATCHET DISCOVERS ITS SUBJECTS AND STATES WHAT IS FORBIDDEN.** The team-board readers are
+found by their `useQuery<TeamPost[]>`, not named, so a third reader is covered the day it is
+written; indexing the end of the list is forbidden **in any spelling** rather than one accepted
+form being required; and two cases pin the PREMISES the rules rest on -- that the server still
+orders newest-first, and that `documents_requested` is still the only type written to a guardian,
+discovered from `storage.ts` rather than asserted. If a second writer ever addresses a guardian,
+that sentence is incomplete and this is where it reds.
+
+Eight mutations, each caught by the right case, **and the eighth proves the comment strip is
+load-bearing rather than assumed**: the fix's own comment quotes `posts[posts.length - 1]`
+verbatim, so with the strip removed the forbidden-form scan goes green on the bug and red on the
+fix. That is the failure this file calls its most repeated self-inflicted one, demonstrated in the
+file that would suffer from it.
+
+418 files / 4864 tests, the delta exactly the seven new cases. Client-side: `verify_build`, and it
+batches -- no camera number moves.
+
 ## RULE #3: A VIDEO SHOWS THE REAL APP. NOTHING IN IT IS INVENTED.
 
 Added 2026-10-02, after a build-a-program reel shipped with a program builder nobody has ever

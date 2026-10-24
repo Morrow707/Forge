@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ReadFailed } from "@/components/read-failed";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
@@ -29,7 +30,12 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
   const [body, setBody] = useState("");
   const [isAnnouncement, setIsAnnouncement] = useState(false);
 
-  const { data: posts, isLoading } = useQuery<TeamPost[]>({
+  const {
+    data: posts,
+    isLoading,
+    isError: postsFailed,
+    refetch: refetchPosts,
+  } = useQuery<TeamPost[]>({
     queryKey: [baseUrl],
     queryFn: () => getJson(baseUrl),
   });
@@ -104,7 +110,17 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
 
         <div className="space-y-3">
           {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
-          {!isLoading && !posts?.length && (
+          {!isLoading && postsFailed && (
+            // "Be the first to ask something" is an invitation, and on a failed read it is an
+            // invitation to repeat a question the board already answered. The composer above
+            // stays: posting still works when only the read failed.
+            <ReadFailed
+              what="the board"
+              onRetry={() => void refetchPosts()}
+              className="flex flex-col items-center gap-2 py-8 text-center"
+            />
+          )}
+          {!isLoading && !postsFailed && !posts?.length && (
             <p className="py-8 text-center text-sm text-muted-foreground">
               No posts yet, be the first to ask something.
             </p>

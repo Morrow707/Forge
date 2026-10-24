@@ -109,9 +109,20 @@ export function NotificationBell() {
           ) : null}
           {!notificationsFailed && notifications.length === 0 && (
             <p className="px-3 py-8 text-center text-sm text-muted-foreground">
+              {/* A GUARDIAN GETS EXACTLY ONE KIND OF NOTIFICATION, and it was the one kind this
+                  sentence did not name. storage.requestDocuments is the only writer anywhere
+                  that addresses a guardian ("Documents needed for <child>"); they do not
+                  comment on sets and they are not on a team, so the two-way fallback promised
+                  them coach replies and team announcements -- two things they can never receive
+                  -- and omitted the one that matters. This bell exists because of that exact
+                  notification: it is how a parent learns their child's medical clearance and
+                  participation waiver are missing when the email could not be sent, and until
+                  2026-10-22 a guardian could not see it at all. */}
               {user?.role === "coach"
                 ? "Nothing yet. You'll see athlete comments and video uploads here."
-                : "Nothing yet. You'll see coach replies and team announcements here."}
+                : user?.role === "guardian"
+                  ? "Nothing yet. You'll see requests for your athlete's paperwork here."
+                  : "Nothing yet. You'll see coach replies and team announcements here."}
             </p>
           )}
           {notifications.map((n) => (
