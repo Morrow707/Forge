@@ -35,12 +35,32 @@ function hostFromHeaderValue(value: string | string[] | undefined): string | nul
   }
 }
 
+// An Origin header that is PRESENT but is not a URL is `Origin: null`, which is exactly what a
+// browser sends for a form posted from a sandboxed iframe or a data: URL -- the two ways an
+// attacker's page can send a cross-site request with no origin to compare. The first version
+// of this check parsed "null" as "no header", fell through to the (absent) Referer, and let the
+// request in on the comment above's "neither header" reasoning, which was written about
+// non-browser callers and did not hold. A present-but-unparseable Origin is a browser request
+// from somewhere this server cannot name, and is refused; only the ABSENCE of both headers is
+// the webhook case the comment describes. Found by the 2026-10-24 audit.
+function rawHeader(value: string | string[] | undefined): string | undefined {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === undefined || raw === "" ? undefined : raw;
+}
+
 export function verifyRequestOrigin(nativeAppOrigins: string[]): RequestHandler {
   const allowedHosts = new Set(nativeAppOrigins.map((o) => new URL(o).host));
   return (req, res, next) => {
     if (SAFE_METHODS.has(req.method)) return next();
-    const requestHost = hostFromHeaderValue(req.headers.origin) ?? hostFromHeaderValue(req.headers.referer);
-    if (!requestHost) return next();
+    const origin = rawHeader(req.headers.origin);
+    let requestHost: string | null;
+    if (origin !== undefined) {
+      requestHost = hostFromHeaderValue(origin);
+      if (!requestHost) return res.status(403).json({ message: "Request blocked, origin mismatch." });
+    } else {
+      requestHost = hostFromHeaderValue(req.headers.referer);
+      if (!requestHost) return next();
+    }
     if (requestHost === req.headers.host || allowedHosts.has(requestHost)) return next();
     return res.status(403).json({ message: "Request blocked, origin mismatch." });
   };

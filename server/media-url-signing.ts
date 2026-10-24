@@ -1,3 +1,4 @@
+import type { RequestHandler } from "express";
 import crypto from "crypto";
 
 // Closes the gap where /uploads was served as fully public, unauthenticated
@@ -242,6 +243,60 @@ function isNestedPathInGatedDir(pathname: string): boolean {
   const match = /^\/uploads\/([^/]+)\/(.+)$/.exec(pathname);
   if (!match) return false;
   return GATED_UPLOAD_DIRS.has(match[1]) && match[2].includes("/");
+}
+
+/**
+ * The path the gate judges has to be the path the file server will OPEN. Express hands
+ * middleware the RAW request path while `express.static` percent-decodes it before touching
+ * the disk, so `/uploads/form%2Dvideos/<uuid>.mp4` reached `verifyMediaUrl` as a directory not
+ * in GATED_UPLOAD_DIRS (read as public, no signature asked) and was then served from
+ * form-videos/. Found by the 2026-10-24 audit. One decode, the same one `send` performs; a
+ * path that does not decode is refused rather than guessed at, and a path that still carries a
+ * percent sign after decoding is refused too, so a double-encoded name cannot reach the disk
+ * under one spelling and this check under another.
+ */
+export function decodeUploadPath(rawPath: string): string | null {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(rawPath);
+  } catch {
+    return null;
+  }
+  if (decoded.includes("%")) return null;
+  return decoded;
+}
+
+/** The /uploads gate as mounted in routes.ts: decode, then judge the decoded path. */
+export function uploadsSignatureGate(): RequestHandler {
+  return (req, res, next) => {
+    const decoded = decodeUploadPath(req.path);
+    if (decoded === null) return res.status(403).json({ message: "This link has expired. Reload the page and try again." });
+    if (!verifyMediaUrl(`/uploads${decoded}`, req.query.exp, req.query.sig)) {
+      return res.status(403).json({ message: "This link has expired. Reload the page and try again." });
+    }
+    next();
+  };
+}
+
+/**
+ * An uploaded SVG is a document that can carry script, and the lesson-image directory is
+ * public and served as `image/svg+xml` from this origin -- so a coach's upload opened directly
+ * would run on forgeperformancesystems.com with the viewer's session, and the site's CSP is
+ * report-only. Found by the 2026-10-24 audit. An ENFORCING policy on the SVG response alone
+ * stops that: no script, no connections, no frames, sandboxed. An `<img src>` never ran an
+ * SVG's script in the first place, so the lesson pages that embed these draw exactly as before.
+ */
+export const SVG_RESPONSE_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox";
+
+export function svgUploadHeaders(): RequestHandler {
+  return (req, res, next) => {
+    const decoded = decodeUploadPath(req.path);
+    if (decoded !== null && /\.svgz?$/i.test(decoded)) {
+      res.setHeader("Content-Security-Policy", SVG_RESPONSE_CSP);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+    }
+    next();
+  };
 }
 
 export function verifyMediaUrl(pathname: string, exp: unknown, sig: unknown): boolean {

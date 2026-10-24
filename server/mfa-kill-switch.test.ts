@@ -35,12 +35,29 @@ describe("the MFA enforcement kill switch", () => {
   // A switch wired to one of them is a switch that does not work, and the account it fails
   // on is whichever path that login happened to take.
   it("covers EVERY place the code is demanded", () => {
-    const demands = auth.split("\n").filter((l) => l.includes("mfaRequired: true"));
-    expect(demands).toHaveLength(2);
-    const guarded = auth
-      .split("\n")
-      .filter((l) => l.includes("user.mfaEnabled") && l.includes("isMfaEnforcementDisabled()"));
-    expect(guarded).toHaveLength(2);
+    const lines = auth.split("\n");
+    const demandAt = lines.flatMap((l, i) => (l.includes("mfaRequired: true") ? [i] : []));
+    expect(demandAt).toHaveLength(2);
+    // Each demand sits inside an `if` that reads the switch beside the account's flag: find the
+    // nearest `if (` above it, rather than counting guarded lines anywhere in the file -- a
+    // count is satisfied by a guard somewhere else.
+    for (const at of demandAt) {
+      let i = at;
+      while (i >= 0 && !lines[i].includes("if (")) i--;
+      expect(lines[i], `the demand at line ${at + 1} is not guarded by the switch`).toContain("user.mfaEnabled");
+      expect(lines[i]).toContain("isMfaEnforcementDisabled()");
+    }
+  });
+
+  // The third reader of the switch is not a demand: standDownButRememberDevice declines to
+  // remember a first-seen device while the account still owes a code (2026-10-24 audit -- a
+  // device trusted before the code made the code optional on every exempt account). Under the
+  // switch no code is owed, so the device is remembered as before; the switch has to be read
+  // there too, or turning enforcement off would stop remembering MFA accounts' devices.
+  it("lets a stood-down device gate remember an MFA account's device only when no code is owed", () => {
+    const fn = auth.slice(auth.indexOf("async function standDownButRememberDevice("), auth.indexOf("function deviceGateStandsDown("));
+    expect(fn).toContain("if (user.mfaEnabled && !isMfaEnforcementDisabled()) {");
+    expect(fn.indexOf("isMfaEnforcementDisabled()")).toBeLessThan(fn.indexOf("await trustDevice("));
   });
 
   // Turning the demand off must not clear anybody's secret: the switch has to be reversible

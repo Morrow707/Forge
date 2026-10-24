@@ -1528,7 +1528,7 @@ export function setupAuth(app: Express) {
    * meets the authenticator code; every sign-in after it is recognised and skips it. */
   async function standDownButRememberDevice(
     req: any,
-    user: { id: number; email: string; name: string },
+    user: { id: number; email: string; name: string; mfaEnabled?: boolean | null },
   ): Promise<DeviceGate> {
     const deviceId = requestDeviceId(req);
     if (!deviceId) return { kind: "trusted", recognized: false };
@@ -1537,16 +1537,37 @@ export function setupAuth(app: Express) {
       await touchTrustedDevice(known.id);
       return { kind: "trusted", recognized: true };
     }
+    // AN MFA ACCOUNT'S DEVICE IS REMEMBERED AFTER THE CODE, NEVER BEFORE IT.
+    //
+    // Trusting a first-seen device here, on an account that still owes an authenticator code,
+    // made the code optional: a stolen password signs in once, is asked for the code, fails it
+    // -- and the device is already on file, so the NEXT attempt with the same device id is
+    // `recognized` and mayShortCircuitMfa skips the code altogether. Two password attempts
+    // defeated the second factor on every exempt account, every box with no email provider,
+    // and the whole platform under the kill switch. The device is recorded by
+    // /api/auth/mfa/verify-login instead, once the code has proven the holder is the owner;
+    // an account with no second factor is remembered here as before.
+    if (user.mfaEnabled && !isMfaEnforcementDisabled()) {
+      return { kind: "trusted", recognized: false };
+    }
     // Best-effort: failing to record the device must never fail a sign-in that was otherwise
     // going to succeed. The cost of a miss is one more code next time, not a lockout.
     await trustDevice(user.id, deviceId, deviceMeta(req)).catch(() => {});
     return { kind: "trusted", recognized: false };
   }
 
+  /** The three reasons deviceGate answers without an email -- the kill switch, an exempt
+   *  account, no email provider. Read by verify-login so it remembers a device under exactly
+   *  the conditions standDownButRememberDevice would have, and under no other: when the gate is
+   *  live, a device is trusted only through the emailed approval. */
+  function deviceGateStandsDown(email: string): boolean {
+    return isDeviceVerificationDisabled() || isDeviceVerificationExempt(email) || !isEmailConfigured();
+  }
+
   // Password was right. Is this a device we know? See trusted-devices.ts for
   // the rule; this is where it is applied, and it runs BEFORE the
   // authenticator step so a stolen password meets the inbox first.
-  async function deviceGate(req: any, user: { id: number; email: string; name: string }): Promise<DeviceGate> {
+  async function deviceGate(req: any, user: { id: number; email: string; name: string; mfaEnabled?: boolean | null }): Promise<DeviceGate> {
     // STANDING DOWN FROM THE EMAIL IS NOT THE SAME AS REFUSING TO REMEMBER THE DEVICE.
     //
     // This branch used to return before the device lookup below, which had a consequence
@@ -1796,6 +1817,14 @@ export function setupAuth(app: Express) {
     }
     const user = await storage.getUser(userId);
     if (!user) return res.status(401).json({ message: "Account not found" });
+    // The code passed, so the holder is the owner: NOW the device may be remembered, in the
+    // cases where standDownButRememberDevice deliberately declined to (see it). Best-effort
+    // for the same reason as there -- a failed write costs one more code next time.
+    const deviceId = requestDeviceId(req);
+    if (deviceId && deviceGateStandsDown(user.email)) {
+      const known = await findTrustedDevice(user.id, deviceId);
+      if (!known) await trustDevice(user.id, deviceId, deviceMeta(req)).catch(() => {});
+    }
     completeLogin(req, res, next, user);
   });
 

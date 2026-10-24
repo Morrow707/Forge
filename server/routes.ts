@@ -134,7 +134,7 @@ import { verifyAppleTransaction, appleVerifyRefusal, APPLE_IAP_LIVE } from "./ap
 import { GOOGLE_PLAY_BILLING_LIVE, verifyGooglePlayPurchase } from "./google-play-billing";
 import { publicSignupOpen, inviteCodeAccepted } from "./signup-availability";
 import { publicOrigin as sharedPublicOrigin } from "./public-origin";
-import { verifyMediaUrl } from "./media-url-signing";
+import { uploadsSignatureGate, svgUploadHeaders } from "./media-url-signing";
 import { summarizeCspReport } from "./csp-report";
 import { shouldTouchLastSeen } from "./session-tracking";
 import { COACH_SECTIONS } from "@shared/coach-sections";
@@ -1684,13 +1684,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // team-logos are coach/org content, not footage of a person, and stay
   // exactly as before: plain public files, no signature required.
   app.use("/uploads", uploadsLimiter);
-  app.use("/uploads", (req, res, next) => {
-    const pathname = `/uploads${req.path}`;
-    if (!verifyMediaUrl(pathname, req.query.exp, req.query.sig)) {
-      return res.status(403).json({ message: "This link has expired. Reload the page and try again." });
-    }
-    next();
-  });
+  // The gate decodes the path first -- see uploadsSignatureGate for the encoded-directory bypass
+  // it closes -- and an uploaded SVG is served under an enforcing CSP, see svgUploadHeaders.
+  app.use("/uploads", uploadsSignatureGate());
+  app.use("/uploads", svgUploadHeaders());
   // Extends recordAccessAuditLogs past the admin video-management page
   // (list/delete only, see the routes above) into the actual streaming
   // path -- the far more common and far more sensitive way a coach/admin
