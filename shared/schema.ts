@@ -1008,20 +1008,16 @@ export type WithdrawGuardianConsentInput = z.infer<typeof withdrawGuardianConsen
 export const claimGuardianInviteSchema = z.object({
   password: passwordField,
   agreedToTerms: z.literal(true, {
-    errorMap: () => ({ message: "You must agree to the terms to create an account" }),
+    message: "You must agree to the terms to create an account",
   }),
   agreedToPrivacyPolicy: z.literal(true, {
-    errorMap: () => ({ message: "You must agree to the privacy policy to create an account" }),
+    message: "You must agree to the privacy policy to create an account",
   }),
   agreedToMinorMediaRelease: z.literal(true, {
-    errorMap: () => ({
-      message: "A parent or guardian has to agree to the video and biometric consent",
-    }),
+    message: "A parent or guardian has to agree to the video and biometric consent",
   }),
   agreedToAssumptionOfRisk: z.literal(true, {
-    errorMap: () => ({
-      message: "A parent or guardian has to accept the risks of athletic training",
-    }),
+    message: "A parent or guardian has to accept the risks of athletic training",
   }),
 });
 export type ClaimGuardianInviteInput = z.infer<typeof claimGuardianInviteSchema>;
@@ -4223,7 +4219,7 @@ export const claimProvisionalAthleteSchema = z.object({
   heightIn: z.number().int().min(1).max(120).optional(),
   bodyWeightLbs: z.number().min(1).max(1500).optional(),
   agreedToTerms: z.literal(true, {
-    errorMap: () => ({ message: "You must agree to the terms to create an account" }),
+    message: "You must agree to the terms to create an account",
   }),
 });
 export type ClaimProvisionalAthleteInput = z.infer<typeof claimProvisionalAthleteSchema>;
@@ -8442,7 +8438,7 @@ export const signupSchema = z.object({
   // never coachCode, which is the athlete code and is public.
   staffInviteCode: z.string().trim().min(1).max(64).optional(),
   agreedToTerms: z.literal(true, {
-    errorMap: () => ({ message: "You must agree to the terms to create an account" }),
+    message: "You must agree to the terms to create an account",
   }),
   // Optional, and z.boolean() rather than z.literal(true) precisely because
   // refusing has to be a real option. Consent bundled into the same
@@ -9836,7 +9832,7 @@ export const trackingDiagnosticsSchema = z.object({
         suppressedBecause: z.string().max(60).optional(),
         // Free-form by design: a rule's inputs differ per rule. Bounded so a bug cannot turn the
         // diagnostics blob into a payload problem -- see the 13MB autosave of build 620.
-        inputs: z.record(z.union([z.number(), z.string().max(60), z.null()])).optional(),
+        inputs: z.record(z.string(), z.union([z.number(), z.string().max(60), z.null()])).optional(),
       }),
     )
     .max(40)

@@ -210,17 +210,15 @@ function buildAgreementPdf(
  */
 const signBodySchema = institutionalAgreementFormSchema.extend({
   typedSignature: z
-    .string({ required_error: "Type your name to sign." })
+    .string({ error: "Type your name to sign." })
     .trim()
     .min(2, "Type your name to sign.")
     .max(120, "That signature is too long -- type the name as it appears above."),
   authorizedToBind: z.literal(true, {
-    errorMap: () => ({
-      message: "Confirm that you are authorized to sign this agreement for your institution.",
-    }),
+    message: "Confirm that you are authorized to sign this agreement for your institution.",
   }),
   agreed: z.literal(true, {
-    errorMap: () => ({ message: "Tick the box to agree to the terms above." }),
+    message: "Tick the box to agree to the terms above.",
   }),
 });
 

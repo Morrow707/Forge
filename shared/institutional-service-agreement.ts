@@ -191,27 +191,27 @@ export const INSTITUTIONAL_AGREEMENT_SECTIONS: InstitutionalAgreementSection[] =
  */
 export const institutionalAgreementFormSchema = z.object({
   institutionName: z
-    .string({ required_error: "Enter the full legal name of your school, district or club." })
+    .string({ error: "Enter the full legal name of your school, district or club." })
     .trim()
     .min(2, "Enter the full legal name of your school, district or club.")
     .max(200, "That name is too long -- use the legal name, up to 200 characters."),
   address: z
-    .string({ required_error: "Enter the mailing address where notices should be sent." })
+    .string({ error: "Enter the mailing address where notices should be sent." })
     .trim()
     .min(5, "Enter the mailing address where notices should be sent.")
     .max(300, "That address is too long -- keep it under 300 characters."),
   signerName: z
-    .string({ required_error: "Enter the name of the person who will sign this." })
+    .string({ error: "Enter the name of the person who will sign this." })
     .trim()
     .min(2, "Enter the name of the person who will sign this.")
     .max(120, "That name is too long -- keep it under 120 characters."),
   signerTitle: z
-    .string({ required_error: "Enter that person's job title, for example Athletic Director." })
+    .string({ error: "Enter that person's job title, for example Athletic Director." })
     .trim()
     .min(2, "Enter that person's job title, for example Athletic Director.")
     .max(120, "That title is too long -- keep it under 120 characters."),
   noticeEmail: z
-    .string({ required_error: "Enter an email address for legal notices." })
+    .string({ error: "Enter an email address for legal notices." })
     .trim()
     .email("That doesn't look like an email address -- check for a typo."),
 });

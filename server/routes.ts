@@ -6687,7 +6687,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .object({
         status: z.enum(["prefer_new", "prefer_existing", "scoped", "dismissed"]),
         reason: z.string().trim().max(1000).optional(),
-        scope: z.record(z.array(z.string().trim().min(1)).max(20)).optional(),
+        scope: z.record(z.string(), z.array(z.string().trim().min(1)).max(20)).optional(),
       })
       .superRefine((v, ctx) => {
         // A scoped ruling with no conditions is just "prefer new" wearing a
