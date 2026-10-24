@@ -12,6 +12,7 @@ import {
 import { youTubeConfigured } from "./youtube-catalog";
 import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import { needsCoppaAttestation } from "@shared/coach-attestation";
+import { FILMING_ROLES_WITHOUT_A_PLAN_PANEL_SET } from "@shared/roles-that-film-their-own-training";
 import {
   bandForAthleteCount,
   coachesCornerCompedForRoster,
@@ -4479,6 +4480,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const updated = await storage.updateFreeAgentBilling(athleteId, parsed.data);
     res.json(updated);
+  });
+
+  // THE TWO ACCOUNT SWITCHES, FOR A ROLE THAT FILMS AND HAS NO PLAN PANEL.
+  //
+  // Found 2026-10-24. The 10-22 pass widened the four retention paths to
+  // ROLES_THAT_FILM_THEIR_OWN_TRAINING, so the nightly sweep really does cap an ADMIN's own
+  // training videos at ten unfavorited per exercise -- and the remedy CLAUDE.md names for it
+  // ("tick Beta account or Extra video storage for that account") had nowhere to be ticked.
+  // AdminBillingAssignment is the only writer of either column in the whole client and its call
+  // site asks `role === "coach" || role === "athlete"`; the two routes above 404 any other role
+  // outright. So a cap applied to an account that no screen and no endpoint could lift.
+  //
+  // A SEPARATE PAIR RATHER THAN WIDENING THOSE TWO, and that is a decision rather than the lazy
+  // option: updateFreeAgentBillingSchema also carries freeAgentTier, freeAgentAddOns and
+  // unlockedSkillSports, every one of them inert for an admin (cameraAccessFor and
+  // skillsAccessFor return on the role branch before a tier is read) -- and "inert today" is
+  // exactly how a write becomes meaningful later by accident. This pair accepts the two
+  // account-level columns and nothing else.
+  //
+  // It still goes through storage.updateFreeAgentBilling, so isBetaAccount and
+  // hasVideoStorageAddOn keep ONE writer. A fact with two writers is the billing sweep's whole
+  // lesson, and sending no add-on array means this takes that method's unlocked path.
+  const accountSwitchesSchema = z.object({
+    isBetaAccount: z.boolean().optional(),
+    hasVideoStorageAddOn: z.boolean().optional(),
+  });
+
+  /** The role set is derived (filming roles minus the two with a plan panel), so widening the
+   *  sweep cannot leave this behind again. */
+  async function filmingAccountWithoutAPlanPanel(id: number) {
+    if (!Number.isInteger(id)) return null;
+    const account = await storage.getUser(id);
+    if (!account || !FILMING_ROLES_WITHOUT_A_PLAN_PANEL_SET.has(account.role)) return null;
+    return account;
+  }
+
+  app.get("/api/admin/accounts/:id/own-training-billing", requireRole("admin"), async (req, res) => {
+    const account = await filmingAccountWithoutAPlanPanel(Number(req.params.id));
+    if (!account) {
+      return res.status(404).json({ message: "No account of that kind with that id" });
+    }
+    res.json({
+      id: account.id,
+      role: account.role,
+      isBetaAccount: account.isBetaAccount,
+      hasVideoStorageAddOn: account.hasVideoStorageAddOn,
+    });
+  });
+
+  app.patch("/api/admin/accounts/:id/own-training-billing", requireRole("admin"), async (req, res) => {
+    const account = await filmingAccountWithoutAPlanPanel(Number(req.params.id));
+    if (!account) {
+      return res.status(404).json({ message: "No account of that kind with that id" });
+    }
+    const parsed = accountSwitchesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const updated = await storage.updateFreeAgentBilling(account.id, parsed.data);
+    if (!updated) {
+      // updateFreeAgentBilling returns null when the row is gone by the time it writes -- an
+      // account deleted between the read above and this statement. Reported rather than cast
+      // away: the compiler is the only thing that would ever have mentioned it, and the athlete
+      // route beside this one sends the bare null because res.json takes anything.
+      return res.status(404).json({ message: "That account no longer exists" });
+    }
+    res.json({
+      id: updated.id,
+      role: account.role,
+      isBetaAccount: updated.isBetaAccount,
+      hasVideoStorageAddOn: updated.hasVideoStorageAddOn,
+    });
   });
 
 

@@ -25,3 +25,32 @@ export const ROLES_THAT_FILM_THEIR_OWN_TRAINING_LIST = ["athlete", "coach", "adm
 export const ROLES_THAT_FILM_THEIR_OWN_TRAINING: ReadonlySet<string> = new Set(
   ROLES_THAT_FILM_THEIR_OWN_TRAINING_LIST,
 );
+
+/** The roles whose billing IS set by one of the two plan panels on More -> Users: a coach gets a
+ *  band, an athlete gets a Free Agent tier, and both panels also carry the two account-level
+ *  switches (`isBetaAccount`, `hasVideoStorageAddOn`). */
+export const ROLES_WITH_A_PLAN_PANEL_LIST = ["coach", "athlete"] as const;
+
+/** ...and the roles that film their own training with NO plan panel to carry those switches.
+ *
+ *  Found 2026-10-24. The 10-22 pass widened the four retention paths to the filming set, so the
+ *  nightly sweep really does cap an ADMIN's own training videos at ten unfavorited per exercise
+ *  -- and CLAUDE.md names the remedy as a fact: "ticking Beta account or Extra video storage for
+ *  that account on /admin/billing makes it unlimited again." It did not exist.
+ *  `AdminBillingAssignment` is the only writer of either column anywhere in the client and its
+ *  call site is `role === "coach" || role === "athlete"`, while both server routes 404 any other
+ *  role outright -- so there was no path, UI or API, to lift a cap that applies. The calibration
+ *  account is an admin that films the same four lifts over and over, which makes it the one
+ *  account on the platform likeliest to cross it.
+ *
+ *  DERIVED, never written out, because the divergence is silent in one direction: widening the
+ *  sweep is a server change that produces no error on the screen that is supposed to control it.
+ *  A role added to the filming set above gains its switches in the same edit. It is `["admin"]`
+ *  today. */
+export const FILMING_ROLES_WITHOUT_A_PLAN_PANEL = ROLES_THAT_FILM_THEIR_OWN_TRAINING_LIST.filter(
+  (role) => !new Set<string>(ROLES_WITH_A_PLAN_PANEL_LIST).has(role),
+);
+
+export const FILMING_ROLES_WITHOUT_A_PLAN_PANEL_SET: ReadonlySet<string> = new Set(
+  FILMING_ROLES_WITHOUT_A_PLAN_PANEL,
+);

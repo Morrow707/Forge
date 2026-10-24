@@ -700,7 +700,10 @@ account on the platform likely to cross that. Two things take the edge off and o
 it: **purging a video never touches its metrics** (the numbers, `trackingDiagnostics`, the scale
 blend and the skeleton trace all survive -- the export that calibration is actually read from is
 unaffected), the warning now links somewhere an admin can open, and ticking **Beta account** or
-**Extra video storage** for that account on `/admin/billing` makes it unlimited again. The
+**Extra video storage** for that account makes it unlimited again -- **which was NOT true when
+this was written and is now**: that tick had nowhere to be made for an admin until 2026-10-24
+(see "THE CAP THE 10-22 WIDENING APPLIED TO SCOTT'S ADMIN ACCOUNT COULD NOT BE LIFTED" below),
+and it is on the account's own row under More -> Users, not on `/admin/billing`. The
 stale-account sweep cannot touch it at all (12 months inactive). Nothing is deleted on the deploy
 itself: the first run only warns.
 
@@ -1259,6 +1262,89 @@ Seven mutations, each caught by the right case. 418 files / 4844 tests, the delt
 new cases; the 10-case `admin-identity-sweep.itest.ts` and the three waiver/document itests green on
 the new mechanism. Server-side plus two admin client files: `verify_build`.
 
+
+## THE CAP THE 10-22 WIDENING APPLIED TO SCOTT'S ADMIN ACCOUNT COULD NOT BE LIFTED
+
+Added 2026-10-24, the second of the role survey's unread targets. **The 10-22 pass widened the
+four retention paths and left behind the screen that is supposed to control them**, and this file
+asserted the remedy as a fact: "ticking **Beta account** or **Extra video storage** for that
+account on `/admin/billing` makes it unlimited again."
+
+**IT DID NOT EXIST.** `sweepVideoRetentionCap` selects
+`inArray(users.role, ROLES_THAT_FILM_THEIR_OWN_TRAINING_LIST)`, so the nightly sweep really does
+cap an ADMIN's own training clips at ten unfavorited per exercise, and
+`resolveVideoRetentionLimits` reads exactly those two columns to decide it. But
+`AdminBillingAssignment` is the **only writer of `isBetaAccount` or `hasVideoStorageAddOn`
+anywhere in the client** -- proven by discovering every `apiRequest` body in `client/src`, not by
+grepping the two files -- its prop was typed `role: "coach" | "athlete"`, its call site asked
+`detail.role === "coach" || detail.role === "athlete"`, and **both billing routes 404 any other
+role outright**. So the cap applied to an account that no screen and no endpoint could exempt.
+`/admin/users` showed "Beta account: Yes" as a read-only `DetailField`, which is the part that
+makes it read as working.
+
+**THE CALIBRATION ACCOUNT IS THE ONE THIS BITES.** It is an admin filming the same four lifts over
+and over, which this file already named as "the one account on the platform likely to cross that"
+-- and then named a lever it did not have. Enforcement is on and `isBetaAccount` has defaulted
+false since 10-11.
+
+**TWO ROLE STRINGS WHERE THE pgEnum HAS FOUR**, which is `documentAudienceFor`'s shape (10-22, the
+guardian served an athlete checklist) in a third home. The guard is in the component now, read off
+**`FILMING_ROLES_WITHOUT_A_PLAN_PANEL`, derived as the filming set MINUS the two roles that have a
+plan panel** -- `["admin"]` today, and a role added to the filming set gains its switches in the
+same edit. Derived rather than written, because the failure is silent in exactly one direction: a
+server-side widening produces no error on the screen that controls it. A guardian still gets
+nothing, which is right -- they buy nothing and film nothing.
+
+**A SEPARATE ROUTE PAIR RATHER THAN WIDENING THE TWO THAT 404'd, and that is a decision.**
+`updateFreeAgentBillingSchema` also carries `freeAgentTier`, `freeAgentAddOns` and
+`unlockedSkillSports`, every one inert for an admin (`cameraAccessFor` and `skillsAccessFor`
+return on the role branch before a tier is read) -- and **"inert today" is how a write becomes
+meaningful later by accident**. `/api/admin/accounts/:id/own-training-billing` takes the two
+account columns and nothing else, and still writes through `storage.updateFreeAgentBilling`, so
+those columns keep **ONE writer**: a fact with two writers is the billing sweep's whole lesson.
+Sending no add-on array means it takes that method's unlocked path. The compiler caught that
+method returning null (the row deleted between the read and the write) and that is reported as a
+404 rather than cast away -- the athlete route beside it sends the bare null, because `res.json`
+takes anything.
+
+**THE ITEST DRIVES THE REAL SWEEP, because "a column can be written" is not the claim.** Six cases:
+the read carries the two switches and none of the plan fields, the write lands, a coach, an athlete
+and a guardian are all 404 there, it is admin-only, and -- the two that matter -- the sweep warns an
+admin over the cap and **stops** once either switch is ticked. **Each of those asserts the PREMISE
+first** (that the sweep really did warn about this account before the tick), and that premise is
+what reverting the sweep to `role = 'athlete'` reds: without it the case would pass for an admin
+the sweep never looked at, which is the shape that made the athlete-only scoping invisible for
+months.
+
+**THE RATCHET, AND TWO BOUNDING BUGS IN ITS OWN DRAFTS -- both this file's standing lessons again.**
+13 cases stating what is forbidden: the sets partition the filming roles; the no-panel set is
+derived and names no role; the sweep's own query is read for the roles it caps; the switches have
+one client writer, discovered from the directory; the panel is not gated on a role literal at the
+call site; the form writes neither plan field nor unticked boxes over a failed read; the routes are
+scoped to the set and admin-only.
+- **A `Promise<{ ... }>` RETURN TYPE IS NOT A FUNCTION BODY**, and nor is a `params: { ... }`
+  parameter type. "The next `{` after the name" landed inside one or the other in two different
+  cases, and what comes back is a type annotation: it holds the role literals a forbidden-literal
+  check looks for and none of the code, so the check reds on correct source *and* the positive
+  assertion reds with it. `functionBodyAt` matches the signature's parens, then takes the first
+  `{` at angle-bracket depth zero.
+- **AND I BOUNDED ONE CASE BY 400 CHARACTERS**, the thing this file forbids in so many words. It
+  passed, for the second and worse reason a window fails: the comment the fix added is longer than
+  the window, so the `=== "coach"` quoted inside it fell outside and the case could not tell
+  whether the comment strip did anything. The span is the element's own wrapping condition now,
+  matched backwards -- and only *after* establishing the element is wrapped at all, because walking
+  back from a plain child lands on an ANCESTOR expression and picks up the legitimate
+  `detail.role === "coach"` conditionals around other controls on the same panel.
+- **A TERNARY HAS TWO BRANCHES.** The first version checked for `?` before the element; a mutation
+  reached for `role === "guardian" ? null : <panel>`, where the preceding token is `:`. That is
+  the likelier spelling, since withholding a panel from a role reads naturally that way.
+
+Eleven mutations, ten caught by the right case. **The eleventh is the comment strip, and it is NOT
+caught -- said rather than implied:** every forbidden word these cases look for sits in a docblock
+*above* the span they bound, so no comment currently falls inside one. The strip stays because the
+next case added will not know that. 418 files / 4857 tests, the delta exactly the 13 new cases; the
+retention, admin-identity and billing-assignment itests green on the new mechanism. Server plus two
+admin client files: `verify_build`.
 
 ## RULE #3: A VIDEO SHOWS THE REAL APP. NOTHING IN IT IS INVENTED.
 

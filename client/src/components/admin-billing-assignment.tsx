@@ -27,6 +27,7 @@ import {
   FREE_AGENT_ADD_ON_ORDER,
 } from "@shared/free-agent-tiers";
 import { VIDEO_STORAGE_ADD_ON } from "@shared/video-retention";
+import { FILMING_ROLES_WITHOUT_A_PLAN_PANEL_SET } from "@shared/roles-that-film-their-own-training";
 import type { AddOnStillBilling } from "@shared/add-on-terms";
 
 /**
@@ -136,12 +137,115 @@ export function AdminBillingAssignment({
 }: {
   userId: number;
   email: string;
-  role: "coach" | "athlete";
+  role: string;
 }) {
-  return role === "coach" ? (
-    <CoachBillingForm userId={userId} email={email} />
-  ) : (
-    <AthleteBillingForm userId={userId} email={email} />
+  if (role === "coach") return <CoachBillingForm userId={userId} email={email} />;
+  if (role === "athlete") return <AthleteBillingForm userId={userId} email={email} />;
+  // A ROLE THAT FILMS AND HAS NO PLAN. The prop was `"coach" | "athlete"` and the call site
+  // asked for exactly those two, so an admin account had no billing panel at all -- and since
+  // 2026-10-22 the nightly retention sweep caps an ADMIN's own training videos at ten
+  // unfavorited per exercise. This component is the only writer of isBetaAccount or
+  // hasVideoStorageAddOn anywhere in the client, so the remedy CLAUDE.md names for exactly that
+  // account ("tick Beta account or Extra video storage") had nowhere to be ticked.
+  //
+  // Derived from the filming set rather than asking `role === "admin"`, because the failure was
+  // a server-side widening leaving the screen behind in silence -- see
+  // FILMING_ROLES_WITHOUT_A_PLAN_PANEL_SET. Any other role (a guardian) still gets nothing,
+  // which is right: they buy nothing and film nothing.
+  if (FILMING_ROLES_WITHOUT_A_PLAN_PANEL_SET.has(role)) {
+    return <OwnTrainingBillingForm userId={userId} />;
+  }
+  return null;
+}
+
+type OwnTrainingBilling = {
+  id: number;
+  role: string;
+  isBetaAccount: boolean;
+  hasVideoStorageAddOn: boolean;
+};
+
+/** The two account-level switches, with no plan around them.
+ *
+ * Deliberately NOT the athlete form: a Free Agent tier, the Free Agent add-ons and the Skill
+ * Bank sports are all inert for an account whose camera and skills come from its role, and
+ * "inert today" is how a meaningless control becomes a meaningful one by accident. What is left
+ * is the pair that really does decide something for this account -- what the video cap is. */
+function OwnTrainingBillingForm({ userId }: { userId: number }) {
+  const qc = useQueryClient();
+  const key = [`/api/admin/accounts/${userId}/own-training-billing`];
+  const { data, isLoading, isError, refetch } = useQuery<OwnTrainingBilling>({
+    queryKey: key,
+    queryFn: () => getJson(`/api/admin/accounts/${userId}/own-training-billing`),
+  });
+
+  const [beta, setBeta] = useState(false);
+  const [videoStorage, setVideoStorage] = useState(false);
+  useEffect(() => {
+    if (!data) return;
+    setBeta(data.isBetaAccount);
+    setVideoStorage(data.hasVideoStorageAddOn);
+  }, [data]);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", `/api/admin/accounts/${userId}/own-training-billing`, {
+        isBetaAccount: beta,
+        hasVideoStorageAddOn: videoStorage,
+      });
+      return (await res.json()) as OwnTrainingBilling;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: key });
+      qc.invalidateQueries({ queryKey: ["/api/admin/users", userId] });
+      toast.success("Storage updated");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not update storage"),
+  });
+
+  if (isLoading) return <div className="h-20 animate-pulse rounded-md bg-surface" />;
+  // A failed read must not draw two unticked boxes over whatever is really on the account: Save
+  // would then write both switches off and cap an account somebody had deliberately exempted.
+  // The hydrate-in-an-effect shape CLAUDE.md has a whole section about.
+  if (isError || !data) {
+    return (
+      <div className="space-y-2 rounded-md border border-border p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Own-training storage
+        </p>
+        <p className="text-xs text-muted-foreground">Couldn't load this account's storage.</p>
+        <Button size="sm" variant="secondary" onClick={() => void refetch()}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 rounded-md border border-border p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Own-training storage
+      </p>
+      <p className="text-xs text-muted-foreground">
+        This account films its own training, so the nightly retention sweep caps its clips like
+        any other. There is no plan to assign — these two are what lift the cap.
+      </p>
+
+      <label className="flex items-center gap-1.5 text-xs">
+        <Checkbox
+          checked={videoStorage}
+          onCheckedChange={(c) => setVideoStorage(c === true)}
+        />
+        Extra video storage ({VIDEO_STORAGE_ADD_ON.totalCap} clips,{" "}
+        {formatCents(VIDEO_STORAGE_ADD_ON.monthlyPriceCents)}/mo)
+      </label>
+
+      <BetaToggle beta={beta} setBeta={setBeta} />
+
+      <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
+        {save.isPending ? "Saving…" : "Save storage"}
+      </Button>
+    </div>
   );
 }
 

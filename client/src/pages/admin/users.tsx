@@ -349,13 +349,21 @@ export default function AdminUsers() {
                             )}
                           </div>
 
-                          {(detail.role === "coach" || detail.role === "athlete") && (
-                            <AdminBillingAssignment
-                              userId={detail.id}
-                              email={detail.email ?? ""}
-                              role={detail.role}
-                            />
-                          )}
+                          {/* THE ROLE GUARD MOVED INTO THE COMPONENT, and that is the fix
+                              rather than a tidy-up. This read `role === "coach" || role ===
+                              "athlete"`, matching a prop typed the same way -- two role
+                              strings where the pgEnum has four, the documentAudienceFor shape.
+                              So an admin account had no billing panel, and since 2026-10-22 the
+                              retention sweep caps an admin's own training videos; the two
+                              switches that lift that cap live only in this component, so there
+                              was nowhere to tick them. The component decides now, from the
+                              filming set, so a role added to that set gets its switches in the
+                              same edit instead of silently going without. */}
+                          <AdminBillingAssignment
+                            userId={detail.id}
+                            email={detail.email ?? ""}
+                            role={detail.role}
+                          />
                         </div>
                       )}
                     </div>
