@@ -3,6 +3,7 @@ import { storage } from "./storage";
 import { testOutbox } from "./email";
 import { resetDatabase, makeCoach } from "./test-support/fixtures";
 import { startTestServer, type TestServer } from "./test-support/http-app";
+import { waitForEmailTo } from "./test-support/wait-for-email";
 
 /** THE WELCOME EMAIL A COACH-PROVISIONED ATHLETE GETS, DRIVEN THROUGH THE REAL CLAIM ROUTE.
  *
@@ -69,11 +70,18 @@ describe("the welcome email a coach-provisioned athlete receives", () => {
     });
     expect(res.status, await res.text().catch(() => "")).toBe(201);
 
-    const welcome = testOutbox.find(
-      (m) => m.to === email && String(m.subject) === "Welcome to Forge",
-    );
-    expect(welcome, "no welcome email was sent to the claiming athlete at all").toBeTruthy();
-    return { coach, email, html: String(welcome!.html) };
+    // WAITED FOR, NOT READ. The claim handler calls `sendEmail(...)` without awaiting it --
+    // deliberate, so a mail outage can never fail a signup -- and `sendEmail` pushes to the
+    // outbox only after `await import("./storage")` and a branding query, because this send
+    // passes `brandForUserId`. Reading the outbox the instant the 201 lands therefore races the
+    // push, and this file is what proved it: red on six consecutive CI runs, reproduced locally
+    // about one run in three, and ONLY ever on the first of these four cases -- the one call
+    // where that dynamic import is a real module load rather than a cache hit.
+    //
+    // waitForEmailTo still THROWS when no email is sent, so the thing this test was written to
+    // catch is not weakened; see server/test-support/wait-for-email.ts.
+    const welcome = await waitForEmailTo(email, "Welcome to Forge");
+    return { coach, email, html: String(welcome.html) };
   }
 
   it("names the coach whose roster they are already on", async () => {

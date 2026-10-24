@@ -251,6 +251,107 @@ DECLARED range and the INSTALLED tree separately (the one that runs is the resol
 `drizzle-zod`'s own peer declaration names a 4.x range rather than trusting a version number, and
 forbids the three zod-3 spellings in the four migrated files. Two mutations, each caught.
 
+### AND THE FOURTH: `brandForUserId` MAKES A FIRE-AND-FORGET SEND LAND AFTER THE RESPONSE
+
+Scott, 2026-10-24: **"I have gotten about 15 cl run errors."** He had, and more than that --
+**24 CI failures and 13 CodeQL cancellations in one day.** It decomposes into exactly two code
+causes and two things about how I was pushing, and only the first of the four needed a code fix.
+
+**THE CAUSES, IN SEQUENCE, AND THE SECOND WAS HIDDEN BY THE FIRST.** Read the step NUMBER:
+
+| runs | step | cause |
+|---|---|---|
+| 1929-1934 | **9**, Audit production dependencies | the zod advisory, fixed by `ce4ae810` |
+| 1935-1940 | **16**, Integration tests | `a-claimed-athlete-is-told-they-have-a-coach.itest.ts` |
+
+The second had been latent for five runs. CI died at step 9 the whole time, so it never reached
+step 16 -- **the commit that introduced it was unproven by the integration suite**, which is what
+this file means when it says a commit that dies early is unproven by everything after it rather
+than merely unaudited. Fixing the audit is what made the real red visible, so it reads as "the
+zod fix broke the tests" and is the opposite.
+
+**THE MECHANISM, MEASURED RATHER THAN REASONED ABOUT.** `sendEmail` is an async function, so its
+body runs synchronously up to its first `await` -- and on the UNBRANDED path there is no await
+before `testOutbox.push`. Driving the real function proves it: an unbranded `sendEmail(...)` with
+no `await` is **already readable on the next line**. Pass `brandForUserId` and two awaits appear
+ahead of the push:
+
+    const { storage } = await import("./storage");            // a real module load, the first time
+    brand = await storage.getEffectiveBrandingForUser(id);    // a query
+    ...
+    testOutbox.push({ to, subject, html, from });             // only now readable
+
+So **the hazard is exactly one shape: a send that is NOT awaited AND carries `brandForUserId`.**
+Neither half alone is a problem, which is precisely why it hid -- this repo has unawaited sends
+that are perfectly safe (`void emailSignedCopy(...)` is deliberately unbranded and says so in its
+own comment) and branded sends that are perfectly safe (every roster, campaign and device email is
+awaited, because its route reports what was actually delivered and cannot know without waiting).
+There are **four** unawaited branded sends, all in `auth.ts`, and only one had a test reading its
+outbox.
+
+**AND ONLY THE FIRST OF THAT FILE'S FOUR CASES EVER FAILED, which is the tell.** The first call is
+the only one where `await import("./storage")` is a genuine filesystem load and compile rather than
+a cache hit, so it is the only one slow enough to lose. **A race whose loser is always the first
+test in a worker reads as one broken test rather than as a race**, and that is how it got through
+review. Reproduced locally at about **one run in three**; with the fix, six for six; and with the
+wait neutered to a zero timeout the flake comes straight back, so the wait is demonstrably the
+thing doing the work rather than the rewrite.
+
+**THE FIX IS IN THE HARNESS, NOT THE PRODUCT, and that is a decision.** The fire-and-forget send is
+deliberate -- a mail outage must never be able to fail a signup -- and it is the same family of
+intentional unawaited writes that `retry-on-deadlock.ts` already exists for. Awaiting the sends to
+make tests easier would put an email provider on the critical path of account creation.
+`server/test-support/wait-for-email.ts` is the sibling of that file: a bounded poll that **THROWS,
+with the recipients and subjects the outbox actually held**, so a route that sends nothing still
+fails and fails readably. A helper that waited and then returned undefined would convert every
+missing-email bug into a silent pass, which is the inversion this file keeps having to relearn. The
+sleep is a real timer, never an immediately-resolving one -- `retry-on-deadlock.ts` records that a
+loop whose sleep resolves at once starves the timer queue, so the suite HANGS instead of failing
+and a hang in CI is a job timeout that reads as another fault entirely.
+
+**THE WHOLE SUITE WAS SWEPT AND EXACTLY ONE READ WAS RACY**, which is the reassuring half. Eight
+itests read `testOutbox`, 28 reads between them; every other one is safe for a reason read off the
+handler with line numbers -- the send is awaited (`branding-page`, `coach-roster-document-emails`,
+`email-list`, `new-device-approval`), it is unbranded so the push is synchronous
+(`institutional-agreement-sign`), or the test calls the awaited notifier directly
+(`terms-reacceptance`, whose five ABSENCE assertions would otherwise be the worse bug -- an
+unwaited absence check fails GREEN and nothing announces it).
+
+**THE RATCHET DISCOVERS THE HAZARD FROM THE SOURCE** rather than listing what was fixed:
+`an-unawaited-branded-send-lands-late.test.ts` finds every unawaited `sendEmail` carrying
+`brandForUserId` (comments stripped, bounded by the call's own parens, `sendEmail`'s own
+declaration excluded) and forbids an itest reading `testOutbox` directly unless it carries a reason
+naming why that send cannot land late. It is a `.test.ts`, so it runs on every `npm test` with no
+Postgres -- the same argument `the-reset-survives-an-unawaited-write.test.ts` makes.
+**Six mutations; the fifth was NOT caught by the first draft and is worth keeping:** inverting the
+scan to look for AWAITED branded sends left every case green, because `auth.ts` holds both kinds,
+so "the set is non-empty and mentions auth.ts" is true either way. `terms-change-notice.ts` is the
+directional landmark now -- branded and awaited, so it appears only under an inverted scan -- pinned
+by filename, not line. **And the comment strip is proven in the DANGEROUS direction**: a comment
+quoting `waitForEmailTo(` above a direct read leaves the scan green with the strip removed and reds
+it with the strip in, so prose cannot excuse the very thing being scanned for.
+
+**THE OTHER HALF OF SCOTT'S INBOX WAS ME, NOT THE CODE, AND THIS FILE ALREADY SAID SO.**
+- **Every commit was mirrored to the development branch, so every red was doubled.** 12 commits x 2
+  refs = the 24. The "CI red that is not a test failure" section says it in as many words: "The
+  cheaper cure is not to mirror the branch on every commit. Push it when it has actually diverged,
+  not after every merge to main." Mirroring per commit buys nothing and doubles the noise.
+- **13 CodeQL cancellations were rapid pushes superseding each other.** CodeQL runs on `main` with
+  `cancel-in-progress: true`, so five pushes in ninety minutes leave its matrix half-cancelled and
+  the check reads failure. That is the setting working; the remedy named here is fewer rapid pushes
+  to main, and I made five.
+
+**AND PRODUCTION WAS NEVER BEHIND, which is the thing to check first and I checked it late.** Render
+is `autoDeploy: yes`, `trigger: commit` on `main`, so it deploys independently of the `deploy` job:
+all twelve commits deployed and the newest went live. A skipped `deploy` beside a red CI is noise
+here, not a blocked release -- confirm it from the Render deploy list rather than inferring it from
+the job graph.
+
+**THE LESSON I OWE THIS ENTRY: a green local run is not a green suite.** I reported "849 integration
+tests pass" and pushed, and the failing test was in that run -- it passed because the race is
+1-in-3. One run of a suite is evidence about one run. For anything with an unawaited write behind
+it, a single pass means nothing; run it several times, or do not call it proven.
+
 ### AND ONE MORE THAT IS REAL: A DEADLOCKED TRUNCATE IN THE TEST HARNESS (2026-10-09)
 
 Run 1757 on `b88d8850`. **`deploy` hangs off the integration job, so one aborted TRUNCATE stopped
