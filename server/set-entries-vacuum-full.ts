@@ -14,8 +14,8 @@
  *   - no row still carries frames inline (`skeleton_frames IS NULL` everywhere); a table the
  *     offload has not finished with would be rewritten at its full size for nothing;
  *   - the table is small enough to rewrite without filling the disk it is meant to free
- *     (its LIVE size, estimated off reltuples, under 50 MB; VACUUM FULL needs that much space
- *     for the copy and no more).
+ *     (its LIVE size, measured row by row, under 50 MB; VACUUM FULL needs that much space for
+ *     the copy and no more).
  *
  * WHAT IT WRITES DOWN. Size before, size after, bytes returned -- sizes and counts only, never
  * a value, as database-size-job.ts established for this log. The marker is DATED so the next
@@ -74,15 +74,37 @@ export async function vacuumFullSetEntriesOnce(): Promise<VacuumFullOutcome> {
       note: `${framesStillInline} rows still hold frames inline; the offload job has to finish first, so this will try again next boot`,
     };
   }
-  // The live bytes are what the rewrite has to copy. Without a per-row size on file, the
-  // conservative estimate is the whole relation's bytes divided evenly across every tuple slot
-  // the table has ever held (live + dead), times the live count -- an overestimate when the
-  // dead tuples were the fat ones, which here they were.
-  const deadRows = readRows<{ n: number }>(
-    await db.execute(sql`SELECT greatest(n_dead_tup, 0)::bigint AS n FROM pg_stat_user_tables WHERE relname = 'workout_set_entries'`),
+  // The live bytes are what the rewrite has to copy: the stored size of every live row plus
+  // the stored size of each json column (which is where a TOASTed value's bytes live, off the
+  // heap page). Measured directly, because the first version estimated it off the statistics view's dead-tuple counter and
+  // the daily plain VACUUM had already zeroed that counter -- the dead tuples were gone, the
+  // PAGES were not, and 447 MB of empty pages read as 447 MB of live rows (production boot,
+  // 2026-10-24 01:39 UTC: "skipped_too_large" on a table of 114 rows). A seq scan of a
+  // mostly-empty 447 MB table is a one-time read at boot and fine.
+  const live = readRows<{ live_bytes: number }>(
+    await db.execute(sql`
+      SELECT (
+        coalesce(sum(pg_column_size(t.*)), 0)
+        + coalesce(sum(pg_column_size(t.skeleton_frames)), 0)
+        + coalesce(sum(pg_column_size(t.tracking_diagnostics)), 0)
+        + coalesce(sum(pg_column_size(t.bar_path_trace)), 0)
+        + coalesce(sum(pg_column_size(t.arm_path_trace)), 0)
+        + coalesce(sum(pg_column_size(t.rep_breakdown)), 0)
+        + coalesce(sum(pg_column_size(t.form_faults)), 0)
+        + coalesce(sum(pg_column_size(t.jump_breakdown)), 0)
+        + coalesce(sum(pg_column_size(t.med_ball_rep_breakdown)), 0)
+        + coalesce(sum(pg_column_size(t.trust_scores)), 0)
+        + coalesce(sum(pg_column_size(t.kb_swing_trust_score)), 0)
+        + coalesce(sum(pg_column_size(t.med_ball_trust_score)), 0)
+        + coalesce(sum(pg_column_size(t.swing_trust_score)), 0)
+        + coalesce(sum(pg_column_size(t.arm_drive_asymmetry)), 0)
+        + coalesce(sum(pg_column_size(t.leg_drive_asymmetry)), 0)
+        + coalesce(sum(pg_column_size(t.capture_device_info)), 0)
+      )::bigint AS live_bytes
+      FROM workout_set_entries t
+    `),
   );
-  const slots = liveRowsEstimate + Number(deadRows[0]?.n ?? 0);
-  const liveBytesEstimate = slots > 0 ? Math.round((bytesBefore * liveRowsEstimate) / slots) : bytesBefore;
+  const liveBytesEstimate = Number(live[0]?.live_bytes ?? bytesBefore);
   if (liveBytesEstimate > MAX_LIVE_BYTES_FOR_BOOT_VACUUM) {
     return {
       ...base,

@@ -32,7 +32,7 @@ function textOf(q: unknown): string {
   return dialect.sqlToQuery(q as SQL).sql;
 }
 
-type Facts = { applied: number; frames: number; live: number; bytes: number; dead: number; bytesAfter: number };
+type Facts = { applied: number; frames: number; live: number; bytes: number; liveBytes: number; bytesAfter: number };
 
 function fakeDb(f: Facts) {
   const ran: string[] = [];
@@ -40,7 +40,7 @@ function fakeDb(f: Facts) {
     const t = textOf(q);
     ran.push(t.replace(/\s+/g, " ").trim());
     if (t.includes("FROM applied_backfills WHERE key")) return { rows: [{ n: f.applied }] };
-    if (t.includes("pg_stat_user_tables")) return { rows: [{ n: f.dead }] };
+    if (t.includes("AS live_bytes")) return { rows: [{ live_bytes: f.liveBytes }] };
     if (t.includes("AS frames")) return { rows: [{ frames: f.frames, live: f.live, bytes: f.bytes }] };
     if (t.includes("VACUUM")) return { rows: [] };
     if (t.includes("pg_total_relation_size") ) return { rows: [{ bytes: f.bytesAfter }] };
@@ -57,8 +57,14 @@ beforeEach(() => {
 });
 
 describe("vacuumFullSetEntriesOnce", () => {
+  it("measures the live rows directly, never off pg_stat's dead-tuple counter (which a plain VACUUM zeroes)", () => {
+    const src = fs.readFileSync(path.join(__dirname, "set-entries-vacuum-full.ts"), "utf8");
+    expect(src).not.toContain("n_dead_tup");
+    expect(src).toContain("pg_column_size(t.*)");
+  });
+
   it("vacuums, measures, and writes the marker when the offload has finished and the table is small", async () => {
-    const ran = fakeDb({ applied: 0, frames: 0, live: 114, bytes: 447 * MB, dead: 17_500, bytesAfter: 1 * MB });
+    const ran = fakeDb({ applied: 0, frames: 0, live: 114, bytes: 447 * MB, liveBytes: 0.4 * MB, bytesAfter: 1 * MB });
     const o = await vacuumFullSetEntriesOnce();
     expect(o.status).toBe("vacuumed");
     expect(o.bytesBefore).toBe(447 * MB);
@@ -72,7 +78,7 @@ describe("vacuumFullSetEntriesOnce", () => {
   });
 
   it("does nothing once the marker is there -- a redeploy is silent", async () => {
-    const ran = fakeDb({ applied: 1, frames: 0, live: 114, bytes: 447 * MB, dead: 0, bytesAfter: 0 });
+    const ran = fakeDb({ applied: 1, frames: 0, live: 114, bytes: 447 * MB, liveBytes: 0, bytesAfter: 0 });
     const o = await vacuumFullSetEntriesOnce();
     expect(o.status).toBe("already_applied");
     expect(ran.some((s) => s.includes("VACUUM"))).toBe(false);
@@ -80,7 +86,7 @@ describe("vacuumFullSetEntriesOnce", () => {
   });
 
   it("skips WITHOUT the marker while rows still hold frames inline, so the next boot tries again", async () => {
-    const ran = fakeDb({ applied: 0, frames: 37, live: 1200, bytes: 447 * MB, dead: 0, bytesAfter: 0 });
+    const ran = fakeDb({ applied: 0, frames: 37, live: 1200, bytes: 447 * MB, liveBytes: 0, bytesAfter: 0 });
     const o = await vacuumFullSetEntriesOnce();
     expect(o.status).toBe("skipped_frames_remain");
     expect(o.framesStillInline).toBe(37);
@@ -89,8 +95,8 @@ describe("vacuumFullSetEntriesOnce", () => {
   });
 
   it("skips WITHOUT the marker when the live rows are too big to rewrite at boot", async () => {
-    // Every row live, none dead: the live estimate IS the relation size.
-    const ran = fakeDb({ applied: 0, frames: 0, live: 20_000, bytes: 450 * MB, dead: 0, bytesAfter: 0 });
+    // Every row live: the measured live bytes ARE the relation size.
+    const ran = fakeDb({ applied: 0, frames: 0, live: 20_000, bytes: 450 * MB, liveBytes: 450 * MB, bytesAfter: 0 });
     const o = await vacuumFullSetEntriesOnce();
     expect(o.status).toBe("skipped_too_large");
     expect(o.note).toContain("by hand");
