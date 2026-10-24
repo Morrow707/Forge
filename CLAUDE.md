@@ -1346,6 +1346,46 @@ next case added will not know that. 418 files / 4857 tests, the delta exactly th
 retention, admin-identity and billing-assignment itests green on the new mechanism. Server plus two
 admin client files: `verify_build`.
 
+### AND ONE READ AND DELIBERATELY NOT FIXED: A COMMENT'S ROLE LABEL IS LIVE, NOT SNAPSHOTTED
+
+`workout-comment-thread.tsx:132` renders `{c.author.role}` as a small uppercase label beside the
+author's name, and the server sends `author: { id, name, role: r.author.role }` -- the row's LIVE
+role. So an athlete who is later promoted to coach has every comment they ever left relabelled
+"COACH", retroactively, including the questions they asked as an athlete.
+
+**Recorded rather than fixed, and the reasons are the ones that make it not worth a migration.**
+The label sits beside the author's own name, so nobody is misidentified -- the thread does not
+read as somebody else's. Reaching it takes an admin role change on an account that has already
+commented, which is a handful of accounts on the platform. And the fix is a snapshot column whose
+backfill is **unrecoverable**: the role a past comment was written under is not derivable from
+anything still stored, so every existing row would have to be seeded with today's answer, which
+is the wrong answer for exactly the rows the bug is about. The alternative -- deriving the label
+from the relationship instead of the role, by threading the athleteId through four call sites --
+is a better shape and a bigger change than the defect earns.
+
+**What is NOT wrong here, checked because it looked like it might be:** the client types the role
+as `"coach" | "athlete"` where the pgEnum has four, which is the shape that has cost three bugs
+this week -- and it is accurate for this field, because all four comment routes are
+`requireRole("coach")` or `requireRole("athlete")` (two GET, two POST, verified). No guardian or
+admin can author one.
+
+### THE FIFTH TARGET IS CORRECTLY INERT, WHICH IS ALSO A RESULT
+
+`coach-section-gate.tsx`, read in full: only a coach has `hiddenSections`, so its branching is
+right and there is nothing to change. Worth one line because it fails **OPEN** on an undefined
+`hiddenSections` -- which is what amplified the 10-22 flag-free-response bug, where a coach who
+saved their profile stopped having sections hidden. That cause is closed by
+`every-self-response-carries-the-flags.test.ts`, and failing closed instead would blank every
+coach's Library on any navigation where the answer had not landed yet. **A gate that fails open is
+the right call here and the wrong one to generalise**: the thing that made 10-22 bad was the
+response, not this gate.
+
+**All five of the sweep's unread targets are now read** -- `admin/waivers.tsx` (the dead link),
+`admin-billing-assignment.tsx` (the cap nobody could lift), `notification-bell.tsx` and
+`team-chat-quick-summary.tsx` (above), and this one. Four of the five were defective and **not one
+of the four had a role conditional in the defective code**, which is the survey's own stated blind
+spot confirmed four more times.
+
 ## THE TEAM CHAT CARD SHOWED THE COACH'S FIRST EVER POST AS THE LATEST ONE
 
 Added 2026-10-24, the last two of the role survey's unread targets. Three findings in one pair of
