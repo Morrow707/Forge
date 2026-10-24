@@ -3194,6 +3194,46 @@ async function main() {
     if (videoPromoted > 0) {
       console.log(`Promoted videoEligible=true on ${videoPromoted} exercise(s) now on the canonical main-lift list.`);
     }
+
+    // THE LIBRARY IS FLAGGED FORGE-OFFICIAL HERE, BECAUSE THE BACKFILL CANNOT REACH A LIBRARY
+    // THAT DOES NOT EXIST YET (2026-10-24).
+    //
+    // `exercises.is_forge_official` is the gate on all three strength-profile queries, and the
+    // only writer it had was a one-shot in reconcile-schema.ts keyed on `applied_backfills`.
+    // The build command is `db:reconcile && db:seed && db:reconcile`, so on a database created
+    // FRESH that one-shot runs against an EMPTY exercises table, writes its marker anyway, and
+    // the second reconcile skips -- leaving every exercise this block just created false, for
+    // good. Measured on a throwaway database brought up exactly as render.yaml does: 410
+    // exercises, all owned by the role-admin library owner, 0 flagged -- while 9 of 9 seeded
+    // classes ARE flagged by the same run, because createClassWithStructure takes the flag as an
+    // argument. Clearing the marker and re-reconciling flagged all 410, which is the proof that
+    // ORDERING was the whole fault and the backfill itself is sound. Production is unaffected:
+    // the handover to the admin has run in this seed since 2026-08-01, so when the backfill
+    // landed on 2026-09-21 it saw an admin-owned library and flagged it.
+    //
+    // What that cost on every other environment is a percentile that matches zero rows for
+    // everybody, reading as "Not enough athletes on Forge yet" -- indistinguishable from the
+    // real thin-cohort state the platform launched in, which is why it survived a month.
+    //
+    // DISCOVERED FROM THE LISTS, not restated at each createExercise call. A fourth list added
+    // below would be flagged the day it is written; three call-site edits would miss it in
+    // silence, which is the shape this file has been bitten by five times (the Coaches Corner
+    // lesson re-sync, the Barbell Shoulder Press instructions, videoEligible, the terms-change
+    // guardian notice, the Stripe upsert). The names are the authority on what Forge ships, and
+    // the write is scoped by owner AND by name so an admin's own hand-made exercise -- false
+    // until an admin flips it, deliberately -- can never be caught by it.
+    const forgeLibraryNames = [
+      ...seedExercises.map((e) => e.name),
+      ...combinationExercises.map((e) => e.name),
+      ...expansionExercises.map((e) => e.name),
+    ];
+    const newlyOfficial = await storage.markSeededExercisesForgeOfficial(
+      libraryOwner.id,
+      forgeLibraryNames,
+    );
+    if (newlyOfficial > 0) {
+      console.log(`Flagged ${newlyOfficial} seeded exercise(s) Forge-official.`);
+    }
   }
 
   // One-time production fixup: promote scott.morrow@live.com to admin and

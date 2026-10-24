@@ -725,6 +725,87 @@ reported, not acted on.** And nothing the server imports may `process.exit` -- t
 so importing it from `index.ts` would have crash-looped the service on the very drift it reports;
 the logic is in `server/foreign-key-drift.ts` now and a test forbids the path.
 
+## THE STRENGTH PERCENTILE SCORED NOBODY ON EVERY DATABASE BUT PRODUCTION
+
+Added 2026-10-24, from the role-conditional sweep's own report, verified against the code and
+then MEASURED before anything moved -- and the agent's stated consequence ("for everybody,
+forever") was right about the environments it tested and did not distinguish production, which
+is the whole severity question.
+
+**`exercises.is_forge_official` GATES ALL THREE STRENGTH-PROFILE QUERIES AND HAD EXACTLY ONE
+WRITER: A ONE-SHOT THAT RUNS BEFORE THE ROWS EXIST.** `reconcile-schema.ts:3674` adds the column
+and backfills it from admin ownership under the `applied_backfills` key
+`forge_official_exercises_2026_09_21`. `render.yaml`'s build command is
+**`db:reconcile && db:seed && db:reconcile`**. So on a database created FRESH: reconcile #1 fires
+the backfill against an EMPTY table, writes its marker anyway, the seed then creates 410
+exercises, and reconcile #2 skips. **Measured on a throwaway database brought up exactly that
+way: 410 exercises, all owned by the role-admin library owner, 0 flagged -- while 9 of 9 seeded
+classes ARE flagged by the same run**, because `createClassWithStructure(owner, structure, true)`
+takes the flag as an argument. Deleting the marker and re-reconciling flagged all 410, which is
+the proof that **ORDERING was the entire fault and the backfill itself is sound.**
+
+**PRODUCTION WAS NEVER AFFECTED, AND THAT NEARLY WENT UNSAID.** The ownership handover to the
+admin has run inside the seed since `bef1f04f` (2026-08-01), so when the backfill landed on
+2026-09-21 it saw an admin-owned library and flagged it; and no new exercise NAME has entered
+`seed.ts` since (diffed across the backfill commit: 0 added). What was broken is **every other
+environment** -- a dev box, a new Render service, a rebuild after a database loss, and **CI's
+integration harness, which creates its database fresh on every run.**
+
+**THE SYMPTOM IS THE REASON IT SURVIVED A MONTH.** A zero-row gate does not error: every athlete
+gets no percentile and the card reads "Not enough athletes on Forge yet" -- which is the REAL
+thin-cohort state the platform launched in (`NORM_MIN_COHORT` is 30 per group, and the 10-10
+audit already fixed a different sentence for exactly this reason). A correct empty state and a
+broken gate are the same pixels.
+
+**AND NO TEST COULD SEE IT, FOR THE REASON THIS FILE KEEPS NAMING.**
+`strength-profile.itest.ts:65` does `db.update(exercises).set({ isForgeOfficial: true })` on its
+OWN fixture row, so the suite proves the QUERY works and is structurally blind to whether
+anything in the real library is ever flagged. A test that supplies the input it is meant to be
+checking for cannot fail for the input being absent.
+
+**THE FIX IS ONE MECHANISM, DISCOVERED FROM THE LISTS, NOT THREE CALL-SITE EDITS.** `seed.ts`
+flags the library it creates, keyed on the union of its own three name lists
+(`seedExercises`, `combinationExercises`, `expansionExercises`) and scoped to the library owner.
+A fourth list added next year is covered the day it is written; editing the three
+`createExercise(libraryOwner.id, ...)` calls instead would have missed it in silence, which is
+the shape this file has now recorded six times (the Coaches Corner lesson re-sync, the Barbell
+Shoulder Press instructions, `videoEligible: false`, the terms-change guardian notice, the Stripe
+upsert, the height ruler's refit). **The flag is NOT written at the call sites as well**: a fact
+with two writers is the billing sweep's whole lesson.
+
+**SCOPED BY OWNER *AND* BY NAME, which is the one thing that had to be measured rather than
+asserted.** `shared/schema.ts` argues the explicit column exists precisely so ownership cannot
+enrol "an admin's own personal exercise into the standards every athlete on the platform is
+measured against" -- and production holds exactly such a row (`Mcconnell Raises`, Scott's own,
+under the account that owns the library). A write scoped to the owner alone is that hazard. On a
+throwaway database with the library unflagged and that exercise present: **411 total, 410 flagged,
+`Mcconnell Raises` still false.** It also only ever SETS the flag, so an admin turning a Forge
+exercise off is not undone by the next deploy, and it reports what it CHANGED -- a count of what
+MATCHED would put a "repaired 410" line in every deploy log forever, which is how a one-off fix
+comes to read as a recurring fault.
+
+**THE RATCHET'S DIRECTION IS THE POINT.** A scan that iterated the names handed to the flagging
+step could not see a list nobody passed -- the omission it would look like it covered, which is
+`parental_notice` and the upload-directory list again. So it discovers every
+`for (const x of LIST)` loop that really calls `createExercise(libraryOwner.id, ...)` and requires
+the flagging step to name each one. **Two bugs in its own first drafts, both recorded because both
+are this file's standing lessons wearing new clothes:** the brace matcher followed a BRACE-LESS
+loop body (`for (const ex of allExercises) exerciseMap[ex.name] = ex.id;`) to the next `{`
+hundreds of lines away and reported `allExercises` as a library list -- a character window with a
+brace matcher's face; and the cross-check in `forge-official-is-inferred-for-classes.test.ts`
+matched the bare method NAME, so renaming the call to `...ForgeOfficialX(` left it GREEN, the
+unanchored-match trap that `/export \{ X \}/` is recorded for. Eight mutations on the scan and
+four on the itest, each caught by the right case; **the one that is NOT caught says so in its own
+comment** -- deleting the empty-list guard changes nothing observable, because `inArray(col, [])`
+already compiles to a false predicate, so that case proves the outcome and not the guard.
+
+**AND IT CORRECTS `a0ef9305`, PUSHED THE DAY BEFORE.** That commit's test and schema comment both
+state the exercises column "is the one that is real: reconcile-schema.ts adds it, backfills it for
+admin-owned rows and indexes it" -- true of production, false of a fresh database, and **a source
+scan cannot tell those two apart**, which is why that file certified a working column for a month.
+Both now say which writer covers which database. The classes/programs divergence it recorded is
+unchanged and still open.
+
 ## RULE #3: A VIDEO SHOWS THE REAL APP. NOTHING IN IT IS INVENTED.
 
 Added 2026-10-02, after a build-a-program reel shipped with a program builder nobody has ever

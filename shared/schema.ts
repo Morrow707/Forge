@@ -1453,8 +1453,20 @@ export const exercises = pgTable("exercises", {
    * read sites after. server/forge-official-is-inferred-for-classes.test.ts holds the divergence
    * so it stays visible, and says which sites are free to move once the backfill lands.
    *
-   * Backfilled true for admin-owned rows, which is exactly what the library means by Forge
-   * content today; after that the two can diverge on purpose.
+   * AND "BACKFILLED" WAS ONLY EVER HALF TRUE, CORRECTED 2026-10-24. The backfill is a one-shot
+   * guarded by `applied_backfills`, and render.yaml's build command is
+   * `db:reconcile && db:seed && db:reconcile` -- so on a database created FRESH it runs against
+   * an EMPTY exercises table, writes its marker anyway, and the second reconcile skips. Measured
+   * on a throwaway database brought up exactly that way: 410 exercises, all owned by the
+   * role-admin library owner, 0 flagged. Production was never affected (the ownership handover
+   * to the admin has run in the seed since 2026-08-01, so the backfill saw an admin-owned
+   * library on 2026-09-21 and flagged it, and no new exercise name has entered seed.ts since) --
+   * but every dev box, every new Render service, a rebuild after a database loss and the
+   * integration harness all scored nobody against anything, reading on screen as "Not enough
+   * athletes on Forge yet", which is the real thin-cohort state the platform launched in.
+   * `seed.ts` now flags the library it creates, keyed on its own name lists and scoped to the
+   * library owner, which is the same shape createClassWithStructure already uses for classes;
+   * server/the-seeded-library-is-forge-official.{test,itest}.ts hold it.
    */
   isForgeOfficial: boolean("is_forge_official").notNull().default(false),
   usesBand: boolean("uses_band").notNull().default(false),

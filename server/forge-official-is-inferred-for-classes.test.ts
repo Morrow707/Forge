@@ -13,6 +13,15 @@ import { join } from "node:path";
  * `reconcile-schema.ts` adds it, BACKFILLS it true for admin-owned rows, and indexes it, and the
  * strength profile reads it.
  *
+ * THAT SENTENCE WAS TRUE OF PRODUCTION AND FALSE OF A FRESH DATABASE, CORRECTED 2026-10-24. The
+ * backfill is a one-shot guarded by `applied_backfills` and render.yaml runs
+ * `db:reconcile && db:seed && db:reconcile`, so on a database created fresh it fires against an
+ * EMPTY exercises table, marks itself done, and the second reconcile skips -- 410 exercises, 0
+ * flagged, measured. A source scan cannot tell the two cases apart, which is why this file
+ * certified the column as working. What makes it trustworthy is the seed flagging the library it
+ * creates (server/the-seeded-library-is-forge-official.{test,itest}.ts); the backfill is what
+ * covers production, where the library predates the column.
+ *
  * The comment then cites `classes.isForgeOfficial` as the precedent it follows -- and the
  * citation is circular. The classes column exists and is `NOT NULL DEFAULT false` and **nothing
  * has ever written it true**: no backfill, no seed, no route. So for classes and programs the
@@ -43,12 +52,33 @@ const RECONCILE = readFileSync(join(process.cwd(), "server", "reconcile-schema.t
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
 
 describe("forge-official: one column that works, one that is decorative", () => {
-  it("backfills the EXERCISES column, which is why the strength profile can trust it", () => {
+  it("backfills the EXERCISES column, which is what covers the one database that predates it", () => {
     const sql = strip(RECONCILE);
     expect(sql).toMatch(/ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "is_forge_official"/);
-    // The backfill itself: without it the column is false everywhere and the percentile gate
-    // would score nobody against anything.
+    // The backfill itself. It is NOT what makes the column trustworthy in general -- see the
+    // correction in the header: it can only ever reach rows that already exist when it runs, so
+    // it covers production and nothing else. Kept because production is the database that
+    // cannot be re-seeded into correctness.
     expect(sql).toMatch(/UPDATE "exercises" SET "is_forge_official" = true/);
+  });
+
+  it("and the SEED flags what it creates, which is what covers every other database", () => {
+    /* Asserted here as well as in the dedicated file because this is the file that certified the
+     * exercises column as working for a month, and the clause it got wrong was "backfills it".
+     * The two writers answer different databases and both are load-bearing; a reader who finds
+     * only one of them has the same incomplete picture this file shipped. */
+    const seed = strip(readFileSync(join(process.cwd(), "server", "seed.ts"), "utf8"));
+    expect(
+      seed,
+      "server/seed.ts no longer flags the library it creates, so on any database created fresh " +
+        "every seeded exercise is is_forge_official=false permanently and the strength profile " +
+        "scores nobody against anything -- the state measured on 2026-10-24 (410 exercises, 0 " +
+        "flagged). The backfill above cannot cover this: it runs before the seed.",
+      /* Anchored on the CALL's own paren, not the bare name. Mutation-tested: renaming the
+       * method to `...ForgeOfficialX(` left a bare-name match GREEN, because the old name is a
+       * substring of the new one -- the same unanchored-match trap CLAUDE.md records for
+       * `/export \{ X \}/` matching a commented-out export. */
+    ).toMatch(/storage\.markSeededExercisesForgeOfficial\s*\(/);
   });
 
   it("RECORDED: nothing has ever written classes.isForgeOfficial true, so the column is inert", () => {

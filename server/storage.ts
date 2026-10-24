@@ -12317,6 +12317,47 @@ Hard rules, no exceptions:
     return row;
   },
 
+  // Flags the exercises FORGE ITSELF SHIPS, by name, under the library owner.
+  //
+  // `is_forge_official` is what the three strength-profile queries gate on, and until
+  // 2026-10-24 the only thing that had ever written it true was a one-shot backfill in
+  // reconcile-schema.ts guarded by an `applied_backfills` marker. On production that backfill
+  // ran (2026-09-21) against a library the seed had already handed to the admin, so every
+  // exercise there is flagged and nothing here changes it. On a database created FRESH the
+  // backfill cannot work, and the build command is why: `db:reconcile && db:seed &&
+  // db:reconcile` runs it against an EMPTY table, writes the marker anyway, and the second
+  // reconcile then skips -- so every exercise the seed goes on to create is false, for good.
+  // Measured on a throwaway database: 410 exercises, 0 flagged, while 9 of 9 seeded classes
+  // ARE flagged, because createClassWithStructure takes the flag as an argument. Every athlete
+  // on such an environment gets no percentile and the card reads "not enough athletes yet",
+  // which is indistinguishable from the real thin-cohort state the platform launched in.
+  //
+  // SCOPED BY NAME AND BY OWNER, never "everything the library owner owns". The admin account
+  // also holds exercises a person created by hand, and those are deliberately false until an
+  // admin flips them -- flagging one is exactly the "silently enrol an admin's own personal
+  // exercise into the standards every athlete is measured against" hazard that shared/schema.ts
+  // argues the explicit column exists to prevent. A name the seed does not ship cannot be
+  // touched here.
+  //
+  // Idempotent, and reports what it CHANGED rather than what matches: the `isForgeOfficial`
+  // false test means a second run finds nothing and logs nothing, so the line in the deploy log
+  // appears on the run that fixes an environment and never again.
+  async markSeededExercisesForgeOfficial(ownerId: number, names: string[]) {
+    if (names.length === 0) return 0;
+    const rows = await db
+      .update(exercises)
+      .set({ isForgeOfficial: true })
+      .where(
+        and(
+          eq(exercises.coachId, ownerId),
+          eq(exercises.isForgeOfficial, false),
+          inArray(exercises.name, names),
+        ),
+      )
+      .returning({ id: exercises.id });
+    return rows.length;
+  },
+
   // One-off migration helper: hand an existing exercise library over to a
   // different owner (e.g. promoting a coach's library to the admin's
   // official Forge library). Idempotent -- re-running finds nothing left
