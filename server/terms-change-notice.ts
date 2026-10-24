@@ -66,8 +66,12 @@ export async function notifyGuardiansOfTermsChange(): Promise<{
       .where(eq(users.id, guardianId))
       .limit(1);
     if (!guardian?.email) continue;
+    let sent = false;
     try {
-      await sendEmail({
+      // sendEmail does not throw on a failed send -- it returns { sent: false } -- so the
+      // try/catch alone counted every failure as delivered and marked the athletes, and the
+      // notice was never retried (2026-10-24 audit). Both shapes of failure leave them unmarked.
+      const result = await sendEmail({
         to: guardian.email,
         subject: "Forge's terms have changed, please review",
         brandForUserId: guardianId,
@@ -76,12 +80,15 @@ export async function notifyGuardiansOfTermsChange(): Promise<{
           athletes.map((a) => a.athleteName),
         ),
       });
-      guardiansEmailed += 1;
+      sent = result.sent;
     } catch {
-      // Deliberately swallowed and NOT marked: the athletes below stay unmarked only when the
-      // send threw, so the next deploy tries again.
+      sent = false;
+    }
+    if (!sent) {
+      // NOT marked: the next deploy tries again.
       continue;
     }
+    guardiansEmailed += 1;
     marked.push(...athletes.map((a) => a.athleteId));
   }
 

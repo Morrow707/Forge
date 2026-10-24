@@ -38,6 +38,7 @@ import { DeleteAccountDialog } from "@/components/delete-account-dialog";
 import { ReportProblemDialog } from "@/components/report-problem-dialog";
 import { localIsoDate } from "@/lib/local-date";
 import { ReadFailed } from "@/components/read-failed";
+import { PasswordInput } from "@/components/ui/password-input";
 
 type GuardianAthlete = {
   id: number;
@@ -472,6 +473,15 @@ export default function GuardianDashboardPage() {
                     </Button>
                   </CardContent>
                 </Card>
+
+                <GuardianWithdrawCard
+                  athleteId={athlete.id}
+                  athleteName={athlete.name}
+                  onAthleteGone={() => {
+                    setActiveId(null);
+                    qc.invalidateQueries({ queryKey: ["/api/guardian/athletes"] });
+                  }}
+                />
 
                 <Card>
                   <CardHeader>
@@ -1290,6 +1300,133 @@ function GuardianParentalVerificationCard({
             <Button type="button" disabled={start.isPending} onClick={() => start.mutate()}>
               {start.isPending ? "Opening…" : `Verify with a card (${dollars}, refunded)`}
             </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** THE TWO THINGS THE NOTICE TO PARENT OR GUARDIAN PROMISES IN SECTION 7 AND NOTHING ON THIS
+ * PAGE OFFERED UNTIL 2026-10-24. Withdrawing consent (the server route existed with no button:
+ * every consent this guardian gave is marked withdrawn, every video of the child is deleted,
+ * research participation ends, and the guardian link is removed) and deleting the child's
+ * account outright. The only "Delete account" here deleted the GUARDIAN's own account and left
+ * the child's data in place. Both take the child's name typed back; deletion takes the guardian's
+ * password too, as the holder's own deletion does. */
+function GuardianWithdrawCard({
+  athleteId,
+  athleteName,
+  onAthleteGone,
+}: {
+  athleteId: number;
+  athleteName: string;
+  onAthleteGone: () => void;
+}) {
+  const [mode, setMode] = useState<"idle" | "withdraw" | "delete">("idle");
+  const [confirmName, setConfirmName] = useState("");
+  const [password, setPassword] = useState("");
+  const nameMatches = confirmName.trim().toLowerCase() === athleteName.trim().toLowerCase();
+
+  const withdraw = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/guardian/athletes/${athleteId}/withdraw-consent`, {
+        confirmAthleteName: confirmName,
+      });
+      return (await res.json()) as { videosPurged: number };
+    },
+    onSuccess: (r) => {
+      toast.success(`Consent withdrawn. ${r.videosPurged} video${r.videosPurged === 1 ? "" : "s"} deleted.`);
+      onAthleteGone();
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't withdraw consent"),
+  });
+  const remove = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/guardian/athletes/${athleteId}/delete-account`, {
+        confirmAthleteName: confirmName,
+        password,
+      });
+    },
+    onSuccess: () => {
+      toast.success(`${athleteName}'s account and everything it held are deleted.`);
+      onAthleteGone();
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't delete the account"),
+  });
+  const busy = withdraw.isPending || remove.isPending;
+
+  return (
+    <Card className="border-destructive/40" data-testid="guardian-withdraw-card">
+      <CardHeader>
+        <CardTitle className="text-base">Withdraw consent or delete the account</CardTitle>
+        <CardDescription>
+          Withdrawing consent marks everything you agreed to as withdrawn, deletes every video of{" "}
+          {athleteName}, ends any research participation, and removes your link to the account.
+          Deleting the account removes the account itself and everything it holds. Neither can be
+          undone.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {mode === "idle" ? (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => setMode("withdraw")}>
+              Withdraw consent
+            </Button>
+            <Button variant="destructive" size="sm" className="gap-1.5" onClick={() => setMode("delete")}>
+              <Trash2 className="h-4 w-4" />
+              Delete {athleteName}'s account
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-1.5">
+              <Label htmlFor="guardian-confirm-name">Type {athleteName}'s name to confirm</Label>
+              <Input
+                id="guardian-confirm-name"
+                value={confirmName}
+                onChange={(e) => setConfirmName(e.target.value)}
+                placeholder={athleteName}
+                autoComplete="off"
+              />
+            </div>
+            {mode === "delete" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="guardian-confirm-password">Your password</Label>
+                <PasswordInput
+                  id="guardian-confirm-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={busy || !nameMatches || (mode === "delete" && !password)}
+                onClick={() => (mode === "delete" ? remove.mutate() : withdraw.mutate())}
+              >
+                {busy
+                  ? "Working…"
+                  : mode === "delete"
+                    ? `Delete ${athleteName}'s account`
+                    : "Withdraw consent and delete videos"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  setMode("idle");
+                  setConfirmName("");
+                  setPassword("");
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
           </>
         )}
       </CardContent>

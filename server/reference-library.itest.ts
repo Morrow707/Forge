@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { resetDatabase, db, makeUploadedFile } from "./test-support/fixtures";
+import { storage } from "./storage";
 import { referenceClips } from "@shared/schema";
 import { UPLOADS_ROOT, deleteUploadedFile } from "./uploaded-files";
 import {
@@ -54,8 +55,17 @@ describe("the coach's reference library", () => {
 
   const abs = (url: string) => join(UPLOADS_ROOT, url.replace("/uploads/", ""));
 
+  /** A clip that is the ATHLETE's: on disk and in the upload ledger under their id. Since
+   * 2026-10-24 the copy route refuses a path that is not the named athlete's footage, so a bare
+   * file nobody uploaded is exactly the thing it must turn down. */
+  async function athleteClip(name: string) {
+    const url = await makeUploadedFile(name);
+    await storage.recordUploadedFile(url, athleteId);
+    return url;
+  }
+
   it("copies the file, so the reference outlives the athlete's clip", async () => {
-    const athleteClipUrl = await makeUploadedFile("athlete-squat.mp4");
+    const athleteClipUrl = await athleteClip("athlete-squat.mp4");
     expect(existsSync(abs(athleteClipUrl))).toBe(true);
 
     const res = await coachClient.post("/api/coach/reference-clips/from-athlete", {
@@ -94,12 +104,22 @@ describe("the coach's reference library", () => {
   });
 
   it("refuses a clip path that does not exist", async () => {
-    const res = await coachClient.post("/api/coach/reference-clips/from-athlete", {
+    // Nobody's path: refused as not this athlete's BEFORE the disk is consulted, so a coach
+    // cannot learn whether a filename exists by asking to copy it.
+    const nobodys = await coachClient.post("/api/coach/reference-clips/from-athlete", {
       athleteId,
       videoUrl: "/uploads/form-videos/nope.mp4",
       title: "Ghost",
     });
-    expect(res.status).toBe(404);
+    expect(nobodys.status).toBe(403);
+    // The athlete's own path with no file behind it is the honest 404.
+    await storage.recordUploadedFile("/uploads/form-videos/gone.mp4", athleteId);
+    const gone = await coachClient.post("/api/coach/reference-clips/from-athlete", {
+      athleteId,
+      videoUrl: "/uploads/form-videos/gone.mp4",
+      title: "Ghost",
+    });
+    expect(gone.status).toBe(404);
   });
 
   it("refuses a path that tries to escape the uploads root", async () => {
@@ -114,7 +134,7 @@ describe("the coach's reference library", () => {
   });
 
   it("does not show one coach another coach's library", async () => {
-    const clip = await makeUploadedFile("mine.mp4");
+    const clip = await athleteClip("mine.mp4");
     await coachClient.post("/api/coach/reference-clips/from-athlete", {
       athleteId,
       videoUrl: clip,
@@ -125,7 +145,7 @@ describe("the coach's reference library", () => {
   });
 
   it("deletes the copy with the row, and only for its owner", async () => {
-    const clip = await makeUploadedFile("to-delete.mp4");
+    const clip = await athleteClip("to-delete.mp4");
     const created = await coachClient.post("/api/coach/reference-clips/from-athlete", {
       athleteId,
       videoUrl: clip,

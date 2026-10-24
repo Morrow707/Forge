@@ -122,7 +122,7 @@ export function TeamChallengesSection({
                 <div className="mt-2 space-y-0.5">
                   {c.progress.perAthlete.map((a) => (
                     <div
-                      key={a.athleteId}
+                      key={a.athleteId ?? a.name}
                       className="flex items-center justify-between text-[11px] text-muted-foreground"
                     >
                       <span className="truncate">{a.name}</span>

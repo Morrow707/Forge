@@ -90,6 +90,10 @@ describe("video review, end to end, as a coach and their athlete", () => {
   }
 
   let clipUrl = "";
+  /** The ATHLETE's clip, attached to their set in case 2. The self-review and the reference copy
+   * are about the athlete's footage, and since 2026-10-24 both refuse a clip that is not the
+   * athlete's -- `clipUrl` above is the coach's own unattached upload. */
+  let athleteClipUrl = "";
   let setId = 0;
   let reviewId = 0;
   let shareUrl = "";
@@ -140,6 +144,7 @@ describe("video review, end to end, as a coach and their athlete", () => {
     const mine = clips.body as { id: number; videoUrl: string; exerciseName: string }[];
     expect(mine.length).toBeGreaterThan(0);
     setId = mine[0].id;
+    athleteClipUrl = mine[0].videoUrl.split("?")[0];
     expect(mine[0].exerciseName).toBe("Back Squat");
     expect(mine[0].videoUrl).toBeTruthy();
   });
@@ -313,9 +318,15 @@ describe("video review, end to end, as a coach and their athlete", () => {
   });
 
   it("11. the athlete reviews their own lift and sends it back", async () => {
-    const self = await athlete.post("/api/athlete/self-reviews", {
+    // Somebody else's clip (the coach's unattached upload) is refused; their own is taken.
+    const notMine = await athlete.post("/api/athlete/self-reviews", {
       title: "My squat",
       leftClip: { videoUrl: clipUrl.split("?")[0], source: "set", label: "Back Squat", setId },
+    });
+    expect(notMine.status).toBe(400);
+    const self = await athlete.post("/api/athlete/self-reviews", {
+      title: "My squat",
+      leftClip: { videoUrl: athleteClipUrl, source: "set", label: "Back Squat", setId },
     });
     expect(self.status).toBe(201);
 
@@ -380,9 +391,20 @@ describe("video review, end to end, as a coach and their athlete", () => {
   });
 
   it("13. the reference library takes a clip and keeps its own copy", async () => {
-    const saved = await coach.post("/api/coach/reference-clips/from-athlete", {
+    // The coach's own unattached upload is not this athlete's footage; the athlete's own upload
+    // is. (12b purged the set clip's FILE above, so this is a fresh upload of the athlete's.)
+    const notTheirs = await coach.post("/api/coach/reference-clips/from-athlete", {
       athleteId,
       videoUrl: clipUrl.split("?")[0],
+      title: "Model squat",
+      movement: "Back Squat",
+    });
+    expect(notTheirs.status).toBe(403);
+    const fresh = await uploadFormVideo(athlete);
+    const freshUrl = (fresh.body!.url as string).split("?")[0];
+    const saved = await coach.post("/api/coach/reference-clips/from-athlete", {
+      athleteId,
+      videoUrl: freshUrl,
       title: "Model squat",
       movement: "Back Squat",
     });
@@ -395,7 +417,7 @@ describe("video review, end to end, as a coach and their athlete", () => {
     // A COPY, not a pointer: the reference must survive the athlete's retention purge, and
     // must not keep their footage alive after they have asked for it to go.
     const ref = (list.body as { videoUrl: string }[])[0];
-    expect(ref.videoUrl.split("?")[0]).not.toBe(clipUrl.split("?")[0]);
+    expect(ref.videoUrl.split("?")[0]).not.toBe(freshUrl);
     expect(existsSync(join(UPLOADS_ROOT, ref.videoUrl.split("?")[0].replace("/uploads/", "")))).toBe(true);
   });
 });

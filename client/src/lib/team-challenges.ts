@@ -12,7 +12,9 @@ export type TeamChallenge = {
   progress: {
     teamTotal: number;
     target: number | null;
-    perAthlete: { athleteId: number; name: string; contribution: number }[];
+    // athleteId is on the COACH's board only. The athlete's Squad Quests card gets teammates as
+    // the leaderboard shows them -- first name, last initial, no id (see the route's comment).
+    perAthlete: { athleteId?: number; name: string; contribution: number; isYou?: boolean }[];
   };
 };
 

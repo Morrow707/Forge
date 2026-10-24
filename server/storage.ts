@@ -778,7 +778,7 @@ async function guardCohortDifferencing(
  * onboarding rather than anything here. It removes what they can walk away
  * with.
  */
-function leaderboardDisplayName(fullName: string | null | undefined): string {
+export function leaderboardDisplayName(fullName: string | null | undefined): string {
   const parts = String(fullName ?? "").trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "Athlete";
   if (parts.length === 1) return parts[0];
@@ -798,6 +798,49 @@ function projectLeaderboardForAthlete<T extends { id: number; name: string }>(
 }
 
 const LEADERBOARD_MAX_ROWS = 100;
+
+/**
+ * The athlete as the coach's assignment lists carry them. `with: { athlete: true }` pulls the
+ * whole users row, and stripping passwordHash alone left the coach holding the athlete's
+ * calendarToken (an unauthenticated feed that never rotates), mfaBackupCodeHashes, the
+ * encrypted mfaSecret, researchSubjectId, agreedToTermsText, phone and bodyModel -- for every
+ * athlete on the roster, and (before athleteIsInCoachScope read the roster) every athlete who
+ * had ever been on it. These are the fields the coach screens read; a field added to a screen is
+ * added here, which is the point of a list: a secret cannot ride along by default.
+ */
+const ASSIGNMENT_ATHLETE_FIELDS = [
+  "id",
+  "name",
+  "email",
+  "age",
+  "gender",
+  "sport",
+  "position",
+  "seasonPhase",
+  "healthStatus",
+  "heightIn",
+  "bodyWeightLbs",
+  "trackingOptOut",
+  "trainingStylePreference",
+  "fortyYardDash",
+  "verticalJumpIn",
+  "broadJumpIn",
+  "proAgilitySeconds",
+  "threeConeSeconds",
+  "benchMaxLbs",
+  "squatMaxLbs",
+  "deadliftMaxLbs",
+  "lastActivityAt",
+  "createdAt",
+] as const satisfies readonly (keyof typeof users.$inferSelect)[];
+
+export type AssignmentAthlete = Pick<typeof users.$inferSelect, (typeof ASSIGNMENT_ATHLETE_FIELDS)[number]>;
+
+export function projectAssignmentAthlete(row: typeof users.$inferSelect): AssignmentAthlete {
+  const out: Partial<AssignmentAthlete> = {};
+  for (const key of ASSIGNMENT_ATHLETE_FIELDS) (out as any)[key] = row[key];
+  return out as AssignmentAthlete;
+}
 
 function jointLabelFor(jointKey: string): string {
   return GONIOMETER_JOINTS.find((j) => j.key === jointKey)?.label ?? jointKey;
@@ -4957,12 +5000,20 @@ export const storage = {
   /** The deletion itself, with no password check: every file the account owns, the research
    * retention decision, then the row and everything that cascades from it. deleteOwnAccount is
    * this behind the account holder's own password; the seed's removal of the retired demo
-   * accounts (server/seed.ts, removeSeededDemoAccounts) is this with no holder to ask. Nothing
-   * else may call it -- an admin route that deletes somebody's account is a decision this repo
-   * has not made. */
+   * accounts (server/seed.ts, removeSeededDemoAccounts) is this with no holder to ask; and
+   * deleteLinkedAthleteAccount is this behind a GUARDIAN's password for the child they are linked
+   * to, which the Notice to Parent or Guardian (section 7) and the privacy policy (section 9)
+   * both promise. Nothing else may call it -- an admin route that deletes somebody's account is
+   * a decision this repo has not made. */
   async deleteUserRecord(userId: number): Promise<void> {
     const user = await this.getUser(userId);
     if (!user) return;
+
+    // Copies of this person's footage held in OTHER people's tables -- a coach's reference clip
+    // copied from their set, a review export burned in from it -- go first, while
+    // reference_clips.source_athlete_id still points at them (it is SET NULL on delete, which is
+    // exactly how these outlived every deletion until 2026-10-24).
+    await this.purgeDerivedFootageForAthlete(userId);
 
     // THE TWO BRANCHES BELOW WERE EXCLUSIVE AND A COACH WHO FILMS IS BOTH (fixed 2026-10-22).
     // Only an athlete's own training files were cleaned up here, and `cameraAccessFor` grants
@@ -6881,6 +6932,66 @@ export const storage = {
     return row?.uploadedBy ?? null;
   },
 
+  /** Is this gated clip THIS athlete's footage: uploaded by them, or attached to one of their
+   * sets or skill sessions (a coach may have uploaded a clip of the athlete and attached it).
+   * A non-gated path is nobody's to protect and answers true. */
+  async clipBelongsToAthlete(path: string, athleteId: number): Promise<boolean> {
+    const pathname = path.split("?")[0];
+    if (!isGatedUploadPath(pathname)) return true;
+    if ((await this.getUploadedFileOwnerId(pathname)) === athleteId) return true;
+    const [set] = await db
+      .select({ id: workoutSetEntries.id })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .where(and(eq(workoutLogs.athleteId, athleteId), eq(workoutSetEntries.formCheckVideoUrl, pathname)))
+      .limit(1);
+    if (set) return true;
+    const [skill] = await db
+      .select({ id: skillSessionLogs.id })
+      .from(skillSessionLogs)
+      .where(and(eq(skillSessionLogs.athleteId, athleteId), eq(skillSessionLogs.videoUrl, pathname)))
+      .limit(1);
+    return !!skill;
+  },
+
+  /** The clips a video review may hold. A gated path has to be the footage of one of
+   * `athleteIds` (clipBelongsToAthlete), an upload by one of `uploaderIds` (the coach's own
+   * clip), or -- for a `reference` clip, which copyUploadedFile writes with no ledger row -- a
+   * reference_clips row owned by one of `referenceCoachIds`. Anything else is the
+   * ForbiddenReferenceError assertUploadedFileOwnedBy throws, so the route answers the same way. */
+  async assertReviewClipsReferenceable(
+    clips: unknown[],
+    allowed: { athleteIds: number[]; uploaderIds: number[]; referenceCoachIds: number[] },
+  ): Promise<void> {
+    for (const clip of clips) {
+      if (!clip || typeof clip !== "object") continue;
+      const { videoUrl, source } = clip as { videoUrl?: unknown; source?: unknown };
+      if (typeof videoUrl !== "string") continue;
+      const pathname = videoUrl.split("?")[0];
+      if (!isGatedUploadPath(pathname)) continue;
+      if (source === "reference") {
+        const [row] = await db
+          .select({ coachId: referenceClips.coachId })
+          .from(referenceClips)
+          .where(eq(referenceClips.videoUrl, pathname));
+        if (row && allowed.referenceCoachIds.includes(row.coachId)) continue;
+        throw new ForbiddenReferenceError("That file isn't available to reference here.");
+      }
+      const owner = await this.getUploadedFileOwnerId(pathname);
+      if (owner !== null && allowed.uploaderIds.includes(owner)) continue;
+      let belongs = false;
+      for (const athleteId of allowed.athleteIds) {
+        if (await this.clipBelongsToAthlete(pathname, athleteId)) {
+          belongs = true;
+          break;
+        }
+      }
+      if (belongs) continue;
+      throw new ForbiddenReferenceError("That file isn't available to reference here.");
+    }
+  },
+
   // Resolves the full set of coach ids that should see identical data --
   // this coach's own id, plus every other coach sharing the same staff (see
   // coachStaff in shared/schema.ts, and the "Coaching staff" section below).
@@ -7002,7 +7113,36 @@ export const storage = {
    * keeps "the first assignment is what turns narrowing on" true. Both ride the per-request
    * memo getCoachTeamScope already has, so adding them to a query costs no round trip.
    */
+  /** The athletes currently on this coach's staff roster (coach_athletes across the staff),
+   * before any team narrowing. Memoised per request like the scope it sits beside. */
+  async getStaffRosterAthleteIds(coachId: number): Promise<number[]> {
+    return requestMemo(`staffRosterIds:${coachId}`, async () => {
+      const coachIds = await this.getEffectiveCoachIds(coachId);
+      const rows = await db
+        .select({ athleteId: coachAthletes.athleteId })
+        .from(coachAthletes)
+        .where(inArray(coachAthletes.coachId, coachIds));
+      return Array.from(new Set(rows.map((r) => r.athleteId)));
+    });
+  },
+
+  /* A CURRENT ROSTER SEAT IS PART OF BEING IN SCOPE (2026-10-24 audit).
+   *
+   * Until this date both helpers answered from TEAM scope alone, and a primary or solo coach
+   * (scope null) was in scope for everybody. Every read keyed on `assignments.coachId` then
+   * kept answering for an athlete who had LEFT the roster: removeAthleteFromCoach deletes the
+   * coach_athletes and team_members rows and never the assignments (it cannot -- workout_logs
+   * cascade from them, so deleting an assignment deletes the athlete's training history), so a
+   * removed coach, or an assistant who left the staff, went on reading the former athlete's
+   * assignments, analytics, leaderboard rows, recent PRs and calendar, and could still post on
+   * their day. The roster is the relationship; the assignment is a record of one that existed.
+   *
+   * The coach's own id is always in scope: a coach who films their own training holds an
+   * assignments row with coachId === athleteId and sits on no roster. */
   async athleteIsInCoachScope(coachId: number, athleteId: number): Promise<boolean> {
+    if (athleteId === coachId) return true;
+    const roster = await this.getStaffRosterAthleteIds(coachId);
+    if (!roster.includes(athleteId)) return false;
     const scope = await this.getCoachTeamScope(coachId);
     if (scope === null) return true;
     const allowed = await this.getScopedRosterAthleteIds(scope);
@@ -7010,10 +7150,15 @@ export const storage = {
   },
 
   /** The athlete ids a narrowed coach may see, or null when they may see every one. */
-  async athleteIdsInCoachScope(coachId: number): Promise<number[] | null> {
+  /** Every athlete id this coach may read: the current staff roster, narrowed to their teams
+   * when they are assigned to any, plus their own id (see athleteIsInCoachScope). Never null
+   * since 2026-10-24 -- "no filter" was how a former athlete stayed readable. */
+  async athleteIdsInCoachScope(coachId: number): Promise<number[]> {
+    const roster = await this.getStaffRosterAthleteIds(coachId);
     const scope = await this.getCoachTeamScope(coachId);
-    if (scope === null) return null;
-    return this.getScopedRosterAthleteIds(scope);
+    const narrowed =
+      scope === null ? roster : (await this.getScopedRosterAthleteIds(scope)).filter((id) => roster.includes(id));
+    return Array.from(new Set([...narrowed, coachId]));
   },
 
   async getAdmins() {
@@ -7818,9 +7963,24 @@ export const storage = {
     };
   },
 
-  async setTrackingOptOut(coachId: number, athleteId: number, trackingOptOut: boolean) {
+  async setTrackingOptOut(
+    coachId: number,
+    athleteId: number,
+    trackingOptOut: boolean,
+  ): Promise<{ id: number; trackingOptOut: boolean } | null | "guardian_only"> {
     const onRoster = await this.getRosterAthleteForCoach(coachId, athleteId);
     if (!onRoster) return null;
+    // The Notice to Parent or Guardian, section 4: for a child under 13 "nothing is measured
+    // from video until you turn it on yourself". A coach may turn tracking OFF for anyone -- that
+    // only ever withholds -- and may not turn it ON for an under-13; that is the guardian's
+    // switch (setTrackingOptOutForGuardian). Found by the 2026-10-24 audit.
+    if (
+      !trackingOptOut &&
+      onRoster.dateOfBirth &&
+      derivePrivacyTier(onRoster.dateOfBirth) === "tier1_under13"
+    ) {
+      return "guardian_only";
+    }
     const [updated] = await db
       .update(users)
       .set({ trackingOptOut })
@@ -9791,6 +9951,8 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       .where(
         and(
           inArray(assignments.coachId, coachIds),
+          // Current roster only -- see athleteIsInCoachScope.
+          inArray(assignments.athleteId, await this.athleteIdsInCoachScope(coachId)),
           eq(workoutSetEntries.isPr, true),
           gte(workoutLogs.date, windowStart),
         ),
@@ -11452,7 +11614,12 @@ Hard rules, no exceptions:
       .where(
         and(inArray(coachAthletes.coachId, coachIds), inArray(coachAthletes.athleteId, athleteIds)),
       );
-    const validIds = onRoster.map((r) => r.athleteId);
+    // The single-athlete add resolves through getRosterAthleteForCoach and so is team-narrowed;
+    // this one checked the staff-wide join alone, so a coach assigned to one team could create a
+    // team of their own (getCoachTeamScope counts owned teams) and bulk-add the whole staff
+    // roster onto it -- every athlete then in scope. Found by the 2026-10-24 audit.
+    const inScope = await this.athleteIdsInCoachScope(coachId);
+    const validIds = onRoster.map((r) => r.athleteId).filter((id) => inScope.includes(id));
     if (validIds.length === 0) return { added: 0, skippedNotOnRoster: athleteIds.length };
     const inserted = await db
       .insert(teamMembers)
@@ -12917,15 +13084,13 @@ Hard rules, no exceptions:
 
   async getSkillAssignmentsForCoach(coachId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
+    const allowed = await this.athleteIdsInCoachScope(coachId);
     const rows = await db.query.skillAssignments.findMany({
-      where: inArray(skillAssignments.coachId, coachIds),
+      where: and(inArray(skillAssignments.coachId, coachIds), inArray(skillAssignments.athleteId, allowed)),
       with: { program: true, athlete: true },
       orderBy: desc(skillAssignments.createdAt),
     });
-    return rows.map((a) => {
-      const { passwordHash, ...athlete } = a.athlete;
-      return { ...a, athlete };
-    });
+    return rows.map((a) => ({ ...a, athlete: projectAssignmentAthlete(a.athlete) }));
   },
 
   // ---------- Skill session logs (camera-tracked skill sessions) ----------
@@ -20608,18 +20773,25 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
 
   async getAssignmentForCoach(coachId: number, assignmentId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
-    return db.query.assignments.findFirst({
+    const row = await db.query.assignments.findFirst({
       where: and(eq(assignments.id, assignmentId), inArray(assignments.coachId, coachIds)),
     });
+    // Ownership of the row is not the relationship -- see athleteIsInCoachScope. Without this a
+    // removed coach kept writing correctives and day comments on a former athlete's program and
+    // notifying them.
+    if (row && !(await this.athleteIsInCoachScope(coachId, row.athleteId))) return undefined;
+    return row;
   },
 
   // Exact mirror of getAssignmentForCoach for the skill side, used by the
   // coach's skill-day comment routes.
   async getSkillAssignmentForCoach(coachId: number, skillAssignmentId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
-    return db.query.skillAssignments.findFirst({
+    const row = await db.query.skillAssignments.findFirst({
       where: and(eq(skillAssignments.id, skillAssignmentId), inArray(skillAssignments.coachId, coachIds)),
     });
+    if (row && !(await this.athleteIsInCoachScope(coachId, row.athleteId))) return undefined;
+    return row;
   },
 
   async updateAssignment(assignmentId: number, input: UpdateAssignmentInput) {
@@ -20636,17 +20808,13 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
 
   async getAssignmentsForCoach(coachId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
+    const allowed = await this.athleteIdsInCoachScope(coachId);
     const rows = await db.query.assignments.findMany({
-      where: inArray(assignments.coachId, coachIds),
+      where: and(inArray(assignments.coachId, coachIds), inArray(assignments.athleteId, allowed)),
       with: { program: true, athlete: true },
       orderBy: desc(assignments.createdAt),
     });
-    // `with: { athlete: true }` pulls the full user row -- strip
-    // passwordHash before this reaches a response.
-    return rows.map((a) => {
-      const { passwordHash, ...athlete } = a.athlete;
-      return { ...a, athlete };
-    });
+    return rows.map((a) => ({ ...a, athlete: projectAssignmentAthlete(a.athlete) }));
   },
 
   async getAssignmentFull(id: number) {
@@ -22159,7 +22327,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     // below), and they are not a member of any team, so narrowing without this would hide a
     // narrowed staff coach's OWN calendar from them.
     const scopeIds = await this.athleteIdsInCoachScope(coachId);
-    const allowedAthleteIds = scopeIds === null ? null : Array.from(new Set([...scopeIds, coachId]));
+    const allowedAthleteIds: number[] | null = Array.from(new Set([...scopeIds, coachId]));
     if (allowedAthleteIds !== null && athleteId && !allowedAthleteIds.includes(athleteId)) {
       return [];
     }
@@ -24300,6 +24468,16 @@ ${catalog}`;
       const athlete = await this.getRosterAthleteForCoach(coachId, input.athleteId);
       if (!athlete) return null;
     }
+    // And every clip on it has to be footage this coach may reference: the named athlete's own
+    // upload (or the coach's own, for a coach who films), or a reference clip in the staff's
+    // library. A review stored any /uploads path it was handed, and the read handed it back
+    // signed, which turned a remembered filename into a playable link (2026-10-24 audit).
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    await this.assertReviewClipsReferenceable([input.leftClip, input.rightClip], {
+      athleteIds: input.athleteId != null ? [input.athleteId] : [],
+      uploaderIds: [coachId, ...coachIds],
+      referenceCoachIds: coachIds,
+    });
     const [row] = await db
       .insert(videoReviews)
       .values({
@@ -24958,6 +25136,13 @@ ${catalog}`;
     },
   ) {
     const coaches = await this.getCoachesForAthlete(athleteId);
+    // Same rule as createVideoReview: the athlete's own uploads, or a reference clip from one of
+    // their coaches' libraries.
+    await this.assertReviewClipsReferenceable([input.leftClip, input.rightClip], {
+      athleteIds: [athleteId],
+      uploaderIds: [athleteId],
+      referenceCoachIds: coaches.map((c) => c.id),
+    });
     const [row] = await db
       .insert(videoReviews)
       .values({
@@ -25936,7 +26121,19 @@ ${catalog}`;
       // exists. Three silent drops have already been found in the sibling query.
       .leftJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
       .leftJoin(programExercises, eq(workoutLogEntries.programExerciseId, programExercises.id))
-      .where(isNotNull(workoutSetEntries.formCheckVideoUrl))
+      .innerJoin(users, eq(workoutLogs.athleteId, users.id))
+      // An admin watching footage to label a detector is a research use of the clip, and the
+      // footage identifies the person whatever the label on the row says. So: research consent
+      // on file, tracking not opted out, and an adult -- a minor's clip never reaches this list,
+      // whatever their guardian relayed (2026-10-24 audit).
+      .where(
+        and(
+          isNotNull(workoutSetEntries.formCheckVideoUrl),
+          eq(users.researchDataConsent, true),
+          eq(users.trackingOptOut, false),
+          sql`${users.dateOfBirth} IS NOT NULL AND ${users.dateOfBirth} <= (current_date - interval '18 years')`,
+        ),
+      )
       .orderBy(desc(workoutSetEntries.videoUploadedAt))
       .limit(limit);
   },
@@ -28466,7 +28663,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
      * the athlete-facing view reads, and an athlete's board is bounded by their own coach's
      * roster, not by a staff assignment they have nothing to do with. */
     const allowed = await this.athleteIdsInCoachScope(coachId);
-    const scoped = allowed === null ? full : full.filter((r) => allowed.includes(r.id));
+    const scoped = full.filter((r) => allowed.includes(r.id));
     return scoped.slice(0, LEADERBOARD_MAX_ROWS);
   },
 
@@ -28588,7 +28785,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     const full = await this.getFullSpeedLeaderboardForExercise(coachId, skillExerciseId, distanceYards);
     // Team narrowing, before the cap, for the same reasons as the strength board above.
     const allowed = await this.athleteIdsInCoachScope(coachId);
-    const scoped = allowed === null ? full : full.filter((r) => allowed.includes(r.id));
+    const scoped = full.filter((r) => allowed.includes(r.id));
     return scoped.slice(0, LEADERBOARD_MAX_ROWS);
   },
 
@@ -31098,11 +31295,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     const actor = await this.getUser(actorId);
     if (!actor) return false;
     if (actor.role === "coach") {
-      const coachIds = await this.getEffectiveCoachIds(actorId);
-      const link = await db.query.coachAthletes.findFirst({
-        where: and(inArray(coachAthletes.coachId, coachIds), eq(coachAthletes.athleteId, athleteId)),
-      });
-      if (link) return true;
+      // Roster AND team scope: a narrowed staff coach could list and upload an off-team
+      // athlete's medical clearances through the staff-wide join alone (2026-10-24 audit).
+      if (await this.athleteIsInCoachScope(actorId, athleteId)) return true;
     }
     const guardianLink = await db.query.guardianLinks.findFirst({
       where: and(
@@ -32064,6 +32259,91 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
    * an athlete who has independently chosen to keep tracking off should not have that reversed by
    * agreeing to a release.
    */
+  /** An adult athlete turning camera tracking off in their own account, which the release text
+   * (biometric-release.ts section 7) defines as withdrawing the Video and Biometric Consent.
+   * Writes the WITHDRAWN biometric_waiver row hasBiometricConsent reads, sets trackingOptOut, and
+   * removes the research subject -- the same three things the guardian's switch does for a minor.
+   * A minor is refused: their guardian holds this switch. */
+  async withdrawOwnTracking(
+    athleteId: number,
+    context?: { ipAddress?: string; userAgent?: string },
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const athlete = await this.getUser(athleteId);
+    if (!athlete || athlete.role !== "athlete") return { ok: false, error: "Not found." };
+    if (!athlete.dateOfBirth || derivePrivacyTier(athlete.dateOfBirth) !== "tier3_adult_18plus") {
+      return { ok: false, error: "A parent or guardian turns camera tracking off for an athlete under 18." };
+    }
+    const release = await this.getLegalDocument("biometric_waiver");
+    await this.logConsentRecord({
+      userId: athleteId,
+      consentType: "biometric_waiver",
+      documentText:
+        `WITHDRAWN ${new Date().toISOString()}\n\nThe athlete turned camera tracking off in their ` +
+        `account, which withdraws the consent previously given under the following text:\n\n` +
+        `${release?.content ?? BIOMETRIC_DOCUMENT_NAME}`,
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+    });
+    await db.update(users).set({ trackingOptOut: true }).where(eq(users.id, athleteId));
+    await removeResearchSubject(athleteId);
+    return { ok: true };
+  },
+
+  /** A guardian deleting the account of a child they are linked to. Same ordering rule as
+   * deleteOwnAccount: the GUARDIAN's password first, then the billing callback while the child's
+   * handles still exist, then deleteUserRecord. The link itself cascades with the row. */
+  async deleteLinkedAthleteAccount(
+    guardianId: number,
+    athleteId: number,
+    guardianPassword: string,
+    onBeforeDelete?: (handles: {
+      stripeSubscriptionIds: string[];
+      appleOriginalTransactionIds: string[];
+    }) => Promise<{ cancelled: string[]; failed: string[] }>,
+  ): Promise<
+    | { ok: true; billing?: { cancelled: string[]; failed: string[]; alsoCancelInAppStore: boolean } }
+    | { error: string }
+  > {
+    const guardian = await this.getUser(guardianId);
+    if (!guardian) return { error: "Account not found." };
+    if (!(await comparePasswords(guardianPassword, guardian.passwordHash))) {
+      return { error: "Incorrect password." };
+    }
+    const link = await db.query.guardianLinks.findFirst({
+      where: and(eq(guardianLinks.guardianId, guardianId), eq(guardianLinks.athleteId, athleteId)),
+    });
+    if (!link) return { error: "No athlete linked to this account." };
+
+    let billing: { cancelled: string[]; failed: string[]; alsoCancelInAppStore: boolean } | undefined;
+    if (onBeforeDelete) {
+      const handles = await this.billingHandlesForAccount(athleteId);
+      let outcome = { cancelled: [] as string[], failed: [] as string[] };
+      try {
+        outcome = await onBeforeDelete(handles);
+      } catch (err) {
+        console.error(
+          `account ${athleteId} deletion by guardian ${guardianId}: could not cancel ${handles.stripeSubscriptionIds.join(", ")} and they need a hand:`,
+          err,
+        );
+        outcome = { cancelled: [], failed: handles.stripeSubscriptionIds };
+      }
+      billing = { ...outcome, alsoCancelInAppStore: handles.appleOriginalTransactionIds.length > 0 };
+    }
+
+    // The record that the guardian did this survives on the guardian's own row: consent_records
+    // cascade from the athlete, so it is written against the guardian.
+    await this.logConsentRecord({
+      userId: guardianId,
+      consentType: "guardian_coppa_consent",
+      documentText:
+        `WITHDRAWN ${new Date().toISOString()}\n\nThe guardian deleted the linked athlete account ` +
+        `(athlete id ${athleteId}) and every record it held, under the Notice to Parent or Guardian, section 7.`,
+      givenByUserId: guardianId,
+    });
+    await this.deleteUserRecord(athleteId);
+    return billing ? { ok: true, billing } : { ok: true };
+  },
+
   async recordBiometricRelease(
     athleteId: number,
     context?: { ipAddress?: string; userAgent?: string },
@@ -32254,8 +32534,104 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       }
     }
 
+    // THE RESEARCH CONSENT GOES WITH IT, WHOEVER GAVE IT. research-consent.ts section 5 promises
+    // "immediately removed" on withdrawal, and until 2026-10-24 this method never touched
+    // users.researchDataConsent or the mirror: the WITHDRAWN rows above were written, the
+    // flag stayed true, the nightly sync kept the child in research_subjects, and -- because the
+    // WITHDRAWN text quotes the whole consent, retention heading included --
+    // retainSubjectAfterDeletion then kept the rows past account deletion. A coach-relayed
+    // consent (givenByUserId = the coach) was not even in `toWithdraw`. setResearchDataConsent
+    // writes its own WITHDRAWN research row and removes the subject at once; when the flag is
+    // already off, the subject is removed anyway in case a sync left one behind.
+    const athleteRow = await this.getUser(input.athleteId);
+    if (athleteRow?.researchDataConsent) {
+      await this.setResearchDataConsent({
+        athleteId: input.athleteId,
+        granted: false,
+        grantedByUserId: input.guardianId,
+        ipAddress: input.ipAddress,
+        userAgent: input.userAgent,
+      });
+    } else {
+      await removeResearchSubject(input.athleteId);
+    }
+    // Footage copied out of the athlete's own tables -- reference clips a coach saved from their
+    // sets, burned-in review exports -- is the athlete's footage still (biometric-release.ts
+    // section 7), so a withdrawal takes it too.
+    videosPurged += await this.purgeDerivedFootageForAthlete(input.athleteId);
+
     await db.delete(guardianLinks).where(eq(guardianLinks.id, link.id));
     return { ok: true, videosPurged, recordsWritten };
+  },
+
+  /** Every copy of an athlete's footage that lives outside their own set, skill and comment
+   * tables: reference clips a coach copied from them (`reference_clips.source_athlete_id`) and
+   * review exports burned in from their clips (`video_review_exports.athlete_id`). Neither was
+   * reached by the minor retention purge, a guardian's withdrawal or account deletion until
+   * 2026-10-24, so a child's clip outlived every path the documents name. Returns how many
+   * files went. Best-effort per file, like every other purge here. */
+  /** The retention job's half of the same rule: a reference clip copied from a MINOR's set ages
+   * on the minor's tier window from the day it was copied, and an export link that has expired
+   * has no reason to keep its file. Returns how many files went. */
+  async purgeDerivedFootagePastRetention(): Promise<number> {
+    const clips = await db.execute<{ id: number; video_url: string }>(sql`
+      SELECT rc.id, rc.video_url
+      FROM reference_clips rc
+      JOIN users u ON u.id = rc.source_athlete_id
+      WHERE u.date_of_birth IS NOT NULL
+        AND u.date_of_birth > (current_date - interval '18 years')
+        AND (
+          (u.date_of_birth > (current_date - interval '13 years')
+            AND rc.created_at < (now() - (${TIER1_VIDEO_RETENTION_DAYS} || ' days')::interval))
+          OR
+          (u.date_of_birth <= (current_date - interval '13 years')
+            AND rc.created_at < (now() - (${TIER2_VIDEO_RETENTION_DAYS} || ' days')::interval))
+        )
+    `);
+    const expiredExports = await db
+      .select({ id: videoReviewExports.id, videoUrl: videoReviewExports.videoUrl })
+      .from(videoReviewExports)
+      .where(and(lt(videoReviewExports.expiresAt, new Date()), isNull(videoReviewExports.revokedAt)));
+    let purged = 0;
+    for (const clip of clips.rows) {
+      await deleteUploadedFile(clip.video_url).catch(() => {});
+      await db.delete(referenceClips).where(eq(referenceClips.id, clip.id));
+      purged += 1;
+    }
+    for (const row of expiredExports) {
+      await deleteUploadedFile(row.videoUrl).catch(() => {});
+      await db.update(videoReviewExports).set({ revokedAt: new Date() }).where(eq(videoReviewExports.id, row.id));
+      purged += 1;
+    }
+    return purged;
+  },
+
+  async purgeDerivedFootageForAthlete(athleteId: number): Promise<number> {
+    const clips = await db
+      .select({ id: referenceClips.id, videoUrl: referenceClips.videoUrl })
+      .from(referenceClips)
+      .where(eq(referenceClips.sourceAthleteId, athleteId));
+    const exports = await db
+      .select({ id: videoReviewExports.id, videoUrl: videoReviewExports.videoUrl })
+      .from(videoReviewExports)
+      .where(eq(videoReviewExports.athleteId, athleteId));
+    let purged = 0;
+    for (const clip of clips) {
+      await deleteUploadedFile(clip.videoUrl).catch(() => {});
+      await db.delete(referenceClips).where(eq(referenceClips.id, clip.id));
+      purged += 1;
+    }
+    for (const row of exports) {
+      await deleteUploadedFile(row.videoUrl).catch(() => {});
+      // The export row is an audit record (who exported what, when) and stays; the link is dead
+      // because the file is gone, and revokedAt says so to anyone reading the row.
+      await db
+        .update(videoReviewExports)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(videoReviewExports.id, row.id), isNull(videoReviewExports.revokedAt)));
+      purged += 1;
+    }
+    return purged;
   },
 
   async recordPaymentAsParentalVerification(input: {

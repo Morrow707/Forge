@@ -1279,6 +1279,14 @@ export function setupAuth(app: Express) {
           ),
         });
       })
+      .then((result) => {
+        // sendEmail never throws -- it answers { sent: false } -- so the catch below only ever
+        // saw a lookup failure and a failed confirmation was silent (2026-10-24 audit). This is
+        // the email-plus half of an under-13 consent, so a miss is said in the log by athlete id.
+        if (!result.sent) {
+          console.error(`guardian consent confirmation (email-plus) was not sent for athlete ${athleteId}: ${result.error ?? "unknown"}`);
+        }
+      })
       .catch((err) =>
         console.error("guardian consent confirmation (email-plus) failed to send:", err),
       );

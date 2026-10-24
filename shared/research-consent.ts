@@ -58,6 +58,10 @@ export const PRIOR_DELETION_RETENTION_HEADINGS: readonly string[] = ["IF YOU DEL
  */
 export function researchConsentDisclosesDeletionRetention(documentText: string | null | undefined) {
   if (!documentText) return false;
+  // A withdrawal row quotes the whole text it withdraws, heading included. It is a record that
+  // consent ENDED, so it discloses nothing the athlete still agrees to (2026-10-24 audit: a
+  // guardian's withdrawal left the rows retained past deletion on the strength of this quote).
+  if (documentText.startsWith("WITHDRAWN ")) return false;
   return (
     documentText.includes(DELETION_RETENTION_HEADING) ||
     PRIOR_DELETION_RETENTION_HEADINGS.some((h) => documentText.includes(h))

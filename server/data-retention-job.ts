@@ -43,8 +43,18 @@ export async function runDataRetentionJob(): Promise<Record<string, number>> {
         reportJobFailure("data-retention", err, { source: row.source, videoId: row.id });
       }
     }
-    console.log(`Data retention job: purged ${purged}/${eligible.length} eligible video(s).`);
-    return { eligible: eligible.length, purged };
+    // Copies made FROM a minor's clips -- a coach's reference clip, a burned-in review export --
+    // age on the same clock as the clip they came from, and until 2026-10-24 nothing purged them.
+    let derivedPurged = 0;
+    try {
+      derivedPurged = await storage.purgeDerivedFootagePastRetention();
+    } catch (err) {
+      reportJobFailure("data-retention", err, { stage: "derived-footage" });
+    }
+    console.log(
+      `Data retention job: purged ${purged}/${eligible.length} eligible video(s), ${derivedPurged} derived cop${derivedPurged === 1 ? "y" : "ies"}.`,
+    );
+    return { eligible: eligible.length, purged, derivedPurged };
   } catch (err) {
     reportJobFailure("data-retention", err);
     return { eligible: 0, purged: 0 };
