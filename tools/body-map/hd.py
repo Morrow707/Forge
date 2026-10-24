@@ -74,6 +74,36 @@ def smooth_labels(labn, am, sigma, min_island, close_r):
                 lab2[part] = np.bincount(vals, minlength=256).argmax() if vals.size else 0
     return lab2
 
+def symmetrize_body(am, column_frac):
+    """Mirror the torso-and-legs column of the silhouette about the figure's own vertical axis and
+    take the FULLER outline on both sides. The female back render has one hip notched and the
+    other flared, and its leg gap sits off the axis by ~20 px (Scott: "left hip indents where
+    right does not"). The arms are left alone -- a pose is never perfectly mirrored and a union
+    there would ghost a limb. The axis is the median midpoint of the body rows inside the column,
+    so a figure drawn slightly off-centre keeps its own centre line."""
+    H, W = am.shape
+    half = int(column_frac * W)
+    xs_all = np.arange(W)
+    mids = []
+    for y in range(int(H * 0.2), int(H * 0.9), 4):
+        row = am[y]
+        xs = xs_all[row]
+        if len(xs) == 0: continue
+        # restrict to the central column so a hand on the same row does not pull the midpoint
+        c0 = W / 2
+        xs = xs[np.abs(xs - c0) < half]
+        if len(xs) < 10: continue
+        mids.append((xs.min() + xs.max()) / 2)
+    if not mids: return am
+    axis = float(np.median(mids))
+    # mirror about the axis by resampling columns
+    src_x = np.clip(np.round(2 * axis - xs_all).astype(int), 0, W - 1)
+    mirrored = am[:, src_x]
+    in_col = np.abs(xs_all - axis) < half
+    out = am.copy()
+    out[:, in_col] = am[:, in_col] | mirrored[:, in_col]
+    return out
+
 def smooth_silhouette(am, sigma, open_r):
     """Body mask -> soft alpha (0..1) whose boundary is the mask's contour with a gaussian of
     `sigma` run ALONG it. A blur on the bitmap rounds a corner by a pixel or two and leaves every
@@ -112,6 +142,8 @@ for name in (REF, "female-front", "female-back", "male-back"):
     am = a_s > 0.5
     am = ndi.binary_opening(am, structure=disc(2)); am = ndi.binary_closing(am, structure=disc(2))
     am = ndi.binary_fill_holes(am) & (a_s > 0.08)
+    if kf("symmetrize", 1) > 0:
+        am = symmetrize_body(am, kf("sym_column", 0.24))
     cs = kf("contour_smooth", 9.0)
     if cs > 0:
         alpha_soft = smooth_silhouette(am, cs, int(kf("contour_open", 3)))
@@ -196,7 +228,7 @@ for name in (REF, "female-front", "female-back", "male-back"):
         # keep the shading (value) of the local blur, take the hue from the tile's skin
         lv = local.mean(2, keepdims=True); tv = max(float(tone.mean()), 1e-3)
         target = np.clip(tone[None, None, :] * (lv / tv), 0, 1)
-        target = 0.55 * target + 0.45 * local
+        target = 0.65 * target + 0.35 * local
         w = cv2.GaussianBlur(wmask, (0, 0), 2.0) * sk
         rgb_np = rgb_np * (1 - w[..., None]) + target * w[..., None]
     # --- hands and feet are PAINTED, not blended: the tile's skin tone, shaded up from the edge
@@ -245,7 +277,14 @@ for name in (REF, "female-front", "female-back", "male-back"):
     rgb_f = np.asarray(rgb).astype(np.float32) * (1.0 - float(K["striations"]) * stri)[..., None]
     dist = ndi.distance_transform_edt(am)
     es = float(K["edge_shade"]); shade = (1 - es) + es * np.clip(dist / kf("edge_shade_px", 8.0), 0, 1) ** 0.8
-    arr = np.clip(rgb_f * shade[..., None], 0, 255).astype(np.uint8)
+    rgb_f = rgb_f * shade[..., None]
+    # a final unsharp mask: the regions stay flat (the bilateral made them so) and the edges
+    # between them come back crisp -- v4 without it read "out of focus" (Scott, 2026-10-24)
+    fs = kf("final_sharpen", 0.6)
+    if fs > 0:
+        blur_f = cv2.GaussianBlur(rgb_f, (0, 0), kf("final_sharpen_sigma", 2.0))
+        rgb_f = rgb_f * (1 + fs) - blur_f * fs
+    arr = np.clip(rgb_f, 0, 255).astype(np.uint8)
     # the alpha is the smoothed contour's own anti-aliased fill, feathered a touch more
     a_f = alpha_soft * 255
     if K["feather"] > 0: a_f = cv2.GaussianBlur(a_f, (0, 0), float(K["feather"]))

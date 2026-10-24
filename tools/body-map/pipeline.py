@@ -22,7 +22,7 @@ KNOBS = {
     "stripe_min_area": 1400, # blobs smaller than this get no lines
     "edge_shade": 0.12,    # darkening at the silhouette edge (a rounded look)
     "edge_shade_px": 22.0, # how far in from the edge that shading reaches, at 2x
-    "feather": 1.2,        # alpha blur at the edge (the edge is already anti-aliased from the smoothed contour)
+    "feather": 0.8,        # alpha blur at the edge (the edge is already anti-aliased from the smoothed contour)
     # hd.py: the smoothing pass (2026-10-24)
     "outline_smooth": 2.5, # gaussian sigma on the silhouette before it is thresholded, at 2x
     "label_smooth": 4.0,   # sigma on each group's soft mask before the argmax; 0 = the old staircase
@@ -31,7 +31,7 @@ KNOBS = {
     "hand_zone": 0.08,     # fraction of the FIGURE's height above each arm's lowest point that is hand: skin, no group
     "foot_zone": 0.075,    # fraction of the figure's height, from the bottom, that is foot (ankle included)
     "flatten": 0.6,        # 0..1, how far each blob is pulled toward its own median colour
-    "flatten_blur": 3.0,   # sigma on the flat image, softens the seams between blobs
+    "flatten_blur": 1.5,   # sigma on the flat image, softens the seams between blobs
     "skin_smooth": 0.85,   # 0..1, how far ungrouped body pixels (hands, feet, tendon) go to smooth skin
     "skin_sigma": 7.0,     # how wide that skin blur is, at 2x
     "match_color": 1.0,    # 0..1, how far each tile's muscle saturation/value is matched to the male front
@@ -42,9 +42,13 @@ KNOBS = {
     "smooth_color": 30.0,  # bilateral colour sigma: how different two colours may be and still blend
     "smooth_space": 9.0,   # bilateral space sigma
     "smooth_passes": 2,    # how many times the bilateral runs
-    "smooth_gauss": 1.3,   # final gaussian over the body, at 2x (0 = off)
+    "smooth_gauss": 0.0,   # plain gaussian over the body, at 2x (0 = off; 1.3 read "out of focus")
     "extrem_round": 20.0,  # hands and feet: pixels from the edge over which the flat skin shades up to full tone
     "extrem_blend": 11.0,  # how softly the painted hand/foot meets the arm or shin (a ramp, not a sock line)
+    "final_sharpen": 0.6,  # unsharp amount after all smoothing: flat regions, crisp edges (0 = off)
+    "final_sharpen_sigma": 2.0, # width of that unsharp mask, at 2x
+    "symmetrize": 1,       # 1 = mirror the torso/leg column of the silhouette about the figure's axis, fuller side wins
+    "sym_column": 0.24,    # half-width of that column as a fraction of the tile width (the arms lie outside it)
     # face.py: the graft
     "face_scale": 0.96,    # male head width relative to the female head box
     "face_fade": 14,       # rows the graft fades over at the neck

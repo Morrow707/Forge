@@ -74,3 +74,18 @@ each a knob in `pipeline.py`:
 
 `edge_shade` reaches `edge_shade_px` in from the edge now (a rounded look) instead of a fixed 8 px.
 The label maps are unchanged from the smoothing pass, confined to the new silhouette.
+
+### v4c, the same day: crisp again, and the hips line up
+
+Scott on v4: "much better, but now everything looks blurry ... almost like its out of focus, also
+female back doesn't line up, left hip indents where right hip does not." Two changes:
+
+- **The blur was the plain gaussian, not the bilateral.** `smooth_gauss` defaults to 0 now,
+  `flatten_blur` 3 -> 1.5, `feather` 1.2 -> 0.8, and a `final_sharpen` unsharp mask (0.6 at sigma 2)
+  runs after the edge shade. The bilateral keeps every region flat; the sharpen gives the edges
+  between them back.
+- **The hip is in the source render**: the figure is centred but one glute flares where the other
+  notches, and the gap between the legs sits ~20 px off the axis. `symmetrize_body` mirrors the
+  torso-and-legs column (`sym_column`, half-width 0.24 of the tile) about the figure's own axis and
+  takes the fuller outline on both sides. The arms are outside the column and untouched: a pose is
+  never perfectly mirrored, and a union there would ghost a limb.
