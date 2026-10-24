@@ -101,11 +101,18 @@ export default function AdminUsers() {
   // named, not just this page in general.
   const initialParams = new URLSearchParams(useSearch());
   const initialRole = initialParams.get("role");
-  // ?search= lands here pre-filtered, the same way ?role= does. The waiver
-  // review queue is the caller that needs it: an admin deciding whether a
-  // signed document is about the right child has to be able to reach that
-  // athlete's account, and there is no per-user route to link to -- this page
-  // shows a user by finding them, so a deep link has to arrive as a search.
+  // ?search= lands here pre-filtered, the same way ?role= does, and it is for
+  // a person arriving with a term they already know -- nothing in the app
+  // links here with one.
+  //
+  // It was added on 2026-09-17 for the waiver review queue, so an admin
+  // deciding whether a signed document was about the right child could reach
+  // that athlete's account. That caller is gone and the comment it left
+  // behind was the thing that made the mechanism look settled: an admin may
+  // not know an athlete's name (admin-identity.ts), so getUsersForAdmin
+  // refuses a name search for one and that link never matched a row in its
+  // life. A deep link built from an athlete is a link to "No accounts match
+  // that search" -- see the comment in admin/waivers.tsx.
   const initialSearch = initialParams.get("search") ?? "";
   const [searchInput, setSearchInput] = useState(initialSearch);
   const [appliedSearch, setAppliedSearch] = useState(initialSearch);

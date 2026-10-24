@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Check, X, FileText, Search, Eye } from "lucide-react";
@@ -175,16 +174,30 @@ export default function AdminWaiversPage() {
                     </div>
                   </div>
                 ) : (
+                  // NO LINK TO THE ACCOUNT FROM HERE, AND THE REASON IS THE POLICY ITSELF.
+                  //
+                  // This branch carried `/admin/users?search=<athleteName>` from 2026-09-17 --
+                  // added in a commit called "Fix a dead link", and dead on arrival in two
+                  // separate ways. An admin may not know an athlete's name at all
+                  // (ATHLETE_FIELDS_WITHHELD_FROM_ADMIN in server/admin-identity.ts names it),
+                  // so getUsersForAdmin refuses a name search for an athlete outright and the
+                  // link answered "No accounts match that search" for every row it ever drew --
+                  // while handing the one value an admin is specifically not allowed to hold to
+                  // the surface built to withhold it. And the queue went pending-only hours
+                  // later, so this branch has not rendered since, which is what kept the first
+                  // fault invisible.
+                  //
+                  // The need it named is real and is met by AthleteDocuments below instead: by
+                  // athlete ID, with a stated reason, logged, opening the document once. The
+                  // account page could never have answered "is this the right child" anyway --
+                  // it withholds the child's name.
+                  //
+                  // The branch itself stays. Every row here is pending by construction, but the
+                  // review route does not guard on current status, so drawing Accept/Reject for
+                  // an already-decided document would be a way to re-decide one.
                   <p className="text-xs text-muted-foreground">
                     {waiver.reviewStatus.replace("_", " ")}
                     {waiver.reviewNote ? ` — ${waiver.reviewNote}` : ""}
-                    {" · "}
-                    <Link
-                      href={`/admin/users?search=${encodeURIComponent(athleteName)}`}
-                      className="font-semibold text-primary hover:underline"
-                    >
-                      account
-                    </Link>
                   </p>
                 )}
               </CardContent>

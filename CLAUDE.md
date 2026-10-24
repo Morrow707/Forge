@@ -1179,6 +1179,87 @@ scan cannot tell those two apart**, which is why that file certified a working c
 Both now say which writer covers which database. The classes/programs divergence it recorded is
 unchanged and still open.
 
+## "FIX A DEAD LINK" SHIPPED A DEAD LINK, AND THE RULE IT BROKE WAS WRITTEN TWICE
+
+Added 2026-10-24, reading the role survey's unread targets. `admin/waivers.tsx` had no role
+conditional in it at all, which is why seven slices of `role ===` greps were blind to it -- the
+same blind spot as the 10-22 flag-free response.
+
+**AN ADMIN MAY NOT KNOW AN ATHLETE'S NAME, AND THE WAIVER QUEUE LINKED TO THE ACCOUNT SEARCH BY
+NAME.** `ATHLETE_FIELDS_WITHHELD_FROM_ADMIN` names `name` and `email`; `getUsersForAdmin` refuses
+a name or email match against an athlete or a guardian outright, under a long comment calling it
+"the whole policy undone by a text box". And every decided row in the review queue carried
+`/admin/users?search=${encodeURIComponent(athleteName)}` -- so the link answered **"No accounts
+match that search"** for every athlete it ever drew, while handing the one value an admin is
+specifically not allowed to hold to the surface built to withhold it. `athleteId` sat destructured
+two lines above it, unused.
+
+**IT WAS DEAD ON ARRIVAL, IN TWO SEPARATE WAYS, AND THE SECOND HID THE FIRST.** The timeline is
+the finding:
+
+| when | what |
+|---|---|
+| 09-15 `93a7851f` | "Stop admins being able to work out who an athlete is" -- the name search stops reaching athletes |
+| 09-17 01:05 `c2a70c8c` | **"Fix a dead link"** -- adds this link, and adds `?search=` to `users.tsx` *for this one caller* |
+| 09-17 01:31 `6ff1ec2e` | the queue widens to accepted rows, so the branch renders -- broken |
+| 09-17 04:44 `c3ceefac` | pending-only plus the one-shot grant flow; the branch stops rendering at all |
+
+So the fix for a dead link was a dead link, written two days after the restriction that broke it,
+in a different file, by somebody who left a comment in `users.tsx` asserting the mechanism worked
+("the waiver review queue is the caller that needs it ... a deep link has to arrive as a search").
+**Intent and code differed and the comment is what made it look settled** -- the same sentence
+this file uses for the cross-school contract leak, and the reason that comment is corrected rather
+than deleted. Hours later the queue went pending-only, the branch stopped rendering, and a broken
+link became an invisible broken link for five weeks.
+
+**THE LINK COULD NEVER HAVE ANSWERED ITS OWN QUESTION ANYWAY**, which is what settles the fix
+rather than making it a judgement call: the need named in that comment is "an admin deciding
+whether a signed document is about the right child has to be able to reach that athlete's
+account", and the account page withholds the child's name. The need is real and `c3ceefac` had
+already built the replacement one card down -- `AthleteDocuments`, by athlete ID, with a stated
+reason, logged, opening the document once. **The branch itself stays**: every row is pending by
+construction, but `POST /api/admin/waivers/:id/review` does not guard on current status, so
+drawing Accept/Reject for an already-decided document would be a way to re-decide one.
+
+**AND THE STRUCTURAL FAULT UNDERNEATH: `searchableRolesFor` DID NOT EXIST.** The rule lived as two
+hand-typed literals in two files -- `role === "athlete" || role === "guardian"` in
+`admin-identity.ts` and `notInArray(users.role, ["athlete", "guardian"])` in `storage.ts` -- beside
+a comment citing "searchableRolesFor in admin-identity.ts", **a helper nobody had written**. A
+divergence between those two is silent in exactly the direction that matters: add a role to the
+scrub list and the search box goes on finding them by name. It is one declaration now
+(`IDENTITY_WITHHELD_ROLES`), read by the scrubber and by the query, and
+**`searchableRolesFor()` is the enum MINUS that set rather than its complement** -- so a fifth role
+added to `roleEnum` next year is NOT searchable until somebody classifies it on purpose, where the
+old `notInArray` made it searchable by omission. A privacy rule fails closed. It returns the enum's
+own union rather than `string[]`, keeping the `inArray` compiler check for the same reason this
+file leaves the `requireRole` gates typed.
+
+**THE RATCHET, AND THE MUTATION THAT EXPOSED ITS FIRST DRAFT.** Seven cases: the roles partition
+`roleEnum` exactly once (discovered from the enum, so a new role fails until classified); the
+scrubber really withholds a name for each withheld role (behaviour, not a list); `getUsersForAdmin`
+reads the helper and contains **no role literal of its own**; and -- the general rule, which is what
+would have caught this -- **an `/admin/users?search=` URL may be built in exactly one place, the
+page where a person types it**, discovered from the client directory rather than named.
+**The partition case could not see the policy being narrowed**, proven rather than assumed:
+deleting `guardian` from the withheld set left all six original cases green, because
+`searchableRolesFor` and `identityIsWithheldFromAdmins` both read that set, so the role moves sides
+and the behaviour case then cheerfully asserts a guardian is named to an admin. Which roles are
+withheld is Scott's decision (2026-09-15) and is not derivable from code, so it is a named
+assertion stated as a FLOOR -- adding a role is tightening and stays green, removing either of
+those two reds.
+**Two bounding bugs worth keeping, both this file's standing lessons in new clothes:** the body
+matcher took "the next `{` after the method name" and landed inside the PARAMETER TYPE
+(`params: { search?: string; role?: "coach" | "athlete" | ... }`), which holds every role literal
+and none of the query -- so the forbidden-literal check reds on correct code and the positive check
+reds too; it matches the signature's parens first now. And **the comment strip is proven
+load-bearing rather than trusted**: the fix's own comment in `waivers.tsx` quotes the old link
+verbatim, so with the strip removed two cases go red.
+
+Seven mutations, each caught by the right case. 418 files / 4844 tests, the delta exactly the seven
+new cases; the 10-case `admin-identity-sweep.itest.ts` and the three waiver/document itests green on
+the new mechanism. Server-side plus two admin client files: `verify_build`.
+
+
 ## RULE #3: A VIDEO SHOWS THE REAL APP. NOTHING IN IT IS INVENTED.
 
 Added 2026-10-02, after a build-a-program reel shipped with a program builder nobody has ever

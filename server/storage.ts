@@ -215,7 +215,7 @@ import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { promises as fsPromises } from "node:fs";
 import path from "node:path";
 import { UPLOADS_ROOT } from "./uploaded-files";
-import { scrubUserForAdmin } from "./admin-identity";
+import { scrubUserForAdmin, searchableRolesFor } from "./admin-identity";
 import { encryptField, decryptField, isEncryptedField } from "./field-encryption";
 import { syncResearchSubject, removeResearchSubject, retainSubjectAfterDeletion } from "./research-mirror";
 import { KNOWLEDGE_DOMAIN_KEYS, isKnowledgeDomain, knowledgeDomainLabel } from "@shared/knowledge-domains";
@@ -3767,8 +3767,14 @@ export const storage = {
     // admin is allowed to hold. Pointing it at athletes would be the whole
     // policy undone by a text box: "is this particular child on the platform,
     // and which account are they" answered in one request, which is worse
-    // than the list it replaces rather than a lesser version of it. See
-    // searchableRolesFor in admin-identity.ts.
+    // than the list it replaces rather than a lesser version of it.
+    //
+    // The role set comes from searchableRolesFor in admin-identity.ts, which
+    // is where the rule lives and is derived from roleEnum. This clause used
+    // to hand-type `notInArray(users.role, ["athlete", "guardian"])` beside a
+    // comment citing that helper, which did not exist -- so the scrub rule and
+    // the search rule were two literals that could disagree in silence, and a
+    // role added to the scrub list would still have been findable by name.
     //
     // The clause is written as a role restriction rather than as "ignore the
     // search", so an admin searching without a role filter still finds the
@@ -3779,7 +3785,7 @@ export const storage = {
       const q = `%${params.search.trim()}%`;
       conditions.push(
         and(
-          notInArray(users.role, ["athlete", "guardian"]),
+          inArray(users.role, searchableRolesFor()),
           or(ilike(users.name, q), ilike(users.email, q)),
         ),
       );

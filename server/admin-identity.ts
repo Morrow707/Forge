@@ -1,4 +1,47 @@
 import { ageFromDateOfBirth, derivePrivacyTier, type PrivacyTier } from "@shared/privacy-tiers";
+import { roleEnum } from "@shared/schema";
+
+/**
+ * WHOSE IDENTITY AN ADMIN MAY HOLD, DECLARED ONCE.
+ *
+ * This fact was written twice and the two copies could not see each other.
+ * `scrubUserForAdmin` below branched on `role === "athlete" || role ===
+ * "guardian"`; `getUsersForAdmin` in storage.ts refused a name/email search
+ * with its own hand-typed `notInArray(users.role, ["athlete", "guardian"])`,
+ * under a comment pointing at "searchableRolesFor in admin-identity.ts" --
+ * **a helper that did not exist**. So one rule lived as two literals in two
+ * files, and a divergence between them is silent in the direction that
+ * matters: add a role to the scrub list and the search box goes on finding
+ * them by name, which is this whole policy undone by a text box.
+ *
+ * `searchableRolesFor` is derived from `roleEnum` MINUS this set rather than
+ * written as its complement, so the default for a role nobody has classified
+ * is "not searchable". A privacy rule has to fail closed: a fifth role added
+ * to the enum next year is invisible to the search box until somebody puts it
+ * on one side or the other on purpose, where a `notInArray` of the withheld
+ * roles would have made it searchable by omission.
+ */
+export type AdminVisibleRole = (typeof roleEnum.enumValues)[number];
+
+export const IDENTITY_WITHHELD_ROLES = ["athlete", "guardian"] as const satisfies readonly AdminVisibleRole[];
+
+export type IdentityWithheldRole = (typeof IDENTITY_WITHHELD_ROLES)[number];
+
+/** The roles an admin may find by a partial name or email.
+ *
+ * Returns the ENUM's own union rather than `string[]`, so the drizzle
+ * `inArray` that reads it keeps its compiler check -- the same argument
+ * CLAUDE.md records for leaving the `requireRole` gates typed: widening a
+ * permission or privacy predicate to `string` trades a check the compiler
+ * makes for cosmetics. */
+export function searchableRolesFor(): AdminVisibleRole[] {
+  const withheld = new Set<string>(IDENTITY_WITHHELD_ROLES);
+  return roleEnum.enumValues.filter((role) => !withheld.has(role));
+}
+
+export function identityIsWithheldFromAdmins(role: string | null | undefined): boolean {
+  return new Set<string>(IDENTITY_WITHHELD_ROLES).has(role ?? "");
+}
 
 /**
  * What an admin is allowed to know about an athlete.
@@ -197,7 +240,7 @@ const COACH_VISIBLE = [
  * own would.
  */
 export function scrubUserForAdmin(user: Record<string, any>): Record<string, unknown> {
-  if (user?.role === "athlete" || user?.role === "guardian") {
+  if (identityIsWithheldFromAdmins(user?.role)) {
     return scrubAthleteForAdmin(user);
   }
   const scrubbed: Record<string, unknown> = {};
