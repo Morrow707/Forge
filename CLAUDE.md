@@ -4538,7 +4538,24 @@ Render API for the instance and the database) and fixed second. What the measure
   number does NOT fall after it -- the space is reusable, not returned; that needs a `VACUUM FULL
   workout_set_entries` in a quiet hour, by hand, which takes an exclusive lock on the busiest
   table in the app and is why the job never runs it. Read `[job:set-trace-offload]` in the log:
-  "moved N ... M still in the table" until M is 0. `skeleton-frames-live-on-disk.itest.ts` (8
+  "moved N ... M still in the table" until M is 0.
+  **AND THE DISK NUMBER DID NOT FALL, SO RENDER MAILED "NEARING ITS STORAGE LIMIT" ON 2026-10-23.**
+  The offload finished on the 16th ("0 still in the table" every run since); the table still
+  measured 447 MB for ~114 live rows, all of it dead space a plain VACUUM frees for reuse and
+  never hands back. Render's metric read 0.64 GB of 1.02 GB with a 0.79 GB peak when the mail
+  went out, so there was no outage coming, only a number that would never go down.
+  `server/set-entries-vacuum-full.ts` is the by-hand step made automatic, under the conditions
+  that made it safe: boot only, under the job lock, behind the dated marker
+  `vacuum_full_set_entries_2026_10_24`, and ONLY when no row still holds frames inline and the
+  live rows are estimated under 50 MB (a rewrite of 114 rows is seconds, at boot, with nobody
+  talking to the table; a big live table goes back to being a quiet-hour job and the log says
+  so). A skip writes NO marker so the next boot tries again; the marker goes on AFTER the vacuum.
+  Log line to look for: `[job:set-entries-vacuum-full] vacuumed: workout_set_entries 447.x MB
+  -> ~1 MB`. Unit test drives the four branches on a fake db; the itest runs the real
+  `VACUUM (FULL, ANALYZE)` through the pool. Server-side: ships on Render, no build.
+  **One vitest lesson from writing it: `beforeEach(() => mock.mockReset())` returns the mock,
+  and vitest calls a hook's returned FUNCTION as its cleanup** -- so the runner itself invoked
+  the fake with no arguments and every case read as a bug in the code under test. Braces. `skeleton-frames-live-on-disk.itest.ts` (8
   cases on real Postgres and a real disk: the write, the carry-forward with an untouched file,
   the retake, the null, no consent, both readers plus the clip list, the offload and its second
   idempotent run, the account deletion) and the `.test.ts` scan beside it. Sixteen neighbouring

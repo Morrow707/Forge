@@ -92,6 +92,7 @@ import { startDataRetentionJob } from "./data-retention-job";
 import { startVideoRetentionJob } from "./video-retention-job";
 import { startDatabaseSizeJob } from "./database-size-job";
 import { startSetTraceOffloadJob } from "./set-trace-offload-job";
+import { startSetEntriesVacuumFull } from "./set-entries-vacuum-full";
 import { startFkDriftJob } from "./fk-drift-job";
 import { startOrphanSetRowsCleanup } from "./orphan-set-rows-cleanup";
 import { startResearchMirrorJob } from "./research-mirror-job";
@@ -571,6 +572,11 @@ app.get("/healthz", async (_req, res) => {
     // purpose: every row it could not move was an orphan, so on the first boot after this it
     // has nothing to do and goes quiet, which is itself the signal that the cleanup worked.
     startSetTraceOffloadJob();
+    // Hands the 447 MB of dead space the offload left in workout_set_entries back to the disk
+    // (Render's "nearing its storage limit" mail, 2026-10-23). VACUUM FULL, once, behind an
+    // applied_backfills marker, and only when no row still holds frames inline and the live
+    // rows are small enough to rewrite in seconds -- see set-entries-vacuum-full.ts.
+    startSetEntriesVacuumFull();
     // One-time backlog cleanup for the dev-testing account's accumulated
     // video volume -- see oneTimeCleanupPreexistingVideosForAccount's own
     // comment for why this is safe to leave as permanent boot-time code
