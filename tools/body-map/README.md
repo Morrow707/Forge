@@ -50,3 +50,27 @@ weird hands and feet on both fronts, a lower-back hover that was a staircase. Al
 - `match_color`: each tile's muscle saturation and value are matched to the male front's
   (measured over labelled pixels), which is what brought the female front into the same
   register.
+
+## The v4 pass (2026-10-24): every pixel, head to toe
+
+Scott, on the smoothing pass: "No they are not. Also hands and feet are still clunky. Smooth
+everything out all pixels, head to toe make body bodies smoother on edges." Four changes in `hd.py`,
+each a knob in `pipeline.py`:
+
+- **The silhouette is a smoothed contour, not a blurred bitmap.** `smooth_silhouette` traces each
+  outer contour, runs a gaussian (`contour_smooth`, sigma in boundary pixels at 2x) ALONG it, refills
+  at 4x and averages down. A bump shorter than ~sigma is gone outright; a blur on the mask only ever
+  rounded it. The alpha channel is that fill, so the edge carries its own anti-aliasing (`feather` is
+  a touch on top). `contour_open` drops dangling specks before tracing.
+- **Every body pixel is smoothed.** Two passes of a bilateral filter (`smooth_all` diameter,
+  `smooth_color`, `smooth_space`, `smooth_passes`) keep each muscle a flat region while the grain and
+  the sheet's brush marks go, then a normalised gaussian inside the body (`smooth_gauss`).
+- **Hands and feet are painted, never blended.** The tile's skin tone -- the median of the ungrouped
+  pixels that LOOK like skin (warm hue, low saturation, not dark; the plain median picked up the
+  lavender gaps and painted the male back's hands purple-grey), pulled halfway to one warm beige so
+  the four tiles agree -- shaded up from the edge by the distance transform (`extrem_round`) and met
+  by the limb over a ramp (`extrem_blend`), over muscle too, so the wrist is a fade and not a sock line.
+- **Striations default to 0.** At a glance they read as noise. The knob stays.
+
+`edge_shade` reaches `edge_shade_px` in from the edge now (a rounded look) instead of a fixed 8 px.
+The label maps are unchanged from the smoothing pass, confined to the new silhouette.

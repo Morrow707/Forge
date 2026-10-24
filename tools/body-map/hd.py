@@ -12,7 +12,18 @@ The smoothing pass (2026-10-24, Scott: "everything is just very chunky"):
     bellies -- is repainted as smooth skin, which is what the stray purple on a hand was never;
   - the silhouette outline is smoothed before feathering, so finger and toe stubs stop tearing;
   - each tile's muscle saturation and brightness are matched to the male front's, so the
-    female front stops reading pale beside it."""
+    female front stops reading pale beside it.
+
+The v4 pass (2026-10-24, Scott: "No they are not. Also hands and feet are still clunky. Smooth
+everything out all pixels, head to toe make body bodies smoother on edges"):
+  - the silhouette is traced as a CONTOUR and a gaussian is run along it, then it is refilled
+    at 4x and averaged down, so the edge is a curve with its own anti-aliasing rather than a
+    thresholded bitmap that a blur only ever rounds a little;
+  - EVERY body pixel goes through an edge-preserving (bilateral) smooth, twice, then a light
+    gaussian -- muscle colours stay as regions, the grain and the sheet's brush marks go;
+  - hands and feet are PAINTED: the tile's own skin tone, shaded up from the edge by a distance
+    transform, blended softly into the arm or the shin -- never the blurred old colour;
+  - the fibre striations default to 0: at a glance they read as noise, not as fibre."""
 import json, os, pathlib, numpy as np, cv2
 from PIL import Image, ImageEnhance, ImageFilter
 from scipy import ndimage as ndi
@@ -63,6 +74,30 @@ def smooth_labels(labn, am, sigma, min_island, close_r):
                 lab2[part] = np.bincount(vals, minlength=256).argmax() if vals.size else 0
     return lab2
 
+def smooth_silhouette(am, sigma, open_r):
+    """Body mask -> soft alpha (0..1) whose boundary is the mask's contour with a gaussian of
+    `sigma` run ALONG it. A blur on the bitmap rounds a corner by a pixel or two and leaves every
+    bump in the source alpha where it was; a gaussian along the boundary removes bumps shorter
+    than ~sigma outright, which is what "smoother on edges" asks for. Each outer contour is
+    refilled at 4x and averaged down, so the alpha is anti-aliased from the curve itself.
+    Features thinner than ~2 sigma (a finger stub) shrink a little; a dangling speck under
+    `open_r` is dropped before tracing so it cannot pull the curve toward it."""
+    H, W = am.shape
+    m = am
+    if open_r > 0: m = ndi.binary_opening(m, structure=disc(open_r))
+    m = ndi.binary_fill_holes(m)
+    cnts, _ = cv2.findContours(m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    SS = 4
+    canvas = np.zeros((H * SS, W * SS), np.uint8)
+    k = int(3 * sigma); idx = np.arange(-k, k + 1); w = np.exp(-idx ** 2 / (2 * sigma * sigma)); w /= w.sum()
+    for c in cnts:
+        if cv2.contourArea(c) < 150: continue
+        pts = c[:, 0, :].astype(np.float64)
+        if len(pts) > 2 * k + 2:
+            pts = np.stack([np.convolve(np.pad(pts[:, j], k, mode="wrap"), w, mode="valid") for j in (0, 1)], 1)
+        cv2.fillPoly(canvas, [np.round((pts + 0.5) * SS).astype(np.int32)], 255, lineType=cv2.LINE_AA)
+    return cv2.resize(canvas, (W, H), interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
+
 for name in (REF, "female-front", "female-back", "male-back"):
     src = Image.open(ROOT / f"tiles/{name}.png").convert("RGBA")
     s_np = np.asarray(src).copy(); inside = s_np[..., 3] > 128
@@ -77,6 +112,12 @@ for name in (REF, "female-front", "female-back", "male-back"):
     am = a_s > 0.5
     am = ndi.binary_opening(am, structure=disc(2)); am = ndi.binary_closing(am, structure=disc(2))
     am = ndi.binary_fill_holes(am) & (a_s > 0.08)
+    cs = kf("contour_smooth", 9.0)
+    if cs > 0:
+        alpha_soft = smooth_silhouette(am, cs, int(kf("contour_open", 3)))
+        am = alpha_soft > 0.5
+    else:
+        alpha_soft = am.astype(np.float32)
     # --- colour: denoise at 1x, upscale, soften, sharpen
     bgr = cv2.cvtColor(np.asarray(src.convert("RGB")), cv2.COLOR_RGB2BGR)
     if K["denoise"] > 0:
@@ -136,23 +177,52 @@ for name in (REF, "female-front", "female-back", "male-back"):
         fb = kf("flatten_blur", 2.5)
         if fb > 0: flat = cv2.GaussianBlur(flat, (0, 0), fb)
         rgb_np = rgb_np * (1 - fl) + flat * fl
-    # --- hands, feet and tendon: every body pixel in no group, below the head, becomes smooth skin
+    # --- tendon between bellies: every body pixel in no group, below the head, becomes smooth skin
     sk = kf("skin_smooth", 0.85)
     skin_mask = am & ~muscle & (fy > HEAD_FRAC)
+    # the skin tone: the median of the ungrouped pixels that LOOK like skin -- warm hue, low
+    # saturation, not dark. The plain median of every ungrouped pixel picked up the sheet's
+    # lavender gaps between bellies and painted the male back's hands purple-grey.
+    hsv_s = cv2.cvtColor(np.clip(rgb_np * 255, 0, 255).astype(np.uint8), cv2.COLOR_RGB2HSV)
+    skinlike = skin_mask & ((hsv_s[..., 0] <= 22) | (hsv_s[..., 0] >= 170)) & (hsv_s[..., 1] < 110) & (hsv_s[..., 2] > 120)
+    tone = np.median(rgb_np[skinlike], axis=0) if skinlike.sum() > 400 else np.array([0.86, 0.72, 0.58], np.float32)
+    tone = 0.5 * tone + 0.5 * np.array([0.86, 0.72, 0.58], np.float32)   # halfway to a warm beige, so the four tiles agree
     if sk > 0 and skin_mask.sum() > 50:
         sig = kf("skin_sigma", 7.0)
         wmask = skin_mask.astype(np.float32)
         num = cv2.GaussianBlur(rgb_np * wmask[..., None], (0, 0), sig)
         den = cv2.GaussianBlur(wmask, (0, 0), sig)[..., None]
         local = num / np.maximum(den, 1e-4)
-        tone = np.median(rgb_np[skin_mask], axis=0)               # the tile's own skin colour
         # keep the shading (value) of the local blur, take the hue from the tile's skin
         lv = local.mean(2, keepdims=True); tv = max(float(tone.mean()), 1e-3)
         target = np.clip(tone[None, None, :] * (lv / tv), 0, 1)
-        pull = np.where(extrem, 0.8, 0.55)[..., None]
-        target = pull * target + (1 - pull) * local
+        target = 0.55 * target + 0.45 * local
         w = cv2.GaussianBlur(wmask, (0, 0), 2.0) * sk
         rgb_np = rgb_np * (1 - w[..., None]) + target * w[..., None]
+    # --- hands and feet are PAINTED, not blended: the tile's skin tone, shaded up from the edge
+    # by the distance transform so the shape reads as a rounded solid, met softly by the limb.
+    if extrem.any():
+        dist_in = ndi.distance_transform_edt(am)
+        er = kf("extrem_round", 20.0)
+        shade = 0.82 + 0.18 * np.clip(dist_in / max(er, 1e-3), 0, 1) ** 0.7
+        paint = np.clip(tone[None, None, :] * shade[..., None], 0, 1)
+        # the zone's edge is a straight row; blurred, it becomes a ramp that fades the paint a
+        # little way up the limb (over muscle too -- a tendon fading into a belly, not a sock line)
+        wE = cv2.GaussianBlur(extrem.astype(np.float32), (0, 0), kf("extrem_blend", 11.0)) * am
+        rgb_np = rgb_np * (1 - wE[..., None]) + paint * wE[..., None]
+    # --- every pixel, head to toe: an edge-preserving smooth, then a light gaussian
+    sa = int(kf("smooth_all", 9))
+    if sa > 0:
+        b8 = np.clip(rgb_np * 255, 0, 255).astype(np.uint8)
+        for _ in range(int(kf("smooth_passes", 2))):
+            b8 = cv2.bilateralFilter(b8, sa, kf("smooth_color", 30.0), kf("smooth_space", 9.0))
+        rgb_np = b8.astype(np.float32) / 255.0
+    sg = kf("smooth_gauss", 1.3)
+    if sg > 0:
+        # a normalised blur inside the body only, so the background never bleeds into the edge
+        wm = am.astype(np.float32)
+        rgb_np = cv2.GaussianBlur(rgb_np * wm[..., None], (0, 0), sg) / np.maximum(cv2.GaussianBlur(wm, (0, 0), sg), 1e-4)[..., None]
+        rgb_np = np.clip(rgb_np, 0, 1)
     # --- tone, striations, edge shade (as before)
     rgb_np = np.clip(rgb_np, 0, 1) ** float(K["gamma"])
     rgb = ImageEnhance.Color(Image.fromarray(np.clip(rgb_np * 255, 0, 255).astype(np.uint8), "RGB")).enhance(float(K["color"]))
@@ -174,11 +244,12 @@ for name in (REF, "female-front", "female-back", "male-back"):
         stri = cv2.GaussianBlur(stri, (0, 0), 1.1)
     rgb_f = np.asarray(rgb).astype(np.float32) * (1.0 - float(K["striations"]) * stri)[..., None]
     dist = ndi.distance_transform_edt(am)
-    es = float(K["edge_shade"]); shade = (1 - es) + es * np.clip(dist / 8.0, 0, 1)
+    es = float(K["edge_shade"]); shade = (1 - es) + es * np.clip(dist / kf("edge_shade_px", 8.0), 0, 1) ** 0.8
     arr = np.clip(rgb_f * shade[..., None], 0, 255).astype(np.uint8)
-    a_img = Image.fromarray((am * 255).astype(np.uint8), "L")
-    a_np = np.asarray(a_img.filter(ImageFilter.GaussianBlur(float(K["feather"])))).astype(np.float32) if K["feather"] > 0 else np.asarray(a_img).astype(np.float32)
-    a_np = np.clip((a_np - 40) * 1.3, 0, 255).astype(np.uint8)
+    # the alpha is the smoothed contour's own anti-aliased fill, feathered a touch more
+    a_f = alpha_soft * 255
+    if K["feather"] > 0: a_f = cv2.GaussianBlur(a_f, (0, 0), float(K["feather"]))
+    a_np = np.clip((a_f - 24) * 1.15, 0, 255).astype(np.uint8)
     Image.merge("RGBA", (*Image.fromarray(arr, "RGB").split(), Image.fromarray(a_np, "L"))).save(ROOT / f"site/img/{name}.webp", "WEBP", quality=90, method=6)
     Image.fromarray(lab2, "L").save(ROOT / f"site/lab/{name}.png", optimize=True)
     groups = {}

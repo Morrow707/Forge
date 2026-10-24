@@ -17,11 +17,12 @@ KNOBS = {
     "sharpen_sigma": 3.0,  # width of the unsharp mask
     "gamma": 0.92,         # <1 darkens midtones a little
     "color": 1.05,         # saturation multiplier
-    "striations": 0.17,    # how dark the fibre lines are (0 = none)
+    "striations": 0.0,     # how dark the fibre lines are (0 = none; off since the v4 pass, they read as noise)
     "stripe_period": 13.0, # pixels between fibre lines, at 2x
     "stripe_min_area": 1400, # blobs smaller than this get no lines
-    "edge_shade": 0.07,    # darkening at the silhouette edge
-    "feather": 1.6,        # alpha blur at the edge
+    "edge_shade": 0.12,    # darkening at the silhouette edge (a rounded look)
+    "edge_shade_px": 22.0, # how far in from the edge that shading reaches, at 2x
+    "feather": 1.2,        # alpha blur at the edge (the edge is already anti-aliased from the smoothed contour)
     # hd.py: the smoothing pass (2026-10-24)
     "outline_smooth": 2.5, # gaussian sigma on the silhouette before it is thresholded, at 2x
     "label_smooth": 4.0,   # sigma on each group's soft mask before the argmax; 0 = the old staircase
@@ -34,6 +35,16 @@ KNOBS = {
     "skin_smooth": 0.85,   # 0..1, how far ungrouped body pixels (hands, feet, tendon) go to smooth skin
     "skin_sigma": 7.0,     # how wide that skin blur is, at 2x
     "match_color": 1.0,    # 0..1, how far each tile's muscle saturation/value is matched to the male front
+    # hd.py: the v4 pass (2026-10-24, Scott: "smooth everything out all pixels, head to toe")
+    "contour_smooth": 9.0, # sigma, in boundary pixels at 2x, of the gaussian run ALONG the silhouette's contour
+    "contour_open": 3,     # radius (2x px) of the opening that drops dangling specks before the contour is traced
+    "smooth_all": 9,       # bilateral filter diameter over EVERY body pixel (0 = off)
+    "smooth_color": 30.0,  # bilateral colour sigma: how different two colours may be and still blend
+    "smooth_space": 9.0,   # bilateral space sigma
+    "smooth_passes": 2,    # how many times the bilateral runs
+    "smooth_gauss": 1.3,   # final gaussian over the body, at 2x (0 = off)
+    "extrem_round": 20.0,  # hands and feet: pixels from the edge over which the flat skin shades up to full tone
+    "extrem_blend": 11.0,  # how softly the painted hand/foot meets the arm or shin (a ramp, not a sock line)
     # face.py: the graft
     "face_scale": 0.96,    # male head width relative to the female head box
     "face_fade": 14,       # rows the graft fades over at the neck
