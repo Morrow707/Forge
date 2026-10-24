@@ -349,8 +349,41 @@ the job graph.
 
 **THE LESSON I OWE THIS ENTRY: a green local run is not a green suite.** I reported "849 integration
 tests pass" and pushed, and the failing test was in that run -- it passed because the race is
-1-in-3. One run of a suite is evidence about one run. For anything with an unawaited write behind
-it, a single pass means nothing; run it several times, or do not call it proven.
+1-in-3. One run of a suite is evidence about one run.
+
+**AND MY FIRST VERSION OF THAT LESSON SAID "run it several times, or do not call it proven", WHICH
+THE SWEEP THEN MEASURED AND DISPROVED.** Driving the real login route 25 times, the unawaited
+branded "New login" send was readable on the very next line **15 times out of 15, maximum lateness
+0ms** -- because an HTTP round trip is longer than two WARM awaits. **Repetition does not surface
+this class.** The hazard bites only where `await import(...)` is a genuinely COLD load, which is
+exactly why only the first of four cases ever failed and why 1-in-3 was as reproducible as it got.
+So the honest rule is not "run it more": it is **a test that reads a side effect of an unawaited
+write must wait for it, whether or not repetition ever caught it** -- the guard has to be
+structural, because the evidence that you need one is nearly undetectable by running the test.
+
+**THE HAZARD SURFACE IS LARGER THAN THE SCAN SEES, AND THE FORBIDDEN-FORM CASE IS WHAT ACTUALLY
+PROTECTS.** `sendsThatLandLate()` finds unawaited DIRECT `sendEmail(` calls carrying
+`brandForUserId` -- four today, all in `auth.ts`. It does NOT find the INDIRECT shape: an unawaited
+call to a function that internally awaits a branded send. The sweep named four more of those in the
+same file -- `sendVerificationEmail`, `issueGuardianInviteIfNeeded`, the guardian consent
+confirmation, and `trackNewSession`'s "New login" continuation (which is explicitly never awaited).
+A transitive scan was considered and not built: it would have to follow calls through helpers and
+would rot, while the `FORBIDS an itest reading the outbox directly` case already covers every one
+of them, because it is a rule about the TEST and so does not care which send is behind the read.
+Read the discovery scan as a diagnostic aid and the forbidden form as the guard.
+
+**AND THE SAME COLD-IMPORT MECHANISM EXISTS OUTSIDE EMAIL, WHERE IT IS ALREADY HANDLED.**
+`recordDeliveryAttempt` (`health-probes.ts`) is unawaited and its `withPool` does
+`await import("./db")` -- the identical shape -- and `job-health.itest.ts` already polls for it,
+as `system-events.itest.ts` does for `recordSystemFailure`. Those two hand-roll their own `until`
+helper, which is the duplication `wait-for-email.ts` should absorb if a third appears. Several
+other deliberately-unawaited writes have NO test exposure at all (`recordAiUsage`,
+`touchSessionLastSeen`, the two AI knowledge logs, the MFA secret's self-upgrading re-encrypt, the
+background ingest workers), so they are latent rather than broken.
+**Recorded and NOT fixed:** `job-health.itest.ts` fires two unawaited writes, waits for only one
+and reads the other, which is fragile by construction -- it relies on `pg.Pool` dispatching
+FIFO, which the test never states. Measured 700/700 clean, including 300 runs with the pool
+saturated, so it is not a live fault; reordering those two lines would make it one.
 
 ### AND ONE MORE THAT IS REAL: A DEADLOCKED TRUNCATE IN THE TEST HARNESS (2026-10-09)
 

@@ -73,7 +73,16 @@ function serverFiles(filter: (name: string) => boolean): string[] {
 
 /** Every `sendEmail(...)` in production server code that is NOT awaited and DOES carry
  *  `brandForUserId` -- i.e. every send whose outbox push can land after the response.
- *  Discovered, never listed: a fifth one written next year shows up here the day it is added. */
+ *  Discovered, never listed: a fifth one written next year shows up here the day it is added.
+ *
+ *  **DIRECT CALLS ONLY, and the forbidden-form case below is what actually protects.** This does
+ *  not see the INDIRECT shape -- an unawaited call to a function that internally awaits a branded
+ *  send -- and `auth.ts` has four of those beside the four found here (`sendVerificationEmail`,
+ *  `issueGuardianInviteIfNeeded`, the guardian consent confirmation, and `trackNewSession`'s
+ *  never-awaited "New login" continuation). A transitive scan was considered and rejected: it
+ *  would have to follow calls through helpers and would rot, while "an itest may not read the
+ *  outbox directly" is a rule about the TEST and therefore covers every send behind every read.
+ *  So read this as a diagnostic aid that names the surface, not as the guard. */
 function sendsThatLandLate(): { file: string; line: number }[] {
   const out: { file: string; line: number }[] = [];
   for (const path of serverFiles((n) => !n.includes(".test.") && !n.includes(".itest."))) {
