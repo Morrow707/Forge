@@ -1126,10 +1126,31 @@ export function setupAuth(app: Express) {
       }
       loginWithFreshSession(req, user, async (err: any) => {
         if (err) return next(err);
+        // THE COACH IS KNOWN HERE AND USED TO BE THROWN AWAY (2026-10-24). `coachId` is
+        // destructured two lines above and `claimRosterSeat(provisional.coachId, user.id)` has
+        // already run inside the storage call, so this athlete is ON that coach's roster by the
+        // time the email is built -- and passing null made buildWelcomeEmail take its FREE AGENT
+        // branch, which is wrong in four sentences and right in none. It told a rostered athlete
+        // "You're training on your own for now"; pointed them at the Free Agent builder, which
+        // FreeAgentGate refuses them; said "the AI coach, the camera and the skills library are
+        // paid upgrades you can add whenever you want them" when cameraAccessFor and
+        // skillsAccessFor already grant a coached athlete both for free and the AI coach is not
+        // purchasable by them AT ANY PRICE (a coached athlete deliberately gets no AI assistance,
+        // and the tier checkout carries requireFreeAgent, so following that sentence ends in a
+        // refusal); and offered to let them "join a coach later using their invite code", which
+        // they have just done. It also omitted the one thing the coached branch exists to say --
+        // that whatever their coach assigns appears on their calendar automatically.
+        //
+        // This is the repo's "a change that alters what the app CLAIMS about money" class: it
+        // offered purchases to the one role that cannot make them. It is also blind-spot form 4
+        // from the role survey -- a nullable DISPLAY NAME standing in for the relationship -- and
+        // the direct-signup route one branch up has always passed `coach?.name ?? null`
+        // correctly, so this was the same correction wired to one of two paths.
+        const claimedCoach = coachId ? await storage.getUser(coachId) : null;
         sendEmail({
           to: user.email,
           subject: "Welcome to Forge",
-          html: buildWelcomeEmail(user, null),
+          html: buildWelcomeEmail(user, claimedCoach?.name ?? null),
           brandForUserId: user.id,
         });
         sendVerificationEmail(req, user);

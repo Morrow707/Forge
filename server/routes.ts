@@ -8868,6 +8868,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // "Send me a test": the welcome email, dressed in the program's current brand, to the
   // coach's own inbox. The one way to see what an athlete's inbox will show without inviting
   // one. Reads the saved row, not the page's draft -- save first, then send.
+  //
+  // RENDERED AS THE ATHLETE, which is what the sentence above promises and what it did not do
+  // (2026-10-24). It passed the signed-in coach straight through, and buildWelcomeEmail branches
+  // on `user.role` FIRST -- so a coach checking what their athletes receive was shown the COACH
+  // onboarding text ("start by building out your exercise bank"), correctly branded and about
+  // the wrong person. The `coachName` argument was `user.name`, which that branch never reads,
+  // so it looked deliberate. The greeting still uses the coach's own first name, which is right
+  // for a test landing in their own inbox; the body is now the one a rostered athlete gets,
+  // naming them as the coach. A Free Agent's copy is not previewable here on purpose: this
+  // route exists to show a PROGRAM its own branded mail, and a Free Agent has no program.
   app.post("/api/coach/branding/test-email", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
     const user = currentUser(req);
     if (!isEmailConfigured()) {
@@ -8876,7 +8886,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const result = await sendEmail({
       to: user.email,
       subject: "Welcome to Forge",
-      html: buildWelcomeEmail(user, user.name),
+      html: buildWelcomeEmail({ name: user.name, role: "athlete" }, user.name),
       brandForUserId: user.id,
     });
     if (!result.sent) return res.status(502).json({ message: "The email provider refused the send." });

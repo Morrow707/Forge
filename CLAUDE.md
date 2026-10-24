@@ -725,6 +725,66 @@ reported, not acted on.** And nothing the server imports may `process.exit` -- t
 so importing it from `index.ts` would have crash-looped the service on the very drift it reports;
 the logic is in `server/foreign-key-drift.ts` now and a test forbids the path.
 
+## EVERY ATHLETE A COACH ONBOARDED WAS WELCOMED AS A FREE AGENT
+
+Added 2026-10-24, the third fix off the sweep. **"Is this athlete coached" was carried by a
+NULLABLE DISPLAY NAME**, which is blind-spot form 4 from the role survey -- a coach's name standing
+in for the relationship -- and it is why seven slices of `role ===` greps were blind to it.
+
+`buildWelcomeEmail(user, coachName)` branches on `coachName` being truthy, and the claim handler
+passed a literal `null` -- while `coachId` sat destructured TWO LINES ABOVE it, and
+`claimRosterSeat(provisional.coachId, user.id)` had already run inside the storage call, so the
+athlete is on that coach's roster by the time the email is built. The direct-signup route one
+branch up has always passed `coach?.name ?? null` correctly, so this is **the same correction wired
+to one of two paths** -- the shape this file has now recorded seven times.
+
+**It is the only path by which a coach-provisioned athlete is ever created**, so every athlete
+onboarded the way a school actually onboards one -- intake sheet, claim link -- got the FREE AGENT
+body, which is wrong in four sentences and right in none:
+
+| what it said | what is true |
+|---|---|
+| "You're training on your own for now" | they are on a roster |
+| "Build your own programs by hand or duplicate a Forge template" | `FreeAgentGate` refuses them that builder |
+| "the AI coach, the camera and the skills library are paid upgrades you can add whenever you want them" | `cameraAccessFor` and `skillsAccessFor` already grant a coached athlete both FREE, and the AI coach is not purchasable by them AT ANY PRICE -- a coached athlete deliberately gets no AI assistance and the tier checkout carries `requireFreeAgent`, so following that sentence ends in a refusal |
+| "If you join a coach later using their invite code" | they just did |
+
+and it omitted the one thing the coached branch exists to say: that whatever their coach assigns
+appears on their calendar automatically. **This is the "a change that alters what the app CLAIMS
+about money" class** -- it offered purchases to the one role that cannot make them -- which the
+build-686 entry says ships on its own rather than waiting behind the batch counter.
+
+**NOTHING SHOWED IT.** The send is fire-and-forget (`sendEmail` never throws), the body is never
+logged, and the one test over this surface --
+`welcome-email-promises-only-what-you-have.test.ts`, which is thorough and has caught this family
+twice -- exercises exactly the three argument pairs somebody chose to pass the function:
+coach/null, athlete/"Marcus Delacroix", athlete/null. **The function was never wrong.** The bug was
+in which pair a call site handed it, and no case in that file looked at a call site.
+
+**AND MY OWN READ FOUND A THIRD CALL SITE THE REPORT DID NOT NAME.** `routes.ts:8879`
+(`POST /api/coach/branding/test-email`) passed `buildWelcomeEmail(user, user.name)` -- the
+recipient's own name as the coach's. Not the same bug: a coach hits the `role === "coach"` branch,
+which never reads the argument, so it was inert. But that route's own comment calls it "the one way
+to see what an ATHLETE's inbox will show without inviting one", and it rendered the COACH
+onboarding text, correctly branded and about the wrong person. It renders as the athlete now, with
+the coach's own first name in the greeting (right for a test landing in their own inbox) and
+themselves named as the coach. A Free Agent's copy is deliberately not previewable there: the route
+exists to show a PROGRAM its own branded mail, and a Free Agent has no program.
+
+**THE SCAN STATES WHAT IS FORBIDDEN: a literal `null` for `coachName` in server production code.**
+Not a list of the two call sites, which would rot. A literal null is not "this reader has no coach",
+it is "nobody looked", and the function cannot tell those apart; a COACH recipient never reads the
+argument, so there is no legitimate reason to hard-code it -- which is precisely why the one that
+did looked deliberate. `server/a-claimed-athlete-is-told-they-have-a-coach.itest.ts` drives the
+real claim route and reads the real outbox (three of its four cases red against the pre-fix code;
+the fourth asserts the PREMISE -- that the athlete really is on the roster when the email is built
+-- and correctly passes either way, because if the claim ever stopped joining the roster the Free
+Agent body would become the correct one and every other case would be arguing for the wrong thing).
+**And the comment strip is proven load-bearing rather than assumed**: with a comment quoting
+`buildWelcomeEmail(user, null)` the scan stays green, and with the strip removed it reds -- the
+failure this file calls its most repeated self-inflicted one, demonstrated instead of guarded
+against on faith.
+
 ## ONE SCHOOL'S EXECUTED CONTRACT WAS A BUTTON-TAP AWAY FROM ANOTHER SCHOOL
 
 Added 2026-10-24, from the same sweep. **The most serious thing it found, and I refuted it wrongly

@@ -85,6 +85,62 @@ describe("the welcome email a Free Agent gets", () => {
   });
 });
 
+/* AND WHICH BRANCH EACH CALL SITE ASKS FOR, WHICH IS WHERE THE BUG ACTUALLY WAS.
+ *
+ * Added 2026-10-24. Every case above exercises the pure function, and the function was never
+ * wrong -- it was handed the wrong arguments. `buildWelcomeEmail` decides coached-or-not from a
+ * NULLABLE DISPLAY NAME, so "this athlete has no coach" and "whoever wrote this call site did not
+ * look up the coach" are the same value, and the claim handler passed a literal `null` while
+ * `coachId` sat destructured two lines above it. Result: every athlete a coach provisioned and
+ * invited -- the way a school actually onboards one -- was told in writing that they were training
+ * on their own and that the camera and skills library were upgrades to buy, when a coached athlete
+ * already has both for free and cannot buy the AI coach at any price.
+ *
+ * Stated as what is FORBIDDEN rather than as a list of the two call sites, which would rot: a
+ * literal `null` for coachName anywhere in server production code is the bug itself. Both real
+ * sites resolve a name from a coach id they already hold. A COACH recipient never reads the
+ * argument (the role branch comes first), so there is no legitimate reason to hard-code it --
+ * which is exactly why the one that did looked deliberate.
+ */
+describe("every call site asks for the branch its reader is actually in", () => {
+  const dir = join(process.cwd(), "server");
+  const files = readdirSync(dir).filter(
+    (f) => f.endsWith(".ts") && !/\.test\.ts$|\.itest\.ts$/.test(f),
+  );
+
+  /** Comments first: the paragraph explaining this fix quotes the old form, which is
+   *  indistinguishable from the code still doing it -- CLAUDE.md's most repeated self-inflicted
+   *  failure, and it would make this scan pass for the very shape it forbids. */
+  const strip = (src: string) =>
+    src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+
+  const callSites = files.flatMap((f) => {
+    const src = strip(readFileSync(join(dir, f), "utf8"));
+    return [...src.matchAll(/buildWelcomeEmail\s*\(([^;]*?)\)\s*,?\s*$/gm)].map((m) => ({
+      file: f,
+      args: m[1],
+    }));
+  });
+
+  it("finds the call sites at all", () => {
+    // A floor, so a regex that stops matching cannot turn the rule below green.
+    expect(callSites.length, "no buildWelcomeEmail call site found in server/").toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(callSites)("$file resolves a coach rather than hard-coding null", ({ file, args }) => {
+    expect(
+      /,\s*null\s*$/.test(args.trim()),
+      `${file} passes a literal null for coachName. That is not "this reader has no coach" -- it ` +
+        `is "nobody looked", and buildWelcomeEmail cannot tell the two apart, so a rostered ` +
+        `athlete receives the Free Agent body: told they train alone, pointed at a builder ` +
+        `FreeAgentGate refuses them, and offered the camera and skills library as purchases they ` +
+        `already have free and the AI coach as one they cannot make at all. Resolve the name from ` +
+        `the coach id the handler already holds, as /api/auth/signup and /api/claim/:code/signup ` +
+        `both now do.`,
+    ).toBe(false);
+  });
+});
+
 /* AND THE OTHER TWELVE EMAILS, SCANNED RATHER THAN LISTED.
  *
  * Added by the pass-G audit, 2026-10-06. Checklist row G3 is "every email the system sends...
