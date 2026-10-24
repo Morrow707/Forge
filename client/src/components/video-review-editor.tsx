@@ -73,6 +73,7 @@ export function VideoReviewEditorDialog({
   initialEvents = [],
   initialShared = false,
   variant = "coach",
+  canSend = true,
   onSaved,
 }: {
   open: boolean;
@@ -93,6 +94,14 @@ export function VideoReviewEditorDialog({
    * button, and the two coach-only affordances (voice-over, prescribing a corrective).
    */
   variant?: "coach" | "self";
+  /**
+   * Whether there is anybody to send this to. False only for an athlete with no coach, and the
+   * button is not drawn at all in that case -- "Send to coach" in front of somebody who has no
+   * coach is the shape this repo removed from three cards on /athlete/progress in 2026-09-22
+   * ("what the does ask a coach do? What coach?"). Defaults TRUE so every existing caller keeps
+   * the button it has today; a coach's own review is unaffected by construction.
+   */
+  canSend?: boolean;
   onSaved?: () => void;
 }) {
   const base = variant === "coach" ? "/api/coach/video-reviews" : "/api/athlete/self-reviews";
@@ -539,10 +548,12 @@ export function VideoReviewEditorDialog({
             </Button>
           )}
           <span className="flex-1" />
-          <Button size="sm" variant={shared ? "default" : "outline"} onClick={() => void toggleShare()}>
-            <Share2 className="h-3.5 w-3.5" />{" "}
-            {isCoach ? (shared ? "Shared" : "Share") : shared ? "Sent" : "Send to coach"}
-          </Button>
+          {canSend && (
+            <Button size="sm" variant={shared ? "default" : "outline"} onClick={() => void toggleShare()}>
+              <Share2 className="h-3.5 w-3.5" />{" "}
+              {isCoach ? (shared ? "Shared" : "Share") : shared ? "Sent" : "Send to coach"}
+            </Button>
+          )}
           <Button size="sm" onClick={() => void save()} disabled={saving || !dirty}>
             <Save className="h-3.5 w-3.5" /> {saving ? "Saving..." : "Save"}
           </Button>

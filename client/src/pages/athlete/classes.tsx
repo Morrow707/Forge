@@ -188,8 +188,18 @@ export default function AthleteClasses() {
             </Card>
           )}
           {/* isFreeAgent is false while the coaches read is failing too, so without this
-              guard the page tells a Free Agent their coach hasn't enrolled them. */}
-          {!myFailed && !coachesFailed && !myLoading && myClasses.length === 0 && (
+              guard the page tells a Free Agent their coach hasn't enrolled them.
+
+              AND FALSE WHILE IT IS STILL IN FLIGHT, which is the half this guard missed until
+              2026-10-24. `isFreeAgent` is `!!coaches && coaches.length === 0`, so an undefined
+              `coaches` reads as "has a coach" -- and all four queries on this page fire in
+              parallel on mount, so whenever /api/athlete/my-classes resolves before
+              /api/athlete/coaches (the smaller payload, routinely) a Free Agent with no
+              enrolments was shown "Your coach hasn't enrolled you in a Class yet" for the
+              length of the slower request. `coachesFailed` was handled and `coachesLoading` was
+              not, though it was already destructured above and already guards the catalog
+              further down this file -- the same test, one card away. */}
+          {!myFailed && !coachesFailed && !coachesLoading && !myLoading && myClasses.length === 0 && (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
                 <GraduationCap className="h-10 w-10 text-muted-foreground" />

@@ -42,6 +42,7 @@ export function VideoReviewList({
   /** Where to fetch one review from, given its id. Differs per role. */
   reviewUrl,
   emptyHint,
+  canSend = true,
 }: {
   fetchUrl: string;
   /** "coach" edits a coach's own review; "self" edits an athlete's own (Phase 4b); "read-only"
@@ -50,6 +51,9 @@ export function VideoReviewList({
   mode: "coach" | "self" | "read-only";
   reviewUrl: (id: number) => string;
   emptyHint: string;
+  /** Passed through to the editor: false for an athlete with no coach, so no "Send to coach"
+   *  button is drawn for somebody who has nobody to send to. Defaults true. */
+  canSend?: boolean;
 }) {
   const { data, isLoading, isError, refetch } = useQuery<ReviewRow[]>({
     queryKey: [fetchUrl],
@@ -148,6 +152,7 @@ export function VideoReviewList({
           initialShared={
             mode === "self" ? !!editing.sentToCoachAt : !!editing.sharedWithAthleteAt
           }
+          canSend={canSend}
           onSaved={() => void refetch()}
         />
       )}

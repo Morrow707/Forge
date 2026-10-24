@@ -100,7 +100,23 @@ export default function AthleteProgress() {
   const [sharingPrIndex, setSharingPrIndex] = useState<number | null>(null);
   const [trendExercise, setTrendExercise] = useState<{ id: number; name: string } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  const isFreeAgent = useIsFreeAgent() === true;
+  /* THE HOOK IS TRI-STATE AND ONE BOOLEAN CANNOT BE SAFE IN BOTH POLARITIES (2026-10-24).
+   *
+   * `useIsFreeAgent` returns `boolean | undefined` and its own doc says callers "should treat
+   * [undefined] as 'not yet', not as 'no', so an AI control never flickers into view for a
+   * coached athlete during the first load". `=== true` honours that for the `isFreeAgent` reads
+   * -- which is what it was written for -- and inverts it for the `!isFreeAgent` ones: while the
+   * answer is unknown, `!isFreeAgent` is TRUE, so a Free Agent was shown the coach cards
+   * ("Coach reviews", "Ask your coach to check a lift") until /api/athlete/coaches landed. The
+   * cards this repo removed in 2026-09-22 on the grounds that they "described something that
+   * could not happen" came back for the length of one request.
+   *
+   * So the two polarities are two names. `coachKnown` is the "not yet" the hook asks for, and a
+   * coach-only block takes both: nothing about a coach is drawn until there is an answer. */
+  const freeAgentAnswer = useIsFreeAgent();
+  const isFreeAgent = freeAgentAnswer === true;
+  const coachKnown = freeAgentAnswer !== undefined;
+  const hasCoach = coachKnown && !isFreeAgent;
 
   async function handleSharePr(
     pr: {
@@ -270,7 +286,7 @@ export default function AthleteProgress() {
               is sending it to somebody, and a request with no recipient. Reported 2026-09-22 --
               "what the does ask a coach do? What coach? The free agent doesn't have one".
               A coached athlete keeps all three unchanged. */}
-          {!isFreeAgent && (
+          {hasCoach && (
             <>
               {/* Reviews the coach has SHARED. The route returns only those, so nothing here
                   has to filter -- and nothing here can accidentally stop filtering. */}
@@ -298,29 +314,55 @@ export default function AthleteProgress() {
               rank, and never a name -- see getStrengthPercentilesForAthlete. */}
           <StrengthProfileCard fetchUrl="/api/athlete/strength-profile" />
 
-          {!isFreeAgent && (
-            <>
-              {/* The athlete's OWN breakdowns of their own lifts, which they can send to their
-                  coach. Kept apart from "Coach reviews" above on purpose: one list mixing the
-                  two would leave an athlete unable to tell their own notes from their coach's.
-                  Hidden from a Free Agent because the sending is the point -- a self-review
-                  with nowhere to send it is a feature that stops halfway. Whether they should
-                  get a self-comparison tool INSTEAD is an open product question, not this. */}
-              <Card>
-                <CardContent className="space-y-3 p-5">
-                  <p className="font-semibold">Your own reviews</p>
-                  <VideoReviewList
-                    mode="self"
-                    fetchUrl="/api/athlete/self-reviews"
-                    reviewUrl={(id) => `/api/athlete/self-reviews/${id}`}
-                    emptyHint="Break down one of your own lifts from the compare tool, then send it to your coach."
-                  />
-                </CardContent>
-              </Card>
+          {/* The athlete's OWN breakdowns of their own lifts. Kept apart from "Coach reviews"
+              above on purpose: one list mixing the two would leave an athlete unable to tell
+              their own notes from their coach's.
 
+              SHOWN TO A FREE AGENT TOO, SINCE 2026-10-24, BECAUSE THEY CAN ALREADY MAKE THESE.
+              This card was inside the `!isFreeAgent` block, on the argument that "the sending is
+              the point -- a self-review with nowhere to send it is a feature that stops halfway",
+              and that was true when it was written. The Video workbench above (line ~295) is what
+              changed it: `VideoWorkbenchCard` passes `subject={{ kind: "self" }}`, video-compare's
+              "Save as review" button is drawn for every subject except a guardian, and for a self
+              subject it POSTs to /api/athlete/self-reviews -- which is `requireRole("athlete")`
+              with no requireFreeAgent, so it succeeds. So a Free Agent on AI Coach + Video could
+              save a review, edit it in that one dialog, and never see it again: this list is the
+              ONLY surface in the client that renders `mode="self"` (one hit, grep it).
+
+              That is the exact inverse of the bug video-compare's own comment records fixing --
+              "both saved-review lists promised something no button could produce" -- and nothing
+              said it had happened, because a persisted row and a row that was never saved look
+              the same from the screen.
+
+              `canSend` is what keeps the original argument honest: with no coach there is no
+              "Send to coach" button in the editor and the empty hint does not promise one. It
+              takes `hasCoach`, not `!isFreeAgent`, for the tri-state reason above -- the button
+              must not flash while the answer is unknown. The empty HINT may read off
+              `isFreeAgent` because both of its sentences are about this athlete's own footage
+              and neither offers anything a Free Agent cannot do. */}
+          <Card>
+            <CardContent className="space-y-3 p-5">
+              <p className="font-semibold">Your own reviews</p>
+              <VideoReviewList
+                mode="self"
+                fetchUrl="/api/athlete/self-reviews"
+                reviewUrl={(id) => `/api/athlete/self-reviews/${id}`}
+                canSend={hasCoach}
+                emptyHint={
+                  isFreeAgent
+                    ? "Break down one of your own lifts from the compare tool above and it will be saved here."
+                    : "Break down one of your own lifts from the compare tool, then send it to your coach."
+                }
+              />
+            </CardContent>
+          </Card>
+
+          {hasCoach && (
+            <>
               {/* The other direction: what the athlete has ASKED for, and whether it came back.
                   A button that fires and forgets would leave them exactly where they started --
-                  which is the failure the queue exists for. */}
+                  which is the failure the queue exists for. Still coach-only, and correctly so:
+                  unlike the list above, this one has no recipient at all without a coach. */}
               <Card>
                 <CardContent className="space-y-3 p-5">
                   <p className="font-semibold">Ask your coach to check a lift</p>
@@ -513,7 +555,7 @@ export default function AthleteProgress() {
               PT/S&C deficit analysis alongside them, so it stays hidden
               entirely until they have one. See the /api/athlete/weakness-reports
               route comment for how visibility ties to the active coach link. */}
-          {!isFreeAgent && (
+          {hasCoach && (
             <Card className="mt-4">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

@@ -725,6 +725,57 @@ reported, not acted on.** And nothing the server imports may `process.exit` -- t
 so importing it from `index.ts` would have crash-looped the service on the very drift it reports;
 the logic is in `server/foreign-key-drift.ts` now and a test forbids the path.
 
+## A FREE AGENT WAS TOLD THEY HAD A COACH, AND SHOWN NO LIST OF WHAT THEY HAD SAVED
+
+Added 2026-10-24. Three findings of one family, all client-side. **"Does this athlete have a
+coach" arrives over the network**, so every surface branching on it has a THIRD state, and
+`useIsFreeAgent`'s own doc already names it: "`undefined` while the answer isn't known yet --
+callers should treat that as 'not yet', not as 'no'."
+
+- **`athlete/progress.tsx` collapsed the tri-state and then read the boolean in BOTH polarities.**
+  `useIsFreeAgent() === true` is correct for the `isFreeAgent` reads -- which is what it was
+  written for -- and INVERTED for the `!isFreeAgent` ones: while the answer is unknown
+  `!isFreeAgent` is TRUE, so a Free Agent was shown "Coach reviews" and "Ask your coach to check a
+  lift" until the request landed. **The cards this repo deleted on 2026-09-22 because they
+  "described something that could not happen" came back for the length of one fetch.** The two
+  polarities are two names now: `hasCoach = coachKnown && !isFreeAgent`, and nothing about a coach
+  is drawn before there is an answer.
+- **`athlete/classes.tsx` guarded on `coachesFailed` and not `coachesLoading`** -- and
+  `coachesLoading` was already destructured and already guards the catalog twenty lines further
+  down the same file. All four queries fire in parallel on mount, so whenever `my-classes` won the
+  race a Free Agent read **"Your coach hasn't enrolled you in a Class yet."** The comment above
+  that guard shows the author reasoning about the FAILED case and missing the IN-FLIGHT one.
+
+**AND THE ONE THAT IS NOT A FLICKER: A BUTTON WITH NO LIST.** `mode="self"` -- the ONLY surface in
+the whole client that lists an athlete's own video reviews, one grep hit -- sat inside
+`!isFreeAgent`, while the Video workbench that CREATES them is shown **only** to a Free Agent.
+`VideoWorkbenchCard` passes `subject={{ kind: "self" }}`; video-compare's "Save as review" button
+renders for every subject except a guardian; for a self subject it POSTs to
+`/api/athlete/self-reviews`, which is `requireRole("athlete")` with no `requireFreeAgent`, so it
+SUCCEEDS. A Free Agent on AI Coach + Video could save a review, edit it in that one dialog, and
+never reach it again.
+
+**That is the exact inverse of the bug video-compare's own comment records fixing** -- "both
+saved-review lists promised something no button could produce" -- and it was invisible, because a
+persisted row and a row that never saved look identical from the screen. The card's own comment
+argued the other way ("the sending is the point ... whether they should get a self-comparison tool
+INSTEAD is an open product question"), and that argument was true when it was written: **the
+workbench, added later, is what answered the open question**, and nobody went back to the card.
+`canSend` keeps the original point honest -- with no coach there is no "Send to coach" button in
+the editor and the empty hint does not promise one -- and it takes `hasCoach`, not `!isFreeAgent`,
+so it cannot flash while the answer is unknown.
+
+**THE RATCHET'S RULE IS THE GENERAL ONE: the surface that LISTS a thing is reachable by whoever
+can CREATE it.** `a-free-agent-is-never-told-they-have-a-coach.test.ts` discovers
+`mode="self"` from the client directory rather than naming the file, forbids a coach-only block
+guarded on a bare `!isFreeAgent`, requires the two-sentence card to consult `coachesLoading`, and
+requires the Send button to sit behind `canSend`. Bodies are bounded by **matching the block's own
+parens**, never a character window. Four mutations, each caught by the right case -- and the fifth
+is the comment strip, which no mutation of the code could exercise, so it was proven directly: a
+JSX comment quoting `{!isFreeAgent && (` leaves the scan green and reds it with the strip removed.
+
+Client-side: `verify_build`, and it batches -- no camera number moves.
+
 ## EVERY ATHLETE A COACH ONBOARDED WAS WELCOMED AS A FREE AGENT
 
 Added 2026-10-24, the third fix off the sweep. **"Is this athlete coached" was carried by a
