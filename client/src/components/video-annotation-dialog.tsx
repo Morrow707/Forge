@@ -91,13 +91,25 @@ export function VideoAnnotationDialog({
     const ctx = offscreen.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, offscreen.width, offscreen.height);
+    // AND IT SAYS SO IF IT EVER FAILS ANYWAY. crossOrigin above is what makes this work, but a
+    // tainted canvas throws rather than returning anything, and this threw out of an onClick
+    // handler -- which React logs to the console and nothing else. There is no console on a
+    // phone (see the debug-console entries), so the only symptom was a button that did nothing.
+    // A sentence the coach can read beats a silent no-op even when the cause is unfixable here.
+    let frame: string;
+    try {
+      frame = offscreen.toDataURL("image/png");
+    } catch {
+      toast.error("Couldn't capture this frame. Try reopening the video.");
+      return;
+    }
     const img = new Image();
     img.onload = () => {
       baseImageRef.current = img;
       setStrokes([]);
       setCaptured(true);
     };
-    img.src = offscreen.toDataURL("image/png");
+    img.src = frame;
   }
 
   function pointFromEvent(e: React.PointerEvent<HTMLCanvasElement>): Point {
@@ -193,6 +205,22 @@ export function VideoAnnotationDialog({
           <div className="space-y-3">
             <video
               ref={videoRef}
+              // THE SAME CROSS-ORIGIN CANVAS TAINT, FOUND IN A THIRD FILE (2026-10-24).
+              // video-analysis-dialog.tsx and video-pose-analysis.ts both carry this attribute
+              // with the same comment; this element was missed, so "Capture This Frame" did
+              // NOTHING on the native app -- no toast, no error, no state change, forever.
+              // The page origin is capacitor://localhost and the video is on the API host, so
+              // drawImage taints the canvas and the toDataURL below throws "the operation is
+              // insecure"; plain playback never touches a canvas, which is why nobody noticed,
+              // and the web build is same-origin so it worked in every browser.
+              //
+              // Safe because the uploads gate is a SIGNED URL and not a cookie: routes.ts's
+              // /uploads middleware is verifyMediaUrl(path, exp, sig), and its own comment says
+              // signed media URLs exist "precisely because the session cookie doesn't reliably
+              // travel with a bare <video src> fetch on iOS native". So the credentials this
+              // attribute withholds are credentials the request never sent, and app-wide
+              // cors() already allows capacitor://localhost.
+              crossOrigin="anonymous"
               src={resolveApiUrl(videoUrl)}
               controls
               className="w-full rounded-md bg-black"

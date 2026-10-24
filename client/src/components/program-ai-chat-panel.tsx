@@ -159,6 +159,44 @@ export function ProgramAiChatPanel({
   // failure, so it gets its own quiet locked-state card instead of an
   // error. This has to come after every hook above it -- an early return
   // can never sit between hooks.
+  // A 404 IS ALSO PERMANENT, AND IT USED TO DRAW THE INVITING PROMPT (2026-10-24).
+  //
+  // 402 was the only status handled, so every other one fell through to the normal render --
+  // where `messages` is undefined, so the empty state draws: "Tell me what you want to build
+  // ... I'll ask if I need anything else before building your program." The athlete then types,
+  // and `send`'s onError says "Couldn't send that, try again" -- a TRANSIENT sentence for a
+  // permanent condition, so they try again, and again.
+  //
+  // Reached without anybody doing anything odd: the athlete programs route deliberately returns
+  // a Free Agent their own programs PLUS every Forge-official one, so a template opens in the
+  // builder with this panel beside it -- while this panel's own route resolves through
+  // assertCoachOwnsProgram, which a template fails, giving 404 "Program not found".
+  //
+  // Same reasoning the 402 branch below already states in its own words, applied to the other
+  // permanent status: a quiet card rather than an error, and it names the thing that DOES work.
+  // Duplicate is drawn unconditionally on /athlete/programs (unlike Edit, which is behind
+  // `p.editable`) and titled "Duplicate as a new editable program"; it POSTs a copy owned by the
+  // athlete, and the AI can edit that.
+  if (error instanceof ApiError && error.status === 404) {
+    return (
+      <Card>
+        <CardHeader className="shrink-0">
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            {title}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+          <Lock className="h-8 w-8 text-muted-foreground" />
+          <p className="max-w-xs text-sm text-muted-foreground">
+            The AI can't edit a Forge template directly. Duplicate it from your program list and
+            it can rewrite your copy.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (error instanceof ApiError && error.status === 402) {
     return (
       <Card>

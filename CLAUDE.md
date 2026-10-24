@@ -175,6 +175,82 @@ the npm the runner actually has.
 build tool that produces it moving two patches is a client change: `verify_build`, same argument
 as the Capacitor paragraph above.
 
+### AND IT FIRED A THIRD TIME, 2026-10-24, AND THE ONLY FIX WAS A MAJOR MIGRATION
+
+CI was red on EVERY run from 1920 to 1933 -- across four commits and both refs, so not the
+duplicate-run pattern -- at **step 9, "Audit production dependencies"**. Read the step number: 9
+of 16 means typecheck and the 414-file unit suite PASSED and nothing about the code was the
+problem, and it also means steps 10-16 never ran, so **every commit in that window is unproven by
+the build, the reconciler, the seed, the FK-drift check and the whole integration suite**, not
+merely unaudited. Five advisories.
+
+**FOUR FIXED INSIDE THEIR RANGES, so only `package-lock.json` moved** (13 insertions / 13
+deletions, zero packages added or removed): `body-parser` 1.20.6 -> 1.20.9 (high, DoS via
+trailing bytes after a compressed request body), `multer` 2.4.0 -> 2.5.0 (high, DoS via a pending
+async `fileFilter` after request teardown -- Forge's whole upload path), `fast-uri` 3.1.8 -> 3.1.9
+(moderate, and moderate is what step 10 fails on) and `serialize-javascript` 7.0.7 -> 7.1.4 (low,
+taken while the tree was open). Applied with the **newer-npm-from-a-scratchpad** recipe the
+2026-10-22 entry records, because npm 10.9.7 still crashes in arborist on any ideal-tree rebuild
+and `--legacy-peer-deps` still silently deletes packages.
+
+**THE FIFTH HAD NO FIX INSIDE ITS RANGE, AND THAT IS THE PART WORTH KEEPING.** `zod <4.6.6`
+(high, memory exhaustion validating oversized constrained collections) -- and zod is the validator
+on **every input path in this app**: every route body, the consent schemas, the billing schemas.
+npm named the fix as **4.6.7 with `isSemVerMajor: true`**, and there is no stable 3.x patch: the
+only zod versions past 3.25.76 are `3.26.0-canary` prereleases. So the choice was a major
+migration or an indefinitely red CI with no integration coverage on any commit.
+
+**THE ALLOWLIST WAS CONSIDERED AND IS NOT FOR THIS.** `scripts/npm-audit-check.mjs` exists for
+exactly this shape -- an entry with a reason and an expiry, an expired entry failing the build --
+and its own header says it is "for advisories that have **no fix**"; the one live entry (`braces`)
+reads "npm reports no fixed version". zod HAS a fix, so allowlisting it would use
+unfixable-advisory machinery to defer a fixable high on the production tree. **And the tempting
+shortcut is worse:** zod 4 ships a `zod/v3` compatibility subpath, so bumping to 4.6.7 and
+repointing the eleven imports at `zod/v3` would turn the audit green while running the same v3
+code the advisory's range covers -- a flag that makes a resolver stop resolving, in a new costume.
+
+**THE MIGRATION IS 14 EDITS IN 4 FILES AND THREE MECHANICAL CLASSES.** Measured before it was
+decided: 17 typecheck errors, nothing else.
+- `required_error:` -> `error:` (6). Behaviour-preserving **here** for a reason worth checking
+  before copying this elsewhere: every `required_error` message in this repo is IDENTICAL to its
+  adjacent `.min()` message, so a missing and a too-short value already said the same sentence,
+  and a specific check's own message (`.email()`, `.max()`) still wins over the type-level
+  fallback.
+- `errorMap: () => ({ message: M })` -> `message: M` (8). Proven identical rather than assumed:
+  the old `errorMap` fired for ANY issue on the field, and a probe confirms `message` does too --
+  an **unticked** box and a **missing** box both give "Tick the box."
+- `z.record(V)` -> `z.record(z.string(), V)` (2). zod 4 requires the key type; the key was always
+  a JSON string, so naming it changes nothing.
+Plus `drizzle-zod` 0.7.1 -> 0.8.3, which had to move: 0.7.1 peers `zod >=3.0.0`, **satisfied by
+zod 4 and written before it existed** -- a satisfied peer range is not a statement of
+compatibility -- while 0.8.3 peers `^3.25.0 || ^4.0.0`.
+
+**WHAT WAS MEASURED, because a compiling migration is not a correct one.** 0 typecheck errors;
+the unit suite **414 files / 4825 passed, identical to the pre-migration baseline**; `npm run
+build` green; both audits exit 0 with 0 vulnerabilities at or above moderate; `npm ci` on CI's own
+npm 10.9.7 installs all 905 packages from the npm-11-written lock; **zero packages added or
+removed** and two lines in `package.json`. The two `drizzle-zod` schemas were probed directly
+(they are `.pick()`ed to plain text columns and `.extend()`ed with hand-written zod, which is as
+low-risk as drizzle-zod gets): valid accepted, missing rejected, the custom max-8 message
+preserved, the enum rejected, and **`.default()` still applied** -- the interaction most likely to
+have broken. And every realistic email still validates: plus-tags, subdomains, hyphenated school
+districts, uppercase. `a@b` is now rejected for having no TLD, which is a change and a correct one.
+
+**THE ONE REAL BEHAVIOUR CHANGE, recorded rather than hidden: zod 4's DEFAULT messages are
+different, and routes return `parsed.error.issues[0]?.message` to users.** "Required" is now
+"Invalid input: expected string, received undefined"; a short string reads "Too small: expected
+string to have >=2 characters". That reaches a user only where a schema sets no message of its
+own -- every signup, consent and agreement schema sets one -- so it is more technical prose on the
+thin edge rather than a wrong answer, and the 4825 tests that assert specific messages are all
+still green.
+
+`shared/zod-stays-above-the-advisory.test.ts` is the ratchet, and it exists because **a peer
+warning is the obvious thing somebody "fixes" by pinning a dependency back**, which here silently
+reopens a high on every validation path. It states the floor npm named (4.6.7), checks the
+DECLARED range and the INSTALLED tree separately (the one that runs is the resolved one), asserts
+`drizzle-zod`'s own peer declaration names a 4.x range rather than trusting a version number, and
+forbids the three zod-3 spellings in the four migrated files. Two mutations, each caught.
+
 ### AND ONE MORE THAT IS REAL: A DEADLOCKED TRUNCATE IN THE TEST HARNESS (2026-10-09)
 
 Run 1757 on `b88d8850`. **`deploy` hangs off the integration job, so one aborted TRUNCATE stopped
@@ -724,6 +800,77 @@ repeat and not following it). **The three `assignment_correctives` decisions are
 reported, not acted on.** And nothing the server imports may `process.exit` -- the drift CLI did,
 so importing it from `index.ts` would have crash-looped the service on the very drift it reports;
 the logic is in `server/foreign-key-drift.ts` now and a test forbids the path.
+
+## "CAPTURE THIS FRAME" DID NOTHING ON THE PHONE, AND IT IS THE THIRD FILE WITH THIS BUG
+
+Added 2026-10-24. The native page origin is `capacitor://localhost` and every upload is served
+from the API host, so a `<video src={resolveApiUrl(...)}>` is CROSS-ORIGIN there. Plain playback
+does not care. The moment a canvas `drawImage`s that element the canvas is **tainted**, and
+`toDataURL` throws "the operation is insecure" rather than returning anything.
+
+**`video-analysis-dialog.tsx` and `video-pose-analysis.ts` BOTH carry `crossOrigin="anonymous"`
+with a comment explaining exactly this.** `video-annotation-dialog.tsx` did not -- and it had no
+try/catch either, so the throw left an onClick handler, which React logs to a console **that does
+not exist on a phone.** A coach tapping **"Capture This Frame"** got nothing: no toast, no error,
+no state change, ever. The web build is same-origin, so it worked in every browser. **A
+correction wired to two of three paths**, invisible because the paths that WERE taken worked --
+the shape this file has now recorded eight times.
+
+**THE ATTRIBUTE IS SAFE HERE, AND THAT HAD TO BE ESTABLISHED RATHER THAN ASSUMED**, because
+withholding credentials usually breaks a gated fetch. The `/uploads` gate is
+`verifyMediaUrl(path, exp, sig)` -- a **signed URL, not a cookie** -- and its own comment in
+`routes.ts` says signed media URLs exist "precisely because the session cookie doesn't reliably
+travel with a bare `<video src>` fetch on iOS native". So `crossOrigin="anonymous"` withholds a
+credential the request never sent; the app-wide `cors()` already allows `capacitor://localhost`;
+and the audit-log middleware beside it is best-effort and already documented as logging nothing
+on native for the same reason. **Playback cannot break.**
+
+**AND THE CAPTURE SAYS SOMETHING IF IT EVER FAILS ANYWAY.** The attribute is the fix; the
+try/catch is what makes the NEXT failure legible on a device with no console. A sentence beats a
+silent no-op even where the cause is not fixable from the client.
+
+`a-video-read-into-a-canvas-is-cross-origin.test.ts` states the rule -- a `<video>` whose frames
+are read back into a canvas must declare `crossOrigin` -- and discovers the files from the client
+directory, scoped to a JSX element whose `src` goes through `resolveApiUrl` (a video built in JS
+from a freshly recorded blob is same-origin and not this class, which is why the scope is not
+every `drawImage` in the app). Elements are bounded by **matching their own angle bracket**, never
+a character window. Four mutations, each caught by the right case -- including removing the
+attribute from the SIBLING, which proves the scan sees both files and not just the one it was
+written for, and the comment strip, which is load-bearing here because the paragraph above quotes
+every pattern it matches.
+
+**Also checked and NOT a finding:** `image-colors.ts` (the Branding page's pull-colours-from-a-logo)
+reads `getImageData` inside a try/catch and degrades to no swatches, which is a visible
+degradation rather than a silent throw.
+
+## A PERMANENT REFUSAL WAS DRAWN AS AN INVITATION, AND TOASTED AS "TRY AGAIN"
+
+Added 2026-10-24. `program-ai-chat-panel.tsx` handled exactly **one** status, 402, under a comment
+stating the right principle in its own words -- "an expected, permanent state, not a transient
+failure, so it gets its own quiet locked-state card instead of an error". Every other status fell
+through to the normal render, where `messages` is undefined, so the **empty state** drew: "Tell me
+what you want to build ... I'll ask if I need anything else before building your program." The
+athlete types, and `send`'s `onError` says **"Couldn't send that, try again"** -- a transient
+sentence for a permanent condition, so they try again, and again.
+
+**404 IS REACHED WITH NOBODY DOING ANYTHING ODD.** The athlete programs route deliberately returns
+a Free Agent their own programs PLUS every Forge-official one, so a template opens in the builder
+with this panel beside it -- while the panel's own route resolves through
+`assertCoachOwnsProgram`, which a template fails: 404 "Program not found".
+
+**THE CARD NAMES WHAT DOES WORK, which is the half that makes it a fix rather than a refusal.**
+Duplicate is drawn **unconditionally** on the program list -- unlike Edit, which sits behind
+`p.editable` -- titled "Duplicate as a new editable program", and it POSTs a copy owned by the
+athlete that the AI can then edit. A refusal naming no alternative is what Rule #1 is about.
+
+`a-permanent-refusal-is-not-try-again.test.ts` holds both statuses as a closed list (the set is
+decided by the route's own middleware, so a third should fail here deliberately) and asserts each
+returns BEFORE the main render, so the composer is never drawn in that state and the generic "try
+again" toast can only ever describe a real transient -- which is what makes keeping that toast
+correct rather than lazy. **Its first draft asserted source ORDER between a render guard and a
+mutation callback**, which decides nothing; recorded in the file, because the mistake is easy to
+repeat and the corrected property is the interesting one. Two mutations caught; the comment strip
+is defensive today and the file says so instead of implying coverage.
 
 ## "FORM CHECK VIDEO SENT TO YOUR COACH", TO SOMEBODY WITH NO COACH
 
