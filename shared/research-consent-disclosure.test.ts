@@ -45,6 +45,15 @@ describe("the deletion-retention disclosure", () => {
     expect(researchConsentDisclosesDeletionRetention("")).toBe(false);
   });
 
+  it("answers no for a WITHDRAWN row, however much of the text it quotes", () => {
+    // The withdrawal paths quote the whole consent back, heading and all. A quote of what was
+    // withdrawn is not a disclosure the athlete still stands behind.
+    const withdrawn = `WITHDRAWN 2026-10-24T00:00:00.000Z\n\nConsent previously given under the following text was withdrawn:\n\n${RESEARCH_CONSENT_TEXT}`;
+    expect(researchConsentDisclosesDeletionRetention(withdrawn)).toBe(false);
+    const byGuardian = `WITHDRAWN 2026-10-24T00:00:00.000Z\n\nConsent previously given under the following text was withdrawn by the linked guardian:\n\n${RESEARCH_CONSENT_TEXT}`;
+    expect(researchConsentDisclosesDeletionRetention(byGuardian)).toBe(false);
+  });
+
   it("still answers yes when a coach relayed a guardian's decision", () => {
     // That path prepends a line naming who it came from; the document is still
     // the document.

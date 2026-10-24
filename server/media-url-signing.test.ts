@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import crypto from "crypto";
-import { isGatedUploadPath, signMediaUrl, verifyMediaUrl, signMediaUrlsDeep } from "./media-url-signing";
+import {
+  isGatedUploadPath,
+  signMediaUrl,
+  verifyMediaUrl,
+  signMediaUrlsDeep,
+  decodeUploadPath,
+  uploadsSignatureGate,
+  svgUploadHeaders,
+  SVG_RESPONSE_CSP,
+} from "./media-url-signing";
 
 // Same fallback chain the module resolves at import time. Neither
 // MEDIA_URL_SECRET nor SESSION_SECRET is set in a plain test run, so this is
@@ -260,5 +269,51 @@ describe("signMediaUrlsDeep", () => {
     const out = signMediaUrlsDeep({ video: "/uploads/annotations/a.png" });
     const { pathname, exp, sig } = parse(out.video);
     expect(verifyMediaUrl(pathname, exp, sig)).toBe(true);
+  });
+});
+
+describe("the /uploads gate judges the DECODED path (2026-10-24 audit)", () => {
+  function runGate(rawPath: string, query: Record<string, string> = {}) {
+    let status: number | null = null;
+    let nexted = false;
+    const req = { path: rawPath, query } as any;
+    const res = { status: (s: number) => ({ json: () => void (status = s) }) } as any;
+    uploadsSignatureGate()(req, res, () => void (nexted = true));
+    return { status, nexted };
+  }
+
+  it("a percent-encoded gated directory is still gated", () => {
+    // express.static decodes form%2Dvideos to form-videos and serves the clip; the gate must see the same name.
+    expect(runGate("/form%2Dvideos/clip.mp4")).toEqual({ status: 403, nexted: false });
+    expect(runGate("/%73et-traces/7/1-squat-1-abcd.json")).toEqual({ status: 403, nexted: false });
+    expect(runGate("/form-videos/clip.mp4")).toEqual({ status: 403, nexted: false });
+  });
+  it("a signed gated path still opens, encoded or not", () => {
+    const signed = new URL(`https://x${signMediaUrl("/uploads/form-videos/clip.mp4")}`);
+    const query = Object.fromEntries(signed.searchParams.entries());
+    expect(runGate("/form-videos/clip.mp4", query).nexted).toBe(true);
+    expect(runGate("/form%2Dvideos/clip.mp4", query).nexted).toBe(true);
+  });
+  it("a public directory still needs no signature", () => {
+    expect(runGate("/lesson-images/diagram.png").nexted).toBe(true);
+  });
+  it("a path that does not decode, or is double-encoded, is refused", () => {
+    expect(runGate("/form-videos/%E0%A4%A").status).toBe(403);
+    expect(runGate("/form%252Dvideos/clip.mp4").status).toBe(403);
+    expect(decodeUploadPath("/a%2Fb")).toBe("/a/b");
+    expect(decodeUploadPath("/a%252Fb")).toBeNull();
+  });
+  it("an uploaded SVG is served under an enforcing CSP; other files are untouched", () => {
+    const headers: Record<string, string> = {};
+    const res = { setHeader: (k: string, v: string) => void (headers[k] = v) } as any;
+    let nexted = false;
+    svgUploadHeaders()({ path: "/lesson-images/diagram.svg" } as any, res, () => void (nexted = true));
+    expect(nexted).toBe(true);
+    expect(headers["Content-Security-Policy"]).toBe(SVG_RESPONSE_CSP);
+    expect(SVG_RESPONSE_CSP).toMatch(/default-src 'none'/);
+    expect(SVG_RESPONSE_CSP).toMatch(/\bsandbox\b/);
+    const none: Record<string, string> = {};
+    svgUploadHeaders()({ path: "/lesson-images/photo.png" } as any, { setHeader: (k: string, v: string) => void (none[k] = v) } as any, () => {});
+    expect(none).toEqual({});
   });
 });

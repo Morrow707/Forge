@@ -71,12 +71,12 @@ export function SquadQuests() {
             </div>
             {c.progress.perAthlete.length > 0 && (
               <div className="mt-2 space-y-0.5">
-                {c.progress.perAthlete.map((a) => (
+                {c.progress.perAthlete.map((a, i) => (
                   <div
-                    key={a.athleteId}
-                    className="flex items-center justify-between text-xs text-muted-foreground"
+                    key={`${i}-${a.name}`}
+                    className={`flex items-center justify-between text-xs ${a.isYou ? "text-foreground" : "text-muted-foreground"}`}
                   >
-                    <span className="truncate">{a.name}</span>
+                    <span className="truncate">{a.name}{a.isYou ? " (you)" : ""}</span>
                     <span className="shrink-0 font-semibold">{a.contribution.toLocaleString()}</span>
                   </div>
                 ))}

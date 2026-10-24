@@ -6169,3 +6169,82 @@ lever, a tighter agreement tolerance, is the width the body rulers need to clust
 **What to read on the next filmed set: `plateBoxToExpectedRatio`, then `plateScaleIfAdmitted`.**
 Near 1.0 and the row is solved. At 1.2-1.5 the next work is a corroboration rule that can tell a
 25% disagreement from agreement -- written against a measured take, never against that table.
+
+## THE 2026-10-24 SECURITY AUDIT: PROFILES, MINORS, CONSENT, AND WHAT LEAVES
+
+Scott: "you are going to be my security expert ... audit our profiles, especially the athletes
+profiles ... how we collect data ... if someone were to try to steal this data, how are we
+protected? i don't want any data leaks." Then: "build your recommendations in order then push all
+to main." Four read-only sub-audits, every finding re-read in the code before anything moved, the
+report in the session scratchpad. What shipped, in the order it was recommended, each with a test
+that goes red with the fix reverted:
+
+- **Four authentication holes, the only outsider-reachable ones found.** CSRF let `Origin: null`
+  through (a sandboxed iframe's request, with the SameSite=None cookie attached); the `/uploads`
+  signature gate matched gated directories on the RAW path, so `form%2Dvideos` needed no
+  signature and `express.static` decoded it -- every clip public by filename; an uploaded SVG ran
+  script on the app origin; and when the device gate stood down (an exempt account, the kill
+  switch, no email provider) a first-seen device was trusted BEFORE the authenticator code, so a
+  stolen password needed two attempts. `csrf-protection.test.ts`, `media-url-signing.test.ts`,
+  `new-device-approval.itest.ts`.
+- **A CURRENT ROSTER SEAT IS PART OF BEING IN SCOPE.** `athleteIsInCoachScope` and
+  `athleteIdsInCoachScope` answered from team scope alone, and a primary coach was in scope for
+  everybody -- so every read keyed on `assignments.coachId` (assignments, skill assignments,
+  analytics, both leaderboards, recent PRs, the calendar, the day-comment writes) kept answering
+  for an athlete who had LEFT the roster, and `getAssignmentsForCoach` handed back the whole users
+  row minus passwordHash: calendarToken, mfaBackupCodeHashes, researchSubjectId. Assignments are
+  never deleted (workout_logs cascade from them), so the roster is the relationship and the
+  helpers read it now; the athlete on an assignment list is `projectAssignmentAthlete`, a LIST of
+  the fields the screens read, so a secret cannot ride along by default.
+- **A narrowed staff coach could widen their own scope** by creating a team (owned teams count as
+  scope) and bulk-adding the staff roster onto it; the bulk route is team-narrowed now like the
+  single add. Waivers follow the same scope.
+- **The documents give some switches to the guardian and the code gave them to the coach.** A
+  guardian's withdrawal never touched `users.researchDataConsent` or the mirror, and its
+  WITHDRAWN row (which quotes the whole consent, heading included) made
+  `retainSubjectAfterDeletion` keep the rows past deletion -- `withdrawGuardianConsent` withdraws
+  the research consent too and `researchConsentDisclosesDeletionRetention` refuses a WITHDRAWN
+  text. A coach can no longer turn tracking ON for an under-13 (Notice section 4) or relay
+  research consent for an adult or for a minor whose guardian is on Forge (consent text
+  section 7); OFF is never refused.
+- **The two controls the documents promised and nothing offered.** An adult turns camera tracking
+  off in Account Settings (`POST /api/athlete/tracking-opt-out`: the WITHDRAWN biometric_waiver row,
+  the opt-out, out of the mirror; back ON is the release again from the workout screen) -- the
+  release text's section 7 described a switch that did not exist. A guardian deletes the child's
+  account from the dashboard (`.../delete-account`, their password plus the child's name; the only
+  "Delete account" there deleted the GUARDIAN's account), and the guardian's withdrawal, which had a
+  route and no button, has one.
+- **Copies of a minor's footage outlived every deletion path.** Reference clips a coach copied
+  (`reference_clips.source_athlete_id`) and burned-in review exports were in no purge, no
+  withdrawal and not in `deleteUserRecord`. `purgeDerivedFootageForAthlete` runs from all three
+  and `purgeDerivedFootagePastRetention` from the nightly retention job. The copy route also
+  checks the clip is THAT athlete's upload: it checked the athlete and not the path.
+- **A filename was a permission.** `res.json` signs every `/uploads/` string in every response, so
+  any path a signed-in user got reflected came back playable. The ownership checks that were
+  missing are in: review creation (both clips, by uploader or by reference-clip ownership), the
+  attach-video refusal no longer RECORDS the other person's path, comments carrying a video meet
+  the opt-out, and `setHasTrackedData` reads `CAMERA_DERIVED_SET_COLUMNS` instead of four fields.
+  **STILL OPEN AND NAMED:** the hook itself. Signing only what a route is entitled to return is
+  architectural; until then a remembered filename plus any echo of it is a link for a signed-in
+  user, which is why the ownership checks matter.
+- **Smaller:** an unrelated admin gets no `athleteName` from the waivers route (every admin
+  surface that hands out ids was a name lookup); Squad Quests shows teammates as the leaderboard
+  does (first name, last initial, no id, `isYou` for the viewer); the detector-training clips are
+  research-consenting adults only and logged through `logRecordAccess`; a failed guardian email is
+  no longer counted as sent (`terms-change-notice.ts` read a never-thrown exception, the consent
+  confirmation ignored `{sent:false}`); `scripts/backup.sh` encrypts both files at rest when
+  `BACKUP_ENCRYPTION_PASSPHRASE` is set and says loudly when it is not.
+- `server/security-audit-2026-10-24.itest.ts` drives all of it through the real routes (14
+  cases); the roster-scope and bulk-add fixes were mutation-tested.
+- **AND THE HTTP TEST HARNESS COULD NOT SEE A THROWN REFUSAL.** `test-support/http-app.ts` mounted
+  neither `express-async-errors` nor an error middleware, so a storage method that THROWS
+  (`ForbiddenReferenceError`, status 400) rejected a promise nobody listened to and the request
+  never answered: three review itests read a 20-second timeout where production answers 400.
+  The harness has both now, in index.ts's shape, which is what "the status a refusal carries" --
+  the thing the harness exists to observe -- needs. A review may hold only the named athlete's
+  footage, the coach's own upload, or a staff reference clip; two itests that reviewed a coach's
+  unattached upload as if it were the athlete's were corrected rather than the rule.
+
+**Two for counsel, not code:** the research text says no linking key exists and
+`users.researchSubjectId` is one; the privacy policy says the AI provider receives request text and
+`waiver-reader.ts` also sends it uploaded medical documents.

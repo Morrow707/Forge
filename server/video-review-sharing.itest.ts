@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { resetDatabase, db } from "./test-support/fixtures";
+import { storage } from "./storage";
 import { guardianLinks, videoReviews } from "@shared/schema";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -57,6 +58,10 @@ describe("saved video reviews", () => {
     await addToRoster(otherCoach.id, otherAthlete.id);
     await db.insert(guardianLinks).values({ athleteId: athlete.id, guardianId: guardian.id });
     ids = { athleteId: athlete.id, otherAthleteId: otherAthlete.id };
+    // The clip is the ATHLETE's upload. Since 2026-10-24 a review may only hold footage of the
+    // athlete it names (or the coach's own, or a staff reference clip), and the ledger is what
+    // says whose a gated path is -- see storage.assertReviewClipsReferenceable.
+    await storage.recordUploadedFile(CLIP.videoUrl, athlete.id);
     actors = {
       coach: await loginAs(server.baseUrl, coach),
       otherCoach: await loginAs(server.baseUrl, otherCoach),

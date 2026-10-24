@@ -135,7 +135,7 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
     expect(section).not.toContain("updateProfileSchema");
   });
 
-  it("leaves exactly eight guardian writes, all deliberate", () => {
+  it("leaves exactly nine guardian writes, all deliberate", () => {
     // Camera tracking off, which is prospective and is the parental control the feature exists
     // for; asking for a removal, which somebody else answers; and signing off a research-consent
     // change the ATHLETE asked for.
@@ -199,11 +199,20 @@ describe("rule 3: a guardian writes nothing on the athlete's record", () => {
     // give it, refused for anyone 13 or over, and the record itself is written by Stripe's
     // webhook rather than by this route.
     //
+    // The ninth DELETES THE CHILD'S ACCOUNT (2026-10-24 audit). The Notice to Parent or Guardian
+    // (section 7) and the privacy policy (section 9) both told a guardian they could, and the only
+    // "Delete account" on their dashboard deleted the GUARDIAN's own account and left the child's
+    // data in place. It is the withdraw-consent route taken to its end: not information about the
+    // child (rule 3) but the account's existence, which the guardian whose consent it stands on
+    // may end. Guardian's password plus the child's name typed back; the billing callback runs
+    // first, exactly as the holder's own deletion does.
+    //
     // Anything else appearing here is a regression.
     const guardianWrites = [...routes.matchAll(/app\.(post|patch|put|delete)\(\s*\n?\s*"\/api\/guardian\/[^"]*"/g)];
     const paths = guardianWrites.map((m) => m[0].split('"')[1]);
     expect(paths.sort()).toEqual([
       "/api/guardian/athletes/:athleteId/biometric-consent",
+      "/api/guardian/athletes/:athleteId/delete-account",
       "/api/guardian/athletes/:athleteId/parental-verification",
       "/api/guardian/athletes/:athleteId/removal-requests",
       "/api/guardian/athletes/:athleteId/tracking-opt-out",

@@ -1,5 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { trustDevice } from "../trusted-devices";
+// What server/index.ts imports first: without it an async handler that THROWS (storage's
+// ForbiddenReferenceError, say) rejects a promise nobody is listening to, the request never
+// answers, and the test reads a 20-second timeout where production answers 400. Found 2026-10-24
+// when a refusal added to review creation hung the surface audit instead of failing it.
+import "express-async-errors";
 import express from "express";
 import cors from "cors";
 import type { AddressInfo } from "node:net";
@@ -51,6 +56,12 @@ export async function startTestServer(): Promise<TestServer> {
   app.use(requestMemoScope);
 
   const server: Server = await registerRoutes(app);
+  // The shape of server/index.ts's final error middleware, for the same reason: the status a
+  // refusal carries is the thing this harness exists to observe, and a thrown refusal has one.
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const status = err?.status || err?.statusCode || 500;
+    res.status(status).json({ message: status < 500 ? err?.message : "Internal Server Error" });
+  });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
 

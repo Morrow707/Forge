@@ -21,6 +21,7 @@ import { Ticket, AlertTriangle, Moon, Sun } from "lucide-react";
 import { contrastForegroundHsl, meetsWcagAA, nearestAccessibleColor } from "@/lib/color";
 import { cn } from "@/lib/utils";
 import { getStoredTheme, setTheme, type Theme } from "@/lib/theme";
+import { derivePrivacyTier } from "@shared/privacy-tiers";
 import type { PublicUser } from "@shared/schema";
 
 // Same five hues shown in the "Coach Themes" concept deck -- named presets
@@ -67,6 +68,27 @@ export function AccountSettingsDialog({
     setTheme(next);
     setThemeState(next);
   }
+
+  // THE ADULT'S OWN CAMERA SWITCH. The Video and Biometric Consent (section 7) says an adult
+  // withdraws "by turning camera tracking off in their account", and until 2026-10-24 no such
+  // control existed -- only a coach or a guardian could toggle it. Adults only: a minor's switch
+  // is on the guardian dashboard. Turning it back on is agreeing to the consent again, which the
+  // workout screen asks for the next time Record is tapped, so there is one way to give it.
+  const isAdultAthlete =
+    user.role === "athlete" && !!user.dateOfBirth && derivePrivacyTier(user.dateOfBirth) === "tier3_adult_18plus";
+  const [confirmTrackingOff, setConfirmTrackingOff] = useState(false);
+  const trackingOffMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/athlete/tracking-opt-out", { trackingOptOut: true });
+    },
+    onSuccess: () => {
+      setConfirmTrackingOff(false);
+      qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      qc.invalidateQueries({ queryKey: ["/api/athlete/camera-access"] });
+      toast.success("Camera tracking is off and your consent is withdrawn");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't turn camera tracking off"),
+  });
 
   const [name, setName] = useState(user.name);
   const nameMutation = useMutation({
@@ -185,6 +207,47 @@ export function AccountSettingsDialog({
               </Button>
             </div>
           </div>
+
+          {isAdultAthlete && (
+            <div className="space-y-1.5 border-t border-border pt-4" data-testid="camera-tracking-switch">
+              <Label>Camera tracking</Label>
+              {user.trackingOptOut ? (
+                <p className="text-xs text-muted-foreground">
+                  Off. Nothing is measured from your video and your Video and Biometric Consent is
+                  withdrawn. To turn it back on, tap Record on a workout and agree to the consent
+                  again.
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    On. Turning it off stops every camera measurement from now on and withdraws
+                    your Video and Biometric Consent. Video already saved stays in your video bank
+                    until you delete it.
+                  </p>
+                  {confirmTrackingOff ? (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => trackingOffMutation.mutate()}
+                        disabled={trackingOffMutation.isPending}
+                      >
+                        {trackingOffMutation.isPending ? "Turning off…" : "Yes, turn it off"}
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmTrackingOff(false)}>
+                        Keep it on
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button type="button" variant="outline" size="sm" onClick={() => setConfirmTrackingOff(true)}>
+                      Turn camera tracking off
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           <div className="space-y-1.5 border-t border-border pt-4">
             <Label>Email</Label>

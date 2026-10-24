@@ -1005,6 +1005,14 @@ export const withdrawGuardianConsentSchema = z.object({
 });
 export type WithdrawGuardianConsentInput = z.infer<typeof withdrawGuardianConsentSchema>;
 
+/** A guardian deleting their linked athlete's account: their own password, and the child's name
+ * typed back -- the same two confirmations the withdrawal and the holder's own deletion take. */
+export const guardianDeleteAthleteSchema = z.object({
+  password: z.string().min(1, "Your password is required"),
+  confirmAthleteName: z.string().min(1, "Type the athlete's name to confirm"),
+});
+export type GuardianDeleteAthleteInput = z.infer<typeof guardianDeleteAthleteSchema>;
+
 export const claimGuardianInviteSchema = z.object({
   password: passwordField,
   agreedToTerms: z.literal(true, {

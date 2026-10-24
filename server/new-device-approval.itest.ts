@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { db, resetDatabase } from "./test-support/fixtures";
 import { startTestServer, makeLoginableUser, TestClient, TEST_PASSWORD, trustClientDevice, type TestServer } from "./test-support/http-app";
 import { testOutbox } from "./email";
-import { deviceApprovals } from "@shared/schema";
+import { deviceApprovals, trustedDevices } from "@shared/schema";
+import { generate, generateSecret } from "otplib";
 import { eq } from "drizzle-orm";
 
 /** A password alone signs in only on a device this account has used before. Everything else
@@ -255,6 +256,61 @@ describe("a new device waits on the email", () => {
       const res = await new TestClient(server.baseUrl).login(user.email, TEST_PASSWORD);
       expect(res.status).toBe(200);
       expect(res.body.email).toBe(user.email);
+    } finally {
+      delete process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS;
+    }
+  });
+
+  /** THE SECOND FACTOR WAS OPTIONAL ON EVERY ACCOUNT THE EMAIL GATE STOOD DOWN FOR.
+   *
+   * standDownButRememberDevice trusted a first-seen device BEFORE the authenticator code was
+   * entered, so a stolen password needed two attempts: the first was asked for the code and
+   * failed it, and the second found the device already on file, was `recognized`, and
+   * mayShortCircuitMfa skipped the code. Exempt accounts (the App Review logins, an operator
+   * exemption for a day), every box with no email provider, and the whole platform under the
+   * kill switch. The device is remembered by verify-login now, after the code. */
+  it("an exempt account with an authenticator owes the code until the code is entered, then its device is remembered", async () => {
+    const secret = generateSecret();
+    const user = await makeLoginableUser({ role: "coach", mfaEnabled: true, mfaSecret: secret });
+    process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS = user.email;
+    try {
+      const phone = new TestClient(server.baseUrl);
+      // The login limiter is per IP and this file is already at its budget; trust proxy is 1,
+      // so a forwarded address is what the limiter keys on. Nothing about the device gate
+      // reads the IP.
+      const ip = { "x-forwarded-for": "203.0.113.77" };
+      const login = () => phone.post("/api/auth/login", { email: user.email, password: TEST_PASSWORD }, ip);
+      const first = await login();
+      expect(first.status).toBe(200);
+      expect(first.body.mfaRequired).toBe(true);
+      expect(phone.hasSessionCookie()).toBe(false);
+
+      // The attack: the same device, the password again, no code ever entered. Before the fix
+      // this answered with a session.
+      const again = await login();
+      expect(again.body.mfaRequired).toBe(true);
+      expect(again.body.email).toBeUndefined();
+      expect(phone.hasSessionCookie()).toBe(false);
+      const list = await db.select().from(trustedDevices).where(eq(trustedDevices.userId, user.id));
+      expect(list.length).toBe(0);
+
+      const wrong = await phone.post("/api/auth/mfa/verify-login", { mfaToken: again.body.mfaToken, code: "000000" }, ip);
+      expect(wrong.status).toBe(401);
+      expect(phone.hasSessionCookie()).toBe(false);
+
+      const code = await generate({ secret });
+      const right = await phone.post("/api/auth/mfa/verify-login", { mfaToken: again.body.mfaToken, code }, ip);
+      expect(right.status).toBe(200);
+      expect(right.body.email).toBe(user.email);
+      expect(phone.hasSessionCookie()).toBe(true);
+
+      // The code proved the holder; from here the device is known and skips the code, which
+      // is the behaviour the 2026-09-21 fix was for.
+      await phone.post("/api/auth/logout");
+      const third = await login();
+      expect(third.status).toBe(200);
+      expect(third.body.mfaRequired).toBeUndefined();
+      expect(third.body.email).toBe(user.email);
     } finally {
       delete process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS;
     }

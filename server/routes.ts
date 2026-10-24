@@ -34,9 +34,16 @@ import { setupAuth, requireAuth, requireRole, toPublicUser, toPublicUserWithSect
 import { registerInstitutionalAgreementRoutes } from "./institutional-agreement-routes";
 import { registerEmailListRoutes } from "./email-list";
 import { hashPassword, comparePasswords } from "./auth-utils";
-import { getEntitlements, type Entitlements, getFreeAgentEntitlements, syncCoachSubscriptionBand, createStripePromoForCode } from "./billing";
+import {
+  getEntitlements,
+  type Entitlements,
+  getFreeAgentEntitlements,
+  syncCoachSubscriptionBand,
+  createStripePromoForCode,
+  cancelSubscriptionsForDeletedAccount,
+} from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
-import { storage, CohortQueryBudgetExceeded, CohortQueryDifferencingRefused } from "./storage";
+import { storage, CohortQueryBudgetExceeded, CohortQueryDifferencingRefused, leaderboardDisplayName } from "./storage";
 import { redeemPromoCode } from "./promo-codes";
 import { promoDiscountMonths, promoPercentOff } from "@shared/promo-codes";
 import { formatTrackingReport, buildTrackingReportEntries } from "./tracking-report";
@@ -134,7 +141,7 @@ import { verifyAppleTransaction, appleVerifyRefusal, APPLE_IAP_LIVE } from "./ap
 import { GOOGLE_PLAY_BILLING_LIVE, verifyGooglePlayPurchase } from "./google-play-billing";
 import { publicSignupOpen, inviteCodeAccepted } from "./signup-availability";
 import { publicOrigin as sharedPublicOrigin } from "./public-origin";
-import { verifyMediaUrl } from "./media-url-signing";
+import { uploadsSignatureGate, svgUploadHeaders } from "./media-url-signing";
 import { summarizeCspReport } from "./csp-report";
 import { shouldTouchLastSeen } from "./session-tracking";
 import { COACH_SECTIONS } from "@shared/coach-sections";
@@ -264,6 +271,8 @@ import {
   emailLegalDocumentSchema,
   externalWaiverKindEnum,
   signupSchema,
+  CAMERA_DERIVED_SET_COLUMNS,
+  guardianDeleteAthleteSchema,
 } from "@shared/schema";
 import { readUploadedWaiver } from "./waiver-reader";
 import { promises as fsp } from "node:fs";
@@ -896,13 +905,13 @@ async function requireFreeAgent(req: any, res: any, next: any) {
 // swingSeparationDeg for a swing/rotation capture), so checking these four
 // catches every tracking mode without needing to enumerate every optional
 // metric field setLogInputSchema carries.
-function setHasTrackedData(set: { formCheckVideoUrl?: string | null; peakVelocityMps?: number | null; jumpHeightCm?: number | null; swingSeparationDeg?: number | null }): boolean {
-  return (
-    set.formCheckVideoUrl != null ||
-    set.peakVelocityMps != null ||
-    set.jumpHeightCm != null ||
-    set.swingSeparationDeg != null
-  );
+// Four headline fields was the first version, and it let a save carrying kettlebell, med-ball,
+// horizontal-load or skeleton-frame data past the opt-out when those four were null -- so the
+// test is EVERY camera-derived column (shared/schema.ts classifies them; a new capture mode
+// cannot skip this) plus the clip itself (2026-10-24 audit).
+function setHasTrackedData(set: Record<string, unknown>): boolean {
+  if (set.formCheckVideoUrl != null) return true;
+  return CAMERA_DERIVED_SET_COLUMNS.some((column) => set[column] != null);
 }
 
 // Server-side backstop for a parent's request to stop future camera-tracking
@@ -917,6 +926,8 @@ async function isTrackingOptedOut(athleteId: number): Promise<boolean> {
   const athlete = await storage.getUser(athleteId);
   return Boolean(athlete?.trackingOptOut);
 }
+const TRACKING_OFF_MESSAGE =
+  "Camera-tracking collection is turned off for this athlete at a parent/guardian's request.";
 
 // TestFlight-phase-only bypass -- flips every paywall below open for every
 // account, not just the specific comped demo accounts below, so real
@@ -1684,13 +1695,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // team-logos are coach/org content, not footage of a person, and stay
   // exactly as before: plain public files, no signature required.
   app.use("/uploads", uploadsLimiter);
-  app.use("/uploads", (req, res, next) => {
-    const pathname = `/uploads${req.path}`;
-    if (!verifyMediaUrl(pathname, req.query.exp, req.query.sig)) {
-      return res.status(403).json({ message: "This link has expired. Reload the page and try again." });
-    }
-    next();
-  });
+  // The gate decodes the path first -- see uploadsSignatureGate for the encoded-directory bypass
+  // it closes -- and an uploaded SVG is served under an enforcing CSP, see svgUploadHeaders.
+  app.use("/uploads", uploadsSignatureGate());
+  app.use("/uploads", svgUploadHeaders());
   // Extends recordAccessAuditLogs past the admin video-management page
   // (list/delete only, see the routes above) into the actual streaming
   // path -- the far more common and far more sensitive way a coach/admin
@@ -1845,7 +1853,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/detector-training-clips", requireRole("admin"), async (req, res) => {
     const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "40"), 10) || 40, 1), 200);
+    // Research-consenting adults who have not opted out, and nothing else -- the filter is in
+    // the query. Logged like every other admin read of a person's footage; the row names the
+    // clip ids and not the athletes, which the response does not carry either.
     const rows = await storage.getClipsForDetectorTraining(limit);
+    await storage.logRecordAccess({
+      userId: currentUser(req).id,
+      actionType: "viewed",
+      resourceType: "detector_training_clips",
+      detail: `${rows.length} clip(s): ${rows.map((r) => r.setId).join(",")}`.slice(0, 1000),
+      ipAddress: req.ip,
+    });
     const codes = new Map<number, string>();
     const codeFor = (athleteId: number) => {
       if (!codes.has(athleteId)) codes.set(athleteId, `Athlete ${codes.size + 1}`);
@@ -5959,8 +5977,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // uses, so per-team narrowing applies here too.
     const athlete = await storage.getRosterAthleteForCoach(user.id, parsed.data.athleteId);
     if (!athlete) return res.status(404).json({ message: "Athlete not found" });
+    // ...and the clip has to be THAT athlete's upload. The athlete was checked and the path was
+    // not, so any /uploads path the coach knew -- another athlete's clip, a waiver PDF -- could be
+    // copied into the reference library and handed back signed (2026-10-24 audit).
+    const sourcePath = parsed.data.videoUrl.split("?")[0];
+    if (!(await storage.clipBelongsToAthlete(sourcePath, parsed.data.athleteId))) {
+      return res.status(403).json({ message: "That clip isn't this athlete's." });
+    }
 
-    const copied = await copyUploadedFile(parsed.data.videoUrl, "reference-clips");
+    const copied = await copyUploadedFile(sourcePath, "reference-clips");
     if (!copied) return res.status(404).json({ message: "Clip not found" });
 
     const row = await storage.createReferenceClip({
@@ -7507,6 +7532,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // A minor asking their guardian to change it. The ask only -- approving is the guardian's.
+  // THE ADULT'S OWN SWITCH. biometric-release.ts section 7: "An adult athlete withdraws by
+  // turning camera tracking off in their account." Until 2026-10-24 there was no such switch --
+  // only a coach or a guardian could toggle trackingOptOut -- so the release text described a
+  // control that did not exist. OFF writes the WITHDRAWN biometric_waiver row (hasBiometricConsent
+  // reads it), sets trackingOptOut and takes the athlete out of the research mirror, exactly as
+  // the guardian's switch does. Turning it back ON is giving the release again, which is
+  // POST /api/account/biometric-release (it records the text and clears the opt-out); this route
+  // refuses `false` so there is one way to give consent and it always records the document.
+  app.post("/api/athlete/tracking-opt-out", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = setTrackingOptOutSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    if (!parsed.data.trackingOptOut) {
+      return res.status(400).json({
+        message: "Turning camera tracking back on means agreeing to the Video and Biometric Consent again, from the workout screen.",
+      });
+    }
+    const result = await storage.withdrawOwnTracking(user.id, {
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent") ?? undefined,
+    });
+    if (!result.ok) return res.status(403).json({ message: result.error });
+    res.json({ trackingOptOut: true });
+  });
+
   app.post("/api/athlete/research-consent/request", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const parsed = z
@@ -7636,6 +7688,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
       if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      // WHO MAY ANSWER (research-consent.ts, section 7: the guardian "retains the sole right").
+      // An adult answers for themselves on their own research-consent route; a minor with a
+      // linked guardian is answered for from the guardian dashboard. Until 2026-10-24 a coach
+      // could grant for either by typing a name into relayedFrom. What is left for the relay is
+      // the minor whose guardian has no Forge account, which is what it was written for. Turning
+      // consent OFF is never refused: a withdrawal only ever withholds.
+      if (parsed.data.granted) {
+        const adult = onRoster.dateOfBirth && derivePrivacyTier(onRoster.dateOfBirth) === "tier3_adult_18plus";
+        if (adult) {
+          return res.status(403).json({ message: "An adult athlete decides this for themselves, from their own account." });
+        }
+        if (await storage.getGuardianLinkForAthlete(athleteId)) {
+          return res.status(403).json({
+            message: "This athlete's parent or guardian answers this from the guardian dashboard, not through a coach.",
+          });
+        }
+      }
 
       const updated = await storage.setResearchDataConsent({
         athleteId,
@@ -7742,6 +7811,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const updated = await storage.setTrackingOptOut(user.id, athleteId, parsed.data.trackingOptOut);
       if (!updated) return res.status(404).json({ message: "Athlete not found" });
+      if (updated === "guardian_only") {
+        return res.status(403).json({
+          message:
+            "For an athlete under 13, camera tracking is turned on by their parent or guardian from the guardian dashboard.",
+        });
+      }
       res.json(updated);
     },
   );
@@ -9050,16 +9125,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // just closed, through a different door.
       //
       // The uploader, their guardian and their coach still get the link. It is their document.
+      const unrelatedAdmin = user.role === "admin" && !(await storage.canManageWaiversFor(user.id, athleteId));
       res.json({
-        waivers:
-          user.role === "admin" && !(await storage.canManageWaiversFor(user.id, athleteId))
-            ? waivers.map((w) => ({ ...w, fileUrl: "" }))
-            : waivers,
+        waivers: unrelatedAdmin ? waivers.map((w) => ({ ...w, fileUrl: "" })) : waivers,
         summary: await storage.externalWaiverSummary(athleteId),
         // Whose documents these are. A coach uploading on behalf of an athlete needs the page to
         // say the athlete's name, or the one screen in Forge where you can file somebody else's
         // medical form looks exactly like the one where you file your own.
-        athleteName: (await storage.getUser(athleteId))?.name ?? null,
+        // An admin with no relationship gets no name, the same way they get no file: this route
+        // took any user id and answered with the person's name, which turned every admin surface
+        // that hands out ids into a name lookup, against admin-identity.ts (2026-10-24 audit).
+        athleteName: unrelatedAdmin ? null : ((await storage.getUser(athleteId))?.name ?? null),
       });
     } catch (err) {
       next(err);
@@ -10195,10 +10271,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // pagination -- top 10 (already sorted by contribution) instead of the
     // whole team, which on a real 10k-member team was a 2MB response and
     // 10,000+ rendered rows for every single athlete's dashboard load.
+    // Teammates appear as the athlete leaderboard shows them -- first name and last initial,
+    // no user id -- for the reason leaderboardDisplayName gives: a team code on a flyer is a
+    // roster seat, and this card handed a stranger holding one every teammate's full name and
+    // id (2026-10-24 audit). The viewer's own row keeps their name.
     const withProgress = await Promise.all(
       challenges.map(async (c) => {
         const progress = await storage.computeTeamChallengeProgress(c);
-        return { ...c, progress: { ...progress, perAthlete: progress.perAthlete.slice(0, 10) } };
+        const perAthlete = progress.perAthlete.slice(0, 10).map((a) => ({
+          name: a.athleteId === user.id ? a.name : leaderboardDisplayName(a.name),
+          contribution: a.contribution,
+          isYou: a.athleteId === user.id,
+        }));
+        return { ...c, progress: { ...progress, perAthlete } };
       }),
     );
     res.json(withProgress);
@@ -12278,6 +12363,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
       }
+      // Same rule as the workout-day comment above.
+      if (parsed.data.videoUrl && (await isTrackingOptedOut(user.id))) {
+        return res.status(403).json({ message: TRACKING_OFF_MESSAGE });
+      }
       const comment = await storage.addSkillDayComment(assignmentId, skillProgramDayId, user.id, parsed.data);
 
       // Same "self-assigned has nobody to notify" guard as the sprint/
@@ -12609,6 +12698,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .json({ message: "Camera-tracking collection is turned off for this athlete at a parent/guardian's request." });
     }
     const result = await storage.attachVideoToLoggedSet(user.id, parsed.data);
+    if (!result.attached && result.cause === "not_your_upload") {
+      // Never recorded: the unattached list is read back signed, so recording somebody else's
+      // path here would mint a playable link to their footage (2026-10-24 audit).
+      return res.status(403).json({ message: "That file isn't yours to attach." });
+    }
     if (!result.attached) {
       // The clip is on disk and in uploaded_files; the only thing that failed is the link. The
       // row is what lets the Video Bank offer to link it by hand and the coach's page say a
@@ -12814,6 +12908,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsed = createWorkoutCommentSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      // A clip on a comment is footage of the athlete like any set clip, and this route had no
+      // opt-out check -- the one way video reached the server after a guardian turned it off.
+      if (parsed.data.videoUrl && (await isTrackingOptedOut(user.id))) {
+        return res.status(403).json({ message: TRACKING_OFF_MESSAGE });
       }
       const comment = await storage.addWorkoutComment(
         assignmentId,
@@ -14886,6 +14985,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         videosPurged: result.videosPurged,
         consentRecordsWritten: result.recordsWritten,
       });
+    },
+  );
+
+  // THE NOTICE SAYS A GUARDIAN CAN DELETE THE ACCOUNT (section 7), AND THE PRIVACY POLICY SAYS IT
+  // TOO (section 9). Until 2026-10-24 the only "Delete account" on the guardian dashboard deleted
+  // the GUARDIAN's own account and left the child's data in place. Same two confirmations as the
+  // athlete's own deletion plus the withdrawal: the guardian's password and the child's name typed
+  // back. Everything the account holds goes the way deleteUserRecord takes it for the holder.
+  app.post(
+    "/api/guardian/athletes/:athleteId/delete-account",
+    requireGuardianAccess,
+    async (req, res, next) => {
+      try {
+        const user = currentUser(req);
+        const athlete = await storage.getAthleteForGuardianScoped(user.id, Number(req.params.athleteId));
+        if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
+        const parsed = guardianDeleteAthleteSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ message: parsed.error.issues[0]?.message });
+        }
+        if (parsed.data.confirmAthleteName.trim().toLowerCase() !== athlete.name.trim().toLowerCase()) {
+          return res.status(400).json({ message: `Type ${athlete.name}'s name exactly to confirm.` });
+        }
+        const result = await storage.deleteLinkedAthleteAccount(user.id, athlete.id, parsed.data.password, (handles) =>
+          cancelSubscriptionsForDeletedAccount(handles),
+        );
+        if ("error" in result) return res.status(400).json({ message: result.error });
+        res.json({ deleted: true, ...("billing" in result ? { billing: result.billing } : {}) });
+      } catch (err) {
+        next(err);
+      }
     },
   );
 
