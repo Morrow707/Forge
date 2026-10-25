@@ -3002,6 +3002,27 @@ Two things worth saying out loud when someone tests this:
   under attorney review; a change to it changes the hash on every later signature, which is
   the point of storing it.
 
+## 1.0 WAS REJECTED ONCE, ON METADATA ALONE: THE EULA HAS TO BE IN APP STORE CONNECT TOO
+
+Added 2026-10-25. Apple's only finding on 1.0, Guideline 3.1.2: the app sells auto-renewable
+subscriptions and "does not include a functional link to the Terms of Use (EULA) in the app
+metadata that appears on the app's App Store product page." Nothing in the binary; no new build.
+The License Agreement field had been left on Apple's standard agreement (the default on every
+app), which is why the product page showed no link.
+
+**Fixed in App Store Connect, same morning, and resubmitted on the same build:** License
+Agreement switched to Custom with the full Forge EULA pasted from the live site
+(`/api/legal-documents/eula`, the attorney-reviewed text, all territories), and two lines
+appended to the Description -- `Terms of Use (EULA): https://forgeperformancesystems.com/eula`
+and `Privacy Policy: https://forgeperformancesystems.com/privacy`. **The Description also said
+"Forge is in closed beta"**, two weeks after billing went live; it reads "Sign-up on the website
+is currently by invite code" now, which is the half that is still true.
+
+**So the EULA now lives in two places**, the site and App Store Connect, and an edit to the
+reviewed document is an edit to both. Do not switch the field back to Apple's standard
+agreement: it is the generic licence this file already rejects (one copy on one computer, no
+Apple-required clauses, an entire-agreement clause over the Terms and the consents).
+
 ## Coaches Corner: worth the $19.99, and what counsel said about the textbook
 
 Added 2026-10-03. Scott: "we have the cscs book uploaded now ... can we add verbiage to those
