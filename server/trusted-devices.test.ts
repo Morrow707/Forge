@@ -111,32 +111,39 @@ describe("the shape the code has to keep", () => {
  * The three seeded demo accounts have addresses nothing delivers to, so the new-device email is
  * a door with no key for them. This was an env var and one unset variable locked out App Review.
  */
-describe("no seeded account is exempt from the new-device email any more", () => {
+describe("the three demo accounts are exempt from the new-device email in code, and nothing else is", () => {
   const saved = process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS;
   afterEach(() => {
     if (saved === undefined) delete process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS;
     else process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS = saved;
   });
 
-  // 2026-10-11: the three review accounts are retired and deleted by the seed, so the in-code
-  // exemption list is EMPTY and the old addresses are ordinary addresses that nobody holds.
-  it("holds nobody in code", () => {
-    expect([...DEMO_ACCOUNT_EMAILS]).toEqual([]);
+  // 2026-10-11 to 2026-10-28 the list was EMPTY (the three were retired). Scott brought them
+  // back for social-media screenshots; their addresses still deliver nowhere, so the exemption
+  // is a fact about the software again and lives in code. The list is the one declaration in
+  // server/demo-accounts.ts, pinned here against the addresses the seed really creates.
+  it("holds exactly the three demo accounts", () => {
+    expect([...DEMO_ACCOUNT_EMAILS]).toEqual(["coach@forge.app", "athlete@forge.app", "freeagent@forge.app"]);
   });
 
-  it("no longer exempts the retired addresses with no environment variable set", () => {
+  it("exempts them with no environment variable set", () => {
     delete process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS;
-    for (const email of ["coach@forge.app", "athlete@forge.app", "freeagent@forge.app"]) {
-      expect(isDeviceVerificationExempt(email)).toBe(false);
+    for (const email of DEMO_ACCOUNT_EMAILS) {
+      expect(isDeviceVerificationExempt(email)).toBe(true);
     }
   });
 
-  it("and the seed no longer creates them", () => {
+  it("and the seed creates exactly those addresses, only while DEMO_ACCOUNT_PASSWORDS is set, and retires them otherwise", () => {
     const seed = readFileSync(resolve(__dirname, "seed.ts"), "utf-8");
-    for (const email of ["coach@forge.app", "athlete@forge.app", "freeagent@forge.app"]) {
-      expect(seed).not.toContain(`email: "${email}"`);
+    for (const email of DEMO_ACCOUNT_EMAILS) {
+      expect(seed).toContain(`email: "${email}"`);
     }
-    expect(seed).toContain("removeSeededDemoAccounts");
+    expect(seed).toMatch(/const demoAccountPasswords = demoAccountPasswordsFromEnv\(\);/);
+    expect(seed).toMatch(/if \(demoAccountPasswords\) await ensureDemoAccounts\(demoAccountPasswords\);/);
+    expect(seed).toMatch(/await removeSeededDemoAccounts\(demoAccountPasswords !== null\);/);
+    // Never a password in the repository: the only literal passwords the seed may hold are the
+    // dev-only demoPassword() fallbacks for the seeded admin.
+    expect(seed).not.toMatch(/passwordHash: await hashPassword\("/);
   });
 
   it("is exact-match, so no real account falls into it", () => {
@@ -148,7 +155,7 @@ describe("no seeded account is exempt from the new-device email any more", () =>
   it("still adds whatever the environment variable lists", () => {
     process.env.DEVICE_VERIFICATION_EXEMPT_EMAILS = "review@apple.test";
     expect(isDeviceVerificationExempt("review@apple.test")).toBe(true);
-    expect(isDeviceVerificationExempt("coach@forge.app")).toBe(false);
+    expect(isDeviceVerificationExempt("someone.else@live.com")).toBe(false);
   });
 });
 

@@ -1,6 +1,7 @@
 import { hashResetToken } from "./auth-utils";
 import type { DeviceApproval } from "@shared/schema";
 
+import { DEMO_ACCOUNT_EMAILS as DEMO_ACCOUNT_EMAILS_LIST } from "./demo-accounts";
 /** The database-free half of new-device approval. See trusted-devices.ts for the rule and the
  * rows; this file is what a unit test can import without provisioning Postgres. */
 
@@ -76,13 +77,12 @@ export function isMfaEnforcementDisabled(): boolean {
  * exact address -- a real user cannot land in it by accident. The env var still works and still
  * ADDS to this list, so an operator can exempt something else without a deploy.
  */
-export const DEMO_ACCOUNT_EMAILS: readonly string[] = [
-  // EMPTY since 2026-10-11. The three review accounts are retired and deleted by the seed
-  // (server/seed.ts, removeSeededDemoAccounts); every account on the platform meets the
-  // new-device email now, and only DEVICE_VERIFICATION_EXEMPT_EMAILS can exempt one. The list
-  // stays so the comment above keeps its meaning: an entry here is a fact about the software,
-  // and there is no such fact any more.
-];
+// Was EMPTY from 2026-10-11 (the three were retired) until 2026-10-28, when Scott brought them
+// back for social-media screenshots. The list is ONE declaration, in server/demo-accounts.ts,
+// read by this exemption, by the seed that creates and retires them, and by the two aggregate
+// queries that keep their numbers out of everybody else's. Re-exported here so the device policy
+// still names the fact it rests on.
+export { DEMO_ACCOUNT_EMAILS } from "./demo-accounts";
 
 /**
  * A TEMPORARY OPERATOR EXEMPTION, AND IT IS NOT THE SAME THING AS THE LIST ABOVE.
@@ -108,7 +108,7 @@ export function isDeviceVerificationExempt(email: string): boolean {
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
   const list: string[] = [
-    ...DEMO_ACCOUNT_EMAILS,
+    ...DEMO_ACCOUNT_EMAILS_LIST,
     ...TEMPORARY_ACCOUNT_EXEMPTIONS,
     ...fromEnv,
   ];

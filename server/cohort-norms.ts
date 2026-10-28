@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { DEMO_ACCOUNT_EMAILS_SQL_LIST } from "./demo-accounts";
 import { ageFromDateOfBirth } from "@shared/privacy-tiers";
 import {
   NORM_MIN_COHORT,
@@ -65,7 +66,12 @@ export async function rebuildCohortNorms(): Promise<{ cohorts: number; norms: nu
     const { rows: athletes } = await pool.query(
       `SELECT age, date_of_birth, gender, sport, position, ${PROFILE_METRICS.map((m) => m.column).join(", ")}
          FROM users
-        WHERE role = 'athlete' AND tracking_opt_out = false`,
+        WHERE role = 'athlete' AND tracking_opt_out = false
+          -- The three demo accounts exist for screenshots (server/demo-accounts.ts); whatever
+          -- gets typed on them for a picture is not a measurement of anybody. They were deleted
+          -- once (2026-10-11) for exactly this, so the exclusion is by name and not by hoping
+          -- nobody logs on them.
+          AND email NOT IN (${DEMO_ACCOUNT_EMAILS_SQL_LIST})`,
     );
 
     // Every cohort an athlete belongs to, from the most specific to the

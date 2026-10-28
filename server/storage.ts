@@ -175,6 +175,7 @@ import {
   type MediaRemovalRequest,
 } from "@shared/schema";
 import { ageBandFor, ageBandBounds, NORM_MIN_COHORT } from "@shared/cohort-norms";
+import { DEMO_ACCOUNT_EMAILS_SQL_LIST } from "./demo-accounts";
 import { ageFromDateOfBirth } from "@shared/privacy-tiers";
 import {
   BROADEST_COHORT,
@@ -24960,6 +24961,9 @@ ${catalog}`;
         -- resolves to nobody), but tracking opt-out does: an athlete who asked not to be
         -- measured is not quietly made part of the distribution either.
         AND u.tracking_opt_out = false
+        -- Nor are the three demo accounts (server/demo-accounts.ts): a 405 typed on
+        -- athlete@forge.app for a screenshot is nobody's squat. Same rule as the norms rebuild.
+        AND u.email NOT IN (${sql.raw(DEMO_ACCOUNT_EMAILS_SQL_LIST)})
         -- THE ATHLETE'S OWN NARROWING. Both are optional and both keep the 30 floor below, so
         -- a filter can only ever make the number disappear, never make it describe a group too
         -- small to be a distribution.

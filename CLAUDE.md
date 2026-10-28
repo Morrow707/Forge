@@ -3023,6 +3023,53 @@ reviewed document is an edit to both. Do not switch the field back to Apple's st
 agreement: it is the generic licence this file already rejects (one copy on one computer, no
 Apple-required clauses, an entire-agreement clause over the Terms and the consents).
 
+## THE THREE DEMO ACCOUNTS ARE BACK, EMPTY, AND THEIR PASSWORDS ARE ON RENDER, NEVER HERE
+
+Added 2026-10-28. Scott: "reinstate those 3 accounts, but wipe all data associated with them ...
+change the passwords to something random and hard to generate ... i need these 3 accounts for
+social media screenshots, they have no way of taking these screenshots as they don't have access
+to the actual app." `coach@forge.app`, `athlete@forge.app` and `freeagent@forge.app` exist again
+on production, created fresh by the seed (the 2026-10-11 purge took every row they ever had, so
+nothing of the old data survives), so a Claude session can sign in as them headless and take a
+screenshot of the real app (Rule #3).
+
+**THE PASSWORDS ARE NOT IN THIS FILE AND NEVER WILL BE. THE REPOSITORY IS PUBLIC.** They live in
+ONE Render environment variable, `DEMO_ACCOUNT_PASSWORDS`, a JSON object keyed by address
+(`{"coach@forge.app":"...","athlete@forge.app":"...","freeagent@forge.app":"..."}`). A Claude Code
+session in this environment reads it off the service in one line, because a read-only Render API
+key is injected for `api.render.com`:
+
+```
+curl -sS "https://api.render.com/v1/services/srv-d9mfqflbedkc73dlguhg/env-vars/DEMO_ACCOUNT_PASSWORDS"
+```
+
+Read it, use it, never print it into a log, a commit or a chat message. Scott reads it in the
+Render dashboard under Environment.
+
+- **The variable is the switch** (`server/demo-accounts.ts`, `ensureDemoAccounts` in `seed.ts`;
+  the same shape as `SEEDED_ADMIN_PASSWORD`): while set, the seed creates the three accounts and
+  re-applies each password on every deploy, so rotating one is one variable change and a redeploy;
+  delete the variable and redeploy and the seed retires them through `deleteUserRecord`, exactly
+  as on 2026-10-11. A malformed or partial value is refused as a whole and logged.
+- **What they are:** a head coach ("Coach Riley", beta-flagged, planned headcount 10), an adult
+  athlete on that roster ("Jordan Athlete") and an adult Free Agent ("Morgan Freeagent"), both
+  beta-flagged and kept on the current Terms so no dialog stands in front of a screenshot. No
+  program, assignment, logged set, testing number or class grant is seeded for them any more;
+  whatever a screenshot needs is typed on the account by whoever takes it.
+- **They cannot skew anybody's numbers**, which is why they were deleted in the first place: the
+  nightly cohort norms rebuild and the strength percentile's peer query exclude the three
+  addresses by name (`DEMO_ACCOUNT_EMAILS_SQL_LIST`), the research mirror and the platform-trends
+  dataset already require a research consent they never give, and leaderboards are scoped to the
+  demo coach's own roster. `server/demo-accounts.test.ts` pins all of it.
+- **They are exempt from the new-device email IN CODE** again (`DEMO_ACCOUNT_EMAILS` in
+  `device-trust-policy.ts` re-exports the one list); their addresses deliver nowhere.
+- **`DEMO_ACCOUNT_PASSWORD` (singular) on Render is a dead variable** from before 2026-10-11 that
+  no code reads; it stays until Scott deletes it. Do not confuse the two.
+- **The push gate caught a fifth production advisory on the way**: `qs` <=6.16.0 (moderate, DoS in
+  `qs.stringify`, reached through express). The existing `qs` override already allowed it, so a
+  plain `npm update qs` moved the lock to 6.17.0 (three lines, no package added or removed) and
+  both audits read 0 at or above moderate.
+
 ## Coaches Corner: worth the $19.99, and what counsel said about the textbook
 
 Added 2026-10-03. Scott: "we have the cscs book uploaded now ... can we add verbiage to those
