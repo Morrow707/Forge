@@ -97,7 +97,10 @@ export async function redeemPromoCode(userId: number, code: string, now: Date = 
     if (cardSubscriptions.length === 0) {
       return {
         ok: false,
-        message: `This code takes ${promoPercentOff(record)}% off a plan. Enter it on the checkout page when you buy one.`,
+        // NO RAIL IS NAMED. This sentence reaches the iOS app too (the Forge-code box on the Upgrade
+        // screen), and "enter it on the checkout page" there is a steer to a purchase outside the
+        // App Store, which Guideline 3.1.1 forbids (Scott, 2026-10-29, on the App Review reply).
+        message: `This code takes ${promoPercentOff(record)}% off a plan, and applies when a plan is bought. There is no plan on this account to discount yet.`,
       };
     }
     if (!record.stripeCouponId) {
