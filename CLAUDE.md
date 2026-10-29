@@ -3055,7 +3055,12 @@ Render dashboard under Environment.
   athlete on that roster ("Jordan Athlete") and an adult Free Agent ("Morgan Freeagent"), both
   beta-flagged and kept on the current Terms so no dialog stands in front of a screenshot. No
   program, assignment, logged set, testing number or class grant is seeded for them any more;
-  whatever a screenshot needs is typed on the account by whoever takes it.
+  whatever a screenshot needs is typed on the account by whoever takes it. **Their REQUIRED
+  PAPERWORK IS seeded** (restored 2026-10-29, Scott: "just sign them so the warnings go away"):
+  each account's own checklist is filed as ACCEPTED placeholders that say in words they are demo
+  data (`fileUrl: seed://demo-account-placeholder`, `reviewSource: seed_demo_account`), so the
+  document gate and its banner stay quiet. `document-gate-blocks-use.test.ts` holds that to the
+  three demo addresses, inside `ensureDemoAccounts`, and nobody else.
 - **They cannot skew anybody's numbers**, which is why they were deleted in the first place: the
   nightly cohort norms rebuild and the strength percentile's peer query exclude the three
   addresses by name (`DEMO_ACCOUNT_EMAILS_SQL_LIST`), the research mirror and the platform-trends

@@ -358,6 +358,47 @@ async function ensureDemoAccounts(
   }
   // The athlete is on the demo coach's roster; linkAthleteToCoach is idempotent.
   await storage.linkAthleteToCoach(rows["coach@forge.app"].id, rows["athlete@forge.app"].id);
+
+  // THE THREE DEMO ACCOUNTS COME WITH THEIR REQUIRED PAPERWORK ALREADY ON FILE (restored
+  // 2026-10-29; it was removed with the accounts on 2026-10-11). Scott: "fill in the free agent
+  // and athletes documents for me ... just sign them so the warnings go away."
+  //
+  // Required documents gate training, skills and the camera (missingRequiredDocuments) and draw
+  // the "Your documents aren't done yet" banner, and these accounts have no physician to ask
+  // and no school to sign for them -- so without this every screenshot carries a red warning
+  // about paperwork that cannot exist. Each account gets ITS OWN checklist (the rostered
+  // athlete's waiver and clearance, the Free Agent's clearance, the coach's three credentials):
+  // documentAudienceFor decides, the same way the documents page does.
+  //
+  // Accepted rather than pending, because a pending row would sit in the admin review queue
+  // forever waiting for somebody to read a file that does not exist. No file is written, and
+  // fileUrl, issuingOrganization, reviewSource and reviewNote all say in words that this is
+  // demo data: inventing a PDF that claims to be a physician's clearance is the one thing this
+  // must never do, and client/src/lib/document-gate-blocks-use.test.ts holds this to the three
+  // demo addresses and nobody else. Idempotent: a kind already accepted is left alone.
+  for (const email of DEMO_ACCOUNT_EMAILS) {
+    const spec = specs[email];
+    const onFile = new Set(
+      (await storage.externalWaiverSummary(rows[email].id))
+        .filter((line) => line.status === "accepted")
+        .map((line) => line.kind),
+    );
+    const audience = documentAudienceFor({ role: spec.role ?? "athlete", hasCoach: email === "athlete@forge.app" });
+    for (const doc of REQUIRED_DOCUMENTS[audience]) {
+      if (!doc.required || onFile.has(doc.kind)) continue;
+      await storage.createExternalWaiver({
+        athleteId: rows[email].id,
+        uploadedByUserId: rows[email].id,
+        kind: doc.kind,
+        fileUrl: "seed://demo-account-placeholder",
+        issuingOrganization: "Forge demo data -- not a real document",
+        reviewStatus: "accepted",
+        reviewSource: "seed_demo_account",
+        reviewNote: "Seeded so the demo accounts are not blocked by the document gate.",
+      });
+      console.log(`Demo account ${email}: placeholder ${doc.kind} filed as accepted.`);
+    }
+  }
   return { coach: rows["coach@forge.app"], athlete: rows["athlete@forge.app"], freeAgent: rows["freeagent@forge.app"] };
 }
 
@@ -5406,21 +5447,7 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
     if (next) await storage.updateLegalDocument(type, next);
   }
 
-  // THE THREE DEMO ACCOUNTS COME WITH THEIR PAPERWORK ALREADY ON FILE.
-  //
-  // Required documents now gate training, skills and the camera (see missingRequiredDocuments),
-  // and the seeded accounts have addresses nothing delivers to and no physician to ask -- so
-  // without this they would be permanently locked out of the app they exist to demonstrate.
-  // Exactly the same shape as the device-trust exemption: these three are a fact about the
-  // software, not an operator's decision.
-  //
-  // Accepted rather than pending, because a pending row would sit in the admin review queue
-  // forever waiting for somebody to read a file that does not exist. reviewSource says plainly
-  // what they are so nobody later mistakes one for a real clearance.
-  // The COACH is papered too, and with the coach checklist -- a background check, a coaching
-  // certification and CPR. Filing a medical clearance against a coach would be invisible: it is
-  // not on their checklist, nothing reads it, and the upload route would refuse the same kind
-  // from a real coach. What each account needs is its OWN required documents.
+  // The demo accounts' paperwork is filed inside ensureDemoAccounts, beside the accounts.
   await removeSeededDemoAccounts(demoAccountPasswords !== null);
   // SEEDED_ADMIN_PASSWORD set: the account is wanted, with its login, and is left alone.
   if (demoAdmin && !seededAdminPassword) {

@@ -107,15 +107,41 @@ describe("the wall and the way through it", () => {
   });
 });
 
-describe("no account is papered past the gate by the seed", () => {
-  it("seeds no placeholder documents for anybody, now that the demo accounts are retired", () => {
-    // Until 2026-10-11 the three seeded demo accounts were handed accepted placeholder
-    // documents so a reviewer could clear the gate. Those accounts are gone (the seed deletes
-    // them, see removeSeededDemoAccounts), and with them the one legitimate reason to write a
-    // document nobody signed. A placeholder that claims to be a physician's clearance on a real
-    // account would be exactly the fabrication the old block was careful never to commit.
-    expect(seed).not.toContain('reviewSource: "seed_demo_account"');
-    expect(seed).not.toContain("seed://demo-account-placeholder");
+describe("only the three demo accounts are papered past the gate by the seed", () => {
+  // From 2026-10-11 to 2026-10-28 the seed papered nobody, because the demo accounts were
+  // retired. They are back for social-media screenshots (DEMO_ACCOUNT_PASSWORDS on Render,
+  // server/demo-accounts.ts) and come with accepted placeholder documents again, so a screenshot
+  // does not carry a red warning about paperwork that cannot exist. The rule this pins is the
+  // one that made the old block safe: a placeholder that claims to be a physician's clearance may
+  // be filed ONLY against a demo address, inside the function that creates those accounts, and
+  // must say in words that it is demo data.
+  const stripComments = (src: string) =>
+    src.replace(/^[ \t]*\/\*[\s\S]*?\*\/[ \t]*\n?/gm, "").replace(/^[ \t]*\/\/[^\n]*\n?/gm, "");
+  const code = stripComments(seed);
+  const fnStart = code.indexOf("async function ensureDemoAccounts(");
+  const fnEnd = code.indexOf("\nasync function ", fnStart + 1);
+  const ensureDemoAccounts = code.slice(fnStart, fnEnd === -1 ? undefined : fnEnd);
+  const outside = code.slice(0, fnStart) + code.slice(fnEnd === -1 ? code.length : fnEnd);
+
+  it("files the placeholders inside ensureDemoAccounts, iterating the demo addresses only", () => {
+    expect(fnStart).toBeGreaterThan(-1);
+    expect(ensureDemoAccounts).toContain('reviewSource: "seed_demo_account"');
+    expect(ensureDemoAccounts).toContain('fileUrl: "seed://demo-account-placeholder"');
+    expect(ensureDemoAccounts).toMatch(/for \(const email of DEMO_ACCOUNT_EMAILS\)/);
+    // The row it files against is the demo account just created, never a looked-up user.
+    expect(ensureDemoAccounts).toMatch(/athleteId: rows\[email\]\.id/);
+  });
+
+  it("files them against nobody else", () => {
+    expect(outside).not.toContain("seed_demo_account");
+    expect(outside).not.toContain("seed://demo-account-placeholder");
+    expect(outside).not.toContain("createExternalWaiver(");
+  });
+
+  it("says in words that the row is demo data, and only ever marks it accepted (never pending)", () => {
+    expect(ensureDemoAccounts).toContain('issuingOrganization: "Forge demo data -- not a real document"');
+    expect(ensureDemoAccounts).toContain('reviewStatus: "accepted"');
+    expect(ensureDemoAccounts).not.toContain('reviewStatus: "pending_review"');
     expect(seed).toContain("removeSeededDemoAccounts");
   });
 });
