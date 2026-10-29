@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import { Link } from "wouter";
-import { ForgeMark } from "@/components/forge-mark";
+import { LegalPageChrome } from "@/components/legal-page-chrome";
 import { ReadFailed } from "@/components/read-failed";
 
 /**
@@ -20,7 +20,10 @@ const PUBLIC_DOCUMENT_LINKS: { href: string; label: string }[] = [
   { href: "/biometric-release", label: BIOMETRIC_DOCUMENT_NAME },
   { href: "/parent-notice", label: "Notice to Parent or Guardian" },
   { href: "/assumption-of-risk", label: "Assumption of Risk and Release" },
-  { href: "/research-consent", label: "Research Consent and Data Use Authorization" },
+  {
+    href: "/research-consent",
+    label: "Research Consent and Data Use Authorization",
+  },
 ];
 
 export default function LegalPage() {
@@ -29,43 +32,35 @@ export default function LegalPage() {
   });
 
   return (
-    <div className="min-h-screen bg-background px-4 py-10">
-      <div className="mx-auto max-w-2xl">
-        <Link href="/" className="mb-8 flex items-center gap-2">
-          <ForgeMark className="h-8 w-8 rounded-md" />
-          <span className="font-display font-bold uppercase tracking-wide text-foreground">
-            Forge
-          </span>
-        </Link>
-        <h1 className="mb-6 font-display text-3xl font-extrabold uppercase tracking-wide">
-          Terms &amp; Privacy
-        </h1>
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : isError ? (
-          <ReadFailed what="these terms" onRetry={() => void refetch()} />
-        ) : (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-            {data?.content}
-          </p>
-        )}
-        {/* The public index. Every document a person can be asked to accept has a page, and the
+    <LegalPageChrome title="Terms & Privacy">
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : isError ? (
+        <ReadFailed what="these terms" onRetry={() => void refetch()} />
+      ) : (
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+          {data?.content}
+        </p>
+      )}
+      {/* The public index. Every document a person can be asked to accept has a page, and the
             research consent was the one with none until 2026-09-20. */}
-        <nav className="mt-10 border-t pt-6">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            All documents
-          </p>
-          <ul className="space-y-2 text-sm">
-            {PUBLIC_DOCUMENT_LINKS.map((doc) => (
-              <li key={doc.href}>
-                <Link href={doc.href} className="font-semibold text-primary hover:underline">
-                  {doc.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </div>
-    </div>
+      <nav className="mt-10 border-t pt-6">
+        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          All documents
+        </p>
+        <ul className="space-y-2 text-sm">
+          {PUBLIC_DOCUMENT_LINKS.map((doc) => (
+            <li key={doc.href}>
+              <Link
+                href={doc.href}
+                className="font-semibold text-primary hover:underline"
+              >
+                {doc.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </LegalPageChrome>
   );
 }

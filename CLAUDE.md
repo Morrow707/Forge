@@ -3062,6 +3062,20 @@ What the reply needs beside the text: a screen recording of the Upgrade screen o
 the new build (plan cards, the sentence, each link opening), and the App Review Information notes
 updated with the subscription titles, lengths and prices.
 
+**AND THE FIRST TAP ON ONE OF THOSE LINKS IN THE APP WAS A DEAD END.** Build 693, Scott on his
+phone: "once i clicked on EULA i cant exit out of it only scroll to the other documents, on every
+page should be the navigation bar at the top with the 3 lines so i can easily navigate on any
+page." The legal pages were written as PUBLIC pages for a browser with a back button, and the
+only way out inside the native app was the Forge mark at the top, which reads as a logo.
+`client/src/components/legal-page-chrome.tsx` frames a document by who is reading it: a
+signed-in athlete, coach or admin gets the AppShell (nav bar, More menu, account button), a
+guardian gets a "Back to your dashboard" bar (they never render the AppShell), and a visitor with
+no session gets the public page exactly as before. **The AppShell is a LAZY import there on
+purpose**: the legal pages are eager (public routes) and the shell carries every dialog in the
+app, so a static import would put all of it on a signed-out visitor's first paint, which
+`bundle-budget.test.ts` refuses; the Suspense fallback is the document itself, so nothing blanks.
+Run 694 is its `verify_build`; the beta after it is the build that replaces 693 on the version page.
+
 ## THE THREE DEMO ACCOUNTS ARE BACK, EMPTY, AND THEIR PASSWORDS ARE ON RENDER, NEVER HERE
 
 Added 2026-10-28. Scott: "reinstate those 3 accounts, but wipe all data associated with them ...
