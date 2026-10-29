@@ -136,6 +136,8 @@ export type JumpCountermovement = {
   concentricMeanVelocityMps: number;
   /** The hip's fastest rise inside the concentric, m/s, from the smoothed hip trace. */
   concentricPeakVelocityMps: number;
+  /** The same peak off the unsmoothed hip trace. Diagnostic; nothing reads it. */
+  concentricPeakVelocityRawMps?: number;
 };
 
 /** How much the hip has to move before a direction change counts, so a jittering standing hip
@@ -199,12 +201,19 @@ export function measureCountermovement(
   // The hip's fastest rise in the drive: central difference over at least 33ms, so a 120fps
   // trace is not differenced across one frame of jitter.
   let peak = 0;
+  // The same read off the RAW hip trace, recorded beside the smoothed one and read by nothing.
+  // The 2026-10-29 box jump beside the OVR: the sensor's hip peak was 2.60-2.75 m/s on five reps
+  // and the smoothed read here was 1.60-2.28, 30% low, over a 0.18-0.22s drive sampled 7-9 times
+  // at 40Hz. A smoother that lags a 0.2s drive can only read low; whether that is the cause or
+  // the hip trace itself is what these two numbers side by side will say on the next take.
+  let peakRaw = 0;
   for (let i = bottomIdx + 1; i <= takeoffIdx; i++) {
     let lo = i - 1;
     while (lo > bottomIdx && hipPoints[i].t - hipPoints[lo].t < 33) lo--;
     const dt = (hipPoints[i].t - hipPoints[lo].t) / 1000;
     if (dt <= 0) continue;
     peak = Math.max(peak, (hipYSmoothed[lo] - hipYSmoothed[i]) / dt);
+    peakRaw = Math.max(peakRaw, (hipPoints[lo].y - hipPoints[i].y) / dt);
   }
   const r2 = (v: number) => Math.round(v * 100) / 100;
   const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -218,6 +227,7 @@ export function measureCountermovement(
     concentricRiseCm: r1(riseM * 100),
     concentricMeanVelocityMps: r2(riseM / concentricSeconds),
     concentricPeakVelocityMps: r2(peak),
+    concentricPeakVelocityRawMps: r2(peakRaw),
   };
 }
 
@@ -233,6 +243,7 @@ export function scaleCountermovement(cm: JumpCountermovement, ratio: number): Ju
     concentricRiseCm: r1(cm.concentricRiseCm),
     concentricMeanVelocityMps: r2(cm.concentricMeanVelocityMps),
     concentricPeakVelocityMps: r2(cm.concentricPeakVelocityMps),
+    concentricPeakVelocityRawMps: cm.concentricPeakVelocityRawMps == null ? undefined : r2(cm.concentricPeakVelocityRawMps),
   };
 }
 

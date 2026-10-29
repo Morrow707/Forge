@@ -1174,14 +1174,35 @@ export function reconcileScaleEstimates(
   // of the sensor both times. So the pair is collapsed into one witness before the vote (its
   // geometric mean, the wider of the two uncertainties), and both original sources are still
   // reported in agreedSources/outliers so the record shows what each read.
+  // THE PAIR'S MEAN IS WEIGHTED BY WHAT EACH HALF STATES (2026-10-29). The geometric mean was
+  // UNWEIGHTED, so a depth reading stated at 0.6 pulled exactly as hard as a bone stated at 0.2
+  // -- the one place in this blend where a stated uncertainty bought nothing. On the Romanian
+  // deadlift, where the depth ruler has read 8-44% HIGH on every one of five sensor-paired takes
+  // while the in-plane bone sat at -1% on three of them, the plain mean was the whole error on
+  // 10-19 (+12% and +16%, with body_3d at -1%). Inverse-variance weights in log space: with
+  // equal uncertainties this IS the old geometric mean to the last digit, so every lift whose
+  // record states 0.2 for both (all of them but the one with an override) is bit-identical, and
+  // the ledger replay asserts that on every row. The collapsed witness states the TIGHTER of the
+  // two uncertainties: the pair is one sensor, its scale follows the half that claims to know
+  // better, and a vaguer second reading cannot make the first one vaguer than it was on its own
+  // (the old max() made exactly that happen the moment the two differed, handing the vote to
+  // whichever 2D ruler was left). With equal uncertainties min() and max() are the same number.
   const pose3d = usable.filter((e) => (e.source === "body_3d" || e.source === "depth") && !e.demoted);
   const collapsed: ScaleEstimate | null =
     pose3d.length === 2
-      ? {
-          source: "body_3d",
-          scale: Math.sqrt(pose3d[0].scale * pose3d[1].scale),
-          uncertaintyFraction: Math.max(pose3d[0].uncertaintyFraction, pose3d[1].uncertaintyFraction),
-        }
+      ? (() => {
+          const w0 = 1 / (pose3d[0].uncertaintyFraction * pose3d[0].uncertaintyFraction);
+          const w1 = 1 / (pose3d[1].uncertaintyFraction * pose3d[1].uncertaintyFraction);
+          const scale =
+            Number.isFinite(w0) && Number.isFinite(w1) && w0 + w1 > 0
+              ? Math.exp((w0 * Math.log(pose3d[0].scale) + w1 * Math.log(pose3d[1].scale)) / (w0 + w1))
+              : Math.sqrt(pose3d[0].scale * pose3d[1].scale);
+          return {
+            source: "body_3d" as const,
+            scale,
+            uncertaintyFraction: Math.min(pose3d[0].uncertaintyFraction, pose3d[1].uncertaintyFraction),
+          };
+        })()
       : null;
   let voters = collapsed ? [...usable.filter((e) => !pose3d.includes(e)), collapsed] : usable;
   const ranked = [...voters].sort((a, b) => rank(a) - rank(b));

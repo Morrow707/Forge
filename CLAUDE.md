@@ -582,6 +582,15 @@ same SHA shows a success on `main` and a failure elsewhere, nothing is broken.
 
 ## Camera tracking
 
+- **ON A CALIBRATION DAY, READ THE STATUS BOARD BEFORE ANYTHING ELSE**, then the ledger:
+  `docs/camera-tracking-notes.md` opens with "STATUS BOARD" (what works and must not be touched,
+  what is known not to work and is not tried again, what the latest evidence points at) and
+  `shared/accuracy-ledger.ts` holds one replayable row per sensor-paired take. Scott, 2026-10-29:
+  "I want you keeping a running log ... so we don't keep going in circles with what works and
+  what doesn't, when your feed goes stale you don't remember what you fixed yesterday in the
+  camera or last week." **Every session ends by updating the board and adding its rows to the
+  ledger, before the push.** A take that is not a ledger row is not measured; a fix that is not
+  on the board will be re-proposed.
 - **Read the camera architecture section below first.** Three parts -- body
   tracker, object tracker, overwatch -- and everything here sits inside that
   shape. This section is the older, mode-specific notes; it is not the design.
@@ -2521,9 +2530,13 @@ halves before splitting anything else:
   gets better for every lift at once. The RDL hinge, the box jump's flagged rep and the bench
   un-rack were all fixed by changing a rule or a label, and every lift got the benefit -- that is
   the shape to keep, not something to split away.
-  **`FITTED_OVERRIDES` is EMPTY and the test fails if an entry appears** -- no constant here has ever been fitted on one lift in isolation, and the registry is
-  machinery for doing that safely, not permission to guess. See docs/camera-tracking-notes.md,
-  "One set of numbers per filmable thing".
+  **`FITTED_OVERRIDES` has ONE entry as of 2026-10-29 -- the Romanian Deadlift's `depthRulerUncertainty`
+  0.6 and `maxPeakToMeanRatio` 2.5 -- and the test that used to assert the list was empty now
+  asserts every entry carries `FITTED_OVERRIDE_EVIDENCE` naming its date, its sensor and its
+  takes.** It was costed on every ledger row before it shipped (RDL median 12.0% -> 6.7%, every
+  squat row identical), which is the only way an entry gets in: the registry is machinery for
+  fitting one lift safely, not permission to guess. See docs/camera-tracking-notes.md, "Second
+  pass, 2026-10-29".
 - Build **633** was cut 2026-10-06 from the three lifts filmed on 632 beside the OVR
   (docs/camera-tracking-notes.md, "Three lifts beside OVR, build 632, 2026-10-06"). The build-632
   diagnostics answered their own open question on the first take, which is what they were for.
@@ -2880,7 +2893,12 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 691** (2026-10-24,
+  branch `verify_build` for the arbiter plumbing. **The newest build is 695** (2026-10-29,
+  `039ae04`, a legal document opened inside the app wears the app's nav bar so it can be left;
+  694 was its `verify_build`). Before it, **693** the same day (`bcd3b74`, the in-app Privacy
+  Policy and EULA links on every purchase surface for the second App Review rejection; 692 was
+  its `verify_build`) -- a dead end on the phone the moment a link was tapped, which 695 fixes.
+  Before it, **691** (2026-10-24,
   `52c3d89f`, the security audit's recommendations plus the role survey's client commits since 686; 690
   was its `verify_build`, and 687-689 were the other session's `verify_build` runs on its client
   commits). Before it, **686** (2026-10-23, `a0ef9305`, the eighteen-commit batch including four
@@ -2910,22 +2928,15 @@ halves before splitting anything else:
   worst case **60.5% -> 20.7%**. The row is the one lift still outside 15% and the retrained
   detector is the only remaining candidate for it; what proves or disproves that is one filmed
   set, read off `plateBoxToExpectedRatio`.
-- **THE QUEUE IS EMPTY AS OF BUILD 691** (2026-10-24, `52c3d89f`, run 690 was its `verify_build`,
-  which passed Apple's own `--validate-app`; 687-689 were `verify_build` runs on the other
-  session's client commits). It carries the 2026-10-24 security audit's client halves (the adult
-  camera-tracking switch in Account Settings, the guardian's withdraw-consent and delete-child-
-  account cards, Squad Quests showing teammates the way the leaderboard does) and the role
-  survey's client commits since **686**: a Free Agent never told they have a coach (`5119405f`),
-  the form-check video never "sent to your coach" with no coach (`d8f54171`), the tainted canvas
-  and the 404 drawn as an invitation (`a5d8d0db`), the zod 4 migration (`ce4ae810`, a validator
-  bump that reaches every form in the bundle), the waiver queue's dead link (`312070a4`), the
-  admin's own video-cap switches (`99a99ef4`), and the Team Chat card's newest post with the
-  guardian's bell copy (`3d8cdca5`). **The lesson the 686 entry
-  carried stands and is kept in one line**: the batch counter governs only work whose value is
-  not time-sensitive; calibration, compliance and we-are-charging-you corrections ship on their
-  own upload the moment they are committed, and four held calibration commits sat behind the
-  counter for up to eight days before 686. A security fix is in that class.
-  **Clear this entry on the next upload rather than adding to it.**
+- **THE QUEUE IS EMPTY AS OF BUILD 695** (2026-10-29, `039ae04`; run 694 was its `verify_build`,
+  which passed Apple's own `--validate-app`). Two uploads the same night, both for the second App
+  Review rejection (see "1.0 WAS REJECTED A SECOND TIME" below): **693** (`bcd3b74`, 692 its
+  `verify_build`) carried the in-app Privacy Policy and Terms of Use (EULA) links and the monthly
+  auto-renewal sentence on every purchase surface, the Account Settings legal row and the More
+  menu's Terms & Privacy entry (`59825a1`); **695** carries `LegalPageChrome`, because on 693 a
+  tapped EULA had no way out but the Forge mark (`039ae04`). Nothing else was waiting: 691 had
+  cleared the queue five days earlier. **695 is the build to submit to App Review in place of
+  691 and 693.** Clear this entry on the next upload rather than adding to it.
 - **THE RDL'S +12% IS THE 3D-POSE COLLAPSE, AND NO CONSTANT MOVED FOR IT** (2026-10-19, the
   first calibration session on the admin account; three lifts beside the OVR -- Back Squat,
   Romanian Deadlift, Box Jump, and only those three).
@@ -3022,6 +3033,65 @@ is currently by invite code" now, which is the half that is still true.
 reviewed document is an edit to both. Do not switch the field back to Apple's standard
 agreement: it is the generic licence this file already rejects (one copy on one computer, no
 Apple-required clauses, an entire-agreement clause over the Terms and the consents).
+
+## 1.0 WAS REJECTED A SECOND TIME, ON THE PURCHASE SCREENS: THE LINKS GO IN THE APP, NOT ONLY THE LISTING
+
+Added 2026-10-29. Apple's second pass on build 691 (reviewed on an iPad Air 11-inch M3) came back
+with three items, and only one of them is code:
+
+- **Guideline 3.1.2(c): no functional link to the Privacy Policy or the Terms of Use (EULA)
+  INSIDE the app, and the purchase flow stated no subscription length.** The listing fix of
+  10-25 put both links on the product page; the reviewer then looked for them in the app and
+  found neither -- the legal pages were routes (`/privacy`, `/eula`, `/legal`) reachable from the
+  marketing footer and from nowhere a signed-in person goes. `SubscriptionLegalLinks`
+  (`client/src/components/subscription-legal-links.tsx`) is the one sentence and the two links,
+  drawn on every surface that sells something: the Upgrade screen (both rails), the All Classes
+  card (full and compact), the coach Billing screen (the add-ons card and the plan card), the
+  Coaches Corner upsell card, the sport-coaches page (latent) and the per-lesson unlock (unused
+  machinery, still a purchase). The links are the app's OWN routes, never an absolute URL: the
+  native paywall scan refuses handing an iOS buyer to a browser for a checkout and Apple reads a
+  terms link the same way. The App Store auto-renewal sentence (charged to the Apple ID, renews
+  unless cancelled 24 hours before the period ends, managed in App Store settings) is drawn only
+  inside the iOS app, because on the web it would be false. Account Settings carries the three
+  links for every role (the guardian dashboard renders that dialog too) and the More menu has a
+  "Terms & Privacy" entry on all three AppShell roles.
+  `every-purchase-surface-links-the-legal-documents.test.ts` discovers the surfaces from what
+  they DO (a store purchase call or a checkout POST), comments stripped, and requires the
+  component on each -- commenting it out of one surface reds it. **Compliance class: its own
+  `verify_build` and `beta`, not the batch.**
+- **Guideline 2.1: what the promo/Forge code is and where it comes from.** Answered in words
+  (the reply is in the session scratchpad, `asc/4-reply-to-app-review-2026-10-29.txt`): a
+  Forge code is created on More -> Billing -> Redeem codes and handed out by Forge (mailing-list
+  campaigns, onboarding, events), never obtainable in the app; it unlocks a free-time window of
+  the paid Free Agent features or a percent off a card-billed subscription, and never bypasses
+  StoreKit. The "App Store code" button is Apple's own offer-code sheet. **A reviewer may ask for
+  a code: create a 30-day `new_accounts`/`everyone` free-time code for them and put it in the App
+  Review notes**, which is where the notes template (`asc/5-app-review-information-notes.txt`)
+  has a `[CODE]` placeholder.
+- **Guideline 2.3.6: the Age Rating declared In-App Controls (Parental Controls, Age Assurance)
+  the reviewer could not find.** Set both to **None** on App Information. Forge takes a date of
+  birth and holds an under-13 account until a guardian claims it by email, which is consent
+  management, not a parental-control setting or an age-assurance method in Apple's sense -- and
+  claiming it invites a reviewer to go looking for a switch they cannot reach without an under-13
+  signup and the guardian's inbox.
+
+What the reply needs beside the text: a screen recording of the Upgrade screen on an iPhone on
+the new build (plan cards, the sentence, each link opening), and the App Review Information notes
+updated with the subscription titles, lengths and prices.
+
+**AND THE FIRST TAP ON ONE OF THOSE LINKS IN THE APP WAS A DEAD END.** Build 693, Scott on his
+phone: "once i clicked on EULA i cant exit out of it only scroll to the other documents, on every
+page should be the navigation bar at the top with the 3 lines so i can easily navigate on any
+page." The legal pages were written as PUBLIC pages for a browser with a back button, and the
+only way out inside the native app was the Forge mark at the top, which reads as a logo.
+`client/src/components/legal-page-chrome.tsx` frames a document by who is reading it: a
+signed-in athlete, coach or admin gets the AppShell (nav bar, More menu, account button), a
+guardian gets a "Back to your dashboard" bar (they never render the AppShell), and a visitor with
+no session gets the public page exactly as before. **The AppShell is a LAZY import there on
+purpose**: the legal pages are eager (public routes) and the shell carries every dialog in the
+app, so a static import would put all of it on a signed-out visitor's first paint, which
+`bundle-budget.test.ts` refuses; the Suspense fallback is the document itself, so nothing blanks.
+Run 694 was its `verify_build` and **695 the upload**: the build that replaces 693 on the version page.
 
 ## THE THREE DEMO ACCOUNTS ARE BACK, EMPTY, AND THEIR PASSWORDS ARE ON RENDER, NEVER HERE
 

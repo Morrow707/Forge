@@ -25,6 +25,7 @@ import {
   type TrackedPoint,
 } from "./bar-tracking";
 import { firstMoveForExercise, romBucketForExercise } from "./exercise-camera-profile";
+import { cameraTunablesFor } from "@shared/camera-tunables-by-lift";
 import { summarizeJumpSet, type JumpSetMetrics } from "./jump-tracking";
 import {
   implausibleRangeOfMotion,
@@ -245,6 +246,12 @@ export function replayCapture(capture: StoredCapture): ReplayResult {
     // The reps the athlete logged, as the device has them from the set's prescription: the
     // segmenter chooses between its own candidate gates by it (segmentPhasesRelative).
     capture.loggedReps ?? null,
+    // THIS LIFT'S OWN NUMBERS, resolved exactly as av-bar-tracker-dialog.tsx resolves them. Until
+    // 2026-10-29 the harness passed nothing here and summarizeTrackedSet fell back to the shared
+    // record, so a replay could never see a FITTED_OVERRIDES entry -- the first one (the
+    // Romanian Deadlift's peak-to-mean cap) replayed as if it did not exist. A harness that
+    // reproduces the device has to hand the summariser what the device hands it.
+    cameraTunablesFor(capture.exerciseName, romBucketForExercise(capture.exerciseName)),
   );
   const repCount = metrics?.repBreakdown.length ?? 0;
   const loggedReps = capture.loggedReps ?? null;
@@ -291,6 +298,10 @@ export function replayCaptureScaleFree(capture: StoredCapture) {
     [],
     1,
     true,
+    null,
+    null,
+    null,
+    cameraTunablesFor(capture.exerciseName, romBucketForExercise(capture.exerciseName)),
   );
   return metrics ? toScaleFreeMetrics(metrics) : null;
 }

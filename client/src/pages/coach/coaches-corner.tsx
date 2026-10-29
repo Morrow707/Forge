@@ -29,6 +29,7 @@ import { LessonFlashcards } from "@/components/lesson-flashcards";
 import { DebouncedNote } from "@/components/lesson-page-notes";
 import { ReadAloud, fetchTrackLessonNarration } from "@/components/read-aloud";
 import { formatCents } from "@shared/billing-tiers";
+import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
 import { useAuth } from "@/hooks/use-auth";
 
 /** The Coaches Corner half of GET /api/coach/entitlements. `unlocked` is the same
@@ -531,6 +532,7 @@ export default function CoachesCorner() {
                 <Button onClick={buyCoachesCorner} disabled={buying}>
                   {buying ? "Purchasing..." : "Get Coaches Corner"}
                 </Button>
+                <SubscriptionLegalLinks compact />
               </div>
             ) : !isPrimaryCoach ? (
               <p className="text-sm font-semibold">
@@ -546,6 +548,7 @@ export default function CoachesCorner() {
                 <Button onClick={buyCoachesCorner} disabled={buying}>
                   {buying ? "Opening checkout..." : "Get Coaches Corner"}
                 </Button>
+                <SubscriptionLegalLinks compact />
               </div>
             ) : (
               <p className="text-sm font-semibold text-amber-500">

@@ -7,9 +7,16 @@ import {
   errorPctAgainstSensor,
   type LedgerRow,
 } from "@shared/accuracy-ledger";
-import { reconcileScaleEstimates, HEIGHT_RULER_UNCERTAINTY, BIACROMIAL_TOLERANCE_FRACTION } from "./pose-tracking";
+import {
+  reconcileScaleEstimates,
+  HEIGHT_RULER_UNCERTAINTY,
+  BIACROMIAL_TOLERANCE_FRACTION,
+  COREML_BOX_LONG_EDGE_UNCERTAINTY,
+  CALIBRATION_REFERENCES,
+} from "./pose-tracking";
 import { BODY_3D_CORRECTED_UNCERTAINTY, DEPTH_RULER_UNCERTAINTY } from "./body-3d-ruler";
-import { postureForExercise, postureAllowsHeightCalibration } from "./exercise-camera-profile";
+import { postureForExercise, postureAllowsHeightCalibration, romBucketForExercise } from "./exercise-camera-profile";
+import { cameraTunablesFor } from "@shared/camera-tunables-by-lift";
 
 /* EVERY SENSOR-PAIRED TAKE, REPLAYED TWICE: AS FILMED, AND THROUGH TODAY'S CONSTANTS.
  *
@@ -41,11 +48,25 @@ import { postureForExercise, postureAllowsHeightCalibration } from "./exercise-c
  *  to catch it. `shoulder_width` takes BIACROMIAL_TOLERANCE_FRACTION because that is its FLOOR
  *  (e70cc096 made it `max(floor, spanSpreadFraction, gripFloor)`), and a sealed row carries no
  *  frames, so the floor is the most this replay can know. */
-function liveUncertainty(source: string): number {
-  if (source === "height") return HEIGHT_RULER_UNCERTAINTY;
-  if (source === "shoulder_width") return BIACROMIAL_TOLERANCE_FRACTION;
-  if (source === "depth") return DEPTH_RULER_UNCERTAINTY;
-  return BODY_3D_CORRECTED_UNCERTAINTY;
+/* THE LIVE UNCERTAINTIES ARE THIS LIFT'S OWN, read off the registry exactly as the bar dialog
+ * reads them, because since 2026-10-29 a lift can carry a FITTED_OVERRIDES entry and a replay
+ * that read the module constants would certify a blend no phone produces -- the hybrid this
+ * file exists to refuse, one layer up. The module constants are still imported and asserted
+ * below so the registry's defaults cannot drift from them unnoticed. */
+function liveUncertainty(source: string, exercise: string): number {
+  const t = cameraTunablesFor(exercise, romBucketForExercise(exercise)).values;
+  if (source === "height") return t.heightRulerUncertainty;
+  if (source === "shoulder_width") return t.biacromialToleranceFraction;
+  if (source === "depth") return t.depthRulerUncertainty;
+  if (source === "plate") {
+    // What `computeReferenceObjectScale` states for a bumper plate the detector boxed: the casting
+    // tolerance over the nominal diameter, in quadrature with the detector's own measured noise.
+    // The 2026-10-19 RDL set 2 row is the one take so far with a plate in the vote.
+    const plate = CALIBRATION_REFERENCES.find((r) => r.id === "bumper_plate_perform_better");
+    if (!plate) throw new Error("the bumper plate reference is gone from CALIBRATION_REFERENCES");
+    return Math.hypot(plate.toleranceM / plate.nominalSizeM, COREML_BOX_LONG_EDGE_UNCERTAINTY);
+  }
+  return t.body3DCorrectedUncertainty;
 }
 
 function blendX1000(
@@ -79,10 +100,17 @@ function liveX1000(row: LedgerRow): number {
   const candidates = heightVotesToday
     ? row.candidates
     : row.candidates.filter((c) => c.source !== "height");
-  return blendX1000(candidates, liveUncertainty);
+  return blendX1000(candidates, (s) => liveUncertainty(s, row.exercise));
 }
 
 describe("every ledger row is a record of a real take", () => {
+  it("the registry's shared defaults are the module constants the live replay used to read", () => {
+    const shared = cameraTunablesFor("Back Squat", "squat").values;
+    expect(shared.heightRulerUncertainty).toBe(HEIGHT_RULER_UNCERTAINTY);
+    expect(shared.biacromialToleranceFraction).toBe(BIACROMIAL_TOLERANCE_FRACTION);
+    expect(shared.depthRulerUncertainty).toBe(DEPTH_RULER_UNCERTAINTY);
+    expect(shared.body3DCorrectedUncertainty).toBe(BODY_3D_CORRECTED_UNCERTAINTY);
+  });
   it("has rows at all, and no two share an id", () => {
     expect(ACCURACY_LEDGER.length).toBeGreaterThanOrEqual(4);
     const ids = ACCURACY_LEDGER.map((r) => r.id);

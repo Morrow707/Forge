@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import { Link } from "wouter";
-import { ForgeMark } from "@/components/forge-mark";
+import { LegalPageChrome } from "@/components/legal-page-chrome";
 import { ReadFailed } from "@/components/read-failed";
 import { DownloadButton } from "@/components/download-button";
 
@@ -60,53 +60,51 @@ function LegalDocumentPage({
   });
 
   return (
-    <div className="min-h-screen bg-background px-4 py-10">
-      <div className="mx-auto max-w-2xl">
-        <Link href="/" className="mb-8 flex items-center gap-2">
-          <ForgeMark className="h-8 w-8 rounded-md" />
-          <span className="font-display font-bold uppercase tracking-wide text-foreground">
-            Forge
-          </span>
-        </Link>
-        <h1 className="mb-2 font-display text-3xl font-extrabold uppercase tracking-wide">
-          {title}
-        </h1>
-        {data?.updatedAt && (
-          <p className="mb-6 text-xs text-muted-foreground">
-            Last updated {new Date(data.updatedAt).toLocaleDateString()}
-          </p>
-        )}
-        {data?.version && (
-          <p className="mb-6 text-xs text-muted-foreground">Version {data.version}</p>
-        )}
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : isError ? (
-          <ReadFailed what={`the ${title}`} onRetry={() => void refetch()} className="mb-8 flex flex-col items-start gap-2" />
-        ) : (
-          <p className="mb-8 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-            {data?.content}
-          </p>
-        )}
-        {/* The same PDF an admin could already download, from the public route. Anybody who
+    <LegalPageChrome title={title}>
+      {data?.updatedAt && (
+        <p className="mb-6 text-xs text-muted-foreground">
+          Last updated {new Date(data.updatedAt).toLocaleDateString()}
+        </p>
+      )}
+      {data?.version && (
+        <p className="mb-6 text-xs text-muted-foreground">
+          Version {data.version}
+        </p>
+      )}
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : isError ? (
+        <ReadFailed
+          what={`the ${title}`}
+          onRetry={() => void refetch()}
+          className="mb-8 flex flex-col items-start gap-2"
+        />
+      ) : (
+        <p className="mb-8 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+          {data?.content}
+        </p>
+      )}
+      {/* The same PDF an admin could already download, from the public route. Anybody who
             accepted one of these should be able to keep a copy, and until now only an admin
             could. DownloadButton goes through the share sheet on iOS, where <a download> is
             ignored. */}
-        {!isLoading && !isError && (
-          <div className="mb-6">
-            <DownloadButton
-              url={`/api/legal-documents/${docType}.pdf`}
-              filename={`forge-${docType.replace(/_/g, "-")}.pdf`}
-              shareTitle={`Forge ${title}`}
-              label="Download PDF"
-            />
-          </div>
-        )}
-        <Link href={otherHref} className="text-sm font-semibold text-primary hover:underline">
-          {otherLabel}
-        </Link>
-      </div>
-    </div>
+      {!isLoading && !isError && (
+        <div className="mb-6">
+          <DownloadButton
+            url={`/api/legal-documents/${docType}.pdf`}
+            filename={`forge-${docType.replace(/_/g, "-")}.pdf`}
+            shareTitle={`Forge ${title}`}
+            label="Download PDF"
+          />
+        </div>
+      )}
+      <Link
+        href={otherHref}
+        className="text-sm font-semibold text-primary hover:underline"
+      >
+        {otherLabel}
+      </Link>
+    </LegalPageChrome>
   );
 }
 

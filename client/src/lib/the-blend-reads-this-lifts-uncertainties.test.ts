@@ -79,16 +79,27 @@ describe("the blend is handed this lift's uncertainties", () => {
     expect(cameraTunablesFor("Bench Press", "press").values.heightRulerUncertainty).not.toBe(999);
   });
 
-  it("nothing moved: every lift still resolves the shared starting values", () => {
-    // The commit is machinery, not a fit. FITTED_OVERRIDES is empty and these must still be the
-    // numbers the module constants carry, or this changed a measurement while claiming not to.
-    for (const [name, bucket] of [["Back Squat", "squat"], ["Bench Press", "press"], ["Romanian Deadlift", "hinge"]] as const) {
-      const v = cameraTunablesFor(name, bucket as never).values;
-      expect(v.heightRulerUncertainty).toBe(0.1);
-      expect(v.depthRulerUncertainty).toBe(0.2);
-      expect(v.depthRulerBias).toBe(0.9);
-      expect(v.ankle3DRulerUncertainty).toBe(0.2);
+  it("every lift still resolves the shared starting values, except the one with its own record", () => {
+    // When this was written FITTED_OVERRIDES was empty and all three resolved the module
+    // constants. Since 2026-10-29 the Romanian Deadlift carries its own depth uncertainty
+    // (0.6, fitted on five sensor-paired RDL takes; see FITTED_OVERRIDE_EVIDENCE) and the point
+    // of this case is now the other half: the lifts WITHOUT an entry must still read the shared
+    // numbers, and the RDL's other three must be untouched -- a change to one lift reaches one
+    // field of one lift.
+    for (const [name, bucket] of [["Back Squat", "squat"], ["Bench Press", "press"]] as const) {
+      const v = cameraTunablesFor(name, bucket as never);
+      expect(v.values.heightRulerUncertainty).toBe(0.1);
+      expect(v.values.depthRulerUncertainty).toBe(0.2);
+      expect(v.values.depthRulerBias).toBe(0.9);
+      expect(v.values.ankle3DRulerUncertainty).toBe(0.2);
+      expect(v.sources.depthRulerUncertainty).not.toBe("fitted");
     }
+    const rdl = cameraTunablesFor("Romanian Deadlift", "hinge" as never);
+    expect(rdl.values.depthRulerUncertainty).toBe(0.6);
+    expect(rdl.sources.depthRulerUncertainty).toBe("fitted");
+    expect(rdl.values.heightRulerUncertainty).toBe(0.1);
+    expect(rdl.values.depthRulerBias).toBe(0.9);
+    expect(rdl.values.ankle3DRulerUncertainty).toBe(0.2);
   });
 
   it("TWO OF THE THREE ARE WIRED NOW, AND THE LIST SHRANK AS IT WAS MEANT TO", () => {

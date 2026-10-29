@@ -26,6 +26,7 @@ import {
 } from "@/lib/apple-iap";
 import { cn } from "@/lib/utils";
 import { Sparkles, Unlock, Lock } from "lucide-react";
+import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
 
 /** What GET /api/athlete/entitlements answers with. `addOns` is MAY I OPEN THIS
  * and `ownedAddOns` is DID I PAY FOR THIS -- two different questions, and the
@@ -206,6 +207,7 @@ export default function AthleteSportCoaches() {
                         Included with your account.
                       </p>
                     )}
+                    {sellable && <SubscriptionLegalLinks compact />}
                   </CardContent>
                 </Card>
               );

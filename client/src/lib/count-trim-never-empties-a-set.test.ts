@@ -71,6 +71,13 @@ describe("the count-trim removes surplus and never a set", () => {
     "bench-unrack-capture.json": 9,
     "pendlay-row-set2-2026-10-02.json": 9,
     "push-press-set2-2026-10-02.json": 9,
+    // A multi-capture export is keyed per capture (file:setId), because one file holds takes
+    // that count differently. The 2026-10-29 export: both RDLs found 7 of the 8 logged (the
+    // 10-29 one lost a quarter of its wrist frames; see docs/camera-tracking-notes.md) and the
+    // 10-19 squat set 2 found 4 of 5. The 10-29 squat counts all five and is not listed.
+    "ovr-2026-10-29-export.json:2026-10-29 Romanian Deadlift set 1": 7,
+    "ovr-2026-10-29-export.json:2026-10-19 Romanian Deadlift set 2": 7,
+    "ovr-2026-10-29-export.json:2026-10-19 Back Squat set 2": 4,
   };
 
   it.each(
@@ -81,7 +88,7 @@ describe("the count-trim removes surplus and never a set", () => {
     const r = replayCapture(capture);
     const counted = r.metrics?.repBreakdown.length ?? 0;
     if (counted === 0) return; // a jump capture; covered by the Rule #1 case above
-    const known = KNOWN_UNDERCOUNTS[file];
+    const known = KNOWN_UNDERCOUNTS[`${file}:${capture.setId ?? ""}`] ?? KNOWN_UNDERCOUNTS[file];
     if (known != null) {
       // Still broken in the same way. If this fails because `counted` went UP, the segmenter
       // got better: delete the entry. If it fails because it went DOWN, something regressed.

@@ -190,7 +190,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.43338517946498,
     reportedRomCm: 54.7,
     sensorRomCm: 59.4,
-    liveErrorPct: 3.58,
+    liveErrorPct: -0.16,
     notes:
       "Read 7.9% low as filmed. Today's pipeline admits NO height ruler here -- the hinge is " +
       "bent_over since 2026-10-05 -- and that relabel plus the shoulder floor take it to +3.6%, " +
@@ -240,14 +240,189 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.7870913839708666,
     reportedRomCm: 60.0,
     sensorRomCm: 64.5,
-    liveErrorPct: -1.95,
+    liveErrorPct: -6.64,
     notes:
       "The take the hinge fix was made on: the height ruler read 16% below the scale the sensor " +
       "requires while carrying 44.4% of the weight, and dropping it took the take from -7.0% to " +
       "0.0% on that build. It reads -2.0% today, the extra 2 points being the shoulder floor -- " +
       "so the '0.0%' in the note is a fact about build 620 and not a standing property.",
   },
+  /* THE 2026-10-19 SESSION, from the admin capture export Scott attached on 2026-10-29 -- the
+   * rows the note above said were missing, entered mechanically from `calibration.scaleBlend.inputs`
+   * (the RAW rows before the 3D-pose collapse, uncertainties as stated on the day) and
+   * `calibration.scaleFactor`. The sensor's range of motion is the OVR's, converted from inches,
+   * as docs/camera-tracking-notes.md "Three lifts beside OVR, 2026-10-19" records it. Filmed on
+   * build 673 (34574c60); the camera pipeline on it is e40ea299's. `heightIn` was 75 on every row.
+   * The shoulder ruler's uncertainty on both squats is the GRIP FLOOR's answer (grip/shoulder 2.49
+   * and 2.57 against a 1.85 ceiling), which is why it is not the 0.2 floor; the live replay can
+   * only know the floor, so `liveErrorPct` on those two rows is the blend at 0.2, not at what
+   * the frames would loosen it to. */
+  {
+    id: "2026-10-19-back-squat-set-1",
+    date: "2026-10-19",
+    build: 673,
+    exercise: "Back Squat",
+    filmedOnCommit: "34574c60",
+    candidates: [
+      { source: "body_3d", scaleX1000: 3.95753 },
+      { source: "depth", scaleX1000: 4.15814 },
+      { source: "height", scaleX1000: 3.24164 },
+      { source: "shoulder_width", scaleX1000: 4.19401 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, height: 0.1, shoulder_width: 0.3483303821163719 },
+    heightRulerVotedAsFilmed: true,
+    shippedScaleX1000: 3.4534573167314636,
+    reportedRomCm: 70.6,
+    sensorRomCm: 74.6,
+    liveErrorPct: -3.09,
+    notes:
+      "First session with a height on file (75in). Read -5.3% as filmed. The height ruler carried " +
+      "75% of the weight and read 7.5% LOW against the sensor's scale; body_3d read +12.9% and " +
+      "shoulder_width +19.6% HIGH. The blend lands because two biases of opposite sign meet in " +
+      "the middle, which is not the same as either ruler being right -- the pattern every squat " +
+      "on this account repeats.",
+  },
+  {
+    id: "2026-10-19-back-squat-set-2",
+    date: "2026-10-19",
+    build: 673,
+    exercise: "Back Squat",
+    filmedOnCommit: "34574c60",
+    candidates: [
+      { source: "body_3d", scaleX1000: 3.84052 },
+      { source: "depth", scaleX1000: 4.43984 },
+      { source: "height", scaleX1000: 3.39639 },
+      { source: "shoulder_width", scaleX1000: 4.33825 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, height: 0.1, shoulder_width: 0.3920177678390395 },
+    heightRulerVotedAsFilmed: true,
+    shippedScaleX1000: 3.5823291387545777,
+    reportedRomCm: 72.6,
+    sensorRomCm: 73.7,
+    liveErrorPct: 1.07,
+    notes:
+      "The best standing result on record: -1.5% on range of motion and 0.00 m/s on the mean " +
+      "(0.84 against 0.84). The height ruler alone was within 1.5% of the sensor's scale on this " +
+      "take; the segmenter found 4 reps of 5. Same shape as set 1 -- height low, the two body " +
+      "rulers high -- with the height ruler less low than usual.",
+  },
+  {
+    id: "2026-10-19-romanian-deadlift-set-1",
+    date: "2026-10-19",
+    build: 673,
+    exercise: "Romanian Deadlift",
+    filmedOnCommit: "34574c60",
+    candidates: [
+      { source: "body_3d", scaleX1000: 3.33607 },
+      { source: "depth", scaleX1000: 4.54961 },
+      { source: "shoulder_width", scaleX1000: 3.93503 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, shoulder_width: 0.2 },
+    // bent_over since 2026-10-05: no height ruler is offered to a hinge.
+    heightRulerVotedAsFilmed: false,
+    shippedScaleX1000: 3.915452007948545,
+    reportedRomCm: 65.2,
+    sensorRomCm: 56.0,
+    liveErrorPct: 9.67,
+    notes:
+      "Read +16.4% as filmed, and the whole error is the 3D-pose collapse: body_3d alone was " +
+      "-0.8% of the sensor's scale and depth +35.3%, they vote once at their geometric mean " +
+      "(+15.8%), and a hinge has no height ruler on the other side to pull it back. Two fixes " +
+      "were measured and rejected the same day; see the notes. depth read HIGH on all four takes.",
+  },
+  {
+    id: "2026-10-19-romanian-deadlift-set-2",
+    date: "2026-10-19",
+    build: 673,
+    exercise: "Romanian Deadlift",
+    filmedOnCommit: "34574c60",
+    candidates: [
+      { source: "plate", scaleX1000: 2.05555 },
+      { source: "body_3d", scaleX1000: 3.55661 },
+      { source: "depth", scaleX1000: 4.5721 },
+      { source: "shoulder_width", scaleX1000: 4.02663 },
+    ],
+    // The plate states the detector's own measured noise (COREML_BOX_LONG_EDGE_UNCERTAINTY 0.056)
+    // in quadrature with the 6mm casting tolerance of a 450mm bumper: 0.0576.
+    uncertaintiesAsFilmed: { plate: 0.05756542171979441, body_3d: 0.2, depth: 0.2, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: false,
+    shippedScaleX1000: 4.0295695742386135,
+    reportedRomCm: 64.3,
+    sensorRomCm: 57.4,
+    liveErrorPct: 6.66,
+    notes:
+      "Read +12.0% as filmed. The one take of the four with a plate in the vote -- 2.06 against a " +
+      "required 3.59, i.e. the box 1.75x too big -- and the lone-plate rule correctly stepped it " +
+      "out (0% weight), leaving body_3d (-1.1%) collapsed with depth (+27.1%) at +12.1%. The " +
+      "collapse is the error again; the plate was never in a position to help.",
+  },
+
+  /* THE 2026-10-29 SESSION. Same athlete, same height on file, filmed on build 695 (039ae04; the
+   * camera pipeline is byte-identical to 693's and to e40ea299's). The OVR called the second
+   * lift "Deadlift"; Forge logged it as Romanian Deadlift, which is the label that decides the
+   * posture and so whether a height ruler is offered. */
+  {
+    id: "2026-10-29-back-squat",
+    date: "2026-10-29",
+    build: 695,
+    exercise: "Back Squat",
+    filmedOnCommit: "039ae04",
+    candidates: [
+      { source: "body_3d", scaleX1000: 3.99216 },
+      { source: "depth", scaleX1000: 4.86174 },
+      { source: "height", scaleX1000: 3.16385 },
+      { source: "shoulder_width", scaleX1000: 4.03818 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, height: 0.1, shoulder_width: 0.3387229966186345 },
+    heightRulerVotedAsFilmed: true,
+    shippedScaleX1000: 3.452992524721314,
+    reportedRomCm: 71.8,
+    sensorRomCm: 73.2,
+    liveErrorPct: -0.11,
+    notes:
+      "Read -1.9% as filmed, 5 of 5 reps, cadence held, no dropouts: the control. Against the " +
+      "sensor's scale the height ruler read -10.1% at 74.8% of the weight, body_3d +13.4%, " +
+      "shoulder_width +14.7%, depth +38.1%. Third squat take in a row with the same signature: the " +
+      "height ruler 8-10% low and the two body rulers 13-20% high, cancelling. Its shipped scale " +
+      "(3.4530) is the RDL's (3.4496) to three decimals, filmed minutes apart from the same spot.",
+  },
+  {
+    id: "2026-10-29-romanian-deadlift",
+    date: "2026-10-29",
+    build: 695,
+    exercise: "Romanian Deadlift",
+    filmedOnCommit: "039ae04",
+    candidates: [
+      { source: "body_3d", scaleX1000: 3.05709 },
+      { source: "depth", scaleX1000: 3.80237 },
+      { source: "shoulder_width", scaleX1000: 3.48977 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: false,
+    shippedScaleX1000: 3.449596630517205,
+    reportedRomCm: 81.2,
+    sensorRomCm: 62.2,
+    liveErrorPct: 25.16,
+    notes:
+      "Read +30.5% as filmed, the worst RDL on record, and this time EVERY ruler is high: body_3d " +
+      "+15.7%, shoulder_width +32.0% (grip/shoulder 1.77, spread 0.12 -- the span foreshortened on " +
+      "a hinge filmed oblique, grip axis 32.6 deg from vertical), depth +43.9%. No height ruler to " +
+      "oppose them. Not a clean scale error either: 168 of 611 frames had a wrist under the " +
+      "visibility floor, 108 bar points were a lone hand carried, 5 of 7 rep peaks were floored " +
+      "to their means, and per-rep ROM ran 62-93cm where the sensor read 59-64. A trace problem " +
+      "and a scale problem on one take, which is why nothing was fitted to it.",
+  },
 ];
+
+/* THE FIRST MOVE THIS RATCHET RECORDED, 2026-10-29: the Romanian Deadlift's own record
+ * (FITTED_OVERRIDES: depthRulerUncertainty 0.6, with the collapse weighing its pair) moved the
+ * five RDL rows and no squat row:
+ *   10-04 RDL  +3.58 -> -0.16    10-05 RDL  -1.95 -> -6.64
+ *   10-19 RDL s1 +16.43 -> +9.67    10-19 RDL s2 +12.02 -> +6.66    10-29 RDL +30.55 -> +25.16
+ * Median |error| on the RDL 12.0% -> 6.7%; the 10-05 take (filmed with no height on file, the
+ * one where depth read only +8%) is the cost, 4.7 points, and it is written here rather than
+ * averaged away. Every squat row is identical to the hundredth of a point, which is what "a
+ * change to one lift reaches one lift" means in this file. */
 
 /** Every take filmed on a given day, in the order they were added. */
 export function ledgerRowsOn(date: string): readonly LedgerRow[] {

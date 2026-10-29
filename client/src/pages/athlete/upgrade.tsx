@@ -44,6 +44,7 @@ import {
 } from "@shared/free-agent-tiers";
 import { ApiError, apiRequest } from "@/lib/queryClient";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
+import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
 import { formatCents } from "@shared/billing-tiers";
 
 /** The add-on half of GET /api/athlete/entitlements -- see sport-coaches.tsx for
@@ -469,6 +470,7 @@ export default function AthleteUpgrade() {
             })}
           </div>
         )}
+        {!supported && !androidNative && <SubscriptionLegalLinks className="mt-4" />}
         {/* All Classes (2026-10-04): the one add-on on sale, on top of any tier. */}
         <div className="mt-6">
           <AllClassesCard />
@@ -526,6 +528,7 @@ export default function AthleteUpgrade() {
             ))}
           </div>
         )}
+        {live && <SubscriptionLegalLinks className="mt-4" />}
       </AppShell>
     </FreeAgentGate>
   );
