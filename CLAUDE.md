@@ -2880,9 +2880,12 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 693** (2026-10-29,
-  `bcd3b74`, the in-app Privacy Policy and EULA links on every purchase surface for the second App
-  Review rejection; 692 was its `verify_build`). Before it, **691** (2026-10-24,
+  branch `verify_build` for the arbiter plumbing. **The newest build is 695** (2026-10-29,
+  `039ae04`, a legal document opened inside the app wears the app's nav bar so it can be left;
+  694 was its `verify_build`). Before it, **693** the same day (`bcd3b74`, the in-app Privacy
+  Policy and EULA links on every purchase surface for the second App Review rejection; 692 was
+  its `verify_build`) -- a dead end on the phone the moment a link was tapped, which 695 fixes.
+  Before it, **691** (2026-10-24,
   `52c3d89f`, the security audit's recommendations plus the role survey's client commits since 686; 690
   was its `verify_build`, and 687-689 were the other session's `verify_build` runs on its client
   commits). Before it, **686** (2026-10-23, `a0ef9305`, the eighteen-commit batch including four
@@ -2912,14 +2915,15 @@ halves before splitting anything else:
   worst case **60.5% -> 20.7%**. The row is the one lift still outside 15% and the retrained
   detector is the only remaining candidate for it; what proves or disproves that is one filmed
   set, read off `plateBoxToExpectedRatio`.
-- **THE QUEUE IS EMPTY AS OF BUILD 693** (2026-10-29, `bcd3b74`; run 692 was its `verify_build`,
-  which passed Apple's own `--validate-app`). It carries one thing: the in-app Privacy Policy and
-  Terms of Use (EULA) links and the monthly auto-renewal sentence on every purchase surface, the
-  Account Settings legal row and the More menu's Terms & Privacy entry (`59825a1`), shipped on its
-  own upload because it answers the second App Review rejection (see "1.0 WAS REJECTED A SECOND
-  TIME" below). Nothing else was waiting: 691 had cleared the queue five days earlier. This is the
-  build to submit to App Review in place of 691. **Clear this entry on the next upload rather than
-  adding to it.**
+- **THE QUEUE IS EMPTY AS OF BUILD 695** (2026-10-29, `039ae04`; run 694 was its `verify_build`,
+  which passed Apple's own `--validate-app`). Two uploads the same night, both for the second App
+  Review rejection (see "1.0 WAS REJECTED A SECOND TIME" below): **693** (`bcd3b74`, 692 its
+  `verify_build`) carried the in-app Privacy Policy and Terms of Use (EULA) links and the monthly
+  auto-renewal sentence on every purchase surface, the Account Settings legal row and the More
+  menu's Terms & Privacy entry (`59825a1`); **695** carries `LegalPageChrome`, because on 693 a
+  tapped EULA had no way out but the Forge mark (`039ae04`). Nothing else was waiting: 691 had
+  cleared the queue five days earlier. **695 is the build to submit to App Review in place of
+  691 and 693.** Clear this entry on the next upload rather than adding to it.
 - **THE RDL'S +12% IS THE 3D-POSE COLLAPSE, AND NO CONSTANT MOVED FOR IT** (2026-10-19, the
   first calibration session on the admin account; three lifts beside the OVR -- Back Squat,
   Romanian Deadlift, Box Jump, and only those three).
@@ -3074,7 +3078,7 @@ no session gets the public page exactly as before. **The AppShell is a LAZY impo
 purpose**: the legal pages are eager (public routes) and the shell carries every dialog in the
 app, so a static import would put all of it on a signed-out visitor's first paint, which
 `bundle-budget.test.ts` refuses; the Suspense fallback is the document itself, so nothing blanks.
-Run 694 is its `verify_build`; the beta after it is the build that replaces 693 on the version page.
+Run 694 was its `verify_build` and **695 the upload**: the build that replaces 693 on the version page.
 
 ## THE THREE DEMO ACCOUNTS ARE BACK, EMPTY, AND THEIR PASSWORDS ARE ON RENDER, NEVER HERE
 
