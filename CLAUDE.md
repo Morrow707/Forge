@@ -2893,9 +2893,14 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 695** (2026-10-29,
-  `039ae04`, a legal document opened inside the app wears the app's nav bar so it can be left;
-  694 was its `verify_build`). Before it, **693** the same day (`bcd3b74`, the in-app Privacy
+  branch `verify_build` for the arbiter plumbing. **The newest build is 697** (2026-10-29
+  evening, `6d8f259`: the Romanian Deadlift's own numbers in `FITTED_OVERRIDES`, the weighted
+  3D-pose collapse, the replay harness reading each lift's record, the jump's raw hip peak;
+  696 was its `verify_build` on `ccdeba5`, and the beta picked up one server-only seed commit
+  merged in between, `cc5d2bf`, which changes nothing in the binary). **697 is the build to film
+  all three lifts on.** Before it, **695** earlier the same day (`039ae04`, a legal document
+  opened inside the app wears the app's nav bar so it can be left; 694 was its `verify_build`),
+  which is the build submitted to App Review. Before it, **693** the same day (`bcd3b74`, the in-app Privacy
   Policy and EULA links on every purchase surface for the second App Review rejection; 692 was
   its `verify_build`) -- a dead end on the phone the moment a link was tapped, which 695 fixes.
   Before it, **691** (2026-10-24,
@@ -2928,15 +2933,26 @@ halves before splitting anything else:
   worst case **60.5% -> 20.7%**. The row is the one lift still outside 15% and the retrained
   detector is the only remaining candidate for it; what proves or disproves that is one filmed
   set, read off `plateBoxToExpectedRatio`.
-- **THE QUEUE IS EMPTY AS OF BUILD 695** (2026-10-29, `039ae04`; run 694 was its `verify_build`,
-  which passed Apple's own `--validate-app`). Two uploads the same night, both for the second App
+- **THE QUEUE IS EMPTY AS OF BUILD 697** (2026-10-29 evening, `6d8f259`; 696 was its
+  `verify_build` on `ccdeba5`). Calibration work, uploaded on commit: the RDL's first per-lift
+  record (`depthRulerUncertainty` 0.6, `maxPeakToMeanRatio` 2.5), the weighted 3D-pose collapse,
+  the replay harness resolving each capture's own record, and `concentricPeakVelocityRawMps` on
+  the jump. **Scott films Back Squat, Romanian Deadlift (square-on) and Box Jump on 697 beside
+  the OVR; the next session reads that export against the status board's "Next" list.** His
+  standing instruction for that session, 2026-10-29: "change something on all lifts after this
+  round. 1.5% is good but I want to make it 0% and steady" and then "Small changes. .001%
+  changes" -- one per-lift adjustment each for squat, RDL and jump, each small, each costed on
+  the ledger and the fixture replay to prove the other two lifts do not move. Before 697:
+  **695** (2026-10-29, `039ae04`; run 694 was its `verify_build`,
+  which passed Apple's own `--validate-app`), the App Review build. Two uploads the same night, both for the second App
   Review rejection (see "1.0 WAS REJECTED A SECOND TIME" below): **693** (`bcd3b74`, 692 its
   `verify_build`) carried the in-app Privacy Policy and Terms of Use (EULA) links and the monthly
   auto-renewal sentence on every purchase surface, the Account Settings legal row and the More
   menu's Terms & Privacy entry (`59825a1`); **695** carries `LegalPageChrome`, because on 693 a
   tapped EULA had no way out but the Forge mark (`039ae04`). Nothing else was waiting: 691 had
-  cleared the queue five days earlier. **695 is the build to submit to App Review in place of
-  691 and 693.** Clear this entry on the next upload rather than adding to it.
+  cleared the queue five days earlier. **695 is the build submitted to App Review in place of
+  691 and 693** (submitted 2026-10-29, nine items, not expedited). Clear this entry on the next
+  upload rather than adding to it.
 - **THE RDL'S +12% IS THE 3D-POSE COLLAPSE, AND NO CONSTANT MOVED FOR IT** (2026-10-19, the
   first calibration session on the admin account; three lifts beside the OVR -- Back Squat,
   Romanian Deadlift, Box Jump, and only those three).

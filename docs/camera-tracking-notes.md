@@ -26,6 +26,18 @@ of every session, before the push, and date the heading.** The replayable record
 
 **Under test (Scott, 2026-10-20): Back Squat, Romanian Deadlift, Box Jump. Nothing else.**
 
+**THE STANDING ORDER FOR THE NEXT SESSION (Scott, 2026-10-29, after build 697 shipped the RDL's
+record):** "Ok I'll record all 3, but I want you to change something on all lifts after this
+round. 1.5% is good but I want to make it 0% and steady." Then: "Small changes. .001% changes."
+So when the 697 export and the OVR numbers arrive: add the ledger rows FIRST, then ship ONE
+per-lift adjustment for EACH of the three lifts -- in that lift's `FITTED_OVERRIDES` record or a
+rule gated on that lift, never a shared constant -- sized SMALL (a nudge on the order of the
+residual, not a swing; he said .001%), each replayed on every ledger row and the fixture corpus
+to show the other two lifts do not move to the hundredth, and the board's "what is known not to
+work" list read before any lever is picked. Target is 0% AND steady, so repeatability across the
+takes counts as much as the mean (Rule #5): a change that closes the mean and widens the
+take-to-take spread is not the change. Build to film on: **697**.
+
 | lift | paired takes | ROM vs OVR, oldest -> newest | state |
 |---|---|---|---|
 | Back Squat 135 | 10-19 x2, 10-29 | -5.3%, -1.5%, -1.9% (mean 0.81/0.84/0.72 vs 0.86/0.84/0.80) | **lands, for the wrong reason** |
