@@ -2941,8 +2941,11 @@ halves before splitting anything else:
   the OVR; the next session reads that export against the status board's "Next" list.** His
   standing instruction for that session, 2026-10-29: "change something on all lifts after this
   round. 1.5% is good but I want to make it 0% and steady" and then "Small changes. .001%
-  changes" -- one per-lift adjustment each for squat, RDL and jump, each small, each costed on
-  the ledger and the fixture replay to prove the other two lifts do not move. Before 697:
+  changes" and "If you have to do multiple changes that's fine, but until we get to 0% I want to
+  keep making small adjustments on everything to remain steady and confident" -- one or several
+  per-lift adjustments each for squat, RDL and jump, every one small, each costed on the ledger
+  and the fixture replay to prove the other two lifts do not move, repeated take after take
+  until each lift reads 0%. Before 697:
   **695** (2026-10-29, `039ae04`; run 694 was its `verify_build`,
   which passed Apple's own `--validate-app`), the App Review build. Two uploads the same night, both for the second App
   Review rejection (see "1.0 WAS REJECTED A SECOND TIME" below): **693** (`bcd3b74`, 692 its

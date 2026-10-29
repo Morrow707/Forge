@@ -29,12 +29,17 @@ of every session, before the push, and date the heading.** The replayable record
 **THE STANDING ORDER FOR THE NEXT SESSION (Scott, 2026-10-29, after build 697 shipped the RDL's
 record):** "Ok I'll record all 3, but I want you to change something on all lifts after this
 round. 1.5% is good but I want to make it 0% and steady." Then: "Small changes. .001% changes."
-So when the 697 export and the OVR numbers arrive: add the ledger rows FIRST, then ship ONE
-per-lift adjustment for EACH of the three lifts -- in that lift's `FITTED_OVERRIDES` record or a
-rule gated on that lift, never a shared constant -- sized SMALL (a nudge on the order of the
-residual, not a swing; he said .001%), each replayed on every ledger row and the fixture corpus
-to show the other two lifts do not move to the hundredth, and the board's "what is known not to
-work" list read before any lever is picked. Target is 0% AND steady, so repeatability across the
+And, refining it: "If you have to do multiple changes that's fine, but until we get to 0% I
+want to keep making small adjustments on everything to remain steady and confident."
+So when the 697 export and the OVR numbers arrive: add the ledger rows FIRST, then ship
+adjustments to EACH of the three lifts -- one or several per lift, in that lift's
+`FITTED_OVERRIDES` record or a rule gated on that lift, never a shared constant -- every one of
+them SMALL (a nudge on the order of the residual, not a swing; he said .001%), each replayed on
+every ledger row and the fixture corpus to show the other two lifts do not move to the
+hundredth, and the board's "what is known not to work" list read before any lever is picked.
+**This is the loop until every lift reads 0%: film, ledger, small nudges per lift, verify_build,
+beta, film again.** A big correction that lands once is not what he asked for; a run of small
+ones that each hold on the next take is. Target is 0% AND steady, so repeatability across the
 takes counts as much as the mean (Rule #5): a change that closes the mean and widens the
 take-to-take spread is not the change. Build to film on: **697**.
 
