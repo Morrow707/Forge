@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { useEffect, useState } from "react";
 import { DownloadButton } from "@/components/download-button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -560,6 +561,16 @@ export function AccountSettingsDialog({
               </div>
             </div>
           )}
+
+          {/* THE PRIVACY POLICY AND THE EULA, REACHABLE FROM SETTINGS IN THE APP (App Review,
+              2026-10-29, Guideline 3.1.2: the reviewer could find neither inside the app). Every
+              role renders this dialog, the guardian dashboard included, so this is the one row
+              that reaches all four. The routes render the reviewed text from the API. */}
+          <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-border pt-4 text-xs text-muted-foreground" data-testid="account-legal-links">
+            <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">Privacy Policy</Link>
+            <Link href="/eula" className="underline underline-offset-2 hover:text-foreground">Terms of Use (EULA)</Link>
+            <Link href="/legal" className="underline underline-offset-2 hover:text-foreground">All legal documents</Link>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

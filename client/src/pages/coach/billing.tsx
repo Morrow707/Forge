@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { CreditCard, Users } from "lucide-react";
 import { bandForAthleteCount, formatCents, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
 import { useAuth } from "@/hooks/use-auth";
+import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
 
 /** GET /api/coach/entitlements, the add-on half. purchasableAddOns is derived
  * server-side from COACH_PURCHASABLE_ADD_ON_ORDER, so this page never holds its
@@ -459,6 +460,7 @@ export default function CoachBilling() {
             </Button>
           )}
           {!entitlements && <p className="text-sm text-muted-foreground">Loading…</p>}
+          <SubscriptionLegalLinks />
         </CardContent>
       </Card>
 
@@ -527,6 +529,7 @@ export default function CoachBilling() {
               </Button>
             </div>
           )}
+          <SubscriptionLegalLinks compact />
         </CardContent>
       </Card>
     </AppShell>

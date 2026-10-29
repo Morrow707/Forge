@@ -53,6 +53,7 @@ import {
   FileCheck2,
   FileWarning,
   Mail,
+  Scale,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -141,6 +142,7 @@ const coachNav: NavItem[] = [
   // covered, and asking them for it.
   { href: "/coach/athlete-documents", label: "Athlete Documents", icon: FileWarning, overflow: true },
   { href: "/coach/about", label: "About", icon: Info, overflow: true },
+  { href: "/legal", label: "Terms & Privacy", icon: Scale, overflow: true },
 ];
 
 const athleteNav: NavItem[] = [
@@ -198,6 +200,7 @@ const athleteNav: NavItem[] = [
   { href: "/athlete/video-bank", label: "Video Bank", icon: Video, overflow: true },
   { href: "/documents", label: "Documents", icon: FileCheck2, overflow: true },
   { href: "/athlete/about", label: "About", icon: Info },
+  { href: "/legal", label: "Terms & Privacy", icon: Scale, overflow: true },
 ];
 
 const adminNav: NavItem[] = [
@@ -233,6 +236,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/users", label: "Users", icon: Users, overflow: true },
   { href: "/admin/email-list", label: "Email List", icon: Mail, overflow: true },
   { href: "/admin/documents", label: "Legal & Compliance", icon: ShieldCheck, overflow: true },
+  { href: "/legal", label: "Terms & Privacy", icon: Scale, overflow: true },
   // BOTH OF THESE EXISTED, WORKED, AND HAD NO WAY IN.
   //
   // Each had a route in App.tsx, a working server endpoint and a finished page, and no entry

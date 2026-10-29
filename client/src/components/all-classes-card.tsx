@@ -24,6 +24,7 @@ import {
   GooglePlayPurchasePendingError,
 } from "@/lib/google-play-billing";
 import { GraduationCap, Lock, Unlock } from "lucide-react";
+import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
 
 type Entitlements = {
   addOns: Record<FreeAgentAddOnId, boolean>;
@@ -128,6 +129,7 @@ export function AllClassesCard({ compact = false }: { compact?: boolean }) {
             See plans
           </Button>
         )}
+        {sellable && <SubscriptionLegalLinks compact className="basis-full" />}
       </div>
     );
   }
@@ -166,6 +168,7 @@ export function AllClassesCard({ compact = false }: { compact?: boolean }) {
             {billingOpen ? "Not available in the store yet." : "Not available yet."}
           </p>
         )}
+        {!unlocked && sellable && <SubscriptionLegalLinks compact />}
       </CardContent>
     </Card>
   );

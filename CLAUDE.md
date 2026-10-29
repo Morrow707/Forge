@@ -3023,6 +3023,51 @@ reviewed document is an edit to both. Do not switch the field back to Apple's st
 agreement: it is the generic licence this file already rejects (one copy on one computer, no
 Apple-required clauses, an entire-agreement clause over the Terms and the consents).
 
+## 1.0 WAS REJECTED A SECOND TIME, ON THE PURCHASE SCREENS: THE LINKS GO IN THE APP, NOT ONLY THE LISTING
+
+Added 2026-10-29. Apple's second pass on build 691 (reviewed on an iPad Air 11-inch M3) came back
+with three items, and only one of them is code:
+
+- **Guideline 3.1.2(c): no functional link to the Privacy Policy or the Terms of Use (EULA)
+  INSIDE the app, and the purchase flow stated no subscription length.** The listing fix of
+  10-25 put both links on the product page; the reviewer then looked for them in the app and
+  found neither -- the legal pages were routes (`/privacy`, `/eula`, `/legal`) reachable from the
+  marketing footer and from nowhere a signed-in person goes. `SubscriptionLegalLinks`
+  (`client/src/components/subscription-legal-links.tsx`) is the one sentence and the two links,
+  drawn on every surface that sells something: the Upgrade screen (both rails), the All Classes
+  card (full and compact), the coach Billing screen (the add-ons card and the plan card), the
+  Coaches Corner upsell card, the sport-coaches page (latent) and the per-lesson unlock (unused
+  machinery, still a purchase). The links are the app's OWN routes, never an absolute URL: the
+  native paywall scan refuses handing an iOS buyer to a browser for a checkout and Apple reads a
+  terms link the same way. The App Store auto-renewal sentence (charged to the Apple ID, renews
+  unless cancelled 24 hours before the period ends, managed in App Store settings) is drawn only
+  inside the iOS app, because on the web it would be false. Account Settings carries the three
+  links for every role (the guardian dashboard renders that dialog too) and the More menu has a
+  "Terms & Privacy" entry on all three AppShell roles.
+  `every-purchase-surface-links-the-legal-documents.test.ts` discovers the surfaces from what
+  they DO (a store purchase call or a checkout POST), comments stripped, and requires the
+  component on each -- commenting it out of one surface reds it. **Compliance class: its own
+  `verify_build` and `beta`, not the batch.**
+- **Guideline 2.1: what the promo/Forge code is and where it comes from.** Answered in words
+  (the reply is in the session scratchpad, `asc/4-reply-to-app-review-2026-10-29.txt`): a
+  Forge code is created on More -> Billing -> Redeem codes and handed out by Forge (mailing-list
+  campaigns, onboarding, events), never obtainable in the app; it unlocks a free-time window of
+  the paid Free Agent features or a percent off a card-billed subscription, and never bypasses
+  StoreKit. The "App Store code" button is Apple's own offer-code sheet. **A reviewer may ask for
+  a code: create a 30-day `new_accounts`/`everyone` free-time code for them and put it in the App
+  Review notes**, which is where the notes template (`asc/5-app-review-information-notes.txt`)
+  has a `[CODE]` placeholder.
+- **Guideline 2.3.6: the Age Rating declared In-App Controls (Parental Controls, Age Assurance)
+  the reviewer could not find.** Set both to **None** on App Information. Forge takes a date of
+  birth and holds an under-13 account until a guardian claims it by email, which is consent
+  management, not a parental-control setting or an age-assurance method in Apple's sense -- and
+  claiming it invites a reviewer to go looking for a switch they cannot reach without an under-13
+  signup and the guardian's inbox.
+
+What the reply needs beside the text: a screen recording of the Upgrade screen on an iPhone on
+the new build (plan cards, the sentence, each link opening), and the App Review Information notes
+updated with the subscription titles, lengths and prices.
+
 ## THE THREE DEMO ACCOUNTS ARE BACK, EMPTY, AND THEIR PASSWORDS ARE ON RENDER, NEVER HERE
 
 Added 2026-10-28. Scott: "reinstate those 3 accounts, but wipe all data associated with them ...

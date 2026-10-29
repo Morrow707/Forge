@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { ClassLessonReaderDialog } from "@/components/class-lesson-reader-dialog";
 import { ReadFailed } from "@/components/read-failed";
 import { AllClassesCard } from "@/components/all-classes-card";
+import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
 import { Capacitor } from "@capacitor/core";
 
 type LessonProgress = {
@@ -297,6 +298,7 @@ export default function AthleteClassDetail() {
                       {lesson.priceCents != null && ` — $${(lesson.priceCents / 100).toFixed(2)}`}
                     </Button>
                   )}
+                  {lesson.state === "locked_preview" && <SubscriptionLegalLinks compact />}
                   {/* The one pricing rule (shared/class-pricing-rule.ts): chapter one is free,
                       the rest come with All Classes. */}
                   {lesson.state === "locked_tier" && <AllClassesCard compact />}
