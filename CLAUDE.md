@@ -2530,9 +2530,13 @@ halves before splitting anything else:
   gets better for every lift at once. The RDL hinge, the box jump's flagged rep and the bench
   un-rack were all fixed by changing a rule or a label, and every lift got the benefit -- that is
   the shape to keep, not something to split away.
-  **`FITTED_OVERRIDES` is EMPTY and the test fails if an entry appears** -- no constant here has ever been fitted on one lift in isolation, and the registry is
-  machinery for doing that safely, not permission to guess. See docs/camera-tracking-notes.md,
-  "One set of numbers per filmable thing".
+  **`FITTED_OVERRIDES` has ONE entry as of 2026-10-29 -- the Romanian Deadlift's `depthRulerUncertainty`
+  0.6 and `maxPeakToMeanRatio` 2.5 -- and the test that used to assert the list was empty now
+  asserts every entry carries `FITTED_OVERRIDE_EVIDENCE` naming its date, its sensor and its
+  takes.** It was costed on every ledger row before it shipped (RDL median 12.0% -> 6.7%, every
+  squat row identical), which is the only way an entry gets in: the registry is machinery for
+  fitting one lift safely, not permission to guess. See docs/camera-tracking-notes.md, "Second
+  pass, 2026-10-29".
 - Build **633** was cut 2026-10-06 from the three lifts filmed on 632 beside the OVR
   (docs/camera-tracking-notes.md, "Three lifts beside OVR, build 632, 2026-10-06"). The build-632
   diagnostics answered their own open question on the first take, which is what they were for.

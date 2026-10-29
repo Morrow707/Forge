@@ -190,7 +190,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.43338517946498,
     reportedRomCm: 54.7,
     sensorRomCm: 59.4,
-    liveErrorPct: 3.58,
+    liveErrorPct: -0.16,
     notes:
       "Read 7.9% low as filmed. Today's pipeline admits NO height ruler here -- the hinge is " +
       "bent_over since 2026-10-05 -- and that relabel plus the shoulder floor take it to +3.6%, " +
@@ -240,7 +240,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.7870913839708666,
     reportedRomCm: 60.0,
     sensorRomCm: 64.5,
-    liveErrorPct: -1.95,
+    liveErrorPct: -6.64,
     notes:
       "The take the hinge fix was made on: the height ruler read 16% below the scale the sensor " +
       "requires while carrying 44.4% of the weight, and dropping it took the take from -7.0% to " +
@@ -323,7 +323,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.915452007948545,
     reportedRomCm: 65.2,
     sensorRomCm: 56.0,
-    liveErrorPct: 16.43,
+    liveErrorPct: 9.67,
     notes:
       "Read +16.4% as filmed, and the whole error is the 3D-pose collapse: body_3d alone was " +
       "-0.8% of the sensor's scale and depth +35.3%, they vote once at their geometric mean " +
@@ -349,7 +349,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 4.0295695742386135,
     reportedRomCm: 64.3,
     sensorRomCm: 57.4,
-    liveErrorPct: 12.02,
+    liveErrorPct: 6.66,
     notes:
       "Read +12.0% as filmed. The one take of the four with a plate in the vote -- 2.06 against a " +
       "required 3.59, i.e. the box 1.75x too big -- and the lone-plate rule correctly stepped it " +
@@ -402,7 +402,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.449596630517205,
     reportedRomCm: 81.2,
     sensorRomCm: 62.2,
-    liveErrorPct: 30.55,
+    liveErrorPct: 25.16,
     notes:
       "Read +30.5% as filmed, the worst RDL on record, and this time EVERY ruler is high: body_3d " +
       "+15.7%, shoulder_width +32.0% (grip/shoulder 1.77, spread 0.12 -- the span foreshortened on " +
@@ -413,6 +413,16 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "and a scale problem on one take, which is why nothing was fitted to it.",
   },
 ];
+
+/* THE FIRST MOVE THIS RATCHET RECORDED, 2026-10-29: the Romanian Deadlift's own record
+ * (FITTED_OVERRIDES: depthRulerUncertainty 0.6, with the collapse weighing its pair) moved the
+ * five RDL rows and no squat row:
+ *   10-04 RDL  +3.58 -> -0.16    10-05 RDL  -1.95 -> -6.64
+ *   10-19 RDL s1 +16.43 -> +9.67    10-19 RDL s2 +12.02 -> +6.66    10-29 RDL +30.55 -> +25.16
+ * Median |error| on the RDL 12.0% -> 6.7%; the 10-05 take (filmed with no height on file, the
+ * one where depth read only +8%) is the cost, 4.7 points, and it is written here rather than
+ * averaged away. Every squat row is identical to the hundredth of a point, which is what "a
+ * change to one lift reaches one lift" means in this file. */
 
 /** Every take filmed on a given day, in the order they were added. */
 export function ledgerRowsOn(date: string): readonly LedgerRow[] {

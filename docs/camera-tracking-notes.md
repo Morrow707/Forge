@@ -29,7 +29,7 @@ of every session, before the push, and date the heading.** The replayable record
 | lift | paired takes | ROM vs OVR, oldest -> newest | state |
 |---|---|---|---|
 | Back Squat 135 | 10-19 x2, 10-29 | -5.3%, -1.5%, -1.9% (mean 0.81/0.84/0.72 vs 0.86/0.84/0.80) | **lands, for the wrong reason** |
-| Romanian Deadlift 135 | 10-19 x2, 10-29 | +16.4%, +12.0%, **+30.5%** (peak unusable all three) | **broken; cause known, no fix admissible yet** |
+| Romanian Deadlift 135 | 10-19 x2, 10-29 | +16.4%, +12.0%, **+30.5%** as filmed; **+9.7%, +6.7%, +25.2%** on the record shipped 10-29 (its own depth uncertainty, its own peak cap) | **the first lift with its own numbers; next take tests them** |
 | Box Jump, 24in box | 10-19 x2, 10-29 | rise onto box 61.5-69.2 on a 61cm box; hip peak velocity -30%; "takeoff velocity" +30% | **box height right, velocities wrong in both directions** |
 
 **WHAT WORKS AND MUST NOT BE TOUCHED** (each proven against the sensor, each with a test):
@@ -41,7 +41,20 @@ of every session, before the push, and date the heading.** The replayable record
 - `DRIVE_ONSET_FRACTION` 0.04 (10-07): concentric window inside 1.1% on two of three takes.
 - The box ruler on a box set, the gravity ruler on a flat jump, never both (10-05, 10-19).
 
+**THE FIRST PER-LIFT NUMBERS, 10-29** (`FITTED_OVERRIDES["Romanian Deadlift"]`, evidence beside it):
+`depthRulerUncertainty` 0.6 (depth read +8..+44% HIGH on 5 of 5 RDL takes; the collapse now weighs
+the pair by what each states, which is identical for every lift stating 0.2 twice) and
+`maxPeakToMeanRatio` 2.5 (the OVR's own ratio on this lift is 1.57-1.78 on 16 of 16 reps; the
+2.0 was 60 bench reps). Replayed on every ledger row: RDL median error 12.0% -> 6.7%, every squat
+row identical to the hundredth. See "Second pass, 2026-10-29".
+
 **WHAT IS KNOWN NOT TO WORK, SO IT IS NOT TRIED AGAIN:**
+- Reading a floored RDL peak off the UNFILTERED window (10-29): the low-confidence frames are
+  noise, not the missing peak -- 2.56, 1.95, 2.0 m/s against a sensor at 1.6. Reverted before
+  it shipped; the replay harness is what caught it.
+- Refitting the SHARED `DEPTH_RULER_BIAS` (10-29): every value that helps the RDL hurts every
+  squat and the worst case stays above 20%; at 1.25 the 10-19 RDL flips to -36% when the plate
+  takes the cluster. A shared constant is the wrong lever for a hinge-only error.
 - Fitting the RDL by carrying the in-plane 3D value with the pair's split as uncertainty:
   reds three pinned OVR guards (10-19). Widening the collapsed witness alone: no effect (10-19).
 - Refitting `HEIGHT_RULER_UNCERTAINTY` or `BIACROMIAL_HEIGHT_FRACTION` off a squat: the squat
@@ -5794,3 +5807,114 @@ the right body point, read 30% low off a smoothed trace at `effectiveHz` 40 with
    jump: the rise, which is right, or a velocity, which cannot be read off the ankle). Scott's.
 4. The squat's fourth and fifth paired take, read against the board's signature before any
    refit of the height or shoulder ruler.
+
+
+## Second pass, 2026-10-29: the RDL gets its own numbers, and the harness learns to see them
+
+Scott, after the first pass shipped nothing to the phone: "Change something and push to Apple ...
+if I don't have changes why would I re-record? We will just get bad numbers again with no fix."
+And twice more: "everything should be separate ... any changes you're making to squat should
+not effect rdl should not effect the jump and vice versa."
+
+Both are right, and the second is what made the first answerable. The ledger (six new rows this
+morning) replays every sensor-paired take through the live pipeline, so a change can be costed on
+every squat and every RDL BEFORE it ships rather than on the next filming day. Three candidates
+were replayed; two were rejected by the replay and one shipped.
+
+### Rejected by the replay, so nobody tries them again
+
+- **A shared refit of `DEPTH_RULER_BIAS`.** Swept 0.9 -> 1.3 on all ten ledger rows: every value
+  that helps the RDL hurts every squat (squat median 3.6% -> 5.5% at 1.10), the worst case never
+  drops below 20%, and at 1.25 the 10-19 RDL set 2 flips from +4.5% to -36.3% because the plate
+  takes the cluster. Removing depth from the vote entirely: squats 3.6% -> 5.9%. A shared
+  constant cannot fix a hinge-only error, which is the registry's whole argument.
+- **Reading a floored peak off the unfiltered window.** Today's RDL floored 5 of 7 peaks and the
+  window diagnostics said why: the confidence filter removed 17 of 18, 19 of 24, 23 of 46
+  samples, so the surviving pool was the slow frames. The obvious rule -- when the filter has
+  emptied half the window and the filtered peak sits below the mean, read the 95th percentile of
+  the whole window instead -- replayed to 2.56, 1.95, 2.0 and 1.9 m/s on reps the sensor read at
+  1.57-1.64. The low-confidence frames are noise, not the peak the filter hid. Reverted. The
+  floor stays, and the peak on that take is honestly unmeasurable from its trace.
+
+### Shipped: the Romanian Deadlift's own record, and the collapse weighing its pair
+
+**`FITTED_OVERRIDES["Romanian Deadlift"] = { depthRulerUncertainty: 0.6, maxPeakToMeanRatio: 2.5 }`**,
+the registry's first entry, with `FITTED_OVERRIDE_EVIDENCE` beside it and the copy test rewritten
+from "the list is empty" to "every entry names its date, its sensor and its takes".
+
+- **The depth ruler is a 0.6 instrument on a hinge, stated as such.** Against the sensor it read
+  +10, +8, +35, +27, +44% on the five RDL takes in the ledger while the in-plane bone read -9,
+  -17, -1, -1, +16 -- and the two were averaged EQUALLY into one witness (build 578's collapse was
+  an unweighted geometric mean), so half the depth ruler's error rode into every hinge. The
+  collapse is inverse-variance weighted in log space now, which is the old geometric mean to the
+  last digit whenever both halves state the same uncertainty (every lift but this one), and the
+  collapsed witness states the TIGHTER half's uncertainty -- the first draft kept the wider, and
+  that handed the vote to the shoulder ruler instead (RDL rows moved by a point). This is a
+  judgement about an uncertainty, not a fit of a bias: nothing is corrected, the depth ruler is
+  believed a ninth as much as the bone on this lift.
+- **The peak-to-mean cap is 2.5 on this lift.** The 2.0 was fitted on 60 bench reps (sensor ratio
+  1.35-1.5). The OVR's own ratio on this athlete's RDL is 1.57-1.78 on all 16 reps across 10-19
+  and 10-29, and Forge's mean reads LOW on a hinge (0.74 against 0.89), so a correctly-read peak
+  reaches 2.1-2.2x the mean and the cap was cutting it: 10-19 set 2 wrote 1.575 and 1.624 down as
+  1.53 and 1.49. At 2.5 the un-rack the cap exists for (3.5x on the 10-06 bench) is still caught.
+
+**What it does on every paired take, replayed:**
+
+| ledger row | as filmed | before today | shipped 10-29 |
+|---|---|---|---|
+| 10-04 RDL | -7.9% | +3.6% | **-0.2%** |
+| 10-05 RDL | -7.0% | -1.9% | -6.6% |
+| 10-19 RDL set 1 | +16.4% | +16.4% | **+9.7%** |
+| 10-19 RDL set 2 | +12.0% | +12.0% | **+6.7%** |
+| 10-29 RDL | +30.5% | +30.5% | **+25.2%** |
+| every Back Squat row | | | **identical to the hundredth of a point** |
+
+RDL median error 12.0% -> 6.7%. The 10-05 take is the cost (4.7 points worse; it was filmed with
+no height on file and is the one where depth read only +8%) and it is in the ledger's own comment
+rather than averaged away. Today's +25% is still a trace problem as much as a scale problem
+(see the first pass), which the next square-on RDL separates.
+
+On the peak: 10-19 RDL set 2 replays at 1.43 against the sensor's 1.59 (was 1.40); today's RDL
+is unchanged at 1.06 because a floored rep is floored whatever the cap says.
+
+**And the harness had never seen a per-lift number.** `capture-replay.ts` passed no record to
+`summarizeTrackedSet`, so every replay ran on the shared defaults; the first override replayed as
+if it did not exist, which is how the fidelity gap was found. It resolves `cameraTunablesFor` for
+the capture's exercise now, exactly as the dialog does, and the ledger's live replay reads each
+row's uncertainties off the same record instead of the module constants (asserting the registry's
+defaults still equal those constants, so a drift there is loud).
+
+**Separation, proved rather than promised** (`ovr-2026-10-29-every-lift-reads-only-its-own-record.test.ts`,
+over the four traced captures of the export): the harness reproduces the shipped reps, range of
+motion and mean on all four; the two squat traces replay to their shipped peaks with no rep capped
+or floored; the RDL traces read their own cap. And `the-collapse-weighs-the-pair.test.ts` pins the
+equal-uncertainty case to the old geometric mean to eight decimals.
+
+### The squat and the jump, asked for directly and not changed
+
+Scott: "Make sure you fix the squat and the jump as well. How can we get those closer."
+
+**The squat is at -1.9% on range of motion and nothing here touched it.** What is off today is the
+mean, -10% (0.72 against 0.80), where 10-19 set 2 read 0.0% on the same code. Per rep the sensor's
+means are 0.87 0.83 0.82 0.77 0.74 and Forge's 0.57 0.80 0.79 0.76 0.65: reps 2-4 are inside 4%,
+rep 1 is 35% low and rep 5 12% low. Rep 1's drive window is 1.23s inside a 5.0s phase that opens
+at the walk-out (`open` 0.032), so the window started before the descent did. That is a
+segmentation rule about a FIRST rep that follows a walk-out, it has one take of evidence, and it
+is recorded here for the next squat rather than written today.
+
+**The jump's box height is right; its velocities are the open item, and the export could not say
+why.** `jumpHeightCm` on a box set is the net rise onto the box corrected by the box ruler, so it
+reads the box (61.5-69.2 on 61cm). The two velocities bracket the sensor's 2.66 m/s by +30% and
+-30% (first pass). The hip's own peak is the right quantity and reads low; the one thing that
+could tell smoothing lag from a bad hip trace is the same read off the UNSMOOTHED hip, so the
+countermovement now carries `concentricPeakVelocityRawMps` beside the smoothed one (declared in
+the schema, read by nothing). The hip trace itself is not in the export, so the jump cannot be
+replayed here the way a bar take can; that is the gap the next jump fills.
+
+### Next
+
+1. Film the RDL square-on. The record shipped today is tested by that take: the scale should land
+   near +7-10% if the extra +15% today was the angle, and the trace should stop losing a quarter
+   of its wrist frames.
+2. Read `concentricPeakVelocityRawMps` against the smoothed read on the next box jump.
+3. The squat's first-rep window after a walk-out, once a second take shows it.

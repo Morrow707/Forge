@@ -373,6 +373,29 @@ const BY_ROM_BUCKET: Record<string, Partial<CameraTunables>> = {
  *  and the 10-06 bias sweep is on the record as evidence against doing so blind. */
 export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // e.g. "Bench Press": { driveOnsetFraction: 0.09 }, // 2026-10-__, +4.3% -> 0.0% against OVR
+  "Romanian Deadlift": { maxPeakToMeanRatio: 2.5, depthRulerUncertainty: 0.6 },
+};
+
+/** WHY EACH OVERRIDE EXISTS, in the sentence a reader needs to decide whether it still should.
+ *  One entry per identity in FITTED_OVERRIDES, held equal by camera-tunables-are-a-copy.test.ts;
+ *  an override with no evidence here is a number somebody guessed, and the test refuses it. */
+export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
+  "Romanian Deadlift":
+    "2026-10-29. maxPeakToMeanRatio 2.0 -> 2.5 on this lift only. The 2.0 was fitted on 60 BENCH " +
+    "reps whose sensor ratio is 1.35-1.5; the OVR's own peak/mean on this athlete's RDL is 1.57-1.78 " +
+    "on 16 of 16 reps across 10-19 and 10-29, and Forge's mean reads LOW on a hinge (0.74 against " +
+    "0.89 on 10-19), so a correctly-read peak reaches 2.1-2.2x the mean here and the cap cut it: " +
+    "on 10-19 set 2 raw peaks of 1.575 and 1.624 (sensor 1.59 set average) were written down as " +
+    "1.53 and 1.49. 2.5 still catches the un-rack the cap exists for (3.5x on the 10-06 bench). " +
+    "Replayed on the three RDL traces in the export; the squat traces are untouched by construction. " +
+    "depthRulerUncertainty 0.2 -> 0.6 on this lift only: the depth ruler read HIGH against the sensor " +
+    "on five of five RDL takes (+10, +8, +35, +27, +44% on 10-04, 10-05, 10-19 x2, 10-29) while the " +
+    "in-plane bone read -9, -17, -1, -1, +16, and the collapse averaged them equally, so the pair's " +
+    "witness carried half the depth ruler's error into every hinge. 0.6 states it as the instrument " +
+    "it has measured as on a hinge (three times the bone's 0.2, a ninth of the weight), which is a " +
+    "judgement about an uncertainty and not a fit of a bias; replayed on all five ledger rows it takes " +
+    "the RDL's median error from 12.0% to under 8% and moves no squat row, since the squat's record " +
+    "still states 0.2 for both.",
 };
 
 /** Where each of an identity's numbers came from. The report prints this, so a reader can tell

@@ -55,6 +55,7 @@ import {
 } from "./tracker-arbiter";
 import {
   FITTED_OVERRIDES,
+  FITTED_OVERRIDE_EVIDENCE,
   SHARED_CAMERA_TUNABLES,
   cameraTunablesFor,
 } from "./camera-tunables-by-lift";
@@ -238,12 +239,33 @@ describe("the per-lift numbers are a copy of today's numbers", () => {
     expect(sources.minRomFractionOfHeight).toBe("shared");
   });
 
-  it("starts with NO lift carrying a fitted number of its own", () => {
-    // The correct state today, and worth failing on: not one constant in the pipeline has been
-    // fitted on a single lift in isolation. Every calibration win so far came from fixing a
-    // LABEL or a RULE. An entry appearing here without a dated note in the camera notes is a
-    // number somebody guessed.
-    expect(Object.keys(FITTED_OVERRIDES)).toEqual([]);
+  it("every lift carrying a fitted number of its own says what it was fitted on", () => {
+    // Until 2026-10-29 this asserted the list was EMPTY: no constant had been fitted on one lift
+    // in isolation, every calibration win was a label or a rule. The first entry is the Romanian
+    // Deadlift's peak-to-mean cap, fitted on sixteen sensor reps of that lift, and the rule now is
+    // the one the empty list was standing in for: an override is a number somebody guessed unless
+    // the evidence beside it names the date, the sensor and the takes. Held EQUAL in both
+    // directions so evidence cannot outlive its override or an override arrive without any.
+    expect(Object.keys(FITTED_OVERRIDE_EVIDENCE).sort()).toEqual(Object.keys(FITTED_OVERRIDES).sort());
+    for (const [identity, why] of Object.entries(FITTED_OVERRIDE_EVIDENCE)) {
+      expect(why.length, identity).toBeGreaterThan(200);
+      expect(why, identity).toMatch(/\b2026-\d{2}-\d{2}\b/);
+      expect(why, identity).toMatch(/OVR|sensor/);
+      // The override names fields that exist on the record, and nothing else.
+      for (const key of Object.keys(FITTED_OVERRIDES[identity])) {
+        expect(key in cameraTunablesFor(identity).values, `${identity}.${key}`).toBe(true);
+      }
+    }
+  });
+  it("an override reaches its own lift and no other", () => {
+    const rdl = cameraTunablesFor("Romanian Deadlift", "deadlift");
+    expect(rdl.values.maxPeakToMeanRatio).toBe(2.5);
+    expect(rdl.sources.maxPeakToMeanRatio).toBe("fitted");
+    for (const [name, bucket] of [["Back Squat", "squat"], ["Bench Press", "horizontal_press_or_row"], ["Conventional Deadlift", "deadlift"], ["Pendlay Row", "horizontal_press_or_row"]]) {
+      const other = cameraTunablesFor(name, bucket);
+      expect(other.values.maxPeakToMeanRatio, name).toBe(MAX_PEAK_TO_MEAN_RATIO);
+      expect(other.sources.maxPeakToMeanRatio, name).not.toBe("fitted");
+    }
   });
 });
 

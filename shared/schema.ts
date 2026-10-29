@@ -10198,6 +10198,7 @@ export const jumpBreakdownEntrySchema = z.object({
       concentricRiseCm: z.number(),
       concentricMeanVelocityMps: z.number(),
       concentricPeakVelocityMps: z.number(),
+      concentricPeakVelocityRawMps: z.number().nullable().optional(),
     })
     .optional()
     .nullable(),
