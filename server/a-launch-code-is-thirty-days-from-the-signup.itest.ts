@@ -276,14 +276,18 @@ describe("a launch code is thirty days from the signup", () => {
     expect(ent.body.hasMultiTeam).toBe(true);
   });
 
-  it("a percent-off code on an account with no card plan says to type it at checkout, and spends nothing", async () => {
+  it("a percent-off code on an account with no card plan says it applies when a plan is bought, names no rail, and spends nothing", async () => {
     await storage.createRedeemCode({ code: "JULY50", kind: "percent_off", percentOff: 50, discountMonths: 1, audience: "everyone", maxRedemptions: 1 });
     const athlete = await makeLoginableUser({ role: "athlete", isBetaAccount: false });
     const client = await loginAs(server.baseUrl, athlete);
     const res = await client.post("/api/athlete/redeem-code", { code: "JULY50" });
     expect(res.status).toBe(400);
     expect(res.body.message).toContain("50% off");
-    expect(res.body.message).toContain("checkout");
+    expect(res.body.message).toContain("applies when a plan is bought");
+    // The sentence reaches the Forge-code box on the Upgrade screen inside the iOS app, where
+    // naming a checkout page, a card or a browser is a steer to a purchase outside the App Store
+    // (Guideline 3.1.1). It names no rail (server/promo-codes.ts, 2026-10-29).
+    expect(res.body.message).not.toMatch(/checkout|card|browser|website|web\b/i);
     expect(await db.query.redeemCodeRedemptions.findFirst({ where: eq(redeemCodeRedemptions.coachId, athlete.id) })).toBeUndefined();
     // Not spent: the one redemption is still available.
     const again = await storage.findRedeemableCode("JULY50");
