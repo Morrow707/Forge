@@ -138,6 +138,16 @@ export type JumpCountermovement = {
   concentricPeakVelocityMps: number;
   /** The same peak off the unsmoothed hip trace. Diagnostic; nothing reads it. */
   concentricPeakVelocityRawMps?: number;
+  /** THE HIP'S VELOCITIES BEFORE THE BOX-RISE CORRECTION DIVIDED THEM (2026-10-29). On a box set
+   *  every scaled number is divided by the box ruler's ratio (1.20 and 1.22 on the two 2026-10-29
+   *  sets), heights and velocities alike. Against the OVR on the hip that day the CORRECTED
+   *  concentric peak read -15% and -29% and the corrected mean -4% and -13%; the UNCORRECTED peak
+   *  read +2% and -13%, the uncorrected mean +15% and +7%. Two takes, two different answers to
+   *  which number the sensor's matches, so nothing is fitted and both are written down: the next
+   *  box jump beside the sensor reads these two fields and decides. Set only when a correction
+   *  ran; absent means the numbers above are uncorrected already. */
+  uncorrectedConcentricMeanVelocityMps?: number;
+  uncorrectedConcentricPeakVelocityMps?: number;
 };
 
 /** How much the hip has to move before a direction change counts, so a jittering standing hip
@@ -238,6 +248,8 @@ export function scaleCountermovement(cm: JumpCountermovement, ratio: number): Ju
   const r1 = (v: number) => Math.round((v / ratio) * 10) / 10;
   return {
     ...cm,
+    uncorrectedConcentricMeanVelocityMps: cm.uncorrectedConcentricMeanVelocityMps ?? cm.concentricMeanVelocityMps,
+    uncorrectedConcentricPeakVelocityMps: cm.uncorrectedConcentricPeakVelocityMps ?? cm.concentricPeakVelocityMps,
     dipDepthCm: r1(cm.dipDepthCm),
     eccentricMeanVelocityMps: r2(cm.eccentricMeanVelocityMps),
     concentricRiseCm: r1(cm.concentricRiseCm),

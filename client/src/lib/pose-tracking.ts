@@ -962,6 +962,40 @@ function agreementTolerance(
 }
 
 /**
+ * WHETHER TWO RULERS AGREE. Asked from the anchor's end, as it always was -- and, for a PLATE,
+ * from the plate's end as well.
+ *
+ * The test is `|other/anchor - 1| <= tolerance`, which is not symmetric: a ruler reading 0.65 of
+ * its anchor is "within 0.4" (|0.65 - 1| = 0.35), while the anchor read from that ruler is 1.53x
+ * away and fails. The 10-07 note recorded the asymmetry and let the pairwise trace show both
+ * directions. It is LOAD-BEARING for the body rulers and stays: on the 2026-10-05 Back Squat
+ * the height ruler sat at 0.7 of the two body rulers and was the one near the sensor, and it
+ * was admitted into their cluster from their end only -- making the test symmetric for every
+ * ruler replays that take from -3.6% to +24%, measured on the accuracy ledger before this was
+ * written the way it is.
+ *
+ * For a plate it is the defect. Romanian Deadlift set 2, 2026-10-29, the first take filmed
+ * square-on with the lift's own record: the barbell plate was boxed 1.63x too large
+ * (plateBoxToExpectedRatio 1.627, no gate fired) and read 0.00256 against body_3d 0.00392 and
+ * shoulder_width 0.00441. Anchored on the plate every body ruler is 1.5-1.7x away, so the
+ * plate's own cluster was one and the lone-plate rule below would have stepped it out. Anchored
+ * on body_3d the plate is 0.653 of it, 0.347 from one, inside 0.4 -- so the body-anchored
+ * cluster held all three, inverse-variance weighting handed a ruler stated at 0.058 86% of the
+ * blend, and the set read 41.1cm against the sensor's 62.5 (-34.2%). A plate is the one ruler
+ * here that claims a known size to a few per cent; a plate that cannot vouch for the anchor
+ * from its own end is not corroborating it, it is a box of the wrong size (Rule #4: a rejected
+ * object read is a bug report, and plateBoxToExpectedRatio is the report). With it refused,
+ * that take's two body rulers blend to 0.00416, -1.9% of the sensor. A RULE about plates, so it
+ * is shared; replayed on the accuracy ledger and the capture corpus, where no take without a
+ * plate can move by construction.
+ */
+function scalesAgree(anchor: ScaleEstimate, other: ScaleEstimate, tolerance: number): boolean {
+  const fromAnchor = Math.abs(other.scale / anchor.scale - 1) <= tolerance;
+  if (other.source !== "plate") return fromAnchor;
+  return fromAnchor && Math.abs(anchor.scale / other.scale - 1) <= tolerance;
+}
+
+/**
  * Reconciles every real-world scale the take could produce, instead of taking the first one that
  * answered.
  *
@@ -1216,7 +1250,7 @@ export function reconcileScaleEstimates(
     const cluster = ranked.filter((other) => {
       const tolerance = agreementTolerance(anchor, other, maxAgreementTolerance);
       const ratio = other.scale / anchor.scale;
-      const agrees = Math.abs(ratio - 1) <= tolerance;
+      const agrees = scalesAgree(anchor, other, tolerance);
       if (anchor !== other) {
         pairwise.push({
           anchor: anchor.source,
@@ -1292,7 +1326,7 @@ export function reconcileScaleEstimates(
     for (const anchor of rerankedWithoutPlate) {
       const cluster = rerankedWithoutPlate.filter((other) => {
         const tolerance = agreementTolerance(anchor, other, maxAgreementTolerance);
-        return Math.abs(other.scale / anchor.scale - 1) <= tolerance;
+        return scalesAgree(anchor, other, tolerance);
       });
       if (cluster.length > bestWithoutPlate.length) bestWithoutPlate = cluster;
     }

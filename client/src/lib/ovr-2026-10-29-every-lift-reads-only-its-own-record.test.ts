@@ -41,7 +41,9 @@ describe("the 2026-10-29 export replays through each lift's own record", () => {
     });
   }
   it("the squat traces replay to the shipped peaks exactly: the RDL's override never reaches them", () => {
-    expect(FITTED_OVERRIDES["Back Squat"]).toBeUndefined();
+    // The squat's own record (2026-10-29 evening) holds ONE field, a ruler uncertainty, which the
+    // trace replay below never reads: the peaks and the rep gate are shared with every bar lift.
+    expect(Object.keys(FITTED_OVERRIDES["Back Squat"] ?? {})).toEqual(["heightRulerUncertainty"]);
     expect(cameraTunablesFor("Back Squat", "squat").sources.maxPeakToMeanRatio).not.toBe("fitted");
     for (const f of fixtures.filter((x) => x.exerciseName === "Back Squat")) {
       const m = replay(f);

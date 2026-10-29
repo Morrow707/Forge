@@ -2530,10 +2530,10 @@ halves before splitting anything else:
   gets better for every lift at once. The RDL hinge, the box jump's flagged rep and the bench
   un-rack were all fixed by changing a rule or a label, and every lift got the benefit -- that is
   the shape to keep, not something to split away.
-  **`FITTED_OVERRIDES` has ONE entry as of 2026-10-29 -- the Romanian Deadlift's `depthRulerUncertainty`
-  0.6 and `maxPeakToMeanRatio` 2.5 -- and the test that used to assert the list was empty now
-  asserts every entry carries `FITTED_OVERRIDE_EVIDENCE` naming its date, its sensor and its
-  takes.** It was costed on every ledger row before it shipped (RDL median 12.0% -> 6.7%, every
+  **`FITTED_OVERRIDES` has TWO entries as of 2026-10-29 -- the Romanian Deadlift's `depthRulerUncertainty`
+  0.6 and `maxPeakToMeanRatio` 2.5, and from round two the Back Squat's `heightRulerUncertainty`
+  0.11 -- and the test that used to assert the list was empty now asserts every entry carries
+  `FITTED_OVERRIDE_EVIDENCE` naming its date, its sensor and its takes.** It was costed on every ledger row before it shipped (RDL median 12.0% -> 6.7%, every
   squat row identical), which is the only way an entry gets in: the registry is machinery for
   fitting one lift safely, not permission to guess. See docs/camera-tracking-notes.md, "Second
   pass, 2026-10-29".
@@ -2933,7 +2933,21 @@ halves before splitting anything else:
   worst case **60.5% -> 20.7%**. The row is the one lift still outside 15% and the retrained
   detector is the only remaining candidate for it; what proves or disproves that is one filmed
   set, read off `plateBoxToExpectedRatio`.
-- **THE QUEUE IS EMPTY AS OF BUILD 697** (2026-10-29 evening, `6d8f259`; 696 was its
+- **ROUND TWO ON 697 SHIPPED THE SQUAT'S OWN NUMBER AND THE PLATE RULE** (2026-10-29 evening,
+  calibration work, uploaded on commit; the build number is in the run list). Scott filmed all
+  three lifts on 697: squat -1.3% (its own `heightRulerUncertainty` 0.11 is the small step, ~+1%
+  on the ledger's six squat rows and nothing else), RDL -34.2% from a plate boxed 1.63x too big
+  and admitted from the body rulers' end (`scalesAgree` asks a plate from both ends now; without
+  it the square-on take reads -1.9%), the jump's hip velocities carried uncorrected beside the
+  box-corrected ones (no number moved: the two sets disagree). Status board and
+  docs/camera-tracking-notes.md "Round two, 2026-10-29" have the numbers.
+  **QUEUED, NOT YET FIXED: the device-approval sign-in storm.** After approving a new device from
+  the email, the phone POSTed `/api/auth/device-approval/complete` about fifty times in one
+  second (one 200, the rest 409 then 429) and then showed the Sentry "Something went wrong"
+  screen; Reload signed in. Read off the Render log 2026-10-29 19:46:45. The burst is a render
+  loop around `DeviceApprovalStep`'s claim effect; the crash follows it. Not reproduced yet (no
+  DOM test environment in the unit suite); fix queued behind the calibration round.
+- **THE QUEUE WAS EMPTY AS OF BUILD 697** (2026-10-29 evening, `6d8f259`; 696 was its
   `verify_build` on `ccdeba5`). Calibration work, uploaded on commit: the RDL's first per-lift
   record (`depthRulerUncertainty` 0.6, `maxPeakToMeanRatio` 2.5), the weighted 3D-pose collapse,
   the replay harness resolving each capture's own record, and `concentricPeakVelocityRawMps` on

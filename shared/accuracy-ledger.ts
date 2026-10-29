@@ -76,8 +76,16 @@ export type LedgerRow = {
    *  take by similar amounts and are not the same event. */
   readonly heightRulerVotedAsFilmed: boolean;
 
-  /** The scale the phone really used, x1000. The replay must reproduce this. */
+  /** The scale the phone really used, x1000. The replay must reproduce this -- unless
+   *  `shippedUnderDefect` names the rule that produced it and has since been fixed. */
   readonly shippedScaleX1000: number;
+  /** SET ONLY WHEN THE SHIPPED SCALE CAME OUT OF A RULE THAT WAS WRONG AND IS GONE. A mechanism
+   *  fix is the one change the as-filmed replay cannot absorb: the inputs are sealed, the rule is
+   *  not, and a row whose shipped number depended on the old rule will never replay to it again.
+   *  Such a row keeps its shipped scale as history and says here which rule made it, and the
+   *  replay asserts the OPPOSITE of the usual check -- that the fixed pipeline no longer
+   *  reproduces the defect. Never set this to excuse a row that simply does not replay. */
+  readonly shippedUnderDefect?: string;
   /** What the app reported, and what the sensor beside it read. Their ratio is the only thing
    *  that turns a scale into an error, and neither number alone is enough. */
   readonly reportedRomCm: number;
@@ -163,7 +171,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.6547947529533787,
     reportedRomCm: 68.0,
     sensorRomCm: 73.9,
-    liveErrorPct: -5.97,
+    liveErrorPct: -4.81,
     notes:
       "The take HEIGHT_RULER_UNCERTAINTY was refit on: at 0.05 the height ruler held 400 units " +
       "of inverse-variance weight against the 3D ruler's 25, so the blend WAS the height ruler " +
@@ -215,7 +223,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 4.460001794224457,
     reportedRomCm: 78.1,
     sensorRomCm: 73.7,
-    liveErrorPct: -3.58,
+    liveErrorPct: -1.74,
     notes:
       "The control for the hinge fix: a standing lift keeps its height ruler, so dropping that " +
       "ruler reads 24% HIGH and the fix had to leave this take alone. Read +6.0% as filmed and " +
@@ -274,7 +282,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.4534573167314636,
     reportedRomCm: 70.6,
     sensorRomCm: 74.6,
-    liveErrorPct: -3.09,
+    liveErrorPct: -2.04,
     notes:
       "First session with a height on file (75in). Read -5.3% as filmed. The height ruler carried " +
       "75% of the weight and read 7.5% LOW against the sensor's scale; body_3d read +12.9% and " +
@@ -299,7 +307,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.5823291387545777,
     reportedRomCm: 72.6,
     sensorRomCm: 73.7,
-    liveErrorPct: 1.07,
+    liveErrorPct: 2.07,
     notes:
       "The best standing result on record: -1.5% on range of motion and 0.00 m/s on the mean " +
       "(0.84 against 0.84). The height ruler alone was within 1.5% of the sensor's scale on this " +
@@ -378,7 +386,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.452992524721314,
     reportedRomCm: 71.8,
     sensorRomCm: 73.2,
-    liveErrorPct: -0.11,
+    liveErrorPct: 1.2,
     notes:
       "Read -1.9% as filmed, 5 of 5 reps, cadence held, no dropouts: the control. Against the " +
       "sensor's scale the height ruler read -10.1% at 74.8% of the weight, body_3d +13.4%, " +
@@ -412,9 +420,80 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "to their means, and per-rep ROM ran 62-93cm where the sensor read 59-64. A trace problem " +
       "and a scale problem on one take, which is why nothing was fitted to it.",
   },
+  {
+    id: "2026-10-29-back-squat-set-2",
+    date: "2026-10-29",
+    build: 697,
+    exercise: "Back Squat",
+    filmedOnCommit: "6d8f259",
+    candidates: [
+      { source: "body_3d", scaleX1000: 4.02739 },
+      { source: "depth", scaleX1000: 4.44778 },
+      { source: "height", scaleX1000: 3.43669 },
+      { source: "shoulder_width", scaleX1000: 4.21316 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, height: 0.1, shoulder_width: 0.39758842671480643 },
+    heightRulerVotedAsFilmed: true,
+    shippedScaleX1000: 3.6255637866370203,
+    reportedRomCm: 74.7,
+    sensorRomCm: 75.7,
+    liveErrorPct: 1.6,
+    notes:
+      "Read -1.3% as filmed, 5 of 5 reps, cadence 0.991, one dropout, the second squat of the day " +
+      "an hour after the first and the best squat on record. Mean +6.0% (0.89 against 0.84) and " +
+      "peak +1.6%. The fourth squat take in a row with the one signature: height ruler -6.5% of " +
+      "the sensor's scale at 76.1% of the weight, body_3d +9.6%, shoulder_width +14.7% (grip floor " +
+      "loosened it to 0.398), depth +21.1%. Rep 1's drive window again opened at the walk-out " +
+      "(phase 3.40s, drive 1.07s, mean 0.66 against the sensor's 0.86) while reps 2-5 ran 0.80s " +
+      "and read 7-22% HIGH against a sensor whose reps slow from 0.88 to 0.78 and Forge's do not. " +
+      "The row the first per-lift squat number (heightRulerUncertainty 0.11) was costed on.",
+  },
+  {
+    id: "2026-10-29-romanian-deadlift-set-2",
+    date: "2026-10-29",
+    build: 697,
+    exercise: "Romanian Deadlift",
+    filmedOnCommit: "6d8f259",
+    candidates: [
+      { source: "plate", scaleX1000: 2.55966 },
+      { source: "body_3d", scaleX1000: 3.82238 },
+      { source: "depth", scaleX1000: 4.95564 },
+      { source: "shoulder_width", scaleX1000: 4.40749 },
+    ],
+    uncertaintiesAsFilmed: { plate: 0.05756542171979441, body_3d: 0.2, depth: 0.6, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: false,
+    shippedScaleX1000: 2.7878659744209606,
+    reportedRomCm: 41.1,
+    sensorRomCm: 62.5,
+    shippedUnderDefect:
+      "a plate admitted into the body rulers' cluster from the anchor's end only (0.653 of body_3d " +
+      "is inside 0.4; body_3d is 1.53x the plate and is not), at 85.8% of the blend; fixed in " +
+      "scalesAgree, 2026-10-29",
+    liveErrorPct: -1.75,
+    notes:
+      "THE FIRST RDL FILMED SQUARE-ON WITH THE LIFT'S OWN RECORD, and it read -34.2% (41.1 against " +
+      "62.5) because the barbell plate took the scale: boxed at 175.8px where the body consensus " +
+      "expects 108 (plateBoxToExpectedRatio 1.627), stated at 0.058, no gate fired, 85.8% of the " +
+      "weight. Without it the two body rulers (shoulder 0.00441, the collapsed pair 0.00392 with " +
+      "depth at its new 0.6) blend to 0.00416, -1.9% of the sensor: square-on, the body rulers on " +
+      "a hinge are within 2%, where the oblique morning take had every one of them 16-44% high. " +
+      "7 of 8 reps found both sets. With the scale right the velocities are still LOW: mean would " +
+      "read 0.68 against 0.85, peak 1.23 against 1.43 -- the concentric runs 0.83-0.93s against a " +
+      "sensor whose 0.625m at 0.85m/s is 0.74s. The next RDL thing is the window, not the scale.",
+  },
 ];
 
-/* THE FIRST MOVE THIS RATCHET RECORDED, 2026-10-29: the Romanian Deadlift's own record
+/* THE SECOND MOVE, 2026-10-29 (evening, round two on build 697): the Back Squat's own
+ * heightRulerUncertainty (0.1 -> 0.11, FITTED_OVERRIDES) moved the five squat rows by about one
+ * point each and no RDL row -- 10-04 -5.97 -> -4.81, 10-05 -3.58 -> -1.74, 10-19 set 1 -3.09 ->
+ * -2.04, 10-19 set 2 1.07 -> 2.07, 10-29 set 1 -0.11 -> 1.20 -- the small step Scott asked for.
+ * The same commit made a plate agree from both ends (scalesAgree): no row moved for it, because
+ * the only row with an asymmetrically admitted plate is the new 10-29 RDL set 2, which records
+ * the defect instead of replaying to it. Making the test symmetric for EVERY ruler was replayed
+ * first and rejected: it takes the 10-05 Back Squat from -3.58% to +24.43%, because that take's
+ * height ruler was admitted from the body rulers' end and was the one near the sensor.
+ *
+ * THE FIRST MOVE THIS RATCHET RECORDED, 2026-10-29: the Romanian Deadlift's own record
  * (FITTED_OVERRIDES: depthRulerUncertainty 0.6, with the collapse weighing its pair) moved the
  * five RDL rows and no squat row:
  *   10-04 RDL  +3.58 -> -0.16    10-05 RDL  -1.95 -> -6.64

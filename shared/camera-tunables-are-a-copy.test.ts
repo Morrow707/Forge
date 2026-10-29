@@ -177,7 +177,9 @@ describe("the per-lift numbers are a copy of today's numbers", () => {
     // films a med ball throw beside the sensor, this assertion is what they come and change.
     expect(cameraTunablesFor("Med Ball Chest Pass", null, "med_ball").values.heightRulerUncertainty).toBe(0.05);
     expect(cameraTunablesFor("Kettlebell Swing", null, "kb_swing").values.heightRulerUncertainty).toBe(0.05);
-    expect(cameraTunablesFor("Back Squat", "squat", "bar").values.heightRulerUncertainty).toBe(
+    // A bar lift WITHOUT an entry in FITTED_OVERRIDES; the Back Squat carried this line until it
+    // got its own heightRulerUncertainty on 2026-10-29.
+    expect(cameraTunablesFor("Bench Press", "press", "bar").values.heightRulerUncertainty).toBe(
       HEIGHT_RULER_UNCERTAINTY,
     );
     // And the two dialogs read the FIELD now, so the next refit reaches them.

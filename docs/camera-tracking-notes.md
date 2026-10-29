@@ -14,7 +14,7 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-10-29)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-10-29, round two)
 
 Scott, 2026-10-29: "I want you keeping a running log wherever you need to ... so we don't keep
 going in circles with what works and what doesn't, when your feed goes stale you don't remember
@@ -45,9 +45,9 @@ take-to-take spread is not the change. Build to film on: **697**.
 
 | lift | paired takes | ROM vs OVR, oldest -> newest | state |
 |---|---|---|---|
-| Back Squat 135 | 10-19 x2, 10-29 | -5.3%, -1.5%, -1.9% (mean 0.81/0.84/0.72 vs 0.86/0.84/0.80) | **lands, for the wrong reason** |
-| Romanian Deadlift 135 | 10-19 x2, 10-29 | +16.4%, +12.0%, **+30.5%** as filmed; **+9.7%, +6.7%, +25.2%** on the record shipped 10-29 (its own depth uncertainty, its own peak cap) | **the first lift with its own numbers; next take tests them** |
-| Box Jump, 24in box | 10-19 x2, 10-29 | rise onto box 61.5-69.2 on a 61cm box; hip peak velocity -30%; "takeoff velocity" +30% | **box height right, velocities wrong in both directions** |
+| Back Squat 135 | 10-19 x2, 10-29 x2 | -5.3%, -1.5%, -1.9%, **-1.3%** (mean 0.81/0.84/0.72/0.89 vs 0.86/0.84/0.80/0.84) | **lands, same signature four takes running; its own height uncertainty (0.11) ships in round two, worth about +1%** |
+| Romanian Deadlift 135 | 10-19 x2, 10-29 x2 | +16.4%, +12.0%, +30.5% oblique; **-34.2% square-on on 697** -- a plate boxed 1.63x too big took 86% of the scale. Without it the square-on take reads **-1.9%** | **square-on, the body rulers are within 2%; the plate rule is fixed in round two; the velocities are the next fault (window 25% long)** |
+| Box Jump, 24in box | 10-19 x2, 10-29 x2 | box ruler 1.20-1.22 on both 10-29 sets (ankle rise 72-75cm onto 61); hip peak -15% / -29% after the correction, +2% / -13% before it; hip mean -4% / -13% after, +15% / +7% before | **no number moved: the two sets disagree on which half the sensor matches; both halves are in the export now** |
 
 **WHAT WORKS AND MUST NOT BE TOUCHED** (each proven against the sensor, each with a test):
 - A hinge gets NO height ruler (`bent_over`, 10-05): the RDL went -7.0% -> 0.0% that day.
@@ -57,6 +57,16 @@ take-to-take spread is not the change. Build to film on: **697**.
   pair of changes to take nine paired takes from 10.6% to 5.4% median error.
 - `DRIVE_ONSET_FRACTION` 0.04 (10-07): concentric window inside 1.1% on two of three takes.
 - The box ruler on a box set, the gravity ruler on a flat jump, never both (10-05, 10-19).
+- A PLATE agrees from both ends or not at all (`scalesAgree`, 10-29 round two): the 697 RDL's
+  1.63x plate was inside 0.4 anchored on the body and 1.53x away anchored on itself, and took
+  86% of the blend. For the BODY rulers the one-ended test stays -- see the next list.
+
+**THE SQUAT'S FIRST PER-LIFT NUMBER, 10-29 round two** (`FITTED_OVERRIDES["Back Squat"]`):
+`heightRulerUncertainty` 0.1 -> 0.11, the small step Scott asked for. Four squat takes in a row
+read low with one signature (height ruler 6-10% under at ~75% of the weight, body rulers 10-20%
+over), so a tenth less confidence in the low voter moves the blend about +1%. Replayed on all six
+squat ledger rows (+1.0 to +1.8 each) and no RDL row. Expect 10-29 set 2's -1.3% to read about
+-0.3% on the next build; if the next take reads HIGH, the step was too big and comes back a hundredth.
 
 **THE FIRST PER-LIFT NUMBERS, 10-29** (`FITTED_OVERRIDES["Romanian Deadlift"]`, evidence beside it):
 `depthRulerUncertainty` 0.6 (depth read +8..+44% HIGH on 5 of 5 RDL takes; the collapse now weighs
@@ -66,6 +76,10 @@ the pair by what each states, which is identical for every lift stating 0.2 twic
 row identical to the hundredth. See "Second pass, 2026-10-29".
 
 **WHAT IS KNOWN NOT TO WORK, SO IT IS NOT TRIED AGAIN:**
+- Making the agreement test symmetric for EVERY ruler (10-29 round two): the 10-05 Back Squat goes
+  from -3.58% to +24.43%, because its height ruler sat at 0.7 of the body rulers, was the one near
+  the sensor, and was admitted from THEIR end. The asymmetry is load-bearing for body rulers and a
+  defect only for a plate, which is why `scalesAgree` asks the plate from both ends and nobody else.
 - Reading a floored RDL peak off the UNFILTERED window (10-29): the low-confidence frames are
   noise, not the missing peak -- 2.56, 1.95, 2.0 m/s against a sensor at 1.6. Reverted before
   it shipped; the replay harness is what caught it.
@@ -84,7 +98,18 @@ row identical to the hundredth. See "Second pass, 2026-10-29".
   too big on the two real takes read since the retrain, against 1.01-1.03x on held-out images.
   The gates were right both times. The object witness is still not a ruler on a real take.
 
-**WHAT TODAY'S EVIDENCE POINTS AT, UNFITTED** (see "Three lifts beside OVR, 2026-10-29"):
+**WHAT ROUND TWO POINTS AT, UNFITTED** (see "Round two, 2026-10-29"):
+- The RDL's velocities with the scale right: mean 0.68 against 0.85, peak 1.23 against 1.43. The
+  concentric runs 0.83-0.93s where the sensor's 0.625m at 0.85m/s is ~0.74s -- the window is a
+  quarter long on a hinge. The next RDL lever is the drive window, in the RDL's own record
+  (`driveOnsetFraction` is a field), after a second square-on take confirms the scale.
+- The jump: the box-rise correction divides the hip's velocities by 1.2 and the sensor matches the
+  UNCORRECTED peak on set 2 (+2%) and neither on set 1. `uncorrectedConcentricPeakVelocityMps`
+  and `...MeanVelocityMps` are in the export now; two more box sets decide whether the hip's
+  velocities should be corrected by the ankle's ruler at all.
+- 7 of 8 RDL reps found on both sets, 10-19 and 10-29: the segmenter loses one every take.
+
+**WHAT THE MORNING'S EVIDENCE POINTED AT, UNFITTED** (see "Three lifts beside OVR, 2026-10-29"):
 - The RDL is two faults on one take: body rulers all high (the collapse again, plus a shoulder
   span foreshortened on an oblique hinge) AND a hand trace with 27% of frames under the wrist
   visibility floor, 5 of 7 peaks floored, per-rep ROM 62-93cm against the sensor's 59-64.
@@ -5825,6 +5850,81 @@ the right body point, read 30% low off a smoothed trace at `effectiveHz` 40 with
 4. The squat's fourth and fifth paired take, read against the board's signature before any
    refit of the height or shoulder ruler.
 
+
+## Round two, 2026-10-29: build 697 beside the OVR, one small step per lift
+
+Scott filmed all three lifts on 697 an hour after the morning's takes, with the standing order
+"small adjustments on everything ... until we get to 0% ... steady and confident". Set 1 on the
+OVR is the morning's take; set 2 is 697's.
+
+**BACK SQUAT 135x5, set 2: ROM 74.7 against 75.7 (-1.3%), mean 0.89 against 0.84 (+6.0%), peak
+1.29 against 1.27 (+1.6%).** The best squat on record, and the fourth take running with one
+signature against the scale the sensor requires: height ruler -6.5% at 76.1% of the weight,
+body_3d +9.6%, shoulder_width +14.7% (grip floor 0.398), depth +21.1% (10-29 set 1: -10.1 /
++13.4 / +14.7 / +38.1; 10-19 x2 the same shape). The mean's +6% is a window, not a scale: rep 1's
+drive opened at the walk-out again (phase 3.40s, drive 1.07s, 0.66 against the sensor's 0.86)
+and reps 2-5 ran 0.80s at 0.91-0.95 against a sensor that slows from 0.88 to 0.78. Recorded;
+the first-rep rule waits for a third take showing it.
+The small step: `FITTED_OVERRIDES["Back Squat"].heightRulerUncertainty` 0.1 -> 0.11. On the
+ledger's six squat rows the live replay moves +1.0 to +1.8 points each (10-04 -5.97 -> -4.81,
+10-05 -3.58 -> -1.74, 10-19 s1 -3.09 -> -2.04, 10-19 s2 1.07 -> 2.07, 10-29 s1 -0.11 -> 1.20,
+10-29 s2 pinned at 1.60) and no other lift's row moves. As filmed with the step, today's two
+squats would read about -0.9% and -0.3%.
+
+**ROMANIAN DEADLIFT 135x8, set 2, square-on as asked: ROM 41.1 against 62.5 (-34.2%), mean 0.45
+against 0.85, peak 0.81 against 1.43.** One cause, read off `calibration.scaleBlend`: the barbell
+plate was boxed at 175.8px where the body consensus expects 108 (`plateBoxToExpectedRatio`
+1.627), no gate fired (`rejectedReasons: []`, grip/shoulder 1.706 inside the plausibility
+window), it stated 0.058, and it carried **85.8%** of the blend at 0.00256 against body_3d
+0.00392 (the collapsed pair, with depth at its new 0.6) and shoulder_width 0.00441. This is
+exactly the tail the 10-09 note left open ("at 1.2-1.5 the next work is a corroboration rule
+that can tell a 25% disagreement from agreement -- written against a measured take"); the
+measured take arrived at 1.63x.
+Why the lone-plate rule slept: the agreement test is asked from the anchor's end. Anchored on
+body_3d the plate is 0.653 of it, |0.653 - 1| = 0.347 <= 0.4, admitted; anchored on the plate the
+body rulers are 1.53-1.72x away, refused. The cluster anchored on body_3d held all three, so the
+plate was never alone. `scalesAgree` now asks a PLATE from both ends: a ruler claiming a known
+size to 6% that cannot vouch for its anchor is a box of the wrong size (Rule #4), not a witness.
+With the plate refused the two body rulers blend to 0.00416, **-1.9%** of the sensor. So the
+square-on hinge's body rulers are within 2% -- where the oblique morning take had every ruler
+16-44% high -- and the record shipped at 697 did what it was built to do once the plate was out
+of the way.
+**Making the test symmetric for every ruler was replayed first and rejected**: it takes the
+10-05 Back Squat from -3.58% to +24.43% (its height ruler at 0.7 of the body rulers was the good
+one, admitted from their end). The ledger row for this take carries `shippedUnderDefect` and the
+replay asserts the fixed pipeline no longer reproduces the shipped scale.
+**What is still wrong with the scale right:** mean would read 0.68 against 0.85 (-20%), peak 1.23
+against 1.43 (-14%). Concentric 0.83-0.93s per rep where the sensor's 0.625m at 0.85m/s is about
+0.74s -- a window a quarter long on a hinge, no rep floored or capped, 0-7 frames under the
+wrist floor per rep (the morning's trace fault did not recur square-on). 7 of 8 reps found on
+both sets. The next RDL step is the drive window in the RDL's own record, after the next
+square-on take confirms the scale lands.
+
+**BOX JUMP x6 onto 24in, set 2 (rep 1 a set-up rep on the OVR, skipped).** `boxRise` applied
+1.201 (net rises 74.8/74.6/73.2/72.1/72.6 onto 61cm, 5 reps used), set 1 1.222. Hip
+countermovement against the OVR's hip, reps 2-6:
+
+| | corrected (shipped) | uncorrected | sensor |
+|---|---|---|---|
+| set 2 peak | 2.03 2.24 2.30 2.20 2.40 (2.23, -15%) | x1.201 = 2.68 (+2%) | 2.49 2.89 2.61 2.64 2.45 (2.62) |
+| set 1 peak | 2.28 1.86 1.93 1.60 1.82 (1.90, -29%) | x1.222 = 2.32 (-13%) | 2.62 2.75 2.60 2.68 2.64 (2.66) |
+| set 2 mean | 1.22 1.53 1.11 1.38 1.38 (1.32, -4%) | 1.58 (+15%) | 1.37 |
+| set 1 mean | 1.33 1.31 1.32 0.97 1.22 (1.23, -13%) | 1.50 (+7%) | 1.41 |
+
+The raw hip peak shipped on 697 answered its question: raw and smoothed are within 0.08 m/s on
+every rep (2.00/2.19/2.21/2.14/2.48 against 2.03/2.24/2.30/2.20/2.40), so smoothing lag is not
+where the -15% comes from. What the two sets disagree about is whether the ankle's box ruler
+should divide the hip's velocities at all -- set 2 says no (the uncorrected peak is +2%), set 1
+says partly. Two takes that disagree by 17% on the same number are Rule #5's case exactly, so
+**no jump number moved**; `uncorrectedConcentricMeanVelocityMps` and
+`uncorrectedConcentricPeakVelocityMps` ride beside the corrected ones in every box-set export
+now, and the next two box sets decide. The ankle's rise onto the box is consistent at 1.20-1.22x
+on both sets, which is the one steady thing about the jump.
+
+Also fixed on the way: the box jump's `jumpBreakdown` carries the raw hip peak for the first
+time (697), and the admin export now has four traced captures from 697 to replay.
+`a-plate-agrees-from-both-ends` is covered by the ledger's defect row rather than a new file: the
+RDL set 2 row reds if the as-filmed replay ever reproduces the plate-admitted scale again.
 
 ## Second pass, 2026-10-29: the RDL gets its own numbers, and the harness learns to see them
 

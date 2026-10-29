@@ -105,7 +105,9 @@ function liveX1000(row: LedgerRow): number {
 
 describe("every ledger row is a record of a real take", () => {
   it("the registry's shared defaults are the module constants the live replay used to read", () => {
-    const shared = cameraTunablesFor("Back Squat", "squat").values;
+    // A lift with no entry in FITTED_OVERRIDES, so its record IS the shared defaults. The Back
+    // Squat carried this case until 2026-10-29, when it got its own heightRulerUncertainty.
+    const shared = cameraTunablesFor("Bench Press", "bench").values;
     expect(shared.heightRulerUncertainty).toBe(HEIGHT_RULER_UNCERTAINTY);
     expect(shared.biacromialToleranceFraction).toBe(BIACROMIAL_TOLERANCE_FRACTION);
     expect(shared.depthRulerUncertainty).toBe(DEPTH_RULER_UNCERTAINTY);
@@ -129,6 +131,16 @@ describe("every ledger row is a record of a real take", () => {
      * something. */
     it(`${row.id}: replaying it as filmed reproduces the scale the phone shipped`, () => {
       const replayed = asFilmedX1000(row);
+      if (row.shippedUnderDefect) {
+        // The inputs are sealed and the rule is not: a row shipped by a rule that has since been
+        // fixed must NOT replay to its shipped scale any more, or the fix is not in the pipeline.
+        expect(
+          Math.abs(replayed / row.shippedScaleX1000 - 1),
+          `${row.id} says it shipped under "${row.shippedUnderDefect}", and the as-filmed replay ` +
+            `still reproduces that scale -- so the defect is back, or the row is excusing itself.`,
+        ).toBeGreaterThan(0.01);
+        return;
+      }
       expect(
         Math.abs(replayed / row.shippedScaleX1000 - 1),
         `${row.id}: replay ${replayed.toFixed(6)} against a shipped ${row.shippedScaleX1000.toFixed(6)}. ` +

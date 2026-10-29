@@ -374,12 +374,22 @@ const BY_ROM_BUCKET: Record<string, Partial<CameraTunables>> = {
 export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // e.g. "Bench Press": { driveOnsetFraction: 0.09 }, // 2026-10-__, +4.3% -> 0.0% against OVR
   "Romanian Deadlift": { maxPeakToMeanRatio: 2.5, depthRulerUncertainty: 0.6 },
+  "Back Squat": { heightRulerUncertainty: 0.11 },
 };
 
 /** WHY EACH OVERRIDE EXISTS, in the sentence a reader needs to decide whether it still should.
  *  One entry per identity in FITTED_OVERRIDES, held equal by camera-tunables-are-a-copy.test.ts;
  *  an override with no evidence here is a number somebody guessed, and the test refuses it. */
 export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
+  "Back Squat":
+    "2026-10-29. heightRulerUncertainty 0.1 -> 0.11 on this lift only, the first of the SMALL steps " +
+    "Scott asked for (\"small adjustments on everything ... until we get to 0%\"). Against the OVR the " +
+    "squat's range of motion has read LOW on the last four paired takes (-5.3, -1.5, -1.9, -1.3% on " +
+    "10-19 x2 and 10-29 x2) with one signature every time: the height ruler 6-10% under the scale " +
+    "the sensor requires at 75% of the weight, the two body rulers 10-20% over it. Stating the " +
+    "height ruler a tenth less certain moves about four points of weight from the low voter to the " +
+    "high ones, about +0.8% on the blend, replayed on all six squat ledger rows and no other lift's. " +
+    "Not a refit of HEIGHT_RULER_UNCERTAINTY, which is shared and was fitted on a squat AND an RDL.",
   "Romanian Deadlift":
     "2026-10-29. maxPeakToMeanRatio 2.0 -> 2.5 on this lift only. The 2.0 was fitted on 60 BENCH " +
     "reps whose sensor ratio is 1.35-1.5; the OVR's own peak/mean on this athlete's RDL is 1.57-1.78 " +
