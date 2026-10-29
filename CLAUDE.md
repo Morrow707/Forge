@@ -582,6 +582,15 @@ same SHA shows a success on `main` and a failure elsewhere, nothing is broken.
 
 ## Camera tracking
 
+- **ON A CALIBRATION DAY, READ THE STATUS BOARD BEFORE ANYTHING ELSE**, then the ledger:
+  `docs/camera-tracking-notes.md` opens with "STATUS BOARD" (what works and must not be touched,
+  what is known not to work and is not tried again, what the latest evidence points at) and
+  `shared/accuracy-ledger.ts` holds one replayable row per sensor-paired take. Scott, 2026-10-29:
+  "I want you keeping a running log ... so we don't keep going in circles with what works and
+  what doesn't, when your feed goes stale you don't remember what you fixed yesterday in the
+  camera or last week." **Every session ends by updating the board and adding its rows to the
+  ledger, before the push.** A take that is not a ledger row is not measured; a fix that is not
+  on the board will be re-proposed.
 - **Read the camera architecture section below first.** Three parts -- body
   tracker, object tracker, overwatch -- and everything here sits inside that
   shape. This section is the older, mode-specific notes; it is not the design.

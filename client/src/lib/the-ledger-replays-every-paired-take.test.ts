@@ -7,7 +7,13 @@ import {
   errorPctAgainstSensor,
   type LedgerRow,
 } from "@shared/accuracy-ledger";
-import { reconcileScaleEstimates, HEIGHT_RULER_UNCERTAINTY, BIACROMIAL_TOLERANCE_FRACTION } from "./pose-tracking";
+import {
+  reconcileScaleEstimates,
+  HEIGHT_RULER_UNCERTAINTY,
+  BIACROMIAL_TOLERANCE_FRACTION,
+  COREML_BOX_LONG_EDGE_UNCERTAINTY,
+  CALIBRATION_REFERENCES,
+} from "./pose-tracking";
 import { BODY_3D_CORRECTED_UNCERTAINTY, DEPTH_RULER_UNCERTAINTY } from "./body-3d-ruler";
 import { postureForExercise, postureAllowsHeightCalibration } from "./exercise-camera-profile";
 
@@ -45,6 +51,14 @@ function liveUncertainty(source: string): number {
   if (source === "height") return HEIGHT_RULER_UNCERTAINTY;
   if (source === "shoulder_width") return BIACROMIAL_TOLERANCE_FRACTION;
   if (source === "depth") return DEPTH_RULER_UNCERTAINTY;
+  if (source === "plate") {
+    // What `computeReferenceObjectScale` states for a bumper plate the detector boxed: the casting
+    // tolerance over the nominal diameter, in quadrature with the detector's own measured noise.
+    // The 2026-10-19 RDL set 2 row is the one take so far with a plate in the vote.
+    const plate = CALIBRATION_REFERENCES.find((r) => r.id === "bumper_plate_perform_better");
+    if (!plate) throw new Error("the bumper plate reference is gone from CALIBRATION_REFERENCES");
+    return Math.hypot(plate.toleranceM / plate.nominalSizeM, COREML_BOX_LONG_EDGE_UNCERTAINTY);
+  }
   return BODY_3D_CORRECTED_UNCERTAINTY;
 }
 
