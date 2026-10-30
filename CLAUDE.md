@@ -2893,11 +2893,13 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 699** (2026-10-30
-  00:09 UTC, `ad319e1`: round two on 697 -- the Back Squat's own `heightRulerUncertainty` 0.11,
-  a plate that has to agree from both ends before it joins the blend, the jump's uncorrected hip
-  velocities in the export; 698 was its `verify_build` on the same commit). **699 is the build to
-  film all three lifts on.** Before it, **697** (2026-10-29 evening, `6d8f259`: the Romanian
+  branch `verify_build` for the arbiter plumbing. **The newest build is 701** (2026-10-30
+  01:00 UTC, `980fcd4`: round three -- the box ruler corrects the landing numbers only and the
+  hip's drive keeps the floor scale; 700 was its `verify_build` on the same commit). **701 is the
+  build to film all three lifts on.** Before it, **699** (2026-10-30 00:09 UTC, `ad319e1`: round
+  two on 697 -- the Back Squat's own `heightRulerUncertainty` 0.11, a plate that has to agree
+  from both ends before it joins the blend, the jump's uncorrected hip velocities in the export;
+  698 was its `verify_build` on the same commit). Before it, **697** (2026-10-29 evening, `6d8f259`: the Romanian
   Deadlift's own numbers in `FITTED_OVERRIDES`, the weighted 3D-pose collapse, the replay harness
   reading each lift's record, the jump's raw hip peak; 696 was its `verify_build` on `ccdeba5`,
   and the beta picked up one server-only seed commit merged in between, `cc5d2bf`, which changes
@@ -2952,7 +2954,8 @@ halves before splitting anything else:
   loop around `DeviceApprovalStep`'s claim effect; the crash follows it. Not reproduced yet (no
   DOM test environment in the unit suite); fix queued behind the calibration round.
 - **ROUND THREE, 2026-10-30: THE BOX RULER MEASURES THE LANDING; THE HIP'S DRIVE KEEPS THE FLOOR
-  SCALE** (calibration work, uploaded on commit; the build number is in the run list). Scott, on
+  SCALE, AS BUILD 701** (`980fcd4`; 700 was its `verify_build`, 701 the beta, uploaded 01:00 UTC;
+  calibration work, uploaded on commit). Scott, on
   round two's "the next two box sets decide which the sensor tracks": "Can we make the sensor
   track what we want it to track? Why are we leaving it up to the sensor?" He was right: the OVR
   on the hip measures the hip, full stop, and the choice was Forge's. The 697 export decided it --
@@ -2969,7 +2972,7 @@ halves before splitting anything else:
   are bit-identical). `jump-countermovement.test.ts` drives both rulers and reads the source with
   comments stripped; putting the division back reds two cases. See docs/camera-tracking-notes.md
   "Round three, 2026-10-30".
-- **THE QUEUE IS EMPTY AS OF BUILD 699** (round two above; nothing waits behind it). Before it,
+- **THE QUEUE IS EMPTY AS OF BUILD 701** (round three above; nothing waits behind it). Before it,
   build **697** (2026-10-29 evening, `6d8f259`; 696 was its
   `verify_build` on `ccdeba5`). Calibration work, uploaded on commit: the RDL's first per-lift
   record (`depthRulerUncertainty` 0.6, `maxPeakToMeanRatio` 2.5), the weighted 3D-pose collapse,
