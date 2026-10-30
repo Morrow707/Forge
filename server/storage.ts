@@ -384,6 +384,7 @@ import {
   OPEN_CLASS_ACCESS,
   type ClassAccessGate,
 } from "@shared/class-pricing-rule";
+import { heldSeatRefusalMessage } from "@shared/roster-hold";
 import { readingLevelInstruction, type ClassReadingLevel } from "@shared/class-reading-level";
 import { learningStreakFromDays } from "@shared/learning-streak";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
@@ -6330,18 +6331,72 @@ export const storage = {
     return !!row;
   },
 
-  // Every athlete currently on this coach's roster -- there's no "archived
-  // athlete" concept in the schema yet, so a real launch of roster-seat
-  // guardrails would want that distinction before this number means "seats
-  // actually in use" the way the pricing page's tiers imply. Good enough
-  // for a framework that isn't gating anything live yet.
+  /** BILLED SEATS: every athlete on this coach's roster whose seat is not parked.
+   *
+   *  THE "ARCHIVED ATHLETE" THIS COMMENT USED TO ASK FOR NOW EXISTS (2026-10-29). It read: "there's
+   *  no archived athlete concept in the schema yet, so a real launch of roster-seat guardrails would
+   *  want that distinction before this number means seats actually in use the way the pricing page's
+   *  tiers imply." That distinction is the off-season hold -- see shared/roster-hold.ts, question 1
+   *  -- and this is the one of its five questions that moves money.
+   *
+   *  `isNull(heldAt)` is the whole change, and it is the only place in this file where a hold
+   *  reaches the bill. Note what it does NOT do on its own: getBilledAthleteCountForCoach is the
+   *  larger of this and plannedAthleteCount, so a program that typed "about 180" and parks 120 in
+   *  June still bills the 180 band. That is deliberate and is written up on seatIsBilled(). */
   async getRosterSeatCountForCoach(coachId: number): Promise<number> {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const rows = await db
       .select({ athleteId: coachAthletes.athleteId })
       .from(coachAthletes)
-      .where(inArray(coachAthletes.coachId, coachIds));
+      .where(and(inArray(coachAthletes.coachId, coachIds), isNull(coachAthletes.heldAt)));
     return new Set(rows.map((r) => r.athleteId)).size;
+  },
+
+  /** Every PARKED seat on this coach's roster, newest hold first -- what the roster screen's "On
+   *  hold" section lists and what the due-back prompt is built from. Carries the athlete's name
+   *  because every caller is rendering a list of people, and the return date because that is the
+   *  thing the coach set and the thing the prompt reads.
+   *
+   *  AN ATHLETE WITH TWO LINKS TO ONE STAFF IS PARKED ONLY IF BOTH ARE. There is one row per
+   *  coach-athlete LINK and a staff has several coaches, so an athlete whom two coaches each had
+   *  on their own roster before they formed a staff has two rows (getRosterForCoach's own comment
+   *  records that case and the double-counting it caused). The program is one program, so ANY
+   *  active link means an active seat -- which is also what getCoachesForAthlete answers, so the
+   *  roster screen and the athlete's own entitlements cannot disagree. That is why this selects
+   *  every seat rather than filtering to the held ones in SQL: an athlete who appeared in both
+   *  lists would be drawn under "On hold" while still being billed and still being coached.
+   *
+   *  **BILLING-SCOPED, NOT COACH-SCOPED, SO IT IS NEVER SERVED TO A COACH AS A LIST OF PEOPLE.**
+   *  It resolves through getEffectiveCoachIds alone and applies no TEAM narrowing, which is right
+   *  for its one caller -- coachPlanPayload's `heldCount`, where the question is how many of the
+   *  PROGRAM's seats are parked and a narrowed assistant's view of that would be a wrong number
+   *  on a bill. That also makes it unfit to hand back as rows: a narrowed coach would read the
+   *  names of athletes outside their teams, which is exactly the leak the 2026-10-24 audit closed
+   *  in getRosterForCoach and athleteIdsInCoachScope. An endpoint for it was written and removed
+   *  for that reason. The roster screen needs no such endpoint anyway -- getRosterForCoach already
+   *  carries heldAt on every row and is already narrowed, so the page splits one list it has
+   *  rather than fetching a second it would have to re-scope. */
+  async getHeldSeatsForCoach(coachId: number) {
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const rows = await db
+      .select({
+        athleteId: coachAthletes.athleteId,
+        athleteName: users.name,
+        heldAt: coachAthletes.heldAt,
+        heldUntil: coachAthletes.heldUntil,
+        heldByCoachId: coachAthletes.heldByCoachId,
+      })
+      .from(coachAthletes)
+      .innerJoin(users, eq(coachAthletes.athleteId, users.id))
+      .where(inArray(coachAthletes.coachId, coachIds))
+      .orderBy(desc(coachAthletes.heldAt));
+    const anyActive = new Set(rows.filter((r) => r.heldAt == null).map((r) => r.athleteId));
+    const byAthlete = new Map<number, (typeof rows)[number]>();
+    for (const row of rows) {
+      if (row.heldAt == null || anyActive.has(row.athleteId)) continue;
+      if (!byAthlete.has(row.athleteId)) byAthlete.set(row.athleteId, row);
+    }
+    return Array.from(byAthlete.values());
   },
 
   // WHAT THE ORG IS BILLED FOR: the larger of what they HAVE and what they SAID.
@@ -6873,7 +6928,21 @@ export const storage = {
       const existing = await db.query.coachAthletes.findFirst({
         where: and(inArray(coachAthletes.coachId, coachIds), eq(coachAthletes.athleteId, athleteId)),
       });
-      if (existing) return { ok: true as const, athlete: existing };
+      if (existing) {
+        // A PARKED SEAT IS LIFTED, not handed back parked -- the same rule as
+        // linkAthleteToCoach, and this is the other of the two join paths (a provisional athlete
+        // claiming their link). An athlete who claims a seat has re-joined; returning the held row
+        // would leave them off the roster's active list with their camera still refused and
+        // nothing to explain it. On `tx` rather than `db` so it is inside the advisory lock this
+        // transaction already took.
+        if (existing.heldAt == null) return { ok: true as const, athlete: existing };
+        const [lifted] = await tx
+          .update(coachAthletes)
+          .set({ heldAt: null, heldUntil: null, heldByCoachId: null })
+          .where(eq(coachAthletes.id, existing.id))
+          .returning();
+        return { ok: true as const, athlete: lifted ?? existing };
+      }
 
       const [row] = await tx.insert(coachAthletes).values({ coachId, athleteId }).returning();
       return { ok: true as const, athlete: row };
@@ -7115,7 +7184,17 @@ export const storage = {
    * memo getCoachTeamScope already has, so adding them to a query costs no round trip.
    */
   /** The athletes currently on this coach's staff roster (coach_athletes across the staff),
-   * before any team narrowing. Memoised per request like the scope it sits beside. */
+   * before any team narrowing. Memoised per request like the scope it sits beside.
+   *
+   * A HELD SEAT IS DELIBERATELY INCLUDED, and this is where the off-season hold earns its keep
+   * (shared/roster-hold.ts, question 2). Every coach read in the app resolves through
+   * athleteIsInCoachScope / athleteIdsInCoachScope just below, and both resolve through this --
+   * so "the coach keeps every read of an athlete they parked" is a property of this one method
+   * rather than of forty routes. Analytics, both leaderboards, exercise history, recent PRs, the
+   * calendar, the day comments and the training-history export all keep working with no edit of
+   * their own. Filtering holds here is the one change that would break the whole feature: it
+   * would reproduce exactly what a REMOVAL does today, which is the thing the hold exists to
+   * avoid. */
   async getStaffRosterAthleteIds(coachId: number): Promise<number[]> {
     return requestMemo(`staffRosterIds:${coachId}`, async () => {
       const coachIds = await this.getEffectiveCoachIds(coachId);
@@ -7289,6 +7368,14 @@ export const storage = {
   // athlete's account by the time this runs; a null here just leaves them
   // a Free Agent (an existing, fully-supported state, not an error) rather
   // than failing the whole signup.
+  /** A PARKED SEAT IS LIFTED HERE, NEVER RE-INSERTED (2026-10-29).
+   *
+   *  This is how an athlete who types the coach code in August comes straight back onto their own
+   *  history: the row already exists, so an insert would collide on `coach_athlete_pair_idx`, and
+   *  returning the existing row unchanged -- what this did before the hold existed -- would leave
+   *  them parked after they had just re-joined, with nothing on any screen to say why their camera
+   *  was still off. Lifting here also means the two join paths and the coach's own "Bring back"
+   *  button converge on one outcome rather than three. */
   async linkAthleteToCoach(coachId: number, athleteId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     const existing = await db.query.coachAthletes.findFirst({
@@ -7297,7 +7384,15 @@ export const storage = {
         eq(coachAthletes.athleteId, athleteId),
       ),
     });
-    if (existing) return existing;
+    if (existing) {
+      if (existing.heldAt == null) return existing;
+      const [lifted] = await db
+        .update(coachAthletes)
+        .set({ heldAt: null, heldUntil: null, heldByCoachId: null })
+        .where(eq(coachAthletes.id, existing.id))
+        .returning();
+      return lifted ?? existing;
+    }
 
     const [row] = await db
       .insert(coachAthletes)
@@ -7314,6 +7409,12 @@ export const storage = {
   // staff's teams so they don't linger as an orphaned team member the coach
   // can no longer see or remove through the roster. Returns false (no-op)
   // if the athlete wasn't on this staff's roster to begin with.
+  //
+  // A PARKED SEAT IS STILL REMOVABLE, and deliberately so: a hold is for an athlete coming back
+  // and a removal is for one who is not, so a coach who parked a squad in June must be able to
+  // remove the five who graduated without bringing them back onto the bill first.
+  // athleteIsInCoachScope includes held seats (shared/roster-hold.ts, question 2), which is what
+  // makes that work.
   async removeAthleteFromCoach(coachId: number, athleteId: number) {
     // Team narrowing: a narrowed staff coach cannot remove an athlete they cannot see.
     if (!(await this.athleteIsInCoachScope(coachId, athleteId))) return false;
@@ -7345,6 +7446,76 @@ export const storage = {
         and(inArray(coachAthletes.coachId, coachIds), eq(coachAthletes.athleteId, athleteId)),
       );
     return true;
+  },
+
+  /* ---------------------------------------------------------------------------------------
+   * THE OFF-SEASON HOLD: PARK A SEAT, BRING IT BACK.
+   *
+   * Scott, 2026-10-29: "they don't get charged for it, and all of the players data remains for
+   * the coach when they come back." shared/roster-hold.ts is the decision and carries the five
+   * questions; these two are the only writers of the three columns.
+   *
+   * BOTH WRITE EVERY ONE OF THE STAFF'S LINKS FOR THAT ATHLETE, and that is not incidental.
+   * There is one row per coach-athlete link and a staff has several coaches, so an athlete whom
+   * two of them each linked has two rows -- and ANY active link is an active seat, by
+   * getCoachesForAthlete and getHeldSeatsForCoach alike. Holding one row of two would therefore
+   * do nothing at all, visibly: the athlete would stay billed, stay coached and stay off the "On
+   * hold" list, while the coach's button reported success.
+   *
+   * A HOLD AND A REMOVAL ARE BOTH STILL AVAILABLE, on purpose. A hold is for an athlete coming
+   * back in the autumn; removeAthleteFromCoach is for one who is not -- a graduating senior, a
+   * transfer -- and it deliberately still works on a parked seat, so a coach who parked a whole
+   * squad in June can remove the five who graduated without bringing them back first.
+   * ------------------------------------------------------------------------------------------ */
+
+  /** Parks this athlete's seat. `heldUntil` is the return date the coach stated, if they stated
+   *  one -- it drives the due-back PROMPT and never an action (see seatIsDueBack).
+   *
+   *  Team narrowing first, exactly as removeAthleteFromCoach does it: a narrowed staff coach
+   *  cannot park an athlete they cannot see. Returns false when the athlete is not on this
+   *  staff's roster, so the route 404s rather than reporting a hold of nobody. */
+  async holdAthlete(
+    coachId: number,
+    athleteId: number,
+    heldUntil: string | null = null,
+  ): Promise<boolean> {
+    if (!(await this.athleteIsInCoachScope(coachId, athleteId))) return false;
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const updated = await db
+      .update(coachAthletes)
+      .set({ heldAt: new Date(), heldUntil, heldByCoachId: coachId })
+      .where(
+        and(inArray(coachAthletes.coachId, coachIds), eq(coachAthletes.athleteId, athleteId)),
+      )
+      .returning({ id: coachAthletes.id });
+    return updated.length > 0;
+  },
+
+  /** Brings a parked seat back. One UPDATE, and every derived answer follows by itself -- the
+   *  seat starts billing, the coach can assign again, and the athlete's camera, skills, AI and
+   *  class catalog all read coached again on their next request, because every one of those
+   *  resolves through getCoachesForAthlete rather than through anything stored.
+   *
+   *  THE COACH DOES THIS ALONE, and that is the practical win over today's remove-and-re-add. A
+   *  removal needs the ATHLETE to undo it (sendFreeAgentRequest needs their acceptance, and the
+   *  removal dialog's own copy tells the coach to have them re-enter the coach code), which in
+   *  August is sixty athletes to chase. A hold never ended the athlete's consent to this coach,
+   *  so lifting it needs nobody's permission but the program's. */
+  async unholdAthlete(coachId: number, athleteId: number): Promise<boolean> {
+    if (!(await this.athleteIsInCoachScope(coachId, athleteId))) return false;
+    const coachIds = await this.getEffectiveCoachIds(coachId);
+    const updated = await db
+      .update(coachAthletes)
+      .set({ heldAt: null, heldUntil: null, heldByCoachId: null })
+      .where(
+        and(
+          inArray(coachAthletes.coachId, coachIds),
+          eq(coachAthletes.athleteId, athleteId),
+          isNotNull(coachAthletes.heldAt),
+        ),
+      )
+      .returning({ id: coachAthletes.id });
+    return updated.length > 0;
   },
 
   // Coach-initiated counterpart to the athlete-initiated "join with coach
@@ -7467,6 +7638,14 @@ export const storage = {
         squatMaxLbs: users.squatMaxLbs,
         deadliftMaxLbs: users.deadliftMaxLbs,
         groupId: coachAthletes.groupId,
+        // THE OFF-SEASON HOLD RIDES ON THE ROSTER ROW, AS ONE LIST WITH A FLAG -- never a second
+        // query for the parked athletes. Two lists is how a held athlete becomes invisible to a
+        // surface nobody remembered to update, and this list is read by the roster screen, the
+        // weekly digest, the wellness cards, the ACWR summary and a dozen other callers. They all
+        // keep seeing every athlete (shared/roster-hold.ts, question 2); the ones that must not
+        // count a parked athlete read the flag. See getHeldSeatsForCoach for the two-links case.
+        heldAt: coachAthletes.heldAt,
+        heldUntil: coachAthletes.heldUntil,
       })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
@@ -7492,7 +7671,12 @@ export const storage = {
       .where(eq(coachAthletes.coachId, coachId));
     const ownGroupByAthlete = new Map(ownLinks.map((l) => [l.athleteId, l.groupId]));
     for (const row of rows) {
-      if (byAthlete.has(row.id)) continue;
+      // An ACTIVE link wins the dedup over a held one: the program is one program, so an athlete
+      // one of this staff's coaches still has active is an active seat, which is the same answer
+      // getCoachesForAthlete gives them. Keeping the first row regardless would let the order the
+      // database happened to return decide whether somebody reads as parked.
+      const kept = byAthlete.get(row.id);
+      if (kept && !(kept.heldAt != null && row.heldAt == null)) continue;
       byAthlete.set(row.id, {
         ...row,
         groupId: ownGroupByAthlete.has(row.id) ? (ownGroupByAthlete.get(row.id) ?? null) : row.groupId,
@@ -7541,11 +7725,21 @@ export const storage = {
         squatMaxLbs: users.squatMaxLbs,
         deadliftMaxLbs: users.deadliftMaxLbs,
         groupId: coachAthletes.groupId,
+        // A PARKED ATHLETE'S DETAIL PAGE MUST STILL OPEN -- every per-athlete coach route 404s
+        // through here, so filtering holds out would make a hold indistinguishable from a removal
+        // (shared/roster-hold.ts, question 2). It carries the flag instead, so the page can say
+        // "On hold" and withhold the Assign button rather than withholding the athlete.
+        heldAt: coachAthletes.heldAt,
+        heldUntil: coachAthletes.heldUntil,
       })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
       .where(and(inArray(coachAthletes.coachId, coachIds), eq(coachAthletes.athleteId, athleteId)));
-    return rows[0] ?? null;
+    // An ACTIVE link wins over a held one, for the reason getHeldSeatsForCoach sets out: two
+    // coaches on one staff can each hold their own link to the same athlete, and any active link
+    // is an active seat. Without this, `rows[0]` lets the database's return order decide whether
+    // the Assign button is drawn.
+    return rows.find((r) => r.heldAt == null) ?? rows[0] ?? null;
   },
 
   // Coach's own fast-access pin list (users.pinnedAthleteIds) -- flips one
@@ -8073,13 +8267,54 @@ export const storage = {
     return inactive.sort((a, b) => (b.daysSinceActive ?? Infinity) - (a.daysSinceActive ?? Infinity));
   },
 
+  /** THE COACHES THIS ATHLETE IS ACTIVELY COACHED BY, AND THE ONE LINE THAT DECIDES "FREE AGENT".
+   *
+   *  Both sides of the app resolve "does this athlete have a coach" through here: the server via
+   *  `athleteHasCoach` in routes.ts, and the client via `useIsFreeAgent` -> `/api/athlete/coaches`,
+   *  which is this method and nothing else. "Free Agent" is not a role -- roleEnum is
+   *  ["coach","athlete","admin","guardian"] -- it is `role === "athlete"` with an empty answer
+   *  here, recomputed per request.
+   *
+   *  SO `isNull(heldAt)` IS THE WHOLE OF QUESTION 4 (shared/roster-hold.ts), and it is why a hold
+   *  needs no state machine, no activation job and no nightly reconciler: every derived answer
+   *  downstream -- cameraAccessFor, skillsAccessFor, requirePaidAiAccess, FreeAgentGate, the class
+   *  gate, autoregulation -- flips in both directions off this one predicate, and bringing an
+   *  athlete back is one UPDATE setting held_at to null.
+   *
+   *  Scott, 2026-10-29, on whether a held athlete reverts: yes, and in the off season that is
+   *  simply true -- they are training on their own, so the camera, the skills side and the AI
+   *  follow their own tier. The ONE thing that must not follow is content the program already
+   *  bought and gave them, which is why `getCoachSeatsForAthlete` below exists and why
+   *  `classGateFor` asks that question instead of this one. */
   async getCoachesForAthlete(athleteId: number) {
     const rows = await db
       .select({ id: users.id, name: users.name, coachCode: users.coachCode })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.coachId, users.id))
-      .where(eq(coachAthletes.athleteId, athleteId));
+      .where(and(eq(coachAthletes.athleteId, athleteId), isNull(coachAthletes.heldAt)));
     return rows;
+  },
+
+  /** EVERY ROSTER SEAT THIS ATHLETE HOLDS, PARKED OR NOT -- the raw relationship, before question
+   *  4 is applied to it.
+   *
+   *  The sibling of getCoachesForAthlete above, and a separate method rather than a boolean
+   *  parameter on it, because the two answer different questions and a shared implementation
+   *  behind a flag is how "turn the camera off for the off season" becomes a change that silently
+   *  also takes back a class the coach assigned in April.
+   *
+   *  The one caller that needs this is `classGateFor`: a held athlete is gated on the Forge
+   *  catalog like any uncoached athlete, and must NOT lose paid chapters of a class their COACH
+   *  enrolled them in. See heldSeatKeepsCoachGivenContent. */
+  async getCoachSeatsForAthlete(athleteId: number) {
+    return db
+      .select({
+        coachId: coachAthletes.coachId,
+        heldAt: coachAthletes.heldAt,
+        heldUntil: coachAthletes.heldUntil,
+      })
+      .from(coachAthletes)
+      .where(eq(coachAthletes.athleteId, athleteId));
   },
 
   // ---------- Coaching staff (assistant coaches sharing one roster) ----------
@@ -9905,8 +10140,17 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
 
     const newPRs = prRows[0]?.count ?? 0;
     const wellnessFlags = wellnessRows.filter((w) => computeReadiness(w).level === "red").length;
+    // THE MISSED-WORKOUT COUNT IS A DENOMINATOR, SO A PARKED ATHLETE IS NOT IN IT
+    // (shared/roster-hold.ts, question 5). A coach who parks sixty athletes for the summer would
+    // otherwise open the dashboard to "60 missed workouts this week", every week, which is not
+    // true of anybody -- it is one hold reported sixty times.
+    //
+    // The two wellness counts above need no such filter and deliberately do not get one: they
+    // INNER JOIN wellness_checkins, so an athlete who checked in produced a real row their coach
+    // should see, and one who did not produced none. That is the line between the roster queries
+    // that need question 5 and the ones that are already right.
     const missedWorkouts = await this.countMissedWorkoutsForRoster(
-      roster.map((a) => a.id),
+      roster.filter((a) => a.heldAt == null).map((a) => a.id),
       priorWindowStart,
       priorWindowEnd,
     );
@@ -10061,7 +10305,11 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       .select({ cap: users.caraWeeklyCapMinutes })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.coachId, users.id))
-      .where(eq(coachAthletes.athleteId, athleteId));
+      // A PARKED SEAT'S COACH DOES NOT CAP THE ATHLETE'S OWN SUMMER. This is question 4 in
+      // another costume (shared/roster-hold.ts): a held athlete trains on their own, so a weekly
+      // minutes cap the program set has no business binding them while the program has them
+      // parked. It binds again the moment they are brought back, by itself.
+      .where(and(eq(coachAthletes.athleteId, athleteId), isNull(coachAthletes.heldAt)));
     const caps = rows.map((r) => r.cap).filter((c): c is number => c != null);
     return caps.length > 0 ? Math.min(...caps) : null;
   },
@@ -10253,11 +10501,14 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
     const [coach] = await db.select({ cap: users.caraWeeklyCapMinutes }).from(users).where(eq(users.id, coachId));
     if (!coach?.cap) return null;
     const coachIds = await this.getEffectiveCoachIds(coachId);
+    // Parked seats are out of the compliance report -- question 5. A held athlete logs no
+    // sessions by construction, so including them reports every one of them at zero minutes
+    // against the cap, which reads as a roster full of non-compliance rather than as a hold.
     const roster = await db
       .selectDistinct({ id: users.id, name: users.name })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
-      .where(inArray(coachAthletes.coachId, coachIds));
+      .where(and(inArray(coachAthletes.coachId, coachIds), isNull(coachAthletes.heldAt)));
     if (roster.length === 0) return { capMinutes: coach.cap, athletes: [] };
     const athleteIds = roster.map((r) => r.id);
 
@@ -10317,11 +10568,14 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
   // showing up open (or missing) in a document meant to leave the app.
   async getCaraSessionsForCoach(coachId: number, from: Date, to: Date) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
+    // Parked seats are out of this document too -- question 5, and this one's own comment says
+    // it builds "a document meant to leave the app", where a page of parked athletes at zero
+    // minutes is worse than an omission.
     const roster = await db
       .selectDistinct({ id: users.id, name: users.name })
       .from(coachAthletes)
       .innerJoin(users, eq(coachAthletes.athleteId, users.id))
-      .where(inArray(coachAthletes.coachId, coachIds));
+      .where(and(inArray(coachAthletes.coachId, coachIds), isNull(coachAthletes.heldAt)));
     if (roster.length === 0) return [];
     const athleteIds = roster.map((r) => r.id);
     const nameById = new Map(roster.map((r) => [r.id, r.name]));
@@ -11609,11 +11863,19 @@ Hard rules, no exceptions:
   async bulkAddAthletesToTeam(coachId: number, teamId: number, athleteIds: number[]) {
     if (athleteIds.length === 0) return { added: 0, skippedNotOnRoster: 0 };
     const coachIds = await this.getEffectiveCoachIds(coachId);
+    // A PARKED SEAT TAKES NO NEW WORK -- question 3, reads widen and writes narrow. Adding a held
+    // athlete to a team would put the team's assigned programs on the calendar of somebody the
+    // program has parked, which is the one thing a hold is meant to stop. They count as
+    // skippedNotOnRoster, and the route's own message names the hold.
     const onRoster = await db
       .select({ athleteId: coachAthletes.athleteId })
       .from(coachAthletes)
       .where(
-        and(inArray(coachAthletes.coachId, coachIds), inArray(coachAthletes.athleteId, athleteIds)),
+        and(
+          inArray(coachAthletes.coachId, coachIds),
+          inArray(coachAthletes.athleteId, athleteIds),
+          isNull(coachAthletes.heldAt),
+        ),
       );
     // The single-athlete add resolves through getRosterAthleteForCoach and so is team-narrowed;
     // this one checked the staff-wide join alone, so a coach assigned to one team could create a
@@ -13059,10 +13321,11 @@ Hard rules, no exceptions:
     dateOverrides?: Record<string, string>,
     durationWeeks = 1,
   ) {
-    // Same gate as createAssignment -- see assertMinorHasActiveGuardian, including why the
-    // requester id is passed.
+    // Same two gates as createAssignment -- see assertMinorHasActiveGuardian, including why the
+    // requester id is passed, and assertSeatIsNotHeld for the off-season hold.
     for (const a of athletes) {
       await this.assertMinorHasActiveGuardian(a.athleteId, coachId);
+      await this.assertSeatIsNotHeld(a.athleteId, coachId);
     }
 
     const created = athletes.length
@@ -20746,6 +21009,8 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     // reading their own name back at them.
     for (const a of athletes) {
       await this.assertMinorHasActiveGuardian(a.athleteId, coachId);
+      // ...and nothing new lands on a seat the program parked -- see assertSeatIsNotHeld.
+      await this.assertSeatIsNotHeld(a.athleteId, coachId);
     }
 
     // Re-assigning a program an athlete already has (or has finished) is
@@ -29850,10 +30115,20 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       // minutes of 100% CPU across 3 backends and still hadn't finished when
       // cancelled. The LEFT JOIN form plans as a Parallel Hash Anti Join
       // (~56k cost vs. ~1.33 BILLION) and actually runs in ~330ms.
+      // A PARKED ATHLETE COUNTS AS A FREE AGENT HERE, because that is what they are to
+      // themselves: getCoachesForAthlete excludes held seats, so their camera, skills and AI all
+      // read uncoached (shared/roster-hold.ts, question 4). Counting them as coached would make
+      // this number disagree with the product every one of them is using. The hold predicate goes
+      // in the JOIN condition rather than the WHERE so this stays the anti-join the comment above
+      // is about -- moving it to the WHERE would turn the plan back into the materialize-and-scan
+      // SubPlan that took two minutes of CPU.
       db
         .select({ count: count() })
         .from(users)
-        .leftJoin(coachAthletes, eq(coachAthletes.athleteId, users.id))
+        .leftJoin(
+          coachAthletes,
+          and(eq(coachAthletes.athleteId, users.id), isNull(coachAthletes.heldAt)),
+        )
         .where(and(eq(users.role, "athlete"), isNull(coachAthletes.athleteId))),
     ]);
     // Real per-day signup counts for the "New signups this week" sparkline --
@@ -32826,6 +33101,48 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       requestedBy === athleteId
         ? "A parent or guardian has to finish setting up their linked account before you can schedule anything. We emailed them when you signed up -- ask them to open that link, or resend it from your profile."
         : `${athlete.name} needs an active guardian account linked before anything new can be assigned to them.`,
+    );
+  },
+
+  /** NOTHING NEW LANDS ON A PARKED SEAT (2026-10-29, shared/roster-hold.ts, question 3).
+   *
+   *  Reads widen and writes narrow: the coach keeps every read of an athlete they parked, and
+   *  assigns them nothing until they bring them back. Written as a sibling of
+   *  assertMinorHasActiveGuardian above and called from the same two loops, for the same reason
+   *  that one gives -- "a batch assignment either fully succeeds or fails closed with a clear
+   *  reason rather than silently skipping some athletes." A coach who parked a whole squad and
+   *  then assigns the autumn block to all sixty needs to be told, not to have fifty-five land
+   *  and five vanish.
+   *
+   *  IT GUARDS THE MECHANISM, NOT THE FOUR ROUTES. createAssignment has four call sites and
+   *  createSkillAssignment its own; guarding the routes instead is how the fifth one added next
+   *  year misses it, which is the defect CLAUDE.md records eight times over.
+   *
+   *  SELF-ASSIGNMENT IS NEVER REFUSED. An athlete assigning their own program passes their OWN
+   *  id as the coach (assertMinorHasActiveGuardian's comment relies on the same fact), and a held
+   *  athlete is a Free Agent who may build and self-assign -- refusing them here would take away
+   *  the one thing the off season leaves them, and for a reason that is about their coach.
+   *
+   *  AND IT REFUSES ONLY FOR A HOLD. An athlete who is not on this staff's roster at all is a
+   *  different refusal belonging to a different check, so this returns and lets that one speak;
+   *  widening it here would turn every "not your athlete" into a sentence about a hold. */
+  async assertSeatIsNotHeld(athleteId: number, requestedBy: number): Promise<void> {
+    if (requestedBy === athleteId) return;
+    const coachIds = await this.getEffectiveCoachIds(requestedBy);
+    const seats = await db
+      .select({ heldAt: coachAthletes.heldAt, heldUntil: coachAthletes.heldUntil })
+      .from(coachAthletes)
+      .where(
+        and(inArray(coachAthletes.coachId, coachIds), eq(coachAthletes.athleteId, athleteId)),
+      );
+    if (seats.length === 0) return;
+    // ANY active link is an active seat -- the same rule getCoachesForAthlete and
+    // getHeldSeatsForCoach apply, so one staff cannot disagree with itself about whether an
+    // athlete may be assigned to.
+    if (seats.some((seat) => seat.heldAt == null)) return;
+    const athlete = await this.getUser(athleteId);
+    throw new ForbiddenReferenceError(
+      heldSeatRefusalMessage(athlete?.name ?? "That athlete", seats[0]?.heldUntil ?? null),
     );
   },
 

@@ -860,6 +860,57 @@ export const coachAthletes = pgTable(
     // in the UI -- nothing here hard-deletes or reassigns that athlete.
     // Null means never assigned (or explicitly unassigned).
     groupId: text("group_id"),
+
+    /* THE OFF-SEASON HOLD (2026-10-29). A seat that is parked, not given up.
+     *
+     * Scott: "what happens in the off season? They players will come back in a few months, we
+     * need to build a database where the coach can put the player on hold, they don't get
+     * charged for it, and all of the players data remains for the coach when they come back."
+     *
+     * WHY IT IS A STATE OF THIS ROW AND NOT A TABLE OF ITS OWN. A hold is a property of ONE
+     * coach-athlete relationship: the same athlete can be held by one program and active in
+     * another, so it cannot live on `users`, and a `roster_holds` table would be a second
+     * writer of a fact this row already carries -- the billing sweep's whole lesson. Keeping it
+     * here also means `coach_athlete_pair_idx`, the group label and every scope helper keep
+     * working untouched, and the hold can never get out of step with the membership.
+     *
+     * NOT A DELETE-AND-REMEMBER. `removeAthleteFromCoach` already preserves the athlete's
+     * training history (it cannot delete assignments -- workout_logs cascade from them), so the
+     * DATA was never the problem. Two other things were: the 2026-10-24 audit made a current
+     * roster seat part of being in scope ("the roster is the relationship; the assignment is a
+     * record of one that existed"), so a removed athlete goes dark to their coach; and the coach
+     * CANNOT undo a removal -- `sendFreeAgentRequest` needs the athlete's acceptance and the
+     * removal dialog's own copy says "re-add them later with your coach code", which is the
+     * athlete's act, not the coach's. In August that is sixty athletes to chase.
+     *
+     * A HOLD IS FOUR SEPARATE QUESTIONS AND EACH IS ANSWERED DELIBERATELY. They do not follow
+     * from one another and nothing may infer one from another: see shared/roster-hold.ts, which
+     * is the only place they are decided.
+     *   1. Is the seat billed?                     NO  -- this is the ask.
+     *   2. May the coach read their history?       YES -- this is the ask.
+     *   3. May the coach assign new work?          NO  -- reads widen, writes narrow.
+     *   4. Do they count as coached for their own  NO  -- Scott, 2026-10-29: in the off season
+     *      entitlements (camera, skills, AI)?             they are training on their own.
+     * Question 4 is the one with a sharp edge, and it has a documented exception rather than a
+     * flipped boolean: a held athlete must NOT lose paid chapters of a class their COACH gave
+     * them (the program bought those). classGateStateFor carries that case.
+     */
+    /** When the coach parked this seat. Null means an ordinary, active roster seat -- so every
+     *  row written before this column existed reads as active, which is what it is. */
+    heldAt: timestamp("held_at"),
+    /** The return date the COACH stated, if they stated one. It drives a PROMPT and never an
+     *  action: a seat that starts billing itself overnight is what coach-band-drift-job.ts
+     *  deliberately refuses to do (it ships the measurement and leaves COACH_BAND_DRIFT_REBILL
+     *  unset), and a graduating senior's hold must expire into nothing rather than into a billed
+     *  seat. Seasonal rosters also move in bulk -- hold sixty in June, bring back fifty-five in
+     *  August because five graduated -- so one confirmable prompt beats fifty-five silent
+     *  auto-lifts somebody then has to audit. */
+    heldUntil: date("held_until"),
+    /** Which coach parked it. A staff has several coaches and any of them may hold or bring
+     *  back, so this is provenance for the roster screen, never a permission: the hold belongs
+     *  to the program, not to the person who typed it. Deliberately NOT a foreign key with a
+     *  cascade -- a coach leaving the staff must not quietly un-hold their athletes. */
+    heldByCoachId: integer("held_by_coach_id"),
   },
   (table) => ({
     pairIdx: uniqueIndex("coach_athlete_pair_idx").on(

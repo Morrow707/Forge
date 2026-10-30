@@ -1491,8 +1491,24 @@ async function classGateFor(user: { id: number; email: string; role: string }): 
   // gate for a coached athlete is therefore per enrolment, and storage applies it from
   // classEnrollments.coachId; the add-on's buy card is withheld from them because
   // requireFreeAgent refuses that purchase on both rails.
-  const coached = await athleteHasCoach(user.id);
-  return { tierGated: !coached, selfEnrolledGated: coached };
+  // READS THE SEATS RATHER THAN `athleteHasCoach`, BECAUSE A PARKED SEAT IS A THIRD ANSWER
+  // (2026-10-29, shared/roster-hold.ts). `athleteHasCoach` resolves through
+  // getCoachesForAthlete, which excludes held seats on purpose -- so it cannot tell an athlete
+  // whose program parked them for the summer from one who never had a coach, and those two want
+  // different answers here: both are gated on the catalog, and only the parked one keeps the
+  // chapters their coach already gave them. One query either way.
+  const seats = await storage.getCoachSeatsForAthlete(user.id);
+  const activelyCoached = seats.some((seat) => seat.heldAt == null);
+  if (activelyCoached) {
+    return { tierGated: false, selfEnrolledGated: true, coachGivenStaysOpen: false };
+  }
+  return {
+    tierGated: true,
+    selfEnrolledGated: false,
+    // Every seat they hold is parked -- so there IS a relationship, paused. An athlete with no
+    // seat at all (never joined, or removed) gets false: see coachGivenStaysOpen's own comment.
+    coachGivenStaysOpen: seats.length > 0,
+  };
 }
 
 async function requireReadableClassLesson(user: { id: number; email: string; role: string }, classId: number, lessonId: number) {
@@ -5908,6 +5924,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(rows);
   });
 
+  /* ---------------------------------------------------------------------------------------
+   * THE OFF-SEASON HOLD. shared/roster-hold.ts carries the five questions a hold answers; these
+   * routes only move the three columns.
+   *
+   * THESE LITERALS SIT ABOVE THE :athleteId WILDCARD DELIBERATELY -- see that route's own comment
+   * and numeric-route-params.test.ts, which fails if a literal under /api/coach/roster/ is ever
+   * declared after it.
+   *
+   * ANY STAFF COACH MAY PARK AND BRING BACK, not just the primary, and that is the same posture
+   * DELETE /api/coach/roster/:athleteId already has. A hold is strictly less powerful than the
+   * removal sitting beside it: it keeps the relationship, the coach can undo it alone, and
+   * nothing about the athlete's account changes. Team narrowing is real either way --
+   * storage.holdAthlete goes through athleteIsInCoachScope, so a narrowed coach cannot park an
+   * athlete they cannot see.
+   * ------------------------------------------------------------------------------------------ */
+
+  /** Park a whole cohort at once, which is how a season actually ends. The roster screen already
+   *  has multi-select and a bulk add-to-team; this is the same selection with a different verb.
+   *
+   *  REPORTS PER ATHLETE RATHER THAN FAILING THE BATCH. A coach selecting sixty athletes may well
+   *  have one in the selection who is outside their team scope or already parked, and refusing
+   *  the whole action for that is worse than telling them which ones did not move -- the opposite
+   *  trade from createAssignment, which fails closed because a partially-assigned program is a
+   *  training plan nobody has. */
+  app.post("/api/coach/roster/hold", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = z
+      .object({
+        athleteIds: z.array(z.number().int().positive()).min(1).max(500),
+        heldUntil: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+          .nullable()
+          .optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message ?? "Invalid request" });
+    }
+    const held: number[] = [];
+    const skipped: number[] = [];
+    for (const athleteId of parsed.data.athleteIds) {
+      const ok = await storage.holdAthlete(user.id, athleteId, parsed.data.heldUntil ?? null);
+      (ok ? held : skipped).push(athleteId);
+    }
+    res.json({ held: held.length, skipped: skipped.length, skippedAthleteIds: skipped });
+  });
+
+  /** Bring a cohort back. The counterpart of the above, and the one a coach runs in August. */
+  app.post("/api/coach/roster/unhold", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = z
+      .object({ athleteIds: z.array(z.number().int().positive()).min(1).max(500) })
+      .safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message ?? "Invalid request" });
+    }
+    const broughtBack: number[] = [];
+    const skipped: number[] = [];
+    for (const athleteId of parsed.data.athleteIds) {
+      const ok = await storage.unholdAthlete(user.id, athleteId);
+      (ok ? broughtBack : skipped).push(athleteId);
+    }
+    res.json({
+      broughtBack: broughtBack.length,
+      skipped: skipped.length,
+      skippedAthleteIds: skipped,
+    });
+  });
+
   app.get("/api/coach/roster/:athleteId", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     // A literal route added under /api/coach/roster/ without noticing this
@@ -6639,6 +6725,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const athleteId = Number(req.params.athleteId);
     const removed = await storage.removeAthleteFromCoach(user.id, athleteId);
     if (!removed) return res.status(404).json({ message: "Athlete not found" });
+    res.status(204).end();
+  });
+
+  /** Park one seat. The single-athlete sibling of the bulk route above, and the one the athlete
+   *  detail page uses -- beside the removal, which is the other thing a coach can do with an
+   *  athlete who has stopped training and is the right one when they are not coming back. */
+  app.post("/api/coach/roster/:athleteId/hold", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const parsed = z
+      .object({
+        heldUntil: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+          .nullable()
+          .optional(),
+      })
+      .safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message ?? "Invalid request" });
+    }
+    const ok = await storage.holdAthlete(user.id, athleteId, parsed.data.heldUntil ?? null);
+    if (!ok) return res.status(404).json({ message: "Athlete not found" });
+    res.status(204).end();
+  });
+
+  /** Bring one seat back. 404 when there was nothing parked to bring back, which keeps a stale
+   *  tab from reporting a return that did not happen. */
+  app.post("/api/coach/roster/:athleteId/unhold", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const athleteId = Number(req.params.athleteId);
+    const ok = await storage.unholdAthlete(user.id, athleteId);
+    if (!ok) return res.status(404).json({ message: "Athlete not on hold" });
     res.status(204).end();
   });
 
@@ -13634,6 +13753,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // This route is requireFreeAgent, so selfEnrolledGated is never the live half here -- a
     // coached athlete does not see the catalog at all -- but it is read rather than ignored, so
     // the card cannot claim full access on the strength of only half the gate being open.
+    //
+    // `coachGivenStaysOpen` is deliberately NOT read here, and this is the one place somebody
+    // would be tempted to add it: an athlete whose seat is parked reaches this route (they are a
+    // Free Agent by question 4), and their plan still does not open every chapter of the CATALOG
+    // -- only the classes their coach already gave them, which are not what this card is about.
+    // Reading it here would promise full access to somebody who would then meet a locked chapter.
     const gate = await classGateFor(user);
     const fullAccess = !gate.tierGated && !gate.selfEnrolledGated;
     res.json(list.map((c) => ({ ...c, forYourSport: classCategoryMatchesSport(c.category, user.sport), fullAccess })));
@@ -14511,6 +14636,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const primary = await storage.getUser(primaryId);
     const rosterCount = await storage.getRosterSeatCountForCoach(coachId);
     const billedCount = await storage.getBilledAthleteCountForCoach(coachId);
+    // PARKED SEATS, SHOWN BESIDE THE QUOTE, because a hold does not always lower the bill and the
+    // plan screen is the only place that can explain why. `rosterCount` already excludes them
+    // (shared/roster-hold.ts, question 1), and `billedCount` is the larger of that and the
+    // headcount the school typed -- so a program that said "about 180" and parks 120 for the
+    // summer sees its roster fall and its band stay, which is correct and reads as a bug without
+    // this number next to it. A school that wants the quote to fall lowers its own stated number,
+    // which is the field right above this one.
+    const heldCount = (await storage.getHeldSeatsForCoach(coachId)).length;
     // THE QUOTE IS DERIVED; THE BAND ON FILE IS WHAT WAS PAID FOR. These were one field until
     // 2026-10-11, read off users.billingTier -- which signup wrote from the typed headcount, so
     // the quote was free to show AND free to grant personalization from. Now the screen quotes
@@ -14523,6 +14656,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return {
       plannedAthleteCount: primary?.plannedAthleteCount ?? null,
       rosterCount,
+      heldCount,
       billedCount,
       band: band
         ? {

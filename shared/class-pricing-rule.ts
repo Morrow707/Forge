@@ -52,9 +52,33 @@ export interface ClassAccessGate {
    *  read `locked`, with no offer, because they cannot buy it. A class their coach enrolled them
    *  in is never gated. */
   selfEnrolledGated: boolean;
+  /** AN OFF-SEASON HOLD KEEPS WHAT THE COACH GAVE (2026-10-29, shared/roster-hold.ts).
+   *
+   *  A held athlete is a Free Agent for everything they would BUY -- the camera, the skills side,
+   *  the AI, and the Forge catalog -- because in the off season they are training on their own.
+   *  So they arrive here `tierGated`, like any uncoached athlete, and **that alone would lock
+   *  every chapter past chapter one of a class their coach assigned them in April, and draw a
+   *  $19.99 buy card in front of a fifteen-year-old for content their program already bought.**
+   *  That is a withheld thing with no replacement, which is what Rule #1 in CLAUDE.md refuses.
+   *
+   *  So this is the exception, and it is a third flag rather than a special case inside
+   *  `tierGated` because the two facts are independent: whether they may buy the catalog, and
+   *  whether what they were given stays given. `classEnrollments.coachId` already carries which
+   *  is which (it equals the athleteId for a self-enrolment), so no new column is needed.
+   *
+   *  DELIBERATELY FALSE FOR A REMOVED ATHLETE, which is not the same case and is not an
+   *  oversight. A held seat still EXISTS -- the relationship is paused, not ended -- and the
+   *  class was given inside a relationship that is still live. A removal ends it, and widening
+   *  this to cover removals would change what somebody removed months ago can read, which is its
+   *  own decision with its own blast radius. Recorded rather than quietly included. */
+  coachGivenStaysOpen: boolean;
 }
 
-export const OPEN_CLASS_ACCESS: ClassAccessGate = { tierGated: false, selfEnrolledGated: false };
+export const OPEN_CLASS_ACCESS: ClassAccessGate = {
+  tierGated: false,
+  selfEnrolledGated: false,
+  coachGivenStaysOpen: false,
+};
 
 /** Does this enrolment's paid chapters get withheld, and as which state? Null means open.
  *  `enrollment` is the row; a self-enrolment is the one whose coachId is the athlete. */
@@ -62,6 +86,11 @@ export function classGateStateFor(
   gate: ClassAccessGate,
   enrollment: { athleteId: number; coachId: number },
 ): "locked_tier" | "locked" | null {
+  // THE ORDER IS LOAD-BEARING AND IS WHAT THE TEST PINS. The coach-given exception has to be
+  // asked BEFORE `tierGated`, because a held athlete is tierGated -- putting it after would read
+  // as present and do nothing, which is the shape of defect this repo has recorded eight times.
+  // Same reasoning as `holdsAllClasses` being checked before the coach, one rule up.
+  if (gate.coachGivenStaysOpen && enrollment.coachId !== enrollment.athleteId) return null;
   if (gate.tierGated) return "locked_tier";
   if (gate.selfEnrolledGated && enrollment.coachId === enrollment.athleteId) return "locked";
   return null;

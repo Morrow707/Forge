@@ -55,6 +55,9 @@ describe("the one pricing rule", () => {
     await storage.enrollSelfInClass(freeAgent.id, cls.id, "2026-09-14", {
       tierGated: true,
       selfEnrolledGated: false,
+      // Free Agent with no coach seat at all -- a parked seat is a different gate, see
+      // coachGivenStaysOpen in shared/class-pricing-rule.ts.
+      coachGivenStaysOpen: false,
     });
     const fa = await loginAs(server.baseUrl, freeAgent);
 
@@ -105,6 +108,9 @@ describe("the one pricing rule", () => {
     await storage.enrollSelfInClass(athlete.id, cls.id, "2026-09-14", {
       tierGated: true,
       selfEnrolledGated: false,
+      // Free Agent with no coach seat at all -- a parked seat is a different gate, see
+      // coachGivenStaysOpen in shared/class-pricing-rule.ts.
+      coachGivenStaysOpen: false,
     });
     // ...and then joins a program.
     const coach = await makeCoach();
@@ -134,6 +140,9 @@ describe("the one pricing rule", () => {
     await storage.enrollSelfInClass(athlete.id, mine.cls.id, "2026-09-14", {
       tierGated: true,
       selfEnrolledGated: false,
+      // Free Agent with no coach seat at all -- a parked seat is a different gate, see
+      // coachGivenStaysOpen in shared/class-pricing-rule.ts.
+      coachGivenStaysOpen: false,
     });
     const coach = await makeCoach();
     await addToRoster(coach.id, athlete.id);
@@ -157,6 +166,9 @@ describe("the one pricing rule", () => {
     await storage.enrollSelfInClass(athlete.id, cls.id, "2026-09-14", {
       tierGated: true,
       selfEnrolledGated: false,
+      // Free Agent with no coach seat at all -- a parked seat is a different gate, see
+      // coachGivenStaysOpen in shared/class-pricing-rule.ts.
+      coachGivenStaysOpen: false,
     });
     await storage.addFreeAgentAddOn(athlete.id, "all_classes");
     const coach = await makeCoach();

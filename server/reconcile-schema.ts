@@ -3745,6 +3745,31 @@ CREATE TABLE IF NOT EXISTS "email_list_campaigns" (
 -- audience. That feature was deleted on 2026-10-11 and the column STAYS: the launch list's
 -- own listing filters on it, and any row a digest wrote is the record that mail really left.
 ALTER TABLE "email_list_campaigns" ADD COLUMN IF NOT EXISTS "audience" text NOT NULL DEFAULT 'launch_list';
+
+-- 2026-10-29: THE OFF-SEASON HOLD. A parked roster seat: not billed, still readable by the
+-- coach, and brought back by the coach alone. See coachAthletes in shared/schema.ts for why the
+-- hold is a state of that row rather than a table of its own, and shared/roster-hold.ts for the
+-- four separate questions a hold answers.
+--
+-- All three are NULLABLE WITH NO DEFAULT on purpose: every row written before today reads as
+-- held_at IS NULL, which is an ordinary active seat, which is what it is. A backfill would be a
+-- backfill of nothing.
+--
+-- held_by_coach_id is deliberately NOT a REFERENCES ... ON DELETE SET NULL. It is provenance for
+-- the roster screen, and a coach leaving the staff must not quietly rewrite who held a seat --
+-- nor, worse, could a cascade ever be allowed to un-hold anybody. It also keeps this out of the
+-- declared-foreign-key set that server/fk-drift-job.ts compares against production, where an
+-- unbacked REFERENCES written inside a CREATE TABLE IF NOT EXISTS is exactly the drift that file
+-- exists to report.
+ALTER TABLE "coach_athletes" ADD COLUMN IF NOT EXISTS "held_at" timestamp;
+ALTER TABLE "coach_athletes" ADD COLUMN IF NOT EXISTS "held_until" date;
+ALTER TABLE "coach_athletes" ADD COLUMN IF NOT EXISTS "held_by_coach_id" integer;
+-- The roster screen's "on hold" section and the due-back prompt both read held rows for one
+-- staff, and the billed-seat count reads the ACTIVE ones -- both are per-coach scans of a table
+-- whose pair index leads with coach_id, so a partial index on the held rows alone is what keeps
+-- "which of my seats are parked" from widening into the whole roster.
+CREATE INDEX IF NOT EXISTS "coach_athletes_held_idx"
+  ON "coach_athletes" ("coach_id") WHERE "held_at" IS NOT NULL;
 `;
 
 async function main() {
