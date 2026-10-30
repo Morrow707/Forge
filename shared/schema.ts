@@ -10159,6 +10159,17 @@ export const trackingDiagnosticsSchema = z.object({
         .array(z.object({ source: z.string().max(120), impliedHeightIn: z.number(), impliedGripIn: z.number().optional() }))
         .max(8)
         .optional(),
+      scaleYardstickAbstained: z
+        .array(
+          z.object({
+            yardstick: z.enum(["height", "grip"]),
+            wouldHaveRejected: z
+              .array(z.object({ source: z.string().max(120), impliedHeightIn: z.number(), impliedGripIn: z.number().optional() }))
+              .max(8),
+          }),
+        )
+        .max(2)
+        .optional(),
       noseToAnkleFrames: z.number(),
       shoulderToAnkleFrames: z.number(),
       supineFullLengthFrames: z.number().optional(),

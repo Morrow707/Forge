@@ -101,3 +101,67 @@ describe("the longest-projection 3D ruler is demoted, the in-plane one is a full
     expect(verdict.corroborated).toBe(true);
   });
 });
+
+describe("a yardstick that would convict most of the rulers stands down (2026-10-30, Pendlay row set 2)", () => {
+  // The export's own numbers: a grip of 52.7 units on a take whose shoulder span was 70 -- a grip
+  // NARROWER than the shoulders, the only such ratio on any take in the corpus -- read against
+  // three rulers of which two (the 3D bone at 0.003636 and the depth ruler at 0.001911) were
+  // within 3% of the scale the sensor required (0.004109) once collapsed, and one (the shoulder
+  // span at 0.006278) was 53% high. The grip yardstick convicted the two good ones (7.5in and 4in
+  // grips) and the survivor took the whole scale: range of motion 78.4 against 51.3cm.
+  const GRIP = 52.7;
+  const body3D: ScaleEstimate = { source: "body_3d", scale: 0.003636, uncertaintyFraction: 0.2 };
+  const depth: ScaleEstimate = { source: "depth", scale: 0.001911, uncertaintyFraction: 0.6 };
+  const wideShoulder: ScaleEstimate = { source: "shoulder_width", scale: 0.006278, uncertaintyFraction: 0.317 };
+
+  it("keeps every ruler when the grip would reject a strict majority, and says which yardstick stood down", () => {
+    const { kept, rejected, abstained } = rejectImplausibleScales([body3D, depth, wideShoulder], null, 75, GRIP);
+    expect(kept.map((k) => k.source)).toEqual(["body_3d", "depth", "shoulder_width"]);
+    expect(rejected).toEqual([]);
+    expect(abstained).toHaveLength(1);
+    expect(abstained[0].yardstick).toBe("grip");
+    expect(abstained[0].wouldHaveRejected.map((r) => r.source)).toEqual(["body_3d", "depth"]);
+    expect(abstained[0].wouldHaveRejected[0].impliedGripIn).toBeCloseTo(7.5, 0);
+    expect(abstained[0].wouldHaveRejected[1].impliedGripIn).toBeCloseTo(4.0, 0);
+  });
+
+  it("and with the rulers kept, the row's own record lands the take inside 3% of the sensor", () => {
+    const required = 0.004108889;
+    const { kept } = rejectImplausibleScales([body3D, depth, wideShoulder], null, 75, GRIP);
+    const blend = reconcileScaleEstimates(kept, 0.4).scale!;
+    expect(Math.abs(blend / required - 1)).toBeLessThan(0.03);
+    // and the as-filmed verdict (shoulder alone) is the +53% the phone shipped
+    expect(reconcileScaleEstimates([wideShoulder], 0.4).scale! / required - 1).toBeGreaterThan(0.5);
+  });
+
+  it("still rejects a lone outlier: the rulers outvote the candidate, not the yardstick", () => {
+    // The 10-01 squat's shape (1 of 5 rejected) and the 09-29 bench's (1 of 2): both unchanged.
+    const good = (source: string) => ({ source, scale: 0.0045, uncertaintyFraction: 0.2 }) as ScaleEstimate;
+    const wild: ScaleEstimate = { source: "plate", scale: 0.0045 * 6, uncertaintyFraction: 0.05 };
+    const five = rejectImplausibleScales([wild, good("body_3d"), good("depth"), good("height"), good("shoulder_width")], null, 75, GRIP_UNITS);
+    expect(five.rejected.map((r) => r.source)).toEqual(["plate"]);
+    expect(five.abstained).toEqual([]);
+    const two = rejectImplausibleScales([wild, good("shoulder_width")], null, 75, GRIP_UNITS);
+    expect(two.rejected.map((r) => r.source)).toEqual(["plate"]);
+    expect(two.abstained).toEqual([]);
+  });
+
+  it("an exact half is not a majority: 2 of 4 are still rejected", () => {
+    const good = (source: string) => ({ source, scale: 0.0045, uncertaintyFraction: 0.2 }) as ScaleEstimate;
+    const bad = (source: string) => ({ source, scale: 0.0045 * 6, uncertaintyFraction: 0.2 }) as ScaleEstimate;
+    const r = rejectImplausibleScales([bad("plate"), bad("depth"), good("height"), good("shoulder_width")], null, 75, GRIP_UNITS);
+    expect(r.rejected.map((x) => x.source)).toEqual(["plate", "depth"]);
+    expect(r.abstained).toEqual([]);
+  });
+
+  it("the height yardstick abstains by the same rule, independently of the grip", () => {
+    // Two rulers imply a 2.6x-tall athlete off a body span that is really a folded torso; the
+    // third does not. The height yardstick stands down, the grip (not given) says nothing.
+    const bodySpan = 400;
+    const tall = (source: string) => ({ source, scale: (75 * 0.0254 * 2.6) / bodySpan, uncertaintyFraction: 0.2 }) as ScaleEstimate;
+    const fine: ScaleEstimate = { source: "height", scale: (75 * 0.0254) / bodySpan, uncertaintyFraction: 0.1 };
+    const r = rejectImplausibleScales([tall("body_3d"), tall("depth"), fine], bodySpan, 75, null);
+    expect(r.kept).toHaveLength(3);
+    expect(r.abstained.map((a) => a.yardstick)).toEqual(["height"]);
+  });
+});

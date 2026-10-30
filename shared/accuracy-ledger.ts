@@ -75,6 +75,12 @@ export type LedgerRow = {
    *  2026-10-05 means today's pipeline would not admit one at all. A refit and a relabel move a
    *  take by similar amounts and are not the same event. */
   readonly heightRulerVotedAsFilmed: boolean;
+  /** THE SHOULDER SPAN'S OWN SCATTER ON THIS TAKE, where the export carries it
+   *  (`shoulderRuler.spanSpreadFraction`). A property of the TAKE, not a constant: the shoulder
+   *  ruler states `max(floor, spread, gripFloor)`, and a replay through the live floor alone would
+   *  weight a jittery span as if it were steady. Set only where the spread exceeded the floor on
+   *  the day (the 10-30 row set 2, 0.317 against 0.2); absent means the floor was what shipped. */
+  readonly shoulderSpanSpreadFraction?: number;
 
   /** The scale the phone really used, x1000. The replay must reproduce this -- unless
    *  `shippedUnderDefect` names the rule that produced it and has since been fixed. */
@@ -548,9 +554,133 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "(0.55-0.66s) -- 172 of 586 frames had a wrist under the visibility floor and 196 bar points " +
       "were a lone hand carried, which is the bottom of a Pendlay rep, hands at the plates.",
   },
+
+/** 2026-10-30, round five, set 2 of the row, on 703 (the export's ruler uncertainties carry the
+ *  row's own depth 0.6, so the row's record was on the phone). Filmed oblique again
+ *  (axisForeshortening 1.575). THE GRIP YARDSTICK CONVICTED THE TWO GOOD RULERS: the grip read
+ *  52.7 units against a 69.8-unit shoulder span (grip/shoulder 0.755, the only ratio under 1 on
+ *  any take in the corpus; 280 of 579 bar points a lone hand carried, 105 wrist frames under the
+ *  floor), so the 3D bone and the depth ruler "implied" 7.5in and 4in grips and were rejected,
+ *  and the shoulder span alone shipped the take 53% high. */
+  {
+    id: "2026-10-30-pendlay-row-set-2",
+    date: "2026-10-30",
+    build: 703,
+    exercise: "Pendlay Row",
+    filmedOnCommit: "87aa268",
+    candidates: [
+      { source: "body_3d", scaleX1000: 3.635733273396519 },
+      { source: "depth", scaleX1000: 1.9111024480728291 },
+      { source: "shoulder_width", scaleX1000: 6.278493176066047 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.6, shoulder_width: 0.317 },
+    shoulderSpanSpreadFraction: 0.317,
+    heightRulerVotedAsFilmed: false,
+    shippedScaleX1000: 6.278493176066048,
+    shippedUnderDefect:
+      "the grip yardstick rejected 2 of the 3 rulers (body_3d at an implied 7.5in grip, depth at 4in) " +
+      "off a 52.7-unit grip read on a 69.8-unit shoulder span, and the shoulder span shipped alone; " +
+      "fixed in rejectImplausibleScales (a yardstick that would convict a strict majority stands " +
+      "down), 2026-10-30 round five",
+    reportedRomCm: 78.4,
+    sensorRomCm: 51.31,
+    liveErrorPct: 2.85,
+    notes:
+      "Read +52.8% as filmed (78.4 against 20.2in), 8 of 8 reps, cadence 0.943, the plate seen but " +
+      "refused too_far_from_athlete (box 1.391 of expected; plateScaleIfAdmitted 0.004514 would have " +
+      "read +10%). The shipped scale was the shoulder span ALONE at 100% because the grip yardstick " +
+      "threw out the other two rulers: the grip read 52.7 units, narrower than the shoulders (0.755), " +
+      "which no real barbell grip is -- the hands were at the plates for half the take and the " +
+      "yardstick measured whatever the tracker carried. The two rulers it rejected collapse to a " +
+      "witness within 3% of the scale the sensor requires (0.004109). The defect is a RULE and is " +
+      "fixed as one: a yardstick that would convict a strict majority of the rulers abstains. The " +
+      "velocities at the shipped scale read mean 1.61 against 0.85 and peak 2.50 against 1.48, which " +
+      "is the scale error (x1.53) on top of the row's window fault; at the corrected scale the mean " +
+      "would read ~+27% and the peak ~+10%, the same trace fault set 1 carries.",
+  },
+
+/** 2026-10-30, round five: the Barbell Shoulder Press beside the OVR for the first time. The OVR
+ *  labels the lift "Push Press"; Scott pressed it standing, strict, 65lb x 8. The sensor counted a
+ *  NINTH rep (35.0in of travel at 0.61 m/s) that is the bar being lowered from the shoulders to the
+ *  floor, and it is excluded from the sensor's range here (the eight real reps average 24.51in).
+ *  Filmed head-on (facing_camera), live path, cadence 0.949. Forge found 7 of the 8: the eighth
+ *  press is in the trace and was folded into the lowering that follows it. */
+  {
+    id: "2026-10-30-barbell-shoulder-press-set-1",
+    date: "2026-10-30",
+    build: 701,
+    exercise: "Barbell Shoulder Press",
+    filmedOnCommit: "980fcd4",
+    candidates: [
+      { source: "body_3d", scaleX1000: 3.4734 },
+      { source: "depth", scaleX1000: 3.84733 },
+      { source: "height", scaleX1000: 3.38781 },
+      { source: "shoulder_width", scaleX1000: 3.90989 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, height: 0.1, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: true,
+    shippedScaleX1000: 3.519451709909543,
+    reportedRomCm: 63.0,
+    sensorRomCm: 62.26,
+    liveErrorPct: 1.19,
+    notes:
+      "Read +1.3% as filmed (63.0 against the eight real reps' 24.51in) with four body rulers and no " +
+      "plate seen, the height ruler at two-thirds of the weight -- a standing lift keeps its height " +
+      "ruler, and this one lands. The error on the day was the WINDOW: mean 0.71 against 0.82 " +
+      "(-13.5%) and peak 1.30 against 1.40 (-7.2%) at the shared drive onset 0.04; the press's own " +
+      "driveOnsetFraction 0.08 reads the mean at -3.8% on this take, 0.0% on set 2 and +2.9% on the " +
+      "10-02 push-press fixture. Seven of eight reps: the eighth (a 68cm rise at 19.0-19.8s) is " +
+      "folded into the 2.7m lowering to the floor that follows -- a press re-racks DOWNWARD, so the " +
+      "last eccentric runs on into the re-rack; the RDL loses one rep per take the same way.",
+  },
+
+/** 2026-10-30, round five, set 2 of the press at 85lb x 8, head-on, live path. The plate was
+ *  seen (box 1.482 of expected, every frame admitted by the gates) and its 0.00241 sat at 0.65-0.7
+ *  of the body rulers; the blend's two-ended plate test kept it out and the four body rulers
+ *  shipped the take. 28 dropouts and 206 wrist frames under the floor on this one. */
+  {
+    id: "2026-10-30-barbell-shoulder-press-set-2",
+    date: "2026-10-30",
+    build: 703,
+    exercise: "Barbell Shoulder Press",
+    filmedOnCommit: "87aa268",
+    candidates: [
+      { source: "plate", scaleX1000: 2.4145460285527074 },
+      { source: "body_3d", scaleX1000: 3.725433047257267 },
+      { source: "depth", scaleX1000: 4.757256405341153 },
+      { source: "height", scaleX1000: 3.310957189949788 },
+      { source: "shoulder_width", scaleX1000: 4.022723382239999 },
+    ],
+    uncertaintiesAsFilmed: { plate: 0.05756542171979441, body_3d: 0.2, depth: 0.2, height: 0.1, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: true,
+    shippedScaleX1000: 3.579400420433846,
+    reportedRomCm: 56.7,
+    sensorRomCm: 61.72,
+    liveErrorPct: -8.13,
+    notes:
+      "Read -8.1% as filmed (56.7 against 24.3in), 7 of 8 reps again (the eighth at 26.4-27.4s " +
+      "folded into the lowering), cadence 0.906 with 28 dropouts and 206 wrist frames under the " +
+      "floor -- the trace, not the scale, is the likelier reason the range came up short, since the " +
+      "shipped scale (0.003579) is within 2% of set 1's (0.003519) from the same spot and set 1 " +
+      "landed. The plate was boxed 1.48x too big (the retrained detector's third oversized plate on " +
+      "a non-bench) and correctly kept out from both ends. At the shared window the mean read -2.7% " +
+      "and the peak +0.8%; at the press's own 0.08 the mean reads 0.0%. Rep-by-rep the sensor's " +
+      "peaks run 0.91-1.34 and Forge's 0.97-1.48 at the shared smoothing.",
+  },
 ];
 
-/* THE THIRD MOVE, 2026-10-30 (round four on build 701): the Pendlay Row's own depthRulerUncertainty
+/* THE FOURTH MOVE, 2026-10-30 (round five, on the set-2 takes of 703): a RULE, not a number. The
+ * grip yardstick in rejectImplausibleScales stands down when it would convict a strict majority
+ * of the rulers, which is what it did on the row's set 2 (2 of 3, off a grip read narrower than
+ * the shoulders). That row records the defect (shippedUnderDefect) and reads +2.85% through the
+ * fixed pipeline at the row's record; NO other row moves, because the only other take in the
+ * corpus with a rejection is the 10-01 squat set 2 fixture at 1 of 5. The Barbell Shoulder
+ * Press's own driveOnsetFraction (0.08) is a window number the scale replay never reads, so its
+ * two rows' liveErrorPct are their as-filmed +1.19% and -8.13%. The row's set-2 shoulder spread
+ * (0.317) is on the row and the live replay states max(floor, spread) for the shoulder ruler,
+ * which is what the phone does; every other row's spread was under the floor and is unaffected.
+ *
+ * THE THIRD MOVE, 2026-10-30 (round four on build 701): the Pendlay Row's own depthRulerUncertainty
  * (0.2 -> 0.6, FITTED_OVERRIDES) moved the one row row from -10.8% to +0.6% and NO squat, RDL or
  * bench row; the Bench Press's own driveOnsetFraction and velocitySmoothingMs are window and
  * smoothing numbers that the ledger's scale replay never reads, so the bench row's liveErrorPct is

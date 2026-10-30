@@ -3000,8 +3000,41 @@ halves before splitting anything else:
   reach the bench trace and not the row's or the press's, and the row's depth reaches the row's
   blend and not the bench's. `the-drive-window-was-fitted-on-thirteen-sets.test.ts` replays its
   sweep at the shared smoothing on purpose. See docs/camera-tracking-notes.md "Round four".
-- **THE QUEUE IS EMPTY AS OF BUILD 703** (round four above; nothing waits behind it).
-  Before it, **701** (round three). Before it,
+- **ROUND FIVE, 2026-10-30: SET 2 OF THE ROW AND THE PRESS, THE PRESS'S FIRST SENSOR NUMBERS; A
+  YARDSTICK THAT CONVICTS MOST OF THE RULERS STANDS DOWN, AND THE PRESS GETS ITS OWN WINDOW.**
+  Scott sent the set-2 OVR screens and a fresh export (the two set-2 captures ran on 703; bench set
+  2 has a sensor screen and NO Forge capture in the export). **THE PENDLAY ROW'S SET 2 SHIPPED
+  +52.8% BECAUSE THE GRIP YARDSTICK THREW OUT THE TWO GOOD RULERS.** `rejectImplausibleScales`
+  read a grip of 52.7 units on a 69.8-unit shoulder span -- a grip NARROWER than the shoulders
+  (0.755), the only such ratio in the corpus, on a take where half the bar points were a lone hand
+  carried -- and rejected the 3D bone (implied grip 7.5in) and the depth ruler (4in); the shoulder
+  span shipped alone, 53% high. The two it rejected collapse to within 3% of the sensor. **The fix
+  is a RULE, shared: a yardstick that would convict a strict majority of the rulers abstains**
+  (the existing "never reject everything" clause, extended from unanimous to majority; a lone
+  outlier at 1 of 2 or 1 of 5 is rejected exactly as before). At the row's record the take reads
+  **+2.85%**; the only other rejection in the whole corpus is the 10-01 squat's plate at 1 of 5, so
+  nothing else moves. Recorded as `calibration.scaleYardstickAbstained` (schema, report line
+  "Yardstick stood down") so an admitted candidate and one nobody questioned are not the same
+  blank. A grip/shoulder RATIO threshold was considered and rejected: a close-grip bench sits at
+  0.7-0.95. **THE PRESS: set 1 ROM +1.3% with the mean -13.5%, set 2 ROM -8.1% (a trace with 28
+  dropouts) with the mean -2.7%.** The OVR counted a NINTH rep on set 1 that is the bar being
+  lowered to the floor (35in at 0.61 m/s); the sensor numbers are over the eight real reps.
+  `FITTED_OVERRIDES["Barbell Shoulder Press"]` carries `driveOnsetFraction` 0.08 (sweep on both
+  sets and the 10-02 push-press fixture: 0.04 -13.5/-2.7/-3.8, 0.08 -3.8/0.0/+2.9, 0.10
+  -0.1/+2.7/+2.9; rep counts unchanged at every value; 0.10 is the next step if the next press
+  reads low). Smoothing stays shared: 200 costs the press peaks 6-8 points where it bought the bench
+  4. 7 of 8 on both press sets; `edgeOversizedAmplitudeRatio` and the logged count do not recover
+  the eighth (and `loggedReps: null` returns 2 on set 2) -- the fold is the segmenter's downward
+  re-rack, shared with the RDL, next round's rule. Ledger rows for all three sets (the row's with
+  `shippedUnderDefect` and its own `shoulderSpanSpreadFraction`, which the live replay now states
+  as `max(floor, spread)` the way the phone does); `scale-plausibility-grip.test.ts` drives the
+  rule off the take's own numbers, the lone-outlier and exact-half cases, and the height yardstick
+  by the same rule; the every-lift test pins that the press's window reaches the press trace and
+  the row's record lands set 2. See docs/camera-tracking-notes.md "Round five, 2026-10-30".
+  Calibration work: `verify_build` then `beta` on commit; the build number is in the paragraph
+  above once the runs finish.
+- **THE QUEUE IS EMPTY AS OF THE ROUND-FIVE BETA** (round five above; nothing waits behind it).
+  Before it, **703** (round four). Before it, **701** (round three). Before it,
   build **697** (2026-10-29 evening, `6d8f259`; 696 was its
   `verify_build` on `ccdeba5`). Calibration work, uploaded on commit: the RDL's first per-lift
   record (`depthRulerUncertainty` 0.6, `maxPeakToMeanRatio` 2.5), the weighted 3D-pose collapse,

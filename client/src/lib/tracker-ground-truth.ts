@@ -1180,3 +1180,110 @@ export const OVR_PENDLAY_ROW_2026_10_30 = {
     reported: { meanVelocityMps: 0.89, peakVelocityMps: 1.51, romIn: 20.7, meanW: 534, peakW: 910, tpvS: 0.39, eai: 3.82 },
   },
 };
+
+/** 2026-10-30, round five, the row's second set on 703 (the row's record on the phone). Oblique,
+ *  bent_over, live path; 8 of 8 reps. Shipped 53% high because the grip yardstick rejected the two
+ *  good rulers off a 52.7-unit grip read (grip/shoulder 0.755) -- see the ledger row
+ *  2026-10-30-pendlay-row-set-2 and the "a yardstick that would convict most of the rulers stands
+ *  down" cases in scale-plausibility-grip.test.ts. The sensor's numbers are the control. */
+export const OVR_PENDLAY_ROW_SET2_2026_10_30 = {
+  build: 703,
+  loadLb: 135,
+  repsPerSet: 8,
+  camera: "oblique (axisForeshortening 1.575), bent_over posture; live path, cadence 0.943",
+  forgeOnDevice: {
+    repCount: 8,
+    meanVelocityMps: 1.61,
+    peakVelocityMps: 2.5,
+    romCm: 78.4,
+    scaleSource: "shoulder_width",
+    scale: 0.006278493176066048,
+    gripToShoulderSpanRatio: 0.755,
+    repMeans: [1.59, 0.98, 1.77, 1.92, 1.35, 1.69, 1.42, 2.31],
+    repPeaks: [2.38, 1.97, 2.78, 2.5, 2.7, 2.74, 2.64, 2.31],
+  },
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.62, romIn: 21.7, meanW: 535, peakW: 975, tpvS: 0.45, eai: 3.55 },
+      { meanVelocityMps: 0.93, peakVelocityMps: 1.60, romIn: 19.9, meanW: 555, peakW: 959, tpvS: 0.35, eai: 4.46 },
+      { meanVelocityMps: 0.92, peakVelocityMps: 1.64, romIn: 20.5, meanW: 554, peakW: 983, tpvS: 0.37, eai: 4.35 },
+      { meanVelocityMps: 0.83, peakVelocityMps: 1.45, romIn: 19.7, meanW: 499, peakW: 867, tpvS: 0.41, eai: 3.50 },
+      { meanVelocityMps: 0.85, peakVelocityMps: 1.43, romIn: 19.7, meanW: 507, peakW: 859, tpvS: 0.39, eai: 3.63 },
+      { meanVelocityMps: 0.83, peakVelocityMps: 1.35, romIn: 19.9, meanW: 496, peakW: 809, tpvS: 0.42, eai: 3.20 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.49, romIn: 21.1, meanW: 485, peakW: 892, tpvS: 0.45, eai: 3.25 },
+      { meanVelocityMps: 0.76, peakVelocityMps: 1.32, romIn: 19.7, meanW: 457, peakW: 793, tpvS: 0.43, eai: 3.01 },
+    ],
+    reported: { meanVelocityMps: 0.85, peakVelocityMps: 1.48, romIn: 20.2, meanW: 511, peakW: 892, tpvS: 0.40, eai: 3.61 },
+  },
+};
+
+/** 2026-10-30, round five: the Barbell Shoulder Press beside the OVR for the first time, 65lb x 8,
+ *  standing and strict (the OVR's own label for it is "Push Press"). Head-on, live path. THE
+ *  SENSOR COUNTED NINE: its ninth rep (35.0in, 0.61 m/s, 1.51 peak) is the bar being lowered from
+ *  the shoulders to the floor after the set, and it is kept here as `loweringCountedBySensor` and
+ *  excluded from `reported`, which is recomputed over the eight real reps (the OVR's own set line
+ *  included the ninth: avg 0.79, peak 1.41, ROM 25.6in). Forge found 7 of 8. */
+export const OVR_BARBELL_SHOULDER_PRESS_2026_10_30 = {
+  build: 701,
+  loadLb: 65,
+  repsPerSet: 8,
+  camera: "head-on (facing_camera, axisForeshortening 1.159); live path, cadence 0.949",
+  forgeOnDevice: {
+    repCount: 7,
+    meanVelocityMps: 0.71,
+    peakVelocityMps: 1.3,
+    romCm: 63.0,
+    scaleSource: "both",
+    scale: 0.003519451709909543,
+    repMeans: [0.7, 0.66, 0.67, 0.66, 0.74, 0.72, 0.77],
+    repPeaks: [1.29, 1.31, 1.32, 1.24, 1.26, 1.37, 1.3],
+  },
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.71, peakVelocityMps: 1.29, romIn: 24.5, meanW: 206, peakW: 374, tpvS: 0.34 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.33, romIn: 24.1, meanW: 213, peakW: 385, tpvS: 0.27 },
+      { meanVelocityMps: 0.87, peakVelocityMps: 1.46, romIn: 24.8, meanW: 250, peakW: 421, tpvS: 0.27 },
+      { meanVelocityMps: 0.85, peakVelocityMps: 1.40, romIn: 24.4, meanW: 246, peakW: 405, tpvS: 0.27 },
+      { meanVelocityMps: 0.88, peakVelocityMps: 1.43, romIn: 24.6, meanW: 254, peakW: 413, tpvS: 0.23 },
+      { meanVelocityMps: 0.88, peakVelocityMps: 1.43, romIn: 24.5, meanW: 253, peakW: 413, tpvS: 0.23 },
+      { meanVelocityMps: 0.82, peakVelocityMps: 1.43, romIn: 24.2, meanW: 235, peakW: 413, tpvS: 0.23 },
+      { meanVelocityMps: 0.82, peakVelocityMps: 1.44, romIn: 25.0, meanW: 237, peakW: 417, tpvS: 0.27 },
+    ],
+    loweringCountedBySensor: { meanVelocityMps: 0.61, peakVelocityMps: 1.51, romIn: 35.0, meanW: 176, peakW: 437, tpvS: 0.27 },
+    // over the eight real reps, not the OVR's nine-rep set line
+    reported: { meanVelocityMps: 0.821, peakVelocityMps: 1.401, romIn: 24.51, meanW: 237, peakW: 405 },
+  },
+};
+
+/** 2026-10-30, round five, set 2 of the press at 85lb x 8 on 703, head-on, live path (28 dropouts,
+ *  cadence 0.906). The plate was seen and boxed 1.48x too big; the blend kept it out. 7 of 8. */
+export const OVR_BARBELL_SHOULDER_PRESS_SET2_2026_10_30 = {
+  build: 703,
+  loadLb: 85,
+  repsPerSet: 8,
+  camera: "head-on (facing_camera, axisForeshortening 1.096); live path, cadence 0.906, 28 dropouts",
+  forgeOnDevice: {
+    repCount: 7,
+    meanVelocityMps: 0.71,
+    peakVelocityMps: 1.19,
+    romCm: 56.7,
+    scaleSource: "both",
+    scale: 0.003579400420433846,
+    plateBoxToExpectedRatio: 1.482,
+    repMeans: [0.69, 0.55, 0.59, 0.73, 0.72, 0.73, 0.76],
+    repPeaks: [1.15, 0.97, 1.05, 1.19, 1.13, 1.34, 1.48],
+  },
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.84, peakVelocityMps: 1.34, romIn: 24.7, meanW: 317, peakW: 504, tpvS: 0.26, eai: 5.11 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.27, romIn: 24.6, meanW: 302, peakW: 478, tpvS: 0.25, eai: 5.02 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.07, romIn: 24.1, meanW: 276, peakW: 405, tpvS: 0.22, eai: 4.77 },
+      { meanVelocityMps: 0.76, peakVelocityMps: 1.24, romIn: 24.1, meanW: 285, peakW: 468, tpvS: 0.22, eai: 5.50 },
+      { meanVelocityMps: 0.65, peakVelocityMps: 1.10, romIn: 23.6, meanW: 245, peakW: 416, tpvS: 0.27, eai: 3.97 },
+      { meanVelocityMps: 0.63, peakVelocityMps: 0.91, romIn: 24.0, meanW: 237, peakW: 343, tpvS: 0.24, eai: 3.73 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.31, romIn: 24.7, meanW: 280, peakW: 494, tpvS: 0.22, eai: 5.81 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.21, romIn: 25.1, meanW: 279, peakW: 458, tpvS: 0.27, eai: 4.48 },
+    ],
+    reported: { meanVelocityMps: 0.73, peakVelocityMps: 1.18, romIn: 24.3, meanW: 277, peakW: 445, tpvS: 0.24, eai: 4.79 },
+  },
+};

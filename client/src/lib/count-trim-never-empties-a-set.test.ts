@@ -83,6 +83,8 @@ describe("the count-trim removes surplus and never a set", () => {
     // a press re-racks DOWNWARD, so the last rep's eccentric runs on into the re-rack. Same
     // family as the RDL's 7-of-8 above; see docs/camera-tracking-notes.md "Round four".
     "ovr-2026-10-30-export.json:2026-10-30 Barbell Shoulder Press set 1": 7,
+    // and set 2 the same way (85lb, the eighth at 26.4-27.4s folded into the lowering); round five.
+    "ovr-2026-10-30-export.json:2026-10-30 Barbell Shoulder Press set 2": 7,
   };
 
   it.each(

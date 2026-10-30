@@ -1429,7 +1429,7 @@ export function AvBarTrackerDialog({
           ]
         : []),
     ];
-    const { kept: plausibleScales, rejected: implausibleScales } = rejectImplausibleScales(
+    const { kept: plausibleScales, rejected: implausibleScales, abstained: yardsticksAbstained } = rejectImplausibleScales(
       scaleCandidatesRaw,
       bodySpanUnits,
       heightIn,
@@ -1529,6 +1529,10 @@ export function AvBarTrackerDialog({
       scaleBlend?: NonNullable<TrackingDiagnostics["calibration"]>["scaleBlend"];
       scaleWitnesses?: NonNullable<TrackingDiagnostics["calibration"]>["scaleWitnesses"];
       scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number; impliedGripIn?: number }[];
+      // A yardstick that would have convicted most of the rulers stood down instead (the 10-30
+      // Pendlay row's grip read 52.7 units against a 70-unit shoulder span). Recorded so an
+      // admitted candidate and a candidate nobody questioned are not the same blank.
+      scaleYardstickAbstained?: { yardstick: "height" | "grip"; wouldHaveRejected: { source: string; impliedHeightIn: number; impliedGripIn?: number }[] }[];
       axisSource?: MovementAxisSource;
       gripAxisFromVerticalDeg?: number | null;
       movementAxis?: { x: number; y: number } | null;
@@ -1575,6 +1579,7 @@ export function AvBarTrackerDialog({
       })),
       scaleCorroborated: scaleVerdict.corroborated,
       scalesRejectedAsImplausible: implausibleScales,
+      scaleYardstickAbstained: yardsticksAbstained,
       // The shape is recorded whether the read was used or thrown out -- a rejected read is the
       // one worth looking at.
       referenceObject: (plateScale ?? plateScaleRaw)?.shape ?? null,

@@ -53,10 +53,12 @@ import { cameraTunablesFor } from "@shared/camera-tunables-by-lift";
  * that read the module constants would certify a blend no phone produces -- the hybrid this
  * file exists to refuse, one layer up. The module constants are still imported and asserted
  * below so the registry's defaults cannot drift from them unnoticed. */
-function liveUncertainty(source: string, exercise: string): number {
+function liveUncertainty(source: string, exercise: string, row?: LedgerRow): number {
   const t = cameraTunablesFor(exercise, romBucketForExercise(exercise)).values;
   if (source === "height") return t.heightRulerUncertainty;
-  if (source === "shoulder_width") return t.biacromialToleranceFraction;
+  // The floor is the constant; the span's own spread on the day is a fact about the take, and the
+  // phone states the larger of the two (the 10-30 row set 2 shipped at 0.317 over a 0.2 floor).
+  if (source === "shoulder_width") return Math.max(t.biacromialToleranceFraction, row?.shoulderSpanSpreadFraction ?? 0);
   if (source === "depth") return t.depthRulerUncertainty;
   if (source === "plate") {
     // What `computeReferenceObjectScale` states for a bumper plate the detector boxed: the casting
@@ -100,7 +102,7 @@ function liveX1000(row: LedgerRow): number {
   const candidates = heightVotesToday
     ? row.candidates
     : row.candidates.filter((c) => c.source !== "height");
-  return blendX1000(candidates, (s) => liveUncertainty(s, row.exercise));
+  return blendX1000(candidates, (s) => liveUncertainty(s, row.exercise, row));
 }
 
 describe("every ledger row is a record of a real take", () => {

@@ -143,7 +143,12 @@ describe("the drive window was fitted on thirteen sensor-paired sets", () => {
     const bench = cameraTunablesFor("Bench Press", "horizontal_press_or_row");
     expect(bench.values.driveOnsetFraction).toBe(0.03);
     expect(bench.sources.driveOnsetFraction).toBe("fitted");
-    for (const [name, bucket] of [["Back Squat", "squat"], ["Romanian Deadlift", "deadlift"], ["Pendlay Row", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"]]) {
+    // The press got its own window (0.08) in round five, 2026-10-30, the same way; the three
+    // below still read the shared copy.
+    const press = cameraTunablesFor("Barbell Shoulder Press", "overhead_press");
+    expect(press.values.driveOnsetFraction).toBe(0.08);
+    expect(press.sources.driveOnsetFraction).toBe("fitted");
+    for (const [name, bucket] of [["Back Squat", "squat"], ["Romanian Deadlift", "deadlift"], ["Pendlay Row", "horizontal_press_or_row"]]) {
       const other = cameraTunablesFor(name, bucket);
       expect(other.values.driveOnsetFraction, name).toBe(DRIVE_ONSET_FRACTION);
       expect(other.sources.driveOnsetFraction, name).not.toBe("fitted");

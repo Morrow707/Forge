@@ -379,6 +379,7 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   "Back Squat": { heightRulerUncertainty: 0.11 },
   "Bench Press": { driveOnsetFraction: 0.03, velocitySmoothingMs: 200 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
+  "Barbell Shoulder Press": { driveOnsetFraction: 0.08 },
 };
 
 /** WHY EACH OVERRIDE EXISTS, in the sentence a reader needs to decide whether it still should.
@@ -443,6 +444,22 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "ruler reads LOW where the RDL's reads HIGH, which is exactly why neither lift's record states a " +
     "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
     "moves, since each reads its own record.",
+  "Barbell Shoulder Press":
+    "2026-10-30, round five, build 701 beside the OVR (its \"Push Press\" sets at 65x8 and 85x8; " +
+    "the sensor counted a ninth rep on set 1 that is the bar being lowered to the floor, 35in of travel " +
+    "at 0.61 m/s, and it is excluded). driveOnsetFraction 0.04 -> 0.08 on this lift only. With the " +
+    "scale inside 2% on set 1 (63.0 against 62.2cm) the mean read -13.5% at the shared window and " +
+    "set 2 -2.7%: a standing press's drive starts from a dead stop at the collarbone and the shared " +
+    "0.04, fitted 10-07 across five movements on the sensor's DURATION, opens the window on the " +
+    "slow first centimetres a press spends leaving the shoulders. Swept 0.04/0.06/0.08/0.10/0.12 on " +
+    "both sets and on the 10-02 push-press fixture (a dipped press, 9 of 10 reps, the weak point): " +
+    "set 1 -13.5/-8.6/-3.8/-0.1/+3.5, set 2 -2.7/-1.4/0.0/+2.7/+2.7, 10-02 -3.8/+1.0/+2.9/+2.9/+4.8. " +
+    "0.08 is the first value where no take reads low and the three are inside 4 points (bias +1.0%, " +
+    "rms 2.8%); 0.10 pays +2.9 on both of the other two to buy set 1 and is the NEXT step if the " +
+    "next press still reads low. Rep counts unchanged at every value (7, 7, 9). The peak is not " +
+    "touched by the window and velocitySmoothingMs stays at the shared 165: 200 costs the press " +
+    "peaks 6-8 points on both sets where it bought the bench 4. Replayed on every ledger row and " +
+    "the fixture corpus; no bench, row, squat or RDL number moves, since each reads its own record.",
 };
 
 /** Where each of an identity's numbers came from. The report prints this, so a reader can tell

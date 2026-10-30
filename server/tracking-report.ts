@@ -226,6 +226,7 @@ type TrackingDiagnostics = {
     traceTravelAcrossCm?: number | null;
     tracePointsDroppedOffAxis?: number | null;
     scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number }[];
+    scaleYardstickAbstained?: { yardstick: string; wouldHaveRejected: { source: string; impliedHeightIn: number; impliedGripIn?: number }[] }[];
     noseToAnkleFrames: number;
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;
@@ -956,6 +957,23 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
         label: "Scales rejected",
         value: c.scalesRejectedAsImplausible
           .map((r) => `${r.source} (it would make the athlete ${r.impliedHeightIn}in tall)`)
+          .join("; "),
+      });
+    }
+    // THE YARDSTICK STOOD DOWN. It would have convicted most of the rulers, so the rulers were kept
+    // and the yardstick is the thing to look at (the 10-30 Pendlay row: a grip of 52.7 units on a
+    // 70-unit shoulder span, 2 of 3 rulers "implausible", the one survivor 53% high). A reader
+    // needs to see that a candidate was ADMITTED by this rule rather than never questioned.
+    if (c.scaleYardstickAbstained && c.scaleYardstickAbstained.length > 0) {
+      lines.push({
+        label: "Yardstick stood down",
+        value: c.scaleYardstickAbstained
+          .map(
+            (a) =>
+              `${a.yardstick} would have rejected ${a.wouldHaveRejected.length} of the rulers (${a.wouldHaveRejected
+                .map((r) => `${r.source}${r.impliedGripIn != null ? ` grip ${r.impliedGripIn}in` : ` height ${r.impliedHeightIn}in`}`)
+                .join(", ")}); kept them and distrusted the yardstick`,
+          )
           .join("; "),
       });
     }

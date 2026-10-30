@@ -1056,14 +1056,20 @@ export function rejectImplausibleScales(
   // outstretched adult is measuring something else. Generous on purpose -- this catches a scale
   // wrong by a factor, not one wrong by a tenth.
   gripSpanUnits: number | null = null,
-): { kept: ScaleEstimate[]; rejected: { source: string; impliedHeightIn: number; impliedGripIn?: number }[] } {
+): {
+  kept: ScaleEstimate[];
+  rejected: ImplausibleScaleRejection[];
+  /** A YARDSTICK THAT CONVICTS MOST OF THE WITNESSES IS THE THING ON TRIAL. Set when a yardstick
+   *  would have rejected a strict majority of the candidates and so stood down instead; what it
+   *  would have thrown out is listed, because an abstention nobody can see is the same kind of
+   *  invisible as a wrong rejection. */
+  abstained: ScaleYardstickAbstention[];
+} {
   const trueHeightM = heightIn && heightIn > 0 ? heightIn * 0.0254 : null;
   const checkHeight = !!bodySpanUnits && trueHeightM != null;
   const checkGrip = !!gripSpanUnits && gripSpanUnits > 0;
-  if (!checkHeight && !checkGrip) return { kept: estimates, rejected: [] };
-  const kept: ScaleEstimate[] = [];
-  const rejected: { source: string; impliedHeightIn: number; impliedGripIn?: number }[] = [];
-  for (const e of estimates) {
+  if (!checkHeight && !checkGrip) return { kept: estimates, rejected: [], abstained: [] };
+  const verdicts = estimates.map((e) => {
     const impliedM = checkHeight ? bodySpanUnits! * e.scale : null;
     const heightRatio = impliedM != null && trueHeightM != null ? impliedM / trueHeightM : null;
     const impliedGripM = checkGrip ? gripSpanUnits! * e.scale : null;
@@ -1071,20 +1077,61 @@ export function rejectImplausibleScales(
       heightRatio != null && (heightRatio < IMPLAUSIBLE_BODY_HEIGHT_LOW || heightRatio > IMPLAUSIBLE_BODY_HEIGHT_HIGH);
     const badGrip =
       impliedGripM != null && (impliedGripM < IMPLAUSIBLE_GRIP_LOW_M || impliedGripM > IMPLAUSIBLE_GRIP_HIGH_M);
-    if (badHeight || badGrip) {
-      rejected.push({
-        source: e.source,
-        impliedHeightIn: impliedM != null ? Math.round((impliedM / 0.0254) * 10) / 10 : 0,
-        ...(impliedGripM != null ? { impliedGripIn: Math.round((impliedGripM / 0.0254) * 10) / 10 } : {}),
-      });
-    } else {
-      kept.push(e);
-    }
+    const record: ImplausibleScaleRejection = {
+      source: e.source,
+      impliedHeightIn: impliedM != null ? Math.round((impliedM / 0.0254) * 10) / 10 : 0,
+      ...(impliedGripM != null ? { impliedGripIn: Math.round((impliedGripM / 0.0254) * 10) / 10 } : {}),
+    };
+    return { e, badHeight, badGrip, record };
+  });
+
+  // A YARDSTICK ABSTAINS WHEN IT WOULD CONVICT A STRICT MAJORITY. The Pendlay row beside OVR,
+  // 2026-10-30 set 2: the grip read 52.7 units on a take whose shoulder span was 70 (a grip
+  // NARROWER than the shoulders, the only such ratio on any take in the corpus -- 280 of 579 bar
+  // points were a lone hand carried), so the grip yardstick said the 3D bone implied a 7.5in grip
+  // and the depth ruler a 4in one and threw both out. The one ruler it kept, the shoulder span,
+  // was 53% high and took the whole scale. Two independent rulers agreeing with the sensor to
+  // within 3% and one yardstick disagreeing with both is evidence about the yardstick: a grip is
+  // ONE measurement, the rulers it is judging are several, and when most of them fail it the
+  // likelier reading is that the hands were not where the tracker put them. The clause below this
+  // one already said so for the unanimous case ("the body span is the thing that is wrong, not
+  // all three scales at once"); a majority is the same argument with one dissenter. A lone
+  // outlier -- the 10-01 squat's plate at 1 of 5, the 09-29 bench's 3D ruler at 1 of 2 -- is still
+  // rejected exactly as before, because there the rulers outvote the candidate, not the yardstick.
+  // A RULE about a mechanism, shared by every lift (Rule #2: it appoints nobody and removes
+  // nothing; Rule #1: it only ever ADMITS a candidate). It never fires on fewer than three
+  // candidates with a lone dissenter, because 1 of 2 is not a majority.
+  const abstained: ScaleYardstickAbstention[] = [];
+  const majority = (n: number) => n * 2 > estimates.length;
+  const heightAbstains = checkHeight && majority(verdicts.filter((v) => v.badHeight).length);
+  const gripAbstains = checkGrip && majority(verdicts.filter((v) => v.badGrip).length);
+  if (heightAbstains) {
+    abstained.push({ yardstick: "height", wouldHaveRejected: verdicts.filter((v) => v.badHeight).map((v) => v.record) });
+  }
+  if (gripAbstains) {
+    abstained.push({ yardstick: "grip", wouldHaveRejected: verdicts.filter((v) => v.badGrip).map((v) => v.record) });
+  }
+
+  const kept: ScaleEstimate[] = [];
+  const rejected: ImplausibleScaleRejection[] = [];
+  for (const v of verdicts) {
+    const badHeight = v.badHeight && !heightAbstains;
+    const badGrip = v.badGrip && !gripAbstains;
+    if (badHeight || badGrip) rejected.push(v.record);
+    else kept.push(v.e);
   }
   // Never reject everything. If no candidate survives, the body span is the thing that is wrong,
   // not all three scales at once, and a take with a questionable number beats a take with none.
-  return kept.length > 0 ? { kept, rejected } : { kept: estimates, rejected: [] };
+  // (Unreachable since the majority clause above, which covers the unanimous case too; kept as
+  // the floor it always was.)
+  return kept.length > 0 ? { kept, rejected, abstained } : { kept: estimates, rejected: [], abstained };
 }
+
+export type ImplausibleScaleRejection = { source: string; impliedHeightIn: number; impliedGripIn?: number };
+export type ScaleYardstickAbstention = {
+  yardstick: "height" | "grip";
+  wouldHaveRejected: ImplausibleScaleRejection[];
+};
 
 /** Wrist-to-wrist on a bar, metres. A close-grip bench sits near 0.35m and a wide one near 0.9m;
  *  the bounds are outside anything a person does with two hands on one bar so that only a scale
