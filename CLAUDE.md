@@ -2893,10 +2893,12 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 703** (2026-10-30
-  ~20:15 UTC, `87aa268`: round four -- the bench's own drive onset 0.03 and smoothing 200, the
-  Pendlay row's own depth uncertainty 0.6; 702 was its `verify_build` on the same commit). **703
-  is the build to film bench, Pendlay row and shoulder press on.** Before it, **701** (2026-10-30
+  branch `verify_build` for the arbiter plumbing. **The newest build is 705** (2026-10-30
+  20:53 UTC, `bfcc130`: round five -- a yardstick that would convict most of the rulers stands
+  down, the press's own drive onset 0.08; 704 was its `verify_build` on the same commit). **705
+  is the build to film bench, Pendlay row and shoulder press on.** Before it, **703** (2026-10-30
+  20:07 UTC, `87aa268`: round four -- the bench's own drive onset 0.03 and smoothing 200, the
+  Pendlay row's own depth uncertainty 0.6; 702 was its `verify_build` on the same commit). Before it, **701** (2026-10-30
   01:00 UTC, `980fcd4`: round three -- the box ruler corrects the landing numbers only and the
   hip's drive keeps the floor scale; 700 was its `verify_build` on the same commit). Before it, **699** (2026-10-30 00:09 UTC, `ad319e1`: round
   two on 697 -- the Back Squat's own `heightRulerUncertainty` 0.11, a plate that has to agree
@@ -3031,9 +3033,8 @@ halves before splitting anything else:
   rule off the take's own numbers, the lone-outlier and exact-half cases, and the height yardstick
   by the same rule; the every-lift test pins that the press's window reaches the press trace and
   the row's record lands set 2. See docs/camera-tracking-notes.md "Round five, 2026-10-30".
-  Calibration work: `verify_build` then `beta` on commit; the build number is in the paragraph
-  above once the runs finish.
-- **THE QUEUE IS EMPTY AS OF THE ROUND-FIVE BETA** (round five above; nothing waits behind it).
+  Calibration work, uploaded on commit as build **705** (704 was its `verify_build` on `bfcc130`).
+- **THE QUEUE IS EMPTY AS OF BUILD 705** (round five above; nothing waits behind it).
   Before it, **703** (round four). Before it, **701** (round three). Before it,
   build **697** (2026-10-29 evening, `6d8f259`; 696 was its
   `verify_build` on `ccdeba5`). Calibration work, uploaded on commit: the RDL's first per-lift

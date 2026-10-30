@@ -43,9 +43,8 @@ hundredth, and the board's "what is known not to work" list read before any leve
 beta, film again.** A big correction that lands once is not what he asked for; a run of small
 ones that each hold on the next take is. Target is 0% AND steady, so repeatability across the
 takes counts as much as the mean (Rule #5): a change that closes the mean and widens the
-take-to-take spread is not the change. Build to film on: **the round-five beta** (the run after 703's
-`verify_build`; 703 carried round four, 701 round three, 699 round two -- the run list in the iOS
-workflow is the authority, see CLAUDE.md "THE BUILD NUMBER IS THE iOS WORKFLOW'S `GITHUB_RUN_NUMBER`").
+take-to-take spread is not the change. Build to film on: **705** (round five; 704 was its
+`verify_build` on the same commit; 703 carried round four, 701 round three, 699 round two).
 
 | lift | paired takes | ROM vs OVR, oldest -> newest | state |
 |---|---|---|---|
