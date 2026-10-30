@@ -41,6 +41,8 @@ import {
 import type { ReadinessLevel } from "@shared/wellness";
 import type { AcwrRiskLevel } from "@shared/load";
 import { resolveRosterGroups, type RosterGroup } from "@shared/roster-groups";
+import { seatIsHeld, seatIsDueBack } from "@shared/roster-hold";
+import { todayIso } from "@/lib/local-date";
 import { apiRequest, getJson, ApiError, resolveApiUrl } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
@@ -85,6 +87,8 @@ import {
   BellRing,
   Tags,
   AlertTriangle,
+  PauseCircle,
+  RotateCcw,
 } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
 
@@ -127,6 +131,10 @@ type RosterEntry = {
   position?: string | null;
   healthStatus?: HealthStatus;
   groupId?: string | null;
+  /** THE OFF-SEASON HOLD (shared/roster-hold.ts). Optional because the teams endpoint reuses this
+   *  type for its member rows and does not select them; `/api/coach/roster` always sends both. */
+  heldAt?: string | null;
+  heldUntil?: string | null;
 };
 type TeamMember = { athlete: RosterEntry };
 type TeamEntry = {
@@ -201,13 +209,41 @@ export default function CoachRoster() {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
   const {
-    data: roster = [],
+    data: allSeats = [],
     isLoading: rosterLoading,
     isError: rosterFailed,
     refetch: refetchRoster,
   } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
   });
+  /* ONE LIST FROM THE SERVER, SPLIT HERE, AND `roster` KEEPS ITS OLD MEANING.
+   *
+   * getRosterForCoach carries `heldAt` on every row rather than answering two queries, because
+   * two lists is how a parked athlete becomes invisible to a surface nobody remembered -- and it
+   * is already team-narrowed, which a second endpoint would have had to re-scope (see
+   * getHeldSeatsForCoach, which is billing-scoped and deliberately never served as rows).
+   *
+   * Every existing reader of `roster` on this screen means the ACTIVE roster: the tab's count,
+   * the healthy/hurt split, who is missing today's check-in, the group counts, the CSV. So the
+   * binding is renamed and `roster` is the active seats, which leaves all of them correct with
+   * no edit each -- shared/roster-hold.ts question 5, and the alternative was fifteen call sites
+   * each deciding for itself. */
+  const parked = (a: RosterEntry) => seatIsHeld({ heldAt: a.heldAt ?? null });
+  const roster = allSeats.filter((a) => !parked(a));
+  const heldSeats = allSeats.filter(parked);
+  const [holdUntilInput, setHoldUntilInput] = useState("");
+  /* DUE BACK DRIVES A PROMPT, NEVER AN ACTION (shared/roster-hold.ts, seatIsDueBack). Bringing a
+   * seat back starts billing it, and money does not move unattended here -- coach-band-drift-job
+   * ships the measurement and leaves its switch unset for the same reason. It is also the better
+   * product: a coach who parked sixty in June brings back fifty-five in August because five
+   * graduated, so one confirmable list they can uncheck beats fifty-five silent auto-lifts.
+   *
+   * `todayIso` rather than toISOString().slice(0,10) -- the return date is a calendar date the
+   * coach typed, and local-date.test.ts records what the UTC version gets wrong at the edges. */
+  const today = todayIso();
+  const dueBack = heldSeats.filter((a) =>
+    seatIsDueBack({ heldAt: a.heldAt ?? null, heldUntil: a.heldUntil ?? null }, today),
+  );
   const { data: teams = [], refetch: refetchTeams } = useQuery<TeamEntry[]>({
     queryKey: ["/api/coach/teams"],
   });
@@ -445,6 +481,48 @@ export default function CoachRoster() {
       exitSelectMode();
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't add everyone to that team"),
+  });
+
+  /* PARK A COHORT, AND BRING ONE BACK. The roster screen already had multi-select and a bulk
+   * add-to-team; this is the same selection with a different verb, which is how a season
+   * actually ends.
+   *
+   * The route reports PER ATHLETE rather than failing the batch (a selection of sixty may hold
+   * one athlete outside this coach's team scope), so the toast says what did not move instead of
+   * refusing the lot. That is the opposite trade from assigning a program, which fails closed
+   * because a half-assigned program is a training plan nobody has. */
+  const bulkHoldMutation = useMutation({
+    mutationFn: async ({ athleteIds, heldUntil }: { athleteIds: number[]; heldUntil: string | null }) => {
+      const res = await apiRequest("POST", "/api/coach/roster/hold", { athleteIds, heldUntil });
+      return (await res.json()) as { held: number; skipped: number };
+    },
+    onSuccess: ({ held, skipped }) => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
+      qc.invalidateQueries({ queryKey: ["/api/coach/plan"] });
+      toast.success(
+        `${held} athlete${held === 1 ? "" : "s"} on hold` +
+          (skipped > 0 ? `, ${skipped} couldn't be` : ""),
+      );
+      exitSelectMode();
+      setHoldUntilInput("");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't put those athletes on hold"),
+  });
+
+  const unholdMutation = useMutation({
+    mutationFn: async (athleteIds: number[]) => {
+      const res = await apiRequest("POST", "/api/coach/roster/unhold", { athleteIds });
+      return (await res.json()) as { broughtBack: number; skipped: number };
+    },
+    onSuccess: ({ broughtBack, skipped }) => {
+      qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
+      qc.invalidateQueries({ queryKey: ["/api/coach/plan"] });
+      toast.success(
+        `${broughtBack} athlete${broughtBack === 1 ? "" : "s"} back on your roster` +
+          (skipped > 0 ? `, ${skipped} couldn't be` : ""),
+      );
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't bring those athletes back"),
   });
 
   // Moves one athlete from their current team straight to another --
@@ -812,6 +890,33 @@ export default function CoachRoster() {
                       Add
                     </Button>
                   </div>
+                  {/* PUT ON HOLD sits beside Add to team because it is the same selection with a
+                      different verb -- see shared/roster-hold.ts. The date is the expected return
+                      and is optional: it drives the due-back prompt below and never an action, so
+                      a coach who does not know yet leaves it blank and brings them back by hand. */}
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="date"
+                      value={holdUntilInput}
+                      onChange={(e) => setHoldUntilInput(e.target.value)}
+                      className="h-8 w-36 text-xs"
+                      aria-label="Expected return date (optional)"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={selectedIds.size === 0 || bulkHoldMutation.isPending}
+                      onClick={() =>
+                        bulkHoldMutation.mutate({
+                          athleteIds: Array.from(selectedIds),
+                          heldUntil: holdUntilInput || null,
+                        })
+                      }
+                    >
+                      <PauseCircle className="h-3.5 w-3.5" />
+                      {bulkHoldMutation.isPending ? "Holding..." : "Put on hold"}
+                    </Button>
+                  </div>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -1021,6 +1126,74 @@ export default function CoachRoster() {
                     </tbody>
                   </table>
                 </div>
+              )}
+              {heldSeats.length > 0 && (
+                <Card className="mt-6">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <PauseCircle className="h-4 w-4 text-muted-foreground" />
+                      On hold ({heldSeats.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {/* WHAT A HOLD IS, in the two sentences a coach needs: they are not billed,
+                        their history is still here, and nothing new lands on their calendar. The
+                        third sentence is the one that is easy to get wrong -- their own camera and
+                        skills follow their own plan while they are parked (question 4). */}
+                    <p className="text-sm text-muted-foreground">
+                      You aren't billed for these seats and nothing new can be assigned to them.
+                      Every number, video and session they've logged is still here, and bringing
+                      them back is one tap -- they don't have to re-enter your coach code. While
+                      they're on hold their own camera and skills follow whatever plan they have.
+                    </p>
+                    {dueBack.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5">
+                        <span className="text-sm font-medium">
+                          {dueBack.length} {dueBack.length === 1 ? "athlete is" : "athletes are"} due
+                          back
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={unholdMutation.isPending}
+                          onClick={() => unholdMutation.mutate(dueBack.map((a) => a.id))}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          Bring {dueBack.length === 1 ? "them" : "all"} back
+                        </Button>
+                      </div>
+                    )}
+                    <div className="divide-y divide-border/50">
+                      {heldSeats.map((a) => (
+                        <div
+                          key={a.id}
+                          className="flex flex-wrap items-center justify-between gap-2 py-2"
+                        >
+                          <div className="min-w-0">
+                            <Link
+                              href={`/coach/roster/${a.id}`}
+                              className="text-sm font-medium hover:underline"
+                            >
+                              {a.name}
+                            </Link>
+                            <p className="text-xs text-muted-foreground">
+                              {a.heldUntil ? `Back ${a.heldUntil}` : "No return date set"}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={unholdMutation.isPending}
+                            onClick={() => unholdMutation.mutate([a.id])}
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Bring back
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               )}
             </>
           )}

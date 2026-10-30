@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { lazyDialog } from "@/components/lazy-dialog";
@@ -52,6 +53,8 @@ import {
   UserMinus,
   Users,
   Pin,
+  PauseCircle,
+  RotateCcw,
 } from "lucide-react";
 
 type Athlete = {
@@ -77,6 +80,11 @@ type Athlete = {
   deadliftMaxLbs?: number | null;
   healthStatus?: HealthStatus;
   trackingOptOut?: boolean | null;
+  /** The off-season hold (shared/roster-hold.ts). getRosterAthleteForCoach carries these on
+   *  purpose: a parked athlete's detail page must still OPEN -- filtering them out here is what
+   *  would make a hold indistinguishable from the removal it exists to replace. */
+  heldAt?: string | null;
+  heldUntil?: string | null;
 };
 
 const GENDER_LABEL: Record<string, string> = {
@@ -195,6 +203,9 @@ export default function AthleteDetailPage() {
   const [acwrOpen, setAcwrOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
+  /** The expected return date on a hold -- optional, and it drives the roster screen's due-back
+   *  prompt rather than any automatic action (see seatIsDueBack). */
+  const [holdUntilInput, setHoldUntilInput] = useState("");
   // Lazily fetched the first time a coach compares, not with this page -- the compare tool
   // pulls in the skeleton renderer and the clip picker, and most visits to an athlete never
   // open it. Same lazyDialog treatment as the analysis dialog (see set-video-review.tsx).
@@ -231,6 +242,36 @@ export default function AthleteDetailPage() {
       navigate("/coach/roster");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not remove that athlete"),
+  });
+
+  /* PARK THIS SEAT, OR BRING IT BACK. The gentler sibling of the removal below, and the one a
+   * coach wants when an athlete is coming back: the relationship survives, so this is undone by
+   * the coach alone, where a removal needs the ATHLETE to re-enter the coach code. See
+   * shared/roster-hold.ts. */
+  const holdMutation = useMutation({
+    mutationFn: async (heldUntil: string | null) => {
+      await apiRequest("POST", `/api/coach/roster/${id}/hold`, { heldUntil });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`/api/coach/roster/${id}`] });
+      qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
+      qc.invalidateQueries({ queryKey: ["/api/coach/plan"] });
+      toast.success(`${athlete?.name ?? "Athlete"} is on hold`);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't put them on hold"),
+  });
+
+  const unholdMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/coach/roster/${id}/unhold`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`/api/coach/roster/${id}`] });
+      qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
+      qc.invalidateQueries({ queryKey: ["/api/coach/plan"] });
+      toast.success(`${athlete?.name ?? "Athlete"} is back on your roster`);
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't bring them back"),
   });
 
   // "Pinned" reads straight off the logged-in coach's own /api/auth/me
@@ -484,6 +525,70 @@ export default function AthleteDetailPage() {
               </div>
             </section>
 
+            {/* ABOVE the Danger Zone and not inside it, because a hold is the reversible one:
+                nothing is deleted, the coach undoes it alone, and it is what somebody reaching
+                for Remove in June actually wants. */}
+            <section className="space-y-2">
+              <h3 className="label-xs">Off-season</h3>
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  {athlete.heldAt ? (
+                    <>
+                      <div>
+                        <p className="text-sm font-medium">On hold</p>
+                        <p className="text-xs text-muted-foreground">
+                          {athlete.heldUntil
+                            ? `Expected back ${athlete.heldUntil}. `
+                            : "No return date set. "}
+                          You aren't billed for this seat and nothing new can be assigned to it.
+                          Everything they've logged is still here.
+                        </p>
+                      </div>
+                      <Button
+                        variant="secondary"
+                        className="w-full"
+                        disabled={unholdMutation.isPending}
+                        onClick={() => unholdMutation.mutate()}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        {unholdMutation.isPending ? "Bringing back..." : "Bring back on roster"}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <p className="text-sm font-medium">Put on hold</p>
+                        <p className="text-xs text-muted-foreground">
+                          For an athlete coming back next season. You stop being billed for the
+                          seat, nothing new can be assigned, and everything they've logged stays
+                          yours to read. You bring them back yourself -- they don't re-enter your
+                          coach code.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          type="date"
+                          value={holdUntilInput}
+                          onChange={(e) => setHoldUntilInput(e.target.value)}
+                          className="h-9 w-40"
+                          aria-label="Expected return date (optional)"
+                        />
+                        <Button
+                          variant="secondary"
+                          className="flex-1"
+                          disabled={holdMutation.isPending}
+                          onClick={() => holdMutation.mutate(holdUntilInput || null)}
+                        >
+                          <PauseCircle className="h-3.5 w-3.5" />
+                          {holdMutation.isPending ? "Holding..." : "Put on hold"}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </section>
+
             <section className="space-y-2">
               <h3 className="label-xs text-destructive">
                 Danger Zone
@@ -493,8 +598,10 @@ export default function AthleteDetailPage() {
                   <div>
                     <p className="text-sm font-medium">Remove from your roster</p>
                     <p className="text-xs text-muted-foreground">
-                      {athlete.name} reverts to Free Agent status. Their account and training
-                      history stay intact.
+                      For an athlete who isn't coming back. {athlete.name} reverts to Free Agent
+                      status; their account and training history stay intact, but you won't be
+                      able to open any of it, and only they can rejoin. Coming back next season?
+                      Put them on hold instead.
                     </p>
                   </div>
                   <Button variant="destructive" className="w-full" onClick={() => setRemoveOpen(true)}>
@@ -721,10 +828,19 @@ export default function AthleteDetailPage() {
           <DialogHeader>
             <DialogTitle>Remove {athlete.name} from your roster?</DialogTitle>
           </DialogHeader>
+          {/* THE OLD COPY PROMISED SOMETHING THE COACH CANNOT DO: "you can always re-add them
+              later with your coach code". The coach HAS no way to re-add them -- sendFreeAgentRequest
+              needs the athlete's acceptance and the code is theirs to type, so in August that is
+              a chase. Saying so is the whole reason the hold above exists. */}
           <p className="text-sm text-muted-foreground">
-            They'll lose access to your programs, calendar, and roster tools. Their training
-            history and account stay intact, this just takes them off your roster, so you can
-            always re-add them later with your coach code.
+            Their training history and account stay intact, but you'll no longer be able to open
+            any of it -- their sessions, numbers and videos all go dark to you. Rejoining is theirs
+            to do: they'd have to enter your coach code again, you can't put them back yourself.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            If they're coming back next season, close this and use <strong>Put on hold</strong>
+            {" "}instead -- you stop paying for the seat, you keep reading everything they've
+            logged, and one tap brings them back.
           </p>
           <DialogFooter>
             <Button
