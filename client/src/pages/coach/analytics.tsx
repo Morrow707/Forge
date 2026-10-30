@@ -2453,6 +2453,15 @@ export default function CoachAnalytics() {
         </TabsContent>
 
         <TabsContent value="skills">
+          {/* THE CAVEAT IS PER TAB, BECAUSE THE PAGE'S OTHER ONE IS INSIDE TabsContent
+              value="performance" and so is invisible from here. Every number on this tab comes off
+              the camera -- sprint splits and speed, hip-shoulder separation, arm slot, weight
+              transfer -- and SkillsTrendsPanel carried no caveat at all, which
+              camera-caveat-coverage.test.ts could not see because it walked client/src/pages and
+              this is a component. Dismissible, matching the Performance tab: this is one athlete's
+              trend read by a coach who knows them, which is the distinction that file draws
+              against a leaderboard's permanent one. */}
+          <CameraMetricCaveat dismissible className="mb-4" />
           <SkillsTab
             roster={roster}
             rosterFailed={rosterFailed}
@@ -2464,6 +2473,13 @@ export default function CoachAnalytics() {
         </TabsContent>
 
         <TabsContent value="trends">
+          {/* THREE OF THESE METRICS CAN BE CAMERA-WRITTEN AND NOTHING ON THE ROW SAYS WHICH.
+              recordCameraTimedCombineResult (server/storage.ts) writes a video-timed 40, pro
+              agility and 3-cone straight into users.fortyYardDash / proAgilitySeconds /
+              threeConeSeconds, and there is no provenance column -- so a number here may be
+              camera-timed or may be a stopwatch, and only "may" is an honest claim about it. Same
+              argument, same columns, as the progress-report email's caveat of 2026-10-09. */}
+          <CameraMetricCaveat dismissible className="mb-4" />
           <TeamTrends />
         </TabsContent>
 
