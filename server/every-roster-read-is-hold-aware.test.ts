@@ -116,9 +116,27 @@ for (const s of code.matchAll(QUERY_SITE)) {
 
 const bodyOf = (name: string) => methods.find((m) => m.name === name)?.body ?? "";
 
-/** HOLD-AWARE IS DERIVED FROM THE CODE, never declared: a method whose body reads `heldAt` has
- *  decided. Declaring it instead would let a classification be a lie. */
-const holdAware = [...sitesByMethod.keys()].filter((n) => bodyOf(n).includes("heldAt")).sort();
+/** HOLD-AWARE IS DERIVED FROM THE CODE, never declared: a method has decided if its body reads
+ *  `heldAt` ITSELF, or if it resolves the roster through `getRosterForCoach`, which filters parked
+ *  seats for every caller (see its docblock in storage.ts).
+ *
+ *  THE SECOND CLAUSE IS NOT A LOOPHOLE AND THE SPELLING IS WHAT MAKES IT SAFE:
+ *  `getRosterForCoachIncludingHeld(` does NOT contain the substring `getRosterForCoach(`, because
+ *  the name runs on before the paren -- so a method that deliberately asks for parked seats cannot
+ *  be certified hold-aware by this line and lands in the unclassified list instead. That is the
+ *  one property of the pair's naming this test depends on, so it is asserted directly below rather
+ *  than left to be noticed.
+ *
+ *  WHAT THIS CLAUSE DOES NOT CERTIFY, said plainly: delegation vouches for the ROSTER read only.
+ *  A method can resolve the roster through the filtered helper and still run a coach_athletes
+ *  query of its own that sees every seat -- `getCoachWeeklyDigest` is exactly that shape, and the
+ *  reason its own query needs no filter (it inner-joins the check-ins it counts) is argued in its
+ *  body and pinned by a named case below. A second method of that shape wants the same treatment,
+ *  not a wider regex. */
+const RESOLVES_THROUGH_FILTERED_ROSTER = /\bgetRosterForCoach\(|\bseatIsInSeason\(|\bbilledSeats\(/;
+const holdAware = [...sitesByMethod.keys()]
+  .filter((n) => bodyOf(n).includes("heldAt") || RESOLVES_THROUGH_FILTERED_ROSTER.test(bodyOf(n)))
+  .sort();
 
 /**
  * THE METHODS THAT DELIBERATELY SEE EVERY SEAT, PARKED OR NOT, each with the reason.
@@ -291,5 +309,154 @@ describe("nothing new lands on a parked seat", () => {
     // ANY active link is an active seat -- the same rule getCoachesForAthlete applies, so one
     // staff cannot disagree with itself about whether an athlete may be assigned to.
     expect(bodyOf("assertSeatIsNotHeld")).toMatch(/seats\.some\(/);
+  });
+});
+
+/**
+ * AND THE HALF THAT WOULD HAVE CAUGHT THE DEFECT THIS FILE'S FIRST VERSION SHIPPED WITH.
+ *
+ * Added 2026-10-30, before the hold was pushed. The block above discovers every `coach_athletes`
+ * QUERY SITE and classifies it, and it passed on all 24 methods -- while **33 callers one hop
+ * downstream read the roster through `getRosterForCoach` and not one of them read the flag.** A
+ * scan over the queries cannot see a caller of a query, which is the same blind spot in a new
+ * costume: `parental_notice` was invisible to a scan that iterated the set it was meant to police,
+ * and the upload-directory list could not fail for a directory nobody added.
+ *
+ * What it cost is measured in `getRosterForCoach`'s own docblock: a guaranteed push AND email to
+ * every parked athlete each time a coach tapped Nudge, "practice moved" announcements all off
+ * season with `bypassEmailPref` set, guardians mailed, and sixty parked athletes listed as
+ * "hasn't logged a workout" with a Send Nudge button on each. A sent email cannot be taken back.
+ *
+ * SO THE DEFAULT MOVED RATHER THAN THE CALL SITES: `getRosterForCoach` filters, and asking for the
+ * parked seats means naming `getRosterForCoachIncludingHeld`, which this block holds to a stated
+ * reason. The rule is about the EXCEPTION, never a list of the sites that were fixed -- the 12th
+ * exception added next year fails here the day it is written, and an unclassified caller that
+ * nobody thought about is SAFE rather than sending mail.
+ */
+describe("asking for the parked seats costs a sentence", () => {
+  const FILES = ["./storage.ts", "./routes.ts"] as const;
+  const raw = new Map(
+    FILES.map((f) => [f, readFileSync(resolve(import.meta.dirname, f), "utf8")] as const),
+  );
+
+  /** THE ONE PROPERTY OF THE PAIR'S NAMING THE BLOCK ABOVE RESTS ON, asserted rather than
+   *  noticed. If the variant were ever renamed to `getRosterForCoach(opts)` or
+   *  `getRosterForCoach({ includingHeld: true })`, `RESOLVES_THROUGH_FILTERED_ROSTER` would
+   *  certify every deliberate see-every-seat caller as hold-aware and this whole file would go
+   *  quietly green on the bug it exists for. */
+  it("cannot certify the including-held variant as hold-aware by accident", () => {
+    expect("getRosterForCoachIncludingHeld(".includes("getRosterForCoach(")).toBe(false);
+    expect(RESOLVES_THROUGH_FILTERED_ROSTER.test("await this.getRosterForCoachIncludingHeld(id)")).toBe(
+      false,
+    );
+    expect(RESOLVES_THROUGH_FILTERED_ROSTER.test("await this.getRosterForCoach(id)")).toBe(true);
+  });
+
+  /** Call sites, comments LEFT IN on purpose: the reason is the thing being checked, so this is
+   *  the one scan in the file that reads raw source. The DEFINITION and the one line inside
+   *  `getRosterForCoach` that delegates to it are not callers. */
+  function callSites(file: (typeof FILES)[number]) {
+    const src = raw.get(file)!;
+    const lines = src.split("\n");
+    const out: { line: number; reason: string }[] = [];
+    lines.forEach((l, i) => {
+      if (!/getRosterForCoachIncludingHeld\(/.test(l)) return;
+      if (/^\s*(?:\*|\/\/)/.test(l)) return; // prose about it is not a call
+      if (/^\s*async getRosterForCoachIncludingHeld\(/.test(l)) return; // the definition
+      // AND THE FILTER ITSELF IS NOT AN EXCEPTION. `getRosterForCoach` calls the variant and
+      // filters its result -- that line IS the mechanism this block polices, so demanding a
+      // "why must this see parked seats" sentence there would be asking the filter to justify
+      // reading the thing it filters. Excluded by OWNER rather than by matching the line's text,
+      // so rewriting the delegation cannot slip a second caller in beside it.
+      let owner = "";
+      for (let j = i - 1; j >= 0; j--) {
+        const m = lines[j].match(/^  async ([A-Za-z0-9_]+)\s*\(/);
+        if (m) {
+          owner = m[1];
+          break;
+        }
+      }
+      if (owner === "getRosterForCoach") return;
+      // The reason is the unbroken run of comment lines directly above the statement.
+      const reason: string[] = [];
+      for (let j = i - 1; j >= 0; j--) {
+        const t = lines[j].trim();
+        if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) {
+          reason.unshift(t.replace(/^(?:\/\/|\*\/?|\/\*\*?)\s*/, ""));
+          continue;
+        }
+        break;
+      }
+      out.push({ line: i + 1, reason: reason.join(" ").trim() });
+    });
+    return out;
+  }
+
+  const sites = FILES.flatMap((f) => callSites(f).map((s) => ({ file: f, ...s })));
+
+  it("found the callers at all -- a scan that matches nothing turns the rest of this green", () => {
+    // CLAUDE.md records a brace matcher that silently found nothing and a comment strip that ate
+    // half of routes.ts; the floor is what makes either one loud instead of reassuring.
+    expect(sites.length).toBeGreaterThanOrEqual(16);
+    expect(new Set(sites.map((s) => s.file)).size).toBe(2);
+  });
+
+  it("makes every one of them say why it must see a parked seat", () => {
+    const unexplained = sites
+      .filter((s) => !/INCLUDING HELD/.test(s.reason) || s.reason.length <= 80)
+      .map((s) => `${s.file.slice(2)}:${s.line}`);
+    expect(
+      unexplained,
+      "These call `getRosterForCoachIncludingHeld` with no reason above them. A caller wants the " +
+        "parked seats for exactly one of three reasons (see the method's docblock): it SPLITS the " +
+        "list itself, it is a VISIBILITY set for a read, or it is a MEMBERSHIP check whose " +
+        "refusal must come from assertSeatIsNotHeld. Anything else wants plain getRosterForCoach.",
+    ).toEqual([]);
+  });
+
+  /** THE FOUR SURFACES THAT SEND, named rather than derived, because what makes them the hazard is
+   *  that they DELIVER something -- a push, an email, a guardian's email -- and a scan cannot see
+   *  that a notifyUser downstream of a list is irreversible. Each must resolve the plain,
+   *  filtered roster; switching any of them back to the including-held variant reds this. */
+  it("keeps every sending surface on the filtered roster", () => {
+    const routes = stripComments(raw.get("./routes.ts")!);
+    // THE VERB IS PART OF THE KEY, and the first draft of this case left it out. Both team-board
+    // paths are registered TWICE -- a GET that reads the posts and a POST that broadcasts them --
+    // so `indexOf(path)` found the GET, which touches no roster, and the case went red on correct
+    // code while being structurally unable to check the handler it was written for. **"The next
+    // occurrence of a string" is not "the thing I meant"**, which is the character-window lesson
+    // with a different ruler: a path is not an identifier, a path plus a verb is.
+    for (const path of [
+      'app.post("/api/coach/roster/nudge-wellness"',
+      'app.post(\n    "/api/coach/legal-documents/:type/email-roster"',
+      'app.post("/api/coach/team-board"',
+      'app.post("/api/athlete/team-board"',
+    ]) {
+      const at = routes.indexOf(path);
+      expect(at, `${path} is not a registered route any more`).toBeGreaterThan(-1);
+      // Bounded by the next route registration, which is what "this handler" means -- never a
+      // character window (CLAUDE.md: a fixed window also PASSES for a match belonging to an
+      // unrelated handler further down the file).
+      const next = routes.slice(at + path.length).search(/\n  app\.(?:get|post|patch|put|delete)\(/);
+      const handler = routes.slice(at, next === -1 ? undefined : at + path.length + next);
+      expect(handler, `${path} reads the roster and does not send to a parked athlete`).toMatch(
+        /getRosterForCoach\(/,
+      );
+      expect(handler, `${path} must not ask for parked seats -- it DELIVERS`).not.toMatch(
+        /getRosterForCoachIncludingHeld\(/,
+      );
+    }
+  });
+
+  /** `getCoachWeeklyDigest` is the one method certified hold-aware BY DELEGATION that also runs a
+   *  coach_athletes query of its own, so the thing delegation does not vouch for is pinned here:
+   *  its own query inner-joins the check-ins it counts, which is why it needs no filter. */
+  it("pins the one method whose own query delegation does not vouch for", () => {
+    const body = bodyOf("getCoachWeeklyDigest");
+    expect(body).toMatch(/getRosterForCoach\(/);
+    expect(body).toMatch(/innerJoin\(wellnessCheckins/);
+    // And its missed-workout denominator takes the filtered list straight through: a second
+    // filter over an already-filtered list is a claim the first one might not have run.
+    expect(body).not.toMatch(/filter\(\s*\(a\)\s*=>\s*a\.heldAt/);
   });
 });

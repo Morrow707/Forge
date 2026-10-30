@@ -2353,7 +2353,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const usable = await storage.getSkillProgramIfUsableByCoach(user.id, parsed.data.skillProgramId);
     if (!usable) return res.status(404).json({ message: "Skill program not found" });
 
-    const roster = await storage.getRosterForCoach(user.id);
+    // INCLUDING HELD: a MEMBERSHIP check, not a current-squad view. Filtering here would
+    // answer "Athlete not on your roster" about somebody sitting on the coach's own screen
+    // under "On hold" -- a wrong explanation is worse than a missing one. The refusal a parked
+    // seat earns comes from assertSeatIsNotHeld, which names the hold and the return date.
+    const roster = await storage.getRosterForCoachIncludingHeld(user.id);
     const rosterIds = new Set(roster.map((a) => a.id));
     const invalidAthlete = parsed.data.athletes.find((a) => !rosterIds.has(a.athleteId));
     if (invalidAthlete) {
@@ -2539,7 +2543,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    const roster = await storage.getRosterForCoach(user.id);
+    // INCLUDING HELD: a MEMBERSHIP check, not a current-squad view. Filtering here would
+    // answer "Athlete not on your roster" about somebody sitting on the coach's own screen
+    // under "On hold" -- a wrong explanation is worse than a missing one. The refusal a parked
+    // seat earns comes from assertSeatIsNotHeld, which names the hold and the return date.
+    const roster = await storage.getRosterForCoachIncludingHeld(user.id);
     if (!roster.some((a) => a.id === parsed.data.athleteId)) {
       return res.status(400).json({ message: "Athlete not on your roster" });
     }
@@ -2578,7 +2586,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // different coaches, so without this roster check any coach could
       // force-unlock a lesson for (and read the full class progress of) an
       // athlete who isn't theirs, same as /enroll above already guards for.
-      const roster = await storage.getRosterForCoach(user.id);
+      // INCLUDING HELD: a MEMBERSHIP check, not a current-squad view. Filtering here would
+      // answer "Athlete not on your roster" about somebody sitting on the coach's own screen
+      // under "On hold" -- a wrong explanation is worse than a missing one. The refusal a parked
+      // seat earns comes from assertSeatIsNotHeld, which names the hold and the return date.
+      const roster = await storage.getRosterForCoachIncludingHeld(user.id);
       if (!roster.some((a) => a.id === parsed.data.athleteId)) {
         return res.status(400).json({ message: "Athlete not on your roster" });
       }
@@ -4352,7 +4364,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const coachIds = await storage.getEffectiveCoachIds(coach.id);
     const isPrimary = coachIds[0] === coach.id;
-    const roster = await storage.getRosterForCoach(coach.id);
+    // INCLUDING HELD: an admin reading one program wants the whole program's headcount, and
+    // the number that decides MONEY is getBilledAthleteCountForCoach (the larger of billed
+    // seats and the planned count), not this one.
+    const roster = await storage.getRosterForCoachIncludingHeld(coach.id);
     const institutionalAgreement = await storage.getInstitutionalAgreementStatus(coach.id);
     res.json({
       id: coach.id,
@@ -5930,7 +5945,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/coach/roster", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
-    const roster = await storage.getRosterForCoach(user.id);
+    // INCLUDING HELD: this is the screen that SPLITS the list -- the roster table and the "On hold"
+    // card below it are two renders of one payload, which is why every row carries heldAt/heldUntil
+    // and the page needs no second query. See getHeldSeatsForCoach, which is billing-scoped and is
+    // deliberately never served as rows.
+    const roster = await storage.getRosterForCoachIncludingHeld(user.id);
     res.json(roster);
   });
 
@@ -8437,7 +8456,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    const roster = await storage.getRosterForCoach(user.id);
+    // INCLUDING HELD: this set resolves the ids a photographed sheet was matched to, and an id
+    // it does not contain is SILENTLY SKIPPED (`continue`), so filtering would drop a parked
+    // athlete's transcribed row with the response still reporting success. Typing up a sheet is
+    // historical data entry about an athlete, which question 2 keeps open to the coach.
+    const roster = await storage.getRosterForCoachIncludingHeld(user.id);
     const validIds = new Set(roster.map((a) => a.id));
     let applied = 0;
     for (const { athleteId, ...fields } of parsed.data.updates) {
@@ -8471,7 +8494,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    const roster = await storage.getRosterForCoach(user.id);
+    // INCLUDING HELD: this set resolves the ids a photographed sheet was matched to, and an id
+    // it does not contain is SILENTLY SKIPPED (`continue`), so filtering would drop a parked
+    // athlete's transcribed row with the response still reporting success. Typing up a sheet is
+    // historical data entry about an athlete, which question 2 keeps open to the coach.
+    const roster = await storage.getRosterForCoachIncludingHeld(user.id);
     const validIds = new Set(roster.map((a) => a.id));
     let applied = 0;
     for (const { athleteId, ...entry } of parsed.data.entries) {
@@ -8509,7 +8536,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    const roster = await storage.getRosterForCoach(user.id);
+    // INCLUDING HELD: this set resolves the ids a photographed sheet was matched to, and an id
+    // it does not contain is SILENTLY SKIPPED (`continue`), so filtering would drop a parked
+    // athlete's transcribed row with the response still reporting success. Typing up a sheet is
+    // historical data entry about an athlete, which question 2 keeps open to the coach.
+    const roster = await storage.getRosterForCoachIncludingHeld(user.id);
     const validIds = new Set(roster.map((a) => a.id));
     let applied = 0;
     for (const { athleteId, ...fields } of parsed.data.updates) {
@@ -8543,7 +8574,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    const roster = await storage.getRosterForCoach(user.id);
+    // INCLUDING HELD: this set resolves the ids a photographed sheet was matched to, and an id
+    // it does not contain is SILENTLY SKIPPED (`continue`), so filtering would drop a parked
+    // athlete's transcribed row with the response still reporting success. Typing up a sheet is
+    // historical data entry about an athlete, which question 2 keeps open to the coach.
+    const roster = await storage.getRosterForCoachIncludingHeld(user.id);
     const validIds = new Set(roster.map((a) => a.id));
     let applied = 0;
     for (const { athleteId, ...entry } of parsed.data.entries) {
@@ -8583,7 +8618,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
-    const roster = await storage.getRosterForCoach(user.id);
+    // INCLUDING HELD: this set resolves the ids a photographed sheet was matched to, and an id
+    // it does not contain is SILENTLY SKIPPED (`continue`), so filtering would drop a parked
+    // athlete's transcribed row with the response still reporting success. Typing up a sheet is
+    // historical data entry about an athlete, which question 2 keeps open to the coach.
+    const roster = await storage.getRosterForCoachIncludingHeld(user.id);
     const created = await storage.createImportedTestingDataRows(
       roster.map((a) => a.id),
       user.id,
@@ -10199,6 +10238,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/coach/roster/nudge-wellness", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const today = todayIso();
+    // FILTERED, and this is the site that decided the default had to move rather than the call
+    // sites: `missing` is the roster minus whoever checked in today, and a PARKED athlete never
+    // checks in, so every one of them was guaranteed a push AND an email every time a coach tapped
+    // this -- the only surface here where the hazard is certain rather than likely.
     const [roster, checkedInToday] = await Promise.all([
       storage.getRosterForCoach(user.id),
       storage.getRosterWellnessToday(user.id, today),
@@ -10573,6 +10616,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // this is the one path meant for "practice moved" style emergencies, so
     // it only fires when the coach explicitly opts a post in (default off).
     if (parsed.data.isAnnouncement) {
+      // FILTERED: an announcement fires with bypassEmailPref AND bypassPushCategoryPref, so a
+      // parked athlete was getting every "practice moved" email all off season with their own
+      // notification preferences deliberately overridden -- the one path in the app that cannot be
+      // turned off from the receiving end.
       const roster = await storage.getRosterForCoach(user.id);
       await notifyEach(roster, (athlete) =>
         notifyUser(
@@ -10691,7 +10738,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const usable = await storage.getProgramIfUsableByCoach(user.id, parsed.data.programId);
     if (!usable) return res.status(404).json({ message: "Program not found" });
 
-    const roster = await storage.getRosterForCoach(user.id);
+    // INCLUDING HELD: a MEMBERSHIP check, not a current-squad view. Filtering here would
+    // answer "Athlete not on your roster" about somebody sitting on the coach's own screen
+    // under "On hold" -- a wrong explanation is worse than a missing one. The refusal a parked
+    // seat earns comes from assertSeatIsNotHeld, which names the hold and the return date.
+    const roster = await storage.getRosterForCoachIncludingHeld(user.id);
     const rosterIds = new Set(roster.map((a) => a.id));
     const invalidAthlete = parsed.data.athletes.find((a) => !rosterIds.has(a.athleteId));
     if (invalidAthlete) {

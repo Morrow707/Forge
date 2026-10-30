@@ -34,16 +34,23 @@
  * -- is cleared between them instead. The seventh actor has no seat at all and is not comped: the
  * patch-safety case for a carve-out that widens access.
  *
- * NINE MUTATIONS, EACH CAUGHT BY THE RIGHT CASE, and the two that are worth keeping:
+ * FOURTEEN MUTATIONS, EACH CAUGHT BY THE RIGHT CASE, and the three worth keeping:
  *
  *   - Dropping `isNull(heldAt)` from getStaffRosterAthleteIds reds NINE cases, which is the
  *     measured version of that method's own comment ("would reproduce exactly what a REMOVAL
  *     does today"): the scope predicate carries the bill, the unhold, the camera and the cohort.
- *   - Making getRosterForCoach filter holds reds the roster-list case AND both assignment cases,
- *     and the assignment one fails on the SENTENCE rather than the status -- "expected 'Athlete
- *     not on your roster' to contain 'Jordan Reyes'". That is the design argument demonstrated:
- *     filtering the roster read would tell a coach that an athlete sitting on their own screen
- *     under "On hold" was not on their roster.
+ *   - Deleting the `.filter` from `getRosterForCoach` -- the whole 10-30 inversion reverted -- reds
+ *     the three sender cases at the bottom of this file and NOTHING ELSE in the suite, the ratchet
+ *     included (nineteen cases, all green). That is the measured reason those cases exist: whether
+ *     a resolver filters is BEHAVIOUR, and a scan over call sites is structurally blind to it.
+ *   - And the inverse is a mutation too, because over-applying the inversion is as wrong as not
+ *     applying it: making `getRosterForCoachIncludingHeld` filter reds SEVEN, and pointing the
+ *     assignment route back at the plain resolver reds exactly one, on the SENTENCE rather than
+ *     the status -- "expected 'Athlete not on your roster' to contain 'Jordan Reyes'". That is the
+ *     design argument demonstrated: a roster read that filtered would tell a coach that an athlete
+ *     sitting on their own screen under "On hold" was not on their roster. Which resolver a caller
+ *     wants is a real decision in both directions, which is why there are two names and not a
+ *     boolean parameter.
  *
  * AND ONE WAS NOT CAUGHT BY THE FIRST VERSION OF THIS FILE, which is why two of its cases exist:
  * removing assertSeatIsNotHeld from `createSkillAssignment` alone left all twenty green, because
@@ -707,5 +714,111 @@ describe("parking a cohort", () => {
     expect(res.body.message).toContain("YYYY-MM-DD");
     // And nothing was parked by the refused request.
     expect((await coachCClient.get("/api/coach/plan")).body.heldCount).toBe(0);
+  });
+});
+
+/**
+ * NOTHING IS SENT TO A PARKED ATHLETE, AND THE REPORTS STOP COUNTING THEM.
+ *
+ * Added 2026-10-30, before the hold was pushed, after reading the CALLERS of the roster read
+ * rather than the roster read itself. `getRosterForCoach` returned every seat with a flag under a
+ * comment saying the callers that must not count a parked athlete read it; **none of its 33
+ * callers did.** The ratchet passed throughout, because it discovers `coach_athletes` QUERY SITES
+ * and these are callers one hop downstream of one.
+ *
+ * The worst of them is `nudge-wellness`, and it is the case driven first below: it nudges whoever
+ * has not checked in today, and a parked athlete NEVER checks in, so every one of them got a push
+ * AND an email every time a coach tapped it. Not likely -- certain. A sent email cannot be taken
+ * back, which is why the fix moved the DEFAULT rather than twenty call sites.
+ *
+ * THESE CASES ARE THE ONLY THING THAT REDS THAT REVERT. Mutation M3 -- deleting the `.filter` from
+ * `getRosterForCoach` so it returns every seat again -- leaves all nineteen cases of the ratchet
+ * GREEN, because whether a method filters is BEHAVIOUR and a scan over call sites cannot see it.
+ * Each case asserts its premise on the unparked roster first, for the reason the header gives: a
+ * count that was always 1 would pass for a route that never looked at the hold.
+ */
+describe("nothing is sent to a parked athlete", () => {
+  it("nudges the squad and not the parked seat -- the guaranteed sender", async () => {
+    // THE PREMISE: both of coach C's athletes are on the roster and neither has checked in, so
+    // both are nudgeable. Without this the case would pass for a route that nudged nobody.
+    expect((await coachCClient.get("/api/coach/plan")).body.billedCount).toBe(2);
+    const before = await coachCClient.post("/api/coach/roster/nudge-wellness", {});
+    expect(before.status).toBe(200);
+    expect(before.body.nudged).toBe(2);
+
+    await coachCClient.post("/api/coach/roster/hold", {
+      athleteIds: [athleteC1.id],
+      heldUntil: "2026-08-15",
+    });
+
+    const after = await coachCClient.post("/api/coach/roster/nudge-wellness", {});
+    expect(after.status).toBe(200);
+    // ONE, not two. A parked athlete cannot check in, so before the fix this stayed at 2 forever
+    // -- a push and an email to somebody whose season has not started, on every tap.
+    expect(after.body.nudged).toBe(1);
+  });
+
+  it("counts only the squad as owing paperwork, and mails only them", async () => {
+    expect((await coachCClient.get("/api/coach/plan")).body.billedCount).toBe(2);
+    const before = await coachCClient.get("/api/coach/legal-documents/email-roster/recipients");
+    expect(before.status).toBe(200);
+    expect(before.body.athletes).toBe(2);
+
+    await coachCClient.post("/api/coach/roster/hold", {
+      athleteIds: [athleteC1.id],
+      heldUntil: null,
+    });
+
+    // The confirm step and the send are computed the same way by construction (the route's own
+    // comment), so the count is the send: before the fix this mailed a parked athlete AND, for a
+    // minor, their guardian.
+    const after = await coachCClient.get("/api/coach/legal-documents/email-roster/recipients");
+    expect(after.body.athletes).toBe(1);
+
+    const chase = await coachCClient.get("/api/coach/documents-status");
+    expect(chase.status).toBe(200);
+    expect(chase.body.length).toBe(1);
+    expect(chase.body.map((r: { athleteId: number }) => r.athleteId)).not.toContain(athleteC1.id);
+  });
+
+  it("stops listing them as the athlete who has not logged a workout", async () => {
+    // Neither has ever logged one, so both are inactive -- the premise, and the reason the fix
+    // matters here: the list draws a Send Nudge button on every row, and that nudge resolves
+    // through getRosterAthleteForCoach, which deliberately passes a parked seat. So the button
+    // did not 404; it delivered.
+    const before = await coachCClient.get("/api/coach/inactive-athletes");
+    expect(before.status).toBe(200);
+    expect(before.body.map((a: { id: number }) => a.id).sort()).toEqual(
+      [athleteC1.id, athleteC2.id].sort(),
+    );
+
+    await coachCClient.post("/api/coach/roster/hold", {
+      athleteIds: [athleteC1.id],
+      heldUntil: null,
+    });
+
+    const after = await coachCClient.get("/api/coach/inactive-athletes");
+    expect(after.body.map((a: { id: number }) => a.id)).toEqual([athleteC2.id]);
+  });
+
+  /** AND THE OTHER HALF OF THE INVERSION, which is what keeps it from being a removal with a
+   *  nicer name: the LIST the coach reads still has them in it. Question 2 is the feature, and
+   *  `GET /api/coach/roster` is the one surface that asks for parked seats on purpose -- the
+   *  roster table and the "On hold" card are two renders of one payload. A fix that filtered
+   *  everything would pass all three cases above and break the thing Scott asked for. */
+  it("still shows the coach the parked athlete, flag and return date and all", async () => {
+    await coachCClient.post("/api/coach/roster/hold", {
+      athleteIds: [athleteC1.id],
+      heldUntil: "2026-08-15",
+    });
+
+    const roster = await coachCClient.get("/api/coach/roster");
+    expect(roster.status).toBe(200);
+    const parked = roster.body.find((a: { id: number }) => a.id === athleteC1.id);
+    expect(parked, "a parked athlete must stay on the roster payload").toBeTruthy();
+    expect(parked.heldAt).toBeTruthy();
+    expect(parked.heldUntil).toBe("2026-08-15");
+    const active = roster.body.find((a: { id: number }) => a.id === athleteC2.id);
+    expect(active.heldAt).toBeNull();
   });
 });

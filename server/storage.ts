@@ -384,7 +384,7 @@ import {
   OPEN_CLASS_ACCESS,
   type ClassAccessGate,
 } from "@shared/class-pricing-rule";
-import { heldSeatRefusalMessage } from "@shared/roster-hold";
+import { heldSeatRefusalMessage, seatIsInSeason } from "@shared/roster-hold";
 import { readingLevelInstruction, type ClassReadingLevel } from "@shared/class-reading-level";
 import { learningStreakFromDays } from "@shared/learning-streak";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
@@ -7604,7 +7604,50 @@ export const storage = {
     return { ok: true as const };
   },
 
+  /** THE ROSTER AS THE COACH'S CURRENT SQUAD -- parked seats are NOT in it, and that default is
+   *  the whole point of this pair.
+   *
+   *  `getRosterForCoachIncludingHeld` below is the raw list and used to be the only one, under a
+   *  comment asserting that "the ones that must not count a parked athlete read the flag". NONE of
+   *  its 33 callers read the flag. Intent and code differed and the comment is what made it look
+   *  settled -- the same sentence CLAUDE.md uses for the cross-school contract leak.
+   *
+   *  What that cost, measured off the call sites rather than reasoned about: `nudge-wellness`
+   *  filters the roster to whoever has not checked in today, and a parked athlete NEVER checks in,
+   *  so every one of them was guaranteed a push and an email telling them to log today's wellness;
+   *  a team-board announcement fires with `bypassEmailPref` and `bypassPushCategoryPref`, so a
+   *  parked athlete got every "practice moved" email all off season with their own notification
+   *  preferences deliberately overridden; `email-roster` mailed them AND their guardians; and the
+   *  re-engagement list showed all of them as "hasn't logged a workout" with a Send Nudge button
+   *  beside each. A sent email cannot be taken back, which is why the DEFAULT had to move rather
+   *  than twenty call sites being patched -- the twenty-first would get it wrong the same way.
+   *
+   *  So the safe answer is the one you get by not thinking about it, and asking for the parked
+   *  seats costs a method name a grep finds. The losses from the inversion were checked per caller
+   *  (`every-roster-read-is-hold-aware.test.ts` holds the exception list to a stated reason): what
+   *  leaves a report is question 5, "in the program's current views and caps", which is the answer
+   *  those surfaces should always have given.
+   *
+   *  NOT a replacement for question 2 -- the coach may still READ a parked athlete. That is
+   *  `getRosterAthleteForCoach`, which deliberately resolves a parked seat, and the athlete-detail
+   *  page it serves. This is the LIST.
+   */
   async getRosterForCoach(coachId: number) {
+    const roster = await this.getRosterForCoachIncludingHeld(coachId);
+    return roster.filter((a) => seatIsInSeason({ heldAt: a.heldAt }));
+  },
+
+  /** Every seat on the roster, parked ones included, each carrying `heldAt`/`heldUntil`.
+   *  Read `getRosterForCoach` above before reaching for this: a caller wants it for exactly one of
+   *  three reasons, and anything else is the defect that comment records.
+   *   - it SPLITS the list itself (the roster screen's "On hold" card);
+   *   - it is a VISIBILITY set for a READ, which question 2 says a parked athlete stays in;
+   *   - it is a MEMBERSHIP check, where filtering would answer "Athlete not on your roster" about
+   *     somebody sitting on the coach's own screen under "On hold". The refusal has to come from
+   *     `assertSeatIsNotHeld`, which names the hold and the way out of it; a wrong explanation is
+   *     worse than a missing one.
+   */
+  async getRosterForCoachIncludingHeld(coachId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
     // Per-team assignment narrows the roster to the members of the teams
     // this coach is assigned to -- see teamCoaches in shared/schema.ts. A
@@ -7640,10 +7683,12 @@ export const storage = {
         groupId: coachAthletes.groupId,
         // THE OFF-SEASON HOLD RIDES ON THE ROSTER ROW, AS ONE LIST WITH A FLAG -- never a second
         // query for the parked athletes. Two lists is how a held athlete becomes invisible to a
-        // surface nobody remembered to update, and this list is read by the roster screen, the
-        // weekly digest, the wellness cards, the ACWR summary and a dozen other callers. They all
-        // keep seeing every athlete (shared/roster-hold.ts, question 2); the ones that must not
-        // count a parked athlete read the flag. See getHeldSeatsForCoach for the two-links case.
+        // surface nobody remembered to update. See getHeldSeatsForCoach for the two-links case.
+        //
+        // This comment used to end "the ones that must not count a parked athlete read the flag",
+        // and not one of the 33 callers did. The flag is read by `getRosterForCoach` above now, so
+        // the filtering happens ONCE, in the method almost everything calls -- a sentence here
+        // telling 33 callers what to do is not a mechanism, which is the whole lesson.
         heldAt: coachAthletes.heldAt,
         heldUntil: coachAthletes.heldUntil,
       })
@@ -10145,12 +10190,18 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
     // otherwise open the dashboard to "60 missed workouts this week", every week, which is not
     // true of anybody -- it is one hold reported sixty times.
     //
+    // `roster` is already parked-free -- getRosterForCoach filters -- so the per-call filter this
+    // line used to carry is gone rather than kept "for safety": a second filter over a filtered
+    // list is a claim that the first one might not have run, and the next reader cannot tell which
+    // of the two is the rule. The ratchet reads this method's hold-awareness off the resolver it
+    // calls, which is why the name of that resolver has to carry the meaning.
+    //
     // The two wellness counts above need no such filter and deliberately do not get one: they
     // INNER JOIN wellness_checkins, so an athlete who checked in produced a real row their coach
     // should see, and one who did not produced none. That is the line between the roster queries
     // that need question 5 and the ones that are already right.
     const missedWorkouts = await this.countMissedWorkoutsForRoster(
-      roster.filter((a) => a.heldAt == null).map((a) => a.id),
+      roster.map((a) => a.id),
       priorWindowStart,
       priorWindowEnd,
     );
@@ -25596,11 +25647,15 @@ ${catalog}`;
    */
   async listVideoReviewRequestsForCoach(coachId: number) {
     const coachIds = await this.getEffectiveCoachIds(coachId);
-    // Narrowed to the athletes this coach may actually open. getRosterForCoach is the one
-    // resolver that already applies both the staff union and the per-team assignment, so the
+    // Narrowed to the athletes this coach may actually open. getRosterForCoachIncludingHeld is the
+    // one resolver that already applies both the staff union and the per-team assignment, so the
     // queue cannot drift from the roster page -- and an athlete who has left the roster stops
     // appearing here, which is the same answer every other coach surface gives.
-    const visible = new Set((await this.getRosterForCoach(coachId)).map((a) => a.id));
+    // INCLUDING HELD, because this is a VISIBILITY set for a READ and question 2 keeps a parked
+    // athlete readable: the request was made before the hold and the clip still exists, so
+    // filtering would silently drop the review that has been waiting longest -- the exact failure
+    // the comment above this method already warns about for a different cause.
+    const visible = new Set((await this.getRosterForCoachIncludingHeld(coachId)).map((a) => a.id));
     const rows = await db
       .select({
         id: videoReviewRequests.id,
@@ -30241,7 +30296,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     if (!aiEnabled) {
       return { error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it." };
     }
-    const roster = await this.getRosterForCoach(coachId);
+    // INCLUDING HELD: this list is a NAME-to-id map for matching rows on a photographed sheet, not
+    // a current-squad view. A coach typing up a testing sheet in the off season has parked
+    // athletes' names on it, and a name that fails to resolve is silently dropped from the import
+    // (`athleteId` is left out rather than guessed), so filtering here would lose their rows with
+    // nothing on screen saying why.
+    const roster = await this.getRosterForCoachIncludingHeld(coachId);
     if (roster.length === 0) {
       return { error: "Your roster is empty -- add athletes before importing a testing sheet." };
     }
@@ -30304,7 +30364,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     if (!aiEnabled) {
       return { error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it." };
     }
-    const roster = await this.getRosterForCoach(coachId);
+    // INCLUDING HELD: this list is a NAME-to-id map for matching rows on a photographed sheet, not
+    // a current-squad view. A coach typing up a testing sheet in the off season has parked
+    // athletes' names on it, and a name that fails to resolve is silently dropped from the import
+    // (`athleteId` is left out rather than guessed), so filtering here would lose their rows with
+    // nothing on screen saying why.
+    const roster = await this.getRosterForCoachIncludingHeld(coachId);
     if (roster.length === 0) {
       return { error: "Your roster is empty -- add athletes before importing a weigh-in sheet." };
     }
@@ -30368,7 +30433,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     if (!aiEnabled) {
       return { error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it." };
     }
-    const roster = await this.getRosterForCoach(coachId);
+    // INCLUDING HELD: a NAME-to-id map for matching a photographed sheet, as the four sibling
+    // analyze*Photo methods above -- never a current-squad view. A name that fails to resolve is
+    // dropped from the import with nothing on screen saying why.
+    const roster = await this.getRosterForCoachIncludingHeld(coachId);
     const rosterList = roster.map((a) => `${a.id}: ${a.name}`).join("\n");
     const system =
       "You are transcribing a photographed nutrition target/macro sheet (from a coach, dietitian, or meal-plan printout) for a strength coach. Report exactly the numbers written -- never estimate a target that isn't shown. If the sheet names whose targets these are, match that name to the roster; otherwise leave athleteId out.";
@@ -30428,7 +30496,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     if (!aiEnabled) {
       return { error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it." };
     }
-    const roster = await this.getRosterForCoach(coachId);
+    // INCLUDING HELD: this list is a NAME-to-id map for matching rows on a photographed sheet, not
+    // a current-squad view. A coach typing up a testing sheet in the off season has parked
+    // athletes' names on it, and a name that fails to resolve is silently dropped from the import
+    // (`athleteId` is left out rather than guessed), so filtering here would lose their rows with
+    // nothing on screen saying why.
+    const roster = await this.getRosterForCoachIncludingHeld(coachId);
     if (roster.length === 0) {
       return { error: "Your roster is empty -- add athletes before importing an intake form." };
     }
@@ -30491,7 +30564,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     if (!aiEnabled) {
       return { error: "AI isn't set up yet -- ask whoever manages this Forge instance to configure it." };
     }
-    const roster = await this.getRosterForCoach(coachId);
+    // INCLUDING HELD: this list is a NAME-to-id map for matching rows on a photographed sheet, not
+    // a current-squad view. A coach typing up a testing sheet in the off season has parked
+    // athletes' names on it, and a name that fails to resolve is silently dropped from the import
+    // (`athleteId` is left out rather than guessed), so filtering here would lose their rows with
+    // nothing on screen saying why.
+    const roster = await this.getRosterForCoachIncludingHeld(coachId);
     if (roster.length === 0) {
       return { error: "Your roster is empty -- add athletes before importing testing data." };
     }
