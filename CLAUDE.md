@@ -2893,12 +2893,15 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 697** (2026-10-29
-  evening, `6d8f259`: the Romanian Deadlift's own numbers in `FITTED_OVERRIDES`, the weighted
-  3D-pose collapse, the replay harness reading each lift's record, the jump's raw hip peak;
-  696 was its `verify_build` on `ccdeba5`, and the beta picked up one server-only seed commit
-  merged in between, `cc5d2bf`, which changes nothing in the binary). **697 is the build to film
-  all three lifts on.** Before it, **695** earlier the same day (`039ae04`, a legal document
+  branch `verify_build` for the arbiter plumbing. **The newest build is 699** (2026-10-30
+  00:09 UTC, `ad319e1`: round two on 697 -- the Back Squat's own `heightRulerUncertainty` 0.11,
+  a plate that has to agree from both ends before it joins the blend, the jump's uncorrected hip
+  velocities in the export; 698 was its `verify_build` on the same commit). **699 is the build to
+  film all three lifts on.** Before it, **697** (2026-10-29 evening, `6d8f259`: the Romanian
+  Deadlift's own numbers in `FITTED_OVERRIDES`, the weighted 3D-pose collapse, the replay harness
+  reading each lift's record, the jump's raw hip peak; 696 was its `verify_build` on `ccdeba5`,
+  and the beta picked up one server-only seed commit merged in between, `cc5d2bf`, which changes
+  nothing in the binary). Before it, **695** earlier the same day (`039ae04`, a legal document
   opened inside the app wears the app's nav bar so it can be left; 694 was its `verify_build`),
   which is the build submitted to App Review. Before it, **693** the same day (`bcd3b74`, the in-app Privacy
   Policy and EULA links on every purchase surface for the second App Review rejection; 692 was
@@ -2933,8 +2936,9 @@ halves before splitting anything else:
   worst case **60.5% -> 20.7%**. The row is the one lift still outside 15% and the retrained
   detector is the only remaining candidate for it; what proves or disproves that is one filmed
   set, read off `plateBoxToExpectedRatio`.
-- **ROUND TWO ON 697 SHIPPED THE SQUAT'S OWN NUMBER AND THE PLATE RULE** (2026-10-29 evening,
-  calibration work, uploaded on commit; the build number is in the run list). Scott filmed all
+- **ROUND TWO ON 697 SHIPPED THE SQUAT'S OWN NUMBER AND THE PLATE RULE, AS BUILD 699**
+  (2026-10-29 evening, `ad319e1`; 698 was its `verify_build`, 699 the beta, uploaded 00:09 UTC
+  2026-10-30; calibration work, uploaded on commit). Scott filmed all
   three lifts on 697: squat -1.3% (its own `heightRulerUncertainty` 0.11 is the small step, ~+1%
   on the ledger's six squat rows and nothing else), RDL -34.2% from a plate boxed 1.63x too big
   and admitted from the body rulers' end (`scalesAgree` asks a plate from both ends now; without
@@ -2947,7 +2951,8 @@ halves before splitting anything else:
   screen; Reload signed in. Read off the Render log 2026-10-29 19:46:45. The burst is a render
   loop around `DeviceApprovalStep`'s claim effect; the crash follows it. Not reproduced yet (no
   DOM test environment in the unit suite); fix queued behind the calibration round.
-- **THE QUEUE WAS EMPTY AS OF BUILD 697** (2026-10-29 evening, `6d8f259`; 696 was its
+- **THE QUEUE IS EMPTY AS OF BUILD 699** (round two above; nothing waits behind it). Before it,
+  build **697** (2026-10-29 evening, `6d8f259`; 696 was its
   `verify_build` on `ccdeba5`). Calibration work, uploaded on commit: the RDL's first per-lift
   record (`depthRulerUncertainty` 0.6, `maxPeakToMeanRatio` 2.5), the weighted 3D-pose collapse,
   the replay harness resolving each capture's own record, and `concentricPeakVelocityRawMps` on
