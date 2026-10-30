@@ -3909,6 +3909,153 @@ billing uses the larger (`getBilledAthleteCountForCoach`).
   (`staffInviteCode` on `signupSchema`). The code is checked before the account is created, the
   row gets no plan of its own, and the account lands on the staff in the same request.
 
+## THE OFF-SEASON HOLD: A PARKED SEAT, NOT A REMOVAL, AND "FREE AGENT" IS DERIVED
+
+Added 2026-10-29. Scott: "coaches can only delete athletes they no longer have, but what happens
+in the off season? They players will come back in a few months, we need to build a database where
+the coach can put the player on hold, they don't get charged for it, and all of the players data
+remains for the coach when they come back."
+
+**THE WHOLE FEATURE IS THREE COLUMNS AND ONE `WHERE` CLAUSE, AND THE REASON IS THAT NOTHING IN
+FORGE STORES "FREE AGENT".** `roleEnum` is `["coach","athlete","admin","guardian"]`; a Free Agent
+is `role === "athlete"` with no active coach seat, recomputed per request by
+`storage.getCoachesForAthlete`, which **both** halves of the app resolve through -- the server via
+`athleteHasCoach`, the client via `useIsFreeAgent` -> `/api/athlete/coaches`. So Scott's own model
+("do they get reverted back to a free agent? And then when the season starts it activates their
+profiles") is right about the OUTCOME and the answer is that nothing reverts and nothing
+activates: `isNull(coachAthletes.heldAt)` on that one query flips every derived answer, both ways,
+on the next request. **No state machine, no activation job, no reconciler, nothing to drift.**
+A design that stored a second role, or deleted the row and remembered it elsewhere, would need all
+four.
+
+`coachAthletes.heldAt` / `heldUntil` / `heldByCoachId`, all nullable with no default, so **every
+pre-existing row reads as the active seat it is** -- proven against the real reconciler three ways
+on a throwaway database: clean from empty, idempotent on a second run, and over an EXISTING
+`coach_athletes` with a live row and no hold columns (the production case: 0 columns before, 3
+after, the partial index created, the pre-existing seat reading `held_at IS NULL`).
+`heldByCoachId` is deliberately **not** a `REFERENCES`: it is provenance, no cascade may ever
+un-hold anybody, and it stays out of the fk-drift set.
+
+**A HOLD IS FIVE INDEPENDENT QUESTIONS, NOT ONE BOOLEAN** (`shared/roster-hold.ts`), and four of
+the five agree today -- which is exactly why they are five names:
+
+| question | parked answer |
+|---|---|
+| 1. billed? | no |
+| 2. **may the coach read them?** | **YES** |
+| 3. may the coach assign to them? | no |
+| 4. counts as coached for the athlete's OWN features? | no |
+| 5. in the program's current views and caps? | no |
+
+**Question 2 is the feature.** A removal already preserves every row and takes the READ away; if a
+hold does that too it is a removal with a nicer name. `shared/roster-hold.test.ts` states it as the
+DISAGREEMENT -- `coachMayReadSeat(PARKED)` must differ from each of the other four -- so it reds the
+day somebody collapses them into one `isHeld()`, because collapsing them makes question 2 agree too.
+It CALLS the predicates rather than scanning the source they are written with, which is the
+`form-check-destination.ts` lesson: a scan over a decision can only see the words the decision is
+written with, never which way it goes.
+
+**QUESTION 4 IS SCOTT'S DECISION AND HAS ONE CARVE-OUT.** In the off season they train on their
+own, so the camera, skills, AI and class catalog follow their OWN tier like any uncoached
+athlete's. But a class their coach ENROLLED them in stays open: gating it would lock every chapter
+past the first of a class assigned in April and draw a $19.99 buy card in front of a fifteen-year-old
+for content the program already bought -- a withheld thing with no replacement, which Rule #1
+refuses. So the synthesis is neither "held = coached" nor "held = Free Agent" flat: **held = Free
+Agent for anything they would BUY, coached for anything the program already bought and GAVE them.**
+`ClassAccessGate` gains a **required** `coachGivenStaysOpen` (required, not optional, so the six
+call sites were compiler errors rather than silent defaults), and `classGateStateFor` asks it
+BEFORE `tierGated`, since a held athlete arrives tierGated and an exception checked after that
+never fires. `classGateFor` builds it from `getCoachSeatsForAthlete` -- the raw relationship, every
+seat parked or not, which is the one read that can tell a PARKED seat from no seat at all.
+
+**THE BILLING FACT THAT READS AS A BUG AND IS THE DESIGN.** `getBilledAthleteCountForCoach` is the
+LARGER of the seats held and `plannedAthleteCount`, so a program that typed "about 30" at signup
+and parks its whole roster **still bills the 30 band**. They are a 30-athlete program and they will
+be back. The hold's money effect is real where the roster has outgrown the estimate -- the
+population `coach-band-drift-job` exists to measure -- and a school that wants the quote to fall
+lowers its own number, the field directly above the held count on that screen. Pinned as its own
+itest case so nobody "fixes" it.
+
+**THE BLAST RADIUS WAS MEASURED, NOT ASSUMED: 24 methods, 31 `coach_athletes` query sites, 23 of
+them hold-aware and 8 deliberately not.** Most roster-wide reads INNER JOIN the activity they
+report on (wellness check-ins, workout logs), so a parked athlete contributes no rows and they
+needed no change at all; what needed question 5 was the DENOMINATORS and the CAPS
+(`getCoachWeeklyDigest`'s missed-workout denominator, the three CARA reads,
+`bulkAddAthletesToTeam`, `getAdminPlatformStats`). **Question 5 was not in the design** -- it was
+discovered by classifying the call sites, which is the argument for the ratchet:
+`server/every-roster-read-is-hold-aware.test.ts` discovers every site from the source, attributes
+each to its innermost owning method, derives hold-awareness from the CODE, and requires the
+remaining eight to carry a reason over eighty characters. It also found a 24th method a manual
+classification had missed (`setAthleteGroup`).
+
+**`getStaffRosterAthleteIds` KEEPS A PARKED ATHLETE IN, AND THE RATCHET HOLDS IT TO THE FORBIDDEN
+FORM** -- that method must NOT mention `heldAt`. Filtering there is what would turn a hold back
+into a removal everywhere at once, because the 2026-10-24 audit made a current roster seat part of
+`athleteIsInCoachScope`. Measured: dropping `isNull(heldAt)` into it reds NINE of the itest's cases.
+
+**BOTH WRITERS WRITE EVERY STAFF LINK** (`inArray(coachAthletes.coachId, coachIds)`, never a bare
+`eq`), after `athleteIsInCoachScope` so a narrowed assistant cannot park somebody they cannot see.
+A school with an assistant holds a `coach_athletes` row per coach for the same athlete, so parking
+one link alone would leave them **billed and reading coached through the assistant's row while the
+primary's screen shows them under "On hold"** -- a seat parked and charged at once, with no screen
+able to show the contradiction. Two itest cases drive it, because the ratchet can only see that
+`inArray` is written, not which way the decision goes.
+
+**COMING BACK IS THE COACH'S OWN ACT, WHICH IS THE PRACTICAL WIN.** Undoing a REMOVAL needs the
+ATHLETE (`sendFreeAgentRequest` needs their acceptance, and the removal dialog's own copy told the
+coach to have them re-enter the coach code), so a coach who removed sixty athletes in June has
+sixty people to chase in August. A hold never ended their consent, so lifting it needs nobody's
+permission but the program's. **And if the athlete types the coach code anyway, the hold is LIFTED
+rather than doubled** -- the row already exists, so an insert would collide on the pair index and
+returning it unchanged would leave them parked after re-joining, with their camera still off and
+nothing to explain it. Both join paths do this (`linkAthleteToCoach` and `claimRosterSeat`, the
+latter on `tx` inside the advisory lock it already took).
+
+**A REFUSED WRITE NAMES THE HOLD, NEVER THE ROSTER.** `getRosterForCoach` deliberately still
+contains a parked athlete, so the assignment route's own "Athlete not on your roster" check passes
+and the refusal comes from `assertSeatIsNotHeld`, which names the athlete, the hold, the return
+date and the way out of it. Demonstrated by mutation: make the roster read filter holds and the
+itest fails with *"expected 'Athlete not on your roster' to contain 'Jordan Reyes'"* -- a coach
+told that an athlete sitting on their own screen under "On hold" was not on their roster.
+`assertSeatIsNotHeld` returns early for `requestedBy === athleteId` (a parked athlete may still
+self-assign; it is the one thing the off season leaves them) and for a seat it cannot find (a
+"not your athlete" refusal belongs to the check that owns it -- a wrong explanation is worse than
+a missing one).
+
+**`heldUntil` PROMPTS AND NEVER ACTS.** `seatIsDueBack` is a lexicographic date comparison, which
+is why the column is `date` and the caller passes `todayIso()` rather than a timestamp -- a
+timestamp on either side makes "due on the 15th" false all day on the 15th. Nothing brings an
+athlete back on a schedule: a season start is a human decision and a sweep that re-billed sixty
+seats on a date typed in June is the wrong kind of automatic.
+
+**`getHeldSeatsForCoach` IS BILLING-SCOPED AND IS NEVER SERVED AS ROWS.** It resolves through
+`getEffectiveCoachIds` with no team narrowing, so a route returning it would leak the names of
+athletes outside a narrowed assistant's teams -- the exact leak the 2026-10-24 audit closed. I
+wrote that route and removed it before it shipped; the reason is on the method. The roster screen
+splits the already-narrowed `/api/coach/roster` list instead, which carries `heldAt`/`heldUntil` on
+every row, so the page needs no second query.
+
+**OPEN, NAMED SO IT IS NOT MISTAKEN FOR DONE: `requireSkillsAccess` gates skill READS**, so a
+parked athlete cannot open the skill history they already recorded. That follows from question 4
+and may well be wrong -- "all of the players data remains" is about the COACH's read, and whether
+the athlete keeps reading their own is a separate call. Put to Scott, unanswered.
+
+Where things are: `shared/roster-hold.ts` (the five predicates, pure, `today` passed in and never
+read from the clock), `shared/schema.ts` (three columns), `server/reconcile-schema.ts` (the ALTERs
+plus a partial index on `coach_id WHERE held_at IS NOT NULL`), `server/storage.ts` (13 changed
+sites, `holdAthlete`/`unholdAthlete`/`assertSeatIsNotHeld`/`getHeldSeatsForCoach`/
+`getCoachSeatsForAthlete`), `server/routes.ts` (per-athlete and bulk hold/unhold, `heldCount` on
+the plan payload), `client/src/pages/coach/roster.tsx` (the bulk bar and the "On hold" card with a
+due-back prompt), `client/src/pages/coach/athlete-detail.tsx` (an Off-season section above the
+Danger Zone). Tests: `shared/roster-hold.test.ts` (17), `server/every-roster-read-is-hold-aware.test.ts`
+(14, seven mutations, the comment-strip one recorded as not caught today and why),
+`server/an-off-season-hold.itest.ts` (23, nine mutations). Client halves: `verify_build`, and it
+batches -- no camera number moves.
+
+**AND THE REMOVAL DIALOG STOPPED PROMISING WHAT A COACH CANNOT DO.** It read "so you can always
+re-add them later with your coach code", which is the athlete's act, not the coach's. It names the
+hold as the thing to use for an athlete who is coming back.
+
 ## A changed Terms of Use is accepted again, never assumed
 
 Added 2026-09-19 on counsel's answer: "we can change the terms without telling you, and
