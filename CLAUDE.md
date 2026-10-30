@@ -2893,10 +2893,12 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 701** (2026-10-30
+  branch `verify_build` for the arbiter plumbing. **The newest build is 703** (2026-10-30
+  ~20:15 UTC, `87aa268`: round four -- the bench's own drive onset 0.03 and smoothing 200, the
+  Pendlay row's own depth uncertainty 0.6; 702 was its `verify_build` on the same commit). **703
+  is the build to film bench, Pendlay row and shoulder press on.** Before it, **701** (2026-10-30
   01:00 UTC, `980fcd4`: round three -- the box ruler corrects the landing numbers only and the
-  hip's drive keeps the floor scale; 700 was its `verify_build` on the same commit). **701 is the
-  build to film all three lifts on.** Before it, **699** (2026-10-30 00:09 UTC, `ad319e1`: round
+  hip's drive keeps the floor scale; 700 was its `verify_build` on the same commit). Before it, **699** (2026-10-30 00:09 UTC, `ad319e1`: round
   two on 697 -- the Back Squat's own `heightRulerUncertainty` 0.11, a plate that has to agree
   from both ends before it joins the blend, the jump's uncorrected hip velocities in the export;
   698 was its `verify_build` on the same commit). Before it, **697** (2026-10-29 evening, `6d8f259`: the Romanian
@@ -2973,8 +2975,8 @@ halves before splitting anything else:
   comments stripped; putting the division back reds two cases. See docs/camera-tracking-notes.md
   "Round three, 2026-10-30".
 - **ROUND FOUR, 2026-10-30: BENCH, PENDLAY ROW AND SHOULDER PRESS ON 701; THE BENCH AND THE ROW GET
-  THEIR OWN NUMBERS, THE PRESS WAITS ON ITS SENSOR SCREEN** (calibration work, uploaded on commit;
-  the build number is in the run list -- see the newest-build paragraph above). Scott filmed set 1
+  THEIR OWN NUMBERS, THE PRESS WAITS ON ITS SENSOR SCREEN, AS BUILD 703** (`87aa268`; 702 was its
+  `verify_build`, 703 the beta; calibration work, uploaded on commit). Scott filmed set 1
   of each at 8 reps and sent the OVR screens for the bench and the row. **The bench's scale landed
   for the first time (+3.2%) because the retrained detector's plate was finally the ruler on a real
   take** (`plateBoxToExpectedRatio` 0.919, locked 251 frames, 86% of the blend) -- the 657 retrain
@@ -2998,7 +3000,7 @@ halves before splitting anything else:
   reach the bench trace and not the row's or the press's, and the row's depth reaches the row's
   blend and not the bench's. `the-drive-window-was-fitted-on-thirteen-sets.test.ts` replays its
   sweep at the shared smoothing on purpose. See docs/camera-tracking-notes.md "Round four".
-- **THE QUEUE IS EMPTY AS OF THE ROUND-FOUR BETA** (round four above; nothing waits behind it).
+- **THE QUEUE IS EMPTY AS OF BUILD 703** (round four above; nothing waits behind it).
   Before it, **701** (round three). Before it,
   build **697** (2026-10-29 evening, `6d8f259`; 696 was its
   `verify_build` on `ccdeba5`). Calibration work, uploaded on commit: the RDL's first per-lift

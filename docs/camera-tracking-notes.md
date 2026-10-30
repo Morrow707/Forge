@@ -43,8 +43,8 @@ hundredth, and the board's "what is known not to work" list read before any leve
 beta, film again.** A big correction that lands once is not what he asked for; a run of small
 ones that each hold on the next take is. Target is 0% AND steady, so repeatability across the
 takes counts as much as the mean (Rule #5): a change that closes the mean and widens the
-take-to-take spread is not the change. Build to film on: **the round-four beta** (the run list in
-CLAUDE.md names its number; 701 carried round three, 699 round two).
+take-to-take spread is not the change. Build to film on: **703** (round four; 701 carried round three,
+699 round two).
 
 | lift | paired takes | ROM vs OVR, oldest -> newest | state |
 |---|---|---|---|
