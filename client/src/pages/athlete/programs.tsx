@@ -8,7 +8,12 @@ export default function AthletePrograms() {
   // has to stop being drawn for a Free Agent on Basic or AI Coach -- the routes behind it answer
   // 402 now, and a tab that always errors is worse than no tab. Explicit true: undefined means
   // the server has not answered, and flashing the tab in or out is worse than one quiet frame.
-  const showSkills = useSkillsAccess()?.allowed === true;
+  //
+  // `canRecord`, matching SkillsGate for the reason written there: both tabs lead to BUILD
+  // surfaces, so a parked athlete -- who may read their past skill numbers but not start a new
+  // session -- gets the same answer here as at the page, rather than a tab that shows them a
+  // hold card. One question, one answer, in both places.
+  const showSkills = useSkillsAccess()?.canRecord === true;
   return (
     <FreeAgentGate>
       <ProgramListPage

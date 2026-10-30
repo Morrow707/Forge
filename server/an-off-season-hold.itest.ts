@@ -21,7 +21,7 @@
  * server/every-roster-read-is-hold-aware.test.ts -- including team narrowing on both writers,
  * which is asserted from the source there rather than driven here.
  *
- * SIX LOGINS FOR THE WHOLE FILE, AND FIVE COACHES RATHER THAN ONE. loginLimiter allows 15
+ * SEVEN LOGINS FOR THE WHOLE FILE, AND FIVE COACHES RATHER THAN ONE. loginLimiter allows 15
  * attempts per IP per fifteen minutes and every client here connects from 127.0.0.1, so a login
  * inside each case spends that budget and the file starts failing with 429s that read as
  * authorization bugs -- which is exactly what the first run of this file did, on its last seven
@@ -31,7 +31,8 @@
  * and entitlement cases drive; coach B is the stated-headcount case; coach C is the cohort; coach
  * D exists to have a seat removed out from under it; coach E has a staff, so one athlete holds a
  * link to two coaches. `resetDatabase()` runs ONCE, and what the cases write -- the hold columns
- * -- is cleared between them instead.
+ * -- is cleared between them instead. The seventh actor has no seat at all and is not comped: the
+ * patch-safety case for a carve-out that widens access.
  *
  * NINE MUTATIONS, EACH CAUGHT BY THE RIGHT CASE, and the two that are worth keeping:
  *
@@ -97,6 +98,9 @@ let coachDClient: TestClient;
 // A program with a staff, where one athlete holds a link to BOTH coaches.
 let athleteE: Awaited<ReturnType<typeof makeLoginableUser>>;
 let coachEClient: TestClient;
+
+// Nobody's athlete, and NOT comped -- the patch-safety actor for the skills carve-out.
+let noSeatClient: TestClient;
 
 beforeAll(async () => {
   server = await startTestServer();
@@ -164,6 +168,14 @@ beforeAll(async () => {
   await addToRoster(coachE.id, athleteE.id);
   await addToRoster(coachF.id, athleteE.id);
   coachEClient = await loginAs(server.baseUrl, coachE);
+
+  // `isBetaAccount: false` is the whole point of this actor and is why it is not `stranger`:
+  // makeLoginableUser comps by default, and a comped account answers true at the FIRST
+  // entitlement gate, so a beta fixture proves nothing about a tier. A Free Agent who never had
+  // a coach is the population the skills gate was built for in 2026-09-19, and the carve-out for
+  // a parked seat must not loosen it.
+  const noSeat = await makeLoginableUser({ role: "athlete", isBetaAccount: false });
+  noSeatClient = await loginAs(server.baseUrl, noSeat);
 });
 
 afterAll(async () => {
@@ -443,6 +455,152 @@ describe("a hold and a removal are both still available", () => {
     expect(removed.status).toBe(204);
     expect(await storage.getCoachSeatsForAthlete(athleteD.id)).toHaveLength(0);
     expect((await coachDClient.get("/api/coach/plan")).body.heldCount).toBe(0);
+  });
+});
+
+describe("a parked athlete reads the skill numbers they already recorded", () => {
+  /**
+   * Scott, 2026-10-30, against the one item left open when the hold shipped: "let's add that."
+   *
+   * The skills side asked athleteHasCoach(), which a parked seat answers false, so a parked
+   * athlete on no paid tier lost the five skills READS along with the writes -- the sprint times
+   * and mechanics scores their coach's program had already produced. The carve-out is the class
+   * gate's, one surface over: held = Free Agent for anything they would BUY, coached for anything
+   * the program already bought and GAVE them.
+   *
+   * THE GATE IS TESTED BY DRIVING IT WITH MADE-UP IDS, deliberately. A middleware that refuses
+   * must refuse BEFORE anything about the resource is looked up, so a nonexistent assignment id
+   * is the sharpest probe there is: a 403 proves the gate ran, and a 404 proves it let the request
+   * through to the handler. Asserting "not 402" on the reads says the gate passed without the test
+   * having to build a skill assignment to be passed about.
+   */
+
+  // The reads that answer 200 on their own. `skill-session-logs` is here with its query param
+  // rather than bare: bare it answers 400 from its own handler, which would ALSO have proved the
+  // gate passed -- but an assertion that reads "not 402" is satisfied by a route that is broken
+  // for some third reason, and 200 with a real list is not.
+  const READS_THAT_STAND_ALONE = [
+    "/api/athlete/skill-exercises-with-history",
+    "/api/athlete/skill-session-logs?skillProgramExerciseId=999999",
+    "/api/athlete/leaderboard/skill-exercises",
+  ];
+  const READS_NEEDING_AN_ASSIGNMENT = [
+    "/api/athlete/skill-day/999999/999999",
+    "/api/athlete/skill-assignments/999999/days/999999/comments",
+  ];
+  const WRITES = [
+    ["post", "/api/athlete/skill-session-logs"],
+    ["post", "/api/athlete/skill-day/999999/999999/complete"],
+    ["put", "/api/athlete/skill-day/999999/999999/999999/sets/1"],
+    ["post", "/api/athlete/skill-assignments/999999/days/999999/comments"],
+  ];
+
+  const park = () => coachAClient.post(`/api/coach/roster/${athleteA.id}/hold`, { heldUntil: "2026-08-15" });
+
+  it("keeps every read open, where before the hold they answered 402", async () => {
+    // THE PREMISE: these all open while the seat is active, on the coached branch, with no tier.
+    for (const path of READS_THAT_STAND_ALONE) {
+      expect((await athleteAClient.get(path)).status).toBe(200);
+    }
+
+    await park();
+
+    // THE CLAIM.
+    for (const path of READS_THAT_STAND_ALONE) {
+      const res = await athleteAClient.get(path);
+      expect(res.status).toBe(200);
+    }
+
+    // AND THE LEADERBOARD NOW SAYS THE TRUE THING, which is the measured argument for putting a
+    // comparative surface with the READS rather than the writes. getSpeedLeaderboardExercisesForAthlete
+    // returns null for an athlete with no ACTIVE coach and athlete/leaderboard.tsx draws
+    // <NoCoachCard /> on exactly that -- so letting a parked athlete through produces the sentence
+    // the page was already built to produce. Refusing them with a 402 instead leaves `exercises`
+    // undefined, the `=== null` branch unreached, and the page drawing an empty drill dropdown:
+    // the refusal is strictly worse than the pass-through.
+    const board = await athleteAClient.get("/api/athlete/leaderboard/skill-exercises");
+    expect(board.body).toBeNull();
+    for (const path of READS_NEEDING_AN_ASSIGNMENT) {
+      // Not 402: whatever the handler then makes of a made-up id, the GATE passed it through.
+      expect((await athleteAClient.get(path)).status).not.toBe(402);
+    }
+  });
+
+  it("refuses every write, and names the hold rather than a plan", async () => {
+    await park();
+    for (const [verb, path] of WRITES) {
+      const res =
+        verb === "post"
+          ? await athleteAClient.post(path, {})
+          : await athleteAClient.put(path, {});
+      // 403 AND NOT 404, which is what proves the gate ran before the resource was looked up --
+      // every one of these ids is made up. Same argument as the checkout itests asserting 403
+      // and not 503: a refusal about WHO is asking has to come first or it is decorative.
+      expect(res.status).toBe(403);
+      expect(res.body.heldSeat).toBe(true);
+      expect(res.body.message).toMatch(/on hold/i);
+      // NOT the paywall shape: the client draws a "See plans" button off freeAgentPaywall, and a
+      // parked athlete is not short of a plan -- their coach parked them.
+      expect(res.body.freeAgentPaywall).toBeUndefined();
+      expect(res.body.message).not.toMatch(/AI Coach \+ Video|upgrade/i);
+    }
+  });
+
+  it("says which of the two states they are in, so the screen can say it too", async () => {
+    const before = await athleteAClient.get("/api/athlete/skills-access");
+    expect(before.body).toMatchObject({ allowed: true, canRecord: true, reason: "coached_athlete" });
+
+    await park();
+
+    const parked = await athleteAClient.get("/api/athlete/skills-access");
+    expect(parked.body).toMatchObject({
+      allowed: true,
+      canRecord: false,
+      reason: "held_seat_history_only",
+    });
+
+    await coachAClient.post(`/api/coach/roster/${athleteA.id}/unhold`, {});
+    const back = await athleteAClient.get("/api/athlete/skills-access");
+    expect(back.body).toMatchObject({ allowed: true, canRecord: true, reason: "coached_athlete" });
+  });
+
+  it("gives a parked athlete who BOUGHT the plan all of it, recording included", async () => {
+    // THE ORDERING, AND THE ONE THING NO SOURCE SCAN CAN SEE. skillsAccessFor asks whether they
+    // have paid BEFORE it asks whether the seat is parked, so somebody paying for AI Coach +
+    // Video keeps the whole skills side through the off season. Asking about the hold first would
+    // take away what they bought -- the same ordering, and the same argument, as the All Classes
+    // add-on being resolved ahead of the coach in classGateFor. A scan over the resolver can read
+    // both checks and cannot tell which way the decision goes; this drives it.
+    await park();
+    expect((await athleteAClient.get("/api/athlete/skills-access")).body.canRecord).toBe(false);
+
+    await storage.updateFreeAgentBilling(athleteA.id, { freeAgentTier: "ai_coach_video" });
+    try {
+      const paid = await athleteAClient.get("/api/athlete/skills-access");
+      expect(paid.body).toMatchObject({ allowed: true, canRecord: true, reason: "entitled" });
+      // And the writes really open, not just the flag.
+      const res = await athleteAClient.post("/api/athlete/skill-day/999999/999999/complete", {});
+      expect(res.status).not.toBe(403);
+    } finally {
+      // The tier is not hold state, so beforeEach does not clear it -- this case owns it.
+      await storage.updateFreeAgentBilling(athleteA.id, { freeAgentTier: null });
+    }
+  });
+
+  it("still refuses an athlete who never had a coach, with the paywall and not the hold", async () => {
+    // The patch-safety case. A Free Agent on no tier is the population this gate was built for in
+    // 2026-09-19 and nothing about the hold may loosen it -- this actor has no seat at all, so
+    // `seats.length > 0` is false and they fall to tier_excludes_skills. Not comped, or beta
+    // would answer true at the first gate and the case would prove nothing.
+    const res = await noSeatClient.get("/api/athlete/skills-access");
+    expect(res.body).toMatchObject({
+      allowed: false,
+      canRecord: false,
+      reason: "tier_excludes_skills",
+    });
+    const refused = await noSeatClient.get("/api/athlete/skill-session-logs");
+    expect(refused.status).toBe(402);
+    expect(refused.body.freeAgentPaywall).toBe(true);
   });
 });
 

@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Target } from "lucide-react";
+import { PauseCircle, Target } from "lucide-react";
 import { useSkillsAccess } from "@/hooks/use-skills-access";
 import { ReadFailed } from "@/components/read-failed";
 
@@ -21,6 +21,20 @@ import { ReadFailed } from "@/components/read-failed";
  * Shows a spinner rather than nothing while the answer is unknown, for the reason FreeAgentGate
  * records: returning null gives a completely blank page -- no nav, no header -- on a cold start,
  * and every other loading path in the app shows something.
+ *
+ * IT DECIDES ON `canRecord`, NOT ON `allowed`, AND THAT IS NOT A TYPO. The off-season hold gave
+ * the skills question two answers (see skillsAccessFor): a parked athlete may OPEN the skills
+ * side -- their past sprint times feed the goal picker and the speed leaderboard, both of which
+ * live on pages this gate does not wrap -- and may not START anything new. Every one of the five
+ * pages this DOES wrap is a build-or-record surface or a stub redirecting to one: My Skill
+ * Programs, the builder, the skill-session screen, and two Skill Library pages that are now a
+ * link to the builder. So for a parked athlete the right answer on all five is still no, and
+ * passing them through on `allowed` would have handed them a New Skill Program button and an AI
+ * chat whose every write answers 402 -- a page of dead controls, which this repo holds to be
+ * worse than no page.
+ *
+ * The REFUSAL is decided by the boolean and only the COPY by the reason, so a later reason that
+ * cannot record is refused by default rather than slipping through a list of known ones.
  */
 export function SkillsGate({ children, title = "Skills" }: { children: ReactNode; title?: string }) {
   const [, navigate] = useLocation();
@@ -47,7 +61,31 @@ export function SkillsGate({ children, title = "Skills" }: { children: ReactNode
     );
   }
 
-  if (!access.allowed) {
+  if (access.canRecord !== true) {
+    // A PARKED SEAT GETS THE HOLD'S OWN SENTENCE AND NO BUY BUTTON AS THE HEADLINE. They are not
+    // short of a plan, their coach parked them for the off season, and the thing that fixes it is
+    // their coach -- so "See plans" as the primary action would be answering a question they did
+    // not ask. It names where their numbers still are, because they are still there and the
+    // whole point of a hold rather than a removal is that nothing was lost.
+    if (access.reason === "held_seat_history_only") {
+      return (
+        <AppShell title={title}>
+          <Card className="mt-6">
+            <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+              <PauseCircle className="h-10 w-10 text-muted-foreground" />
+              <p className="max-w-sm text-muted-foreground">
+                Your coach has you on hold for the off season, so skill sessions are paused. Every
+                drill you have already recorded is still on file and still counts -- your times
+                show up on your goals and on the leaderboard.
+              </p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Your coach brings you back when the season starts, and this opens again.
+              </p>
+            </CardContent>
+          </Card>
+        </AppShell>
+      );
+    }
     return (
       <AppShell title={title}>
         <Card className="mt-6">

@@ -6,9 +6,20 @@ export type SkillsAccessReason =
   | "coach_or_admin"
   | "coached_athlete"
   | "entitled"
+  | "held_seat_history_only"
   | "tier_excludes_skills";
 
-export type SkillsAccess = { allowed: boolean; reason: SkillsAccessReason };
+/** Mirrors the server's SkillsAccess (server/routes.ts, skillsAccessFor). TWO booleans rather
+ *  than one since the off-season hold: a parked athlete may OPEN the skills side and read the
+ *  sessions their coach's program already produced, and may not RECORD a new one. Everybody else
+ *  answers both the same way. `skills-need-entitlement.test.ts` holds this declaration and the
+ *  server's together -- the client declares its own copy rather than importing it, so a
+ *  divergence here typechecks cleanly and is invisible, which is why it is asserted. */
+export type SkillsAccess = {
+  allowed: boolean;
+  canRecord: boolean;
+  reason: SkillsAccessReason;
+};
 
 /** What a caller gets back. `allowed` is undefined until the server answers AND after a failed
  * read, so `?.allowed === true` stays the only way to draw a skills control. `failed` is the
@@ -16,6 +27,9 @@ export type SkillsAccess = { allowed: boolean; reason: SkillsAccessReason };
  * and the skills gate spun forever with no retry. */
 export type SkillsAccessState = {
   allowed: boolean | undefined;
+  /** Undefined until answered and after a failed read, same convention as `allowed`: a control
+   *  that STARTS something is drawn on an explicit true and never on a maybe. */
+  canRecord: boolean | undefined;
   reason: SkillsAccessReason | undefined;
   failed: boolean;
   retry: () => void;
@@ -56,10 +70,17 @@ export function useSkillsAccess(): SkillsAccessState {
     staleTime: 5 * 60 * 1000,
   });
   if (!eligible) {
-    return { allowed: false, reason: "tier_excludes_skills", failed: false, retry: () => {} };
+    return {
+      allowed: false,
+      canRecord: false,
+      reason: "tier_excludes_skills",
+      failed: false,
+      retry: () => {},
+    };
   }
   return {
     allowed: data?.allowed,
+    canRecord: data?.canRecord,
     reason: data?.reason,
     failed: isError,
     retry: () => void refetch(),

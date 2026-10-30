@@ -1138,8 +1138,16 @@ async function cameraAccessFor(user: { id: number; email: string; role: string }
 }
 
 export type SkillsAccess = {
+  /** May they OPEN the skills side -- their programs, their history, the drill library. */
   allowed: boolean;
-  reason: "coach_or_admin" | "coached_athlete" | "entitled" | "tier_excludes_skills";
+  /** May they START something new -- log a set, complete a drill day, record a session. */
+  canRecord: boolean;
+  reason:
+    | "coach_or_admin"
+    | "coached_athlete"
+    | "entitled"
+    | "held_seat_history_only"
+    | "tier_excludes_skills";
 };
 
 /**
@@ -1157,13 +1165,32 @@ export type SkillsAccess = {
  */
 async function skillsAccessFor(user: { id: number; email: string; role: string }): Promise<SkillsAccess> {
   if (user.role === "coach" || user.role === "admin") {
-    return { allowed: true, reason: "coach_or_admin" };
+    return { allowed: true, canRecord: true, reason: "coach_or_admin" };
   }
-  if (await athleteHasCoach(user.id)) return { allowed: true, reason: "coached_athlete" };
+  // THE SEATS, NOT athleteHasCoach(), AND THAT IS THE WHOLE OF THE OFF-SEASON CARVE-OUT.
+  // getCoachSeatsForAthlete is the raw relationship -- every seat, parked or not -- so it is the
+  // one read that can tell a PARKED seat from no seat at all, which athleteHasCoach cannot
+  // (it resolves through getCoachesForAthlete, where isNull(heldAt) has already dropped the
+  // parked ones). Same read classGateFor uses, for the same reason.
+  const seats = await storage.getCoachSeatsForAthlete(user.id);
+  if (seats.some((seat) => seat.heldAt == null)) {
+    return { allowed: true, canRecord: true, reason: "coached_athlete" };
+  }
+  // PAID IS ASKED BEFORE PARKED, deliberately: a parked athlete who holds AI Coach + Video is
+  // paying for the skills side themselves and gets all of it, recording included. Asking about
+  // the hold first would take away what they bought -- the same ordering, and the same argument,
+  // as the All Classes add-on being resolved ahead of the coach in classGateFor.
   const hasPaid = await hasAthletePaidForAiAccess(user.id, user.email, "skillsAi");
-  return hasPaid
-    ? { allowed: true, reason: "entitled" }
-    : { allowed: false, reason: "tier_excludes_skills" };
+  if (hasPaid) return { allowed: true, canRecord: true, reason: "entitled" };
+  // A PARKED SEAT KEEPS WHAT THE PROGRAM ALREADY GAVE THEM (shared/roster-hold.ts, question 4's
+  // carve-out, one surface over from the class gate). Their coach paid for the sprints and
+  // mechanics drills already on file, so the off season is not the moment those stop opening --
+  // and unlike a Free Agent who never held a tier, this athlete HAS recorded sessions, which is
+  // exactly the distinction. New recording is a capability and is bought; history is theirs.
+  if (seats.length > 0) {
+    return { allowed: true, canRecord: false, reason: "held_seat_history_only" };
+  }
+  return { allowed: false, canRecord: false, reason: "tier_excludes_skills" };
 }
 
 // Gates the skills side for a Free Agent, passing a coached athlete and a self-training coach
@@ -1174,6 +1201,42 @@ async function requireSkillsAccess(req: any, res: any, next: any) {
   const user = currentUser(req);
   const access = await skillsAccessFor(user);
   if (!access.allowed) {
+    return res.status(402).json({
+      message: "Skills are part of the AI Coach + Video plan for Free Agents.",
+      freeAgentPaywall: true,
+      entitlement: "skillsAi",
+    });
+  }
+  next();
+}
+
+/**
+ * Gates STARTING something new on the skills side, where requireSkillsAccess gates OPENING it.
+ *
+ * Two gates rather than one because the off-season hold made the question two questions: a parked
+ * athlete may read the sprint times and mechanics scores their coach's program already produced,
+ * and may not record more until somebody is paying again. Everybody else answers both the same
+ * way, which is why this is a second middleware on four routes rather than a parameter on the
+ * first -- the four WRITES are a closed set a reader can see, and a flag would put the
+ * read/write distinction inside a function call where a new route would inherit whichever
+ * default it was given.
+ *
+ * The refusal says which of the two states the caller is in, because they want different things
+ * done about them: a tier-excluded Free Agent buys the plan, and a parked athlete asks their coach
+ * to bring them back -- a "See plans" button is the wrong answer for the second, and
+ * `freeAgentPaywall` is what the client reads to draw one.
+ */
+async function requireSkillsRecording(req: any, res: any, next: any) {
+  const user = currentUser(req);
+  const access = await skillsAccessFor(user);
+  if (!access.canRecord) {
+    if (access.reason === "held_seat_history_only") {
+      return res.status(403).json({
+        message:
+          "Your coach has you on hold for the off season. Your past sessions stay here; ask them to bring you back to record a new one.",
+        heldSeat: true,
+      });
+    }
     return res.status(402).json({
       message: "Skills are part of the AI Coach + Video plan for Free Agents.",
       freeAgentPaywall: true,
@@ -12397,8 +12460,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/skill-day/:skillAssignmentId/:skillProgramDayId/complete",
     requireRole("athlete"),
     // Reached by coached athletes too, so the three-branch rule rather than the
-    // Free-Agent-only one -- see skillsAccessFor.
-    requireSkillsAccess,
+    // Free-Agent-only one -- see skillsAccessFor. RECORDING rather than reading, so this is the
+    // one of the two gates a PARKED seat is refused by; the GETs beside it still open.
+    requireSkillsRecording,
     async (req, res) => {
       const user = currentUser(req);
       const parsed = setSkillDayCompleteSchema.safeParse(req.body);
@@ -12426,8 +12490,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/skill-day/:skillAssignmentId/:skillProgramDayId/:skillProgramExerciseId/sets/:setNumber",
     requireRole("athlete"),
     // Reached by coached athletes too, so the three-branch rule rather than the
-    // Free-Agent-only one -- see skillsAccessFor.
-    requireSkillsAccess,
+    // Free-Agent-only one -- see skillsAccessFor. RECORDING rather than reading, so this is the
+    // one of the two gates a PARKED seat is refused by; the GETs beside it still open.
+    requireSkillsRecording,
     async (req, res) => {
       const user = currentUser(req);
       const parsed = upsertSkillSetEntrySchema.safeParse(req.body);
@@ -12470,8 +12535,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/skill-assignments/:assignmentId/days/:skillProgramDayId/comments",
     requireRole("athlete"),
     // Reached by coached athletes too, so the three-branch rule rather than the
-    // Free-Agent-only one -- see skillsAccessFor.
-    requireSkillsAccess,
+    // Free-Agent-only one -- see skillsAccessFor. RECORDING rather than reading, so this is the
+    // one of the two gates a PARKED seat is refused by; the GETs beside it still open.
+    requireSkillsRecording,
     async (req, res) => {
       const user = currentUser(req);
       const assignmentId = Number(req.params.assignmentId);
@@ -12521,8 +12587,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/athlete/skill-session-logs",
     requireRole("athlete"),
     // Reached by coached athletes too, so the three-branch rule rather than the
-    // Free-Agent-only one -- see skillsAccessFor.
-    requireSkillsAccess,
+    // Free-Agent-only one -- see skillsAccessFor. RECORDING rather than reading, so this is the
+    // one of the two gates a PARKED seat is refused by; the GETs beside it still open.
+    requireSkillsRecording,
     async (req, res) => {
     const user = currentUser(req);
     const parsed = createSkillSessionLogSchema.safeParse(req.body);
