@@ -367,14 +367,18 @@ const BY_ROM_BUCKET: Record<string, Partial<CameraTunables>> = {
 };
 
 /** A FITTED NUMBER GOES HERE, against the one identity it was measured on, with the date and
- *  the measured error in a comment. Empty today, and that is the correct state: not one constant
- *  in this file has been fitted on a single lift in isolation. The RDL, the box jump and the
- *  bench were all fixed by changing a LABEL or a RULE, never by giving one lift its own number,
- *  and the 10-06 bias sweep is on the record as evidence against doing so blind. */
+ *  the measured error in FITTED_OVERRIDE_EVIDENCE beside it. The list was empty until
+ *  2026-10-29 and that was the correct state then: every earlier win was a LABEL or a RULE, and
+ *  the 10-06 bias sweep is on the record as evidence against fitting blind. An entry gets in one
+ *  way only: costed on every ledger row and every stored trace of that lift, with the other
+ *  lifts shown unmoved -- the registry is machinery for fitting one lift safely, not permission
+ *  to guess. */
 export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // e.g. "Bench Press": { driveOnsetFraction: 0.09 }, // 2026-10-__, +4.3% -> 0.0% against OVR
   "Romanian Deadlift": { maxPeakToMeanRatio: 2.5, depthRulerUncertainty: 0.6 },
   "Back Squat": { heightRulerUncertainty: 0.11 },
+  "Bench Press": { driveOnsetFraction: 0.03, velocitySmoothingMs: 200 },
+  "Pendlay Row": { depthRulerUncertainty: 0.6 },
 };
 
 /** WHY EACH OVERRIDE EXISTS, in the sentence a reader needs to decide whether it still should.
@@ -406,6 +410,39 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "judgement about an uncertainty and not a fit of a bias; replayed on all five ledger rows it takes " +
     "the RDL's median error from 12.0% to under 8% and moves no squat row, since the squat's record " +
     "still states 0.2 for both.",
+  "Bench Press":
+    "2026-10-30, round four, build 701 beside the OVR. driveOnsetFraction 0.04 -> 0.03 on this lift " +
+    "only: the bench's reported mean has read HIGH against the sensor on every clean bench take " +
+    "stored in the repo -- +10.3% (10-30), +10.4% (set 7, 09-29), +6.4% (set 10, 09-30), +15.7% " +
+    "(oblique, 09-29) -- with the range of motion inside 3% on the newest, so the error is the window " +
+    "and not the scale. The shared 0.04 was fitted ACROSS five movements on 10-07 (the sensor's " +
+    "concentric DURATION, not its mean); on the four clean benches the mean-velocity bias is +10.7% " +
+    "at 0.04, +5.2% at 0.03 (+8.8, +2.6, +3.8, +5.7, every take the right way, spread 6 points) and " +
+    "+0.1% at 0.02 -- and 0.02 is NOT taken this round because the one trace-poor bench in the corpus " +
+    "(set 5, 09-29, a carried point frozen mid-rep) goes from -15.6% to -31.2% there and to -22.1% at " +
+    "0.03. Every rep count unchanged at every fraction. 0.02 is the next step if the next bench still " +
+    "reads high. velocitySmoothingMs 165 -> 200 on this lift only: the 165 was fitted on ONE bench take " +
+    "(provenance audit 10-20) and the peak reads +18.6% (10-30), 0.0%, -1.8%, +11.9% at 165 against " +
+    "+14.4, -4.5, 0.0, +3.0 at 200 -- bias +7.2% -> +3.2%, mean absolute error 8.1% -> 5.5%; 210 and " +
+    "above push set 7 and set 10 to -5.5%, and a peak-to-mean CAP was swept and rejected (1.6 caps half " +
+    "the reps). The pair together on the four clean takes: mean bias +6.3% (|err| 6.3%), peak bias " +
+    "+3.0% (|err| 5.2%, the lowest of any cell swept). Replayed on the 10-30 fixture and every stored " +
+    "bench; the row, the press, the squat and the RDL traces are untouched by construction (their " +
+    "records still read the shared 0.04 and 165, asserted in " +
+    "ovr-2026-10-30-every-lift-reads-only-its-own-record.test.ts).",
+  "Pendlay Row":
+    "2026-10-30, round four, build 701 beside the OVR. depthRulerUncertainty 0.2 -> 0.6 on this lift " +
+    "only, the same statement the Romanian Deadlift's record makes about the same instrument on a " +
+    "hinge: the depth ruler read -64% of the scale the sensor requires on 10-30 (0.00126 against " +
+    "0.00347), -22% on 10-09 set 1, -27% on 10-09 set 3 and +0.4% on 10-09 set 2, while the in-plane " +
+    "bone read -15%, -9%, -21% and -3% -- a hinge filmed oblique puts the wrist's depth where the " +
+    "collapse's equal weighting carries half of that error into the pair's one witness. At 0.6 (a " +
+    "ninth of the bone's weight) the four paired row takes read +0.6%, -2.7%, -2.4%, -15.2% where they " +
+    "read -10.8%, -7.3%, -1.1%, -17.5% at 0.2: median |error| 9.0% -> 2.6%, the one cost being set 2's " +
+    "1.3 points, written here rather than averaged away. An uncertainty, not a bias: the row's depth " +
+    "ruler reads LOW where the RDL's reads HIGH, which is exactly why neither lift's record states a " +
+    "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
+    "moves, since each reads its own record.",
 };
 
 /** Where each of an identity's numbers came from. The report prints this, so a reader can tell

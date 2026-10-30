@@ -14,7 +14,7 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-10-29, round two)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-10-30, round four)
 
 Scott, 2026-10-29: "I want you keeping a running log wherever you need to ... so we don't keep
 going in circles with what works and what doesn't, when your feed goes stale you don't remember
@@ -24,7 +24,9 @@ of every session, before the push, and date the heading.** The replayable record
 `shared/accuracy-ledger.ts` (one row per sensor-paired take, replayed by
 `the-ledger-replays-every-paired-take.test.ts`); a take that is not a row there is not measured.
 
-**Under test (Scott, 2026-10-20): Back Squat, Romanian Deadlift, Box Jump. Nothing else.**
+**Under test (Scott, 2026-10-20): Back Squat, Romanian Deadlift, Box Jump. And from 2026-10-30, at
+his choice, Bench Press, Pendlay Row and Barbell Shoulder Press ("reps of probably 8 ... multiple
+sets"). Every round fixes something on every lift filmed that round.**
 
 **THE STANDING ORDER FOR THE NEXT SESSION (Scott, 2026-10-29, after build 697 shipped the RDL's
 record):** "Ok I'll record all 3, but I want you to change something on all lifts after this
@@ -41,13 +43,17 @@ hundredth, and the board's "what is known not to work" list read before any leve
 beta, film again.** A big correction that lands once is not what he asked for; a run of small
 ones that each hold on the next take is. Target is 0% AND steady, so repeatability across the
 takes counts as much as the mean (Rule #5): a change that closes the mean and widens the
-take-to-take spread is not the change. Build to film on: **701** (round three; 699 carried round two).
+take-to-take spread is not the change. Build to film on: **the round-four beta** (the run list in
+CLAUDE.md names its number; 701 carried round three, 699 round two).
 
 | lift | paired takes | ROM vs OVR, oldest -> newest | state |
 |---|---|---|---|
 | Back Squat 135 | 10-19 x2, 10-29 x2 | -5.3%, -1.5%, -1.9%, **-1.3%** (mean 0.81/0.84/0.72/0.89 vs 0.86/0.84/0.80/0.84) | **lands, same signature four takes running; its own height uncertainty (0.11) ships in round two, worth about +1%** |
 | Romanian Deadlift 135 | 10-19 x2, 10-29 x2 | +16.4%, +12.0%, +30.5% oblique; **-34.2% square-on on 697** -- a plate boxed 1.63x too big took 86% of the scale. Without it the square-on take reads **-1.9%** | **square-on, the body rulers are within 2%; the plate rule is fixed in round two; the velocities are the next fault (window 25% long)** |
 | Box Jump, 24in box | 10-19 x2, 10-29 x2 | box ruler 1.20-1.22 on both 10-29 sets (ankle rise 72-75cm onto 61); hip peak **+2% / -13%** at the floor scale (was -15% / -29% divided by the landing ratio); hip mean +15% / +7% at the floor scale | **round three: the box ratio corrects the LANDING numbers only; the hip's drive keeps the floor scale the squat proved from the same spot. Next: set 1's -13% is a trace with 21 dropouts, and the mean's window** |
+| Bench Press 135 | 10-30 x1 (plus the 09-29/09-30/10-02 corpus) | **+3.2%** (36.7 vs 35.6) -- the first bench whose scale lands, and the first real take where the retrained detector's PLATE was the ruler (box 0.919 of expected, 86% of the blend); mean +10.3%, peak +18.6% | **round four: the bench's own window (driveOnsetFraction 0.03) and smoothing (200), costed on the four clean paired benches: mean bias +10.7% -> +6.3%, peak bias +7.2% -> +3.0%. 0.02 is the zero-bias window on those four and the NEXT step; held back because the one trace-poor bench (set 5, 09-29) pays 15 points there** |
+| Pendlay Row 135 | 10-30 x1 (plus 10-09 x3 candidates) | **-10.8%** (46.9 vs 52.6): the depth ruler read -64% and the collapse carried half of it; mean +23.6%, peak +6% | **round four: the row's own depthRulerUncertainty 0.6 (the RDL's hinge statement, same instrument): -10.8% -> +0.6%, and the three 10-09 rows -7.3/-1.1/-17.5 -> -2.7/-2.4/-15.2. Next: the window -- the segmented phase is already shorter than the sensor's concentric, because the bottom of a Pendlay rep is a hand at the plates (172 frames under the wrist floor, 196 lone-hand points)** |
+| Barbell Shoulder Press 65 | 10-30 x1, NO sensor screen yet | 7 of 8 reps; the 8th is in the trace (a 68cm press at 19.0-19.8s) and was folded into the lowering to the floor that follows it; ROM 63, mean 0.71, peak 1.30 at the height ruler's 66.7% | **nothing fitted: no OVR numbers for it. Send the press screen and it gets its ledger row and its own number. The folded last rep is a RULE question (a press re-racks downward), not a number** |
 
 **WHAT WORKS AND MUST NOT BE TOUCHED** (each proven against the sensor, each with a test):
 - A hinge gets NO height ruler (`bent_over`, 10-05): the RDL went -7.0% -> 0.0% that day.
@@ -64,6 +70,13 @@ take-to-take spread is not the change. Build to film on: **701** (round three; 6
 - A PLATE agrees from both ends or not at all (`scalesAgree`, 10-29 round two): the 697 RDL's
   1.63x plate was inside 0.4 anchored on the body and 1.53x away anchored on itself, and took
   86% of the blend. For the BODY rulers the one-ended test stays -- see the next list.
+- The retrained detector's plate IS a ruler on a bench (10-30, round four): locked 251 of 994
+  frames, boxed 0.919 of what the body expects, admitted from both ends, 86% of the blend, and the
+  bench's range of motion landed (+3.2%) for the first time on record. Nothing was changed to get
+  it; it is the 657 retrain finally read on a bench. Do not touch the plate gates on the strength
+  of the RDL's 1.63x -- that was a hinge filmed square-on with the plate edge-on to the lens.
+- A hinge's depth ruler is stated at 0.6 IN THAT LIFT'S RECORD (RDL 10-29, Pendlay Row 10-30):
+  high on the RDL, low on the row, wide on both; the collapse weighs the pair by what each states.
 
 **THE SQUAT'S FIRST PER-LIFT NUMBER, 10-29 round two** (`FITTED_OVERRIDES["Back Squat"]`):
 `heightRulerUncertainty` 0.1 -> 0.11, the small step Scott asked for. Four squat takes in a row
@@ -98,9 +111,41 @@ row identical to the hundredth. See "Second pass, 2026-10-29".
 - Fitting `DEPTH_RULER_BIAS`: depth has read HIGH on every take since the height went on file
   (+14, +22, +27, +35, +38, +44%), scatter as wide as the bias. Rule #5.
 - Refusing the shoulder ruler: the only good voter on a bench (10-09).
-- Admitting the plate: the retrained detector boxed the plate 1.75x (10-19) and **2.19x (10-29)**
-  too big on the two real takes read since the retrain, against 1.01-1.03x on held-out images.
-  The gates were right both times. The object witness is still not a ruler on a real take.
+- Admitting the plate on a HINGE: the retrained detector boxed the plate 1.75x (10-19) and **2.19x
+  (10-29)** too big on the two RDL takes read since the retrain, against 1.01-1.03x on held-out
+  images, and the gates were right both times. On the 10-30 BENCH it boxed 0.919x and was the
+  ruler that landed the take -- so "the object witness is not a ruler on a real take" is now a
+  statement about the RDL's framing (plate edge-on, square to the lens), not about the detector.
+- The shared `DRIVE_ONSET_FRACTION` 0.04 on a BENCH (10-30): the mean reads +6..+16% HIGH on every
+  clean bench take in the repo (+10.3, +10.4, +6.4, +15.7) with the scale inside 3%, because the
+  10-07 fit was across five movements and on the sensor's DURATION. The bench carries its own 0.03
+  now (0.02 next, if the next bench still reads high); do not move the shared value for it, the
+  squat and RDL read the shared copy.
+- A bench peak-to-mean CAP as the bench's peak fix (10-30): 1.6 caps half the reps on every take
+  (4 of 8, 3 of 10) -- a cap doing the measuring, not a measurement. Smoothing is the lever and
+  200ms is where it stops helping: 210+ pushes set 7 and set 10 to -5.5%.
+- Raising the onset above 0.04 on a bench (10-30): 0.06-0.15 take the mean from +10% to +18..+41%.
+
+**WHAT ROUND FOUR POINTS AT, UNFITTED** (see "Round four, 2026-10-30"):
+- The row's velocities with the scale right get WORSE, not better: mean would read ~1.24 against
+  0.89, peak ~1.80 against 1.51, because the segmented phase (0.45-0.63s) is already shorter than
+  the sensor's concentric (0.55-0.66s). The bottom of a Pendlay rep is invisible to the hand
+  tracker (hands at the plates: 172 frames under the wrist floor, 196 lone-hand points), so the
+  phase starts late. A trace fault; no number in the row's record reaches it. The row's smoothing
+  at 200 would take today's peak from +6% to -2.6% at the shipped scale (one take plus the weak
+  10-02 fixture), recorded, not shipped.
+- The press's eighth rep: in the trace at 19.0-19.8s, folded into the 2.7m lowering to the floor
+  that follows the last press (the eccentric runs on into the re-rack). A press and a squat
+  re-rack DOWNWARD where a bench re-racks UP, which is why the bench's edge rules do not see it.
+  The RDL has lost one rep per take the same way (7 of 8, 10-19 and 10-29). Segmenter, shared.
+- The press has no sensor numbers. Its 7 reps read ROM 63cm, mean 0.71, peak 1.30, filmed
+  head-on (`facing_camera`) this time where 10-06's -1.8% press was side-on.
+- The bench's peak is still +14% on today's take at the bench's own smoothing (the four-take bias
+  is +3.0%); reps 4 and 5 read 1.43/1.39 against 1.03/1.05 with per-rep ROM 38/43 against the
+  sensor's 34/37 -- position noise on an oblique bench, not a window.
+- The bench's mean at 0.03 is +8.8% on today's take and +6.3% bias on the four clean takes; 0.02
+  takes those four to +0.1% bias and the 09-29 dropout take from -15.6% to -31.2%. If the next
+  bench on the new build reads high, 0.02 is the step; if it reads low, 0.03 stands.
 
 **WHAT ROUND TWO POINTS AT, UNFITTED** (see "Round two, 2026-10-29"):
 - The RDL's velocities with the scale right: mean 0.68 against 0.85, peak 1.23 against 1.43. The
@@ -5856,6 +5901,121 @@ the right body point, read 30% low off a smoothed trace at `effectiveHz` 40 with
 4. The squat's fourth and fifth paired take, read against the board's signature before any
    refit of the height or shoulder ruler.
 
+
+## Round four, 2026-10-30: bench, Pendlay row and shoulder press on build 701 beside the OVR
+
+Scott: "What's better for calibration? More reps or less reps?" -- more SETS, 5-8 reps each, same
+load, same spot (scale is one number per take; a long set is a count gamble). He filmed set 1 of
+each at 135x8 (press 65x8) and sent the OVR screens for the bench and the row, plus yesterday's
+RDL screens again (the OVR labels an RDL "Deadlift"; 62.2 / 62.5cm, the ledger's 10-29 rows). No
+press screen. His standing order for the round: "follow the notes, make sure you're taking notes
+on everything, things that work, things that don't work, and I want a fix on all 3 lifts ... every
+round needs a fix on all 3 lifts until we get a steady 0%."
+
+**BENCH PRESS 135x8: ROM 36.7 against 14.0in = 35.6 (+3.2%), mean 0.75 against 0.68 (+10.3%), peak
+1.15 against 0.97 (+18.6%), 8 of 8 reps, cadence 0.994.** The best bench scale on record, and the
+reason is the one thing the status board said to read first: `plateBoxToExpectedRatio` **0.919**.
+The retrained detector (657) locked the plate on 251 of 994 frames at 0.74-1.00 confidence, boxed
+it 101.4px where the body consensus expects 110.3, `scalesAgree` admitted it from both ends, and it
+took 85.8% of the blend at +4.4% of the sensor's scale. The two body rulers were the usual bench
+pair -- shoulder +15.5%, the collapsed 3D witness -23.6% -- and would have blended to about -7%
+on their own. Rep 8 (23.2cm) was dropped from the set range by `repConsistency`, and the sensor's
+own rep 8 is odd too (ROM 16.0in, TPV 0.19s): the re-rack travel on both sides.
+
+So the bench's error is the WINDOW, and it has been on every clean bench take stored in the repo:
+
+| bench take | mean vs OVR at the shared 0.04 | at 0.03 | at 0.02 | at 0.01 |
+|---|---|---|---|---|
+| 10-30 (this one) | +10.3% | **+8.8%** | +4.4% | -4.4% |
+| set 7, 09-29 | +10.4% | **+2.6%** | +2.6% | +2.6% |
+| set 10, 09-30 | +6.4% | **+3.8%** | -3.8% | -3.8% |
+| oblique, 09-29 | +15.7% | **+5.7%** | -2.9% | -7.1% |
+| bias / mean abs, clean four | +10.7 / 10.7 | **+5.2 / 5.2** | +0.1 / 3.4 | -3.2 / 4.5 |
+| set 5 "dropout", 09-29 (a carried point frozen mid-rep) | -15.6% | **-22.1%** | -31.2% | |
+| set 8 (7 of 10 found), set 9 (8 of 10), 10-02 set 2 (scale -40%) | +84, +81, -40 | +67, +56, -40 | +67, +22, -40 | |
+
+Every rep count unchanged at every fraction (the window is reported, never segmented). The shared
+0.04 was fitted on 10-07 ACROSS five movements and on the sensor's concentric DURATION; on the
+clean benches alone the mean's zero-bias point is 0.02. **Taken to 0.03, not 0.02**, for one
+measured reason: the trace-poor set 5 -- the one bench in the corpus with a frozen carried point
+mid-rep, which the ratchet `bench-dropout-keeps-its-reps.test.ts` caught the moment 0.02 went in --
+pays 15 points at 0.02 and 6.5 at 0.03, because a window that opens earlier takes in more of the
+plateau the frozen point leaves. 0.03 moves every clean take the right way with the tightest
+spread of any column (2.6..8.8). 0.02 is the next step and is written down as such; the next bench
+on the new build decides.
+
+And the peak. `velocitySmoothingMs` was fitted on ONE bench take (165, provenance audit 10-20):
+
+| bench take | peak vs OVR at 165 | at 200 | at 210+ |
+|---|---|---|---|
+| 10-30 | +18.6% | **+14.4%** | +10.3% |
+| set 7 | 0.0% | **-4.5%** | -5.4% |
+| set 10 | -1.8% | **0.0%** | -5.5% |
+| oblique | +11.9% | **+3.0%** | 0.0% |
+| bias / mean abs | +7.2 / 8.1 | **+3.2 / 5.5** | -0.1 / 5.3 |
+
+200 is where it stops helping the takes that were already right. A bench peak-to-mean CAP was
+swept too and rejected: 1.6 caps 4 of 8 reps today and 3 of 10 on the oblique take, which is the
+cap measuring instead of the trace. The pair (0.03, 200) together on the four clean takes: mean
+bias +6.3% (|err| 6.3%; the smoothing moves the peak index the window is anchored on, so the two
+interact by about a point), peak bias +3.0% (|err| 5.2%, the lowest of the nine cells swept), same
+reps, same range of motion on every take. Shipped as
+`FITTED_OVERRIDES["Bench Press"]`; the row, press, squat and RDL traces replay to the shipped peaks
+with it in (their records read the shared 0.04 and 165), asserted in
+`ovr-2026-10-30-every-lift-reads-only-its-own-record.test.ts`.
+
+**PENDLAY ROW 135x8: ROM 46.9 against 20.7in = 52.6 (-10.8%), mean 1.10 against 0.89 (+23.6%),
+peak 1.60 against 1.51 (+6%), 8 of 8 reps, cadence 0.948.** No plate: 32 CoreML frames at 0.33
+confidence, every one of 76 fresh detections broken on low confidence, lock never held -- the
+plates on a row sit at the floor between the feet, and from an oblique camera they are edge-on.
+The scale came from the body rulers alone and the depth ruler read **0.00126 against a required
+0.00347, -64%**, the worst depth read in the ledger; the in-plane bone read -15% and the collapse
+averaged them equally into one witness at -44%, which the shoulder span (+23%, grip/shoulder 1.80
+inside the 1.85 ceiling, spread 0.121) was then averaged with. The RDL's round-two move was built
+for exactly this -- a hinge filmed oblique puts the wrist's depth wherever the lens says -- and
+the row is a hinge (`bent_over`). The row's own `depthRulerUncertainty` 0.6, replayed through the
+real blend on every row take with a sensor beside it:
+
+| row take | required | at 0.2 (shipped) | at 0.4 | at 0.5 | **at 0.6** |
+|---|---|---|---|---|---|
+| 10-30 | 0.003474 | -10.8% | -2.6% | -0.7% | **+0.6%** |
+| 10-09 set 1 | 0.004037 | -7.3% | -3.9% | -3.1% | **-2.7%** |
+| 10-09 set 2 | 0.003516 | -1.1% | -2.1% | -2.2% | **-2.4%** |
+| 10-09 set 3 | 0.00439 | -17.5% | -15.8% | -15.4% | **-15.2%** |
+
+Median |error| 9.0% -> 2.6%; set 2 pays 1.3 points and is written here rather than averaged
+away; set 3 is the take whose body rulers bracket the truth 21% either side and no uncertainty
+fixes. An uncertainty and not a bias: the row's depth reads LOW (-64, -22, -27, +0.4%) where the
+RDL's reads HIGH (+8..+44%), which is why neither record states a correction and both state a
+width. The RDL's own 0.6 is untouched by this (each lift reads its own record; the ledger's five
+RDL rows and six squat rows are identical to the hundredth).
+
+**With the scale right the row's velocities get worse, and that is recorded, not hidden.** Mean
+would read ~1.24 against 0.89 and peak ~1.80 against 1.51, because the error was never scale:
+Forge's segmented PHASE runs 0.45-0.63s per rep where the sensor's concentric (its ROM over its
+mean) runs 0.55-0.66s, and no window can be longer than its phase. The phase starts late because
+the bottom of a Pendlay rep is a hand at the plates -- 172 of 586 frames under the wrist
+visibility floor, 196 bar points a lone hand carried, 77 dropped off-axis. A trace fault, the
+same shape as the RDL's "7 of 8 reps". The row's smoothing at 200 would take the peak from +6% to
+-2.6% at the shipped scale; one take plus the 10-02 fixture (which the harness segments as 9 reps
+of an 8-rep set) is not enough to ship it.
+
+**BARBELL SHOULDER PRESS 65x8: 7 of 8 reps, ROM 63cm, mean 0.71, peak 1.30, no sensor screen.**
+Nothing fitted and nothing to fit it against. What the trace says on its own: the eighth press is
+there, a 68cm rise at 19.0-19.8s after the last kept rep ends at 18.6s, and the summariser folded
+it into the 2.7m lowering to the floor that follows (the bar sits at the shoulders 18.6-21.5s,
+then goes down 205cm). A press re-racks DOWNWARD, so the last rep's eccentric runs on into the
+re-rack and the pair reads as an oversized edge; a bench re-racks UP and its edge rules never
+meet this. The RDL loses one rep per take the same way. That is a segmenter rule, shared, and the
+next thing to build once the press has a sensor row to be checked against. Filmed `facing_camera`
+this time (10-06's -1.8% press was side-on), height ruler 66.7% of the blend, `axisForeshortening`
+1.159 against 1.001 on the bench -- so expect the press's scale to read differently from 10-06
+even before the window is looked at.
+
+**Round four's ledger rows:** `2026-10-30-bench-press` (+3.2% as filmed, live +3.21%) and
+`2026-10-30-pendlay-row` (-10.8% as filmed, live +0.57% at the row's record). The press gets its
+row when its sensor screen arrives. `tracker-ground-truth.ts` carries both sensors' per-rep tables
+(`OVR_BENCH_2026_10_30`, `OVR_PENDLAY_ROW_2026_10_30`).
 
 ## Round three, 2026-10-30: the box ruler measures the landing, the drive happened at the floor
 

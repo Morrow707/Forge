@@ -481,9 +481,84 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "read 0.68 against 0.85, peak 1.23 against 1.43 -- the concentric runs 0.83-0.93s against a " +
       "sensor whose 0.625m at 0.85m/s is 0.74s. The next RDL thing is the window, not the scale.",
   },
+
+  /* THE 2026-10-30 SESSION, round four, build 701 (980fcd4): bench press, Pendlay row and
+   * barbell shoulder press, the three lifts NOT under test since 10-20, filmed at Scott's choice
+   * ("next I'm doing bench press, pendlay rows, and shoulder press, reps of probably 8"). The
+   * press has no row yet: its OVR screen was not sent with the other two, and a row without a
+   * sensor range is a reconstruction. */
+  {
+    id: "2026-10-30-bench-press",
+    date: "2026-10-30",
+    build: 701,
+    exercise: "Bench Press",
+    filmedOnCommit: "980fcd4",
+    candidates: [
+      { source: "plate", scaleX1000: 4.43957 },
+      { source: "body_3d", scaleX1000: 3.1213 },
+      { source: "depth", scaleX1000: 3.38311 },
+      { source: "shoulder_width", scaleX1000: 4.90914 },
+    ],
+    uncertaintiesAsFilmed: { plate: 0.05756542171979441, body_3d: 0.2, depth: 0.2, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: false,
+    shippedScaleX1000: 4.388368159185664,
+    reportedRomCm: 36.7,
+    sensorRomCm: 35.56,
+    liveErrorPct: 3.21,
+    notes:
+      "Read +3.2% as filmed (36.7 against 14.0in), the first bench on record whose range of motion " +
+      "lands, and the first real take where the PLATE was the ruler: locked on 251 of 994 frames, " +
+      "boxed 101.4px against the body consensus's 110.3 (plateBoxToExpectedRatio 0.919), admitted " +
+      "from both ends, 85.8% of the blend at +4.4% of the sensor's scale -- where every earlier " +
+      "bench plate was 2-7x too big and refused. The body rulers were the usual bench pair: " +
+      "shoulder_width +15.5%, the collapsed 3D witness -23.6%. 8 of 8 reps, cadence 0.994, rep 8 " +
+      "(23.2cm, the re-rack folded in) dropped by repConsistency and odd on the sensor too. The " +
+      "velocities are the window, not the scale: mean +10.3% (0.75 against 0.68) and peak +18.6% " +
+      "(1.15 against 0.97) with a 0.49s concentric against the sensor's 0.52 -- the same +6..+16% " +
+      "mean the three stored benches read, which is what the bench's own driveOnsetFraction (0.03) " +
+      "and velocitySmoothingMs (200) were costed on.",
+  },
+  {
+    id: "2026-10-30-pendlay-row",
+    date: "2026-10-30",
+    build: 701,
+    exercise: "Pendlay Row",
+    filmedOnCommit: "980fcd4",
+    candidates: [
+      { source: "body_3d", scaleX1000: 2.96168 },
+      { source: "depth", scaleX1000: 1.25511 },
+      { source: "shoulder_width", scaleX1000: 4.2704 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: false,
+    shippedScaleX1000: 3.0992059950320987,
+    reportedRomCm: 46.9,
+    sensorRomCm: 52.58,
+    liveErrorPct: 0.57,
+    notes:
+      "Read -10.8% as filmed (46.9 against 20.7in), 8 of 8 reps, cadence 0.948, no plate lock (32 " +
+      "CoreML frames at 0.33 confidence, 76 fresh detections all broken on low confidence). The " +
+      "depth ruler read 0.00126 against a required 0.00347, -64%, the worst depth read on any take " +
+      "in this file, and it collapsed with the in-plane bone (-15%) into one witness at -44% that " +
+      "the shoulder span (+23%, grip/shoulder 1.80 inside the ceiling, spread 0.121) was then " +
+      "averaged with. The row's own depthRulerUncertainty (0.6) is what this row was costed on: at " +
+      "it the blend reads +0.6%. The velocities are a trace fault and not a scale one and get WORSE " +
+      "with the scale right: mean +23.6% (1.10 against 0.89) and peak +6% at the shipped scale, " +
+      "because the segmented phase (0.45-0.63s) is already shorter than the sensor's concentric " +
+      "(0.55-0.66s) -- 172 of 586 frames had a wrist under the visibility floor and 196 bar points " +
+      "were a lone hand carried, which is the bottom of a Pendlay rep, hands at the plates.",
+  },
 ];
 
-/* THE SECOND MOVE, 2026-10-29 (evening, round two on build 697): the Back Squat's own
+/* THE THIRD MOVE, 2026-10-30 (round four on build 701): the Pendlay Row's own depthRulerUncertainty
+ * (0.2 -> 0.6, FITTED_OVERRIDES) moved the one row row from -10.8% to +0.6% and NO squat, RDL or
+ * bench row; the Bench Press's own driveOnsetFraction and velocitySmoothingMs are window and
+ * smoothing numbers that the ledger's scale replay never reads, so the bench row's liveErrorPct is
+ * its as-filmed +3.2%. The row's number was costed on the three 10-09 row takes as well (their
+ * candidates live in the two lone-plate guards, not here, because those rows carry no sensor
+ * range): -7.3 -> -2.7, -1.1 -> -2.4, -17.5 -> -15.2.
+ *
+ * THE SECOND MOVE, 2026-10-29 (evening, round two on build 697): the Back Squat's own
  * heightRulerUncertainty (0.1 -> 0.11, FITTED_OVERRIDES) moved the five squat rows by about one
  * point each and no RDL row -- 10-04 -5.97 -> -4.81, 10-05 -3.58 -> -1.74, 10-19 set 1 -3.09 ->
  * -2.04, 10-19 set 2 1.07 -> 2.07, 10-29 set 1 -0.11 -> 1.20 -- the small step Scott asked for.

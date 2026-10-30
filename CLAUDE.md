@@ -2972,7 +2972,34 @@ halves before splitting anything else:
   are bit-identical). `jump-countermovement.test.ts` drives both rulers and reads the source with
   comments stripped; putting the division back reds two cases. See docs/camera-tracking-notes.md
   "Round three, 2026-10-30".
-- **THE QUEUE IS EMPTY AS OF BUILD 701** (round three above; nothing waits behind it). Before it,
+- **ROUND FOUR, 2026-10-30: BENCH, PENDLAY ROW AND SHOULDER PRESS ON 701; THE BENCH AND THE ROW GET
+  THEIR OWN NUMBERS, THE PRESS WAITS ON ITS SENSOR SCREEN** (calibration work, uploaded on commit;
+  the build number is in the run list -- see the newest-build paragraph above). Scott filmed set 1
+  of each at 8 reps and sent the OVR screens for the bench and the row. **The bench's scale landed
+  for the first time (+3.2%) because the retrained detector's plate was finally the ruler on a real
+  take** (`plateBoxToExpectedRatio` 0.919, locked 251 frames, 86% of the blend) -- the 657 retrain
+  read on a bench, three weeks on. Its velocities were the WINDOW: the mean has read +6..+16% HIGH
+  on every clean bench take in the repo at the shared `DRIVE_ONSET_FRACTION` 0.04 (fitted 10-07
+  across five movements, on duration), so `FITTED_OVERRIDES["Bench Press"]` carries
+  `driveOnsetFraction` 0.03 (four clean takes: bias +10.7% -> +5.2%, every take the right way, every
+  rep count unchanged; 0.02 is their zero-bias point and the NEXT step, held back because the one
+  trace-poor bench in the corpus pays 15 points there and 6.5 at 0.03 -- the dropout ratchet caught
+  it) and `velocitySmoothingMs` 200 (fitted on ONE take at 165; peak bias +7.2% -> +3.2%, 210+
+  costs the takes that were right). A bench peak CAP was swept and rejected: it caps half the reps. **The row
+  read -10.8% because its depth ruler read -64%** and the collapse carried half of it; the row's own
+  `depthRulerUncertainty` 0.6 -- the RDL's hinge statement about the same instrument -- takes it to
+  +0.6% and the three 10-09 rows from -7.3/-1.1/-17.5 to -2.7/-2.4/-15.2. **With the scale right the
+  row's velocities get WORSE** (mean ~+39%), because the segmented phase is already shorter than the
+  sensor's concentric: the bottom of a Pendlay rep is a hand at the plates (172 frames under the
+  wrist floor). Trace fault, recorded, no number reaches it. **The press has no sensor numbers and
+  nothing was fitted**; its eighth rep is in the trace and was folded into the downward re-rack,
+  which the RDL's 7-of-8 shares -- a shared segmenter rule, next. Ledger rows for the bench and the
+  row; `ovr-2026-10-30-every-lift-reads-only-its-own-record.test.ts` pins that the bench's numbers
+  reach the bench trace and not the row's or the press's, and the row's depth reaches the row's
+  blend and not the bench's. `the-drive-window-was-fitted-on-thirteen-sets.test.ts` replays its
+  sweep at the shared smoothing on purpose. See docs/camera-tracking-notes.md "Round four".
+- **THE QUEUE IS EMPTY AS OF THE ROUND-FOUR BETA** (round four above; nothing waits behind it).
+  Before it, **701** (round three). Before it,
   build **697** (2026-10-29 evening, `6d8f259`; 696 was its
   `verify_build` on `ccdeba5`). Calibration work, uploaded on commit: the RDL's first per-lift
   record (`depthRulerUncertainty` 0.6, `maxPeakToMeanRatio` 2.5), the weighted 3D-pose collapse,

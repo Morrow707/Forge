@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { summarizeTrackedSet, DRIVE_ONSET_FRACTION } from "./bar-tracking";
+import { summarizeTrackedSet, DRIVE_ONSET_FRACTION, VELOCITY_SMOOTHING_MS } from "./bar-tracking";
 import { firstMoveForExercise, romBucketForExercise } from "./exercise-camera-profile";
 import { cameraTunablesFor } from "@shared/camera-tunables-by-lift";
 import * as GT from "./tracker-ground-truth";
@@ -42,6 +42,12 @@ function replay(capture: any, driveOnsetFraction: number) {
   const romKind = romBucketForExercise(capture.exerciseName);
   const tunables = cameraTunablesFor(capture.exerciseName, romKind);
   tunables.values.driveOnsetFraction = driveOnsetFraction;
+  // The 10-07 sweep was run at the SHARED smoothing, and this file is the record of that sweep.
+  // Since 2026-10-30 the Bench Press's record carries its own smoothing (200), which moves where
+  // the drive window's peak index lands on the four bench fixtures; replaying them at that value
+  // would make this a record of a sweep nobody ran. The bench's own numbers are costed in
+  // ovr-2026-10-30-every-lift-reads-only-its-own-record.test.ts.
+  tunables.values.velocitySmoothingMs = VELOCITY_SMOOTHING_MS;
   return summarizeTrackedSet(
     points,
     capture.loadKg ?? undefined,
@@ -79,7 +85,9 @@ describe("the drive window was fitted on thirteen sensor-paired sets", () => {
     // The registry hands every one of the 269 filmable things a COPY of it, and the two may not
     // drift -- camera-tunables-are-a-copy.test.ts owns that check; this is the reason it matters
     // here: a refit that moved one and not the other would be invisible on every lift but one.
-    expect(cameraTunablesFor("Bench Press", "horizontal_press_or_row").values.driveOnsetFraction)
+    // A lift with no entry of its own reads the copy. The Bench Press carried this case until
+    // 2026-10-30, when it got its own fraction (see FITTED_OVERRIDE_EVIDENCE).
+    expect(cameraTunablesFor("Incline Barbell Bench Press", "horizontal_press_or_row").values.driveOnsetFraction)
       .toBe(DRIVE_ONSET_FRACTION);
   });
 
@@ -125,14 +133,20 @@ describe("the drive window was fitted on thirteen sensor-paired sets", () => {
     }
   });
 
-  it("stays a SHARED default -- no lift has been given its own", () => {
-    // The registry exists so a number fitted on one movement cannot leak to another. This one was
-    // fitted ACROSS five movements and is a property of how a bar sensor defines a concentric, so
-    // it belongs in the shared default and not in an override. See CLAUDE.md.
+  it("stays the SHARED default for every lift that has not been fitted apart -- and the bench's own is written down", () => {
+    // The registry exists so a number fitted on one movement cannot leak to another. The 0.04 was
+    // fitted ACROSS five movements and stays the shared default. Until 2026-10-30 this case said no
+    // lift had been given its own; the Bench Press has one now (0.03), costed on five sensor-paired
+    // benches whose mean read +6..+16% HIGH at the shared value, and the assertion is the one the
+    // registry makes: the bench's fraction is marked fitted, reaches the bench, and reaches nobody
+    // else -- the squat, the RDL and the row still read the shared copy.
     const bench = cameraTunablesFor("Bench Press", "horizontal_press_or_row");
-    const squat = cameraTunablesFor("Back Squat", "squat");
-    expect(bench.values.driveOnsetFraction).toBe(squat.values.driveOnsetFraction);
-    expect(bench.sources.driveOnsetFraction).not.toBe("fitted");
-    expect(squat.sources.driveOnsetFraction).not.toBe("fitted");
+    expect(bench.values.driveOnsetFraction).toBe(0.03);
+    expect(bench.sources.driveOnsetFraction).toBe("fitted");
+    for (const [name, bucket] of [["Back Squat", "squat"], ["Romanian Deadlift", "deadlift"], ["Pendlay Row", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"]]) {
+      const other = cameraTunablesFor(name, bucket);
+      expect(other.values.driveOnsetFraction, name).toBe(DRIVE_ONSET_FRACTION);
+      expect(other.sources.driveOnsetFraction, name).not.toBe("fitted");
+    }
   });
 });

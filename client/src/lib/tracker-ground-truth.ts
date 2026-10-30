@@ -1103,3 +1103,80 @@ export const OVR_PUSH_PRESS_2026_10_02 = {
     reported: { meanVelocityMps: 1.05, peakVelocityMps: 1.75, romIn: 25.9, meanW: 444, peakW: 742, tpvS: 0.23, eai: 7.37 },
   },
 };
+
+/** 2026-10-30, build 701, the first bench filmed beside the OVR since the retrained detector
+ *  (657): the plate held a lock on 251 frames, boxed 101px where the body consensus expects 110
+ *  (plateBoxToExpectedRatio 0.919), and took 85.8% of the scale -- the first bench whose range of
+ *  motion lands (36.7 against 35.6, +3.2%). The sensor's own rep 8 is the odd one (ROM 16.0in,
+ *  TPV 0.19s, EAI 4.45 against 2.8-3.6): the re-rack travel folded into the last rep on the
+ *  sensor's side; Forge's rep 8 (23.2cm) was dropped from the set range by repConsistency. */
+export const OVR_BENCH_2026_10_30 = {
+  build: 701,
+  loadLb: 135,
+  repsPerSet: 8,
+  camera: "oblique (subjectFacing oblique, axisForeshortening 1.001); live path fell back to the file (coverage 0.88)",
+  forgeOnDevice: {
+    repCount: 8,
+    meanVelocityMps: 0.75,
+    peakVelocityMps: 1.15,
+    romCm: 36.7,
+    medianRomCm: 36.9,
+    concentricSeconds: 0.49,
+    scaleSource: "both",
+    scale: 0.004388368159185664,
+    plateBoxToExpectedRatio: 0.919,
+    repMeans: [0.55, 0.93, 0.92, 0.76, 0.83, 0.6, 0.88, 0.47],
+    repPeaks: [0.97, 1.21, 1.12, 1.41, 1.47, 1.21, 1.08, 0.75],
+    repRomCm: [36.4, 40.6, 32.8, 38.1, 42.8, 36.9, 33.3, 23.2],
+  },
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.68, peakVelocityMps: 1.00, romIn: 14.1, meanW: 410, peakW: 603, tpvS: 0.35, eai: 2.86 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.07, romIn: 13.8, meanW: 440, peakW: 644, tpvS: 0.31, eai: 3.40 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 0.99, romIn: 13.2, meanW: 423, peakW: 595, tpvS: 0.31, eai: 3.14 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.03, romIn: 13.3, meanW: 441, peakW: 619, tpvS: 0.28, eai: 3.58 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.05, romIn: 14.4, meanW: 444, peakW: 628, tpvS: 0.30, eai: 3.41 },
+      { meanVelocityMps: 0.67, peakVelocityMps: 0.94, romIn: 13.9, meanW: 399, peakW: 561, tpvS: 0.32, eai: 2.88 },
+      { meanVelocityMps: 0.64, peakVelocityMps: 0.85, romIn: 13.3, meanW: 384, peakW: 512, tpvS: 0.30, eai: 2.78 },
+      { meanVelocityMps: 0.56, peakVelocityMps: 0.88, romIn: 16.0, meanW: 335, peakW: 529, tpvS: 0.19, eai: 4.45 },
+    ],
+    reported: { meanVelocityMps: 0.68, peakVelocityMps: 0.97, romIn: 14.0, meanW: 409, peakW: 586, tpvS: 0.29, eai: 3.31 },
+  },
+};
+
+/** 2026-10-30, build 701. Filmed oblique (grip axis 37.9 deg from vertical, torso 45.5 deg from
+ *  vertical on the standing frames), 8 of 8 reps found, no plate lock (32 CoreML frames at 0.33
+ *  confidence, every fresh detection broke on low confidence). The depth ruler read 0.00126
+ *  against a required 0.00347 (-64%); the in-plane bone -15%, the shoulder span +23%. */
+export const OVR_PENDLAY_ROW_2026_10_30 = {
+  build: 701,
+  loadLb: 135,
+  repsPerSet: 8,
+  camera: "oblique, bent_over posture; live path",
+  forgeOnDevice: {
+    repCount: 8,
+    meanVelocityMps: 1.1,
+    peakVelocityMps: 1.6,
+    romCm: 46.9,
+    medianRomCm: 48.1,
+    concentricSeconds: 0.46,
+    scaleSource: "both",
+    scale: 0.0030992059950320987,
+    repMeans: [0.77, 0.99, 1.19, 1.07, 1.45, 0.77, 1.38, 0.87],
+    repPeaks: [1.24, 1.23, 2.39, 1.54, 2.07, 1.54, 1.38, 1.4],
+    repRomCm: [39.7, 50.2, 48.1, 53.2, 55.1, 41.7, 44.8, 42.2],
+  },
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.49, romIn: 20.9, meanW: 477, peakW: 892, tpvS: 0.46, eai: 3.17 },
+      { meanVelocityMps: 0.90, peakVelocityMps: 1.53, romIn: 21.2, meanW: 537, peakW: 917, tpvS: 0.41, eai: 3.70 },
+      { meanVelocityMps: 1.01, peakVelocityMps: 1.68, romIn: 21.7, meanW: 604, peakW: 1008, tpvS: 0.34, eai: 4.81 },
+      { meanVelocityMps: 0.98, peakVelocityMps: 1.62, romIn: 21.7, meanW: 585, peakW: 975, tpvS: 0.39, eai: 4.12 },
+      { meanVelocityMps: 0.88, peakVelocityMps: 1.50, romIn: 20.5, meanW: 527, peakW: 901, tpvS: 0.38, eai: 3.89 },
+      { meanVelocityMps: 0.92, peakVelocityMps: 1.49, romIn: 20.7, meanW: 549, peakW: 892, tpvS: 0.38, eai: 3.86 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.40, romIn: 20.2, meanW: 483, peakW: 842, tpvS: 0.43, eai: 3.26 },
+      { meanVelocityMps: 0.85, peakVelocityMps: 1.43, romIn: 19.3, meanW: 512, peakW: 859, tpvS: 0.37, eai: 3.80 },
+    ],
+    reported: { meanVelocityMps: 0.89, peakVelocityMps: 1.51, romIn: 20.7, meanW: 534, peakW: 910, tpvS: 0.39, eai: 3.82 },
+  },
+};

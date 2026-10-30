@@ -106,8 +106,9 @@ function liveX1000(row: LedgerRow): number {
 describe("every ledger row is a record of a real take", () => {
   it("the registry's shared defaults are the module constants the live replay used to read", () => {
     // A lift with no entry in FITTED_OVERRIDES, so its record IS the shared defaults. The Back
-    // Squat carried this case until 2026-10-29, when it got its own heightRulerUncertainty.
-    const shared = cameraTunablesFor("Bench Press", "bench").values;
+    // Squat carried this case until 2026-10-29 and the Bench Press until 2026-10-30, each getting
+    // its own numbers that day.
+    const shared = cameraTunablesFor("Front Squat", "squat").values;
     expect(shared.heightRulerUncertainty).toBe(HEIGHT_RULER_UNCERTAINTY);
     expect(shared.biacromialToleranceFraction).toBe(BIACROMIAL_TOLERANCE_FRACTION);
     expect(shared.depthRulerUncertainty).toBe(DEPTH_RULER_UNCERTAINTY);

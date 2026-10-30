@@ -78,6 +78,11 @@ describe("the count-trim removes surplus and never a set", () => {
     "ovr-2026-10-29-export.json:2026-10-29 Romanian Deadlift set 1": 7,
     "ovr-2026-10-29-export.json:2026-10-19 Romanian Deadlift set 2": 7,
     "ovr-2026-10-29-export.json:2026-10-19 Back Squat set 2": 4,
+    // The 2026-10-30 export: the shoulder press found 7 of 8. The eighth is in the trace (a 68cm
+    // press at 19.0-19.8s) and was folded into the 2.7m lowering to the floor that follows it --
+    // a press re-racks DOWNWARD, so the last rep's eccentric runs on into the re-rack. Same
+    // family as the RDL's 7-of-8 above; see docs/camera-tracking-notes.md "Round four".
+    "ovr-2026-10-30-export.json:2026-10-30 Barbell Shoulder Press set 1": 7,
   };
 
   it.each(
