@@ -1004,8 +1004,24 @@ export type BoxRiseVerdict = {
   repsRejected: number;
 };
 
-/** Divides every scaled number by (median net rise / box height) when the set has enough box
- *  reps and the ratio is more than 5% from 1.0. Mutates the reps; returns the verdict. */
+/** Divides every LANDING number by (median net rise / box height) when the set has enough box
+ *  reps and the ratio is more than 5% from 1.0. Mutates the reps; returns the verdict.
+ *
+ *  THE DRIVE IS LEFT ALONE, AND THAT IS A FINDING, NOT AN OMISSION (2026-10-30). This ratio is
+ *  measured where the athlete LANDS -- the ankle's net rise onto a box of typed height -- and the
+ *  countermovement is measured where the athlete took off, on the standing frames, before the
+ *  feet left the floor. Those are two spots, and on the 697 pairing the same ruler said so: the
+ *  height ruler read 0.00327 / 0.00309 m per unit on the two box sets and 0.00316 / 0.00344 on the
+ *  two Back Squats filmed from the same place minutes earlier, so the floor was at the SAME scale
+ *  on all four takes -- yet this ratio (1.20 / 1.22) asked the jump's floor to be 20% further away
+ *  than the squat's. It cannot be. What it measures is the landing being nearer the lens than the
+ *  takeoff (the squats read `facing_camera` / `oblique`, and a box jump travels toward a camera
+ *  that is in front), which is a correction that belongs to the numbers measured AT the landing
+ *  (net rise, peak height, box clearance, the flight-rebuilt height) and to none measured at the
+ *  floor. Applied to the drive it read the hip's peak 15% low on set 2 and 29% low on set 1
+ *  against the OVR on the hip, where the undivided hip read +2% and -13%. The gravity ruler is
+ *  different in kind: it compares flight time with displacement AT THE SAME SPOT, so its ratio is
+ *  a scale error of the floor and applyGravityCorrection still scales the countermovement. */
 export function applyBoxRiseCorrection(
   reps: JumpRep[],
   boxHeightCm: number | null,
@@ -1033,7 +1049,8 @@ export function applyBoxRiseCorrection(
     rep.peakHeightCm = Math.round((rep.peakHeightCm / ratio) * 10) / 10;
     if (rep.horizontalDistanceCm != null) rep.horizontalDistanceCm = Math.round((rep.horizontalDistanceCm / ratio) * 10) / 10;
     if (rep.boxClearanceCm != null) rep.boxClearanceCm = Math.round((rep.boxClearanceCm / ratio) * 10) / 10;
-    if (rep.countermovement) rep.countermovement = scaleCountermovement(rep.countermovement, ratio);
+    // rep.countermovement is deliberately NOT divided here -- see the docblock. The drive was
+    // measured at the floor, at the scale the body rulers read on the standing frames.
     const t = rep.flightSeconds;
     if (t > 0) {
       const v0 = (rep.netRiseCm / 100 + (GRAVITY_MPS2 * t * t) / 2) / t;

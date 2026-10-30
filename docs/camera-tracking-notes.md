@@ -41,13 +41,13 @@ hundredth, and the board's "what is known not to work" list read before any leve
 beta, film again.** A big correction that lands once is not what he asked for; a run of small
 ones that each hold on the next take is. Target is 0% AND steady, so repeatability across the
 takes counts as much as the mean (Rule #5): a change that closes the mean and widens the
-take-to-take spread is not the change. Build to film on: **697**.
+take-to-take spread is not the change. Build to film on: **the newest in the run list** (701 once round three's beta lands; 699 carried round two).
 
 | lift | paired takes | ROM vs OVR, oldest -> newest | state |
 |---|---|---|---|
 | Back Squat 135 | 10-19 x2, 10-29 x2 | -5.3%, -1.5%, -1.9%, **-1.3%** (mean 0.81/0.84/0.72/0.89 vs 0.86/0.84/0.80/0.84) | **lands, same signature four takes running; its own height uncertainty (0.11) ships in round two, worth about +1%** |
 | Romanian Deadlift 135 | 10-19 x2, 10-29 x2 | +16.4%, +12.0%, +30.5% oblique; **-34.2% square-on on 697** -- a plate boxed 1.63x too big took 86% of the scale. Without it the square-on take reads **-1.9%** | **square-on, the body rulers are within 2%; the plate rule is fixed in round two; the velocities are the next fault (window 25% long)** |
-| Box Jump, 24in box | 10-19 x2, 10-29 x2 | box ruler 1.20-1.22 on both 10-29 sets (ankle rise 72-75cm onto 61); hip peak -15% / -29% after the correction, +2% / -13% before it; hip mean -4% / -13% after, +15% / +7% before | **no number moved: the two sets disagree on which half the sensor matches; both halves are in the export now** |
+| Box Jump, 24in box | 10-19 x2, 10-29 x2 | box ruler 1.20-1.22 on both 10-29 sets (ankle rise 72-75cm onto 61); hip peak **+2% / -13%** at the floor scale (was -15% / -29% divided by the landing ratio); hip mean +15% / +7% at the floor scale | **round three: the box ratio corrects the LANDING numbers only; the hip's drive keeps the floor scale the squat proved from the same spot. Next: set 1's -13% is a trace with 21 dropouts, and the mean's window** |
 
 **WHAT WORKS AND MUST NOT BE TOUCHED** (each proven against the sensor, each with a test):
 - A hinge gets NO height ruler (`bent_over`, 10-05): the RDL went -7.0% -> 0.0% that day.
@@ -57,6 +57,10 @@ take-to-take spread is not the change. Build to film on: **697**.
   pair of changes to take nine paired takes from 10.6% to 5.4% median error.
 - `DRIVE_ONSET_FRACTION` 0.04 (10-07): concentric window inside 1.1% on two of three takes.
 - The box ruler on a box set, the gravity ruler on a flat jump, never both (10-05, 10-19).
+- The box ruler divides what was measured AT THE LANDING and never the hip's drive (10-30, round
+  three): its 1.20-1.22 is the landing sitting nearer the lens than the takeoff, proven by the
+  height ruler reading the same scale on the box sets as on the squats filmed from the same spot
+  minutes earlier. The gravity ruler still scales the drive, because it measures one spot.
 - A PLATE agrees from both ends or not at all (`scalesAgree`, 10-29 round two): the 697 RDL's
   1.63x plate was inside 0.4 anchored on the body and 1.53x away anchored on itself, and took
   86% of the blend. For the BODY rulers the one-ended test stays -- see the next list.
@@ -103,10 +107,12 @@ row identical to the hundredth. See "Second pass, 2026-10-29".
   concentric runs 0.83-0.93s where the sensor's 0.625m at 0.85m/s is ~0.74s -- the window is a
   quarter long on a hinge. The next RDL lever is the drive window, in the RDL's own record
   (`driveOnsetFraction` is a field), after a second square-on take confirms the scale.
-- The jump: the box-rise correction divides the hip's velocities by 1.2 and the sensor matches the
-  UNCORRECTED peak on set 2 (+2%) and neither on set 1. `uncorrectedConcentricPeakVelocityMps`
-  and `...MeanVelocityMps` are in the export now; two more box sets decide whether the hip's
-  velocities should be corrected by the ankle's ruler at all.
+- The jump: DECIDED in round three (10-30), not left to the sensor -- the hip's drive keeps the
+  floor scale (see "Round three"). What is left: set 1's peak -13% on a trace with 21 dropouts
+  (`cadenceHeld` 0.914) against set 2's +2% with 23 dropouts, so the dropouts alone do not
+  separate them; and the mean +15% / +7% beside a window (0.18-0.28s) the sensor reads at
+  0.18-0.20 TPV -- the concentric window's start is the lever, in the jump's own record, after
+  the next box set confirms the peak holds at the floor scale.
 - 7 of 8 RDL reps found on both sets, 10-19 and 10-29: the segmenter loses one every take.
 
 **WHAT THE MORNING'S EVIDENCE POINTED AT, UNFITTED** (see "Three lifts beside OVR, 2026-10-29"):
@@ -5850,6 +5856,70 @@ the right body point, read 30% low off a smoothed trace at `effectiveHz` 40 with
 4. The squat's fourth and fifth paired take, read against the board's signature before any
    refit of the height or shoulder ruler.
 
+
+## Round three, 2026-10-30: the box ruler measures the landing, the drive happened at the floor
+
+Scott, reading round two's "the next two box sets decide which the sensor tracks": **"Can we make
+the sensor track what we want it to track? Why are we leaving it up to the sensor?"** He is right
+that the sensor decides nothing. The OVR on the hip measures the hip's velocity; that is the
+ground truth and the only thing it can be. What was undecided was on Forge's side -- one hip
+trace, two scales to multiply it by -- and round two handed the choice to the next filming day
+instead of making it. The 697 export already held the answer.
+
+**The height ruler read the same scale on all four takes filmed from one spot.** Nose-to-ankle on
+the standing frames, metres per trace unit:
+
+| take | height ruler | what the take's truth requires |
+|---|---|---|
+| Back Squat set 1 | 0.003164 | 0.003520 (the OVR's ROM), ruler **-10%** |
+| Back Squat set 2 | 0.003437 | 0.003674, ruler **-6.5%** |
+| Box Jump set 1 | 0.003092 | 0.002687 if the box-rise ratio (1.222) were a floor scale error |
+| Box Jump set 2 | 0.003268 | 0.002890 if the box-rise ratio (1.201) were |
+
+Same athlete, same camera distance (the ruler says so: a 20% closer camera reads a 20% bigger
+span), same hour. On the squats the ruler sits 6-10% UNDER the truth; the box-rise ratio asked it
+to sit 13-15% OVER the truth on the jumps. One ruler cannot be biased 20 points apart on four
+takes from one spot, so the 1.20-1.22 is not a scale error of the floor. It is the LANDING: the
+ankle's rise is measured onto a box that is nearer the lens than the takeoff (the squats from the
+same spot read `facing_camera` / `oblique`, and a box jump travels toward a camera that is in
+front), so the box top reads 20% further up the frame than 61cm of floor-scale would. The
+detector's own box top says the same thing in a cruder way (`boxTopFromDetectorM` 1.29 / 1.41
+against 0.61 typed).
+
+**So the correction belongs to the numbers measured at the landing** -- net rise, peak height, box
+clearance and the flight-rebuilt height -- **and not to the hip's drive**, which was measured on
+the standing frames before the feet left the floor, at the scale the body rulers read there.
+`applyBoxRiseCorrection` no longer divides the countermovement. `applyGravityCorrection` still
+does, because the gravity ruler compares flight time with displacement at ONE spot, so its ratio
+is a floor scale error and the drive is at that scale.
+
+What that does to the 697 takes, hip against the OVR on the hip, reps 2-6:
+
+| | divided by the landing ratio (697 shipped) | at the floor scale (round three) | sensor |
+|---|---|---|---|
+| set 2 peak | 2.23 (-15%) | **2.68 (+2%)** | 2.62 |
+| set 1 peak | 1.90 (-29%) | **2.32 (-13%)** | 2.66 |
+| set 2 mean | 1.32 (-4%) | 1.58 (+15%) | 1.37 |
+| set 1 mean | 1.23 (-13%) | 1.50 (+7%) | 1.41 |
+
+The peak is the sensor's headline and it lands on set 2. Set 1's -13% is a trace question (reps
+at 1.96-2.36 with rises of 21.8-35.1cm that vary twice as much as set 2's), not a scale one. The
+MEAN goes the other way, +7% / +15%, and that is the window: Forge's concentric runs 0.18-0.28s
+where the sensor's time-to-peak is 0.18-0.20s, and a mean over a window that starts early on a
+rise it reads correctly can only come out high. That is the next jump lever, in the jump's own
+record, once a third box set confirms the peak holds at the floor scale.
+
+**A RULE, not a number** -- which spot a ruler measured -- so `FITTED_OVERRIDES` is untouched and
+nothing on the squat or the RDL can move: the change is inside `jump-tracking.ts`, which no bar
+lift reads, and the fixture replay and the ledger replay are bit-identical.
+`jump-countermovement.test.ts` drives both rulers on the same reps (the box ruler scales the net
+rise and leaves the drive; the gravity ruler scales both) and then reads the source with comments
+stripped, because the docblock on the function now quotes the very line the scan forbids. Putting
+the division back reds both cases.
+
+`uncorrectedConcentricMeanVelocityMps` / `...PeakVelocityMps` stay in the schema and are written
+by the gravity branch only; on a box set they are absent now and the countermovement's own
+numbers ARE the floor-scale read.
 
 ## Round two, 2026-10-29: build 697 beside the OVR, one small step per lift
 

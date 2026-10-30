@@ -1,12 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import {
+  applyBoxRiseCorrection,
+  applyGravityCorrection,
   measureCountermovement,
   scaleCountermovement,
   COUNTERMOVEMENT_HYSTERESIS_M,
   type JumpCountermovement,
+  type JumpRep,
 } from "./jump-tracking";
 import type { TrackedPoint } from "./bar-tracking";
+
+/** Block comments first, then line comments: a negative assertion over source must not be
+ *  satisfied or defeated by prose. */
+function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+}
 
 // Scott, 2026-10-01: "Will the camera differentiate between the loading drop portion, and the
 // rise concentric, back to the landing eccentric?" The ankle trace marks takeoff and landing;
@@ -82,13 +91,59 @@ describe("the countermovement is read off the hip", () => {
     expect(scaled.standingT).toBe(100);
   });
 
-  it("the jump dialog hands the hip trace in, both corrections scale it, and the schema declares it", () => {
+  it("the jump dialog hands the hip trace in, the gravity ruler scales it, and the schema declares it", () => {
     const dialog = readFileSync("client/src/components/av-jump-tracker-dialog.tsx", "utf8");
     expect(dialog).toMatch(/deriveHipPoint\(/);
     expect(dialog).toMatch(/hipTrace\s*\}/);
-    const tracker = readFileSync("client/src/lib/jump-tracking.ts", "utf8");
-    expect(tracker.match(/scaleCountermovement\(rep\.countermovement, ratio\)/g)?.length).toBe(2);
+    const tracker = stripComments(readFileSync("client/src/lib/jump-tracking.ts", "utf8"));
+    expect(tracker.match(/scaleCountermovement\(rep\.countermovement, ratio\)/g)?.length).toBe(1);
     const schema = readFileSync("shared/schema.ts", "utf8");
     expect(schema).toMatch(/countermovement: z\s*\.object/);
+  });
+
+  // THE BOX RULER MEASURES THE LANDING; THE DRIVE HAPPENED AT THE FLOOR (2026-10-30). On the 697
+  // pairing the box-rise ratio (1.20 / 1.22) divided the hip's drive velocities and read the peak
+  // 15% and 29% low against the OVR on the hip, while the undivided hip read +2% and -13%. The
+  // height ruler read the same scale on the box sets as on the squats filmed from the same spot,
+  // so the ratio is the landing sitting nearer the lens than the takeoff, not a scale error of
+  // the floor -- see the docblock on applyBoxRiseCorrection. The gravity ruler compares flight
+  // time with displacement at ONE spot, so its ratio IS a floor scale error and still scales the
+  // drive. Behaviour first, then the source, comments stripped: a comment quoting the old line
+  // is exactly where the forbidden form would hide.
+  it("the box ruler corrects the landing numbers and leaves the hip's drive at the floor scale", () => {
+    const cm = (): JumpCountermovement => ({
+      standingT: 100, bottomT: 500, dipDepthCm: 30, eccentricSeconds: 0.4, eccentricMeanVelocityMps: 0.75,
+      concentricSeconds: 0.3, concentricRiseCm: 36, concentricMeanVelocityMps: 1.2, concentricPeakVelocityMps: 2.4,
+    });
+    const boxRep = (netRiseCm: number): JumpRep => ({
+      repNumber: 1, takeoffT: 0, landingT: 400, flightSeconds: 0.4, jumpHeightCm: 20, peakHeightCm: 73,
+      netRiseCm, horizontalDistanceCm: null, groundContactSeconds: null, likelyTrackingGlitch: false,
+      boxClearanceCm: null, countermovement: cm(),
+    });
+    const reps = [boxRep(73.2), boxRep(73.2), boxRep(73.2)];
+    const verdict = applyBoxRiseCorrection(reps, 61);
+    expect(verdict.applied).toBe(true);
+    expect(verdict.scaleErrorRatio).toBeCloseTo(1.2, 3);
+    for (const rep of reps) {
+      expect(rep.netRiseCm).toBeCloseTo(61, 0);
+      expect(rep.countermovement?.concentricPeakVelocityMps).toBe(2.4);
+      expect(rep.countermovement?.concentricMeanVelocityMps).toBe(1.2);
+      expect(rep.countermovement?.dipDepthCm).toBe(30);
+      expect(rep.countermovement?.uncorrectedConcentricPeakVelocityMps).toBeUndefined();
+    }
+    const flat = [boxRep(0), boxRep(0)];
+    expect(applyGravityCorrection(flat, { scaleErrorRatio: 1.2, uncertaintyFraction: 0.1, repsUsed: 2 })).toBe(true);
+    for (const rep of flat) {
+      expect(rep.countermovement?.concentricPeakVelocityMps).toBe(2);
+      expect(rep.countermovement?.uncorrectedConcentricPeakVelocityMps).toBe(2.4);
+    }
+    const tracker = stripComments(readFileSync("client/src/lib/jump-tracking.ts", "utf8"));
+    const boxBody = tracker.slice(
+      tracker.indexOf("export function applyBoxRiseCorrection("),
+      tracker.indexOf("export const GRAVITY_CORRECTION_MAX_UNCERTAINTY"),
+    );
+    expect(boxBody.length).toBeGreaterThan(200);
+    expect(boxBody).not.toMatch(/scaleCountermovement\(/);
+    expect(boxBody).toMatch(/rep\.netRiseCm = /);
   });
 });

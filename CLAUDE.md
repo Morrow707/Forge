@@ -2951,6 +2951,24 @@ halves before splitting anything else:
   screen; Reload signed in. Read off the Render log 2026-10-29 19:46:45. The burst is a render
   loop around `DeviceApprovalStep`'s claim effect; the crash follows it. Not reproduced yet (no
   DOM test environment in the unit suite); fix queued behind the calibration round.
+- **ROUND THREE, 2026-10-30: THE BOX RULER MEASURES THE LANDING; THE HIP'S DRIVE KEEPS THE FLOOR
+  SCALE** (calibration work, uploaded on commit; the build number is in the run list). Scott, on
+  round two's "the next two box sets decide which the sensor tracks": "Can we make the sensor
+  track what we want it to track? Why are we leaving it up to the sensor?" He was right: the OVR
+  on the hip measures the hip, full stop, and the choice was Forge's. The 697 export decided it --
+  the height ruler read the SAME scale on the two box sets as on the two squats filmed from the
+  same spot (0.0031-0.0034 on all four), while the box-rise ratio (1.20 / 1.22) asked the jump's
+  floor to be 20% further away than the squat's. It cannot be; the ratio is the LANDING sitting
+  nearer the lens than the takeoff. So `applyBoxRiseCorrection` divides the landing numbers (net
+  rise, peak height, clearance, the flight-rebuilt height) and no longer the countermovement,
+  which was measured on the standing frames at the floor; `applyGravityCorrection` still scales
+  the drive because it measures one spot. Hip peak against the OVR: set 2 -15% -> **+2%**, set 1
+  -29% -> -13%; the mean reads +15% / +7%, which is the concentric window and the next jump lever.
+  A RULE about which spot a ruler measured, so `FITTED_OVERRIDES` is untouched and no squat or
+  RDL number can move (the change is inside `jump-tracking.ts`; the fixture and ledger replays
+  are bit-identical). `jump-countermovement.test.ts` drives both rulers and reads the source with
+  comments stripped; putting the division back reds two cases. See docs/camera-tracking-notes.md
+  "Round three, 2026-10-30".
 - **THE QUEUE IS EMPTY AS OF BUILD 699** (round two above; nothing waits behind it). Before it,
   build **697** (2026-10-29 evening, `6d8f259`; 696 was its
   `verify_build` on `ccdeba5`). Calibration work, uploaded on commit: the RDL's first per-lift
