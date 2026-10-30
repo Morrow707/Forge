@@ -4035,10 +4035,77 @@ wrote that route and removed it before it shipped; the reason is on the method. 
 splits the already-narrowed `/api/coach/roster` list instead, which carries `heldAt`/`heldUntil` on
 every row, so the page needs no second query.
 
-**OPEN, NAMED SO IT IS NOT MISTAKEN FOR DONE: `requireSkillsAccess` gates skill READS**, so a
-parked athlete cannot open the skill history they already recorded. That follows from question 4
-and may well be wrong -- "all of the players data remains" is about the COACH's read, and whether
-the athlete keeps reading their own is a separate call. Put to Scott, unanswered.
+**AND THE SKILLS SIDE GOT THE SAME CARVE-OUT, 2026-10-30.** Scott, on the one item left open
+above: "let's add that." `skillsAccessFor` asked `athleteHasCoach()`, which a parked seat answers
+false, so a parked athlete on no paid tier lost the five skills READS along with the writes -- the
+sprint times and mechanics scores their coach's program had already produced. **What makes it
+principled rather than lenient is that a Free Agent who never held a tier has NO skill sessions,
+because they could never record one; this athlete has them.** So the question has two answers now:
+`allowed` is "may they open the skills side", `canRecord` is "may they start something new", and
+the nine routes split five reads and four writes by one gate each (`requireSkillsAccess` /
+`requireSkillsRecording`). The resolver reads `getCoachSeatsForAthlete`, the same raw relationship
+`classGateFor` uses, because `athleteHasCoach` resolves through `getCoachesForAthlete` where
+`isNull(heldAt)` has already dropped the parked seats -- so it cannot tell a parked athlete from
+somebody who never had a coach, which is the single distinction this turns on.
+
+**PAID IS ASKED BEFORE PARKED, and that ordering is the thing no source scan can see:** a parked
+athlete holding AI Coach + Video is paying for the skills side themselves and keeps all of it,
+recording included. Swapping the two reds exactly one itest case and nothing else.
+
+**THE REFUSAL NAMES THE HOLD AND NOT A PLAN** -- 403 with `heldSeat`, never 402 with
+`freeAgentPaywall`, because the client draws "See plans" off the second one and a parked athlete is
+not short of a plan. Their coach is the thing that fixes it.
+
+**AND `SkillsGate` MOVED TO `canRecord`, WHICH LOOKS BACKWARDS AND IS NOT.** All five pages it
+wraps are build-or-record surfaces or stubs redirecting to one, so passing a parked athlete through
+on `allowed` would have handed them a New Skill Program button and an AI chat whose every write
+answers 402 -- a page of dead controls. **Their history does not live on those pages**: it reaches
+them through the goal picker on `/athlete/progress` and the speed leaderboard, both outside that
+gate. The refusal is decided by the boolean and only the COPY by the reason, so a later reason that
+cannot record is refused by default.
+
+**THE LEADERBOARD WAS THE ONE CALL I WAS UNSURE OF AND THE CODE SETTLED IT AGAINST MY ASSUMPTION.**
+A leaderboard is comparative, over other people, so it looked like it belonged with the writes.
+`getSpeedLeaderboardExercisesForAthlete` returns **null** for an athlete with no ACTIVE coach and
+`athlete/leaderboard.tsx` draws `<NoCoachCard />` on exactly that -- so letting a parked athlete
+through produces the sentence the page was already built to produce, while refusing them leaves
+`exercises` undefined, the `=== null` branch unreached, and the page drawing an empty drill
+dropdown. **The refusal is strictly worse than the pass-through**, which is how a comparative
+surface ended up with the reads.
+
+**THREE BUGS IN MY OWN TEST HELPERS, all three this file's standing lessons, and the first is new
+and worth knowing by heart:**
+- **THE TWO-REGEX COMMENT STRIP THIS FILE RECOMMENDS DELETED 413,000 OF `routes.ts`'s 734,000
+  CHARACTERS** and took all five `requireSkillsAccess,` sites with it, so a count case read 0 and
+  said nothing about why. A non-greedy `/\*[\s\S]*?\*/` pairs a `/*` that appears inside a STRING
+  or a regex with the next real `*/` thousands of lines away, and the `//` pass then eats the tail
+  of every line holding a URL. **On a small file you never see it; on a big one it silently empties
+  the haystack**, which is the failure mode that reads as "the code is wrong". The cure is
+  line-aware: a block comment counts only when its opener starts its line, and an end-of-line
+  comment is cut only where the `//` has balanced quotes before it. `skills-need-entitlement.test.ts`
+  carries it.
+- A bound that ran to the next `"See plans"` reached **past the hold branch into the tier branch
+  beside it** and found that branch's upgrade link -- a character-ish window with a different face.
+  Brace-matched now.
+- And "the next `{` after the function name" landed inside
+  `skillsAccessFor(user: { id: number; email: string; role: string })`. **A PARAMETER TYPE IS NOT A
+  FUNCTION BODY**, which this file already records twice: it holds the words a forbidden-token check
+  looks for and none of the code, so the negative assertion and the positive one beside it both red
+  on correct source. `functionBodyAt` paren-matches the signature, then takes the first `{` at
+  angle-bracket depth zero.
+
+Fourteen mutations, each caught by the right case -- ten on the ratchet, four on the itest -- and
+**removing the comment strip reds two**, because the fix's own comments quote `athleteHasCoach` and
+`allowed`. The tab-strip case was RESTATED rather than patched: it asserted the literal
+`useSkillsAccess()?.allowed === true` and went red on a change that served its purpose strictly
+better, so it states the rule instead (whatever field it reads is compared for an explicit true).
+
+**AND `GET /api/athlete/skill-session-logs` HAS NO CLIENT CALLER AT ALL** -- four POSTs from the
+tracker dialogs, zero GETs, verified both ways. So **an athlete cannot see their own skill sessions
+anywhere in the app**, parked or not; only their coach can, through
+`/api/coach/roster/:id/skill-sessions` on the athlete-detail and analytics panels. That is a
+product gap rather than a hold bug, and it is why the parked athlete's history reaches them only
+through the goal picker and the leaderboard. Recorded, not filled.
 
 Where things are: `shared/roster-hold.ts` (the five predicates, pure, `today` passed in and never
 read from the clock), `shared/schema.ts` (three columns), `server/reconcile-schema.ts` (the ALTERs
@@ -4047,10 +4114,14 @@ sites, `holdAthlete`/`unholdAthlete`/`assertSeatIsNotHeld`/`getHeldSeatsForCoach
 `getCoachSeatsForAthlete`), `server/routes.ts` (per-athlete and bulk hold/unhold, `heldCount` on
 the plan payload), `client/src/pages/coach/roster.tsx` (the bulk bar and the "On hold" card with a
 due-back prompt), `client/src/pages/coach/athlete-detail.tsx` (an Off-season section above the
-Danger Zone). Tests: `shared/roster-hold.test.ts` (17), `server/every-roster-read-is-hold-aware.test.ts`
+Danger Zone), and for the skills carve-out `server/routes.ts` (`skillsAccessFor`,
+`requireSkillsRecording`), `client/src/hooks/use-skills-access.ts`,
+`client/src/components/skills-gate.tsx` and `client/src/pages/athlete/programs.tsx`.
+Tests: `shared/roster-hold.test.ts` (17), `server/every-roster-read-is-hold-aware.test.ts`
 (14, seven mutations, the comment-strip one recorded as not caught today and why),
-`server/an-off-season-hold.itest.ts` (23, nine mutations). Client halves: `verify_build`, and it
-batches -- no camera number moves.
+`client/src/lib/skills-need-entitlement.test.ts` (23, ten mutations) and
+`server/an-off-season-hold.itest.ts` (28, thirteen mutations). Client halves: `verify_build`, and
+it batches -- no camera number moves.
 
 **AND THE REMOVAL DIALOG STOPPED PROMISING WHAT A COACH CANNOT DO.** It read "so you can always
 re-add them later with your coach code", which is the athlete's act, not the coach's. It names the
