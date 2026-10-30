@@ -74,6 +74,31 @@ describe("which paid chapters are withheld, and as what", () => {
     expect(classGateStateFor(FREE_AGENT, GIVEN)).toBe("locked_tier");
   });
 
+  it("leaves a parked athlete the chapters their coach already gave them", () => {
+    // THE OFF-SEASON HOLD'S ONE CARVE-OUT (2026-10-29, shared/roster-hold.ts question 4). A held
+    // athlete arrives tierGated like any uncoached athlete, and that ALONE would lock every
+    // chapter past the first of a class their coach assigned in April and draw a $19.99 buy card
+    // in front of a fifteen-year-old for content the program already bought -- a withheld thing
+    // with no replacement, which Rule #1 refuses.
+    expect(classGateStateFor(HELD, GIVEN)).toBeNull();
+  });
+
+  it("still gates a parked athlete's own self-enrolment, and offers them the add-on for it", () => {
+    // The other half, and what keeps the carve-out from being a free-access hole: the catalog is
+    // not theirs for nothing. `locked_tier` rather than `locked` is right HERE and wrong for a
+    // coached athlete -- a parked athlete IS a Free Agent, so requireFreeAgent admits them and
+    // the buy button works, where for a coached athlete it would be a dead button.
+    expect(classGateStateFor(HELD, SELF)).toBe("locked_tier");
+  });
+
+  it("asks the carve-out BEFORE the tier, or it would read as present and do nothing", () => {
+    // A held athlete is tierGated, so an exception checked after `tierGated` never fires. Stated
+    // as the outcome rather than as source order: the two gates differ for a GIVEN enrolment only
+    // if the carve-out is asked first, so this one assertion is the ordering.
+    expect(classGateStateFor(HELD, GIVEN)).not.toBe(classGateStateFor(FREE_AGENT, GIVEN));
+    expect(classGateStateFor(FREE_AGENT, GIVEN)).toBe("locked_tier");
+  });
+
   it("still only ever applies to a chapter past the free one in a Forge class", () => {
     // The gate says WHO; this says WHICH. A coach's own class is never gated, and chapter one of
     // a Forge class is the preview, so neither is reachable by any gate above.
