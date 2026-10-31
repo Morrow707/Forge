@@ -667,6 +667,124 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "and the peak +0.8%; at the press's own 0.08 the mean reads 0.0%. Rep-by-rep the sensor's " +
       "peaks run 0.91-1.34 and Forge's 0.97-1.48 at the shared smoothing.",
   },
+/** 2026-10-30, round SIX: set 3 of the bench on build 705, the first bench take filmed through
+ *  the round-five pipeline. Square-ish to the side, live path, cadence 0.979 with 4 dropouts, 8
+ *  of 8 reps found -- the cleanest trace of the three set-3 takes by a wide margin. The plate was
+ *  the ruler again and it was an EARNED read: the lock held 256 of 865 tracked frames, 206 plate
+ *  frames at 0.93 average confidence, 3 fresh detections and 1 low-confidence break all take. */
+  {
+    id: "2026-10-30-bench-press-set-3",
+    date: "2026-10-30",
+    build: 705,
+    exercise: "Bench Press",
+    filmedOnCommit: "bfcc130",
+    candidates: [
+      { source: "plate", scaleX1000: 4.249 },
+      { source: "body_3d", scaleX1000: 3.15079 },
+      { source: "depth", scaleX1000: 4.05365 },
+      { source: "shoulder_width", scaleX1000: 3.63684 },
+    ],
+    uncertaintiesAsFilmed: { plate: 0.05756542171979441, body_3d: 0.2, depth: 0.2, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: false,
+    shippedScaleX1000: 4.15751295357763,
+    reportedRomCm: 39.4,
+    sensorRomCm: 37.338,
+    liveErrorPct: 5.52,
+    notes:
+      "Read +5.5% as filmed (39.4 against 14.7in), up from set 1's +3.2% on the same lift two " +
+      "builds earlier. THE PLATE CARRIES 86% OF THIS BLEND and that is arithmetic rather than a " +
+      "reading: at 0.0576 against the body rulers' 0.2 its inverse-variance weight is 12x theirs, " +
+      "and the weighted mean of these four candidates after the collapse is 4.157e-3 against a " +
+      "shipped 4.15751e-3. Both body rulers sit BELOW the sensor's required 3.9399e-3 (shoulder " +
+      "3.637e-3, -7.7%; the collapsed pair 3.574e-3, -9.3%) and the plate sits above it at " +
+      "+7.8%, so the plate is what the +5.5% is. Its box measured 105.9px where 114.2px would " +
+      "have hit the sensor -- 7.3% too SMALL, the opposite direction from the pre-retrain model's " +
+      "2-7x too large -- and plateBoxToExpectedRatio read 0.849. Window and smoothing: mean +12.1% " +
+      "(0.74 against 0.66) and peak +25.3% (1.14 against 0.91) at this lift's own drive onset 0.03 " +
+      "and smoothing 200. The export says 165 for the smoothing and that is the RECORD being " +
+      "wrong, not the pipeline: av-bar-tracker-dialog.tsx wrote the shared module constant into " +
+      "the diagnostic while bar-tracking.ts read tune.velocitySmoothingMs, fixed in the same " +
+      "commit as this row. axisForeshortening 1.112, so some of the travel was along the lens.",
+  },
+
+/** 2026-10-30, round SIX: set 3 of the Pendlay row on 705. Round five's yardstick rule is NOT
+ *  what this take is about -- scaleYardstickAbstained and scalesRejectedAsImplausible are both
+ *  empty, nothing was rejected, and all three witnesses voted. The error moved from set 2's
+ *  +52.8% to +23.2% and changed cause entirely: a plate measured off a detector that never once
+ *  held a lock took 86% of the blend. Cadence 0.937, 16 dropouts, 8 of 8 reps. */
+  {
+    id: "2026-10-30-pendlay-row-set-3",
+    date: "2026-10-30",
+    build: 705,
+    exercise: "Pendlay Row",
+    filmedOnCommit: "bfcc130",
+    candidates: [
+      { source: "plate", scaleX1000: 4.86486 },
+      { source: "body_3d", scaleX1000: 3.79838 },
+      { source: "depth", scaleX1000: 2.49038 },
+      { source: "shoulder_width", scaleX1000: 5.74208 },
+    ],
+    uncertaintiesAsFilmed: { plate: 0.05756542171979441, body_3d: 0.2, depth: 0.6, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: false,
+    shippedScaleX1000: 4.840255324542491,
+    reportedRomCm: 70.1,
+    sensorRomCm: 56.896,
+    liveErrorPct: 23.21,
+    notes:
+      "Read +23.2% as filmed (70.1 against 22.4in), and THE PLATE IS THE WHOLE OF IT: 4.865e-3 " +
+      "against the sensor's required 3.9285e-3, +23.8%, carrying 86% of the blend at its 0.0576 " +
+      "while the collapsed 3D pair (3.641e-3, -7.3%) and the shoulder span (5.742e-3, +46.2%) hold " +
+      "7% each. The weighted mean of the three is 4.840e-3 against a shipped 4.84026e-3, so the " +
+      "blend did exactly what its weights said. THE PLATE STATED THE SAME UNCERTAINTY AS THE BENCH " +
+      "TAKE ABOVE AND HAD NOTHING LIKE THE EVIDENCE: objectLock.framesLockHeld 0, 20 plate frames " +
+      "of 663 tracked at 0.44 average confidence, and all 59 fresh detections broken on low " +
+      "confidence -- 5 samples clears MIN_CALIBRATION_SAMPLES, so a median off 20 jittery frames " +
+      "asserts the detector's held-out median noise. That is the shoulder ruler's old bug one " +
+      "instrument over, and the cure this repo already uses is a floor that can only loosen. " +
+      "plateBoxToExpectedRatio read 0.964, which looks like a perfect box and is not evidence: it " +
+      "divides by the blend with the plate removed, and that pair spans 58% here, so a plate 24% " +
+      "high lands near its midpoint and scores as corroborated. Box 92.5px where 114.5px hits the " +
+      "sensor, 19.2% too small. Peak +46.0% (2.03 against 1.39); the sensor's Avg field is cut off " +
+      "on the screen for this set, so no mean comparison. gripToShoulderSpanRatio 1.962 and " +
+      "spanSpreadFraction 0.165, both under what would loosen the 0.2 floor.",
+  },
+
+/** 2026-10-30, round SIX: set 3 of the press on 705, 85lb x 8. THE OVR LABELS THIS LIFT PUSH
+ *  PRESS and sets 2 and 3 are 85lb against set 1's 65lb, so the three are not one movement until
+ *  Scott says they are -- CLAUDE.md's rule is that a push press is not pooled with a strict press
+ *  until one is filmed without the dip. No plate was seen at all (plateMeasuredPx null), so this
+ *  is the one set-3 take decided entirely by body rulers, and it is also the most accurate. */
+  {
+    id: "2026-10-30-barbell-shoulder-press-set-3",
+    date: "2026-10-30",
+    build: 705,
+    exercise: "Barbell Shoulder Press",
+    filmedOnCommit: "bfcc130",
+    candidates: [
+      { source: "body_3d", scaleX1000: 3.74773 },
+      { source: "depth", scaleX1000: 4.73345 },
+      { source: "height", scaleX1000: 3.74643 },
+      { source: "shoulder_width", scaleX1000: 3.94121 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, height: 0.1, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: true,
+    shippedScaleX1000: 3.8564646965464013,
+    reportedRomCm: 61.8,
+    sensorRomCm: 59.944,
+    liveErrorPct: 3.1,
+    notes:
+      "Read +3.1% as filmed (61.8 against 23.6in as the screen displays it). The height ruler " +
+      "landed on the sensor almost exactly -- 3.74643e-3 against a required 3.7406e-3, +0.16% -- " +
+      "and carries half the blend at its 0.1; the shoulder span is +5.4% and the collapsed 3D pair " +
+      "+12.6%, so the +3.1% is those two pulling a correct height ruler up. Every pairwise test " +
+      "agreed, nothing was rejected, no plate was found. Mean -2.4% (0.80 against 0.82) and peak " +
+      "+12.7% (1.42 against 1.26) at this lift's own drive onset 0.08, which is the window round " +
+      "five fitted and it holds on a take it was not fitted on. Seven of eight reps for the third " +
+      "press take running: cadence 0.822, 18 dropouts, 4.228s lost and a largest gap of 2.885s, " +
+      "the worst trace of the three. axisForeshortening 1.188 -- 1.56m of the 2.89m travel is " +
+      "along the lens -- so the range of motion landing inside 3.1% is partly luck and this take " +
+      "is NOT a candidate to fit anything to.",
+  },
 ];
 
 /* THE FOURTH MOVE, 2026-10-30 (round five, on the set-2 takes of 703): a RULE, not a number. The
