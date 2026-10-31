@@ -53,6 +53,7 @@ import {
   MAX_PLATE_SIZE_IN_YARDSTICKS,
   MAX_YARDSTICK_DEVIATION_RATIO,
 } from "./tracker-arbiter";
+import type { CameraTunables } from "./camera-tunables-by-lift";
 import {
   FITTED_OVERRIDES,
   FITTED_OVERRIDE_EVIDENCE,
@@ -260,14 +261,46 @@ describe("the per-lift numbers are a copy of today's numbers", () => {
     }
   });
   it("an override reaches its own lift and no other", () => {
-    const rdl = cameraTunablesFor("Romanian Deadlift", "deadlift");
-    expect(rdl.values.maxPeakToMeanRatio).toBe(2.5);
-    expect(rdl.sources.maxPeakToMeanRatio).toBe("fitted");
-    for (const [name, bucket] of [["Back Squat", "squat"], ["Bench Press", "horizontal_press_or_row"], ["Conventional Deadlift", "deadlift"], ["Pendlay Row", "horizontal_press_or_row"]]) {
-      const other = cameraTunablesFor(name, bucket);
-      expect(other.values.maxPeakToMeanRatio, name).toBe(MAX_PEAK_TO_MEAN_RATIO);
-      expect(other.sources.maxPeakToMeanRatio, name).not.toBe("fitted");
+    // STATED AS THE RULE, NOT AS A LIST OF LIFTS THAT DO NOT HAVE ONE. The first version named
+    // the Bench Press among the lifts that read the shared peak cap, and went red the day the
+    // bench earned a cap of its own (2026-10-31, round seven) -- a correct change failing a
+    // scan that enumerated the accepted state, which is the mistake CLAUDE.md records three
+    // times. The property is per-field and discovered from FITTED_OVERRIDES: an identity named
+    // in it reads its own value and says "fitted"; every other identity reads the shared
+    // constant and never says "fitted". So a new override passes the day it is written and a
+    // leak into a lift that was not fitted reds here.
+    const SHARED: { [K in keyof CameraTunables]?: number } = {
+      maxPeakToMeanRatio: MAX_PEAK_TO_MEAN_RATIO,
+      driveOnsetFraction: DRIVE_ONSET_FRACTION,
+      velocitySmoothingMs: VELOCITY_SMOOTHING_MS,
+    };
+    const PROBES: [string, string][] = [
+      ["Back Squat", "squat"], ["Bench Press", "horizontal_press_or_row"],
+      ["Conventional Deadlift", "deadlift"], ["Pendlay Row", "horizontal_press_or_row"],
+      ["Romanian Deadlift", "deadlift"], ["Barbell Shoulder Press", "overhead_press"],
+      ["Incline Barbell Bench Press", "horizontal_press_or_row"],
+    ];
+    let fittedSeen = 0;
+    const fields = Object.keys(SHARED) as (keyof CameraTunables)[];
+    for (const field of fields) {
+      const shared = SHARED[field]!;
+      for (const [name, bucket] of PROBES) {
+        const r = cameraTunablesFor(name, bucket);
+        const own = (FITTED_OVERRIDES[name] ?? {})[field] as number | undefined;
+        if (own != null) {
+          expect(r.values[field], `${name}.${String(field)}`).toBe(own);
+          expect(r.sources[field], `${name}.${String(field)}`).toBe("fitted");
+          fittedSeen++;
+        } else {
+          expect(r.values[field], `${name}.${String(field)}`).toBe(shared);
+          expect(r.sources[field], `${name}.${String(field)}`).not.toBe("fitted");
+        }
+      }
     }
+    // The probes have to actually EXERCISE the fitted branch, or the whole case is the shared
+    // half asserted seven times over -- the "a gate that never fires collides with nothing"
+    // failure that let expensive-sensors-never-collide pass through build 618.
+    expect(fittedSeen).toBeGreaterThanOrEqual(5);
   });
 });
 

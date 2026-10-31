@@ -14,7 +14,7 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-10-31, round six)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-10-31, round seven)
 
 Scott, 2026-10-29: "I want you keeping a running log wherever you need to ... so we don't keep
 going in circles with what works and what doesn't, when your feed goes stale you don't remember
@@ -48,7 +48,31 @@ take-to-take spread is not the change. Build to film on: **705** (round five; 70
 **ROUND SIX (2026-10-31) SHIPPED NO CONSTANT**: it added the three set-3 ledger rows, corrected a
 DIAGNOSTIC that had been reporting the shared smoothing instead of the bench's own, and named the
 plate's unearned precision as the next lever -- which wants one more filmed set before anything
-moves, per Rule #5. So 705 is still the build to film on.
+moves, per Rule #5.
+**ROUND SEVEN (2026-10-31) IS THE ONE THAT HONOURED THE STANDING ORDER: ONE SMALL STEP ON EACH
+OF THE THREE.** Scott, auditing round six: "so i told fable to make a change, no matter how small
+even if its a .001% change on every single lift, did you apply a fix to bench, shoulder press, and
+pendlay rows?" The honest answer was no -- round six's two fixes were SHARED mechanism fixes, so
+the bench improved, the row moved only as a side effect, and **the press came out WORSE than it
+went in** (set 1 -3.2% -> -6.3%, set 2 +0.1% -> -5.0%), because the set-mean fix voided the sweep
+round five's 0.08 was chosen by. Round seven:
+- **Bench Press**: its own `maxPeakToMeanRatio` 2.0 -> **1.6**. Peak bias +8.5% -> +3.8%, median
+  |err| 9.45 -> 5.40, spread at its own minimum (24.3 -> 20.4 points) across the six bench takes
+  with a sensor peak. Round four REJECTED 1.6 ("caps half the reps") and that measurement is
+  VOID: the cap bounds a rep's peak by its own MEAN, and the set-mean fix changed what a mean is.
+  On all ten stored bench takes the reps, the range of motion and the set mean are identical at
+  1.6 and at 2.0 -- only the peak moves. **1.5 and 1.4 are the next steps** (lower bias, wider
+  spread, which is Rule #5's refusal).
+- **Barbell Shoulder Press**: its own `driveOnsetFraction` 0.08 -> **0.12**. Bias -4.4% -> -1.6%,
+  median |err| 5.20 -> 1.85, spread 5.2 -> 2.7 across its three 10-30 sets and the 10-02 fixture;
+  0.12 weakly DOMINATES both 0.08 and 0.10 (no take of the four is worse at it than at either).
+  Rep counts unchanged at every value. **0.13 is the next step** -- it is the exact argmin of a
+  four-take sample and sits one notch from the cliff (0.14 flips two takes positive, 0.16 blows
+  set 1 to +8.4%), so it is not spent this round.
+- **Pendlay Row**, through a shared RULE rather than a number: the plate's box uncertainty is
+  FLOORED by the band its own take-mean detection confidence earned on held-out data. Row set 3
+  **+22.68% -> +20.79%**; 1 ledger row better, 0 worse, 19 unchanged.
+So the build to film on is **707** once it is cut (706 is its `verify_build`).
 **HOW TO TELL WHICH BUILD A CAPTURE RAN ON, from the export alone:** `scaleYardstickAbstained`
 exists from 705, the row's `rulerUncertainties.depth` is 0.6 from 703, and `scaleBlend.identity`
 from round four. Cheaper than the run list and it cannot drift.

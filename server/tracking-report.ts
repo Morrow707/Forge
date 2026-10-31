@@ -217,6 +217,8 @@ type TrackingDiagnostics = {
       minConfidence: number;
       maxConfidence: number;
       samples: number;
+      meanCoreMlConfidence?: number | null;
+      boxUncertaintyFraction?: number | null;
     } | null;
     axisSource?: string | null;
     gripPairsUsed?: number | null;
@@ -993,7 +995,16 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
           `${o.label}: ${Math.round(o.medianWidthPx)} x ${Math.round(o.medianHeightPx)}px ` +
           `(aspect ${o.aspectRatio}, a plate should be near 1), centred at ` +
           `${Math.round(o.medianCenterXNorm * 100)}% across / ${Math.round(o.medianCenterYNorm * 100)}% up the frame, ` +
-          `confidence ${pct(o.minConfidence)}-${pct(o.maxConfidence)} over ${o.samples} frames`,
+          `confidence ${pct(o.minConfidence)}-${pct(o.maxConfidence)} over ${o.samples} frames` +
+          // What the plate's weight in the blend was actually decided by: the take-level mean
+          // confidence and the box uncertainty it floored to. A plate stating 0.084 and one
+          // stating 0.212 differ by six times the weight and looked identical in this report.
+          (o.meanCoreMlConfidence == null
+            ? ", take confidence not recorded"
+            : `, take confidence ${pct(o.meanCoreMlConfidence)}`) +
+          (o.boxUncertaintyFraction == null
+            ? ", box uncertainty not recorded"
+            : `, box uncertainty ${o.boxUncertaintyFraction}`),
       });
       // The hand span is measured off the wrists in the same raw pixels, with no calibration
       // involved, which is what makes it usable as a check when calibration itself has failed --

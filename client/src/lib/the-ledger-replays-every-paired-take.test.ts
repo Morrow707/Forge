@@ -12,6 +12,7 @@ import {
   HEIGHT_RULER_UNCERTAINTY,
   BIACROMIAL_TOLERANCE_FRACTION,
   COREML_BOX_LONG_EDGE_UNCERTAINTY,
+  coreMlBoxUncertaintyForConfidence,
   CALIBRATION_REFERENCES,
 } from "./pose-tracking";
 import { BODY_3D_CORRECTED_UNCERTAINTY, DEPTH_RULER_UNCERTAINTY } from "./body-3d-ruler";
@@ -66,7 +67,15 @@ function liveUncertainty(source: string, exercise: string, row?: LedgerRow): num
     // The 2026-10-19 RDL set 2 row is the one take so far with a plate in the vote.
     const plate = CALIBRATION_REFERENCES.find((r) => r.id === "bumper_plate_perform_better");
     if (!plate) throw new Error("the bumper plate reference is gone from CALIBRATION_REFERENCES");
-    return Math.hypot(plate.toleranceM / plate.nominalSizeM, COREML_BOX_LONG_EDGE_UNCERTAINTY);
+    // FLOORED BY THE BAND THIS TAKE'S OWN CONFIDENCE EARNED since 2026-10-31. Read off the row,
+    // never a constant: the floor is a fact about the take in exactly the way the shoulder span's
+    // spread is, and a replay through the pooled value alone would weight the 10-30 row's six
+    // frames at 0.44 as if they were the bench's 205 at 0.93. A row with no plate in the vote
+    // never reaches this branch, so the missing field decides nothing.
+    return Math.hypot(
+      plate.toleranceM / plate.nominalSizeM,
+      coreMlBoxUncertaintyForConfidence(row?.plateMeanCoreMlConfidence ?? null),
+    );
   }
   return t.body3DCorrectedUncertainty;
 }

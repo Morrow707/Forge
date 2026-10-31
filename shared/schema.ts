@@ -10187,6 +10187,11 @@ export const trackingDiagnosticsSchema = z.object({
           minConfidence: z.number(),
           maxConfidence: z.number(),
           samples: z.number(),
+          // DECLARED OR SILENTLY DROPPED: zod strips what it does not name, and that has cost
+          // this repo two diagnostics already. These two are what decide how much of a take's
+          // scale the plate carries, so a take whose plate was 86% of the blend has to say so.
+          meanCoreMlConfidence: z.number().optional().nullable(),
+          boxUncertaintyFraction: z.number().optional(),
         })
         .optional()
         .nullable(),

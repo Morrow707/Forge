@@ -377,9 +377,9 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // e.g. "Bench Press": { driveOnsetFraction: 0.09 }, // 2026-10-__, +4.3% -> 0.0% against OVR
   "Romanian Deadlift": { maxPeakToMeanRatio: 2.5, depthRulerUncertainty: 0.6 },
   "Back Squat": { heightRulerUncertainty: 0.11 },
-  "Bench Press": { driveOnsetFraction: 0.03, velocitySmoothingMs: 200 },
+  "Bench Press": { driveOnsetFraction: 0.03, velocitySmoothingMs: 200, maxPeakToMeanRatio: 1.6 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
-  "Barbell Shoulder Press": { driveOnsetFraction: 0.08 },
+  "Barbell Shoulder Press": { driveOnsetFraction: 0.12 },
 };
 
 /** WHY EACH OVERRIDE EXISTS, in the sentence a reader needs to decide whether it still should.
@@ -452,6 +452,19 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "smoothing -- it is specific to the two 10-30 takes (+14.4% and +19.8% at 200, where every " +
     "09-29/09-30 take sits at or below zero), which are also the two where the retrained detector's " +
     "plate decides the scale at 86% of the blend. Open, and named on the status board. " +
+    "AND THE PEAK IS THE THIRD NUMBER, 2026-10-31, round seven: maxPeakToMeanRatio 2.0 -> 1.6 on " +
+    "this lift only. ROUND FOUR SWEPT THIS AND REJECTED IT (\"1.6 caps half the reps\") AND THAT " +
+    "MEASUREMENT IS VOID, for the same reason round four's window figures are: the cap bounds a " +
+    "rep's peak by its own MEAN, and the 10-31 set-mean fix changed what a mean is, so every " +
+    "peak-to-mean ratio in the corpus moved under it. Re-swept on the ten stored bench takes, six " +
+    "of which carry a sensor peak: bias +8.5% at 2.0, +6.8% at 1.8, +3.8% at 1.6, +1.9% at 1.5, " +
+    "-0.8% at 1.4; median |err| 9.45 / 8.45 / 5.40 / 5.35 / 5.15; and the SPREAD across the six is " +
+    "24.3 / 22.9 / 20.4 / 22.2 / 23.3 points. 1.6 is the spread's own minimum and more than halves " +
+    "the bias; 1.5 and 1.4 buy the last of the bias by paying it back in spread, which is Rule #5 " +
+    "exactly, so they are the named next steps and not this round's. Round four's \"caps half the " +
+    "reps\" is also simply not what it does now: on all TEN stored bench takes the rep count, the " +
+    "range of motion and the set mean are identical to the hundredth at 1.6 and at 2.0 -- only the " +
+    "peak moves, which is what a peak cap should do. " +
     "Replayed on the 10-30 fixture and every stored " +
     "bench; the row, the press, the squat and the RDL traces are untouched by construction (their " +
     "records still read the shared 0.04 and 165, asserted in " +
@@ -484,6 +497,21 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "next press still reads low. Rep counts unchanged at every value (7, 7, 9). The peak is not " +
     "touched by the window and velocitySmoothingMs stays at the shared 165: 200 costs the press " +
     "peaks 6-8 points on both sets where it bought the bench 4. Replayed on every ledger row and " +
+    "AND 0.08 IS SUPERSEDED BY 0.12, 2026-10-31, round seven -- and the sweep above is void for " +
+    "the reason round four's bench figures are: every mean in it was the SET mean that summed the " +
+    "whole phase's distance over the drive window's time, so narrowing the fraction moved only the " +
+    "denominator and always dragged a mean down. With both sums from the drive window the press " +
+    "reads LOW at 0.08 on all three of its 10-30 sets AND on the 10-02 fixture. Re-swept on those " +
+    "four, rep counts unchanged at every value (7, 7, 7, 9): set 1 -6.2/-5.0/-3.8/-2.6/-1.3/-0.1, " +
+    "set 2 -5.5/-2.7/-2.7/-2.7/-2.7/-1.4, set 3 -4.9/-3.7/-2.4/-2.4/-2.4/+1.2, 10-02 " +
+    "-1.0/-1.0/-1.0/0.0/0.0/0.0 at 0.08/0.09/0.10/0.11/0.12/0.13. Bias -4.4% at 0.08, -2.5% at " +
+    "0.10, -1.6% at 0.12, -0.1% at 0.13, +1.3% at 0.14; median |err| 5.20 / 2.55 / 1.85 / 0.65 / " +
+    "2.10; spread 5.2 / 2.8 / 2.7 / 2.6 / 3.8. 0.12 WEAKLY DOMINATES both 0.08 and 0.10 -- no take " +
+    "of the four is worse at it than at either -- which is the strongest evidence shape a step " +
+    "gets, and it leaves 0.13 as the named next step rather than fitting the exact argmin of a " +
+    "four-take sample one notch from the cliff (0.14 flips set 3 and set 1 positive, 0.16 blows " +
+    "set 1 to +8.4%). Round five's own trigger -- \"0.10 is the next step if the next press reads " +
+    "low\" -- is what fired, for a cause it could not have known. " +
     "the fixture corpus; no bench, row, squat or RDL number moves, since each reads its own record.",
 };
 

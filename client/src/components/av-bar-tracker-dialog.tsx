@@ -68,6 +68,7 @@ import {
   calibrationMethodBreakdown,
   scaleWorldLandmarks,
   COREML_BOX_LONG_EDGE_UNCERTAINTY,
+  coreMlBoxUncertaintyForConfidence,
   computeReferenceObjectScale,
   CALIBRATION_REFERENCES,
   MIN_CALIBRATION_SAMPLES,
@@ -438,6 +439,21 @@ function plateScaleFromFrames(
   const plateIsPrimary = trackingMode === "plate";
   const plateIsSecondary = trackingMode === "barbell";
   if (!plateIsPrimary && !plateIsSecondary) return null;
+  // HOW WELL THE DETECTOR SAW ITS OBJECT ON THIS TAKE, over every frame that carried a CoreML
+  // implement box and NOT only the ones the median below kept. The kept frames are filtered on
+  // confidence, so their mean reads higher than the detector's real performance by construction,
+  // and the confidence bins in COREML_BOX_LONG_EDGE_UNCERTAINTY_UNCONFIDENT were measured against
+  // the unfiltered quantity -- the one the export has always carried as
+  // `objectDetection.avgCoreMlConfidence`, which is why every take ever filmed can be replayed
+  // through this rule rather than only the ones shot after it.
+  const takeConfidences: number[] = [];
+  for (const f of frames) {
+    const any = plateIsPrimary ? f.coreMlImplement : f.coreMlSecondary;
+    if (any) takeConfidences.push(any.confidence);
+  }
+  const meanCoreMlConfidence = takeConfidences.length
+    ? takeConfidences.reduce((a, b) => a + b, 0) / takeConfidences.length
+    : null;
   const samples: number[] = [];
   const widths: number[] = [];
   const heights: number[] = [];
@@ -473,8 +489,11 @@ function plateScaleFromFrames(
     reference.toleranceM,
     // The detector's own box noise, measured on held-out data. Without it this ruler stated the
     // plate's 1.3% casting tolerance as the whole of its uncertainty and treated the CoreML box
-    // as exact -- see COREML_BOX_LONG_EDGE_UNCERTAINTY.
-    COREML_BOX_LONG_EDGE_UNCERTAINTY,
+    // as exact -- see COREML_BOX_LONG_EDGE_UNCERTAINTY. And since 2026-10-31 it is FLOORED by the
+    // band this take's own detection confidence earned on those same held-out images, so a plate
+    // the detector was barely sure of cannot assert the confidence of one it was certain about
+    // (the 10-30 Pendlay row: six frames at 0.44, 86% of the blend, 23% high).
+    coreMlBoxUncertaintyForConfidence(meanCoreMlConfidence),
   );
   // The measured diameter travels with the scale. When a plate read goes wrong it is because the
   // detector measured the wrong thing -- a plate on the rack behind the lifter, a bench end, a
@@ -485,6 +504,7 @@ function plateScaleFromFrames(
   // exactly what these exist to expose, and a mean would follow it there.
   const med = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
   const round2 = (n: number) => Math.round(n * 100) / 100;
+  const round3 = (n: number) => Math.round(n * 1000) / 1000;
   const medianWidthPx = med(widths);
   const medianHeightPx = med(heights);
   const shape = {
@@ -497,6 +517,11 @@ function plateScaleFromFrames(
     minConfidence: round2(Math.min(...confidences)),
     maxConfidence: round2(Math.max(...confidences)),
     samples: samples.length,
+    // WHAT THE FLOOR ABOVE WAS DECIDED ON, recorded so a take's plate weight is attributable
+    // without the frames. minConfidence/maxConfidence describe the KEPT frames and could not
+    // answer this: every take in the corpus but one reports a max of 1.0.
+    meanCoreMlConfidence: meanCoreMlConfidence == null ? null : round2(meanCoreMlConfidence),
+    boxUncertaintyFraction: round3(coreMlBoxUncertaintyForConfidence(meanCoreMlConfidence)),
   };
   return computed ? { ...computed, measured: medianPixelSize, samples: samples.length, shape } : null;
 }

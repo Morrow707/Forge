@@ -2480,6 +2480,73 @@ export const COREML_BOX_LONG_EDGE_RELATIVE_MAD = 0.056;
  *  literal so a re-measurement only has to update the MAD. */
 export const COREML_BOX_LONG_EDGE_UNCERTAINTY = COREML_BOX_LONG_EDGE_RELATIVE_MAD / 0.6745;
 
+/** AND THE SAME DETECTOR IS NOT EQUALLY CERTAIN ON EVERY TAKE: SPLIT BY ITS OWN CONFIDENCE,
+ *  MEASURED 2026-10-31 ON THE SAME HELD-OUT IMAGES.
+ *
+ *  `COREML_BOX_LONG_EDGE_RELATIVE_MAD` above pools all 77 matched plate boxes into one number,
+ *  so a plate the detector was barely sure it saw states exactly the confidence of one it was
+ *  certain about. The 2026-10-30 Pendlay row is what that costs: six plate frames of 663 at a
+ *  take-mean CoreML confidence of **0.44**, stating the same 0.084 as the bench take beside it
+ *  whose plate held a lock on 205 frames at 0.93 -- and at twelve times a body ruler's weight it
+ *  took 86% of the blend and shipped the set 23% high.
+ *
+ *  Re-binned by the detector's own confidence (plate class, 77 boxes, 41 val images it never
+ *  trained on; sigma = relMAD / 0.6745 as above):
+ *
+ *      conf 0.25-0.40   n=10   relMAD 0.115   sigma 0.170
+ *      conf 0.40-0.55   n=14   relMAD 0.164   sigma 0.243
+ *      conf 0.55-0.70   n=12   relMAD 0.071   sigma 0.105
+ *      conf 0.70-0.85   n=26   relMAD 0.042   sigma 0.063
+ *      conf 0.85-1.00   n=15   relMAD 0.030   sigma 0.044
+ *      ---- pooled either side of the cliff ----
+ *      conf >= 0.55     n=53   relMAD 0.051   sigma 0.075
+ *      conf <  0.55     n=24   relMAD 0.143   sigma 0.211
+ *
+ *  **The split is read off the measurement, not off the ledger.** The step sits between the
+ *  0.40-0.55 and 0.55-0.70 bins in the plate class (0.243 -> 0.105) and in all 145 boxes across
+ *  every class (0.136 -> 0.085); it is the one place the series is not merely noisy.
+ *
+ *  **IT IS A FLOOR, so it can only ever LOOSEN** -- the same shape the shoulder ruler's
+ *  `max(BIACROMIAL_TOLERANCE_FRACTION, spanSpreadFraction, gripFloor)` already uses, and for the
+ *  same reason: the confident bin measures 0.075 against the pooled 0.083, which is inside its
+ *  own noise over 53 boxes, and TIGHTENING the one ruler that already dominates every blend it
+ *  joins on that evidence is not a step this corpus supports. Costed on all twenty ledger rows
+ *  both ways: as a two-sided band it is 1 row better and 3 worse (the bench's two rows and the
+ *  press's set 2 all read further out), and as a floor it is **1 better, 0 worse, 19 unchanged**
+ *  -- the 10-30 Pendlay row's set 3, 22.68% -> 20.79%.
+ *
+ *  **A property of the DETECTOR, like the pooled MAD, so it is shared across all 270 identities
+ *  and belongs nowhere near FITTED_OVERRIDES.** No take chose either number; both come off 41
+ *  photographs of other people's gyms.
+ *
+ *  **Re-measure both MADs when the model is retrained** -- `validate_box_size.py` prints the
+ *  pooled one, and the confidence bins are the same script split on `boxes.conf`. */
+export const COREML_BOX_LONG_EDGE_RELATIVE_MAD_UNCONFIDENT = 0.143;
+/** Converted exactly as the pooled MAD is, so a re-measurement updates only the MAD. */
+export const COREML_BOX_LONG_EDGE_UNCERTAINTY_UNCONFIDENT =
+  COREML_BOX_LONG_EDGE_RELATIVE_MAD_UNCONFIDENT / 0.6745;
+/** Where the measured series steps, and the only threshold here. */
+export const COREML_CONFIDENCE_SPLIT = 0.55;
+
+/** The box-size uncertainty to state for a take, given the MEAN confidence of the detector's own
+ *  implement detections across it -- the quantity the export has always carried as
+ *  `objectDetection.avgCoreMlConfidence`, which is what makes this replayable on every take ever
+ *  filmed rather than only on the ones shot after it shipped.
+ *
+ *  **The take-level mean, NOT the mean of the frames the ruler kept.** Those frames are filtered
+ *  ON confidence (`COREML_MIN_CONFIDENCE_TO_PENALIZE`), so their mean is a truncated sample of
+ *  the thing being asked about and reads higher than the detector's real performance on the take
+ *  by construction. The unfiltered mean is the honest statement of "how well did it see its
+ *  object here", and it is the one the bins above were measured against.
+ *
+ *  Floored, never substituted: an unknown confidence states the pooled value. */
+export function coreMlBoxUncertaintyForConfidence(meanConfidence: number | null | undefined): number {
+  if (meanConfidence == null || !Number.isFinite(meanConfidence)) return COREML_BOX_LONG_EDGE_UNCERTAINTY;
+  return meanConfidence < COREML_CONFIDENCE_SPLIT
+    ? Math.max(COREML_BOX_LONG_EDGE_UNCERTAINTY, COREML_BOX_LONG_EDGE_UNCERTAINTY_UNCONFIDENT)
+    : COREML_BOX_LONG_EDGE_UNCERTAINTY;
+}
+
 // A named reference size with its own honest uncertainty, not a bare exact-looking number --
 // see computeReferenceObjectScale's own comment on why a single constant would be dishonest
 // here. "generic" entries are a best-effort assumption for when the coach hasn't confirmed

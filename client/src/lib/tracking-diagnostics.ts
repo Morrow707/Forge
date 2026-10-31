@@ -53,6 +53,17 @@ export type ReferenceObjectRead = {
   minConfidence: number;
   maxConfidence: number;
   samples: number;
+  /** The mean confidence of the detector's implement boxes across the WHOLE take, unfiltered --
+   *  what `coreMlBoxUncertaintyForConfidence` was given, and the same quantity
+   *  `objectDetection.avgCoreMlConfidence` reports. minConfidence/maxConfidence describe only the
+   *  frames the median kept and cannot answer this: every take in the corpus but one reports a
+   *  maxConfidence of 1.0. */
+  meanCoreMlConfidence?: number | null;
+  /** The box-size uncertainty this take's plate actually stated, after the confidence floor. The
+   *  blend weights by 1/sigma^2, so this is the number that decides how much of a take's scale
+   *  the plate carries -- it was the pooled constant for everyone before 2026-10-31 and is now a
+   *  fact about the take. */
+  boxUncertaintyFraction?: number;
 };
 
 export type TraceDiagnostics = {

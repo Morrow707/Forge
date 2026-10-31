@@ -146,7 +146,7 @@ describe("the drive window was fitted on thirteen sensor-paired sets", () => {
     // The press got its own window (0.08) in round five, 2026-10-30, the same way; the three
     // below still read the shared copy.
     const press = cameraTunablesFor("Barbell Shoulder Press", "overhead_press");
-    expect(press.values.driveOnsetFraction).toBe(0.08);
+    expect(press.values.driveOnsetFraction).toBe(0.12);
     expect(press.sources.driveOnsetFraction).toBe("fitted");
     for (const [name, bucket] of [["Back Squat", "squat"], ["Romanian Deadlift", "deadlift"], ["Pendlay Row", "horizontal_press_or_row"]]) {
       const other = cameraTunablesFor(name, bucket);

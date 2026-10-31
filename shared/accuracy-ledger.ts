@@ -81,6 +81,14 @@ export type LedgerRow = {
    *  weight a jittery span as if it were steady. Set only where the spread exceeded the floor on
    *  the day (the 10-30 row set 2, 0.317 against 0.2); absent means the floor was what shipped. */
   readonly shoulderSpanSpreadFraction?: number;
+  /** THE DETECTOR'S OWN MEAN CONFIDENCE ON THIS TAKE, where a plate joined the vote
+   *  (`objectDetection.avgCoreMlConfidence`). A property of the TAKE, like the span's spread
+   *  above, and for the identical reason: since 2026-10-31 the plate's uncertainty is FLOORED by
+   *  the band its confidence earned on held-out images, so a replay through the pooled constant
+   *  alone would weight the 10-30 row's six frames at 0.44 as if the detector had been as sure of
+   *  them as of the bench's 205 frames at 0.93. Set on every row whose candidates include a
+   *  plate; absent means no plate was in the vote and the field decides nothing. */
+  readonly plateMeanCoreMlConfidence?: number;
 
   /** The scale the phone really used, x1000. The replay must reproduce this -- unless
    *  `shippedUnderDefect` names the rule that produced it and has since been fixed. */
@@ -251,6 +259,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     ],
     uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, height: 0.1, shoulder_width: 0.1 },
     heightRulerVotedAsFilmed: true,
+    plateMeanCoreMlConfidence: 0.84,
     shippedScaleX1000: 3.7870913839708666,
     reportedRomCm: 60.0,
     sensorRomCm: 64.5,
@@ -360,6 +369,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     // in quadrature with the 6mm casting tolerance of a 450mm bumper: 0.0576.
     uncertaintiesAsFilmed: { plate: 0.05756542171979441, body_3d: 0.2, depth: 0.2, shoulder_width: 0.2 },
     heightRulerVotedAsFilmed: false,
+    plateMeanCoreMlConfidence: 0.83,
     shippedScaleX1000: 4.0295695742386135,
     reportedRomCm: 64.3,
     sensorRomCm: 57.4,
@@ -468,6 +478,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     ],
     uncertaintiesAsFilmed: { plate: 0.05756542171979441, body_3d: 0.2, depth: 0.6, shoulder_width: 0.2 },
     heightRulerVotedAsFilmed: false,
+    plateMeanCoreMlConfidence: 0.84,
     shippedScaleX1000: 2.7878659744209606,
     reportedRomCm: 41.1,
     sensorRomCm: 62.5,
@@ -507,6 +518,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     ],
     uncertaintiesAsFilmed: { plate: 0.05756542171979441, body_3d: 0.2, depth: 0.2, shoulder_width: 0.2 },
     heightRulerVotedAsFilmed: false,
+    plateMeanCoreMlConfidence: 0.72,
     shippedScaleX1000: 4.388368159185664,
     reportedRomCm: 36.7,
     sensorRomCm: 35.56,
@@ -653,6 +665,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     ],
     uncertaintiesAsFilmed: { plate: 0.05756542171979441, body_3d: 0.2, depth: 0.2, height: 0.1, shoulder_width: 0.2 },
     heightRulerVotedAsFilmed: true,
+    plateMeanCoreMlConfidence: 0.57,
     shippedScaleX1000: 3.579400420433846,
     reportedRomCm: 56.7,
     sensorRomCm: 61.72,
@@ -686,6 +699,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     ],
     uncertaintiesAsFilmed: { plate: 0.05756542171979441, body_3d: 0.2, depth: 0.2, shoulder_width: 0.2 },
     heightRulerVotedAsFilmed: false,
+    plateMeanCoreMlConfidence: 0.93,
     shippedScaleX1000: 4.15751295357763,
     reportedRomCm: 39.4,
     sensorRomCm: 37.338,
@@ -736,10 +750,11 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     ],
     uncertaintiesAsFilmed: { plate: 0.05756542171979441, body_3d: 0.2, depth: 0.6, shoulder_width: 0.2 },
     heightRulerVotedAsFilmed: false,
+    plateMeanCoreMlConfidence: 0.44,
     shippedScaleX1000: 4.840255324542491,
     reportedRomCm: 70.1,
     sensorRomCm: 56.896,
-    liveErrorPct: 22.68,
+    liveErrorPct: 20.79,
     notes:
       "Read +23.2% as filmed (70.1 against 22.4in), and THE PLATE IS THE WHOLE OF IT: 4.865e-3 " +
       "against the sensor's required 3.9285e-3, +23.8%, carrying 86% of the blend at its 0.0576 " +
@@ -750,7 +765,14 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "of 663 tracked at 0.44 average confidence, and all 59 fresh detections broken on low " +
       "confidence -- 5 samples clears MIN_CALIBRATION_SAMPLES, so a median off 20 jittery frames " +
       "asserts the detector's held-out median noise. That is the shoulder ruler's old bug one " +
-      "instrument over, and the cure this repo already uses is a floor that can only loosen. " +
+      "instrument over, and the cure this repo already uses is a floor that can only loosen -- " +
+      "WHICH IS WHAT ROUND SEVEN SHIPPED, 2026-10-31: the plate's box uncertainty is now floored " +
+      "by the band its own take-mean confidence earned on the same 41 held-out images (conf < 0.55 " +
+      "reads sigma 0.211 over 24 plate boxes against 0.075 over 53 above it), so this take's 0.44 " +
+      "states 0.212 instead of 0.084, the plate's weight falls six-fold, and the row reads +20.79%. " +
+      "It is the ONLY ledger row below the split, so nothing else moved: 1 better, 0 worse, 19 " +
+      "unchanged. The remaining +20.8% is still the plate -- a floor de-weights a bad ruler, it " +
+      "does not make a box 19.2% too small right. " +
       "plateBoxToExpectedRatio read 0.964, which looks like a perfect box and is not evidence: it " +
       "divides by the blend with the plate removed, and that pair spans 58% here, so a plate 24% " +
       "high lands near its midpoint and scores as corroborated. Box 92.5px where 114.5px hits the " +
@@ -803,6 +825,46 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "vocabulary for the same movement.",
   },
 ];
+
+/* THE SEVENTH MOVE, 2026-10-31 (round seven): ONE SMALL STEP ON EACH OF THE THREE LIFTS FILMED
+ * ON 10-30, which is Scott's standing instruction for this loop ("change something on all lifts
+ * after this round ... until we get to 0% I want to keep making small adjustments on everything").
+ * Round six shipped two SHARED mechanism fixes, so the bench improved, the row moved only as a
+ * side effect and the PRESS came out worse than it went in -- which is what this round answers.
+ *
+ *   BENCH PRESS, its own `maxPeakToMeanRatio` 2.0 -> 1.6. A peak cap, so it moves no ledger row
+ *   (the ledger replays SCALE). Re-swept because the set-mean fix changed what a peak-to-mean
+ *   ratio is and so voided round four's own rejection of 1.6: on the six bench takes with a
+ *   sensor peak the bias goes +8.5% -> +3.8%, median |err| 9.45 -> 5.40, and the SPREAD is at its
+ *   own minimum (24.3 -> 20.4 points); 1.5 and 1.4 buy the last of the bias by paying it back in
+ *   spread, so they are the next steps and not this one. On all ten stored bench takes the reps,
+ *   the range of motion and the set mean are identical at 1.6 and at 2.0.
+ *
+ *   BARBELL SHOULDER PRESS, its own `driveOnsetFraction` 0.08 -> 0.12. Also a window, so no
+ *   ledger row moves. Round five's 0.08 was fitted against the pre-fix mean, where narrowing the
+ *   window moved only the denominator; with both sums from the drive window the press reads low
+ *   at 0.08 on all three 10-30 sets AND the 10-02 fixture, and 0.12 weakly dominates 0.08 and
+ *   0.10 -- no take of the four is worse at it than at either. Bias -4.4% -> -1.6%, median |err|
+ *   5.20 -> 1.85, spread 5.2 -> 2.7. Rep counts unchanged at every value.
+ *
+ *   PENDLAY ROW, and every lift, through a shared RULE rather than a number: the plate's box
+ *   uncertainty is FLOORED by the band its own take-mean detection confidence earned on the 41
+ *   held-out val images. Measured the same day on the same 77 plate boxes the pooled MAD comes
+ *   from: conf >= 0.55 reads sigma 0.075 over 53 boxes, conf < 0.55 reads 0.211 over 24, and the
+ *   step sits between the 0.40-0.55 and 0.55-0.70 bins in the plate class AND in all 145 boxes,
+ *   so the split is read off the measurement rather than off this ledger. The 10-30 row's set 3
+ *   is the only row below it (six plate frames at 0.44 take-mean confidence, stating the same
+ *   0.084 as the bench take beside it whose plate held 205 frames at 0.93): **22.68% -> 20.79%,
+ *   1 better, 0 worse, 19 unchanged.** A FLOOR, never a substitution -- the confident bin's 0.075
+ *   is inside its own noise over 53 boxes, and tightening the one ruler that already dominates
+ *   every blend it joins on that evidence is not a step this corpus supports; costed as a
+ *   two-sided band it is 1 better and 3 WORSE. A detector property, like the pooled MAD, so it is
+ *   shared across all 270 identities and FITTED_OVERRIDES is untouched by it.
+ *
+ * Every row with a plate in its vote now carries `plateMeanCoreMlConfidence`, read off the raw
+ * exports' `objectDetection.avgCoreMlConfidence`, which is what makes the rule replayable on
+ * takes filmed long before it existed rather than only on the next one.
+ */
 
 /* THE SIXTH MOVE, 2026-10-31 (round six): a STATISTIC corrected, not a number fitted.
  * `COREML_BOX_LONG_EDGE_UNCERTAINTY` was the detector's relative MAD (0.056) handed straight to
