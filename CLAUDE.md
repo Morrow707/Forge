@@ -251,6 +251,82 @@ DECLARED range and the INSTALLED tree separately (the one that runs is the resol
 `drizzle-zod`'s own peer declaration names a 4.x range rather than trusting a version number, and
 forbids the three zod-3 spellings in the four migrated files. Two mutations, each caught.
 
+### AND A FIFTH FIRING OF STEP 10, 2026-10-31: THE FIX WAS AN OVERRIDE PAST THE DECLARED RANGE
+
+CI run 2006 on `37867e34` (round seven) went red at **step 10, "Audit build tooling"**. Read the
+step NUMBER: typecheck, the 432-file / 5052-test suite AND the production audit (step 9) all
+PASSED, so nothing about the commit was the problem -- and steps 11-16 never ran, so that commit
+is unproven by the build, the reconciler, the seed, the FK-drift check and the whole integration
+suite, not merely unaudited. Three advisories, all dev-tree, all transitive, **12 vulnerabilities
+(2 low, 10 moderate)**: `glob` <=14.0.1 (moderate, AbortSignal cancellation bypass allowing
+post-timeout filesystem traversal), `minimatch` <11.0.1 (moderate, DoS via globparts
+amplification) and `deepmerge` >=4.2.0 (low, prototype poisoning of merged objects).
+
+**`npm audit fix --force` WOULD HAVE RIPPED OUT CAPACITOR 8.** It named the fixes as
+"Will install `@capacitor/cli@4.8.2`" and "Will install `vite-plugin-pwa@1.1.0`" -- both
+DOWNGRADES, four majors and one major back respectively. npm reports a downgrade as a "breaking
+change fix" with no sign that it is going backwards, which on this repo would have taken the iOS
+plugin bridge with it.
+
+**THERE IS NO UPSTREAM FIX FOR EITHER MODERATE, AND THAT IS THE NEW FINDING.** `rimraf` 6.1.3 IS
+the latest release and declares `glob: ^13.0.3`; `@capacitor/cli` 8.6.0 still declares
+`rimraf: ^6.0.1`. So nothing in that chain can resolve a glob past 14.0.1 by being updated.
+Likewise `filelist` 1.0.6 declares `minimatch: ^5.0.1` and top-level `glob` declares
+`minimatch: ^10.1.1`. **Every available fix was therefore a forced major OUTSIDE the consumer's
+declared range** -- `glob: ^14.0.3` and `minimatch: ^11.0.3` as `overrides`, which is a stronger
+claim than the satisfied-peer case this file already warns about ("a satisfied peer range is not
+a statement of compatibility"); here the range is not even satisfied.
+
+**SO IT WAS MEASURED RATHER THAN ASSUMED, ON THE TWO PATHS THAT ACTUALLY EXERCISE THEM.**
+`npm run build` drives minimatch through vite-plugin-pwa -> workbox-build ->
+@trickfilm400/rollup-plugin-off-main-thread -> ejs -> jake -> filelist, and it is green with the
+service worker generated (332 precache entries, 20 routes prerendered, first-paint budget OK) --
+which matters because `client/src/sw.ts` is custom and a broken worker is the 2026-10-10
+"/parent-notice 404 for every existing visitor" bug. `npx cap sync ios` drives glob through
+@capacitor/cli -> rimraf, and it finished in 0.688s with all 17 plugins found and Package.swift
+written. Applied with the **newer-npm-from-a-scratchpad** recipe the 10-22 entry records, because
+npm 10.9.7 still crashes in arborist on an ideal-tree rebuild.
+
+**THE LOCKFILE LOST EIGHT PACKAGES AND EVERY ONE TRACES TO THE OVERRIDES -- CHECKED, NOT WAVED
+THROUGH**, because a net package loss is exactly the signature `--legacy-peer-deps` leaves when a
+resolver stops resolving. 1039 -> 1032, one added: `rimraf/node_modules/glob` and
+`filelist/node_modules/minimatch` (plus its two brace-expansion deps) are gone because both now
+use the hoisted copies; `foreground-child`, `jackspeak`, `@isaacs/cliui` and the top-level
+`signal-exit` 4.x are gone because glob 14 dropped glob 11's bin dependencies, and it gained
+`@isaacs/nonrecursive-glob-match`. **The one that looked like a real break was not**:
+`@ionic/utils-process` and `@ionic/utils-terminal` still declare `signal-exit`, and the tree holds
+it at 3.0.7 nested under each of them -- it was glob's own top-level 4.x copy that went. A scan
+for "is this package still required" is not enough; look for the version it is required AT.
+
+**`deepmerge` HAS NO FIX AND DOES NOT NEED THE ALLOWLIST EITHER.** 4.3.1 is the newest release and
+the advisory range is `>=4.2.0 <=4.3.1`, so this is the braces shape -- but it is **low**, and both
+audit steps run `--audit-level=moderate`, so `npm-audit-check.mjs` already filters it out by
+severity and exits 0. An allowlist entry was written and then deleted: adding one for an advisory
+the gate does not fail on would put an expiry date on a non-event, and the entry would come due in
+December for nothing.
+
+**AND READING THE GATE FOUND A REPORTING BUG IN THE GATE.** The success path printed
+`Object.keys(vulns).length - covered.size` -- EVERY remaining advisory -- under the words "at or
+above ${level}", so it read **"npm audit: 4 vulnerabilities at or above moderate"** and exited
+**0**. That is the same sentence shape as the failure line at the bottom of the same file
+("${failing.length} vulnerabilities at or above ${level}", exit 1), so **a green gate and a red one
+read alike** -- this file's own "a correct empty state and a broken gate are the same pixels", in
+the script whose whole job is to tell them apart. It now says
+`0 vulnerabilities at or above moderate after the allowlist (4 below moderate, reported and not
+blocking)`.
+
+**A NATIVE CHANGE RODE ALONG AND IS DECLARED RATHER THAN HIDDEN.** `npx cap sync ios` regenerated
+`ios/App/CapApp-SPM/Package.swift`, moving the `capacitor-swift-pm` pin 8.5.0 -> **8.5.2** to match
+the `@capacitor/ios` 8.5.2 the lockfile has carried since the 10-06 audit fix; the checked-in file
+had simply never been regenerated. The workflow runs `cap sync` itself, so this changes nothing CI
+would not have done -- and by the Capacitor paragraph above it is still a native change, so it gets
+`verify_build`.
+
+**What was measured:** `npm ci` on CI's own npm 10.9.7 installs all packages from the npm-11-written
+lock; `npx tsc --noEmit` clean; 432 files / 5052 passed / 2 expected fail, identical to the
+pre-change baseline; `npm run build` green; both CI audit steps exit 0 run exactly as CI runs them.
+`package.json` moved two lines and `FITTED_OVERRIDES` is untouched -- no camera number moves.
+
 ### AND THE FOURTH: `brandForUserId` MAKES A FIRE-AND-FORGET SEND LAND AFTER THE RESPONSE
 
 Scott, 2026-10-24: **"I have gotten about 15 cl run errors."** He had, and more than that --

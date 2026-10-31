@@ -71,7 +71,18 @@ for (const name of covered) {
   console.log(`allowlisted: ${name} (${v.severity}) ${urls.join(" ")}`.trim());
 }
 if (failing.length === 0) {
-  console.log(`npm audit: ${Object.keys(vulns).length - covered.size} vulnerabilities at or above ${level} after the allowlist.`);
+  // Say what is true on the success path. This line used to print EVERY remaining
+  // advisory under the words "at or above ${level}", which on 2026-10-31 read
+  // "4 vulnerabilities at or above moderate" beside an exit 0 -- the same sentence
+  // shape as the failure line at the bottom of this file. A green gate and a red one
+  // must not read alike; CLAUDE.md calls that class "a correct empty state and a
+  // broken gate are the same pixels".
+  const below = Object.keys(vulns).length - covered.size;
+  console.log(
+    `npm audit: 0 vulnerabilities at or above ${level} after the allowlist` +
+      (below > 0 ? ` (${below} below ${level}, reported and not blocking)` : "") +
+      ".",
+  );
   process.exit(0);
 }
 console.log(`# npm audit report (allowlist applied)\n`);
