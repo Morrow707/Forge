@@ -749,11 +749,16 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "spanSpreadFraction 0.165, both under what would loosen the 0.2 floor.",
   },
 
-/** 2026-10-30, round SIX: set 3 of the press on 705, 85lb x 8. THE OVR LABELS THIS LIFT PUSH
- *  PRESS and sets 2 and 3 are 85lb against set 1's 65lb, so the three are not one movement until
- *  Scott says they are -- CLAUDE.md's rule is that a push press is not pooled with a strict press
- *  until one is filmed without the dip. No plate was seen at all (plateMeasuredPx null), so this
- *  is the one set-3 take decided entirely by body rulers, and it is also the most accurate. */
+/** 2026-10-30, round SIX: set 3 of the press on 705, 85lb x 8. THE OVR LABELS THIS LIFT "PUSH
+ *  PRESS" AND THAT IS THE OVR'S OWN VOCABULARY, NOT A SECOND MOVEMENT. Scott, 2026-10-31, asked
+ *  directly: "The push press is the shoulder press, they don't have another name." So all three
+ *  press takes are one identity's record and round five's `driveOnsetFraction` 0.08, fitted across
+ *  sets 1 and 2 and the 10-02 fixture, is fitted on this lift rather than across two. This
+ *  CORRECTS the 2026-10-07 note that held a push press out of the press's evidence until one was
+ *  filmed without the dip: the concern there was GEOMETRY (that take's axisForeshortening was
+ *  1.452) and it stands as a geometry caveat, which is a reason to weigh a take, never a reason to
+ *  call it a different lift. No plate was seen at all here (plateMeasuredPx null), so this is the
+ *  one set-3 take decided entirely by body rulers, and it is also the most accurate. */
   {
     id: "2026-10-30-barbell-shoulder-press-set-3",
     date: "2026-10-30",
@@ -782,8 +787,10 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "five fitted and it holds on a take it was not fitted on. Seven of eight reps for the third " +
       "press take running: cadence 0.822, 18 dropouts, 4.228s lost and a largest gap of 2.885s, " +
       "the worst trace of the three. axisForeshortening 1.188 -- 1.56m of the 2.89m travel is " +
-      "along the lens -- so the range of motion landing inside 3.1% is partly luck and this take " +
-      "is NOT a candidate to fit anything to.",
+      "along the lens, against 1.007 on the row and 1.112 on the bench -- so the range of motion " +
+      "landing inside 3.1% is partly luck and this take is NOT a candidate to fit anything to. " +
+      "The lift is ONE identity (see the note above): the OVR's \"push press\" label is its own " +
+      "vocabulary for the same movement.",
   },
 ];
 

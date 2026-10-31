@@ -3116,6 +3116,81 @@ halves before splitting anything else:
   See docs/camera-tracking-notes.md, "The RDL's +12.0% is the 3D-pose collapse". Calibration work:
   uploaded on commit.
 
+- **ROUND SIX, 2026-10-31: SET 3 OF ALL THREE LIFTS ON 705, AND THE EXPORT HAD BEEN LYING ABOUT THE
+  SMOOTHING.** Taken over from Fable mid-session; nothing shipped a constant, which is the point.
+  Three new ledger rows (bench set 3 **+5.5%**, Pendlay row set 3 **+23.2%**, press set 3 **+3.1%**),
+  all three replaying as filmed to within 0.01% of the scale the phone shipped.
+  **WHICH BUILD A CAPTURE RAN ON IS READABLE OFF THE EXPORT AND DOES NOT NEED THE RUN LIST.**
+  `calibration.scaleYardstickAbstained` exists from 705, the row's `rulerUncertainties.depth` is
+  0.6 from 703, `scaleBlend.identity` from round four. That is what settled that the three set-3
+  takes are post-round-five rather than 703, which decides whether a measurement is evidence about
+  the current pipeline or about a previous one.
+  **THE PLATE STATES A CONSTANT UNCERTAINTY AND ITS EVIDENCE IS NOT CONSTANT.** It states
+  `hypot(casting tolerance, COREML_BOX_LONG_EDGE_UNCERTAINTY)` = 0.0576 against every body ruler's
+  0.2, which is **12x the inverse-variance weight**, so on both lifts where a plate was found it
+  carried **86%** of the blend -- recomputed from the export's own candidates, 4.157e-3 against a
+  shipped 4.15751e-3 on the bench and 4.840e-3 against 4.84026e-3 on the row. And the two plates are
+  not the same instrument: the bench's lock held **256** of 865 frames with 206 plate frames at
+  **0.93** confidence, while the row's held **ZERO**, with 20 plate frames of 663 at **0.44** and all
+  59 fresh detections broken on low confidence. Both stated 0.0576. A median off 20 jittery frames
+  clears `MIN_CALIBRATION_SAMPLES` (5) and then asserts the detector's HELD-OUT MEDIAN noise as
+  though it were this take's. **That is the shoulder ruler's bug of 2026-10-09 one instrument over**,
+  and the cure this repo already uses is `max(floor, this take's own scatter)`, floored so it can
+  only LOOSEN; the per-frame box edges are already collected at the measurement site, so the scatter
+  is a diagnostic rather than a new sensor. **NOT FITTED YET, deliberately** -- Rule #5, two takes is
+  two points, and the bench's plate is the one that EARNED its weight and must not lose it.
+  **ALSO: THE DIRECTION FLIPPED AT THE 657 RETRAIN.** The old model boxed 2-7x too LARGE and every
+  plate was correctly refused; these are 7.3% and 19.2% too SMALL, which reads as a scale too HIGH.
+  Any reasoning in this file from before 2026-10-09 about oversized plates describes a model that is
+  no longer shipping.
+  **`plateBoxToExpectedRatio` DID NOT CATCH IT, AND THE DENOMINATOR IS WHY.** It read **0.964** on
+  the row -- which looks like a perfect box -- because it divides by the blend with the plate removed
+  and that pair spans **58%** on that take, so a plate 24% high lands near its midpoint and scores as
+  corroborated. The bench read 0.849 on a plate only 7.8% off, so across those two takes it is not
+  even monotonic in the plate's real error. **The 10-09 note asked for exactly this take** ("near 1.0
+  and the row is solved; at 1.2-1.5 the next work is a corroboration rule") and it arrived at 0.964
+  with the row 23% out: **a corroboration measure whose denominator is a wide disagreement cannot
+  refuse a candidate that sits inside the disagreement.**
+  **AND ROUND FIVE'S YARDSTICK RULE IS NOT WHAT THE ROW'S SET 3 IS ABOUT** --
+  `scaleYardstickAbstained` and `scalesRejectedAsImplausible` are both EMPTY on it, so +52.8% ->
+  +23.2% across builds is a different fault rather than a partial cure. Recorded because reading an
+  improvement as the last fix working is how a session loses a round.
+  **THE RECORD WAS WRONG AND THE PIPELINE WAS RIGHT: `velocitySmoothingMs`.** Every export said 165,
+  including a bench that round four gave **200** in `FITTED_OVERRIDES`. `bar-tracking.ts` reads it
+  off the record correctly (`tune.velocitySmoothingMs`, the `speedsReportedMps` line);
+  `av-bar-tracker-dialog.tsx` wrote the shared module constant into the blob. It was the right value
+  for as long as every lift shared it, so **the first export that NEEDED the field to be true is the
+  first one in which it was false** -- the ninth instance of this file's correction-wired-to-one-path
+  shape. It matters more than a cosmetic field because `FITTED_OVERRIDES` exists to move one lift
+  without the others, and a diagnostic reporting the SHARED value makes a per-lift fit and its
+  absence identical on the row where it is read; same argument `calibration.scaleBlend` was built on.
+  `a-diagnostic-states-this-lifts-own-number.test.ts` states what is FORBIDDEN: the subjects are
+  DISCOVERED (every `calibrationDiagnostics.<field> =` write whose field is a key of the per-lift
+  record -- 19 writes in the dialog), each must resolve `cameraTunablesFor(...)`, and a
+  SCREAMING_CASE constant or a bare literal is refused. Expressions bounded by **matching their own
+  brackets**, never a character count and never "the next semicolon" (the fixed value spans four
+  lines and holds a call). Five mutations, each caught; **the comment strip is DRIVEN directly
+  rather than mutation-proved, and the file says why** -- removing it leaves every other case green,
+  because every forbidden word sits in a docblock ABOVE the bounded span, so the strip is exercised
+  on a synthetic input covering all three of its passes instead of being claimed on faith.
+  **THE PRESS IS ONE LIFT.** Scott, 2026-10-31: "The push press is the shoulder press, they don't
+  have another name." The OVR's "Push Press" label is its own vocabulary, so all three press takes
+  are one identity's evidence and round five's `driveOnsetFraction` 0.08 was fitted on this lift
+  rather than across two. **This corrects the 2026-10-07 note** that held a push press out of the
+  press's evidence until one was filmed without the dip: the concern there was GEOMETRY (that take's
+  `axisForeshortening` was 1.452), which is a reason to weigh a take and never a reason to call it a
+  different lift. Set 3's foreshortening is 1.188 (1.56m of its 2.89m travel along the lens, against
+  the row's 1.007 and the bench's 1.112), so its +3.1% is partly luck and **0.08 is not stepped to
+  0.10** -- round five's trigger was "if the next press still reads low" and -2.4% is not low.
+  **BENCH SET 2 HAS AN OVR SCREEN AND NO FORGE CAPTURE, FOR THE SECOND EXPORT RUNNING** (0.69 /
+  0.97 / 14.9in). Sets 1 and 3 are both present, so it is that one take, and it is unexplained.
+  **The bench's peak is the other open item and the lever is not the one held back:** set 3 reads
+  mean +12.1% AND peak +25.3% on the cleanest trace in the corpus (737 samples, cadence 0.979, 4
+  dropouts, 8 of 8). The WINDOW moves the mean and the SMOOTHING moves the peak, so round four's
+  held-back 0.02 window is not the answer to a peak error. Status board and
+  docs/camera-tracking-notes.md "Round six, 2026-10-31" carry the evidence. Calibration work, but
+  **no camera number moves**, so it batches rather than taking a beta of its own.
+
 Two things worth saying out loud when someone tests this:
 - **The gate is native, the evidence is not.** The arbiter runs in the build,
   but its telemetry is only readable on the admin tracking report, which is

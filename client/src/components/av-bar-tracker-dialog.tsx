@@ -109,7 +109,6 @@ import {
   type RepMetrics,
   type TrackedPoint,
   type VelocitySample,
-  VELOCITY_SMOOTHING_MS,
   carryHalfSpan,
   type BarPointSource,
 } from "@/lib/bar-tracking";
@@ -2334,7 +2333,19 @@ export function AvBarTrackerDialog({
       }
       calibrationDiagnostics.tracePathCm = walked * 100;
       calibrationDiagnostics.traceDisplacementCm = (maxAlong - minAlong) * 100;
-      calibrationDiagnostics.velocitySmoothingMs = VELOCITY_SMOOTHING_MS;
+      // THIS LIFT'S OWN SMOOTHING, NOT THE SHARED CONSTANT. It wrote VELOCITY_SMOOTHING_MS
+      // until 2026-10-31, which was the right value only while every lift shared it. Round
+      // four (2026-10-30) gave the Bench Press velocitySmoothingMs 200 in FITTED_OVERRIDES
+      // and bar-tracking.ts reads it off the record (`tune.velocitySmoothingMs`, the
+      // speedsReportedMps line), so the PIPELINE was already correct and only the record was
+      // wrong -- every bench export since has said 165 for a take smoothed at 200. The first
+      // export carrying a per-lift override is the first one that needed this field to be
+      // true, which is exactly when it stopped being: a correction wired to one of two paths,
+      // invisible because the path that IS taken looks like it worked.
+      calibrationDiagnostics.velocitySmoothingMs = cameraTunablesFor(
+        exerciseName,
+        romBucketForExercise(exerciseName),
+      ).values.velocitySmoothingMs;
       if (scaleFactor && scaleFactor > 0) {
         calibrationDiagnostics.traceTravelAlongPx = (maxAlong - minAlong) / scaleFactor;
         calibrationDiagnostics.traceTravelAcrossPx = (maxAcross - minAcross) / scaleFactor;
