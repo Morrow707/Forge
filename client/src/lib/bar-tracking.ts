@@ -1774,6 +1774,15 @@ export function summarizeTrackedSet(
       // What is reported for the rep: the drive window's length and onset.
       driveDuration,
       romM,
+      // THE DRIVE WINDOW'S OWN DISTANCE, which the SET-level mean needs and did not have.
+      //
+      // The rep's mean has divided driveRomM by driveDuration since 2026-10-06 (see the long
+      // comment above: "THE DISTANCE AND THE TIME MUST COME FROM THE SAME WINDOW"). The set's
+      // mean is a separate aggregation and it was still summing `romM` -- the WHOLE PHASE's
+      // distance -- over `driveDuration`, the drive window's time, which is the exact pairing
+      // that comment says is the bug. The field simply was not on this record, so the set-level
+      // code reached for the one that was. Found 2026-10-31 on the bench's set 3.
+      driveRomM,
       startIdx: phase.startIdx,
       endIdx: phase.endIdx,
       movingStartIdx: drive.startIdx,
@@ -2500,8 +2509,18 @@ export function summarizeTrackedSet(
     // the two agree to the second decimal (the sensor averages its rep means, and its reps are
     // clean); on the 2026-09-30 benches the average of ratios ran 12-18% over the sensor and
     // the distance-over-time 2-5%.
+    //
+    // AND BOTH SUMS COME FROM THE DRIVE WINDOW, which they did not until 2026-10-31. The
+    // 2026-10-06 fix made the REP's mean divide the drive window's distance by the drive
+    // window's time, and this aggregation kept summing `romM` -- the whole PHASE's distance --
+    // over `driveDuration`. That is the pairing `romM`'s own comment names as the bug, left in
+    // place one function up because `driveRomM` was not on the record to sum. The bench's set 3
+    // beside the OVR is what found it: range of motion +4.2%, mean +10.4%, and a mean error
+    // 2.5x the distance error is not scale -- it is the clock, exactly as 10-06 argued. Summing
+    // the drive distance instead reads +2.9% on that take. The REPORTED range of motion still
+    // spans the whole phase, which is the rep's real travel; two windows, two jobs.
     meanVelocityMps: (() => {
-      const dist = setConcentric.reduce((a, c) => a + c.romM, 0);
+      const dist = setConcentric.reduce((a, c) => a + c.driveRomM, 0);
       const time = setConcentric.reduce((a, c) => a + c.driveDuration, 0);
       const weighted = time > 0 ? Math.min(MAX_PLAUSIBLE_LIFT_VELOCITY_MPS, dist / time) : setConcentric.reduce((a, c) => a + c.mean, 0) / (setConcentric.length || 1);
       return Math.round(weighted * 100) / 100;
@@ -2534,7 +2553,7 @@ export function summarizeTrackedSet(
     meanPowerWatts:
       loadKg && loadKg > 0
         ? (() => {
-            const dist = setConcentric.reduce((a, c) => a + c.romM, 0);
+            const dist = setConcentric.reduce((a, c) => a + c.driveRomM, 0);
             const time = setConcentric.reduce((a, c) => a + c.driveDuration, 0);
             const v = time > 0 ? Math.min(MAX_PLAUSIBLE_LIFT_VELOCITY_MPS, dist / time) : setConcentric.reduce((a, c) => a + c.mean, 0) / (setConcentric.length || 1);
             return Math.round(loadKg * GRAVITY_MPS2 * v);

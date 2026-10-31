@@ -18,11 +18,16 @@ describe("the Pendlay row's pickup is not a rep", () => {
   // The title used to say this landed on the sensor's mean and the number pinned was 1.02. The
   // sensor read 0.85, so 1.02 was +20% and the title was wrong about its own assertion. The
   // 2026-10-07 drive-window refit takes it to 0.91, +7%, and the pin says which is which now.
-  it("counts nine rows, and the mean moves from +20% to +7% of the sensor", () => {
+  // AND THE 2026-10-31 SET-MEAN FIX TAKES IT TO 0.83, -2.1%. The set mean had been summing the
+  // whole PHASE's distance over the DRIVE window's time; summing the drive window's distance
+  // lowers every mean, which helped every take in the corpus that read high and this is one of
+  // the seven. So the number pinned here has been 1.02 (+20%), 0.91 (+7%) and now 0.83 (-2.1%),
+  // and each move is a fix to a different thing: the window, then the distance it is paired with.
+  it("counts nine rows, and the mean moves from +20% to +7% to -2% of the sensor", () => {
     const result = replayCapture((row as StoredCapture[])[0]);
     expect(result.repCount).toBe(9);
     const m = result.metrics!;
-    expect(m.meanVelocityMps).toBeCloseTo(0.91, 1);
+    expect(m.meanVelocityMps).toBeCloseTo(0.83, 1);
     const sensorMean = 0.85;
     expect(Math.abs(m.meanVelocityMps! - sensorMean) / sensorMean).toBeLessThan(0.1);
     expect(Math.abs(m.romCm! - 49.5) / 49.5).toBeLessThan(0.05);

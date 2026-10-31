@@ -422,12 +422,37 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "+0.1% at 0.02 -- and 0.02 is NOT taken this round because the one trace-poor bench in the corpus " +
     "(set 5, 09-29, a carried point frozen mid-rep) goes from -15.6% to -31.2% there and to -22.1% at " +
     "0.03. Every rep count unchanged at every fraction. 0.02 is the next step if the next bench still " +
-    "reads high. velocitySmoothingMs 165 -> 200 on this lift only: the 165 was fitted on ONE bench take " +
+    "reads high. " +
+    "AND EVERY MEAN FIGURE IN THE PARAGRAPH ABOVE IS SUPERSEDED, 2026-10-31: it was measured " +
+    "against a SET mean that summed the whole phase's distance over the drive window's time, the " +
+    "pairing `romM`'s own comment in bar-tracking.ts names as a bug and which the rep-level mean " +
+    "stopped doing on 2026-10-06. With both sums taken from the drive window the fraction moves the " +
+    "numerator too, and 0.03 is INERT on both 10-30 bench takes -- set 1 reads +5.9% and set 3 +3.0% " +
+    "at 0.03 AND at the shared 0.04, identical to the hundredth. It is kept because it is still the " +
+    "better value where these takes do respond, the 09-29/09-30 corpus: oblique +5.7% against +8.6%, " +
+    "set 7 +2.6% against +7.8%, set 10 -1.3% against +1.3%. Re-swept across the ten bench takes with " +
+    "a sensor mean on file, rep counts unchanged at every fraction: 0.02 bias -6.1% median |err| " +
+    "11.3%, 0.03 bias +3.1% median 14.3%, 0.04 bias +6.5% median 11.7%; on the five clean takes that " +
+    "respond to the fraction at all, 0.02 is median 1.5% / bias -2.4% against 0.03's 3.0% / +3.2%. " +
+    "0.02 IS STILL NOT TAKEN, for round four's own reason re-measured: the trace-poor bench goes " +
+    "-32.1% -> -42.9% there, so it closes the mean and widens the spread, which Rule #5 says is not " +
+    "the change. The equality on the 10-30 takes is asserted in " +
+    "ovr-2026-10-30-every-lift-reads-only-its-own-record.test.ts, so the day a change makes this " +
+    "lift's window matter on its own paired takes again, somebody re-reads this instead of " +
+    "inheriting it. " +
+    "velocitySmoothingMs 165 -> 200 on this lift only: the 165 was fitted on ONE bench take " +
     "(provenance audit 10-20) and the peak reads +18.6% (10-30), 0.0%, -1.8%, +11.9% at 165 against " +
     "+14.4, -4.5, 0.0, +3.0 at 200 -- bias +7.2% -> +3.2%, mean absolute error 8.1% -> 5.5%; 210 and " +
     "above push set 7 and set 10 to -5.5%, and a peak-to-mean CAP was swept and rejected (1.6 caps half " +
     "the reps). The pair together on the four clean takes: mean bias +6.3% (|err| 6.3%), peak bias " +
-    "+3.0% (|err| 5.2%, the lowest of any cell swept). Replayed on the 10-30 fixture and every stored " +
+    "+3.0% (|err| 5.2%, the lowest of any cell swept). THE SMOOTHING IS UNAFFECTED by the 10-31 set-mean " +
+    "fix (it sets the reported peak, not the mean) and 200 is re-confirmed as the sweep's own minimum " +
+    "on seven bench takes with a sensor peak: bias +3.0% at 165, +0.2% at 200, -2.7% at 240, -9.1% at " +
+    "280; median |err| 10.9 / 9.3 / 10.3 / 10.8. So the bench's remaining peak error is NOT the " +
+    "smoothing -- it is specific to the two 10-30 takes (+14.4% and +19.8% at 200, where every " +
+    "09-29/09-30 take sits at or below zero), which are also the two where the retrained detector's " +
+    "plate decides the scale at 86% of the blend. Open, and named on the status board. " +
+    "Replayed on the 10-30 fixture and every stored " +
     "bench; the row, the press, the squat and the RDL traces are untouched by construction (their " +
     "records still read the shared 0.04 and 165, asserted in " +
     "ovr-2026-10-30-every-lift-reads-only-its-own-record.test.ts).",

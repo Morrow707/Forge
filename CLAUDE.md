@@ -3155,6 +3155,63 @@ halves before splitting anything else:
   `scaleYardstickAbstained` and `scalesRejectedAsImplausible` are both EMPTY on it, so +52.8% ->
   +23.2% across builds is a different fault rather than a partial cure. Recorded because reading an
   improvement as the last fix working is how a session loses a round.
+  **AND THE BENCH'S MEAN WAS A BUG THIS FILE'S OWN COMMENT ALREADY DESCRIBED, 780 LINES ABOVE THE
+  LINE THAT STILL HAD IT.** Scott: "We are only looking at bench set 3." Its three errors are ROM
+  +5.5%, mean +12.1%, peak +25.3% -- and a mean error 2.5x the distance error is not scale, it is
+  the clock, which is the 2026-10-06 argument word for word. `romM`'s own comment in
+  `bar-tracking.ts` is headed **"THE DISTANCE AND THE TIME MUST COME FROM THE SAME WINDOW"** and
+  fixed the REP's mean to `driveRomM / driveDuration`; **the SET's mean is a separate aggregation
+  one function down and went on summing `romM` -- the WHOLE PHASE's distance -- over
+  `driveDuration`**, the exact pairing that comment names, for twenty-five days. It did so because
+  `driveRomM` was never put on the concentric record, so the set-level code reached for the only
+  distance that was there; `meanPowerWatts` beside it had the same line. The fix is one field and
+  two reduce callbacks. Bench set 3: **+10.4% -> +2.9%**.
+  **COSTED ON ALL TWELVE TRACED SENSOR-PAIRED TAKES AND IT IS NOT A CLEAN WIN, which is the part to
+  read.** Seven better, five worse, and the split is exactly on sign: **every take that read HIGH
+  improved** (set 3 +10.4->+2.9, bench set 1 +8.9->+5.5, oblique +9.9->+5.1, set 10 +3.4->-1.1, the
+  10-02 row +7.1->-2.1, the 10-02 push press +2.4->-1.3, set 9 +57.8->+35.0) **and every take that
+  read LOW got one to three points worse** (clean -13.3->-14.2, dropout -29.0->-32.2, bench set 2
+  10-02 -40.8->-41.9, squat set 1 -6.5->-9.8, squat set 2 -20.5->-22.1). Median |err| 13.3% ->
+  14.2%, worst 74.2% -> 68.2%. **It ships anyway**: it is a bug with the file's own comment naming
+  it, and keeping a wrong formula because it cancels another error is the shape this file refuses
+  elsewhere. The honest reading of the five is that **the inflation was MASKING a genuine low read**
+  on them, and those are now visible rather than hidden.
+  **AND IT VOIDED A FITTED CONSTANT'S EVIDENCE WITHOUT CHANGING ITS VALUE -- the general lesson of
+  the round.** Round four fitted the bench's own `driveOnsetFraction` 0.03 against this mean, and
+  narrowing the window used to move only the DENOMINATOR, so a smaller fraction always dragged a
+  too-high mean down. With both sums from the drive window **0.03 is INERT on both 10-30 bench
+  takes** (+5.9% and +3.0% at 0.03 AND at the shared 0.04, identical to the hundredth). It is KEPT,
+  because it is still the better value where the older corpus responds (oblique +5.7% against
+  +8.6%, set 7 +2.6% against +7.8%, set 10 -1.3% against +1.3%), and `FITTED_OVERRIDE_EVIDENCE`
+  carries the re-measured sweep rather than round four's. **Before fitting a window constant
+  against a velocity, check which window that velocity's numerator and its denominator each come
+  from.** Round five's press `driveOnsetFraction` 0.08 was fitted the same way and now reads -6.2%
+  / -5.0%; the sweep puts 0.10 at -3.8% / -2.7%, which is round five's own named next step, and it
+  is **NOT refit here** because Scott asked for the bench only and the press's set 3 carries a
+  1.188 foreshortening.
+  **0.02 IS STILL REFUSED, for round four's reason re-measured**: re-swept on the ten bench takes
+  with a sensor mean (rep counts unchanged at every fraction) it is bias -6.1% / median 11.3%
+  against 0.03's +3.1% / 14.3%, and on the five clean responsive takes it is median 1.5% / bias
+  -2.4% against 3.0% / +3.2% -- tempting -- while the trace-poor bench goes -32.1% -> -42.9%. It
+  closes the mean and widens the spread, which Rule #5 says is not the change.
+  **THE PEAK IS OPEN AND 200ms IS ALREADY ITS BEST VALUE**, so the lever is not the one held back:
+  swept on seven bench takes with a sensor peak, 165 is bias +3.0% / median 10.9%, **200 is +0.2% /
+  9.3%**, 240 is -2.7% / 10.3%, 280 is -9.1% / 10.8%. Only the two 10-30 takes read high (+14.4%,
+  +19.8%) where every 09-29/09-30 take sits at or below zero -- and those two are the ones where
+  the retrained detector's plate decides the scale at 86% of the blend. A +5.5% scale accounts for
+  5.5 of set 3's 19.8 and the other 13 is unexplained: the next thing to read on a bench.
+  **WHAT THE PIPELINE ALREADY GOT RIGHT, recorded so nobody spends a round on it:**
+  `repConsistency` flagged set 3's reps 7 and 8 (rep 7 is 66.3cm on a 37cm bench, 1.7x the median)
+  and `setRangeOfMotion` DROPS them, which is why the range of motion reads +5.5% rather than +11%.
+  The velocities do not read that flag, and excluding the two moves the set peak 1.14 -> 1.135,
+  because rep 7 is high and rep 8 is low and they cancel. The outlier flag is not this take's lever.
+  `the-set-mean-measures-one-window.test.ts` states what is FORBIDDEN and discovers its subjects:
+  every `setConcentric.reduce(` in `bar-tracking.ts`, bounded by matching its own brackets, and
+  none may sum `romM` beside a sum of `driveDuration`. One case DRIVES the real summariser on the
+  real bench trace against both candidates, because a scan over an aggregation sees the names it is
+  written with and never which way it goes. Five mutations, each caught; **the comment strip is
+  INERT today and the file says so** -- none of the three explanations writes the reducer form the
+  scan matches -- so it is exercised on a synthetic input covering all three of its passes.
   **THE RECORD WAS WRONG AND THE PIPELINE WAS RIGHT: `velocitySmoothingMs`.** Every export said 165,
   including a bench that round four gave **200** in `FITTED_OVERRIDES`. `bar-tracking.ts` reads it
   off the record correctly (`tune.velocitySmoothingMs`, the `speedsReportedMps` line);

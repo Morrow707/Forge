@@ -58,7 +58,7 @@ from round four. Cheaper than the run list and it cannot drift.
 | Back Squat 135 | 10-19 x2, 10-29 x2 | -5.3%, -1.5%, -1.9%, **-1.3%** (mean 0.81/0.84/0.72/0.89 vs 0.86/0.84/0.80/0.84) | **lands, same signature four takes running; its own height uncertainty (0.11) ships in round two, worth about +1%** |
 | Romanian Deadlift 135 | 10-19 x2, 10-29 x2 | +16.4%, +12.0%, +30.5% oblique; **-34.2% square-on on 697** -- a plate boxed 1.63x too big took 86% of the scale. Without it the square-on take reads **-1.9%** | **square-on, the body rulers are within 2%; the plate rule is fixed in round two; the velocities are the next fault (window 25% long)** |
 | Box Jump, 24in box | 10-19 x2, 10-29 x2 | box ruler 1.20-1.22 on both 10-29 sets (ankle rise 72-75cm onto 61); hip peak **+2% / -13%** at the floor scale (was -15% / -29% divided by the landing ratio); hip mean +15% / +7% at the floor scale | **round three: the box ratio corrects the LANDING numbers only; the hip's drive keeps the floor scale the squat proved from the same spot. Next: set 1's -13% is a trace with 21 dropouts, and the mean's window** |
-| Bench Press 135 | 10-30 x2 (set 1 on 703, set 3 on 705; plus the 09-29/09-30/10-02 corpus); **set 2's OVR screen arrived TWICE (0.69 / 0.97 / 14.9in) with NO Forge capture in either export** | **+3.2%** (36.7 vs 35.6) -- the first bench whose scale lands, and the first real take where the retrained detector's PLATE was the ruler (box 0.919 of expected, 86% of the blend); mean +10.3%, peak +18.6%. **Set 3 on 705: +5.5%** (39.4 vs 37.3), mean +12.1%, peak +25.3% -- the plate again, 86% of the blend, boxed 7.3% too SMALL, and both body rulers were BELOW the sensor | **round four: the bench's own window (driveOnsetFraction 0.03) and smoothing (200), costed on the four clean paired benches: mean bias +10.7% -> +6.3%, peak bias +7.2% -> +3.0%. 0.02 is the zero-bias window on those four and the NEXT step; held back because the one trace-poor bench (set 5, 09-29) pays 15 points there. **Round six: set 3 is outside both fitted biases (mean +12.1%, peak +25.3%) on the cleanest trace in the corpus (cadence 0.979, 4 dropouts, 8 of 8) -- but its axisForeshortening is 1.112 against the 10-07 bench's 1.009, so some of it is a more oblique take. PEAK IS SMOOTHING, MEAN IS WINDOW: 0.02 is not the answer to a peak error** |
+| Bench Press 135 | 10-30 x2 (set 1 on 703, set 3 on 705; plus the 09-29/09-30/10-02 corpus); **set 2's OVR screen arrived TWICE (0.69 / 0.97 / 14.9in) with NO Forge capture in either export** | **+3.2%** (36.7 vs 35.6) -- the first bench whose scale lands, and the first real take where the retrained detector's PLATE was the ruler (box 0.919 of expected, 86% of the blend); mean +10.3%, peak +18.6%. **Set 3 on 705: +5.5%** (39.4 vs 37.3), mean +12.1%, peak +25.3% -- the plate again, 86% of the blend, boxed 7.3% too SMALL, and both body rulers were BELOW the sensor | **round four: the bench's own window (driveOnsetFraction 0.03) and smoothing (200), costed on the four clean paired benches: mean bias +10.7% -> +6.3%, peak bias +7.2% -> +3.0%. 0.02 is the zero-bias window on those four and the NEXT step; held back because the one trace-poor bench (set 5, 09-29) pays 15 points there. **Round six: the MEAN was a BUG, not a fit -- the SET mean summed the whole phase's distance over the drive window's time (`romM`'s own comment names the pairing; the rep was fixed 10-06 and the set-level aggregation was not). Set 3 +10.4% -> +2.9%; seven of the twelve traced takes improve and the five that read LOW get 1-3 points worse, which is what removing a one-sided inflation does. It made the bench's own `driveOnsetFraction` 0.03 INERT on both 10-30 takes (+5.9% / +3.0% at 0.03 AND at 0.04) -- kept because it still earns its keep on the 09-29/09-30 corpus; 0.02 re-swept and still refused (the trace-poor bench -32.1% -> -42.9%). The PEAK is open and 200ms is already the sweep's minimum across seven bench takes (+0.2% bias), so it is NOT the smoothing: only the two 10-30 takes read high (+14.4%, +19.8%) and those are the two where the plate decides the scale at 86%** |
 | Pendlay Row 135 | 10-30 x2 (plus 10-09 x3 candidates) | set 1 **-10.8%** (46.9 vs 52.6): the depth ruler read -64% and the collapse carried half of it; set 2 on 703 **+52.8%** (78.4 vs 51.3): the grip yardstick threw out 2 of 3 rulers off a grip read NARROWER than the shoulders (0.755) and the shoulder span shipped alone; mean +24%/+90%, peak +6%/+69%; set 3 on 705 **+23.2%** (70.1 vs 56.9) with NOTHING rejected and no yardstick abstention -- a plate boxed 19.2% too small took 86% of the scale off 20 frames at 0.44 confidence with zero lock held | **round four: the row's own depthRulerUncertainty 0.6: set 1 -10.8% -> +0.6%. Round five: a yardstick that would convict a strict majority of the rulers stands down (`rejectImplausibleScales`), set 2 +52.8% -> **+2.85%** at the row's record; a RULE, nothing else in the corpus moves (the only other rejection is the 10-01 squat's plate at 1 of 5). **Round six: set 3 is the plate and NOT the yardstick rule (that rule was never engaged) -- the collapsed 3D pair was the closest witness at -7.3% and held 7% of the weight. The plate's unearned precision is the open lever.** Next: that, then the window -- the phase is short because the bottom of a Pendlay rep is a hand at the plates (set 2: 280 of 579 points a lone hand carried)** |
 | Barbell Shoulder Press 65 / 85 | 10-30 x3 (65x8 on 701, 85x8 on 703, 85x8 on 705). **ONE LIFT, not two** -- Scott, 2026-10-31: "The push press is the shoulder press, they don't have another name." The OVR's "Push Press" label is its own vocabulary | set 1 ROM **+1.3%** (63.0 vs 62.3 over the eight real reps; the OVR counted the lowering as a ninth), mean **-13.5%**, peak -7.2%; set 2 ROM -8.1% (28 dropouts, 206 wrist frames under the floor; the plate boxed 1.48x and kept out), mean -2.7%, peak +0.8%; set 3 on 705 ROM **+3.1%** (61.8 vs 59.9), mean **-2.4%**, peak +12.7% | **round five: the press's own driveOnsetFraction 0.08 (shared 0.04 opens the window on a strict press's dead-stop start): set 1 mean -13.5% -> -3.8%, set 2 -2.7% -> 0.0%, 10-02 push-press fixture -3.8% -> +2.9%; 0.10 is the NEXT step if the next press still reads low. Smoothing stays shared (200 costs the press peaks 6-8 points). **Round six: 0.08 HOLDS on a take it was not fitted on (mean -2.4%), so do NOT spend the 0.10 step -- round five's trigger was "if the next press still reads low" and -2.4% is not low. And set 3's axisForeshortening is 1.188 (1.56m of 2.89m along the lens, against the row's 1.007), so it is not a take to fit to.** 7 of 8 on ALL THREE sets: the 8th is folded into the downward re-rack -- a segmenter RULE, still open** |
 
@@ -100,6 +100,11 @@ from round four. Cheaper than the run list and it cannot drift.
   across two. The 10-07 note that held a push press out of the press's evidence "until a press is
   filmed without the dip" survives only as a GEOMETRY caveat about that take's 1.452
   foreshortening -- a reason to weigh a take, never a reason to call it a different lift.
+- A REPORTED VELOCITY'S DISTANCE AND TIME COME FROM THE SAME WINDOW -- ALL OF THEM, not just the
+  rep's (round six, 10-31, `the-set-mean-measures-one-window.test.ts`). The rep has done this since
+  10-06; the SET's mean and mean power did not, because `driveRomM` was not on the concentric
+  record for them to sum. One field and two reduce callbacks. The reported range of motion still
+  spans the whole phase, which is the rep's real travel: two windows, two jobs.
 - A DIAGNOSTIC THAT NAMES A PER-LIFT NUMBER READS THIS LIFT'S RECORD (round six, 10-31,
   `a-diagnostic-states-this-lifts-own-number.test.ts`): the export reported the shared
   `VELOCITY_SMOOTHING_MS` (165) on a bench the pipeline had correctly smoothed at the record's 200.
@@ -151,6 +156,20 @@ row identical to the hundredth. See "Second pass, 2026-10-29".
 - THE BENCH'S 0.02 WINDOW AS A CURE FOR ITS PEAK (round six): set 3 reads mean +12.1% AND peak
   +25.3%. The window moves the mean; the SMOOTHING moves the peak. Round four's own sweep
   separated them and the 0.02 step is held back for the trace-poor bench, not for the peak.
+- MOVING THE BENCH'S SMOOTHING OFF 200ms (round six, re-swept 10-31 on seven bench takes with a
+  sensor peak): 165 bias +3.0% / median |err| 10.9%, **200 +0.2% / 9.3%**, 240 -2.7% / 10.3%, 280
+  -9.1% / 10.8%. 200 is the minimum on both measures; every value past it hurts five takes to help
+  the two 10-30 ones. The bench's remaining peak error is not the smoothing.
+- READING THE OUTLIER FLAG INTO THE BENCH'S SET PEAK (round six). `repConsistency` flags set 3's
+  reps 7 and 8 and `setRangeOfMotion` already drops them, which is why its range of motion reads
+  +5.5% rather than +11%. Dropping them from the PEAK moves it 1.14 -> 1.135, because rep 7 is high
+  and rep 8 is low and they cancel. It is not that take's lever.
+- FITTING A WINDOW CONSTANT AGAINST A VELOCITY WITHOUT CHECKING WHICH WINDOWS ITS NUMERATOR AND
+  DENOMINATOR CAME FROM (round six). Round four's 0.03 and round five's 0.08 were both fitted
+  against a set mean pairing the phase's distance with the drive's time, so a smaller fraction
+  dragged the mean down through the denominator alone. With the pairing fixed, 0.03 is inert on the
+  bench's own takes and 0.08 overshoots the press 5-6% low. The values were not wrong to try; the
+  evidence for them was measured through a bug.
 - Fitting `DEPTH_RULER_BIAS`: depth has read HIGH on every take since the height went on file
   (+14, +22, +27, +35, +38, +44%), scatter as wide as the bias. Rule #5.
 - Refusing the shoulder ruler: the only good voter on a bench (10-09).
@@ -6069,6 +6088,96 @@ the measure is not even monotonic in the plate's real error across these two tak
 disagreement from agreement." It arrived at 0.964 and the row is 23% out. **A corroboration
 measure whose denominator is a wide disagreement cannot refuse a candidate that sits inside the
 disagreement.** What is needed is the plate's own scatter, which is a property of the plate.
+
+### THE BENCH'S MEAN WAS A BUG THIS FILE ALREADY DESCRIBED, 780 LINES ABOVE THE LINE THAT HAD IT
+
+Scott: "We are only looking at bench set 3." So the three errors on that one take, in order.
+
+**ROM +5.5%, mean +12.1%, peak +25.3%.** A mean error 2.5x the distance error is not scale, it is
+the clock -- which is the 2026-10-06 argument word for word. And this time the clock was a pairing
+the code had already been corrected for, in one of the two places it occurs.
+
+**`romM`'s OWN COMMENT IN `bar-tracking.ts` IS HEADED "THE DISTANCE AND THE TIME MUST COME FROM THE
+SAME WINDOW".** Written 10-06, it explains at length that summing the WHOLE PHASE's distance over
+the DRIVE window's time credits the whole rep's travel to only the fast part's time, and it fixed
+the REP's mean (`driveRomM / driveDuration`). **The SET's mean is a separate aggregation one
+function down and went on summing `romM` over `driveDuration` for twenty-five days** -- the exact
+pairing that comment names -- because `driveRomM` was never put on the concentric record for it to
+sum, so the set-level code reached for the only distance that was there. `meanPowerWatts` beside
+it had the same line. The whole fix is one field on the record and two `reduce` callbacks.
+
+On bench set 3: sum of phase distances 332.9cm, sum of drive distances 310.3cm, sum of drive time
+4.570s. **0.728 against 0.679 -- +10.4% becomes +2.9%.**
+
+**COSTED ON EVERY TRACED SENSOR-PAIRED TAKE, AND IT IS NOT A CLEAN WIN, WHICH IS THE PART TO READ.**
+Twelve takes with a sensor mean on file:
+
+| take | sensor | as filmed | fixed |
+|---|---|---|---|
+| bench set 3 10-30 | 0.66 | +10.4% | **+2.9%** |
+| bench set 1 10-30 | 0.68 | +8.9% | +5.5% |
+| bench oblique 09-29 | 0.70 | +9.9% | +5.1% |
+| bench set 7 09-29 | 0.77 | +3.2% | +2.2% |
+| bench set 10 09-30 | 0.78 | +3.4% | -1.1% |
+| bench set 8 09-29 | 0.76 | +74.2% | +68.2% |
+| bench set 9 09-30 | 0.80 | +57.8% | +35.0% |
+| Pendlay row 10-02 | 0.85 | +7.1% | -2.1% |
+| push press 10-02 | 1.05 | +2.4% | -1.3% |
+| bench clean 09-29 | 0.77 | -13.3% | -14.2% |
+| bench dropout 09-29 | 0.84 | -29.0% | -32.2% |
+| bench set 2 10-02 | 0.74 | -40.8% | -41.9% |
+| squat set 1 10-01 | 1.00 | -6.5% | -9.8% |
+| squat set 2 10-01 | 0.93 | -20.5% | -22.1% |
+
+**Seven better, five worse, and the split is exactly on sign: every take that read HIGH improved
+and every take that read LOW got one to three points worse.** That is what removing a one-sided
+0-10% inflation does. Median |err| 13.3% -> 14.2%, worst 74.2% -> 68.2%. It ships anyway, because
+it is a bug with the file's own comment naming it and because keeping a wrong formula for the sake
+of a cancellation is the shape this repo refuses elsewhere ("a flag that makes a resolver stop
+resolving is not a bypass for a resolver bug"). **The honest reading of the five is that the
+inflation was MASKING a genuine low read on them** -- the dropout take, bench set 2 10-02 (-42% and
+completely inert to the window), and both squats -- and those are now visible rather than hidden.
+
+**AND IT VOIDED A FITTED CONSTANT'S EVIDENCE WITHOUT CHANGING ITS VALUE.** Round four fitted the
+Bench Press's own `driveOnsetFraction` (0.03) against this mean. Narrowing the window used to move
+only the DENOMINATOR, so a smaller fraction always dragged a too-high mean down -- which is why
+0.03 "worked". With both sums from the drive window the numerator moves with it, and **0.03 is now
+INERT on both 10-30 bench takes: set 1 reads +5.9% and set 3 +3.0% at 0.03 AND at the shared 0.04,
+identical to the hundredth.** It is kept, because it is still the better value where the older
+corpus responds to it (oblique +5.7% against +8.6%, set 7 +2.6% against +7.8%, set 10 -1.3% against
++1.3%), and `FITTED_OVERRIDE_EVIDENCE` carries the re-measured sweep instead of round four's.
+**The general lesson: before fitting a window constant against a velocity, check which window that
+velocity's numerator and its denominator each come from.**
+
+**0.02 IS STILL NOT TAKEN, for round four's own reason re-measured.** Re-swept across the ten bench
+takes with a sensor mean, rep counts unchanged at every fraction: 0.02 bias -6.1% / median 11.3%,
+0.03 +3.1% / 14.3%, 0.04 +6.5% / 11.7%. On the five clean takes that respond at all, 0.02 is median
+1.5% / bias -2.4% against 0.03's 3.0% / +3.2% -- tempting -- and the trace-poor bench goes -32.1%
+-> -42.9% there. It closes the mean and widens the spread, which Rule #5 says is not the change.
+
+**THE PEAK IS OPEN AND THE SMOOTHING IS ALREADY ITS BEST VALUE.** Swept on seven bench takes with a
+sensor peak: 165ms bias +3.0% / median 10.9%, **200ms +0.2% / 9.3%**, 240ms -2.7% / 10.3%, 280ms
+-9.1% / 10.8%. So 200 is the minimum on both and moving it would hurt five takes to help two.
+**The remaining peak error is specific to the two 10-30 takes** -- +14.4% and +19.8% at 200, where
+every 09-29/09-30 take sits at or below zero -- and those are the two takes where the retrained
+detector's plate decides the scale at 86% of the blend. A +5.5% scale accounts for 5.5 of set 3's
+19.8; the other 13 is unexplained and is the next thing to read on a bench.
+
+**WHAT THE PIPELINE ALREADY GOT RIGHT ON THIS TAKE, worth saying because it is the half that
+worked.** `repConsistency` flagged reps 7 and 8 (rep 7 is 66.3cm on a 37cm bench press, 1.7x the
+median), and `setRangeOfMotion` DROPPED them -- `usedRepNumbers: [1,2,3,4,5,6]` -- which is why the
+range of motion reads +5.5% and not +11%. The velocities do not read that flag, and excluding the
+two outliers moves the set peak from 1.14 to 1.135, because rep 7 (high) and rep 8 (low) cancel.
+So the outlier flag is NOT this take's lever; recorded so nobody spends a round on it.
+
+`client/src/lib/the-set-mean-measures-one-window.test.ts` states the rule as what is FORBIDDEN and
+discovers the subjects: every `setConcentric.reduce(` in `bar-tracking.ts`, bounded by matching its
+own brackets, and none may sum `romM` beside a sum of `driveDuration`. One case DRIVES the real
+summariser on the real bench trace and asserts the identity against both candidates, because a
+scan over an aggregation can only see the names it is written with and never which way it goes.
+Five mutations, each caught. The comment strip is INERT today and the file says so rather than
+implying coverage -- none of the three explanations writes the reducer form the scan matches -- so
+the strip is exercised on a synthetic input covering all three of its passes.
 
 ### THE RECORD WAS LYING ABOUT THE SMOOTHING, AND THE PIPELINE WAS NOT
 

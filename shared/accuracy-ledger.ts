@@ -704,7 +704,17 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "and smoothing 200. The export says 165 for the smoothing and that is the RECORD being " +
       "wrong, not the pipeline: av-bar-tracker-dialog.tsx wrote the shared module constant into " +
       "the diagnostic while bar-tracking.ts read tune.velocitySmoothingMs, fixed in the same " +
-      "commit as this row. axisForeshortening 1.112, so some of the travel was along the lens.",
+      "commit as this row. axisForeshortening 1.112, so some of the travel was along the lens. " +
+      "AND THE +12.1% MEAN WAS A BUG, FOUND ON THIS TAKE AND FIXED 2026-10-31: the SET mean summed " +
+      "the whole PHASE's distance over the DRIVE window's time -- the pairing `romM`'s own comment " +
+      "in bar-tracking.ts names, fixed at the rep on 2026-10-06 and left in the set-level " +
+      "aggregation because `driveRomM` was not on the record to sum. A mean error 2.5x the distance " +
+      "error is not scale, it is the clock, exactly as that comment argues. Summing the drive " +
+      "window's distance reads this take at +2.9%; the shipped 0.74 was never reproducible after " +
+      "the fix and is kept here as history. What is LEFT on this take is the SCALE (+5.5%, a plate " +
+      "boxed 7.3% small carrying 86% of the blend) and the PEAK (+19.8% at the bench's own 200ms, " +
+      "which is the sweep's own minimum across seven bench takes -- so the peak is not the " +
+      "smoothing, and it is open).",
   },
 
 /** 2026-10-30, round SIX: set 3 of the Pendlay row on 705. Round five's yardstick rule is NOT

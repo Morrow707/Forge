@@ -37,7 +37,17 @@ describe("the 2026-10-29 export replays through each lift's own record", () => {
       const m = replay(f);
       expect(m.repBreakdown.length).toBe(f.shipped.reps);
       expect(Math.abs((m.romCm ?? NaN) - f.shipped.romCm)).toBeLessThanOrEqual(0.5);
-      expect(Math.abs((m.meanVelocityMps ?? NaN) - f.shipped.meanVelocityMps)).toBeLessThanOrEqual(0.03);
+      // THE SHIPPED MEAN IS NO LONGER REPRODUCIBLE, BY CONSTRUCTION (2026-10-31). Every mean in
+      // this export summed the whole PHASE's distance over the DRIVE window's time -- the pairing
+      // `romM`'s own comment in bar-tracking.ts names as the bug, fixed at the rep on 2026-10-06
+      // and left in the set-level aggregation because `driveRomM` was not on the record to sum.
+      // So this is the `shippedUnderDefect` rule: the corrected mean is at or below what the
+      // phone shipped and never above it, because a drive window is a subset of its phase and so
+      // its distance cannot be the larger. Ratios here: the RDL 0.897, the squats 0.972 and
+      // 0.988, the 10-19 RDL exactly 1.000 (its drive window already spanned the whole phase).
+      expect(m.meanVelocityMps!, `${f.id} corrected mean is never above the shipped one`)
+        .toBeLessThanOrEqual(f.shipped.meanVelocityMps + 1e-9);
+      expect(m.meanVelocityMps! / f.shipped.meanVelocityMps).toBeGreaterThan(0.85);
     });
   }
   it("the squat traces replay to the shipped peaks exactly: the RDL's override never reaches them", () => {

@@ -72,8 +72,19 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
       // SAME trace fault the row's notes name, not a number in any record.
       expect(Math.abs((m.peakVelocityMps ?? NaN) - f.shipped.peakVelocityMps), f.id)
         .toBeLessThanOrEqual(f.exerciseName === "Pendlay Row" ? 0.07 : 0.011);
-      expect(Math.abs((m.meanVelocityMps ?? NaN) - f.shipped.meanVelocityMps), f.id)
-        .toBeLessThanOrEqual(f.exerciseName === "Pendlay Row" ? 0.1 : 0.03);
+      // THE SHIPPED MEAN IS NO LONGER REPRODUCIBLE, AND THAT IS THE POINT (2026-10-31).
+      // Every mean in this export was computed by summing the WHOLE PHASE's distance over the
+      // DRIVE window's time -- the pairing `romM`'s own comment in bar-tracking.ts names as the
+      // bug, fixed at the rep in 2026-10-06 and left in the set-level aggregation because
+      // `driveRomM` was not on the record to sum. So the rule here is the `shippedUnderDefect`
+      // one: the corrected mean is AT OR BELOW what the phone shipped on every take and never
+      // above it, because a drive window is a subset of its phase and so its distance cannot be
+      // the larger. Reps, range of motion and peaks still reproduce exactly, which is what says
+      // the harness is sound and only this one aggregation moved. Measured ratios, shipped ->
+      // corrected: row 0.909 / 0.907, press 0.986 / 0.944, bench 0.960.
+      expect(m.meanVelocityMps!, `${f.id} corrected mean is never above the shipped one`)
+        .toBeLessThanOrEqual(f.shipped.meanVelocityMps + 1e-9);
+      expect(m.meanVelocityMps! / f.shipped.meanVelocityMps, f.id).toBeGreaterThan(0.85);
     }
   });
 
@@ -103,7 +114,9 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
         expect(Math.abs(r.peakVelocityMps - f.shipped.repPeaks[i]), `${f.id} rep ${i + 1}`)
           .toBeLessThanOrEqual(name === "Pendlay Row" ? 0.2 : 0.011);
       });
-      expect(Math.abs((m.meanVelocityMps ?? NaN) - f.shipped.meanVelocityMps), f.id).toBeLessThanOrEqual(name === "Pendlay Row" ? 0.1 : 0.03);
+      // Same shipped-under-defect rule as the reproduction case above: the corrected mean sums
+      // the drive window's distance, so it is at or below what the phone shipped, never above.
+      expect(m.meanVelocityMps!, f.id).toBeLessThanOrEqual(f.shipped.meanVelocityMps + 1e-9);
     }
   });
 
@@ -120,13 +133,21 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     // Same reps, same range of motion: a window and a smoothing cannot change which reps exist.
     expect(own.repBreakdown.length).toBe(shipped.repBreakdown.length);
     expect(own.romCm).toBeCloseTo(shipped.romCm!, 1);
-    // The mean: +10.3% against the sensor at the shared window, +8.8% at the bench's own 0.03 --
-    // a step, not a landing, on purpose: 0.02 is the zero-bias point on the four clean benches and
-    // costs the one trace-poor bench in the corpus 15 points (see FITTED_OVERRIDE_EVIDENCE). Held
-    // as "lower and under 10%", so the next step shows up here as a number to tighten.
-    expect(shipped.meanVelocityMps! / sensor.meanVelocityMps - 1).toBeGreaterThan(0.09);
-    expect(own.meanVelocityMps!).toBeLessThan(shipped.meanVelocityMps!);
-    expect(Math.abs(own.meanVelocityMps! / sensor.meanVelocityMps - 1)).toBeLessThan(0.10);
+    // THE MEAN, AND THE BENCH'S OWN DRIVE ONSET IS INERT ON THIS TAKE SINCE 2026-10-31.
+    //
+    // Round four fitted 0.03 against a set mean that summed the whole phase's distance over the
+    // drive window's time, so widening or narrowing the window moved only the DENOMINATOR and a
+    // smaller fraction always dragged a too-high mean down. With both sums taken from the drive
+    // window the numerator moves with it, and on this take 0.03 and the shared 0.04 return the
+    // SAME mean to the hundredth (+5.9% against the sensor at either, where the phone shipped
+    // +10.3%). The override is kept because it is still the better value on the 09-29/09-30
+    // corpus, where these takes respond to it -- oblique +5.7% against +8.6%, set 7 +2.6%
+    // against +7.8%, set 10 -1.3% against +1.3% -- and FITTED_OVERRIDE_EVIDENCE records that
+    // re-measured sweep rather than round four's. Asserted as equality on purpose: the day a
+    // change makes the bench's window matter on its own paired takes again, this reds and
+    // somebody re-reads the evidence instead of inheriting it.
+    expect(own.meanVelocityMps!).toBe(shipped.meanVelocityMps!);
+    expect(Math.abs(own.meanVelocityMps! / sensor.meanVelocityMps - 1)).toBeLessThan(0.07);
     // The peak: +18.6% at 165ms, lower at 200ms, and still a measurement (over the sensor, not
     // capped down to it -- the cap is untouched on this lift).
     expect(shipped.peakVelocityMps! / sensor.peakVelocityMps - 1).toBeGreaterThan(0.17);
@@ -182,7 +203,19 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
       expect(own.romCm, f.id).toBeCloseTo(shipped.romCm!, 1);
       expect(shipped.meanVelocityMps! / sensorMean - 1, `${f.id} shared`).toBeLessThan(sharedReadsBelow);
       expect(own.meanVelocityMps!, f.id).toBeGreaterThan(shipped.meanVelocityMps!);
-      expect(Math.abs(own.meanVelocityMps! / sensorMean - 1), `${f.id} own`).toBeLessThan(0.045);
+      // 0.08 NOW READS LOW, AND IT IS THIS LIFT'S NUMBER THAT NEEDS REFITTING, NOT THE FIX.
+      //
+      // Round five chose 0.08 as the first value where neither set read low -- measured against
+      // the set mean that summed the whole phase's distance over the drive window's time. With
+      // both sums taken from the drive window (2026-10-31) the press reads -6.2% on set 1 and
+      // -5.0% on set 2 at 0.08, and the sweep puts 0.10 at -3.8% / -2.7%: round five's own named
+      // next step ("0.10 is the next step if the next press reads low"), now triggered for a
+      // reason it could not have known. NOT refit here -- Scott asked for the bench only this
+      // round, and the press's set 3 carries an axisForeshortening of 1.188, so the take that
+      // would settle it is confounded. Held as "low, and no worse than 8%", which is the band
+      // the refit has to close and which reds if the fix is reverted (+0.1% on set 2 then).
+      expect(own.meanVelocityMps! / sensorMean - 1, `${f.id} own reads low`).toBeLessThan(0);
+      expect(Math.abs(own.meanVelocityMps! / sensorMean - 1), `${f.id} own`).toBeLessThan(0.08);
       // a window moves the mean, not the peak: 0.03 on set 1 (the peak frame of one rep sits at the
       // window's old edge), nothing on set 2
       expect(Math.abs(own.peakVelocityMps! - shipped.peakVelocityMps!), f.id).toBeLessThanOrEqual(0.035);
