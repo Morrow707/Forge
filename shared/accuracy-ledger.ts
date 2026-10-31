@@ -510,7 +510,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 4.388368159185664,
     reportedRomCm: 36.7,
     sensorRomCm: 35.56,
-    liveErrorPct: 3.21,
+    liveErrorPct: 2.20,
     notes:
       "Read +3.2% as filmed (36.7 against 14.0in), the first bench on record whose range of motion " +
       "lands, and the first real take where the PLATE was the ruler: locked on 251 of 994 frames, " +
@@ -689,7 +689,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 4.15751295357763,
     reportedRomCm: 39.4,
     sensorRomCm: 37.338,
-    liveErrorPct: 5.52,
+    liveErrorPct: 3.58,
     notes:
       "Read +5.5% as filmed (39.4 against 14.7in), up from set 1's +3.2% on the same lift two " +
       "builds earlier. THE PLATE CARRIES 86% OF THIS BLEND and that is arithmetic rather than a " +
@@ -739,7 +739,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 4.840255324542491,
     reportedRomCm: 70.1,
     sensorRomCm: 56.896,
-    liveErrorPct: 23.21,
+    liveErrorPct: 22.68,
     notes:
       "Read +23.2% as filmed (70.1 against 22.4in), and THE PLATE IS THE WHOLE OF IT: 4.865e-3 " +
       "against the sensor's required 3.9285e-3, +23.8%, carrying 86% of the blend at its 0.0576 " +
@@ -803,6 +803,20 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "vocabulary for the same movement.",
   },
 ];
+
+/* THE SIXTH MOVE, 2026-10-31 (round six): a STATISTIC corrected, not a number fitted.
+ * `COREML_BOX_LONG_EDGE_UNCERTAINTY` was the detector's relative MAD (0.056) handed straight to
+ * an inverse-variance blend, which needs a SIGMA -- so the plate's weight was overstated by
+ * 1.4826^2 = 2.2x, 12.1 times a body ruler's where the measurement supports 5.7. Converting it
+ * (MAD / 0.6745 = 0.083) moves the THREE rows whose plate actually joined the cluster and no
+ * others: bench set 1 +3.21 -> +2.20, bench set 3 +5.52 -> +3.58, row set 3 +23.21 -> +22.68.
+ * Seventeen rows unchanged, NONE worse. Found on the bench's set 3, whose plate had done nothing
+ * wrong: 205 frames at 0.60-1.00 confidence, aspect 0.93, and a box 7.3% small -- 1.26 sigma of
+ * what the constant states. An ordinary draw carrying 86% of the blend, which is the finding.
+ *
+ * THE FIFTH MOVE, 2026-10-31 (round six): the SET mean sums the DRIVE window's distance rather
+ * than the whole phase's. Not a scale number, so no row's liveErrorPct moves for it; the bench
+ * set 3 row's note carries the +10.4% -> +2.9% and the twelve-take costing. */
 
 /* THE FOURTH MOVE, 2026-10-30 (round five, on the set-2 takes of 703): a RULE, not a number. The
  * grip yardstick in rejectImplausibleScales stands down when it would convict a strict majority

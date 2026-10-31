@@ -137,8 +137,17 @@ def main() -> int:
         print(f"\nall classes: n={len(every)} median={med:.3f} relMAD={mad / med:.3f} "
               f"mean={statistics.fmean(every):.3f}")
     print("\nA class with fewer than ~20 matches has no usable spread -- do not set a constant "
-          "from it.\nrelMAD here is what client/src/lib/pose-tracking.ts's "
-          "COREML_BOX_LONG_EDGE_UNCERTAINTY states.")
+          "from it.")
+    print("relMAD here is what client/src/lib/pose-tracking.ts's "
+          "COREML_BOX_LONG_EDGE_RELATIVE_MAD states.")
+    print("A MAD IS NOT A SIGMA: the consumer is an inverse-variance blend, which weights by "
+          "1/sigma^2,\nso pose-tracking.ts derives the sigma it reads as relMAD / 0.6745 "
+          "(= 1.4826 x relMAD).\nPaste the relMAD into COREML_BOX_LONG_EDGE_RELATIVE_MAD and let "
+          "the division stand; handing\nthe raw MAD to the blend overstates the plate's weight by "
+          "2.2x, which is what it did\nuntil 2026-10-31. MAD rather than stdev is still the right "
+          "way to MEASURE it -- a detector\nthat occasionally boxes something absurd must not have "
+          "its spread set by that tail -- and\nthe conversion is how a robust measurement becomes "
+          "the sigma a weighting needs.")
     return 0
 
 

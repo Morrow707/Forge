@@ -58,7 +58,7 @@ describe("the plate ruler's stated uncertainty", () => {
     expect(CASTING_ONLY).toBeLessThan(COREML_BOX_LONG_EDGE_UNCERTAINTY / 3);
   });
 
-  it("costs the plate about eighteen times its weight, which is the whole effect", () => {
+  it("costs the plate about forty times its weight, which is the whole effect", () => {
     const sigmaBefore = computeReferenceObjectScale(457, PLATE.nominalSizeM, PLATE.toleranceM)!
       .uncertaintyFraction;
     const sigmaAfter = computeReferenceObjectScale(
@@ -66,8 +66,11 @@ describe("the plate ruler's stated uncertainty", () => {
     )!.uncertaintyFraction;
     // Weight goes as 1/sigma^2, so the weight the plate LOSES is (sigmaAfter/sigmaBefore)^2.
     const weightLost = (sigmaAfter / sigmaBefore) ** 2;
-    expect(weightLost).toBeGreaterThan(10);
-    expect(weightLost).toBeLessThan(30);
+    // ~18x when this was written and ~40x since 2026-10-31, when the constant stopped being the
+    // raw relative MAD and became the SIGMA that an inverse-variance blend needs (MAD / 0.6745).
+    // The number is bigger because the honest sigma is bigger; the effect is the same one.
+    expect(weightLost).toBeGreaterThan(25);
+    expect(weightLost).toBeLessThan(60);
   });
 
   it("does not move the scale, only the confidence in it", () => {
@@ -111,11 +114,27 @@ describe("the plate ruler's stated uncertainty", () => {
     // The number describes one specific set of weights and is wrong for the next ones. The only
     // thing that makes it maintainable is that the measurement is reproducible.
     const src = readFileSync(join(__dirname, "pose-tracking.ts"), "utf8");
-    const at = src.indexOf("COREML_BOX_LONG_EDGE_UNCERTAINTY = ");
-    expect(at).toBeGreaterThan(-1);
-    const doc = src.slice(Math.max(0, at - 2000), at);
+    // BOUNDED BY THE DOCBLOCK'S OWN DELIMITERS, NEVER BY A CHARACTER COUNT. This was
+    // `src.slice(at - 2000, at)` and the 2026-10-31 split is what broke it: the measured MAD and
+    // the sigma the blend reads are two declarations now, the long docblock sits above the FIRST
+    // of them, and a 2,000-character window above the second found only the short one. CLAUDE.md
+    // forbids a character window in so many words, and this is the cheaper half of why -- the
+    // expensive half is a window that PASSES on prose belonging to something else entirely.
+    const at = src.indexOf("export const COREML_BOX_LONG_EDGE_RELATIVE_MAD = ");
+    expect(at, "the measured MAD should still be its own named declaration").toBeGreaterThan(-1);
+    const open = src.lastIndexOf("/**", at);
+    expect(open, "it should still carry a docblock").toBeGreaterThan(-1);
+    const doc = src.slice(open, at);
     expect(doc).toContain("validate_box_size.py");
     expect(doc).toContain("retrained");
+    // And the conversion is named where the blend reads it, so a re-measurement updates the MAD
+    // and nothing else: the day somebody pastes a fresh number over the sigma instead, this reds.
+    const sigmaAt = src.indexOf("export const COREML_BOX_LONG_EDGE_UNCERTAINTY = ");
+    expect(sigmaAt).toBeGreaterThan(at);
+    const sigmaDecl = src.slice(sigmaAt, src.indexOf(";", sigmaAt));
+    expect(sigmaDecl).toContain("COREML_BOX_LONG_EDGE_RELATIVE_MAD");
+    expect(sigmaDecl).toContain("0.6745");
+    expect(sigmaDecl, "the sigma is derived, never retyped").not.toMatch(/=\s*0?\.\d+\s*$/);
   });
 
   it("still lets a right-sized plate decide the scale, which is Rule #4", () => {

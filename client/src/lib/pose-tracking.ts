@@ -2442,8 +2442,43 @@ export function computeReferenceObjectScale(
  *  not bias. The spread measured here is ACROSS images, which is the right scale of variation
  *  for a take's median, and the right thing to hand the blend.
  *
- *  **Re-measure this when the model is retrained.** It describes one specific set of weights. */
-export const COREML_BOX_LONG_EDGE_UNCERTAINTY = 0.056;
+ *  **Re-measure this when the model is retrained.** It describes one specific set of weights.
+ *
+ *  AND A MAD IS NOT A SIGMA -- CORRECTED 2026-10-31, found on the bench's set 3.
+ *
+ *  The script measures a relative MAD on purpose, and that is the right way to MEASURE this: a
+ *  detector that occasionally boxes something absurd must not have its spread dominated by that
+ *  tail. But the CONSUMER is `reconcileScaleEstimates`, an inverse-variance blend, which weights
+ *  by 1/sigma^2 and so needs a sigma. For a normal core sigma = MAD / 0.6745, so handing the raw
+ *  MAD over understated the plate's sigma by a third and **overstated its weight by 1.4826^2 =
+ *  2.2x**: 12.1 times a body ruler's where the measurement supports 5.7.
+ *
+ *  **What found it: a plate that had done nothing wrong.** The bench's set 3 (2026-10-30) boxed
+ *  its plate over 205 frames at 0.60-1.00 confidence with an aspect ratio of 0.93 -- a disc seen
+ *  face-on, the best plate read in the corpus -- and the box still came out 7.3% small, which is
+ *  **1.26 sigma** of what this constant states. An ordinary draw. The scale still shipped +5.5%
+ *  high, because at 12x the plate carried 86% of the blend and the two body rulers bracketing the
+ *  truth from below held 7% each. So the error was not the detector and not a bad box; it was the
+ *  weight, and the weight came from a statistic used one conversion short.
+ *
+ *  **Costed on all twenty ledger rows: three better, none worse, seventeen unchanged** -- only
+ *  the rows whose plate actually joined the cluster move (bench set 1 +3.21% -> +2.20%, bench
+ *  set 3 +5.52% -> +3.58%, row set 3 +23.21% -> +22.68%). The rows whose plate stepped out or was
+ *  refused are untouched by construction.
+ *
+ *  **It widens an agreement tolerance, which is the hazard CLAUDE.md names** ("a change that
+ *  widens an uncertainty widens a TOLERANCE somewhere"): the plate's own window goes 0.115 ->
+ *  0.168, both far under the 0.4 ceiling, and the ledger replay is what says no cluster flipped.
+ *
+ *  **If anything this is a FLOOR on the correction, not an overshoot.** MAD / 0.6745 recovers the
+ *  sigma of a GAUSSIAN core; box-size ratios have a heavier tail than that (6% of val plates box
+ *  past 1.25x), so the true sigma is at least this. */
+export const COREML_BOX_LONG_EDGE_RELATIVE_MAD = 0.056;
+/** The constant the blend actually reads: the MAD above converted to the sigma an
+ *  inverse-variance weighting needs. `0.6745` is the normal distribution's MAD in units of sigma;
+ *  the division is the whole of the correction and is spelled out rather than folded into a
+ *  literal so a re-measurement only has to update the MAD. */
+export const COREML_BOX_LONG_EDGE_UNCERTAINTY = COREML_BOX_LONG_EDGE_RELATIVE_MAD / 0.6745;
 
 // A named reference size with its own honest uncertainty, not a bare exact-looking number --
 // see computeReferenceObjectScale's own comment on why a single constant would be dishonest

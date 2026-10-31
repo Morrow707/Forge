@@ -3212,6 +3212,47 @@ halves before splitting anything else:
   written with and never which way it goes. Five mutations, each caught; **the comment strip is
   INERT today and the file says so** -- none of the three explanations writes the reducer form the
   scan matches -- so it is exercised on a synthetic input covering all three of its passes.
+  **AND BENCH SET 3'S SCALE WAS A STATISTIC, NOT A DETECTOR FAULT: A MAD IS NOT A SIGMA.**
+  With the mean fixed the take is ROM +5.5% and peak +19.8%, and the ROM turned out to be a
+  conversion. **The plate that caused it had done nothing wrong**, which is what made it findable:
+  `calibration.referenceObject` -- carried since the shape blob was added and never compared across
+  two takes -- says the bench's plate was boxed over **205 frames at 0.60-1.00 confidence with an
+  aspect ratio of 0.93** (a disc seen face-on, the best plate read in the corpus) against the row's
+  **6 frames at 0.50-0.89 and an aspect of 0.71**, six clearing `MIN_CALIBRATION_SAMPLES` of 5 by
+  one. **Both state the same 0.0576**, so the signals that separate an earned read from an unearned
+  one are already in the export and nothing reads them -- that is the ROW's lever and is still open.
+  On the bench it means the box being 7.3% small is **1.26 sigma** of what the constant states, an
+  ordinary draw, and the take shipped +5.5% high only because at 12x a body ruler's weight the plate
+  carried **86%** of the blend while the two body rulers bracketing the truth from below (-7.7% and
+  -9.3%) held 7% each. **A well-behaved ruler's ordinary noise became the set's number.**
+  **THE 0.056 IS A RAW RELATIVE MAD AND IT WAS READ AS A SIGMA.** `validate_box_size.py` computes
+  `median(|r - median|)` and its own comment says MAD rather than stdev is deliberate -- correct for
+  MEASURING a detector whose tail must not set its spread. But the consumer is
+  `reconcileScaleEstimates`, an inverse-variance blend weighting by 1/sigma^2, which needs a sigma:
+  for a normal core **sigma = MAD / 0.6745 = 1.4826 x MAD**, so the raw MAD understated the plate's
+  sigma by a third and **overstated its weight by 2.2x** -- 12.1 times a body ruler's where the
+  measurement supports 5.7. `COREML_BOX_LONG_EDGE_RELATIVE_MAD` is the measurement now and
+  `COREML_BOX_LONG_EDGE_UNCERTAINTY` is `that / 0.6745` = 0.083, the division spelled out so a
+  retrain updates only the MAD, and the script's own footer says so because the next person to run
+  it would otherwise paste the MAD straight back over the sigma.
+  **COSTED ON ALL TWENTY LEDGER ROWS: THREE BETTER, NONE WORSE, SEVENTEEN UNCHANGED** -- only the
+  rows whose plate actually joined the cluster move. Bench set 1 **+3.21% -> +2.20%**, bench set 3
+  **+5.52% -> +3.58%**, Pendlay row set 3 +23.21% -> +22.68%; the other plate rows are untouched by
+  construction because their plates stepped out or were refused. It widens the plate's own agreement
+  window 0.115 -> 0.168 (the hazard this file names as "a change that widens an uncertainty widens a
+  TOLERANCE somewhere"), both far under the 0.4 ceiling, and the twenty-row replay is what says no
+  cluster flipped. **It is a FLOOR on the correction rather than an overshoot**: MAD / 0.6745
+  recovers a GAUSSIAN core's sigma and box ratios are heavier-tailed than that (6% of val plates box
+  past 1.25x). Nothing is fitted -- no take chose the 0.6745 -- and `FITTED_OVERRIDES` is untouched.
+  **AND A CHARACTER WINDOW BROKE A TEST WHILE FIXING IT, which is the cheap half of why this file
+  forbids them.** `the-plate-states-the-detectors-own-noise.test.ts` found the docblock naming the
+  script with `src.slice(at - 2000, at)`; splitting one declaration into two put the long docblock
+  above the FIRST and the window above the second found only the short one. Bounded by the
+  docblock's own `/**` now, with a second assertion that the sigma is DERIVED and never retyped as a
+  literal. Three mutations on the conversion, each caught (the raw MAD reds five cases, a retyped
+  0.083 reds the derivation case, an over-conversion reds six).
+  **DO NOT CHASE THE DETECTOR on a take whose `referenceObject.samples` is in the hundreds and whose
+  aspect is near 1.0** -- read the sigma it is being handed instead.
   **THE RECORD WAS WRONG AND THE PIPELINE WAS RIGHT: `velocitySmoothingMs`.** Every export said 165,
   including a bench that round four gave **200** in `FITTED_OVERRIDES`. `bar-tracking.ts` reads it
   off the record correctly (`tune.velocitySmoothingMs`, the `speedsReportedMps` line);

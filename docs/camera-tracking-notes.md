@@ -58,7 +58,7 @@ from round four. Cheaper than the run list and it cannot drift.
 | Back Squat 135 | 10-19 x2, 10-29 x2 | -5.3%, -1.5%, -1.9%, **-1.3%** (mean 0.81/0.84/0.72/0.89 vs 0.86/0.84/0.80/0.84) | **lands, same signature four takes running; its own height uncertainty (0.11) ships in round two, worth about +1%** |
 | Romanian Deadlift 135 | 10-19 x2, 10-29 x2 | +16.4%, +12.0%, +30.5% oblique; **-34.2% square-on on 697** -- a plate boxed 1.63x too big took 86% of the scale. Without it the square-on take reads **-1.9%** | **square-on, the body rulers are within 2%; the plate rule is fixed in round two; the velocities are the next fault (window 25% long)** |
 | Box Jump, 24in box | 10-19 x2, 10-29 x2 | box ruler 1.20-1.22 on both 10-29 sets (ankle rise 72-75cm onto 61); hip peak **+2% / -13%** at the floor scale (was -15% / -29% divided by the landing ratio); hip mean +15% / +7% at the floor scale | **round three: the box ratio corrects the LANDING numbers only; the hip's drive keeps the floor scale the squat proved from the same spot. Next: set 1's -13% is a trace with 21 dropouts, and the mean's window** |
-| Bench Press 135 | 10-30 x2 (set 1 on 703, set 3 on 705; plus the 09-29/09-30/10-02 corpus); **set 2's OVR screen arrived TWICE (0.69 / 0.97 / 14.9in) with NO Forge capture in either export** | **+3.2%** (36.7 vs 35.6) -- the first bench whose scale lands, and the first real take where the retrained detector's PLATE was the ruler (box 0.919 of expected, 86% of the blend); mean +10.3%, peak +18.6%. **Set 3 on 705: +5.5%** (39.4 vs 37.3), mean +12.1%, peak +25.3% -- the plate again, 86% of the blend, boxed 7.3% too SMALL, and both body rulers were BELOW the sensor | **round four: the bench's own window (driveOnsetFraction 0.03) and smoothing (200), costed on the four clean paired benches: mean bias +10.7% -> +6.3%, peak bias +7.2% -> +3.0%. 0.02 is the zero-bias window on those four and the NEXT step; held back because the one trace-poor bench (set 5, 09-29) pays 15 points there. **Round six: the MEAN was a BUG, not a fit -- the SET mean summed the whole phase's distance over the drive window's time (`romM`'s own comment names the pairing; the rep was fixed 10-06 and the set-level aggregation was not). Set 3 +10.4% -> +2.9%; seven of the twelve traced takes improve and the five that read LOW get 1-3 points worse, which is what removing a one-sided inflation does. It made the bench's own `driveOnsetFraction` 0.03 INERT on both 10-30 takes (+5.9% / +3.0% at 0.03 AND at 0.04) -- kept because it still earns its keep on the 09-29/09-30 corpus; 0.02 re-swept and still refused (the trace-poor bench -32.1% -> -42.9%). The PEAK is open and 200ms is already the sweep's minimum across seven bench takes (+0.2% bias), so it is NOT the smoothing: only the two 10-30 takes read high (+14.4%, +19.8%) and those are the two where the plate decides the scale at 86%** |
+| Bench Press 135 | 10-30 x2 (set 1 on 703, set 3 on 705; plus the 09-29/09-30/10-02 corpus); **set 2's OVR screen arrived TWICE (0.69 / 0.97 / 14.9in) with NO Forge capture in either export** | **+3.2%** (36.7 vs 35.6) -- the first bench whose scale lands, and the first real take where the retrained detector's PLATE was the ruler (box 0.919 of expected, 86% of the blend); mean +10.3%, peak +18.6%. **Set 3 on 705: +5.5%** (39.4 vs 37.3), mean +12.1%, peak +25.3% -- the plate again, 86% of the blend, boxed 7.3% too SMALL, and both body rulers were BELOW the sensor | **round four: the bench's own window (driveOnsetFraction 0.03) and smoothing (200), costed on the four clean paired benches: mean bias +10.7% -> +6.3%, peak bias +7.2% -> +3.0%. 0.02 is the zero-bias window on those four and the NEXT step; held back because the one trace-poor bench (set 5, 09-29) pays 15 points there. **Round six: the MEAN was a BUG, not a fit -- the SET mean summed the whole phase's distance over the drive window's time (`romM`'s own comment names the pairing; the rep was fixed 10-06 and the set-level aggregation was not). Set 3 +10.4% -> +2.9%; seven of the twelve traced takes improve and the five that read LOW get 1-3 points worse, which is what removing a one-sided inflation does. It made the bench's own `driveOnsetFraction` 0.03 INERT on both 10-30 takes (+5.9% / +3.0% at 0.03 AND at 0.04) -- kept because it still earns its keep on the 09-29/09-30 corpus; 0.02 re-swept and still refused (the trace-poor bench -32.1% -> -42.9%). The SCALE was a STATISTIC: `COREML_BOX_LONG_EDGE_UNCERTAINTY` was the detector's raw relative MAD read as a sigma by an inverse-variance blend, overstating the plate's weight 2.2x -- set 3 **+5.5% -> +3.6%**, set 1 +3.2% -> +2.2%, three ledger rows better and none worse. The plate itself was fine (205 frames, aspect 0.93, box 1.26 sigma small). The PEAK is open and 200ms is already the sweep's minimum across seven bench takes (+0.2% bias), so it is NOT the smoothing: only the two 10-30 takes read high (+14.4%, +19.8%) and those are the two where the plate decides the scale** |
 | Pendlay Row 135 | 10-30 x2 (plus 10-09 x3 candidates) | set 1 **-10.8%** (46.9 vs 52.6): the depth ruler read -64% and the collapse carried half of it; set 2 on 703 **+52.8%** (78.4 vs 51.3): the grip yardstick threw out 2 of 3 rulers off a grip read NARROWER than the shoulders (0.755) and the shoulder span shipped alone; mean +24%/+90%, peak +6%/+69%; set 3 on 705 **+23.2%** (70.1 vs 56.9) with NOTHING rejected and no yardstick abstention -- a plate boxed 19.2% too small took 86% of the scale off 20 frames at 0.44 confidence with zero lock held | **round four: the row's own depthRulerUncertainty 0.6: set 1 -10.8% -> +0.6%. Round five: a yardstick that would convict a strict majority of the rulers stands down (`rejectImplausibleScales`), set 2 +52.8% -> **+2.85%** at the row's record; a RULE, nothing else in the corpus moves (the only other rejection is the 10-01 squat's plate at 1 of 5). **Round six: set 3 is the plate and NOT the yardstick rule (that rule was never engaged) -- the collapsed 3D pair was the closest witness at -7.3% and held 7% of the weight. The plate's unearned precision is the open lever.** Next: that, then the window -- the phase is short because the bottom of a Pendlay rep is a hand at the plates (set 2: 280 of 579 points a lone hand carried)** |
 | Barbell Shoulder Press 65 / 85 | 10-30 x3 (65x8 on 701, 85x8 on 703, 85x8 on 705). **ONE LIFT, not two** -- Scott, 2026-10-31: "The push press is the shoulder press, they don't have another name." The OVR's "Push Press" label is its own vocabulary | set 1 ROM **+1.3%** (63.0 vs 62.3 over the eight real reps; the OVR counted the lowering as a ninth), mean **-13.5%**, peak -7.2%; set 2 ROM -8.1% (28 dropouts, 206 wrist frames under the floor; the plate boxed 1.48x and kept out), mean -2.7%, peak +0.8%; set 3 on 705 ROM **+3.1%** (61.8 vs 59.9), mean **-2.4%**, peak +12.7% | **round five: the press's own driveOnsetFraction 0.08 (shared 0.04 opens the window on a strict press's dead-stop start): set 1 mean -13.5% -> -3.8%, set 2 -2.7% -> 0.0%, 10-02 push-press fixture -3.8% -> +2.9%; 0.10 is the NEXT step if the next press still reads low. Smoothing stays shared (200 costs the press peaks 6-8 points). **Round six: 0.08 HOLDS on a take it was not fitted on (mean -2.4%), so do NOT spend the 0.10 step -- round five's trigger was "if the next press still reads low" and -2.4% is not low. And set 3's axisForeshortening is 1.188 (1.56m of 2.89m along the lens, against the row's 1.007), so it is not a take to fit to.** 7 of 8 on ALL THREE sets: the 8th is folded into the downward re-rack -- a segmenter RULE, still open** |
 
@@ -100,6 +100,10 @@ from round four. Cheaper than the run list and it cannot drift.
   across two. The 10-07 note that held a push press out of the press's evidence "until a press is
   filmed without the dip" survives only as a GEOMETRY caveat about that take's 1.452
   foreshortening -- a reason to weigh a take, never a reason to call it a different lift.
+- A MAD IS NOT A SIGMA (round six, 10-31). `COREML_BOX_LONG_EDGE_RELATIVE_MAD` is the measurement
+  (0.056, robust on purpose) and `COREML_BOX_LONG_EDGE_UNCERTAINTY` is `that / 0.6745` = 0.083,
+  which is what an inverse-variance blend needs. The raw MAD overstated the plate's weight 2.2x;
+  three ledger rows better, none worse. Re-measure the MAD on a retrain and leave the division.
 - A REPORTED VELOCITY'S DISTANCE AND TIME COME FROM THE SAME WINDOW -- ALL OF THEM, not just the
   rep's (round six, 10-31, `the-set-mean-measures-one-window.test.ts`). The rep has done this since
   10-06; the SET's mean and mean power did not, because `driveRomM` was not on the concentric
@@ -156,6 +160,11 @@ row identical to the hundredth. See "Second pass, 2026-10-29".
 - THE BENCH'S 0.02 WINDOW AS A CURE FOR ITS PEAK (round six): set 3 reads mean +12.1% AND peak
   +25.3%. The window moves the mean; the SMOOTHING moves the peak. Round four's own sweep
   separated them and the 0.02 step is held back for the trace-poor bench, not for the peak.
+- READING BENCH SET 3'S SCALE AS A DETECTOR FAULT (round six). Its plate was boxed over 205 frames
+  at 0.60-1.00 confidence with an aspect ratio of 0.93 and came out 7.3% small -- **1.26 sigma** of
+  the detector's own stated noise, an ordinary draw. The error was the WEIGHT, not the box. Do not
+  chase the detector on a take whose `referenceObject.samples` is in the hundreds and whose aspect
+  is near 1.0; read the sigma it is being handed instead.
 - MOVING THE BENCH'S SMOOTHING OFF 200ms (round six, re-swept 10-31 on seven bench takes with a
   sensor peak): 165 bias +3.0% / median |err| 10.9%, **200 +0.2% / 9.3%**, 240 -2.7% / 10.3%, 280
   -9.1% / 10.8%. 200 is the minimum on both measures; every value past it hurts five takes to help
@@ -6178,6 +6187,76 @@ scan over an aggregation can only see the names it is written with and never whi
 Five mutations, each caught. The comment strip is INERT today and the file says so rather than
 implying coverage -- none of the three explanations writes the reducer form the scan matches -- so
 the strip is exercised on a synthetic input covering all three of its passes.
+
+### AND BENCH SET 3'S SCALE WAS A STATISTIC, NOT A DETECTOR FAULT: A MAD IS NOT A SIGMA
+
+With the mean fixed, bench set 3 is ROM +5.5% and peak +19.8%. The ROM turned out to be the
+cheaper of the two and the fix is a conversion.
+
+**THE PLATE THAT CAUSED IT HAD DONE NOTHING WRONG, which is what made it findable.** Read off
+`calibration.referenceObject`, which has carried this since the shape blob was added and which
+nothing had compared across two takes:
+
+| | bench set 3 | row set 3 |
+|---|---|---|
+| `samples` | **205** | **6** |
+| confidence | 0.60 - 1.00 | 0.50 - 0.89 |
+| `aspectRatio` | **0.93** (a disc face-on) | **0.71** |
+| median w x h, px | 98.2 x 105.9 | 65.7 x 92.0 |
+| lock held | 256 of 865 frames | **0** |
+
+The row's plate is a median over **SIX frames** -- `MIN_CALIBRATION_SAMPLES` is 5, so it cleared by
+one -- at an aspect ratio that is not a disc seen face-on. The bench's is the best plate read in
+the corpus. **Both state the same 0.0576.** So the signals that separate an earned read from an
+unearned one are already in the export and nothing reads them; that is the row's lever and is
+still open (see the first half of this round).
+
+**AND ON THE BENCH IT MEANS THE SCALE ERROR IS NOT THE DETECTOR.** 105.9px where 114.2px would hit
+the sensor is 7.3% small, which is **1.26 sigma** of what the constant states. An ordinary draw.
+The take still shipped +5.5% high because at 12x a body ruler's weight the plate carried **86%** of
+the blend while the two body rulers bracketing the truth from below (-7.7% and -9.3%) held 7% each.
+**A well-behaved ruler's ordinary noise became the set's number.**
+
+**THE 0.056 IS A RAW RELATIVE MAD AND IT IS READ AS A SIGMA.** `validate_box_size.py` line 128 is
+`mad = statistics.median([abs(r - median) for r in ratios])`, and its own comment says MAD rather
+than stdev is deliberate -- which is correct for MEASURING a detector whose tail must not set its
+spread. But the consumer is `reconcileScaleEstimates`, an inverse-variance blend that weights by
+1/sigma^2 and therefore needs a sigma. For a normal core **sigma = MAD / 0.6745 = 1.4826 x MAD**,
+so handing over the raw MAD understated the plate's sigma by a third and **overstated its weight by
+1.4826^2 = 2.2x**: 12.1 times a body ruler's where the measurement supports 5.7.
+
+`COREML_BOX_LONG_EDGE_RELATIVE_MAD` (0.056) is the measurement now and
+`COREML_BOX_LONG_EDGE_UNCERTAINTY` is `that / 0.6745` = 0.083, with the division spelled out so a
+retrain only has to update the MAD. The script's footer says so too, since the next person to run
+it would otherwise paste the MAD straight back over the sigma.
+
+**COSTED ON ALL TWENTY LEDGER ROWS: THREE BETTER, NONE WORSE, SEVENTEEN UNCHANGED.** Only the rows
+whose plate actually joined the cluster move.
+
+| row | before | after |
+|---|---|---|
+| 2026-10-30 bench press set 1 | +3.21% | **+2.20%** |
+| 2026-10-30 bench press set 3 | +5.52% | **+3.58%** |
+| 2026-10-30 Pendlay row set 3 | +23.21% | +22.68% |
+
+The other plate rows (the 10-19 and 10-29 RDL set 2s, press set 2) are untouched by construction:
+their plates stepped out or were refused.
+
+**IT WIDENS AN AGREEMENT TOLERANCE, which is the hazard this file names** ("a change that widens an
+uncertainty widens a TOLERANCE somewhere", 10-09): the plate's own window goes 0.115 -> 0.168, both
+far under the 0.4 ceiling, and the twenty-row replay is what says no cluster flipped.
+
+**AND IT IS A FLOOR ON THE CORRECTION RATHER THAN AN OVERSHOOT.** MAD / 0.6745 recovers the sigma
+of a GAUSSIAN core, and box-size ratios have a heavier tail than that -- `validate_box_size.py`
+found 6% of val plates boxing past 1.25x -- so the true sigma is at least this. Nothing here is
+fitted: no take chose the 0.6745, and `FITTED_OVERRIDES` is untouched.
+
+**A character window broke a test while fixing this, and the break is the cheap half of why
+CLAUDE.md forbids them.** `the-plate-states-the-detectors-own-noise.test.ts` found the docblock
+naming the script with `src.slice(at - 2000, at)`; splitting one declaration into two put the long
+docblock above the FIRST and left the window above the second finding only the short one. It is
+bounded by the docblock's own `/**` now. The expensive half is a window that PASSES on prose
+belonging to something else, which is the same bug facing the other way.
 
 ### THE RECORD WAS LYING ABOUT THE SMOOTHING, AND THE PIPELINE WAS NOT
 
