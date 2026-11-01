@@ -22,3 +22,6 @@ python3 nba.py 3001 | head -2
 echo
 echo "== careers: 6 teams x 14 seasons, all three sports, 3 leagues each =="
 for s in 9001 9002 9003; do for sp in baseball football basketball; do python3 career.py "$sp" "$s" 14; done; done
+echo
+echo "== the lifetime cohort: 75 athletes, 25 per sport, ages 13 to 45 =="
+for s in 5001 5002 5003 5004; do python3 lifetime.py "$s"; done
