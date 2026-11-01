@@ -12,6 +12,66 @@ artifact, kept so that nobody has to rebuild a world to re-ask a question.
 The generated worlds are **not committed** (~30MB) and are **deterministic**: the seeds are in
 the scripts, so `build.sh` reproduces them byte for byte. `.gitignore` covers `*.json` here.
 
+## Careers, not seasons
+
+`career.py` builds a league (6 teams, 14 seasons) with an aging curve, cliffs, trades,
+retirement and replacement; `career_channel.py` is the detector. Careers come out realistic
+(median 3 seasons, 17% turnover a year, longest 14) because the cut is **relative** -- the
+bottom slice of the league goes every offseason -- rather than an absolute replacement level,
+which produced a league where the median career was twelve seasons.
+
+**What this model does not contain, and it decides what any number here can mean.** Brady at 43,
+LeBron at 39 and Scherzer at 38 were not physiologically 26. They were better at the parts that
+are not physiological: anticipation, preparation, technique, picking their spots, changing what
+they do. None of that is in here. This model has a body and a schedule, so the most it can say
+is *"this athlete's physical decline is slower than his age cohort's"* -- never why. A product
+that forgets that will tell a 38 year old to retire.
+
+Two further things asserted rather than established: the "ageless" class is drawn from a
+**different distribution**, not the tail of the normal one (whether real outliers are a separate
+population or the tail of one is unknown, and it matters -- if they are the tail, the channel's
+sparing of them is partly luck); and the cliff is a **step with no precursor**, which is why
+section 6 below finds nothing before it.
+
+### What the career run found
+
+**A career anchor is a machine for telling a 35 year old he is not 23.** Flagging anyone a swing
+slower than their own rookie season, among athletes with no cliff at all, aging exactly as
+expected: 0% at 23, 13% at 29, 35% at 32, **54% at 35** (baseball).
+
+**Year over year against the same-age cohort works**, and three of its properties are the design
+rather than luck:
+
+| at a 10% false positive rate | football | baseball | basketball |
+|---|---|---|---|
+| ordinary season, no cliff | 10.0% | 10.0% | 10.0% |
+| the year a cliff lands | **84.4%** | **50.0%** | **51.9%** |
+| the ageless | **7.4%** | **2.6%** | **7.6%** |
+| the season after a trade | 10.2% | 10.6% | 10.3% |
+| aged 35+, no cliff | — | 12.2% | — |
+| after a season of *gains* | 6.1% | 3.3% | 4.3% |
+
+The ageless score **below** the base rate, by construction: an athlete declining slower than his
+cohort scores better than average, which is what the Brady/LeBron/Scherzer case needs. Trades are
+**exactly** neutral, because the statistic is within-athlete year over year scored against a
+league-wide age cohort rather than a roster -- the career channel is immune to the thing that
+breaks the chronic channel.
+
+**It cannot see a cliff coming.** Flag rate in the three seasons before one lands: 0% to 6.7%,
+**below** the 10% base rate, in every sport. The channel is purely retrospective: it confirms,
+it does not predict. Part of that is the model (a step with no precursor cannot be anticipated by
+anything), and the part that is not is the finding: **this must never be sold as predictive.**
+
+**Two seasons is the budget.** Caught that season / by the end of the next / within three:
+football 84/93/93, baseball 50/70/70, basketball 52/74/74. A third season adds **nothing**.
+
+**Football is better at this because its cliff is bigger relative to its own year-over-year
+noise** -- 6.09x the cohort sigma against baseball's 3.78x and basketball's 4.46x -- not because
+its cohorts are bigger (1508 / 502 / 231 athletes per age).
+
+**The false-positive economics, which are the real decision.** Flagging a career is not flagging
+a day: 2% of clean seasons buys 14-19% of cliffs, 5% buys 30-73%, 10% buys 50-84%.
+
 ## The three worlds
 
 | | football | baseball | basketball |
