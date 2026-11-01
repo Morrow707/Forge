@@ -19,3 +19,6 @@ echo "   40 seasons, not 4: an 18 man roster gives 2 slow decliners a season, so
 echo "   put the detection rate on one-athlete granularity (it read 4.2%, which was 1 of 24)."
 for s in $(seq 3001 3040); do python3 nba.py "$s" >/dev/null; done
 python3 nba.py 3001 | head -2
+echo
+echo "== careers: 6 teams x 14 seasons, all three sports, 3 leagues each =="
+for s in 9001 9002 9003; do for sp in baseball football basketball; do python3 career.py "$sp" "$s" 14; done; done
