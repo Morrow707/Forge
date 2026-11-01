@@ -186,3 +186,6 @@ __pycache__/
 # Written by the Claude Code engine beside a loaded plugin; never committed.
 .claude/skills/*/tsconfig.json
 .claude/skills/*/.claude-plugin/types/
+
+# Anvil simulation worlds: ~12MB, regenerated deterministically by tools/anvil-sim/build.sh
+tools/anvil-sim/*.json
