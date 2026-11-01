@@ -72,6 +72,30 @@ its cohorts are bigger (1508 / 502 / 231 athletes per age).
 **The false-positive economics, which are the real decision.** Flagging a career is not flagging
 a day: 2% of clean seasons buys 14-19% of cliffs, 5% buys 30-73%, 10% buys 50-84%.
 
+### Two things measured because they would otherwise have been asserted
+
+**Pooling across teams does NOT make the chronic channel finer.** Basketball scored in cohorts
+from 18 athletes to 720: residual sigma 0.34 / 0.34 / 0.35 / 0.33 / 0.35, detection 23.8% /
+22.5% / 22.5% / 21.2% / 25.0%. Sigma is a property of the population, not of the sample. What a
+small roster actually has is a **noisy estimate** of it, and that is severe: the threshold taken
+off one 18 man team in one season ranges **0.54 to 4.38** (mean 1.32), against 1.14 to 1.48 at
+ten teams. A nominal 10% channel that really flags 30% of a clean roster, or nobody at all. So
+**pool to estimate the threshold, score on the athlete's own roster** -- two different uses of a
+cohort, and only one of them is worth doing.
+
+**The career channel works on 15 year olds, and that is the problem.** Re-run with a 14-17 entry
+age, it holds its false positive rate at 9-10% from 15 through 23, because the age-cohort
+normalisation absorbs growth automatically -- a 15 year old is compared to other 15 year olds who
+are also improving (median -1.90 swings a year at 15, -1.37 at 19). Which means a 15 year old who
+improves by 1.0 swing while his cohort improves by 1.9 is **2.7 sigma and gets flagged, working
+exactly as designed**, for developing more slowly than his peers. That sentence must never reach a
+child. It is the strength profile's movement-not-body-part rule again, one level worse.
+
+And the channel is least trustworthy **exactly at the peak**: ages 24-26 the cohort sigma jumps
+0.20 -> 0.44 -> 0.77 and the flag rate goes 17.2% -> 30.0% -> 0.8%, because individuals cross
+their peak at different ages so the cohort is a mix of risers and fallers. The nominal 10% is not
+10% in that band.
+
 ## The three worlds
 
 | | football | baseball | basketball |

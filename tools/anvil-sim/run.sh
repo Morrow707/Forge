@@ -13,3 +13,5 @@ run why_r2.py         # why load explains one world and not the other
 run form_by_sport.py  # and therefore why the form is chosen per roster
 run raw_spread.py     # the anchor means opposite things in the two sports
 run career_channel.py # careers: aging, cliffs, trades, and what cannot be predicted
+run pooled.py         # pooling fixes the threshold, not the instrument
+run youth.py          # the channel works on 15 year olds, which is the problem
