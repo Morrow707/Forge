@@ -1391,3 +1391,107 @@ export const OVR_BENCH_SET3_2026_10_30 = {
     reported: { meanVelocityMps: 0.66, peakVelocityMps: 0.91, romIn: 14.7, meanW: 397, peakW: 549, tpvS: 0.31, eai: 2.84 },
   },
 };
+
+
+// Back squat beside the OVR, 2026-11-05, 135lb x 5, build 710 (round eight's build, the first
+// with the direction rule corrected), analysed on the FILE path. The first squat on the
+// corrected drives: range of motion -1.9%, mean +4.8% at the squat's round-eight window (0.02)
+// and +2.4% at the whole travel window, peak -5.5% at 165ms. See the 2026-11-05 ledger row.
+export const OVR_BACK_SQUAT_2026_11_05 = {
+  build: 710,
+  loadLb: 135,
+  repsPerSet: 5,
+  camera: "front of the rack, phone pitched 10.3 deg; the shoulders carried the bar (708 shoulder points); file path",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.85, peakVelocityMps: 1.28, romIn: 29.0, tpvS: 0.63 },
+      { meanVelocityMps: 0.87, peakVelocityMps: 1.34, romIn: 28.9, tpvS: 0.63 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.20, romIn: 29.0, tpvS: 0.65 },
+      { meanVelocityMps: 0.84, peakVelocityMps: 1.32, romIn: 29.5, tpvS: 0.62 },
+      { meanVelocityMps: 0.79, peakVelocityMps: 1.21, romIn: 30.2, tpvS: 0.73 },
+    ],
+    reported: { meanVelocityMps: 0.83, peakVelocityMps: 1.27, romIn: 29.3, meanW: 499, peakW: 761, tpvS: 0.65, eai: 1.94 },
+  },
+  forgeOnDevice: {
+    repCount: 5,
+    meanVelocityMps: 0.87,
+    peakVelocityMps: 1.20,
+    romCm: 73.0,
+    scaleSource: "both",
+    scale: 0.0036334879618557616,
+    driveOnsetFraction: 0.02,
+    velocitySmoothingMs: 165,
+    repMeans: [0.84, 0.90, 0.85, 0.94, 0.84],
+    repPeaks: [1.20, 1.28, 1.15, 1.25, 1.12],
+  },
+};
+
+// Romanian deadlift beside the OVR (labelled "DEADLIFT" on the sensor), 2026-11-05, 135lb x 8,
+// build 710, live path. The sensor's rep 1 is a full 24.1in pull; Forge's rep 1 lost 30cm of it
+// inside a 0.239s hole and reported 45.6cm -- the take that produced the sample-starvation rule.
+export const OVR_ROMANIAN_DEADLIFT_2026_11_05 = {
+  build: 710,
+  loadLb: 135,
+  repsPerSet: 8,
+  camera: "square to the side, phone pitched 15.7 deg; hands carried the bar; live path, cadence 0.939",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 1.00, peakVelocityMps: 1.72, romIn: 24.1, meanW: 599, peakW: 1032, tpvS: 0.29, eai: 5.79 },
+      { meanVelocityMps: 0.93, peakVelocityMps: 1.69, romIn: 25.3, meanW: 559, peakW: 1016, tpvS: 0.35, eai: 4.72 },
+      { meanVelocityMps: 1.00, peakVelocityMps: 1.72, romIn: 24.8, meanW: 599, peakW: 1032, tpvS: 0.35, eai: 4.90 },
+      { meanVelocityMps: 0.94, peakVelocityMps: 1.62, romIn: 24.1, meanW: 562, peakW: 975, tpvS: 0.34, eai: 4.77 },
+      { meanVelocityMps: 0.95, peakVelocityMps: 1.64, romIn: 24.8, meanW: 569, peakW: 983, tpvS: 0.29, eai: 5.55 },
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.51, romIn: 23.0, meanW: 534, peakW: 909, tpvS: 0.26, eai: 5.64 },
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.51, romIn: 23.9, meanW: 534, peakW: 909, tpvS: 0.30, eai: 4.98 },
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.47, romIn: 23.5, meanW: 532, peakW: 884, tpvS: 0.28, eai: 5.14 },
+    ],
+    reported: { meanVelocityMps: 0.93, peakVelocityMps: 1.61, romIn: 24.1, meanW: 561, peakW: 967, tpvS: 0.30, eai: 5.18 },
+  },
+  forgeOnDevice: {
+    repCount: 8,
+    meanVelocityMps: 1.26,
+    peakVelocityMps: 2.07,
+    romCm: 61.5,
+    scaleSource: "both",
+    scale: 0.0037460894387513865,
+    driveOnsetFraction: 0.04,
+    repMeans: [1.18, 1.42, 1.24, 1.44, 1.39, 1.16, 1.14, 1.17],
+    repPeaks: [1.18, 2.24, 2.44, 2.15, 2.33, 2.03, 1.92, 2.29],
+    repRoms: [45.5, 64.5, 69.8, 66.8, 62.7, 62.0, 54.2, 66.2],
+  },
+};
+
+// Box jump beside the OVR on the hip ("Jump Squat" on the sensor, 1lb x 6), 2026-11-05, build
+// 710, live path, onto a 24in box. Scott: "For the box jumps ignore set 1 on the OVR, that was
+// a setup rep, reps 2-6 are ours." Forge found five reps; they are the sensor's reps 2-6 in
+// order. The sensor's "ROM" on a jump is the hip's rise over its concentric, which runs past
+// takeoff; Forge's drive mean is to takeoff only, so the two means are different windows.
+export const OVR_BOX_JUMP_HIP_2026_11_05 = {
+  build: 710,
+  boxHeightIn: 24,
+  repsPerSet: 5,
+  sensor: {
+    ignoredRep1: { meanVelocityMps: 0.93, peakVelocityMps: 2.37, romIn: 34.9, tpvS: 0.20 },
+    reps: [
+      { meanVelocityMps: 1.56, peakVelocityMps: 2.84, romIn: 28.2, tpvS: 0.18 },
+      { meanVelocityMps: 1.47, peakVelocityMps: 2.77, romIn: 27.5, tpvS: 0.10 },
+      { meanVelocityMps: 1.45, peakVelocityMps: 2.85, romIn: 27.7, tpvS: 0.19 },
+      { meanVelocityMps: 1.42, peakVelocityMps: 3.00, romIn: 26.7, tpvS: 0.13 },
+      { meanVelocityMps: 1.40, peakVelocityMps: 2.70, romIn: 26.3, tpvS: 0.18 },
+    ],
+    // reps 2-6 only, the five Forge measured
+    reportedOverOurReps: { meanVelocityMps: 1.46, peakVelocityMps: 2.832, romIn: 27.28 },
+  },
+  forgeOnDevice: {
+    repCount: 5,
+    jumpHeightCm: 69.7,
+    boxRiseScaleErrorRatio: 1.142,
+    reps: [
+      { jumpHeightCm: 69.3, takeoffVelocityMps: 3.46, hipDrivePeakMps: 2.95, hipDrivePeakRawMps: 2.90, hipDriveMeanMps: 1.64, dipDepthCm: 22.3, eccentricSeconds: 0.26, concentricSeconds: 0.23 },
+      { jumpHeightCm: 69.7, takeoffVelocityMps: 3.46, hipDrivePeakMps: 2.97, hipDrivePeakRawMps: 3.01, hipDriveMeanMps: 1.79, dipDepthCm: 29.5, eccentricSeconds: 0.73, concentricSeconds: 0.23 },
+      { jumpHeightCm: 66.2, takeoffVelocityMps: 3.69, hipDrivePeakMps: 2.71, hipDrivePeakRawMps: 2.64, hipDriveMeanMps: 1.76, dipDepthCm: 31.8, eccentricSeconds: 0.75, concentricSeconds: 0.21 },
+      { jumpHeightCm: 58.7, takeoffVelocityMps: 3.35, hipDrivePeakMps: 2.96, hipDrivePeakRawMps: 2.83, hipDriveMeanMps: 2.20, dipDepthCm: 27.7, eccentricSeconds: 0.67, concentricSeconds: 0.19 },
+      { jumpHeightCm: 63.0, takeoffVelocityMps: 3.42, hipDrivePeakMps: 2.87, hipDrivePeakRawMps: 2.82, hipDriveMeanMps: 1.94, dipDepthCm: 25.2, eccentricSeconds: 0.27, concentricSeconds: 0.21 },
+    ],
+  },
+};

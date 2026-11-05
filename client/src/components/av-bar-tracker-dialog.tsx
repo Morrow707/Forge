@@ -1580,6 +1580,7 @@ export function AvBarTrackerDialog({
       tracePathCm?: number;
       traceDisplacementCm?: number;
       velocitySmoothingMs?: number;
+      liftRecord?: NonNullable<TrackingDiagnostics["calibration"]>["liftRecord"];
       traceTravelAcrossCm?: number;
       tracePointsDroppedOffAxis?: number;
       posture?: string;
@@ -2097,7 +2098,7 @@ export function AvBarTrackerDialog({
     // the ones reporting nothing at all about why.
     const traceDiagnostics = (
       repsFound: number | null,
-      peakBounds?: { repPeaksFlooredToMean?: number; repPeaksCappedToMeanRatio?: number },
+      peakBounds?: { repPeaksFlooredToMean?: number; repPeaksCappedToMeanRatio?: number; repsSampleStarved?: number },
     ) => {
       let largestGapSeconds: number | null = null;
       for (let i = 1; i < trace.length; i++) {
@@ -2109,6 +2110,7 @@ export function AvBarTrackerDialog({
         repsFound,
         repPeaksFlooredToMean: peakBounds?.repPeaksFlooredToMean,
         repPeaksCappedToMeanRatio: peakBounds?.repPeaksCappedToMeanRatio,
+        repsSampleStarved: peakBounds?.repsSampleStarved,
         framesUsable,
         framesNoWristOrImplement,
         wristsBelowVisibilityFloor,
@@ -2371,6 +2373,19 @@ export function AvBarTrackerDialog({
         exerciseName,
         romBucketForExercise(exerciseName),
       ).values.velocitySmoothingMs;
+      // THE WHOLE RECORD, NOT ONE FIELD OF IT. Which build a capture ran on -- and so which
+      // per-lift numbers -- has been read off the run list every round; the record itself,
+      // with each number's source, answers it from the export. Scott, 2026-11-05.
+      {
+        const record = cameraTunablesFor(exerciseName, romBucketForExercise(exerciseName));
+        calibrationDiagnostics.liftRecord = {
+          identity: record.identity,
+          tracker: record.tracker,
+          romBucket: romBucketForExercise(exerciseName) ?? null,
+          values: { ...record.values },
+          sources: { ...record.sources },
+        };
+      }
       if (scaleFactor && scaleFactor > 0) {
         calibrationDiagnostics.traceTravelAlongPx = (maxAlong - minAlong) / scaleFactor;
         calibrationDiagnostics.traceTravelAcrossPx = (maxAcross - minAcross) / scaleFactor;
@@ -2711,7 +2726,7 @@ export function AvBarTrackerDialog({
       // WHICH REPS THE SET'S RANGE OF MOTION WAS COMPUTED FROM. A set statistic that silently
       // drops reps is one nobody can reproduce from the rep rows beside it.
       setRangeOfMotion: setRangeOfMotionProvenance(
-        metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, romCm: r.romCm })),
+        metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, romCm: r.romCm, windows: r.windows })),
       ),
       repConsistency: repConsistency(
         metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, romCm: r.romCm })),

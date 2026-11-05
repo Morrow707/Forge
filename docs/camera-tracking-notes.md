@@ -14,7 +14,7 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-05, round eight)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-05, round nine)
 
 Scott, 2026-10-29: "I want you keeping a running log wherever you need to ... so we don't keep
 going in circles with what works and what doesn't, when your feed goes stale you don't remember
@@ -89,15 +89,59 @@ lowering**; the corrected numbers are in "Round eight" and the table's state cel
 fitted velocity overrides are gone (bench 0.03 / 200 / 1.6, press 0.12, RDL cap 2.5); the squat
 carries the first window fitted on an actual drive (0.02). Build to film on: **710** (2026-11-05 16:36 UTC,
 `4c30e37`; 709 its `verify_build`); 708 was a `verify_build` on the audit fix.
+**ROUND NINE (2026-11-05, the first takes ON the corrected direction rule: squat 135x5, RDL 135x8
+and a box jump x5 on 710, "only testing the 3 lifts today", "at least one fix per lift"):**
+- **Back Squat**: ROM -1.9%, mean +4.8% / peak -5.5% at round eight's record (0.02 / 165), rep for
+  rep on the sensor's durations (rep 1: 0.868s against 0.867). Two steps, both its own:
+  `driveOnsetFraction` 0.02 -> **0** (the five paired squats +1.2/0.0/+2.0/+2.2/+4.8% at 0.02 ->
+  0.0/-3.5/0.0/-1.1/+2.4% at 0; nothing between the two moves anything, because the trim only ever
+  removes the zero-speed turnaround samples) and `velocitySmoothingMs` 165 -> **130** (one notch of
+  a 33ms-sample window; peaks -5.5/-4.2/-9.2 -> -3.9/-3.3/-8.5). Today's take reads **+2.4% /
+  -3.9%** at the new record. Found and recorded, not changed: the set's range is the mean of the
+  reps' RAW-endpoint distances (73.0, -1.9%) while the drive-window distances the mean is built
+  from average 74.4 (-0.1%), 1.5cm apart on every rep.
+- **Romanian Deadlift**: 8 of 8, ROM "+0.5%" by accident -- rep 1 was a 45.6cm fragment (a 0.239s
+  hole holding 30cm of the pull; the sensor's rep 1 is 61.2cm) averaged in with seven reps reading
+  +3.6%. Two fixes: the **SAMPLE-STARVATION RULE** (shared; a rep whose phase holds a gap past 3x
+  the take's cadence AND at least half its distance keeps its row, with the hole written on it,
+  and leaves the set's aggregates -- measured on every stored take, it fires on this rep and one
+  09-29 bench rep and on no rep of a sensor-paired take; the set reads 63.8, +4.2%, honestly) and
+  its own `driveOnsetFraction` 0.04 -> **0.02** (+35.5% -> **+29.0%** today, +45.6 -> +32.2 and
+  +30.3 -> +25.8 on the two earlier traced RDLs; 0 is next, +17.2%). NOT fitted, with the costing:
+  the peaks read +26 to +54% on every rep with the distance right (only a 400ms blur reaches the
+  sensor), and a shoulder-floor step 0.2 -> 0.21 was a wash on the six RDL ledger rows (three
+  better, three worse, 0.3 points each). The phase durations match the sensor's concentric within
+  12% on five reps and read 1.35-1.38x short on reps 1, 2 and 5, each with a 0.19-0.25s dwell at
+  the bottom in front of it. The lift is TRACE-limited (per-rep distances scatter +-15% against a
+  sensor whose own spread is 5%; 99 wrist frames under the floor, 43 lone-hand points).
+- **Box Jump**: the hip's drive PEAK is the sensor's -- smoothed 2.89 against 2.832 (+2.1%), raw
+  2.84 (+0.3%) over the five reps (the sensor's rep 1 was a setup rep, ignored on Scott's word);
+  the box-corrected net rise 69.7 against the sensor's hip range 69.3. The drive MEAN reads +28%
+  because the sensor's window runs past takeoff and Forge's stops at it -- a different window,
+  not an error in either. Fix: `summarizeJumpSet` now carries `hipDrivePeakVelocityMps` and
+  `hipDriveMeanVelocityMps` (the reps' average, the bar's set-peak definition) and the jump writes
+  them to the set's `peakVelocityMps` / `meanVelocityMps`, so the sensor's own quantity is in the
+  export and on the row from the next take. Reps 1 and 5 carry a 0.26s eccentric where reps 2-4
+  carry 0.67-0.75s (the dip truncated by the hysteresis walk-back or by the trace); unreadable
+  without the hip trace, which is what the export addition below is for.
+- **THE EXPORT, on Scott's "can you add anything to it to help?":** `calibration.liftRecord` on
+  every bar and jump capture (the whole per-lift record with each number's source: which build,
+  which numbers, from the file), per-rep `windows.largestGapSeconds` / `distanceInLargestGapShare`
+  / `sampleStarved` plus `trace.repsSampleStarved` and `setRangeOfMotion.sampleStarvedRepNumbers`,
+  and -- server-side, no build -- `bodyWitnessTrace`: shoulder, hip, wrist and ankle y per stored
+  skeleton frame on the bar trace's own clock, derived from the trace file at download time, so
+  the RDL question (do the hands move faster than the body on a hinge?) and the jump's dip can be
+  read offline next round. Build to film on: **712** (711 its `verify_build`).
 **HOW TO TELL WHICH BUILD A CAPTURE RAN ON, from the export alone:** `scaleYardstickAbstained`
 exists from 705, the row's `rulerUncertainties.depth` is 0.6 from 703, and `scaleBlend.identity`
-from round four. Cheaper than the run list and it cannot drift.
+from round four -- and from 712, `calibration.liftRecord` says it outright. Cheaper than the run
+list and it cannot drift.
 
 | lift | paired takes | ROM vs OVR, oldest -> newest | state |
 |---|---|---|---|
-| Back Squat 135 | 10-19 x2, 10-29 x2 | -5.3%, -1.5%, -1.9%, **-1.3%** (mean 0.81/0.84/0.72/0.89 vs 0.86/0.84/0.80/0.84) | **lands, same signature four takes running; its own height uncertainty (0.11) ships in round two, worth about +1%** **Round eight (11-05): on the DRIVES the four paired squats read +5.0 / +1.2 / +4.0 / +3.2% at the shared window and +1.2 / 0.0 / +2.0 / +2.2% at the squat's own `driveOnsetFraction` 0.02 (the first velocity number ever fitted on a drive); 0.0 is the next step. Peaks -4 to -11% at the shared smoothing, recorded. The squat reads the sensor rep for rep.** |
-| Romanian Deadlift 135 | 10-19 x2, 10-29 x2 | +16.4%, +12.0%, +30.5% oblique; **-34.2% square-on on 697** -- a plate boxed 1.63x too big took 86% of the scale. Without it the square-on take reads **-1.9%** | **square-on, the body rulers are within 2%; the plate rule is fixed in round two; the velocities are the next fault (window 25% long)** **Round eight: on the drives the RDL reads +46% / +30% on the mean and +21% / +37% on the peak -- the 10-29 take is oblique at +35% ROM, the 10-19 take carries the +15% collapse; both are scale faults the drive now reads honestly. The cap 2.5 is gone (it released the lowering's peaks). 10-29 set 1 counts 8 of 8 on the drives (7 on the lowerings).** |
-| Box Jump, 24in box | 10-19 x2, 10-29 x2 | box ruler 1.20-1.22 on both 10-29 sets (ankle rise 72-75cm onto 61); hip peak **+2% / -13%** at the floor scale (was -15% / -29% divided by the landing ratio); hip mean +15% / +7% at the floor scale | **round three: the box ratio corrects the LANDING numbers only; the hip's drive keeps the floor scale the squat proved from the same spot. Next: set 1's -13% is a trace with 21 dropouts, and the mean's window** |
+| Back Squat 135 | 10-19 x2, 10-29 x2 | -5.3%, -1.5%, -1.9%, **-1.3%** (mean 0.81/0.84/0.72/0.89 vs 0.86/0.84/0.80/0.84) | **lands, same signature four takes running; its own height uncertainty (0.11) ships in round two, worth about +1%** **Round eight (11-05): on the DRIVES the four paired squats read +5.0 / +1.2 / +4.0 / +3.2% at the shared window and +1.2 / 0.0 / +2.0 / +2.2% at the squat's own `driveOnsetFraction` 0.02 (the first velocity number ever fitted on a drive); 0.0 is the next step. Peaks -4 to -11% at the shared smoothing, recorded. The squat reads the sensor rep for rep.** **Round nine (11-05, 135x5 on 710, file path): ROM -1.9%, mean +4.8% -> +2.4% at its own 0 window, peak -5.5% -> -3.9% at its own 130ms. Next: 0 is the last window step; the set-range endpoint rule (raw 73.0 vs smoothed 74.4).** |
+| Romanian Deadlift 135 | 10-19 x2, 10-29 x2 | +16.4%, +12.0%, +30.5% oblique; **-34.2% square-on on 697** -- a plate boxed 1.63x too big took 86% of the scale. Without it the square-on take reads **-1.9%** | **square-on, the body rulers are within 2%; the plate rule is fixed in round two; the velocities are the next fault (window 25% long)** **Round eight: on the drives the RDL reads +46% / +30% on the mean and +21% / +37% on the peak -- the 10-29 take is oblique at +35% ROM, the 10-19 take carries the +15% collapse; both are scale faults the drive now reads honestly. The cap 2.5 is gone (it released the lowering's peaks). 10-29 set 1 counts 8 of 8 on the drives (7 on the lowerings).** **Round nine (11-05, 135x8 on 710, live): ROM +4.2% over the whole reps (rep 1 a starved fragment, now out of the set), mean +35.5% -> +29.0% at its own 0.02, peak +35% NOT fitted (a trace fault: per-rep distance scatter +-15%, phases 1.35x short on 3 of 8 behind a bottom dwell). Next: window 0 (+17%), the bodyWitnessTrace on the next export.** |
+| Box Jump, 24in box | 10-19 x2, 10-29 x2 | box ruler 1.20-1.22 on both 10-29 sets (ankle rise 72-75cm onto 61); hip peak **+2% / -13%** at the floor scale (was -15% / -29% divided by the landing ratio); hip mean +15% / +7% at the floor scale | **round three: the box ratio corrects the LANDING numbers only; the hip's drive keeps the floor scale the squat proved from the same spot. Next: set 1's -13% is a trace with 21 dropouts, and the mean's window** **Round nine (11-05, x5 on 710): hip peak +2.1% smoothed / +0.3% raw, net rise 69.7 vs 69.3; drive mean +28% is the sensor's wider window. The set carries the hip peak and mean from 712. Next: the mean's window, read off the bodyWitnessTrace.** |
 | Bench Press 135 | 10-30 x2 (set 1 on 703, set 3 on 705; plus the 09-29/09-30/10-02 corpus); **set 2's OVR screen arrived TWICE (0.69 / 0.97 / 14.9in) with NO Forge capture in either export** | **+3.2%** (36.7 vs 35.6) -- the first bench whose scale lands, and the first real take where the retrained detector's PLATE was the ruler (box 0.919 of expected, 86% of the blend); mean +10.3%, peak +18.6%. **Set 3 on 705: +5.5%** (39.4 vs 37.3), mean +12.1%, peak +25.3% -- the plate again, 86% of the blend, boxed 7.3% too SMALL, and both body rulers were BELOW the sensor | **round four: the bench's own window (driveOnsetFraction 0.03) and smoothing (200), costed on the four clean paired benches: mean bias +10.7% -> +6.3%, peak bias +7.2% -> +3.0%. 0.02 is the zero-bias window on those four and the NEXT step; held back because the one trace-poor bench (set 5, 09-29) pays 15 points there. **Round six: the MEAN was a BUG, not a fit -- the SET mean summed the whole phase's distance over the drive window's time (`romM`'s own comment names the pairing; the rep was fixed 10-06 and the set-level aggregation was not). Set 3 +10.4% -> +2.9%; seven of the twelve traced takes improve and the five that read LOW get 1-3 points worse, which is what removing a one-sided inflation does. It made the bench's own `driveOnsetFraction` 0.03 INERT on both 10-30 takes (+5.9% / +3.0% at 0.03 AND at 0.04) -- kept because it still earns its keep on the 09-29/09-30 corpus; 0.02 re-swept and still refused (the trace-poor bench -32.1% -> -42.9%). The SCALE was a STATISTIC: `COREML_BOX_LONG_EDGE_UNCERTAINTY` was the detector's raw relative MAD read as a sigma by an inverse-variance blend, overstating the plate's weight 2.2x -- set 3 **+5.5% -> +3.6%**, set 1 +3.2% -> +2.2%, three ledger rows better and none worse. The plate itself was fine (205 frames, aspect 0.93, box 1.26 sigma small). The PEAK is open and 200ms is already the sweep's minimum across seven bench takes (+0.2% bias), so it is NOT the smoothing: only the two 10-30 takes read high (+14.4%, +19.8%) and those are the two where the plate decides the scale** **Round eight: on the DRIVES every clean bench reads 20-48% HIGH on the mean at the shared window (+32% / +47% on the 10-30 takes, +4 to +37% on the corpus) and the peaks +13 to +66%, while the whole upward phases (0.33-0.60s) match the sensor's 0.50-0.55s concentric -- the drive window at 0.04 trims a bench's slow start; at onset 0 set 1 reads +5.9%. Scatter dominates (Rule #5), so NO bench window is fitted this round; 0.03 / 200 / 1.6 are gone. The slow LAST press (2.6x the median duration) meets the edge rule fitted on descents and is dropped on 10-06, 10-02 and set 3 -- the bench's open RULE.** |
 | Pendlay Row 135 | 10-30 x2 (plus 10-09 x3 candidates) | set 1 **-10.8%** (46.9 vs 52.6): the depth ruler read -64% and the collapse carried half of it; set 2 on 703 **+52.8%** (78.4 vs 51.3): the grip yardstick threw out 2 of 3 rulers off a grip read NARROWER than the shoulders (0.755) and the shoulder span shipped alone; mean +24%/+90%, peak +6%/+69%; set 3 on 705 **+23.2%** (70.1 vs 56.9) with NOTHING rejected and no yardstick abstention -- a plate boxed 19.2% too small took 86% of the scale off 20 frames at 0.44 confidence with zero lock held | **round four: the row's own depthRulerUncertainty 0.6: set 1 -10.8% -> +0.6%. Round five: a yardstick that would convict a strict majority of the rulers stands down (`rejectImplausibleScales`), set 2 +52.8% -> **+2.85%** at the row's record; a RULE, nothing else in the corpus moves (the only other rejection is the 10-01 squat's plate at 1 of 5). **Round six: set 3 is the plate and NOT the yardstick rule (that rule was never engaged) -- the collapsed 3D pair was the closest witness at -7.3% and held 7% of the weight. The plate's unearned precision is the open lever.** Next: that, then the window -- the phase is short because the bottom of a Pendlay rep is a hand at the plates (set 2: 280 of 579 points a lone hand carried)** **Round eight: on the drives the row reads -16% / +39% / +10% on the mean -- a lone-hand trace either way round, pinned at what it reads and not fitted. 10-02 counts all ten rows on the drives (nine on the lowerings).** |
 | Barbell Shoulder Press 65 / 85 | 10-30 x3 (65x8 on 701, 85x8 on 703, 85x8 on 705). **ONE LIFT, not two** -- Scott, 2026-10-31: "The push press is the shoulder press, they don't have another name." The OVR's "Push Press" label is its own vocabulary | set 1 ROM **+1.3%** (63.0 vs 62.3 over the eight real reps; the OVR counted the lowering as a ninth), mean **-13.5%**, peak -7.2%; set 2 ROM -8.1% (28 dropouts, 206 wrist frames under the floor; the plate boxed 1.48x and kept out), mean -2.7%, peak +0.8%; set 3 on 705 ROM **+3.1%** (61.8 vs 59.9), mean **-2.4%**, peak +12.7% | **round five: the press's own driveOnsetFraction 0.08 (shared 0.04 opens the window on a strict press's dead-stop start): set 1 mean -13.5% -> -3.8%, set 2 -2.7% -> 0.0%, 10-02 push-press fixture -3.8% -> +2.9%; 0.10 is the NEXT step if the next press still reads low. Smoothing stays shared (200 costs the press peaks 6-8 points). **Round six: 0.08 HOLDS on a take it was not fitted on (mean -2.4%), so do NOT spend the 0.10 step -- round five's trigger was "if the next press still reads low" and -2.4% is not low. And set 3's axisForeshortening is 1.188 (1.56m of 2.89m along the lens, against the row's 1.007), so it is not a take to fit to.** 7 of 8 on ALL THREE sets: the 8th is folded into the downward re-rack -- a segmenter RULE, still open** **Round eight: on the DRIVES the press reads +3.5% / -2.7% / +2.4% on the mean at the SHARED 0.04 -- so 0.08 and 0.12 (fitted to lift a lowering that read low) are gone and the press reads the shared copy. Peaks +18 / +9 / +26% with 5 / 1 / 4 of 7 reps capped at 2.0x, recorded. And the missing rep is the FIRST press, merged with the clean into one 2.6m upward phase, not the eighth folded into the re-rack.** |
@@ -6052,6 +6096,110 @@ the right body point, read 30% low off a smoothed trace at `effectiveHz` 40 with
 4. The squat's fourth and fifth paired take, read against the board's signature before any
    refit of the height or shoulder ruler.
 
+
+## Round nine, 2026-11-05: the first takes on the corrected rule -- the squat lands, the RDL is trace-limited, the jump's hip peak is on the sensor
+
+Scott filmed Back Squat 135x5, Romanian Deadlift 135x8 and a box jump (OVR "Jump Squat", rep 1 a
+setup rep he said to ignore) on 710, the round-eight build, and sent the OVR screens and the
+export the same afternoon: "Only testing squat rdl and box jumps today so 3 lifts. Like the notes
+state I want at least one fix per lift. At least, if there's more do it, fix every error you find
+even if it's .001 accuracy. Remember goal is to get as close to 0% to OVR numbers." Then: "Look at
+the export too, can you add anything to it to help?" and "When done push to Apple."
+
+### Back Squat: the whole window and one notch of smoothing
+
+The squat was the one of the three analysed on the FILE path (live coverage 0.84 fell under the
+gate), and it is the one that reads the sensor rep for rep. Shipped (0.02 / 165): 5 of 5, ROM 73.0
+against 74.4 (-1.9%), mean 0.87 against 0.83 (+4.8%), peak 1.20 against 1.27 (-5.5%); rep 1's
+drive is 0.868s against the sensor's 0.867. The drive-window distances (72.7 / 74.6 / 73.6 / 75.0
+/ 75.6) sit inside 1.6% of the sensor's reps while the set's range is the mean of the reps'
+RAW-endpoint distances (71.5 / 72.9 / 72.4 / 73.7 / 74.6), 1.5cm under on every rep -- recorded,
+not changed, because which of the two is a set's range is a rule for every lift.
+
+The sweep (every squat take with a sensor, five) says the only window step that moves anything
+is 0.02 -> 0: at 0.015, 0.01 and 0.005 every take reads exactly as at 0.02, because the trim at any
+positive fraction removes only the zero-speed turnaround samples at the phase's two ends, and the
+sensor counts them. Means at 0.02: +1.2 / 0.0 / +2.0 / +2.2 / +4.8 (average +2.0%); at 0: 0.0 /
+-3.5 / 0.0 / -1.1 / +2.4 (average -0.4%). Shipped as the squat's own `driveOnsetFraction` 0. The
+peak read 4-9% low on every paired squat; the smoother is a time window over 33ms samples, so 165
+is five samples and the next narrower window is three (130; 140 and 150 read as 165, 100 and 120
+as 130): -5.5 / -4.2 / -9.2 -> -3.9 / -3.3 / -8.5. Shipped as the squat's own `velocitySmoothingMs`
+130. Today's take at the new record: **+2.4% / -3.9%**.
+
+### Romanian Deadlift: a starved rep, a window step, and a limit named
+
+Shipped: 8 of 8, ROM 61.5 against 61.2 (+0.5%), mean 1.26 against 0.93 (+35.5%), peak 2.07 against
+1.61 (+28.6%). The ROM is an accident of two errors cancelling: rep 1 is a 45.6cm fragment -- its
+drive holds a 0.239s hole (t 4436 -> 4675, three low-confidence lone-hand points before it) with
+the bar 30cm further on when the trace resumed, 61% of the phase's distance inside one gap, and
+both neighbouring gaps 0 so nothing in the export said so -- averaged in with seven reps reading
++3.6%. Reps 2-8 against the sensor's: +1 / +13 / +12 / 0 / +8 / -6 / +15%, where the sensor's own
+rep-to-rep spread is 5%. The scale is noisier than it is biased (Rule #5).
+
+**The sample-starvation rule** (shared, `SAMPLE_STARVED_GAP_MULTIPLE` 3 and
+`SAMPLE_STARVED_MIN_DISTANCE_SHARE` 0.5 in bar-tracking.ts): a rep whose phase holds a gap past 3x
+the take's median interval AND at least half of the rep's distance keeps its row, with
+`windows.largestGapSeconds`, `distanceInLargestGapShare` and `sampleStarved` on it, and leaves the
+set's range, mean, peak, times and power; the set falls back to every rep when none is whole. The
+first draft was the gap alone, and measuring it across every stored take rejected that: gaps past
+3x sit inside 20 reps of nine takes, and on the two of those with a sensor (10-30 bench set 1,
+press set 2) leaving the rep out moved the set AWAY from it -- a hole the bar sat still through
+loses nothing (press set 2 rep 4: 0.208s, 0.0cm). With the distance half the rule catches today's
+rep 1 and one 09-29 bench rep (0.1s, 32.2 of 57.2cm) and no rep on a sensor-paired take. Today's
+set reads 63.8 (+4.2%) over its seven whole reps, which is what it is.
+
+**The window**: `driveOnsetFraction` 0.04 -> 0.02 on the RDL's record, the step the squat took in
+round eight: +35.5 -> +29.0% today, +45.6 -> +32.2% (10-29 set 1) and +30.3 -> +25.8% (10-19 set
+2); 0 is next (+17.2 / +7.8 / +23.6%).
+
+**What was measured and NOT fitted.** Per rep the phase durations against the sensor's concentric
+(its range over its mean) are 1.38 / 1.38 / 0.92 / 1.04 / 1.35 / 1.11 / 1.05 / 1.03 -- five inside
+12%, three short by a third, and each of the three has a 0.19-0.25s dwell at the bottom in front of
+its phase (rep 2: the bar creeps DOWN 1.9cm from t 6905 to 7105, then drives 64.5cm in 0.50s where
+the sensor's rep 2 is 64.3cm in 0.69s with its peak at 0.35s against Forge's at 0.22). The peaks
+read +26 to +54% on every rep (2.24 / 2.29 / 2.16 / 2.34 / 2.02 / 1.91 / 2.27 against 1.69 / 1.72 /
+1.62 / 1.64 / 1.51 / 1.51 / 1.47) with the distance right, which no window reaches; only a 400ms
+smoothing (twelve samples over a fifteen-sample drive) brings them to the sensor, and that is a
+blur, not a peak. The live path's timestamps were checked and are the frames' own presentation
+times (the 25ms steps that appear are 3-frame intervals the 0.75 cadence slack admits), so the
+clock is sound: on this hinge the WRISTS cover the distance faster than the sensor says the bar
+did, and nothing in the export can hold them against the body. A shoulder-floor step
+(`biacromialToleranceFraction` 0.2 -> 0.21, worth two points of today's +4%) was replayed on the
+six RDL ledger rows and moved three toward the sensor and three away by 0.3 points each; it does
+not ship. The RDL is trace-limited: 99 wrist frames under the visibility floor, 26 carried from a
+lone hand and 17 bare, cadence 0.939 with 18 dropouts.
+
+### Box Jump: the hip peak is the sensor's; the mean is a different window
+
+Five reps found, the sensor's reps 2-6 in order. Hip drive peak per rep 2.95 / 2.97 / 2.71 / 2.96 /
+2.87 (raw 2.90 / 3.01 / 2.64 / 2.83 / 2.82) against 2.84 / 2.77 / 2.85 / 3.00 / 2.70: smoothed +2.1%,
+raw +0.3% on the set, +-7% per rep. The box-corrected net rise 69.7 against the sensor's hip range
+69.3cm. The drive mean 1.64 / 1.79 / 1.76 / 2.20 / 1.94 reads +28% against 1.46, and the sensor's
+own numbers say why: 69.3cm over 1.46 m/s is 0.47s, Forge's drive to takeoff is 0.19-0.23s over
+37-42cm -- the sensor's concentric runs past takeoff into the flight. Which point it stops at (the
+hip's apex, the landing on the box, a velocity threshold) cannot be read without the hip trace,
+which the export did not carry; `bodyWitnessTrace` now does. The fix this round is that the set
+has the number at all: `hipDrivePeakVelocityMps` and `hipDriveMeanVelocityMps` on
+`JumpSetMetrics`, written to the jump's `peakVelocityMps` / `meanVelocityMps`. Reps 1 and 5 carry
+0.26-0.27s eccentrics where reps 2-4 carry 0.67-0.75s -- open, read it off the hip trace next time.
+
+### The export
+
+`calibration.liftRecord` (identity, tracker, bucket, every value and its source) on bar and jump
+captures; the per-rep hole fields and the set's starved-rep list above; and `bodyWitnessTrace`
+(server-side at download: shoulder, hip, wrist and ankle midpoint y per stored skeleton frame, in
+the frames' own pixels y-down, on the bar trace's clock; `server/body-witness-trace.ts`). Ledger
+rows `2026-11-05-back-squat` and `2026-11-05-romanian-deadlift`; ground truth
+`OVR_BACK_SQUAT_2026_11_05`, `OVR_ROMANIAN_DEADLIFT_2026_11_05`, `OVR_BOX_JUMP_HIP_2026_11_05`;
+fixture `ovr-2026-11-05-export.json` and `ovr-2026-11-05-every-lift-reads-only-its-own-record.test.ts`.
+
+### Next
+
+1. Squat: nothing to step until the next take (0 is the last window step); then the set-range
+   endpoint rule if the raw-vs-smoothed 1.5cm holds.
+2. RDL: window 0; read the hands against the shoulders on the `bodyWitnessTrace` of the next
+   export before any peak number moves.
+3. Jump: the mean's window, read off the hip trace; the truncated eccentrics on reps 1 and 5.
 
 ## Round eight, 2026-11-05: the segmenter had been calling the lowering the lift since 2026-09-30
 

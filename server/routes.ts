@@ -3979,6 +3979,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // above); this says so, and says why, so an empty-trace row is never read as a set
             // nobody filmed. Null when the trace is present.
             traceAbsentBecause: traceAbsentBecause.get(r.setId) ?? null,
+            // The shoulders, hips, wrists and ankles on the bar trace's own clock, derived from
+            // the stored skeleton frames (server/body-witness-trace.ts). Null when no frames
+            // are stored for the row.
+            bodyWitnessTrace: (r as { bodyWitnessTrace?: unknown }).bodyWitnessTrace ?? null,
           }
         : {}),
       ...("skeletonFrames" in r ? { skeletonFrames: r.skeletonFrames } : {}),

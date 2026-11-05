@@ -153,13 +153,17 @@ describe("the drive window was fitted on thirteen sensor-paired sets", () => {
     // fitted ACROSS five movements and stays the shared default. The Bench Press (0.03, round four)
     // and the Barbell Shoulder Press (0.08 then 0.12, rounds five and seven) each carried their own;
     // all were fitted on the lowering and were removed 2026-11-05 (VELOCITY_OVERRIDES_REMOVED_2026_11_05).
-    // The Back Squat carries the first window fitted on an actual drive (0.02, four paired squats
-    // reading +2.3..+5.0% at 0.04 and +0.0..+2.4% at 0.02); it is marked fitted, reaches the squat,
-    // and reaches nobody else.
+    // The Back Squat carries the first window fitted on an actual drive (0.02 in round eight, the
+    // whole travel window, 0, in round nine: five paired squats reading +2.0% on average at 0.02
+    // and -0.4% at 0); the Romanian Deadlift took its own first step in round nine (0.04 -> 0.02).
+    // Each is marked fitted, reaches its own lift, and reaches nobody else.
     const squat = cameraTunablesFor("Back Squat", "squat");
-    expect(squat.values.driveOnsetFraction).toBe(0.02);
+    expect(squat.values.driveOnsetFraction).toBe(0);
     expect(squat.sources.driveOnsetFraction).toBe("fitted");
-    for (const [name, bucket] of [["Bench Press", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"], ["Romanian Deadlift", "deadlift"], ["Pendlay Row", "horizontal_press_or_row"], ["Front Squat", "squat"]]) {
+    const rdl = cameraTunablesFor("Romanian Deadlift", "deadlift");
+    expect(rdl.values.driveOnsetFraction).toBe(0.02);
+    expect(rdl.sources.driveOnsetFraction).toBe("fitted");
+    for (const [name, bucket] of [["Bench Press", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"], ["Conventional Deadlift", "deadlift"], ["Pendlay Row", "horizontal_press_or_row"], ["Front Squat", "squat"]]) {
       const other = cameraTunablesFor(name, bucket);
       expect(other.values.driveOnsetFraction, name).toBe(DRIVE_ONSET_FRACTION);
       expect(other.sources.driveOnsetFraction, name).not.toBe("fitted");
