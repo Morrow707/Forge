@@ -99,8 +99,11 @@ describe("a floored peak says how far", () => {
       // ...and the number it was floored FROM is still in the file, strictly below it. This is
       // the whole deliverable: the size of the error, which trace.repPeaksFlooredToMean's count
       // could never give.
+      // rawPeakMps carries 3 decimals and the reported peak 2, so a rep floored by under half a
+      // hundredth (set 9 rep 5 on the corrected direction rule: raw 1.111, reported 1.11) is
+      // "below" only before rounding; the half-hundredth is the rounding, not a gap.
       expect(rep.windows.rawPeakMps, `${file} rep ${i}: the raw peak must be recoverable and lower`).toBeLessThan(
-        rep.peakVelocityMps!,
+        rep.peakVelocityMps! + 0.005,
       );
     }
   });

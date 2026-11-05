@@ -124,20 +124,24 @@ const TRACE_CM_PER_METRE = 100;
  * measures this axis from the two ends of the bar; a replay has only the averaged point, so it
  * supplies the vertical, which is the honest answer for every lift this harness replays.
  *
- * NEGATIVE y, because worldLandmarks are y-DOWN: vision-body-landmarks.ts flips Vision's own
- * bottom-up normalized y on the way in, so a larger y is LOWER and the concentric of a squat or a
- * press makes y decrease. Getting this backwards does not fail loudly -- it silently swaps every
- * concentric with its eccentric, so mean velocity, velocity loss, EAI and power all come back as
- * the other half of the rep.
- *
- * Checked both ways against the corpus rather than taken from the comment alone. On the five
- * clean back squats, this sign gives a negative velocity loss on 1 of 7 takes and the opposite
- * sign gives 5 of 7 -- a negative velocity loss meaning the last rep outran the first, which is
- * what reading a set's eccentrics as its concentrics produces. The bench takes cannot vote: they
- * are segmented badly enough that they split about evenly either way, which is itself the tell
- * that their numbers are noise. */
-const VERTICAL_AXIS = { x: 0, y: -1 };
-/** Identity for a trace the device already rotated -- see the call site. */
+ * THE IDENTITY, SINCE 2026-11-05. worldLandmarks are y-DOWN: vision-body-landmarks.ts flips
+ * Vision's own bottom-up normalized y on the way in, so a larger y is LOWER and the concentric of
+ * a squat or a press makes y decrease. Until 2026-11-05 this was { x: 0, y: -1 }, which flipped an
+ * axis-less trace so that y grew UPWARD before summarizeTrackedSet read it -- and that flip was
+ * compensating for the direction rule in summarizeTrackedSet reading the polarity backwards (it
+ * called a RISE in y the bar going up). The two wrongs made the harness right on an axis-less
+ * trace and the phone wrong on every take: the device projects on IMAGE_VERTICAL_AXIS, the
+ * identity, and so reported the lowering as the lift from 2026-09-30 to 2026-11-05. The rule is
+ * fixed at its source (see the "A LARGER y IS LOWER" comment in bar-tracking.ts), so the harness
+ * hands the summariser the trace exactly as the phone does: no rotation, no flip, one convention.
+ * Getting this backwards does not fail loudly -- it silently swaps every concentric with its
+ * eccentric, so mean velocity, velocity loss, EAI and power all come back as the other half of
+ * the rep -- which is why the-concentric-is-the-way-up.test.ts drives a synthetic trace through
+ * the real pipeline with the phone's own axis and pins which half comes back. */
+const VERTICAL_AXIS = { x: 0, y: 1 };
+/** Identity for a trace the device already rotated -- see the call site. The same vector as
+ * VERTICAL_AXIS since 2026-11-05, kept as its own name because the two answer different questions
+ * (a trace that carries its axis was rotated on the device; one that does not was not). */
 const STORED_TRACE_ALONG_AXIS = { x: 0, y: 1 };
 
 function toTrackedPoints(trace: PathTracePoint[]): TrackedPoint[] {

@@ -1910,12 +1910,30 @@ export function summarizeTrackedSet(
   // Only when the axis came from the bar. The trace's own principal component has no reliable
   // polarity when the motion it was recovered from was small or noisy, and a direction read off
   // that would be a guess wearing a measurement's clothes.
+  //
+  // A LARGER y IS LOWER. THE FIRST VERSION OF THIS RULE HAD IT BACKWARDS, AND FROM THE DAY IT
+  // SHIPPED EVERY NATIVE TAKE REPORTED ITS LOWERING AS ITS LIFT (2026-09-30 to 2026-11-05).
+  //
+  // The trace is y-DOWN: vision-body-landmarks.ts writes y = -(joint.y * frameHeight) from
+  // Vision's bottom-up normalized y, worldVerticalSign pins that same "shoulders read smaller
+  // than hips" polarity, and dominantAxisFrame keeps y's polarity when it projects onto the
+  // axis. So on the phone -- IMAGE_VERTICAL_AXIS, the identity projection -- the bar going UP
+  // makes y DECREASE, and the harness comment on VERTICAL_AXIS in capture-replay.ts has said
+  // so since 2026-09-29. The first version read `rose = y[end] > y[start]`, which is the bar
+  // going DOWN, and called that the concentric. It did not fail loudly: a controlled lowering
+  // and a drive have similar speeds, so the numbers stayed plausible and the sensor pairings from
+  // 09-30 through 10-31 compared the descent to the OVR's concentric and fitted windows to it.
+  // Proven on the 2026-10-29 Back Squat, rep for rep: the UPWARD phases read 0.88 / 0.80 /
+  // 0.85 / 0.76 / 0.72 m/s against the sensor's 0.87 / 0.83 / 0.82 / 0.77 / 0.74, fatigue trend
+  // included; the downward ones read 0.52-0.60 over 1.3s, which is what a squat's descent looks
+  // like. the-concentric-is-the-way-up.test.ts drives a synthetic fast-up / slow-down trace
+  // through this with the phone's own axis and pins which half comes back.
   const directionKnown = movementAxis != null && romKind != null;
   const concentricGoesUp = concentricIsUpward(romKind);
   const isConcentric = phaseStats.map((phase, i) => {
     if (directionKnown) {
-      const rose = ySmoothed[phase.endIdx] > ySmoothed[phase.startIdx];
-      return rose === concentricGoesUp;
+      const wentUp = ySmoothed[phase.endIdx] < ySmoothed[phase.startIdx];
+      return wentUp === concentricGoesUp;
     }
     const neighbor = phaseStats[i + 1] ?? phaseStats[i - 1];
     if (i === 0 && firstPhaseHint) {
@@ -3474,7 +3492,7 @@ export function toScaleFreeMetrics(metrics: RepMetrics): ScaleFreeMetrics | null
 //   - On a correctly filmed lift the principal axis IS near-vertical, so the projection is
 //     within a percent or two of today's y and every validated number stays where it was. It
 //     degrades into current behaviour rather than replacing it.
-//   - The sign is pinned to y, so "larger means higher" still holds. The concentric-vs-eccentric
+//   - The sign is pinned to y, so y keeps its polarity (a larger y is LOWER, as worldVerticalSign pins it). The concentric-vs-eccentric
 //     heuristic, the first-phase hint and the phantom-phase filter are all comparisons along
 //     this axis and keep their meaning untouched.
 //
@@ -3944,7 +3962,9 @@ export function movementAxisFromGrip(
   const barAngle = angles[Math.floor(angles.length / 2)];
 
   // Perpendicular to the bar, pointed so that its y component is positive -- the same polarity
-  // pinning dominantAxisFrame applies, so "larger means higher" keeps its meaning downstream.
+  // pinning dominantAxisFrame applies, so y keeps its meaning downstream: the trace is y-DOWN,
+  // a larger y is LOWER (see worldVerticalSign), and the concentric of every lift but a
+  // vertical pull makes it decrease.
   let ax = -Math.sin(barAngle);
   let ay = Math.cos(barAngle);
   if (ay < 0) {

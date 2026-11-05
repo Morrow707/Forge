@@ -303,7 +303,14 @@ describe("movementAxisFromGrip", () => {
 });
 
 /** A grinding set: the press up is SLOW and the lowering is quick. Real, and the exact shape
- *  the "faster half is the concentric" heuristic gets backwards. */
+ *  the "faster half is the concentric" heuristic gets backwards.
+ *
+ *  THE TRACE IS y-DOWN, as every real trace is (vision-body-landmarks.ts: a larger y is LOWER,
+ *  worldVerticalSign pins it, dominantAxisFrame keeps it). Until 2026-11-05 this fixture emitted
+ *  "along" as y directly, so its lockout sat at the LARGEST y -- a y-UP world -- and the direction
+ *  rule it was written to prove had the same polarity backwards; the two agreed with each other
+ *  and with no phone. `emit` negates now, so the chest is the largest y and the lockout the
+ *  smallest, and the rule under test is the one the device runs. */
 function grindingSet(barDeg = 0, romM = 0.36, gripM = 0.8) {
   const bar = (barDeg * Math.PI) / 180;
   const push = bar + Math.PI / 2;
@@ -313,7 +320,10 @@ function grindingSet(barDeg = 0, romM = 0.36, gripM = 0.8) {
   const downSeconds = 0.8;
   const upSeconds = 2.6;
   let t = 0;
-  const emit = (along: number) => {
+  const emit = (height: number) => {
+    // height is metres ABOVE the chest; the trace's y grows downward, so the point is placed at
+    // -height along the push direction (the bar's perpendicular, pointed y-positive).
+    const along = -height;
     const cx = along * Math.cos(push);
     const cy = along * Math.sin(push);
     const hx = (gripM / 2) * Math.cos(bar);

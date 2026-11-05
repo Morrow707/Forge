@@ -35,7 +35,9 @@ describe("the re-rack at the end of a bench set is not a rep", () => {
     const result = replayCapture(stored[0]);
     expect(result.repCount).toBe(10);
     const reps = result.metrics!.repBreakdown;
-    expect(Math.max(...reps.map((r) => r.endT))).toBeLessThan(20_500);
+    // The tenth press ends at 20.57s; the re-rack (21.6-26.3s) is not among the reps. The bound
+    // was 20_500 until 2026-11-05, when the "tenth rep" was the lowering before it.
+    expect(Math.max(...reps.map((r) => r.endT))).toBeLessThan(21_000);
   });
 
   it("finds the ten presses, whatever it makes of the re-rack", () => {

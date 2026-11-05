@@ -375,11 +375,37 @@ const BY_ROM_BUCKET: Record<string, Partial<CameraTunables>> = {
  *  to guess. */
 export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // e.g. "Bench Press": { driveOnsetFraction: 0.09 }, // 2026-10-__, +4.3% -> 0.0% against OVR
-  "Romanian Deadlift": { maxPeakToMeanRatio: 2.5, depthRulerUncertainty: 0.6 },
-  "Back Squat": { heightRulerUncertainty: 0.11 },
-  "Bench Press": { driveOnsetFraction: 0.03, velocitySmoothingMs: 200, maxPeakToMeanRatio: 1.6 },
+  // SCALE numbers (ruler uncertainties) survive 2026-11-05; every VELOCITY number fitted before
+  // it was fitted on the lowering and is gone -- see VELOCITY_OVERRIDES_REMOVED_2026_11_05 and
+  // the-concentric-is-the-way-up.test.ts.
+  "Romanian Deadlift": { depthRulerUncertainty: 0.6 },
+  "Back Squat": { heightRulerUncertainty: 0.11, driveOnsetFraction: 0.02 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
-  "Barbell Shoulder Press": { driveOnsetFraction: 0.12 },
+};
+
+/** THE VELOCITY OVERRIDES REMOVED ON 2026-11-05, AND WHY -- kept as data so the next reader does
+ *  not re-propose them from the notes that recommended them. Every one was fitted against the
+ *  OVR's CONCENTRIC with Forge reading the ECCENTRIC: summarizeTrackedSet's direction rule had
+ *  the trace's polarity backwards from the day it shipped (2026-09-30) until 2026-11-05 (a larger
+ *  y is LOWER, and the rule read a rise in y as the bar going up), so on every native take the
+ *  reported "concentric" was the lowering. A window, a smoothing or a cap fitted to make the
+ *  lowering match the sensor's drive is not evidence about the drive -- and that includes the
+ *  2026-10-31 re-sweeps (rounds six and seven), which corrected the set mean's window and then
+ *  fitted the corrected mean of the wrong half of the rep. Costed on the corrected labels before
+ *  removal (ovr-2026-10-30-every-lift-reads-only-its-own-record.test.ts has the numbers):
+ *  - Bench Press driveOnsetFraction 0.03 + velocitySmoothingMs 200 (round four) +
+ *    maxPeakToMeanRatio 1.6 (round seven): on the corrected phases the bench's drives read 29 to
+ *    48% high at the shared window and the three together moved that by a few points; the bench's
+ *    concentric is open (see the notes, "Round eight").
+ *  - Barbell Shoulder Press driveOnsetFraction 0.08 (round five) then 0.12 (round seven): fitted
+ *    to lift a lowering that read low; the real press at the shared 0.04 reads inside 5% on all
+ *    three paired sets and 19 to 30% high at 0.08. Removed; the press reads the shared copy.
+ *  - Romanian Deadlift maxPeakToMeanRatio 2.5 (round one): the "capped" peaks it released were the
+ *    lowering's. Removed. */
+export const VELOCITY_OVERRIDES_REMOVED_2026_11_05: Record<string, string[]> = {
+  "Bench Press": ["driveOnsetFraction", "velocitySmoothingMs", "maxPeakToMeanRatio"],
+  "Barbell Shoulder Press": ["driveOnsetFraction"],
+  "Romanian Deadlift": ["maxPeakToMeanRatio"],
 };
 
 /** WHY EACH OVERRIDE EXISTS, in the sentence a reader needs to decide whether it still should.
@@ -387,6 +413,17 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
  *  an override with no evidence here is a number somebody guessed, and the test refuses it. */
 export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
   "Back Squat":
+    "2026-11-05, round eight, the first velocity number fitted on the squat's actual drive (every one " +
+    "before it was fitted on the lowering -- see VELOCITY_OVERRIDES_REMOVED_2026_11_05). " +
+    "driveOnsetFraction 0.04 -> 0.02 on this lift only. With the direction rule corrected the four " +
+    "paired squats (10-19 set 2, 10-29 sets 1 and 2 beside the OVR, 10-01 set 1) read their mean " +
+    "+2.3 / +5.0 / +4.8 / +4.8% at the shared 0.04, +0.0 / +1.2 / +2.4 / +1.8% at 0.02 and -1.2 / " +
+    "0.0 / -1.2 / -0.2% at 0.0 -- every take the same way, and the squat is the one lift whose " +
+    "corrected drive reads the sensor rep for rep (10-29 set 1: 0.88 / 0.80 / 0.85 / 0.76 / 0.72 " +
+    "against 0.87 / 0.83 / 0.82 / 0.77 / 0.74). 0.02 is the small step; 0.0 (the whole travel " +
+    "window) is the next if the next squat still reads high. Rep counts unchanged at every value, " +
+    "the peak untouched (a window moves the mean), the RDL, bench, row and press traces untouched by " +
+    "construction. " +
     "2026-10-29. heightRulerUncertainty 0.1 -> 0.11 on this lift only, the first of the SMALL steps " +
     "Scott asked for (\"small adjustments on everything ... until we get to 0%\"). Against the OVR the " +
     "squat's range of motion has read LOW on the last four paired takes (-5.3, -1.5, -1.9, -1.3% on " +
@@ -396,13 +433,8 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "high ones, about +0.8% on the blend, replayed on all six squat ledger rows and no other lift's. " +
     "Not a refit of HEIGHT_RULER_UNCERTAINTY, which is shared and was fitted on a squat AND an RDL.",
   "Romanian Deadlift":
-    "2026-10-29. maxPeakToMeanRatio 2.0 -> 2.5 on this lift only. The 2.0 was fitted on 60 BENCH " +
-    "reps whose sensor ratio is 1.35-1.5; the OVR's own peak/mean on this athlete's RDL is 1.57-1.78 " +
-    "on 16 of 16 reps across 10-19 and 10-29, and Forge's mean reads LOW on a hinge (0.74 against " +
-    "0.89 on 10-19), so a correctly-read peak reaches 2.1-2.2x the mean here and the cap cut it: " +
-    "on 10-19 set 2 raw peaks of 1.575 and 1.624 (sensor 1.59 set average) were written down as " +
-    "1.53 and 1.49. 2.5 still catches the un-rack the cap exists for (3.5x on the 10-06 bench). " +
-    "Replayed on the three RDL traces in the export; the squat traces are untouched by construction. " +
+    "2026-10-29 (the maxPeakToMeanRatio 2.5 that shipped beside this was REMOVED 2026-11-05: the " +
+    "peaks it released were the lowering's, see VELOCITY_OVERRIDES_REMOVED_2026_11_05). " +
     "depthRulerUncertainty 0.2 -> 0.6 on this lift only: the depth ruler read HIGH against the sensor " +
     "on five of five RDL takes (+10, +8, +35, +27, +44% on 10-04, 10-05, 10-19 x2, 10-29) while the " +
     "in-plane bone read -9, -17, -1, -1, +16, and the collapse averaged them equally, so the pair's " +
@@ -411,64 +443,6 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "judgement about an uncertainty and not a fit of a bias; replayed on all five ledger rows it takes " +
     "the RDL's median error from 12.0% to under 8% and moves no squat row, since the squat's record " +
     "still states 0.2 for both.",
-  "Bench Press":
-    "2026-10-30, round four, build 701 beside the OVR. driveOnsetFraction 0.04 -> 0.03 on this lift " +
-    "only: the bench's reported mean has read HIGH against the sensor on every clean bench take " +
-    "stored in the repo -- +10.3% (10-30), +10.4% (set 7, 09-29), +6.4% (set 10, 09-30), +15.7% " +
-    "(oblique, 09-29) -- with the range of motion inside 3% on the newest, so the error is the window " +
-    "and not the scale. The shared 0.04 was fitted ACROSS five movements on 10-07 (the sensor's " +
-    "concentric DURATION, not its mean); on the four clean benches the mean-velocity bias is +10.7% " +
-    "at 0.04, +5.2% at 0.03 (+8.8, +2.6, +3.8, +5.7, every take the right way, spread 6 points) and " +
-    "+0.1% at 0.02 -- and 0.02 is NOT taken this round because the one trace-poor bench in the corpus " +
-    "(set 5, 09-29, a carried point frozen mid-rep) goes from -15.6% to -31.2% there and to -22.1% at " +
-    "0.03. Every rep count unchanged at every fraction. 0.02 is the next step if the next bench still " +
-    "reads high. " +
-    "AND EVERY MEAN FIGURE IN THE PARAGRAPH ABOVE IS SUPERSEDED, 2026-10-31: it was measured " +
-    "against a SET mean that summed the whole phase's distance over the drive window's time, the " +
-    "pairing `romM`'s own comment in bar-tracking.ts names as a bug and which the rep-level mean " +
-    "stopped doing on 2026-10-06. With both sums taken from the drive window the fraction moves the " +
-    "numerator too, and 0.03 is INERT on both 10-30 bench takes -- set 1 reads +5.9% and set 3 +3.0% " +
-    "at 0.03 AND at the shared 0.04, identical to the hundredth. It is kept because it is still the " +
-    "better value where these takes do respond, the 09-29/09-30 corpus: oblique +5.7% against +8.6%, " +
-    "set 7 +2.6% against +7.8%, set 10 -1.3% against +1.3%. Re-swept across the ten bench takes with " +
-    "a sensor mean on file, rep counts unchanged at every fraction: 0.02 bias -6.1% median |err| " +
-    "11.3%, 0.03 bias +3.1% median 14.3%, 0.04 bias +6.5% median 11.7%; on the five clean takes that " +
-    "respond to the fraction at all, 0.02 is median 1.5% / bias -2.4% against 0.03's 3.0% / +3.2%. " +
-    "0.02 IS STILL NOT TAKEN, for round four's own reason re-measured: the trace-poor bench goes " +
-    "-32.1% -> -42.9% there, so it closes the mean and widens the spread, which Rule #5 says is not " +
-    "the change. The equality on the 10-30 takes is asserted in " +
-    "ovr-2026-10-30-every-lift-reads-only-its-own-record.test.ts, so the day a change makes this " +
-    "lift's window matter on its own paired takes again, somebody re-reads this instead of " +
-    "inheriting it. " +
-    "velocitySmoothingMs 165 -> 200 on this lift only: the 165 was fitted on ONE bench take " +
-    "(provenance audit 10-20) and the peak reads +18.6% (10-30), 0.0%, -1.8%, +11.9% at 165 against " +
-    "+14.4, -4.5, 0.0, +3.0 at 200 -- bias +7.2% -> +3.2%, mean absolute error 8.1% -> 5.5%; 210 and " +
-    "above push set 7 and set 10 to -5.5%, and a peak-to-mean CAP was swept and rejected (1.6 caps half " +
-    "the reps). The pair together on the four clean takes: mean bias +6.3% (|err| 6.3%), peak bias " +
-    "+3.0% (|err| 5.2%, the lowest of any cell swept). THE SMOOTHING IS UNAFFECTED by the 10-31 set-mean " +
-    "fix (it sets the reported peak, not the mean) and 200 is re-confirmed as the sweep's own minimum " +
-    "on seven bench takes with a sensor peak: bias +3.0% at 165, +0.2% at 200, -2.7% at 240, -9.1% at " +
-    "280; median |err| 10.9 / 9.3 / 10.3 / 10.8. So the bench's remaining peak error is NOT the " +
-    "smoothing -- it is specific to the two 10-30 takes (+14.4% and +19.8% at 200, where every " +
-    "09-29/09-30 take sits at or below zero), which are also the two where the retrained detector's " +
-    "plate decides the scale at 86% of the blend. Open, and named on the status board. " +
-    "AND THE PEAK IS THE THIRD NUMBER, 2026-10-31, round seven: maxPeakToMeanRatio 2.0 -> 1.6 on " +
-    "this lift only. ROUND FOUR SWEPT THIS AND REJECTED IT (\"1.6 caps half the reps\") AND THAT " +
-    "MEASUREMENT IS VOID, for the same reason round four's window figures are: the cap bounds a " +
-    "rep's peak by its own MEAN, and the 10-31 set-mean fix changed what a mean is, so every " +
-    "peak-to-mean ratio in the corpus moved under it. Re-swept on the ten stored bench takes, six " +
-    "of which carry a sensor peak: bias +8.5% at 2.0, +6.8% at 1.8, +3.8% at 1.6, +1.9% at 1.5, " +
-    "-0.8% at 1.4; median |err| 9.45 / 8.45 / 5.40 / 5.35 / 5.15; and the SPREAD across the six is " +
-    "24.3 / 22.9 / 20.4 / 22.2 / 23.3 points. 1.6 is the spread's own minimum and more than halves " +
-    "the bias; 1.5 and 1.4 buy the last of the bias by paying it back in spread, which is Rule #5 " +
-    "exactly, so they are the named next steps and not this round's. Round four's \"caps half the " +
-    "reps\" is also simply not what it does now: on all TEN stored bench takes the rep count, the " +
-    "range of motion and the set mean are identical to the hundredth at 1.6 and at 2.0 -- only the " +
-    "peak moves, which is what a peak cap should do. " +
-    "Replayed on the 10-30 fixture and every stored " +
-    "bench; the row, the press, the squat and the RDL traces are untouched by construction (their " +
-    "records still read the shared 0.04 and 165, asserted in " +
-    "ovr-2026-10-30-every-lift-reads-only-its-own-record.test.ts).",
   "Pendlay Row":
     "2026-10-30, round four, build 701 beside the OVR. depthRulerUncertainty 0.2 -> 0.6 on this lift " +
     "only, the same statement the Romanian Deadlift's record makes about the same instrument on a " +
@@ -482,37 +456,6 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "ruler reads LOW where the RDL's reads HIGH, which is exactly why neither lift's record states a " +
     "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
     "moves, since each reads its own record.",
-  "Barbell Shoulder Press":
-    "2026-10-30, round five, build 701 beside the OVR (its \"Push Press\" sets at 65x8 and 85x8; " +
-    "the sensor counted a ninth rep on set 1 that is the bar being lowered to the floor, 35in of travel " +
-    "at 0.61 m/s, and it is excluded). driveOnsetFraction 0.04 -> 0.08 on this lift only. With the " +
-    "scale inside 2% on set 1 (63.0 against 62.2cm) the mean read -13.5% at the shared window and " +
-    "set 2 -2.7%: a standing press's drive starts from a dead stop at the collarbone and the shared " +
-    "0.04, fitted 10-07 across five movements on the sensor's DURATION, opens the window on the " +
-    "slow first centimetres a press spends leaving the shoulders. Swept 0.04/0.06/0.08/0.10/0.12 on " +
-    "both sets and on the 10-02 push-press fixture (a dipped press, 9 of 10 reps, the weak point): " +
-    "set 1 -13.5/-8.6/-3.8/-0.1/+3.5, set 2 -2.7/-1.4/0.0/+2.7/+2.7, 10-02 -3.8/+1.0/+2.9/+2.9/+4.8. " +
-    "0.08 is the first value where no take reads low and the three are inside 4 points (bias +1.0%, " +
-    "rms 2.8%); 0.10 pays +2.9 on both of the other two to buy set 1 and is the NEXT step if the " +
-    "next press still reads low. Rep counts unchanged at every value (7, 7, 9). The peak is not " +
-    "touched by the window and velocitySmoothingMs stays at the shared 165: 200 costs the press " +
-    "peaks 6-8 points on both sets where it bought the bench 4. Replayed on every ledger row and " +
-    "AND 0.08 IS SUPERSEDED BY 0.12, 2026-10-31, round seven -- and the sweep above is void for " +
-    "the reason round four's bench figures are: every mean in it was the SET mean that summed the " +
-    "whole phase's distance over the drive window's time, so narrowing the fraction moved only the " +
-    "denominator and always dragged a mean down. With both sums from the drive window the press " +
-    "reads LOW at 0.08 on all three of its 10-30 sets AND on the 10-02 fixture. Re-swept on those " +
-    "four, rep counts unchanged at every value (7, 7, 7, 9): set 1 -6.2/-5.0/-3.8/-2.6/-1.3/-0.1, " +
-    "set 2 -5.5/-2.7/-2.7/-2.7/-2.7/-1.4, set 3 -4.9/-3.7/-2.4/-2.4/-2.4/+1.2, 10-02 " +
-    "-1.0/-1.0/-1.0/0.0/0.0/0.0 at 0.08/0.09/0.10/0.11/0.12/0.13. Bias -4.4% at 0.08, -2.5% at " +
-    "0.10, -1.6% at 0.12, -0.1% at 0.13, +1.3% at 0.14; median |err| 5.20 / 2.55 / 1.85 / 0.65 / " +
-    "2.10; spread 5.2 / 2.8 / 2.7 / 2.6 / 3.8. 0.12 WEAKLY DOMINATES both 0.08 and 0.10 -- no take " +
-    "of the four is worse at it than at either -- which is the strongest evidence shape a step " +
-    "gets, and it leaves 0.13 as the named next step rather than fitting the exact argmin of a " +
-    "four-take sample one notch from the cliff (0.14 flips set 3 and set 1 positive, 0.16 blows " +
-    "set 1 to +8.4%). Round five's own trigger -- \"0.10 is the next step if the next press reads " +
-    "low\" -- is what fired, for a cause it could not have known. " +
-    "the fixture corpus; no bench, row, squat or RDL number moves, since each reads its own record.",
 };
 
 /** Where each of an identity's numbers came from. The report prints this, so a reader can tell

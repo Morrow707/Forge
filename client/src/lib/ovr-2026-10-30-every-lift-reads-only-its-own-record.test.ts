@@ -4,23 +4,29 @@ import { join } from "node:path";
 import { summarizeTrackedSet, DRIVE_ONSET_FRACTION, VELOCITY_SMOOTHING_MS, MAX_PEAK_TO_MEAN_RATIO } from "./bar-tracking";
 import { firstMoveForExercise, romBucketForExercise } from "./exercise-camera-profile";
 import { reconcileScaleEstimates } from "./pose-tracking";
-import { cameraTunablesFor, FITTED_OVERRIDES } from "@shared/camera-tunables-by-lift";
+import { cameraTunablesFor, FITTED_OVERRIDES, VELOCITY_OVERRIDES_REMOVED_2026_11_05 } from "@shared/camera-tunables-by-lift";
 import { ledgerRow } from "@shared/accuracy-ledger";
 import { reconcileScaleEstimates as blendScales, rejectImplausibleScales } from "./pose-tracking";
 import {
-  OVR_BENCH_2026_10_30, OVR_PENDLAY_ROW_2026_10_30, OVR_PENDLAY_ROW_SET2_2026_10_30,
-  OVR_BARBELL_SHOULDER_PRESS_2026_10_30, OVR_BARBELL_SHOULDER_PRESS_SET2_2026_10_30,
+  OVR_BENCH_2026_10_30, OVR_BENCH_SET3_2026_10_30,
+  OVR_PENDLAY_ROW_2026_10_30, OVR_PENDLAY_ROW_SET2_2026_10_30, OVR_PENDLAY_ROW_SET3_2026_10_30,
+  OVR_BARBELL_SHOULDER_PRESS_2026_10_30, OVR_BARBELL_SHOULDER_PRESS_SET2_2026_10_30, OVR_BARBELL_SHOULDER_PRESS_SET3_2026_10_30,
 } from "./tracker-ground-truth";
 
-/* THE FIVE TRACED CAPTURES OF THE 2026-10-30 EXPORTS (set 1 of bench press, Pendlay row and
- * barbell shoulder press on build 701; set 2 of the row and the press on 703), replayed through
- * the real summariser with each lift's OWN record, the way the phone runs them. Round four's two
- * per-lift numbers are pinned here in the direction that matters: the Bench Press's own drive
- * onset (0.03) and smoothing (200) reach the bench trace and
- * NOT the row's or the press's, which replay to the peaks the phone shipped to the hundredth; and
- * the Pendlay Row's own depth uncertainty (0.6) reaches the row's scale blend and not the
- * bench's. Scott, 2026-10-29: "any changes you're making to squat should not effect rdl should
- * not effect the jump and vice versa" -- the same sentence, three lifts over.
+/* THE EIGHT TRACED CAPTURES OF THE 2026-10-30 EXPORTS (set 1 of bench press, Pendlay row and
+ * barbell shoulder press on build 701; set 2 of the row and the press on 703; set 3 of all three
+ * on 705), replayed through the real summariser with each lift's OWN record, the way the phone
+ * runs them.
+ *
+ * REWRITTEN 2026-11-05. Until then this file pinned the harness to what the phone SHIPPED, and
+ * what the phone shipped on every one of these takes was the LOWERING of each rep: the direction
+ * rule was inverted from 2026-09-30 to 2026-11-05 (the-concentric-is-the-way-up.test.ts). Rounds
+ * four and five fitted the bench's window and smoothing (0.03 / 200) and the press's window
+ * (0.08) to make the descents match the sensor's drives; those are gone
+ * (VELOCITY_OVERRIDES_REMOVED_2026_11_05) and this file now says what each take reads on its
+ * DRIVES, beside the sensor, with the per-lift separation Scott asked for still the spine: a
+ * number in one lift's record reaches that lift's traces and nobody else's.
+ * Each capture's `shipped` block is the record of what the phone said on its build, kept as that.
  * Fixture: client/src/lib/__fixtures__/ovr-2026-10-30-export.json, trimmed from the admin export. */
 type Fixture = {
   id: string; exerciseName: string; heightIn: number | null; loadKg: number | null; loggedReps: number | null;
@@ -28,11 +34,9 @@ type Fixture = {
   shipped: { reps: number; peakVelocityMps: number; meanVelocityMps: number; romCm: number; repPeaks: number[]; repMeans: number[]; repRawPeaks: (number | null)[] };
 };
 const fixtures: Fixture[] = JSON.parse(readFileSync(join(__dirname, "__fixtures__", "ovr-2026-10-30-export.json"), "utf8"));
+/** The phone projects on IMAGE_VERTICAL_AXIS, the identity; a stored trace is replayed the same way. */
 const STORED = { x: 0, y: 1 };
-const VERTICAL = { x: 0, y: -1 };
 
-/** The harness's own replay, with the record resolved the way the dialog resolves it and an
- *  optional patch for the counterfactual cases below. */
 function replay(f: Fixture, patch: Partial<Record<string, number>> = {}) {
   const points = f.barPathTrace.map((p: any) => ({ t: p.t, x: p.x / 100, y: p.y / 100, z: 0, confidence: p.c ?? 1 }));
   const cal = f.trackingDiagnostics?.calibration ?? null;
@@ -40,154 +44,114 @@ function replay(f: Fixture, patch: Partial<Record<string, number>> = {}) {
   const tune = cameraTunablesFor(f.exerciseName, romKind);
   Object.assign(tune.values, patch);
   const m = summarizeTrackedSet(points, f.loadKg ?? undefined, f.heightIn ?? undefined, firstMoveForExercise(f.exerciseName), [],
-    cal?.positionScaleCorrection ?? 1, false, romKind, cal?.movementAxis ? STORED : VERTICAL, f.loggedReps ?? null, tune);
+    cal?.positionScaleCorrection ?? 1, false, romKind, STORED, f.loggedReps ?? null, tune);
   if (!m) throw new Error(`${f.id}: no metrics`);
   return m;
 }
-/* The three numbers build 701 and 703 ran shared and that this lift now carries its own: reset
- * together, because the reproduction cases below are about the TRACE and a record the phone
- * never had makes them about the record instead. The bench's maxPeakToMeanRatio joined this
- * list on 2026-10-31 (round seven) and its absence was a real failure, not a threshold: set 1's
- * peak replayed 0.08 away from what shipped. */
-const SHARED_AS_THE_PHONE_RAN = {
-  driveOnsetFraction: DRIVE_ONSET_FRACTION,
-  velocitySmoothingMs: VELOCITY_SMOOTHING_MS,
-  maxPeakToMeanRatio: MAX_PEAK_TO_MEAN_RATIO,
-};
-const byName = (n: string) => fixtures.find((f) => f.exerciseName === n)!;
 const byId = (id: string) => fixtures.find((f) => f.id === id)!;
 
+/** What the corrected rule reads at each lift's own record (which, for velocity, is the shared
+ *  copy on all three lifts since 2026-11-05). Range of motion is a magnitude and is the phone's. */
+const S = (o: any) => ({ mean: o.sensor.reported.meanVelocityMps as number, peak: o.sensor.reported.peakVelocityMps as number });
+const CORRECTED: Record<string, { reps: number; romCm: number; mean: number; peak: number; sensor: { mean: number; peak: number } }> = {
+  "2026-10-30 Pendlay Row set 1": { reps: 8, romCm: 51.1, mean: 0.75, peak: 1.33, sensor: S(OVR_PENDLAY_ROW_2026_10_30) },
+  "2026-10-30 Barbell Shoulder Press set 1": { reps: 7, romCm: 63.9, mean: 0.85, peak: 1.66, sensor: S(OVR_BARBELL_SHOULDER_PRESS_2026_10_30) },
+  "2026-10-30 Bench Press set 1": { reps: 8, romCm: 37.1, mean: 0.90, peak: 1.32, sensor: S(OVR_BENCH_2026_10_30) },
+  "2026-10-30 Pendlay Row set 2": { reps: 7, romCm: 78.4, mean: 1.18, peak: 1.91, sensor: S(OVR_PENDLAY_ROW_SET2_2026_10_30) },
+  "2026-10-30 Barbell Shoulder Press set 2": { reps: 7, romCm: 56.2, mean: 0.71, peak: 1.29, sensor: S(OVR_BARBELL_SHOULDER_PRESS_SET2_2026_10_30) },
+  "2026-10-30 Pendlay Row set 3": { reps: 8, romCm: 67.6, mean: 0.90, peak: 1.62, sensor: S(OVR_PENDLAY_ROW_SET3_2026_10_30) },
+  "2026-10-30 Barbell Shoulder Press set 3": { reps: 7, romCm: 62.2, mean: 0.84, peak: 1.59, sensor: S(OVR_BARBELL_SHOULDER_PRESS_SET3_2026_10_30) },
+  "2026-10-30 Bench Press set 3": { reps: 7, romCm: 42.0, mean: 0.97, peak: 1.51, sensor: S(OVR_BENCH_SET3_2026_10_30) },
+};
+
 describe("the 2026-10-30 export replays through each lift's own record", () => {
-  it("holds the five traced captures", () => {
+  it("holds the eight traced captures", () => {
     expect(fixtures.map((f) => f.id).sort()).toEqual([
-      "2026-10-30 Barbell Shoulder Press set 1", "2026-10-30 Barbell Shoulder Press set 2",
-      "2026-10-30 Bench Press set 1", "2026-10-30 Pendlay Row set 1", "2026-10-30 Pendlay Row set 2",
+      "2026-10-30 Barbell Shoulder Press set 1", "2026-10-30 Barbell Shoulder Press set 2", "2026-10-30 Barbell Shoulder Press set 3",
+      "2026-10-30 Bench Press set 1", "2026-10-30 Bench Press set 3",
+      "2026-10-30 Pendlay Row set 1", "2026-10-30 Pendlay Row set 2", "2026-10-30 Pendlay Row set 3",
     ]);
   });
 
-  it("the harness reproduces the shipped reps and range of motion on every take, AT THE SHARED numbers the phone ran", () => {
-    // Build 701 ran every lift on the shared window and smoothing; the bench's own numbers landed
-    // after this export. So reproduction is asserted with the two bench fields set back to what
-    // the phone had, which is also what proves the counterfactual below is the record and not the
-    // trace. The row's rep 7 is the one place the harness and the live path disagree (the phone
-    // floored its peak to a 1.38 mean over a 0.13s concentric; the harness finds a 0.44s rep), so
-    // the row's mean is held to a tenth rather than the 0.03 the 10-29 takes allow.
+  it("range of motion as the phone shipped it on every take; reps and velocities as the corrected rule reads them", () => {
     for (const f of fixtures) {
-      const m = replay(f, SHARED_AS_THE_PHONE_RAN);
-      expect(m.repBreakdown.length, f.id).toBe(f.shipped.reps);
-      expect(Math.abs((m.romCm ?? NaN) - f.shipped.romCm), f.id).toBeLessThanOrEqual(0.5);
-      // The row's set 2 is the take whose bar points were half a lone hand carried (280 of 579), and
-      // the live path's segmentation differs from the harness's by up to 0.06 on the set peak
-      // (2.44 against 2.50) and 0.09 on the mean; set 1 is inside 0.011 and 0.08. Both are the
-      // SAME trace fault the row's notes name, not a number in any record.
-      expect(Math.abs((m.peakVelocityMps ?? NaN) - f.shipped.peakVelocityMps), f.id)
-        .toBeLessThanOrEqual(f.exerciseName === "Pendlay Row" ? 0.07 : 0.011);
-      // THE SHIPPED MEAN IS NO LONGER REPRODUCIBLE, AND THAT IS THE POINT (2026-10-31).
-      // Every mean in this export was computed by summing the WHOLE PHASE's distance over the
-      // DRIVE window's time -- the pairing `romM`'s own comment in bar-tracking.ts names as the
-      // bug, fixed at the rep in 2026-10-06 and left in the set-level aggregation because
-      // `driveRomM` was not on the record to sum. So the rule here is the `shippedUnderDefect`
-      // one: the corrected mean is AT OR BELOW what the phone shipped on every take and never
-      // above it, because a drive window is a subset of its phase and so its distance cannot be
-      // the larger. Reps, range of motion and peaks still reproduce exactly, which is what says
-      // the harness is sound and only this one aggregation moved. Measured ratios, shipped ->
-      // corrected: row 0.909 / 0.907, press 0.986 / 0.944, bench 0.960.
-      expect(m.meanVelocityMps!, `${f.id} corrected mean is never above the shipped one`)
-        .toBeLessThanOrEqual(f.shipped.meanVelocityMps + 1e-9);
-      expect(m.meanVelocityMps! / f.shipped.meanVelocityMps, f.id).toBeGreaterThan(0.85);
+      const m = replay(f);
+      const c = CORRECTED[f.id];
+      // A magnitude -- but the set's range is the MEDIAN of its reps' amplitudes, and which phases
+      // are the reps changed, so it is pinned to the corrected replay; the row's set 1 (51.1 against
+      // the lowerings' 46.9) and set 3 (67.6 against 70.1) are the two that re-median visibly.
+      expect(Math.abs((m.romCm ?? NaN) - c.romCm), f.id).toBeLessThanOrEqual(0.5);
+      expect(m.repBreakdown.length, f.id).toBe(c.reps);
+      expect(Math.abs((m.meanVelocityMps ?? NaN) - c.mean), f.id).toBeLessThanOrEqual(0.015);
+      expect(Math.abs((m.peakVelocityMps ?? NaN) - c.peak), f.id).toBeLessThanOrEqual(0.015);
     }
   });
 
-  it("the row and the press replay to the shipped peaks exactly: the bench's own numbers never reach them", () => {
-    expect(Object.keys(FITTED_OVERRIDES["Bench Press"]).sort()).toEqual(["driveOnsetFraction", "maxPeakToMeanRatio", "velocitySmoothingMs"]);
-    // The row carries no window or smoothing number of its own; the press carries its own WINDOW
-    // since round five (0.08) and the shared smoothing, so its shipped peaks are replayed with the
-    // window set back to the shared 0.04 the phone ran.
-    // NEITHER THE ROW NOR THE PRESS CARRIES THE BENCH'S PEAK CAP: round seven's 1.6 is scoped to
-    // the one identity it was measured on, so both still state the shared 2.0.
-    const rowT = cameraTunablesFor("Pendlay Row", romBucketForExercise("Pendlay Row"));
-    expect(rowT.values.maxPeakToMeanRatio).toBe(MAX_PEAK_TO_MEAN_RATIO);
-    expect(rowT.values.driveOnsetFraction).toBe(DRIVE_ONSET_FRACTION);
-    expect(rowT.values.velocitySmoothingMs).toBe(VELOCITY_SMOOTHING_MS);
-    expect(rowT.sources.velocitySmoothingMs).not.toBe("fitted");
-    const pressT = cameraTunablesFor("Barbell Shoulder Press", romBucketForExercise("Barbell Shoulder Press"));
-    expect(pressT.values.driveOnsetFraction).toBe(0.12);
-    expect(pressT.values.velocitySmoothingMs).toBe(VELOCITY_SMOOTHING_MS);
-    expect(pressT.values.maxPeakToMeanRatio).toBe(MAX_PEAK_TO_MEAN_RATIO);
-    expect(pressT.sources.velocitySmoothingMs).not.toBe("fitted");
-    for (const f of fixtures.filter((x) => x.exerciseName !== "Bench Press")) {
-      const name = f.exerciseName;
-      const m = replay(f, { driveOnsetFraction: DRIVE_ONSET_FRACTION });
-      expect(m.repBreakdown.length, f.id).toBe(f.shipped.reps);
-      expect(Math.abs((m.peakVelocityMps ?? NaN) - f.shipped.peakVelocityMps), f.id)
-        .toBeLessThanOrEqual(name === "Pendlay Row" ? 0.07 : 0.011);
-      // Per rep the press reproduces to the hundredth; the row's reps 5-7 are where the live path
-      // and the harness segment differently (rep 7's 0.13s concentric on the phone), 0.06-0.18
-      // apart, and that predates round four -- the record under test is the SET peak above.
-      m.repBreakdown.forEach((r: any, i: number) => {
-        expect(Math.abs(r.peakVelocityMps - f.shipped.repPeaks[i]), `${f.id} rep ${i + 1}`)
-          .toBeLessThanOrEqual(name === "Pendlay Row" ? 0.2 : 0.011);
-      });
-      // Same shipped-under-defect rule as the reproduction case above: the corrected mean sums
-      // the drive window's distance, so it is at or below what the phone shipped, never above.
-      expect(m.meanVelocityMps!, f.id).toBeLessThanOrEqual(f.shipped.meanVelocityMps + 1e-9);
+  it("no lift on this export carries a velocity number of its own: the three fitted on the lowering are gone", () => {
+    expect(VELOCITY_OVERRIDES_REMOVED_2026_11_05["Bench Press"]).toEqual(["driveOnsetFraction", "velocitySmoothingMs", "maxPeakToMeanRatio"]);
+    expect(VELOCITY_OVERRIDES_REMOVED_2026_11_05["Barbell Shoulder Press"]).toEqual(["driveOnsetFraction"]);
+    expect(FITTED_OVERRIDES["Bench Press"]).toBeUndefined();
+    expect(FITTED_OVERRIDES["Barbell Shoulder Press"]).toBeUndefined();
+    expect(Object.keys(FITTED_OVERRIDES["Pendlay Row"])).toEqual(["depthRulerUncertainty"]);
+    for (const [name, bucket] of [["Bench Press", "horizontal_press_or_row"], ["Pendlay Row", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"]]) {
+      const t = cameraTunablesFor(name, bucket);
+      expect(t.values.driveOnsetFraction, name).toBe(DRIVE_ONSET_FRACTION);
+      expect(t.values.velocitySmoothingMs, name).toBe(VELOCITY_SMOOTHING_MS);
+      expect(t.values.maxPeakToMeanRatio, name).toBe(MAX_PEAK_TO_MEAN_RATIO);
+      for (const k of ["driveOnsetFraction", "velocitySmoothingMs", "maxPeakToMeanRatio"] as const) expect(t.sources[k], `${name}.${k}`).not.toBe("fitted");
     }
+    // And the squat's own window (0.02) does not reach any of these traces: replaying each with
+    // the squat's record gives the SAME numbers as its own only where the two records agree, which
+    // for velocity they do not -- the squat's window is a different number -- so what is asserted
+    // is the registry: a bench, a row and a press trace replayed under their own records never read
+    // a window marked fitted.
+    expect(cameraTunablesFor("Back Squat", "squat").sources.driveOnsetFraction).toBe("fitted");
   });
 
-  it("the bench trace reads its own window and smoothing: the mean lands and the peak comes down, with the same eight reps", () => {
-    const f = byName("Bench Press");
-    const t = cameraTunablesFor("Bench Press", "horizontal_press_or_row");
-    expect(t.values.driveOnsetFraction).toBe(0.03);
-    expect(t.values.velocitySmoothingMs).toBe(200);
-    expect(t.sources.driveOnsetFraction).toBe("fitted");
-    expect(t.sources.velocitySmoothingMs).toBe("fitted");
-    const sensor = OVR_BENCH_2026_10_30.sensor.reported;
-    const shipped = replay(f, SHARED_AS_THE_PHONE_RAN);
-    const own = replay(f);
-    // Same reps, same range of motion: a window and a smoothing cannot change which reps exist.
-    expect(own.repBreakdown.length).toBe(shipped.repBreakdown.length);
-    expect(own.romCm).toBeCloseTo(shipped.romCm!, 1);
-    // THE MEAN, AND THE BENCH'S OWN DRIVE ONSET IS INERT ON THIS TAKE SINCE 2026-10-31.
-    //
-    // Round four fitted 0.03 against a set mean that summed the whole phase's distance over the
-    // drive window's time, so widening or narrowing the window moved only the DENOMINATOR and a
-    // smaller fraction always dragged a too-high mean down. With both sums taken from the drive
-    // window the numerator moves with it, and on this take 0.03 and the shared 0.04 return the
-    // SAME mean to the hundredth (+5.9% against the sensor at either, where the phone shipped
-    // +10.3%). The override is kept because it is still the better value on the 09-29/09-30
-    // corpus, where these takes respond to it -- oblique +5.7% against +8.6%, set 7 +2.6%
-    // against +7.8%, set 10 -1.3% against +1.3% -- and FITTED_OVERRIDE_EVIDENCE records that
-    // re-measured sweep rather than round four's. Asserted as equality on purpose: the day a
-    // change makes the bench's window matter on its own paired takes again, this reds and
-    // somebody re-reads the evidence instead of inheriting it.
-    expect(own.meanVelocityMps!).toBe(shipped.meanVelocityMps!);
-    expect(Math.abs(own.meanVelocityMps! / sensor.meanVelocityMps - 1)).toBeLessThan(0.07);
-    // THE PEAK, AND THIS LIFT HAS ITS OWN CAP SINCE 2026-10-31 (round seven).
-    //
-    // The phone shipped +18.6% here at the shared 165ms smoothing and the shared 2.0 cap; the
-    // bench's own record brings it down twice over -- 200ms (round four) and maxPeakToMeanRatio
-    // 1.6 (round seven, re-swept because the 10-31 set-mean fix changed what a peak-to-mean ratio
-    // IS and so voided round four's own rejection of 1.6). It is still a MEASUREMENT and not a
-    // number capped to the sensor: it stays above it.
-    expect(shipped.peakVelocityMps! / sensor.peakVelocityMps - 1).toBeGreaterThan(0.17);
-    expect(own.peakVelocityMps!).toBeLessThan(shipped.peakVelocityMps!);
-    expect(own.peakVelocityMps! / sensor.peakVelocityMps - 1).toBeLessThan(0.08);
-    expect(own.peakVelocityMps!).toBeGreaterThan(sensor.peakVelocityMps);
-    expect(t.values.maxPeakToMeanRatio).toBe(1.6);
-    expect(t.sources.maxPeakToMeanRatio).toBe("fitted");
-    // THE CAP IS THE BENCH'S ALONE. An incline bench is a different identity and keeps the
-    // shared 2.0, which is what says the override is scoped to the one name it was measured on.
-    expect(cameraTunablesFor("Incline Barbell Bench Press", "horizontal_press_or_row").values.maxPeakToMeanRatio)
-      .toBe(MAX_PEAK_TO_MEAN_RATIO);
-    // A CAP CANNOT MOVE A DISTANCE OR A COUNT, and that is the half worth pinning: on all ten
-    // stored bench takes the reps, the range of motion and the set mean are identical at 1.6 and
-    // at 2.0, which is what makes round four's "1.6 caps half the reps" void rather than merely
-    // superseded.
-    const capOnly = replay(f, { maxPeakToMeanRatio: MAX_PEAK_TO_MEAN_RATIO });
-    expect(own.repBreakdown.length).toBe(capOnly.repBreakdown.length);
-    expect(own.romCm!).toBe(capOnly.romCm!);
-    expect(own.meanVelocityMps!).toBe(capOnly.meanVelocityMps!);
-    expect(own.peakVelocityMps!).toBeLessThan(capOnly.peakVelocityMps!);
+  it("the press reads the sensor on its drives at the SHARED window, which is why its 0.08 is gone", () => {
+    // Rounds five and seven fitted 0.08 then 0.12 to lift a lowering that read low. The drives at
+    // 0.04 read +3.5%, -2.7%, +2.4% on the three sets; at 0.08 they would read +16%, +3%, +17%. The press's peaks
+    // are high on every set (+18%, +9%, +26%) and 4-5 of its 7 reps are capped at 2.0x their mean
+    // on sets 1 and 3 -- recorded, not fitted (the smoothing and the cap were both fitted on
+    // descents and are the next thing to read on a press).
+    const errs = ["set 1", "set 2", "set 3"].map((s) => {
+      const id = `2026-10-30 Barbell Shoulder Press ${s}`;
+      const m = replay(byId(id));
+      return { mean: m.meanVelocityMps! / CORRECTED[id].sensor.mean - 1, peak: m.peakVelocityMps! / CORRECTED[id].sensor.peak - 1, capped: m.repBreakdown.filter((r: any) => r.windows?.peakCapped).length, reps: m.repBreakdown.length };
+    });
+    for (const e of errs) expect(Math.abs(e.mean)).toBeLessThan(0.05);
+    expect(errs.map((e) => e.reps)).toEqual([7, 7, 7]);
+    expect(errs[0].capped).toBe(5);
+    expect(errs[2].capped).toBe(4);
+    for (const e of errs) { expect(e.peak).toBeGreaterThan(0.08); expect(e.peak).toBeLessThan(0.3); }
+    // at the removed 0.08 every set reads higher than at 0.04, and two of three past +15%
+    const at08 = ["set 1", "set 2", "set 3"].map((s) => {
+      const id = `2026-10-30 Barbell Shoulder Press ${s}`;
+      return replay(byId(id), { driveOnsetFraction: 0.08 }).meanVelocityMps! / CORRECTED[id].sensor.mean - 1;
+    });
+    at08.forEach((e, i) => expect(e, `set ${i + 1}`).toBeGreaterThan(errs[i].mean));
+    expect(at08.filter((e) => e > 0.15).length).toBe(2);
+  });
+
+  it("the bench's drives read +29% / +48% at the shared window and the removed 0.03 / 200 would not have changed that", () => {
+    // Set 1: 8 of 8, range of motion 37.1 against 37.1 (the plate was the ruler), the drives' mean
+    // +34% and peak +35%. Set 3: 7 of 8 (the slow last press meets the edge-duration rule), range
+    // +12%, mean +48%, peak +66%. The bench's whole upward phases (0.33-0.60s) match the sensor's
+    // 0.55s concentric; the drive window at 0.04 trims the slow start a bench has and the bench
+    // alone reads high by it (+6% at onset 0 on set 1). That is the open bench window, recorded in
+    // the notes and NOT fitted on a day the labels flipped (Rule #5).
+    const s1 = byId("2026-10-30 Bench Press set 1"), s3 = byId("2026-10-30 Bench Press set 3");
+    const m1 = replay(s1), m3 = replay(s3);
+    expect(m1.repBreakdown.length).toBe(8);
+    expect(Math.abs(m1.romCm! / (OVR_BENCH_2026_10_30.sensor.reported.romIn * 2.54) - 1)).toBeLessThan(0.05);
+    expect(m1.meanVelocityMps! / CORRECTED[s1.id].sensor.mean - 1).toBeGreaterThan(0.25);
+    expect(m3.repBreakdown.length).toBe(7);
+    expect(m3.meanVelocityMps! / CORRECTED[s3.id].sensor.mean - 1).toBeGreaterThan(0.4);
+    // the pair round four shipped moves set 1 by four points and leaves it 25% high
+    const old1 = replay(s1, { driveOnsetFraction: 0.03, velocitySmoothingMs: 200 });
+    expect(old1.meanVelocityMps! / CORRECTED[s1.id].sensor.mean - 1).toBeGreaterThan(0.2);
+    // and at the whole travel window set 1 is inside 10%
+    expect(Math.abs(replay(s1, { driveOnsetFraction: 0 }).meanVelocityMps! / CORRECTED[s1.id].sensor.mean - 1)).toBeLessThan(0.1);
   });
 
   it("the row's scale reads its own depth uncertainty: -10.8% as filmed, inside 1% at the row's own record, and the bench's blend does not move", () => {
@@ -204,8 +168,6 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     expect(own).toBe(0.6);
     expect(blend("Pendlay Row", shared) / required - 1).toBeCloseTo(-0.108, 2);
     expect(Math.abs(blend("Pendlay Row", own) / required - 1)).toBeLessThan(0.01);
-    // And the bench's blend is byte-for-byte the shipped one: its record still states 0.2 for the
-    // depth ruler, and its two new fields are not scale numbers at all.
     const bench = ledgerRow("2026-10-30-bench-press");
     const benchBlend = reconcileScaleEstimates(bench.candidates.map((c) => ({
       source: c.source as "body_3d", scale: c.scaleX1000 / 1000,
@@ -214,57 +176,7 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
         : bench.uncertaintiesAsFilmed[c.source],
     }))).scale! * 1000;
     expect(Math.abs(benchBlend / bench.shippedScaleX1000 - 1)).toBeLessThan(0.0001);
-    // The sensor's own numbers for the row, so the next reader has them beside the fixture.
     expect(OVR_PENDLAY_ROW_2026_10_30.sensor.reported.romIn * 2.54).toBeCloseTo(row.sensorRomCm, 1);
-  });
-
-  it("the press trace reads its own drive window: the mean lands on both sets, the peaks and the reps do not move", () => {
-    // Round five, 2026-10-30. With the scale inside 2% on set 1, the press's mean read -13.5% at
-    // the shared 0.04 (a strict press leaves the collarbone from a dead stop, so the shared window
-    // -- fitted 10-07 across five movements -- opens on its slowest centimetres) and set 2 -2.7%.
-    // The press's own 0.08 is the first value where neither set nor the 10-02 push-press fixture
-    // reads low (see FITTED_OVERRIDE_EVIDENCE). Only the window: smoothing stays shared because
-    // 200ms costs the press peaks 6-8 points where it bought the bench 4.
-    expect(Object.keys(FITTED_OVERRIDES["Barbell Shoulder Press"])).toEqual(["driveOnsetFraction"]);
-    expect(cameraTunablesFor("Barbell Shoulder Press", romBucketForExercise("Barbell Shoulder Press")).values.driveOnsetFraction).toBe(0.12);
-    const cases: [Fixture, number, number][] = [
-      [byId("2026-10-30 Barbell Shoulder Press set 1"), OVR_BARBELL_SHOULDER_PRESS_2026_10_30.sensor.reported.meanVelocityMps, -0.13],
-      [byId("2026-10-30 Barbell Shoulder Press set 2"), OVR_BARBELL_SHOULDER_PRESS_SET2_2026_10_30.sensor.reported.meanVelocityMps, -0.02],
-    ];
-    for (const [f, sensorMean, sharedReadsBelow] of cases) {
-      const shipped = replay(f, { driveOnsetFraction: DRIVE_ONSET_FRACTION });
-      const own = replay(f);
-      expect(own.repBreakdown.length, f.id).toBe(shipped.repBreakdown.length);
-      expect(own.romCm, f.id).toBeCloseTo(shipped.romCm!, 1);
-      expect(shipped.meanVelocityMps! / sensorMean - 1, `${f.id} shared`).toBeLessThan(sharedReadsBelow);
-      expect(own.meanVelocityMps!, f.id).toBeGreaterThan(shipped.meanVelocityMps!);
-      // AND 0.08 WAS REFIT TO 0.12, 2026-10-31 (round seven), BECAUSE THE SET-MEAN FIX VOIDED
-      // THE SWEEP THAT CHOSE IT -- not because the press changed.
-      //
-      // Round five chose 0.08 as the first value where neither set read low, measured against the
-      // set mean that summed the whole phase's distance over the drive window's time; narrowing
-      // the window moved only the DENOMINATOR there, so a smaller fraction always dragged a mean
-      // down. With both sums from the drive window the press reads low at 0.08 on all three of
-      // its 10-30 sets AND on the 10-02 fixture, and 0.12 weakly dominates both 0.08 and 0.10 --
-      // no take of the four is worse at it than at either (see FITTED_OVERRIDE_EVIDENCE for the
-      // sweep). Held as "inside 3% and no longer biased low on both sets", which reds if the
-      // refit is reverted (-6.2% and -5.5%).
-      expect(Math.abs(own.meanVelocityMps! / sensorMean - 1), `${f.id} own`).toBeLessThan(0.03);
-      // A WINDOW MOVES THE MEAN, AND IT CAN MOVE THE PEAK ONLY BY MOVING AN EDGE PAST A REP'S
-      // PEAK FRAME, which 0.12 does on one rep of set 1 (0.07) and on none of set 2. Bounded
-      // rather than asserted equal, because the bound is the claim: a window must not be able to
-      // rewrite the peaks wholesale.
-      expect(Math.abs(own.peakVelocityMps! - shipped.peakVelocityMps!), f.id).toBeLessThanOrEqual(0.08);
-      // Seven of eight on both sets. The eighth press is in the trace and the segmenter folded it
-      // into the lowering to the floor that follows the last press (a press re-racks DOWNWARD, so
-      // the last eccentric runs on into the re-rack). That is a RULE question shared with every
-      // lift that re-racks downward, and the lift's own record carries nothing for it.
-      expect(own.repBreakdown.length, f.id).toBe(7);
-      expect(f.loggedReps).toBe(8);
-      const lastEnd = own.repBreakdown[own.repBreakdown.length - 1].endT;
-      const after = f.barPathTrace.filter((p: any) => p.t > lastEnd && p.t < lastEnd + 2500).map((p: any) => p.y);
-      expect(Math.max(...after) - Math.min(...after), f.id).toBeGreaterThan(55);
-    }
   });
 
   it("the row's second set: the grip yardstick that convicted two of three rulers stands down, and the row's record lands the scale", () => {
@@ -295,10 +207,68 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     const required = row.shippedScaleX1000 / 1000 * (row.sensorRomCm / row.reportedRomCm);
     const landed = blendScales(kept, t.maxScaleAgreementTolerance).scale!;
     expect(Math.abs(landed / required - 1)).toBeLessThan(0.03);
-    // the shoulder span alone IS the shipped scale, to the digit
     expect(blendScales(kept.filter((k) => k.source === "shoulder_width"), t.maxScaleAgreementTolerance).scale! * 1000)
       .toBeCloseTo(row.shippedScaleX1000, 9);
-    // and the sensor's numbers for set 2 sit beside the fixture
     expect(OVR_PENDLAY_ROW_SET2_2026_10_30.sensor.reported.romIn * 2.54).toBeCloseTo(row.sensorRomCm, 1);
+  });
+
+  it("set 3 of the row: the first row whose plate was the ruler, boxed 0.964 of expected, and the take still reads +23% -- recorded, not fitted", () => {
+    const f = byId("2026-10-30 Pendlay Row set 3");
+    const cal = f.trackingDiagnostics.calibration;
+    const row = ledgerRow("2026-10-30-pendlay-row-set-3");
+    expect(cal.objectGate.plateBoxToExpectedRatio).toBeCloseTo(0.964, 3);
+    expect(cal.scaleBlend.plateSteppedOut).toBe(false);
+    expect(cal.scaleCandidates.find((c: any) => c.source === "plate").weightPct).toBeCloseTo(85.8, 1);
+    // The ledger replays the row's scale as filmed and reads +23.2% against the sensor; the plate
+    // is +23.8% of the scale the sensor requires, the bone -3.3%, the shoulder +46.2%. Round seven's
+    // confidence floor (six plate frames at 0.44) de-weights that plate and the live replay reads
+    // +20.79%. The row's third paired take and its third different answer (-10.8%, +52.8% under a
+    // defect, +23.2%): Rule #5 says the spread is the finding, so no further scale number moves.
+    expect(row.liveErrorPct).toBeCloseTo(20.79, 1);
+    const required = row.shippedScaleX1000 * (row.sensorRomCm / row.reportedRomCm);
+    const plate = row.candidates.find((c) => c.source === "plate")!.scaleX1000;
+    expect(plate / required - 1).toBeCloseTo(0.238, 2);
+    expect(OVR_PENDLAY_ROW_SET3_2026_10_30.sensor.reported.romIn * 2.54).toBeCloseTo(row.sensorRomCm, 1);
+    // 8 of 8 either way round; the pulls read +10% on the mean and +17% on the peak at the shared
+    // window -- a lone-hand trace (290 of 543 points carried) on a scale 23% high
+    const m = replay(f);
+    expect(m.repBreakdown.length).toBe(8);
+    expect(m.meanVelocityMps! / CORRECTED[f.id].sensor.mean - 1).toBeGreaterThan(0.05);
+    expect(m.meanVelocityMps! / CORRECTED[f.id].sensor.mean - 1).toBeLessThan(0.2);
+  });
+
+  it("set 3 of the press: the third press inside 3.2% on range of motion, 7 of 8 because the FIRST press is merged with the clean", () => {
+    const f = byId("2026-10-30 Barbell Shoulder Press set 3");
+    const row = ledgerRow("2026-10-30-barbell-shoulder-press-set-3");
+    expect(row.liveErrorPct).toBeCloseTo(3.1, 1);
+    expect(row.heightRulerVotedAsFilmed).toBe(true);
+    const m = replay(f);
+    expect(m.repBreakdown.length).toBe(7);
+    expect(f.loggedReps).toBe(8);
+    // Rounds four and five read the missing press as the eighth, folded into the re-rack; on the
+    // drives it is the first: one upward phase from the floor to overhead (the clean, a pause at
+    // the shoulders, the press) with no reversal between, 2.6m long. The first counted drive
+    // starts after it.
+    const firstRep = m.repBreakdown[0];
+    const beforeIt = f.barPathTrace.filter((p: any) => p.t < firstRep.startT).map((p: any) => p.y);
+    expect(Math.max(...beforeIt) - Math.min(...beforeIt)).toBeGreaterThan(200);
+    expect(firstRep.startT).toBeGreaterThan(5_000);
+  });
+
+  it("set 3 of the bench: the plate was the ruler again (0.849 of expected) and the take reads +5.5%; the phone's eight were lowerings, the drives count seven", () => {
+    const f = byId("2026-10-30 Bench Press set 3");
+    const row = ledgerRow("2026-10-30-bench-press-set-3");
+    expect(f.trackingDiagnostics.calibration.objectGate.plateBoxToExpectedRatio).toBeCloseTo(0.849, 3);
+    // +5.5% as filmed; +3.58% through the live constants since round six's MAD-to-sigma correction
+    expect(row.liveErrorPct).toBeCloseTo(3.58, 1);
+    expect(f.shipped.reps).toBe(8);
+    const m = replay(f);
+    expect(m.repBreakdown.length).toBe(7);
+    // the dropped press is the slow last one: the trace after the seventh drive still travels a
+    // bench's range of motion before the re-rack
+    const lastEnd = m.repBreakdown[m.repBreakdown.length - 1].endT;
+    const after = f.barPathTrace.filter((p: any) => p.t > lastEnd && p.t < lastEnd + 2000).map((p: any) => p.y);
+    expect(Math.max(...after) - Math.min(...after)).toBeGreaterThan(30);
+    expect(OVR_BENCH_SET3_2026_10_30.sensor.reported.romIn * 2.54).toBeCloseTo(row.sensorRomCm, 1);
   });
 });

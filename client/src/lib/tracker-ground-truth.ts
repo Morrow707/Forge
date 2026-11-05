@@ -1287,3 +1287,107 @@ export const OVR_BARBELL_SHOULDER_PRESS_SET2_2026_10_30 = {
     reported: { meanVelocityMps: 0.73, peakVelocityMps: 1.18, romIn: 24.3, meanW: 277, peakW: 445, tpvS: 0.24, eai: 4.79 },
   },
 };
+
+/** 2026-10-30, round six, set 3 of the Pendlay Row at 135x8 on build 705 (the OVR screen; the
+ *  Forge capture is in ovr-2026-10-30-export.json). Oblique, bent_over, the retrained detector's
+ *  plate boxed 0.964 of expected and admitted from both ends at 85.8% of the blend -- the first
+ *  row whose plate was the ruler. Forge 8 of 8; the phone shipped 70.1cm / 1.19 / 2.03 under the
+ *  inverted direction rule (its "reps" were the lowerings). */
+export const OVR_PENDLAY_ROW_SET3_2026_10_30 = {
+  build: 705,
+  loadLb: 135,
+  repsPerSet: 8,
+  camera: "oblique (axisForeshortening 1.007), bent_over posture; live path",
+  forgeOnDevice: {
+    repCount: 8,
+    meanVelocityMps: 1.19,
+    peakVelocityMps: 2.03,
+    romCm: 70.1,
+    scaleSource: "plate (85.8%) + body_3d + shoulder_width",
+    scale: 0.004840255324542491,
+    plateBoxToExpectedRatio: 0.964,
+    reportedTheLowering: true,
+  },
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.79, peakVelocityMps: 1.43, romIn: 22.0, meanW: 472, peakW: 859, tpvS: 0.49, eai: 2.89 },
+      { meanVelocityMps: 0.82, peakVelocityMps: 1.35, romIn: 22.1, meanW: 493, peakW: 809, tpvS: 0.46, eai: 2.88 },
+      { meanVelocityMps: 0.88, peakVelocityMps: 1.42, romIn: 22.2, meanW: 530, peakW: 851, tpvS: 0.43, eai: 3.28 },
+      { meanVelocityMps: 0.82, peakVelocityMps: 1.38, romIn: 22.2, meanW: 495, peakW: 826, tpvS: 0.47, eai: 2.88 },
+      { meanVelocityMps: 0.82, peakVelocityMps: 1.40, romIn: 22.7, meanW: 493, peakW: 842, tpvS: 0.48, eai: 2.88 },
+      { meanVelocityMps: 0.79, peakVelocityMps: 1.34, romIn: 22.5, meanW: 476, peakW: 801, tpvS: 0.51, eai: 2.60 },
+      { meanVelocityMps: 0.82, peakVelocityMps: 1.40, romIn: 22.7, meanW: 494, peakW: 842, tpvS: 0.48, eai: 2.88 },
+      { meanVelocityMps: 0.86, peakVelocityMps: 1.43, romIn: 23.1, meanW: 514, peakW: 859, tpvS: 0.45, eai: 3.11 },
+    ],
+    reported: { meanVelocityMps: 0.82, peakVelocityMps: 1.39, romIn: 22.4, meanW: 495, peakW: 836, tpvS: 0.47, eai: 2.92 },
+  },
+};
+
+/** 2026-10-30, round six, set 3 of the Barbell Shoulder Press at 85x8 on build 705 (the OVR's
+ *  "Push Press"; strict and standing). Head-on, live path, height ruler 66.7% of the blend, 18
+ *  dropouts and a 2.885s gap (cadenceHeld 0.822). Forge 7 of 8 -- the first press is merged with
+ *  the clean into one 2.6m upward phase, see the notes "Round six". The phone shipped
+ *  61.8cm / 0.80 / 1.42 under the inverted direction rule. */
+export const OVR_BARBELL_SHOULDER_PRESS_SET3_2026_10_30 = {
+  build: 705,
+  loadLb: 85,
+  repsPerSet: 8,
+  camera: "head-on (axisForeshortening 1.188), standing; live path, cadenceHeld 0.822",
+  forgeOnDevice: {
+    repCount: 7,
+    meanVelocityMps: 0.8,
+    peakVelocityMps: 1.42,
+    romCm: 61.8,
+    scaleSource: "height (66.7%) + body_3d + shoulder_width",
+    scale: 0.0038564646965464013,
+    reportedTheLowering: true,
+  },
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.31, romIn: 23.2, meanW: 302, peakW: 494, tpvS: 0.29, eai: 4.43 },
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.32, romIn: 23.8, meanW: 335, peakW: 499, tpvS: 0.20, eai: 6.44 },
+      { meanVelocityMps: 0.87, peakVelocityMps: 1.35, romIn: 23.9, meanW: 327, peakW: 509, tpvS: 0.22, eai: 6.04 },
+      { meanVelocityMps: 0.84, peakVelocityMps: 1.32, romIn: 23.4, meanW: 317, peakW: 499, tpvS: 0.22, eai: 5.92 },
+      { meanVelocityMps: 0.86, peakVelocityMps: 1.28, romIn: 24.1, meanW: 326, peakW: 483, tpvS: 0.21, eai: 5.98 },
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.14, romIn: 22.9, meanW: 285, peakW: 431, tpvS: 0.23, eai: 4.92 },
+      { meanVelocityMps: 0.85, peakVelocityMps: 1.34, romIn: 23.7, meanW: 320, peakW: 504, tpvS: 0.23, eai: 5.75 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 1.06, romIn: 23.8, meanW: 264, peakW: 400, tpvS: 0.21, eai: 4.95 },
+    ],
+    reported: { meanVelocityMps: 0.82, peakVelocityMps: 1.26, romIn: 23.6, meanW: 309, peakW: 477, tpvS: 0.22, eai: 5.55 },
+  },
+};
+
+/** 2026-10-30, round six, set 3 of the Bench Press at 135x8 on build 705. Side-on, lying, the
+ *  plate boxed 0.849 of expected and admitted at 85.8% of the blend; 120 frames with no wrist or
+ *  implement. Forge 8 of 8 on the phone (7 through the corrected rule, see the notes). The
+ *  phone shipped 39.4cm / 0.74 / 1.14 under the inverted direction rule. Set 2 of the same
+ *  session has an OVR screen (0.69 / 0.97 / 14.9in) and NO Forge capture in the export. */
+export const OVR_BENCH_SET3_2026_10_30 = {
+  build: 705,
+  loadLb: 135,
+  repsPerSet: 8,
+  camera: "side-on (axisForeshortening 1.112), lying; live path",
+  forgeOnDevice: {
+    repCount: 8,
+    meanVelocityMps: 0.74,
+    peakVelocityMps: 1.14,
+    romCm: 39.4,
+    scaleSource: "plate (85.8%) + body_3d + shoulder_width",
+    scale: 0.0041575129535776295,
+    plateBoxToExpectedRatio: 0.849,
+    reportedTheLowering: true,
+  },
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.64, peakVelocityMps: 0.91, romIn: 14.0, meanW: 385, peakW: 545, tpvS: 0.33, eai: 2.74 },
+      { meanVelocityMps: 0.69, peakVelocityMps: 0.99, romIn: 14.2, meanW: 416, peakW: 595, tpvS: 0.32, eai: 3.05 },
+      { meanVelocityMps: 0.69, peakVelocityMps: 0.99, romIn: 14.5, meanW: 416, peakW: 595, tpvS: 0.30, eai: 3.23 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 0.96, romIn: 13.9, meanW: 421, peakW: 578, tpvS: 0.30, eai: 3.14 },
+      { meanVelocityMps: 0.69, peakVelocityMps: 0.96, romIn: 15.0, meanW: 412, peakW: 578, tpvS: 0.30, eai: 3.14 },
+      { meanVelocityMps: 0.66, peakVelocityMps: 0.89, romIn: 15.5, meanW: 394, peakW: 537, tpvS: 0.32, eai: 2.76 },
+      { meanVelocityMps: 0.60, peakVelocityMps: 0.80, romIn: 14.4, meanW: 360, peakW: 479, tpvS: 0.37, eai: 2.12 },
+      { meanVelocityMps: 0.62, peakVelocityMps: 0.81, romIn: 16.5, meanW: 373, peakW: 487, tpvS: 0.31, eai: 2.57 },
+    ],
+    reported: { meanVelocityMps: 0.66, peakVelocityMps: 0.91, romIn: 14.7, meanW: 397, peakW: 549, tpvS: 0.31, eai: 2.84 },
+  },
+};
