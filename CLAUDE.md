@@ -2973,7 +2973,9 @@ halves before splitting anything else:
   UTC, `3ac2b34`: round nine -- the squat's own drive onset 0 and smoothing 130, the RDL's
   sample-starvation rule and own drive onset 0.02, the jump's hip peak on the set, `liftRecord`
   and `bodyWitnessTrace` in the export; 711 was its `verify_build` on the same commit).
-  **712 is the build to film on.** Before it, **710** (2026-11-05 16:36
+  **712 is the build to film on.** Round ten and the day-wipe save fix are COMMITTED AND HELD
+  behind it (Scott: "queue it as I'm testing the camera"); they go out as the next `verify_build`
+  + `beta` when he lifts the hold. Before 712, **710** (2026-11-05 16:36
   UTC, `4c30e37`: round eight -- the direction rule corrected, every descent-fitted velocity
   override removed, the squat's own drive onset 0.02; 709 was its `verify_build` on the same
   commit). Before 710, **707** (2026-10-31 19:19 UTC, `37867e3`:
@@ -3205,6 +3207,67 @@ halves before splitting anything else:
   See docs/camera-tracking-notes.md, "The RDL's +12.0% is the 3D-pose collapse". Calibration work:
   uploaded on commit.
 
+- **ROUND TEN, 2026-11-05: THE RDL'S EIGHTH REP WAS A HOLD THE SEGMENTER COULD NOT SEE PAST, ON
+  THREE TAKES, AND SET 1'S "REP 1" WAS THE SET-UP.** Set 2 of all three lifts on 712 (Back Squat
+  135x5, RDL 135x8, box jump x5), filmed between the morning's set 1 and the autosave that wiped
+  it; Scott: "Obviously rdl only recorded 7 reps when OVR says 8 so we were wrong there."
+  **A REP ENDS WHEN THE BAR COMES TO REST** (`restArrivalAfterPeak`, bar-tracking.ts, a shared
+  RULE): the eighth pull was in the trace, followed by a 2.2s stand at lockout with the recording
+  running and an 8cm shrug, and `segmentPhases` -- which ends a phase only on a reversal -- made
+  one 2.8s "concentric" of it that the overlong rack-move test deleted. Walking forward from the
+  peak on the RAW series, the first sample from which the bar moves under four travel margins in
+  a whole second is the rest; if the phase goes on past the rest's own top, every measurement on
+  the rep reads to the rest. Inert on a rep that reverses out of its top. Four things had to be
+  measured to get it right and each is in the comments: extent over the window not from its
+  first sample (a held bar creeps), raw not smoothed (the Kalman smoother overshoots the arrival
+  and reads as movement inside the hold -- the 10-19 take's rest was never found on the smoothed
+  series), drift judged past the rest's top not its arrival (a paused lockout stays whole), and
+  a phase cut at a rest after less than half a rep's movement is a settle wherever it sits
+  (bench-unrack-capture's 5s settle became a 0.13s "rep" without it).
+  **AND THE RULE EXPOSED ROUND NINE'S READING OF SET 1.** With its eighth pull returned (behind a
+  1.7s stand) the count had nine, and round nine's "starved rep 1" -- 48.6cm with 61% of it
+  inside a 0.239s hole, 2.3s before the first pull where the pulls sit 1.0s apart -- was the
+  SET-UP. The count-trim kept it (0.6) and took the real eighth (0.1, its window read over the
+  whole phase, hold included; it reads to the rest now). A sample-starved edge phase is the least
+  rep-like thing in the set when the count says there is one too many: raised to the trim's
+  floor. Set 1 and set 2 read 8 of 8 as the eight pulls, the 10-19 RDL set 2 reads 8 of 8 and
+  left `KNOWN_UNDERCOUNTS`, no other take in the corpus moved; with no count logged the set-up
+  reports as a ninth rep (the lesser failure, recorded in the test). **The ledger row for set 1
+  is re-stated over the eight pulls** (63.4, +3.6%; round nine's 63.8 was over the seven it had)
+  and the ground truth says in words that its forgeOnDevice numbers are the phone's seven plus
+  the set-up.
+  **RDL window 0.02 -> 0** (its own record): set 2 mean +20.0 -> +15.8%, set 1 +25.8 -> +16.1%,
+  10-29 set 1 +32.2 -> +7.8%, 10-19 set 2 +25.8 -> +22.5%; peaks untouched (+19 / +30%, not
+  fitted). **Squat `heightRulerUncertainty` 0.11 -> 0.12**: set 2 reads -2.7% / +2.4% / +1.6%
+  rep for rep, and the six squat takes on the current pipeline all read low as filmed (-4.3 /
+  -0.5 / -0.9 / -0.3 / -1.9 / -2.7 at 0.11), so the one-point step round two took; on the ledger's
+  SEALED rows the live replay reads it as a wash (three better, four worse), because a sealed row
+  carries the shoulder floor and not the grip-loosened 0.38-0.40 the phone stated on the 10-29 and
+  11-05 takes -- the ledger's own stated limit, now costing a decision. **MEASURED AND REJECTED
+  (the romCm comment in bar-tracking.ts):** reporting the rep's range off the SMOOTHED series
+  lands all four sensor-paired squats inside 1% (the drive distances read the sensor's reps
+  within 2% on all ten squat reps) and reads 2-12 points HIGH on every one of the fifteen other
+  paired takes -- the Kalman smoother overshoots a fast reversal; the raw extreme near each
+  endpoint moves no squat. Reverted before it was committed. The mean's +2.4% on both squat sets
+  is one 33ms sample of phase edge on four of five reps, a mechanism and not a constant.
+  **THE SENSOR'S WINDOW ON A JUMP IS SETTLED: DIP BOTTOM TO THE HIP'S APEX.** Off the
+  `bodyWitnessTrace` (in the export from 712) the hip's rise from the dip bottom to its highest
+  point takes 0.55 / 0.45 / 0.46 / 0.49 / 0.50s against the sensor's range over its mean, 0.50 /
+  0.49 / 0.48 / 0.48 / 0.50s -- inside one hip sample on every rep -- where the drive to takeoff
+  is 0.20-0.28s, which is the whole of the +24% / +28% the drive mean read on two sets.
+  `measureCountermovement` reads `riseToApexCm` / `riseToApexSeconds` / `riseToApexMeanVelocityMps`
+  (bounded a second past takeoff, absent when the trace ends in flight); `applyBoxRiseCorrection`
+  divides the FLIGHT share of that rise by the box ratio and keeps the drive share at the floor's
+  scale (the rise crosses from the floor to the box); the set's `meanVelocityMps` is
+  `hipRiseToApexMeanVelocityMps` (workout.tsx), the drive mean kept beside it. On the replay through
+  the stored hip trace the set reads +3.1%; the phone's own series is the next take's test. Hip
+  peak +2.6% smoothed / +5.5% raw on set 2, not fitted.
+  `a-rep-ends-when-the-bar-rests.test.ts` (the three rules on synthetic input, five mutations
+  named in its header), the set-2 cases in `ovr-2026-11-05-every-lift-reads-only-its-own-record.test.ts`,
+  ledger rows `2026-11-05-back-squat-set-2` / `2026-11-05-romanian-deadlift-set-2`, ground truth
+  `OVR_*_SET2_2026_11_05`, `windows.heldAtTopSeconds` and the apex fields declared in the schema.
+  See docs/camera-tracking-notes.md, "Round ten". Calibration work: **HELD with the save fix on
+  Scott's word ("queue it as I'm testing the camera"); `verify_build` then `beta` when he lifts it.**
 - **ROUND NINE, 2026-11-05: THE FIRST TAKES ON THE CORRECTED RULE. THE SQUAT LANDS, THE RDL IS
   TRACE-LIMITED, THE JUMP'S HIP PEAK IS ON THE SENSOR.** Squat 135x5, RDL 135x8 and a box jump x5
   on 710; Scott: "only testing the 3 lifts today", "at least one fix per lift ... fix every error

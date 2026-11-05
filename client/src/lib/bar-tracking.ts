@@ -173,6 +173,10 @@ export type RepBreakdown = {
     /** How much of the phase's own distance fell inside that gap, 0-1. */
     distanceInLargestGapShare?: number;
     sampleStarved?: boolean;
+    /** Seconds the segmenter's phase ran on past the rep's rest at the top (restArrivalAfterPeak).
+     *  0 on every rep that reversed out of its top. The 2026-11-05 Romanian deadlift set 2's eighth
+     *  rep held 2.1s at lockout with the recording running and was deleted as a re-rack for it. */
+    heldAtTopSeconds?: number;
   };
 };
 
@@ -1313,6 +1317,82 @@ export function trimPhaseToTravel(
 }
 
 /**
+ * A REP ENDS WHEN THE BAR COMES TO REST. WHAT HAPPENS AFTER A REST IS NOT THE REP.
+ *
+ * Romanian deadlift set 2 beside the OVR, 2026-11-05 (135x8, build 712): the sensor counted
+ * eight, Forge seven. The eighth drive is in the trace -- 59cm up in 0.75s, the same shape as the
+ * seven before it -- and then the athlete stood at lockout with the bar for two seconds while the
+ * recording ran on, the bar drifting 2cm up and then 8cm up again as they shrugged and stepped.
+ * segmentPhases ends a phase only on a REVERSAL of at least the gate, so the drive, the hold and
+ * the drift were one 2.8-second "concentric" whose travel window ran to the drift's end, and the
+ * overlong rack-move test (2.5x the median duration) deleted the whole thing as a re-rack. A
+ * filmed rep got no row, which is the failure Rule #1 exists to refuse.
+ *
+ * The rule: walking forward from the phase's peak, the first sample from which the bar stays
+ * within the travel margin for REST_AT_TOP_SECONDS is where the bar came to rest, and if the
+ * phase then goes on to a point further than the margin from that rest, the rep ended AT the
+ * rest and the rest of the phase is a hold with something after it. Everything measured on the
+ * rep (its travel and drive windows, its distance, its gaps) reads to the rest; the phase itself
+ * keeps its segmenter endpoints, so alternation is untouched and no count changes by this.
+ *
+ * Inert by construction on every rep that reverses out of its top: there the phase ENDS within
+ * the margin of the rest, so no cut is made and every number reads as before -- a paused lockout
+ * followed by the lowering is unchanged, because its rest is where the phase already ends. A full
+ * second motionless is a hold, not a sticking point: a grinding stall at a sticking point is
+ * slower than that and still moving, and a rep that genuinely stopped dead for a second mid-lift
+ * is reported to the stop (Rule #1: it keeps its row and its distance to there).
+ */
+export const REST_AT_TOP_SECONDS = 1.0;
+/** How far the bar may creep inside that second and still be at rest, in travel margins: four
+ *  (4cm on a 1cm margin, 3cm on the bench's 0.75). The 2026-11-05 hold crept 2cm in its second,
+ *  the 2026-10-19 hold 3cm; a bar moving 4cm in a second is at a tenth of the slowest rep mean
+ *  in the corpus, and a grinding sticking point moves faster than that. */
+export const REST_AT_TOP_EXTENT_MARGINS = 4;
+
+export function restArrivalAfterPeak(
+  positions: number[],
+  times: number[],
+  peakIdx: number,
+  endIdx: number,
+  margin: number,
+  restSeconds: number = REST_AT_TOP_SECONDS,
+): number | null {
+  if (!(peakIdx >= 0 && peakIdx < endIdx) || !(margin > 0) || !(restSeconds > 0)) return null;
+  // "At rest" is the bar moving less than two margins in a whole second -- an EXTENT over the
+  // window, not a distance from its first sample, because a held bar creeps (the 2026-11-05 hold
+  // drifted 2cm over its two seconds, never a centimetre inside any one second) and a creep is
+  // not a lift.
+  const towardTop = Math.sign(positions[endIdx] - positions[peakIdx]) || 1;
+  for (let r = peakIdx + 1; r < endIdx; r++) {
+    let lo = positions[r];
+    let hi = positions[r];
+    let still = true;
+    let reachedRest = false;
+    for (let j = r + 1; j <= endIdx; j++) {
+      lo = Math.min(lo, positions[j]);
+      hi = Math.max(hi, positions[j]);
+      if (hi - lo > REST_AT_TOP_EXTENT_MARGINS * margin) {
+        still = false;
+        break;
+      }
+      if (times[j] - times[r] >= restSeconds * 1000) {
+        reachedRest = true;
+        break;
+      }
+    }
+    if (!still) continue;
+    if (!reachedRest) return null; // the phase ends inside the rest: nothing after it to cut
+    // The bar came to rest at r. Only a phase that goes on PAST the rest is cut there -- past the
+    // furthest the rest itself reached, not past r: the arrival sits a few centimetres of
+    // deceleration before the top, and a rep that reverses out of a paused lockout must read to
+    // its top and stay whole.
+    const restTop = towardTop > 0 ? hi : lo;
+    return (positions[endIdx] - restTop) * towardTop > margin ? r : null;
+  }
+  return null;
+}
+
+/**
  * A PHASE WITH HALF A REP'S REVERSAL INSIDE IT IS TWO PHASES, NOT ONE LONG ONE.
  *
  * Set 5 on build 571 (bench, OVR beside it, 270 of 629 bar points carried from a lone hand):
@@ -1742,16 +1822,29 @@ export function summarizeTrackedSet(
   })();
 
   const phaseStats = phases.map((phase, phaseIdx) => {
+    // THE REP'S OWN END -- see restArrivalAfterPeak. The segmenter's endpoint stays on the
+    // phase (alternation, the velocity curve, the rep's window on the trace); every number
+    // measured on the rep reads to where the bar came to rest, which on every rep that reverses
+    // out of its top is the same sample.
+    const restPeak = robustPeakSpeed(speedsReportedMps, phase.startIdx, phase.endIdx, confidences, tune.maxPlausibleSpeedMps, tune.minTrackingConfidence);
+    // On the RAW series, not the smoothed one: the Kalman smoother overshoots the fast arrival at
+    // lockout and then settles, which reads as several centimetres of movement inside a hold
+    // that the raw points show creeping 3cm (the 2026-10-19 RDL's hold, missed on the smoothed
+    // series at every extent tried). A rest is an extent over a whole second, so raw jitter of a
+    // centimetre either way cannot invent one.
+    const restIdx = restArrivalAfterPeak(points.map((p) => p.y), points.map((p) => p.t), restPeak.peakIdx, phase.endIdx, tune.travelOnsetMarginM);
+    const repEndIdx = restIdx ?? phase.endIdx;
+    const heldAtTopSeconds = restIdx == null ? 0 : (points[phase.endIdx].t - points[restIdx].t) / 1000;
     let largestGapInPhaseSeconds = 0;
     let distanceInLargestGapM = 0;
-    for (let idx = phase.startIdx + 1; idx <= phase.endIdx; idx++) {
+    for (let idx = phase.startIdx + 1; idx <= repEndIdx; idx++) {
       const gap = (points[idx].t - points[idx - 1].t) / 1000;
       if (gap > largestGapInPhaseSeconds) {
         largestGapInPhaseSeconds = gap;
         distanceInLargestGapM = Math.abs(points[idx].y - points[idx - 1].y);
       }
     }
-    const phaseDistanceM = Math.abs(points[phase.endIdx].y - points[phase.startIdx].y);
+    const phaseDistanceM = Math.abs(points[repEndIdx].y - points[phase.startIdx].y);
     const distanceInLargestGapShare = phaseDistanceM > 0 ? distanceInLargestGapM / phaseDistanceM : 0;
     const sampleStarved =
       phaseSampleIntervalSeconds > 0 &&
@@ -1764,23 +1857,23 @@ export function summarizeTrackedSet(
     // is the one number already measuring correctly.
     // The peak is found over the whole phase first, because the travel window is anchored on it
     // -- see trimPhaseToTravel. The speed-based trim only ever finds a window this one contains.
-    const wholePhasePeak = robustPeakSpeed(speedsReportedMps, phase.startIdx, phase.endIdx, confidences, tune.maxPlausibleSpeedMps, tune.minTrackingConfidence);
+    const wholePhasePeak = robustPeakSpeed(speedsReportedMps, phase.startIdx, repEndIdx, confidences, tune.maxPlausibleSpeedMps, tune.minTrackingConfidence);
     // TWO WINDOWS, TWO JOBS. The travel-margin window is what every phantom and rack-move
     // filter below was fitted on (duration ratios, implausibly-fast, overlong), so it keeps
     // deciding which phases are reps. The drive window (trimPhaseToDrive) is what is REPORTED:
     // the sensor's definition of the concentric, fitted to the sensor. Same split as speedsMps
     // against speedsReportedMps, and for the same reason: changing what a number is read over
     // must not change which reps exist.
-    const moving = trimPhaseToTravel(ySmoothed, phase.startIdx, phase.endIdx, wholePhasePeak.peakIdx, tune.travelOnsetMarginM);
+    const moving = trimPhaseToTravel(ySmoothed, phase.startIdx, repEndIdx, wholePhasePeak.peakIdx, tune.travelOnsetMarginM);
     const duration = (points[moving.endIdx].t - points[moving.startIdx].t) / 1000;
-    const drive = trimPhaseToDrive(speedsMps, phase.startIdx, phase.endIdx, wholePhasePeak.peakIdx, tune.driveOnsetFraction) ?? moving;
+    const drive = trimPhaseToDrive(speedsMps, phase.startIdx, repEndIdx, wholePhasePeak.peakIdx, tune.driveOnsetFraction) ?? moving;
     const driveDuration = (points[drive.endIdx].t - points[drive.startIdx].t) / 1000;
     // RANGE OF MOTION OVER THE TIME THE BAR WAS TRAVELLING -- a bar sensor's definition of mean
     // concentric velocity, and the one this is calibrated against. The sample mean of the
     // smoothed speeds it replaced sat at 0.42x of the sensor on the same reps: a mean of
     // instantaneous speeds over a window that includes the slow start is not distance over time.
     // Capped at the same plausibility ceiling every other reported speed is.
-    const romM = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);
+    const romM = Math.abs(ySmoothed[repEndIdx] - ySmoothed[phase.startIdx]);
     // THE DISTANCE AND THE TIME MUST COME FROM THE SAME WINDOW.
     //
     // 2026-10-06, the bench beside the OVR: mean 1.13 against the sensor's 0.65, +73.8%, while
@@ -1846,6 +1939,8 @@ export function summarizeTrackedSet(
       driveRomM,
       startIdx: phase.startIdx,
       endIdx: phase.endIdx,
+      repEndIdx,
+      heldAtTopSeconds,
       movingStartIdx: drive.startIdx,
       peakIdx,
       peakFloored,
@@ -1857,7 +1952,10 @@ export function summarizeTrackedSet(
       // a drive window far shorter than its travel window, or a drive distance far short of the
       // phase distance, is the shape of that failure returning.
       windows: {
-        phaseSeconds: Math.round(((points[phase.endIdx].t - points[phase.startIdx].t) / 1000) * 1000) / 1000,
+        phaseSeconds: Math.round(((points[repEndIdx].t - points[phase.startIdx].t) / 1000) * 1000) / 1000,
+        /** Time the segmenter's phase ran on past the rep's rest at the top -- see
+         *  restArrivalAfterPeak. 0 on every rep that reversed out of its top. */
+        heldAtTopSeconds: Math.round(heldAtTopSeconds * 1000) / 1000,
         travelSeconds: Math.round(duration * 1000) / 1000,
         driveSeconds: Math.round(driveDuration * 1000) / 1000,
         phaseRomCm: Math.round(romM * 1000) / 10,
@@ -2251,6 +2349,20 @@ export function summarizeTrackedSet(
   }
 
   function isPhantomByShape(phase: (typeof phaseStats)[number]): boolean {
+    // A PHASE THAT CAME TO REST AFTER A SMALL MOVEMENT IS A SETTLE, WHEREVER IT SITS. The rest
+    // cut (restArrivalAfterPeak) measures a rep to the rest it came to, so a 5-second settle after
+    // the un-rack -- 6.5cm of drift, then the bar held over the chest -- reads as a 0.13s, 6.5cm
+    // "rep" instead of the 5-second phase the overlong test used to catch (bench-unrack-capture,
+    // 2026-11-05). What came to rest is not a rep if it moved less than half the set's rep: the
+    // same ratio the edge test uses, applied to the rest cut alone and not edge-only, because a
+    // dead stop for a whole second after a few centimetres is a settle in the middle of a set too.
+    if (
+      phase.heldAtTopSeconds > 0 &&
+      medianConcentricAmplitude > 0 &&
+      phase.romM < medianConcentricAmplitude * EDGE_PHANTOM_AMPLITUDE_RATIO
+    ) {
+      return true;
+    }
     if (isImplausiblyFast(phase)) return true;
     if (isEdgeRackArtifact(phase)) return true;
     if (isOversizedPhantom(phase)) return true;
@@ -2373,11 +2485,15 @@ export function summarizeTrackedSet(
       const stats = (i: number) => {
         const phase = phaseStats[i];
         const ecc = pairedEccentric(i);
-        const amplitude = Math.abs(ySmoothed[phase.endIdx] - ySmoothed[phase.startIdx]);
-        const window = seconds(ecc ? ecc.startIdx : phase.startIdx, phase.endIdx);
+        // To the rep's END (the rest it came to, or the phase's end), never the segmenter's end:
+        // the 2026-10-19 RDL's eighth drive sat in front of a 2-second hold, and scored over the
+        // whole phase its window read 3x the median, so the trim took the real rep and kept the
+        // pickup. See restArrivalAfterPeak.
+        const amplitude = Math.abs(ySmoothed[phase.repEndIdx] - ySmoothed[phase.startIdx]);
+        const window = seconds(ecc ? ecc.startIdx : phase.startIdx, phase.repEndIdx);
         const eccSeconds = ecc ? seconds(ecc.startIdx, ecc.endIdx) : 0;
         const eccSpeed = ecc && eccSeconds > 0 ? Math.abs(ySmoothed[ecc.endIdx] - ySmoothed[ecc.startIdx]) / eccSeconds : null;
-        const concSeconds = seconds(phase.startIdx, phase.endIdx);
+        const concSeconds = seconds(phase.startIdx, phase.repEndIdx);
         const concSpeed = concSeconds > 0 ? amplitude / concSeconds : null;
         return { amplitude, window, eccSpeed, concSpeed };
       };
@@ -2397,6 +2513,16 @@ export function summarizeTrackedSet(
         if (medWin > 0 && s.window > 0) score += Math.abs(Math.log(s.window / medWin));
         if (medEcc > 0 && s.eccSpeed != null && s.eccSpeed > 0) score += Math.abs(Math.log(s.eccSpeed / medEcc));
         if (medConc > 0 && s.concSpeed != null && s.concSpeed > 0) score += Math.abs(Math.log(s.concSpeed / medConc));
+        // A SAMPLE-STARVED EDGE PHASE IS THE LEAST REP-LIKE THING IN THE SET when the count says
+        // there is one too many. The 2026-11-05 RDL set 1: its first upward phase after the pickup
+        // (48.6cm with 61% of the distance inside a 0.239s hole, 2.3s before the first rep where
+        // the reps sit 1.0s apart) scored 0.6 here and stayed, while the eighth drive it displaced
+        // -- recovered by the rest-at-top rule -- scored 0.1. Round nine read that phase as a
+        // starved rep 1 and the set as 8 of 8; it was the set-up and the set was 7 of 8. A phase
+        // whose distance the trace mostly did not see is never odder than a rep the trace saw
+        // whole, so it goes first: raised to the trim's floor, never above a phase that scores
+        // past it on its own.
+        if (phaseStats[i].windows.sampleStarved) score = Math.max(score, MIN_COUNT_TRIM_ODDNESS);
         return score;
       };
       let remaining = [...setRun];
@@ -2453,7 +2579,16 @@ export function summarizeTrackedSet(
     // whenever this rep isn't the very first phase, phaseStats[i - 1] is
     // guaranteed to be the eccentric that led into it.
     const pairedEccentric = i > 0 ? phaseStats[i - 1] : null;
-    const romCm = Math.round(Math.abs(points[phase.endIdx].y - points[phase.startIdx].y) * 1000) / 10;
+    // The rep's range is the RAW trace's distance between the phase's start and the rep's end
+    // (the rest the bar came to, or the phase's endpoint -- see restArrivalAfterPeak). NOT the
+    // smoothed series' distance, and that was measured rather than assumed, 2026-11-05 round
+    // ten: on the four sensor-paired squats the smoothed distance reads the sensor within 1%
+    // where this reads 2-4% short, and on the fifteen other paired takes (bench, row, press,
+    // RDL) the smoothed distance reads 2-12 points HIGH where this reads within a few -- the
+    // Kalman smoother overshoots a fast reversal. The raw extreme within one to three samples
+    // of each endpoint was measured too and moves nothing on the squats. The squat's 2% is not
+    // the endpoint read; the smoothed distance is on windows.phaseRomCm for the next reader.
+    const romCm = Math.round(Math.abs(points[phase.repEndIdx].y - points[phase.startIdx].y) * 1000) / 10;
 
     // From the moment the bar STARTED MOVING, not from the turning point the athlete may have
     // stood at first -- see trimPhaseToMovement. Time-to-peak-velocity and EAI (peak divided by

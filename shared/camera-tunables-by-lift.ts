@@ -378,8 +378,8 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // SCALE numbers (ruler uncertainties) survive 2026-11-05; every VELOCITY number fitted before
   // it was fitted on the lowering and is gone -- see VELOCITY_OVERRIDES_REMOVED_2026_11_05 and
   // the-concentric-is-the-way-up.test.ts.
-  "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0.02 },
-  "Back Squat": { heightRulerUncertainty: 0.11, driveOnsetFraction: 0, velocitySmoothingMs: 130 },
+  "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0 },
+  "Back Squat": { heightRulerUncertainty: 0.12, driveOnsetFraction: 0, velocitySmoothingMs: 130 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
 };
 
@@ -413,6 +413,17 @@ export const VELOCITY_OVERRIDES_REMOVED_2026_11_05: Record<string, string[]> = {
  *  an override with no evidence here is a number somebody guessed, and the test refuses it. */
 export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
   "Back Squat":
+    "2026-11-05, round ten. heightRulerUncertainty 0.11 -> 0.12, the same one-point step round two " +
+    "took (0.1 -> 0.11), worth about +1% of scale on every squat take. Set 2 beside the OVR (135x5, " +
+    "build 712, file path) read its range -2.7% as filmed and set 1 -1.9%; across the eight squat " +
+    "rows the ledger holds (10-04, 10-05, 10-19 x2, 10-29 x2, 11-05 x2) the as-filmed and live " +
+    "errors read -4.8 / -1.7 / -2.0 / +2.1 / +1.2 / +1.6 / -1.9 / -2.7, five of eight low, mean -1.0%, " +
+    "scatter 2.4% -- so this is the one-point step and not a fit (Rule #5), and the four TRACED " +
+    "squats all read low. Two other squat moves were measured this round and rejected: reading the " +
+    "rep's range off the smoothed series (lands the four squats inside 1% and reads 2-12 points high " +
+    "on the fifteen other paired takes, see the romCm comment in bar-tracking.ts) and the raw extreme " +
+    "within 1-3 samples of each endpoint (moves no squat). The mean's +2.4% on both sets is a " +
+    "phase edge one sample short of the sensor's concentric on 30fps samples, not a window. " +
     "2026-11-05, round nine. driveOnsetFraction 0.02 -> 0 (the whole travel window) and " +
     "velocitySmoothingMs 165 -> 130, both on this lift only. The 2026-11-05 squat beside the OVR " +
     "(135x5, build 710, analysed on the file path) read its mean +4.8% at 0.02 and +2.4% at 0, and " +
@@ -446,6 +457,13 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "high ones, about +0.8% on the blend, replayed on all six squat ledger rows and no other lift's. " +
     "Not a refit of HEIGHT_RULER_UNCERTAINTY, which is shared and was fitted on a squat AND an RDL.",
   "Romanian Deadlift":
+    "2026-11-05, round ten. driveOnsetFraction 0.02 -> 0 (the whole travel window), the step round " +
+    "nine named as next, costed after the rest-at-top rule (bar-tracking.ts, restArrivalAfterPeak) " +
+    "gave both 11-05 sets and the 10-19 take their eighth pull: at 0.02 -> 0 the mean reads " +
+    "+20.0% -> +15.8% on set 2 (135x8, build 712, live), +25.8% -> +16.1% on set 1, +32.2% -> " +
+    "+7.8% on 10-29 set 1 and +25.8% -> +22.5% on 10-19 set 2. Every take the same way, rep counts " +
+    "and ranges unchanged by the window, the peak untouched (+19% on set 2, +30% on set 1, not " +
+    "fitted: a more peaked profile on the same distance). " +
     "2026-11-05, round nine. driveOnsetFraction 0.04 -> 0.02 on this lift only, the same first step " +
     "the squat took in round eight. The 2026-11-05 RDL beside the OVR (135x8, build 710, live path) " +
     "read its mean +35.5% at 0.04 and +29.0% at 0.02 (+17.2% at 0); the two earlier traced RDLs " +

@@ -9277,6 +9277,9 @@ export const repBreakdownEntrySchema = z.object({
       largestGapSeconds: z.number().nullable().optional(),
       distanceInLargestGapShare: z.number().nullable().optional(),
       sampleStarved: z.boolean().nullable().optional(),
+      // How long the segmenter's phase ran on past the rep's rest at the top (bar-tracking.ts,
+      // restArrivalAfterPeak, round ten 2026-11-05).
+      heldAtTopSeconds: z.number().nullable().optional(),
     })
     .optional()
     .nullable(),
@@ -10292,6 +10295,12 @@ export const jumpBreakdownEntrySchema = z.object({
       concentricPeakVelocityRawMps: z.number().nullable().optional(),
       uncorrectedConcentricMeanVelocityMps: z.number().nullable().optional(),
       uncorrectedConcentricPeakVelocityMps: z.number().nullable().optional(),
+      // The sensor's window: dip bottom to the hip's apex (jump-tracking.ts, round ten 2026-11-05).
+      apexT: z.number().nullable().optional(),
+      riseToApexCm: z.number().nullable().optional(),
+      riseToApexSeconds: z.number().nullable().optional(),
+      riseToApexMeanVelocityMps: z.number().nullable().optional(),
+      uncorrectedRiseToApexCm: z.number().nullable().optional(),
     })
     .optional()
     .nullable(),

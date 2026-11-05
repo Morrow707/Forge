@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { replayCapture } from "./capture-replay";
-import { VELOCITY_SMOOTHING_MS } from "./bar-tracking";
+import { VELOCITY_SMOOTHING_MS, summarizeTrackedSet } from "./bar-tracking";
 import { cameraTunablesFor, FITTED_OVERRIDES, VELOCITY_OVERRIDES_REMOVED_2026_11_05 } from "@shared/camera-tunables-by-lift";
-import { romBucketForExercise } from "./exercise-camera-profile";
+import { romBucketForExercise, firstMoveForExercise } from "./exercise-camera-profile";
 import { MAX_PEAK_TO_MEAN_RATIO } from "./bar-tracking";
 
 /* THE FOUR TRACED CAPTURES OF THE 2026-10-29 EXPORT, replayed through the real summariser with
@@ -33,6 +33,17 @@ type Fixture = {
 };
 const fixtures: Fixture[] = JSON.parse(readFileSync(join(__dirname, "__fixtures__", "ovr-2026-10-29-export.json"), "utf8"));
 const replay = (f: Fixture) => replayCapture({ setId: f.id, exerciseName: f.exerciseName, heightIn: f.heightIn, loadKg: f.loadKg, loggedReps: f.loggedReps, trackingLevel: f.trackingLevel, barPathTrace: f.barPathTrace, trackingDiagnostics: f.trackingDiagnostics }).metrics!;
+// The same capture through the lift's own record with one value patched, the way the 11-05 file
+// replays: for the one assertion here about a window the record no longer carries.
+const replayAt = (f: Fixture, patch: Partial<Record<string, number>>) => {
+  const points = f.barPathTrace.map((p: any) => ({ t: p.t, x: p.x / 100, y: p.y / 100, z: 0, confidence: p.c ?? 1 }));
+  const romKind = romBucketForExercise(f.exerciseName);
+  const tune = cameraTunablesFor(f.exerciseName, romKind);
+  Object.assign(tune.values, patch);
+  return summarizeTrackedSet(points, f.loadKg ?? undefined, f.heightIn ?? undefined, firstMoveForExercise(f.exerciseName), [],
+    f.trackingDiagnostics?.calibration?.positionScaleCorrection ?? 1, false, romKind, { x: 0, y: 1 }, f.loggedReps ?? null, tune)!;
+};
+const CAPPED_10_19_AT_WHOLE_WINDOW = 6; // at the whole window the mean is lower and the 2.0 cap binds on six of eight 10-19 drives
 const byId = (id: string) => fixtures.find((x) => x.id === id)!;
 
 /** OVR, set level, from docs/camera-tracking-notes.md: 10-29 squat 0.80 / 1.20; 10-19 squat set 2
@@ -52,8 +63,10 @@ const CORRECTED: Record<string, { reps: number; romCm: number; mean: number; pea
   // 0) and a 130ms smoothing, the RDL's window 0.02 -- see FITTED_OVERRIDE_EVIDENCE.
   "2026-10-29 Back Squat set 1": { reps: 5, romCm: 71.8, mean: 0.80, peak: 1.16 },
   "2026-10-19 Back Squat set 2": { reps: 5, romCm: 71.8, mean: 0.83, peak: 1.19 },
-  "2026-10-29 Romanian Deadlift set 1": { reps: 8, romCm: 84.1, mean: 1.19, peak: 1.82 },
-  "2026-10-19 Romanian Deadlift set 2": { reps: 7, romCm: 64.1, mean: 1.12, peak: 2.15 },
+  // Round ten (2026-11-05): the RDL's window is 0 and the rest-at-top rule gives the 10-19 take
+  // its eighth rep (the last drive, merged with the stand-and-hold before the bar went down).
+  "2026-10-29 Romanian Deadlift set 1": { reps: 8, romCm: 84.1, mean: 0.97, peak: 1.55 },
+  "2026-10-19 Romanian Deadlift set 2": { reps: 8, romCm: 63.9, mean: 1.09, peak: 2.12 },
 };
 
 describe("the 2026-10-29 export replays through each lift's own record", () => {
@@ -105,10 +118,11 @@ describe("the 2026-10-29 export replays through each lift's own record", () => {
     expect(squat.sources.driveOnsetFraction).toBe("fitted");
     expect(squat.values.velocitySmoothingMs).toBe(130);
     const rdl = cameraTunablesFor("Romanian Deadlift", romBucketForExercise("Romanian Deadlift"));
-    // The RDL took its own first window step in round nine (0.04 -> 0.02); it is its own number,
-    // not the squat's, and the squat's 0 does not reach it.
+    // The RDL took its own first window step in round nine (0.04 -> 0.02) and the whole window in
+    // round ten (0); it is its own number, not the squat's, held on its own record.
     expect(rdl.sources.driveOnsetFraction).toBe("fitted");
-    expect(rdl.values.driveOnsetFraction).toBe(0.02);
+    expect(rdl.values.driveOnsetFraction).toBe(0);
+    expect(FITTED_OVERRIDES["Romanian Deadlift"].driveOnsetFraction).toBe(0);
     expect(rdl.values.velocitySmoothingMs).toBe(VELOCITY_SMOOTHING_MS);
     // The window moves the squat's mean and the smoothing its peak, and nothing else: same reps,
     // same range at the squat's record as at the shared one, on both squat takes.
@@ -136,20 +150,31 @@ describe("the 2026-10-29 export replays through each lift's own record", () => {
     expect(VELOCITY_OVERRIDES_REMOVED_2026_11_05["Romanian Deadlift"]).toEqual(["maxPeakToMeanRatio"]);
     expect("maxPeakToMeanRatio" in FITTED_OVERRIDES["Romanian Deadlift"]).toBe(false);
     expect(cameraTunablesFor("Romanian Deadlift", romBucketForExercise("Romanian Deadlift")).values.maxPeakToMeanRatio).toBe(MAX_PEAK_TO_MEAN_RATIO);
-    // On the drives the RDL reads HIGH on both takes -- +32% / +26% on the mean at its own 0.02
-    // window (+46% / +30% at the shared 0.04), +18% / +35% on the peak against the sensor -- with
-    // its range of motion +35% (10-29, filmed oblique) and +15%
+    // On the drives the RDL reads HIGH on both takes -- +8% / +22% on the mean at its own whole
+    // window (round ten; +32% / +26% at 0.02, +46% / +30% at the shared 0.04), +1% / +33% on the
+    // peak against the sensor -- with its range of motion +35% (10-29, filmed oblique) and +15%
     // (10-19, the 3D-pose collapse) over the sensor's. Those are the scale faults the notes carry;
     // the drive is read right and reads what the scale gives it. Pinned at what it reads (Rule #5:
-    // two takes, two different scale faults, no velocity fit). The cap at 2.0 binds on four of
-    // the 10-19 drives at the RDL's 0.02 window (three at the shared 0.04) and none of the 10-29 ones.
+    // two takes, two different scale faults, no velocity fit). The cap at 2.0 binds on the 10-19
+    // drives (four at 0.02; at the whole window the count is asserted below) and none of the 10-29 ones.
     const s1 = replay(byId("2026-10-29 Romanian Deadlift set 1"));
     const s2 = replay(byId("2026-10-19 Romanian Deadlift set 2"));
     expect(s1.repBreakdown.length).toBe(8);
-    expect(s1.meanVelocityMps! / SENSOR["2026-10-29 Romanian Deadlift set 1"].mean).toBeGreaterThan(1.25);
-    expect(s2.meanVelocityMps! / SENSOR["2026-10-19 Romanian Deadlift set 2"].mean).toBeGreaterThan(1.2);
-    expect(s2.repBreakdown.filter((r: any) => r.windows?.peakCapped).length).toBe(4);
-    expect(s1.repBreakdown.filter((r: any) => r.windows?.peakCapped).length).toBe(0);
+    expect(s2.repBreakdown.length).toBe(8);
+    expect(s1.meanVelocityMps! / SENSOR["2026-10-29 Romanian Deadlift set 1"].mean - 1).toBeCloseTo(0.078, 2);
+    expect(s2.meanVelocityMps! / SENSOR["2026-10-19 Romanian Deadlift set 2"].mean - 1).toBeCloseTo(0.225, 2);
+    expect(replayAt(byId("2026-10-29 Romanian Deadlift set 1"), { driveOnsetFraction: 0.02 }).meanVelocityMps! / SENSOR["2026-10-29 Romanian Deadlift set 1"].mean).toBeGreaterThan(1.25);
+    expect(s2.repBreakdown.filter((r: any) => r.windows?.peakCapped).length).toBe(CAPPED_10_19_AT_WHOLE_WINDOW);
+    // at the whole window the 10-29 take's mean is lower too, and the cap binds on three of its drives
+    expect(s1.repBreakdown.filter((r: any) => r.windows?.peakCapped).length).toBe(3);
+    // the eighth rep of the 10-19 take is the one the rest rule returned: a 2.0s stand at lockout
+    // ran on behind it (the recording was stopped with the bar still up), and no other rep on
+    // either take came to a rest the rule cut
+    expect(s2.repBreakdown[7].windows?.heldAtTopSeconds).toBeGreaterThan(1.9);
+    expect([...s1.repBreakdown, ...s2.repBreakdown.slice(0, 7)].every((r: any) => r.windows?.heldAtTopSeconds === 0)).toBe(true);
+    // and the set-up phase before the first pull (a 1.5s stand after 45cm of travel) is NOT the
+    // eighth: the athlete's count trims it as the odder edge, so the pulls are reps 1-8
+    expect(s2.repBreakdown[0].romCm).toBeCloseTo(61.3, 1);
     // and on both the drive is faster than the lowering, as a hinge's is
     expect(s1.eccentricMeanVelocityMps!).toBeLessThan(s1.meanVelocityMps!);
     expect(s2.eccentricMeanVelocityMps!).toBeLessThan(s2.meanVelocityMps!);

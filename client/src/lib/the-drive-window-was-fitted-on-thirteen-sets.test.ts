@@ -155,13 +155,14 @@ describe("the drive window was fitted on thirteen sensor-paired sets", () => {
     // all were fitted on the lowering and were removed 2026-11-05 (VELOCITY_OVERRIDES_REMOVED_2026_11_05).
     // The Back Squat carries the first window fitted on an actual drive (0.02 in round eight, the
     // whole travel window, 0, in round nine: five paired squats reading +2.0% on average at 0.02
-    // and -0.4% at 0); the Romanian Deadlift took its own first step in round nine (0.04 -> 0.02).
-    // Each is marked fitted, reaches its own lift, and reaches nobody else.
+    // and -0.4% at 0); the Romanian Deadlift took its own first step in round nine (0.04 -> 0.02)
+    // and the whole window in round ten (0). Each is marked fitted, reaches its own lift, and
+    // reaches nobody else -- the Conventional Deadlift shares the RDL's bucket and not its window.
     const squat = cameraTunablesFor("Back Squat", "squat");
     expect(squat.values.driveOnsetFraction).toBe(0);
     expect(squat.sources.driveOnsetFraction).toBe("fitted");
     const rdl = cameraTunablesFor("Romanian Deadlift", "deadlift");
-    expect(rdl.values.driveOnsetFraction).toBe(0.02);
+    expect(rdl.values.driveOnsetFraction).toBe(0);
     expect(rdl.sources.driveOnsetFraction).toBe("fitted");
     for (const [name, bucket] of [["Bench Press", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"], ["Conventional Deadlift", "deadlift"], ["Pendlay Row", "horizontal_press_or_row"], ["Front Squat", "squat"]]) {
       const other = cameraTunablesFor(name, bucket);

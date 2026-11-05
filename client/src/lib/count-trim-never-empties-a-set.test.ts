@@ -80,10 +80,10 @@ describe("the count-trim removes surplus and never a set", () => {
     "bench-set2-2026-10-02.json": 9,
     "push-press-set2-2026-10-02.json": 9,
     // A multi-capture export is keyed per capture (file:setId), because one file holds takes
-    // that count differently. The 2026-10-29 export: the 10-19 RDL set 2 finds 7 of 8 -- its first
-    // upward phase (2.5-4.9s, 2.4s long) is the pickup from the floor merged with the set-up and
-    // the eighth is the last drive merged with the stand-and-hold before the bar goes down.
-    "ovr-2026-10-29-export.json:2026-10-19 Romanian Deadlift set 2": 7,
+    // that count differently. The 2026-10-29 export's 10-19 RDL set 2 was here at 7 of 8 -- "the
+    // eighth is the last drive merged with the stand-and-hold before the bar goes down" -- until
+    // round ten (2026-11-05) wrote the rest-at-top rule (bar-tracking.ts, restArrivalAfterPeak)
+    // for the same fault on that day's set 2; it counts 8 of 8 now and left the list.
     // The 2026-10-30 export: every shoulder press finds 7 of 8, and on the corrected rule the
     // missing press is the FIRST, merged with the clean into one 2.6m upward phase (the bar goes
     // floor -> shoulders -> overhead with no reversal between), not the eighth folded into the
