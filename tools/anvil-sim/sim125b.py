@@ -116,7 +116,8 @@ for a in roster:
         if stat not in ("out","post_op"):
             rows.append({"id":a["id"],"tag":a["pos"],"kind":a["tier"],"st":stat,
                          "date":day.isoformat(),"doy":doy,"game":day in GAMES,
-                         "load":round(L,1),"acute":round(acute,3),"chronic":round(chronic,3),
+                         "load":round(L,1),"slp":round(slp,2),
+                         "acute":round(acute,3),"chronic":round(chronic,3),
                          "wear":round(wear,3),
                          "v":a["drive0"]*(1+T["acuteWeight"]*acute/2.2
                                             +T["chronicWeight"]*chronic/66.0
