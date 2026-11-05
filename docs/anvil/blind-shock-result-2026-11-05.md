@@ -105,3 +105,59 @@ found it.
   noting as a null, and worth re-checking in a sport where load varies more within a week.
 
 *Run 2026-11-05. `tools/anvil-sim/blindshock.py` (registered), `blindshock2.py` (secondary).*
+
+---
+
+# AMENDMENT TO THE RESULT — 2026-11-05, after an adversarial review
+
+## The replacement was compared at double the false-alarm budget. My error, now measured.
+
+`max(slow, sleep-only)` was reported with **each channel pinned at 10%**. The OR of two 10%
+tests is not a 10% test: up to `1 − (1−.1)(1−.1) = 19%` when the errors are independent. So the
+replacement was given twice Converge's false-alarm budget, and a coach's morning list would have
+gone back up with it. The review that caught this was right and the original comparison was not
+apples to apples.
+
+Re-pinned by bisection on a common quantile until the **combined** false-positive rate is 10%,
+with Converge keeping its own 10% (`blindshock3.py`):
+
+| ρ | quantile | combined FP | OR detection | Converge | verdict |
+|---|---|---|---|---|---|
+| 0.0 | 0.950 | 10.0% | 49% ±28 | 55% ±22 | tied |
+| 0.3 | 0.950 | 10.3% | 55% ±33 | 50% ±37 | tied |
+| 0.6 | 0.950 | 10.1% | 59% ±26 | 33% ±27 | tied |
+| 0.9 | 0.950 | 10.1% | **68% ±24** | 21% ±18 | **OR wins** |
+
+(2 × noise, λ=0. At 1 × noise the OR wins at both ρ=0.6 and ρ=0.9 — 50% vs 15% and 60% vs 14%.)
+
+**The quantile had to move 0.90 → 0.95** — each channel really does have to run at about 5% to
+hold the OR at 10%, exactly as the critique's arithmetic said. After paying that cost in full:
+
+**The conclusion survives, at reduced strength.** The honest statement is now *tied at low sleep
+leakage, strictly better at high leakage, and Converge never wins anywhere.* Not "always better."
+
+## The "straw man" charge: conceded in part, and one of its three survivors is the thing it replaces
+
+The charge is that this falsified *linear OLS residualisation with collinear regressors*, not
+*predictive anomaly detection*. **Half right, and the half that lands is the headline.** What was
+pre-registered and run is the design Forge was going to build; the headline should have said
+*residual-flagging is falsified*, which the body already said, rather than *the hypothesis*.
+
+Of the three formulations offered as surviving it:
+
+- **A · Expectation bounding** (`predict ŷ, threshold at ŷ + 1.96σ`) **is algebraically the test
+  that was run.** `y > ŷ + kσ` ⟺ `y − ŷ > kσ` ⟺ `residual > kσ`. The band *is* the residual.
+  The only genuine difference is a heteroscedastic σ, and that does not help: the **centre** still
+  moves with sleep, which is where the signal goes. And taken at its own word — *"if it drops
+  exactly as much as poor sleep explains, it is an expected fatigue flag"* — it flags on the
+  prediction as well as the residual, which is `max(sleep-only, residual)`: the replacement.
+- **B · Mechanistic asymmetry** (a bad reading on *good* sleep is the alarming one) is real,
+  different, and untested. But it is the **ρ=0 corner, where the residual already works** — 55%
+  against the slow channel's 58%. A sharpening of a case that was never the problem, not a rescue
+  of the case that was.
+- **C · Causal path decomposition** stops residualising and starts estimating a total effect. Once
+  you flag the total effect rather than the leftover, you are running channels in parallel again.
+
+All three either collapse into the replacement or live in the corner where nothing failed.
+
+*Amendment run 2026-11-05. `tools/anvil-sim/blindshock3.py`.*
