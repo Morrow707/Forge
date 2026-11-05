@@ -2969,10 +2969,15 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 705** (2026-10-30
-  20:53 UTC, `bfcc130`: round five -- a yardstick that would convict most of the rulers stands
-  down, the press's own drive onset 0.08; 704 was its `verify_build` on the same commit). **705
-  is the build to film bench, Pendlay row and shoulder press on.** Before it, **703** (2026-10-30
+  branch `verify_build` for the arbiter plumbing. **The newest build is 707** (2026-10-31 19:19
+  UTC, `37867e3`: round seven -- the bench's own peak cap 1.6, the press's own drive onset 0.12,
+  the plate's confidence floor; 706 was its `verify_build` on the same commit, and 708 a
+  `verify_build` on the audit fix `e58737c`). **Round eight (2026-11-05, the direction rule)
+  ships as the next beta -- 709 its `verify_build`, 710 the build to film on**; the round-seven
+  velocity numbers in 707 were fitted on the lowering (see "ROUND EIGHT" below). Before 707,
+  **705** (2026-10-30 20:53 UTC, `bfcc130`: round five -- a yardstick that would convict most of
+  the rulers stands down, the press's own drive onset 0.08; 704 was its `verify_build` on the same
+  commit). Before it, **703** (2026-10-30
   20:07 UTC, `87aa268`: round four -- the bench's own drive onset 0.03 and smoothing 200, the
   Pendlay row's own depth uncertainty 0.6; 702 was its `verify_build` on the same commit). Before it, **701** (2026-10-30
   01:00 UTC, `980fcd4`: round three -- the box ruler corrects the landing numbers only and the
@@ -3110,7 +3115,8 @@ halves before splitting anything else:
   by the same rule; the every-lift test pins that the press's window reaches the press trace and
   the row's record lands set 2. See docs/camera-tracking-notes.md "Round five, 2026-10-30".
   Calibration work, uploaded on commit as build **705** (704 was its `verify_build` on `bfcc130`).
-- **THE QUEUE IS EMPTY AS OF BUILD 705** (round five above; nothing waits behind it).
+- **THE QUEUE IS EMPTY AS OF BUILD 707** (round seven; round eight ships as 710). Before it, 705
+  (round five; nothing waited behind it).
   Before it, **703** (round four). Before it, **701** (round three). Before it,
   build **697** (2026-10-29 evening, `6d8f259`; 696 was its
   `verify_build` on `ccdeba5`). Calibration work, uploaded on commit: the RDL's first per-lift
@@ -3192,6 +3198,56 @@ halves before splitting anything else:
   See docs/camera-tracking-notes.md, "The RDL's +12.0% is the 3D-pose collapse". Calibration work:
   uploaded on commit.
 
+- **ROUND EIGHT, 2026-11-05: THE SEGMENTER HAD BEEN CALLING THE LOWERING THE LIFT SINCE 2026-09-30,
+  AND EVERY VELOCITY FIT IN THIS FILE DATED BEFORE TODAY WAS MADE ON THE DESCENT.** Scott, told
+  the finding and what it costs: "Fix it now." The trace is y-DOWN -- `vision-body-landmarks.ts`
+  writes `y = -(joint.y * frameHeight)`, `worldVerticalSign` pins shoulders-smaller-than-hips, the
+  phone projects on `IMAGE_VERTICAL_AXIS` which is the identity -- and `summarizeTrackedSet`'s
+  direction rule read `y[end] > y[start]` as the bar rising. A rise in y is the bar going DOWN. So
+  from the gravity axis (build 576) to 2026-11-05 every native bar take reported its lowering as
+  its concentric, and every sensor pairing compared the descent to the OVR's drive: the shared
+  `DRIVE_ONSET_FRACTION` 0.04 (10-07, "thirteen sets"), the bench's 0.03 / 200 / 1.6, the press's
+  0.08 then 0.12, the RDL's cap 2.5, round six's set-mean costing. **It never failed loudly because
+  a controlled lowering and a drive have similar speeds** -- bench set 10 "landed on the sensor"
+  on 09-30 with its descent within 3% of the sensor's concentric.
+  **PROVEN THREE WAYS BEFORE A LINE MOVED, because the velocities argued the other way.** On the
+  inverted labels most takes sat within 10% of the sensor and the corrected ones read 20-45% high
+  on the bench and RDL, which is exactly the shape that would have talked a session out of the fix.
+  (1) A synthetic bench pressing UP at 0.80 m/s and lowering at 0.20, through the real summariser
+  with the phone's own axis: reported mean **0.17**. (2) Every pause over 0.4s on every stored
+  take sits at the end a y-down trace puts it (row and press rest at the bottom and read LARGER,
+  squat, RDL and bench rest at the top and read SMALLER: 23 of 26). (3) The 10-29 squat's UPWARD
+  phases read 0.88 / 0.80 / 0.85 / 0.76 / 0.72 against the OVR's 0.87 / 0.83 / 0.82 / 0.77 / 0.74,
+  fatigue trend included. **Verify the direction of a label with geometry, never with how well the
+  number it produces matches** -- a wrong label that happens to match is the one that survives.
+  **THE HARNESS WAS RIGHT WHERE THE PHONE WAS WRONG, AND "REPRODUCES THE DEVICE" HID IT.**
+  `capture-replay.ts` had stated the y-down convention in words since 09-29 and flipped an
+  axis-less trace (`VERTICAL_AXIS` y: -1) to compensate; every stored take WITH an axis was replayed
+  as the identity and so inverted exactly as the phone. The tests pinning "the harness reproduces
+  the shipped mean" were therefore proving the harness inverted the same way. Both are the identity
+  now; `the-concentric-is-the-way-up.test.ts` pins the premises, the synthetic both ways, the squat
+  rep for rep, and forbids the old spelling with comments stripped; the grinding-set synthetic in
+  `off-axis-segmentation.test.ts`, which was written y-UP and so agreed with the bug, emits y-down.
+  **SCALE IS UNTOUCHED, VELOCITY IS RE-OPENED.** A range of motion is a magnitude, so every ledger
+  row, every ruler uncertainty, the plate's MAD-to-sigma and confidence floor and the set-mean
+  window fix from rounds six and seven all stand. The descent-fitted velocity overrides are REMOVED
+  and kept as data with their corrected costing (`VELOCITY_OVERRIDES_REMOVED_2026_11_05`): on the
+  drives the press reads **+3.5 / -2.7 / +2.4%** at the SHARED window (and +16 / +3 / +17% at
+  0.08), the bench reads 20-48% high at every window because the drive trim removes a bench's slow
+  start (its whole upward phases match the sensor's concentric duration), and the squat reads
+  +5.0 / +1.2 / +4.0 / +3.2% at 0.04, **+1.2 / 0.0 / +2.0 / +2.2% at 0.02** -- the one per-lift step
+  this round, `FITTED_OVERRIDES["Back Squat"].driveOnsetFraction` 0.02, with 0.0 the next. The
+  shared 0.04 is left alone on purpose: the 10-07 method on the drives picks 0.0 (recorded in
+  `the-drive-window-was-fitted-on-thirteen-sets.test.ts`), and a shared constant refitted the day
+  a month of labels flipped is how a bad one gets in.
+  **Rep counts moved both ways**: the 10-29 RDL, the 10-19 squat, the 10-02 row and bench set 8
+  count every rep logged now; the 10-06 bench, the 10-02 bench, set 9 and bench set 3 each lose a
+  grinding LAST press to `isEdgeRackArtifact`'s 2.5x duration rule (fitted on descents, which do
+  not grind) -- the bench's open rule. And the press's missing rep is the FIRST (the clean, a
+  pause, the press, one 2.6m phase), not the eighth folded into the re-rack as rounds four and
+  five read it off the lowerings. 876 files / 3112 tests in the client and shared suites green;
+  `KNOWN_UNDERCOUNTS` re-recorded on the drives. See docs/camera-tracking-notes.md, "Round eight".
+  Calibration work: `verify_build` then `beta` on commit.
 - **ROUND SIX, 2026-10-31: SET 3 OF ALL THREE LIFTS ON 705, AND THE EXPORT HAD BEEN LYING ABOUT THE
   SMOOTHING.** Taken over from Fable mid-session; nothing shipped a constant, which is the point.
   Three new ledger rows (bench set 3 **+5.5%**, Pendlay row set 3 **+23.2%**, press set 3 **+3.1%**),

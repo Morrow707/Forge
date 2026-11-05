@@ -12,26 +12,29 @@ import press from "./__fixtures__/push-press-set2-2026-10-02.json";
 // docs/camera-tracking-notes.md, "Set 2 beside OVR, 2026-10-02".
 const read = (p: string) => readFileSync(new URL(`../../../${p}`, import.meta.url), "utf8");
 
+const ROW_10_02_PULL_MEAN = 1.17; // +37% of the sensor's 0.86, measured 2026-11-05
 describe("the Pendlay row's pickup is not a rep", () => {
-  // Sensor: nine rows, mean 1.02 m/s, peak 1.68, ROM 19.5in (49.5cm). The device counted ten,
-  // the first being the bar coming off the floor: 96.8cm over 3.7s against a 54cm median.
-  // The title used to say this landed on the sensor's mean and the number pinned was 1.02. The
-  // sensor read 0.85, so 1.02 was +20% and the title was wrong about its own assertion. The
-  // 2026-10-07 drive-window refit takes it to 0.91, +7%, and the pin says which is which now.
-  // AND THE 2026-10-31 SET-MEAN FIX TAKES IT TO 0.83, -2.1%. The set mean had been summing the
-  // whole PHASE's distance over the DRIVE window's time; summing the drive window's distance
-  // lowers every mean, which helped every take in the corpus that read high and this is one of
-  // the seven. So the number pinned here has been 1.02 (+20%), 0.91 (+7%) and now 0.83 (-2.1%),
-  // and each move is a fix to a different thing: the window, then the distance it is paired with.
-  it("counts nine rows, and the mean moves from +20% to +7% to -2% of the sensor", () => {
+  // Sensor: TEN rows (the OVR_PENDLAY_ROW_2026_10_02 constant), mean 0.86 m/s, peak 1.54, ROM
+  // 22.0in (56.0cm). The device counted ten with the first being the bar coming off the floor
+  // (96.8cm over 3.7s against a 54cm median) and that pickup is what this rule drops.
+  //
+  // Until 2026-11-05 this case pinned NINE rows and a mean that moved 1.02 -> 0.91 -> 0.83 across
+  // three fixes -- every one of them read off the LOWERINGS, because the direction rule was
+  // inverted (the-concentric-is-the-way-up.test.ts). With the pulls read as the pulls: the pickup
+  // is still dropped (an edge phase 1.5x the median amplitude), all ten rows are found, and the
+  // mean reads ROW_10_02_PULL_MEAN at the shared window -- high, a trace fault the row shares with
+  // every 10-30 row (the bottom of a Pendlay rep is a hand at the plates, so the pull's phase
+  // opens late and short) and NOT a number to fit on this take (Rule #5). Pinned at what it reads
+  // so the next change is seen.
+  it("counts ten rows with the pickup dropped; the pull's mean is pinned at what it reads", () => {
     const result = replayCapture((row as StoredCapture[])[0]);
-    expect(result.repCount).toBe(9);
+    expect(result.repCount).toBe(10);
     const m = result.metrics!;
-    expect(m.meanVelocityMps).toBeCloseTo(0.83, 1);
-    const sensorMean = 0.85;
-    expect(Math.abs(m.meanVelocityMps! - sensorMean) / sensorMean).toBeLessThan(0.1);
-    expect(Math.abs(m.romCm! - 49.5) / 49.5).toBeLessThan(0.05);
-    expect(Math.min(...m.repBreakdown.map((r) => r.startT))).toBeGreaterThan(5_000);
+    expect(m.meanVelocityMps).toBeCloseTo(ROW_10_02_PULL_MEAN, 1);
+    expect(Math.abs(m.romCm! - 56.0) / 56.0).toBeLessThan(0.08);
+    expect(Math.min(...m.repBreakdown.map((r) => r.startT))).toBeGreaterThan(3_000);
+    // the pickup (2.0-3.5s) is not a rep
+    expect(m.repBreakdown.some((r) => r.startT < 2_500)).toBe(false);
   });
   it("is an edge rule with a stated ratio", () => {
     const src = read("client/src/lib/bar-tracking.ts");
@@ -56,10 +59,11 @@ describe("the push press, filmed from the front at an angle, is unchanged", () =
 });
 
 describe("the bench whose wrists Vision lost for half the take", () => {
-  // OPEN. 360 of 680 frames had no wrist above MIN_VISIBILITY; the stored trace has fifteen holes
-  // and replays exactly as the device reported (0.46 against the sensor's 0.76). The fix (a wrist
-  // under the floor is used at its own confidence) acts at capture time, so this trace cannot show
-  // it; the next bench from that angle can, through trace.wristsBelowVisibilityFloor.
+  // OPEN. 360 of 680 frames had no wrist above MIN_VISIBILITY and the stored trace has fifteen
+  // holes. It stood at 0.46 against the sensor's 0.76 until 2026-11-05 -- and the 0.46 was the
+  // LOWERING's mean under the inverted direction rule. Read as the press it reads high at the
+  // shared drive window; the holes are the fault and the bench's drive window is open
+  // (docs/camera-tracking-notes.md, "Round eight").
   it.fails("lands within 20% of the sensor's mean", () => {
     const result = replayCapture((bench as StoredCapture[])[0]);
     expect(Math.abs(result.metrics!.meanVelocityMps! - 0.76) / 0.76).toBeLessThan(0.2);

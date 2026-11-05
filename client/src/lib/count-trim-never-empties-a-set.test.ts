@@ -66,25 +66,38 @@ describe("the count-trim removes surplus and never a set", () => {
    * it. Listed with what they currently return so a fix shows up here as a failure asking for
    * the entry to be deleted. */
   const KNOWN_UNDERCOUNTS: Record<string, number> = {
-    "bench-set8-2026-09-29.json": 7,
-    "bench-set9-2026-09-30.json": 8,
+    // RE-COUNTED 2026-11-05 ON THE CORRECTED DIRECTION RULE (the-concentric-is-the-way-up.test.ts):
+    // until then every rep here was a LOWERING plus the phase before it. On the lifts the list
+    // moved both ways -- 10-29 RDL set 1 (7 -> 8), 10-19 squat set 2 (4 -> 5), the 10-02 row
+    // (9 -> 10) and bench set 8 (7 -> 9) now count every rep and left the list; set 9 (8 -> 7),
+    // the 10-06 bench (10 -> 9) and the 10-02 bench (10 -> 9) joined or fell, each a grinding LAST
+    // press that runs 2.6x the median duration and meets an edge rule fitted on descents. That
+    // rule is the bench's open one; see docs/camera-tracking-notes.md "Round six".
+    "bench-set8-2026-09-29.json": 9,
+    "bench-set9-2026-09-30.json": 7,
     "bench-unrack-capture.json": 9,
-    "pendlay-row-set2-2026-10-02.json": 9,
+    "bench-2026-10-06.json": 9,
+    "bench-set2-2026-10-02.json": 9,
     "push-press-set2-2026-10-02.json": 9,
     // A multi-capture export is keyed per capture (file:setId), because one file holds takes
-    // that count differently. The 2026-10-29 export: both RDLs found 7 of the 8 logged (the
-    // 10-29 one lost a quarter of its wrist frames; see docs/camera-tracking-notes.md) and the
-    // 10-19 squat set 2 found 4 of 5. The 10-29 squat counts all five and is not listed.
-    "ovr-2026-10-29-export.json:2026-10-29 Romanian Deadlift set 1": 7,
+    // that count differently. The 2026-10-29 export: the 10-19 RDL set 2 finds 7 of 8 -- its first
+    // upward phase (2.5-4.9s, 2.4s long) is the pickup from the floor merged with the set-up and
+    // the eighth is the last drive merged with the stand-and-hold before the bar goes down.
     "ovr-2026-10-29-export.json:2026-10-19 Romanian Deadlift set 2": 7,
-    "ovr-2026-10-29-export.json:2026-10-19 Back Squat set 2": 4,
-    // The 2026-10-30 export: the shoulder press found 7 of 8. The eighth is in the trace (a 68cm
-    // press at 19.0-19.8s) and was folded into the 2.7m lowering to the floor that follows it --
-    // a press re-racks DOWNWARD, so the last rep's eccentric runs on into the re-rack. Same
-    // family as the RDL's 7-of-8 above; see docs/camera-tracking-notes.md "Round four".
+    // The 2026-10-30 export: every shoulder press finds 7 of 8, and on the corrected rule the
+    // missing press is the FIRST, merged with the clean into one 2.6m upward phase (the bar goes
+    // floor -> shoulders -> overhead with no reversal between), not the eighth folded into the
+    // re-rack as rounds four and five read it off the lowerings. A segmenter rule about a pause
+    // inside a monotonic phase, shared; see docs/camera-tracking-notes.md "Round six".
     "ovr-2026-10-30-export.json:2026-10-30 Barbell Shoulder Press set 1": 7,
-    // and set 2 the same way (85lb, the eighth at 26.4-27.4s folded into the lowering); round five.
     "ovr-2026-10-30-export.json:2026-10-30 Barbell Shoulder Press set 2": 7,
+    // the row's set 2, the lone-hand take (280 of 579 points carried): the phone's eight were
+    // lowerings; the pulls count seven, one lost to the same trace fault
+    "ovr-2026-10-30-export.json:2026-10-30 Pendlay Row set 2": 7,
+    "ovr-2026-10-30-export.json:2026-10-30 Barbell Shoulder Press set 3": 7,
+    // and bench set 3: the phone counted 8 on the lowerings; the presses count 7, the slow last
+    // one (66cm, 2.6x the median duration) dropped by the same edge rule as the 10-06 bench's.
+    "ovr-2026-10-30-export.json:2026-10-30 Bench Press set 3": 7,
   };
 
   it.each(

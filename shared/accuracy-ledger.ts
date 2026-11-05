@@ -826,7 +826,20 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
   },
 ];
 
-/* THE SEVENTH MOVE, 2026-10-31 (round seven): ONE SMALL STEP ON EACH OF THE THREE LIFTS FILMED
+/* THE ROUND-EIGHT MOVE, 2026-11-05: a RULE, and it touches NO scale number on any row.
+ * summarizeTrackedSet's direction rule had the trace's polarity backwards from 2026-09-30 to
+ * 2026-11-05 -- a larger y is LOWER, and the rule read a rise in y as the bar going up -- so every
+ * native take reported its LOWERING as its lift (the-concentric-is-the-way-up.test.ts). This
+ * ledger replays SCALE, which is direction-agnostic (a range of motion is the same magnitude either
+ * way round), so every liveErrorPct here is unchanged by the fix and every scale change rounds six
+ * and seven made (the plate's MAD-to-sigma, the confidence floor, the three set-3 rows above)
+ * stands. Every VELOCITY figure quoted in the notes on these rows -- means, peaks, the windows and
+ * caps fitted to them in rounds four through seven -- was read off the descent and is re-stated in
+ * docs/camera-tracking-notes.md "Round eight". The velocity overrides fitted on the descent
+ * (bench 0.03 / 200 / 1.6, press 0.12, RDL cap 2.5) are gone from FITTED_OVERRIDES; the squat
+ * carries the first drive window fitted on an actual drive (0.02).
+ *
+ * THE SEVENTH MOVE, 2026-10-31 (round seven): ONE SMALL STEP ON EACH OF THE THREE LIFTS FILMED
  * ON 10-30, which is Scott's standing instruction for this loop ("change something on all lifts
  * after this round ... until we get to 0% I want to keep making small adjustments on everything").
  * Round six shipped two SHARED mechanism fixes, so the bench improved, the row moved only as a

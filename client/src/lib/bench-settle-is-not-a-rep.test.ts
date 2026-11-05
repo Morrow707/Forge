@@ -19,7 +19,10 @@ describe("the settle after the un-rack is not a rep", () => {
     const result = replayCapture(stored[0]);
     expect(result.repCount).toBe(10);
     const reps = result.metrics!.repBreakdown;
-    expect(Math.min(...reps.map((r) => r.startT))).toBeGreaterThan(12_000);
+    // Rep 1 is the press at 12.07s plus the descent that led into it (11.51s); the two settles
+    // (7.2-9.0s and 9.9-11.5s) are dropped. The bound was 12_000 until 2026-11-05, when a rep was
+    // the LOWERING plus the phase before it (the direction rule was inverted) and so started later.
+    expect(Math.min(...reps.map((r) => r.startT))).toBeGreaterThan(11_000);
     expect(Math.max(...reps.map((r) => r.endT))).toBeLessThan(23_500);
   });
 });

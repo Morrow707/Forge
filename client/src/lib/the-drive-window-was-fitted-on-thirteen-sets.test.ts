@@ -20,8 +20,14 @@ import squat1 from "./__fixtures__/squat-set1-2026-10-01.json";
 //
 // This file is the ratchet on the two properties that made the refit safe, not a restatement of
 // the sweep (that is in DRIVE_ONSET_FRACTION's own comment, with the table).
+/** The phone projects on IMAGE_VERTICAL_AXIS, the identity; a stored trace is replayed the same
+ *  way. Until 2026-11-05 an axis-less trace was flipped here (y: -1), which compensated for the
+ *  inverted direction rule on the harness side only -- see capture-replay.ts, VERTICAL_AXIS. */
 const STORED = { x: 0, y: 1 };
-const VERTICAL = { x: 0, y: -1 };
+const VERTICAL = { x: 0, y: 1 };
+/** Median |drive duration - sensor concentric| / sensor over the seven sets, ON THE DRIVES,
+ *  measured 2026-11-05 with the direction rule corrected. */
+const DRIVE_TABLE_ON_THE_DRIVES: Record<number, number> = { 0: 0.059, 0.04: 0.168 };
 
 type Fixture = { capture: any; ovr: any; tag: string };
 const SETS: Fixture[] = [
@@ -85,9 +91,9 @@ describe("the drive window was fitted on thirteen sensor-paired sets", () => {
     // The registry hands every one of the 269 filmable things a COPY of it, and the two may not
     // drift -- camera-tunables-are-a-copy.test.ts owns that check; this is the reason it matters
     // here: a refit that moved one and not the other would be invisible on every lift but one.
-    // A lift with no entry of its own reads the copy. The Bench Press carried this case until
-    // 2026-10-30, when it got its own fraction (see FITTED_OVERRIDE_EVIDENCE).
-    expect(cameraTunablesFor("Incline Barbell Bench Press", "horizontal_press_or_row").values.driveOnsetFraction)
+    // A lift with no entry of its own reads the copy -- the Bench Press included, again, since
+    // 2026-11-05 (its 0.03 of round four was fitted on the lowering and is gone).
+    expect(cameraTunablesFor("Bench Press", "horizontal_press_or_row").values.driveOnsetFraction)
       .toBe(DRIVE_ONSET_FRACTION);
   });
 
@@ -102,9 +108,18 @@ describe("the drive window was fitted on thirteen sensor-paired sets", () => {
     const shipped = median(errAt(DRIVE_ONSET_FRACTION));
     const previous = median(errAt(0.07));
     expect(shipped).toBeLessThan(previous);
-    // Stated as an absolute bar too, so a future change that makes BOTH worse while keeping the
-    // inequality cannot pass.
-    expect(shipped).toBeLessThan(0.1);
+    // THE 10-07 SWEEP WAS RUN ON THE LOWERINGS. The direction rule was inverted from 2026-09-30 to
+    // 2026-11-05 (the-concentric-is-the-way-up.test.ts), so the "concentric duration" this fit
+    // matched to the sensor's was the descent's. Until 2026-11-05 this case asserted the shipped
+    // median under 0.1 and it was (0.059); on the DRIVES the same seven sets read the table below,
+    // and 0.0 (the whole travel window) is the sweep's own minimum. The shared value is left at
+    // 0.04 on purpose this round -- a constant refitted the same day a month of labels flipped is
+    // how a bad one gets in, and Scott's order is per-lift steps -- and the Back Squat carries the
+    // first drive-fitted window (0.02). The table is pinned so the refit, when it comes, is made
+    // against numbers already written down rather than re-derived.
+    expect(shipped).toBeCloseTo(DRIVE_TABLE_ON_THE_DRIVES[0.04], 2);
+    expect(median(errAt(0))).toBeCloseTo(DRIVE_TABLE_ON_THE_DRIVES[0], 2);
+    expect(median(errAt(0))).toBeLessThan(shipped);
   });
 
   it("CANNOT change which reps exist, at any fraction", () => {
@@ -133,22 +148,18 @@ describe("the drive window was fitted on thirteen sensor-paired sets", () => {
     }
   });
 
-  it("stays the SHARED default for every lift that has not been fitted apart -- and the bench's own is written down", () => {
+  it("stays the SHARED default for every lift that has not been fitted apart -- and the squat's own is written down", () => {
     // The registry exists so a number fitted on one movement cannot leak to another. The 0.04 was
-    // fitted ACROSS five movements and stays the shared default. Until 2026-10-30 this case said no
-    // lift had been given its own; the Bench Press has one now (0.03), costed on five sensor-paired
-    // benches whose mean read +6..+16% HIGH at the shared value, and the assertion is the one the
-    // registry makes: the bench's fraction is marked fitted, reaches the bench, and reaches nobody
-    // else -- the squat, the RDL and the row still read the shared copy.
-    const bench = cameraTunablesFor("Bench Press", "horizontal_press_or_row");
-    expect(bench.values.driveOnsetFraction).toBe(0.03);
-    expect(bench.sources.driveOnsetFraction).toBe("fitted");
-    // The press got its own window (0.08) in round five, 2026-10-30, the same way; the three
-    // below still read the shared copy.
-    const press = cameraTunablesFor("Barbell Shoulder Press", "overhead_press");
-    expect(press.values.driveOnsetFraction).toBe(0.12);
-    expect(press.sources.driveOnsetFraction).toBe("fitted");
-    for (const [name, bucket] of [["Back Squat", "squat"], ["Romanian Deadlift", "deadlift"], ["Pendlay Row", "horizontal_press_or_row"]]) {
+    // fitted ACROSS five movements and stays the shared default. The Bench Press (0.03, round four)
+    // and the Barbell Shoulder Press (0.08 then 0.12, rounds five and seven) each carried their own;
+    // all were fitted on the lowering and were removed 2026-11-05 (VELOCITY_OVERRIDES_REMOVED_2026_11_05).
+    // The Back Squat carries the first window fitted on an actual drive (0.02, four paired squats
+    // reading +2.3..+5.0% at 0.04 and +0.0..+2.4% at 0.02); it is marked fitted, reaches the squat,
+    // and reaches nobody else.
+    const squat = cameraTunablesFor("Back Squat", "squat");
+    expect(squat.values.driveOnsetFraction).toBe(0.02);
+    expect(squat.sources.driveOnsetFraction).toBe("fitted");
+    for (const [name, bucket] of [["Bench Press", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"], ["Romanian Deadlift", "deadlift"], ["Pendlay Row", "horizontal_press_or_row"], ["Front Squat", "squat"]]) {
       const other = cameraTunablesFor(name, bucket);
       expect(other.values.driveOnsetFraction, name).toBe(DRIVE_ONSET_FRACTION);
       expect(other.sources.driveOnsetFraction, name).not.toBe("fitted");

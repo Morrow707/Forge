@@ -35,6 +35,11 @@ describe("the stored trace carries what a replay needs", () => {
     // buildPathTrace), so a trace that carries one replays along its own y. See the call site.
     expect(replay).toMatch(/calibration\?\.movementAxis \? STORED_TRACE_ALONG_AXIS : VERTICAL_AXIS/);
     expect(replay).not.toMatch(/calibration\?\.movementAxis \?\? VERTICAL_AXIS/);
+    // And since 2026-11-05 neither frame flips the trace: the phone projects on the identity
+    // (IMAGE_VERTICAL_AXIS is { x: 0, y: 1 }) and a replay has to hand the summariser the same
+    // polarity, or the direction rule reads the lowering as the lift on one side and not the other.
+    expect(replay).toMatch(/const VERTICAL_AXIS = \{ x: 0, y: 1 \};/);
+    expect(replay).toMatch(/const STORED_TRACE_ALONG_AXIS = \{ x: 0, y: 1 \};/);
     expect(replay).toMatch(/calibration\?\.positionScaleCorrection \?\? 1/);
   });
 });

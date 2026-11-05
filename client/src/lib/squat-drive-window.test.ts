@@ -16,7 +16,7 @@ describe("the squat's concentric is the drive, not the sit in the hole", () => {
     expect(m.romCm! / (sensor.romIn * 2.54)).toBeGreaterThan(0.9);
     expect(m.romCm! / (sensor.romIn * 2.54)).toBeLessThan(1.1);
     // 0.65 on the device under the travel margin; 0.935 after the 10-07 window refit; 0.90
-    // since 2026-10-31, when the SET mean stopped summing the whole phase's distance over the
+    // since 2026-11-05, when the SET mean stopped summing the whole phase's distance over the
     // drive window's time (see meanVelocityMps in bar-tracking.ts). That fix lowers every mean
     // by the ratio of the two windows, so it helps every take that read HIGH and costs every
     // take that read LOW -- seven and five respectively across the traced corpus. This squat is
@@ -48,27 +48,29 @@ describe("the squat's concentric is the drive, not the sit in the hole", () => {
     expect(trimPhaseToDrive([0, 1, 0], 0, 2, 1)).toBeNull();
   });
 
-  // Set 2 of the same session, oblique. Count and range of motion land; the mean sits below the
-  // sensor because every concentric window is ~0.15s wide, and the drive window does not narrow
-  // it. Pinned at what it IS so the next change that moves it is seen moving it.
-  //
-  // THE 2026-10-07 REFIT MOVED THIS ONE THE WRONG WAY, 0.83 -> 0.80, and that is recorded rather
-  // than smoothed over: a longer window divides the same distance by more time, so a set already
-  // reading LOW reads lower. It is one of two sets in the corpus of thirteen that the refit does
-  // not help (the other is this session's row), against a halving of the median error across the
-  // rest -- the trade was made with the whole table on screen, not by hoping.
-  it("set 2 counts and measures range of motion; its mean is the open 0.80", () => {
+  // Set 2 of the same session, oblique. Count and range of motion land. Until 2026-11-05 this
+  // case pinned the mean at "the open 0.80" of the sensor and blamed a 0.15s window; the 0.80 was
+  // the descent (the direction rule was inverted) and the drive reads inside 5%.
+  it("set 2 counts and measures range of motion, and its mean is no longer 0.80 of the sensor", () => {
     const m = replayCapture((capture2 as StoredCapture[])[0]).metrics!;
     const sensor = OVR_SQUAT_SET2_2026_10_01.sensor.reported;
     expect(m.repBreakdown.length).toBe(5);
     expect(m.romCm! / (sensor.romIn * 2.54)).toBeGreaterThan(0.95);
     expect(m.romCm! / (sensor.romIn * 2.54)).toBeLessThan(1.05);
-    // 0.774 since the 2026-10-31 set-mean fix (0.787 before it); set 2's window has been the
+    // 0.774 since the 2026-11-05 set-mean fix (0.787 before it); set 2's window has been the
     // open item on this take since 10-07 and the `it.fails` below is still the record of it.
     expect(m.meanVelocityMps! / sensor.meanVelocityMps).toBeGreaterThan(0.77);
   });
-  it.fails("set 2's mean within 10% of the sensor (open: the window is 0.15s wide)", () => {
+  // CLOSED 2026-11-05, by the direction rule reading the trace's real polarity. This stood as
+  // `it.fails` because set 2's mean read 0.80 of the sensor -- and the 0.80 was the DESCENT'S mean,
+  // the phone having reported the lowering as the lift since 2026-09-30 (see
+  // the-concentric-is-the-way-up.test.ts). The drive reads +4% of the sensor at the shared window
+  // and +2% at the squat's own 0.02, which is what the sentence above this used to call "the
+  // window is 0.15s wide": the window was on the wrong half of the rep.
+  it("set 2's mean within 10% of the sensor", () => {
     const m = replayCapture((capture2 as StoredCapture[])[0]).metrics!;
-    expect(m.meanVelocityMps! / OVR_SQUAT_SET2_2026_10_01.sensor.reported.meanVelocityMps).toBeGreaterThan(0.9);
+    const ratio = m.meanVelocityMps! / OVR_SQUAT_SET2_2026_10_01.sensor.reported.meanVelocityMps;
+    expect(ratio).toBeGreaterThan(0.9);
+    expect(ratio).toBeLessThan(1.1);
   });
 });

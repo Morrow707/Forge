@@ -57,6 +57,7 @@ import type { CameraTunables } from "./camera-tunables-by-lift";
 import {
   FITTED_OVERRIDES,
   FITTED_OVERRIDE_EVIDENCE,
+  VELOCITY_OVERRIDES_REMOVED_2026_11_05,
   SHARED_CAMERA_TUNABLES,
   cameraTunablesFor,
 } from "./camera-tunables-by-lift";
@@ -300,7 +301,13 @@ describe("the per-lift numbers are a copy of today's numbers", () => {
     // The probes have to actually EXERCISE the fitted branch, or the whole case is the shared
     // half asserted seven times over -- the "a gate that never fires collides with nothing"
     // failure that let expensive-sensors-never-collide pass through build 618.
-    expect(fittedSeen).toBeGreaterThanOrEqual(5);
+    // One since 2026-11-05: the squat's drive window. The other velocity overrides were fitted on
+    // the lowering (the direction rule was inverted) and are gone -- see
+    // VELOCITY_OVERRIDES_REMOVED_2026_11_05, whose entries this case also holds to NOT being fitted.
+    expect(fittedSeen).toBeGreaterThanOrEqual(1);
+    for (const [name, removed] of Object.entries(VELOCITY_OVERRIDES_REMOVED_2026_11_05)) {
+      for (const field of removed) expect((FITTED_OVERRIDES[name] ?? {})[field as keyof CameraTunables], `${name}.${field}`).toBeUndefined();
+    }
   });
 });
 

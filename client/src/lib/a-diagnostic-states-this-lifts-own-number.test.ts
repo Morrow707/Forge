@@ -139,14 +139,20 @@ const TUNABLE_KEYS = new Set(
 );
 
 describe("a diagnostic that names a per-lift number names this lift's own", () => {
-  it("the premise: a lift really can carry its own smoothing, and one does", () => {
+  it("the premise: a lift really can carry its own velocity number, and one does", () => {
     // Without this the whole file is vacuous -- a scan for "reads the record" means nothing if
-    // every record holds the same number. It is the Bench Press today (round four, 2026-10-30).
-    const bench = cameraTunablesFor("Bench Press", romBucketForExercise("Bench Press")).values;
+    // every record holds the same number. It was the Bench Press's smoothing when this was written
+    // (round four, 2026-10-30); that number was fitted on the lowering and is gone (2026-11-05,
+    // VELOCITY_OVERRIDES_REMOVED_2026_11_05), and the Back Squat's drive window is the one that
+    // differs from its shared copy today. The smoothing is still asserted shared everywhere, so a
+    // diagnostic stating 165 on every lift is TRUE again and this file's rule is about where the
+    // value is read from, not what it is.
+    const squat = cameraTunablesFor("Back Squat", romBucketForExercise("Back Squat")).values;
     const shared = cameraTunablesFor("Front Squat", romBucketForExercise("Front Squat")).values;
     expect(shared.velocitySmoothingMs).toBe(VELOCITY_SMOOTHING_MS);
-    expect(bench.velocitySmoothingMs).not.toBe(shared.velocitySmoothingMs);
-    expect(FITTED_OVERRIDES["Bench Press"]?.velocitySmoothingMs).toBe(bench.velocitySmoothingMs);
+    expect(squat.velocitySmoothingMs).toBe(VELOCITY_SMOOTHING_MS);
+    expect(squat.driveOnsetFraction).not.toBe(shared.driveOnsetFraction);
+    expect(FITTED_OVERRIDES["Back Squat"]?.driveOnsetFraction).toBe(squat.driveOnsetFraction);
   });
 
   it("the dialog writes at least one tunable-named diagnostic, so the rule has a subject", () => {

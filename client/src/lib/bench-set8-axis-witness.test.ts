@@ -80,7 +80,9 @@ describe("the grip axis is a witness held against the image vertical", () => {
     // of motion stopped averaging in the fragments a wrong axis creates: the damage a bad axis
     // does is smaller than it was, and this test exists to show the axis is the fault, not to pin
     // how bad the fault used to look.
-    expect(m.romCm).toBeGreaterThan(45);
+    // 45 -> 40 on 2026-11-05, when the direction rule started reading the presses rather than
+    // the lowerings: the rotated frame's reps are 42.4cm, still 16% past the sensor.
+    expect(m.romCm).toBeGreaterThan(40);
   });
 
   it("finds the sensor's ten at its range of motion under the reconciled axis", () => {
