@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { storage, StaleWorkoutLogError } from "./storage";
+import { submitLogAtCurrentRevision } from "./test-support/save-at-current-revision";
 import { db } from "./db";
 import { uploadedFiles } from "@shared/schema";
 import {
@@ -44,7 +45,8 @@ function save(
   program: Awaited<ReturnType<typeof setup>>["program"],
   entries: unknown[],
 ) {
-  return storage.submitWorkoutLog(athleteId, {
+  // Claims the stored revision, as the live screen does -- see save-at-current-revision.ts.
+  return submitLogAtCurrentRevision(athleteId, {
     assignmentId: program.assignment.id,
     programDayId: program.day.id,
     date: "2026-01-05",
@@ -250,16 +252,41 @@ describe("a workout save built on a stale revision is refused, not applied", () 
     expect(await uploadedFileExists(clip)).toBe(true);
   });
 
-  // An older client sends no baseRevision at all, and a first save has nothing to conflict
-  // with. Neither may start failing.
-  it("still accepts a save that makes no claim about what was there", async () => {
+  // A first save of a day has nothing to conflict with and carries no claim. That stays.
+  it("accepts a first save that makes no claim about what was there", async () => {
+    const { athlete, program } = await setup();
+    const [squatEx] = program.programExercises;
+
+    const first = await save(athlete.id, program, [entry(squatEx.id, [{ setNumber: 1, reps: 5, weight: "225" }])]);
+    expect((first as any).revision).toBe(0);
+  });
+
+  // INVERTED 2026-11-05. This case used to assert the opposite -- "an older client sends no
+  // baseRevision at all ... neither may start failing" -- and that clause is what let a
+  // screen hydrated from a cached, log-less picture of the day replace three filmed sets
+  // with three empty exercises (see submitWorkoutLog's comment on the check). There is no
+  // older client; a save with no claim against a day that has a revision is a stale screen,
+  // and it gets the same 409 a wrong claim gets, which the client already knows how to
+  // recover from.
+  it("refuses a save with no revision claim once the day has a log", async () => {
     const { athlete, program } = await setup();
     const [squatEx] = program.programExercises;
 
     await save(athlete.id, program, [entry(squatEx.id, [{ setNumber: 1, reps: 5, weight: "225" }])]);
-    const again = await save(athlete.id, program, [
-      entry(squatEx.id, [{ setNumber: 1, reps: 5, weight: "235" }]),
-    ]);
-    expect((again as any).revision).toBe(1);
+    // Deliberately NOT through save(): that helper claims the current revision, and this case
+    // is about a payload that claims nothing.
+    await expect(
+      storage.submitWorkoutLog(athlete.id, {
+        assignmentId: program.assignment.id,
+        programDayId: program.day.id,
+        date: "2026-01-05",
+        completed: false,
+        entries: [entry(squatEx.id, [{ setNumber: 1, reps: 5, weight: "235" }])],
+      } as any),
+    ).rejects.toBeInstanceOf(StaleWorkoutLogError);
+    // And the day is exactly as the first save left it: nothing was replaced.
+    const kept = await storage.getWorkoutDayDetail(athlete.id, program.assignment.id, program.day.id, "2026-01-05");
+    expect(kept!.log!.revision).toBe(0);
+    expect(kept!.log!.entries[0].sets[0].weight).toBe("225");
   });
 });

@@ -5751,6 +5751,47 @@ change is wrong.
   question asked when one disappeared and there was no way to ask it -- the
   cause sat undetected for four builds. There is no console to read on an
   iPhone, so this is the only instrument.
+- **THE DAY SCREEN HYDRATED FROM THE CACHE AND WROTE AN EMPTY DAY OVER THREE FILMED SETS**
+  (2026-11-05, 19:11 UTC, read off the Render log). Scott filmed set 1 of Back Squat, Romanian
+  Deadlift and Box Jump on 712 between 19:00 and 19:07, every save 200, every clip 201. At
+  19:11:29 a GET of the day returned 30,428 bytes (three sets, three traces); at 19:11:38 and
+  19:11:40 two POSTs returned 200; at 19:12:02 the same GET returned 3,734 bytes. **Rows, clips
+  and traces gone, by the app's own autosave, with nothing refused and nothing logged as an
+  error.** Set 1's numbers survive only because the morning export had already been read into the
+  repo's fixture, ledger and ground truth; the server has nothing left of them.
+  **TWO HALVES, BOTH NECESSARY.** (1) `workout.tsx`'s hydration effect was the hydrate-in-an-effect
+  shape this file already names, with a twist the paragraph does not cover: React Query serves the
+  CACHED day synchronously on remount (in-memory and the `forge-query-cache` persister, 24h) before
+  the `refetchOnMount: "always"` refetch lands, so `if (data && !hydrated)` latched on an 18:59 copy
+  of the day with NO log in it, took `baseRevisionRef` null, and ignored the refetch that arrived a
+  moment later carrying the three sets. The next autosave sent three exercises with no sets and no
+  `baseRevision`. The effect now hydrates only from a fetch that landed AFTER the screen mounted
+  (`dataUpdatedAt >= hydrateFromFetchesAfterRef.current`, the stamp reset in the 409 handler so a
+  catch-up also refetches), the loading gate waits on `!data || !hydrated`, and a save that carried
+  a capture invalidates the day query so the cache is never older than the server by one set.
+  (2) `submitWorkoutLog` let a payload with NO revision claim through against a day that has a
+  log -- the "older client" clause the survival itest used to assert in words. There is no older
+  client; a save with no claim against a revisioned day is a stale screen, and it gets the same
+  409 a wrong claim gets, which the client already recovers from. The first save of a day (no log,
+  nothing to claim) is unchanged. `server/test-support/save-at-current-revision.ts` is how the
+  itests save a day a second time now, and the five files that re-saved without a claim read it.
+  **THE DOUBLE 409 ON EVERY RETURN TO A DAY WAS THE SAME BUG WITH THE REVISION PRESENT.** Where
+  the cache held a revision, the stale hydration was refused (20:41:29/30, 20:42:07/08,
+  20:48:09/14 in the same log: two 409s a second apart each time) and the 409 handler rehydrated
+  from the same stale `data`, so the second save was refused too. Harmless there and the tell for
+  the mechanism; it reads as the cache being one revision behind, which is exactly what it was.
+  **RECORDED FACTS FROM THE SAME LOG, NOT BUGS:** the `visibilitychange` beacon save 401s in 1-3ms
+  on every background (the native app authenticates with a bearer token in localStorage, which
+  `sendBeacon` cannot carry, and ITP drops the cookie) -- fire-and-forget by design, and the
+  queued flush is what actually carries that save; and the device-approval sign-in storm (49
+  `complete` POSTs in a second, one 200, the rest 409/499) fired at 18:58:45 and 20:41:06, both
+  after a fresh install, still queued behind the calibration round.
+  `client/src/lib/the-day-hydrates-from-a-fetch-not-the-cache.test.ts` (8 cases, six mutations
+  each caught) states what is FORBIDDEN -- `if (data && !hydrated) {` with no fetch stamp, a 409
+  branch that rehydrates without resetting the stamp, a loading gate that draws before `data`, a
+  throw condition that still reads `input.baseRevision != null &&` -- with comments stripped.
+  Server half ships on Render; client half is a build. **HELD on Scott's word ("queue it as I'm
+  testing the camera"): a Render deploy restarts the server under a filming session.**
 
 ## The AI knowledge library
 

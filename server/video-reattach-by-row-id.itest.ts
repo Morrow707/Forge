@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { storage } from "./storage";
+import { submitLogAtCurrentRevision } from "./test-support/save-at-current-revision";
 import { db } from "./db";
 import { unattachedVideoUploads, uploadedFiles, workoutSetEntries } from "@shared/schema";
 import {
@@ -59,7 +60,8 @@ async function logDay(
   program: Program,
   sets: Record<string, unknown>[] = [{ setNumber: 1, reps: "10", weight: "135" }],
 ) {
-  const result = await storage.submitWorkoutLog(athleteId, {
+  // Claims the stored revision, as the live screen does -- see save-at-current-revision.ts.
+  const result = await submitLogAtCurrentRevision(athleteId, {
     assignmentId: program.assignment.id,
     programDayId: program.day.id,
     date: DAY,

@@ -1088,7 +1088,7 @@ export function WorkoutPage({
   const [pendingSync, setPendingSync] = useState(() => hasPendingLog(dayKey));
   const [sharingWorkout, setSharingWorkout] = useState(false);
 
-  const { data, isLoading, isError, refetch } = useQuery<DayDetail>({
+  const { data, dataUpdatedAt, isLoading, isError, refetch } = useQuery<DayDetail>({
     queryKey: [`${apiBase}/day`, assignmentId, programDayId, date],
     queryFn: async () => {
       const url = `${apiBase}/day?assignmentId=${assignmentId}&programDayId=${programDayId}&date=${date}`;
@@ -1164,6 +1164,31 @@ export function WorkoutPage({
 
   const [items, setItems] = useState<ItemState[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  // THE SCREEN HYDRATES FROM A FETCH, NEVER FROM A CACHED PICTURE OF THE DAY.
+  //
+  // React Query hands `data` back synchronously from its cache on mount -- the in-memory copy
+  // from the last time this day was read, or the persisted one from localStorage -- and only
+  // THEN runs the refetch that refetchOnMount: "always" asks for. The hydration effect below
+  // used to fire on that cached answer, latch `hydrated`, and ignore the fresh one when it
+  // landed ("items only ever hydrates from data once per mount"). Silent autosaves never
+  // invalidate this query, so the cache is the day as it was when the screen was FIRST
+  // opened, however many sets were saved since.
+  //
+  // 2026-11-05, 19:11 UTC: this day was first opened empty at 18:59, three camera sets were
+  // filmed and saved live, the screen was reopened, React Query handed it the 18:59 copy (no
+  // log, no sets), the 30KB refetch with the three sets arrived a beat later and was ignored,
+  // and the next autosave sent three exercises with no sets and no revision claim. The server
+  // took it and the three sets, their clips and their traces were gone. The 409s this screen
+  // kept meeting on every return to a day ("updated somewhere else") were the same stale
+  // hydration being refused on the days where the cache at least held a revision.
+  //
+  // So hydration waits for data that was FETCHED after the moment it was asked for: this ref
+  // holds that moment (mount, and again when a 409 asks for a rehydration) and only data whose
+  // dataUpdatedAt is at or past it is built into state. A cached answer carries the time it
+  // was originally fetched and never qualifies; the refetch does; the offline fallback inside
+  // queryFn resolves as a fresh result and qualifies too, which is the one case a cached day
+  // is deliberately shown.
+  const hydrateFromFetchesAfterRef = useRef(Date.now());
   // Which revision of the stored log this screen's state was built from, sent with
   // every save so the server can refuse one built on a stale picture of the day
   // rather than replace the day with it -- see workoutLogs.revision. Null before a
@@ -1254,7 +1279,7 @@ export function WorkoutPage({
   useWakeLock(expandedKey !== null);
 
   useEffect(() => {
-    if (data && !hydrated) {
+    if (data && !hydrated && dataUpdatedAt >= hydrateFromFetchesAfterRef.current) {
       const defaultUnit: WeightUnit = user?.preferredWeightUnit ?? "lbs";
       const correctiveItems = data.correctives.map((c) =>
         buildItem(
@@ -1285,7 +1310,7 @@ export function WorkoutPage({
       setHydrated(true);
       setExpandedKey(null);
     }
-  }, [data, hydrated, user]);
+  }, [data, dataUpdatedAt, hydrated, user]);
 
   // Per-exercise, not an account-wide PATCH like this used to be -- a
   // superset can pair a lbs lift with a kg lift, so switching one card's
@@ -1565,12 +1590,16 @@ export function WorkoutPage({
         // stored revision is exactly one ahead of ours and a response was lost, the day moved
         // because of us, so adopt the revision and send this payload again. Anything else is
         // somebody else's edit and falls through to the reload below.
+        // A null claim counts too: a first save that landed but lost its response leaves the
+        // ref null while the server holds revision 0, and the server refuses the next
+        // claim-less save (it has to -- a claim-less save over an existing log is otherwise
+        // the stale screen that deleted three sets on 2026-11-05). The arithmetic below
+        // treats "no revision" as one before the first.
         if (
           err instanceof ApiError
           && err.status === 409
           && !replay
           && lostResponsePossibleRef.current
-          && baseRevisionRef.current != null
         ) {
           try {
             const freshRes = await apiRequest(
@@ -1579,7 +1608,7 @@ export function WorkoutPage({
             );
             const fresh = (await freshRes.json()) as { log?: { revision?: number } | null };
             const serverRevision = fresh.log?.revision;
-            if (typeof serverRevision === "number" && serverRevision === baseRevisionRef.current + 1) {
+            if (typeof serverRevision === "number" && serverRevision === (baseRevisionRef.current ?? -1) + 1) {
               logDebug("SAVE", `409 after a lost response: adopting revision ${serverRevision} and resending`);
               baseRevisionRef.current = serverRevision;
               lostResponsePossibleRef.current = false;
@@ -1672,6 +1701,15 @@ export function WorkoutPage({
       // new one or it would look stale to the server and be refused.
       if (synced && typeof data?.revision === "number") baseRevisionRef.current = data.revision;
       if (synced) dirtySinceSyncRef.current = false;
+      // A save that carried a CAPTURE refreshes the cached day in the background, silent or
+      // not. Hydration no longer reads the cache (see hydrateFromFetchesAfterRef), so this is
+      // not for this screen -- it is for the offline fallback and the day cache, which are
+      // written only by a fetch and would otherwise go on describing the day as it was before
+      // the set was filmed. A keystroke save is left alone: the refetch is ~30KB on a filmed
+      // day and a rep count is cheap to retype; a camera set is not.
+      if (synced && ((payload as { sentCaptureKeys?: string[] }).sentCaptureKeys?.length ?? 0) > 0) {
+        qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
+      }
       // Every synced save replaces every set row, so the ids a queued clip carries are stale
       // from this moment. Take the new ones and push them into the queue before the next flush
       // can run with the old ones; the tuple fallback would still land it, but the row id is
@@ -1774,6 +1812,11 @@ export function WorkoutPage({
           autosaveTimerRef.current = null;
         }
         setJustCompleted(false);
+        // Rehydrate from the REFETCH, not from the data already in hand: without this the
+        // effect fires on the very next render with the same stale `data`, hydrates from it
+        // again, and the next autosave meets the same 409 -- which is the pair of 409s this
+        // screen logged on every return to a day before 2026-11-05.
+        hydrateFromFetchesAfterRef.current = Date.now();
         setHydrated(false);
         baseRevisionRef.current = null;
         qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
@@ -2422,7 +2465,10 @@ export function WorkoutPage({
     );
   }
 
-  if (isLoading || !data) {
+  // `!hydrated` as well: between a cached answer and the refetch that hydration waits for,
+  // `data` is present and `items` is empty, and drawing a day with no sets for that beat is
+  // exactly the picture a stale save is built from.
+  if (isLoading || !data || !hydrated) {
     return (
       <AppShell title="Loading Workout…">
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
