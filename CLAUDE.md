@@ -2969,12 +2969,14 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 707** (2026-10-31 19:19
-  UTC, `37867e3`: round seven -- the bench's own peak cap 1.6, the press's own drive onset 0.12,
-  the plate's confidence floor; 706 was its `verify_build` on the same commit, and 708 a
-  `verify_build` on the audit fix `e58737c`). **Round eight (2026-11-05, the direction rule)
-  ships as the next beta -- 709 its `verify_build`, 710 the build to film on**; the round-seven
-  velocity numbers in 707 were fitted on the lowering (see "ROUND EIGHT" below). Before 707,
+  branch `verify_build` for the arbiter plumbing. **The newest build is 710** (2026-11-05 16:36
+  UTC, `4c30e37`: round eight -- the direction rule corrected, every descent-fitted velocity
+  override removed, the squat's own drive onset 0.02; 709 was its `verify_build` on the same
+  commit). **710 is the build to film on.** Before it, **707** (2026-10-31 19:19 UTC, `37867e3`:
+  round seven -- the bench's own peak cap 1.6, the press's own drive onset 0.12, the plate's
+  confidence floor; 706 was its `verify_build` on the same commit, and 708 a `verify_build` on
+  the audit fix `e58737c`); the round-seven velocity numbers in 707 were fitted on the lowering
+  (see "ROUND EIGHT" below). Before 707,
   **705** (2026-10-30 20:53 UTC, `bfcc130`: round five -- a yardstick that would convict most of
   the rulers stands down, the press's own drive onset 0.08; 704 was its `verify_build` on the same
   commit). Before it, **703** (2026-10-30
@@ -3115,8 +3117,8 @@ halves before splitting anything else:
   by the same rule; the every-lift test pins that the press's window reaches the press trace and
   the row's record lands set 2. See docs/camera-tracking-notes.md "Round five, 2026-10-30".
   Calibration work, uploaded on commit as build **705** (704 was its `verify_build` on `bfcc130`).
-- **THE QUEUE IS EMPTY AS OF BUILD 707** (round seven; round eight ships as 710). Before it, 705
-  (round five; nothing waited behind it).
+- **THE QUEUE IS EMPTY AS OF BUILD 710** (round eight, 2026-11-05; calibration work, uploaded on
+  commit). Before it, 707 (round seven) and 705 (round five); nothing waited behind either.
   Before it, **703** (round four). Before it, **701** (round three). Before it,
   build **697** (2026-10-29 evening, `6d8f259`; 696 was its
   `verify_build` on `ccdeba5`). Calibration work, uploaded on commit: the RDL's first per-lift

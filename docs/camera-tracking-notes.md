@@ -87,8 +87,8 @@ end under y-down (15 of 18); and the 10-29 squat's UPWARD phases read 0.88 / 0.8
 velocity figure in the table and lists below that is dated before 2026-11-05 is a figure about the
 lowering**; the corrected numbers are in "Round eight" and the table's state cells. The descent-
 fitted velocity overrides are gone (bench 0.03 / 200 / 1.6, press 0.12, RDL cap 2.5); the squat
-carries the first window fitted on an actual drive (0.02). Build to film on: **710** once cut (709
-its `verify_build`); 708 was a `verify_build` on the audit fix.
+carries the first window fitted on an actual drive (0.02). Build to film on: **710** (2026-11-05 16:36 UTC,
+`4c30e37`; 709 its `verify_build`); 708 was a `verify_build` on the audit fix.
 **HOW TO TELL WHICH BUILD A CAPTURE RAN ON, from the export alone:** `scaleYardstickAbstained`
 exists from 705, the row's `rulerUncertainties.depth` is 0.6 from 703, and `scaleBlend.identity`
 from round four. Cheaper than the run list and it cannot drift.
