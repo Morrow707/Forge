@@ -139,3 +139,151 @@ of a test you can fail is sometimes failing it.
 ---
 
 *Written 2026-11-05, before any run. Forge Performance Systems.*
+
+---
+
+# AMENDMENT 1 — 2026-11-05, before any run of the test above
+
+The specification above has **not been run**. An adversarial review found four defects in it,
+and a fifth turned up while measuring something else. The original text is left in place
+unchanged, as this file's own rule requires; everything below supersedes it where they conflict.
+
+## A1.1 · The sleep coupling was a free parameter. It becomes a sweep.
+
+§3 fixed arm B's sleep hit at **−0.6 SD**, one hand-picked number. That number **decides the
+answer**. Make the sleep hit proportional to the v hit across affected athletes and sleep
+becomes a perfect linear proxy for the shock, OLS attributes all of it to sleep, and Converge's
+residual goes to zero — it fails by construction. Make them independent and Converge wins
+trivially. **I was setting the result and calling it a test.**
+
+This is the same error the magnitude sweep already guards against, in the one place I did not
+apply it.
+
+**The review that found it got the mechanism wrong and is corrected here**, because the wrong
+mechanism leads to a useless fix: it argued a phase/lag mismatch at the shock's ramp and decay
+boundaries. `compare.py::chronic` is **cross-sectional, not a time series** — one point per
+athlete, window-mean drift against window-mean load, regressed across athletes. There are no
+boundary transitions in the fit, and its proposed fix (shift the sleep hit ±2 days) is a near
+no-op against a 45-day window mean. The real failure is collinearity across athletes, not phase
+within one.
+
+**Replaces §3's arm B:** the correlation between an athlete's v hit and their sleep hit is swept
+over **ρ ∈ {0.0, 0.3, 0.6, 0.9}**, declared now.
+
+## A1.2 · Arm A was physiologically impossible. Load leakage becomes a sweep too.
+
+§3's arm A held load perfectly static while v moved. A real exam-stressed athlete trains worse:
+volume drops, velocity drops, sessions get skipped. Forcing load flat makes the shock
+unnaturally orthogonal to the one predictor the slow channel already has, and **in reality load
+absorbs part of the variance, shrinking the residual.** Arm A as written measures an upper bound
+and will overstate real-world performance.
+
+**Replaces §3's arm A:** the shock's leakage into load is swept over **λ ∈ {0.0, 0.3, 0.6}** of
+its effect size, declared now.
+
+## A1.3 · Three arms become a leakage surface, which cannot be rigged
+
+A1.1 and A1.2 together: the test is no longer three hand-picked arms with a pass/fail. It is a
+**2-D sweep over leakage into sleep (ρ) × leakage into load (λ)**, with the null (ρ=λ=shock=0)
+still setting the false-positive floor.
+
+The result is a region, not a verdict: *the disagreement earns its keep where the stressor leaks
+less than ρ\* into sleep and λ\* into load, and not beyond.* That is a statement I cannot choose
+the outcome of, which is the only kind worth pre-registering.
+
+The success and falsification criteria of §5 are unchanged in substance and now read against the
+surface: at each (ρ, λ), Converge must exceed **sleep-only** by more than the two spreads
+combined. Where it does not, that cell is reported as a failure, not re-tuned.
+
+## A1.4 · The sign convention, recorded because I got it wrong
+
+**In this model a DEGRADED athlete produces a HIGHER `v`.** Established empirically, not assumed:
+`compare.py::chronic` puts decliners at a median residual of **+0.573** (fast) and **+0.156**
+(slow) against clean at **−0.082**, and flags the high tail — **21.4% / 20.3% against a 10.1%
+clean floor.** The acute fatigue pool raises `v` (0.333 against 0.312 across the pool's median).
+
+The first shock written for this work **subtracted**, which injects "gets better." Flag rates
+fell *below* the no-shock floor and fell further the bigger the shock. That is the sign error
+`chronic2.py` already cost this project once, and it was caught only because the result was
+nonsense and the nonsense got checked instead of reported.
+
+Any arm added later states its sign against this paragraph.
+
+## A1.5 · The Gaussian noise assumption limits every false-positive number this project has published
+
+All three world generators emit `rng.gauss(0, 0.0115)` — **symmetric Gaussian** capture noise.
+Real tap-timing distributions are right-skewed (ex-Gaussian). So:
+
+- Every false-positive rate measured here is calibrated against a distribution real data does not
+  have. The fast channel is the exposure, since it z-scores individual captures with no averaging
+  (the slow channel's MAD is applied to 45-day window means, which the CLT makes near-Gaussian
+  whatever the raw shape — a review aimed this at the wrong detector).
+- **And it has already corrupted a design decision.** The headline metric was the *slowest tenth*;
+  an audit moved it to the *median* on a measured ~3× sensitivity gain. But PVT literature
+  (Basner & Dinges; Lim & Dinges) is clear that fatigue presents in **lapses and the slow tail,
+  not the median**. Gaussian noise has no ex-Gaussian tail to detect, so that audit measured a
+  property of the noise model and not of fatigue. The metric choice rests on an artifact.
+
+**Not fixed here, and named rather than folded in:** regenerating the worlds with ex-Gaussian
+capture noise and re-running everything is its own piece of work with its own write-up. Until it
+is done, **no false-positive rate from this harness should be quoted to anyone outside it**, and
+the median-versus-tail decision is reopened rather than settled.
+
+## A1.6 · The fast channel's baseline adapts to a sustained state — measured, not predicted
+
+Already run, so this is a result rather than a plan; it is here because any later arm must account
+for it. `contamination.py`, 4 football seasons, 500 athletes, a 21-day flat shock, per-day z proven
+to reproduce `compare.py::acute()` exactly before injection:
+
+| shipped rule, 2 × noise | d1–3 | d4–6 | d7–9 | d10–12 | d13–15 | d16–18 |
+|---|---|---|---|---|---|---|
+| flag rate | 16.3% | 16.0% | 3.3% | 1.8% | 1.2% | **0.0%** |
+
+Against a no-shock floor of 0.0–0.4%. **The athlete is as shocked on day 17 as on day 2 and the
+system reports them normal.** Half-life about **6 days**, not the 12–15 the review predicted — and
+the reason is a second effect it missed: the baseline is a mean **and** an SD over the same twenty
+captures, so entering shocked captures raise the mean *and* inflate the SD (14 clean + 6 shocked is
+wider than either population alone). The numerator shrinks while the denominator grows. Two
+effects, roughly double the predicted rate of decay.
+
+The architecture partly anticipated this — the slow channel's anchor is fixed and does not adapt —
+but the slow channel runs a 45-day window and reports weekly, so **there is a detection hole at
+roughly 10–20 days**, which is the duration of an exam block, a tournament run or a road trip.
+
+*Amendment written 2026-11-05, before any run of the pre-registered test.*
+
+### A1.6b · The fix doubles detection at an identical false-positive rate
+
+The obvious repair — a capture that flagged never joins the baseline of later captures — holds
+detection across the whole block instead of letting it collapse. But it also raised the no-shock
+floor, and for a reason that is not sensitivity at all: removing the upper tail from the baseline
+shrinks its SD, so every later z is larger. **Some of the gain was a looser threshold wearing a
+fix's clothes**, and a fix that cannot be told from a threshold shift is not a measured fix.
+
+So the guarded threshold was re-pinned by bisection until its no-shock rate matched the unguarded
+rule's exactly, and only then was detection compared (`matched.py`, 4 seasons, pooled over the
+20-day block):
+
+| shipped rule, matched at 0.16% / 0.18% no-shock | unguarded | guarded | gain |
+|---|---|---|---|
+| 1 × noise | 1.3% | 1.8% | +0.5 |
+| 1.5 × noise | 3.1% | 5.0% | +1.9 |
+| 2 × noise | 5.9% | **11.8%** | **+5.9** |
+
+| single day, matched at 3.36% / 3.37% no-shock | unguarded | guarded | gain |
+|---|---|---|---|
+| 2 × noise | 10.7% | **24.2%** | **+13.5** |
+
+The threshold had to move **1.25 → 2.01** to hold the false-positive rate, so the SD-narrowing
+effect is real and large — and after paying that cost in full the guard still **roughly doubles
+detection**. That is sensitivity, not an artifact.
+
+**Not yet decided, and named so it is not mistaken for done:** an unbounded guard means a genuine
+permanent decline never updates the baseline and the athlete flags forever. The guard needs a
+bound — a maximum number of consecutive excluded captures, or slow-channel confirmation before it
+engages — and that bound is not measured here.
+
+**And A1.5 governs these numbers too:** they come from a Gaussian-noise harness. The *relative*
+comparison at a matched floor is more robust to that than the absolute rates are, but it is not
+immune, and none of these figures should be quoted outside this harness until the ex-Gaussian
+rebuild is done.
