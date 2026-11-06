@@ -557,6 +557,58 @@ Each is deliberately small, so that it is cheap to answer and hard to answer wit
 
 Plus the one number nobody supplied: **21's retention ceiling.**
 
+### AS SENT, 2026-11-06, WITH TWO CORRECTIONS AND ONE DECISION
+
+Scott tightened the five and the tightening is kept: he renumbered them against the packet's own
+numbering (18 -> 4, 19 -> 5, 23 -> 9, 24 -> 10, which is what the reviewer sees), cited
+**34 CFR 99.31(a)(1)(i)(B)** and **99.33(a)** with the three statutory prongs enumerated, split the
+reporting question into Forge's obligation and the coach's, and -- the best of the four -- **stated
+the consequence** on 4(a), which is what makes a restatement an unsatisfying answer. Citations
+verified against the eCFR and the Department's Student Privacy Policy Office FAQ: the three prongs
+are the regulation's own, and 99.33(a) is the redisclosure provision.
+
+**CORRECTION 1, AND IT IS THE ONE THAT MATTERS: ASKING ONLY ABOUT THE EXCEPTION CONCEDES THE
+QUESTION THAT DECIDES IT, AND THE CONCESSION CAN CREATE THE ANSWER.** The draft read "the answer
+notes that a Forge-generated score read by a school coach becomes an education record under FERPA,
+but does not evaluate the School Official Exception." Those are two questions and the first is also
+unsettled. An education record under **34 CFR 99.3** is one maintained by the educational agency
+**or by a party acting for it**; if Forge maintains the Anvil score for its own purposes under a
+direct relationship with the athlete and their guardian, it may not be an education record at all,
+and the school-official exception never arises. The exception governs DISCLOSURE of records that
+already are education records.
+
+The two answers cut in opposite directions for the Institutional Service Agreement, which is why
+the order matters. If it is not an education record, the ISA needs nothing -- **and Forge should
+NOT sign a clause accepting school-official status, because direct control over the use and
+maintenance of education records is prong 2 of the exception, so agreeing to it is itself evidence
+of acting for the school and could bring the record inside FERPA that was outside it.** Asking only
+about the exception risks talking ourselves into the harder answer. Sent as two questions in order.
+
+**CORRECTION 2: "all of which were previously reviewed" overstates what was reviewed.** Forge's
+LEGAL DOCUMENTS are attorney-reviewed; the readiness, recovery and fatigue SURFACES are product and
+were never reviewed individually. What is true, and is the useful claim: they ship today, and the
+readiness score's data flow is disclosed, because `getOrCreateReadinessBriefing` calls
+`generateReadinessBriefing` -- it is a model-backed feature and the Privacy Policy's AI-provider
+disclosure covers it. Sent that way.
+
+**ADDED: a fourth element on 9 that is the DISTRICT's and not ours.** 34 CFR 99.7's annual
+notification requires a school to specify the criteria for who constitutes a school official, so a
+vendor cannot qualify unless the district's own annual notice names parties like us. That is a thing
+the ISA can REQUIRE the district to have done, and it is worth knowing before a procurement office
+asks.
+
+**THE DECISION INSIDE FOLLOW-UP 2, recorded because it stacks on two others and the three must not
+be read apart.** Scott, in the sent text: if counsel rules that no disclaimer language is
+sufficient, **"the coach view for minors will be killed entirely."** So:
+
+- Adults are unaffected either way -- an adult athlete's reading goes to their coach as decided.
+- On that ruling, **17(b)'s guardian switch becomes moot for minors**: there is no coach view left
+  to switch off, and the switch survives only for the adult case where it was never the point.
+- And Scott's decision of the same day that the coach gets both the daily and the weekly view
+  survives **for adult athletes only** in that branch.
+
+Also carried into `docs/anvil/research-2026-11-06.md` beside the decision it conditions.
+
 ## How these reach a reviewer
 
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and
