@@ -290,10 +290,178 @@ a HUMAN reading the book; machine retrieval over the file is the EULA's own subj
 question 12 open item on the AI assistants stands). New tracks are written by hand to the
 line in answer 4: outline first, never the book's.
 
+---
+
+# The Anvil: ten questions, 2026-11-06
+
+**These ten travel together, with `docs/anvil-for-counsel.md`**, which describes what the Anvil
+is, what each of its four tasks records, who sees the result, and what Forge already holds under
+which consent. A reviewer cannot answer 15 to 24 without it.
+
+**Nothing is built.** The Anvil is a specification, a set of simulations and a mock of the
+screens; no athlete has taken it and no cognitive measurement has ever been recorded by Forge. The
+questions are being asked before the first minor sits down in front of it. **Nothing ships to a
+minor until 15, 17, 18 and 21 are answered.** The rest can be answered alongside the build.
+
+## 15. Does the Video and Biometric Consent reach a cognitive task?
+
+The reviewed Video and Biometric Consent describes filming a lift and deriving measurements from
+the athlete's body in the video. The Anvil adds something that document does not mention: four
+short tasks on the phone whose output is a measure of the athlete's nervous system -- a
+millisecond reaction-time distribution, whether they inhibited a response they should have
+inhibited, how long a spatial sequence they can repeat, how fast they can tap.
+
+**Is that within the scope of the existing consent, or does it need its own disclosure and its own
+separate tick?** If its own, we would rather have the clause drafted now than retro-fit it. And if
+the answer differs between the adult athlete agreeing for themselves and the guardian agreeing for
+a child, please say which is which.
+
+## 16. Is a daily cognitive measure "consumer health data" under the state statutes?
+
+Forge has users in every state. Four regimes look relevant and we do not know which of them this
+touches:
+
+- **Washington My Health My Data Act**, whose definition of consumer health data reaches
+  information used to identify a consumer's past, present or future physical *or mental* health
+  status. A score that moves when an athlete is tired is at least arguably that.
+- **Illinois BIPA**, which attaches to biometric identifiers -- fingerprint, retina, voiceprint,
+  hand and face geometry. We believe a reaction-time latency is none of those. We are less sure
+  about the pose skeleton Forge already extracts from a filmed lift, which the camera work stores
+  as joint coordinates; that is existing collection rather than new, but if it is within BIPA we
+  would like to know now and not in a demand letter.
+- **Texas CUBI** and **Nevada SB 370**, on the same two points.
+
+**Which of these, if any, does the Anvil bring Forge inside, and what does compliance require --
+consent language, a retention schedule, a deletion right, a separate notice?**
+
+## 17. Does a guardian's existing consent cover showing their child's cognitive measure to a coach?
+
+Forge has decided that a coached athlete's daily and weekly Anvil views are shown to their coach
+as well as to the athlete. A Free Agent has no coach and nobody else sees theirs.
+
+A guardian has agreed that their child may be coached through Forge and that the coach sees their
+training data. **Is a cognitive measure within that, or is showing a minor's reaction-time trend to
+an adult who is not their parent a distinct disclosure that needs its own consent?** The coach is
+usually a school or club employee and is not a clinician.
+
+Two sub-questions we cannot answer ourselves:
+
+- **What is the coach to us in this?** A recipient, a joint controller, our customer's agent?
+  The answer changes what we must tell the guardian and what we must bind the program to in the
+  Institutional Service Agreement.
+- **Should a guardian be able to refuse the coach's view while keeping the athlete's own?**
+  Forge can build that. We do not know whether it is required, advisable, or a complication that
+  creates a worse problem by implying the default is dangerous.
+
+## 18. The concussion problem: what disclaimer works, and does measuring create a duty?
+
+This is the question we are most concerned about, in two parts.
+
+**(a) Language.** A daily cognitive score on a youth athlete will be read as a concussion screen
+by some coaches and some parents, whatever Forge says, because the tasks resemble the ones used in
+sideline testing. Forge will state plainly that it is not a concussion screen and must not be used
+as one. **Is a disclaimer sufficient here, and what language actually works?** We would rather be
+told the measure cannot be shown to a coach at all than discover that a disclaimer nobody read is
+not a defence.
+
+**(b) Duty.** If Forge's own data shows a sharp cognitive decline in a minor athlete, **does Forge
+acquire any duty -- to warn, to act, to escalate to the guardian -- by virtue of having measured
+it?** We are conscious that collecting a signal can create an obligation that not collecting it
+would not, and that a product which notices something and says nothing is in a worse position than
+one that never looked. If a duty exists, we want to design the escalation path deliberately rather
+than inherit one.
+
+A note on the evidence, because it bears on (a): the 2023 Amsterdam international consensus
+statement on concussion in sport is reported to caution against computerised neurocognitive
+testing in younger athletes specifically. We have not been able to read the full text (it is
+paywalled) and so cannot quote it; a reviewer with access may want to.
+
+## 19. RED-S and disordered eating: may we say anything, must we, and to whom?
+
+The Anvil's design reads the athlete's own food log -- calories, iron, B12, vitamin D -- and their
+body-mass entries, not to score nutrition but to separate a finding that is about training from one
+that is not. An athlete whose numbers are down across every measure and who has been under-eating
+for a month is a medical referral, not a training adjustment.
+
+Forge has decided **not to model or flag RED-S**, partly because it can present with autonomic
+numbers that look better rather than worse. But the pattern will sometimes be visible in the data
+Forge holds.
+
+**May Forge say anything? Must it? And to whom -- the athlete, the guardian, the coach, or a named
+adult at the program?** Showing a 15-year-old a screen that connects her food log to a declining
+score has its own risk, and we would rather be told to show her nothing than guess.
+
+## 20. Is this a medical device, or general wellness?
+
+FDA has a General Wellness policy and a separate Clinical Decision Support guidance. A readiness or
+freshness score marketed for training sits, we assume, in general wellness. But the Anvil is a
+cognitive test, trended over time, shown to an adult who makes decisions about a child's
+participation in physical activity.
+
+**Where is the line, and what in our description or our marketing would cross it?** We would like
+the answer as a list of things not to say, which we can then enforce in the code -- Forge already
+scans its own client source to refuse certification marks it does not hold and to require its
+accuracy caveat on every surface showing a camera number, so a rule stated as a forbidden form is
+something we can mechanically keep.
+
+## 21. Keeping a minor's cognitive scores for years, against our own retention posture
+
+Forge deletes a minor's training video on a schedule -- 30 days under 13, 90 days 13 to 17 -- as
+data minimisation. The Anvil's third comparison is the same athlete against athletes of the same
+age in previous years, which cannot work on deleted data: it requires keeping a child's cognitive
+measurements for the length of their career with the program and beyond.
+
+**Does multi-year retention of a minor's cognitive measurements need its own disclosure and its own
+consent? Is there a ceiling we should set? And what must happen on deletion of the account?**
+Forge's current rule is that a research-consented athlete's scrubbed record survives account
+deletion because consent was given as an account holder and the consent text says so; an athlete who
+withdraws first leaves nothing. We do not know whether a cognitive measurement may sit inside that
+rule or needs a different one.
+
+## 22. Publishing on minors' data with no institutional affiliation
+
+Two numbers would validate or kill the Anvil and neither exists in the published literature: the
+athlete's own day-to-day variability on the reaction-time task, and the reliability of Forge's pose
+estimator across days under real conditions. Both are publishable and both would be measured on
+Forge's own users, who include minors.
+
+Forge has a research consent (opt-in, separate, with a pseudonymous mirror and a suppression floor
+of 10 on anything that leaves the organisation) and **no institutional affiliation and no IRB**.
+
+**Can a company publish research on minors' data on the strength of its own consent form? Is an
+IRB or an independent ethics review required, advisable, or available to us?** If the answer is
+that it cannot be published, that is useful: it changes whether the measurement work is worth doing
+at all.
+
+## 23. A school district adopting this -- does a Forge-generated cognitive score become an education record?
+
+Question 4 closed FERPA on the ground that Forge receives directory information only -- name,
+gender, age, sport, position -- and never a GPA, a transcript or a disciplinary record. We think
+that still holds and want it checked against new facts, because the Anvil is different in two ways:
+**the score is generated by Forge rather than received from the school**, and **it is read by a
+coach who is often a school employee acting in their official capacity.**
+
+**Does a cognitive measure created by a vendor and read by a school employee become an education
+record?** If it can, the Institutional Service Agreement probably needs a clause, and a district's
+procurement will ask.
+
+## 24. What may we call it?
+
+Forge has dropped "neuro-fatigue" and "neural fatigue" from everything a user can see. The product
+is called the Anvil, which claims nothing. But a screen has to describe what the number is.
+
+**Which of these may we use, and are any of them health claims: readiness, freshness, fatigue,
+recovery, load tolerance, reaction time?** The last is the only one that is literally what is
+measured. We would rather use a plainer word that is accurate than a better-sounding one that is a
+claim, and a short list of permitted and forbidden words is something we can enforce in the code.
+
 ## How these reach a reviewer
 
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and
-biometric consent plus the engineering facts behind each of its claims.
+biometric consent plus the engineering facts behind each of its claims, and
+`docs/anvil-for-counsel.md`, which carries questions 15 to 24: what the Anvil is, what each
+of its four tasks records, who sees the result, and what Forge already holds under which
+consent. Questions 15 to 24 cannot be answered without that packet.
 
 **Every document is now attorney-reviewed.** The Assumption of Risk, the AI Terms of Use,
 the research consent and the signup Terms of Use were reviewed 2026-09-19 (questions 8 to

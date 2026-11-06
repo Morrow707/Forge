@@ -1,6 +1,6 @@
 # Anvil simulation harness
 
-Test worlds for the Anvil neuro-fatigue check-in, and the detectors measured against them.
+Test worlds for the Anvil daily check, and the detectors measured against them.
 Nothing here is shipped code: it is the evidence behind the design decisions in the Anvil
 artifact, kept so that nobody has to rebuild a world to re-ask a question.
 
