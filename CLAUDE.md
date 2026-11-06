@@ -2974,7 +2974,7 @@ halves before splitting anything else:
   squat's 0.12 step, the jump's mean to the hip's apex -- plus the day-wipe save fix (`09b931f`)
   and the Forge-code removal for App Review's third rejection; 713 was its `verify_build` on the
   same commit, which passed Apple's own `--validate-app`). Scott lifted the hold with "Push all and
-  upload". **714 is the build to film on AND the build to resubmit to App Review** in place of 695.
+  upload". **714 is the build to film on, and it was RESUBMITTED to App Review on 2026-11-06 in place of 695** (Waiting for Review as of 14:40 UTC, with the reply naming the removal, the Upgrade screenshot replaced, and the review notes carrying no Forge code).
   Before 714, **712** (2026-11-05 ~20:20
   UTC, `3ac2b34`: round nine -- the squat's own drive onset 0 and smoothing 130, the RDL's
   sample-starvation rule and own drive onset 0.02, the jump's hip peak on the set, `liftRecord`
