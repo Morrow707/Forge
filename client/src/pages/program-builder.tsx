@@ -1264,7 +1264,7 @@ function SortableExerciseRow({
           onChange={(v) => onUpdate({ sets: Number(v) || 0 })}
           type="number"
         />
-        <FieldInput label="Reps" value={exercise.reps} onChange={(v) => onUpdate({ reps: v })} />
+        <FieldInput label="Reps" inputMode="numeric" value={exercise.reps} onChange={(v) => onUpdate({ reps: v })} />
         <div>
           <label className="mb-0.5 block text-[10px] uppercase text-muted-foreground">
             Weight
@@ -1316,11 +1316,16 @@ function FieldInput({
   value,
   onChange,
   type = "text",
+  inputMode,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
+  /** Reps are typed as text (a stored value can read "8-10"), so the PHONE decides the keyboard off
+      this hint and not off the type: "numeric" summons the digit pad on iOS where a plain text field
+      summons the full keyboard. Scott, 2026-11-06: "reps will never be letters always a number". */
+  inputMode?: "numeric" | "decimal" | "text";
 }) {
   return (
     <div>
@@ -1329,6 +1334,7 @@ function FieldInput({
       </label>
       <Input
         type={type}
+        inputMode={inputMode}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="h-8 px-2 text-xs"
