@@ -2973,9 +2973,10 @@ halves before splitting anything else:
   UTC, `3ac2b34`: round nine -- the squat's own drive onset 0 and smoothing 130, the RDL's
   sample-starvation rule and own drive onset 0.02, the jump's hip peak on the set, `liftRecord`
   and `bodyWitnessTrace` in the export; 711 was its `verify_build` on the same commit).
-  **712 is the build to film on.** Round ten and the day-wipe save fix are COMMITTED AND HELD
-  behind it (Scott: "queue it as I'm testing the camera"); they go out as the next `verify_build`
-  + `beta` when he lifts the hold. Before 712, **710** (2026-11-05 16:36
+  **712 is the build to film on.** Round ten, the day-wipe save fix AND the Forge-code removal for
+  App Review's third rejection (2026-11-06) are COMMITTED AND HELD behind it (Scott: "queue it as
+  I'm testing the camera"); they go out as the next `verify_build` + `beta` when he lifts the hold,
+  and that build is the one to resubmit. Before 712, **710** (2026-11-05 16:36
   UTC, `4c30e37`: round eight -- the direction rule corrected, every descent-fitted velocity
   override removed, the squat's own drive onset 0.02; 709 was its `verify_build` on the same
   commit). Before 710, **707** (2026-10-31 19:19 UTC, `37867e3`:
@@ -3632,6 +3633,53 @@ purpose**: the legal pages are eager (public routes) and the shell carries every
 app, so a static import would put all of it on a signed-out visitor's first paint, which
 `bundle-budget.test.ts` refuses; the Suspense fallback is the document itself, so nothing blanks.
 Run 694 was its `verify_build` and **695 the upload**: the build that replaces 693 on the version page.
+
+## 1.0 WAS REJECTED A THIRD TIME, FOR THE FORGE CODE: A PROMO CODE IS A PURCHASE MECHANISM
+
+Added 2026-11-06. Apple's third pass, on build 695, one item, Guideline 3.1.1: "The app unlocks or
+enables additional functionality with mechanisms other than In-App Purchase ... Specifically, the
+app uses promo code to unlock or enable subscription." The screenshot was the Upgrade screen's
+Forge CODE box, reading "Full access is free through 11/10/2026" above it on the review athlete.
+Apple's remedy, in their words: remove the feature and any other that unlocks functionality outside
+the App Store; for discounts or free access, create offer codes for the In-App Purchases.
+
+**THE COMMENT ABOVE THAT BOX ARGUED THE OPPOSITE, AND THE 10-29 REPLY TO APP REVIEW HANDED THEM
+THE CODE.** The box shipped 2026-10-15 under "It is not a store product -- it writes Forge's own
+trial row, so Apple's rules on where a purchase happens do not reach it", and the reply to the
+second rejection's 2.1 question described exactly how a Forge code grants the paid Free Agent
+features and gave the reviewer a code to try. That is the sentence 3.1.1 is about: WHO writes the
+row is irrelevant, what matters is that typing something other than an In-App Purchase turns the
+paid features on. **A free-trial code is a purchase mechanism**, whatever the table it writes to.
+
+**THE FIX IS ONE PREDICATE AND THREE CONDITIONS; NOTHING IS DELETED.** `forgeCodeEntryIsAllowed()`
+in `client/src/lib/forge-code-entry.ts` is `!Capacitor.isNativePlatform()`, and the three surfaces
+that take a Forge code draw their box only behind it: the Upgrade screen's card (sentence and box
+both), the optional Promo code field at sign-up (`promoCodeApplies` reads it first), and the primary
+coach's Redeem-a-code box in Account Settings. It asks `isNativePlatform`, not the iOS check,
+because Google Play's billing policy reads the same way, so the answer is "web only" and not "not
+iOS". **What stays on the phone**: the "App Store code" button (Apple's own offer-code sheet,
+`redeemAppleOfferCode`) and Restore Purchases, both of which 3.1.1 wants there. **What is
+untouched**: the two redeem routes, the signup handler's code check, `shared/promo-codes.ts`, the
+admin screen that mints codes, and the Stripe promotion codes -- a code typed on the website works
+exactly as before, and an account that redeemed one earlier keeps its trial. The web is where
+Forge's codes live; the App Store's codes live at Apple.
+
+`a-forge-code-is-never-typed-in-the-native-app.test.ts` DISCOVERS the surfaces (every client file
+that posts to a redeem-code route or sends `promoCode` in a body -- a fourth is found the day it is
+written), finds the code input by what it BINDS rather than a test id, walks back to the JSX
+conditional enclosing it by matching brackets, and requires that condition to call the helper
+directly or through a local const whose initializer does (signup's `promoCodeApplies`). It drives
+the helper under a mocked Capacitor both ways. Five mutations, each caught by the right case, the
+fifth being a comment quoting `forgeCodeEntryIsAllowed() && (` above an unconditional card -- the
+strip is what reds it, and a case proves the raw text would have passed.
+
+**WHAT GOES BACK TO APPLE.** A new build (the client changed: its own `verify_build` then `beta`,
+compliance class, not the batch), a reply that names the change and says the only code the app
+accepts is an App Store offer code, and the App Review notes with the Forge-code paragraph and the
+test code REMOVED (the template in the session scratchpad, `asc/5-app-review-information-notes.txt`,
+carried a `[CODE]` placeholder for exactly the thing Apple objected to). **Create the offer codes
+in App Store Connect** for the three Free Agent subscriptions if a launch discount on iOS is still
+wanted; that is the rail Apple allows and the button for it is already on the screen.
 
 ## THE THREE DEMO ACCOUNTS ARE BACK, EMPTY, AND THEIR PASSWORDS ARE ON RENDER, NEVER HERE
 

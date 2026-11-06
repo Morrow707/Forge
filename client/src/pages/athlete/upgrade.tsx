@@ -45,6 +45,7 @@ import {
 import { ApiError, apiRequest } from "@/lib/queryClient";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
+import { forgeCodeEntryIsAllowed } from "@/lib/forge-code-entry";
 import { formatCents } from "@shared/billing-tiers";
 
 /** The add-on half of GET /api/athlete/entitlements -- see sport-coaches.tsx for
@@ -300,7 +301,8 @@ export default function AthleteUpgrade() {
   // produces comes back through the same watcher a purchase does, so nothing here grants
   // anything. The web checkout takes a Stripe promotion code on the checkout page itself and
   // needs no button. A FORGE code (the launch offer, "30 days free from the day you signed up")
-  // is the box below, on every platform -- it is Forge's own trial row, not a store product.
+  // is the box below, ON THE WEB ONLY since the 2026-11-06 rejection -- in the app, this sheet
+  // is the one way a code is ever redeemed.
   async function handleRedeemCode() {
     try {
       await redeemAppleOfferCode();
@@ -363,9 +365,14 @@ export default function AthleteUpgrade() {
           ) : undefined
         }
       >
-        {/* A FORGE CODE, on every platform. It is not a store product -- it writes Forge's own
-            trial row (storage.redeemCode), so Apple's rules on where a purchase happens do not
-            reach it, and the App Store offer-code sheet above is a different thing. */}
+        {/* A FORGE CODE, ON THE WEB ONLY. This card used to say Apple's rules did not reach it
+            because it writes Forge's own trial row rather than buying a store product; App
+            Review read it the other way on 2026-11-06 (Guideline 3.1.1, "the app uses promo
+            code to unlock or enable subscription") and rejected 1.0 for it. A code that grants
+            the paid features is a purchase mechanism outside In-App Purchase, whoever wrote the
+            row. The native app draws the App Store code button above instead -- Apple's own
+            offer-code sheet -- and nothing here. See lib/forge-code-entry.ts. */}
+        {forgeCodeEntryIsAllowed() && (
         <Card className="mt-6" data-testid="forge-promo-code">
           <CardContent className="space-y-3 p-5">
             {trialEndsAt ? (
@@ -400,6 +407,7 @@ export default function AthleteUpgrade() {
             </p>
           </CardContent>
         </Card>
+        )}
         {androidNative && !live && (
           <Card className="mt-6">
             <CardContent className="p-6 text-sm text-muted-foreground">
