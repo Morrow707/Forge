@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type TouchEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type TouchEvent } from "react";
 import { eachSideSuffix } from "@shared/prescription-laterality";
-import { isUnilateral, pairIndexFor, setRowCountFor, setRowLabel, sideForNewSet, sideLabel, type BodySide } from "@shared/unilateral-sides";
+import { groupSetRows, pairIndexFor, rowSideFor, setPillLabel, setRowCountFor, sideForNewSet, sideLabel, type BodySide } from "@shared/unilateral-sides";
 import type { Autoregulation } from "@shared/autoregulation";
 import { shedTracesToFit, describeShed } from "@shared/shed-traces-to-fit";
 import { useParams, useLocation } from "wouter";
@@ -709,16 +709,23 @@ function buildItem(
   defaultUnit: WeightUnit,
 ): ItemState {
   // One row per side per prescribed set on a unilateral lift (shared/unilateral-sides.ts): a
-  // "3 x 5 each side" builds six rows, left/right alternating, so each side is logged, filmed and
-  // measured on its own. A row the server already holds keeps the side it recorded -- null on a
-  // row saved before sides existed, which is shown as such rather than guessed.
+  // "3 x 5 each side" builds six rows, left/right alternating, drawn as five sets each with a Left
+  // and a Right record button, so each side is filmed and measured on its own. A row the server
+  // already holds keeps the side it recorded. A row saved before sides existed has none: if it
+  // holds a capture it stays null (which arm that take saw is a fact, not a guess -- the export
+  // says so); otherwise it takes its structural side, since there is no take to misname.
   const laterality = prescribed.exercise.laterality;
   const sets: SetRow[] = Array.from({ length: setRowCountFor(prescribed.sets, laterality) }, (_, i) => {
     const setNumber = i + 1;
     const existingSet = existing?.sets.find((s) => s.setNumber === setNumber);
+    const existingHoldsCapture =
+      !!existingSet &&
+      (existingSet.peakVelocityMps != null || existingSet.barPathDeviationCm != null || existingSet.jumpHeightCm != null);
     return {
       setNumber,
-      side: existingSet ? (existingSet.side ?? null) : sideForNewSet(setNumber, laterality),
+      side: existingSet
+        ? (existingSet.side ?? (existingHoldsCapture ? null : sideForNewSet(setNumber, laterality)))
+        : sideForNewSet(setNumber, laterality),
       reps: existingSet?.reps ?? prescribed.reps,
       weight: existingSet?.weight ?? "",
       bandColor: existingSet?.bandColor ?? "",
@@ -2348,12 +2355,14 @@ export function WorkoutPage({
     const nextItems = commitItems((prev) => {
       const next = prev.map((it) => {
         if (it.key !== key) return it;
-        const nextNumber = it.sets.length > 0 ? it.sets[it.sets.length - 1].setNumber + 1 : 1;
+        // A set is one row, or two on a unilateral lift (one a side) -- the "+" adds a SET.
+        const firstNumber = it.sets.length > 0 ? it.sets[it.sets.length - 1].setNumber + 1 : 1;
+        const newRows = Array.from({ length: setRowCountFor(1, it.laterality) }, (_, i) => firstNumber + i);
         return {
           ...it,
           sets: [
             ...it.sets,
-            {
+            ...newRows.map((nextNumber) => ({
               setNumber: nextNumber,
               side: sideForNewSet(nextNumber, it.laterality),
               reps: it.prescribedReps,
@@ -2407,7 +2416,7 @@ export function WorkoutPage({
               captureDeviceInfo: null,
               trackingDiagnostics: null,
               skeletonFrames: null,
-            },
+            })),
           ],
         };
       });
@@ -2417,10 +2426,16 @@ export function WorkoutPage({
   }
 
   function removeSet(key: string) {
+    // The "-" removes a SET: the last row, or the last pair on a unilateral lift, and never the
+    // last set.
     const nextItems = commitItems((prev) => {
-      return prev.map((it) =>
-        it.key === key && it.sets.length > 1 ? { ...it, sets: it.sets.slice(0, -1) } : it,
-      );
+      return prev.map((it) => {
+        if (it.key !== key) return it;
+        const groups = groupSetRows(it.sets, it.laterality);
+        if (groups.length <= 1) return it;
+        const lastGroup = groups[groups.length - 1];
+        return { ...it, sets: it.sets.slice(0, it.sets.length - lastGroup.rows.length) };
+      });
     });
     scheduleAutosave(nextItems);
   }
@@ -2661,7 +2676,8 @@ export function WorkoutPage({
 
   function handleSwipeEnd(item: ItemState, e: TouchEvent<HTMLDivElement>) {
     const state = endSwipeGesture();
-    if (!state || state.axis !== "horizontal" || item.sets.length < 2) return;
+    const setCount = groupSetRows(item.sets, item.laterality).length;
+    if (!state || state.axis !== "horizontal" || setCount < 2) return;
     // changedTouches can come back empty in rare cases (e.g. the OS
     // cancels the touch sequence) -- lastDx (kept current by every
     // preventDefault()-ed touchmove above) is the same measurement one
@@ -2671,7 +2687,7 @@ export function WorkoutPage({
     if (Math.abs(dx) < SWIPE_TRIGGER_PX) return;
     const current = visibleSetByKey[item.key] ?? 0;
     const next = current + (dx < 0 ? 1 : -1);
-    if (next < 0 || next >= item.sets.length) return;
+    if (next < 0 || next >= setCount) return;
     // The tactile "slider" snap the swipe was missing -- same cue
     // jumpToSet's own rail-tap destination already earns a haptic
     // elsewhere in this app for a successful, deliberate navigation.
@@ -2947,25 +2963,28 @@ export function WorkoutPage({
                                       it's white. Labeled ("Set 1", not a bare bar)
                                       and sized like a real tap target now, not a
                                       thin progress sliver. */}
+                                  {/* One pill per SET, on every lift: a unilateral lift's two rows
+                                      per set (one a side) are one pill here and two record buttons
+                                      inside -- see shared/unilateral-sides.ts for why. */}
                                   {item.sets.length > 0 && (
                                     <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                      {item.sets.map((set, i) => (
+                                      {groupSetRows(item.sets, item.laterality).map((group, i) => (
                                         <button
-                                          key={set.setNumber}
+                                          key={group.pairIndex}
                                           type="button"
-                                          aria-label={`Show ${setRowLabel(set.setNumber, set.side, item.laterality)}`}
+                                          aria-label={`Show ${setPillLabel(group.pairIndex)}`}
                                           aria-pressed={i === visibleSetIndex}
                                           onClick={() => jumpToSet(item, i)}
                                           className={cn(
                                             "rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors",
-                                            isSetComplete(item, set)
+                                            group.rows.every((set) => isSetComplete(item, set))
                                               ? "bg-amber-400 text-black"
                                               : "bg-white text-black",
                                             i === visibleSetIndex &&
                                               "ring-2 ring-orange-400 ring-offset-1 ring-offset-background",
                                           )}
                                         >
-                                          {setRowLabel(set.setNumber, set.side, item.laterality)}
+                                          {setPillLabel(group.pairIndex)}
                                         </button>
                                       ))}
                                     </div>
@@ -3185,6 +3204,16 @@ function ExerciseLogContent({
     }
     setTrackingSet(setNumber);
   };
+  // A take filmed from the Left or Right button is that side's take: a row saved before sides
+  // existed (null on the server, holding an earlier capture) is named by the button the moment a
+  // new take is recorded on it, and never before -- see shared/unilateral-sides.ts.
+  const startTrackingRow = (row: SetRow) => {
+    if (row.side == null) {
+      const side = rowSideFor(row, item.laterality);
+      if (side) onUpdateSet(row.setNumber, { side });
+    }
+    startTracking(row.setNumber);
+  };
   // Set numbers whose AvBarTrackerDialog recording has stopped and is analyzing/uploading in
   // the background -- see AvBarTrackerDialog's own onAnalysisStarted/onProcessingSettled prop
   // comments. Lets the set's own row show an inline spinner instead of the athlete being stuck
@@ -3289,7 +3318,10 @@ function ExerciseLogContent({
   // and passes it down here) -- not a local toggle, since that rail has to
   // keep working while this exercise is collapsed too. Clamped defensively
   // in case a set gets removed out from under a mid-range index.
-  const activeSetIndex = Math.max(0, Math.min(visibleSetIndex, item.sets.length - 1));
+  // A "set" here is what the pill strip draws: one row, or the left/right pair on a unilateral
+  // lift (shared/unilateral-sides.ts).
+  const setGroups = groupSetRows(item.sets, item.laterality);
+  const activeSetIndex = Math.max(0, Math.min(visibleSetIndex, setGroups.length - 1));
   const topSetWeight = Math.max(0, ...item.sets.map((s) => parseFloat(s.weight) || 0));
   // Only a real barbell (or hex/trap bar, loaded the same way) has plates
   // to calculate -- a cable stack, dumbbells, or a machine's weight isn't
@@ -3325,9 +3357,6 @@ function ExerciseLogContent({
   // Every set requires its own deliberate entry -- no carrying a typed
   // weight forward into later sets. The "Same as Set N" button below is the
   // explicit, one-tap way to repeat a weight instead.
-  function handleWeightChange(setNumber: number, value: string) {
-    onUpdateSet(setNumber, { weight: value });
-  }
   // One column per material the exercise actually needs -- not mutually
   // exclusive, so a combo movement (dumbbell box step-up) shows both a
   // weight column and a box-height column on the same row.
@@ -3882,10 +3911,15 @@ function ExerciseLogContent({
           <span />
         </div>
         <div className="space-y-1.5">
-          {item.sets.map((set) => {
-            const complete = isSetComplete(item, set);
-            const tracked =
-              set.peakVelocityMps != null || set.barPathDeviationCm != null || set.jumpHeightCm != null;
+          {setGroups.map((group, groupIndex) => {
+            if (groupIndex !== activeSetIndex) return null;
+            // The reps and load typed on a set land on every row of it -- both sides of a
+            // unilateral set share one line of inputs and get their own record button below.
+            const set = group.rows[0];
+            const applyToSet = (patch: Partial<SetRow>, options?: { immediate?: boolean }) => {
+              for (const row of group.rows) onUpdateSet(row.setNumber, patch, options);
+            };
+            const complete = group.rows.every((row) => isSetComplete(item, row));
             // POWER NEEDS THE LOAD, AND IT IS READ AT THE MOMENT THE TRACKER OPENS.
             //
             // loadKg comes off this row's weight when the tracker dialog mounts (see the
@@ -3907,27 +3941,22 @@ function ExerciseLogContent({
             const isPR =
               complete &&
               isRepCountPR(item.setHistory, set.reps, item.weightMode, set.weight, earlierSetsThisSession);
-            const prevSet = item.sets.find((s) => s.setNumber === set.setNumber - 1);
+            const prevSet = setGroups[groupIndex - 1]?.rows[0];
             const canQuickFillSame =
               item.weightMode === "numeric" &&
               !!prevSet?.weight.trim() &&
               set.weight.trim() !== prevSet.weight.trim();
-            if (set.setNumber - 1 !== activeSetIndex) return null;
             return (
-              <div key={set.setNumber}>
+              <div key={group.pairIndex}>
                 <div
                   className="grid items-center gap-2"
                   style={{ gridTemplateColumns: gridTemplate }}
                 >
-                  <span className="text-sm font-semibold text-muted-foreground">
-                    {isUnilateral(item.laterality)
-                      ? `${pairIndexFor(set.setNumber, item.laterality)}${set.side ? ` ${sideLabel(set.side)[0]}` : ""}`
-                      : set.setNumber}
-                  </span>
+                  <span className="text-sm font-semibold text-muted-foreground">{group.pairIndex}</span>
                   <Input
                     placeholder={item.lastPerformance?.reps || "Reps"}
                     value={set.reps}
-                    onChange={(e) => onUpdateSet(set.setNumber, { reps: e.target.value })}
+                    onChange={(e) => applyToSet({ reps: e.target.value })}
                     className="h-9 text-sm"
                   />
                   {isBodyweightOnly ? (
@@ -3943,7 +3972,7 @@ function ExerciseLogContent({
                           inputMode="decimal"
                           placeholder={historyMatch?.weight || item.lastPerformance?.weight || "0"}
                           value={set.weight}
-                          onChange={(e) => handleWeightChange(set.setNumber, e.target.value)}
+                          onChange={(e) => applyToSet({ weight: e.target.value })}
                           className="h-9 text-sm"
                         />
                       ) : col.type === "band" ? (
@@ -3951,7 +3980,7 @@ function ExerciseLogContent({
                           key="band"
                           placeholder="e.g. Green"
                           value={set.bandColor}
-                          onChange={(e) => onUpdateSet(set.setNumber, { bandColor: e.target.value })}
+                          onChange={(e) => applyToSet({ bandColor: e.target.value })}
                           className="h-9 text-sm"
                         />
                       ) : (
@@ -3961,7 +3990,7 @@ function ExerciseLogContent({
                           inputMode="decimal"
                           placeholder="Height"
                           value={set.boxHeight}
-                          onChange={(e) => onUpdateSet(set.setNumber, { boxHeight: e.target.value })}
+                          onChange={(e) => applyToSet({ boxHeight: e.target.value })}
                           className="h-9 text-sm"
                         />
                       ),
@@ -4007,135 +4036,152 @@ function ExerciseLogContent({
                     {canQuickFillSame && (
                       <button
                         type="button"
-                        onClick={() => handleWeightChange(set.setNumber, prevSet!.weight)}
+                        onClick={() => applyToSet({ weight: prevSet!.weight })}
                         className="flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
                       >
                         <Copy className="h-3 w-3" />
-                        Same as Set {prevSet!.setNumber} ({prevSet!.weight} {unit})
+                        Same as Set {pairIndexFor(prevSet!.setNumber, item.laterality)} ({prevSet!.weight} {unit})
                       </button>
                     )}
-                    {item.trackingLevel !== "none" && cameraAllowed && !user?.trackingOptOut && processingSets.has(set.setNumber) && (
-                      // AvBarTrackerDialog already closed and handed control back here --
-                      // this set's recording is analyzing/uploading in the background (see
-                      // onAnalysisStarted/onProcessingSettled above). Disabled rather than the
-                      // normal button so a second tap can't start a new take for the same set
-                      // number while this one's still in flight.
-                      <span className="flex flex-col gap-1 rounded-lg border border-primary/40 px-2 py-1 text-[10px] font-semibold text-primary/70">
-                        {/* TWO PHASES, TWO BARS, EACH WITH ITS OWN NUMBER. One bar was doing
-                            the work of two and wearing the wrong label: its percentage was
-                            only ever fed by onUploadProgress, so "Processing… 79%" was really
-                            the SAVE at 79% and analysis -- the slower half -- showed no number
-                            at all. Analysis now reports its own progress from each frame's
-                            timestamp against the length of the take (see
-                            use-av-body-tracking's onAnalysisProgress), so both waits are
-                            visible and the athlete can see which one they are in. */}
-                        <ProcessingPhaseBar
-                          label="Processing"
-                          percent={analysisProgress[set.setNumber]}
-                          // Analysis is finished the moment the upload starts reporting: the
-                          // two run concurrently, but a save cannot begin before the blob
-                          // exists. Without this the analysis bar would sit at its last frame's
-                          // 99% for the whole upload.
-                          done={processingProgress[set.setNumber] != null}
-                        />
-                        <ProcessingPhaseBar label="Saving" percent={processingProgress[set.setNumber]} done={false} />
-                      </span>
-                    )}
-                    {item.trackingLevel !== "none" && cameraAllowed && !user?.trackingOptOut && !processingSets.has(set.setNumber) && (
-                      <button
-                        type="button"
-                        disabled={weightMissingForTracking}
-                        onClick={() => startTracking(set.setNumber)}
-                        // Recording a new set while a DIFFERENT set's analysis is still running
-                        // in the background is intentionally allowed, not guarded -- recording
-                        // is hardware video encoding, a different chip from the Neural Engine/
-                        // GPU work Vision analysis does, and AvBodyTrackingPlugin's own
-                        // analysisQueue already serializes analysis calls onto one queue
-                        // natively (a second analyzeRecording request while one is in flight
-                        // just waits its turn, never runs concurrently) -- so there's nothing
-                        // for a client-side lock to protect here that isn't already handled.
-                        className={cn(
-                          "flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                          weightMissingForTracking
-                            ? "cursor-not-allowed border-border text-muted-foreground opacity-60"
-                            : tracked
-                              ? "border-success/40 bg-success/10 text-success"
-                              : "border-primary/40 text-primary hover:bg-primary/10",
+                    {/* ONE RECORD BUTTON PER ROW: one on a bilateral set, Left and Right on a
+                        unilateral one, each filming and showing its own row's take. Scott,
+                        2026-11-06: "when I open it have there be two record buttons that say left
+                        and right on them." */}
+                    {group.rows.map((row) => {
+                      const rowTracked =
+                        row.peakVelocityMps != null || row.barPathDeviationCm != null || row.jumpHeightCm != null;
+                      const rowSide = rowSideFor(row, item.laterality);
+                      const sideWord = rowSide ? `${sideLabel(rowSide)} · ` : "";
+                      return (
+                        <Fragment key={row.setNumber}>
+                        {item.trackingLevel !== "none" && cameraAllowed && !user?.trackingOptOut && processingSets.has(row.setNumber) && (
+                          // AvBarTrackerDialog already closed and handed control back here --
+                          // this set's recording is analyzing/uploading in the background (see
+                          // onAnalysisStarted/onProcessingSettled above). Disabled rather than the
+                          // normal button so a second tap can't start a new take for the same set
+                          // number while this one's still in flight.
+                          <span className="flex flex-col gap-1 rounded-lg border border-primary/40 px-2 py-1 text-[10px] font-semibold text-primary/70">
+                            {/* TWO PHASES, TWO BARS, EACH WITH ITS OWN NUMBER. One bar was doing
+                                the work of two and wearing the wrong label: its percentage was
+                                only ever fed by onUploadProgress, so "Processing… 79%" was really
+                                the SAVE at 79% and analysis -- the slower half -- showed no number
+                                at all. Analysis now reports its own progress from each frame's
+                                timestamp against the length of the take (see
+                                use-av-body-tracking's onAnalysisProgress), so both waits are
+                                visible and the athlete can see which one they are in. */}
+                            <ProcessingPhaseBar
+                              label="Processing"
+                              percent={analysisProgress[row.setNumber]}
+                              // Analysis is finished the moment the upload starts reporting: the
+                              // two run concurrently, but a save cannot begin before the blob
+                              // exists. Without this the analysis bar would sit at its last frame's
+                              // 99% for the whole upload.
+                              done={processingProgress[row.setNumber] != null}
+                            />
+                            <ProcessingPhaseBar label="Saving" percent={processingProgress[row.setNumber]} done={false} />
+                          </span>
                         )}
-                      >
-                        <Camera className="h-3 w-3" />
-                        {weightMissingForTracking
-                          ? // Says what to do, not just that it is off. A greyed control with
-                            // its usual label reads as broken.
-                            `Enter ${unit} to record`
-                          : tracked
-                          ? item.trackingLevel === "jump" && set.jumpHeightCm != null
-                            ? `${formatDistanceCm(set.jumpHeightCm, distanceUnit)} jump — retake`
-                            : item.trackingLevel === "full" && set.meanVelocityMps != null
-                              ? // Average (mean concentric) velocity, not peak -- this is the
-                                // number VBT athletes actually train against (e.g. "stay above
-                                // 0.5 m/s"), and it's the first thing shown back to them after
-                                // a tracked set, right here on the set row.
-                                `${set.meanVelocityMps} m/s avg — retake`
-                              : `Path ${set.barPathDeviationCm} cm — retake`
-                          : item.trackingLevel === "jump"
-                            ? "Track this jump"
-                            : mergedTracking
-                              ? "Record & Analyze"
-                              : "Track this set"}
-                      </button>
-                    )}
-                    {/* When trackingLevel also applies, the button above already
-                        records the video (see BarTrackerDialog's recordVideo
-                        prop below) -- a second, separate video button here
-                        would just be the same set recorded twice. */}
-                    {/* One button, two jobs, and only one of them needs the camera. An
-                        already-recorded clip is PREVIEWED here, and that must stay available to
-                        everybody: the video exists, it is theirs, and hiding it would take away
-                        something they already have rather than gate something they have not
-                        bought. Starting a NEW recording is the gated half -- it ends at
-                        /api/athlete/form-video, which answers 402 without the entitlement. */}
-                    {videoRequired &&
-                      !mergedTracking &&
-                      (set.formCheckVideoUrl || (cameraAllowed && !user?.trackingOptOut)) && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          set.formCheckVideoUrl
-                            ? setPreviewSetNumber(set.setNumber)
-                            : setRecordingSetNumber(set.setNumber)
-                        }
-                        className={cn(
-                          "flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                          set.formCheckVideoUrl
-                            ? "border-success/40 bg-success/10 text-success"
-                            : "border-primary/40 text-primary hover:bg-primary/10",
+                        {item.trackingLevel !== "none" && cameraAllowed && !user?.trackingOptOut && !processingSets.has(row.setNumber) && !(weightMissingForTracking && row !== set) && (
+                          <button
+                            type="button"
+                            disabled={weightMissingForTracking}
+                            onClick={() => startTrackingRow(row)}
+                            // Recording a new set while a DIFFERENT set's analysis is still running
+                            // in the background is intentionally allowed, not guarded -- recording
+                            // is hardware video encoding, a different chip from the Neural Engine/
+                            // GPU work Vision analysis does, and AvBodyTrackingPlugin's own
+                            // analysisQueue already serializes analysis calls onto one queue
+                            // natively (a second analyzeRecording request while one is in flight
+                            // just waits its turn, never runs concurrently) -- so there's nothing
+                            // for a client-side lock to protect here that isn't already handled.
+                            className={cn(
+                              "flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                              weightMissingForTracking
+                                ? "cursor-not-allowed border-border text-muted-foreground opacity-60"
+                                : rowTracked
+                                  ? "border-success/40 bg-success/10 text-success"
+                                  : "border-primary/40 text-primary hover:bg-primary/10",
+                            )}
+                          >
+                            <Camera className="h-3 w-3" />
+                            {sideWord}
+                            {weightMissingForTracking
+                              ? // Says what to do, not just that it is off. A greyed control with
+                                // its usual label reads as broken.
+                                `Enter ${unit} to record`
+                              : rowTracked
+                              ? item.trackingLevel === "jump" && row.jumpHeightCm != null
+                                ? `${formatDistanceCm(row.jumpHeightCm, distanceUnit)} jump — retake`
+                                : item.trackingLevel === "full" && row.meanVelocityMps != null
+                                  ? // Average (mean concentric) velocity, not peak -- this is the
+                                    // number VBT athletes actually train against (e.g. "stay above
+                                    // 0.5 m/s"), and it's the first thing shown back to them after
+                                    // a tracked set, right here on the set row.
+                                    `${row.meanVelocityMps} m/s avg — retake`
+                                  : `Path ${row.barPathDeviationCm} cm — retake`
+                              : item.trackingLevel === "jump"
+                                ? "Track this jump"
+                                : mergedTracking
+                                  ? "Record & Analyze"
+                                  : "Track this set"}
+                          </button>
                         )}
-                      >
-                        <Video className="h-3 w-3" />
-                        {set.formCheckVideoUrl
-                          ? set.formCheckFlag === "best"
-                            ? "Best set video"
-                            : set.formCheckFlag === "worst"
-                              ? "Worst set video"
-                              : "View video"
-                          : "Record & Analyze"}
-                      </button>
-                    )}
-                    {mergedTracking && set.formCheckVideoUrl && (
-                      <button
-                        type="button"
-                        onClick={() => setPreviewSetNumber(set.setNumber)}
-                        className="flex items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10px] font-semibold text-success"
-                      >
-                        <Video className="h-3 w-3" />
-                        {set.formCheckFlag === "best"
-                          ? "Best set video"
-                          : set.formCheckFlag === "worst"
-                            ? "Worst set video"
-                            : "View video"}
-                      </button>
-                    )}
+                        {/* When trackingLevel also applies, the button above already
+                            records the video (see BarTrackerDialog's recordVideo
+                            prop below) -- a second, separate video button here
+                            would just be the same set recorded twice. */}
+                        {/* One button, two jobs, and only one of them needs the camera. An
+                            already-recorded clip is PREVIEWED here, and that must stay available to
+                            everybody: the video exists, it is theirs, and hiding it would take away
+                            something they already have rather than gate something they have not
+                            bought. Starting a NEW recording is the gated half -- it ends at
+                            /api/athlete/form-video, which answers 402 without the entitlement. */}
+                        {videoRequired &&
+                          !mergedTracking &&
+                          (row.formCheckVideoUrl || (cameraAllowed && !user?.trackingOptOut)) && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              row.formCheckVideoUrl
+                                ? setPreviewSetNumber(row.setNumber)
+                                : setRecordingSetNumber(row.setNumber)
+                            }
+                            className={cn(
+                              "flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                              row.formCheckVideoUrl
+                                ? "border-success/40 bg-success/10 text-success"
+                                : "border-primary/40 text-primary hover:bg-primary/10",
+                            )}
+                          >
+                            <Video className="h-3 w-3" />
+                            {sideWord}
+                            {row.formCheckVideoUrl
+                              ? row.formCheckFlag === "best"
+                                ? "Best set video"
+                                : row.formCheckFlag === "worst"
+                                  ? "Worst set video"
+                                  : "View video"
+                              : "Record & Analyze"}
+                          </button>
+                        )}
+                        {mergedTracking && row.formCheckVideoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewSetNumber(row.setNumber)}
+                            className="flex items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10px] font-semibold text-success"
+                          >
+                            <Video className="h-3 w-3" />
+                            {sideWord}
+                            {row.formCheckFlag === "best"
+                              ? "Best set video"
+                              : row.formCheckFlag === "worst"
+                                ? "Worst set video"
+                                : "View video"}
+                          </button>
+                        )}
+                        </Fragment>
+                      );
+                    })}
                     {usesPlateCalc && (
                       <button
                         type="button"
@@ -5123,7 +5169,7 @@ function ExerciseLogContent({
           <button
             type="button"
             onClick={onRemoveSet}
-            disabled={item.sets.length <= 1}
+            disabled={setGroups.length <= 1}
             aria-label="Remove set"
             className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
           >

@@ -26,7 +26,12 @@ describe("the biometric release prompt", () => {
   it("is asked before the camera opens, not after the set is filmed", () => {
     // The single launch point goes through the check. A tracker opened directly would collect
     // first and ask later, which is the ordering these statutes are specifically about.
-    expect(workout).toContain("onClick={() => startTracking(set.setNumber)}");
+    // The button is per row (Left and Right on a unilateral set) and goes through startTrackingRow,
+    // whose only way into the camera is startTracking, where the release is asked.
+    expect(workout).toContain("onClick={() => startTrackingRow(row)}");
+    expect(workout).not.toMatch(/onClick=\{\(\) => (?:startTracking|setTrackingSet)\(/);
+    const rowFn = workout.slice(workout.indexOf("const startTrackingRow = ("));
+    expect(rowFn.slice(0, rowFn.indexOf("\n  };"))).toContain("startTracking(row.setNumber);");
     const fn = workout.slice(workout.indexOf("const startTracking = ("));
     const body = fn.slice(0, fn.indexOf("\n  };"));
     expect(body).toContain("user?.biometricReleaseRequired");

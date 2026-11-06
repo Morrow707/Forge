@@ -152,9 +152,11 @@ ceiling, built) was costed at +6.2% and not shipped. Held on the branch with the
 and shipped when Scott lifted the hold. Build to film on: **716** (`af7d4d3`, 2026-11-06 evening;
 715 its `verify_build`). See "Round eleven".
 **AND PER-SIDE FILMING IS BUILT (2026-11-06):** every set of a unilateral exercise is two rows,
-one per side, each logged, filmed and measured on its own (`shared/unilateral-sides.ts`,
-`workout_set_entries.side`); the tracker is told the side (`trace.declaredSide`) and records whether
-the hand it measured agrees. The next single-arm row take is the first with a known arm.
+one per side, each filmed and measured on its own (`shared/unilateral-sides.ts`,
+`workout_set_entries.side`), drawn on the screen as ONE set with a Left and a Right record button
+(the ten-pill version shipped in 716 and Scott called it "too clunky"; the fix is held on the branch);
+the tracker is told the side (`trace.declaredSide`) and records whether the hand it measured agrees.
+The next single-arm row take is the first with a known arm.
 
 | lift | paired takes | ROM vs OVR, oldest -> newest | state |
 |---|---|---|---|

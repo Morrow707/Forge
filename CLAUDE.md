@@ -3231,14 +3231,19 @@ halves before splitting anything else:
   left, ... -- and each carries the new `side` column (`body_side`, nullable; `shared/unilateral-
   sides.ts` is the rule: `setRowCountFor`, `sideForNewSet` -- odd rows left, even rows right, so a
   pair stays a pair however rows are added -- `pairIndexFor`, `setRowLabel`). The athlete logs each
-  side's reps (a left arm doing 8 and a right doing 7 is worth knowing), the screen labels the pills
-  "Set 1 · Left" / "Set 1 · Right", and the AV bar tracker is handed the row's `side` as the hand
+  side's reps, the screen draws the pair as ONE set ("Set 1" ... "Set 5", exactly as a bilateral
+  lift) with a Left and a Right record button inside the open set -- the first version drew a pill
+  per ROW, ten of them, and Scott the same evening: "This looks terrible ... when I open it have
+  there be two record buttons that say left and right on them. Your way is too clunky" -- the reps
+  and load typed on a set land on both of its rows, and the AV bar tracker is handed the row's `side` as the hand
   the athlete says is working: it is recorded as `trace.declaredSide`, the working-hand rule still
   MEASURES which wrist travelled (the measurement wins the point, the declared side fills in where
   the take cannot say), and `trace.workingHandDisagreesWithDeclaredSide` is written when they
   differ -- a Vision left/right swap and a mis-tapped side both exist and neither refuses a take.
-  **A ROW SAVED BEFORE SIDES EXISTED STAYS NULL AND IS SHOWN AS "side not recorded" -- never
-  back-filled**, because which arm the camera saw is a fact about the take and not a guess; a
+  **A ROW SAVED BEFORE SIDES EXISTED HOLDING A CAPTURE STAYS NULL -- never back-filled**, because
+  which arm that take saw is a fact and not a guess (the export says so, and the next take recorded
+  on it from the Left or Right button names the side then); a row with nothing filmed takes its
+  structural side on the next save, there being no take to misname; a
   bilateral lift builds exactly the rows it always did and its `side` is null. The column is a
   non-camera column (`NON_CAMERA_SET_COLUMNS`), the save schema takes it optionally so an older
   client still saves, the reconciler adds it after the `body_side` type (proven on a fresh database

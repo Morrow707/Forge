@@ -16,15 +16,15 @@ const hook = readFileSync(resolve(__dirname, "./use-av-body-tracking.ts"), "utf-
  */
 describe("both halves of the wait have their own bar", () => {
   it("draws a phase bar for each of the two waits", () => {
-    expect(workout).toContain('<ProcessingPhaseBar\n                          label="Processing"');
+    expect(workout).toMatch(/<ProcessingPhaseBar\s+label="Processing"/);
     expect(workout).toContain('<ProcessingPhaseBar label="Saving"');
   });
 
   it("feeds them from two different sources", () => {
     // The whole complaint was one number standing in for two. If both bars read the same map
     // again, that is the same bug with twice the furniture.
-    expect(workout).toContain("percent={analysisProgress[set.setNumber]}");
-    expect(workout).toContain("percent={processingProgress[set.setNumber]}");
+    expect(workout).toContain("percent={analysisProgress[row.setNumber]}");
+    expect(workout).toContain("percent={processingProgress[row.setNumber]}");
     expect(workout).toContain("onAnalysisProgress={(setNumber, percent) =>");
     expect(workout).toContain("onUploadProgress={(setNumber, percent) =>");
   });
@@ -42,7 +42,7 @@ describe("both halves of the wait have their own bar", () => {
     // diagnostics all follow it. A bar sitting full while the athlete still waits is its own
     // kind of lie, so analysis is capped at 99 and only completes when the upload starts.
     expect(hook).toContain("Math.min(99,");
-    expect(workout).toContain("done={processingProgress[set.setNumber] != null}");
+    expect(workout).toContain("done={processingProgress[row.setNumber] != null}");
   });
 
   it("clears both phases together", () => {

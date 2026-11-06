@@ -7,8 +7,9 @@ import { setLogInputSchema, NON_CAMERA_SET_COLUMNS } from "@shared/schema";
  *
  * Scott, 2026-11-06: "every set, every rep, every unilateral exercise needs to have a way to film
  * both sides separately." The shape (shared/unilateral-sides.ts): one set ROW per side, carrying
- * `side`, from the workout screen through the save, the read-back, the admin export and the
- * tracking report, and into the tracker as the hand the athlete says is working.
+ * `side`, from the workout screen (where the pair is ONE set with a Left and a Right record button)
+ * through the save, the read-back, the admin export and the tracking report, and into the tracker
+ * as the hand the athlete says is working.
  *
  * A side that is dropped anywhere along that path is a take whose arm nobody can name -- which is
  * exactly the 11-06 row, where the sensor read 41.3cm on one arm and 47.1cm on the other and the
@@ -55,20 +56,37 @@ describe("the side of a unilateral set", () => {
     expect(alterAt).toBeGreaterThan(typeAt);
   });
 
-  it("the workout screen builds one row per side, sends the side, and tells the tracker which hand works", () => {
+  it("the workout screen builds one row per side, draws the pair as ONE set with a Left and a Right record button, and tells the tracker which hand works", () => {
     const src = read("client/src/pages/workout.tsx");
     // One row per side per prescribed set, the side decided by the row's number -- never typed as
     // a literal in this file, so the helper's rule is the only rule.
     expect(src).toMatch(/Array\.from\(\{ length: setRowCountFor\(prescribed\.sets, laterality\) \}/);
-    expect(src).toMatch(/side: existingSet \? \(existingSet\.side \?\? null\) : sideForNewSet\(setNumber, laterality\)/);
+    expect(src).toMatch(/\? \(existingSet\.side \?\? \(existingHoldsCapture \? null : sideForNewSet\(setNumber, laterality\)\)\)/);
     expect(src).toMatch(/side: sideForNewSet\(nextNumber, it\.laterality\)/);
     expect(src).not.toMatch(/side: "left"|side: "right"/);
+    // The "+" and "-" add and remove a SET, which is a pair on a unilateral lift.
+    expect(src).toMatch(/Array\.from\(\{ length: setRowCountFor\(1, it\.laterality\) \}/);
+    expect(src).toMatch(/it\.sets\.slice\(0, it\.sets\.length - lastGroup\.rows\.length\)/);
+    // THE PILLS ARE ONE PER SET ("Set 1" ... "Set 5"), NEVER ONE PER ROW. Scott, 2026-11-06, on
+    // the ten-pill version: "This looks terrible ... Your way is too clunky." The strip, the
+    // swipe and the open set all go through the one grouping; no pill names a side.
+    expect(src).toMatch(/groupSetRows\(item\.sets, item\.laterality\)\.map\(\(group, i\) =>/);
+    expect(src).toMatch(/\{setPillLabel\(group\.pairIndex\)\}/);
+    expect(src).not.toMatch(/setRowLabel\(/);
+    expect(src).not.toMatch(/side not recorded/);
+    // The open set's reps and load land on EVERY row of the set.
+    expect(src).toMatch(/for \(const row of group\.rows\) onUpdateSet\(row\.setNumber, patch, options\);/);
+    expect(src).not.toMatch(/onUpdateSet\(set\.setNumber, \{ reps:/);
+    // And the record button is per ROW -- Left and Right on a unilateral set -- each starting
+    // its own row's take and naming its side off the helper, never a hand-typed word.
+    expect(src).toMatch(/\{group\.rows\.map\(\(row\) => \{[\s\S]*?const rowSide = rowSideFor\(row, item\.laterality\);[\s\S]*?onClick=\{\(\) => startTrackingRow\(row\)\}/);
+    expect(src).toMatch(/const sideWord = rowSide \? `\$\{sideLabel\(rowSide\)\} · ` : "";/);
+    // A row with no side on file is named by the button its next take is filmed from.
+    expect(src).toMatch(/const startTrackingRow = \(row: SetRow\) => \{\s*if \(row\.side == null\) \{\s*const side = rowSideFor\(row, item\.laterality\);\s*if \(side\) onUpdateSet\(row\.setNumber, \{ side \}\);/);
     // The payload carries it.
     expect(src).toMatch(/setNumber: s\.setNumber,\s*side: s\.side,/);
     // The AV bar tracker is handed the row's side.
     expect(src).toMatch(/<AvBarTrackerDialog[\s\S]*?side=\{trackedRow\?\.side \?\? null\}/);
-    // And the row is labelled by the helper, never by a hand-typed "Left"/"Right".
-    expect(src).toMatch(/setRowLabel\(set\.setNumber, set\.side, item\.laterality\)/);
   });
 
   it("the server writes it, reads it back, exports it and prints it", () => {

@@ -69,7 +69,7 @@ describe("both workout pages ask before drawing a camera control", () => {
     // which takes something away rather than withholding something unbought -- and it would hit
     // hardest on exactly the sets that were filmed before a subscription lapsed.
     expect(read("client", "src", "pages", "workout.tsx")).toContain(
-      "(set.formCheckVideoUrl || (cameraAllowed && !user?.trackingOptOut))",
+      "(row.formCheckVideoUrl || (cameraAllowed && !user?.trackingOptOut))",
     );
   });
 
