@@ -4389,6 +4389,11 @@ function ExerciseLogContent({
                 targetSetNumber,
                 {
                   jumpHeightCm,
+                  // The hip's drive peak and mean (JumpSetMetrics.hipDrive*), in the same columns
+                  // a bar set's velocities use, so a jump's export carries the number the OVR on
+                  // the hip reports. Null when no rep had a countermovement, as before.
+                  peakVelocityMps: metrics.hipDrivePeakVelocityMps ?? null,
+                  meanVelocityMps: metrics.hipDriveMeanVelocityMps ?? null,
                   jumpDistanceCm: metrics.bestHorizontalDistanceCm,
                   groundContactSeconds: metrics.avgGroundContactSeconds,
                   reactiveStrengthIndex: metrics.reactiveStrengthIndex,

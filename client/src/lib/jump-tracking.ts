@@ -261,6 +261,16 @@ export function scaleCountermovement(cm: JumpCountermovement, ratio: number): Ju
 
 export type JumpSetMetrics = {
   bestJumpHeightCm: number;
+  /** THE HIP'S DRIVE, AT THE SET LEVEL -- what a hip-mounted bar sensor reports for a jump. The
+   *  reps' average of countermovement.concentricPeakVelocityMps and of concentricMeanVelocityMps
+   *  over the same reps bestJumpHeightCm is taken over (repsForSetBest), the way the bar's set
+   *  peak is its reps' average (build 577). Null when no rep carried a countermovement. Added
+   *  2026-11-05: the OVR on the hip read 2.83 m/s peak / 1.46 mean over a box-jump set whose
+   *  five reps Forge had measured at 2.95 / 2.97 / 2.71 / 2.96 / 2.87, and no set-level number
+   *  existed to put beside the sensor's. The MEAN is over the drive to takeoff only; the
+   *  sensor's window runs past takeoff, so the two means are not the same quantity yet. */
+  hipDrivePeakVelocityMps?: number | null;
+  hipDriveMeanVelocityMps?: number | null;
   bestHorizontalDistanceCm: number | null;
   avgGroundContactSeconds: number | null;
   // Reactive Strength Index (jump height in meters / ground contact time in
@@ -932,6 +942,11 @@ export function summarizeJumpSet(
 
   const boxClearances = forBest.map((r) => r.boxClearanceCm).filter((c): c is number => c != null);
   const bestBoxClearanceCm = boxClearances.length ? Math.max(...boxClearances) : null;
+  const hipPeaks = forBest.map((r) => r.countermovement?.concentricPeakVelocityMps).filter((v): v is number => typeof v === "number" && v > 0);
+  const hipMeans = forBest.map((r) => r.countermovement?.concentricMeanVelocityMps).filter((v): v is number => typeof v === "number" && v > 0);
+  const avg2 = (xs: number[]) => (xs.length ? Math.round((xs.reduce((a, v) => a + v, 0) / xs.length) * 100) / 100 : null);
+  const hipDrivePeakVelocityMps = avg2(hipPeaks);
+  const hipDriveMeanVelocityMps = avg2(hipMeans);
 
   // ARC-1: jump mode cross-checks something and records what it found.
   // Both height estimates were already computed per rep and deliberately
@@ -946,6 +961,8 @@ export function summarizeJumpSet(
 
   return {
     bestJumpHeightCm,
+    hipDrivePeakVelocityMps,
+    hipDriveMeanVelocityMps,
     bestHorizontalDistanceCm,
     avgGroundContactSeconds,
     reactiveStrengthIndex,

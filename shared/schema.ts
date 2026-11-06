@@ -9269,6 +9269,14 @@ export const repBreakdownEntrySchema = z.object({
       peakSamplesInWindow: z.number().nullable().optional(),
       peakSamplesBelowConfidence: z.number().nullable().optional(),
       peakUsedRawFallback: z.boolean().nullable().optional(),
+      // THE HOLE INSIDE THE PHASE. gapBefore/After are the dead time beside a phase; this is the
+      // largest sample gap within it, the share of the rep's distance that fell inside that gap,
+      // and whether the two together starved the rep (bar-tracking.ts, SAMPLE_STARVED_*). The
+      // 2026-11-05 Romanian deadlift's rep 1: a 0.239s hole holding 61% of a 48.6cm phase, both
+      // neighbouring gaps 0, reported 45.6cm against the sensor's 61.2.
+      largestGapSeconds: z.number().nullable().optional(),
+      distanceInLargestGapShare: z.number().nullable().optional(),
+      sampleStarved: z.boolean().nullable().optional(),
     })
     .optional()
     .nullable(),
@@ -9901,6 +9909,7 @@ export const trackingDiagnosticsSchema = z.object({
   setRangeOfMotion: z
     .object({
       usedRepNumbers: z.array(z.number()).max(100),
+      sampleStarvedRepNumbers: z.array(z.number()).max(100).optional(),
       droppedRepNumbers: z.array(z.number()).max(100),
       fellBackToAllReps: z.boolean(),
       medianRomCm: z.number().nullable(),
@@ -9938,6 +9947,7 @@ export const trackingDiagnosticsSchema = z.object({
       velocityRejections: z.number(),
       repPeaksFlooredToMean: z.number().optional(),
       repPeaksCappedToMeanRatio: z.number().optional(),
+      repsSampleStarved: z.number().optional(),
       combinedVelocityRejections: z.number().optional(),
       barPointFromBothHands: z.number().optional(),
       barPointFromLoneHandCarried: z.number().optional(),
@@ -10208,6 +10218,20 @@ export const trackingDiagnosticsSchema = z.object({
       tracePathCm: z.number().optional().nullable(),
       traceDisplacementCm: z.number().optional().nullable(),
       velocitySmoothingMs: z.number().optional().nullable(),
+      // THE WHOLE RECORD THIS TAKE WAS HANDED, with where each number came from. Scott,
+      // 2026-11-05: "Look at the export too, can you add anything to it to help?" The one
+      // question every round since 10-20 has had to answer from the run list -- which build, so
+      // which per-lift numbers, a capture ran on -- is answered here. Values only, no athlete.
+      liftRecord: z
+        .object({
+          identity: z.string().max(120),
+          tracker: z.string().max(40),
+          romBucket: z.string().max(60).nullable(),
+          values: z.record(z.string(), z.number()),
+          sources: z.record(z.string(), z.string().max(20)),
+        })
+        .optional()
+        .nullable(),
       traceTravelAlongCm: z.number().optional().nullable(),
       traceTravelAcrossCm: z.number().optional().nullable(),
       tracePointsDroppedOffAxis: z.number().optional().nullable(),

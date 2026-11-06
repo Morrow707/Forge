@@ -467,6 +467,15 @@ export function AvJumpTrackerDialog({
             },
           }
         : {}),
+      // The whole record this jump ran on, with each number's source -- see the bar dialog's
+      // liftRecord. Values only.
+      liftRecord: {
+        identity: jumpTunables.identity,
+        tracker: jumpTunables.tracker,
+        romBucket: null,
+        values: { ...jumpTunables.values },
+        sources: { ...jumpTunables.sources },
+      },
     };
 
     if (scaleFactor == null) {

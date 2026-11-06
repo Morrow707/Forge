@@ -389,6 +389,7 @@ import { readingLevelInstruction, type ClassReadingLevel } from "@shared/class-r
 import { learningStreakFromDays } from "@shared/learning-streak";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { deleteUploadedFile, statUploadedFile, getUploadsDiskFreeBytes } from "./uploaded-files";
+import { deriveBodyWitnessTrace } from "./body-witness-trace";
 import {
   setTracePathFor,
   writeSetTraceFile,
@@ -26531,6 +26532,8 @@ ${catalog}`;
           ? {
               barPathTrace: workoutSetEntries.barPathTrace,
               armPathTrace: workoutSetEntries.armPathTrace,
+              // Read below for the body witness trace, never served as a path.
+              skeletonFramesPath: workoutSetEntries.skeletonFramesPath,
             }
           : {}),
         ...(includeSkeleton
@@ -26575,9 +26578,28 @@ ${catalog}`;
         if (!Array.isArray(row.skeletonFrames) && row.skeletonFramesPath) {
           row.skeletonFrames = await readSetTraceFile(row.skeletonFramesPath);
         }
-        delete row.skeletonFramesPath;
       }
     }
+    if (includeTraces) {
+      // THE BODY BESIDE THE BAR (server/body-witness-trace.ts): shoulder, hip, wrist and ankle
+      // per stored frame, derived from the skeleton file one row at a time and the frames
+      // dropped again, so the default download carries the body's clock without the frames'
+      // megabytes. Sequential on purpose -- one parsed file in memory at a time.
+      for (const row of rows as Array<{
+        skeletonFrames?: unknown;
+        skeletonFramesPath?: string | null;
+        bodyWitnessTrace?: unknown;
+      }>) {
+        const frames = Array.isArray(row.skeletonFrames)
+          ? row.skeletonFrames
+          : row.skeletonFramesPath
+            ? await readSetTraceFile(row.skeletonFramesPath)
+            : null;
+        row.bodyWitnessTrace = deriveBodyWitnessTrace(frames);
+        if (!includeSkeleton) delete row.skeletonFrames;
+      }
+    }
+    for (const row of rows as Array<{ skeletonFramesPath?: string | null }>) delete row.skeletonFramesPath;
     return rows;
   },
   /** THE SKILL HALF OF THE CAPTURE REPORT, which did not exist until 2026-10-07.

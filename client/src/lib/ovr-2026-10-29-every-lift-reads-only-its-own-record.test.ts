@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { replayCapture } from "./capture-replay";
+import { VELOCITY_SMOOTHING_MS } from "./bar-tracking";
 import { cameraTunablesFor, FITTED_OVERRIDES, VELOCITY_OVERRIDES_REMOVED_2026_11_05 } from "@shared/camera-tunables-by-lift";
 import { romBucketForExercise } from "./exercise-camera-profile";
 import { MAX_PEAK_TO_MEAN_RATIO } from "./bar-tracking";
@@ -47,10 +48,12 @@ const SENSOR: Record<string, { mean: number; peak: number; reps: number }> = {
  *  motion is the phone's to the half-centimetre -- direction does not change a magnitude -- and the
  *  velocities are the drives'. */
 const CORRECTED: Record<string, { reps: number; romCm: number; mean: number; peak: number }> = {
-  "2026-10-29 Back Squat set 1": { reps: 5, romCm: 71.8, mean: 0.81, peak: 1.15 },
-  "2026-10-19 Back Squat set 2": { reps: 5, romCm: 71.8, mean: 0.86, peak: 1.18 },
-  "2026-10-29 Romanian Deadlift set 1": { reps: 8, romCm: 84.1, mean: 1.31, peak: 1.87 },
-  "2026-10-19 Romanian Deadlift set 2": { reps: 7, romCm: 64.1, mean: 1.16, peak: 2.18 },
+  // Round nine (2026-11-05): the squat's record is the whole travel window (driveOnsetFraction
+  // 0) and a 130ms smoothing, the RDL's window 0.02 -- see FITTED_OVERRIDE_EVIDENCE.
+  "2026-10-29 Back Squat set 1": { reps: 5, romCm: 71.8, mean: 0.80, peak: 1.16 },
+  "2026-10-19 Back Squat set 2": { reps: 5, romCm: 71.8, mean: 0.83, peak: 1.19 },
+  "2026-10-29 Romanian Deadlift set 1": { reps: 8, romCm: 84.1, mean: 1.19, peak: 1.82 },
+  "2026-10-19 Romanian Deadlift set 2": { reps: 7, romCm: 64.1, mean: 1.12, peak: 2.15 },
 };
 
 describe("the 2026-10-29 export replays through each lift's own record", () => {
@@ -75,15 +78,18 @@ describe("the 2026-10-29 export replays through each lift's own record", () => {
     });
   }
 
-  it("the squats read the sensor: both count five, the 10-19 set recovers the rep the lowering lost, and the means sit inside 3%", () => {
-    // 10-29 set 1: 0.81 against 0.80 at the squat's own window (0.84 at the shared 0.04); 10-19
-    // set 2: 0.86 against 0.86 (0.87 shared). On the lowerings the phone had read 0.72 and 0.84,
-    // and found four reps on 10-19 where the sensor counted five.
+  it("the squats read the sensor: both count five, the 10-19 set recovers the rep the lowering lost, and the means sit inside 4%", () => {
+    // 10-29 set 1: 0.80 against 0.80 at the squat's own window (0.84 at the shared 0.04, 0.81 at
+    // the 0.02 of round eight); 10-19 set 2: 0.83 against 0.86 (0.87 shared, 0.86 at 0.02). On
+    // the lowerings the phone had read 0.72 and 0.84, and found four reps on 10-19 where the
+    // sensor counted five. The whole-window step (round nine) costs this take 3.5 points and
+    // buys the 2026-11-05 squat 2.4; over the five paired squats the mean error goes +2.0% to
+    // -0.4% (see FITTED_OVERRIDE_EVIDENCE).
     for (const id of ["2026-10-29 Back Squat set 1", "2026-10-19 Back Squat set 2"]) {
       const m = replay(byId(id));
       expect(m.repBreakdown.length, id).toBe(SENSOR[id].reps);
-      expect(Math.abs(m.meanVelocityMps! / SENSOR[id].mean - 1), id).toBeLessThan(0.03);
-      // the peaks read 4-9% under the sensor at the shared smoothing; recorded, not fitted
+      expect(Math.abs(m.meanVelocityMps! / SENSOR[id].mean - 1), id).toBeLessThan(0.04);
+      // the peaks read 3-9% under the sensor at the squat's 130ms smoothing (4-9% at 165)
       expect(m.peakVelocityMps! / SENSOR[id].peak, id).toBeGreaterThan(0.88);
       expect(m.peakVelocityMps! / SENSOR[id].peak, id).toBeLessThan(1.0);
       // and every squat rep's drive is faster than its descent, which is what a squat is
@@ -93,26 +99,31 @@ describe("the 2026-10-29 export replays through each lift's own record", () => {
   });
 
   it("the squat's own numbers reach the squat traces and not the RDL's", () => {
-    expect(Object.keys(FITTED_OVERRIDES["Back Squat"]).sort()).toEqual(["driveOnsetFraction", "heightRulerUncertainty"]);
+    expect(Object.keys(FITTED_OVERRIDES["Back Squat"]).sort()).toEqual(["driveOnsetFraction", "heightRulerUncertainty", "velocitySmoothingMs"]);
     const squat = cameraTunablesFor("Back Squat", "squat");
-    expect(squat.values.driveOnsetFraction).toBe(0.02);
+    expect(squat.values.driveOnsetFraction).toBe(0);
     expect(squat.sources.driveOnsetFraction).toBe("fitted");
+    expect(squat.values.velocitySmoothingMs).toBe(130);
     const rdl = cameraTunablesFor("Romanian Deadlift", romBucketForExercise("Romanian Deadlift"));
-    expect(rdl.sources.driveOnsetFraction).not.toBe("fitted");
-    expect(rdl.values.driveOnsetFraction).toBe(0.04);
-    // The window moves the squat's mean by three points and nothing else: same reps, same range,
-    // same peaks at 0.02 as at the shared 0.04, on both squat takes.
+    // The RDL took its own first window step in round nine (0.04 -> 0.02); it is its own number,
+    // not the squat's, and the squat's 0 does not reach it.
+    expect(rdl.sources.driveOnsetFraction).toBe("fitted");
+    expect(rdl.values.driveOnsetFraction).toBe(0.02);
+    expect(rdl.values.velocitySmoothingMs).toBe(VELOCITY_SMOOTHING_MS);
+    // The window moves the squat's mean and the smoothing its peak, and nothing else: same reps,
+    // same range at the squat's record as at the shared one, on both squat takes.
     for (const id of ["2026-10-29 Back Squat set 1", "2026-10-19 Back Squat set 2"]) {
       const f = byId(id);
       const own = replay(f);
       const shared = replayCapture({ setId: f.id, exerciseName: "Front Squat", heightIn: f.heightIn, loadKg: f.loadKg, loggedReps: f.loggedReps, trackingLevel: f.trackingLevel, barPathTrace: f.barPathTrace, trackingDiagnostics: f.trackingDiagnostics }).metrics!;
       expect(shared.repBreakdown.length, id).toBe(own.repBreakdown.length);
       expect(shared.romCm, id).toBeCloseTo(own.romCm!, 1);
-      expect(shared.peakVelocityMps, id).toBeCloseTo(own.peakVelocityMps!, 2);
-      // 0.03 on 10-29 and 0.01 on 10-19 (the set mean sums the drive window since 10-31, so the
-      // window moves the numerator too and the step is smaller than it read before that fix)
+      // the 130ms smoothing lifts the peak by a hundredth or so against the shared 165
+      expect(own.peakVelocityMps! - shared.peakVelocityMps!, id).toBeGreaterThanOrEqual(0);
+      expect(own.peakVelocityMps! - shared.peakVelocityMps!, id).toBeLessThan(0.03);
+      // 0.04 on both takes: the whole travel window against the shared 0.04 trim
       expect(shared.meanVelocityMps! - own.meanVelocityMps!, id).toBeGreaterThan(0.005);
-      expect(shared.meanVelocityMps! - own.meanVelocityMps!, id).toBeLessThan(0.04);
+      expect(shared.meanVelocityMps! - own.meanVelocityMps!, id).toBeLessThan(0.06);
       // no squat rep is capped or floored on either take: every peak IS its raw read
       own.repBreakdown.forEach((r: any, i: number) => {
         expect(r.windows?.peakCapped, `${id} rep ${i + 1}`).toBe(false);
@@ -125,18 +136,19 @@ describe("the 2026-10-29 export replays through each lift's own record", () => {
     expect(VELOCITY_OVERRIDES_REMOVED_2026_11_05["Romanian Deadlift"]).toEqual(["maxPeakToMeanRatio"]);
     expect("maxPeakToMeanRatio" in FITTED_OVERRIDES["Romanian Deadlift"]).toBe(false);
     expect(cameraTunablesFor("Romanian Deadlift", romBucketForExercise("Romanian Deadlift")).values.maxPeakToMeanRatio).toBe(MAX_PEAK_TO_MEAN_RATIO);
-    // On the drives the RDL reads HIGH on both takes -- +46% / +30% on the mean, +21% / +37% on the
-    // peak against the sensor -- with its range of motion +35% (10-29, filmed oblique) and +15%
+    // On the drives the RDL reads HIGH on both takes -- +32% / +26% on the mean at its own 0.02
+    // window (+46% / +30% at the shared 0.04), +18% / +35% on the peak against the sensor -- with
+    // its range of motion +35% (10-29, filmed oblique) and +15%
     // (10-19, the 3D-pose collapse) over the sensor's. Those are the scale faults the notes carry;
     // the drive is read right and reads what the scale gives it. Pinned at what it reads (Rule #5:
-    // two takes, two different scale faults, no velocity fit). The cap at 2.0 binds on three of
-    // the 10-19 drives and none of the 10-29 ones.
+    // two takes, two different scale faults, no velocity fit). The cap at 2.0 binds on four of
+    // the 10-19 drives at the RDL's 0.02 window (three at the shared 0.04) and none of the 10-29 ones.
     const s1 = replay(byId("2026-10-29 Romanian Deadlift set 1"));
     const s2 = replay(byId("2026-10-19 Romanian Deadlift set 2"));
     expect(s1.repBreakdown.length).toBe(8);
-    expect(s1.meanVelocityMps! / SENSOR["2026-10-29 Romanian Deadlift set 1"].mean).toBeGreaterThan(1.4);
+    expect(s1.meanVelocityMps! / SENSOR["2026-10-29 Romanian Deadlift set 1"].mean).toBeGreaterThan(1.25);
     expect(s2.meanVelocityMps! / SENSOR["2026-10-19 Romanian Deadlift set 2"].mean).toBeGreaterThan(1.2);
-    expect(s2.repBreakdown.filter((r: any) => r.windows?.peakCapped).length).toBe(3);
+    expect(s2.repBreakdown.filter((r: any) => r.windows?.peakCapped).length).toBe(4);
     expect(s1.repBreakdown.filter((r: any) => r.windows?.peakCapped).length).toBe(0);
     // and on both the drive is faster than the lowering, as a hinge's is
     expect(s1.eccentricMeanVelocityMps!).toBeLessThan(s1.meanVelocityMps!);

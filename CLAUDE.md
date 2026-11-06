@@ -2969,12 +2969,18 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 707** (2026-10-31 19:19
-  UTC, `37867e3`: round seven -- the bench's own peak cap 1.6, the press's own drive onset 0.12,
-  the plate's confidence floor; 706 was its `verify_build` on the same commit, and 708 a
-  `verify_build` on the audit fix `e58737c`). **Round eight (2026-11-05, the direction rule)
-  ships as the next beta -- 709 its `verify_build`, 710 the build to film on**; the round-seven
-  velocity numbers in 707 were fitted on the lowering (see "ROUND EIGHT" below). Before 707,
+  branch `verify_build` for the arbiter plumbing. **The newest build is 712** (2026-11-05 ~20:20
+  UTC, `3ac2b34`: round nine -- the squat's own drive onset 0 and smoothing 130, the RDL's
+  sample-starvation rule and own drive onset 0.02, the jump's hip peak on the set, `liftRecord`
+  and `bodyWitnessTrace` in the export; 711 was its `verify_build` on the same commit).
+  **712 is the build to film on.** Before it, **710** (2026-11-05 16:36
+  UTC, `4c30e37`: round eight -- the direction rule corrected, every descent-fitted velocity
+  override removed, the squat's own drive onset 0.02; 709 was its `verify_build` on the same
+  commit). Before 710, **707** (2026-10-31 19:19 UTC, `37867e3`:
+  round seven -- the bench's own peak cap 1.6, the press's own drive onset 0.12, the plate's
+  confidence floor; 706 was its `verify_build` on the same commit, and 708 a `verify_build` on
+  the audit fix `e58737c`); the round-seven velocity numbers in 707 were fitted on the lowering
+  (see "ROUND EIGHT" below). Before 707,
   **705** (2026-10-30 20:53 UTC, `bfcc130`: round five -- a yardstick that would convict most of
   the rulers stands down, the press's own drive onset 0.08; 704 was its `verify_build` on the same
   commit). Before it, **703** (2026-10-30
@@ -3115,8 +3121,9 @@ halves before splitting anything else:
   by the same rule; the every-lift test pins that the press's window reaches the press trace and
   the row's record lands set 2. See docs/camera-tracking-notes.md "Round five, 2026-10-30".
   Calibration work, uploaded on commit as build **705** (704 was its `verify_build` on `bfcc130`).
-- **THE QUEUE IS EMPTY AS OF BUILD 707** (round seven; round eight ships as 710). Before it, 705
-  (round five; nothing waited behind it).
+- **THE QUEUE IS EMPTY AS OF BUILD 712** (round nine, 2026-11-05; calibration work, uploaded on
+  commit). Before it, 710 (round eight), 707 (round seven) and 705 (round five); nothing waited
+  behind any of them.
   Before it, **703** (round four). Before it, **701** (round three). Before it,
   build **697** (2026-10-29 evening, `6d8f259`; 696 was its
   `verify_build` on `ccdeba5`). Calibration work, uploaded on commit: the RDL's first per-lift
@@ -3198,6 +3205,49 @@ halves before splitting anything else:
   See docs/camera-tracking-notes.md, "The RDL's +12.0% is the 3D-pose collapse". Calibration work:
   uploaded on commit.
 
+- **ROUND NINE, 2026-11-05: THE FIRST TAKES ON THE CORRECTED RULE. THE SQUAT LANDS, THE RDL IS
+  TRACE-LIMITED, THE JUMP'S HIP PEAK IS ON THE SENSOR.** Squat 135x5, RDL 135x8 and a box jump x5
+  on 710; Scott: "only testing the 3 lifts today", "at least one fix per lift ... fix every error
+  you find even if it's .001 accuracy", "Look at the export too, can you add anything to it to
+  help?", "When done push to Apple."
+  **Back Squat** (file path, rep for rep on the sensor's durations): ROM -1.9%, mean +4.8%, peak
+  -5.5% at round eight's record. Its own `driveOnsetFraction` 0.02 -> **0** -- the sweep shows
+  nothing between 0.02 and 0 moves any squat take, because a positive fraction only ever trims the
+  zero-speed turnaround samples, which the sensor counts; the five paired squats go +1.2 / 0.0 /
+  +2.0 / +2.2 / +4.8% -> 0.0 / -3.5 / 0.0 / -1.1 / +2.4% -- and its own `velocitySmoothingMs` 165 ->
+  **130**, one notch of a 33ms-sample window (peaks -5.5 / -4.2 / -9.2 -> -3.9 / -3.3 / -8.5).
+  Today's take at the new record: +2.4% / -3.9%. Recorded, not changed: the set's range is the
+  mean of the reps' RAW-endpoint distances (73.0) while the drive distances the mean is built on
+  average 74.4 (the sensor's 74.4), 1.5cm apart on every rep -- a rule for every lift.
+  **Romanian Deadlift**: its ROM "+0.5%" was two errors cancelling -- rep 1 a 45.6cm fragment with
+  a 0.239s hole holding 30cm of a 61cm pull, averaged in with seven reps at +3.6%. **THE
+  SAMPLE-STARVATION RULE** (shared): a rep whose phase holds a gap past 3x the take's cadence AND
+  at least half the rep's distance keeps its row (the hole written on it:
+  `windows.largestGapSeconds`, `distanceInLargestGapShare`, `sampleStarved`) and leaves the set's
+  aggregates, falling back to every rep when none is whole. **The gap alone was measured and
+  rejected**: it sits inside 20 reps of nine stored takes and on both sensor-paired ones leaving
+  the rep out moved the set away from the sensor -- a hole the bar sat still through loses
+  nothing. With the distance half it fires on today's rep 1 and one 09-29 bench rep and nothing
+  paired. Its own `driveOnsetFraction` 0.04 -> **0.02** (+35.5 -> +29.0% today, the two earlier
+  traced RDLs +45.6 -> +32.2 and +30.3 -> +25.8; 0 next). **NOT fitted, costed**: the peaks read
+  +26 to +54% on every rep with the distance right (only a 400ms blur reaches the sensor, which is
+  not a peak); three of eight phases read 1.35x short behind a 0.19-0.25s bottom dwell; a
+  shoulder-floor step (0.2 -> 0.21) was a wash on the six RDL ledger rows. The live path's clock
+  was checked and is sound (presentation timestamps). The lift is trace-limited: per-rep distances
+  scatter +-15% against a sensor whose spread is 5%.
+  **Box Jump**: hip drive peak 2.89 smoothed / 2.84 raw against the sensor's 2.832 over the five
+  reps (its rep 1 a setup rep, ignored on Scott's word) -- +2.1% / +0.3%; net rise 69.7 against the
+  sensor's 69.3. The drive mean +28% is the sensor's wider window (past takeoff). The fix is that
+  the set carries the number: `hipDrivePeakVelocityMps` / `hipDriveMeanVelocityMps` on
+  `JumpSetMetrics`, written to a jump's `peakVelocityMps` / `meanVelocityMps`.
+  **The export** (his ask): `calibration.liftRecord` on bar and jump captures -- the whole per-lift
+  record with each number's source, so which build a capture ran on is read off the file; the
+  per-rep hole fields; and, server-side, `bodyWitnessTrace` -- shoulder, hip, wrist and ankle per
+  stored skeleton frame on the bar trace's clock, derived from the trace file at download
+  (`server/body-witness-trace.ts`), so the RDL's hands can be held against its body and the jump's
+  dip read offline. Ledger rows, ground truth and fixture for all three; 300 files / 3133 tests
+  green bar the two sandbox zod ratchets. See docs/camera-tracking-notes.md, "Round nine".
+  Calibration work: `verify_build` then `beta` on commit.
 - **ROUND EIGHT, 2026-11-05: THE SEGMENTER HAD BEEN CALLING THE LOWERING THE LIFT SINCE 2026-09-30,
   AND EVERY VELOCITY FIT IN THIS FILE DATED BEFORE TODAY WAS MADE ON THE DESCENT.** Scott, told
   the finding and what it costs: "Fix it now." The trace is y-DOWN -- `vision-body-landmarks.ts`

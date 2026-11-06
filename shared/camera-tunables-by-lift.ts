@@ -378,8 +378,8 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // SCALE numbers (ruler uncertainties) survive 2026-11-05; every VELOCITY number fitted before
   // it was fitted on the lowering and is gone -- see VELOCITY_OVERRIDES_REMOVED_2026_11_05 and
   // the-concentric-is-the-way-up.test.ts.
-  "Romanian Deadlift": { depthRulerUncertainty: 0.6 },
-  "Back Squat": { heightRulerUncertainty: 0.11, driveOnsetFraction: 0.02 },
+  "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0.02 },
+  "Back Squat": { heightRulerUncertainty: 0.11, driveOnsetFraction: 0, velocitySmoothingMs: 130 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
 };
 
@@ -413,6 +413,19 @@ export const VELOCITY_OVERRIDES_REMOVED_2026_11_05: Record<string, string[]> = {
  *  an override with no evidence here is a number somebody guessed, and the test refuses it. */
 export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
   "Back Squat":
+    "2026-11-05, round nine. driveOnsetFraction 0.02 -> 0 (the whole travel window) and " +
+    "velocitySmoothingMs 165 -> 130, both on this lift only. The 2026-11-05 squat beside the OVR " +
+    "(135x5, build 710, analysed on the file path) read its mean +4.8% at 0.02 and +2.4% at 0, and " +
+    "the sweep shows nothing between the two moves it: at 0.015, 0.01 and 0.005 every squat take " +
+    "reads exactly as at 0.02, because the only samples the trim ever removes are the zero-speed " +
+    "turnaround samples at each end of the phase, which the sensor counts. Over the five paired " +
+    "squats the mean error is +1.2 / 0.0 / +2.0 / +2.2 / +4.8% at 0.02 and 0.0 / -3.5 / 0.0 / -1.1 " +
+    "/ +2.4% at 0 (average +2.0% -> -0.4%); the 10-19 take is the cost, 3.5 points, written here. " +
+    "The peak read 4-9% under the sensor on every paired squat at 165ms (-5.5 / -4.2 / -9.2 on " +
+    "11-05, 10-29, 10-19); the smoother is a time window over 33ms samples, so 165 is five samples " +
+    "and the next narrower window is three (130; 140 and 150 read as 165, 100 and 120 as 130): " +
+    "-3.9 / -3.3 / -8.5. One notch, every take the same way, the mean untouched (a window moves " +
+    "the mean, a smoothing the peak). Rep counts and range of motion unchanged at both. " +
     "2026-11-05, round eight, the first velocity number fitted on the squat's actual drive (every one " +
     "before it was fitted on the lowering -- see VELOCITY_OVERRIDES_REMOVED_2026_11_05). " +
     "driveOnsetFraction 0.04 -> 0.02 on this lift only. With the direction rule corrected the four " +
@@ -433,6 +446,16 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "high ones, about +0.8% on the blend, replayed on all six squat ledger rows and no other lift's. " +
     "Not a refit of HEIGHT_RULER_UNCERTAINTY, which is shared and was fitted on a squat AND an RDL.",
   "Romanian Deadlift":
+    "2026-11-05, round nine. driveOnsetFraction 0.04 -> 0.02 on this lift only, the same first step " +
+    "the squat took in round eight. The 2026-11-05 RDL beside the OVR (135x8, build 710, live path) " +
+    "read its mean +35.5% at 0.04 and +29.0% at 0.02 (+17.2% at 0); the two earlier traced RDLs " +
+    "read +45.6 -> +32.2% (10-29 set 1, a scale fault of +35% in it) and +30.3 -> +25.8% (10-19 " +
+    "set 2). Every take the same way, rep counts and range of motion unchanged, the peak untouched. " +
+    "0 is the next step. What is NOT fitted, with its costing: the RDL's peaks read +29 to +35% on " +
+    "every rep of every take and only a 400ms smoothing (12 samples over a 15-sample drive) reaches " +
+    "the sensor, which is a blur and not a peak; and a shoulder-floor step (biacromialToleranceFraction " +
+    "0.2 -> 0.21, to take 2 points off today's +4% scale) was replayed on the six RDL ledger rows and " +
+    "moved three toward the sensor and three away by 0.3 points each, so it does not ship. " +
     "2026-10-29 (the maxPeakToMeanRatio 2.5 that shipped beside this was REMOVED 2026-11-05: the " +
     "peaks it released were the lowering's, see VELOCITY_OVERRIDES_REMOVED_2026_11_05). " +
     "depthRulerUncertainty 0.2 -> 0.6 on this lift only: the depth ruler read HIGH against the sensor " +

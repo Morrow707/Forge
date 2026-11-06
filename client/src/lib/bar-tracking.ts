@@ -162,6 +162,17 @@ export type RepBreakdown = {
     driveRomCm: number;
     driveSamples: number;
     driveFellBackToTravel: boolean;
+    phaseSamples?: number;
+    sampleIntervalSeconds?: number;
+    /** The largest sample-to-sample gap INSIDE this rep's phase (seconds), and whether it crossed
+     *  the starvation line. gapBefore/gapAfter are the dead time beside a phase; this is the hole
+     *  in it -- the 2026-11-05 Romanian deadlift's rep 1 had a 0.239s hole with the bar 30cm
+     *  further on when the trace resumed, reported 45.6cm against the sensor's 61.2, and nothing
+     *  in the export said so because both neighbouring gaps read 0. */
+    largestGapSeconds?: number;
+    /** How much of the phase's own distance fell inside that gap, 0-1. */
+    distanceInLargestGapShare?: number;
+    sampleStarved?: boolean;
   };
 };
 
@@ -185,6 +196,10 @@ export type RepMetrics = {
    *  MAX_PEAK_TO_MEAN_RATIO times it -- see the phaseStats peak bound. Diagnostics only. */
   repPeaksFlooredToMean?: number;
   repPeaksCappedToMeanRatio?: number;
+  /** How many reps were SAMPLE-STARVED -- a gap inside the rep's own phase past
+   *  SAMPLE_STARVED_GAP_MULTIPLE times the take's median interval -- and so kept their row in
+   *  repBreakdown but left the set's aggregates. See sampleStarvedRepNumbers on the provenance. */
+  repsSampleStarved?: number;
   // True when this lift's bar deliberately does not travel a straight vertical line, so the two
   // numbers derived from that assumption -- barPathDeviationCm and peakVelocityMps -- are
   // withheld at the set level and the per-rep equivalents must not be charted either. The
@@ -1227,6 +1242,23 @@ export function travelOnsetMarginFor(romKind: string | null | undefined): number
  *  any one lift. FITTED_OVERRIDES stays empty. See CLAUDE.md, "What 'its own numbers' means." */
 export const DRIVE_ONSET_FRACTION = 0.04;
 
+/** A HOLE IN A REP PAST THIS MANY MEDIAN SAMPLE INTERVALS STARVES IT. The same line
+ *  trace-sampling.ts draws for a take's dropouts (3x the median), applied inside one phase: a
+ *  rep that lost a quarter of a second of its own drive is measured on what came back, and what
+ *  came back on the 2026-11-05 Romanian deadlift's rep 1 was 45.6cm of a 61.2cm pull with a
+ *  30cm jump between two consecutive samples. Its row stays, with the gap written on it; the
+ *  set's range of motion, mean and peak are taken over the reps that were whole. A RULE, shared
+ *  by every lift, the way the set-mean window and the direction rule are. */
+export const SAMPLE_STARVED_GAP_MULTIPLE = 3;
+/** AND THE HOLE HAS TO HOLD THE REP. A gap alone is not starvation: measured across every stored
+ *  take (2026-11-05), gaps past 3x the cadence sit inside 20 reps of nine takes, and on the two
+ *  of those with a sensor beside them leaving the rep out moved the set AWAY from it -- a gap
+ *  the bar sat still through (the press's set-2 rep 4, 0.208s and 0.0cm) loses nothing. What
+ *  starves a rep is distance that was never sampled: today's rep 1 had 29.8cm of its 48.6cm
+ *  phase inside its one hole. The line is half the phase's distance; it catches that rep and a
+ *  09-29 bench rep (0.1s, 32.2 of 57.2cm) and no rep on a sensor-paired take. */
+export const SAMPLE_STARVED_MIN_DISTANCE_SHARE = 0.5;
+
 export function trimPhaseToDrive(
   speeds: number[],
   startIdx: number,
@@ -1482,14 +1514,27 @@ export type SetRangeOfMotionProvenance = {
   fellBackToAllReps: boolean;
   medianRomCm: number | null;
   valueCm: number;
+  /** Reps left out of the set's number for a hole in their own trace (windows.sampleStarved) --
+   *  before the outlier test, and only while at least one rep is whole. */
+  sampleStarvedRepNumbers?: number[];
 };
 
+/** A REP WITH A HOLE IN IT IS NOT THE SET'S NUMBER. The reps a set is summarised over: the ones
+ *  whose phase had no sample gap past the starvation line, falling back to every rep when none is
+ *  whole (Rule #1: the set always has a number; every rep always keeps its row). */
+export function repsWithoutStarvation<T extends { windows?: { sampleStarved?: boolean } | null }>(reps: T[]): T[] {
+  const whole = reps.filter((r) => !r.windows?.sampleStarved);
+  return whole.length > 0 ? whole : reps;
+}
+
 export function setRangeOfMotionProvenance(
-  reps: { repNumber: number; romCm: number }[],
+  reps: { repNumber: number; romCm: number; windows?: { sampleStarved?: boolean } | null }[],
 ): SetRangeOfMotionProvenance {
-  const consistency = repConsistency(reps);
+  const forSet = repsWithoutStarvation(reps);
+  const starved = reps.filter((r) => !forSet.includes(r)).map((r) => r.repNumber);
+  const consistency = repConsistency(forSet);
   const outliers = new Set(consistency?.outlierReps ?? []);
-  const usable = reps.filter((r) => Number.isFinite(r.romCm) && r.romCm > 0);
+  const usable = forSet.filter((r) => Number.isFinite(r.romCm) && r.romCm > 0);
   const kept = consistency ? usable.filter((r) => !outliers.has(r.repNumber)) : [];
   const fellBack = kept.length === 0;
   return {
@@ -1497,7 +1542,8 @@ export function setRangeOfMotionProvenance(
     droppedRepNumbers: fellBack ? [] : usable.filter((r) => outliers.has(r.repNumber)).map((r) => r.repNumber),
     fellBackToAllReps: fellBack,
     medianRomCm: consistency?.medianRomCm ?? null,
-    valueCm: setRangeOfMotionCm(reps),
+    valueCm: setRangeOfMotionCm(forSet),
+    sampleStarvedRepNumbers: starved,
   };
 }
 
@@ -1696,6 +1742,21 @@ export function summarizeTrackedSet(
   })();
 
   const phaseStats = phases.map((phase, phaseIdx) => {
+    let largestGapInPhaseSeconds = 0;
+    let distanceInLargestGapM = 0;
+    for (let idx = phase.startIdx + 1; idx <= phase.endIdx; idx++) {
+      const gap = (points[idx].t - points[idx - 1].t) / 1000;
+      if (gap > largestGapInPhaseSeconds) {
+        largestGapInPhaseSeconds = gap;
+        distanceInLargestGapM = Math.abs(points[idx].y - points[idx - 1].y);
+      }
+    }
+    const phaseDistanceM = Math.abs(points[phase.endIdx].y - points[phase.startIdx].y);
+    const distanceInLargestGapShare = phaseDistanceM > 0 ? distanceInLargestGapM / phaseDistanceM : 0;
+    const sampleStarved =
+      phaseSampleIntervalSeconds > 0 &&
+      largestGapInPhaseSeconds > SAMPLE_STARVED_GAP_MULTIPLE * phaseSampleIntervalSeconds &&
+      distanceInLargestGapShare >= SAMPLE_STARVED_MIN_DISTANCE_SHARE;
     // Timing comes from the moving part of the phase; displacement still comes from the phase's
     // own endpoints -- see trimPhaseToMovement for why those are two different windows, and for
     // the calibration run that separated them. startIdx/endIdx below stay untrimmed on purpose:
@@ -1874,6 +1935,10 @@ export function summarizeTrackedSet(
           phaseIdx < phases.length - 1
             ? Math.round(((points[phases[phaseIdx + 1].startIdx].t - points[phase.endIdx].t) / 1000) * 1000) / 1000
             : null,
+        /** The hole INSIDE the phase, against the take's own cadence -- see SAMPLE_STARVED_GAP_MULTIPLE. */
+        largestGapSeconds: Math.round(largestGapInPhaseSeconds * 1000) / 1000,
+        distanceInLargestGapShare: Math.round(distanceInLargestGapShare * 1000) / 1000,
+        sampleStarved,
       },
     };
   });
@@ -2478,7 +2543,11 @@ export function summarizeTrackedSet(
   // nothing, the same stance every other filter in this file takes.
   const realConcentric = concentric.filter((phase) => !isPhantomPhase(phase));
   const realEccentric = eccentric.filter((phase) => !isPhantomPhase(phase));
-  const setConcentric = realConcentric.length > 0 ? realConcentric : concentric;
+  // A rep with a hole in its own trace keeps its row and leaves the set's number -- see
+  // SAMPLE_STARVED_GAP_MULTIPLE. Applied after the phantom filter and before any aggregate, so
+  // the set's mean, peak, times and power are all taken over the same whole reps.
+  const everyRealConcentric = realConcentric.length > 0 ? realConcentric : concentric;
+  const setConcentric = repsWithoutStarvation(everyRealConcentric);
   const setEccentric = realEccentric.length > 0 ? realEccentric : eccentric;
   const activePoints: TrackedPoint[] = [];
   for (const phase of concentricPhases) {
@@ -2518,8 +2587,9 @@ export function summarizeTrackedSet(
       Math.round(
         (setConcentric.reduce((a, c) => a + c.peak, 0) / (setConcentric.length || 1)) * 100,
       ) / 100,
-    repPeaksFlooredToMean: setConcentric.filter((c) => c.peakFloored).length,
-    repPeaksCappedToMeanRatio: setConcentric.filter((c) => c.peakCapped).length,
+    // Counts of REPS, not of the set's aggregate pool: a starved rep keeps its flag and its row.
+    repPeaksFlooredToMean: everyRealConcentric.filter((c) => c.peakFloored).length,
+    repPeaksCappedToMeanRatio: everyRealConcentric.filter((c) => c.peakCapped).length,
     // THE SET'S MEAN IS THE SET'S DISTANCE OVER THE SET'S TIME, not the average of the reps'
     // ratios. A rep whose hands dropped out mid-drive gets a short window and a mean of 1.2 on
     // a set lifted at 0.8; averaging ratios lets that one rep move the set 10%, while summing
@@ -2598,7 +2668,8 @@ export function summarizeTrackedSet(
     //
     // RULE #1: it falls back to every rep when fewer than MIN_REPS_FOR_CONSISTENCY are usable or
     // when none agrees, so a set never loses its number -- exactly as repsForSetBest does.
-    romCm: setRangeOfMotionCm(repBreakdown),
+    romCm: setRangeOfMotionCm(repsWithoutStarvation(repBreakdown)),
+    repsSampleStarved: repBreakdown.filter((r) => r.windows?.sampleStarved).length,
     // Averaged over the reps that HAVE an EAI, not over every rep with the withheld ones counted
     // as zero -- that would drag the set's mean down in proportion to how coarse its trace was,
     // which is the same wrong number the withholding exists to prevent, laundered through a

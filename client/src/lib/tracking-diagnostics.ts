@@ -83,6 +83,9 @@ export type TraceDiagnostics = {
    *  MAX_PEAK_TO_MEAN_RATIO in bar-tracking.ts. */
   repPeaksFlooredToMean?: number;
   repPeaksCappedToMeanRatio?: number;
+  /** Reps kept in the breakdown and left out of the set's aggregates for a hole in their own
+   *  trace -- see bar-tracking.ts SAMPLE_STARVED_GAP_MULTIPLE. */
+  repsSampleStarved?: number;
   /** The gate on the COMBINED bar point, separate from the per-side one above. */
   combinedVelocityRejections?: number;
   /** Which branch of barPointFromSides built each point -- see its call site. */
@@ -421,6 +424,16 @@ export type TrackingDiagnostics = {
     // The window the reported velocities were differenced over, so a take can be read back
     // knowing which setting produced it. 0 means the smoothing was off.
     velocitySmoothingMs?: number;
+    // The whole per-lift record this take was handed (shared/camera-tunables-by-lift.ts) and
+    // the source of each number -- shared, tracker, rom_bucket or fitted. The build question,
+    // answered from the export.
+    liftRecord?: {
+      identity: string;
+      tracker: string;
+      romBucket: string | null;
+      values: Record<string, number>;
+      sources: Record<string, string>;
+    } | null;
     traceTravelAlongCm?: number;
     traceTravelAcrossCm?: number;
     // Frames thrown out for sitting too far off the bar's own line -- see dropAcrossAxisOutliers.
@@ -704,6 +717,7 @@ export type TrackingDiagnostics = {
   /** Which reps the set's range of motion was computed from, and which it left out. */
   setRangeOfMotion?: {
     usedRepNumbers: number[];
+    sampleStarvedRepNumbers?: number[];
     droppedRepNumbers: number[];
     fellBackToAllReps: boolean;
     medianRomCm: number | null;

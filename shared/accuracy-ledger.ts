@@ -824,6 +824,86 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "The lift is ONE identity (see the note above): the OVR's \"push press\" label is its own " +
       "vocabulary for the same movement.",
   },
+
+  /* THE 2026-11-05 SESSION, round nine, build 710 (4c30e37): back squat, Romanian deadlift and
+   * box jump, the three lifts under test, the first takes on the corrected direction rule. The
+   * box jump has no row: a ledger row is a scale blend with a sensor range beside it, and the
+   * jump's sensor is on the hip while its rulers are on the ankle (its numbers are in
+   * tracker-ground-truth.ts, OVR_BOX_JUMP_HIP_2026_11_05). */
+  {
+    id: "2026-11-05-back-squat",
+    date: "2026-11-05",
+    build: 710,
+    exercise: "Back Squat",
+    filmedOnCommit: "4c30e37",
+    candidates: [
+      { source: "body_3d", scaleX1000: 3.99977457432818 },
+      { source: "depth", scaleX1000: 4.32610111255794 },
+      { source: "height", scaleX1000: 3.4052851219247026 },
+      { source: "shoulder_width", scaleX1000: 4.447818301521822 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, height: 0.11, shoulder_width: 0.3778601361518843 },
+    heightRulerVotedAsFilmed: true,
+    shoulderSpanSpreadFraction: 0.044,
+    shippedScaleX1000: 3.6334879618557616,
+    reportedRomCm: 73.0,
+    sensorRomCm: 74.42,
+    // -1.91% as filmed; the live replay reads +1.07% because a sealed row has no frames, so it can
+    // only state the shoulder ruler's floor (0.2) and not the 0.378 the grip floor loosened it to
+    // on the phone -- the limit the ledger's own header records.
+    liveErrorPct: 1.07,
+    notes:
+      "135x5 beside the OVR, filmed from the front of the rack (shoulders carried the bar, 708 " +
+      "shoulder points), analysed on the FILE path (live coverage 0.84 fell under the gate). 5 of 5. " +
+      "Range of motion -1.9%: the height ruler at 72.1% of the blend reads 6.3% under the scale the " +
+      "sensor requires, the collapsed 3D pair +14%, the shoulder ruler +22% with its uncertainty " +
+      "loosened to 0.378 by the grip floor (grip 2.55 shoulder spans against a 1.85 ceiling). Per rep " +
+      "the drive-window distances are 72.7 / 74.6 / 73.6 / 75.0 / 75.6 against the sensor's 73.7 / " +
+      "73.4 / 73.7 / 74.9 / 76.7 -- inside 1.6% every rep -- while the set's number is the mean of " +
+      "the reps' RAW-endpoint distances (71.5 / 72.9 / 72.4 / 73.7 / 74.6), 1.5cm under the smoothed " +
+      "phase on every rep. Recorded, not changed: which of the two is the set's range is a rule for " +
+      "every lift. Velocities at the squat's own record after this round (window 0, smoothing 130): " +
+      "mean +2.4%, peak -3.9%, rep for rep 0.84 / 0.90 / 0.82 / 0.90 / 0.79 against 0.85 / 0.87 / " +
+      "0.81 / 0.84 / 0.79.",
+  },
+  {
+    id: "2026-11-05-romanian-deadlift",
+    date: "2026-11-05",
+    build: 710,
+    exercise: "Romanian Deadlift",
+    filmedOnCommit: "4c30e37",
+    candidates: [
+      { source: "body_3d", scaleX1000: 3.2740642593701843 },
+      { source: "depth", scaleX1000: 4.408099971921619 },
+      { source: "shoulder_width", scaleX1000: 4.11927765644125 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.6, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: false,
+    shoulderSpanSpreadFraction: 0.124,
+    shippedScaleX1000: 3.7460894387513865,
+    // 63.8 is what the trace reads over its seven WHOLE reps (reps 2-8) under the sample-starvation
+    // rule this round added; the phone printed 61.5 because rep 1 -- a 0.239s hole holding 61% of
+    // a 48.6cm phase, 45.6cm against the sensor's 61.2 -- was averaged in. The scale's error is the
+    // seven whole reps', so that is the range this row holds the scale against.
+    reportedRomCm: 63.8,
+    sensorRomCm: 61.21,
+    liveErrorPct: 4.22,
+    notes:
+      "135x8 beside the OVR, square to the side, live path (cadence 0.939, 18 dropouts, 99 wrist " +
+      "frames under the visibility floor, 43 points carried from a lone hand). 8 of 8. Scale +4.2% " +
+      "over the whole reps: the shoulder ruler +14% against the scale the sensor requires, the 3D " +
+      "bone -9%, the depth ruler at 0.6 carrying 0%, the collapse and the blend splitting the two " +
+      "50/50. Per rep the phase distances scatter +1 / +13 / +12 / 0 / +8 / -6 / +15% against the " +
+      "sensor's reps, where the sensor's own rep-to-rep spread is 5%: the trace's noise on a hinge is " +
+      "larger than its bias (Rule #5), so no scale number moved; a shoulder-floor step was replayed " +
+      "on all six RDL rows and was a wash (see FITTED_OVERRIDE_EVIDENCE). Velocities: the phase " +
+      "durations match the sensor's concentric within 12% on reps 3, 4, 6, 7 and 8 and read 1.35-1.38x " +
+      "short on reps 1, 2 and 5 (rep 1 the hole; reps 2 and 5 a 0.50s and a 0.49s phase against the " +
+      "sensor's 0.69 and 0.66, each with a 0.19-0.25s dwell at the bottom in front of it), and the peaks read +26 to +54% on every rep with the distance " +
+      "right -- a more peaked profile on the same distance, not a window. Mean +35.5% at the shared " +
+      "window, +29.0% at the RDL's own 0.02 after this round; peak +35%. Open: whether the hands " +
+      "move faster than the body on a hinge, which the export's new bodyWitnessTrace is for.",
+  },
 ];
 
 /* THE ROUND-EIGHT MOVE, 2026-11-05: a RULE, and it touches NO scale number on any row.

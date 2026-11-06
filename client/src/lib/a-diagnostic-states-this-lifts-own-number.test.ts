@@ -143,14 +143,13 @@ describe("a diagnostic that names a per-lift number names this lift's own", () =
     // Without this the whole file is vacuous -- a scan for "reads the record" means nothing if
     // every record holds the same number. It was the Bench Press's smoothing when this was written
     // (round four, 2026-10-30); that number was fitted on the lowering and is gone (2026-11-05,
-    // VELOCITY_OVERRIDES_REMOVED_2026_11_05), and the Back Squat's drive window is the one that
-    // differs from its shared copy today. The smoothing is still asserted shared everywhere, so a
-    // diagnostic stating 165 on every lift is TRUE again and this file's rule is about where the
-    // value is read from, not what it is.
+    // VELOCITY_OVERRIDES_REMOVED_2026_11_05). Round nine (2026-11-05) gave the Back Squat its own
+    // smoothing on its drives (130 against the shared 165), so a diagnostic stating 165 on a squat
+    // is FALSE again, which is exactly the case this file exists for.
     const squat = cameraTunablesFor("Back Squat", romBucketForExercise("Back Squat")).values;
     const shared = cameraTunablesFor("Front Squat", romBucketForExercise("Front Squat")).values;
     expect(shared.velocitySmoothingMs).toBe(VELOCITY_SMOOTHING_MS);
-    expect(squat.velocitySmoothingMs).toBe(VELOCITY_SMOOTHING_MS);
+    expect(squat.velocitySmoothingMs).not.toBe(VELOCITY_SMOOTHING_MS);
     expect(squat.driveOnsetFraction).not.toBe(shared.driveOnsetFraction);
     expect(FITTED_OVERRIDES["Back Squat"]?.driveOnsetFraction).toBe(squat.driveOnsetFraction);
   });
