@@ -455,6 +455,108 @@ recovery, load tolerance, reaction time?** The last is the only one that is lite
 measured. We would rather use a plainer word that is accurate than a better-sounding one that is a
 claim, and a short list of permitted and forbidden words is something we can enforce in the code.
 
+---
+
+## FORGE'S WORKING POSITION ON 15 TO 24, 2026-11-06 -- NOT COUNSEL'S ANSWER
+
+**An answer to all ten came back the same day through Rocket Lawyer, and WHICH ROCKET LAWYER
+CHANNEL it came from is not established** -- their AI assistant and their attorney review are two
+products, and only the second can close a question in this file. So the ten are **recorded as
+Forge's own working position**, which is enough to build on, and are NOT marked ANSWERED. Every
+one of 15 to 24 stays open.
+
+**The internal evidence for treating them this way is in this file.** Answers 12 and 13, which
+counsel did write, read: *"legally precarious. Copyright protects expression, not the training
+methods, so paraphrase with citation is less exposed than copying, but AI copyright litigation
+turns on MARKET SUBSTITUTION ... Verdict: without an express commercial licence ..."* -- mechanism,
+then hedge, then verdict. The ten below restate each question's own wording and append a
+conclusion, with no mechanism and no hedge, including on 23 where **the mechanism IS the answer**.
+That is not proof of provenance and it is the reason for the caution.
+
+### THE CONTRADICTION, which is the strongest single reason not to file these as answers
+
+**18(b) and 19 answer the same question in opposite directions, five hundred words apart.**
+
+- 18(b): if Forge's data shows a sharp cognitive decline in a minor, *"Forge acquires a duty to
+  warn, act, or escalate by virtue of having measured it ... a product which notices something and
+  says nothing is in a worse position than one that never looked."*
+- 19: when the under-eating pattern is visible in data we hold, *"we must say nothing ... showing
+  her nothing is the correct path."*
+
+Same mechanism -- our own measurement reveals a problem in a child -- and if measuring creates a
+duty in 18 it creates one in 19, where "say nothing" is then the one thing we may not do. **The
+reconciliation of those two is the whole question** and it is what the attorney channel has to
+settle. Until it is settled the Anvil does not ship to a minor.
+
+### FIVE ADOPTED AS THE WORKING POSITION, because each is the conservative direction
+
+Adopted means Forge builds to them now. If counsel later says we did not have to, we have lost
+nothing; the reverse is not true.
+
+- **15 -- the Anvil needs its own disclosure and its own separately ticked agreement**, with a
+  separate mechanism for an adult agreeing for themselves and a guardian agreeing for a child, and
+  more rigour on the second. This is what the research pass recommended independently.
+- **16 -- treat it as inside Washington's My Health My Data Act**, on the mental-health-status
+  limb; a reaction-time latency is not a biometric identifier under BIPA, CUBI or SB 370.
+  Compliance = distinct consent language, a retention schedule, a deletion right, a separate
+  notice. All four are things Forge builds rather than argues about. **The pose-skeleton half is
+  NOT adopted**: "its regulatory standing must be managed tightly" is a disposition, not a ruling,
+  and the question was whether joint coordinates are inside BIPA.
+- **17(b) -- a guardian may refuse the coach's view while keeping the athlete's own.**
+  **THIS MODIFIES SCOTT'S OWN DECISION OF THE SAME DAY** that a coached athlete's reading goes to
+  their coach: the coach's view becomes the DEFAULT with a guardian switch above it, rather than
+  the rule. Recorded in `docs/anvil/research-2026-11-06.md` beside that decision so the two are
+  not read separately. **17(a) is NOT adopted**: "a recipient *or* our customer's agent" are two
+  answers with different Institutional Service Agreement consequences.
+- **20 -- general wellness, crossed only by marketing language implying diagnostic capability**,
+  enforced as a forbidden-form scan in the source the way the certification marks and the camera
+  accuracy caveat already are. Built: `shared/anvil-vocabulary.ts` and its ratchet.
+- **21 -- multi-year retention needs its own disclosure and its own consent, with a ceiling.**
+  **The ceiling is the one part of 21 that is still missing: nobody has named a number.**
+
+### TWO NOT ADOPTED, because adopting them as written would be expensive and probably wrong
+
+- **23 is a strong conclusion with the reasoning absent.** *"A cognitive measure created by a
+  vendor and read by a school employee does become an education record."* FERPA attaches to records
+  maintained by the educational agency **or by a party acting for it**, and the school-official
+  exception exists precisely for a vendor in this position; whether Forge is inside it turns on
+  direct control, the contract and redisclosure limits, none of which the answer touches. Taken as
+  written it rewrites the Institutional Service Agreement and changes what every district asks for.
+  Held until the exception is addressed.
+- **24's forbidden list is not an Anvil decision as written -- it is a rename of three shipped
+  features.** Measured 2026-11-06 in user-visible client files: **"readiness" 15 files**
+  (`components/readiness-banner.tsx`, the live `/api/athlete/readiness`), **"recovery" 18**
+  (`pages/athlete/recovery.tsx`), **"fatigue" 3** (the coach analytics surface). A platform-wide ban
+  costs three renames across 33+ files for a product with no users, and the readiness score is a
+  feature counsel has already reviewed around in the Privacy Policy's AI path. **Scoped to Anvil
+  surfaces only** in `shared/anvil-vocabulary.ts`, which says so in its own header, and
+  `anvil-vocabulary.test.ts` asserts the narrow scope in BOTH directions -- a case fails if the
+  readiness banner, the recovery page or the coach analytics surface ever comes into scope, so
+  widening it has to arrive as a decision rather than as a tidy-up. The narrowed follow-up asks
+  which was meant.
+
+### THE FIVE NARROWED FOLLOW-UPS FOR THE ATTORNEY CHANNEL
+
+Each is deliberately small, so that it is cheap to answer and hard to answer with a restatement.
+
+1. **Reconcile 18(b) with 19.** If measuring creates a duty to escalate on a cognitive decline,
+   what is the duty when the same measurement reveals a pattern consistent with under-eating in a
+   15-year-old, and how is "say nothing" compatible with it? One of the two has to move.
+2. **18(a): supply the language.** We asked what disclaimer works and received the observation
+   that a disclaimer nobody reads is not a defence, which we had already said. We need the actual
+   sentence, or a ruling that no sentence suffices and the measure may not be shown to a coach.
+3. **19: is there a mandatory-reporting obligation**, for Forge or for the coach as a school or
+   club employee, in any state where we have users, that is triggered by data of this kind? "May
+   we" was answered; "must we" was not.
+4. **23: address the FERPA school-official exception** -- direct control, the written agreement,
+   the redisclosure limits -- and say whether Forge is inside it. A yes/no without the exception
+   cannot be built against.
+5. **24: Anvil-only or platform-wide?** Forge already ships a readiness score, a recovery page and
+   a fatigue column on the coach's analytics, reviewed as they stand. Does the prohibition reach
+   those, or only the new surface?
+
+Plus the one number nobody supplied: **21's retention ceiling.**
+
 ## How these reach a reviewer
 
 Alongside `docs/biometric-release-for-counsel.md`, which carries the video and
