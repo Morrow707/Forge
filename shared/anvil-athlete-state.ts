@@ -44,6 +44,7 @@ export type WellnessRow = {
   sleepHours: number | null;
   soreness: number | null;
   stress: number | null;
+  /** Present on the row and DELIBERATELY NOT READ since 2026-11-06; see anvil-inputs.ts. */
   hydration: number | null;
   mentalFocus: number | null;
   bodyPainMap: string[] | null;
@@ -276,7 +277,6 @@ export function assembleAnvilState(input: AnvilStateInput): AnvilAthleteState {
     soreness: reading(w?.soreness, "no_data"),
     stress: reading(w?.stress, "no_data"),
     mental_focus: reading(w?.mentalFocus, "no_data"),
-    hydration: reading(w?.hydration, "no_data"),
     body_pain_map: reading(w?.bodyPainMap, "no_data"),
 
     // slow -- capture-derived

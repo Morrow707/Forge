@@ -254,16 +254,6 @@ export const ANVIL_SIGNALS = [
     why: "The athlete's own read on the thing the drill claims to measure, which makes it the cheapest available check on whether the drill measures anything.",
   },
   {
-    id: "hydration",
-    table: "wellness_checkins",
-    column: "hydration",
-    channel: "fast",
-    kind: "self_report",
-    unit: "1-5",
-    populated: "always",
-    why: "Dehydration slows reaction time on its own, so a flagged day with a 1 here has an explanation that is not accumulated load.",
-  },
-  {
     id: "body_pain_map",
     table: "wellness_checkins",
     column: "bodyPainMap",
@@ -992,7 +982,9 @@ export const NOT_AN_ANVIL_SIGNAL: Record<string, string> = {
   "food_log_entries.fatG": "The same, with no mechanism pointing at it.",
   "food_log_entries.fiberG":
     "No mechanism connects fibre intake to central fatigue, and the exclusion this section serves is answered by energy and iron.",
-  "food_log_entries.sodiumMg": "A hydration mechanism exists and the self-report is far too coarse for it; the hydration field is read instead.",
+  "wellness_checkins.hydration":
+    "DROPPED AS A SIGNAL 2026-11-06, decision-list item 8, and it was a signal until then. Self-reported hydration earns its place only if hypohydration moves cognition, and the meta-analysis says it does not: g = -0.177, p = .331. A 1-to-5 tick is also the coarsest instrument in this file, so it cannot rescue a null. The MECHANISM is real at real dehydration and is not reachable from a self-report, which is the same argument the sodium row below makes one table over.",
+  "food_log_entries.sodiumMg": "A hydration mechanism exists and the self-report is far too coarse for it -- and as of 2026-11-06 the hydration field is not read either, for the reason on the wellness_checkins.hydration row above. Neither end of this mechanism is reachable from a self-report.",
   "food_log_entries.calciumMg": "A bone-health exclusion rather than a fatigue one.",
   "food_log_entries.potassiumMg": "No mechanism at the precision a food log provides.",
   "food_log_entries.magnesiumMg": "A plausible mechanism and a popular supplement claim, with no evidence this repo can cite and none it can measure. Rule #5.",
