@@ -104,6 +104,12 @@ export type TraceDiagnostics = {
    *  points it built. Absent on a bilateral lift. */
   unilateralWorkingHand?: "left" | "right" | null;
   barPointFromWorkingHand?: number;
+  /** The side the athlete filmed, as the set row declares it (shared/unilateral-sides.ts), and
+   *  whether the hand the take MEASURED as working disagrees with it. The measurement wins the
+   *  point; the disagreement is recorded, because a Vision left/right swap and a mis-tapped side
+   *  both exist and neither is a reason to refuse the take. */
+  declaredSide?: "left" | "right" | null;
+  workingHandDisagreesWithDeclaredSide?: boolean;
   /** Which class earned the vote, how many frames it agreed with the hands on, and how far
    *  that agreement wandered (median absolute deviation, in grip widths). The spread is what
    *  decides whether the equipment may vote at all, so the threshold can be revised from it. */

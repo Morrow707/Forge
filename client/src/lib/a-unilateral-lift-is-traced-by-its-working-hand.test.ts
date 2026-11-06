@@ -94,13 +94,17 @@ describe("the bar dialog hands a unilateral lift to its working hand", () => {
   const src = stripComments(readFileSync(DIALOG, "utf8"));
 
   it("the dialog decides it from laterality, once per take, before the frame loop", () => {
-    const decl = src.indexOf("const unilateralWorkingHand");
-    expect(decl, "the dialog no longer decides a working hand").toBeGreaterThan(0);
+    const decl = src.indexOf("const measuredWorkingHand");
+    expect(decl, "the dialog no longer measures a working hand").toBeGreaterThan(0);
     const stmt = src.slice(decl, src.indexOf(";", src.indexOf("workingHandForUnilateral(", decl)));
     expect(stmt).toMatch(/laterality === "unilateral"/);
     expect(stmt).toMatch(/workingHandForUnilateral\(/);
     // Decided before the per-frame loop, so one hand serves the whole take.
     expect(decl).toBeLessThan(src.indexOf("for (const f of rawFrames)"));
+    // The measurement wins, the declared side (the set row's) fills in where it cannot say, and a
+    // disagreement between the two is recorded rather than refused.
+    expect(src).toMatch(/const unilateralWorkingHand: "left" \| "right" \| null = measuredWorkingHand \?\? declaredSide;/);
+    expect(src).toMatch(/measuredWorkingHand != null && declaredSide != null && measuredWorkingHand !== declaredSide/);
   });
 
   it("the working hand IS the point: never averaged with the braced hand, never carried", () => {
@@ -116,7 +120,7 @@ describe("the bar dialog hands a unilateral lift to its working hand", () => {
     expect(src).toMatch(/if \(unilateralWorkingHand && combined\) pointSource = "w";/);
     expect(src).toMatch(/if \(unilateralWorkingHand && combined\) barPointFromWorkingHand\+\+;/);
     // The diagnostics carry the hand and the count only on a unilateral take.
-    expect(src).toMatch(/laterality === "unilateral" \? \{ unilateralWorkingHand, barPointFromWorkingHand \} : \{\}/);
+    expect(src).toMatch(/laterality === "unilateral"\s*\? \{ unilateralWorkingHand, barPointFromWorkingHand, declaredSide, workingHandDisagreesWithDeclaredSide \}\s*: \{\}/);
   });
 
   it("two hands on a unilateral lift are not a grip pair", () => {

@@ -24396,6 +24396,7 @@ ${catalog}`;
               return {
                 logEntryId: entryRow.id,
                 setNumber: s.setNumber,
+                side: s.side ?? null,
                 reps: s.reps ?? null,
                 weight: s.weight ?? null,
                 weightUnit: entry.weightMode === "numeric" && s.weight ? entryWeightUnit : null,
@@ -26232,6 +26233,7 @@ ${catalog}`;
       .select({
         date: workoutLogs.date,
         setNumber: workoutSetEntries.setNumber,
+        side: workoutSetEntries.side,
         reps: workoutSetEntries.reps,
         weight: workoutSetEntries.weight,
         weightUnit: workoutSetEntries.weightUnit,
@@ -26803,6 +26805,8 @@ ${catalog}`;
         movementType: exercises.movementType,
         trackingLevel: programExercises.trackingLevel,
         setNumber: workoutSetEntries.setNumber,
+        // Which side of a unilateral lift this take filmed -- see workoutSetEntries.side.
+        side: workoutSetEntries.side,
         reps: workoutSetEntries.reps,
         weight: workoutSetEntries.weight,
         weightUnit: workoutSetEntries.weightUnit,

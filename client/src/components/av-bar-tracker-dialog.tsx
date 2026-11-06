@@ -606,6 +606,7 @@ export function AvBarTrackerDialog({
   movementType: movementTypeProp,
   equipment,
   laterality,
+  side,
   heightIn,
   bodyModel,
   targetReps,
@@ -628,6 +629,10 @@ export function AvBarTrackerDialog({
   movementType?: string | null;
   equipment?: string | null;
   laterality?: string | null;
+  /** Which side of a unilateral lift this set row is (shared/unilateral-sides.ts): the hand the
+   *  athlete says is working. Recorded as `trace.declaredSide`; the working-hand rule measures the
+   *  hand itself and falls back to this where the take cannot say. */
+  side?: "left" | "right" | null;
   heightIn?: number | null;
   /** A tape-measured grip, when the athlete has given one. See gripWidthScaleFromFrames. */
   /** What earlier takes with a real ruler learned about this athlete's own bones. See
@@ -1724,7 +1729,8 @@ export function AvBarTrackerDialog({
     // loop, so every frame reads the same hand. A bilateral lift leaves it null and nothing below
     // changes; a unilateral take that cannot say (neither wrist seen on eight frames) runs the
     // midpoint rule as before and records the null, which is a sentence rather than a blank.
-    const unilateralWorkingHand: "left" | "right" | null =
+    const declaredSide: "left" | "right" | null = laterality === "unilateral" ? (side ?? null) : null;
+    const measuredWorkingHand: "left" | "right" | null =
       laterality === "unilateral"
         ? workingHandForUnilateral(
             rawFrames.map((f) => {
@@ -1738,6 +1744,16 @@ export function AvBarTrackerDialog({
             }),
           )
         : null;
+    // THE MEASUREMENT WINS, THE DECLARATION FILLS IN, THE DISAGREEMENT IS WRITTEN DOWN. The set row
+    // says which side the athlete filmed (shared/unilateral-sides.ts); the take says which wrist
+    // travelled. Where both speak and differ, the hand that moved is the hand that rowed -- a
+    // Vision left/right swap and a mis-tapped side both exist, and neither is a reason to refuse
+    // the take (Rule #1) -- so the measured hand is the point and the disagreement is a fact in
+    // the export. Where the take cannot say (neither wrist seen on eight frames) the declared
+    // side is the best available answer and is used.
+    const unilateralWorkingHand: "left" | "right" | null = measuredWorkingHand ?? declaredSide;
+    const workingHandDisagreesWithDeclaredSide =
+      measuredWorkingHand != null && declaredSide != null && measuredWorkingHand !== declaredSide;
     let barPointFromWorkingHand = 0;
     let prevCombined: { x: number; y: number; t: number }[] = [];
     let verticalSign: 1 | -1 = 1;
@@ -2193,7 +2209,9 @@ export function AvBarTrackerDialog({
         barPointFromEquipmentRejected,
         barPointFromShoulders,
         barWitness: (barOnBack ? "shoulders" : "hands") as "shoulders" | "hands",
-        ...(laterality === "unilateral" ? { unilateralWorkingHand, barPointFromWorkingHand } : {}),
+        ...(laterality === "unilateral"
+          ? { unilateralWorkingHand, barPointFromWorkingHand, declaredSide, workingHandDisagreesWithDeclaredSide }
+          : {}),
         equipmentVoteLabel: equipmentOffsets.label,
         equipmentAgreementFrames: equipmentOffsets.agreementFrames,
         equipmentOffsetSpreadGrips: (() => {

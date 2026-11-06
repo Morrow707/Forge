@@ -150,6 +150,10 @@ and the working hand, so a unilateral lift is traced by its WORKING hand now, an
 dumbbell. The bench's plate was found, measured 7% SMALL, and admitting it (a per-lift aspect
 ceiling, built) was costed at +6.2% and not shipped. Held on the branch with the reps-keypad fix;
 `verify_build` then `beta` when the hold lifts. See "Round eleven".
+**AND PER-SIDE FILMING IS BUILT (2026-11-06):** every set of a unilateral exercise is two rows,
+one per side, each logged, filmed and measured on its own (`shared/unilateral-sides.ts`,
+`workout_set_entries.side`); the tracker is told the side (`trace.declaredSide`) and records whether
+the hand it measured agrees. The next single-arm row take is the first with a known arm.
 
 | lift | paired takes | ROM vs OVR, oldest -> newest | state |
 |---|---|---|---|

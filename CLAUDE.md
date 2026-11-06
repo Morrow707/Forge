@@ -3212,6 +3212,40 @@ halves before splitting anything else:
   See docs/camera-tracking-notes.md, "The RDL's +12.0% is the 3D-pose collapse". Calibration work:
   uploaded on commit.
 
+- **EVERY SET OF A UNILATERAL EXERCISE IS TWO ROWS, ONE PER SIDE, EACH FILMED ON ITS OWN**
+  (2026-11-06, same session as round eleven). Scott: "I wanted to do the row to the side, but
+  can't because I can't get the other side, on the videos, we need to add a way to film the right
+  side and the left side individually, the exercises ask for it, we need to build that into the
+  system, every set, every rep, every unilateral exercise needs to have a way to film both sides
+  separately." The 11-06 row is the argument: the OVR rode the dumbbell across both arms (41.3cm on
+  one, 47.1cm on the other) and nothing recorded which arm the camera saw.
+  **THE SHAPE IS THE DATA MODEL'S OWN.** `workout_set_entries` is already one row per effort, so a
+  unilateral prescription of "3 x 5 each side" builds SIX rows -- set 1 left, set 1 right, set 2
+  left, ... -- and each carries the new `side` column (`body_side`, nullable; `shared/unilateral-
+  sides.ts` is the rule: `setRowCountFor`, `sideForNewSet` -- odd rows left, even rows right, so a
+  pair stays a pair however rows are added -- `pairIndexFor`, `setRowLabel`). The athlete logs each
+  side's reps (a left arm doing 8 and a right doing 7 is worth knowing), the screen labels the pills
+  "Set 1 · Left" / "Set 1 · Right", and the AV bar tracker is handed the row's `side` as the hand
+  the athlete says is working: it is recorded as `trace.declaredSide`, the working-hand rule still
+  MEASURES which wrist travelled (the measurement wins the point, the declared side fills in where
+  the take cannot say), and `trace.workingHandDisagreesWithDeclaredSide` is written when they
+  differ -- a Vision left/right swap and a mis-tapped side both exist and neither refuses a take.
+  **A ROW SAVED BEFORE SIDES EXISTED STAYS NULL AND IS SHOWN AS "side not recorded" -- never
+  back-filled**, because which arm the camera saw is a fact about the take and not a guess; a
+  bilateral lift builds exactly the rows it always did and its `side` is null. The column is a
+  non-camera column (`NON_CAMERA_SET_COLUMNS`), the save schema takes it optionally so an older
+  client still saves, the reconciler adds it after the `body_side` type (proven on a fresh database
+  and idempotent on a second run), the coach's exercise analytics and the admin capture export
+  select it, the tracking report prints "left side" in the set header, and the day's read-back
+  carries it relationally. `shared/unilateral-sides.test.ts`,
+  `client/src/lib/a-unilateral-set-carries-its-side.test.ts` (the path, comments stripped) and
+  `server/a-unilateral-set-keeps-its-side.itest.ts` (real Postgres: the parse keeps it, the insert
+  writes it, the day and the export read it, the report prints it, a re-save keeps it, an older
+  client and a bilateral lift store null). **What this does NOT do, named:** the coach's athlete
+  views still show set rows by number (a unilateral exercise shows six), with the side only where
+  the row is labelled by the helper; a second filmed row take -- the first on the working-hand rule
+  with a declared side -- is what gives the row its first ledger row. Client plus a server column:
+  `verify_build` then `beta` with round eleven when the hold lifts.
 - **ROUND ELEVEN, 2026-11-06: THE FIRST DUMBBELL LIFTS BESIDE THE SENSOR -- A SUPINE SPAN IS NOT A
   STATURE, A DUMBBELL LIFT ASKS FOR A DUMBBELL, AND A UNILATERAL LIFT IS TRACED BY ITS WORKING
   HAND.** Bench Press 135x8, Dumbbell Shoulder Press 35x8 and Single-Arm Dumbbell Row 70x8 on 714;

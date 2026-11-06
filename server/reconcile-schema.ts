@@ -2502,6 +2502,10 @@ ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "skeleton_frames" jso
 -- above was 92% of the database. New captures write the file; set-trace-offload-job.ts moves the
 -- old rows; the column stays until every row's is null.
 ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "skeleton_frames_path" text;
+-- Which side a unilateral set's row is (shared/unilateral-sides.ts), 2026-11-06. The body_side
+-- type is created in SQL_PART_1 beside the movement screen tables, so it exists by the time this
+-- runs on a fresh database; on production it has existed since the movement screens shipped.
+ALTER TABLE "workout_set_entries" ADD COLUMN IF NOT EXISTS "side" body_side;
 -- ---------------------------------------------------------------------------
 -- Foreign-key indexes.
 --

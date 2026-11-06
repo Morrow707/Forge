@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type TouchEvent } from "react";
 import { eachSideSuffix } from "@shared/prescription-laterality";
+import { isUnilateral, pairIndexFor, setRowCountFor, setRowLabel, sideForNewSet, sideLabel, type BodySide } from "@shared/unilateral-sides";
 import type { Autoregulation } from "@shared/autoregulation";
 import { shedTracesToFit, describeShed } from "@shared/shed-traces-to-fit";
 import { useParams, useLocation } from "wouter";
@@ -598,6 +599,7 @@ type LogEntry = {
     // setRowIdsRef for how it is kept current and what it is for.
     id?: number;
     setNumber: number;
+    side?: BodySide | null;
     reps: string | null;
     weight: string | null;
     weightUnit: WeightUnit | null;
@@ -645,6 +647,11 @@ type DayDetail = {
 
 export type SetRow = {
   setNumber: number;
+  // Which side of a unilateral exercise this row is -- see shared/unilateral-sides.ts. Every set
+  // of a unilateral lift is two rows, one per side, each logged, filmed and measured on its own.
+  // Null on a bilateral lift and on a row saved before sides existed (shown as "side not
+  // recorded", never back-filled).
+  side: BodySide | null;
   reps: string;
   weight: string;
   bandColor: string;
@@ -701,11 +708,17 @@ function buildItem(
   weekNumber: number,
   defaultUnit: WeightUnit,
 ): ItemState {
-  const sets: SetRow[] = Array.from({ length: prescribed.sets }, (_, i) => {
+  // One row per side per prescribed set on a unilateral lift (shared/unilateral-sides.ts): a
+  // "3 x 5 each side" builds six rows, left/right alternating, so each side is logged, filmed and
+  // measured on its own. A row the server already holds keeps the side it recorded -- null on a
+  // row saved before sides existed, which is shown as such rather than guessed.
+  const laterality = prescribed.exercise.laterality;
+  const sets: SetRow[] = Array.from({ length: setRowCountFor(prescribed.sets, laterality) }, (_, i) => {
     const setNumber = i + 1;
     const existingSet = existing?.sets.find((s) => s.setNumber === setNumber);
     return {
       setNumber,
+      side: existingSet ? (existingSet.side ?? null) : sideForNewSet(setNumber, laterality),
       reps: existingSet?.reps ?? prescribed.reps,
       weight: existingSet?.weight ?? "",
       bandColor: existingSet?.bandColor ?? "",
@@ -1408,6 +1421,7 @@ export function WorkoutPage({
               };
           return {
           setNumber: s.setNumber,
+          side: s.side,
           reps: s.reps || null,
           weight: s.weight || null,
           bandColor: s.bandColor || null,
@@ -2341,6 +2355,7 @@ export function WorkoutPage({
             ...it.sets,
             {
               setNumber: nextNumber,
+              side: sideForNewSet(nextNumber, it.laterality),
               reps: it.prescribedReps,
               weight: "",
               bandColor: "",
@@ -2938,7 +2953,7 @@ export function WorkoutPage({
                                         <button
                                           key={set.setNumber}
                                           type="button"
-                                          aria-label={`Show set ${set.setNumber}`}
+                                          aria-label={`Show ${setRowLabel(set.setNumber, set.side, item.laterality)}`}
                                           aria-pressed={i === visibleSetIndex}
                                           onClick={() => jumpToSet(item, i)}
                                           className={cn(
@@ -2950,7 +2965,7 @@ export function WorkoutPage({
                                               "ring-2 ring-orange-400 ring-offset-1 ring-offset-background",
                                           )}
                                         >
-                                          Set {set.setNumber}
+                                          {setRowLabel(set.setNumber, set.side, item.laterality)}
                                         </button>
                                       ))}
                                     </div>
@@ -3904,7 +3919,11 @@ function ExerciseLogContent({
                   className="grid items-center gap-2"
                   style={{ gridTemplateColumns: gridTemplate }}
                 >
-                  <span className="text-sm font-semibold text-muted-foreground">{set.setNumber}</span>
+                  <span className="text-sm font-semibold text-muted-foreground">
+                    {isUnilateral(item.laterality)
+                      ? `${pairIndexFor(set.setNumber, item.laterality)}${set.side ? ` ${sideLabel(set.side)[0]}` : ""}`
+                      : set.setNumber}
+                  </span>
                   <Input
                     placeholder={item.lastPerformance?.reps || "Reps"}
                     value={set.reps}
@@ -4865,6 +4884,7 @@ function ExerciseLogContent({
                 movementType={item.movementType}
                 equipment={item.equipment}
                 laterality={item.laterality}
+                side={trackedRow?.side ?? null}
                 heightIn={user?.heightIn}
                 bodyModel={(user as { bodyModel?: any })?.bodyModel ?? null}
                 targetReps={parseTargetReps(item.prescribedReps)}
