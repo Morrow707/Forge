@@ -105,6 +105,13 @@ describe("the count-trim removes surplus and never a set", () => {
     // counts TEN of eight at half the travel (the midpoint of a braced and a working hand), which
     // is an over-count and passes this file's rule; the working-hand rule is its fix.
     "ovr-2026-11-06-export.json:2026-11-06 Dumbbell Shoulder Press set 1": 7,
+    // The 2026-11-06 set-2 export (round twelve, the first row takes on the working-hand rule):
+    // the first arm (set 3, right hand) finds 7 of 8 -- the sensor's reps 5 and 6 (18.0 and 17.4in)
+    // arrive as ONE 83.8cm upward phase on a trace with a 1.23s hole (cadence 0.868), which the
+    // outlier rule drops from the range and the segmenter cannot split without a reversal between
+    // them. The second arm (set 4) counts 8 of 8, the press 8 of 8, and the bench finds NINE on
+    // nine done with eight logged (the bench's own trim floor 1.2 keeps the ninth).
+    "ovr-2026-11-06-set2-export.json:2026-11-06 Single-Arm Dumbbell Row set 3": 7,
   };
 
   it.each(

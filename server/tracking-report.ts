@@ -233,6 +233,19 @@ type TrackingDiagnostics = {
     shoulderToAnkleFrames: number;
     supineFullLengthFrames?: number;
     unresolvedFrames: number;
+    // Where the height ruler's landmarks sat in the frame -- heightRulerFraming in pose-tracking.ts.
+    heightRuler?: {
+      framesWithAnkles: number;
+      ankleFromBottomMedian: number | null;
+      noseFromTopMedian: number | null;
+      ankleAtBottomEdgeFrames: number;
+      noseAtTopEdgeFrames: number;
+      wristAtTopEdgeFrames: number;
+      wristAboveNoseFrames: number;
+      ankleWanderUnits: number | null;
+      noseToAnkleSpanMedianUnits: number | null;
+      noseToAnkleSpanExtendedUnits: number | null;
+    } | null;
   } | null;
 };
 
@@ -901,6 +914,22 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
     // derived, and whether anything corroborated the winner. A plate detector that has locked
     // onto a plate on the rack behind the lifter says so as a diameter nothing like a plate at
     // that distance, instead of only as a wrong number four steps downstream.
+    // WHERE THE HEIGHT RULER'S LANDMARKS SAT. A stature span read short is a scale read high, and
+    // on the 2026-11-06 dumbbell press (+47%) nothing in the export said whether the ankle the
+    // span ran to was in the frame. See heightRulerFraming.
+    if (c.heightRuler) {
+      const h = c.heightRuler;
+      const pct = (f: number | null | undefined) => (f == null ? "n/a" : `${Math.round(f * 100)}% of the frame`);
+      lines.push({
+        label: "Height ruler framing",
+        value:
+          `ankle ${pct(h.ankleFromBottomMedian)} above the bottom edge (on it for ${h.ankleAtBottomEdgeFrames} frames), ` +
+          `nose ${pct(h.noseFromTopMedian)} below the top edge (on it for ${h.noseAtTopEdgeFrames}), ` +
+          `a wrist at the top edge on ${h.wristAtTopEdgeFrames} frames and above the nose on ${h.wristAboveNoseFrames}; ` +
+          `the ankle wandered ${h.ankleWanderUnits ?? "n/a"} units over ${h.framesWithAnkles} frames; ` +
+          `nose-to-ankle span ${h.noseToAnkleSpanMedianUnits ?? "n/a"} units median, ${h.noseToAnkleSpanExtendedUnits ?? "n/a"} at the extended frames the ruler reads`,
+      });
+    }
     if (c.scaleCandidates && c.scaleCandidates.length > 0) {
       lines.push({
         label: "Scale sources",

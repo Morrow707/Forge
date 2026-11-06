@@ -81,7 +81,9 @@ describe("the 2026-11-06 export: three systems on three lifts", () => {
   it("the bench: the trace replays to the shipped numbers at the shared record, and its scale error is the yardstick's", () => {
     const f = byId(BENCH);
     const own = cameraTunablesFor("Bench Press", "horizontal_press_or_row");
-    expect(FITTED_OVERRIDES["Bench Press"]).toBeUndefined();
+    // The bench's record carries its count-trim floor alone (round twelve); no scale or velocity
+    // number of its own reaches this take, which found its eight at the logged eight.
+    expect(Object.keys(FITTED_OVERRIDES["Bench Press"] ?? {})).toEqual(["minCountTrimOddness"]);
     const m = replay(f);
     expect(m.repBreakdown.length).toBe(8);
     // Within a hundredth: the stored trace is rounded to a hundredth of a unit, and the live

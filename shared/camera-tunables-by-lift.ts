@@ -381,7 +381,9 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0 },
   "Back Squat": { heightRulerUncertainty: 0.12, driveOnsetFraction: 0, velocitySmoothingMs: 130 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
-  "Dumbbell Shoulder Press": { biacromialToleranceFraction: 0.4 },
+  "Dumbbell Shoulder Press": { biacromialToleranceFraction: 0.4, heightRulerUncertainty: 0.2, depthRulerUncertainty: 0.6 },
+  "Bench Press": { minCountTrimOddness: 1.2 },
+  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.6 },
 };
 
 /** THE VELOCITY OVERRIDES REMOVED ON 2026-11-05, AND WHY -- kept as data so the next reader does
@@ -413,6 +415,19 @@ export const VELOCITY_OVERRIDES_REMOVED_2026_11_05: Record<string, string[]> = {
  *  One entry per identity in FITTED_OVERRIDES, held equal by camera-tunables-are-a-copy.test.ts;
  *  an override with no evidence here is a number somebody guessed, and the test refuses it. */
 export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
+  "Bench Press":
+    "2026-11-06, round twelve. minCountTrimOddness 1 -> 1.2 on this lift only. Set 2 beside the OVR " +
+    "(135 x 9 done on purpose with 8 logged, build 716, file path after a live fallback) found all " +
+    "NINE presses and the count-trim removed rep 1 to match the logged eight: its oddness scored " +
+    "between 1.00 and 1.05 (amplitude 34.2 against a 34.7 median, window 0.40s against 0.47, the " +
+    "rest ordinary) and the shared floor is 1. A rep that scores like the others is not a rack move, " +
+    "and the floor is the one knob that says so; at 1.05 and every value to 3 the set reads nine " +
+    "(34.5cm, +0.6% against the sensor's 34.29 over nine, mean 0.86, peak 1.23). Costed on every " +
+    "stored bench take in count-trim-never-empties-a-set (eleven files), bench-rerack-is-not-a-rep, " +
+    "bench-settle-is-not-a-rep and the 10-06 un-rack: no count moves at 1.2 -- the settles score 2.1 " +
+    "and 2.3, the un-rack 1.39 and 1.61, so they are still trimmed, and every bench the trim did not " +
+    "touch at 1 it does not touch at 1.2. A count rule and not a scale or velocity number: the ledger " +
+    "rows are untouched by construction.",
   "Back Squat":
     "2026-11-05, round ten. heightRulerUncertainty 0.11 -> 0.12, the same one-point step round two " +
     "took (0.1 -> 0.11), worth about +1% of scale on every squat take. Set 2 beside the OVR (135x5, " +
@@ -498,7 +513,32 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "ruler reads LOW where the RDL's reads HIGH, which is exactly why neither lift's record states a " +
     "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
     "moves, since each reads its own record.",
+  "Single-Arm Dumbbell Row":
+    "2026-11-06, round twelve. depthRulerUncertainty 0.2 -> 0.6 on this lift only, the statement the " +
+    "Romanian Deadlift and the Pendlay Row carry about the same instrument on a hinge. The first two " +
+    "row takes on the working-hand rule (70lb, build 716, live, one capture per arm): the first arm " +
+    "(set 3, right hand, 429 working-hand points) read its range -20.1% against the sensor's 47.69cm " +
+    "and the second (set 4, left hand, 442 points) -14.0% against 42.45, and on both the depth " +
+    "reading is the whole error -- -35% and -41% of the scale the sensor requires, collapsed at equal " +
+    "weight with a 3D bone that reads -1.8% (the shin, set 3) and -16% (the forearm, set 4; its shin " +
+    "+5.8%). At 0.6 the collapse leans on the bone: set 3 -20.1 -> -5.7%, set 4 -14.0 -> -4.6%, at " +
+    "0.4 -9.6 / -7.1. The 11-06 set 1 midpoint take (no ledger row) moves 1.983 -> 1.874 (-5.5%), " +
+    "recorded as its cost. Rep counts unchanged (7 of 8 on set 3, a merged rep; 8 of 8 on set 4).",
   "Dumbbell Shoulder Press":
+    "2026-11-06, round twelve. heightRulerUncertainty 0.1 -> 0.2 and depthRulerUncertainty 0.2 -> 0.6 " +
+    "on this lift only. Set 2 beside the OVR (40lb x8, build 716, live) read its range +46.7% at the " +
+    "round-eleven record, the same signature as set 1 (+41.8% at that record): the height ruler at " +
+    "76% of the blend reads +47% (set 1 +44%), the shoulder +76% (+84%), the depth instrument +60% " +
+    "(+28%), the 3D pair's upper-arm bone +17% (+13%), while the torso and shin bones read the " +
+    "sensor -3% / -9% (set 1 +2% / -1%). Every ruler high, so no weighting lands it; the two that " +
+    "move BOTH sets the same way are the height ruler, whose nose-to-ankle span is the thing the " +
+    "framing diagnostic (heightRulerFraming) now records because the ankle it reads to sat at or " +
+    "past the bottom edge with the wrists at the top (the 3D shin reads 0.333m against 0.44-0.49 on " +
+    "every other take), and the depth instrument, stated at 0.6 exactly as the RDL and the Pendlay " +
+    "Row state it. Swept at the record: height 0.2 alone 46.7 -> 45.9 / 41.8 -> 38.2; depth 0.6 " +
+    "alone 46.7 -> 43.6 / 41.8 -> 40.7; both 46.7 -> 38.8 / 41.8 -> 35.6, and 0.15 / 0.3 bracket " +
+    "the 0.2. Rep counts unchanged (8 of 8 on set 2, 7 of 8 on set 1). Still +36-39%: the lift is " +
+    "framing-limited, and the next take carries the framing. " +
     "2026-11-06, round eleven, build 714 beside the OVR (35lb x8, live path, 7 of 8; the first dumbbell " +
     "lift ever filmed beside the sensor). biacromialToleranceFraction 0.2 -> 0.4 on this lift only. The " +
     "take shipped 2.980e-3 against the 2.027e-3 the sensor requires (range of motion 85.6cm against " +

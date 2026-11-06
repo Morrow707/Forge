@@ -3132,7 +3132,11 @@ halves before splitting anything else:
   by the same rule; the every-lift test pins that the press's window reaches the press trace and
   the row's record lands set 2. See docs/camera-tracking-notes.md "Round five, 2026-10-30".
   Calibration work, uploaded on commit as build **705** (704 was its `verify_build` on `bfcc130`).
-- **THE QUEUE IS EMPTY AS OF BUILD 716** (2026-11-06 evening: round eleven, per-side filming for
+- **HELD ON THE DEVELOPMENT BRANCH, NOT ON MAIN, AS OF 2026-11-06 NIGHT:** the set-pill redesign (one
+  pill per set with Left/Right record buttons, `0f0ab2c`) and round twelve (the three per-lift steps
+  and the height-ruler framing diagnostic). Scott: "fix it but queue it in testing camera now"; the
+  hold lasts until he lifts it, then `verify_build` and `beta` from main.
+- **THE QUEUE WAS EMPTY AS OF BUILD 716** (2026-11-06 evening: round eleven, per-side filming for
   unilateral exercises and the reps number pad, held on the development branch on Scott's word
   and released with "When done upload"; 715 was its `verify_build`). Before it, **714** (round
   ten, the day-wipe save fix and the Forge-code removal, released with "Push all and upload").
@@ -3258,6 +3262,55 @@ halves before splitting anything else:
   the row is labelled by the helper; a second filmed row take -- the first on the working-hand rule
   with a declared side -- is what gives the row its first ledger row. Client plus a server column:
   shipped with round eleven as build **716**.
+- **ROUND TWELVE, 2026-11-06 EVENING: THE BENCH'S PLATE WAS THE RULER AND THE COUNT TRIMMED A REAL
+  REP, THE PRESS'S HEIGHT RULER GETS ITS FRAMING IN THE EXPORT, AND THE ROW'S FIRST WORKING-HAND
+  TAKES ARE THE DEPTH READING.** Set 2 of Bench Press (135x9 on purpose, 8 logged), Dumbbell
+  Shoulder Press (40x8) and Single-Arm Dumbbell Row (70x8, one capture per arm) on 716; Scott: "bench
+  was fine I did 9 reps on purpose", "Also camera didn't catch 9? Maybe? When I upload check", "skip
+  rep 1 and rep 10 to the ovr", and "at least one fix per exercise ... even if it's a .001 change, we
+  are getting very close with bench." All three systems ran on all four takes and the object system
+  asked for the right class on every one (the round-eleven dumbbell fix on its first outing); the
+  dumbbell class saw candidates and held no lock on any of the three, where the plate class locked
+  224 frames.
+  **BENCH +0.6%, AND THE CAMERA FOUND NINE.** The plate was admitted from the foot of the bench for
+  the first time (aspect 0.98, `plateBoxToExpectedRatio` 1.035, 73.9% of the blend, alone -0.3%).
+  The trace holds all nine presses; the count-trim dropped rep 1 to match the logged eight because
+  it scored 1.0-1.05 against the shared floor of 1 -- a rep that scores like the others is not a
+  rack move, so the bench's own `minCountTrimOddness` 1.2 (`FITTED_OVERRIDES`), costed on every
+  stored bench take and the re-rack / settle / un-rack tests with no other count moving (the settles
+  score 2.1-2.3, the un-rack 1.39-1.61). The velocities read +26% / +24% with the scale inside 1%,
+  and the window sweep disagrees in SIGN across the four paired benches (+25 / -7 / +32 / +47 at the
+  shared window), so no window is fitted (Rule #5).
+  **PRESS +46.7%, EVERY RULER HIGH AGAIN, AND THE EXPORT COULD NOT SAY WHY.** Set 1's signature at
+  the same record: the height ruler at 76% reads +47%, the shoulder +76%, the depth +60%, the 3D
+  upper-arm bone +17% while the torso and shin read -3% / -9% -- and the 3D shin is 0.333m on this
+  take against 0.44-0.49 on every other, which is what an ankle read up the leg does to a
+  nose-to-ankle span. `calibration.heightRuler` (`heightRulerFraming`, pose-tracking.ts; declared in
+  the schema; "Height ruler framing" on the report) records where the ankle and the nose sat as
+  fractions of the frame, the frames with either ON an edge, a wrist at the top edge or above the
+  nose, the ankle's wander and the span the ruler reads from. Records and gates nothing. The small
+  step, both sets the same way: the press's own `heightRulerUncertainty` 0.2 and
+  `depthRulerUncertainty` 0.6 -- 46.7 -> 38.8% and set 1 41.8 -> 35.6% (the ledger's set-1 live value
+  moves with it, which is that file's deliverable); every other per-lift weighting is a wash or worse.
+  **ROW -20.1% / -14.0%, ONE ARM EACH, THE DEPTH READING THE WHOLE ERROR.** The first takes traced
+  by the working hand (429 and 442 points, no midpoints); which capture is which arm is the filming
+  order (newest first in the export) and the hand the rule chose -- right on the first, left on the
+  second -- since the Left/Right buttons are held on the branch. The depth reading is -35% / -41%
+  collapsed at equal weight with a bone that reads the sensor (shin -1.8% on the first arm; the
+  forearm -16% on the second where its shin reads +5.8% -- the bone pick is shared and recorded);
+  the row's own `depthRulerUncertainty` 0.6, the RDL's and Pendlay's statement about the same
+  instrument on a hinge, reads them -5.7% / -4.6%. The first arm found 7 of 8: two pulls with no
+  reversal between them arrive as one 83.8cm phase (a 1.23s hole), dropped from the range by the
+  outlier rule and recorded in `KNOWN_UNDERCOUNTS`. The ledger gains `shoulderGripLoosenedFraction`
+  (the second arm's span was loosened to 0.571 by the grip rule, a fact about the take like the
+  spread, which the live replay now states).
+  Tests: `ovr-2026-11-06-set2-every-lift-reads-only-its-own-record` (every step reaches its own
+  lift and no other), `the-height-ruler-says-where-the-ankle-was` (the framing on synthetic frames,
+  the dialog and the schema, and that nothing reads it back); four ledger rows; three ground-truth
+  constants; the fixture `ovr-2026-11-06-set2-export.json`. See docs/camera-tracking-notes.md,
+  "Round twelve". Calibration work, HELD on the development branch with the set-pill redesign on
+  Scott's word ("fix it but queue it in testing camera now"); `verify_build` then `beta` when he
+  lifts it.
 - **ROUND ELEVEN, 2026-11-06: THE FIRST DUMBBELL LIFTS BESIDE THE SENSOR -- A SUPINE SPAN IS NOT A
   STATURE, A DUMBBELL LIFT ASKS FOR A DUMBBELL, AND A UNILATERAL LIFT IS TRACED BY ITS WORKING
   HAND.** Bench Press 135x8, Dumbbell Shoulder Press 35x8 and Single-Arm Dumbbell Row 70x8 on 714;

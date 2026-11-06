@@ -1750,3 +1750,142 @@ export const OVR_SINGLE_ARM_DUMBBELL_ROW_2026_11_06 = {
     barPointFromBareLoneHand: 11,
   },
 };
+
+// ROUND TWELVE, 2026-11-06 evening, build 716 (af7d4d3): set 2 of the same three lifts. Bench
+// press beside the OVR, 135lb x 9 ON PURPOSE with 8 logged (Scott: "bench was fine I did 9 reps
+// on purpose" and "Also camera didn't catch 9? Maybe? When I upload check"): the camera found all
+// nine; the logged 8 made the count-trim drop rep 1 (oddness 1.0-1.05 at the shared floor of 1),
+// which is the bench's own minCountTrimOddness 1.2 in FITTED_OVERRIDES. The live path fell back to
+// the file (coverage 0.85, drop rate 3.0), so this take is a FILE-path analysis and replays exactly.
+// THE PLATE WAS THE RULER FOR THE FIRST TIME ON A BENCH FILMED FROM THE FOOT: aspect 0.98, box
+// 1.035 of expected, 73.9% of the blend, and the plate alone reads the sensor -0.3%.
+export const OVR_BENCH_PRESS_SET2_2026_11_06 = {
+  build: 716,
+  loadLb: 135,
+  repsPerSet: 9,
+  loggedReps: 8,
+  camera: "foot of the bench as every bench in this repo; file path after a live fallback; the plate found on 33 samples at 0.76, aspect 0.98, lock held 224 frames",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.06, romIn: 12.7, meanW: 439, peakW: 636, tpvS: 0.28, eai: 3.68 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.06, romIn: 13.5, meanW: 439, peakW: 636, tpvS: 0.28, eai: 3.67 },
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.03, romIn: 14.3, meanW: 449, peakW: 620, tpvS: 0.31, eai: 3.27 },
+      { meanVelocityMps: 0.69, peakVelocityMps: 0.98, romIn: 12.9, meanW: 413, peakW: 586, tpvS: 0.30, eai: 3.19 },
+      { meanVelocityMps: 0.67, peakVelocityMps: 0.91, romIn: 13.0, meanW: 400, peakW: 545, tpvS: 0.33, eai: 2.72 },
+      { meanVelocityMps: 0.71, peakVelocityMps: 1.02, romIn: 12.9, meanW: 427, peakW: 611, tpvS: 0.29, eai: 3.42 },
+      { meanVelocityMps: 0.69, peakVelocityMps: 0.95, romIn: 12.8, meanW: 415, peakW: 570, tpvS: 0.30, eai: 3.10 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 1.02, romIn: 13.3, meanW: 434, peakW: 611, tpvS: 0.29, eai: 3.42 },
+      { meanVelocityMps: 0.50, peakVelocityMps: 0.94, romIn: 16.9, meanW: 302, peakW: 561, tpvS: 0.24, eai: 3.85 },
+    ],
+    reported: { meanVelocityMps: 0.68, peakVelocityMps: 0.99, romIn: 13.5, meanW: 413, peakW: 597, tpvS: 0.29, eai: 3.36 },
+  },
+  forgeOnDevice: {
+    repCount: 8,
+    meanVelocityMps: 0.85,
+    peakVelocityMps: 1.23,
+    romCm: 34.5,
+    scaleSource: "both",
+    scale: 0.0038994107713829626,
+    plateBoxToExpectedRatio: 1.035,
+    plateWeightPct: 73.9,
+    minCountTrimOddness: 1,
+  },
+};
+
+// Dumbbell shoulder press beside the OVR (its "Push Press" label), 2026-11-06 set 2, 40lb x 8,
+// build 716, live path. The OVR counted ten and Scott: "Same as before for 'push press' which is
+// our shoulder press, ignore the first 2 reps", so the sensor's reps 3-10 are the eight. Forge
+// found 8 of 8 this time (set 1 found 7). The scale is +46.7% as filmed, the same signature as set
+// 1: the height ruler 76% of the blend at +47%, the shoulder +76%, the collapsed 3D pair +37%, and
+// the 3D shin bone 0.333m where every other take's reads 0.44-0.49 -- see heightRulerFraming and
+// the ledger row 2026-11-06-dumbbell-shoulder-press-set-2.
+export const OVR_DUMBBELL_SHOULDER_PRESS_SET2_2026_11_06 = {
+  build: 716,
+  loadLb: 40,
+  repsPerSet: 8,
+  camera: "square to the front, standing; live path; the object system asked for a dumbbell, saw 13 candidates and held no lock on 776 frames",
+  sensor: {
+    ignoredSetupReps: [
+      { meanVelocityMps: 1.15, peakVelocityMps: 1.60, romIn: 32.0, meanW: 203, peakW: 284, tpvS: 0.31, eai: 5.10 },
+      { meanVelocityMps: 0.52, peakVelocityMps: 0.77, romIn: 23.1, meanW: 93, peakW: 137, tpvS: 0.21, eai: 3.60 },
+    ],
+    reps: [
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.38, romIn: 22.6, meanW: 141, peakW: 244, tpvS: 0.36, eai: 3.72 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.16, romIn: 21.6, meanW: 129, peakW: 205, tpvS: 0.25, eai: 4.46 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.11, romIn: 22.4, meanW: 132, peakW: 198, tpvS: 0.28, eai: 3.89 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 1.11, romIn: 22.3, meanW: 124, peakW: 198, tpvS: 0.30, eai: 3.66 },
+      { meanVelocityMps: 0.65, peakVelocityMps: 1.05, romIn: 21.9, meanW: 114, peakW: 186, tpvS: 0.33, eai: 3.16 },
+      { meanVelocityMps: 0.69, peakVelocityMps: 1.02, romIn: 22.6, meanW: 123, peakW: 181, tpvS: 0.29, eai: 3.45 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 1.16, romIn: 22.6, meanW: 127, peakW: 205, tpvS: 0.27, eai: 4.17 },
+      { meanVelocityMps: 0.62, peakVelocityMps: 1.05, romIn: 21.8, meanW: 109, peakW: 186, tpvS: 0.30, eai: 3.41 },
+    ],
+    // Reps 3-10, the eight Forge was asked to read.
+    reportedOverOurReps: { meanVelocityMps: 0.706, peakVelocityMps: 1.13, romIn: 22.225 },
+    reportedAllTen: { meanVelocityMps: 0.73, peakVelocityMps: 1.14, romIn: 23.2, meanW: 129, peakW: 202, tpvS: 0.29, eai: 3.86 },
+  },
+  forgeOnDevice: {
+    repCount: 8,
+    meanVelocityMps: 1.02,
+    peakVelocityMps: 1.83,
+    romCm: 82.8,
+    scaleSource: "both",
+    scale: 0.0029461076517717523,
+    heightRulerUncertainty: 0.1,
+    depthRulerUncertainty: 0.2,
+    biacromialToleranceFraction: 0.4,
+  },
+};
+
+// Single-arm dumbbell row beside the OVR (its "Pendlay Row" label), 2026-11-06 set 2, 70lb,
+// build 716, live path: THE FIRST ROW TAKES ON THE WORKING-HAND RULE, one capture per arm. The
+// OVR counted EIGHTEEN; Scott: "skip rep 1 and rep 10 to the ovr, as those two are setup reps",
+// so reps 2-9 are the first arm and 11-18 the second. Which capture is which arm is read off the
+// FILMING ORDER (the export's seq runs newest-first): Forge's set 3 was filmed first and traced the
+// RIGHT hand (unilateralWorkingHand), set 4 second and traced the LEFT. Neither row carries a
+// declared side -- the per-side Left/Right buttons are held on the branch -- so the arm is the
+// order's and the working-hand rule's, not the athlete's tap.
+export const OVR_SINGLE_ARM_DUMBBELL_ROW_SET2_2026_11_06 = {
+  build: 716,
+  loadLb: 70,
+  repsPerArm: 8,
+  camera: "square to the side of the bench; live path; the object system asked for a DUMBBELL (the round-eleven fix) and held no lock on either arm (22 and 1 candidates seen)",
+  sensor: {
+    ignoredSetupReps: [
+      { meanVelocityMps: 0.47, peakVelocityMps: 0.85, romIn: 11.2, meanW: 147, peakW: 265, tpvS: 0.14, eai: 5.92 },
+      { meanVelocityMps: 0.66, peakVelocityMps: 1.03, romIn: 16.0, meanW: 204, peakW: 321, tpvS: 0.19, eai: 5.21 },
+    ],
+    // OVR reps 2-9: the first arm filmed, Forge's set 3, the right hand.
+    firstArm: [
+      { meanVelocityMps: 1.07, peakVelocityMps: 1.73, romIn: 24.6, meanW: 334, peakW: 539, tpvS: 0.28, eai: 6.02 },
+      { meanVelocityMps: 1.03, peakVelocityMps: 1.61, romIn: 19.6, meanW: 320, peakW: 501, tpvS: 0.21, eai: 7.45 },
+      { meanVelocityMps: 1.00, peakVelocityMps: 1.57, romIn: 18.1, meanW: 311, peakW: 488, tpvS: 0.21, eai: 7.26 },
+      { meanVelocityMps: 0.95, peakVelocityMps: 1.46, romIn: 17.4, meanW: 294, peakW: 454, tpvS: 0.22, eai: 6.48 },
+      { meanVelocityMps: 0.91, peakVelocityMps: 1.43, romIn: 18.0, meanW: 283, peakW: 445, tpvS: 0.24, eai: 5.89 },
+      { meanVelocityMps: 0.91, peakVelocityMps: 1.42, romIn: 17.4, meanW: 283, peakW: 441, tpvS: 0.24, eai: 5.83 },
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.40, romIn: 16.9, meanW: 276, peakW: 437, tpvS: 0.24, eai: 5.77 },
+      { meanVelocityMps: 0.90, peakVelocityMps: 1.43, romIn: 18.2, meanW: 281, peakW: 445, tpvS: 0.27, eai: 5.13 },
+    ],
+    // OVR reps 11-18: the second arm, Forge's set 4, the left hand.
+    secondArm: [
+      { meanVelocityMps: 1.01, peakVelocityMps: 1.71, romIn: 22.2, meanW: 315, peakW: 531, tpvS: 0.34, eai: 4.89 },
+      { meanVelocityMps: 0.94, peakVelocityMps: 1.47, romIn: 17.1, meanW: 294, peakW: 458, tpvS: 0.24, eai: 6.06 },
+      { meanVelocityMps: 0.88, peakVelocityMps: 1.36, romIn: 15.6, meanW: 274, peakW: 424, tpvS: 0.23, eai: 5.82 },
+      { meanVelocityMps: 0.87, peakVelocityMps: 1.35, romIn: 15.4, meanW: 270, peakW: 419, tpvS: 0.24, eai: 5.55 },
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.40, romIn: 16.0, meanW: 275, peakW: 437, tpvS: 0.24, eai: 5.77 },
+      { meanVelocityMps: 0.85, peakVelocityMps: 1.34, romIn: 15.9, meanW: 263, peakW: 415, tpvS: 0.23, eai: 5.70 },
+      { meanVelocityMps: 0.82, peakVelocityMps: 1.28, romIn: 14.8, meanW: 255, peakW: 398, tpvS: 0.23, eai: 5.47 },
+      { meanVelocityMps: 0.89, peakVelocityMps: 1.35, romIn: 16.7, meanW: 276, peakW: 419, tpvS: 0.22, eai: 5.99 },
+    ],
+    reportedAllEighteen: { meanVelocityMps: 0.88, peakVelocityMps: 1.39, romIn: 17.2, meanW: 275, peakW: 435, tpvS: 0.23, eai: 5.90 },
+    reportedFirstArm: { meanVelocityMps: 0.9575, peakVelocityMps: 1.506, romIn: 18.775 },
+    reportedSecondArm: { meanVelocityMps: 0.894, peakVelocityMps: 1.408, romIn: 16.713 },
+  },
+  forgeOnDevice: {
+    // Set 3 on the phone: the first arm, the RIGHT hand, 429 working-hand points, 7 of 8 -- reps 5
+    // and 6 merged into one 83.8cm "rep" the outlier rule then drops from the set's range.
+    firstArm: { repCount: 7, meanVelocityMps: 0.88, peakVelocityMps: 1.48, romCm: 38.1, scale: 0.002175621919770296, workingHand: "right", chosenBone: "shin" },
+    // Set 4 on the phone: the second arm, the LEFT hand, 442 working-hand points, 8 of 8.
+    secondArm: { repCount: 8, meanVelocityMps: 0.81, peakVelocityMps: 1.19, romCm: 36.5, scale: 0.0020695213986667176, workingHand: "left", chosenBone: "forearm" },
+    depthRulerUncertainty: 0.2,
+  },
+};

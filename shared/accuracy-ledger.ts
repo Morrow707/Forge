@@ -89,6 +89,12 @@ export type LedgerRow = {
    *  weight a jittery span as if it were steady. Set only where the spread exceeded the floor on
    *  the day (the 10-30 row set 2, 0.317 against 0.2); absent means the floor was what shipped. */
   readonly shoulderSpanSpreadFraction?: number;
+  /** THE UNCERTAINTY THE GRIP YARDSTICK LOOSENED THE SHOULDER SPAN TO ON THE DAY, where it exceeds
+   *  both the floor and the spread (the 2026-10-09 grip rule: a grip wider than anatomy allows
+   *  against the span is a span read too small, carried as uncertainty, floored). A fact about the
+   *  take in exactly the way the spread is -- a sealed row carries no grip to re-derive it -- so
+   *  the live replay states max(floor, spread, this). Absent means the grip rule did not fire. */
+  readonly shoulderGripLoosenedFraction?: number;
   /** THE DETECTOR'S OWN MEAN CONFIDENCE ON THIS TAKE, where a plate joined the vote
    *  (`objectDetection.avgCoreMlConfidence`). A property of the TAKE, like the span's spread
    *  above, and for the identical reason: since 2026-10-31 the plate's uncertainty is FLOORED by
@@ -1066,7 +1072,8 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 2.979875841056815,
     reportedRomCm: 85.6,
     sensorRomCm: 58.24,
-    liveErrorPct: 41.76,
+    // 41.76 at round eleven's record (shoulder 0.4); 35.62 at round twelve's (height 0.2, depth 0.6).
+    liveErrorPct: 35.62,
     notes:
       "35lb x8 beside the OVR (its \"Push Press\" x10, reps 1-2 the set-up and ignored on Scott's word), " +
       "live path, 7 of 8, the first dumbbell press ever paired. Range of motion +47.0% as filmed and " +
@@ -1084,6 +1091,153 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "0.834 and peak 2.78 against 1.36, the scale's +47% and nothing else to read until the scale is " +
       "right. Object system: class dumbbell (correct), 100 CoreML frames at 0.60, the lock held on 30 " +
       "of 741 with 70 breaks on low confidence; overwatch judged every frame, 69 body-suspect.",
+  },
+  /* ROUND TWELVE, 2026-11-06 evening, build 716 (af7d4d3): set 2 of the same three lifts. The
+   * Single-Arm Dumbbell Row gets its FIRST rows here -- two, one per arm, the first takes traced by
+   * the working hand (round eleven's rule); which capture is which arm is read off the filming
+   * order (the export's seq) and the hand the rule chose, since the per-side buttons are held on the
+   * branch and neither row carries a declared side. The bench row is the first bench whose plate
+   * was the ruler from the foot of the bench (aspect 0.98, box 1.035 of expected). */
+  {
+    id: "2026-11-06-bench-press-set-2",
+    date: "2026-11-06",
+    build: 716,
+    exercise: "Bench Press",
+    filmedOnCommit: "af7d4d3",
+    candidates: [
+      { source: "plate", scaleX1000: 3.86406 },
+      { source: "body_3d", scaleX1000: 3.10449 },
+      { source: "depth", scaleX1000: 4.89084 },
+      { source: "shoulder_width", scaleX1000: 4.10219 },
+    ],
+    uncertaintiesAsFilmed: { plate: 0.084, body_3d: 0.2, depth: 0.2, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: false,
+    shoulderSpanSpreadFraction: 0.154,
+    plateMeanCoreMlConfidence: 0.76,
+    shippedScaleX1000: 3.8994107713829626,
+    reportedRomCm: 34.5,
+    sensorRomCm: 34.29,
+    liveErrorPct: 0.61,
+    notes:
+      "135 x 9 done on purpose with 8 logged, beside the OVR, build 716; the live path fell back to the " +
+      "file (coverage 0.85, drop rate 3.0) so this is a FILE-path take and replays exactly. Range of " +
+      "motion +0.6% as filmed (34.5 against the sensor's 34.29 over nine): THE PLATE WAS THE RULER, " +
+      "aspect 0.98 (a disc seen face-on from the foot of the bench), box 1.035 of expected, 33 samples " +
+      "at 0.76, the lock held 224 frames, 73.9% of the blend, and the plate alone reads -0.3%; the " +
+      "collapsed 3D pair (shoulderWidth bone 3.104, depth 4.891 -> 3.896) +0.5%, the shoulder span " +
+      "+5.8% (spread 0.154, grip/shoulder 1.99 inside the ceiling). The camera found all NINE presses " +
+      "(Scott: \"camera didn't catch 9? Maybe?\" -- it did) and the count-trim dropped rep 1 to match " +
+      "the logged eight (oddness 1.0-1.05 at the shared floor of 1), which is the bench's own " +
+      "minCountTrimOddness 1.2 (FITTED_OVERRIDE_EVIDENCE). Velocities over the nine at the shared " +
+      "record: mean 0.86 against 0.68 (+26%), peak 1.23 against 0.99 (+24%), rep for rep 0.92 / 0.91 " +
+      "/ 0.99 / 0.85 / 0.91 / 0.92 / 0.94 / 0.79 / 0.69 against 0.73 / 0.73 / 0.75 / 0.69 / 0.67 / " +
+      "0.71 / 0.69 / 0.72 / 0.50 -- with the scale right the bench's drive reads a quarter high on " +
+      "every rep, and the window sweep disagrees in SIGN across the four paired benches (this +25%, " +
+      "11-06 set 1 -7%, 10-30 set 1 +32%, set 3 +47% at the shared window; onset 0 gives +15 / -26 / " +
+      "+6 / +41), so no window is fitted (Rule #5). axisForeshortening 1.398, recorded.",
+  },
+  {
+    id: "2026-11-06-dumbbell-shoulder-press-set-2",
+    date: "2026-11-06",
+    build: 716,
+    exercise: "Dumbbell Shoulder Press",
+    filmedOnCommit: "af7d4d3",
+    candidates: [
+      { source: "body_3d", scaleX1000: 2.35799 },
+      { source: "depth", scaleX1000: 3.21383 },
+      { source: "height", scaleX1000: 2.95814 },
+      { source: "shoulder_width", scaleX1000: 3.52671 },
+    ],
+    // The press's own shoulder floor (0.4, round eleven) was on the phone for this take.
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, height: 0.1, shoulder_width: 0.4 },
+    heightRulerVotedAsFilmed: true,
+    shoulderSpanSpreadFraction: 0.043,
+    shippedScaleX1000: 2.9461076517717523,
+    reportedRomCm: 82.8,
+    sensorRomCm: 56.45,
+    liveErrorPct: 38.78,
+    notes:
+      "40lb x8 beside the OVR (its \"Push Press\" x10, reps 1-2 the set-up and ignored on Scott's " +
+      "word), build 716, live path, 8 of 8 (set 1 found 7). Range of motion +46.7% as filmed, the " +
+      "same signature as set 1 at the same record: the height ruler at 76% of the blend reads +47% " +
+      "(502 nose-to-ankle frames of 706), the shoulder +76% (span 124 units, spread 0.043, " +
+      "grip/shoulder 1.66 under the ceiling so the grip rule is silent), the depth instrument +60%, " +
+      "the 3D pair's upper-arm bone +17%; the torso (1.953) and shin (1.820) bones read -3% / -9%, " +
+      "and the shin is 0.333m on this take against 0.44-0.49 on every other take in the export -- the " +
+      "3D skeleton's ankle sits up the leg, which is what a 2D ankle at or past the bottom edge would " +
+      "do to a nose-to-ankle span. That is the hypothesis heightRulerFraming records from the next " +
+      "take (where the ankle and the nose sat, how far the ankle wandered, how often a wrist was at " +
+      "the top edge); nothing in this export can prove it. The press's own height 0.2 and depth 0.6 " +
+      "(FITTED_OVERRIDE_EVIDENCE) read it +38.8% and set 1 +35.6%. Velocities at the shared record: " +
+      "mean 1.02 against 0.706 (+44%) and peak 1.83 against 1.13 (+62%), the scale's +47% and a " +
+      "peaked profile; nothing to read until the scale lands. Object system: dumbbell (right), 13 " +
+      "candidates, lock held 0 of 776; overwatch judged every frame, 597 body-suspect.",
+  },
+  {
+    id: "2026-11-06-single-arm-dumbbell-row-first-arm",
+    date: "2026-11-06",
+    build: 716,
+    exercise: "Single-Arm Dumbbell Row",
+    filmedOnCommit: "af7d4d3",
+    candidates: [
+      { source: "body_3d", scaleX1000: 2.67482 },
+      { source: "depth", scaleX1000: 1.76959 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2 },
+    heightRulerVotedAsFilmed: false,
+    // The shoulder ruler refused its own span (14.6 units side-on, implausible_span) before the
+    // candidate list, so it is not a candidate and not a rejection: two rulers voted.
+    shippedScaleX1000: 2.175621919770296,
+    reportedRomCm: 38.1,
+    sensorRomCm: 47.69,
+    liveErrorPct: -5.75,
+    notes:
+      "70lb, the phone's set 3, FILMED FIRST (the export's seq), the RIGHT hand by the working-hand " +
+      "rule (429 working-hand points, 0 midpoints, 0 carries), against the OVR's reps 2-9 (reps 1 " +
+      "and 10 the set-up on Scott's word), 47.69cm. The first row take ever traced by the working " +
+      "hand. Range of motion -20.1% as filmed over 7 of 8: the sensor's reps 5 and 6 (18.0 and 17.4in) " +
+      "arrive as ONE 83.8cm upward phase on a trace with a 1.23s hole (cadence 0.868, 16 dropouts), " +
+      "flagged by the outlier rule and dropped from the range; the other six read 47.0 / 28.2 / 37.5 " +
+      "/ 40.2 / 38.2 / 37.4 against 62.5 / 49.8 / 46.0 / 44.2 / 45.7 / 42.9 / 46.2 (the rep-1 pull " +
+      "the sensor reads long, 24.6in, Forge reads 47.0). The SCALE: the shin bone 2.675 reads -1.8% " +
+      "of the 2.723 the sensor requires and the depth reading 1.770 reads -35%, collapsed at equal " +
+      "weight to 2.176; the row's own depthRulerUncertainty 0.6 (FITTED_OVERRIDE_EVIDENCE) reads it " +
+      "-5.7%. Velocities at the shared record over the seven: mean 0.88 against 0.96 (-9%), peak 1.48 " +
+      "against 1.51 (-2%), both the scale's. Object system: dumbbell (the round-eleven fix), 22 " +
+      "candidates, lock held 0 of 540; overwatch judged every frame, 36 body-suspect.",
+  },
+  {
+    id: "2026-11-06-single-arm-dumbbell-row-second-arm",
+    date: "2026-11-06",
+    build: 716,
+    exercise: "Single-Arm Dumbbell Row",
+    filmedOnCommit: "af7d4d3",
+    candidates: [
+      { source: "body_3d", scaleX1000: 2.01384 },
+      { source: "depth", scaleX1000: 1.41911 },
+      { source: "shoulder_width", scaleX1000: 5.15642 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, shoulder_width: 0.5707819596983763 },
+    heightRulerVotedAsFilmed: false,
+    shoulderSpanSpreadFraction: 0.148,
+    shoulderGripLoosenedFraction: 0.5707819596983763,
+    shippedScaleX1000: 2.0695213986667176,
+    reportedRomCm: 36.5,
+    sensorRomCm: 42.45,
+    liveErrorPct: -4.62,
+    notes:
+      "70lb, the phone's set 4, filmed SECOND, the LEFT hand by the working-hand rule (442 points), " +
+      "against the OVR's reps 11-18, 42.45cm -- the arm the 11-06 set-1 note called the second, 5cm " +
+      "shorter than the first on the sensor both days. 8 of 8. Range of motion -14.0% as filmed, rep " +
+      "for rep 40.0 / 35.4 / 33.6 / 37.1 / 36.2 / 36.2 / 36.5 / 37.0 against 56.4 / 43.4 / 39.6 / 39.1 " +
+      "/ 40.6 / 40.4 / 37.6 / 42.4. The SCALE: the 3D pick landed on the FOREARM (2.014, -16% of the " +
+      "2.407 the sensor requires; the shin 2.547 reads +5.8%, the upper arm 1.668 -31%) and the depth " +
+      "reading 1.419 reads -41%; the shoulder span (5.156, +114%) was loosened to 0.571 by the grip " +
+      "rule (grip/shoulder 2.90, spread 0.148) and carries 11%. The row's own depth 0.6 reads it " +
+      "-4.6%; with the shin as the bone it would read +12%, which is why the bone pick (a shared " +
+      "rule) is recorded and not moved. Velocities at the shared record: mean 0.81 against 0.89 " +
+      "(-9%), peak 1.19 against 1.41 (-15%). Object system: dumbbell, 1 candidate, lock held 0 of " +
+      "561; overwatch judged every frame, 344 body-suspect; cadence 0.762 with a 1.33s hole.",
   },
 ];
 

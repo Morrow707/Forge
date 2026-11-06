@@ -10048,6 +10048,26 @@ export const trackingDiagnosticsSchema = z.object({
         })
         .optional()
         .nullable(),
+      /* Where the height ruler's two landmarks sat in the frame -- see heightRulerFraming in
+       * pose-tracking.ts. Added 2026-11-06 (round twelve) because the dumbbell press's height
+       * ruler read +44% and +47% on two takes and the export could not say whether the ankle it
+       * measured to was in the frame. Records and gates nothing (Rule #1). Declared here because
+       * a zod object strips what it does not declare. */
+      heightRuler: z
+        .object({
+          framesWithAnkles: z.number(),
+          ankleFromBottomMedian: z.number().nullable(),
+          noseFromTopMedian: z.number().nullable(),
+          ankleAtBottomEdgeFrames: z.number(),
+          noseAtTopEdgeFrames: z.number(),
+          wristAtTopEdgeFrames: z.number(),
+          wristAboveNoseFrames: z.number(),
+          ankleWanderUnits: z.number().nullable(),
+          noseToAnkleSpanMedianUnits: z.number().nullable(),
+          noseToAnkleSpanExtendedUnits: z.number().nullable(),
+        })
+        .optional()
+        .nullable(),
       scaleCandidates: z
         .array(
           z.object({

@@ -59,7 +59,11 @@ function liveUncertainty(source: string, exercise: string, row?: LedgerRow): num
   if (source === "height") return t.heightRulerUncertainty;
   // The floor is the constant; the span's own spread on the day is a fact about the take, and the
   // phone states the larger of the two (the 10-30 row set 2 shipped at 0.317 over a 0.2 floor).
-  if (source === "shoulder_width") return Math.max(t.biacromialToleranceFraction, row?.shoulderSpanSpreadFraction ?? 0);
+  // ... and the grip yardstick's loosening (the 2026-11-06 row's second arm, 0.571 over a 0.2
+  // floor and a 0.148 spread) is a fact about the take the same way, carried on the row.
+  if (source === "shoulder_width") {
+    return Math.max(t.biacromialToleranceFraction, row?.shoulderSpanSpreadFraction ?? 0, row?.shoulderGripLoosenedFraction ?? 0);
+  }
   if (source === "depth") return t.depthRulerUncertainty;
   if (source === "plate") {
     // What `computeReferenceObjectScale` states for a bumper plate the detector boxed: the casting

@@ -2359,6 +2359,116 @@ export function calibrationMethodBreakdown(
   return { noseToAnkleFrames, shoulderToAnkleFrames, supineFullLengthFrames, unresolvedFrames };
 }
 
+/** WHERE THE HEIGHT RULER'S TWO LANDMARKS SAT IN THE FRAME, recorded so a stature span measured
+ *  short can be attributed to the framing rather than guessed at from the number it produced.
+ *
+ *  Round eleven (2026-11-06): the dumbbell shoulder press's height ruler read +44% and then +47%
+ *  on two takes with the wrists at the TOP edge of the frame, the ankle landmark wandering
+ *  420px, and the 3D shin bone 0.33m where every other take's reads 0.39-0.48 -- everything
+ *  consistent with a nose-to-ankle span short by about a shin because the ankle was at or past
+ *  the bottom edge, and none of it provable from an export that carried neither the frames nor
+ *  where the landmarks were. This is that record. It takes the native dialog's frames
+ *  (visionJointsToWorldLandmarks: y = -(joint.y * frameHeight), so the bottom edge is 0 and the
+ *  top edge is -frameHeight) and answers, per take: how far from the bottom edge the ankle sat
+ *  (median, as a fraction of the frame height; 0 is ON the edge), how far from the top the nose
+ *  sat, how many frames put either wrist above the nose (an overhead lift), how many put a
+ *  wrist, the nose or the ankle within EDGE_FRACTION of an edge, how far the ankle midpoint
+ *  wandered over the take (p95 - p5, in units), and the nose-to-ankle span the ruler reads from
+ *  (its median and the extended-frame percentile calibrateFromFrames picks).
+ *
+ *  Records and gates nothing (Rule #1). No ruler reads it; a rule that does is the next round's
+ *  decision, made against a take that carries this. */
+export const HEIGHT_RULER_EDGE_FRACTION = 0.03;
+
+export type HeightRulerFraming = {
+  framesWithAnkles: number;
+  ankleFromBottomMedian: number | null;
+  noseFromTopMedian: number | null;
+  ankleAtBottomEdgeFrames: number;
+  noseAtTopEdgeFrames: number;
+  wristAtTopEdgeFrames: number;
+  wristAboveNoseFrames: number;
+  ankleWanderUnits: number | null;
+  noseToAnkleSpanMedianUnits: number | null;
+  noseToAnkleSpanExtendedUnits: number | null;
+};
+
+export function heightRulerFraming(
+  frames: { worldLandmarks: Landmark[]; frameHeight?: number | null }[],
+): HeightRulerFraming {
+  const ankleFromBottom: number[] = [];
+  const noseFromTop: number[] = [];
+  const ankleYs: number[] = [];
+  const spans: number[] = [];
+  let ankleAtBottomEdgeFrames = 0;
+  let noseAtTopEdgeFrames = 0;
+  let wristAtTopEdgeFrames = 0;
+  let wristAboveNoseFrames = 0;
+  let lastSign: 1 | -1 = 1;
+  for (const f of frames) {
+    const lm = f.worldLandmarks;
+    const sign: 1 | -1 = worldVerticalSign(lm) ?? lastSign;
+    lastSign = sign;
+    const H = f.frameHeight != null && f.frameHeight > 0 ? f.frameHeight : null;
+    // Fractions are defined against the native convention only; a frame with no height stated
+    // still contributes its spans and its wander, which need no frame to be read.
+    const fromBottom = (y: number) => (H == null ? null : Math.min(1, Math.max(0, -y / H)));
+    const nose = lm[POSE_LANDMARKS.NOSE];
+    const lAnkle = lm[POSE_LANDMARKS.LEFT_ANKLE];
+    const rAnkle = lm[POSE_LANDMARKS.RIGHT_ANKLE];
+    const lWrist = lm[POSE_LANDMARKS.LEFT_WRIST];
+    const rWrist = lm[POSE_LANDMARKS.RIGHT_WRIST];
+    if (visible(nose)) {
+      const fb = fromBottom(nose.y);
+      if (fb != null) {
+        noseFromTop.push(1 - fb);
+        if (1 - fb <= HEIGHT_RULER_EDGE_FRACTION) noseAtTopEdgeFrames++;
+      }
+      // A wrist above the nose: the arms overhead. sign * (nose.y - wrist.y) > 0 reads "higher"
+      // in the frame's own vertical, whichever way the take's sign runs.
+      if ((visible(lWrist) && sign * (nose.y - lWrist.y) > 0) || (visible(rWrist) && sign * (nose.y - rWrist.y) > 0)) {
+        wristAboveNoseFrames++;
+      }
+    }
+    for (const w of [lWrist, rWrist]) {
+      if (!visible(w)) continue;
+      const fb = fromBottom(w.y);
+      if (fb != null && 1 - fb <= HEIGHT_RULER_EDGE_FRACTION) {
+        wristAtTopEdgeFrames++;
+        break;
+      }
+    }
+    if (!visible(lAnkle) || !visible(rAnkle)) continue;
+    const ankleY = (lAnkle.y + rAnkle.y) / 2;
+    ankleYs.push(ankleY);
+    const fb = fromBottom(ankleY);
+    if (fb != null) {
+      ankleFromBottom.push(fb);
+      if (fb <= HEIGHT_RULER_EDGE_FRACTION) ankleAtBottomEdgeFrames++;
+    }
+    if (visible(nose)) {
+      const span = sign * (ankleY - nose.y);
+      if (span > 0) spans.push(span);
+    }
+  }
+  const round = (n: number, places: number) => Math.round(n * 10 ** places) / 10 ** places;
+  const med = (v: number[], places: number) => (v.length === 0 ? null : round(percentile(v, 0.5), places));
+  return {
+    framesWithAnkles: ankleYs.length,
+    ankleFromBottomMedian: med(ankleFromBottom, 3),
+    noseFromTopMedian: med(noseFromTop, 3),
+    ankleAtBottomEdgeFrames,
+    noseAtTopEdgeFrames,
+    wristAtTopEdgeFrames,
+    wristAboveNoseFrames,
+    ankleWanderUnits: ankleYs.length === 0 ? null : round(percentile(ankleYs, 0.95) - percentile(ankleYs, 0.05), 1),
+    noseToAnkleSpanMedianUnits: med(spans, 1),
+    // The frames the ruler reads from: the extended ones. calibrateFromFrames takes the tenth
+    // percentile of per-frame SCALES, which is the (1 - tenth) percentile of spans.
+    noseToAnkleSpanExtendedUnits: spans.length === 0 ? null : round(percentile(spans, 1 - HEIGHT_RULER_EXTENSION_PERCENTILE), 1),
+  };
+}
+
 // First of Vision's two calibration mechanisms: the athlete's own known real height compared
 // against their implied height in the pipeline's pixel-space units, at the same "standing
 // fully visible" moment computeImpliedStandingHeightM's callers already sample from. Returns

@@ -90,7 +90,10 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
   it("no lift on this export carries a velocity number of its own: the three fitted on the lowering are gone", () => {
     expect(VELOCITY_OVERRIDES_REMOVED_2026_11_05["Bench Press"]).toEqual(["driveOnsetFraction", "velocitySmoothingMs", "maxPeakToMeanRatio"]);
     expect(VELOCITY_OVERRIDES_REMOVED_2026_11_05["Barbell Shoulder Press"]).toEqual(["driveOnsetFraction"]);
-    expect(FITTED_OVERRIDES["Bench Press"]).toBeUndefined();
+    // No SCALE and no VELOCITY number of the bench's own: the bench's record since round twelve
+    // (2026-11-06) carries only its count-trim floor (minCountTrimOddness), which moves no number
+    // on these takes -- every rep here is found at or under the logged count.
+    expect(Object.keys(FITTED_OVERRIDES["Bench Press"] ?? {})).toEqual(["minCountTrimOddness"]);
     expect(FITTED_OVERRIDES["Barbell Shoulder Press"]).toBeUndefined();
     expect(Object.keys(FITTED_OVERRIDES["Pendlay Row"])).toEqual(["depthRulerUncertainty"]);
     for (const [name, bucket] of [["Bench Press", "horizontal_press_or_row"], ["Pendlay Row", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"]]) {

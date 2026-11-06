@@ -14,7 +14,7 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-06, round eleven)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-06, round twelve)
 
 Scott, 2026-10-29: "I want you keeping a running log wherever you need to ... so we don't keep
 going in circles with what works and what doesn't, when your feed goes stale you don't remember
@@ -157,17 +157,31 @@ one per side, each filmed and measured on its own (`shared/unilateral-sides.ts`,
 (the ten-pill version shipped in 716 and Scott called it "too clunky"; the fix is held on the branch);
 the tracker is told the side (`trace.declaredSide`) and records whether the hand it measured agrees.
 The next single-arm row take is the first with a known arm.
+**ROUND TWELVE (2026-11-06 evening, set 2 of the same three on 716; "at least one fix per exercise
+... even if it's a .001 change"):** the **bench's +0.6%** -- the plate the ruler at last from the
+foot of the bench (aspect 0.98, box 1.035, 73.9%) -- and the camera found all NINE presses Scott did
+on purpose; the logged eight trimmed the first, so the bench's own `minCountTrimOddness` 1.2 keeps a
+rep that scores like the others (costed: no other bench count moves). Mean +26% / peak +24% with the
+scale inside 1%, and the window sweep disagrees in SIGN across the four paired benches, so no window
+(Rule #5). The **press's +46.7%** is set 1's signature again (height +47% at 76%, shoulder +76%, depth
++60%, the 3D shin 0.333m against 0.44-0.49 everywhere else): its own height 0.2 and depth 0.6 take
+both sets 46.7 -> 38.8 / 41.8 -> 35.6, and `calibration.heightRuler` (where the ankle and the nose
+sat, a wrist at the top edge) is in the export so the next take proves or kills the ankle-at-the-edge
+hypothesis. The **row's -20.1% / -14.0%** on its first two working-hand takes (one per arm, the right
+then the left, by filming order) is the depth reading (-35% / -41%) collapsed with a bone that reads
+the sensor (shin -1.8%); its own depth 0.6 reads them -5.7% / -4.6%. Held on the branch with the
+set-pill redesign; nothing uploaded. See "Round twelve".
 
 | lift | paired takes | ROM vs OVR, oldest -> newest | state |
 |---|---|---|---|
 | Back Squat 135 | 10-19 x2, 10-29 x2 | -5.3%, -1.5%, -1.9%, **-1.3%** (mean 0.81/0.84/0.72/0.89 vs 0.86/0.84/0.80/0.84) | **lands, same signature four takes running; its own height uncertainty (0.11) ships in round two, worth about +1%** **Round eight (11-05): on the DRIVES the four paired squats read +5.0 / +1.2 / +4.0 / +3.2% at the shared window and +1.2 / 0.0 / +2.0 / +2.2% at the squat's own `driveOnsetFraction` 0.02 (the first velocity number ever fitted on a drive); 0.0 is the next step. Peaks -4 to -11% at the shared smoothing, recorded. The squat reads the sensor rep for rep.** **Round nine (11-05, 135x5 on 710, file path): ROM -1.9%, mean +4.8% -> +2.4% at its own 0 window, peak -5.5% -> -3.9% at its own 130ms. Next: 0 is the last window step; the set-range endpoint rule (raw 73.0 vs smoothed 74.4).** **Round ten (11-05, set 2 on 712, file path): ROM -2.7%, mean +2.4%, peak +1.6%, rep for rep. Its own `heightRulerUncertainty` 0.11 -> 0.12 (the six takes on the current pipeline all read low as filmed: -4.3 / -0.5 / -0.9 / -0.3 / -1.9 / -2.7 at 0.11). Measured and REJECTED: the rep's range off the smoothed series (lands the four squats inside 1%, reads 2-12 points high on fifteen other paired takes) and the raw extreme near each endpoint (moves nothing). The mean's +2.4% is one 33ms sample of phase edge on both sets. Next: nothing to step; the sample-edge is a mechanism, not a constant.** |
 | Romanian Deadlift 135 | 10-19 x2, 10-29 x2 | +16.4%, +12.0%, +30.5% oblique; **-34.2% square-on on 697** -- a plate boxed 1.63x too big took 86% of the scale. Without it the square-on take reads **-1.9%** | **square-on, the body rulers are within 2%; the plate rule is fixed in round two; the velocities are the next fault (window 25% long)** **Round eight: on the drives the RDL reads +46% / +30% on the mean and +21% / +37% on the peak -- the 10-29 take is oblique at +35% ROM, the 10-19 take carries the +15% collapse; both are scale faults the drive now reads honestly. The cap 2.5 is gone (it released the lowering's peaks). 10-29 set 1 counts 8 of 8 on the drives (7 on the lowerings).** **Round nine (11-05, 135x8 on 710, live): ROM +4.2% over the whole reps (rep 1 a starved fragment, now out of the set), mean +35.5% -> +29.0% at its own 0.02, peak +35% NOT fitted (a trace fault: per-rep distance scatter +-15%, phases 1.35x short on 3 of 8 behind a bottom dwell). Next: window 0 (+17%), the bodyWitnessTrace on the next export.** **Round ten (11-05, set 2 on 712, live): the phone printed 7 of 8 -- the eighth pull merged with a 2.2s stand at lockout and deleted as a re-rack. THE REST-AT-TOP RULE (`restArrivalAfterPeak`, shared): a rep is measured to the rest it came to when the phase goes on past it. 8 of 8 on set 2, and it exposed set 1: its "starved rep 1" was the SET-UP and its eighth had gone the same way (8 of 8 now, the set-up trimmed by the athlete's count as the starved edge); the 10-19 take too (7 -> 8, left KNOWN_UNDERCOUNTS). Window 0.02 -> 0: set 2 ROM +3.6%, mean +15.8%, peak +19.0%; set 1 ROM +3.6%, mean +16.1%, peak +29.8%. Next: the peaks (+19 to +30% on every pull, not a window); the eighth's 2cm of creep the rest cut leaves off.** |
 | Box Jump, 24in box | 10-19 x2, 10-29 x2 | box ruler 1.20-1.22 on both 10-29 sets (ankle rise 72-75cm onto 61); hip peak **+2% / -13%** at the floor scale (was -15% / -29% divided by the landing ratio); hip mean +15% / +7% at the floor scale | **round three: the box ratio corrects the LANDING numbers only; the hip's drive keeps the floor scale the squat proved from the same spot. Next: set 1's -13% is a trace with 21 dropouts, and the mean's window** **Round nine (11-05, x5 on 710): hip peak +2.1% smoothed / +0.3% raw, net rise 69.7 vs 69.3; drive mean +28% is the sensor's wider window. The set carries the hip peak and mean from 712. Next: the mean's window, read off the bodyWitnessTrace.** **Round ten (11-05, set 2 on 712): hip peak +2.6% smoothed / +5.5% raw; THE SENSOR'S WINDOW IS SETTLED off the bodyWitnessTrace -- dip bottom to the hip's APEX, 0.45-0.55s per rep against the sensor's 0.48-0.50 -- and `riseToApexMeanVelocityMps` (drive share at the floor scale, flight share over the box ratio) is the set's mean from the next build: +3.1% on the replay where the drive-to-takeoff mean read +24%. Next: read it off the phone's own hip series on the next take; the peak's +2 to +3% on two sets.** |
-| Bench Press 135 | 10-30 x2 (set 1 on 703, set 3 on 705; plus the 09-29/09-30/10-02 corpus); **set 2's OVR screen arrived TWICE (0.69 / 0.97 / 14.9in) with NO Forge capture in either export** | **+3.2%** (36.7 vs 35.6) -- the first bench whose scale lands, and the first real take where the retrained detector's PLATE was the ruler (box 0.919 of expected, 86% of the blend); mean +10.3%, peak +18.6%. **Set 3 on 705: +5.5%** (39.4 vs 37.3), mean +12.1%, peak +25.3% -- the plate again, 86% of the blend, boxed 7.3% too SMALL, and both body rulers were BELOW the sensor | **round four: the bench's own window (driveOnsetFraction 0.03) and smoothing (200), costed on the four clean paired benches: mean bias +10.7% -> +6.3%, peak bias +7.2% -> +3.0%. 0.02 is the zero-bias window on those four and the NEXT step; held back because the one trace-poor bench (set 5, 09-29) pays 15 points there. **Round six: the MEAN was a BUG, not a fit -- the SET mean summed the whole phase's distance over the drive window's time (`romM`'s own comment names the pairing; the rep was fixed 10-06 and the set-level aggregation was not). Set 3 +10.4% -> +2.9%; seven of the twelve traced takes improve and the five that read LOW get 1-3 points worse, which is what removing a one-sided inflation does. It made the bench's own `driveOnsetFraction` 0.03 INERT on both 10-30 takes (+5.9% / +3.0% at 0.03 AND at 0.04) -- kept because it still earns its keep on the 09-29/09-30 corpus; 0.02 re-swept and still refused (the trace-poor bench -32.1% -> -42.9%). The SCALE was a STATISTIC: `COREML_BOX_LONG_EDGE_UNCERTAINTY` was the detector's raw relative MAD read as a sigma by an inverse-variance blend, overstating the plate's weight 2.2x -- set 3 **+5.5% -> +3.6%**, set 1 +3.2% -> +2.2%, three ledger rows better and none worse. The plate itself was fine (205 frames, aspect 0.93, box 1.26 sigma small). The PEAK is open and 200ms is already the sweep's minimum across seven bench takes (+0.2% bias), so it is NOT the smoothing: only the two 10-30 takes read high (+14.4%, +19.8%) and those are the two where the plate decides the scale** **Round eight: on the DRIVES every clean bench reads 20-48% HIGH on the mean at the shared window (+32% / +47% on the 10-30 takes, +4 to +37% on the corpus) and the peaks +13 to +66%, while the whole upward phases (0.33-0.60s) match the sensor's 0.50-0.55s concentric -- the drive window at 0.04 trims a bench's slow start; at onset 0 set 1 reads +5.9%. Scatter dominates (Rule #5), so NO bench window is fitted this round; 0.03 / 200 / 1.6 are gone. The slow LAST press (2.6x the median duration) meets the edge rule fitted on descents and is dropped on 10-06, 10-02 and set 3 -- the bench's open RULE.** **Round eleven (11-06, 135x8 on 714, live): ROM -12.6% -- the STATURE yardstick read the supine span as a stature and convicted the shoulder ruler; with it standing down on a lying posture the take reads +2.5%. The plate: 724 samples at 0.90, locked 866 of 994, aspect 1.96, boxed 7% SMALL, admitting it costs 3.7 points (+6.2%), not shipped. Mean -8.6% / peak +6.9% at the shared record, the scale's error. Next: the next bench on the yardstick rule; the window after that.** |
+| Bench Press 135 | 10-30 x2 (set 1 on 703, set 3 on 705; plus the 09-29/09-30/10-02 corpus); **set 2's OVR screen arrived TWICE (0.69 / 0.97 / 14.9in) with NO Forge capture in either export** | **+3.2%** (36.7 vs 35.6) -- the first bench whose scale lands, and the first real take where the retrained detector's PLATE was the ruler (box 0.919 of expected, 86% of the blend); mean +10.3%, peak +18.6%. **Set 3 on 705: +5.5%** (39.4 vs 37.3), mean +12.1%, peak +25.3% -- the plate again, 86% of the blend, boxed 7.3% too SMALL, and both body rulers were BELOW the sensor | **round four: the bench's own window (driveOnsetFraction 0.03) and smoothing (200), costed on the four clean paired benches: mean bias +10.7% -> +6.3%, peak bias +7.2% -> +3.0%. 0.02 is the zero-bias window on those four and the NEXT step; held back because the one trace-poor bench (set 5, 09-29) pays 15 points there. **Round six: the MEAN was a BUG, not a fit -- the SET mean summed the whole phase's distance over the drive window's time (`romM`'s own comment names the pairing; the rep was fixed 10-06 and the set-level aggregation was not). Set 3 +10.4% -> +2.9%; seven of the twelve traced takes improve and the five that read LOW get 1-3 points worse, which is what removing a one-sided inflation does. It made the bench's own `driveOnsetFraction` 0.03 INERT on both 10-30 takes (+5.9% / +3.0% at 0.03 AND at 0.04) -- kept because it still earns its keep on the 09-29/09-30 corpus; 0.02 re-swept and still refused (the trace-poor bench -32.1% -> -42.9%). The SCALE was a STATISTIC: `COREML_BOX_LONG_EDGE_UNCERTAINTY` was the detector's raw relative MAD read as a sigma by an inverse-variance blend, overstating the plate's weight 2.2x -- set 3 **+5.5% -> +3.6%**, set 1 +3.2% -> +2.2%, three ledger rows better and none worse. The plate itself was fine (205 frames, aspect 0.93, box 1.26 sigma small). The PEAK is open and 200ms is already the sweep's minimum across seven bench takes (+0.2% bias), so it is NOT the smoothing: only the two 10-30 takes read high (+14.4%, +19.8%) and those are the two where the plate decides the scale** **Round eight: on the DRIVES every clean bench reads 20-48% HIGH on the mean at the shared window (+32% / +47% on the 10-30 takes, +4 to +37% on the corpus) and the peaks +13 to +66%, while the whole upward phases (0.33-0.60s) match the sensor's 0.50-0.55s concentric -- the drive window at 0.04 trims a bench's slow start; at onset 0 set 1 reads +5.9%. Scatter dominates (Rule #5), so NO bench window is fitted this round; 0.03 / 200 / 1.6 are gone. The slow LAST press (2.6x the median duration) meets the edge rule fitted on descents and is dropped on 10-06, 10-02 and set 3 -- the bench's open RULE.** **Round eleven (11-06, 135x8 on 714, live): ROM -12.6% -- the STATURE yardstick read the supine span as a stature and convicted the shoulder ruler; with it standing down on a lying posture the take reads +2.5%. The plate: 724 samples at 0.90, locked 866 of 994, aspect 1.96, boxed 7% SMALL, admitting it costs 3.7 points (+6.2%), not shipped. Mean -8.6% / peak +6.9% at the shared record, the scale's error. Next: the next bench on the yardstick rule; the window after that.** **Round twelve (11-06 evening, 135x9 on 716, file path): ROM +0.6% -- the PLATE the ruler from the foot of the bench at last (aspect 0.98, box 1.035, 73.9%; alone -0.3%). The camera found all nine; the logged eight trimmed rep 1 (oddness 1.0-1.05 at the shared floor), so the bench's own `minCountTrimOddness` 1.2 keeps it, no other bench count moving. Mean +26% / peak +24% with the scale inside 1%; the four paired benches disagree in sign at every window, so no window (Rule #5). Next: the next bench on a landed scale decides the window.** |
 | Pendlay Row 135 | 10-30 x2 (plus 10-09 x3 candidates) | set 1 **-10.8%** (46.9 vs 52.6): the depth ruler read -64% and the collapse carried half of it; set 2 on 703 **+52.8%** (78.4 vs 51.3): the grip yardstick threw out 2 of 3 rulers off a grip read NARROWER than the shoulders (0.755) and the shoulder span shipped alone; mean +24%/+90%, peak +6%/+69%; set 3 on 705 **+23.2%** (70.1 vs 56.9) with NOTHING rejected and no yardstick abstention -- a plate boxed 19.2% too small took 86% of the scale off 20 frames at 0.44 confidence with zero lock held | **round four: the row's own depthRulerUncertainty 0.6: set 1 -10.8% -> +0.6%. Round five: a yardstick that would convict a strict majority of the rulers stands down (`rejectImplausibleScales`), set 2 +52.8% -> **+2.85%** at the row's record; a RULE, nothing else in the corpus moves (the only other rejection is the 10-01 squat's plate at 1 of 5). **Round six: set 3 is the plate and NOT the yardstick rule (that rule was never engaged) -- the collapsed 3D pair was the closest witness at -7.3% and held 7% of the weight. The plate's unearned precision is the open lever.** Next: that, then the window -- the phase is short because the bottom of a Pendlay rep is a hand at the plates (set 2: 280 of 579 points a lone hand carried)** **Round eight: on the drives the row reads -16% / +39% / +10% on the mean -- a lone-hand trace either way round, pinned at what it reads and not fitted. 10-02 counts all ten rows on the drives (nine on the lowerings).** |
 | Barbell Shoulder Press 65 / 85 | 10-30 x3 (65x8 on 701, 85x8 on 703, 85x8 on 705). **ONE LIFT, not two** -- Scott, 2026-10-31: "The push press is the shoulder press, they don't have another name." The OVR's "Push Press" label is its own vocabulary | set 1 ROM **+1.3%** (63.0 vs 62.3 over the eight real reps; the OVR counted the lowering as a ninth), mean **-13.5%**, peak -7.2%; set 2 ROM -8.1% (28 dropouts, 206 wrist frames under the floor; the plate boxed 1.48x and kept out), mean -2.7%, peak +0.8%; set 3 on 705 ROM **+3.1%** (61.8 vs 59.9), mean **-2.4%**, peak +12.7% | **round five: the press's own driveOnsetFraction 0.08 (shared 0.04 opens the window on a strict press's dead-stop start): set 1 mean -13.5% -> -3.8%, set 2 -2.7% -> 0.0%, 10-02 push-press fixture -3.8% -> +2.9%; 0.10 is the NEXT step if the next press still reads low. Smoothing stays shared (200 costs the press peaks 6-8 points). **Round six: 0.08 HOLDS on a take it was not fitted on (mean -2.4%), so do NOT spend the 0.10 step -- round five's trigger was "if the next press still reads low" and -2.4% is not low. And set 3's axisForeshortening is 1.188 (1.56m of 2.89m along the lens, against the row's 1.007), so it is not a take to fit to.** 7 of 8 on ALL THREE sets: the 8th is folded into the downward re-rack -- a segmenter RULE, still open** **Round eight: on the DRIVES the press reads +3.5% / -2.7% / +2.4% on the mean at the SHARED 0.04 -- so 0.08 and 0.12 (fitted to lift a lowering that read low) are gone and the press reads the shared copy. Peaks +18 / +9 / +26% with 5 / 1 / 4 of 7 reps capped at 2.0x, recorded. And the missing rep is the FIRST press, merged with the clean into one 2.6m upward phase, not the eighth folded into the re-rack.** |
-| Dumbbell Shoulder Press 35 | 11-06 x1 (set 1 on 714; the OVR's "Push Press" x10, reps 1-2 the set-up) | **+47.0%** (85.6 vs 58.2): EVERY ruler high -- shoulder +84% (landmarks collapsed to 55% with the arms overhead; grip/shoulder 1.735 under the barbell rule's 1.85 ceiling), height +44% (ankle wandering 420px, wrists at the top edge), the collapsed 3D pair +21% (the bone median landed on the upper arm; torso and shin read the sensor within 2%); mean 1.52 vs 0.834, peak 2.78 vs 1.36, 7 of 8 | **round eleven: its own `biacromialToleranceFraction` 0.4 (+47.0% -> +41.8%; loosening the height ruler instead reads +49.5%). Next: 0.6 if it reads the same way; the 3D bone pick (shared) and the ankle wander are the mechanisms. The dumbbell class locked 30 of 741 frames at 0.60 -- weak, correct, recorded.** |
-| Single-Arm Dumbbell Row 70 | 11-06 x1 (set 1 on 714; the OVR's "Pendlay Row" x18: reps 1-2 the set-up, 3-10 one arm, 11-18 the other; which arm the camera saw is not recorded) | **21.9cm** vs 41.3 (first arm) / 47.1 (second): TEN reps for eight, the bar point the MIDPOINT of a braced hand and the working hand (537 carries, 84 midpoints) -- half the travel exactly; the object system asked for a PLATE and locked nothing | **round eleven: two RULES -- a unilateral lift is traced by its WORKING hand (`workingHandForUnilateral`, tagged `w`), and the equipment's own class comes before the posture fallback (dumbbell, not plate). No ledger row until a take is filmed on the rule (the stored trace is the midpoint). Next: film it on the new build, both sides separately once per-side filming ships.** |
+| Dumbbell Shoulder Press 35 | 11-06 x1 (set 1 on 714; the OVR's "Push Press" x10, reps 1-2 the set-up) | **+47.0%** (85.6 vs 58.2): EVERY ruler high -- shoulder +84% (landmarks collapsed to 55% with the arms overhead; grip/shoulder 1.735 under the barbell rule's 1.85 ceiling), height +44% (ankle wandering 420px, wrists at the top edge), the collapsed 3D pair +21% (the bone median landed on the upper arm; torso and shin read the sensor within 2%); mean 1.52 vs 0.834, peak 2.78 vs 1.36, 7 of 8 | **round eleven: its own `biacromialToleranceFraction` 0.4 (+47.0% -> +41.8%; loosening the height ruler instead reads +49.5%). Next: 0.6 if it reads the same way; the 3D bone pick (shared) and the ankle wander are the mechanisms. The dumbbell class locked 30 of 741 frames at 0.60 -- weak, correct, recorded.** **Round twelve (11-06 evening, 40x8 on 716, live, 8 of 8): +46.7% at the round-eleven record, set 1's signature exactly (height +47% at 76%, shoulder +76%, depth +60%, upper-arm bone +17%, torso/shin -3/-9%) and the 3D shin 0.333m against 0.44-0.49 everywhere else. Its own height 0.2 + depth 0.6: 46.7 -> 38.8%, set 1 41.8 -> 35.6%. `calibration.heightRuler` (where the ankle and the nose sat, a wrist at the top edge, the ankle's wander) ships in the export. Next: read it on the next take before the height ruler moves again.** |
+| Single-Arm Dumbbell Row 70 | 11-06 x1 (set 1 on 714; the OVR's "Pendlay Row" x18: reps 1-2 the set-up, 3-10 one arm, 11-18 the other; which arm the camera saw is not recorded) | **21.9cm** vs 41.3 (first arm) / 47.1 (second): TEN reps for eight, the bar point the MIDPOINT of a braced hand and the working hand (537 carries, 84 midpoints) -- half the travel exactly; the object system asked for a PLATE and locked nothing | **round eleven: two RULES -- a unilateral lift is traced by its WORKING hand (`workingHandForUnilateral`, tagged `w`), and the equipment's own class comes before the posture fallback (dumbbell, not plate). No ledger row until a take is filmed on the rule (the stored trace is the midpoint). Next: film it on the new build, both sides separately once per-side filming ships.** **Round twelve (11-06 evening, 70x8 on 716, live, ONE CAPTURE PER ARM, the first working-hand takes): first arm (right, by filming order) 38.1 vs 47.69 = -20.1% over 7 of 8 (two pulls merged into one 83.8cm phase, dropped by the outlier rule); second arm (left) 36.5 vs 42.45 = -14.0%, 8 of 8. The depth reading is the whole error (-35% / -41%) against a bone that reads the sensor (shin -1.8% on the first; the forearm -16% on the second, its shin +5.8%). Its own `depthRulerUncertainty` 0.6: -5.7% / -4.6%. Next: a declared side (the Left/Right buttons), the merged pull, the bone pick.** |
 
 **WHAT WORKS AND MUST NOT BE TOUCHED** (each proven against the sensor, each with a test):
 - THE CONCENTRIC IS THE WAY UP, AND THE TRACE'S y GROWS DOWNWARD (round eight, 11-05,
@@ -352,6 +366,21 @@ row identical to the hundredth. See "Second pass, 2026-10-29".
 - Fixing the row's set 2 by the grip-to-shoulder RATIO alone (abstain under ~0.9): a close-grip
   bench sits near 0.7-0.95 legitimately, so that threshold would switch the yardstick off on the
   one lift it was built for. The majority rule needs no threshold.
+
+**WHAT ROUND TWELVE POINTS AT, UNFITTED** (see "Round twelve, 2026-11-06 evening"):
+- The bench's window: +26% on the mean with the scale inside 1%, and the four paired benches
+  disagree in sign at every window swept. One more bench on a landed scale before any value.
+- The press's height ruler: `calibration.heightRuler` arrives with the next take. If
+  `ankleAtBottomEdgeFrames` is most of the take and the 3D shin is short again, the rule is "an
+  ankle on the edge is not an ankle" (abstain, never reject the take); if the ankle was in the
+  frame, the fault is the shoulder collapse and the bone pick, not the framing.
+- The 3D bone pick on an even count (the forearm over the shin on the row's second arm, -16%
+  against +5.8%; the upper arm over the torso on both presses): a shared rule, costed on the
+  corpus before it moves.
+- The dumbbell detector: candidates on all three dumbbell takes, a lock on none. The plate class
+  locks; the dumbbell class does not.
+- The row's merged pull (two pulls, no reversal, one 83.8cm phase) and the first takes with a
+  declared side.
 
 **WHAT ROUND ELEVEN POINTS AT, UNFITTED** (see "Round eleven, 2026-11-06"):
 - The dumbbell press's height ruler (+44%): the ankle landmark wandered 420px with the wrists at
@@ -6159,6 +6188,142 @@ the right body point, read 30% low off a smoothed trace at `effectiveHz` 40 with
 4. The squat's fourth and fifth paired take, read against the board's signature before any
    refit of the height or shoulder ruler.
 
+
+## Round twelve, 2026-11-06 evening: set 2 of the bench, the dumbbell press and the single-arm row on 716 -- the first row takes traced by the working hand
+
+Scott filmed set 2 of each on build 716 (`af7d4d3`, 75in on file) between the ten-pill screenshot
+and the set-pill redesign, and sent the three OVR screens and the export. "Same as before for
+'push press' which is our shoulder press, ignore the first 2 reps, bench was fine I did 9 reps on
+purpose." "Also camera didn't catch 9? Maybe? When I upload check." "For 'pendlay row' which is
+our single arm row, skip rep 1 and rep 10 to the ovr, as those two are setup reps." And the
+standing order: "Remember at least one fix per exercise, we need to get as close to 0% to the OVR,
+even if it's a .001 change, we are getting very close with bench." The OVR screens: bench 135x9
+(0.68 / 0.99 / 13.5in over nine); "Push Press" 40lb x10, reps 3-10 the eight (0.706 / 1.13 /
+22.225in); "Pendlay Row" 70lb x18, reps 2-9 the first arm (0.9575 / 1.506 / 18.775in = 47.69cm) and
+11-18 the second (0.894 / 1.408 / 16.713in = 42.45cm). Ground truth: `OVR_*_SET2_2026_11_06` in
+`tracker-ground-truth.ts`; fixture `__fixtures__/ovr-2026-11-06-set2-export.json`; ledger rows
+`2026-11-06-bench-press-set-2`, `2026-11-06-dumbbell-shoulder-press-set-2`,
+`2026-11-06-single-arm-dumbbell-row-first-arm` / `-second-arm`.
+
+### The three systems, take by take
+
+| take | body tracker | object system | overwatch |
+|---|---|---|---|
+| Bench Press (file path; the live analysis fell back at coverage 0.85) | 515 both-hand points, 45 carries | **plate**, 33 samples at 0.76, aspect 0.98, lock held 224 of 840, box **1.035** of expected, 73.9% of the blend | judged 840, frozen 0, 456 body-suspect |
+| Dumbbell Shoulder Press (live) | 646 both-hand, 59 carries | **dumbbell**, 13 candidates, lock held **0** of 776 | judged 776, frozen 0, 597 body-suspect |
+| Single-Arm Row, first arm (set 3, live) | **429 working-hand points, 0 midpoints, 0 carries** (`unilateralWorkingHand: right`) | **dumbbell** (the round-eleven fix on its first outing), 22 candidates, lock held 0 of 540 | judged 540, frozen 0 |
+| Single-Arm Row, second arm (set 4, live) | 442 working-hand points (`left`) | dumbbell, 1 candidate, lock held 0 of 561 | judged 561, frozen 0, 344 body-suspect |
+
+All three ran on all four takes; the object system asked for the right class on every one. The
+detector's dumbbell class saw candidates on all three dumbbell takes and held a lock on none of
+them, where its plate class locked 224 frames and was the bench's ruler -- the detector's open item
+on a dumbbell, recorded. The arms: the export lists captures newest first, so the phone's set 3 was
+filmed first and is the OVR's reps 2-9; the working-hand rule chose the RIGHT wrist on it and the
+LEFT on set 4. Neither row carries a declared side (the Left/Right buttons are held on the branch),
+so the arm is the order's and the rule's, not the athlete's tap.
+
+### Bench 135x9: +0.6% on range of motion, the plate the ruler, and the ninth rep trimmed by the count
+
+**The camera found all nine.** Replayed from the stored trace with the logged count removed, or at
+nine, the set is nine reps at 34.5cm; as the phone ran it with 8 logged, the count-trim removed rep
+1, whose oddness scored between 1.00 and 1.05 (amplitude 34.2 against a 34.7 median, window 0.40s
+against 0.47) at the shared floor of 1. A rep that scores like the others is not a rack move, and
+the floor is the one knob that says so: **the bench's own `minCountTrimOddness` 1.2** in
+`FITTED_OVERRIDES`. At 1.05 and every value to 3 the set reads nine; costed on every stored bench
+take (the eleven files in `count-trim-never-empties-a-set`, the re-rack, the settle and the 10-06
+un-rack tests) no count moves, because the settles score 2.1 and 2.3 and the un-rack 1.39 / 1.61.
+A count rule and not a scale or velocity number, so no ledger row moves.
+
+**The scale landed because the plate was the ruler.** Range of motion 34.5 against 34.29
+(**+0.6%**): the plate boxed at aspect 0.98 (a disc seen face-on from the foot of the bench --
+round eleven's set 1 saw it at 1.96, 59 degrees off, and refused it), `plateBoxToExpectedRatio`
+1.035, 73.9% of the blend, and alone it reads **-0.3%**; the collapsed 3D pair +0.5%, the shoulder
++5.8%. The first bench from the foot of the bench whose plate was admitted.
+
+**The velocities are the open item and no window is fitted.** Over the nine, mean 0.86 against 0.68
+(+26%), peak 1.23 against 0.99 (+24%), rep for rep 0.92 / 0.91 / 0.99 / 0.85 / 0.91 / 0.92 / 0.94 /
+0.79 / 0.69 against 0.73 / 0.73 / 0.75 / 0.69 / 0.67 / 0.71 / 0.69 / 0.72 / 0.50. With the scale
+inside 1% the drive reads a quarter high on every rep. The window sweep disagrees in SIGN across the
+four paired benches with a mean: this take +25%, 11-06 set 1 -7%, 10-30 set 1 +32%, set 3 +47% at
+the shared 0.04, and +15 / -26 / +6 / +41 at 0; the smoothing moves the peak 1.25 / 1.22 / 1.19 at
+130 / 165 / 200. Scatter the size of the bias (Rule #5), so the window waits for the next bench on
+a landed scale. `axisForeshortening` 1.398 on this take, recorded.
+
+### Dumbbell Shoulder Press 40x8: +46.7% again, every ruler high, and the height ruler's framing goes into the export
+
+8 of 8 this time. Range of motion 82.8 against 56.45 (**+46.7%** at the round-eleven record), the
+same signature as set 1 (+41.8% at that record): the height ruler at 76% of the blend reads +47%,
+the shoulder +76% (span 124 units, spread 0.043, grip/shoulder 1.66 under the ceiling so the grip
+rule is silent), the depth instrument +60%, the 3D pair's upper-arm bone +17%; the torso and shin
+bones read -3% / -9%. **And the 3D shin is 0.333m on this take against 0.44-0.49 on every other take
+in the two 11-06 exports** -- the 3D skeleton's ankle sits up the leg, which is what a 2D ankle at
+or past the bottom edge does to a nose-to-ankle span. That is a hypothesis the export cannot prove:
+it carries neither the frames nor where the landmarks sat.
+
+**So the framing goes into the export: `calibration.heightRuler`** (`heightRulerFraming` in
+`pose-tracking.ts`, declared in the schema, printed as "Height ruler framing" on the report): where
+the ankle sat above the bottom edge and the nose below the top (medians, as fractions of the frame),
+how many frames put the ankle or the nose ON an edge (within 3%) and a wrist at the top edge or
+above the nose, how far the ankle midpoint wandered (p95 - p5), and the nose-to-ankle span the ruler
+reads from (median and the extended-frame percentile). Records and gates nothing; the next press
+says whether the ankle was in the frame.
+
+**The small step, both sets the same way: the press's own `heightRulerUncertainty` 0.2 and
+`depthRulerUncertainty` 0.6.** Swept at the record: height 0.2 alone 46.7 -> 45.9 / 41.8 -> 38.2;
+depth 0.6 alone 46.7 -> 43.6 / 41.8 -> 40.7; both **46.7 -> 38.8 / 41.8 -> 35.6**, with 0.15 and 0.3
+bracketing the 0.2. The height ruler loses the tighter claim it never earned on this lift (the 10-23
+note's own argument: it and the shoulder are body spans off the same landmarks), and the depth
+instrument is stated at 0.6 exactly as the RDL and the Pendlay Row state it. Every per-lift
+weighting was swept and every other one is a wash or worse (body_3d 0.3 reads higher, the shoulder
+at 0.6 moves a point). Still +36-39%: the lift is framing-limited, and the mean (+44%) and peak
+(+62%) are the scale's.
+
+### Single-Arm Dumbbell Row 70x8, two arms: -20.1% and -14.0%, the depth reading the whole error
+
+The first row takes traced by the working hand (round eleven's rule): 429 and 442 working-hand
+points, no midpoints, no carries. **The first arm (set 3, right hand)** read 38.1cm against 47.69
+(**-20.1%**) over 7 of 8: the sensor's reps 5 and 6 (18.0 and 17.4in) arrive as ONE 83.8cm upward
+phase on a trace with a 1.23s hole (cadence 0.868), flagged by the outlier rule and dropped from the
+range -- the segmenter cannot split two pulls with no reversal between them, a trace fault,
+recorded in `KNOWN_UNDERCOUNTS`. **The second arm (set 4, left hand)** read 36.5 against 42.45
+(**-14.0%**) over 8 of 8.
+
+On both the depth reading is the whole error: -35% and -41% of the scale the sensor requires,
+collapsed at equal weight with a 3D bone that reads **-1.8%** (the shin, set 3) and -16% (the
+forearm, set 4; its shin reads +5.8%, its upper arm -31%). The shoulder span was refused on set 3
+(14.6 units side-on, `implausible_span`) and loosened to 0.571 by the grip rule on set 4
+(grip/shoulder 2.90), where it carries 11%. **The row's own `depthRulerUncertainty` 0.6** -- the
+statement the RDL and the Pendlay Row carry about the same instrument on a hinge -- reads the first
+arm **-5.7%** and the second **-4.6%** (0.4: -9.6 / -7.1). The 11-06 set-1 midpoint take, which has
+no ledger row, moves 1.983 -> 1.874 (-5.5%), its cost. The bone pick (the forearm over the shin on
+set 4) is a shared rule and is recorded, not moved: with the shin the second arm would read +12%.
+Velocities at the shared record: mean -9% / -9%, peak -2% / -15%, the scale's.
+
+The ledger gains `shoulderGripLoosenedFraction` for the second arm's row: the uncertainty the grip
+yardstick loosened the span to on the day is a fact about the take in exactly the way the spread is,
+a sealed row carries no grip to re-derive it, and the live replay states max(floor, spread, this).
+
+### What this round changes, and what it does not
+
+- `FITTED_OVERRIDES`: Bench Press `minCountTrimOddness` 1.2; Dumbbell Shoulder Press
+  `heightRulerUncertainty` 0.2 and `depthRulerUncertainty` 0.6 (beside its 0.4 shoulder floor);
+  Single-Arm Dumbbell Row `depthRulerUncertainty` 0.6. Each with its sentence in
+  `FITTED_OVERRIDE_EVIDENCE`; no shared constant moves; no other lift's record moves (pinned in
+  `ovr-2026-11-06-set2-every-lift-reads-only-its-own-record.test.ts`).
+- Ledger: four rows added; the 11-06 press set 1 row's live value moves 41.76 -> 35.62% under the
+  press's new record (the diff is the deliverable, as that file says).
+- The export: `calibration.heightRuler`, the framing diagnostic, on every bar-tracker take.
+- Not moved: the bench's window (scatter the size of the bias), the 3D bone pick (shared), the
+  dumbbell detector (no lock on three takes; the plate class is fine).
+
+### Next
+- **Bench:** the next bench on a landed scale decides the window; the four paired benches disagree
+  in sign today.
+- **Press:** read `calibration.heightRuler` on the next take -- `ankleAtBottomEdgeFrames`,
+  `ankleWanderUnits`, `noseToAnkleSpanExtendedUnits` against the 3D shin -- before the height
+  ruler moves again. If the ankle was in the frame the fault is elsewhere.
+- **Row:** the first takes with a DECLARED side (the Left/Right buttons), and whether the working
+  hand agrees with it; the merged-pull fault on the first arm (two pulls, no reversal).
 
 ## Round eleven, 2026-11-06: bench, dumbbell shoulder press and single-arm dumbbell row on 714 -- the first dumbbell lifts beside the sensor
 

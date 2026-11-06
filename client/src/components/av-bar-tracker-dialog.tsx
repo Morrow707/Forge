@@ -66,6 +66,8 @@ import {
   lowVisibilityWristConfidence,
   calibrateFromFrames,
   calibrationMethodBreakdown,
+  heightRulerFraming,
+  type HeightRulerFraming,
   scaleWorldLandmarks,
   COREML_BOX_LONG_EDGE_UNCERTAINTY,
   coreMlBoxUncertaintyForConfidence,
@@ -1133,7 +1135,7 @@ export function AvBarTrackerDialog({
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
     forSetNumber: number,
   ) {
-    const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f) }));
+    const calibrationInput = rawFrames.map((f) => ({ worldLandmarks: visionJointsToWorldLandmarks(f), frameHeight: f.frameHeight }));
     // Athlete-height calibration measures head-to-ankle and calls it standing height. That
     // identity requires an UPRIGHT body, so for a movement performed lying down it is invalid
     // at every camera angle -- there is no prop position that makes it correct.
@@ -1619,6 +1621,7 @@ export function AvBarTrackerDialog({
       tracePointsDroppedOffAxis?: number;
       posture?: string;
       measuredPosture?: { torsoFromVerticalDeg: number | null; heightToShoulderRatio: number | null; framesUsed: number };
+      heightRuler?: HeightRulerFraming;
       referenceObject?: ReferenceObjectRead | null;
       gripWidthPx?: number | null;
       plateRejectedAgainstGrip?: boolean;
@@ -1631,6 +1634,9 @@ export function AvBarTrackerDialog({
       // A take where these disagree is a take whose rulers were chosen on the wrong premise.
       posture,
       measuredPosture,
+      // Where the height ruler's two landmarks sat in the frame (heightRulerFraming): the press's
+      // +47% height ruler on 2026-11-06 could not be attributed without it. Records, gates nothing.
+      heightRuler: heightRulerFraming(calibrationInput),
       scaleCandidates: scaleCandidatesWithWeights,
       scaleOutliers: scaleVerdict.outliers.map((o) => ({
         source: o.source,
