@@ -260,6 +260,30 @@ describe("a reference object has to be the right shape AND in the right place", 
     expect(v.aspectRatio).toBeCloseTo(1.5, 5);
   });
 
+  it("takes the aspect ceiling from the caller since 2026-11-06, with the shared constant as the default", () => {
+    // The 11-06 bench's plate, as the export carries it: 60.85 x 119.96 px, a disc seen about 59
+    // degrees off its face from the foot of the bench. Refused at the shared 1.7; a lift that
+    // states 2.0 for itself (cameraTunablesFor(...).values.maxPlateAspectRatio) admits it. The
+    // plumbing shipped and the bench's own ceiling did NOT -- that plate was 7% small and admitting
+    // it costs the bench 3.7 points (the ledger row 2026-11-06-bench-press-set-1) -- so every
+    // record still reads 1.7 and this case holds the default and the parameter apart.
+    const benchPlate = { ...plateOnTheBar, medianWidthPx: 60.85, medianHeightPx: 119.96 };
+    const shared = check(benchPlate);
+    expect(shared.aspectRatio!).toBeCloseTo(1.9714, 3);
+    expect(shared.reasons).toContain("aspect_ratio");
+    const own = referenceObjectVerdict({
+      shape: benchPlate,
+      anchor: handAnchor(LEFT_WRIST, RIGHT_WRIST),
+      yardstick: yardstick(),
+      frameWidth: W,
+      frameHeight: H,
+      maxPlateAspectRatio: 2.0,
+    });
+    expect(own.reasons).not.toContain("aspect_ratio");
+    // An explicit ceiling equal to the constant is the same verdict as none.
+    expect(referenceObjectVerdict({ shape: benchPlate, anchor: null, yardstick: null, frameWidth: W, frameHeight: H, maxPlateAspectRatio: MAX_PLATE_ASPECT_RATIO }).reasons).toContain("aspect_ratio");
+  });
+
   it("rejects the rack upright that started all this", () => {
     // The read in the diagnostics that prompted the audit boxed at 3.12 -- a post, not a disc.
     const v = check({ ...plateOnTheBar, medianWidthPx: 593.94, medianHeightPx: 190.2 });

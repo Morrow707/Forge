@@ -381,6 +381,7 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0 },
   "Back Squat": { heightRulerUncertainty: 0.12, driveOnsetFraction: 0, velocitySmoothingMs: 130 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
+  "Dumbbell Shoulder Press": { biacromialToleranceFraction: 0.4 },
 };
 
 /** THE VELOCITY OVERRIDES REMOVED ON 2026-11-05, AND WHY -- kept as data so the next reader does
@@ -497,6 +498,25 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "ruler reads LOW where the RDL's reads HIGH, which is exactly why neither lift's record states a " +
     "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
     "moves, since each reads its own record.",
+  "Dumbbell Shoulder Press":
+    "2026-11-06, round eleven, build 714 beside the OVR (35lb x8, live path, 7 of 8; the first dumbbell " +
+    "lift ever filmed beside the sensor). biacromialToleranceFraction 0.2 -> 0.4 on this lift only. The " +
+    "take shipped 2.980e-3 against the 2.027e-3 the sensor requires (range of motion 85.6cm against " +
+    "58.2, +47%) and every ruler read HIGH: the shoulder ruler 3.721e-3 (+84%), the height ruler " +
+    "2.928e-3 (+44%, the ankle landmark wandering 420px with the wrists at the top edge of the frame), " +
+    "the collapsed 3D pair 2.445e-3 (+21%, the bone median landing on the upper arm at +13% where the " +
+    "torso and shin read the sensor within 2%). The shoulder is the worst of them and the one with a " +
+    "mechanism already on record: its 117.7-unit span is 0.239m at the sensor's scale against this " +
+    "athlete's 0.438m biacromial breadth, the landmarks collapsed to 55% with the arms overhead -- the " +
+    "same collapse the grip rule of 2026-10-09 caught on both barbell presses (grip/shoulder 2.06 -> " +
+    "the ruler +49%) and misses here because a dumbbell grip is narrower (1.735 against the 1.85 " +
+    "ceiling), not because the shoulders read better. At 0.4 the shoulder carries 4.8% of the blend " +
+    "instead of 16.7% and the take reads +41.8% (2.874e-3); 0.6 reads +40.6%, diminishing, so 0.4 is " +
+    "the small step. A floor, so it can only loosen (Rule #1). What is left is the height ruler and the " +
+    "3D pick, both mechanisms and both recorded in the notes rather than fitted on one take: loosening " +
+    "the height ruler instead was swept and makes the take WORSE (0.2 -> +49.5%), because the weight it " +
+    "gives up lands on the shoulder. Replayed on every ledger row: no other identity reads this record, " +
+    "so none moves.",
 };
 
 /** Where each of an identity's numbers came from. The report prints this, so a reader can tell

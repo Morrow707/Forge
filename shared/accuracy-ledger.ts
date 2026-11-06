@@ -75,6 +75,14 @@ export type LedgerRow = {
    *  2026-10-05 means today's pipeline would not admit one at all. A refit and a relabel move a
    *  take by similar amounts and are not the same event. */
   readonly heightRulerVotedAsFilmed: boolean;
+  /** A CANDIDATE THE PHONE REFUSED BEFORE THE BLEND, AND WHICH YARDSTICK REFUSED IT. Listed in
+   *  `candidates` (it was measured) and excluded from the as-filmed blend (it never voted), so the
+   *  row still replays to the shipped scale. The live replay re-admits a `height` refusal on a
+   *  posture where the stature yardstick no longer runs (since 2026-11-06 it runs only where the
+   *  height ruler may vote, `postureAllowsHeightCalibration`): the 11-06 bench's shoulder ruler,
+   *  convicted by a supine athlete's "stature" of 163.6in, is the case. A `grip` refusal stands
+   *  either way, because a sealed row has no span to re-judge it with. */
+  readonly rejectedAsFilmed?: readonly { source: LedgerRulerSource; yardstick: "height" | "grip"; impliedHeightIn?: number }[];
   /** THE SHOULDER SPAN'S OWN SCATTER ON THIS TAKE, where the export carries it
    *  (`shoulderRuler.spanSpreadFraction`). A property of the TAKE, not a constant: the shoulder
    *  ruler states `max(floor, spread, gripFloor)`, and a replay through the live floor alone would
@@ -128,9 +136,11 @@ export function errorPctAgainstSensor(blendedX1000: number, row: LedgerRow): num
 
 /** The rulers a row actually blended, after the height ruler's own admission. */
 export function candidatesAsFilmed(row: LedgerRow): readonly LedgerCandidate[] {
-  return row.heightRulerVotedAsFilmed
+  const refused = new Set((row.rejectedAsFilmed ?? []).map((r) => r.source));
+  return (row.heightRulerVotedAsFilmed
     ? row.candidates
-    : row.candidates.filter((c) => c.source !== "height");
+    : row.candidates.filter((c) => c.source !== "height")
+  ).filter((c) => !refused.has(c.source));
 }
 
 /* THE ROWS.
@@ -984,6 +994,96 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "take -- the cost of the rule, recorded. The set-up phase before rep 1 (89cm from the floor, " +
       "0.9s of travel, then a 1.6s stand) is cut at its rest too and trimmed by the athlete's count; " +
       "with no count logged it would have been reported as a ninth rep.",
+  },
+  /* ROUND ELEVEN, 2026-11-06, build 714 (5003fef): the bench, and the first two DUMBBELL lifts ever
+   * filmed beside the OVR. The Single-Arm Dumbbell Row (70lb x8, OVR "Pendlay Row" x18 with reps 1-2
+   * the set-up and the other arm's eight after) has NO ROW HERE, on purpose: its reported range
+   * (21.9cm against the sensor's 41.3 on the first arm and 47.1 on the second -- which arm the camera
+   * saw is not recorded, which is what per-side filming is for) was built from the MIDPOINT of a
+   * braced hand and the working hand (537 lone-hand carries, 84 midpoints, 11 bare), which halves the
+   * travel exactly, so a row would score its scale against a range that half-measured the hand -- a
+   * point-rule defect, not a scale one, and `shippedUnderDefect` is a statement about the scale. The
+   * fix is the working-hand rule in bar-tracking.ts (workingHandForUnilateral); the next row take,
+   * filmed on it, gets the row. Its candidates for the record: body_3d (upper arm) 1.75979, depth
+   * 2.33829, shoulder_width 1.93722, all at 0.2, shipped 1.982872; doubled under a still braced hand
+   * the range reads 43.8cm, between the two arms. */
+  {
+    id: "2026-11-06-bench-press-set-1",
+    date: "2026-11-06",
+    build: 714,
+    exercise: "Bench Press",
+    filmedOnCommit: "5003fef",
+    candidates: [
+      { source: "body_3d", scaleX1000: 3.17939 },
+      { source: "depth", scaleX1000: 2.93212 },
+      { source: "shoulder_width", scaleX1000: 4.11144 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: false,
+    // The stature yardstick read a SUPINE athlete's nose-to-ankle span (1011 units) as a stature
+    // and convicted the shoulder ruler at an implied 163.6in; at the scale the sensor requires that
+    // same span is a 139-inch man, so the yardstick was the thing that was wrong. It stands down on
+    // a lying posture since this round, which is what re-admits the shoulder in the live replay.
+    rejectedAsFilmed: [{ source: "shoulder_width", yardstick: "height", impliedHeightIn: 163.6 }],
+    shoulderSpanSpreadFraction: 0.099,
+    shippedScaleX1000: 3.053252770384875,
+    reportedRomCm: 29.3,
+    sensorRomCm: 33.53,
+    liveErrorPct: 2.53,
+    notes:
+      "135x8 beside the OVR, live path, 8 of 8, filmed from the foot of the bench as every bench in " +
+      "this repo. Range of motion -12.6% as filmed: the shoulder ruler (+17.8% against the sensor) was " +
+      "refused by the stature yardstick and the scale fell to the collapsed 3D pair alone (-12.5%); " +
+      "with the yardstick standing down on a lying posture the two bracket the sensor and read +2.5%. " +
+      "THE PLATE WAS FOUND AND MEASURED SMALL: 724 samples at 0.90 mean confidence, the lock held on " +
+      "866 of 994 frames, boxed 60.85 x 119.96 px (aspect 1.96, a disc seen about 59 degrees off its " +
+      "face) and refused on aspect_ratio alone; plateBoxToExpectedRatio 0.814, plateScaleIfAdmitted " +
+      "3.751e-3 against the 3.491e-3 the sensor requires (+7.4%), a box 7% too SMALL -- the direction " +
+      "the 10-31 note predicted for the retrained detector. Admitting it at a per-lift aspect ceiling " +
+      "of 2.0 was built, costed and NOT shipped: with the shoulder admitted it reads +6.2% (the plate " +
+      "at 73.9% of the blend) against +2.5% without, and with the stature yardstick still running the " +
+      "plate is convicted by it too (implied 149in), so the ceiling alone moves nothing. Velocities at " +
+      "the shared record: mean 0.64 against 0.70 (-8.6%), peak 1.08 against 1.01 (+6.9%), rep for rep " +
+      "0.60 / 0.66 / 0.68 / 0.65 / 0.66 / 0.65 / 0.60 / 0.60 against 0.71 / 0.73 / 0.74 / 0.73 / 0.72 / " +
+      "0.72 / 0.66 / 0.64 -- the mean's error is the scale's -12.6% and a window reading long, which the " +
+      "corrected scale alone would take to about +4%.",
+  },
+  {
+    id: "2026-11-06-dumbbell-shoulder-press-set-1",
+    date: "2026-11-06",
+    build: 714,
+    exercise: "Dumbbell Shoulder Press",
+    filmedOnCommit: "5003fef",
+    candidates: [
+      { source: "body_3d", scaleX1000: 2.29978 },
+      { source: "depth", scaleX1000: 2.60016 },
+      { source: "height", scaleX1000: 2.9282 },
+      { source: "shoulder_width", scaleX1000: 3.72107 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, height: 0.1, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: true,
+    shoulderSpanSpreadFraction: 0.088,
+    shippedScaleX1000: 2.979875841056815,
+    reportedRomCm: 85.6,
+    sensorRomCm: 58.24,
+    liveErrorPct: 41.76,
+    notes:
+      "35lb x8 beside the OVR (its \"Push Press\" x10, reps 1-2 the set-up and ignored on Scott's word), " +
+      "live path, 7 of 8, the first dumbbell press ever paired. Range of motion +47.0% as filmed and " +
+      "EVERY ruler high: the shoulder ruler +84% (a 117.7-unit span that is 0.239m at the sensor's scale " +
+      "against this athlete's 0.438m biacromial breadth -- the landmarks collapsed to 55% with the arms " +
+      "overhead, the collapse the 10-09 grip rule catches on a barbell press at grip/shoulder 2.06 and " +
+      "misses at a dumbbell's 1.735), the height ruler +44% (noseToAnkleFrames 418 of 741, the ankle " +
+      "landmark wandering 420px while the wrists sat at the top edge of the frame), the collapsed 3D " +
+      "pair +21% (the bone median landed on the upper arm, 2.300e-3, where the torso 2.060e-3 and shin " +
+      "2.004e-3 read the sensor within 2%; forearm 1.522e-3, femur 2.571e-3, shoulderWidth 2.542e-3). " +
+      "The per-rep wrist travel in the body witness is 287px, which at the torso's scale IS the sensor's " +
+      "range: the travel is right and the 2D rulers are wrong. The press's own biacromialToleranceFraction " +
+      "0.4 (FITTED_OVERRIDE_EVIDENCE) reads it +41.8%; loosening the height ruler instead reads +49.5%, " +
+      "because the weight lands on the shoulder. Velocities at the shared record: mean 1.52 against " +
+      "0.834 and peak 2.78 against 1.36, the scale's +47% and nothing else to read until the scale is " +
+      "right. Object system: class dumbbell (correct), 100 CoreML frames at 0.60, the lock held on 30 " +
+      "of 741 with 70 breaks on low confidence; overwatch judged every frame, 69 body-suspect.",
   },
 ];
 

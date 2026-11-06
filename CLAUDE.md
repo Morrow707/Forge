@@ -3212,6 +3212,60 @@ halves before splitting anything else:
   See docs/camera-tracking-notes.md, "The RDL's +12.0% is the 3D-pose collapse". Calibration work:
   uploaded on commit.
 
+- **ROUND ELEVEN, 2026-11-06: THE FIRST DUMBBELL LIFTS BESIDE THE SENSOR -- A SUPINE SPAN IS NOT A
+  STATURE, A DUMBBELL LIFT ASKS FOR A DUMBBELL, AND A UNILATERAL LIFT IS TRACED BY ITS WORKING
+  HAND.** Bench Press 135x8, Dumbbell Shoulder Press 35x8 and Single-Arm Dumbbell Row 70x8 on 714;
+  Scott: "at least one fix per lift ... this is the first time we've ever tested dumbbell exercises
+  though. So we need to check the object detection, are the two camera systems and the ai overwatch
+  working together?" All three systems ran on all three takes (overwatch judged every frame, frozen
+  0; `recording.overwatch` is where it rides); the object system asked for the right class on the
+  bench and the press and the WRONG one on the row.
+  **BENCH -12.6%: THE STATURE YARDSTICK CONVICTED THE ONE RULER THAT WAS RIGHT.**
+  `rejectImplausibleScales` read a SUPINE athlete's nose-to-ankle span (1011 units -- a 139-inch
+  man at the scale the sensor requires) as a stature and threw out the shoulder ruler (+17.8%,
+  implied 163.6in), leaving the collapsed 3D pair alone at -12.5%; the three together read **+2.5%**.
+  The 10-06 rule "the body-length yardstick is consulted only where a body length IS a stature" was
+  coded as `bent_over` alone; it runs exactly where the height RULER may vote now
+  (`postureAllowsHeightCalibration`), a shared RULE that only ever ADMITS, and the only take in the
+  corpus it moves is this bench. **The plate was found (724 samples at 0.90, locked 866 of 994),
+  boxed 7% SMALL (aspect 1.96, from the foot of the bench), and admitting it was built, costed and
+  NOT shipped**: `referenceObjectVerdict` takes a per-lift `maxPlateAspectRatio` now (defaulted, so
+  nothing moves), but at 2.0 the plate carries 73.9% of the blend and reads the take +6.2% against
+  +2.5% without it. Recorded under "known not to work".
+  **DUMBBELL PRESS +47%: EVERY RULER HIGH.** Shoulder +84% (the landmarks collapsed to 55% of
+  breadth with the arms overhead; the 10-09 grip rule catches this on a barbell press at
+  grip/shoulder 2.06 and misses a dumbbell's 1.735), height +44% (the ankle wandered 420px with the
+  wrists at the top edge), the collapsed 3D pair +21% (the even-count bone median landed on the
+  upper arm at +13% where the torso and shin read the sensor within 2%). The body witness's per-rep
+  wrist travel IS the sensor's range at the torso's scale, so the hands are right and the 2D rulers
+  are wrong. The small per-lift step: `FITTED_OVERRIDES["Dumbbell Shoulder Press"]
+  .biacromialToleranceFraction` 0.4 (+47.0 -> +41.8%); loosening the height ruler instead was swept
+  and reads WORSE (+49.5%), because the weight lands on the shoulder. 7 of 8, in `KNOWN_UNDERCOUNTS`
+  until the scale lands.
+  **SINGLE-ARM ROW: TEN REPS AT HALF THE TRAVEL, TWO RULES.** (1) The dialog resolved its CoreML
+  class posture-first, so a `bent_over` lift asked for a PLATE whatever it held -- 14 frames at
+  0.37, no lock on 963 -- while the detector has a dumbbell class; the equipment's own class comes
+  first now, "plate" is the fallback for an implement with none (Rule #4). (2) `barPointFromSides`
+  built the MIDPOINT of a braced hand and the working hand (537 carries, 84 midpoints), which halves
+  the travel exactly: 21.9cm against the sensor's 41.3 (first arm) / 47.1 (second). On a lift whose
+  `laterality` is `unilateral` the point is the WORKING hand (`workingHandForUnilateral`: the wrist
+  with the larger 5th-95th percentile travel, decided once per take), never averaged, never carried,
+  tagged `w`, counted in `trace.barPointFromWorkingHand` / `unilateralWorkingHand` (declared in the
+  schema). Bilateral takes are bit-identical. **It cannot be replayed on this take** (the stored
+  trace and the body witness are both the midpoint), so the row has NO ledger row this round -- a
+  row would score a correct scale against a range that half-measured the hand -- and the next row
+  take filmed on the rule is its test. **Which arm the camera saw is not recorded**; the sensor rode
+  the dumbbell across both arms and they differ by 6cm, which is what Scott's per-side filming ask
+  is for ("every set, every rep, every unilateral exercise needs to have a way to film both sides
+  separately"), the next piece of work.
+  Tests: `a-supine-span-is-not-a-stature`, `a-dumbbell-lift-asks-for-a-dumbbell`,
+  `a-unilateral-lift-is-traced-by-its-working-hand`, `ovr-2026-11-06-every-lift-reads-only-its-own-record`,
+  the aspect-parameter case in `tracker-arbiter.test.ts`; two ledger rows (the bench's carrying
+  the new `rejectedAsFilmed`, which the replay re-admits where the stature yardstick no longer
+  runs); three ground-truth constants; the fixture `ovr-2026-11-06-export.json`. See
+  docs/camera-tracking-notes.md, "Round eleven". Calibration work, HELD on the development branch
+  with the reps-keypad fix on Scott's word ("Build but queue I'm testing camera now");
+  `verify_build` then `beta` when he lifts it.
 - **ROUND TEN, 2026-11-05: THE RDL'S EIGHTH REP WAS A HOLD THE SEGMENTER COULD NOT SEE PAST, ON
   THREE TAKES, AND SET 1'S "REP 1" WAS THE SET-UP.** Set 2 of all three lifts on 712 (Back Squat
   135x5, RDL 135x8, box jump x5), filmed between the morning's set 1 and the autosave that wiped

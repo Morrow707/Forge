@@ -108,9 +108,18 @@ function asFilmedX1000(row: LedgerRow): number {
  *  relabel moves a take as far as a refit does and is a different event. */
 function liveX1000(row: LedgerRow): number {
   const heightVotesToday = postureAllowsHeightCalibration(postureForExercise(row.exercise));
-  const candidates = heightVotesToday
+  // THE STATURE YARDSTICK RUNS EXACTLY WHERE THE HEIGHT RULER VOTES (2026-11-06), so a candidate it
+  // convicted on a posture where it no longer runs is admitted today; a grip refusal stands, since
+  // a sealed row carries no span to re-judge it with. See LedgerRow.rejectedAsFilmed.
+  const stillRefused = new Set(
+    (row.rejectedAsFilmed ?? [])
+      .filter((r) => r.yardstick === "grip" || heightVotesToday)
+      .map((r) => r.source),
+  );
+  const candidates = (heightVotesToday
     ? row.candidates
-    : row.candidates.filter((c) => c.source !== "height");
+    : row.candidates.filter((c) => c.source !== "height")
+  ).filter((c) => !stillRefused.has(c.source));
   return blendX1000(candidates, (s) => liveUncertainty(s, row.exercise, row));
 }
 

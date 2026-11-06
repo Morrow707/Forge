@@ -9959,6 +9959,8 @@ export const trackingDiagnosticsSchema = z.object({
       barPointFromEquipmentRejected: z.number().optional(),
       barPointFromShoulders: z.number().optional(),
       barWitness: z.enum(["shoulders", "hands"]).optional(),
+      unilateralWorkingHand: z.enum(["left", "right"]).nullable().optional(),
+      barPointFromWorkingHand: z.number().optional(),
       equipmentVoteLabel: z.enum(["barbell", "plate"]).nullable().optional(),
       equipmentAgreementFrames: z.number().optional(),
       equipmentOffsetSpreadGrips: z.number().nullable().optional(),

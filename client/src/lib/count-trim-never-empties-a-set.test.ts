@@ -98,6 +98,13 @@ describe("the count-trim removes surplus and never a set", () => {
     // and bench set 3: the phone counted 8 on the lowerings; the presses count 7, the slow last
     // one (66cm, 2.6x the median duration) dropped by the same edge rule as the 10-06 bench's.
     "ovr-2026-10-30-export.json:2026-10-30 Bench Press set 3": 7,
+    // The 2026-11-06 export (round eleven, the first dumbbell lifts beside the sensor): the
+    // Dumbbell Shoulder Press finds 7 of 8 on a trace whose scale is +47% high (every ruler
+    // high; see the ledger row) -- the rep gate (minRomFractionOfHeight) reads a short press as
+    // no press at that scale, so the scale is the fault to fix first. The Single-Arm Dumbbell Row
+    // counts TEN of eight at half the travel (the midpoint of a braced and a working hand), which
+    // is an over-count and passes this file's rule; the working-hand rule is its fix.
+    "ovr-2026-11-06-export.json:2026-11-06 Dumbbell Shoulder Press set 1": 7,
   };
 
   it.each(

@@ -29,11 +29,12 @@ import { repConsistency } from "@shared/rep-consistency";
 // rather than untrustworthy -- see movingAverage's own comment.
 /** Which witness built a bar point -- see BAR_POINT_SOURCES. Carried into the stored trace as
  *  `s` so the replay harness can tell a measured midpoint from an inferred one per rep. */
-export type BarPointSource = "b" | "l" | "f" | "h" | "e" | "s" | "i";
+export type BarPointSource = "b" | "l" | "f" | "h" | "e" | "s" | "i" | "w";
 /** b: both hands, measured. l: lone hand carried to the middle by the half-span. f: lone hand
  *  carried, with the side settled by continuity against Vision's label. h: bare lone hand, no
  *  half-span yet (the END of the bar). e: the equipment box filled the frame. s: the shoulders
- *  (bar on back). i: interpolated across an occlusion gap. */
+ *  (bar on back). i: interpolated across an occlusion gap. w: the WORKING hand of a unilateral
+ *  lift, measured (see workingHandForUnilateral). */
 export const BAR_POINT_SOURCES: Record<BarPointSource, string> = {
   b: "both hands",
   l: "lone hand, carried",
@@ -42,7 +43,48 @@ export const BAR_POINT_SOURCES: Record<BarPointSource, string> = {
   e: "equipment",
   s: "shoulders",
   i: "interpolated",
+  w: "working hand (unilateral)",
 };
+
+/** WHICH HAND DOES THE WORK ON A UNILATERAL LIFT, read off the whole take.
+ *
+ * THE MIDPOINT OF TWO HANDS IS THE MIDDLE OF A BAR, AND A UNILATERAL LIFT HAS NO BAR. On a
+ * single-arm dumbbell row the braced hand sits on the bench and the working hand travels; the
+ * midpoint of the two travels HALF as far as the dumbbell, and a lone working hand "carried
+ * back to the middle" by a half-span measured between a still hand and a moving one lands
+ * nowhere in particular. The 2026-11-06 Single-Arm Dumbbell Row (70lb x8 beside the OVR) was
+ * built that way: 522 of its points were lone-hand carries and 84 were midpoints with the braced
+ * hand, and it reported 21.9cm of range against the sensor's 44.2 -- the halving, exactly.
+ *
+ * So on a unilateral lift the tracked point is the working hand itself, and the working hand is
+ * the wrist whose vertical travel over the take is the larger. Decided ONCE for the take rather
+ * than per frame: the hands do not swap roles inside a set, and a per-frame choice would jump
+ * between them whenever the braced hand jittered more than the moving one paused. The travel is
+ * the 5th-to-95th percentile span of each wrist's y, so one jumped landmark cannot pick the hand.
+ *
+ * A bilateral lift never reaches this (the caller gates on `laterality === "unilateral"`), so
+ * every barbell take is bit-identical. Null when neither wrist has enough samples to say, and the
+ * caller then falls back to the midpoint rule it always had, which is still the best available
+ * answer and is recorded as such.
+ */
+export function workingHandForUnilateral(
+  wristYs: { left: number | null; right: number | null }[],
+  minSamples = 8,
+): "left" | "right" | null {
+  const span = (side: "left" | "right"): number | null => {
+    const ys = wristYs.map((w) => w[side]).filter((y): y is number => y != null && Number.isFinite(y));
+    if (ys.length < minSamples) return null;
+    ys.sort((a, b) => a - b);
+    const q = (f: number) => ys[Math.min(ys.length - 1, Math.max(0, Math.floor(f * (ys.length - 1))))];
+    return q(0.95) - q(0.05);
+  };
+  const l = span("left");
+  const r = span("right");
+  if (l == null && r == null) return null;
+  if (l == null) return "right";
+  if (r == null) return "left";
+  return l >= r ? "left" : "right";
+}
 export type TrackedPoint = { t: number; x: number; y: number; z: number; confidence?: number; source?: BarPointSource };
 
 // One entry per rep that had enough clean per-side pose data to trust a
