@@ -2969,12 +2969,17 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 714** (2026-11-06 13:33
+  branch `verify_build` for the arbiter plumbing. **The newest build is 716** (2026-11-06 ~20:00
+  UTC, `af7d4d3`: round eleven -- a supine span is not a stature, a dumbbell lift asks for a
+  dumbbell, a unilateral lift is traced by its working hand, the dumbbell press's own shoulder
+  floor -- plus per-side filming for unilateral exercises (`workout_set_entries.side`) and the
+  reps field summoning the number pad; 715 was its `verify_build` on the same commit, which
+  passed Apple's own `--validate-app`). Scott lifted the hold with "When done upload". **716 is the
+  build to film on.** Before 716, **714** (2026-11-06 13:33
   UTC, `5003fef`: round ten -- a rep ends when the bar comes to rest, the RDL's whole window, the
   squat's 0.12 step, the jump's mean to the hip's apex -- plus the day-wipe save fix (`09b931f`)
   and the Forge-code removal for App Review's third rejection; 713 was its `verify_build` on the
-  same commit, which passed Apple's own `--validate-app`). Scott lifted the hold with "Push all and
-  upload". **714 is the build to film on, and it was RESUBMITTED to App Review on 2026-11-06 in place of 695** (Waiting for Review as of 14:40 UTC, with the reply naming the removal, the Upgrade screenshot replaced, and the review notes carrying no Forge code).
+  same commit). **714 is the build RESUBMITTED to App Review on 2026-11-06 in place of 695** (Waiting for Review as of 14:40 UTC, with the reply naming the removal, the Upgrade screenshot replaced, and the review notes carrying no Forge code); 716 does not replace it there unless Scott says so.
   Before 714, **712** (2026-11-05 ~20:20
   UTC, `3ac2b34`: round nine -- the squat's own drive onset 0 and smoothing 130, the RDL's
   sample-starvation rule and own drive onset 0.02, the jump's hip peak on the set, `liftRecord`
@@ -3127,8 +3132,10 @@ halves before splitting anything else:
   by the same rule; the every-lift test pins that the press's window reaches the press trace and
   the row's record lands set 2. See docs/camera-tracking-notes.md "Round five, 2026-10-30".
   Calibration work, uploaded on commit as build **705** (704 was its `verify_build` on `bfcc130`).
-- **THE QUEUE IS EMPTY AS OF BUILD 714** (2026-11-06: round ten, the day-wipe save fix and the
-  Forge-code removal, held behind 712 on Scott's word and released with "Push all and upload").
+- **THE QUEUE IS EMPTY AS OF BUILD 716** (2026-11-06 evening: round eleven, per-side filming for
+  unilateral exercises and the reps number pad, held on the development branch on Scott's word
+  and released with "When done upload"; 715 was its `verify_build`). Before it, **714** (round
+  ten, the day-wipe save fix and the Forge-code removal, released with "Push all and upload").
   Before it, 712 (round nine), 710 (round eight), 707 (round seven) and 705 (round five); nothing
   waited behind any of them.
   Before it, **703** (round four). Before it, **701** (round three). Before it,
@@ -3245,7 +3252,7 @@ halves before splitting anything else:
   views still show set rows by number (a unilateral exercise shows six), with the side only where
   the row is labelled by the helper; a second filmed row take -- the first on the working-hand rule
   with a declared side -- is what gives the row its first ledger row. Client plus a server column:
-  `verify_build` then `beta` with round eleven when the hold lifts.
+  shipped with round eleven as build **716**.
 - **ROUND ELEVEN, 2026-11-06: THE FIRST DUMBBELL LIFTS BESIDE THE SENSOR -- A SUPINE SPAN IS NOT A
   STATURE, A DUMBBELL LIFT ASKS FOR A DUMBBELL, AND A UNILATERAL LIFT IS TRACED BY ITS WORKING
   HAND.** Bench Press 135x8, Dumbbell Shoulder Press 35x8 and Single-Arm Dumbbell Row 70x8 on 714;
@@ -3297,9 +3304,9 @@ halves before splitting anything else:
   the aspect-parameter case in `tracker-arbiter.test.ts`; two ledger rows (the bench's carrying
   the new `rejectedAsFilmed`, which the replay re-admits where the stature yardstick no longer
   runs); three ground-truth constants; the fixture `ovr-2026-11-06-export.json`. See
-  docs/camera-tracking-notes.md, "Round eleven". Calibration work, HELD on the development branch
-  with the reps-keypad fix on Scott's word ("Build but queue I'm testing camera now");
-  `verify_build` then `beta` when he lifts it.
+  docs/camera-tracking-notes.md, "Round eleven". Calibration work, held on the development branch
+  with the reps-keypad fix on Scott's word ("Build but queue I'm testing camera now") and shipped
+  as build **716** when he lifted it ("When done upload"; 715 was its `verify_build`).
 - **ROUND TEN, 2026-11-05: THE RDL'S EIGHTH REP WAS A HOLD THE SEGMENTER COULD NOT SEE PAST, ON
   THREE TAKES, AND SET 1'S "REP 1" WAS THE SET-UP.** Set 2 of all three lifts on 712 (Back Squat
   135x5, RDL 135x8, box jump x5), filmed between the morning's set 1 and the autosave that wiped

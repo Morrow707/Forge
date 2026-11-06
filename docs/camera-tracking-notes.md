@@ -148,8 +148,9 @@ shoulder ruler -- it stands down wherever the height ruler does (+2.5% with all 
 0.4 is the small step (+41.8%); the **row's 21.9cm against 41-47** is the midpoint of a braced hand
 and the working hand, so a unilateral lift is traced by its WORKING hand now, and it asks for a
 dumbbell. The bench's plate was found, measured 7% SMALL, and admitting it (a per-lift aspect
-ceiling, built) was costed at +6.2% and not shipped. Held on the branch with the reps-keypad fix;
-`verify_build` then `beta` when the hold lifts. See "Round eleven".
+ceiling, built) was costed at +6.2% and not shipped. Held on the branch with the reps-keypad fix
+and shipped when Scott lifted the hold. Build to film on: **716** (`af7d4d3`, 2026-11-06 evening;
+715 its `verify_build`). See "Round eleven".
 **AND PER-SIDE FILMING IS BUILT (2026-11-06):** every set of a unilateral exercise is two rows,
 one per side, each logged, filmed and measured on its own (`shared/unilateral-sides.ts`,
 `workout_set_entries.side`); the tracker is told the side (`trace.declaredSide`) and records whether
