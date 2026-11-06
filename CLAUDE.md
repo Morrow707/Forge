@@ -2969,14 +2969,17 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 712** (2026-11-05 ~20:20
+  branch `verify_build` for the arbiter plumbing. **The newest build is 714** (2026-11-06 13:33
+  UTC, `5003fef`: round ten -- a rep ends when the bar comes to rest, the RDL's whole window, the
+  squat's 0.12 step, the jump's mean to the hip's apex -- plus the day-wipe save fix (`09b931f`)
+  and the Forge-code removal for App Review's third rejection; 713 was its `verify_build` on the
+  same commit, which passed Apple's own `--validate-app`). Scott lifted the hold with "Push all and
+  upload". **714 is the build to film on AND the build to resubmit to App Review** in place of 695.
+  Before 714, **712** (2026-11-05 ~20:20
   UTC, `3ac2b34`: round nine -- the squat's own drive onset 0 and smoothing 130, the RDL's
   sample-starvation rule and own drive onset 0.02, the jump's hip peak on the set, `liftRecord`
   and `bodyWitnessTrace` in the export; 711 was its `verify_build` on the same commit).
-  **712 is the build to film on.** Round ten, the day-wipe save fix AND the Forge-code removal for
-  App Review's third rejection (2026-11-06) are COMMITTED AND HELD behind it (Scott: "queue it as
-  I'm testing the camera"); they go out as the next `verify_build` + `beta` when he lifts the hold,
-  and that build is the one to resubmit. Before 712, **710** (2026-11-05 16:36
+  Before 712, **710** (2026-11-05 16:36
   UTC, `4c30e37`: round eight -- the direction rule corrected, every descent-fitted velocity
   override removed, the squat's own drive onset 0.02; 709 was its `verify_build` on the same
   commit). Before 710, **707** (2026-10-31 19:19 UTC, `37867e3`:
@@ -3124,9 +3127,10 @@ halves before splitting anything else:
   by the same rule; the every-lift test pins that the press's window reaches the press trace and
   the row's record lands set 2. See docs/camera-tracking-notes.md "Round five, 2026-10-30".
   Calibration work, uploaded on commit as build **705** (704 was its `verify_build` on `bfcc130`).
-- **THE QUEUE IS EMPTY AS OF BUILD 712** (round nine, 2026-11-05; calibration work, uploaded on
-  commit). Before it, 710 (round eight), 707 (round seven) and 705 (round five); nothing waited
-  behind any of them.
+- **THE QUEUE IS EMPTY AS OF BUILD 714** (2026-11-06: round ten, the day-wipe save fix and the
+  Forge-code removal, held behind 712 on Scott's word and released with "Push all and upload").
+  Before it, 712 (round nine), 710 (round eight), 707 (round seven) and 705 (round five); nothing
+  waited behind any of them.
   Before it, **703** (round four). Before it, **701** (round three). Before it,
   build **697** (2026-10-29 evening, `6d8f259`; 696 was its
   `verify_build` on `ccdeba5`). Calibration work, uploaded on commit: the RDL's first per-lift
@@ -3267,8 +3271,9 @@ halves before splitting anything else:
   named in its header), the set-2 cases in `ovr-2026-11-05-every-lift-reads-only-its-own-record.test.ts`,
   ledger rows `2026-11-05-back-squat-set-2` / `2026-11-05-romanian-deadlift-set-2`, ground truth
   `OVR_*_SET2_2026_11_05`, `windows.heldAtTopSeconds` and the apex fields declared in the schema.
-  See docs/camera-tracking-notes.md, "Round ten". Calibration work: **HELD with the save fix on
-  Scott's word ("queue it as I'm testing the camera"); `verify_build` then `beta` when he lifts it.**
+  See docs/camera-tracking-notes.md, "Round ten". Calibration work: held with the save fix on
+  Scott's word ("queue it as I'm testing the camera") and shipped as build **714** when he lifted
+  it on 2026-11-06 (713 was its `verify_build`).
 - **ROUND NINE, 2026-11-05: THE FIRST TAKES ON THE CORRECTED RULE. THE SQUAT LANDS, THE RDL IS
   TRACE-LIMITED, THE JUMP'S HIP PEAK IS ON THE SENSOR.** Squat 135x5, RDL 135x8 and a box jump x5
   on 710; Scott: "only testing the 3 lifts today", "at least one fix per lift ... fix every error
@@ -3673,8 +3678,8 @@ the helper under a mocked Capacitor both ways. Five mutations, each caught by th
 fifth being a comment quoting `forgeCodeEntryIsAllowed() && (` above an unconditional card -- the
 strip is what reds it, and a case proves the raw text would have passed.
 
-**WHAT GOES BACK TO APPLE.** A new build (the client changed: its own `verify_build` then `beta`,
-compliance class, not the batch), a reply that names the change and says the only code the app
+**WHAT GOES BACK TO APPLE.** Build **714** (run 713 its `verify_build`, both on `5003fef`,
+2026-11-06) is the resubmission, a reply that names the change and says the only code the app
 accepts is an App Store offer code, and the App Review notes with the Forge-code paragraph and the
 test code REMOVED (the template in the session scratchpad, `asc/5-app-review-information-notes.txt`,
 carried a `[CODE]` placeholder for exactly the thing Apple objected to). **Create the offer codes
@@ -5901,8 +5906,9 @@ change is wrong.
   each caught) states what is FORBIDDEN -- `if (data && !hydrated) {` with no fetch stamp, a 409
   branch that rehydrates without resetting the stamp, a loading gate that draws before `data`, a
   throw condition that still reads `input.baseRevision != null &&` -- with comments stripped.
-  Server half ships on Render; client half is a build. **HELD on Scott's word ("queue it as I'm
-  testing the camera"): a Render deploy restarts the server under a filming session.**
+  Server half ships on Render; client half is a build. Held on Scott's word ("queue it as I'm
+  testing the camera") because a Render deploy restarts the server under a filming session, and
+  shipped 2026-11-06 in build **714** when he lifted it.
 
 ## The AI knowledge library
 
