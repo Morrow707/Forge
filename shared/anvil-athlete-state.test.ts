@@ -80,6 +80,9 @@ function base(over: Partial<AnvilStateInput> = {}): AnvilStateInput {
     caraTrainingMinutes: 62,
     trainingLoad: 4200,
     sessionCompleted: true,
+    importedVelocityMps: null,
+    importedPowerWatts: null,
+    seatIsParked: false,
     ...over,
   };
 }

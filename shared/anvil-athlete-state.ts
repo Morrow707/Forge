@@ -153,6 +153,18 @@ export type AnvilStateInput = {
   trainingLoad: number | null;
   /** Whether the day's session was marked complete. Null when there was no session to complete. */
   sessionCompleted: boolean | null;
+  /**
+   * Velocity and power from an OUTSIDE instrument on `date` -- a VBT unit, a lab, a combine --
+   * read straight off `imported_testing_data`. Null when nothing was imported for that day, which
+   * is the ordinary case and is not an app problem.
+   */
+  importedVelocityMps: number | null;
+  importedPowerWatts: number | null;
+  /**
+   * Whether this athlete's roster seat is PARKED for the off season. True collapses every
+   * capture-derived signal by design, so it has to be readable beside them.
+   */
+  seatIsParked: boolean;
 };
 
 export type AnvilAthleteState = {
@@ -278,6 +290,13 @@ export function assembleAnvilState(input: AnvilStateInput): AnvilAthleteState {
     stress: reading(w?.stress, "no_data"),
     mental_focus: reading(w?.mentalFocus, "no_data"),
     body_pain_map: reading(w?.bodyPainMap, "no_data"),
+
+    // slow -- measured by something that is not the camera
+    imported_velocity_mps: reading(input.importedVelocityMps, "no_data"),
+    imported_power_watts: reading(input.importedPowerWatts, "no_data"),
+
+    // context -- an off-season hold explains a collapse that is not fatigue
+    seat_is_parked: reading(input.seatIsParked, "no_data"),
 
     // slow -- capture-derived
     velocity_loss_percent: fromCapture(captureMean(rows, (c) => c.velocityLossPercent)),

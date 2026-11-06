@@ -139,6 +139,107 @@ export const ANVIL_SIGNAL_TABLES: Record<string, string> = {
   goniometer_readings: "Joint range of motion, which explains a mechanics change that is not fatigue.",
   injury_history: "An injured athlete's decline is explained, and must not read as a new finding.",
   cara_sessions: "Measured training time, which is an exposure denominator nothing else in Forge provides.",
+  imported_testing_data:
+    "Velocity and power measured by SOMETHING THAT IS NOT THE CAMERA. Added 2026-11-06 and it is " +
+    "the one table whose omission was a defect rather than a decision: the slow channel is built on " +
+    "velocity, every other velocity in Forge comes out of the camera pipeline, and this is the only " +
+    "place an outside instrument's reading is stored. Rule #2's argument in the Anvil's own terms -- " +
+    "a witness the camera had no hand in producing.",
+  coach_athletes:
+    "Whether the seat is PARKED. An off-season hold stops the training that every slow-channel " +
+    "signal is computed from, by design, so a parked athlete's channel collapses for a reason that " +
+    "is not fatigue. Context, never arithmetic.",
+};
+
+/**
+ * EVERY OTHER ATHLETE-SCOPED TABLE IN FORGE, AND WHY THE ANVIL DOES NOT READ IT.
+ *
+ * **THIS CLOSES THE WEAKER HALF THIS FILE'S OWN HEADER ADMITTED TO.** That header said the ratchet
+ * "cannot discover a whole new TABLE of athlete signal", on the reasoning that a new signal table
+ * is a schema event a person is present for. Audited 2026-11-06, at Scott's request to check that
+ * everything Forge collects is readable: **42 athlete-scoped tables had never been classified at
+ * the table level at all**, and one of them was a real defect rather than a decision --
+ * `imported_testing_data` holds velocity and power measured by something that is not the camera,
+ * which is the one independent witness the slow channel could have had. It is a signal table now.
+ * `coach_athletes` was the second.
+ *
+ * So the rule is no longer "a new column in a known table must be classified". It is: **a new
+ * athlete-scoped TABLE must be classified too**, and `every-athlete-table-is-classified.test.ts`
+ * discovers them from `shared/schema.ts` rather than from any list here.
+ *
+ * A reason below is not boilerplate. Four of these are CANDIDATES that were considered and left
+ * out with the reason stated, so that leaving them out stays a decision somebody can reopen rather
+ * than an omission nobody can see.
+ */
+export const NOT_A_SIGNAL_TABLE: Record<string, string> = {
+  // ---- considered as signals and left out, with the reason. Reopen deliberately. ----
+  nutrition_targets:
+    "CANDIDATE. The athlete's own target, against which a food log becomes a DEFICIT rather than a " +
+    "number with no referent -- which is what the exclusion channel reads today. Left out because a " +
+    "target is set by a coach and changed rarely, so an athlete whose coach never set one would get " +
+    "a different exclusion channel from one whose coach did, and that difference is about the coach.",
+  goniometer_baselines:
+    "CANDIDATE, and the sharper one. The Anvil reads goniometer READINGS and not the baseline each " +
+    "is measured against, so it reads an angle without the athlete's own normal for that joint. Left " +
+    "out because `restrictedJointAngleDeg` already arrives pre-classified by the caller, which is " +
+    "where that comparison happens today; the day that moves, this table moves with it.",
+  skill_day_logs:
+    "CANDIDATE. Session completion on the skill side, where `workout_logs.completed` is read as the " +
+    "exposure the load is divided by. The asymmetry is real and is left because skill days and " +
+    "workout days are not interchangeable exposures and summing them would invent a denominator.",
+  movement_screens:
+    "CANDIDATE. A scored physical assessment, which is the right KIND of thing. Left out because the " +
+    "score lives in a child table keyed on a battery, so reading it means reading a scoring scheme " +
+    "the Anvil would then have to understand, and no screen has ever been put beside a sensor.",
+  water_log_entries:
+    "Measured intake in ounces, which is the instrument the dropped 1-to-5 hydration tick was not. It " +
+    "is still out for the same reason: hypohydration on cognition is a published null (g = -0.177, " +
+    "p = .331), and a better instrument does not rescue an absent effect.",
+  acwr_risk_alerts:
+    "Acute-to-chronic workload ratio, derived from load the slow channel already reads and already " +
+    "regresses out. Reading it would put the same load in a channel twice.",
+  weakness_reports: "A generated summary over other signals, so reading it would double-count them.",
+  readiness_briefings: "Generated prose about signals the Anvil already reads directly.",
+  athlete_digests: "Generated prose, weekly, about rows the Anvil already reads directly.",
+
+  // ---- not about the athlete's physical state ----
+  assignments: "What was prescribed to the athlete, never what they actually did.",
+  skill_assignments: "The same thing on the skill side: what was prescribed, never what happened.",
+  goals: "A target the athlete typed. An intention, not a measurement of anything.",
+  athlete_trophies: "Gamification. Unlocking a badge is a fact about the app, not about the athlete.",
+  class_enrollments: "Which classroom content the athlete is enrolled in.",
+  team_members: "Roster structure, which says who trains together and nothing about any of them.",
+  coach_athlete_requests: "A relationship waiting to be accepted, not a state of the athlete.",
+  guardian_links: "Who may act for a minor, which is a permission rather than a signal.",
+  guardian_invites: "An unclaimed guardian link, which describes an invitation.",
+
+  // ---- messages and coach feedback: somebody's words about an athlete, never a measurement ----
+  athlete_chat_messages: "An AI transcript: words about training, never a measurement of it.",
+  sport_coach_messages: "The same: an AI transcript, which is words rather than a measurement.",
+  video_reviews: "A coach annotating footage: their reading of a lift, not a measurement of one.",
+  video_review_requests: "A request for one of those reviews.",
+  video_review_exports: "A rendered file of one of those reviews.",
+  unattached_video_uploads: "Footage with no set attached, so there is no measurement on it yet.",
+  problem_reports: "A bug report about the app, written by whoever hit the bug.",
+  notifications: "What the app told them, which is a fact about the app.",
+
+  // ---- consent, legal and privacy: read as a FACT about admissibility, never as a signal ----
+  consent_records: "Consent records. `trackingOptOut` is the admissibility fact the Anvil reads.",
+  external_waivers: "Filed paperwork: a waiver on file is a compliance fact, not a measurement.",
+  research_consent_requests: "A consent decision waiting on a guardian or an athlete.",
+  media_removal_requests: "A request to delete footage, which is a privacy act.",
+  record_access_audit_logs: "Who looked at what. Reading it would make an audit log a signal.",
+
+  // ---- account, auth, billing and devices ----
+  subscriptions: "What the account pays, which the billing sweep owns and no channel reads.",
+  billing_audit_log: "What the account has paid, and when. Money, not physiology.",
+  trusted_devices: "Which phones they sign in on, which the device-approval gate owns.",
+  device_approvals: "A sign-in waiting on an email approval.",
+  user_sessions: "Where the account is currently signed in.",
+  password_reset_tokens: "Authentication machinery.",
+  email_verification_tokens: "Authentication machinery.",
+  push_subscriptions: "Where to deliver a web push notification.",
+  apns_device_tokens: "The same thing on iOS: where to deliver a push notification.",
 };
 
 /**
@@ -675,6 +776,45 @@ export const ANVIL_SIGNALS = [
       "same grounds. Already a column -- it needed reading, not adding.",
   },
   {
+    id: "imported_velocity_mps",
+    table: "imported_testing_data",
+    column: "velocityMps",
+    channel: "slow",
+    kind: "measured_device",
+    unit: "m/s",
+    populated: "when_logged",
+    why:
+      "Bar velocity from an outside instrument -- a VBT unit, a lab, a combine -- rather than from " +
+      "Forge's camera. It is the same quantity the slow channel already reads off a capture, measured " +
+      "by something whose errors are uncorrelated with the camera's, which is the whole definition of " +
+      "a peer witness. An athlete with both on one day is the only case in Forge where a camera " +
+      "number can be checked against anything.",
+  },
+  {
+    id: "imported_power_watts",
+    table: "imported_testing_data",
+    column: "powerWatts",
+    channel: "slow",
+    kind: "measured_device",
+    unit: "W",
+    populated: "when_logged",
+    why: "The same instrument's power figure, read for the same reason and with the same independence.",
+  },
+  {
+    id: "seat_is_parked",
+    table: "coach_athletes",
+    column: "heldAt",
+    channel: "context",
+    kind: "self_report",
+    unit: "boolean",
+    populated: "always",
+    why:
+      "An off-season hold. A parked athlete is not being assigned training, so load, session " +
+      "completion and every capture-derived signal fall away at once -- which is exactly the shape " +
+      "of a real decline and is not one. Without this the Anvil's most confident finding of the year " +
+      "would be June.",
+  },
+  {
     id: "tracking_opt_out",
     table: "users",
     column: "trackingOptOut",
@@ -835,6 +975,34 @@ export const NOT_AN_ANVIL_SIGNAL: Record<string, string> = {
     "Why the session closed. An idle-swept session is a less reliable duration than a completed one, which is worth knowing and is not worth a channel reading until somebody has measured how often it happens.",
   "cara_sessions.loggedByCoachId": "Who logged it. Provenance.",
   "cara_sessions.note": NON_SIGNAL_REASON.FREE_TEXT,
+  "imported_testing_data.id": NON_SIGNAL_REASON.ROW_ID,
+  "imported_testing_data.athleteId": NON_SIGNAL_REASON.ATHLETE_KEY,
+  "imported_testing_data.date": NON_SIGNAL_REASON.TIME_INDEX,
+  "imported_testing_data.createdAt": NON_SIGNAL_REASON.TIME_INDEX,
+  "imported_testing_data.importedByUserId": NON_SIGNAL_REASON.STRUCTURE,
+  "imported_testing_data.setNumber": NON_SIGNAL_REASON.STRUCTURE,
+  "imported_testing_data.exerciseName":
+    "Free text typed by whoever imported the file, so it joins to nothing and cannot be compared " +
+    "across athletes or across imports. The velocity is read without knowing which lift produced it, " +
+    "which is a real limit of this signal and is stated rather than papered over.",
+  "imported_testing_data.loadLbs":
+    "The bar weight, which is the load side rather than the output side. The slow channel regresses " +
+    "load out of its own series and reading a second, differently-sourced load here would put two " +
+    "load measures in one regression.",
+  "imported_testing_data.source":
+    "Which device or file the row came from. It belongs in provenance rather than in a channel, and " +
+    "the day it decides anything it will be because the uncertainties differ by device -- which is a " +
+    "measurement nobody has made.",
+  "imported_testing_data.notes": NON_SIGNAL_REASON.FREE_TEXT,
+  "coach_athletes.id": NON_SIGNAL_REASON.ROW_ID,
+  "coach_athletes.athleteId": NON_SIGNAL_REASON.ATHLETE_KEY,
+  "coach_athletes.coachId": NON_SIGNAL_REASON.STRUCTURE,
+  "coach_athletes.createdAt": NON_SIGNAL_REASON.TIME_INDEX,
+  "coach_athletes.groupId": NON_SIGNAL_REASON.STRUCTURE,
+  "coach_athletes.heldUntil":
+    "The date a hold is expected to end. It prompts a coach and acts on nothing -- a season start " +
+    "is a human decision -- so it describes an intention rather than the athlete's state.",
+  "coach_athletes.heldByCoachId": NON_SIGNAL_REASON.STRUCTURE,
   "workout_logs.id": NON_SIGNAL_REASON.ROW_ID,
   "workout_logs.assignmentId": NON_SIGNAL_REASON.STRUCTURE,
   "workout_logs.programDayId": NON_SIGNAL_REASON.STRUCTURE,
