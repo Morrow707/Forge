@@ -535,29 +535,116 @@ nothing; the reverse is not true.
   widening it has to arrive as a decision rather than as a tidy-up. The narrowed follow-up asks
   which was meant.
 
-### THE FIVE NARROWED FOLLOW-UPS FOR THE ATTORNEY CHANNEL
+### THE FIVE NARROWED FOLLOW-UPS, AS SENT 2026-11-06
 
-Each is deliberately small, so that it is cheap to answer and hard to answer with a restatement.
+**Verbatim, so the record is what went out rather than what was drafted.** Numbered against the
+packet the reviewer holds (`docs/anvil-for-counsel.md`), where questions 15 to 24 of this file
+appear as 1 to 10 -- so follow-up 1 is this file's 18 and 19, follow-up 4 is this file's 23, and
+follow-up 5 is this file's 24. Each is deliberately small, so that it is cheap to answer and hard
+to answer with a restatement.
 
-1. **Reconcile 18(b) with 19.** If measuring creates a duty to escalate on a cognitive decline,
-   what is the duty when the same measurement reveals a pattern consistent with under-eating in a
-   15-year-old, and how is "say nothing" compatible with it? One of the two has to move.
-2. **18(a): supply the language.** We asked what disclaimer works and received the observation
-   that a disclaimer nobody reads is not a defence, which we had already said. We need the actual
-   sentence, or a ruling that no sentence suffices and the measure may not be shown to a coach.
-3. **19: is there a mandatory-reporting obligation**, for Forge or for the coach as a school or
-   club employee, in any state where we have users, that is triggered by data of this kind? "May
-   we" was answered; "must we" was not.
-4. **23: address the FERPA school-official exception** -- direct control, the written agreement,
-   the redisclosure limits -- and say whether Forge is inside it. A yes/no without the exception
-   cannot be built against.
-5. **24: Anvil-only or platform-wide?** Forge already ships a readiness score, a recovery page and
-   a fatigue column on the coach's analytics, reviewed as they stand. Does the prohibition reach
-   those, or only the new surface?
+```
+1. RECONCILE QUESTION 4(b) WITH QUESTION 5
+
+Your answers on duty to act contradict each other on the same underlying
+mechanism:
+
+  - Question 4(b) states that measuring a sharp cognitive decline in a minor
+    creates a duty to escalate to a guardian because "a product which notices
+    something and says nothing is in a worse position than one that never
+    looked."
+  - Question 5 states that when a minor's food log and body-mass entries show a
+    visible under-eating pattern, Forge "must say nothing."
+
+Both scenarios involve an algorithm detecting an adverse state in a child from
+data Forge holds. One of these positions has to move. If measuring cognitive drop
+creates a duty to warn, explain why measuring extended calorie deficit does not
+-- or confirm that both must remain silent.
+
+
+2. QUESTION 4(a): SUPPLY THE DISCLAIMER SENTENCE
+
+We asked what disclaimer language actually works to defeat the concussion-screen
+inference, and received back the statement that a disclaimer nobody reads is not
+a defense -- which is the exact risk we highlighted in the question.
+
+We need one of two concrete outputs from counsel:
+
+  (a) The exact, drafted disclaimer sentence(s) to place on the screen shown to a
+      coach.
+  (b) An explicit ruling that no disclaimer language is legally sufficient to
+      protect Forge, in which case the coach view for minors will be killed
+      entirely.
+
+
+3. QUESTION 5: MANDATORY REPORTING OBLIGATIONS
+
+The response answered "may we say anything" (no), but left "must we"
+unaddressed. Where Forge's system holds data showing severe under-eating combined
+with declining performance in a 13- to 17-year-old:
+
+  - Does Forge itself incur a mandatory child-welfare reporting obligation under
+    the laws of any state where we operate?
+  - Does the coach -- as a school or club employee reading the data on Forge --
+    incur a reporting obligation that our Institutional Service Agreement must
+    account for?
+
+
+4. QUESTION 9: IS IT AN EDUCATION RECORD AT ALL, AND THEN THE SCHOOL-OFFICIAL
+   EXCEPTION
+
+The answer concludes that a Forge-generated score read by a school coach becomes
+an education record under FERPA. We need two rulings, in this order, because they
+cut in opposite directions for our Institutional Service Agreement.
+
+  (i) THRESHOLD. Under 34 CFR 99.3, an education record is one maintained by the
+      educational agency OR BY A PARTY ACTING FOR IT. Forge maintains the Anvil
+      score for its own purposes, under a direct contractual relationship with
+      the athlete and their guardian, not under a contract with the school; the
+      school supplies no part of it and the coach only reads it. Is it an
+      education record at all?
+
+  (ii) IF IT IS. Does Forge qualify under the School Official Exception,
+       34 CFR 99.31(a)(1)(i)(B), addressing each of the three prongs
+       specifically:
+         1. Performing an institutional service or function for which the school
+            would otherwise use employees.
+         2. Operating under the direct control of the school with respect to the
+            use and maintenance of education records.
+         3. Compliance with the redisclosure restrictions of 34 CFR 99.33(a).
+       And whether 34 CFR 99.7's annual-notification requirement means a district
+       must already have specified parties like Forge as school officials before
+       we can qualify -- which is an obligation the Institutional Service
+       Agreement can place on the district.
+
+We are asking (i) first and separately because we do not want to accept
+school-official status by agreement if the record is outside FERPA to begin with:
+prong 2 is direct school control over the use and maintenance of education
+records, so a clause accepting it is itself evidence that Forge acts for the
+school. A plain yes or no on either half, without the analysis, cannot be built
+into the agreement.
+
+
+5. QUESTION 10: SCOPE OF THE PERMITTED AND FORBIDDEN WORDS
+
+Clarify whether the forbidden-words ruling applies strictly to the Anvil or
+platform-wide.
+
+Forge already ships, in the product as it stands today, a surface titled
+"Readiness" with its own banner and route, a "Recovery" page, and a "Fatigue"
+column on the coach's analytics screen. These are product surfaces and were not
+individually reviewed; the readiness score is generated by a model, and its
+disclosure to our AI provider is covered by the Privacy Policy. A platform-wide
+prohibition is therefore a rename of three live features, which we will do if
+required but would rather not do by implication.
+```
 
 Plus the one number nobody supplied: **21's retention ceiling.**
 
-### AS SENT, 2026-11-06, WITH TWO CORRECTIONS AND ONE DECISION
+### WHAT CHANGED BETWEEN THE DRAFT AND WHAT WAS SENT, AND THE DECISION INSIDE FOLLOW-UP 2
+
+The sent text is above, verbatim. This is the account of how it got there, kept because two of
+the changes are reasoning that would otherwise have to be re-derived.
 
 Scott tightened the five and the tightening is kept: he renumbered them against the packet's own
 numbering (18 -> 4, 19 -> 5, 23 -> 9, 24 -> 10, which is what the reviewer sees), cited
@@ -582,14 +669,14 @@ the order matters. If it is not an education record, the ISA needs nothing -- **
 NOT sign a clause accepting school-official status, because direct control over the use and
 maintenance of education records is prong 2 of the exception, so agreeing to it is itself evidence
 of acting for the school and could bring the record inside FERPA that was outside it.** Asking only
-about the exception risks talking ourselves into the harder answer. Sent as two questions in order.
+about the exception risks talking ourselves into the harder answer. That is why follow-up 4 above asks two questions in order.
 
 **CORRECTION 2: "all of which were previously reviewed" overstates what was reviewed.** Forge's
 LEGAL DOCUMENTS are attorney-reviewed; the readiness, recovery and fatigue SURFACES are product and
 were never reviewed individually. What is true, and is the useful claim: they ship today, and the
 readiness score's data flow is disclosed, because `getOrCreateReadinessBriefing` calls
 `generateReadinessBriefing` -- it is a model-backed feature and the Privacy Policy's AI-provider
-disclosure covers it. Sent that way.
+disclosure covers it. Follow-up 5 above says it that way.
 
 **ADDED: a fourth element on 9 that is the DISTRICT's and not ours.** 34 CFR 99.7's annual
 notification requires a school to specify the criteria for who constitutes a school official, so a
