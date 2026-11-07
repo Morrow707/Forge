@@ -6050,6 +6050,20 @@ export const consentTypeEnum = pgEnum("consent_type", [
   // Existing rows are left where they are: their documentText says what was agreed to, and
   // rewriting history in a consent log to make a report tidier is not a trade worth making.
   "privacy_policy",
+  // THE ANVIL'S OWN AGREEMENT, and it exists because the Video and Biometric Consent does not
+  // cover a cognitive task.
+  //
+  // That document describes filming a lift and deriving measurements from the athlete's body in
+  // the video. The Anvil adds four short tasks on the phone whose output is a measure of the
+  // athlete's nervous system -- a millisecond latency distribution, whether they inhibited a
+  // response, how long a sequence they can repeat. Forge's working position (docs/legal-open-
+  // questions.md, question 15, NOT yet counsel's answer) is that this is outside the existing
+  // consent's scope and needs its own separately ticked agreement.
+  //
+  // An ADULT agrees for themselves, which is what this row records. A MINOR cannot take the check
+  // at all until counsel answers questions 15, 17, 18 and 21 -- see shared/anvil-eligibility.ts,
+  // which is the one place that decision lives.
+  "anvil_check",
 ]);
 
 export const consentRecords = pgTable(
@@ -7479,6 +7493,75 @@ export const movementKnowledgeMessages = pgTable(
 export type MovementKnowledgeMessage = typeof movementKnowledgeMessages.$inferSelect;
 
 export const movementProfileStatusEnum = pgEnum("movement_profile_status", ["active", "archived"]);
+
+/**
+ * Whether a check was taken inside its morning window. A LABEL and never a gate -- a check taken
+ * at four in the afternoon is kept, scored for the athlete and held out of the baseline, because
+ * a missing day is honest and a mistimed one folded into a normal is not. Rule #1 applied to a
+ * clock.
+ */
+export const anvilWindowEnum = pgEnum("anvil_window", ["in_window", "late", "practice"]);
+
+/**
+ * THE ANVIL'S OWN TABLE. One row per athlete per attempt.
+ *
+ * Everything here is RAW: the trials as the phone measured them, and nothing derived. The median,
+ * the lapse count, the z-scores and the weekly verdict are all computed on read from
+ * `shared/anvil-baseline.ts`, `anvil-part-metrics.ts` and `anvil-corroboration.ts`, so that every
+ * threshold in the Anvil can be refitted without a migration and without a stored number going
+ * stale against the constant that produced it. The camera work's whole history is the argument:
+ * `FITTED_OVERRIDES` moves and the ledger replays, because the inputs were kept.
+ *
+ * `trials_ms` is the full array on purpose. A median loses the tail metric, a mean loses both, and
+ * the 2026-11-05 finding that one distracted trial is worth 1.70 SD on an arithmetic mean is only
+ * checkable against the trials themselves.
+ */
+export const anvilChecks = pgTable(
+  "anvil_checks",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The athlete's local calendar day, decided by the client and sent with the check. */
+    date: date("date").notNull(),
+    /** When it was actually taken, which is what decides the window label. */
+    takenAt: timestamp("taken_at").notNull().defaultNow(),
+    window: anvilWindowEnum("window").notNull().default("in_window"),
+    /** Part 1: every trial's latency, in order, in milliseconds. Never an aggregate. */
+    trialsMs: json("trials_ms").$type<number[]>().notNull().default([]),
+    /** Part 1: trials where the athlete never responded in time. */
+    omissions: integer("omissions").notNull().default(0),
+    /** Part 2: commission errors -- tapped on a leave trial, or released a hold early. */
+    rulesMissed: integer("rules_missed"),
+    /** Part 2: the go-trial latencies, which is the half with a fine-grained denominator. */
+    goTrialsMs: json("go_trials_ms").$type<number[]>(),
+    /** Part 3: the longest sequence repeated correctly. */
+    sequenceBest: integer("sequence_best"),
+    /** Part 4: the three trials' counts, best-of reported. Null when the part was not run. */
+    tapCounts: json("tap_counts").$type<number[]>(),
+    /**
+     * Which parts ran. An under-15 athlete takes two of four, and a part that was skipped is a
+     * stated fact rather than a null that could mean anything.
+     */
+    partsRun: json("parts_run").$type<string[]>().notNull().default([]),
+    /**
+     * Sampling honesty, the same measure every capture mode already reports: the device's own
+     * timing resolution as the page measured it. A check taken on a browser that throttled
+     * `performance.now` is not comparable with one that did not, and this is the only way to know.
+     */
+    timerResolutionMs: real("timer_resolution_ms"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    // One athlete's own history, newest first, is every read this table has: the rolling baseline,
+    // the week, the coach's column. The date leads because the window is always a date range.
+    athleteDateIdx: index("anvil_checks_athlete_date_idx").on(t.athleteId, t.date),
+  }),
+);
+
+export type AnvilCheck = typeof anvilChecks.$inferSelect;
+export type InsertAnvilCheck = typeof anvilChecks.$inferInsert;
 
 // One row per applied version of a movement's tracking profile. At most one
 // "active" row per movementType -- applying a new proposal archives the

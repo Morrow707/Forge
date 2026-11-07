@@ -3774,6 +3774,57 @@ ALTER TABLE "coach_athletes" ADD COLUMN IF NOT EXISTS "held_by_coach_id" integer
 -- "which of my seats are parked" from widening into the whole roster.
 CREATE INDEX IF NOT EXISTS "coach_athletes_held_idx"
   ON "coach_athletes" ("coach_id") WHERE "held_at" IS NOT NULL;
+
+-- THE ANVIL. One row per athlete per attempt, and everything in it is RAW.
+--
+-- The enum is created defensively because this file runs against databases that already have the
+-- type: CREATE TYPE has no IF NOT EXISTS, so the DO block is the only idempotent spelling.
+--
+-- The window column is a LABEL, not a gate: a check taken outside its morning window is kept and
+-- held out of the baseline rather than refused. A missing day is honest; a mistimed one folded
+-- into an athlete's normal is not.
+--
+-- No derived column anywhere. The median, the lapse count, the z-scores and the weekly verdict are
+-- computed on read, so a refit moves every past reading with it and nothing stored can go stale
+-- against the constant that produced it -- which is the camera ledger's whole argument, applied
+-- before the first row exists rather than after.
+DO $$ BEGIN
+  CREATE TYPE "anvil_window" AS ENUM ('in_window', 'late', 'practice');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE TABLE IF NOT EXISTS "anvil_checks" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "taken_at" timestamp NOT NULL DEFAULT now(),
+  "window" "anvil_window" NOT NULL DEFAULT 'in_window',
+  "trials_ms" json NOT NULL DEFAULT '[]',
+  "omissions" integer NOT NULL DEFAULT 0,
+  "rules_missed" integer,
+  "go_trials_ms" json,
+  "sequence_best" integer,
+  "tap_counts" json,
+  "parts_run" json NOT NULL DEFAULT '[]',
+  "timer_resolution_ms" real,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+-- Repeated as ALTERs for the same reason every other table here repeats them: a REFERENCES clause
+-- or a column written inside CREATE TABLE IF NOT EXISTS is a no-op on the one database that is
+-- never fresh, which is what server/fk-drift-job.ts exists to report.
+ALTER TABLE "anvil_checks" ADD COLUMN IF NOT EXISTS "taken_at" timestamp NOT NULL DEFAULT now();
+ALTER TABLE "anvil_checks" ADD COLUMN IF NOT EXISTS "window" "anvil_window" NOT NULL DEFAULT 'in_window';
+ALTER TABLE "anvil_checks" ADD COLUMN IF NOT EXISTS "omissions" integer NOT NULL DEFAULT 0;
+ALTER TABLE "anvil_checks" ADD COLUMN IF NOT EXISTS "rules_missed" integer;
+ALTER TABLE "anvil_checks" ADD COLUMN IF NOT EXISTS "go_trials_ms" json;
+ALTER TABLE "anvil_checks" ADD COLUMN IF NOT EXISTS "sequence_best" integer;
+ALTER TABLE "anvil_checks" ADD COLUMN IF NOT EXISTS "tap_counts" json;
+ALTER TABLE "anvil_checks" ADD COLUMN IF NOT EXISTS "parts_run" json NOT NULL DEFAULT '[]';
+ALTER TABLE "anvil_checks" ADD COLUMN IF NOT EXISTS "timer_resolution_ms" real;
+-- Every read this table has is one athlete's own history over a date range: the rolling baseline,
+-- the week, the coach's column. Never a scan across athletes.
+CREATE INDEX IF NOT EXISTS "anvil_checks_athlete_date_idx"
+  ON "anvil_checks" ("athlete_id", "date");
 `;
 
 async function main() {

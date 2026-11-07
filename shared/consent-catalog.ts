@@ -58,6 +58,18 @@ export const CONSENT_CATALOG: Record<ConsentType, ConsentCatalogEntry> = {
    * as they provision the slot, not a published document -- it has no page and no PDF to point
    * at, which is why this one stays null while the guardian's row below does not. */
   coach_coppa_consent: { label: "Coach's attestation for an under-13 account", page: null, pdfType: null },
+  /* THE ANVIL'S AGREEMENT, and its page is null for a reason that should expire.
+   *
+   * The text is a code constant shown in the app at the moment the person starts their first
+   * check (shared/anvil-agreement.ts), the same shape as the coach's attestation above. It is
+   * NOT a reviewed legal document and must not be published at /api/legal-documents/:type.pdf
+   * beside eight documents that are -- that route's set is attorney-reviewed text, and a Forge-
+   * written disclosure sitting among them would read as one.
+   *
+   * The day counsel answers question 15 this is likely to become a real document with a real
+   * page, and this entry moves with it. Until then a reader of "What you've agreed to" sees the
+   * label and the date, which is the honest amount. */
+  anvil_check: { label: "The Anvil: daily check agreement", page: null, pdfType: null },
   /* THE NOTICE IS THE DOCUMENT BEHIND THIS ROW, and this entry said there was none until
    * 2026-10-08. storage.claimGuardianInvite writes it as `documentText: notice?.content`, the
    * parental_notice row (seed.ts says so in as many words: "for an athlete under 13 it is what
