@@ -41,6 +41,7 @@ import { SPORTS } from "@shared/exercise-taxonomy";
 import { todayIso } from "@/lib/local-date";
 import { bandForAthleteCount, formatCents, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
 import { Capacitor } from "@capacitor/core";
+import { forgeCodeEntryIsAllowed } from "@/lib/forge-code-entry";
 
 /** The signup form only accepts a whole number of athletes in this range --
  * the upper bound is the server's own (MAX_EXPECTED_ATHLETES on signupSchema)
@@ -197,9 +198,12 @@ export default function SignupPage() {
   const expectedBand = expectedAthletesValid ? bandForAthleteCount(expectedAthletesNum) : null;
   // Only an account that will carry its own plan can take a code: a coach joining a program's
   // staff and an athlete joining under a coach's code are covered by that program. The field
-  // is withheld for them rather than drawn and refused, same as the headcount above.
+  // is withheld for them rather than drawn and refused, same as the headcount above. And it is
+  // withheld in the NATIVE app for everybody (lib/forge-code-entry.ts): App Review rejected 1.0
+  // on 2026-11-06 for a code that unlocks the paid features outside In-App Purchase.
   const promoCodeApplies =
-    (role === "coach" && !joiningStaff) || (role === "athlete" && !coachCode.trim());
+    forgeCodeEntryIsAllowed() &&
+    ((role === "coach" && !joiningStaff) || (role === "athlete" && !coachCode.trim()));
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();

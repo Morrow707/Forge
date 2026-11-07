@@ -336,8 +336,20 @@ export function referenceObjectVerdict(opts: {
   yardstick: BodyYardstick | null;
   frameWidth: number;
   frameHeight: number;
+  /** THE ASPECT CEILING IS THIS LIFT'S OWN since 2026-11-06 (`cameraTunablesFor(...).values
+   *  .maxPlateAspectRatio`); the shared constant is the default for a caller that passes none.
+   *  A disc's apparent aspect is set by the angle between the camera and the bar's axis, and
+   *  that angle is a property of where a LIFT is filmed from: a bench is filmed from the foot
+   *  of the bench, so its plate is seen 50-60 degrees off its face on every take (the 11-06
+   *  bench boxed 60.85x119.96 px, aspect 1.96, over 724 samples at 0.90 confidence, locked on
+   *  866 of 994 frames -- a plate, not a torso), where a standing press or a row is filmed
+   *  square and its "plate" at 2.0 is the athlete's torso (the two 2026-10-02 takes that set
+   *  the shared 1.7). One ceiling cannot serve both, and the registry exists for exactly a
+   *  number fitted on one lift. Defaulted, so every un-plumbed caller keeps today's value. */
+  maxPlateAspectRatio?: number;
 }): ReferenceObjectVerdict {
   const { shape, anchor, yardstick, frameWidth, frameHeight } = opts;
+  const maxPlateAspectRatio = opts.maxPlateAspectRatio ?? MAX_PLATE_ASPECT_RATIO;
   const reasons: ReferenceObjectVerdict["reasons"] = [];
 
   const aspectRatio =
@@ -345,7 +357,7 @@ export function referenceObjectVerdict(opts: {
       ? Math.max(shape.medianWidthPx, shape.medianHeightPx) /
         Math.min(shape.medianWidthPx, shape.medianHeightPx)
       : null;
-  if (aspectRatio != null && aspectRatio > MAX_PLATE_ASPECT_RATIO) reasons.push("aspect_ratio");
+  if (aspectRatio != null && aspectRatio > maxPlateAspectRatio) reasons.push("aspect_ratio");
 
   const distance = lockDistanceVerdict({
     objectCenter: { x: shape.medianCenterXNorm, y: shape.medianCenterYNorm },

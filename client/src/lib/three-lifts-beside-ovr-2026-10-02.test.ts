@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { inferMovementType, heightCalibrationUnreliable, postureForExercise } from "./exercise-camera-profile";
+import { inferMovementType, heightCalibrationUnreliable, postureForExercise, postureAllowsHeightCalibration } from "./exercise-camera-profile";
 import { MAX_PLATE_ASPECT_RATIO, referenceObjectVerdict } from "@shared/tracker-arbiter";
 
 /** THREE LIFTS BESIDE OVR, 2026-10-02 (bench 135x10, Pendlay row 135x10, push press 95x10).
@@ -22,8 +22,13 @@ describe("a hinged body is a posture of its own", () => {
     expect(postureForExercise("Back Squat")).toBe("standing");
   });
   it("the dialog withholds the body span from the plausibility check for that posture", () => {
+    // Since 2026-11-06 the stature yardstick runs exactly where the height RULER may vote
+    // (postureAllowsHeightCalibration), which refuses bent_over along with lying, seated and
+    // supported -- the 11-06 bench's supine span convicted its shoulder ruler the same way the
+    // 10-02 row's hinged span convicted its plate. See a-supine-span-is-not-a-stature.test.ts.
     const src = readFileSync(join(__dirname, "..", "components", "av-bar-tracker-dialog.tsx"), "utf8");
-    expect(src).toContain('const bodySpanUnits = posture === "bent_over" ? null : impliedBodyLengthUnits(calibrationInput);');
+    expect(src).toContain("const bodySpanUnits = postureAllowsHeightCalibration(posture) ? impliedBodyLengthUnits(calibrationInput) : null;");
+    expect(postureAllowsHeightCalibration("bent_over")).toBe(false);
   });
 });
 

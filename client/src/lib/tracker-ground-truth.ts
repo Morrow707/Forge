@@ -1429,6 +1429,11 @@ export const OVR_BACK_SQUAT_2026_11_05 = {
 // Romanian deadlift beside the OVR (labelled "DEADLIFT" on the sensor), 2026-11-05, 135lb x 8,
 // build 710, live path. The sensor's rep 1 is a full 24.1in pull; Forge's rep 1 lost 30cm of it
 // inside a 0.239s hole and reported 45.6cm -- the take that produced the sample-starvation rule.
+// CORRECTED IN ROUND TEN (2026-11-05, same day): that 45.6cm phase was the SET-UP, not rep 1 --
+// it sits 2.3s before the first pull where the pulls sit 1.0s apart -- and the real eighth pull
+// had been deleted as a re-rack, merged with the 1.7s stand at lockout that followed it (the
+// same fault set 2 showed, see restArrivalAfterPeak). Forge's reps 1-8 are the eight pulls now;
+// the forgeOnDevice numbers below are what build 710 printed (set-up as rep 1, eighth pull gone).
 export const OVR_ROMANIAN_DEADLIFT_2026_11_05 = {
   build: 710,
   loadLb: 135,
@@ -1493,5 +1498,255 @@ export const OVR_BOX_JUMP_HIP_2026_11_05 = {
       { jumpHeightCm: 58.7, takeoffVelocityMps: 3.35, hipDrivePeakMps: 2.96, hipDrivePeakRawMps: 2.83, hipDriveMeanMps: 2.20, dipDepthCm: 27.7, eccentricSeconds: 0.67, concentricSeconds: 0.19 },
       { jumpHeightCm: 63.0, takeoffVelocityMps: 3.42, hipDrivePeakMps: 2.87, hipDrivePeakRawMps: 2.82, hipDriveMeanMps: 1.94, dipDepthCm: 25.2, eccentricSeconds: 0.27, concentricSeconds: 0.21 },
     ],
+  },
+};
+
+// Back squat beside the OVR, 2026-11-05 set 2, 135lb x 5, build 712 (round nine's build), file
+// path. Range -2.7% as filmed at the squat's 0.11, mean +2.4% at its whole window, peak +1.6% at
+// its 130ms; rep for rep the means read 0.79 / 0.92 / 0.86 / 0.84 / 0.78 against the sensor's
+// 0.79 / 0.90 / 0.83 / 0.84 / 0.78. See the 2026-11-05-back-squat-set-2 ledger row.
+export const OVR_BACK_SQUAT_SET2_2026_11_05 = {
+  build: 712,
+  loadLb: 135,
+  repsPerSet: 5,
+  camera: "front of the rack, as set 1; the shoulders carried the bar (657 shoulder points); file path, cadence 1.0, 0 dropouts",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.79, peakVelocityMps: 1.24, romIn: 27.0, meanW: 477, peakW: 743, tpvS: 0.62, eai: 1.99 },
+      { meanVelocityMps: 0.90, peakVelocityMps: 1.40, romIn: 28.8, meanW: 537, peakW: 842, tpvS: 0.58, eai: 2.39 },
+      { meanVelocityMps: 0.83, peakVelocityMps: 1.20, romIn: 29.8, meanW: 500, peakW: 719, tpvS: 0.64, eai: 1.84 },
+      { meanVelocityMps: 0.84, peakVelocityMps: 1.27, romIn: 30.2, meanW: 507, peakW: 760, tpvS: 0.66, eai: 1.90 },
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.09, romIn: 30.1, meanW: 469, peakW: 652, tpvS: 0.72, eai: 1.51 },
+    ],
+    reported: { meanVelocityMps: 0.82, peakVelocityMps: 1.24, romIn: 29.1, meanW: 498, peakW: 743, tpvS: 0.64, eai: 1.92 },
+  },
+  forgeOnDevice: {
+    repCount: 5,
+    meanVelocityMps: 0.84,
+    peakVelocityMps: 1.26,
+    romCm: 71.9,
+    scaleSource: "both",
+    scale: 0.003790943613931826,
+    heightRulerUncertainty: 0.11,
+    driveOnsetFraction: 0,
+    velocitySmoothingMs: 130,
+    repMeans: [0.79, 0.92, 0.86, 0.84, 0.78],
+    repPeaks: [1.35, 1.38, 1.20, 1.25, 1.14],
+    repRoms: [67.2, 71.5, 73.1, 73.9, 73.8],
+  },
+};
+
+// Romanian deadlift beside the OVR ("DEADLIFT"), 2026-11-05 set 2, 135lb x 8, build 712, live
+// path. The phone printed SEVEN reps: the eighth pull was followed by a 2.2s stand at lockout
+// with the recording running, the segmenter made one 2.8s phase of the two, and the overlong
+// rack-move test deleted it. Scott: "Obviously rdl only recorded 7 reps when OVR says 8 so we
+// were wrong there." The rest-at-top rule (bar-tracking.ts, restArrivalAfterPeak) is this take's.
+export const OVR_ROMANIAN_DEADLIFT_SET2_2026_11_05 = {
+  build: 712,
+  loadLb: 135,
+  repsPerSet: 8,
+  camera: "square to the side, as set 1; hands carried the bar (551 both-hands points); live path, cadence 0.937, 18 dropouts",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.98, peakVelocityMps: 1.68, romIn: 24.3, meanW: 589, peakW: 1008, tpvS: 0.34, eai: 4.91 },
+      { meanVelocityMps: 0.93, peakVelocityMps: 1.60, romIn: 24.4, meanW: 559, peakW: 958, tpvS: 0.33, eai: 4.82 },
+      { meanVelocityMps: 1.01, peakVelocityMps: 1.69, romIn: 25.4, meanW: 608, peakW: 1016, tpvS: 0.30, eai: 5.57 },
+      { meanVelocityMps: 0.91, peakVelocityMps: 1.57, romIn: 25.0, meanW: 544, peakW: 942, tpvS: 0.34, eai: 4.49 },
+      { meanVelocityMps: 0.95, peakVelocityMps: 1.58, romIn: 25.8, meanW: 569, peakW: 950, tpvS: 0.36, eai: 4.31 },
+      { meanVelocityMps: 1.02, peakVelocityMps: 1.72, romIn: 26.4, meanW: 615, peakW: 1033, tpvS: 0.33, eai: 5.19 },
+      { meanVelocityMps: 0.99, peakVelocityMps: 1.58, romIn: 26.5, meanW: 591, peakW: 950, tpvS: 0.34, eai: 4.65 },
+      { meanVelocityMps: 0.83, peakVelocityMps: 1.28, romIn: 24.7, meanW: 499, peakW: 768, tpvS: 0.35, eai: 3.57 },
+    ],
+    reported: { meanVelocityMps: 0.95, peakVelocityMps: 1.58, romIn: 25.3, meanW: 571, peakW: 953, tpvS: 0.33, eai: 4.68 },
+  },
+  forgeOnDevice: {
+    repCount: 7,
+    meanVelocityMps: 1.18,
+    peakVelocityMps: 1.92,
+    romCm: 67.8,
+    scaleSource: "both",
+    scale: 0.003958541816426069,
+    driveOnsetFraction: 0.02,
+    repMeans: [1.05, 1.02, 1.24, 1.23, 1.14, 1.38, 1.23],
+    repPeaks: [1.82, 2.03, 1.90, 2.25, 1.71, 1.87, 1.88],
+    repRoms: [64.3, 63.8, 67.6, 75.4, 64.2, 65.3, 74.1],
+  },
+};
+
+// Box jump beside the OVR on the hip ("Jump Squat", 1lb x 6), 2026-11-05 set 2, build 712, live
+// path, onto a 24in box. Rep 1 on the sensor is the setup rep again ("Same as before ignore set
+// one on box jumps on the OVR"); Forge's five are the sensor's reps 2-6. THE SENSOR'S WINDOW IS
+// SETTLED ON THIS TAKE: its concentric runs from the dip's bottom to the hip's APEX, through the
+// takeoff and the flight -- read off the hip trace (bodyWitnessTrace, in the export since 712),
+// the hip's rise from the dip bottom to its highest point takes 0.55 / 0.45 / 0.46 / 0.49 /
+// 0.50s against the sensor's range over its mean, 0.50 / 0.49 / 0.48 / 0.48 / 0.50s. See
+// JumpCountermovement.riseToApexMeanVelocityMps.
+export const OVR_BOX_JUMP_HIP_SET2_2026_11_05 = {
+  build: 712,
+  boxHeightIn: 24,
+  repsPerSet: 5,
+  sensor: {
+    ignoredRep1: { meanVelocityMps: 1.16, peakVelocityMps: 2.00, romIn: 31.5, tpvS: 0.34, eai: 5.83 },
+    reps: [
+      { meanVelocityMps: 1.47, peakVelocityMps: 2.92, romIn: 29.0, tpvS: 0.19, eai: 14.73 },
+      { meanVelocityMps: 1.44, peakVelocityMps: 3.03, romIn: 28.0, tpvS: 0.12, eai: 24.02 },
+      { meanVelocityMps: 1.49, peakVelocityMps: 2.99, romIn: 28.0, tpvS: 0.18, eai: 16.59 },
+      { meanVelocityMps: 1.53, peakVelocityMps: 3.06, romIn: 29.1, tpvS: 0.13, eai: 22.63 },
+      { meanVelocityMps: 1.42, peakVelocityMps: 2.62, romIn: 27.7, tpvS: 0.13, eai: 19.37 },
+    ],
+    // reps 2-6 only, the five Forge measured (the sensor's own set line covers all six)
+    reportedOverOurReps: { meanVelocityMps: 1.47, peakVelocityMps: 2.924, romIn: 28.36 },
+  },
+  forgeOnDevice: {
+    repCount: 5,
+    jumpHeightCm: 71.7,
+    hipDrivePeakVelocityMps: 3.00,
+    hipDriveMeanVelocityMps: 1.83,
+    boxRiseScaleErrorRatio: 1.242,
+    reps: [
+      { jumpHeightCm: 65.9, takeoffVelocityMps: 3.42, hipDrivePeakMps: 3.27, hipDrivePeakRawMps: 3.36, hipDriveMeanMps: 1.47, dipDepthCm: 24.5, eccentricSeconds: 0.26, concentricSeconds: 0.28 },
+      { jumpHeightCm: 66.0, takeoffVelocityMps: 3.47, hipDrivePeakMps: 3.22, hipDrivePeakRawMps: 3.34, hipDriveMeanMps: 2.20, dipDepthCm: 27.3, eccentricSeconds: 0.30, concentricSeconds: 0.20 },
+      { jumpHeightCm: 66.3, takeoffVelocityMps: 3.43, hipDrivePeakMps: 2.63, hipDrivePeakRawMps: 2.56, hipDriveMeanMps: 1.88, dipDepthCm: 30.5, eccentricSeconds: 0.72, concentricSeconds: 0.21 },
+      { jumpHeightCm: 71.7, takeoffVelocityMps: 3.58, hipDrivePeakMps: 3.00, hipDrivePeakRawMps: 3.07, hipDriveMeanMps: 1.95, dipDepthCm: 32.8, eccentricSeconds: 1.13, concentricSeconds: 0.20 },
+      { jumpHeightCm: 70.0, takeoffVelocityMps: 3.50, hipDrivePeakMps: 2.89, hipDrivePeakRawMps: 3.09, hipDriveMeanMps: 1.63, dipDepthCm: 29.4, eccentricSeconds: 0.26, concentricSeconds: 0.25 },
+    ],
+  },
+};
+
+// Bench press beside the OVR, 2026-11-06 set 1, 135lb x 8, build 714, live path, filmed from
+// the foot of the bench as every bench in this repo. Round eleven. The OVR counted eight, as did
+// Forge. The scale is the lift's whole error: the stature yardstick convicted the shoulder ruler
+// on a SUPINE athlete (see the ledger row 2026-11-06-bench-press-set-1) and the take fell to the
+// collapsed 3D pair, -12.6% on range of motion.
+export const OVR_BENCH_PRESS_2026_11_06 = {
+  build: 714,
+  loadLb: 135,
+  repsPerSet: 8,
+  camera: "foot of the bench, phone about 45 degrees off; live path; the plate found on 724 samples at 0.90 and refused on aspect 1.96",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.71, peakVelocityMps: 1.03, romIn: 12.8, meanW: 424, peakW: 619, tpvS: 0.28, eai: 3.58 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.07, romIn: 12.7, meanW: 437, peakW: 644, tpvS: 0.27, eai: 3.84 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.09, romIn: 12.6, meanW: 446, peakW: 652, tpvS: 0.27, eai: 4.02 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.03, romIn: 12.9, meanW: 436, peakW: 620, tpvS: 0.27, eai: 3.70 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 1.02, romIn: 13.3, meanW: 431, peakW: 611, tpvS: 0.33, eai: 3.05 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 1.03, romIn: 13.5, meanW: 432, peakW: 619, tpvS: 0.29, eai: 3.47 },
+      { meanVelocityMps: 0.66, peakVelocityMps: 0.87, romIn: 12.7, meanW: 398, peakW: 520, tpvS: 0.33, eai: 2.60 },
+      { meanVelocityMps: 0.64, peakVelocityMps: 0.94, romIn: 15.6, meanW: 383, peakW: 561, tpvS: 0.27, eai: 3.46 },
+    ],
+    reported: { meanVelocityMps: 0.70, peakVelocityMps: 1.01, romIn: 13.2, meanW: 423, peakW: 605, tpvS: 0.28, eai: 3.46 },
+  },
+  forgeOnDevice: {
+    repCount: 8,
+    meanVelocityMps: 0.64,
+    peakVelocityMps: 1.08,
+    romCm: 29.3,
+    scaleSource: "both",
+    scale: 0.003053252770384875,
+    driveOnsetFraction: 0.04,
+    velocitySmoothingMs: 165,
+  },
+};
+
+// Dumbbell shoulder press beside the OVR (its "Push Press" label), 2026-11-06 set 1, 35lb x 8,
+// build 714, live path. THE FIRST DUMBBELL LIFT EVER FILMED BESIDE THE SENSOR. The OVR counted
+// ten; Scott: "For shoulder press, skip first two reps on OVR they were setup reps", so the
+// sensor's reps 3-10 are the eight and Forge found seven of them. Every ruler read high (the
+// shoulder landmarks collapse with the arms overhead, the ankle wandered, the 3D bone median
+// landed on the upper arm); see the ledger row 2026-11-06-dumbbell-shoulder-press-set-1.
+export const OVR_DUMBBELL_SHOULDER_PRESS_2026_11_06 = {
+  build: 714,
+  loadLb: 35,
+  repsPerSet: 8,
+  camera: "square to the front, standing; live path; the object system asked for a dumbbell and held a lock on 30 of 741 frames",
+  sensor: {
+    ignoredSetupReps: [
+      { meanVelocityMps: 0.79, peakVelocityMps: 1.50, romIn: 20.8, meanW: 123, peakW: 233, tpvS: 0.29, eai: 5.05 },
+      { meanVelocityMps: 0.40, peakVelocityMps: 0.74, romIn: 24.0, meanW: 62, peakW: 115, tpvS: 0.66, eai: 1.11 },
+    ],
+    reps: [
+      { meanVelocityMps: 0.88, peakVelocityMps: 1.38, romIn: 23.4, meanW: 137, peakW: 214, tpvS: 0.26, eai: 5.13 },
+      { meanVelocityMps: 0.90, peakVelocityMps: 1.51, romIn: 23.0, meanW: 140, peakW: 235, tpvS: 0.21, eai: 7.00 },
+      { meanVelocityMps: 0.88, peakVelocityMps: 1.38, romIn: 23.2, meanW: 136, peakW: 214, tpvS: 0.23, eai: 5.93 },
+      { meanVelocityMps: 0.82, peakVelocityMps: 1.28, romIn: 22.4, meanW: 128, peakW: 199, tpvS: 0.25, eai: 4.94 },
+      { meanVelocityMps: 0.82, peakVelocityMps: 1.38, romIn: 22.4, meanW: 127, peakW: 214, tpvS: 0.25, eai: 5.50 },
+      { meanVelocityMps: 0.84, peakVelocityMps: 1.38, romIn: 22.5, meanW: 130, peakW: 214, tpvS: 0.22, eai: 6.17 },
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.29, romIn: 23.3, meanW: 121, peakW: 201, tpvS: 0.26, eai: 4.82 },
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.27, romIn: 23.2, meanW: 117, peakW: 197, tpvS: 0.27, eai: 4.57 },
+    ],
+    // The sensor's own set line covers all ten; this is reps 3-10, the eight Forge was asked to read.
+    reportedOverOurReps: { meanVelocityMps: 0.834, peakVelocityMps: 1.359, romIn: 22.93 },
+    reportedAllTen: { meanVelocityMps: 0.78, peakVelocityMps: 1.31, romIn: 22.8, meanW: 122, peakW: 203, tpvS: 0.29, eai: 5.02 },
+  },
+  forgeOnDevice: {
+    repCount: 7,
+    meanVelocityMps: 1.52,
+    peakVelocityMps: 2.78,
+    romCm: 85.6,
+    scaleSource: "both",
+    scale: 0.002979875841056815,
+    heightRulerUncertainty: 0.1,
+    biacromialToleranceFraction: 0.2,
+  },
+};
+
+// Single-arm dumbbell row beside the OVR (its "Pendlay Row" label), 2026-11-06 set 1, 70lb,
+// 8 logged, build 714, live path. The OVR counted EIGHTEEN: Scott: "row the single arm dumbbell
+// row skip reps 1 and 2 as they were also setup reps", and the other sixteen are eight on the
+// filmed arm followed by eight on the other -- the sensor rides the dumbbell across both arms,
+// the camera saw one side, which is why per-side filming exists (CLAUDE.md, 2026-11-06). Forge
+// found TEN reps at half the travel: the bar point was the MIDPOINT of a braced hand and the
+// working hand (barPointFromSides on a unilateral lift; 537 carries, 84 midpoints, 11 bare), which
+// halves it exactly. The
+// working-hand rule (workingHandForUnilateral) is this take's; it cannot be replayed from the
+// stored trace, which is already the midpoint, so the next row take is its test.
+export const OVR_SINGLE_ARM_DUMBBELL_ROW_2026_11_06 = {
+  build: 714,
+  loadLb: 70,
+  repsPerSet: 8,
+  camera: "square to the front of the bench; live path; the object system asked for a PLATE (bent_over forced the class) and held no lock on 963 frames",
+  sensor: {
+    ignoredSetupReps: [
+      { meanVelocityMps: 0.60, peakVelocityMps: 1.07, romIn: 12.0, meanW: 185, peakW: 334, tpvS: 0.18, eai: 5.96 },
+      { meanVelocityMps: 0.48, peakVelocityMps: 0.76, romIn: 12.7, meanW: 149, peakW: 235, tpvS: 0.36, eai: 2.06 },
+    ],
+    // Reps 3-10 on the filmed arm, then 11-18 on the other.
+    reps: [
+      { meanVelocityMps: 1.04, peakVelocityMps: 1.61, romIn: 21.0, meanW: 324, peakW: 501, tpvS: 0.27, eai: 5.96 },
+      { meanVelocityMps: 0.90, peakVelocityMps: 1.49, romIn: 17.2, meanW: 280, peakW: 462, tpvS: 0.23, eai: 6.35 },
+      { meanVelocityMps: 0.83, peakVelocityMps: 1.34, romIn: 15.5, meanW: 256, peakW: 415, tpvS: 0.23, eai: 5.70 },
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.21, romIn: 14.7, meanW: 243, peakW: 377, tpvS: 0.23, eai: 5.17 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.24, romIn: 14.6, meanW: 251, peakW: 385, tpvS: 0.20, eai: 5.98 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.25, romIn: 15.3, meanW: 248, peakW: 390, tpvS: 0.24, eai: 5.15 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.24, romIn: 15.8, meanW: 249, peakW: 385, tpvS: 0.27, eai: 4.43 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.29, romIn: 16.1, meanW: 253, peakW: 402, tpvS: 0.25, eai: 5.13 },
+    ],
+    otherArm: [
+      { meanVelocityMps: 1.03, peakVelocityMps: 1.64, romIn: 23.7, meanW: 319, peakW: 509, tpvS: 0.32, eai: 5.05 },
+      { meanVelocityMps: 0.96, peakVelocityMps: 1.50, romIn: 18.0, meanW: 297, peakW: 467, tpvS: 0.26, eai: 5.75 },
+      { meanVelocityMps: 0.97, peakVelocityMps: 1.51, romIn: 17.5, meanW: 301, peakW: 471, tpvS: 0.21, eai: 7.00 },
+      { meanVelocityMps: 0.96, peakVelocityMps: 1.51, romIn: 17.4, meanW: 300, peakW: 471, tpvS: 0.24, eai: 6.23 },
+      { meanVelocityMps: 0.94, peakVelocityMps: 1.47, romIn: 17.4, meanW: 293, peakW: 458, tpvS: 0.23, eai: 6.29 },
+      { meanVelocityMps: 0.91, peakVelocityMps: 1.43, romIn: 17.0, meanW: 282, peakW: 445, tpvS: 0.24, eai: 5.89 },
+      { meanVelocityMps: 0.94, peakVelocityMps: 1.50, romIn: 18.1, meanW: 293, peakW: 466, tpvS: 0.25, eai: 5.95 },
+      { meanVelocityMps: 0.94, peakVelocityMps: 1.50, romIn: 19.2, meanW: 291, peakW: 467, tpvS: 0.27, eai: 5.55 },
+    ],
+    reportedAllEighteen: { meanVelocityMps: 0.86, peakVelocityMps: 1.36, romIn: 16.8, meanW: 267, peakW: 424, tpvS: 0.24, eai: 5.53 },
+    // Reps 3-10, the filmed arm.
+    reportedOverOurReps: { meanVelocityMps: 0.846, peakVelocityMps: 1.334, romIn: 16.28 },
+    // Reps 3-18, both arms, which is what the midpoint trace was compared against before the
+    // per-side split was known: 17.4in = 44.2cm.
+    reportedOverBothArms: { romIn: 17.4 },
+  },
+  forgeOnDevice: {
+    repCount: 10,
+    meanVelocityMps: 0.43,
+    peakVelocityMps: 0.65,
+    romCm: 21.9,
+    scaleSource: "both",
+    scale: 0.0019828724972426595,
+    barPointFromLoneHandCarried: 537,
+    barPointFromBothHands: 84,
+    barPointFromBareLoneHand: 11,
   },
 };

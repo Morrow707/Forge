@@ -2969,11 +2969,17 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 712** (2026-11-05 ~20:20
+  branch `verify_build` for the arbiter plumbing. **The newest build is 714** (2026-11-06 13:33
+  UTC, `5003fef`: round ten -- a rep ends when the bar comes to rest, the RDL's whole window, the
+  squat's 0.12 step, the jump's mean to the hip's apex -- plus the day-wipe save fix (`09b931f`)
+  and the Forge-code removal for App Review's third rejection; 713 was its `verify_build` on the
+  same commit, which passed Apple's own `--validate-app`). Scott lifted the hold with "Push all and
+  upload". **714 is the build to film on, and it was RESUBMITTED to App Review on 2026-11-06 in place of 695** (Waiting for Review as of 14:40 UTC, with the reply naming the removal, the Upgrade screenshot replaced, and the review notes carrying no Forge code).
+  Before 714, **712** (2026-11-05 ~20:20
   UTC, `3ac2b34`: round nine -- the squat's own drive onset 0 and smoothing 130, the RDL's
   sample-starvation rule and own drive onset 0.02, the jump's hip peak on the set, `liftRecord`
   and `bodyWitnessTrace` in the export; 711 was its `verify_build` on the same commit).
-  **712 is the build to film on.** Before it, **710** (2026-11-05 16:36
+  Before 712, **710** (2026-11-05 16:36
   UTC, `4c30e37`: round eight -- the direction rule corrected, every descent-fitted velocity
   override removed, the squat's own drive onset 0.02; 709 was its `verify_build` on the same
   commit). Before 710, **707** (2026-10-31 19:19 UTC, `37867e3`:
@@ -3121,9 +3127,10 @@ halves before splitting anything else:
   by the same rule; the every-lift test pins that the press's window reaches the press trace and
   the row's record lands set 2. See docs/camera-tracking-notes.md "Round five, 2026-10-30".
   Calibration work, uploaded on commit as build **705** (704 was its `verify_build` on `bfcc130`).
-- **THE QUEUE IS EMPTY AS OF BUILD 712** (round nine, 2026-11-05; calibration work, uploaded on
-  commit). Before it, 710 (round eight), 707 (round seven) and 705 (round five); nothing waited
-  behind any of them.
+- **THE QUEUE IS EMPTY AS OF BUILD 714** (2026-11-06: round ten, the day-wipe save fix and the
+  Forge-code removal, held behind 712 on Scott's word and released with "Push all and upload").
+  Before it, 712 (round nine), 710 (round eight), 707 (round seven) and 705 (round five); nothing
+  waited behind any of them.
   Before it, **703** (round four). Before it, **701** (round three). Before it,
   build **697** (2026-10-29 evening, `6d8f259`; 696 was its
   `verify_build` on `ccdeba5`). Calibration work, uploaded on commit: the RDL's first per-lift
@@ -3205,6 +3212,156 @@ halves before splitting anything else:
   See docs/camera-tracking-notes.md, "The RDL's +12.0% is the 3D-pose collapse". Calibration work:
   uploaded on commit.
 
+- **EVERY SET OF A UNILATERAL EXERCISE IS TWO ROWS, ONE PER SIDE, EACH FILMED ON ITS OWN**
+  (2026-11-06, same session as round eleven). Scott: "I wanted to do the row to the side, but
+  can't because I can't get the other side, on the videos, we need to add a way to film the right
+  side and the left side individually, the exercises ask for it, we need to build that into the
+  system, every set, every rep, every unilateral exercise needs to have a way to film both sides
+  separately." The 11-06 row is the argument: the OVR rode the dumbbell across both arms (41.3cm on
+  one, 47.1cm on the other) and nothing recorded which arm the camera saw.
+  **THE SHAPE IS THE DATA MODEL'S OWN.** `workout_set_entries` is already one row per effort, so a
+  unilateral prescription of "3 x 5 each side" builds SIX rows -- set 1 left, set 1 right, set 2
+  left, ... -- and each carries the new `side` column (`body_side`, nullable; `shared/unilateral-
+  sides.ts` is the rule: `setRowCountFor`, `sideForNewSet` -- odd rows left, even rows right, so a
+  pair stays a pair however rows are added -- `pairIndexFor`, `setRowLabel`). The athlete logs each
+  side's reps (a left arm doing 8 and a right doing 7 is worth knowing), the screen labels the pills
+  "Set 1 · Left" / "Set 1 · Right", and the AV bar tracker is handed the row's `side` as the hand
+  the athlete says is working: it is recorded as `trace.declaredSide`, the working-hand rule still
+  MEASURES which wrist travelled (the measurement wins the point, the declared side fills in where
+  the take cannot say), and `trace.workingHandDisagreesWithDeclaredSide` is written when they
+  differ -- a Vision left/right swap and a mis-tapped side both exist and neither refuses a take.
+  **A ROW SAVED BEFORE SIDES EXISTED STAYS NULL AND IS SHOWN AS "side not recorded" -- never
+  back-filled**, because which arm the camera saw is a fact about the take and not a guess; a
+  bilateral lift builds exactly the rows it always did and its `side` is null. The column is a
+  non-camera column (`NON_CAMERA_SET_COLUMNS`), the save schema takes it optionally so an older
+  client still saves, the reconciler adds it after the `body_side` type (proven on a fresh database
+  and idempotent on a second run), the coach's exercise analytics and the admin capture export
+  select it, the tracking report prints "left side" in the set header, and the day's read-back
+  carries it relationally. `shared/unilateral-sides.test.ts`,
+  `client/src/lib/a-unilateral-set-carries-its-side.test.ts` (the path, comments stripped) and
+  `server/a-unilateral-set-keeps-its-side.itest.ts` (real Postgres: the parse keeps it, the insert
+  writes it, the day and the export read it, the report prints it, a re-save keeps it, an older
+  client and a bilateral lift store null). **What this does NOT do, named:** the coach's athlete
+  views still show set rows by number (a unilateral exercise shows six), with the side only where
+  the row is labelled by the helper; a second filmed row take -- the first on the working-hand rule
+  with a declared side -- is what gives the row its first ledger row. Client plus a server column:
+  `verify_build` then `beta` with round eleven when the hold lifts.
+- **ROUND ELEVEN, 2026-11-06: THE FIRST DUMBBELL LIFTS BESIDE THE SENSOR -- A SUPINE SPAN IS NOT A
+  STATURE, A DUMBBELL LIFT ASKS FOR A DUMBBELL, AND A UNILATERAL LIFT IS TRACED BY ITS WORKING
+  HAND.** Bench Press 135x8, Dumbbell Shoulder Press 35x8 and Single-Arm Dumbbell Row 70x8 on 714;
+  Scott: "at least one fix per lift ... this is the first time we've ever tested dumbbell exercises
+  though. So we need to check the object detection, are the two camera systems and the ai overwatch
+  working together?" All three systems ran on all three takes (overwatch judged every frame, frozen
+  0; `recording.overwatch` is where it rides); the object system asked for the right class on the
+  bench and the press and the WRONG one on the row.
+  **BENCH -12.6%: THE STATURE YARDSTICK CONVICTED THE ONE RULER THAT WAS RIGHT.**
+  `rejectImplausibleScales` read a SUPINE athlete's nose-to-ankle span (1011 units -- a 139-inch
+  man at the scale the sensor requires) as a stature and threw out the shoulder ruler (+17.8%,
+  implied 163.6in), leaving the collapsed 3D pair alone at -12.5%; the three together read **+2.5%**.
+  The 10-06 rule "the body-length yardstick is consulted only where a body length IS a stature" was
+  coded as `bent_over` alone; it runs exactly where the height RULER may vote now
+  (`postureAllowsHeightCalibration`), a shared RULE that only ever ADMITS, and the only take in the
+  corpus it moves is this bench. **The plate was found (724 samples at 0.90, locked 866 of 994),
+  boxed 7% SMALL (aspect 1.96, from the foot of the bench), and admitting it was built, costed and
+  NOT shipped**: `referenceObjectVerdict` takes a per-lift `maxPlateAspectRatio` now (defaulted, so
+  nothing moves), but at 2.0 the plate carries 73.9% of the blend and reads the take +6.2% against
+  +2.5% without it. Recorded under "known not to work".
+  **DUMBBELL PRESS +47%: EVERY RULER HIGH.** Shoulder +84% (the landmarks collapsed to 55% of
+  breadth with the arms overhead; the 10-09 grip rule catches this on a barbell press at
+  grip/shoulder 2.06 and misses a dumbbell's 1.735), height +44% (the ankle wandered 420px with the
+  wrists at the top edge), the collapsed 3D pair +21% (the even-count bone median landed on the
+  upper arm at +13% where the torso and shin read the sensor within 2%). The body witness's per-rep
+  wrist travel IS the sensor's range at the torso's scale, so the hands are right and the 2D rulers
+  are wrong. The small per-lift step: `FITTED_OVERRIDES["Dumbbell Shoulder Press"]
+  .biacromialToleranceFraction` 0.4 (+47.0 -> +41.8%); loosening the height ruler instead was swept
+  and reads WORSE (+49.5%), because the weight lands on the shoulder. 7 of 8, in `KNOWN_UNDERCOUNTS`
+  until the scale lands.
+  **SINGLE-ARM ROW: TEN REPS AT HALF THE TRAVEL, TWO RULES.** (1) The dialog resolved its CoreML
+  class posture-first, so a `bent_over` lift asked for a PLATE whatever it held -- 14 frames at
+  0.37, no lock on 963 -- while the detector has a dumbbell class; the equipment's own class comes
+  first now, "plate" is the fallback for an implement with none (Rule #4). (2) `barPointFromSides`
+  built the MIDPOINT of a braced hand and the working hand (537 carries, 84 midpoints), which halves
+  the travel exactly: 21.9cm against the sensor's 41.3 (first arm) / 47.1 (second). On a lift whose
+  `laterality` is `unilateral` the point is the WORKING hand (`workingHandForUnilateral`: the wrist
+  with the larger 5th-95th percentile travel, decided once per take), never averaged, never carried,
+  tagged `w`, counted in `trace.barPointFromWorkingHand` / `unilateralWorkingHand` (declared in the
+  schema). Bilateral takes are bit-identical. **It cannot be replayed on this take** (the stored
+  trace and the body witness are both the midpoint), so the row has NO ledger row this round -- a
+  row would score a correct scale against a range that half-measured the hand -- and the next row
+  take filmed on the rule is its test. **Which arm the camera saw is not recorded**; the sensor rode
+  the dumbbell across both arms and they differ by 6cm, which is what Scott's per-side filming ask
+  is for ("every set, every rep, every unilateral exercise needs to have a way to film both sides
+  separately"), the next piece of work.
+  Tests: `a-supine-span-is-not-a-stature`, `a-dumbbell-lift-asks-for-a-dumbbell`,
+  `a-unilateral-lift-is-traced-by-its-working-hand`, `ovr-2026-11-06-every-lift-reads-only-its-own-record`,
+  the aspect-parameter case in `tracker-arbiter.test.ts`; two ledger rows (the bench's carrying
+  the new `rejectedAsFilmed`, which the replay re-admits where the stature yardstick no longer
+  runs); three ground-truth constants; the fixture `ovr-2026-11-06-export.json`. See
+  docs/camera-tracking-notes.md, "Round eleven". Calibration work, HELD on the development branch
+  with the reps-keypad fix on Scott's word ("Build but queue I'm testing camera now");
+  `verify_build` then `beta` when he lifts it.
+- **ROUND TEN, 2026-11-05: THE RDL'S EIGHTH REP WAS A HOLD THE SEGMENTER COULD NOT SEE PAST, ON
+  THREE TAKES, AND SET 1'S "REP 1" WAS THE SET-UP.** Set 2 of all three lifts on 712 (Back Squat
+  135x5, RDL 135x8, box jump x5), filmed between the morning's set 1 and the autosave that wiped
+  it; Scott: "Obviously rdl only recorded 7 reps when OVR says 8 so we were wrong there."
+  **A REP ENDS WHEN THE BAR COMES TO REST** (`restArrivalAfterPeak`, bar-tracking.ts, a shared
+  RULE): the eighth pull was in the trace, followed by a 2.2s stand at lockout with the recording
+  running and an 8cm shrug, and `segmentPhases` -- which ends a phase only on a reversal -- made
+  one 2.8s "concentric" of it that the overlong rack-move test deleted. Walking forward from the
+  peak on the RAW series, the first sample from which the bar moves under four travel margins in
+  a whole second is the rest; if the phase goes on past the rest's own top, every measurement on
+  the rep reads to the rest. Inert on a rep that reverses out of its top. Four things had to be
+  measured to get it right and each is in the comments: extent over the window not from its
+  first sample (a held bar creeps), raw not smoothed (the Kalman smoother overshoots the arrival
+  and reads as movement inside the hold -- the 10-19 take's rest was never found on the smoothed
+  series), drift judged past the rest's top not its arrival (a paused lockout stays whole), and
+  a phase cut at a rest after less than half a rep's movement is a settle wherever it sits
+  (bench-unrack-capture's 5s settle became a 0.13s "rep" without it).
+  **AND THE RULE EXPOSED ROUND NINE'S READING OF SET 1.** With its eighth pull returned (behind a
+  1.7s stand) the count had nine, and round nine's "starved rep 1" -- 48.6cm with 61% of it
+  inside a 0.239s hole, 2.3s before the first pull where the pulls sit 1.0s apart -- was the
+  SET-UP. The count-trim kept it (0.6) and took the real eighth (0.1, its window read over the
+  whole phase, hold included; it reads to the rest now). A sample-starved edge phase is the least
+  rep-like thing in the set when the count says there is one too many: raised to the trim's
+  floor. Set 1 and set 2 read 8 of 8 as the eight pulls, the 10-19 RDL set 2 reads 8 of 8 and
+  left `KNOWN_UNDERCOUNTS`, no other take in the corpus moved; with no count logged the set-up
+  reports as a ninth rep (the lesser failure, recorded in the test). **The ledger row for set 1
+  is re-stated over the eight pulls** (63.4, +3.6%; round nine's 63.8 was over the seven it had)
+  and the ground truth says in words that its forgeOnDevice numbers are the phone's seven plus
+  the set-up.
+  **RDL window 0.02 -> 0** (its own record): set 2 mean +20.0 -> +15.8%, set 1 +25.8 -> +16.1%,
+  10-29 set 1 +32.2 -> +7.8%, 10-19 set 2 +25.8 -> +22.5%; peaks untouched (+19 / +30%, not
+  fitted). **Squat `heightRulerUncertainty` 0.11 -> 0.12**: set 2 reads -2.7% / +2.4% / +1.6%
+  rep for rep, and the six squat takes on the current pipeline all read low as filmed (-4.3 /
+  -0.5 / -0.9 / -0.3 / -1.9 / -2.7 at 0.11), so the one-point step round two took; on the ledger's
+  SEALED rows the live replay reads it as a wash (three better, four worse), because a sealed row
+  carries the shoulder floor and not the grip-loosened 0.38-0.40 the phone stated on the 10-29 and
+  11-05 takes -- the ledger's own stated limit, now costing a decision. **MEASURED AND REJECTED
+  (the romCm comment in bar-tracking.ts):** reporting the rep's range off the SMOOTHED series
+  lands all four sensor-paired squats inside 1% (the drive distances read the sensor's reps
+  within 2% on all ten squat reps) and reads 2-12 points HIGH on every one of the fifteen other
+  paired takes -- the Kalman smoother overshoots a fast reversal; the raw extreme near each
+  endpoint moves no squat. Reverted before it was committed. The mean's +2.4% on both squat sets
+  is one 33ms sample of phase edge on four of five reps, a mechanism and not a constant.
+  **THE SENSOR'S WINDOW ON A JUMP IS SETTLED: DIP BOTTOM TO THE HIP'S APEX.** Off the
+  `bodyWitnessTrace` (in the export from 712) the hip's rise from the dip bottom to its highest
+  point takes 0.55 / 0.45 / 0.46 / 0.49 / 0.50s against the sensor's range over its mean, 0.50 /
+  0.49 / 0.48 / 0.48 / 0.50s -- inside one hip sample on every rep -- where the drive to takeoff
+  is 0.20-0.28s, which is the whole of the +24% / +28% the drive mean read on two sets.
+  `measureCountermovement` reads `riseToApexCm` / `riseToApexSeconds` / `riseToApexMeanVelocityMps`
+  (bounded a second past takeoff, absent when the trace ends in flight); `applyBoxRiseCorrection`
+  divides the FLIGHT share of that rise by the box ratio and keeps the drive share at the floor's
+  scale (the rise crosses from the floor to the box); the set's `meanVelocityMps` is
+  `hipRiseToApexMeanVelocityMps` (workout.tsx), the drive mean kept beside it. On the replay through
+  the stored hip trace the set reads +3.1%; the phone's own series is the next take's test. Hip
+  peak +2.6% smoothed / +5.5% raw on set 2, not fitted.
+  `a-rep-ends-when-the-bar-rests.test.ts` (the three rules on synthetic input, five mutations
+  named in its header), the set-2 cases in `ovr-2026-11-05-every-lift-reads-only-its-own-record.test.ts`,
+  ledger rows `2026-11-05-back-squat-set-2` / `2026-11-05-romanian-deadlift-set-2`, ground truth
+  `OVR_*_SET2_2026_11_05`, `windows.heldAtTopSeconds` and the apex fields declared in the schema.
+  See docs/camera-tracking-notes.md, "Round ten". Calibration work: held with the save fix on
+  Scott's word ("queue it as I'm testing the camera") and shipped as build **714** when he lifted
+  it on 2026-11-06 (713 was its `verify_build`).
 - **ROUND NINE, 2026-11-05: THE FIRST TAKES ON THE CORRECTED RULE. THE SQUAT LANDS, THE RDL IS
   TRACE-LIMITED, THE JUMP'S HIP PEAK IS ON THE SENSOR.** Squat 135x5, RDL 135x8 and a box jump x5
   on 710; Scott: "only testing the 3 lifts today", "at least one fix per lift ... fix every error
@@ -3569,6 +3726,53 @@ purpose**: the legal pages are eager (public routes) and the shell carries every
 app, so a static import would put all of it on a signed-out visitor's first paint, which
 `bundle-budget.test.ts` refuses; the Suspense fallback is the document itself, so nothing blanks.
 Run 694 was its `verify_build` and **695 the upload**: the build that replaces 693 on the version page.
+
+## 1.0 WAS REJECTED A THIRD TIME, FOR THE FORGE CODE: A PROMO CODE IS A PURCHASE MECHANISM
+
+Added 2026-11-06. Apple's third pass, on build 695, one item, Guideline 3.1.1: "The app unlocks or
+enables additional functionality with mechanisms other than In-App Purchase ... Specifically, the
+app uses promo code to unlock or enable subscription." The screenshot was the Upgrade screen's
+Forge CODE box, reading "Full access is free through 11/10/2026" above it on the review athlete.
+Apple's remedy, in their words: remove the feature and any other that unlocks functionality outside
+the App Store; for discounts or free access, create offer codes for the In-App Purchases.
+
+**THE COMMENT ABOVE THAT BOX ARGUED THE OPPOSITE, AND THE 10-29 REPLY TO APP REVIEW HANDED THEM
+THE CODE.** The box shipped 2026-10-15 under "It is not a store product -- it writes Forge's own
+trial row, so Apple's rules on where a purchase happens do not reach it", and the reply to the
+second rejection's 2.1 question described exactly how a Forge code grants the paid Free Agent
+features and gave the reviewer a code to try. That is the sentence 3.1.1 is about: WHO writes the
+row is irrelevant, what matters is that typing something other than an In-App Purchase turns the
+paid features on. **A free-trial code is a purchase mechanism**, whatever the table it writes to.
+
+**THE FIX IS ONE PREDICATE AND THREE CONDITIONS; NOTHING IS DELETED.** `forgeCodeEntryIsAllowed()`
+in `client/src/lib/forge-code-entry.ts` is `!Capacitor.isNativePlatform()`, and the three surfaces
+that take a Forge code draw their box only behind it: the Upgrade screen's card (sentence and box
+both), the optional Promo code field at sign-up (`promoCodeApplies` reads it first), and the primary
+coach's Redeem-a-code box in Account Settings. It asks `isNativePlatform`, not the iOS check,
+because Google Play's billing policy reads the same way, so the answer is "web only" and not "not
+iOS". **What stays on the phone**: the "App Store code" button (Apple's own offer-code sheet,
+`redeemAppleOfferCode`) and Restore Purchases, both of which 3.1.1 wants there. **What is
+untouched**: the two redeem routes, the signup handler's code check, `shared/promo-codes.ts`, the
+admin screen that mints codes, and the Stripe promotion codes -- a code typed on the website works
+exactly as before, and an account that redeemed one earlier keeps its trial. The web is where
+Forge's codes live; the App Store's codes live at Apple.
+
+`a-forge-code-is-never-typed-in-the-native-app.test.ts` DISCOVERS the surfaces (every client file
+that posts to a redeem-code route or sends `promoCode` in a body -- a fourth is found the day it is
+written), finds the code input by what it BINDS rather than a test id, walks back to the JSX
+conditional enclosing it by matching brackets, and requires that condition to call the helper
+directly or through a local const whose initializer does (signup's `promoCodeApplies`). It drives
+the helper under a mocked Capacitor both ways. Five mutations, each caught by the right case, the
+fifth being a comment quoting `forgeCodeEntryIsAllowed() && (` above an unconditional card -- the
+strip is what reds it, and a case proves the raw text would have passed.
+
+**WHAT GOES BACK TO APPLE.** Build **714** (run 713 its `verify_build`, both on `5003fef`,
+2026-11-06) is the resubmission, a reply that names the change and says the only code the app
+accepts is an App Store offer code, and the App Review notes with the Forge-code paragraph and the
+test code REMOVED (the template in the session scratchpad, `asc/5-app-review-information-notes.txt`,
+carried a `[CODE]` placeholder for exactly the thing Apple objected to). **Create the offer codes
+in App Store Connect** for the three Free Agent subscriptions if a launch discount on iOS is still
+wanted; that is the rail Apple allows and the button for it is already on the screen.
 
 ## THE THREE DEMO ACCOUNTS ARE BACK, EMPTY, AND THEIR PASSWORDS ARE ON RENDER, NEVER HERE
 
@@ -5751,6 +5955,48 @@ change is wrong.
   question asked when one disappeared and there was no way to ask it -- the
   cause sat undetected for four builds. There is no console to read on an
   iPhone, so this is the only instrument.
+- **THE DAY SCREEN HYDRATED FROM THE CACHE AND WROTE AN EMPTY DAY OVER THREE FILMED SETS**
+  (2026-11-05, 19:11 UTC, read off the Render log). Scott filmed set 1 of Back Squat, Romanian
+  Deadlift and Box Jump on 712 between 19:00 and 19:07, every save 200, every clip 201. At
+  19:11:29 a GET of the day returned 30,428 bytes (three sets, three traces); at 19:11:38 and
+  19:11:40 two POSTs returned 200; at 19:12:02 the same GET returned 3,734 bytes. **Rows, clips
+  and traces gone, by the app's own autosave, with nothing refused and nothing logged as an
+  error.** Set 1's numbers survive only because the morning export had already been read into the
+  repo's fixture, ledger and ground truth; the server has nothing left of them.
+  **TWO HALVES, BOTH NECESSARY.** (1) `workout.tsx`'s hydration effect was the hydrate-in-an-effect
+  shape this file already names, with a twist the paragraph does not cover: React Query serves the
+  CACHED day synchronously on remount (in-memory and the `forge-query-cache` persister, 24h) before
+  the `refetchOnMount: "always"` refetch lands, so `if (data && !hydrated)` latched on an 18:59 copy
+  of the day with NO log in it, took `baseRevisionRef` null, and ignored the refetch that arrived a
+  moment later carrying the three sets. The next autosave sent three exercises with no sets and no
+  `baseRevision`. The effect now hydrates only from a fetch that landed AFTER the screen mounted
+  (`dataUpdatedAt >= hydrateFromFetchesAfterRef.current`, the stamp reset in the 409 handler so a
+  catch-up also refetches), the loading gate waits on `!data || !hydrated`, and a save that carried
+  a capture invalidates the day query so the cache is never older than the server by one set.
+  (2) `submitWorkoutLog` let a payload with NO revision claim through against a day that has a
+  log -- the "older client" clause the survival itest used to assert in words. There is no older
+  client; a save with no claim against a revisioned day is a stale screen, and it gets the same
+  409 a wrong claim gets, which the client already recovers from. The first save of a day (no log,
+  nothing to claim) is unchanged. `server/test-support/save-at-current-revision.ts` is how the
+  itests save a day a second time now, and the five files that re-saved without a claim read it.
+  **THE DOUBLE 409 ON EVERY RETURN TO A DAY WAS THE SAME BUG WITH THE REVISION PRESENT.** Where
+  the cache held a revision, the stale hydration was refused (20:41:29/30, 20:42:07/08,
+  20:48:09/14 in the same log: two 409s a second apart each time) and the 409 handler rehydrated
+  from the same stale `data`, so the second save was refused too. Harmless there and the tell for
+  the mechanism; it reads as the cache being one revision behind, which is exactly what it was.
+  **RECORDED FACTS FROM THE SAME LOG, NOT BUGS:** the `visibilitychange` beacon save 401s in 1-3ms
+  on every background (the native app authenticates with a bearer token in localStorage, which
+  `sendBeacon` cannot carry, and ITP drops the cookie) -- fire-and-forget by design, and the
+  queued flush is what actually carries that save; and the device-approval sign-in storm (49
+  `complete` POSTs in a second, one 200, the rest 409/499) fired at 18:58:45 and 20:41:06, both
+  after a fresh install, still queued behind the calibration round.
+  `client/src/lib/the-day-hydrates-from-a-fetch-not-the-cache.test.ts` (8 cases, six mutations
+  each caught) states what is FORBIDDEN -- `if (data && !hydrated) {` with no fetch stamp, a 409
+  branch that rehydrates without resetting the stamp, a loading gate that draws before `data`, a
+  throw condition that still reads `input.baseRevision != null &&` -- with comments stripped.
+  Server half ships on Render; client half is a build. Held on Scott's word ("queue it as I'm
+  testing the camera") because a Render deploy restarts the server under a filming session, and
+  shipped 2026-11-06 in build **714** when he lifted it.
 
 ## The AI knowledge library
 

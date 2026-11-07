@@ -102,6 +102,11 @@ export const boxHeightUnitEnum = pgEnum("box_height_unit", ["in", "m"]);
 // DB constraint -- nothing downstream depends on that invariant holding.
 export const formCheckFlagEnum = pgEnum("form_check_flag", ["best", "worst"]);
 export const lateralityEnum = pgEnum("laterality", ["bilateral", "unilateral"]);
+// Which side an individual set or result belongs to -- distinct from lateralityEnum above, which
+// says whether a thing is done per side at all. Declared here, above workoutSetEntries, because a
+// pgEnum is a const and a table that names it has to come after it. (It lived beside the movement
+// screen tables until 2026-11-06; the comment there says what it is for on a result.)
+export const bodySideEnum = pgEnum("body_side", ["left", "right"]);
 // Coach-only quick-glance status, toggled by the coach as an athlete gets
 // hurt/recovers -- never surfaced to the athlete themselves (see PublicUser).
 export const healthStatusEnum = pgEnum("health_status", ["healthy", "hurt"]);
@@ -2505,6 +2510,14 @@ export const workoutSetEntries = pgTable(
     .notNull()
     .references(() => workoutLogEntries.id, { onDelete: "cascade" }),
   setNumber: integer("set_number").notNull(),
+  // WHICH SIDE THIS ROW IS, on a unilateral exercise (shared/unilateral-sides.ts). Every set of a
+  // unilateral lift is two rows, one per side, each filmed and measured on its own -- Scott,
+  // 2026-11-06: "every set, every rep, every unilateral exercise needs to have a way to film both
+  // sides separately." Null on a bilateral lift and on every row saved before this existed; a null
+  // on a unilateral lift is shown as "side not recorded" and never back-filled, because which arm
+  // the camera saw is a fact about the take, not a guess. The tracker is TOLD this side
+  // (trackingDiagnostics.trace.declaredSide) and records whether the hand it measured agrees.
+  side: bodySideEnum("side"),
   reps: text("reps"),
   weight: text("weight"),
   // The athlete's preferred unit at the moment this set was logged -- weight
@@ -3756,9 +3769,8 @@ export const movementScreenCaptureMethodEnum = pgEnum("movement_screen_capture_m
   "photo_import",
   "camera_assisted",
 ]);
-// Which side an individual RESULT belongs to -- distinct from lateralityEnum
-// above, which describes whether a battery TEST is scored per-side at all.
-export const bodySideEnum = pgEnum("body_side", ["left", "right"]);
+// Which side an individual RESULT belongs to -- bodySideEnum, declared beside lateralityEnum near
+// the top of this file since 2026-11-06, when workout_set_entries started carrying it too.
 
 // A named, ordered test list. Forge ships one or more official batteries
 // (isForgeOfficial, owned by an admin account -- same explicit-flag pattern
@@ -9277,6 +9289,9 @@ export const repBreakdownEntrySchema = z.object({
       largestGapSeconds: z.number().nullable().optional(),
       distanceInLargestGapShare: z.number().nullable().optional(),
       sampleStarved: z.boolean().nullable().optional(),
+      // How long the segmenter's phase ran on past the rep's rest at the top (bar-tracking.ts,
+      // restArrivalAfterPeak, round ten 2026-11-05).
+      heldAtTopSeconds: z.number().nullable().optional(),
     })
     .optional()
     .nullable(),
@@ -9504,6 +9519,7 @@ export const NON_CAMERA_SET_COLUMNS = [
   "id",
   "logEntryId",
   "setNumber",
+  "side",
   "reps",
   "weight",
   "weightUnit",
@@ -9956,6 +9972,10 @@ export const trackingDiagnosticsSchema = z.object({
       barPointFromEquipmentRejected: z.number().optional(),
       barPointFromShoulders: z.number().optional(),
       barWitness: z.enum(["shoulders", "hands"]).optional(),
+      unilateralWorkingHand: z.enum(["left", "right"]).nullable().optional(),
+      barPointFromWorkingHand: z.number().optional(),
+      declaredSide: z.enum(["left", "right"]).nullable().optional(),
+      workingHandDisagreesWithDeclaredSide: z.boolean().optional(),
       equipmentVoteLabel: z.enum(["barbell", "plate"]).nullable().optional(),
       equipmentAgreementFrames: z.number().optional(),
       equipmentOffsetSpreadGrips: z.number().nullable().optional(),
@@ -10292,6 +10312,12 @@ export const jumpBreakdownEntrySchema = z.object({
       concentricPeakVelocityRawMps: z.number().nullable().optional(),
       uncorrectedConcentricMeanVelocityMps: z.number().nullable().optional(),
       uncorrectedConcentricPeakVelocityMps: z.number().nullable().optional(),
+      // The sensor's window: dip bottom to the hip's apex (jump-tracking.ts, round ten 2026-11-05).
+      apexT: z.number().nullable().optional(),
+      riseToApexCm: z.number().nullable().optional(),
+      riseToApexSeconds: z.number().nullable().optional(),
+      riseToApexMeanVelocityMps: z.number().nullable().optional(),
+      uncorrectedRiseToApexCm: z.number().nullable().optional(),
     })
     .optional()
     .nullable(),
@@ -10327,6 +10353,8 @@ export const jumpBreakdownEntrySchema = z.object({
 //   - formFaults draws from a closed vocabulary of fault codes, so 50 is already unreachable.
 export const setLogInputSchema = z.object({
   setNumber: z.number(),
+  // See workoutSetEntries.side. Optional so a client from before this existed still saves.
+  side: z.enum(["left", "right"]).optional().nullable(),
   reps: z.string().optional().nullable(),
   weight: z.string().optional().nullable(),
   bandColor: z.string().optional().nullable(),

@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { consentRecords, legalDocuments, users } from "@shared/schema";
 import { storage } from "./storage";
+// Every re-save claims the stored revision, as the live screen does -- see save-at-current-revision.ts.
+import { submitLogAtCurrentRevision } from "./test-support/save-at-current-revision";
 import {
   makeAssignedProgram,
   makeAthlete,
@@ -81,14 +83,14 @@ describe("the capture-time biometric gate", () => {
 
   it("refuses to store a trace for an athlete with no release on file", async () => {
     const ctx = await setup();
-    await storage.submitWorkoutLog(ctx.athlete.id, payload(ctx, TRACE) as never);
+    await submitLogAtCurrentRevision(ctx.athlete.id, payload(ctx, TRACE) as never);
     expect(await storedTrace(ctx.athlete.id)).toBeNull();
   });
 
   // The set itself still saves. Withholding consent costs the biometric data, not the training.
   it("still saves the set, the reps and the weight", async () => {
     const ctx = await setup();
-    await storage.submitWorkoutLog(ctx.athlete.id, payload(ctx, TRACE) as never);
+    await submitLogAtCurrentRevision(ctx.athlete.id, payload(ctx, TRACE) as never);
     const rows = await db.query.workoutSetEntries.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0].reps).toBe("5");
@@ -98,7 +100,7 @@ describe("the capture-time biometric gate", () => {
   it("stores the trace once the athlete agrees", async () => {
     const ctx = await setup();
     expect((await storage.recordBiometricRelease(ctx.athlete.id)).ok).toBe(true);
-    await storage.submitWorkoutLog(ctx.athlete.id, payload(ctx, TRACE) as never);
+    await submitLogAtCurrentRevision(ctx.athlete.id, payload(ctx, TRACE) as never);
     expect(await storedTrace(ctx.athlete.id)).not.toBeNull();
   });
 
@@ -110,7 +112,7 @@ describe("the capture-time biometric gate", () => {
   it("never wipes capture data already stored for an athlete with no release", async () => {
     const ctx = await setup();
     await storage.recordBiometricRelease(ctx.athlete.id);
-    await storage.submitWorkoutLog(ctx.athlete.id, payload(ctx, TRACE) as never);
+    await submitLogAtCurrentRevision(ctx.athlete.id, payload(ctx, TRACE) as never);
     expect(await storedTrace(ctx.athlete.id)).not.toBeNull();
 
     // Now the athlete looks like a pre-existing one: real capture data, nothing on file.
@@ -121,7 +123,7 @@ describe("the capture-time biometric gate", () => {
     const edit = payload(ctx, undefined);
     delete (edit.entries[0].sets[0] as Record<string, unknown>).barPathTrace;
     (edit.entries[0].sets[0] as Record<string, unknown>).weight = "145";
-    await storage.submitWorkoutLog(ctx.athlete.id, edit as never);
+    await submitLogAtCurrentRevision(ctx.athlete.id, edit as never);
 
     expect(await storedTrace(ctx.athlete.id)).not.toBeNull();
     const rows = await db.query.workoutSetEntries.findMany();
@@ -133,7 +135,7 @@ describe("the capture-time biometric gate", () => {
   it("still refuses a new capture from an athlete whose old data it kept", async () => {
     const ctx = await setup();
     await storage.recordBiometricRelease(ctx.athlete.id);
-    await storage.submitWorkoutLog(ctx.athlete.id, payload(ctx, TRACE) as never);
+    await submitLogAtCurrentRevision(ctx.athlete.id, payload(ctx, TRACE) as never);
     await db.delete(consentRecords).where(eq(consentRecords.userId, ctx.athlete.id));
 
     const fresh = [
@@ -141,7 +143,7 @@ describe("the capture-time biometric gate", () => {
       { t: 33, x: 5, y: -95 },
       { t: 66, x: 5, y: 5 },
     ];
-    await storage.submitWorkoutLog(ctx.athlete.id, payload(ctx, fresh) as never);
+    await submitLogAtCurrentRevision(ctx.athlete.id, payload(ctx, fresh) as never);
     // The stored trace is still the original, not the one just sent.
     expect(JSON.stringify(await storedTrace(ctx.athlete.id))).toBe(JSON.stringify(TRACE));
   });
@@ -199,7 +201,7 @@ describe("the capture-time biometric gate", () => {
       outcome: "ok",
       recording: { frameCount: 300, trackedFrameCount: 290, elapsedSeconds: 10 },
     };
-    await storage.submitWorkoutLog(ctx.athlete.id, withDiagnostics as never);
+    await submitLogAtCurrentRevision(ctx.athlete.id, withDiagnostics as never);
     expect(await storedTrace(ctx.athlete.id)).toBeNull();
 
     const admin = await makeLoginableUser({ role: "admin" });
@@ -213,7 +215,7 @@ describe("the capture-time biometric gate", () => {
     );
 
     expect((await storage.recordBiometricRelease(ctx.athlete.id)).ok).toBe(true);
-    await storage.submitWorkoutLog(ctx.athlete.id, withDiagnostics as never);
+    await submitLogAtCurrentRevision(ctx.athlete.id, withDiagnostics as never);
     const after = await client.get("/api/admin/capture-export.json?limit=20");
     expect(after.body.captures).toHaveLength(1);
     expect(after.body.captures[0].barPathTrace).toHaveLength(TRACE.length);

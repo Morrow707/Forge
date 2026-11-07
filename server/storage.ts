@@ -23992,9 +23992,28 @@ ${catalog}`;
         // Refuse a save built from an older picture of this day than what is
         // stored, rather than letting it replace the day wholesale. See
         // StaleWorkoutLogError and workoutLogs.revision for why this is a
-        // refusal and not a merge. A payload with no baseRevision at all is an
-        // older client and keeps the previous behaviour.
-        if (input.baseRevision != null && input.baseRevision !== log.revision) {
+        // refusal and not a merge.
+        //
+        // A PAYLOAD WITH NO REVISION CLAIM AT ALL IS REFUSED TOO, ONCE A LOG EXISTS.
+        //
+        // This clause used to read "an older client keeps the previous behaviour" and let a
+        // revision-less save through unchecked. There is no older client -- every screen has
+        // sent baseRevision since build 554 -- and the one thing that still arrives without a
+        // claim is a screen that hydrated from a picture of the day in which NO LOG EXISTED
+        // yet: the cached answer from before the sets were filmed. 2026-11-05, 19:11 UTC: the
+        // workout screen remounted, React Query handed it the day as cached at 18:59 (empty,
+        // no log) a beat before the refetch landed with the three camera sets, the screen
+        // hydrated from the cached one, and its next autosave carried three exercises with no
+        // sets and no baseRevision. The check below skipped it and the day was replaced:
+        // Back Squat, Romanian Deadlift and Box Jump set 1, their clips and their traces, all
+        // deleted by a save that had never read them. A null claim against a day that has a
+        // revision is the stale screen by construction, and the client's own 409 recovery
+        // (re-read the day, rehydrate) is the right answer to it -- the same answer a wrong
+        // revision already gets.
+        //
+        // A first save of a day still has nothing to conflict with: `log` is null above and
+        // this branch is never reached.
+        if (input.baseRevision == null || input.baseRevision !== log.revision) {
           throw new StaleWorkoutLogError(log.revision);
         }
 
@@ -24377,6 +24396,7 @@ ${catalog}`;
               return {
                 logEntryId: entryRow.id,
                 setNumber: s.setNumber,
+                side: s.side ?? null,
                 reps: s.reps ?? null,
                 weight: s.weight ?? null,
                 weightUnit: entry.weightMode === "numeric" && s.weight ? entryWeightUnit : null,
@@ -26213,6 +26233,7 @@ ${catalog}`;
       .select({
         date: workoutLogs.date,
         setNumber: workoutSetEntries.setNumber,
+        side: workoutSetEntries.side,
         reps: workoutSetEntries.reps,
         weight: workoutSetEntries.weight,
         weightUnit: workoutSetEntries.weightUnit,
@@ -26784,6 +26805,8 @@ ${catalog}`;
         movementType: exercises.movementType,
         trackingLevel: programExercises.trackingLevel,
         setNumber: workoutSetEntries.setNumber,
+        // Which side of a unilateral lift this take filmed -- see workoutSetEntries.side.
+        side: workoutSetEntries.side,
         reps: workoutSetEntries.reps,
         weight: workoutSetEntries.weight,
         weightUnit: workoutSetEntries.weightUnit,

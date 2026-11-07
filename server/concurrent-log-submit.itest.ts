@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { storage } from "./storage";
+import { submitLogAtCurrentRevision } from "./test-support/save-at-current-revision";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import { workoutLogEntries, workoutLogs, workoutSetEntries } from "@shared/schema";
@@ -83,7 +84,8 @@ describe("concurrent submissions of the same day", () => {
   it("the last writer's numbers are the ones that survive", async () => {
     const ctx = await setup();
     await storage.submitWorkoutLog(ctx.athlete.id, payload(ctx, "5") as never);
-    await storage.submitWorkoutLog(ctx.athlete.id, payload(ctx, "8") as never);
+    // The second save claims the revision the first produced, as the live screen does.
+    await submitLogAtCurrentRevision(ctx.athlete.id, payload(ctx, "8") as never);
 
     const logs = await db.select().from(workoutLogs).where(eq(workoutLogs.athleteId, ctx.athlete.id));
     const entries = await db

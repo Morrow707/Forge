@@ -22,6 +22,7 @@ import { Ticket, AlertTriangle, Moon, Sun } from "lucide-react";
 import { contrastForegroundHsl, meetsWcagAA, nearestAccessibleColor } from "@/lib/color";
 import { cn } from "@/lib/utils";
 import { getStoredTheme, setTheme, type Theme } from "@/lib/theme";
+import { forgeCodeEntryIsAllowed } from "@/lib/forge-code-entry";
 import { derivePrivacyTier } from "@shared/privacy-tiers";
 import type { PublicUser } from "@shared/schema";
 
@@ -534,7 +535,10 @@ export function AccountSettingsDialog({
             </div>
           )}
 
-          {user.role === "coach" && user.isPrimaryCoach && (
+          {/* WEB ONLY (lib/forge-code-entry.ts): App Review rejected 1.0 on 2026-11-06 under
+              3.1.1 for a code that unlocks paid features outside In-App Purchase. A coach's plan
+              is sold on the web anyway, so this box loses nothing on the phone. */}
+          {user.role === "coach" && user.isPrimaryCoach && forgeCodeEntryIsAllowed() && (
             <div className="space-y-1.5 border-t border-border pt-4">
               <Label className="flex items-center gap-1.5">
                 <Ticket className="h-4 w-4" />

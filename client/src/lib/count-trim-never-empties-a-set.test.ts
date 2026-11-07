@@ -80,10 +80,10 @@ describe("the count-trim removes surplus and never a set", () => {
     "bench-set2-2026-10-02.json": 9,
     "push-press-set2-2026-10-02.json": 9,
     // A multi-capture export is keyed per capture (file:setId), because one file holds takes
-    // that count differently. The 2026-10-29 export: the 10-19 RDL set 2 finds 7 of 8 -- its first
-    // upward phase (2.5-4.9s, 2.4s long) is the pickup from the floor merged with the set-up and
-    // the eighth is the last drive merged with the stand-and-hold before the bar goes down.
-    "ovr-2026-10-29-export.json:2026-10-19 Romanian Deadlift set 2": 7,
+    // that count differently. The 2026-10-29 export's 10-19 RDL set 2 was here at 7 of 8 -- "the
+    // eighth is the last drive merged with the stand-and-hold before the bar goes down" -- until
+    // round ten (2026-11-05) wrote the rest-at-top rule (bar-tracking.ts, restArrivalAfterPeak)
+    // for the same fault on that day's set 2; it counts 8 of 8 now and left the list.
     // The 2026-10-30 export: every shoulder press finds 7 of 8, and on the corrected rule the
     // missing press is the FIRST, merged with the clean into one 2.6m upward phase (the bar goes
     // floor -> shoulders -> overhead with no reversal between), not the eighth folded into the
@@ -98,6 +98,13 @@ describe("the count-trim removes surplus and never a set", () => {
     // and bench set 3: the phone counted 8 on the lowerings; the presses count 7, the slow last
     // one (66cm, 2.6x the median duration) dropped by the same edge rule as the 10-06 bench's.
     "ovr-2026-10-30-export.json:2026-10-30 Bench Press set 3": 7,
+    // The 2026-11-06 export (round eleven, the first dumbbell lifts beside the sensor): the
+    // Dumbbell Shoulder Press finds 7 of 8 on a trace whose scale is +47% high (every ruler
+    // high; see the ledger row) -- the rep gate (minRomFractionOfHeight) reads a short press as
+    // no press at that scale, so the scale is the fault to fix first. The Single-Arm Dumbbell Row
+    // counts TEN of eight at half the travel (the midpoint of a braced and a working hand), which
+    // is an over-count and passes this file's rule; the working-hand rule is its fix.
+    "ovr-2026-11-06-export.json:2026-11-06 Dumbbell Shoulder Press set 1": 7,
   };
 
   it.each(

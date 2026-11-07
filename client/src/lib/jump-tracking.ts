@@ -148,7 +148,27 @@ export type JumpCountermovement = {
    *  ran; absent means the numbers above are uncorrected already. */
   uncorrectedConcentricMeanVelocityMps?: number;
   uncorrectedConcentricPeakVelocityMps?: number;
+  /** THE SENSOR'S WINDOW ON A JUMP: from the bottom of the dip to the hip's APEX, through the
+   *  takeoff and the flight, where the hip's velocity returns to zero. Read off the hip trace of
+   *  the 2026-11-05 box jump set 2 beside the OVR, rep by rep: the hip rose 79.8 / 81.4 / 80.1 /
+   *  81.0 / 81.9cm from the dip bottom to its highest point over 0.55 / 0.45 / 0.46 / 0.49 /
+   *  0.50s, against the sensor's 0.50 / 0.49 / 0.48 / 0.48 / 0.50s -- inside one hip sample on
+   *  every rep -- where the drive to takeoff is 0.20-0.28s. The sensor's "mean velocity" on a
+   *  jump is this rise over this time; concentricMeanVelocityMps (bottom to takeoff) is a
+   *  different quantity and read +24% and +28% against it on two sets for that reason alone.
+   *  Absent when the hip trace ends before the apex (the recording stopped in flight). */
+  apexT?: number;
+  riseToApexCm?: number;
+  riseToApexSeconds?: number;
+  riseToApexMeanVelocityMps?: number;
+  /** The rise to the apex before applyBoxRiseCorrection divided its flight share by the box
+   *  ratio (the drive share is kept at the floor's scale). Absent when no correction ran. */
+  uncorrectedRiseToApexCm?: number;
 };
+
+/** The apex is looked for this long after takeoff at most: a jump's flight to its apex is under
+ *  half a second, and a hip that is still "rising" past this is the tracker, not the athlete. */
+export const APEX_MAX_SECONDS_AFTER_TAKEOFF = 1.0;
 
 /** How much the hip has to move before a direction change counts, so a jittering standing hip
  *  does not read as a dip. 1cm on a scaled trace. */
@@ -225,6 +245,21 @@ export function measureCountermovement(
     peak = Math.max(peak, (hipYSmoothed[lo] - hipYSmoothed[i]) / dt);
     peakRaw = Math.max(peakRaw, (hipPoints[lo].y - hipPoints[i].y) / dt);
   }
+  // The apex: forward from takeoff while the hip is still rising (y falling), with the same
+  // hysteresis, bounded by APEX_MAX_SECONDS_AFTER_TAKEOFF. The hip keeps rising through the
+  // flight; the first point from which it has come back down by more than the hysteresis is past
+  // the apex. A trace that ends while still rising has no apex and the fields stay absent.
+  let apexIdx = takeoffIdx;
+  let apexFound = false;
+  for (let i = takeoffIdx + 1; i < hipPoints.length && hipPoints[i].t - takeoffT <= APEX_MAX_SECONDS_AFTER_TAKEOFF * 1000; i++) {
+    if (hipYSmoothed[i] < hipYSmoothed[apexIdx]) apexIdx = i;
+    else if (hipYSmoothed[i] - hipYSmoothed[apexIdx] > h) {
+      apexFound = true;
+      break;
+    }
+  }
+  const riseToApexM = apexFound ? hipYSmoothed[bottomIdx] - hipYSmoothed[apexIdx] : null;
+  const riseToApexSeconds = apexFound ? (hipPoints[apexIdx].t - hipPoints[bottomIdx].t) / 1000 : null;
   const r2 = (v: number) => Math.round(v * 100) / 100;
   const r1 = (v: number) => Math.round(v * 10) / 10;
   return {
@@ -238,6 +273,14 @@ export function measureCountermovement(
     concentricMeanVelocityMps: r2(riseM / concentricSeconds),
     concentricPeakVelocityMps: r2(peak),
     concentricPeakVelocityRawMps: r2(peakRaw),
+    ...(riseToApexM != null && riseToApexSeconds != null && riseToApexSeconds > 0 && riseToApexM > 0
+      ? {
+          apexT: hipPoints[apexIdx].t,
+          riseToApexCm: r1(riseToApexM * 100),
+          riseToApexSeconds: r2(riseToApexSeconds),
+          riseToApexMeanVelocityMps: r2(riseToApexM / riseToApexSeconds),
+        }
+      : {}),
   };
 }
 
@@ -256,6 +299,8 @@ export function scaleCountermovement(cm: JumpCountermovement, ratio: number): Ju
     concentricMeanVelocityMps: r2(cm.concentricMeanVelocityMps),
     concentricPeakVelocityMps: r2(cm.concentricPeakVelocityMps),
     concentricPeakVelocityRawMps: cm.concentricPeakVelocityRawMps == null ? undefined : r2(cm.concentricPeakVelocityRawMps),
+    riseToApexCm: cm.riseToApexCm == null ? undefined : r1(cm.riseToApexCm),
+    riseToApexMeanVelocityMps: cm.riseToApexMeanVelocityMps == null ? undefined : r2(cm.riseToApexMeanVelocityMps),
   };
 }
 
@@ -271,6 +316,12 @@ export type JumpSetMetrics = {
    *  sensor's window runs past takeoff, so the two means are not the same quantity yet. */
   hipDrivePeakVelocityMps?: number | null;
   hipDriveMeanVelocityMps?: number | null;
+  /** THE SENSOR'S MEAN ON A JUMP (2026-11-05, round ten): the reps' average of
+   *  countermovement.riseToApexMeanVelocityMps -- the hip's rise from the dip bottom to its apex
+   *  over that time -- which is what a hip-mounted sensor reports and what the set's
+   *  meanVelocityMps now carries. hipDriveMeanVelocityMps (bottom to takeoff) stays beside it as
+   *  the drive's own number. Null when no rep reached an apex in its hip trace. */
+  hipRiseToApexMeanVelocityMps?: number | null;
   bestHorizontalDistanceCm: number | null;
   avgGroundContactSeconds: number | null;
   // Reactive Strength Index (jump height in meters / ground contact time in
@@ -947,6 +998,8 @@ export function summarizeJumpSet(
   const avg2 = (xs: number[]) => (xs.length ? Math.round((xs.reduce((a, v) => a + v, 0) / xs.length) * 100) / 100 : null);
   const hipDrivePeakVelocityMps = avg2(hipPeaks);
   const hipDriveMeanVelocityMps = avg2(hipMeans);
+  const hipApexMeans = forBest.map((r) => r.countermovement?.riseToApexMeanVelocityMps).filter((v): v is number => typeof v === "number" && v > 0);
+  const hipRiseToApexMeanVelocityMps = avg2(hipApexMeans);
 
   // ARC-1: jump mode cross-checks something and records what it found.
   // Both height estimates were already computed per rep and deliberately
@@ -963,6 +1016,7 @@ export function summarizeJumpSet(
     bestJumpHeightCm,
     hipDrivePeakVelocityMps,
     hipDriveMeanVelocityMps,
+    hipRiseToApexMeanVelocityMps,
     bestHorizontalDistanceCm,
     avgGroundContactSeconds,
     reactiveStrengthIndex,
@@ -1068,6 +1122,19 @@ export function applyBoxRiseCorrection(
     if (rep.boxClearanceCm != null) rep.boxClearanceCm = Math.round((rep.boxClearanceCm / ratio) * 10) / 10;
     // rep.countermovement is deliberately NOT divided here -- see the docblock. The drive was
     // measured at the floor, at the scale the body rulers read on the standing frames.
+    //
+    // THE RISE TO THE APEX CROSSES FROM THE FLOOR TO THE BOX. Its first part is the drive, at the
+    // floor's scale; the rest is the flight, which ends above the box, nearer the lens, where the
+    // ruler says the picture is `ratio` too big. So the flight share alone is divided, the drive
+    // share kept. On the 2026-11-05 box jump set 2 beside the OVR (ratio 1.242) the uncorrected
+    // rise to the apex read 81-85cm against the sensor's 70-74; drive + flight/ratio reads 72-75.
+    const cm = rep.countermovement;
+    if (cm?.riseToApexCm != null && cm.riseToApexSeconds != null && cm.riseToApexSeconds > 0) {
+      const flightShareCm = Math.max(0, cm.riseToApexCm - cm.concentricRiseCm);
+      cm.uncorrectedRiseToApexCm = cm.uncorrectedRiseToApexCm ?? cm.riseToApexCm;
+      cm.riseToApexCm = Math.round((cm.concentricRiseCm + flightShareCm / ratio) * 10) / 10;
+      cm.riseToApexMeanVelocityMps = Math.round((cm.riseToApexCm / 100 / cm.riseToApexSeconds) * 100) / 100;
+    }
     const t = rep.flightSeconds;
     if (t > 0) {
       const v0 = (rep.netRiseCm / 100 + (GRAVITY_MPS2 * t * t) / 2) / t;

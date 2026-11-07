@@ -112,11 +112,13 @@ import {
   type VelocitySample,
   carryHalfSpan,
   type BarPointSource,
+  workingHandForUnilateral,
 } from "@/lib/bar-tracking";
 import { expectedPatternFromName } from "@/components/bar-tracker-dialog";
 import {
   postureForExercise,
   heightCalibrationUnreliable,
+  postureAllowsHeightCalibration,
   inferMovementType,
   filmGuidanceForExercise,
   barPathAssumptionInvalid,
@@ -604,6 +606,7 @@ export function AvBarTrackerDialog({
   movementType: movementTypeProp,
   equipment,
   laterality,
+  side,
   heightIn,
   bodyModel,
   targetReps,
@@ -626,6 +629,10 @@ export function AvBarTrackerDialog({
   movementType?: string | null;
   equipment?: string | null;
   laterality?: string | null;
+  /** Which side of a unilateral lift this set row is (shared/unilateral-sides.ts): the hand the
+   *  athlete says is working. Recorded as `trace.declaredSide`; the working-hand rule measures the
+   *  hand itself and falls back to this where the take cannot say. */
+  side?: "left" | "right" | null;
   heightIn?: number | null;
   /** A tape-measured grip, when the athlete has given one. See gripWidthScaleFromFrames. */
   /** What earlier takes with a real ruler learned about this athlete's own bones. See
@@ -772,11 +779,21 @@ export function AvBarTrackerDialog({
   // A program row with no movement type is read by its name (inferMovementType); a row that
   // has one is believed. The bench beside OVR on 2026-10-02 arrived with null.
   const movementType = movementTypeProp ?? inferMovementType(exerciseName);
-  const coreMlTrackingMode: string | undefined = heightCalibrationUnreliable(exerciseName, movementType)
-    ? "plate"
-    : equipment
-      ? COREML_TRACKING_MODE_BY_EQUIPMENT[equipment]
-      : undefined;
+  // THE EQUIPMENT'S OWN CLASS FIRST; "plate" ONLY WHERE THE EQUIPMENT HAS NO CLASS OF ITS OWN.
+  //
+  // Until 2026-11-06 the posture branch came first: any lift whose height ruler is unreliable
+  // asked for a plate, whatever it was performed with. The reasoning above is about a BARBELL
+  // lying lift (loaded plates square in frame), and for a barbell the equipment map says plate
+  // anyway, so the order never mattered until the first dumbbell lift was filmed beside the
+  // sensor. The Single-Arm Dumbbell Row is bent_over, so it asked for a plate: 14 frames at 0.37
+  // confidence, a lock held on 0 of 963 frames, and the object system -- which the retrained
+  // detector has a dumbbell class FOR (430 labelled boxes, median box ratio 1.00 held out) --
+  // spent the take looking for an object that was not in the scene. Rule #4: a tracker names the
+  // object it expects, and a dumbbell row expects a dumbbell. A barbell bench, a barbell row and
+  // every unmapped implement resolve exactly as before.
+  const coreMlTrackingMode: string | undefined =
+    (equipment ? COREML_TRACKING_MODE_BY_EQUIPMENT[equipment] : undefined)
+    ?? (heightCalibrationUnreliable(exerciseName, movementType) ? "plate" : undefined);
 
   // OVERWATCH'S THREE NUMBERS FOR THIS LIFT, handed to the native arbiter with every capture.
   //
@@ -1232,6 +1249,9 @@ export function AvBarTrackerDialog({
     // unification rather than a second opinion: the object tracker is being held to one standard
     // in both places, and the standard is the body.
     const bodyRef = takeBodyReference(rawFrames);
+    // The aspect ceiling is THIS lift's (round eleven, 2026-11-06): a bench's plate is seen
+    // from the foot of the bench and reads 1.9-2.0 on every take, a press's or a row's "plate"
+    // at that aspect is the torso. See referenceObjectVerdict and FITTED_OVERRIDE_EVIDENCE.
     const plateShapeVerdict = plateScaleRaw
       ? referenceObjectVerdict({
           shape: plateScaleRaw.shape,
@@ -1239,6 +1259,7 @@ export function AvBarTrackerDialog({
           yardstick: bodyRef.yardstick,
           frameWidth: bodyRef.frameWidth,
           frameHeight: bodyRef.frameHeight,
+          maxPlateAspectRatio: scaleTunables.maxPlateAspectRatio,
         })
       : null;
     // Every reason, not the first one. A read that is both the wrong shape AND in the wrong place
@@ -1425,7 +1446,20 @@ export function AvBarTrackerDialog({
     // plates, implied a 142-inch athlete for the shoulder ruler and a 39-inch one for the plate,
     // and the one ruler that survived (height, built on that same span) was 37% low. The grip
     // yardstick still runs; only the stature check stands down, and only for this posture.
-    const bodySpanUnits = posture === "bent_over" ? null : impliedBodyLengthUnits(calibrationInput);
+    // AND NEITHER HAS A LYING ONE, OR A SEATED ONE. Round eleven, 2026-11-06: the bench beside the
+    // OVR (135x8, build 714) read the nose-to-ankle span of a SUPINE athlete filmed from the foot
+    // of the bench at 1011 units -- which at the scale the sensor requires is a 139-inch man --
+    // and that span convicted the shoulder ruler (implied 163.6in) while keeping the two 3D rulers
+    // that happened to sit under the 1.8x ceiling. The shoulder ruler was +17.8% and the pair it
+    // left behind was -12.5%; together they bracket the sensor and read +2.5%. The rule the 10-06
+    // shoulder fix stated in words -- "the body-length yardstick is consulted only where a body
+    // length IS a stature" -- was written as `bent_over` alone, and a lying, seated or supported
+    // athlete's span is not a stature either. So the stature yardstick runs exactly where the
+    // height RULER may vote (postureAllowsHeightCalibration), because both read the same span as
+    // a stature; the grip yardstick still runs on every posture. Costed on every stored take: the
+    // only non-standing take in the corpus whose stature yardstick ever convicted anything is this
+    // bench, so nothing else moves. Rule #1 in shape: a yardstick standing down only ever ADMITS.
+    const bodySpanUnits = postureAllowsHeightCalibration(posture) ? impliedBodyLengthUnits(calibrationInput) : null;
     const scaleCandidatesRaw = [
       ...(plateScale != null
         ? [
@@ -1690,6 +1724,37 @@ export function AvBarTrackerDialog({
     // behind the head and, filmed from the front, never see it.
     const barOnBack = barRidesOnShoulders(exerciseName, equipment);
     let barPointFromShoulders = 0;
+    // A UNILATERAL LIFT'S POINT IS THE WORKING HAND, NOT A MIDPOINT -- see workingHandForUnilateral
+    // in bar-tracking.ts. Decided once for the take off the raw wrist landmarks before the frame
+    // loop, so every frame reads the same hand. A bilateral lift leaves it null and nothing below
+    // changes; a unilateral take that cannot say (neither wrist seen on eight frames) runs the
+    // midpoint rule as before and records the null, which is a sentence rather than a blank.
+    const declaredSide: "left" | "right" | null = laterality === "unilateral" ? (side ?? null) : null;
+    const measuredWorkingHand: "left" | "right" | null =
+      laterality === "unilateral"
+        ? workingHandForUnilateral(
+            rawFrames.map((f) => {
+              const wl = visionJointsToWorldLandmarks(f);
+              const l = wl[POSE_LANDMARKS.LEFT_WRIST];
+              const r = wl[POSE_LANDMARKS.RIGHT_WRIST];
+              return {
+                left: wristConfidence(wl, "left") > 0 && l && Number.isFinite(l.y) ? l.y : null,
+                right: wristConfidence(wl, "right") > 0 && r && Number.isFinite(r.y) ? r.y : null,
+              };
+            }),
+          )
+        : null;
+    // THE MEASUREMENT WINS, THE DECLARATION FILLS IN, THE DISAGREEMENT IS WRITTEN DOWN. The set row
+    // says which side the athlete filmed (shared/unilateral-sides.ts); the take says which wrist
+    // travelled. Where both speak and differ, the hand that moved is the hand that rowed -- a
+    // Vision left/right swap and a mis-tapped side both exist, and neither is a reason to refuse
+    // the take (Rule #1) -- so the measured hand is the point and the disagreement is a fact in
+    // the export. Where the take cannot say (neither wrist seen on eight frames) the declared
+    // side is the best available answer and is used.
+    const unilateralWorkingHand: "left" | "right" | null = measuredWorkingHand ?? declaredSide;
+    const workingHandDisagreesWithDeclaredSide =
+      measuredWorkingHand != null && declaredSide != null && measuredWorkingHand !== declaredSide;
+    let barPointFromWorkingHand = 0;
     let prevCombined: { x: number; y: number; t: number }[] = [];
     let verticalSign: 1 | -1 = 1;
     // Half the measured distance from the left grip to the right, carried forward so a frame with
@@ -1913,7 +1978,9 @@ export function AvBarTrackerDialog({
       // between them is the bar, and the lift runs perpendicular to it -- see
       // movementAxisFromGrip for why that is a better statement of the movement direction than
       // anything recovered from the trace afterwards.
-      if (fusedLeft && fusedRight) {
+      // On a unilateral lift the two hands are a braced hand and a working one, not two grips
+      // on one bar, so the pair says nothing about the movement axis.
+      if (fusedLeft && fusedRight && !unilateralWorkingHand) {
         gripPairs.push({
           left: { x: fusedLeft.x, y: verticalSign * fusedLeft.y },
           right: { x: fusedRight.x, y: verticalSign * fusedRight.y },
@@ -1953,6 +2020,16 @@ export function AvBarTrackerDialog({
           barPointFromShoulders++;
         }
       }
+      // THE WORKING HAND CARRIES A UNILATERAL LIFT -- see workingHandForUnilateral. The braced
+      // hand is never averaged in and never carries: a frame without the working hand is a frame
+      // with no point, which the occlusion interpolation already handles, rather than a point
+      // half a "grip" from where the dumbbell is. The half-span is left untouched so the
+      // bilateral bookkeeping below is inert on this take.
+      if (unilateralWorkingHand) {
+        const working = unilateralWorkingHand === "left" ? fusedLeft : fusedRight;
+        combined = working ? { x: working.x, y: working.y, confidence: working.confidence } : null;
+        sideFlipped = false;
+      }
       // WHICH BRANCH BUILT THIS POINT, COUNTED.
       //
       // The three branches mean three different things and the trace cannot be read without
@@ -1967,11 +2044,14 @@ export function AvBarTrackerDialog({
       // there was no counter anywhere that could say so.
       if (sideFlipped) barPointSideFlipped++;
       let pointSource: BarPointSource | undefined;
-      if (barOnBack && combined) pointSource = "s";
+      if (unilateralWorkingHand && combined) pointSource = "w";
+      else if (barOnBack && combined) pointSource = "s";
       else if (fusedLeft && fusedRight) pointSource = "b";
       else if (combined && carryBy) pointSource = sideFlipped ? "f" : "l";
       else if (combined) pointSource = "h";
-      if (fusedLeft && fusedRight) barPointFromBothHands++;
+      if (unilateralWorkingHand && combined) barPointFromWorkingHand++;
+      else if (unilateralWorkingHand) { /* the working hand was not seen this frame: no point */ }
+      else if (fusedLeft && fusedRight) barPointFromBothHands++;
       else if (combined && carryBy) barPointFromLoneHandCarried++;
       else if (combined) barPointFromBareLoneHand++;
       lastHalfSpan = halfSpan;
@@ -2129,6 +2209,9 @@ export function AvBarTrackerDialog({
         barPointFromEquipmentRejected,
         barPointFromShoulders,
         barWitness: (barOnBack ? "shoulders" : "hands") as "shoulders" | "hands",
+        ...(laterality === "unilateral"
+          ? { unilateralWorkingHand, barPointFromWorkingHand, declaredSide, workingHandDisagreesWithDeclaredSide }
+          : {}),
         equipmentVoteLabel: equipmentOffsets.label,
         equipmentAgreementFrames: equipmentOffsets.agreementFrames,
         equipmentOffsetSpreadGrips: (() => {

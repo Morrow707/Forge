@@ -1625,6 +1625,7 @@ function LessonCard({
                 />
                 <FieldInput
                   label="Reps"
+                  inputMode="numeric"
                   value={ex.reps}
                   onChange={(v) =>
                     onChange((l) => ({
@@ -2209,17 +2210,23 @@ function FieldInput({
   value,
   onChange,
   type = "text",
+  inputMode,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
+  /** Reps are typed as text (a stored value can read "8-10"), so the PHONE decides the keyboard off
+      this hint and not off the type: "numeric" summons the digit pad on iOS where a plain text field
+      summons the full keyboard. Scott, 2026-11-06: "reps will never be letters always a number". */
+  inputMode?: "numeric" | "decimal" | "text";
 }) {
   return (
     <div>
       <label className="mb-0.5 block text-[10px] uppercase text-muted-foreground">{label}</label>
       <Input
         type={type}
+        inputMode={inputMode}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="h-8 px-2 text-xs"

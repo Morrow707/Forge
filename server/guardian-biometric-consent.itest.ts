@@ -4,6 +4,7 @@ import { db } from "./db";
 import { consentRecords, guardianLinks, legalDocuments, users } from "@shared/schema";
 import { GUARDIAN_GIVES_BIOMETRIC_CONSENT } from "@shared/consent-catalog";
 import { storage } from "./storage";
+import { submitLogAtCurrentRevision } from "./test-support/save-at-current-revision";
 import {
   makeAssignedProgram,
   makeCoach,
@@ -113,8 +114,9 @@ describe("a guardian giving the biometric consent from the dashboard", () => {
     const after = await guardian.get(`/api/guardian/athletes/${ctx.athlete.id}/biometric-consent`);
     expect(after.body).toMatchObject({ given: true, givenByGuardian: true, stale: false });
 
-    // The gate is open: a fresh save stores the trace.
-    await storage.submitWorkoutLog(ctx.athlete.id, payload(ctx) as never);
+    // The gate is open: a fresh save stores the trace. Saved at the day's current revision, as
+    // the live screen does (see save-at-current-revision.ts).
+    await submitLogAtCurrentRevision(ctx.athlete.id, payload(ctx) as never);
     expect(await storedTrace()).not.toBeNull();
     expect((await athlete.get("/api/auth/me")).body.biometricReleaseAwaitingGuardian).toBe(false);
 

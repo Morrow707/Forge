@@ -1393,6 +1393,9 @@ export type TrackingReportEntry = {
   athleteLabel: string;
   exerciseName: string;
   setNumber: number;
+  /** Which side of a unilateral lift this take filmed; null on a bilateral lift or a row saved
+   *  before sides existed (shared/unilateral-sides.ts). */
+  side: "left" | "right" | null;
   reps: string | null;
   weight: string | null;
   weightUnit: string | null;
@@ -1510,6 +1513,7 @@ function minimalEntry(
     athleteLabel: labelFor(r.athleteId),
     exerciseName: r.exerciseName,
     setNumber: r.setNumber,
+    side: r.side ?? null,
     reps: r.reps ?? null,
     weight: r.weight ?? null,
     weightUnit: r.weightUnit ?? null,
@@ -1540,6 +1544,7 @@ function buildEntry(
       // actually true, the same way an entry that arrived without diagnostics says so.
       exerciseName: r.exerciseName ?? "(exercise no longer resolves)",
       setNumber: r.setNumber,
+      side: r.side ?? null,
       reps: r.reps,
       weight: r.weight,
       weightUnit: r.weightUnit,
@@ -1575,7 +1580,7 @@ export function formatTrackingReport(rows: TrackedSetRow[]): string {
   for (const e of entries) {
     const header = `${e.flags.length > 0 ? "⚠ " : ""}${e.date}  ${e.athleteLabel} -- ${e.exerciseName} (set ${
       e.setNumber
-    }${e.reps ? `, ${e.reps} reps` : ""}${
+    }${e.side ? `, ${e.side} side` : ""}${e.reps ? `, ${e.reps} reps` : ""}${
       e.weight ? `, ${e.weight}${e.weightUnit ? ` ${e.weightUnit}` : ""}` : ""
     })`;
     const showMethodology = e.methodology && !seenModes.has(e.trackingMode);
