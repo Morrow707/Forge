@@ -172,6 +172,13 @@ export const ANVIL_SIGNAL_TABLES: Record<string, string> = {
  * than an omission nobody can see.
  */
 export const NOT_A_SIGNAL_TABLE: Record<string, string> = {
+  // ---- the Anvil's own output, which is the one table here it WRITES ----
+  anvil_checks:
+    "THE ANVIL'S OWN TABLE, and the only one in this file it writes rather than reads. Its rows " +
+    "are what the check measured, so reading them as a Forge signal would make the instrument its " +
+    "own input -- the circularity that plateBoxToExpectedRatio shipped with on 2026-10-09, scoring " +
+    "a ruler against itself and returning 1.000 on a plate that was 60% wrong. The fast channel " +
+    "scores these rows; it does not take them as evidence about themselves.",
   // ---- considered as signals and left out, with the reason. Reopen deliberately. ----
   nutrition_targets:
     "CANDIDATE. The athlete's own target, against which a food log becomes a DEFICIT rather than a " +
@@ -994,6 +1001,15 @@ export const NOT_AN_ANVIL_SIGNAL: Record<string, string> = {
     "the day it decides anything it will be because the uncertainties differ by device -- which is a " +
     "measurement nobody has made.",
   "imported_testing_data.notes": NON_SIGNAL_REASON.FREE_TEXT,
+  "workout_set_entries.side":
+    "WHICH LIMB DID THE WORK, added 2026-11-06 for unilateral lifts. Not a signal and not merely " +
+    "structural either: it SPLITS a series. A left-arm row and a right-arm row of the same " +
+    "exercise are two time series, and the slow channel regressing velocity over weeks must not " +
+    "pool them -- that is the error the 11-06 single-arm row recorded, where the sensor rode the " +
+    "dumbbell across both arms at 41.3cm and 47.1cm and nothing said which. The day the slow " +
+    "channel reads a unilateral lift, it reads this first and keys its series on it. Until then a " +
+    "unilateral capture is one more take in the series, which is what it was before the column " +
+    "existed, so nothing silently changed meaning when it arrived.",
   "coach_athletes.id": NON_SIGNAL_REASON.ROW_ID,
   "coach_athletes.athleteId": NON_SIGNAL_REASON.ATHLETE_KEY,
   "coach_athletes.coachId": NON_SIGNAL_REASON.STRUCTURE,

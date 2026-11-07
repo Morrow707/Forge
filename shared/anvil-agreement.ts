@@ -23,6 +23,23 @@
  */
 export const ANVIL_AGREEMENT_VERSION = "2026-11-07";
 
+/**
+ * WHAT THE AGREEMENT EXPLICITLY REFUSES, AND WHY THIS LIST EXISTS AT ALL.
+ *
+ * It is the one place in the Anvil besides `anvil-vocabulary.ts` where the forbidden topics appear
+ * in code rather than in a comment -- because telling a person "this is not a concussion test" is
+ * the opposite of modelling one, and saying so is the entire point of the sentence. Declaring the
+ * refusals here earns that exemption by construction (the scan in `anvil-never-models.test.ts`
+ * exempts a module that declares a prohibition, read off an export's NAME rather than a filename),
+ * and it does a second job worth having: a test asserts the agreement really contains each
+ * refusal, so deleting the sentence that refuses concussion fails rather than passing quietly.
+ */
+export const ANVIL_AGREEMENT_NEVER_CLAIMS: ReadonlyArray<string> = [
+  "concussion",
+  "medical test",
+  "diagnosis",
+];
+
 export const ANVIL_AGREEMENT = `The Anvil: what the daily check does
 
 WHAT YOU DO

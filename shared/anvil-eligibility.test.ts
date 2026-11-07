@@ -5,7 +5,7 @@ import {
   anvilEligibility,
   type AnvilSubject,
 } from "./anvil-eligibility";
-import { ANVIL_AGREEMENT } from "./anvil-agreement";
+import { ANVIL_AGREEMENT, ANVIL_AGREEMENT_NEVER_CLAIMS } from "./anvil-agreement";
 import { ROLES_THAT_FILM_THEIR_OWN_TRAINING_LIST } from "./roles-that-film-their-own-training";
 
 const TODAY = "2026-11-07";
@@ -116,6 +116,16 @@ describe("the agreement says what the software does and claims nothing else", ()
     for (const w of ["readiness", "recovery", "freshness", "neuro-fatigue", "neural fatigue"]) {
       expect(body, `the agreement must not say "${w}"`).not.toContain(w);
     }
+  });
+
+  it("really contains every refusal it declares", () => {
+    // The declaration earns the module its exemption from the never-models scan, so it must not
+    // be able to drift from the text: deleting the sentence that refuses concussion fails here.
+    const body = ANVIL_AGREEMENT.toLowerCase();
+    for (const claim of ANVIL_AGREEMENT_NEVER_CLAIMS) {
+      expect(body, `the agreement declares it refuses "${claim}" and must say so`).toContain(claim);
+    }
+    expect(ANVIL_AGREEMENT_NEVER_CLAIMS).toContain("concussion");
   });
 
   it("states the four things a reader needs and the one they must not assume", () => {
