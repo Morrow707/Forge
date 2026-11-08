@@ -25,9 +25,9 @@ const PREVIEW_WEBP = "/downloads/in-season-2-day-lift.webp"; // what the page it
  */
 export default function InSeasonTemplatePage() {
   usePageMeta({
-    title: "Free 2-day in-season lift for high school teams",
+    title: "Free in-season lifting template",
     description:
-      "A printable two-day in-season lifting template for high school teams: jumps, a squat, a hinge, upper push and pull, and the rules that keep legs fresh for game day.",
+      "A printable 2-day in-season lifting template for high school teams: jumps, a squat, a hinge, push and pull, and rules that keep legs fresh for games.",
     path: "/in-season-template",
     image: PREVIEW,
   });
