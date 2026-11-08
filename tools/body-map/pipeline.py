@@ -77,10 +77,11 @@ KNOBS = {
     "r_feather": 0.0,      # alpha blur; 0 keeps the render's own edge (the fingers are 2 px wide)
     "r_label_smooth": 1.6, # sigma on each group's soft mask before the 2x argmax
     "r_bare_gain": 1.35,   # the head, hands, feet and exposed bone get the shading move too
-    "r_head_tint": 0.85,   # the head alone (not the hands, not the feet): how far it takes the colour below
-    "r_head_r": 232.0,     # a light red. Each pixel keeps its own luminance and takes this chroma.
-    "r_head_g": 150.0,
-    "r_head_b": 146.0,
+    "r_head_tint": 0.92,   # the head alone (not the hands, not the feet): how far it takes the colour below
+    "r_head_r": 195.0,     # a deep red. Each pixel takes this chroma and keeps its own shading.
+    "r_head_g": 58.0,
+    "r_head_b": 54.0,
+    "r_head_value": 0.48,  # how far the head's own value is pulled down (chroma alone only ever gives a LIGHT red)
     "r_head_neck": 0.25,   # the head stops where its own shape narrows to this share of the skull's width
     "r_bare_sat": 0.95,
     "r_bare_value": 0.93,

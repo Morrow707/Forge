@@ -210,7 +210,12 @@ def finish(name):
             t_lum = float(target @ np.array([0.299, 0.587, 0.114], np.float32))
             if t_lum > 1e-3:
                 px = rgb[hm]
-                l = px @ np.array([0.299, 0.587, 0.114], np.float32)
+                # r_head_value is a separate knob from the target colour because the recolour
+                # PRESERVES luminance: the mannequin head is pale, so chroma alone can only ever
+                # make it a light red. Darkening is a move on the head's own value, not a redder
+                # target -- and it stays a multiplier on each pixel so the brow, nose and jaw
+                # keep their relative shading instead of flattening into one slab.
+                l = (px @ np.array([0.299, 0.587, 0.114], np.float32)) * kf("r_head_value", 1.0)
                 rgb[hm] = px * (1 - tint) + np.clip(l[:, None] * (target / t_lum)[None, :], 0, 255) * tint
 
     # --- 4. a key light, so the figure has a direction instead of sitting in a flat box

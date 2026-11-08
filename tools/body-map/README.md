@@ -169,3 +169,12 @@ neck, then 7-31 all the way down the sternum). On a back view the traps reach th
 component ends at the jaw by itself and the cut changes nothing there. A fraction-of-the-figure
 zone was the obvious alternative and is the wrong shape: it moves the moment a figure is rendered
 at another crop.
+
+Scott on the first one: "no darker red." **`r_head_value` is a SEPARATE knob from the target
+colour, and that is the whole reason a darker red was reachable at all:** the recolour preserves
+each pixel's luminance, the mannequin head is pale, so chroma alone can only ever give a LIGHT
+red however deep the target is -- the first attempt at a deeper target still came back at a mean
+R of 223, a traffic cone. Darkening is a move on the head's own VALUE, and it stays a multiplier
+per pixel rather than a flat level so the brow, the nose and the jaw keep their relative shading
+instead of collapsing into one slab. 195/58/54 at value 0.48 reads 190/68/64 on the fronts and
+204/73/68 on the backs (the backs are a touch brighter because the skull catches the key light).
