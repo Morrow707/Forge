@@ -8,6 +8,12 @@ import {
   ANVIL_MODULES_WITHOUT_A_NUMBER,
   isAnvilSurface,
   serverFileIsAnvilOutput,
+  sharedFileIsAnvilModule,
+  ANVIL_SERVER_FILES_THAT_WRITE_NO_PROSE,
+  ANVIL_SHARED_MODULES_THAT_MAY_NAME_THE_WORDS,
+  declarationLinesHoldingForbiddenWords,
+  stringLiteralsHoldingForbiddenWords,
+  writesProse,
 } from "./anvil-vocabulary";
 
 /**
@@ -94,7 +100,22 @@ function serverFiles(): Array<{ path: string; source: string }> {
   return readdirSync(root)
     .filter((e) => /\.tsx?$/.test(e) && !/\.(test|itest)\.tsx?$/.test(e))
     .map((e) => ({ path: `server/${e}`, source: readFileSync(join(root, e), "utf8") }))
-    .filter((f) => serverFileIsAnvilOutput(f.path));
+    // THE STRIPPED SOURCE IS PASSED, which is what lets the exemption be EARNED rather than
+    // granted: `serverFileIsAnvilOutput` keeps a listed file in scope the moment it starts
+    // writing a sentence, and keeps it in scope unconditionally when the caller cannot prove it.
+    .filter((f) => serverFileIsAnvilOutput(f.path, stripComments(f.source)));
+}
+
+/**
+ * THE SHARED ANVIL MODULES, which the sweep never walked until 2026-11-08. A sentence written
+ * here and rendered by a surface was out of reach of the rule that surface is held to.
+ */
+function sharedAnvilFiles(): Array<{ path: string; source: string }> {
+  const root = join(import.meta.dirname, "..", "shared");
+  return readdirSync(root)
+    .filter((e) => /^anvil-[a-z0-9-]+\.tsx?$/.test(e) && !/\.(test|itest)\.tsx?$/.test(e))
+    .map((e) => ({ path: `shared/${e}`, source: readFileSync(join(root, e), "utf8") }))
+    .filter((f) => sharedFileIsAnvilModule(f.path));
 }
 
 function clientFiles(): Array<{ path: string; source: string }> {
@@ -215,6 +236,16 @@ describe("the scan's scope is narrow, in both directions", () => {
         if (body.includes(word)) offences.push(`${path}: "${word}"`);
       }
     }
+    // THE SHARED MODULES ARE SCANNED BY THEIR STRING LITERALS, not their whole body. They have no
+    // JSX, so every word a reader could see is in a literal -- and scanning the body instead
+    // would make the ratchet a demand to rename `heartRateRecovery` and `trackingDiagnostics`,
+    // which are Forge's own columns and have nothing to do with the Anvil.
+    const sharedModules = sharedAnvilFiles();
+    for (const { path, source } of sharedModules) {
+      for (const word of stringLiteralsHoldingForbiddenWords(stripComments(source))) {
+        offences.push(`${path}: "${word}"`);
+      }
+    }
     expect(
       offences,
       "An Anvil surface may describe the number only in the permitted vocabulary. " +
@@ -230,6 +261,54 @@ describe("the scan's scope is narrow, in both directions", () => {
         "stopped recognising them or the files moved out of both walks.",
     ).toBeGreaterThan(0);
     expect(surfaces.map((s) => s.path)).toContain("server/anvil-report.ts");
+    // AND THE SHARED MODULES ARE IN SCOPE, which they were not until 2026-11-08. A sentence
+    // written in `shared/anvil-*.ts` and rendered by a surface was out of reach of the rule.
+    expect(sharedModules.map((s) => s.path)).toContain("shared/anvil-day-context.ts");
+    expect(sharedModules.map((s) => s.path)).toContain("shared/anvil-athlete-state.ts");
+  });
+
+  it("lets the agreement name the words, and only because it declares the prohibition", () => {
+    expect(sharedFileIsAnvilModule("shared/anvil-agreement.ts")).toBe(false);
+    expect(sharedFileIsAnvilModule("shared/anvil-vocabulary.ts")).toBe(false);
+    expect(sharedFileIsAnvilModule("shared/anvil-day-context.ts")).toBe(true);
+    expect(sharedFileIsAnvilModule("shared/anvil-reading.ts")).toBe(true);
+    expect(sharedFileIsAnvilModule("shared/schema.ts")).toBe(false);
+    for (const entry of ANVIL_SHARED_MODULES_THAT_MAY_NAME_THE_WORDS) {
+      expect(entry.why.length, `${entry.module} needs a real reason`).toBeGreaterThan(80);
+    }
+    // THE AGREEMENT'S EXEMPTION IS EARNED OFF A DECLARED PROHIBITION, never off its filename --
+    // which is the distinction this module's own header draws. If the refusal stops being
+    // declared there, the exemption stops being deserved.
+    const agreement = readFileSync(
+      join(import.meta.dirname, "..", "shared", "anvil-agreement.ts"),
+      "utf8",
+    );
+    expect(agreement).toMatch(/^export const ANVIL_NOT_A_MEDICAL_TEST\b/m);
+    const neverModels = readFileSync(
+      join(import.meta.dirname, "..", "shared", "anvil-never-models.ts"),
+      "utf8",
+    );
+    expect(neverModels).toMatch(/NEVER/);
+
+    // AND THE DECLARATION'S EXEMPTION IS NARROWER STILL: a forbidden word may sit on a FIELD of
+    // the declaration -- a column name, an id, a `why` -- and never in a sentence somebody
+    // renders. Without this the exemption would be a licence to write anything in that file.
+    const inputs = stripComments(
+      readFileSync(join(import.meta.dirname, "..", "shared", "anvil-inputs.ts"), "utf8"),
+    );
+    expect(declarationLinesHoldingForbiddenWords(inputs)).toEqual([]);
+  });
+
+  it("scans a shared module by its strings and not by its identifiers", () => {
+    // A COLUMN NAME IS NOT A SENTENCE. `heartRateRecovery` and `trackingDiagnostics` are Forge's
+    // own schema, and a ratchet that demanded they be renamed is the failure this whole scope
+    // section exists to refuse.
+    expect(stringLiteralsHoldingForbiddenWords("const x = w.heartRateRecovery;")).toEqual([]);
+    expect(stringLiteralsHoldingForbiddenWords("function f(diagnostics: unknown) {}")).toEqual([]);
+    // AND A ONE-WORD LABEL IS STILL CAUGHT, which `writesProse` would wave through -- the reason
+    // this is a literal scan rather than the server's prose test.
+    expect(stringLiteralsHoldingForbiddenWords('const label = "Readiness";')).toEqual(["readiness"]);
+    expect(stringLiteralsHoldingForbiddenWords("const t = `a recovery score`;")).toEqual(["recovery"]);
   });
 
   it("leaves routes.ts and storage.ts out of the server scope, by path and not by import", () => {
@@ -247,6 +326,34 @@ describe("the scan's scope is narrow, in both directions", () => {
     expect(serverFileIsAnvilOutput("server/routes.ts")).toBe(false);
     expect(serverFileIsAnvilOutput("server/storage.ts")).toBe(false);
     expect(serverFileIsAnvilOutput("server/anvil-report.ts")).toBe(true);
+  });
+
+  it("lets a server Anvil file out of scope only while it really writes no prose", () => {
+    // THE EXEMPTION IS EARNED. A listed file that starts writing a sentence comes straight back
+    // into scope, and a listed file whose source the caller cannot see never leaves it -- the two
+    // properties that make the list a check rather than a permanent hole with a reason on it.
+    const listed = ANVIL_SERVER_FILES_THAT_WRITE_NO_PROSE[0]?.file;
+    expect(listed, "the list is empty, so these two cases prove nothing").toBeTruthy();
+    expect(serverFileIsAnvilOutput(listed!, 'const a = "heartRateRecovery";')).toBe(false);
+    expect(
+      serverFileIsAnvilOutput(listed!, 'const a = "this is a sentence a reader could see";'),
+    ).toBe(true);
+    expect(serverFileIsAnvilOutput(listed!)).toBe(true);
+    // And an unlisted Anvil file is in scope however little prose it holds.
+    expect(serverFileIsAnvilOutput("server/anvil-report.ts", 'const a = "x";')).toBe(true);
+    for (const entry of ANVIL_SERVER_FILES_THAT_WRITE_NO_PROSE) {
+      expect(entry.why.length, `${entry.file} needs a real reason`).toBeGreaterThan(80);
+    }
+  });
+
+  it("counts four words in a string as prose and a column name as not", () => {
+    expect(writesProse('x = "trackingDiagnostics"')).toBe(false);
+    expect(writesProse('x = "capture_not_comparable"')).toBe(false);
+    expect(writesProse("x = \"iPhone 15 Pro | wide | 1920x1080\"")).toBe(true);
+    expect(writesProse('x = "Not calibrated. No threshold here."')).toBe(true);
+    // A SENTENCE IN A COMMENT MUST NOT COUNT, which is why this takes stripped source: the
+    // function is handed what the strip left, so prose in a docblock never reaches it.
+    expect(writesProse("")).toBe(false);
   });
 
   it("leaves the shipped readiness, recovery and fatigue surfaces out of scope", () => {

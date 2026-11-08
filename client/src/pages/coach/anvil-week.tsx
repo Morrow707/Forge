@@ -7,6 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/skeleton";
 import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import { ANVIL_ACCURACY_CAVEAT, ANVIL_NOT_A_MEDICAL_TEST } from "@shared/anvil-agreement";
+import {
+  besideLine,
+  fixableAcrossDays,
+  fixableLine,
+  type AnvilDayContext,
+} from "@shared/anvil-day-context";
 import type { AnvilReading } from "@shared/anvil-reading";
 
 /**
@@ -28,6 +34,9 @@ type Day = {
   counts: boolean;
   window: string;
   reading: AnvilReading;
+  /** Null when the week was assembled without the app's own data, which is NOT the same as a
+   * morning that had nothing beside it. See AnvilDay's comment in server/anvil-report.ts. */
+  context: AnvilDayContext | null;
 };
 
 type AthleteWeek = {
@@ -127,11 +136,42 @@ export default function CoachAnvilWeek() {
                       : `${Math.round(day.reading.numbers.medianMs)} ms`}
                   </span>
                   <span className="text-xs text-muted-foreground">{dayDetail(day)}</span>
+                  {/* WHAT ELSE FORGE HAD ABOUT THAT MORNING. Facts in their own units, under the
+                      morning they belong to, and never a cause: the week's one claim is the line
+                      in the header and `weeklyVerdict` will not make it on a single witness. */}
+                  {day.context && besideLine(day.context) && (
+                    <span
+                      // NO INDENT ON A PHONE. At 390px the date column is most of the width, so a
+                      // 96px indent leaves the facts in a four-word ragged column -- which looking
+                      // at the real screenshot is the only way to see.
+                      className="basis-full text-xs text-muted-foreground sm:pl-24"
+                      data-testid={`anvil-beside-${day.id}`}
+                    >
+                      beside it: {besideLine(day.context)}
+                    </span>
+                  )}
                 </div>
               ))}
               {entry.week.days.length === 0 && (
                 <p className="text-sm text-muted-foreground">No check in this window.</p>
               )}
+              {/* A BLANK SOMEBODY CAN CLOSE SAYS SO -- ONCE PER ATHLETE, not once per morning.
+                  Drawn under each day it put the same five sentences under all seven, which reads
+                  as a broken page rather than as information. `fixableAcrossDays` names the days
+                  only where the blank is not every day. */}
+                {fixableAcrossDays(
+                  entry.week.days
+                    .map((d) => d.context)
+                    .filter((c): c is AnvilDayContext => c != null),
+                ).map((fix) => (
+                  <p
+                    key={fix.absent}
+                    className="pt-2 text-xs text-amber-600 dark:text-amber-400"
+                    data-testid={`anvil-fixable-${entry.athleteId}-${fix.absent}`}
+                  >
+                    {fixableLine(fix)}
+                  </p>
+                ))}
               <p className="pt-2 text-[11px] text-muted-foreground">
                 {entry.week.channelsNotBuilt.join(" · ")}
               </p>

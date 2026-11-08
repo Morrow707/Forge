@@ -13,6 +13,7 @@ import { AnvilRun, type AnvilRunResult } from "@/components/anvil/anvil-run";
 import { ANVIL_PARTS, estimatedLabel } from "@shared/anvil-tasks";
 import { localMinutesFrom, windowLabelFor } from "@shared/anvil-window";
 import type { AnvilReading } from "@shared/anvil-reading";
+import { besideLine, type AnvilDayContext } from "@shared/anvil-day-context";
 
 /**
  * THE DAILY CHECK, FOR THE PERSON TAKING IT.
@@ -35,6 +36,15 @@ type TodayResponse = {
   countsTodayId: number | null;
   check: { id: number; takenAt: string; window: string } | null;
   reading: AnvilReading | null;
+  /**
+   * WHAT ELSE FORGE ALREADY HAD ABOUT TODAY, fetched whether or not a check was taken.
+   *
+   * The agreement this person ticked says Forge reads their logged sets, filmed lifts, sleep,
+   * soreness and food log beside the check. Until 2026-11-08 that sentence was not true in code:
+   * the fifty-three signals were declared, mapped, tested and wired to nothing. This is where the
+   * athlete can see which of them Forge actually has about them, and which blanks they can close.
+   */
+  context: AnvilDayContext | null;
 };
 
 function hhmm(minutes: number): string {
@@ -360,6 +370,20 @@ function CheckFlow({ stale }: { stale: boolean }) {
           {submit.isPending && (
             <p className="text-xs text-muted-foreground">Sending your check…</p>
           )}
+
+          {/* WHAT FORGE HAS ABOUT TODAY BESIDE THE CHECK, and the blanks this person can close.
+              The agreement they ticked promises the first; the second is the half that is
+              actionable, and it is most useful on a morning they have NOT taken the check yet. */}
+          {data.context && besideLine(data.context, 4) && (
+            <p className="border-t pt-3 text-xs text-muted-foreground" data-testid="anvil-beside-today">
+              Beside it today: {besideLine(data.context, 4)}
+            </p>
+          )}
+          {(data.context?.fixable ?? []).map((fix) => (
+            <p key={fix.signalId} className="text-xs text-muted-foreground">
+              <span className="font-medium">{fix.label}:</span> {fix.says}
+            </p>
+          ))}
         </CardContent>
       </Card>
 
@@ -445,6 +469,7 @@ type WeekResponse = {
     date: string;
     counts: boolean;
     reading: AnvilReading;
+    context: AnvilDayContext | null;
   }>;
   verdict: { kind: string; reason?: string };
 };
@@ -480,7 +505,7 @@ function WeekStrip() {
           .slice()
           .reverse()
           .map((d) => (
-            <div key={d.id} className="flex items-baseline justify-between text-sm">
+            <div key={d.id} className="flex flex-wrap items-baseline justify-between gap-y-0.5 text-sm">
               <span className="text-muted-foreground">{d.date}</span>
               <span className="tabular-nums">
                 {d.reading.numbers.medianMs == null
@@ -494,6 +519,13 @@ function WeekStrip() {
                 )}
                 {!d.counts && <span className="pl-2 text-xs text-muted-foreground">not counted</span>}
               </span>
+              {/* THE DAY'S OWN FACTS, under the morning. Never a cause -- the only claim the
+                  Anvil makes is the week's, and it needs two channels of three to make it. */}
+              {d.context && besideLine(d.context, 3) && (
+                <span className="basis-full text-xs text-muted-foreground">
+                  {besideLine(d.context, 3)}
+                </span>
+              )}
             </div>
           ))}
       </CardContent>

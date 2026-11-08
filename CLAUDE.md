@@ -1758,6 +1758,113 @@ the slow and career channels have no anchor and no history, so no week can carry
 the balance/sway prototype (`anvil-sway.ts`) has no thresholds and nobody has filmed one; and
 `ESCALATION_RECIPIENT` in `anvil-never-models.ts` is unresolved pending counsel follow-up 3.
 
+### THE ANVIL'S FIFTY-THREE INPUTS HAD NO CALLER, AND THE AGREEMENT ALREADY PROMISED THEM
+
+Added 2026-11-08, from Scott's "again does anvil still get the rest of the gathered information
+from the app? we gather alot, where does all that go for anvil". **It did not.**
+`shared/anvil-inputs.ts` declares 53 signals across 13 of Forge's tables and
+`shared/anvil-athlete-state.ts` maps rows onto every one. Both shipped 2026-11-07 with full unit
+coverage, and a grep for `assembleAnvilState` across `server/`, `client/` and `shared/` found its
+own declaration and two comments -- **no production caller.** So the reading an athlete and a coach
+saw was the four tasks alone, and the signals reached no screen and no page.
+
+**THE AGREEMENT AN ADULT TICKS SAID OTHERWISE, IN WORDS:** "Forge also reads training information
+you already give it -- logged sets, filmed lifts, sleep, soreness, your food log -- so that a
+change in these numbers can be read beside what else was happening that week." A promise in a
+consent document the code does not keep is the worst untrue sentence this repo can ship, so the
+fix is to keep it rather than soften the sentence.
+
+**NOTHING ANNOUNCED IT, and the blindness is this file's own standing one.** The unit suite over
+the mapping is thorough and green and is structurally blind to whether anybody calls it -- exactly
+`strength-profile.itest.ts` setting `isForgeOfficial: true` on its own fixture row and so being
+unable to see that nothing in the real library was ever flagged. **A test that supplies the input
+it is meant to be checking for cannot fail for the input being absent.** `assembleAnvilState`'s own
+docblock gave the reason it had no caller ("a route nothing calls is dead code that looks live ...
+The Anvil has no product code yet"), which was true for exactly one day: the Anvil's client shipped
+in build 718.
+
+**`server/anvil-state-source.ts` IS THE CALLER.** Thirteen RANGE queries per athlete, not thirteen
+per day -- a 28-day roster print would otherwise be a few thousand -- grouped in memory afterwards,
+which is also what lets the "most recent on or before this date" signals (testing battery, body
+mass, a restricted joint) be answered for every day from one read. It owns the two derivations the
+pure mapping deliberately refused, both because they read a blob the capture pipeline wrote
+(`shared/anvil-capture-identity.ts`, pure, so `npm test` still needs no Postgres):
+- **The device key is model | lens | format and NOT the OS version.** `comparableCaptures` says
+  why: the lens, the negotiated format and the delivered frame rate are what change a velocity,
+  and this pipeline's own take-to-take spread on ONE device and ONE lift reaches 1.68x. A key that
+  moved on a point release would make every athlete's history incomparable with itself after an
+  update, for no measurement reason.
+- **`refusedByPipeline` is `trackingDiagnostics.outcome !== "tracked"`, and a take with NO
+  diagnostics is NOT refused.** Null means a hand-logged set or a camera set from before the blob
+  existed; reading it as a refusal silently discards the older half of every history.
+  **THIS IS NOT RULE #1 IN REVERSE.** Rule #1 governs what a take may WITHHOLD from the athlete,
+  and this changes none of it -- the set keeps its velocity, its row and its clip. What it decides
+  is `anvil-athlete-state.ts`'s own stated job: whether the Anvil may COMPARE that number with the
+  same athlete's other mornings. The answer is `capture_not_comparable`, a stated absence with a
+  sentence on it, never a blank.
+
+**`shared/anvil-day-context.ts` IS WHAT A READER SEES, and its membership rule runs by EXCLUSION.**
+Everything declared is carried beside the morning unless it is one of five demographics
+(`NOT_BESIDE_THE_MORNING`: date of birth, gender, sport, position, height), each with a reason --
+so a signal added to `ANVIL_SIGNALS` next year appears the day it exists rather than waiting for
+somebody to add it to an accepted list. A date of birth printed on a page a coach forwards is a
+person's identity riding along on a working document for no reason.
+
+**AND LOOKING AT THE REAL PAGE IS WHAT FOUND THE DEFECT IN MY OWN FIRST VERSION.** Drawing the
+fixable blanks under each DAY put the same five sentences under all seven mornings -- "Apple Health
+has never sent this account a value", thirty-five times on a roster of three -- and turned the week
+into a **21,494px wall of amber** that reads as a broken page rather than as information. It is
+also the wrong SHAPE: "Health was never connected" and "camera tracking is off" are facts about the
+ACCOUNT, true on every day in the window by construction. `fixableAcrossDays` groups them once per
+athlete and prints the dates ONLY where the blank is not every day -- which is how
+`capture_not_comparable` on one morning still reads as that morning. Two smaller ones from the same
+screenshot: `readableUnit` drops a unit that is a SCALE ("soreness 2 1-5" reads as two numbers) or
+one the label already says ("sleep hours 7.8 hours"), both mechanical rules rather than a
+per-signal table; and the "beside it" line loses its 96px indent under `sm:`, because at 390px the
+date column is most of the width.
+
+**THE VOCABULARY SWEEP HAD NEVER WALKED `shared/`, AND THIS IS THE FIRST CHANGE THAT COULD BITE.**
+It walked the client and the server's Anvil files, so a sentence written in `shared/anvil-*.ts` and
+rendered by a surface was out of reach of the rule that surface is held to. Nothing had put one
+there; `anvil-day-context.ts`'s remedy sentences are the first, and the first draft of one said
+"its own **diagnostics** say", which would have printed a forbidden word next to a reaction time on
+a page a coach forwards. **A shared module is scanned by its STRING LITERALS, not its whole body**
+-- it has no JSX, so every word a reader could see is in a literal, which is stricter where it
+matters (a one-word `"Readiness"` label is caught, where a prose test would wave it through) and
+silent where it does not (it stops demanding that Forge rename `heartRateRecovery` and
+`trackingDiagnostics`, the schema's own columns, a year older than the Anvil). Four modules may
+name the words and **each earns it rather than being granted it by name**: the agreement and
+`anvil-never-models.ts` must DECLARE the prohibition (checked), `anvil-vocabulary.ts` names them to
+forbid them, and `anvil-inputs.ts` may hold them only on a line that is a FIELD of the declaration
+(`declarationLinesHoldingForbiddenWords`, checked). The SERVER rule gained the same shape:
+`server/anvil-state-source.ts` is exempt only while `writesProse` says it writes no sentence, so
+the exemption stops holding the day somebody puts one in it.
+
+**WHAT MOVES ON SCREEN:** every morning on `/coach/anvil`, `/admin/anvil` and the athlete's own
+page carries a "beside it" line, the week's grouped blanks and a coverage count per channel
+(`fast 6/8 · slow 6/16 · career 0/8 · context 10/14 · exclusion 6/7`) -- because a channel that
+said nothing and a channel that said "fine" are different claims, and one blank for both is how a
+broken gate and a correct empty state come to look like the same pixels. **The Anvil still asserts
+nothing**: `weeklyVerdict` needs two of three channels at z 2.0 and two of the three are not
+computable, so a measured +24.6 SD reads `cannot_judge` with both missing channels named. That is
+the rule working, not a gap.
+
+**Still open and unchanged:** no minor may take it until counsel answers 15, 17, 18 and 21; the
+slow and career channels have no anchor and no history; `shared/anvil-sway.ts` has no thresholds
+and nobody has filmed one; `ESCALATION_RECIPIENT` is unresolved. **Recorded and NOT fixed:**
+`injury_resolved` reads `true` for an athlete who has never been injured, which is the pure
+mapping's own pre-existing reading and is not in `BESIDE_IN_ORDER`, so it reaches no line today.
+
+`server/the-anvil-reads-what-forge-collects.test.ts` (17 cases, six mutations; the sixth -- a
+remedy written for `no_data` -- survived the first draft because `assembleAnvilState` already keeps
+it out of `fixableAbsences`, so the case was asserting a property somebody else guaranteed, and it
+drives `dayContextFrom` directly now: **a guard you cannot reach is a guard you cannot prove**) and
+`server/the-anvil-reads-the-app.itest.ts` (11 cases on real Postgres, five mutations; the fifth --
+a tie on the usual phone -- was not caught until it got its own case). **The comment strip is
+load-bearing and proven, not assumed:** `dayContextFrom`'s own comment names three signal ids on
+purpose, so the "no list of its own" case reds with the strip removed. Server plus three client
+files: `verify_build`, and it batches -- no camera number moves.
+
 ## RULE #3: A VIDEO SHOWS THE REAL APP. NOTHING IN IT IS INVENTED.
 
 Added 2026-10-02, after a build-a-program reel shipped with a program builder nobody has ever

@@ -109,9 +109,67 @@ export const ANVIL_FORBIDDEN_TERM_WORDS: ReadonlyArray<string> =
  * What it is for is narrow and real: `server/anvil-report.ts` prints a page a coach reads, and a
  * printed sentence outlives the screen it came from.
  */
-export function serverFileIsAnvilOutput(relativePath: string): boolean {
+export function serverFileIsAnvilOutput(relativePath: string, strippedSource?: string): boolean {
   const p = relativePath.replace(/\\/g, "/");
-  return /(^|\/)anvil[-/]/.test(p);
+  if (!/(^|\/)anvil[-/]/.test(p)) return false;
+  // The exemption is EARNED, not granted: a listed file is out of scope only while it really
+  // writes no prose. `strippedSource` omitted means the caller cannot prove it, so the file stays
+  // in scope -- the fail-closed direction, as everywhere else in this module.
+  const listed = ANVIL_SERVER_FILES_THAT_WRITE_NO_PROSE.some((e) => e.file === p);
+  if (!listed || strippedSource == null) return true;
+  return writesProse(strippedSource);
+}
+
+/**
+ * SERVER ANVIL FILES THAT WRITE NO PROSE, AND WHY THE PATH RULE NEEDED THIS AT ALL.
+ *
+ * The path rule above is right about what it is for -- `server/anvil-report.ts` prints a page a
+ * coach reads -- and it is wrong about a file whose job is to FETCH. `server/anvil-state-source.ts`
+ * reads thirteen of Forge's tables, and two of the columns it has to name are `heartRateRecovery`
+ * and `trackingDiagnostics`, which carry "recovery" and "diagnos". Sweeping it makes the ratchet a
+ * demand to rename two columns of Forge's own schema that have nothing to do with the Anvil -- the
+ * exact failure `ANVIL_MODULES_WITHOUT_A_NUMBER` exists to refuse on the client, where
+ * `app-shell.tsx` holds the same three words for three live features.
+ *
+ * **BUT A FILENAME MAY NOT BE THE WHOLE REASON**, which is the lesson `shared/anvil-agreement.ts`
+ * is exempt by: it earns its exemption off a declared prohibition rather than off its name. So
+ * these entries earn theirs off a property the scan CHECKS -- `writesProse` -- and the day somebody
+ * puts a sentence in one of them the exemption stops holding and the sweep comes back. A list that
+ * could not be checked would be a permanent hole with a reason written on it.
+ */
+export const ANVIL_SERVER_FILES_THAT_WRITE_NO_PROSE: ReadonlyArray<{ file: string; why: string }> = [
+  {
+    file: "server/anvil-state-source.ts",
+    why:
+      "Fetches rows for the thirteen signal tables and renders nothing. Every string in it is a " +
+      "column name, an ISO date or a device key; the two words the sweep finds are Forge's own " +
+      "`heartRateRecovery` and `trackingDiagnostics` columns, which predate the Anvil entirely.",
+  },
+];
+
+/**
+ * Does this source write a SENTENCE a reader could see?
+ *
+ * Four or more whitespace-separated words inside one string literal. That is the mechanical
+ * version of "renders prose": a column name, a device key, an ISO date and a SQL fragment are all
+ * under it, and the shortest sentence any Anvil surface actually shows a person is well over it
+ * (`ANVIL_NOT_A_MEDICAL_TEST` is nineteen words).
+ *
+ * It takes ALREADY-STRIPPED source so this module does not grow a second comment strip -- the
+ * line-aware one lives in the test, where its own two cases prove it, and a two-regex copy here
+ * would silently empty a long file, which is the failure that cost 413,000 characters of
+ * `routes.ts` once already.
+ */
+export function writesProse(strippedSource: string): boolean {
+  // ONE LINE AT A TIME, and the newline exclusions are load-bearing: `[^"]` matches a newline, so
+  // without them the first quote in the file pairs with the last and the whole source reads as one
+  // enormous "string literal" -- which is the same shape as the two-regex comment strip's own bug
+  // and would make every file prose.
+  for (const match of strippedSource.matchAll(/"([^"\\\n]{8,})"|'([^'\\\n]{8,})'/g)) {
+    const text = match[1] ?? match[2] ?? "";
+    if (text.trim().split(/\s+/).filter((w) => w.length > 0).length >= 4) return true;
+  }
+  return false;
 }
 
 /**
@@ -148,6 +206,103 @@ export const ANVIL_MODULES_WITHOUT_A_NUMBER: ReadonlyArray<{ module: string; why
     why: "Who may take the check. A role, a birthday and a sentence -- never a measurement.",
   },
 ];
+
+/**
+ * SHARED ANVIL MODULES THAT MAY NAME THE FORBIDDEN WORDS, AND THE HOLE THIS CLOSES.
+ *
+ * Until 2026-11-08 the sweep walked the CLIENT and the server's Anvil files and **never
+ * `shared/`** -- so a sentence written in `shared/anvil-*.ts` and rendered by a surface was out of
+ * reach of the rule the surface is held to. Nothing had put one there, which is why it had never
+ * bitten; `shared/anvil-day-context.ts`'s remedy sentences are the first, and the first draft of
+ * one of them said "its own diagnostics say", which would have printed "diagnostics" next to a
+ * reaction time on a page a coach forwards.
+ *
+ * The two entries below are the only shared Anvil modules the words may appear in, and each earns
+ * it rather than being granted it by name:
+ *  - the AGREEMENT, because telling a reader "this is not a concussion test" is the opposite of
+ *    modelling one -- and it must DECLARE that prohibition, which the test checks by requiring
+ *    `ANVIL_NOT_A_MEDICAL_TEST` to be exported from it.
+ *  - this module, which names the words in order to forbid them.
+ */
+export const ANVIL_SHARED_MODULES_THAT_MAY_NAME_THE_WORDS: ReadonlyArray<{
+  module: string;
+  why: string;
+}> = [
+  {
+    module: "anvil-agreement",
+    why:
+      "The consent text, where the refusals live. It declares ANVIL_NOT_A_MEDICAL_TEST, and saying " +
+      "'this is not a concussion test and must not be used as one' is the opposite of modelling one.",
+  },
+  {
+    module: "anvil-vocabulary",
+    why: "This module. It names the forbidden words in order to forbid them, so it cannot avoid them.",
+  },
+  {
+    module: "anvil-never-models",
+    why:
+      "The list of what the Anvil will never model, score, flag or alert on. Concussion is on it " +
+      "by name, and a refusal that cannot say what it refuses is not a refusal at all.",
+  },
+  {
+    module: "anvil-inputs",
+    why:
+      "The declaration of which of FORGE'S OWN COLUMNS the Anvil may read. The words it holds are " +
+      "Forge's own column names (heartRateRecovery, trackingDiagnostics) and Forge's own shipped " +
+      "features (the readiness score), never a sentence about an Anvil number -- and the test " +
+      "holds it to that by requiring every such line to be a declaration field.",
+  },
+];
+
+/**
+ * EVERY WORD A READER COULD SEE, in a shared module.
+ *
+ * A `shared/anvil-*.ts` file has no JSX, so there is no bare text between tags: anything a person
+ * could ever be shown is inside a string or a template literal. Scanning the literals rather than
+ * the whole body is therefore STRICTER where it matters and silent where it does not -- it still
+ * catches a one-word label like `"readiness"`, which `writesProse` would wave through, and it stops
+ * demanding that Forge rename `heartRateRecovery` and `trackingDiagnostics`, which are the schema's
+ * own columns and predate the Anvil by a year.
+ *
+ * On the CLIENT the whole file is still scanned, because JSX text is not a string literal.
+ */
+export function stringLiteralsHoldingForbiddenWords(strippedSource: string): string[] {
+  const hits: string[] = [];
+  for (const match of strippedSource.matchAll(/"([^"\\\n]*)"|'([^'\\\n]*)'|`([^`\\]*)`/g)) {
+    const text = (match[1] ?? match[2] ?? match[3] ?? "").toLowerCase();
+    for (const word of ANVIL_FORBIDDEN_TERM_WORDS) {
+      if (text.includes(word)) hits.push(word);
+    }
+  }
+  return [...new Set(hits)];
+}
+
+/**
+ * The declaration's earned property: a forbidden word may appear only on a line that is a FIELD of
+ * the declaration (`id:`, `table:`, `column:`, `why:`, or a key of one of the classification
+ * records), never in a sentence somebody renders. Checkable, so the exemption cannot rot into a
+ * licence to write anything in that file.
+ */
+export function declarationLinesHoldingForbiddenWords(strippedSource: string): string[] {
+  const bad: string[] = [];
+  for (const line of strippedSource.split("\n")) {
+    const lower = line.toLowerCase();
+    if (!ANVIL_FORBIDDEN_TERM_WORDS.some((w) => lower.includes(w))) continue;
+    const isField = /^\s*(id|table|column|why|module|term|file)\s*:/.test(line);
+    const isRecordKey = /^\s*(["'`]?[a-z0-9_]+["'`]?)\s*:/.test(line);
+    const isContinuation = /^\s*["']/.test(line);
+    if (!isField && !isRecordKey && !isContinuation) bad.push(line.trim());
+  }
+  return bad;
+}
+
+/** Is this `shared/` file an Anvil module the vocabulary applies to? */
+export function sharedFileIsAnvilModule(relativePath: string): boolean {
+  const p = relativePath.replace(/\\/g, "/");
+  const match = /(^|\/)(anvil-[a-z0-9-]+)\.tsx?$/.exec(p);
+  if (!match) return false;
+  return !ANVIL_SHARED_MODULES_THAT_MAY_NAME_THE_WORDS.some((e) => e.module === match[2]);
+}
 
 export function isAnvilSurface(relativePath: string, source: string): boolean {
   const p = relativePath.replace(/\\/g, "/");

@@ -8,6 +8,13 @@ import {
 } from "@shared/anvil-reading";
 import { weeklyVerdict, type WeeklyVerdict } from "@shared/anvil-corroboration";
 import { ANVIL_ACCURACY_CAVEAT, ANVIL_NOT_A_MEDICAL_TEST } from "@shared/anvil-agreement";
+import {
+  besideLine,
+  coverageLine,
+  fixableAcrossDays,
+  fixableLine,
+  type AnvilDayContext,
+} from "@shared/anvil-day-context";
 import type { AnvilCheck } from "@shared/schema";
 
 /**
@@ -68,6 +75,17 @@ export type AnvilDay = {
   /** True for the attempt that counts for its day -- the FIRST in-window one. */
   counts: boolean;
   reading: AnvilReading;
+  /**
+   * WHAT ELSE FORGE HAD ABOUT THAT MORNING, or null when nobody asked for it.
+   *
+   * Null is a real state and not a missing field: `assembleAnvilWeek` is pure and synchronous and
+   * the context needs thirteen range queries, so the caller attaches it afterwards with
+   * `attachDayContext`. A reader must therefore tell "this week was assembled without the context"
+   * from "that morning had nothing beside it", and the second is a context with an empty `beside`
+   * and a non-empty `coverage`. Collapsing the two would make a week nobody fetched the context
+   * for look like a week in which the athlete logged nothing at all.
+   */
+  context: AnvilDayContext | null;
 };
 
 export type AnvilWeek = {
@@ -121,6 +139,7 @@ export function assembleAnvilWeek(
     window: row.window as AnvilWindowLabel,
     counts: countsByDate.get(row.date) === row.id,
     reading,
+    context: null,
   }));
 
   // The week is the days that COUNT. A second attempt is kept and shown and does not get a vote,
@@ -139,6 +158,25 @@ export function assembleAnvilWeek(
       { channel: "career", absent: CAREER_CHANNEL_ABSENT },
     ]),
     channelsNotBuilt: [`slow: ${SLOW_CHANNEL_ABSENT}`, `career: ${CAREER_CHANNEL_ABSENT}`],
+  };
+}
+
+/**
+ * THE APP'S OWN DATA, ATTACHED TO THE MORNINGS IT BELONGS TO.
+ *
+ * Mutates nothing: a new week is returned with the same days carrying their context. It attaches
+ * to EVERY day in the range rather than only the ones that count, because a second attempt and an
+ * out-of-window check are both shown and a coach reading one of those rows wants the same facts
+ * beside it as the row above.
+ *
+ * A day with no entry in `byDate` keeps `context: null` -- the "nobody asked" state the field's
+ * own comment describes -- so a partial fetch degrades to the week as it was rather than to a week
+ * that silently claims every athlete logged nothing.
+ */
+export function attachDayContext(week: AnvilWeek, byDate: Map<string, AnvilDayContext>): AnvilWeek {
+  return {
+    ...week,
+    days: week.days.map((day) => ({ ...day, context: byDate.get(day.date) ?? day.context })),
   };
 }
 
@@ -238,7 +276,35 @@ export function buildAnvilWeekPdf(data: {
 
       doc.font("Helvetica").fontSize(9).fillColor("#000000");
       for (const day of entry.week.days) {
-        doc.text(dayLine(day), { indent: 10 });
+        doc.font("Helvetica").fontSize(9).fillColor("#000000").text(dayLine(day), { indent: 10 });
+        // WHAT ELSE FORGE HAD ABOUT THAT MORNING, under the morning it belongs to. Facts, in the
+        // units they are stored in, and never a cause: the week's one claim is the line above and
+        // `weeklyVerdict` will not make it on a single witness.
+        const beside = day.context ? besideLine(day.context) : "";
+        if (beside) {
+          doc.font("Helvetica").fontSize(8).fillColor("#555555").text(`beside it:  ${beside}`, { indent: 22 });
+        }
+        if (day.context) {
+          doc
+            .font("Helvetica")
+            .fontSize(7)
+            .fillColor("#777777")
+            .text(`read ${coverageLine(day.context)}`, { indent: 22 });
+        }
+      }
+
+      // A BLANK SOMEBODY CAN CLOSE SAYS SO -- ONCE PER ATHLETE. Under each morning it printed the
+      // same five sentences seven times, which on paper is worse than on screen: a page of
+      // repeated amber is skipped, and these are the lines a coach is meant to act on.
+      const fixable = fixableAcrossDays(
+        entry.week.days.map((d) => d.context).filter((c): c is AnvilDayContext => c != null),
+      );
+      for (const fix of fixable) {
+        doc
+          .font("Helvetica-Oblique")
+          .fontSize(8)
+          .fillColor("#555555")
+          .text(fixableLine(fix), { indent: 10, width: width - 10 });
       }
       if (entry.week.days.length === 0) {
         doc.font("Helvetica-Oblique").text("No check taken this week.", { indent: 10 });

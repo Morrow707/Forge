@@ -288,10 +288,12 @@ import {
   windowLabelFor,
 } from "@shared/anvil-window";
 import { readCheck } from "@shared/anvil-reading";
+import { fetchAnvilContext } from "./anvil-state-source";
 import {
   anvilRange,
   anvilRawCheck,
   anvilRowForClient,
+  attachDayContext,
   assembleAnvilWeek,
   buildAnvilWeekPdf,
   type AnvilRosterWeek,
@@ -11708,7 +11710,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * range is returned -- see `assembleAnvilWeek` on why trimming before scoring is wrong. */
   async function anvilWeekFor(athleteId: number, days: number) {
     const rows = await storage.getAnvilChecksOldestFirst(athleteId);
-    return assembleAnvilWeek(athleteId, rows, anvilRange(todayIso(), days));
+    const range = anvilRange(todayIso(), days);
+    const week = assembleAnvilWeek(athleteId, rows, range);
+    // AND WHAT ELSE FORGE HAD ABOUT THOSE MORNINGS. `fetchAnvilContext` is the caller
+    // `assembleAnvilState` did not have: fifty-three declared signals across thirteen tables,
+    // mapped and tested and reaching no screen until this line. The agreement an adult ticks
+    // promises exactly this in words, so the cost of the thirteen range queries is the cost of
+    // the sentence being true.
+    const context = await fetchAnvilContext(athleteId, range.from, range.to);
+    return attachDayContext(
+      week,
+      new Map(Array.from(context.entries()).map(([date, { context: c }]) => [date, c])),
+    );
   }
 
   /**
@@ -11886,6 +11899,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         countsTodayId: counts?.id ?? null,
         check: shown ? anvilRowForClient(shown) : null,
         reading: shown ? readCheck(anvilRawCheck(shown), history.map(anvilRawCheck)) : null,
+        // THE DAY'S OWN CONTEXT, fetched whether or not a check was taken. A morning with no
+        // check still has a sleep number and a training load, and the card is where an athlete
+        // reads "Health has never sent this account a value" -- a sentence that is most useful
+        // on exactly the day they have not taken the check yet.
+        context: (await fetchAnvilContext(user.id, date, date)).get(date)?.context ?? null,
       });
     },
   );
