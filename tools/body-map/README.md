@@ -178,3 +178,48 @@ R of 223, a traffic cone. Darkening is a move on the head's own VALUE, and it st
 per pixel rather than a flat level so the brow, the nose and the jaw keep their relative shading
 instead of collapsing into one slab. 195/58/54 at value 0.48 reads 190/68/64 on the fronts and
 204/73/68 on the backs (the backs are a touch brighter because the skull catches the key light).
+
+### The head follows the hip flexors, and the face comes off as far as the source allows (2026-11-08)
+
+Scott: "no make it the same color as the hip flexors, and don't make it a face give it more
+skeletal features, the muscles in the face, just leave them unlabeled."
+
+**The colour is a NAME in the script, not an RGB triple in the knobs.** `HEAD_TAKES_COLOUR_FROM`
+is `"Hip Flexors"`, read off the FINISHED tile, so the head keeps following that group when any
+tone knob moves; `r_head_match` turns it on. It matches the LEVEL as well as the hue, because the
+recolour preserves luminance and the mannequin head is pale -- a chroma match alone leaves a light
+version of their colour. Measured after: head 172/67/64 against hip flexors 172/68/64 on the
+female front, 165/65/61 against 165/66/61 on the male. The back views have no hip flexors in them,
+so each front tile leaves its answer in `head_colour_cache` for the back of the same figure.
+
+**THE SKULL AND THE FACIAL MUSCLES ARE NOT IN THE RENDER AND CANNOT BE PUT THERE FROM HERE.** The
+head in `source3d` is a single smooth mannequin mesh: eyes, nose, lips, ears, and nothing else --
+no cranium, no mandible, no temporalis, no masseter, not one facial muscle. Painting those on
+would be inventing anatomy on a page a coach reads, which is Rule #3's class. **What closes it is
+a new render**: the same four views, same camera, same pose, with the head's muscle layer turned
+on, dropped into `source3d/` with its label map. Everything else in this pipeline then works on it
+unchanged.
+
+**What a face removal CAN do here, and the bug that made it look impossible.** Three techniques
+were tried and all three read as failures:
+- a blur keeps the features at a sigma small enough to keep the brow and cheek modelled, erases
+  the head entirely at a sigma large enough to take them out, and at sigma 17 leaves them as
+  GHOSTS, which is the worst of the three;
+- finding and filling dark features took the mouth out and left the eyes, because an eye is an
+  almond whose rim and interior deviate in OPPOSITE directions -- the deviation test is absolute
+  now, and a fix that works on one feature and not its neighbour is the tell;
+- `r_head_dome` paints the cranium as a shaded solid off its own distance transform, the way
+  `hd.py` paints hands and feet, and that read as a blob with the jaw gone. It stays as a knob and
+  defaults to 0.
+
+**All three were being undone by the fibre pass.** `fibre` is a high-pass of the ORIGINAL
+luminance, taken at step 1 and multiplied in at step 5, AFTER the head work -- so it was
+re-printing the eyes and the mouth onto every head that had just had them removed. The removal had
+worked every time. `fibre[hm] = 0` is the fix, and it is right on its own terms: the head carries
+no muscle fibre to recover. **A pass that re-applies an earlier state after a later edit makes the
+later edit look broken**, and nothing announces it -- the edit's own output is correct when it is
+written.
+
+With that fixed the eye sockets read as soft hollows, the mouth as a faint lip line, the nose
+remains, and the brow, cheek and jaw keep their form. It is a blank-eyed head rather than a doll's
+face, and it is not a skull.

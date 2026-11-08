@@ -77,11 +77,21 @@ KNOBS = {
     "r_feather": 0.0,      # alpha blur; 0 keeps the render's own edge (the fingers are 2 px wide)
     "r_label_smooth": 1.6, # sigma on each group's soft mask before the 2x argmax
     "r_bare_gain": 1.35,   # the head, hands, feet and exposed bone get the shading move too
-    "r_head_tint": 0.92,   # the head alone (not the hands, not the feet): how far it takes the colour below
+    "r_head_tint": 1.00,   # the head alone (not the hands, not the feet): how far it takes the colour below
     "r_head_r": 195.0,     # a deep red. Each pixel takes this chroma and keeps its own shading.
     "r_head_g": 58.0,
     "r_head_b": 54.0,
     "r_head_value": 0.48,  # how far the head's own value is pulled down (chroma alone only ever gives a LIGHT red)
+    "r_head_match": 1,     # 1 = the head takes HEAD_TAKES_COLOUR_FROM's own colour AND level off the
+                           #     finished tile (realistic.py names the group); 0 = the three knobs above
+    "r_head_face": 1.00,   # how far the doll face is smoothed away; 0 keeps the eyes, nose and lips
+    "r_head_face_sigma": 17.0, # the scale the head's own local level is taken at
+    "r_head_face_depth": 14.0, # a pixel this far below that level is a feature (eye, nostril, lip)
+    "r_head_face_radius": 9,   # how far the inpaint reaches for the tone that fills a feature
+    "r_head_dome": 0.0,    # 1 paints the cranium as a shaded solid instead of editing the doll
+                           #   face; off by default -- it reads as a blob and loses the jaw
+    "r_head_dome_px": 56.0,# pixels from the silhouette over which that solid shades up
+    "r_head_dome_level": 1.15,
     "r_head_neck": 0.25,   # the head stops where its own shape narrows to this share of the skull's width
     "r_bare_sat": 0.95,
     "r_bare_value": 0.93,

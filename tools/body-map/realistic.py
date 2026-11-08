@@ -54,6 +54,14 @@ SCALE = max(1, ki("r_scale", 2))
 OUT_SCALE = max(1, ki("r_out_scale", 1))
 NAMES = ("female-front", "female-back", "male-front", "male-back")
 
+# Scott, 2026-11-08: "make it the same color as the hip flexors". A NAME, not a knob, because
+# this is a rule about which group the head follows and the knobs are numbers somebody turns.
+# Read off the FINISHED tile rather than written down as an RGB triple, so the head keeps
+# following that group when any of the tone knobs move. The back views have no hip flexors in
+# them, so each front tile leaves its answer here for the back of the same figure.
+HEAD_TAKES_COLOUR_FROM = "Hip Flexors"
+head_colour_cache: dict = {}
+
 (ROOT / "site/img3d").mkdir(parents=True, exist_ok=True)
 (ROOT / "site/lab3d").mkdir(parents=True, exist_ok=True)
 
@@ -207,6 +215,19 @@ def finish(name):
         hm = head_mask(lab, body)
         if hm.any():
             target = np.array([kf("r_head_r", 232.0), kf("r_head_g", 150.0), kf("r_head_b", 146.0)], np.float32)
+            value = kf("r_head_value", 1.0)
+            if ki("r_head_match", 0) and HEAD_TAKES_COLOUR_FROM in GROUPS:
+                gm = (lab == GROUPS.index(HEAD_TAKES_COLOUR_FROM) + 1) & body
+                if gm.sum() > 400:
+                    head_colour_cache[name.split("-")[0]] = np.median(rgb[gm], axis=0).astype(np.float32)
+                ref = head_colour_cache.get(name.split("-")[0])
+                if ref is not None:
+                    target = ref
+                    # match the LEVEL as well as the hue: the head is pale and the hip flexors are
+                    # not, and a chroma match alone would leave a light version of their colour
+                    w = np.array([0.299, 0.587, 0.114], np.float32)
+                    head_lum = float(np.median(rgb[hm] @ w))
+                    value = float(target @ w) / head_lum if head_lum > 1e-3 else 1.0
             t_lum = float(target @ np.array([0.299, 0.587, 0.114], np.float32))
             if t_lum > 1e-3:
                 px = rgb[hm]
@@ -215,8 +236,63 @@ def finish(name):
                 # make it a light red. Darkening is a move on the head's own value, not a redder
                 # target -- and it stays a multiplier on each pixel so the brow, nose and jaw
                 # keep their relative shading instead of flattening into one slab.
-                l = (px @ np.array([0.299, 0.587, 0.114], np.float32)) * kf("r_head_value", 1.0)
+                l = (px @ np.array([0.299, 0.587, 0.114], np.float32)) * value
                 rgb[hm] = px * (1 - tint) + np.clip(l[:, None] * (target / t_lum)[None, :], 0, 255) * tint
+            # Scott: "don't make it a face". The eyes, the nose and the lips are the only detail
+            # the mannequin head carries, so smoothing INSIDE the head mask takes the doll face
+            # off and leaves a blank cranium; the silhouette is the alpha channel and is not
+            # touched, so the jaw and the ears still read as a head. This does not put a skull
+            # there -- see the README: that geometry is not in the render.
+            fs = kf("r_head_face", 0.0)
+            if fs > 0:
+                # A BLUR CANNOT DO THIS AND TRYING IT IS THE WRONG SHAPE. The eyes and the mouth
+                # are deep dark features: at a sigma small enough to keep the brow, the cheek and
+                # the jaw modelled they survive intact, and at a sigma large enough to erase them
+                # the head is a featureless egg. In between -- measured at sigma 17 -- they come
+                # back as ghosts, which is the worst of the three. So the features are FOUND and
+                # FILLED instead: a pixel more than r_head_face_depth below the head's own local
+                # level is a feature, and inpainting takes it out from its surroundings. What is
+                # left keeps the cranial form (the brow ridge, the cheek, the jaw line) and has
+                # no eyes, no nostrils and no lips -- which is as close to a skull as this source
+                # can get, because the render has no skull and no facial muscles in it at all.
+                lh = rgb @ np.array([0.299, 0.587, 0.114], np.float32)
+                wm = hm.astype(np.float32)
+                sig = kf("r_head_face_sigma", 17.0)
+                local = cv2.GaussianBlur(lh * wm, (0, 0), sig) / np.maximum(cv2.GaussianBlur(wm, (0, 0), sig), 1e-4)
+                # The deviation is ABSOLUTE in both directions, which the first version got
+                # wrong: an eye is an almond with a DARK rim and a LIGHTER interior, so a
+                # darker-than-local test filled the rim and left the shape sitting there as a
+                # pale almond. The mouth, which is dark throughout, came out on the first try --
+                # a fix that works on one feature and not its neighbour is the tell.
+                feat = (hm & (np.abs(local - lh) > kf("r_head_face_depth", 14.0))).astype(np.uint8)
+                if feat.any():
+                    feat = cv2.dilate(feat, np.ones((5, 5), np.uint8), iterations=1) * hm
+                    filled = cv2.inpaint(np.clip(rgb, 0, 255).astype(np.uint8), feat,
+                                         float(ki("r_head_face_radius", 9)), cv2.INPAINT_TELEA).astype(np.float32)
+                    f = cv2.GaussianBlur(feat.astype(np.float32), (0, 0), 2.0) * fs
+                    rgb = rgb * (1 - f[..., None]) + filled * f[..., None]
+            # AND WHEN THAT IS NOT ENOUGH, PAINT THE CRANIUM RATHER THAN EDIT IT. Finding and
+            # filling features took the mouth out and left the eyes, because an eye is an almond
+            # whose rim and interior deviate in OPPOSITE directions and the inpaint fills each
+            # from the other. Removing a face from a render of a face is reconstruction, not
+            # filtering. So r_head_dome does what hd.py already does for the hands and the feet:
+            # the head is PAINTED as a solid, shaded up from its own silhouette by the distance
+            # transform, which gives a bald cranium with no features at all and keeps the ears
+            # and the jaw, because those are the alpha channel and nothing here touches it.
+            # AND THE FIBRE MUST NOT RUN OVER THE HEAD. `fibre` is a high-pass of the ORIGINAL
+            # luminance, taken at step 1 and multiplied in at step 5 -- AFTER this -- so it was
+            # re-printing the eyes and the mouth onto every head that had just had them removed.
+            # Three attempts at taking the face off read as three failures of the removal; the
+            # removal had worked each time and this was putting it back. The head carries no
+            # muscle fibre to recover in the first place, so it is excluded outright.
+            fibre[hm] = 0
+            dome = kf("r_head_dome", 0.0)
+            if dome > 0:
+                d = ndi.distance_transform_edt(hm)
+                lit = 0.52 + 0.48 * np.clip(d / max(kf("r_head_dome_px", 56.0), 1e-3), 0, 1) ** 0.55
+                paint = np.clip(target[None, None, :] * lit[..., None] * kf("r_head_dome_level", 1.0), 0, 255)
+                w = cv2.GaussianBlur(hm.astype(np.float32), (0, 0), 1.5) * dome
+                rgb = rgb * (1 - w[..., None]) + paint * w[..., None]
 
     # --- 4. a key light, so the figure has a direction instead of sitting in a flat box
     kl = kf("r_light", 0.0)
