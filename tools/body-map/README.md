@@ -150,3 +150,22 @@ them.
 
 `/tune` drives the realistic stage now (`pipeline.py --stage realistic`), and `/tune list` prints
 the `r_*` knobs. The diagram knobs and `hd.py` stay; nothing on the page reads them.
+
+### The head is a light red (2026-11-08)
+
+Scott: "that looks way better, but lets change the head make it like a light red." `r_head_tint`
+plus `r_head_r/g/b`, and every pixel keeps its OWN luminance and takes only the target's chroma --
+the mannequin head is modelled and that shading is the only thing making it a head rather than a
+shape, so this is a recolour and never a fill over the face.
+
+**THE HEAD HAD TO BE FOUND, NOT FENCED OFF.** The render leaves the head, the hands, the feet and
+every bit of exposed bone all on label 0, so a tint on label 0 paints the skeleton's fingers too.
+`head_mask` takes the ungrouped component that reaches the top row of the silhouette -- and the
+first render of it tinted the BREASTBONE pink, because on a front view the sternum and the linea
+alba are ungrouped bone CONNECTED to the skull: the component ran from row 13 to row 1100 of a
+2065-row tile. It is cut at the neck now, the first row past the skull's widest where the
+component narrows below `r_head_neck` of that width (223 px at the ears, 91 at the jaw, 21 at the
+neck, then 7-31 all the way down the sternum). On a back view the traps reach the skull, so the
+component ends at the jaw by itself and the cut changes nothing there. A fraction-of-the-figure
+zone was the obvious alternative and is the wrong shape: it moves the moment a figure is rendered
+at another crop.

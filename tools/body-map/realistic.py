@@ -110,6 +110,42 @@ def amplified(rgb, lum, mask, gain, floor, sat, value, hold):
     rgb[mask] = grey + (px - grey) * sat
 
 
+def head_mask(lab, body):
+    """The head alone, out of everything the render left ungrouped. Label 0 is the head AND the
+    hands AND the feet AND every bit of exposed bone, so a tint applied to label 0 would paint
+    the skeleton's fingers too. The head is the ungrouped component that reaches the top row of
+    the silhouette -- it is separated from the rest by the neck on the front and by the traps on
+    the back, which run to the skull, so the component stops at the jaw either way. Found rather
+    than fenced off by a fraction of the figure's height: a zone would move the moment a figure
+    was rendered at another crop."""
+    bare = (lab == 0) & body
+    if not bare.any():
+        return bare
+    rows = np.nonzero(body.any(1))[0]
+    if not len(rows):
+        return np.zeros_like(bare)
+    comp, n = ndi.label(bare)
+    top = comp[rows[0]:rows[0] + 3][bare[rows[0]:rows[0] + 3]]
+    if not len(top):
+        return np.zeros_like(bare)
+    ids = np.bincount(top)
+    ids[0] = 0
+    head = comp == int(np.argmax(ids))
+    # ON THE FRONT THAT COMPONENT DOES NOT STOP AT THE HEAD. The sternum and the linea alba are
+    # ungrouped bone too, and on a front view they are CONNECTED to the skull, so the component
+    # runs from row 13 to row 1100 of a 2065-row tile -- the first render tinted the breastbone
+    # pink. It is cut at the neck instead: the first row past the skull's widest where the
+    # component narrows sharply (223 px at the ears, 91 at the jaw, 21 at the neck, then 7-31
+    # all the way down the sternum). On a back view the traps reach the skull and the component
+    # ends at the jaw by itself, so the cut finds nothing and changes nothing there.
+    w = head.sum(1)
+    widest = int(w.argmax())
+    narrow = np.nonzero(w[widest:] < w[widest] * kf("r_head_neck", 0.25))[0]
+    if len(narrow):
+        head[widest + int(narrow[0]):] = False
+    return head
+
+
 def finish(name):
     src = Image.open(SRC / f"{name}.webp").convert("RGBA")
     lab1 = np.array(Image.open(SRC / f"lab/{name}.png"))
@@ -161,6 +197,21 @@ def finish(name):
         if sv > 0:
             seam = cv2.GaussianBlur(seam, (0, 0), kf("r_seam_blur", 1.3))
         rgb = rgb * (1.0 - sv * seam)[..., None] * belly[..., None]
+
+    # --- 3b. the head: Scott, 2026-11-08, "make it like a light red". Each pixel keeps its OWN
+    # luminance -- the mannequin head is modelled and the shading is the only thing making it a
+    # head rather than a shape -- and takes the target's chroma, so this is a recolour and never
+    # a flat fill over the face.
+    tint = kf("r_head_tint", 0.0)
+    if tint > 0:
+        hm = head_mask(lab, body)
+        if hm.any():
+            target = np.array([kf("r_head_r", 232.0), kf("r_head_g", 150.0), kf("r_head_b", 146.0)], np.float32)
+            t_lum = float(target @ np.array([0.299, 0.587, 0.114], np.float32))
+            if t_lum > 1e-3:
+                px = rgb[hm]
+                l = px @ np.array([0.299, 0.587, 0.114], np.float32)
+                rgb[hm] = px * (1 - tint) + np.clip(l[:, None] * (target / t_lum)[None, :], 0, 255) * tint
 
     # --- 4. a key light, so the figure has a direction instead of sitting in a flat box
     kl = kf("r_light", 0.0)
