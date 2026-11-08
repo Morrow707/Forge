@@ -323,3 +323,50 @@ describe("the printout", () => {
     expect(out).not.toContain("not a medical test");
   });
 });
+
+/**
+ * THE SLOW CHANNEL'S ABSENCE NAMES THE REAL BLOCKER.
+ *
+ * Until 2026-11-08 it read "no early-season anchor on this account yet" -- a fixed sentence that
+ * was true when it was written and would have gone on being printed after the anchor was built.
+ * CLAUDE.md records what that costs: an entry that stops being revised reads as live, and two
+ * different reasons for "nothing could be judged" must not render as the same blank any more than
+ * a quiet week and an unjudgeable one may.
+ */
+describe("the slow channel", () => {
+  it("names the anchor while an athlete has too little history for one", () => {
+    const week = assembleAnvilWeek(42, mornings(12), anvilRange("2026-11-06", 7));
+    expect("absent" in week.slow).toBe(true);
+    expect(week.verdict.kind).toBe("cannot_judge");
+    if (week.verdict.kind !== "cannot_judge") return;
+    expect(week.verdict.reason).toContain("anchor checks before the window");
+  });
+
+  it("names the COHORT once the anchor exists, because that is what is missing then", () => {
+    // Enough mornings for the anchor to close before the window opens and for the window to be
+    // full: the anchor stops being the blocker and the sentence has to move with it.
+    const week = assembleAnvilWeek(42, mornings(120), anvilRange("2026-11-06", 7));
+    expect("driftMs" in week.slow).toBe(true);
+    if (!("driftMs" in week.slow)) return;
+    expect(week.slow.anchor.checks).toBe(20);
+    expect(week.verdict.kind).toBe("cannot_judge");
+    if (week.verdict.kind !== "cannot_judge") return;
+    expect(week.verdict.reason).toContain("no cohort of 90");
+    expect(week.verdict.reason).toContain("drift of");
+    // And the career channel's reason is still its own, so the two are never conflated.
+    expect(week.verdict.reason).toContain("a year earlier");
+  });
+
+  it("carries the drift into the printed sentence, so it is not accumulating invisibly", () => {
+    const week = assembleAnvilWeek(42, mornings(120), anvilRange("2026-11-06", 7));
+    expect(verdictSentence(week)).toContain("not enough to judge on");
+    expect(verdictSentence(week)).toContain("no cohort of 90");
+    expect(week.channelsNotBuilt.join(" ")).toContain("no cohort of 90");
+  });
+
+  it("never prints the sentence the anchor made false", () => {
+    // FORBIDDEN FORM, comments stripped, because this file's own explanation quotes it above.
+    const src = stripComments(readFileSync(join(__dirname, "anvil-report.ts"), "utf8"));
+    expect(src).not.toContain("no early-season anchor");
+  });
+});

@@ -134,6 +134,23 @@ at 23.8% with 40. *A small roster needs an order of magnitude more seasons to sa
 - `why_r2.py` — why the athlete's own load explains one world and not another.
 - `form_by_sport.py` — and therefore why the detector form is chosen per roster.
 - `raw_spread.py` — the anchor means opposite things in football and baseball.
+- `randomanchor.py` — **the ACWR test turned on the Anvil's own slow channel.** Shuffle the
+  anchor across athletes, draw it at random, remove it: all three fall to the clean floor, so the
+  drift from a fixed anchor is the whole channel and a late-season mean alone is nothing.
+- `countanchor.py` — **which anchor Forge can actually build.** Every sim anchors on days 8%-32%
+  of the season; Forge has no calendar. The athlete's own first 20 readings matches or beats it in
+  all three worlds, and the ROLLING anchor (the twenty readings before the window) detects nothing
+  above its clean floor anywhere — which is why the shipped anchor is frozen.
+- `ownsigma.py` — **is the cohort load-bearing?** Yes, measured: scored against the athlete's own
+  standard error instead, the channel flags 0% of real decliners in football and 54% of CLEAN
+  athletes in baseball. The across-athlete median removes the season's common drift and the MAD
+  sets its scale; neither is recoverable from one series.
+- `cohortfloor.py` — **the floor, set by the worst cohort drawn and not the average one.** A cohort
+  of six has a respectable mean clean rate and a worst draw that flags every clean athlete in it.
+  90 is the smallest size whose worst draw stays at or under 10% in all three worlds.
+- `formrule.py` — **the detector form, chosen by a rule rather than a fitted boundary.** Compute
+  both residuals on the cohort in hand and keep the strictly tighter one: it picks the regression
+  unanimously where the regression wins and almost never where it loses, with no sport table.
 - `diag3.py`, `limit.py`, `mlb_an.py`, `an125.py` — earlier diagnostics, superseded but kept.
 
 ## The findings, so they do not have to be re-derived

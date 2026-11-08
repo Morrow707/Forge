@@ -1865,6 +1865,123 @@ load-bearing and proven, not assumed:** `dayContextFrom`'s own comment names thr
 purpose, so the "no list of its own" case reds with the strip removed. Server plus three client
 files: `verify_build`, and it batches -- no camera number moves.
 
+## THE SLOW CHANNEL HAS AN ANCHOR NOW, AND IT IS THE WHOLE CHANNEL
+
+Added 2026-11-08. `weeklyVerdict` needs two of three channels agreeing, and two of the three were
+not computable, so **every week the Anvil has ever produced reads `cannot_judge` by
+construction**. The career channel wants the same athlete at the same age a year earlier, which
+nothing anybody builds shortens. The slow channel wanted "a fixed early-season anchor, which
+nobody has" -- and that was the half that was buildable. `shared/anvil-slow-channel.ts`.
+
+**THE ANCHOR IS NOT A DETAIL OF THE CHANNEL, IT IS THE CHANNEL.** `tools/anvil-sim/randomanchor.py`
+turns the ACWR test on it -- Carbone et al. 2022 killed the acute:chronic workload ratio by
+replacing its chronic denominator with a random number and watching it predict just as well -- over
+twelve seasons and 1,389 athletes: as shipped **16% / 23%** of slow / fast decliners caught against
+a 10% clean floor; shuffled across athletes 10% / 10%; drawn at random 10% / 8%; **no anchor at all
+9% / 9%**. A late-season mean alone is nothing.
+
+**IT IS A COUNT AND NOT A CALENDAR, AND THAT WAS MEASURED RATHER THAN ASSUMED.** Every simulation
+anchors on days 8%-32% of the season. Forge cannot: an athlete's season phase is one reported word,
+not a calendar, and somebody who starts the check in week nine has no early-season readings at all.
+`tools/anvil-sim/countanchor.py` tests the anchor Forge CAN build in all three worlds:
+
+| world | anchor | slow | fast | clean |
+|---|---|---|---|---|
+| football | days 8%-32% of the season | 16% | 23% | 10% |
+| football | **the athlete's first 20 readings** | **19%** | 21% | 10% |
+| football | the 20 readings before the window | 10% | 10% | 10% |
+| baseball | days 8%-32% of the season | 25% | 20% | 10% |
+| baseball | **the athlete's first 20 readings** | 25% | 22% | 10% |
+| baseball | the 20 readings before the window | 10% | **0%** | 10% |
+| basketball | days 8%-32% of the season | 26% | 26% | 14% |
+| basketball | **the athlete's first 20 readings** | **30%** | 21% | 14% |
+| basketball | the 20 readings before the window | 18% | 11% | 14% |
+
+The count-based anchor matches or beats the calendar one in every world, needs no season, and scores
+one more athlete per football season because it has no early-season requirement to fail. 14, 20 and
+30 are within a point of each other, so 20 is taken to match `BASELINE_WINDOW` and be one fewer
+number.
+
+**AND THE ROLLING ANCHOR DETECTS NOTHING, WHICH IS WHY "FROZEN" IS A MEASUREMENT AND NOT A
+PREFERENCE.** The third row of each block is the anchor somebody reaches for when an athlete's first
+checks look unrepresentative -- the twenty readings immediately before the window, so it moves with
+it -- and it sits at its own clean floor everywhere. An anchor that re-learns itself is the fast
+channel's own measured defect one timescale up: the fast channel's rolling baseline flags 16.3% of
+days in an athlete's first three and 0.0% by days 16-18.
+
+**THE ANCHOR AND THE WINDOW ARE DISJOINT, AND THAT GUARD IS NOT THEORETICAL -- IT FIRES ON EVERY
+ATHLETE'S FIRST TEN WEEKS.** The ACWR's acute week sits inside its own chronic window, so its
+numerator and denominator share data; the Anvil's must not. The guard is what makes the drift a
+difference rather than partly a number minus itself, and the live demo roster proves it is the
+common case: three athletes with 28 consecutive mornings each read **"0 of 20 anchor checks before
+the window"**, because every check they have is inside the 45-day window. **An athlete needs about
+66 days of checks before the slow channel has a drift at all** (one burn-in, twenty anchor, then a
+window that opens after the anchor closes). That is the channel's timescale, not a gap: the sims'
+own anchor and window sit the same 66 days apart.
+
+**THE COHORT IS LOAD-BEARING, MEASURED, AND IS WHY THE CHANNEL STILL CANNOT SPEAK.** The obvious
+way to score a lone athlete needs no roster: the drift is a difference of two means, so its standard
+error is their own day-to-day sigma times `sqrt(1/n_window + 1/n_anchor)`, and the fast channel
+already estimates that sigma. `tools/anvil-sim/ownsigma.py` at a fixed z of 2.0: the cohort form
+gives 7% / 4% / **3% clean** in football and 8% / 12% / **1%** in baseball; the own-sigma form gives
+**0% / 0% / 0%** in football and **58% / 65% / 54% CLEAN** in baseball. Both failures are one cause
+-- the spread of the drift ACROSS athletes is not one athlete's day-to-day sigma scaled by
+`sqrt(1/n)`, because a season has a common drift that everybody shares, and the cohort median is
+what removes it while the cohort MAD sets its scale. An autocorrelation correction (effective n from
+the lag-1 coefficient) moves 54% to 50%, which is the same answer.
+
+**SO THE FLOOR IS SET BY THE WORST COHORT DRAWN, NEVER THE AVERAGE ONE, AND THAT DISTINCTION IS THE
+TRAP.** `tools/anvil-sim/cohortfloor.py`, 400 seeded draws per size: a cohort of **six** has a mean
+clean rate of 3-5% -- respectable -- and a worst draw that flags **100%** of its clean athletes.
+At 20 the worst draw is 24-36%, at 30 it is 17-28%, at 60 it is 7-14%, and **90 is the smallest size
+whose worst draw stays at or under 10% in all three worlds**, which is the rate
+`anvil-corroboration.ts` assumed of each channel when it measured two-of-three at 0.1% false weeks.
+Below it the slow channel corroborates by noise, and **a second witness that fires on noise is worse
+than one witness, because the rule trusts it.** It is a cohort to ESTIMATE from rather than a roster
+to be scored inside -- `pooled.py` measured that pooling does not make the channel finer (sigma is a
+property of the population: 0.34 at 18 athletes, 0.33 at 720) but that a small roster's threshold is
+wild (0.54 to 4.38 off one 18-man team against 1.14 to 1.48 at ten teams).
+
+**THE DETECTOR FORM IS CHOSEN BY A RULE, NOT A FITTED BOUNDARY.** `form_by_sport.py` measured that
+the better form is roster-shaped -- at 18% load spread (football) regressing on the athlete's own
+load HURTS, at 39-40% (baseball, basketball) it wins, and in baseball the cohort-median form detects
+**0%** of the slow declines, so getting it wrong costs the whole channel. Shipping a boundary between
+18% and 39% would fit a threshold to two points, which is the enumerate-the-accepted-forms shape
+this file refuses. So both residuals are computed on the cohort in hand and the **strictly tighter**
+one kept (`formrule.py`: it picks the regression in 100% of baseball and basketball cohorts and 21%
+of football ones, landing on the better form everywhere with no sport table). A tie keeps the simpler
+form, because the regression spends a degree of freedom and a tie is where it bought nothing;
+measured both ways and the direction is inside the sampling noise, so it is the reasoning that picks
+it.
+
+**WHAT CHANGED ON SCREEN, AND IT IS THE ONE THING THAT WOULD OTHERWISE HAVE ROTTED.** The slow
+channel's absence used to be the fixed string `"no early-season anchor on this account yet"` -- true
+when written, and it would have gone on printing after the anchor was built. It is computed per
+athlete now: either the anchor's own count ("0 of 20 anchor checks before the window ... frozen") or,
+once the anchor exists, **the drift itself plus the real blocker** ("a drift of +12ms from this
+athlete's own anchor, with no cohort of 90 to score it against"). `verdictSentence` and
+`channelsNotBuilt` already carry the verdict's reason, so the drift reaches the coach's page and the
+PDF with no further wiring -- which is what stops it accumulating invisibly, the camera registry's
+own lesson (270 records shipped, read by one tracker of fifteen).
+
+**WHAT IS DELIBERATELY NOT WIRED, named so it is not mistaken for done:** `slowChannelCohort` ships
+measured and tested and has NO production caller. Wiring it needs a 45-day training-load read per
+athlete and a pooled cohort of ninety athletes each with 66 days of checks, and writing those today
+would be fitting plumbing against zero data -- the registry's "two weeks to learn it was mostly
+unwired". `SLOW_WINDOW_MIN_CHECKS` is 31, the sims' `W * 0.7` expressed as the count it really was
+at daily cadence; an athlete checking five mornings a week clears it at 32 and four mornings a week
+does not, and it is **the first number to re-measure once there is real cadence data**, which there
+is not. The career channel is unchanged and still a year away.
+
+`shared/anvil-slow-channel.test.ts` (20 cases, ten mutations) and four cases in
+`server/anvil-report.test.ts` (three mutations). **Two mutations survived the first drafts and both
+were fixture weaknesses worth recording:** the disjointness guard could not be broken because the
+fixture put the anchor and the window 180 days apart, so the case that catches it is now the one that
+matters -- an athlete's first 52 consecutive mornings, which is the state the live demo roster is
+actually in; and "ignores checks after the day it is asked about" passed with a single stray future
+reading, because one outlier does not move a median of 31. Server plus shared: ships on Render, no
+build, no camera number moves.
+
 ## THE DEVICE-APPROVAL STORM: A GUARD WHOSE LIFETIME WAS THE MOUNT, NOT THE TOKEN
 
 Added 2026-11-08, clearing the item queued on 2026-10-29. After approving a new device from the

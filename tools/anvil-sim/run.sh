@@ -17,3 +17,8 @@ run pooled.py         # pooling fixes the threshold, not the instrument
 run youth.py          # the channel works on 15 year olds, which is the problem
 run rerun.py          # the three worlds on the load production can actually see
 run life_an.py        # 75 athletes, 25 per sport, thirteen to forty-five
+run randomanchor.py   # the ACWR test, turned on the Anvil's own anchor: it is the whole channel
+run countanchor.py    # the anchor Forge can build -- a count, not a calendar -- and why it is frozen
+run ownsigma.py       # is the cohort load-bearing?  measured: yes, and badly
+run cohortfloor.py    # the floor, set by the worst cohort drawn rather than the average one
+run formrule.py       # the detector form, chosen by a rule rather than a fitted boundary

@@ -7,6 +7,12 @@ import {
   type AnvilReading,
 } from "@shared/anvil-reading";
 import { weeklyVerdict, type WeeklyVerdict } from "@shared/anvil-corroboration";
+import {
+  SLOW_COHORT_MIN,
+  slowChannelDrift,
+  type SlowChannelAbsence,
+  type SlowChannelDrift,
+} from "@shared/anvil-slow-channel";
 import { ANVIL_ACCURACY_CAVEAT, ANVIL_NOT_A_MEDICAL_TEST } from "@shared/anvil-agreement";
 import {
   besideLine,
@@ -95,6 +101,16 @@ export type AnvilWeek = {
   days: AnvilDay[];
   /** The fast channel's week: one witness, or why it has none. */
   fast: ReturnType<typeof fastChannelWeek>;
+  /**
+   * The slow channel's drift from this athlete's own frozen anchor, or why they have none.
+   *
+   * IT IS NOT A WITNESS YET AND THAT IS THE HONEST STATE: a drift becomes a z only against a
+   * cohort, which `anvil-slow-channel.ts` measures as load-bearing rather than convenient (scored
+   * against an athlete's own standard error the channel flags 0% of real decliners in one world
+   * and 54% of CLEAN athletes in another). So the drift is carried, shown and accumulating, and
+   * the channel's absence names the cohort rather than the anchor.
+   */
+  slow: SlowChannelDrift | SlowChannelAbsence;
   /** The only place the Anvil asserts anything, and it will not on one witness. */
   verdict: WeeklyVerdict;
   /** Why the other two channels are absent, in words, so a blank is never read as a quiet week. */
@@ -102,16 +118,32 @@ export type AnvilWeek = {
 };
 
 /**
- * The slow and career channels, stated rather than omitted.
+ * The career channel, stated rather than omitted.
  *
- * Neither is computable yet and the reasons are structural, not pending work: the slow channel
- * needs a fixed early-season anchor with training load regressed out, and nobody has an anchor;
- * the career channel needs the same athlete at the same age a year apart, and the Anvil is a day
- * old. `weeklyVerdict` is handed these as absences so that its `cannot_judge` reason names them
- * -- "nothing was wrong" and "nothing could be judged" must never render as the same blank.
+ * Its reason is structural and not pending work: it needs the same athlete at the same age a year
+ * apart, so nothing anybody builds shortens it. `weeklyVerdict` is handed it as an absence so that
+ * `cannot_judge` names it -- "nothing was wrong" and "nothing could be judged" must never render
+ * as the same blank. The slow channel's reason is computed per athlete below, because as of
+ * 2026-11-08 it has an anchor and the reason changed.
  */
-const SLOW_CHANNEL_ABSENT = "no early-season anchor on this account yet";
 const CAREER_CHANNEL_ABSENT = "needs the same athlete at the same age a year earlier";
+
+/**
+ * Why the slow channel cannot speak, in the athlete's own terms.
+ *
+ * **THIS USED TO READ "no early-season anchor on this account yet" AND THAT IS NO LONGER THE
+ * REASON.** The anchor is built (`shared/anvil-slow-channel.ts`: the athlete's first twenty
+ * eligible checks, frozen, measured against the calendar anchor every simulation used and against
+ * the rolling anchor that detects nothing). What is missing now is the COHORT the drift is scored
+ * against -- ninety athletes with a drift, which is the smallest size whose worst draw does not
+ * flag a tenth of its clean athletes. Naming the real blocker is the whole point: "nothing was
+ * wrong" and "nothing could be judged" must never render as the same blank, and neither must two
+ * different reasons for the second one.
+ */
+function slowChannelAbsence(drift: SlowChannelDrift | SlowChannelAbsence): string {
+  if ("absent" in drift) return `no drift yet: ${drift.absent}`;
+  return `a drift of ${drift.driftMs >= 0 ? "+" : ""}${Math.round(drift.driftMs)}ms from this athlete's own anchor, with no cohort of ${SLOW_COHORT_MIN} to score it against`;
+}
 
 export function assembleAnvilWeek(
   athleteId: number,
@@ -146,18 +178,31 @@ export function assembleAnvilWeek(
   // which is what makes "one attempt counts" true rather than a slogan.
   const counting = days.filter((d) => d.counts);
   const fast = fastChannelWeek(counting);
+  // The drift is measured over the WHOLE history, not the range, for the same reason the reading
+  // is: the anchor is this athlete's first twenty checks and the window is the last forty-five
+  // days, neither of which is the week being printed.
+  const slow = slowChannelDrift(
+    rowsOldestFirst.map((row, i) => ({
+      date: row.date,
+      medianMs: scored[i].reading.numbers.medianMs,
+      eligible: !scored[i].reading.outsideTheWindow,
+    })),
+    range.to,
+  );
+  const slowAbsent = slowChannelAbsence(slow);
   return {
     athleteId,
     from: range.from,
     to: range.to,
     days,
     fast,
+    slow,
     verdict: weeklyVerdict([
       fast,
-      { channel: "slow", absent: SLOW_CHANNEL_ABSENT },
+      { channel: "slow", absent: slowAbsent },
       { channel: "career", absent: CAREER_CHANNEL_ABSENT },
     ]),
-    channelsNotBuilt: [`slow: ${SLOW_CHANNEL_ABSENT}`, `career: ${CAREER_CHANNEL_ABSENT}`],
+    channelsNotBuilt: [`slow: ${slowAbsent}`, `career: ${CAREER_CHANNEL_ABSENT}`],
   };
 }
 
