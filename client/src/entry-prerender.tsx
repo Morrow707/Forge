@@ -24,6 +24,7 @@ import LandingPage from "@/pages/landing";
 import PricingPage from "@/pages/pricing";
 import ForHighSchoolsPage from "@/pages/for-high-schools";
 import ForAthletesPage from "@/pages/for-athletes";
+import InSeasonTemplatePage from "@/pages/in-season-template";
 import CameraValidationPage from "@/pages/camera-validation";
 import MovementPage, { MovementIndexPage } from "@/pages/movement";
 import { MOVEMENTS } from "@shared/movement-library";
@@ -35,6 +36,7 @@ export const PRERENDERED_BODY_PATTERNS = [
   "/pricing",
   "/for-high-schools",
   "/for-athletes",
+  "/in-season-template",
   "/camera-validation",
   "/movements",
   "/movements/:slug",
@@ -68,6 +70,7 @@ export function renderPublicPage(path: string): string {
           <Route path="/pricing" component={PricingPage} />
           <Route path="/for-high-schools" component={ForHighSchoolsPage} />
           <Route path="/for-athletes" component={ForAthletesPage} />
+          <Route path="/in-season-template" component={InSeasonTemplatePage} />
           <Route path="/camera-validation" component={CameraValidationPage} />
           <Route path="/movements" component={MovementIndexPage} />
           <Route path="/movements/:slug" component={MovementPage} />
