@@ -3073,12 +3073,19 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 714** (2026-11-06 13:33
-  UTC, `5003fef`: round ten -- a rep ends when the bar comes to rest, the RDL's whole window, the
+  branch `verify_build` for the arbiter plumbing. **The newest build is 718** (2026-11-08 03:49
+  UTC, `3e04c93`: the Anvil's client half -- the four tasks, the dashboard card, the coach's week
+  and the print button; 717 was its `verify_build` on the same commit, which passed Apple's own
+  `--validate-app`). **This is the first build that carries a feature with no camera in it**, so
+  it is not a calibration build and 714 remains the one to film on until a later build moves a
+  camera number. The Anvil's server half went live on Render with the same push and needs no
+  build. Before 718, **716** (2026-11-06 19:59 UTC, `af7d4d3`: round eleven and the unilateral
+  per-side rows; 715 was its `verify_build` on the same commit). Before it, **714** (2026-11-06
+  13:33 UTC, `5003fef`: round ten -- a rep ends when the bar comes to rest, the RDL's whole window, the
   squat's 0.12 step, the jump's mean to the hip's apex -- plus the day-wipe save fix (`09b931f`)
   and the Forge-code removal for App Review's third rejection; 713 was its `verify_build` on the
   same commit, which passed Apple's own `--validate-app`). Scott lifted the hold with "Push all and
-  upload". **714 is the build to film on, and it was RESUBMITTED to App Review on 2026-11-06 in place of 695** (Waiting for Review as of 14:40 UTC, with the reply naming the removal, the Upgrade screenshot replaced, and the review notes carrying no Forge code).
+  upload". **714 is still the build to film on, and it was RESUBMITTED to App Review on 2026-11-06 in place of 695** (Waiting for Review as of 14:40 UTC, with the reply naming the removal, the Upgrade screenshot replaced, and the review notes carrying no Forge code).
   Before 714, **712** (2026-11-05 ~20:20
   UTC, `3ac2b34`: round nine -- the squat's own drive onset 0 and smoothing 130, the RDL's
   sample-starvation rule and own drive onset 0.02, the jump's hip peak on the set, `liftRecord`
@@ -3231,7 +3238,12 @@ halves before splitting anything else:
   by the same rule; the every-lift test pins that the press's window reaches the press trace and
   the row's record lands set 2. See docs/camera-tracking-notes.md "Round five, 2026-10-30".
   Calibration work, uploaded on commit as build **705** (704 was its `verify_build` on `bfcc130`).
-- **THE QUEUE IS EMPTY AS OF BUILD 714** (2026-11-06: round ten, the day-wipe save fix and the
+- **THE QUEUE IS EMPTY AS OF BUILD 718** (2026-11-08: the Anvil's client half -- the four tasks,
+  the agreement, the dashboard card, the coach's week and the PDF button. Scott: "lets upload all
+  to forge and see what it looks like when it lands", which is what a beta is for; 717 was its
+  `verify_build`). Before it, **716** (round eleven and the per-side unilateral rows, 715 its
+  `verify_build`). Before that, build 714 and the entry below.
+- **THE QUEUE WAS EMPTY AS OF BUILD 714** (2026-11-06: round ten, the day-wipe save fix and the
   Forge-code removal, held behind 712 on Scott's word and released with "Push all and upload").
   Before it, 712 (round nine), 710 (round eight), 707 (round seven) and 705 (round five); nothing
   waited behind any of them.
