@@ -35,6 +35,8 @@ import numpy as np, cv2
 from PIL import Image
 from scipy import ndimage as ndi
 
+import face_muscles
+
 HERE = pathlib.Path(os.environ.get("BODYMAP_HERE", pathlib.Path(__file__).resolve().parent))
 SRC = HERE / "source3d"
 ROOT = pathlib.Path(os.environ["BODYMAP_WORK"])
@@ -286,6 +288,12 @@ def finish(name):
             # removal had worked each time and this was putting it back. The head carries no
             # muscle fibre to recover in the first place, so it is excluded outright.
             fibre[hm] = 0
+            # Scott: "redraw the man and womans head but make it the face with only muscles,
+            # not smooth". The render has no facial muscles in it, so they are DRAWN -- see
+            # face_muscles.py, which says so at length. It runs after the recolour so it inherits
+            # the head's colour, and before the key light and the rim so the face is lit with the
+            # rest of the figure.
+            face_muscles.draw(rgb, hm, lum, "front" if name.endswith("front") else "back", target, K)
             dome = kf("r_head_dome", 0.0)
             if dome > 0:
                 d = ndi.distance_transform_edt(hm)

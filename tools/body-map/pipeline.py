@@ -88,6 +88,20 @@ KNOBS = {
     "r_head_face_sigma": 17.0, # the scale the head's own local level is taken at
     "r_head_face_depth": 14.0, # a pixel this far below that level is a feature (eye, nostril, lip)
     "r_head_face_radius": 9,   # how far the inpaint reaches for the tone that fills a feature
+    "r_face_muscles": 0.0, # DRAW the facial muscles (face_muscles.py); the render has none.
+                           #   OFF: two drawn attempts both read worse than the plain head --
+                           #   see face_muscles.py and the README. /tune r_face_muscles 1 to look.
+    "r_face_round": 0.30,  # how far each muscle outline is rounded (fraction of its own size)
+    "r_face_level": 0.34,  # the level set taken from that blurred field as the muscle's edge
+    "r_face_fibre": 0.13,  # how dark the fibre lines inside each drawn facial muscle are
+    "r_face_fibre_px": 5.0,
+    "r_face_seam": 0.50,   # how dark the crease between two drawn facial muscles goes
+    "r_face_variation": 0.07, # a little tone per muscle, so one belly is told from the next
+    "r_face_tendon": 1.26, # the galea: a pale sheet where there is no muscle belly
+    "r_face_shade": 0.85,  # how much of the mannequin's own light models the drawing
+    "r_face_shade_floor": 0.55,
+    "r_face_shade_ceil": 1.45,
+    "r_face_soften": 0.8,
     "r_head_dome": 0.0,    # 1 paints the cranium as a shaded solid instead of editing the doll
                            #   face; off by default -- it reads as a blob and loses the jaw
     "r_head_dome_px": 56.0,# pixels from the silhouette over which that solid shades up

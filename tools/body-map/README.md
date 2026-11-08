@@ -223,3 +223,38 @@ written.
 With that fixed the eye sockets read as soft hollows, the mouth as a faint lip line, the nose
 remains, and the brow, cheek and jaw keep their form. It is a blank-eyed head rather than a doll's
 face, and it is not a skull.
+
+### THE FACIAL MUSCLES WERE DRAWN, TWICE, AND NEITHER IS SHIPPED (2026-11-08)
+
+Scott: "again the head is too smooth, redraw the man and womans head but make it the face with
+only muscles, not smooth." `face_muscles.py` is that attempt. It is knob-gated at
+`r_face_muscles`, **it defaults to 0**, and the code stays because the work of placing the
+landmarks is done and reusable, not because the output is good.
+
+**What it does.** Fifteen facial muscles -- frontalis, temporalis, orbicularis oculi, procerus,
+nasalis, levator labii, both zygomatics, masseter, risorius, orbicularis oris, depressor anguli
+oris, depressor labii, mentalis, and occipitalis on the back -- placed in a frame the render
+defines (`u` across the head, `v` from crown to jaw), from landmarks read off a coordinate grid
+over male-front: midline x 414, box rows 13-275 cols 304-525, eye line y 152 = v 0.531, mouth y
+218 = v 0.782, jaw angle (342, 215) = u -0.652 / v 0.771. The female head is the same mesh at a
+different width, so the same fractions land on it. The drawing is multiplied by the mannequin's
+own luminance so the brow, cheek and jaw still model it.
+
+**Both attempts read worse than the plain head, and the failures are worth keeping.**
+- **Filled polygons** read as hard-edged blocks taped to a head. A belly has no straight edges and
+  no flat interior, and a fill has both.
+- **Blurred fields** (the polygon blurred, a level set taken as the edge, the same field used as
+  the belly's dome) fixed the edges and overshot: at a sigma that rounds a strap it also rounds it
+  into a sausage, and the face became a pile of jelly beans. Straps and sheets want different
+  amounts of rounding and the knob is one number for both.
+
+**The real reason is not craft, it is the source.** The body reads well because it is a real 3D
+anatomy render and this pipeline only uncovers what is already in it. A face drawn here is polygon
+art sitting next to that, and it will look pasted on however it is tuned. **What closes it is one
+export**: the same four views, same camera, same pose, with the head's muscle layer turned on,
+dropped into `source3d/`. Everything in this pipeline then works on it unchanged and the head ends
+up as good as the quads.
+
+A public-domain anatomy plate (Gray's 1918, Wikimedia) was the one qualitatively different path
+and `upload.wikimedia.org` is outside this environment's network policy. Not worth widening it for
+on a third speculative attempt; the export is the answer.
