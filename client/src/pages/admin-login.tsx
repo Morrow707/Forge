@@ -87,7 +87,12 @@ export default function AdminLoginPage() {
             email={email}
             password={password}
             mfaToken={mfaPending.mfaToken}
-            onBack={() => loginMutation.reset()}
+            // BOTH, because there are two ways to reach this step and only one of them puts
+            // the hand-off on loginMutation -- see login.tsx for the Back that did nothing.
+            onBack={() => {
+              loginMutation.reset();
+              deviceApprovalCompleteMutation.reset();
+            }}
           />
         ) : (
           <Card>

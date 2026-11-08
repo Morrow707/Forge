@@ -1865,6 +1865,77 @@ load-bearing and proven, not assumed:** `dayContextFrom`'s own comment names thr
 purpose, so the "no list of its own" case reds with the strip removed. Server plus three client
 files: `verify_build`, and it batches -- no camera number moves.
 
+## THE DEVICE-APPROVAL STORM: A GUARD WHOSE LIFETIME WAS THE MOUNT, NOT THE TOKEN
+
+Added 2026-11-08, clearing the item queued on 2026-10-29. After approving a new device from the
+email, Scott's phone POSTed `/api/auth/device-approval/complete` about **fifty times in one
+second** -- one 200, then 409s, then 429s off `deviceApprovalLimiter` -- and then showed the
+Sentry "Something went wrong" screen; Reload signed in. Read off the Render log 19:46:45.
+It was parked for "not reproduced yet (no DOM test environment in the unit suite)", and that
+reason expired twice over: a real browser driving the real server and a real Postgres is the
+reproduction harness, and the fix needs no DOM at all.
+
+**TWO DEFECTS, EACH SUFFICIENT ON ITS OWN, AND NEITHER IS THE OSCILLATION.**
+- **The claim was guarded by a `useState` inside `DeviceApprovalStep`.** The approval is spent
+  exactly once on the server (`consumeApproval`), so the fact being recorded is the POLL TOKEN's
+  and the guard's lifetime was the COMPONENT's. A remount resets it -- and the status query's
+  `"approved"` is still CACHED on a remount, so each remount claimed **with no network round trip
+  in between**, which is how fifty fit inside one second. `client/src/lib/device-approval-claim.ts`
+  is the guard now: a module-level `Set` of poll tokens, deliberately not a ref (a ref dies with
+  the mount, which is the lifetime that was wrong) and deliberately **unbounded** (a page load
+  mints a handful of tokens and the set dies with the page, while any cap would make an evicted
+  token claimable again -- the hole it exists to close).
+- **Nothing cleared `loginMutation.data` after a successful claim**, and `devicePending` on both
+  login pages is read off it. So for the life of the page the step stayed DRAWABLE on an approval
+  that had already been consumed. `useDeviceApprovalCompleteMutation` takes the login mutation's
+  own `reset` and calls it on the branch that establishes a session -- **not** on the `mfaRequired`
+  hand-off, because both pages read the authenticator step off this mutation's data and clearing
+  there would break the code step's Back.
+
+**THERE IS NO RELEASE, AND THAT IS A DECISION.** A claim the server ANSWERED has spent the
+approval, 409 included. A claim that never reached it leaves the approval unspent -- but the
+effect re-runs on the mutation's own state change, so releasing on failure re-fires immediately
+and writes a tight retry loop in place of the burst. The way back in is the button that was
+already there: **"Send the email again" mints a fresh approval and a fresh token**, and the step
+now SAYS so ("Approved, but we couldn't finish signing you in. Send the email again...") instead
+of spinning on "Signing you in…" forever. Rule #1's shape: nothing withheld, the way out named.
+
+**WHAT IS NOT CLAIMED: the parent oscillation that did the remounting.** Driving the real route in
+a real browser -- sign in, read the approval email out of an intercepted Resend call, approve it in
+a second tab -- claims **exactly once** and lands on the dashboard; so does the resend path; and
+breaking `/api/auth/me` afterwards does not reproduce it either. The burst needs a remount AND a
+guard that forgets, and only the second half is reproducible from here. So the guard is made
+**structural rather than waited for**, which is this file's own standing rule
+(`wait-for-email.ts`: "the guard has to be structural, because the evidence that you need one is
+nearly undetectable by running the test"). **"Reload signed in" is the clue that places it**: the
+server session was valid the whole time, and a reload clears `loginMutation.data`, which is
+exactly the second defect.
+
+**AND BACKING OUT OF THE CODE STEP WAS A DEAD END FROM ONE OF THE TWO WAYS IN.** Two paths reach
+`MfaLoginStep` -- straight from the password, or after the email approved a new device -- and only
+the first puts the hand-off on `loginMutation`. The second puts it on
+`deviceApprovalCompleteMutation.data`, and both pages' Back reset only the login mutation, so
+`mfaPending` stayed truthy and Back did nothing. Both reset both now.
+
+**NO DOM TEST ENVIRONMENT WAS ADDED, ON PURPOSE.** `jsdom` is one of the five OPTIONAL vitest peers
+this file records as **the thing that crashes npm 10.9.7's arborist** on any ideal-tree rebuild, so
+adding it to fix a login bug would put every future `npm audit` fix behind the
+newer-npm-from-a-scratchpad recipe for no measurement reason. Instead the decision lives in a pure
+module and is DRIVEN directly -- the `form-check-destination.ts` lesson: a scan over a decision can
+only see the words the decision is written with, never which way it goes -- with scans kept for the
+things worth scanning (the claim has exactly ONE caller in the whole client, and exactly one place
+may mark a token claimed, because a second marker would **strand** the real claim rather than guard
+it, which is worse than the burst).
+
+`client/src/lib/the-device-claim-fires-once.test.ts`: 14 cases, a `.test.ts` so it runs on every
+`npm test` with no Postgres. **Eight mutations, each caught by the right case** -- the per-mount
+guard restored, the clear removed, the hook constructed with nothing, the clear moved above
+`applyLoginSuccess`, the clear moved onto the `mfaRequired` branch, admin-login's Back narrowed, a
+second `.mutate(` caller, and **the comment strip**, which is load-bearing and proven rather than
+assumed: the claim module's own docblock names `useState` while explaining the bug, so the
+"holds the guard outside any component" case goes green with the strip removed.
+Client-side: `verify_build`, and it batches -- no camera number moves.
+
 ## RULE #3: A VIDEO SHOWS THE REAL APP. NOTHING IN IT IS INVENTED.
 
 Added 2026-10-02, after a build-a-program reel shipped with a program builder nobody has ever

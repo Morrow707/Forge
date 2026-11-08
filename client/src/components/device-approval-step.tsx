@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { beginDeviceApprovalClaim } from "@/lib/device-approval-claim";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -35,7 +36,6 @@ export function DeviceApprovalStep({
 }) {
   const { deviceApprovalCompleteMutation } = useAuth();
   const [pollToken, setPollToken] = useState(initialPollToken);
-  const [claimed, setClaimed] = useState(false);
   const [resending, setResending] = useState(false);
 
   const { data, isError } = useQuery<{ status: Status }>({
@@ -47,20 +47,26 @@ export function DeviceApprovalStep({
   });
   const status: Status | undefined = data?.status;
 
+  // The guard is keyed on the POLL TOKEN and lives outside this component, because
+  // the approval is spent once on the server and a remount must not be able to
+  // spend it again -- see lib/device-approval-claim.ts for the fifty-claim burst
+  // that a component-state guard allowed.
   useEffect(() => {
-    if (status === "approved" && !claimed) {
-      setClaimed(true);
-      deviceApprovalCompleteMutation.mutate({ pollToken, email, password });
-    }
-  }, [status, claimed, pollToken, email, password, deviceApprovalCompleteMutation]);
+    if (status !== "approved") return;
+    if (!beginDeviceApprovalClaim(pollToken)) return;
+    deviceApprovalCompleteMutation.mutate({ pollToken, email, password });
+  }, [status, pollToken, email, password, deviceApprovalCompleteMutation]);
 
   async function resend() {
     setResending(true);
     try {
       const res = await apiRequest("POST", "/api/auth/device-approval/resend", { pollToken });
       const body = (await res.json()) as { pollToken: string };
+      // A resend is a NEW approval row with a new token (the action token is only
+      // ever in the clear at creation), so the fresh token has never been claimed
+      // and nothing has to forget the old one.
       setPollToken(body.pollToken);
-      setClaimed(false);
+      deviceApprovalCompleteMutation.reset();
       toast.success("Sent another email");
     } catch (err) {
       toast.error((err as ApiError).message || "Couldn't resend the email");
@@ -91,11 +97,16 @@ export function DeviceApprovalStep({
         {!denied && !expired && (
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted border-t-primary" />
-            {status === "approved" || deviceApprovalCompleteMutation.isPending
-              ? "Approved. Signing you in…"
-              : isError
-                ? "Still waiting. Having trouble reaching the server, retrying…"
-                : "Waiting for you to approve it from your email…"}
+            {deviceApprovalCompleteMutation.isError
+              ? // The approval was granted and the claim did not land. It is claimed
+                // once per token on purpose, so the way back in is a fresh approval --
+                // the button below -- and saying so beats a spinner that never resolves.
+                "Approved, but we couldn't finish signing you in. Send the email again to try once more."
+              : status === "approved" || deviceApprovalCompleteMutation.isPending
+                ? "Approved. Signing you in…"
+                : isError
+                  ? "Still waiting. Having trouble reaching the server, retrying…"
+                  : "Waiting for you to approve it from your email…"}
           </div>
         )}
         {!denied && (

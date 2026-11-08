@@ -152,6 +152,11 @@ export default function LoginPage() {
             mfaToken={mfaPending.mfaToken}
             onBack={() => {
               loginMutation.reset();
+              // BOTH, because there are two ways to reach this step and only one of them
+              // puts the hand-off on loginMutation. Arriving here after the email approved
+              // a new device puts it on deviceApprovalCompleteMutation.data, so resetting
+              // the password step alone left mfaPending truthy and Back did nothing.
+              deviceApprovalCompleteMutation.reset();
               // On iOS the screen behind this one is the status line, not the form -- backing
               // out of the code step has to bring the native screen back or there is nothing
               // to type into.

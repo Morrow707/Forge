@@ -120,7 +120,7 @@ function useLoginMutation() {
 // is either a logged-in user or, for an account with an authenticator, the
 // same mfaRequired hand-off the password step gives -- device first, then
 // code, in that order on purpose.
-function useDeviceApprovalCompleteMutation() {
+function useDeviceApprovalCompleteMutation(clearSpentLoginAttempt: () => void) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { pollToken: string; email: string; password: string }) => {
@@ -128,9 +128,23 @@ function useDeviceApprovalCompleteMutation() {
       return (await res.json()) as MfaPending | (PublicUser & { nativeToken?: string });
     },
     onSuccess: (result, variables) => {
+      // The authenticator still owes a code, and BOTH login pages read that
+      // hand-off off this mutation's own data -- so the password step's answer
+      // has to stay put, or the code step loses the state its Back button
+      // resets. Cleared on the branch below, which is the one that ends the
+      // attempt.
       if ("mfaRequired" in result) return;
       const { nativeToken, ...user } = result;
       applyLoginSuccess(qc, nativeToken, user, variables);
+      // THE ATTEMPT IS SPENT, SO THE SCREEN THAT WAITS ON IT MUST STOP BEING
+      // DRAWABLE. `devicePending` on both login pages is read off
+      // loginMutation.data, which nothing used to clear -- so after a
+      // successful claim that data still said deviceApprovalRequired for the
+      // life of the page, and any later remount of the login page re-mounted
+      // DeviceApprovalStep on an approval that had already been consumed. That
+      // is half of the fifty-claim burst of 2026-10-29; the other half is the
+      // per-mount guard, now keyed on the token in lib/device-approval-claim.ts.
+      clearSpentLoginAttempt();
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't finish signing in"),
   });
@@ -249,7 +263,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useLoginMutation();
   const mfaVerifyMutation = useMfaVerifyMutation();
-  const deviceApprovalCompleteMutation = useDeviceApprovalCompleteMutation();
+  // reset is stable for the life of the mutation, so this is not a new callback per render.
+  const deviceApprovalCompleteMutation = useDeviceApprovalCompleteMutation(loginMutation.reset);
   const signupMutation = useSignupMutation();
   const logoutMutation = useLogoutMutation();
 
