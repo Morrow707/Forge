@@ -1849,9 +1849,13 @@ nothing**: `weeklyVerdict` needs two of three channels at z 2.0 and two of the t
 computable, so a measured +24.6 SD reads `cannot_judge` with both missing channels named. That is
 the rule working, not a gap.
 
-**Still open and unchanged:** no minor may take it until counsel answers 15, 17, 18 and 21; the
-slow and career channels have no anchor and no history; `shared/anvil-sway.ts` has no thresholds
-and nobody has filmed one; `ESCALATION_RECIPIENT` is unresolved. **Recorded and NOT fixed:**
+**Still open and unchanged:** no minor may take it until counsel answers 15, 17, 18 and 21 --
+**the note that asks them is written and ready to send**, `docs/anvil/counsel-note-2026-11-08.md`,
+four questions in the order they block us with the consent question first, plus what to attach and
+the two things not to say in correspondence (the forbidden vocabulary is forbidden in a letter too);
+the career channel has no history, and the slow channel has an anchor as of 2026-11-08 and no cohort
+(see the section above); `shared/anvil-sway.ts` has no thresholds and nobody has filmed one;
+`ESCALATION_RECIPIENT` is unresolved pending counsel follow-up 3. **Recorded and NOT fixed:**
 `injury_resolved` reads `true` for an athlete who has never been injured, which is the pure
 mapping's own pre-existing reading and is not in `BESIDE_IN_ORDER`, so it reaches no line today.
 
