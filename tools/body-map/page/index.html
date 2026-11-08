@@ -31,7 +31,7 @@ h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 24px; 
 .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
 .lbl { cursor: pointer; }
 .lbl text { font-family: var(--body); font-weight: 500; fill: #c9c6bf; letter-spacing: 0.02em; }
-.lbl line, .lbl polyline { stroke: #8a877f; stroke-width: 1; fill: none; }
+.lbl line, .lbl polyline { stroke: #8a877f; stroke-width: 1; fill: none; pointer-events: none; } /* a leader line crosses other muscles; it must not catch their taps */
 .lbl circle { fill: #a7a49c; }
 .lbl.hot text { fill: var(--accent); font-weight: 600; }
 .lbl.hot line, .lbl.hot polyline { stroke: var(--accent); stroke-width: 1.6; }
@@ -40,6 +40,7 @@ h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 24px; 
 @media (max-width: 519px) { #viewSeg { display: none; } h1 { font-size: 22px; } .seg button { padding: 0 10px; min-height: 36px; font-size: 14px; } }
 .tip { position: absolute; pointer-events: none; background: #f3f1ec; color: #0b0b0f; font-weight: 600; font-size: 13px; padding: 4px 9px; border-radius: 999px; transform: translate(-50%, -140%); white-space: nowrap; opacity: 0; transition: opacity .12s; }
 .tip.on { opacity: 1; }
+.credit { position: absolute; left: 10px; top: 8px; max-width: 38%; color: #8d8a83; font-size: 11px; line-height: 1.3; pointer-events: none; }
 .bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px max(16px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
 .bar .hint { color: var(--faint); font-size: 12.5px; }
 .btn { background: var(--panel-2); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; padding: 0 14px; min-height: 40px; font: inherit; font-weight: 600; cursor: pointer; }
@@ -97,6 +98,7 @@ h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 24px; 
     <canvas id="canvas"></canvas>
     <svg id="labels" aria-hidden="false"></svg>
     <div class="tip" id="tip"></div>
+    <div class="credit">3D anatomy: Z-Anatomy (CC BY-SA 4.0), from BodyParts3D, DBCLS (CC BY-SA 2.1 JP)</div>
   </div>
 
   <div class="bar">
@@ -165,7 +167,8 @@ h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 24px; 
         const label = new Uint8Array(w * h), alpha = new Uint8Array(w * h);
         for (let i = 0; i < w * h; i++) { label[i] = ld[i * 4]; alpha[i] = id[i * 4 + 3]; }
         Object.assign(entry, { img, w, h, label, alpha }); resolve(entry); };
-      img.onload = done; lab.onload = done; img.src = `img/${key}.webp`; lab.src = `lab/${key}.png`;
+      img.onload = done; lab.onload = done;
+      img.src = `img3d/${key}.webp`; lab.src = `lab3d/${key}.png`;
     });
     return entry.ready;
   }
@@ -248,10 +251,9 @@ h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 24px; 
       const c = document.createElementNS(ns, "circle"); c.setAttribute("cx", i.x); c.setAttribute("cy", i.y); c.setAttribute("r", 2.6); grp.appendChild(c);
       const txt = document.createElementNS(ns, "text"); txt.setAttribute("x", tx); txt.setAttribute("y", i.ly); txt.setAttribute("font-size", fs); txt.setAttribute("text-anchor", i.side === "L" ? "end" : "start"); txt.textContent = i.text; grp.appendChild(txt);
       const hit = document.createElementNS(ns, "rect"); hit.setAttribute("x", i.side === "L" ? tx - w - 6 : tx - 6); hit.setAttribute("y", i.ly - 14); hit.setAttribute("width", w + 12); hit.setAttribute("height", 22); grp.appendChild(hit);
-      grp.addEventListener("click", (ev) => { ev.stopPropagation(); select(state.selected === i.name ? null : i.name); });
       grp.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); select(state.selected === i.name ? null : i.name); } });
-      grp.addEventListener("pointerenter", () => { if (!state.selected) { state.hover = i.name; draw(); } else grp.classList.add("hot"); });
-      grp.addEventListener("pointerleave", () => { if (!state.selected) { state.hover = null; draw(); } else if (state.selected !== i.name) grp.classList.remove("hot"); });
+      grp.addEventListener("pointerenter", (ev) => { if (ev.pointerType !== "mouse") return; if (!state.selected) { if (state.hover !== i.name) { state.hover = i.name; draw(); } } else grp.classList.add("hot"); });
+      grp.addEventListener("pointerleave", (ev) => { if (ev.pointerType !== "mouse" || !grp.isConnected) return; if (!state.selected) { if (state.hover === i.name) { state.hover = null; draw(); } } else if (state.selected !== i.name) grp.classList.remove("hot"); });
       svg.appendChild(grp);
     }
   }
@@ -321,15 +323,26 @@ h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 24px; 
     if (!state.selected && name !== state.hover) { state.hover = name; draw(); }
   });
   stage.addEventListener("pointerleave", () => { tip.classList.remove("on"); if (!state.selected && state.hover) { state.hover = null; draw(); } });
-  stage.addEventListener("pointerup", (e) => {
-    if (!down) return; const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8; down = null; if (moved) return;
+  // Taps are taken on "click", which every browser sends for a mouse, a finger and a pen alike; the
+  // press position from pointerdown, when there is one, tells a tap from a drag.
+  // Tap or drag is decided from where the pointer went down and came up: a phone nudges the click
+  // itself onto a nearby label, so the click's own position is not where the finger lifted.
+  let dragged = false;
+  stage.addEventListener("pointerup", (e) => { dragged = !!down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8; down = null; });
+  stage.addEventListener("click", (e) => {
+    const moved = dragged; dragged = false;
+    if (moved) return;
+    const lbl = e.target.closest && e.target.closest(".lbl");
+    if (lbl) { const g = lbl.dataset.group; select(state.selected === g ? null : g); return; }
     const l = labelAt(e.clientX, e.clientY); if (!l) { if (state.selected) select(null); return; }
     const g = MAN.groups[l - 1]; select(state.selected === g ? null : g, false);
   });
   window.addEventListener("resize", () => draw());
 
-  Promise.all([fetch("manifest.json").then((r) => r.json()), fetch("exercises.json").then((r) => r.json())]).then(([m, ex]) => {
+  Promise.all([fetch("manifest3d.json").then((r) => r.json()), fetch("exercises.json").then((r) => r.json())]).then(([m, ex]) => {
     MAN = m; EX = ex; ["female-front", "female-back", "male-front", "male-back"].forEach(load); draw();
   });
 })();
 </script>
+
+</body></html>

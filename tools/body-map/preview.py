@@ -35,7 +35,8 @@ def main():
     else:
         work = pathlib.Path(os.environ["BODYMAP_WORK"]); out = work
         h = int(json.load(open(work / "knobs.json")).get("preview_height", 520))
-        sheet = contact([work / f"site/img/{n}.webp" for n in ("female-front", "female-back", "male-front", "male-back")], h)
+        sub = os.environ.get("BODYMAP_PREVIEW_DIR", "img")
+        sheet = contact([work / f"site/{sub}/{n}.webp" for n in ("female-front", "female-back", "male-front", "male-back")], h)
     big = sheet if sheet.height <= h else sheet.resize((round(sheet.width * h / sheet.height), h), Image.LANCZOS)
     small = big.resize((round(big.width * 300 / big.height), 300), Image.LANCZOS)
     q1 = squeeze(big, out / "preview.webp", 92_000); q2 = squeeze(small, out / "preview-sm.webp", 44_000)

@@ -49,6 +49,37 @@ KNOBS = {
     "final_sharpen_sigma": 2.0, # width of that unsharp mask, at 2x
     "symmetrize": 1,       # 1 = mirror the torso/leg column of the silhouette about the figure's axis, fuller side wins
     "sym_column": 0.24,    # half-width of that column as a fraction of the tile width (the arms lie outside it)
+    # realistic.py: the finish for the 3D figures (2026-11-08). Scott: "only realistic ... it just
+    # looks flat, missing some edits around the striations, where muscles insert to others".
+    # The shading is in the source; these knobs uncover it. See realistic.py's docstring.
+    "r_scale": 2,          # the scale the shading, seams and fibre are COMPUTED at
+    "r_out_scale": 1,      # the scale the tile is WRITTEN at (the page caches an overlay per muscle)
+    "r_sat": 0.80,         # chroma multiplier on muscle colour: the candy that was burying the form
+    "r_shade_gain": 1.95,  # gamma about each group's own median value; 1.0 = the source, untouched
+    "r_shade_floor": 0.26, # how dark that amplification may drive a pixel (a guard, not a look)
+    "r_shade_hold": 90.0,  # the percentile of each group's own value the gain must leave where it was
+    "r_value": 1.00,       # re-centres each muscle's midtone so the shading has room below white
+    "r_gamma": 1.0,        # whole-tile gamma after everything (<1 lifts, >1 deepens)
+    "r_fibre": 1.20,       # the render's OWN high-frequency fibre, amplified (0 = the flat source)
+    "r_fibre_sigma": 2.2,  # the scale that high-pass is taken at, at r_scale
+    "r_fibre_clip": 26.0,  # cap on one fibre sample, so a speck cannot become a black dot
+    "r_seam": 0.38,        # the crease where a muscle meets another muscle, bone or skin
+    "r_seam_px": 8.0,      # how far that crease reaches into each belly, at r_scale
+    "r_seam_falloff": 0.75,# <1 keeps the crease tight to the boundary, >1 spreads it
+    "r_seam_blur": 1.3,    # softens the crease so a seam is a groove, not a drawn line
+    "r_belly": 0.13,       # the other half of a seam: each belly rounds up away from its creases
+    "r_belly_px": 46.0,    # how far into a belly that rounding reaches, at r_scale
+    "r_light": 0.10,       # a soft key from the upper left, so the figure has a direction
+    "r_rim": 0.17,         # darkening at the silhouette (roundness)
+    "r_rim_px": 26.0,      # how far in that reaches, at r_scale
+    "r_sharpen": 0.55,     # unsharp after the shading moves
+    "r_sharpen_sigma": 1.6,
+    "r_feather": 0.0,      # alpha blur; 0 keeps the render's own edge (the fingers are 2 px wide)
+    "r_label_smooth": 1.6, # sigma on each group's soft mask before the 2x argmax
+    "r_bare_gain": 1.35,   # the head, hands, feet and exposed bone get the shading move too
+    "r_bare_sat": 0.95,
+    "r_bare_value": 0.93,
+    "r_quality": 86,       # webp quality for the realistic tiles
     # face.py: the graft
     "face_scale": 0.96,    # male head width relative to the female head box
     "face_fade": 14,       # rows the graft fades over at the neck
@@ -66,7 +97,7 @@ def run(script, env):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--work", required=True)
-    ap.add_argument("--stage", default="all", choices=["all", "hd", "preview"])
+    ap.add_argument("--stage", default="all", choices=["all", "hd", "realistic", "preview"])
     ap.add_argument("--set", action="append", default=[], help="knob=value")
     ap.add_argument("--reset", action="store_true", help="forget tuned knobs first")
     a = ap.parse_args()
@@ -91,6 +122,9 @@ def main():
         run("face.py", env)
     if a.stage in ("all", "hd"):
         run("hd.py", env)
+    if a.stage in ("all", "realistic"):
+        run("realistic.py", env)
+    env = dict(env, BODYMAP_PREVIEW_DIR="img3d" if a.stage == "realistic" else "img")
     run("preview.py", env)
     # the review page beside the rendered site, so the folder publishes as one artifact
     shutil.copy(HERE / "page/index.html", work / "site/index.html")

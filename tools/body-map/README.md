@@ -89,3 +89,64 @@ female back doesn't line up, left hip indents where right hip does not." Two cha
   torso-and-legs column (`sym_column`, half-width 0.24 of the tile) about the figure's own axis and
   takes the fuller outline on both sides. The arms are outside the column and untouched: a pose is
   never perfectly mirrored, and a union there would ghost a limb.
+
+
+## REALISTIC ONLY, AND THE REALISTIC FIGURES HAD NEVER HAD A FINISH PASS (2026-11-08)
+
+Scott: "ditch the diagram portion, only realistic, what can we do to upgrade realistic, to me it
+just looks flat, missing some edits around the striations, where muscles insert to others, just
+looks flat."
+
+**The reason they looked flat beside the diagram is that the diagram had had four passes of work
+and the realistic figures had had none.** `hd.py` is the diagram's finish; the realistic tiles
+were the Z-Anatomy render cut out of its background and published as-is. `realistic.py` is their
+first finish pass, and the knobs are `r_*` so the two sets can never be confused.
+
+**THE SHADING WAS ALREADY IN THE RENDER AND THE PAINT WAS BURYING IT.** Measured on the source
+before anything was written: inside one muscle the render's own value spans about a hundred
+levels (Chest 138-242, Quads 111-243), so the geometry is modelled -- while saturation sits at
+110-186 of 255 and the mean value at 170-215, poster paint pushed against white, where a hundred
+levels of form read as "the same colour, slightly darker". So the pass uncovers light rather than
+adding it: `r_sat` drops the candy, `r_shade_gain` amplifies each group's own shading about its
+own median, `r_seam` cuts the crease where one muscle meets another (the insertions), `r_belly`
+rounds each belly up away from its creases, and `r_fibre` amplifies the render's OWN
+high-frequency texture -- real striations, which is why `hd.py`'s drawn cosine stripes stay off:
+a flat vector fill has no fibre to recover and a drawn stripe over a real one is the "reads as
+noise" that turned the diagram's striations off in the v4 pass.
+
+**THE FIRST VERSION WASHED THE POSTERIOR CHAIN OUT, AND THE FIX IS THE INTERESTING PART.** A bare
+gamma about the median brightens everything above it, so a group whose source already carries a
+wide range (glutes and hamstrings, V_std 67-80 against the chest's 35) pushed its bright side
+into clipping and came back paler rather than rounder -- the hamstrings went cream, the calves
+sage. `r_shade_hold` (90th percentile) renormalises the gain so it leaves each group's own
+highlight where the source had it: the gain can then only ever spend itself DOWNWARD, the shadow
+side deepens, and that is what reads as form. Same knobs, opposite result.
+
+**THE SILHOUETTE IS NOT SMOOTHED, and this is the one place the diagram's recipe must not be
+copied.** `contour_smooth` is 9 boundary pixels; these figures have skeletal fingers and toes
+narrower than that, so tracing and smoothing their contour would melt the hands off. The alpha is
+the source's own.
+
+**IT SUPERSAMPLES AT 2x AND WRITES AT 1x** (`r_scale` 2, `r_out_scale` 1), because `index.html`
+caches a full-size ImageData overlay per muscle per tile: a 2x tile costs four times the memory
+for twelve groups across four figures, which is a phone's worth of it. The source is 829x2065, so
+a 2x tile carries no detail the source does not have; what 2x buys is sub-pixel room for the seam
+distances, the fibre high-pass and the sharpen, and `INTER_AREA` on the way down is what makes
+that survive as tone instead of aliasing into speckle. The published tiles are the same
+dimensions and the same byte size as before, so nothing about the page's memory or bandwidth
+moved -- the whole gain is in the pixels.
+
+`page/index.html` draws the realistic figures and nothing else: the Diagram/Realistic switch,
+`setLook`, the `real:` tile-key prefix and the `hasReal` fallback are gone, and the page fetches
+`manifest3d.json` alone. **The repo's copy of that page was STALE** -- the published artifact
+carried the Realistic toggle and three tap fixes that were never written back -- so it was
+re-based on the published one before the diagram was stripped out of it.
+
+`source3d/` is checked in for the same reason `tools/body-map/` exists at all: the realistic
+tiles existed only inside the published artifact, nowhere in the repo and nowhere on disk, so one
+container recycle would have ended the ability to re-render them. It is their own source now --
+these are the raw render, not a finished tile, which is exactly why a finish pass can be run over
+them.
+
+`/tune` drives the realistic stage now (`pipeline.py --stage realistic`), and `/tune list` prints
+the `r_*` knobs. The diagram knobs and `hd.py` stay; nothing on the page reads them.
