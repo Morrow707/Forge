@@ -16,6 +16,7 @@ import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
 import { NextThreeDaysCard } from "@/components/next-three-days-card";
 import { StatTile } from "@/components/stat-tile";
 import { ReadinessBanner } from "@/components/readiness-banner";
+import { AnvilDailyCard } from "@/components/anvil-daily-card";
 import { AssumptionOfRiskDialog } from "@/components/assumption-of-risk-dialog";
 import { useWidgetVisibility } from "@/hooks/use-widget-visibility";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
@@ -299,6 +300,10 @@ export default function AthleteDashboard() {
           </Card>
         )}
         <ReadinessBanner date={today} />
+        {/* Hidden entirely until the server says the Anvil is open for this account -- it is
+            adults-only while four counsel questions are open, so for most athletes there is
+            nothing to draw and a card that flashed on and vanished would be worse than none. */}
+        <AnvilDailyCard />
         <PendingCoachRequests />
         <PendingVideosBanner />
         <DigestBanner />

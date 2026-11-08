@@ -10,6 +10,7 @@ import {
   reportedTapCount,
   tappingDeadBand,
   tappingMoved,
+  theilSenDriftMs,
 } from "./anvil-part-metrics";
 
 describe("part 1's second number is a per-person lapse count", () => {
@@ -91,5 +92,62 @@ describe("the part weights are an ORDER, because nothing has been fitted", () =>
   it("names every part exactly once", () => {
     expect(new Set(PART_WEIGHT_ORDER).size).toBe(PART_WEIGHT_ORDER.length);
     expect(PART_WEIGHT_ORDER.length).toBe(4);
+  });
+});
+
+describe("the drift across a check is robust to one slow trial", () => {
+  it("is null below three trials, because two points are a pair and not a drift", () => {
+    expect(theilSenDriftMs([])).toBeNull();
+    expect(theilSenDriftMs([250])).toBeNull();
+    expect(theilSenDriftMs([250, 300])).toBeNull();
+    expect(theilSenDriftMs([250, 275, 300])).not.toBeNull();
+  });
+
+  it("reports the change across the whole check, not per trial", () => {
+    // 25 trials rising by exactly 2 ms each: 48 ms from the first to the last.
+    const rising = Array.from({ length: 25 }, (_, i) => 260 + 2 * i);
+    expect(theilSenDriftMs(rising)).toBeCloseTo(48, 6);
+    const flat = Array(25).fill(260);
+    expect(theilSenDriftMs(flat)).toBe(0);
+    const falling = Array.from({ length: 25 }, (_, i) => 260 - 2 * i);
+    expect(theilSenDriftMs(falling)).toBeCloseTo(-48, 6);
+  });
+
+  it("is barely moved by a slow FIRST trial, where least squares is wrecked by it", () => {
+    // THE WHOLE REASON THIS IS A MEDIAN OF PAIRS. tools/anvil-sim/leverage.py measures the
+    // averages over 2,000 ex-Gaussian draws (-88 ms against -20 ms at +400); this is the same
+    // property on one clean series, where the arithmetic is exact and checkable by hand.
+    const clean = Array(25).fill(260);
+    const distracted = [660, ...Array(24).fill(260)];
+    expect(theilSenDriftMs(clean)).toBe(0);
+    const robust = theilSenDriftMs(distracted)!;
+    // Least squares on that series reports about -69 ms of improvement that did not happen.
+    const n = 25;
+    const mx = (n - 1) / 2;
+    const my = distracted.reduce((a, b) => a + b, 0) / n;
+    let sxx = 0;
+    let sxy = 0;
+    for (let i = 0; i < n; i++) {
+      sxx += (i - mx) ** 2;
+      sxy += (i - mx) * (distracted[i] - my);
+    }
+    const leastSquares = (sxy / sxx) * (n - 1);
+    expect(leastSquares).toBeLessThan(-60);
+    expect(Math.abs(robust)).toBeLessThan(Math.abs(leastSquares) / 3);
+  });
+
+  it("still sees a real drift that a slow first trial is sitting on top of", () => {
+    // Robustness that also deleted the signal would be useless. +48 ms of real drift with a
+    // 400 ms distraction on trial one still reads as a rise.
+    const rising = Array.from({ length: 25 }, (_, i) => 260 + 2 * i);
+    const withSpike = [rising[0] + 400, ...rising.slice(1)];
+    expect(theilSenDriftMs(withSpike)!).toBeGreaterThan(30);
+  });
+
+  it("ignores a non-finite trial rather than returning NaN for the check", () => {
+    const withJunk = [260, Number.NaN, 262, 264, 266, 268];
+    const drift = theilSenDriftMs(withJunk);
+    expect(drift).not.toBeNull();
+    expect(Number.isFinite(drift!)).toBe(true);
   });
 });

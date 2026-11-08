@@ -115,6 +115,12 @@ const AthleteProgress = lazy(withLoadTimeout(() => import("@/pages/athlete/progr
 const AthleteLiftHistory = lazy(withLoadTimeout(() => import("@/pages/athlete/lift-history")));
 const AthleteRecovery = lazy(withLoadTimeout(() => import("@/pages/athlete/recovery")));
 const AthleteVideoBank = lazy(withLoadTimeout(() => import("@/pages/athlete/video-bank")));
+// THE ANVIL. One page for the person taking it, reached by all three roles that film their own
+// training (shared/roles-that-film-their-own-training.ts), and one for a coach reading their
+// roster's week. Lazy: the four tasks and their timing loop are of no use to anybody who is not
+// on the page, and bundle-budget.test.ts holds the eager entry.
+const AnvilPage = lazy(withLoadTimeout(() => import("@/pages/anvil")));
+const CoachAnvilWeek = lazy(withLoadTimeout(() => import("@/pages/coach/anvil-week")));
 const AthleteTeamBoard = lazy(withLoadTimeout(() => import("@/pages/athlete/team-board")));
 const AthleteWorkout = lazy(withLoadTimeout(() => import("@/pages/athlete/workout")));
 const AthleteSkillWorkout = lazy(withLoadTimeout(() => import("@/pages/skill-workout")));
@@ -557,6 +563,12 @@ function Router() {
         <Route path="/coach/team-board">
           <ProtectedRoute role="coach" component={CoachTeamBoard} />
         </Route>
+        <Route path="/coach/anvil">
+          <ProtectedRoute role="coach" component={CoachAnvilWeek} />
+        </Route>
+        <Route path="/admin/anvil">
+          <ProtectedRoute role="admin" component={CoachAnvilWeek} />
+        </Route>
         <Route path="/coach/my">
           <ProtectedRoute role="coach" component={CoachMyCalendar} />
         </Route>
@@ -580,6 +592,18 @@ function Router() {
         </Route>
         <Route path="/athlete/recovery">
           <ProtectedRoute role="athlete" component={AthleteRecovery} />
+        </Route>
+        {/* The same page for every role that films its own training, each behind its own role
+            gate -- the convention shared/own-training-routes.ts already follows, and the reason
+            a coach handed an athlete-only link is refused while a countdown runs. */}
+        <Route path="/athlete/anvil">
+          <ProtectedRoute role="athlete" component={AnvilPage} />
+        </Route>
+        <Route path="/coach/my/anvil">
+          <ProtectedRoute role="coach" component={AnvilPage} />
+        </Route>
+        <Route path="/admin/my/anvil">
+          <ProtectedRoute role="admin" component={AnvilPage} />
         </Route>
         <Route path="/athlete/video-bank">
           <ProtectedRoute role="athlete" component={AthleteVideoBank} />

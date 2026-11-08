@@ -114,8 +114,47 @@ export function serverFileIsAnvilOutput(relativePath: string): boolean {
   return /(^|\/)anvil[-/]/.test(p);
 }
 
+/**
+ * ANVIL MODULES THAT CARRY NO NUMBER, AND WHY THE LIST RUNS THIS WAY ROUND.
+ *
+ * `isAnvilSurface`'s second clause admits a file by its IMPORT of an Anvil module, because a card
+ * called `morning-card.tsx` can render an Anvil reading. That clause was too wide: `app-shell.tsx`
+ * imports `anvil-routes` to put one entry in a nav, and sweeping it finds "recovery" (a shipped
+ * feature's nav label), "screen" and "diagnos" (the AR Diagnosis entry) -- so the ratchet became
+ * a demand to rename three live features, which the case below this one exists to refuse.
+ *
+ * The distinction that holds: a file importing a module that produces a NUMBER is describing that
+ * number somewhere; a file importing a path map or a set of task timings is not. So these are the
+ * modules whose import proves nothing, and **every other `shared/anvil-*` module counts** --
+ * which is the fail-closed direction, the same way `searchableRolesFor` is the enum MINUS a
+ * classified set rather than a list of what to scan. A new scoring module added next year puts
+ * its importers in scope on the day it is written, rather than by somebody remembering to.
+ */
+export const ANVIL_MODULES_WITHOUT_A_NUMBER: ReadonlyArray<{ module: string; why: string }> = [
+  {
+    module: "anvil-routes",
+    why: "A path per role. app-shell.tsx imports it for one nav entry and is the whole app's chrome.",
+  },
+  {
+    module: "anvil-tasks",
+    why: "Trial counts and timings the tasks need in order to be the tasks. No threshold, no reading.",
+  },
+  {
+    module: "anvil-vocabulary",
+    why: "This module. It names the forbidden words in order to forbid them.",
+  },
+  {
+    module: "anvil-eligibility",
+    why: "Who may take the check. A role, a birthday and a sentence -- never a measurement.",
+  },
+];
+
 export function isAnvilSurface(relativePath: string, source: string): boolean {
   const p = relativePath.replace(/\\/g, "/");
   if (/(^|\/)anvil[-/]/.test(p) || /(^|\/)anvil\.tsx?$/.test(p)) return true;
-  return /from\s+["'][^"']*shared\/anvil-[a-z-]+["']/.test(source);
+  const bare = new Set(ANVIL_MODULES_WITHOUT_A_NUMBER.map((m) => m.module));
+  for (const match of source.matchAll(/from\s+["'][^"']*shared\/(anvil-[a-z0-9-]+)["']/g)) {
+    if (!bare.has(match[1])) return true;
+  }
+  return false;
 }

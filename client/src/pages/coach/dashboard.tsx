@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { AnvilDailyCard } from "@/components/anvil-daily-card";
 import { useQuery } from "@tanstack/react-query";
 import { BrandedMark } from "@/components/branded-mark";
 import type { EffectiveBranding } from "@/lib/branding-style";
@@ -414,6 +415,11 @@ export default function CoachDashboard() {
       }
     >
       <div ref={containerRef} className="relative">
+        {/* A coach who films their own training takes their own check; their ROSTER's week is a
+            separate page in the More menu. Hidden until the server says it is open. */}
+        <div className="pb-4">
+          <AnvilDailyCard />
+        </div>
         {/* Grows from 0 as the user pulls down from the top of the list --
             purely visual, so it's hidden from screen readers; the refetch
             itself is announced however the query's own consumers already

@@ -3,6 +3,8 @@ import { Link, useLocation } from "wouter";
 import { Capacitor } from "@capacitor/core";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { useAnvilAccess } from "@/hooks/anvil-access";
+import { ANVIL_ROUTES } from "@shared/anvil-routes";
 import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import {
   Dumbbell,
@@ -49,6 +51,7 @@ import {
   FileSearch,
   Search,
   HeartPulse,
+  Activity,
   Video,
   FileCheck2,
   FileWarning,
@@ -131,6 +134,7 @@ const coachNav: NavItem[] = [
   { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy, overflow: true },
   { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare, overflow: true },
   { href: "/coach/my", label: "My Training", icon: UserCircle, overflow: true },
+  { href: "/coach/anvil", label: "The Anvil", icon: Activity, overflow: true },
   { href: "/coach/video-bank", label: "My Video Bank", icon: Video, overflow: true },
   { href: "/coach/billing", label: "Billing", icon: CreditCard, overflow: true },
   // The whole look of the app for this program, in the order an athlete meets it (2026-10-03).
@@ -197,6 +201,7 @@ const athleteNav: NavItem[] = [
   // one the page exists for: recovering a clip that uploaded and never
   // attached to a set.
   { href: "/athlete/recovery", label: "Recovery", icon: HeartPulse, overflow: true },
+  { href: "/athlete/anvil", label: "The Anvil", icon: Activity, overflow: true },
   { href: "/athlete/video-bank", label: "Video Bank", icon: Video, overflow: true },
   { href: "/documents", label: "Documents", icon: FileCheck2, overflow: true },
   { href: "/athlete/about", label: "About", icon: Info },
@@ -206,6 +211,7 @@ const athleteNav: NavItem[] = [
 const adminNav: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: Flame, exact: true },
   { href: "/admin/my", label: "My Calendar", icon: CalendarDays },
+  { href: "/admin/anvil", label: "The Anvil", icon: Activity, overflow: true },
   { href: "/admin/video-bank", label: "My Video Bank", icon: Video, overflow: true },
   { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
   { href: "/admin/skills", label: "Forge Skill Bank", icon: Target, overflow: true },
@@ -412,6 +418,7 @@ export function AppShell({
     if (appleTouchIcon) appleTouchIcon.href = logoHref ?? "/apple-touch-icon.png";
   }, [branding?.brandLogoUrl]);
 
+  const { access: anvilAccess } = useAnvilAccess();
   const disabledNavHrefs = new Set<string>();
   if (branding?.features) {
     for (const field of COACH_FEATURE_FIELDS) {
@@ -428,6 +435,19 @@ export function AppShell({
   if (user?.role === "coach" && user.hiddenSections) {
     for (const section of user.hiddenSections) {
       for (const href of COACH_SECTION_NAV_HREFS[section] ?? []) disabledNavHrefs.add(href);
+    }
+  }
+
+  // THE ANVIL IS HIDDEN UNTIL THE SERVER SAYS IT IS OPEN, which includes while the answer is
+  // still in flight. It is adults-only while four counsel questions are open, so for most
+  // accounts the entry would lead to a page that explains a refusal -- and "drawing a tab that
+  // always refuses is worse than no tab" is the rule the skills tabs already follow. Unknown is
+  // not yes and not no: a tab that appears a beat after the page painted is the flicker the
+  // coach-status branches below were rewritten to stop.
+  if (anvilAccess?.allowed !== true) {
+    for (const routes of Object.values(ANVIL_ROUTES)) {
+      disabledNavHrefs.add(routes.check);
+      if (routes.roster) disabledNavHrefs.add(routes.roster);
     }
   }
 

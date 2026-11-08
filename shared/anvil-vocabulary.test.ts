@@ -5,6 +5,7 @@ import {
   ANVIL_FORBIDDEN_TERMS,
   ANVIL_FORBIDDEN_TERM_WORDS,
   ANVIL_PERMITTED_TERMS,
+  ANVIL_MODULES_WITHOUT_A_NUMBER,
   isAnvilSurface,
   serverFileIsAnvilOutput,
 } from "./anvil-vocabulary";
@@ -267,6 +268,47 @@ describe("the scan's scope is narrow, in both directions", () => {
         `${path} is a shipped feature, not an Anvil surface. If this scan has been widened, that ` +
           "is a decision about renaming three live features and belongs in a commit that says so.",
       ).toBe(false);
+    }
+  });
+});
+
+describe("the import clause admits a file that describes a NUMBER, not one that holds a path", () => {
+  it("states a reason for every module it exempts", () => {
+    for (const { module, why } of ANVIL_MODULES_WITHOUT_A_NUMBER) {
+      expect(module).toMatch(/^anvil-[a-z0-9-]+$/);
+      expect(
+        why.length,
+        `"${module}" is exempt with no reason. An exemption with no reason is the one somebody ` +
+          "adds to make a red test green.",
+      ).toBeGreaterThan(40);
+    }
+  });
+
+  it("leaves app-shell.tsx out, which is what this list was written for", () => {
+    // THE CASE THAT PROTECTS THREE LIVE FEATURES. app-shell imports anvil-routes for ONE nav
+    // entry and is the whole app's chrome: it holds "recovery" (a shipped page's label),
+    // "screen" and "diagnos" (the AR Diagnosis entry). The first version of the import clause
+    // admitted it and the sweep turned into a demand to rename all three.
+    const shell = clientFiles().find((f) => f.path === "components/app-shell.tsx");
+    expect(shell, "app-shell.tsx has moved; update this case deliberately").toBeDefined();
+    expect(shell!.source).toContain("@shared/anvil-routes");
+    expect(isAnvilSurface(shell!.path, shell!.source)).toBe(false);
+  });
+
+  it("still admits a file that imports a module which SCORES", () => {
+    // The clause's whole point, and the direction that must not be lost in narrowing it.
+    const src = 'import type { AnvilReading } from "@shared/anvil-reading";\n';
+    expect(isAnvilSurface("components/morning-card.tsx", src)).toBe(true);
+    // And an unlisted module counts, which is the fail-closed half: a scoring module written
+    // next year puts its importers in scope the day it exists.
+    expect(
+      isAnvilSurface("components/x.tsx", 'import { z } from "@shared/anvil-not-written-yet";'),
+    ).toBe(true);
+  });
+
+  it("does not admit a file that only imports a path map or the task timings", () => {
+    for (const m of ["anvil-routes", "anvil-tasks"]) {
+      expect(isAnvilSurface("components/x.tsx", `import { a } from "@shared/${m}";`)).toBe(false);
     }
   });
 });

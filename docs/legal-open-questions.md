@@ -303,6 +303,15 @@ screens; no athlete has taken it and no cognitive measurement has ever been reco
 questions are being asked before the first minor sits down in front of it. **Nothing ships to a
 minor until 15, 17, 18 and 21 are answered.** The rest can be answered alongside the build.
 
+> **STATUS, 2026-11-08: the Anvil is BUILT and shipped to ADULTS ONLY, and questions 15, 17, 18
+> and 21 are what the age gate is for.** `shared/anvil-eligibility.ts` refuses anybody under 18
+> and says so in a sentence; `server/the-anvil-is-adults-only-and-never-refuses-a-check.itest.ts`
+> drives the real routes to prove a minor cannot accept the agreement, cannot take a check, and
+> is told why. Nothing about shipping to adults prejudges any of the four: an adult agrees for
+> themselves (question 15 is about whether a DIFFERENT consent already covers them), reads their
+> own result, and is not the population 17, 18 or 21 is about. The day each is answered is the day
+> `ANVIL_MINIMUM_AGE_YEARS` moves, in a commit that says which answer moved it.
+
 ## 15. Does the Video and Biometric Consent reach a cognitive task?
 
 The reviewed Video and Biometric Consent describes filming a lift and deriving measurements from

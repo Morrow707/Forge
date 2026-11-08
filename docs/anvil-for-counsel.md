@@ -1,10 +1,17 @@
 # Forge -- the Anvil: a daily check that includes cognitive tasks
 
-**Prepared 2026-11-06 for legal review. Nothing described here is built.** As of this date the
-Anvil exists as a written specification, a set of simulations, and a mock of the screens. No
-athlete has ever taken it and no cognitive measurement of any kind has ever been recorded by
-Forge. The questions this packet carries (`docs/legal-open-questions.md`, questions 15 to 24) are
-being asked before the first minor sits down in front of it rather than after.
+**Prepared 2026-11-06 for legal review; updated 2026-11-08, when it was built and shipped to
+ADULTS ONLY.** The description below is of the software as it now exists. **No minor can take it
+and none has**: the age gate is 18 and over, in code, and it is there because questions 15, 17,
+18 and 21 below are open -- each of those four changes the design rather than filling in a blank,
+and shipping to an adult prejudges none of them. An adult agrees for themselves, reads their own
+result, and is not the population any of the four is about.
+
+What changed from the 2026-11-06 version of this packet: the specification, the simulations and
+the mock are now a working feature. What did not change: no cognitive measurement of any minor
+has ever been recorded by Forge, and the questions this packet carries
+(`docs/legal-open-questions.md`, questions 15 to 24) are still being asked before the first minor
+sits down in front of it rather than after.
 
 This packet is the companion to `docs/biometric-release-for-counsel.md`, which covers the video
 and biometric consent and the engineering facts behind it. A reviewer who has read that one can

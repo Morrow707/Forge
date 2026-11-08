@@ -26,6 +26,7 @@ import { MovementScreenPanel } from "@/components/movement-screen-panel";
 import { WeaknessReportPanel } from "@/components/weakness-report-panel";
 import { GoalsPanel } from "@/components/goals-panel";
 import { SkillSessionsPanel } from "@/components/skill-sessions-panel";
+import { AnvilAthletePanel } from "@/components/anvil-athlete-panel";
 import { NutritionPanel } from "@/components/nutrition-panel";
 import { AiChatPanel } from "@/components/ai-chat-panel";
 import { TrophyCase, type AthleteTrophyView } from "@/components/trophy-case";
@@ -705,6 +706,8 @@ export default function AthleteDetailPage() {
                       </Button>
                     </div>
                     <SkillSessionsPanel athleteName={athlete.name} athleteId={athlete.id} />
+
+                    <AnvilAthletePanel athleteName={athlete.name} athleteId={athlete.id} />
 
                     {/* The same profile the athlete sees, so a coach and their athlete are
                         reading one number rather than two that can disagree. */}

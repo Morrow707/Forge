@@ -9,6 +9,7 @@ import {
   lapseThresholdFor,
   reportedTapCount,
   tappingDeadBand,
+  theilSenDriftMs,
 } from "./anvil-part-metrics";
 import { countsTowardBaseline, type AnvilWindowLabel } from "./anvil-window";
 
@@ -45,6 +46,9 @@ export type AnvilRawCheck = {
 /** What one check measured, before any comparison. Always present. */
 export type AnvilCheckNumbers = {
   readonly medianMs: number | null;
+  /** How much the latency changed across the check, robustly. Needs no history, so it is a
+   *  NUMBER and not a comparison -- see `theilSenDriftMs`. */
+  readonly driftMs: number | null;
   readonly trials: number;
   readonly omissions: number;
   readonly rulesMissed: number | null;
@@ -94,6 +98,7 @@ function median(xs: readonly number[]): number | null {
 export function readCheck(check: AnvilRawCheck, history: readonly AnvilRawCheck[]): AnvilReading {
   const numbers: AnvilCheckNumbers = {
     medianMs: median(check.trialsMs),
+    driftMs: theilSenDriftMs(check.trialsMs),
     trials: check.trialsMs.length,
     omissions: check.omissions,
     rulesMissed: check.rulesMissed,

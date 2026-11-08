@@ -133,3 +133,55 @@ export const PART_WEIGHT_ORDER = [
   "tapping",
   "go_no_go",
 ] as const;
+
+/**
+ * THE DRIFT ACROSS A CHECK: how much the latency changed from the first trial to the last, as the
+ * MEDIAN OF ALL PAIRWISE SLOPES (Theil-Sen) rather than least squares.
+ *
+ * It sits BESIDE the lapse count rather than replacing it, and both are on the athlete's result.
+ * They answer different questions: a lapse count is how many trials went wrong, a drift is
+ * whether the whole morning got worse while they were doing it -- and the intercept the slope
+ * leaves behind absorbs everything the whole check shares (which phone, what hour, how awake they
+ * were when they picked it up), so this is what happened DURING the check rather than what the
+ * day was like.
+ *
+ * **WHY THE MEDIAN OF PAIRS AND NOT LEAST SQUARES, measured rather than argued**
+ * (`tools/anvil-sim/leverage.py`, 2,000 draws of 25 ex-Gaussian trials, mu 260 / sigma 30 /
+ * tau 45 -- a real latency shape, not the Gaussian a harness reaches for). In a least-squares
+ * slope the ENDPOINTS carry the most leverage, and a distraction on trial one is an ordinary
+ * event:
+ *
+ * | added to trial 1 | least squares | Theil-Sen |
+ * |---|---|---|
+ * | 0 ms | -1.6 ms | -1.3 ms |
+ * | 100 ms | -21.6 ms | -15.8 ms |
+ * | 200 ms | -45.1 ms | -20.6 ms |
+ * | 400 ms | **-88.4 ms** | **-20.4 ms** |
+ *
+ * So least squares reports 88 ms of improvement that did not happen, off one slow trial. On
+ * untampered data the two agree to within 2 ms at every real drift (0, 20, 40, 80 ms) and
+ * Theil-Sen carries slightly LESS variance (33 against 36), so the robustness is free.
+ *
+ * **AND IT IS GAMEABLE, WHICH IS RECORDED RATHER THAN HIDDEN.** Deliberately slowing the first
+ * three trials by 100 ms turns a real +40 ms drift into -12 ms on Theil-Sen (-21 ms on least
+ * squares). What it costs is +10 ms on the headline median, which moves the OTHER way and is the
+ * number anybody looking would read first. That is why this is a diagnostic beside the median and
+ * never a claim on its own -- and why the weekly verdict needs two channels agreeing before the
+ * Anvil says anything at all.
+ */
+export function theilSenDriftMs(trialsMs: readonly number[]): number | null {
+  const y = trialsMs.filter((t) => Number.isFinite(t));
+  const n = y.length;
+  // Two points is one slope and is not a drift. Below three the median of pairs is just the pair.
+  if (n < 3) return null;
+  const slopes: number[] = [];
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) slopes.push((y[j] - y[i]) / (j - i));
+  }
+  slopes.sort((a, b) => a - b);
+  const mid = slopes.length >> 1;
+  const perTrial = slopes.length % 2 ? slopes[mid] : (slopes[mid - 1] + slopes[mid]) / 2;
+  // Reported across the whole check rather than per trial, because "+4 ms over the check" is a
+  // sentence somebody can read and "+0.17 ms per trial" is not.
+  return perTrial * (n - 1);
+}

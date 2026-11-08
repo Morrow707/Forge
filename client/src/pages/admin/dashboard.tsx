@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { AnvilDailyCard } from "@/components/anvil-daily-card";
 import { Link, useLocation } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -159,6 +160,9 @@ export default function AdminDashboard() {
   return (
     <AppShell title={`Welcome, ${user?.name?.split(" ")[0] ?? "Admin"}`}>
       <div className="flex flex-col gap-4">
+        {/* The admin account is the one that films the same four lifts over and over, so it is
+            the one most likely to take this daily. Hidden until the server says it is open. */}
+        <AnvilDailyCard />
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <div>

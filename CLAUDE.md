@@ -1654,6 +1654,110 @@ file that would suffer from it.
 418 files / 4864 tests, the delta exactly the seven new cases. Client-side: `verify_build`, and it
 batches -- no camera number moves.
 
+## THE ANVIL: A DAILY COGNITIVE CHECK, ADULTS ONLY, AND IT NEVER REFUSES A TAKE
+
+Added 2026-11-08. Four short tasks on the phone, once a morning, compared only with the athlete's
+own earlier mornings. Scott's framing through the design: "daily will show good spikes where
+weekly will show the trends." The whole of it is in `shared/anvil-*.ts`, `server/anvil-report.ts`,
+`client/src/pages/anvil.tsx` and `client/src/components/anvil/`.
+
+**THE FOUR PARTS** (`shared/anvil-tasks.ts`): 25 simple reaction-time trials on a 2–5 s random
+wait; 16 go/leave/hold trials mixed 11/3/2 with a constrained order; a sequence span from 3 to 7
+on a six-pad grid that is re-laid-out every round; and three ten-second maximal tapping trials,
+best of three. About four minutes, and the sentence that says so is DERIVED from the trial counts
+rather than typed — the mock said "three and a half minutes" and ran one tapping burst, which
+stopped being true the day best-of-three was measured.
+
+**NOTHING STORES A DERIVED NUMBER.** `anvil_checks` keeps the trials as the phone measured them
+and nothing else; the median, the drift, the lapse count, the band and every z-score are computed
+on READ from the shared modules. So a refitted constant moves every past check instead of only
+the ones taken after it, and a take replays. That is the camera work's whole history (the ledger
+replays because the inputs were kept), applied before the first wrong constant rather than after.
+
+**RULE #1 APPLIED TO A CLOCK AND A TASK.**
+- **The morning window LABELS and never gates.** 05:40–08:40 local, decided from the minute the
+  client reports at Begin (not at the end — the check runs four minutes and a start at 8:38 is
+  not a late check). A check taken at four in the afternoon is written, scored, shown, and left
+  out of that person's normal. Refusing it would destroy the one thing that cannot be recovered
+  to protect a comparison that can simply be skipped.
+- **A check is never refused for what it measured.** Three trials instead of twenty-five, every
+  trial missed, a 2,400 ms median: all kept, all scored. What a thin history withholds is the
+  COMPARISON, which says which of its two reasons it has. The only thing a submission is ever
+  turned away for is a malformed date, and that is a 400 rather than a 403.
+- **ONE ATTEMPT COUNTS — the FIRST in-window check, never the best.** Best-of would let somebody
+  retake until they liked the number. The retake is kept, shown and marked.
+
+**ADULTS ONLY, AND THAT IS THE COUNSEL BLOCK RATHER THAN A SETTING.** `shared/anvil-eligibility.ts`
+is the one place it lives; questions 15, 17, 18 and 21 in `docs/legal-open-questions.md` each
+CHANGE the design rather than filling in a blank, and shipping to an adult prejudges none of them.
+Two things the itest found about where that gate actually bites:
+- **The app-wide guardian gate only looks at `role === "athlete"`**, so a minor ATHLETE is held
+  out of every `/api` path before `requireAnvilAccess` runs. A minor COACH is covered by nothing:
+  `signupSchema` asks a coach for a date of birth exactly as it asks an athlete, nothing refuses
+  a minor one, and `roles-that-film-their-own-training.ts` calling a coach "an adult account by
+  construction" is a CONVENTION. So the Anvil checks the age itself, for every role.
+- **A coach with NO date of birth is refused `age_unknown`.** `recordBiometricRelease`
+  deliberately lets that account film, which is right for a consent an adult gives about their
+  own video and wrong for a block that is about minors as a class. Same call the retention sweep
+  made on 2026-10-22.
+- **A refusal is 403 with a sentence, never 402.** The client draws "See plans" off
+  `freeAgentPaywall`, which is the wrong thing to offer somebody who is seventeen.
+
+**THE ANVIL'S AGREEMENT IS FORGE'S OWN, NOT ONE OF THE EIGHT REVIEWED DOCUMENTS**
+(`shared/anvil-agreement.ts`), because question 15 — whether the Video and Biometric Consent
+reaches a cognitive task at all — is open, and showing an adult nothing while waiting is worse
+than showing them an accurate description. It is deliberately NOT in `LEGAL_DOC_TYPES` and has no
+public page. The accepted text is snapshotted on the consent row like every other consent, and an
+edit re-asks everybody (a TEXT comparison, never a version flag). Two sentences in it are
+constants every other surface RENDERS rather than re-types — `ANVIL_ACCURACY_CAVEAT` and
+`ANVIL_NOT_A_MEDICAL_TEST` — so there is one wording for counsel to review under question 18.
+**`CAMERA_ACCURACY_INLINE` IS NOT THE CAVEAT HERE:** it says "camera metrics" and a tap latency is
+not one, and a true sentence about a different instrument under a number it does not describe is
+worse than no caveat.
+
+**THE VOCABULARY IS A DECISION, WRITTEN DOWN BEFORE THE FIRST SURFACE** (`anvil-vocabulary.ts`).
+"Reaction time" is permitted because it is literally what is measured; "fatigue", "readiness",
+"recovery", "freshness", "load tolerance", "concussion", "screen" and "diagnos" are refused, each
+with its reason. The scan has three scopes and the boundaries are all load-bearing:
+- the CLIENT, by path or by an import of an Anvil module that produces a NUMBER. The import
+  clause had to be narrowed on the day the first surface shipped: `app-shell.tsx` imports
+  `anvil-routes` for one nav entry and holds "recovery", "screen" and "diagnos" for three live
+  features, so the ratchet briefly became a demand to rename them.
+  `ANVIL_MODULES_WITHOUT_A_NUMBER` is the exemption and runs fail-closed — every unlisted
+  `shared/anvil-*` module counts, so a scoring module written next year puts its importers in
+  scope the day it exists.
+- the SERVER, by PATH alone (`serverFileIsAnvilOutput`), because a PDF is a surface and a printed
+  sentence outlives the screen it came from — while `routes.ts` and `storage.ts` import Anvil
+  modules and serve the whole platform.
+- and `shared/anvil-agreement.ts` is the ONE place the forbidden words may appear, earned off a
+  declared prohibition rather than a filename, because telling a reader "this is not a concussion
+  test" is the opposite of modelling one.
+
+**THE COACH GETS BOTH VIEWS AND ONLY ONE OF THEM ASSERTS ANYTHING.** The daily row states where a
+morning sat against that person's own band and claims nothing; the weekly line is the only place
+the Anvil says something, and it needs TWO of three channels agreeing at z 2.0
+(`anvil-corroboration.ts`). A daily FLAG at that threshold fires about **16.9 times per athlete
+per season on noise alone**, measured over 3,000 simulated pure-noise seasons; two-of-three at
+z 2.0 gives 0.1% false against 74.6% caught where any-one-channel gives 6.6% against 99.1%.
+**Today every week comes back `cannot_judge`, naming the two channels that are not computable** —
+the slow channel wants a fixed early-season anchor nobody has, and the career channel wants the
+same athlete at the same age a year earlier. That is the correct answer and not a gap to paper
+over: "nothing was wrong" and "nothing could be judged" must never render as one blank.
+The roster payload carries no trials, names everybody who took none, and drops the coach's own
+row; `/api/coach/anvil/week.pdf` prints the same assembled object the page renders, so the paper
+and the screen cannot disagree.
+
+**A pgEnum VALUE REACHES A REAL DATABASE ONLY THROUGH `ALTER TYPE ... ADD VALUE`.** `anvil_check`
+was added to `consentTypeEnum` on 2026-11-07 and not to the live type, so accepting the agreement
+— the one write that has to succeed before a check can be taken — failed with "invalid input
+value for enum consent_type". It is in `reconcile-schema.ts` now, proven both ways: 11 values on a
+fresh database and 10 → 11 on one that already had the type, which is the production case.
+
+**STILL OPEN, named so it is not mistaken for done:** no minor may take it until counsel answers;
+the slow and career channels have no anchor and no history, so no week can carry a finding yet;
+the balance/sway prototype (`anvil-sway.ts`) has no thresholds and nobody has filmed one; and
+`ESCALATION_RECIPIENT` in `anvil-never-models.ts` is unresolved pending counsel follow-up 3.
+
 ## RULE #3: A VIDEO SHOWS THE REAL APP. NOTHING IN IT IS INVENTED.
 
 Added 2026-10-02, after a build-a-program reel shipped with a program builder nobody has ever
