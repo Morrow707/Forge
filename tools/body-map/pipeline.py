@@ -88,16 +88,16 @@ KNOBS = {
     "r_head_face_sigma": 17.0, # the scale the head's own local level is taken at
     "r_head_face_depth": 14.0, # a pixel this far below that level is a feature (eye, nostril, lip)
     "r_head_face_radius": 9,   # how far the inpaint reaches for the tone that fills a feature
-    "r_face_muscles": 0.0, # DRAW the facial muscles (face_muscles.py); the render has none.
-                           #   OFF: two drawn attempts both read worse than the plain head --
-                           #   see face_muscles.py and the README. /tune r_face_muscles 1 to look.
-    "r_face_round": 0.30,  # how far each muscle outline is rounded (fraction of its own size)
-    "r_face_level": 0.34,  # the level set taken from that blurred field as the muscle's edge
-    "r_face_fibre": 0.13,  # how dark the fibre lines inside each drawn facial muscle are
-    "r_face_fibre_px": 5.0,
-    "r_face_seam": 0.50,   # how dark the crease between two drawn facial muscles goes
+    "r_face_muscles": 1.0, # DRAW the facial muscles (face_muscles.py); the render has none
+    "r_face_round": 0.55,  # rounding as a fraction of the shape's MINOR axis, never its area
+    "r_face_level": 0.50,  # the level set that keeps a blurred shape its own size
+    "r_face_fibre": 0.34,  # how dark the fibre lines inside each drawn facial muscle are
+    "r_face_fibre_px": 4.2,
+    "r_face_seam": 0.42,   # how dark the crease between two drawn facial muscles goes
     "r_face_variation": 0.07, # a little tone per muscle, so one belly is told from the next
-    "r_face_tendon": 1.26, # the galea: a pale sheet where there is no muscle belly
+    "r_face_tendon": 1.30, # the galea and periosteum: every pixel no belly claims
+    "r_face_tendon_grey": 0.42, # how far that sheet is pulled toward neutral (a tendon has no blood)
+    "r_face_aperture": 0.42, # how dark the eye sockets and the mouth opening are recessed
     "r_face_shade": 0.85,  # how much of the mannequin's own light models the drawing
     "r_face_shade_floor": 0.55,
     "r_face_shade_ceil": 1.45,

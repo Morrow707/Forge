@@ -39,33 +39,52 @@ from scipy import ndimage as ndi
 # fibre: "along" runs the lines down the shape's long axis, "ring" runs them round it, an angle
 # in degrees runs them at that angle (0 = across the face, 90 = up it).
 FRONT = [
-    # the forehead sheet, paired with a midline gap, fibres running up into the galea
-    ("frontalis",      "poly", [(0.06, 0.50), (0.60, 0.42), (0.62, 0.22), (0.08, 0.16)], 90, "both"),
-    # the fan over the temple, in front of and above the ear, narrowing to the coronoid process
-    ("temporalis",     "poly", [(0.54, 0.60), (0.95, 0.46), (0.90, 0.26), (0.58, 0.30)], 72, "both"),
-    # the ring round the orbit; the aperture inside it is drawn as a recess, not as an eye
-    ("orbicularis_oculi", "ring", (0.33, 0.531, 0.31, 0.105, 0.40), "ring", "both"),
-    ("procerus",       "poly", [(-0.10, 0.60), (0.10, 0.60), (0.08, 0.46), (-0.08, 0.46)], 90, "mid"),
-    ("nasalis",        "poly", [(-0.17, 0.71), (0.17, 0.71), (0.12, 0.60), (-0.12, 0.60)], 20, "mid"),
-    ("levator_labii",  "strap", ((0.27, 0.57), (0.15, 0.755), 0.052), "along", "both"),
-    ("zygomaticus_minor", "strap", ((0.43, 0.605), (0.20, 0.775), 0.050), "along", "both"),
-    ("zygomaticus_major", "strap", ((0.63, 0.625), (0.27, 0.788), 0.062), "along", "both"),
-    # the jaw block: the one that makes a face read as muscular rather than as a shape
-    ("masseter",       "poly", [(0.46, 0.615), (0.80, 0.595), (0.76, 0.845), (0.50, 0.835)], 84, "both"),
-    ("risorius",       "strap", ((0.52, 0.775), (0.30, 0.788), 0.038), "along", "both"),
-    ("orbicularis_oris", "ring", (0.0, 0.790, 0.30, 0.080, 0.46), "ring", "mid"),
-    ("depressor_anguli_oris", "strap", ((0.29, 0.800), (0.155, 0.915), 0.055), "along", "both"),
-    ("depressor_labii", "strap", ((0.17, 0.820), (0.09, 0.900), 0.042), "along", "both"),
-    ("mentalis",       "poly", [(-0.14, 0.955), (0.14, 0.955), (0.10, 0.855), (-0.10, 0.855)], 90, "mid"),
+    # The forehead sheet, paired, fanning wider at the brow than at the crown. It reaches u 0.62
+    # because the temple behind it is temporalis, not frontalis.
+    ("frontalis", "poly", [(0.05, 0.500), (0.28, 0.492), (0.50, 0.455), (0.61, 0.380),
+                           (0.60, 0.260), (0.46, 0.180), (0.26, 0.152), (0.07, 0.150)], 90, "both"),
+    # THE TEMPLE, NOT THE EAR. The first version ran u 0.56-0.97 and the ear's front edge is at
+    # u 0.71 on this render, so it was drawn over the ear and read as a pair of wings. The temple
+    # is in FRONT of that: the fan sits u 0.42-0.76 and dives under the zygomatic arch at v 0.58.
+    ("temporalis", "poly", [(0.430, 0.560), (0.560, 0.585), (0.700, 0.520), (0.762, 0.410),
+                            (0.735, 0.285), (0.590, 0.225), (0.462, 0.290), (0.420, 0.420)], 74, "both"),
+    ("corrugator", "strap", ((0.330, 0.478), (0.095, 0.497), 0.036), "along", "both"),
+    ("orbicularis_oculi", "ring", (0.330, 0.531, 0.360, 0.125, 0.40), "ring", "both"),
+    ("procerus", "poly", [(-0.090, 0.612), (0.090, 0.612), (0.072, 0.470), (-0.072, 0.470)], 90, "mid"),
+    ("nasalis", "poly", [(-0.195, 0.722), (-0.080, 0.742), (0.080, 0.742), (0.195, 0.722),
+                         (0.125, 0.612), (-0.125, 0.612)], 16, "mid"),
+    ("levator_labii_alaeque_nasi", "strap", ((0.170, 0.562), (0.128, 0.735), 0.038), "along", "both"),
+    ("levator_labii", "strap", ((0.310, 0.588), (0.182, 0.752), 0.054), "along", "both"),
+    ("zygomaticus_minor", "strap", ((0.470, 0.608), (0.232, 0.772), 0.052), "along", "both"),
+    ("zygomaticus_major", "strap", ((0.690, 0.612), (0.292, 0.788), 0.064), "along", "both"),
+    # the jaw block, from under the arch down to the angle of the mandible
+    ("masseter", "poly", [(0.430, 0.628), (0.600, 0.600), (0.775, 0.625), (0.800, 0.742),
+                          (0.735, 0.838), (0.575, 0.872), (0.462, 0.812), (0.428, 0.718)], 84, "both"),
+    ("buccinator", "poly", [(0.320, 0.730), (0.465, 0.718), (0.520, 0.790), (0.425, 0.840),
+                            (0.310, 0.820)], 8, "both"),
+    ("risorius", "strap", ((0.575, 0.780), (0.312, 0.792), 0.038), "along", "both"),
+    ("orbicularis_oris", "ring", (0.0, 0.792, 0.330, 0.092, 0.42), "ring", "mid"),
+    ("depressor_anguli_oris", "poly", [(0.340, 0.796), (0.228, 0.800), (0.128, 0.920),
+                                       (0.248, 0.936), (0.342, 0.860)], 70, "both"),
+    ("depressor_labii", "strap", ((0.178, 0.832), (0.086, 0.908), 0.048), "along", "both"),
+    ("mentalis", "poly", [(-0.130, 0.972), (0.130, 0.972), (0.108, 0.858), (-0.108, 0.858)], 90, "mid"),
 ]
+
+# The apertures: an eye socket and a mouth opening are HOLES, and leaving them at the head's own
+# colour drew two red eyeballs and a red mouth. They are recessed instead -- the same shapes the
+# rings are built on, at their inner radius.
+APERTURES = [(0.330, 0.531, 0.360 * 0.40, 0.125 * 0.40, "both"),
+             (0.0, 0.792, 0.330 * 0.42, 0.092 * 0.42, "mid")]
 
 # The back of a head is mostly the galea aponeurotica -- a tendon sheet, not a muscle -- with the
 # occipital belly low down and the temporalis showing at each side. Drawing bellies over the whole
 # cranium would be inventing muscle where there is none, which is the thing this file is careful
 # not to do even while it is drawing.
 BACK = [
-    ("occipitalis",  "poly", [(-0.52, 0.86), (0.52, 0.86), (0.44, 0.66), (-0.44, 0.66)], 88, "mid"),
-    ("temporalis",   "poly", [(0.62, 0.68), (0.96, 0.56), (0.92, 0.34), (0.66, 0.38)], 72, "both"),
+    ("occipitalis", "poly", [(-0.50, 0.870), (-0.26, 0.895), (0.26, 0.895), (0.50, 0.870),
+                             (0.42, 0.700), (0.0, 0.660), (-0.42, 0.700)], 88, "mid"),
+    ("temporalis", "poly", [(0.615, 0.690), (0.780, 0.700), (0.950, 0.600), (0.985, 0.440),
+                            (0.900, 0.330), (0.720, 0.360), (0.635, 0.500)], 74, "both"),
 ]
 
 APONEUROSIS = [(-0.56, 0.70), (0.56, 0.70), (0.46, 0.18), (-0.46, 0.18)]
@@ -140,14 +159,24 @@ def draw(rgb, head, lum, view, target, K):
     # Blurring the fill and taking a level set gives a rounded outline, and the SAME field is the
     # belly's own dome -- high in the middle, falling to nothing at the seam -- so the shape and
     # its shading come from one thing instead of a polygon plus a distance transform fighting it.
+    # THE ROUNDING IS TAKEN FROM EACH SHAPE'S MINOR AXIS, NEVER FROM ITS AREA, and that one line
+    # is the difference between a muscle and a jelly bean. The second attempt used
+    # sqrt(area) * 0.3, so a 200 x 20 strap -- a zygomaticus, a depressor -- got a sigma of 19 on
+    # a shape 20 px wide and came back a sausage, while a sheet the same area was barely touched.
+    # The minor axis is the width the blur has to respect: it rounds a sheet and leaves a strap a
+    # strap. The level set is 0.5 for the same reason -- at any other level a blur also GROWS or
+    # SHRINKS the shape, so the anatomy drifts with a knob that is meant to soften it.
     fields = []
     for nm, m, fibre in shapes:
-        sig = max(np.sqrt(float(m.sum())) * kf("r_face_round", 0.30), 2.0)
+        ys_, xs_ = np.nonzero(m)
+        cov = np.cov(np.vstack([xs_ - xs_.mean(), ys_ - ys_.mean()]))
+        minor = float(np.sqrt(max(np.linalg.eigvalsh(cov).min(), 1e-3)))
+        sig = max(minor * kf("r_face_round", 0.55), 1.2)
         f = cv2.GaussianBlur(m.astype(np.float32), (0, 0), sig)
         f /= max(float(f.max()), 1e-5)
         fields.append((nm, f, fibre))
     claimed = np.zeros(head.shape, bool)
-    level = kf("r_face_level", 0.34)
+    level = kf("r_face_level", 0.50)
     for nm, f, fibre in fields:
         claimed |= (f > level) & head
     shapes = [(nm, (f > level) & head, fibre, f) for nm, f, fibre in fields]
@@ -156,13 +185,18 @@ def draw(rgb, head, lum, view, target, K):
     paint = np.zeros((*head.shape, 3), np.float32)
     cover = np.zeros(head.shape, np.float32)
     # the aponeurosis: a pale tendon sheet, drawn under everything so a belly always wins
-    apo = np.zeros(head.shape, np.uint8)
-    cv2.fillPoly(apo, [np.round(_px(APONEUROSIS, mid, half, top, height)).astype(np.int32)], 1)
-    apo = (apo.astype(bool) & head & ~claimed)
-    if view == "back":
-        apo = head & ~claimed
+    # EVERY PIXEL THE BELLIES DO NOT CLAIM IS THE SHEET, on both views. Confining it to a polygon
+    # left the crown and the gaps between bellies at the head's own colour, so they read as bare
+    # SKIN on a face that has had its skin taken off -- which is the one thing this is for. The
+    # galea and the periosteum are what is actually there between and above the facial muscles,
+    # and they are tendon: paler than a belly and pulled toward neutral, because a tendon has
+    # almost no blood in it and reading as a pale muscle is how it goes unnoticed.
+    apo = head & ~claimed
     if apo.any():
-        paint[apo] = target * kf("r_face_tendon", 1.26)
+        pale = target * kf("r_face_tendon", 1.30)
+        grey = float(pale @ np.array([0.299, 0.587, 0.114], np.float32))
+        pale = pale + (grey - pale) * kf("r_face_tendon_grey", 0.42)
+        paint[apo] = pale
         cover[apo] = 1.0
 
     yy, xx = np.mgrid[0:head.shape[0], 0:head.shape[1]].astype(np.float32)
@@ -184,12 +218,32 @@ def draw(rgb, head, lum, view, target, K):
                 a = np.deg2rad(float(fibre))
                 ax = np.array([np.cos(a), -np.sin(a)], np.float32)
             phase = -(xx - mid) * ax[1] + (yy - top) * ax[0]
-        lines = 1.0 - kf("r_face_fibre", 0.17) * np.clip(np.cos(2 * np.pi * phase / max(kf("r_face_fibre_px", 7.0), 1e-3)), 0, 1) ** 2
+        # Fibre is what makes the lats and the quads read as muscle in this render rather than as
+        # coloured regions, and at 0.13 it was invisible here. It fades out at the muscle's own
+        # edge so a belly ends in a tendon rather than in a row of cut stripes.
+        wave = np.cos(2 * np.pi * phase / max(kf("r_face_fibre_px", 4.2), 1e-3))
+        lines = 1.0 - kf("r_face_fibre", 0.34) * (np.clip(wave, 0, 1) ** 1.6) * np.clip(t * 2.2, 0, 1)
         # a little tone per muscle so one belly is told from the next where they touch
         jitter = 1.0 + kf("r_face_variation", 0.07) * (((i * 7) % 5) - 2) / 2.0
         col = target[None, None, :] * (belly * lines * jitter)[..., None]
         paint[m] = np.clip(col, 0, 255)[m]
         cover[m] = 1.0
+
+    # the apertures, after every belly, so a ring cannot paint over its own hole
+    # FRONT ONLY. The apertures were view-independent and so were punched into the BACK of the
+    # skull as well: two dark ovals where the eyes would be if you could see through the head.
+    ap = kf("r_face_aperture", 0.42) if view == "front" else 0.0
+    if ap > 0:
+        hole = np.zeros(head.shape, np.uint8)
+        for u, v, rx, ry, side in APERTURES:
+            for sgn in ((1, -1) if side == "both" else (1,)):
+                cv2.ellipse(hole, (int(round(mid + u * sgn * half)), int(round(top + v * height))),
+                            (max(1, int(round(rx * half))), max(1, int(round(ry * height)))),
+                            0, 0, 360, 1, -1)
+        hm2 = hole.astype(bool) & head
+        if hm2.any():
+            paint[hm2] = target * ap
+            cover[hm2] = 1.0
 
     if not cover.any():
         return

@@ -224,7 +224,55 @@ With that fixed the eye sockets read as soft hollows, the mouth as a faint lip l
 remains, and the brow, cheek and jaw keep their form. It is a blank-eyed head rather than a doll's
 face, and it is not a skull.
 
-### THE FACIAL MUSCLES WERE DRAWN, TWICE, AND NEITHER IS SHIPPED (2026-11-08)
+### THE SKIN IS OFF THE FACE: THE FACIAL MUSCLES ARE DRAWN AND SHIPPED (2026-11-08)
+
+Scott, after the plain head: "no you didn't change it the skull is still flat like its someones
+face, i don't want to see someones face, i want to see the muscles under the skin, right now take
+the skin off to show the face muscles." `r_face_muscles` is on.
+
+**This is a DRAWING and `face_muscles.py` says so at the top.** The render's head is one smooth
+mannequin mesh with no cranium and not one facial muscle, so nothing here is uncovered the way the
+body's fibre and seams are. Seventeen muscles are placed from published facial anatomy onto
+landmarks measured off the render -- frontalis, temporalis, corrugator, orbicularis oculi,
+procerus, nasalis, both levators, both zygomatics, masseter, buccinator, risorius, orbicularis
+oris, depressor anguli oris, depressor labii, mentalis, and occipitalis on the back -- in a frame
+the render defines, so the same fractions land on the man and the woman. It is an illustration
+standing in for a layer the source does not have, and it is not evidence about anybody's face.
+
+**IT TOOK FOUR GOES AND EACH FAILED FOR ITS OWN REASON, WHICH IS WHY THEY ARE ALL WRITTEN DOWN.**
+- **Filled polygons** read as hard-edged blocks taped to a head. A belly has no straight edges and
+  no flat interior; a polygon fill has both.
+- **Blurred fields at `sqrt(area) * 0.3`** turned straps into sausages. **The sigma has to come
+  from the shape's MINOR AXIS, never its area**: a 200 x 20 zygomaticus got a sigma of 19 on a
+  shape 20 px wide, while a sheet of the same area was barely touched. The minor axis is the width
+  the blur must respect -- it rounds a sheet and leaves a strap a strap. The level set is 0.5 for
+  the same reason: at any other level the blur also grows or shrinks the shape, so the anatomy
+  drifts with a knob meant only to soften it.
+- **Fibre at 0.13 was invisible**, and fibre is the whole cue -- the lats and the quads read as
+  muscle in this render because of it, not because of their colour. At 0.34 and a 4.2 px period,
+  fading out at each belly's own edge so a muscle ends in a tendon rather than a row of cut
+  stripes, the face reads as muscle for the first time.
+- **The temporalis was drawn on the EAR.** It ran u 0.56-0.97 and the ear's front edge is at
+  u 0.71 on this render, so it came out as a pair of wings. The temple is in front of that.
+- **The eye and mouth apertures were left at the head's colour**, which drew two red eyeballs and
+  a red mouth. They are recessed now -- and FRONT ONLY, because the first version punched them
+  through the back of the skull as well.
+- **Every pixel no belly claims is the tendon sheet**, on both views. Confining it to a polygon
+  left the crown and the gaps between bellies at the head's own colour, reading as bare SKIN on a
+  face whose skin has been taken off. The galea and the periosteum are what is actually there:
+  paler than a belly and pulled toward neutral, because a tendon has almost no blood in it.
+
+**IT IS STILL A DRAWING NEXT TO A RENDER and one export would beat it**: the same four views, same
+camera, same pose, with the head's muscle layer turned on, dropped into `source3d/`. Everything
+here then works on it unchanged and the head ends up as good as the quads. A public-domain anatomy
+plate was the one other path and `upload.wikimedia.org` is outside this environment's network
+policy.
+
+**THE FACE STAYS UNLABELED** (Scott: "just leave them unlabeled"). Nothing in `face_muscles.py`
+writes the label map: these are not a Forge group, they are not tappable, and no strength score or
+set count will ever attach to a face.
+
+#### The two attempts that were not shipped, kept for the reasons they failed
 
 Scott: "again the head is too smooth, redraw the man and womans head but make it the face with
 only muscles, not smooth." `face_muscles.py` is that attempt. It is knob-gated at
