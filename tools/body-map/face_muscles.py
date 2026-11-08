@@ -49,7 +49,10 @@ FRONT = [
     ("temporalis", "poly", [(0.430, 0.560), (0.560, 0.585), (0.700, 0.520), (0.762, 0.410),
                             (0.735, 0.285), (0.590, 0.225), (0.462, 0.290), (0.420, 0.420)], 74, "both"),
     ("corrugator", "strap", ((0.330, 0.478), (0.095, 0.497), 0.036), "along", "both"),
-    ("orbicularis_oculi", "ring", (0.330, 0.531, 0.360, 0.125, 0.40), "ring", "both"),
+    # the ring's hole is the eye opening, so it must be SMALLER than the eye drawn into it: at
+    # 0.40 the hole was taller than the almond and left a pale band of tendon sheet above and
+    # below each eye, which is what made them read as set in a socket of bare bone
+    ("orbicularis_oculi", "ring", (0.330, 0.531, 0.360, 0.125, 0.22), "ring", "both"),
     ("procerus", "poly", [(-0.090, 0.612), (0.090, 0.612), (0.072, 0.470), (-0.072, 0.470)], 90, "mid"),
     ("nasalis", "poly", [(-0.195, 0.722), (-0.080, 0.742), (0.080, 0.742), (0.195, 0.722),
                          (0.125, 0.612), (-0.125, 0.612)], 16, "mid"),
@@ -63,18 +66,37 @@ FRONT = [
     ("buccinator", "poly", [(0.320, 0.730), (0.465, 0.718), (0.520, 0.790), (0.425, 0.840),
                             (0.310, 0.820)], 8, "both"),
     ("risorius", "strap", ((0.575, 0.780), (0.312, 0.792), 0.038), "along", "both"),
-    ("orbicularis_oris", "ring", (0.0, 0.792, 0.330, 0.092, 0.42), "ring", "mid"),
+    # THE LIPS ARE THIS MUSCLE, so its ring is very nearly solid: the mouth is the thin line
+    # drawn over it, not a hole through it. At 0.42 the hole showed as a pale lens sitting above
+    # the lip line and read as a second opening.
+    ("orbicularis_oris", "ring", (0.0, 0.792, 0.330, 0.092, 0.10), "ring", "mid"),
     ("depressor_anguli_oris", "poly", [(0.340, 0.796), (0.228, 0.800), (0.128, 0.920),
                                        (0.248, 0.936), (0.342, 0.860)], 70, "both"),
     ("depressor_labii", "strap", ((0.178, 0.832), (0.086, 0.908), 0.048), "along", "both"),
     ("mentalis", "poly", [(-0.130, 0.972), (0.130, 0.972), (0.108, 0.858), (-0.108, 0.858)], 90, "mid"),
 ]
 
-# The apertures: an eye socket and a mouth opening are HOLES, and leaving them at the head's own
-# colour drew two red eyeballs and a red mouth. They are recessed instead -- the same shapes the
-# rings are built on, at their inner radius.
-APERTURES = [(0.330, 0.531, 0.360 * 0.40, 0.125 * 0.40, "both"),
-             (0.0, 0.792, 0.330 * 0.42, 0.092 * 0.42, "mid")]
+# THE EYE AND THE MOUTH ARE MEASURED OFF THE RENDER, NOT TAKEN FROM THE RING THAT SURROUNDS THEM.
+# The first version reused each ring's inner radius, which gave a 32 x 26 px eye and a 30 x 20 px
+# mouth -- both near-circular, which is why Scott read them as "wide eyes" and a gaping mouth. On
+# male-front the real eye spans x 355-400 by y 145-160, so 45 x 15, and the mouth 386-442 by about
+# 8 tall. In the head's own frame that is u 0.204 x v 0.0286 for the eye and u 0.253 x v 0.015 for
+# the mouth: an almond at 3:1 and a lip line at 7:1, which is the difference between a face and a
+# mask. An eye is also not a hole -- it holds an eyeball -- so it is drawn as sclera, iris, pupil
+# and a lid shadow rather than filled flat.
+EYE = (0.330, 0.531, 0.204, 0.0286)
+MOUTH = (0.0, 0.792, 0.253, 0.0150)
+
+
+def _lens(cx, cy, rx, ry, n=48):
+    """A pointed oval: the corners of an eye and of a mouth come to a point, and an ellipse's do
+    not. Two cosine arcs meeting at the canthi."""
+    t = np.linspace(0, np.pi, n)
+    xs = cx + rx * np.cos(t)
+    bulge = np.sin(t) ** 0.72
+    top = np.stack([xs, cy - ry * bulge], 1)
+    bot = np.stack([xs[::-1], cy + ry * bulge[::-1]], 1)
+    return np.round(np.concatenate([top, bot])).astype(np.int32)
 
 # The back of a head is mostly the galea aponeurotica -- a tendon sheet, not a muscle -- with the
 # occipital belly low down and the temporalis showing at each side. Drawing bellies over the whole
@@ -234,16 +256,39 @@ def draw(rgb, head, lum, view, target, K):
     # skull as well: two dark ovals where the eyes would be if you could see through the head.
     ap = kf("r_face_aperture", 0.42) if view == "front" else 0.0
     if ap > 0:
-        hole = np.zeros(head.shape, np.uint8)
-        for u, v, rx, ry, side in APERTURES:
-            for sgn in ((1, -1) if side == "both" else (1,)):
-                cv2.ellipse(hole, (int(round(mid + u * sgn * half)), int(round(top + v * height))),
-                            (max(1, int(round(rx * half))), max(1, int(round(ry * height)))),
-                            0, 0, 360, 1, -1)
-        hm2 = hole.astype(bool) & head
-        if hm2.any():
-            paint[hm2] = target * ap
-            cover[hm2] = 1.0
+        grey = float(target @ np.array([0.299, 0.587, 0.114], np.float32))
+        mix = lambda c, g, m: c + (g - c) * m
+        sclera = np.clip(mix(target, grey, 0.80) * kf("r_eye_sclera", 1.55), 0, 255)
+        iris = np.clip(mix(target, grey, 0.55) * kf("r_eye_iris", 0.52), 0, 255)
+        pupil = np.clip(target * kf("r_eye_pupil", 0.16), 0, 255)
+        for sgn in (1, -1):
+            cx, cy = mid + EYE[0] * sgn * half, top + EYE[1] * height
+            rx, ry = EYE[2] * half, EYE[3] * height
+            lid = np.zeros(head.shape, np.uint8)
+            cv2.fillPoly(lid, [_lens(cx, cy, rx, ry)], 1)
+            m = lid.astype(bool) & head
+            if not m.any():
+                continue
+            paint[m] = sclera
+            r = max(2, int(round(ry * kf("r_eye_iris_size", 1.55))))
+            cv2.circle(lid, (int(round(cx)), int(round(cy))), r, 2, -1)
+            cv2.circle(lid, (int(round(cx)), int(round(cy))), max(1, int(round(r * 0.42))), 3, -1)
+            paint[(lid == 2) & m] = iris
+            paint[(lid == 3) & m] = pupil
+            # the upper lid throws a shadow across the top of the eye; without it the eyeball
+            # reads as a bead sitting on the face rather than as something set into a socket
+            ys_ = np.nonzero(m.any(1))[0]
+            band = np.zeros(head.shape, bool)
+            band[ys_.min():ys_.min() + max(1, int(round(ry * 0.9)))] = True
+            paint[m & band] *= kf("r_eye_lid_shadow", 0.72)
+            cover[m] = 1.0
+        lip = np.zeros(head.shape, np.uint8)
+        cv2.fillPoly(lip, [_lens(mid + MOUTH[0] * half, top + MOUTH[1] * height,
+                                 MOUTH[2] * half, MOUTH[3] * height)], 1)
+        m = lip.astype(bool) & head
+        if m.any():
+            paint[m] = target * ap
+            cover[m] = 1.0
 
     if not cover.any():
         return

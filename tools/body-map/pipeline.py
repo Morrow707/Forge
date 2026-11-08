@@ -97,7 +97,12 @@ KNOBS = {
     "r_face_variation": 0.07, # a little tone per muscle, so one belly is told from the next
     "r_face_tendon": 1.30, # the galea and periosteum: every pixel no belly claims
     "r_face_tendon_grey": 0.42, # how far that sheet is pulled toward neutral (a tendon has no blood)
-    "r_face_aperture": 0.42, # how dark the eye sockets and the mouth opening are recessed
+    "r_face_aperture": 0.42, # how dark the mouth line is
+    "r_eye_sclera": 1.55,  # the white of the eye, off the head's own colour pulled toward neutral
+    "r_eye_iris": 0.52,
+    "r_eye_iris_size": 1.55, # iris radius as a multiple of the eye opening's half-height
+    "r_eye_pupil": 0.16,
+    "r_eye_lid_shadow": 0.72, # the upper lid's shadow: without it the eye is a bead, not a socket
     "r_face_shade": 0.85,  # how much of the mannequin's own light models the drawing
     "r_face_shade_floor": 0.55,
     "r_face_shade_ceil": 1.45,

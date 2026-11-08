@@ -268,6 +268,24 @@ here then works on it unchanged and the head ends up as good as the quads. A pub
 plate was the one other path and `upload.wikimedia.org` is outside this environment's network
 policy.
 
+**THE EYE AND THE MOUTH ARE MEASURED OFF THE RENDER, not taken from the ring around them.** Scott
+on the first shipped version: "looks freaky with the wide eyes and mouth give the eyes and mouth a
+more human look, but the rest is good." Both apertures reused their muscle ring's inner radius,
+which gave a 32 x 26 px eye and a 30 x 20 px mouth -- near-circular, which is exactly what "wide
+eyes" describes. On male-front the real eye spans 45 x 15 px and the mouth about 56 x 8, so in the
+head's own frame the eye is u 0.204 x v 0.0286 and the mouth u 0.253 x v 0.015: an almond at 3:1
+and a lip line at 7:1. Both are drawn as pointed ovals rather than ellipses, because the canthi
+and the corners of a mouth come to a point and an ellipse's do not.
+
+**An eye is not a hole, it holds an eyeball**, so it is sclera, iris, pupil and an upper-lid
+shadow -- all taken off the head's own colour pulled toward neutral, so they stay in the figure's
+palette. Without the lid shadow the eye reads as a bead sitting on the face instead of something
+set into a socket. And both rings had to close around them: the oculi's hole at 0.40 was TALLER
+than the almond and left a pale band of tendon sheet above and below each eye, and the oris ring
+is very nearly solid at 0.10 now because **the lips are that muscle** -- the mouth is a line drawn
+over it, not a hole through it, and at 0.42 the hole showed as a pale lens above the lip line and
+read as a second opening.
+
 **THE FACE STAYS UNLABELED** (Scott: "just leave them unlabeled"). Nothing in `face_muscles.py`
 writes the label map: these are not a Forge group, they are not tappable, and no strength score or
 set count will ever attach to a face.
