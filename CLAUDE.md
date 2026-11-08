@@ -1986,6 +1986,136 @@ actually in; and "ignores checks after the day it is asked about" passed with a 
 reading, because one outlier does not move a median of 31. Server plus shared: ships on Render, no
 build, no camera number moves.
 
+## THE GROWTH SIGNAL HAD NO INPUT TO READ, AND THE INPUT DID NOT EXIST ANYWHERE IN FORGE
+
+Added 2026-11-08. `shared/anvil-growth.ts` shipped 2026-11-07 fully unit-tested with **no
+production caller**, and the reason was not that nobody wired it: **Forge collected no dated
+height.** `users.heightIn` is one current integer, and the only other three `height_in` columns
+(`provisional_athletes`, `archived_athletes`, `research_subjects`) are the same single value on a
+person-shaped row. A velocity needs two measurements four months apart, so there was nothing to
+differentiate. Recommended as a wait-for-counsel item and built on Scott's "Build the growth
+input."
+
+**WHY IT IS ITS OWN TABLE AND NOT A COLUMN ON `body_metrics`, WHICH IS THE DATED BODY LOG.**
+`body_metrics.weight` is `notNull`, so a height-only entry needs it nullable -- and
+`bodyweightAtLiftSql` takes "the most recent `body_metrics` entry on or before the lift's date" as
+the **strength percentile's DENOMINATOR**. A height-only row with a null weight becomes that
+most-recent entry and returns null, which silently removes that athlete's percentile: a correct
+empty state and a broken gate being the same pixels, in the one place in this app whose numbers
+are simply true. `athlete_heights` keeps that column required. An itest case pins that a recorded
+height writes no `body_metrics` row.
+
+**ONE ROW PER ANSWER, NOT PER CHANGE**, which is why it is a table and not a snapshot on the
+profile edit. A 14-year-old who measures again and is the same height has produced the most
+reassuring reading this signal can give -- a velocity near zero, "not in a spurt" -- and a
+change-triggered history throws exactly that away. The unique index on (athlete, date) makes a
+second answer the same day a **correction** (`onConflictDoUpdate`), because a typo past the range
+check poisons every velocity for up to two years otherwise.
+
+**IT DOES NOT WRITE `users.heightIn`, AND THAT IS THE LOAD-BEARING DECISION.** That column has one
+writer (signup and the profile edit) and it is what the camera's height ruler divides by:
+`HEIGHT_RULER_UNCERTAINTY` is the heaviest lever on two of the three lifts under test, and the day
+`heightIn` first reached the admin account it moved **eight numbers at once**, the rep gates
+included. A weigh-in-shaped surface writing it would be a fact with two writers (the billing
+sweep's lesson) AND would re-scale every subsequent capture from a screen that says nothing about
+the camera. An athlete who has really grown edits their profile, deliberately.
+`server/the-dated-height-never-moves-the-camera.test.ts` holds both halves: no camera file --
+discovered from `client/src/lib/*-tracking.ts`, the tracker dialogs, `pose-tracking.ts`,
+`camera-tunables-by-lift.ts` and `tracker-arbiter.ts`, never a list -- may mention the series, and
+none of the three storage methods that touch it may reference the `users` table at all.
+
+**THE RANGE CHECK IS TIGHTER THAN THE PROFILE'S, ON PURPOSE.** `updateProfileSchema` accepts
+`min(0).nullable()` because a profile height is read by rulers that already guard a non-positive
+value in six places, so a bad one degrades. A dated height is read as a DIFFERENCE over months:
+typing 7 where 70 was meant is roughly **-190 cm/yr** on a coach's page, a number that reads as a
+medical emergency and is a missing digit. 36-96 inches covers a ten-year-old at three feet and an
+eight-foot adult and refuses both halves of that typo.
+
+**ASKED MONTHLY, MEASURED OVER FOUR MONTHS, AND THE TWO NUMBERS ARE NOT IN TENSION.**
+`HEIGHT_ASK_CADENCE_DAYS` (30) was declared and read by nothing; `heightAskDue` is its caller. The
+minimum SPAN is 120 days because half-inch quantization divided by too few days is noise; the
+asking cadence is monthly because an athlete asked every four months answers roughly never, and
+monthly answers build a series whose own endpoints are far enough apart. It returns a REASON, not a
+boolean -- "never asked" and "answered three weeks ago" are the same `false` and want different
+sentences.
+
+**ONE COMPONENT FOR BOTH SURFACES.** `StandingHeightPanel` is on `/athlete/progress` beside the
+weigh-in and on the coach's athlete-detail metrics tab, differing only by `fetchUrl`, exactly as
+`BodyMetricsPanel` beside it does -- because two copies of a prompt is how a correction reaches one
+surface and not the other, the shape this file has recorded nine times. A ratchet requires
+`heightAskDue` to have **exactly one caller** in the whole client. It is deliberately NOT on any
+Anvil surface: the Anvil READS this series and must not collect it, and a body measurement typed on
+the page that shows a cognitive reading is the start of what "the camera measures the athlete and
+the athlete never types a body measurement for it" exists to refuse. **It guards a failed read**:
+with no guard a read that failed would render the ask as "never recorded" and write a second row
+over a history nobody could see.
+
+**AND WIRING IT FOUND THAT THE READING WOULD HAVE BEEN INVISIBLE -- THE REGISTRY'S OWN FAILURE,
+CAUGHT BEFORE IT SHIPPED.** `besideLine` prints the first FIVE present fields of
+`BESIDE_IN_ORDER`, and growth sat eleventh: on any morning with a check-in it was never drawn, and
+on a quiet morning with no check-in it WOULD be -- the same fact appearing or vanishing depending
+on how many unrelated fields that day happened to have. That is 270 camera records read by one
+tracker of fifteen, in a new home, plus an inconsistency that is worse than either. It is also the
+wrong SHAPE: a rate over four months holds one value across any week.
+**`BESIDE_THE_WEEK_NOT_THE_MORNING` is the third membership class**, the present-reading sibling of
+`fixableAcrossDays`, and `weekBeside` draws it **once per athlete** above the grouped blanks on the
+page and in the PDF. **NOT a constancy check over the data, which was the first design and is
+wrong**: a week in which an athlete happens to sleep 7.8 hours every night is not a week in which
+sleep stopped being news about each morning. Whether a signal CAN change between two mornings is a
+property of the signal, so it is declared with its reason like the five in
+`NOT_BESIDE_THE_MORNING`.
+
+**THE ATHLETE DOES NOT SEE THEIR OWN RATE, AND THAT IS A DECISION.** A growth velocity is a
+sentence about a child's body, and the strength-profile section already refuses those -- "every
+coaching line names a MOVEMENT, never a body part. Forge has thirteen-year-olds on it." It exists
+so a COACH does not misread a flag; the athlete typed the height and cannot act on the rate.
+`besideLine`'s filter makes that automatic and a case pins that `anvil.tsx` calls neither
+`weekBeside` nor names the signal.
+
+**A REAL DEFECT IN THE COLUMN RATCHET, FOUND BY THE NEW TABLE TRIPPING IT.**
+`the-anvil-reads-everything-forge-collects.test.ts` discovers every column of every signal table
+and skipped constraint declarations by **the key NAME ending in `Idx`** -- this repo's own
+enumerate-the-accepted-forms trap, under a comment claiming indexes were classified by builder. My
+unique index is keyed `athleteDateUnique`, an ordinary name, so a correct schema addition was
+reported as an unclassified COLUMN; and the same filter would have **silently skipped a real column
+somebody called `lastIdx`**, which is the half that does not announce itself. It skips on the
+BUILDER now (`index`, `uniqueIndex`, `primaryKey`, `foreignKey`, `unique`, `check`), which the
+regex was already capturing and throwing away. Proven in the dangerous direction: a bogus
+`sneakyIdx: real(...)` on `body_metrics` is now caught where it used to pass.
+
+**ONE ABSENCE FOR THE MODULE'S FOUR REASONS.** `needs_two_dated_heights` is a new `AnvilAbsence`,
+and the four-way detail stays on `growthVelocity` for anybody who wants it: what a reader can DO is
+identical in every case -- record a standing height -- so the fixable line names the SPAN and is a
+next action rather than a taxonomy. Deliberately not `no_data`, which reads as "they did not do the
+thing today" about something months long. It is in `FIXABLE`, so `fixableAcrossDays` groups it once
+per athlete rather than printing it under all seven mornings (the wall-of-amber lesson, same day).
+
+**What was measured:** `npx tsc --noEmit` clean; 465 files / 5473 passed, the delta exactly the 19
+new cases, and the one failure is the pre-existing shallow-clone guard in
+`live-document-migration.test.ts`; `npm run build` green; both CI audit gates 0 at or above
+moderate; the reconciler proven on a fresh database and idempotent on a second run, with the FK
+drift check reading **227 declared / 227 present**; 10 itest cases on real Postgres
+(`a-dated-height-reaches-the-anvil.itest.ts`) plus the three neighbouring Anvil and strength-profile
+itests, 67 cases, on a database of their own. **Eleven mutations, ten caught by the right case**:
+a camera file reading the series, a height method touching `users`, the signal declared as a slow
+input, growth added to `BESIDE_IN_ORDER` (two cases), a second prompt implementation, the athlete
+page drawing it, the inches-to-centimetres conversion, the upsert becoming a plain insert, the
+on-or-before filter, and the coach route's roster check. **Two survived first drafts and both were
+weak fixtures:** `besideLine`'s week filter is belt where the disjointness case is braces (removing
+the filter changes nothing observable, because `besideLine` walks a list growth is not in -- said in
+the file rather than implied), and the on-or-before filter could not be broken by a SINGLE-day range
+because the query's own `lte(date, to)` already excludes a later answer, so that case is a real
+week now. **The comment strip is DEFENSIVE today and the file says so** rather than claiming
+coverage: removing it leaves all eighteen other cases green, because no scanned file writes a
+forbidden token in a comment.
+
+**STILL OPEN, named so it is not mistaken for done:** no minor may take the Anvil until counsel
+answers questions 15, 17, 18 and 21, so the one population this signal exists for cannot yet
+produce a series -- the input is built and its reader is adults-only. An athlete who never opens
+`/athlete/progress` and whose coach never opens the metrics tab is never asked. `maturityStatus`
+still returns its stated reason and the Moore et al. 2015 variant is still unimplemented on
+purpose. Server plus three client files: `verify_build`, and it batches -- no camera number moves.
+
 ## THE DEVICE-APPROVAL STORM: A GUARD WHOSE LIFETIME WAS THE MOUNT, NOT THE TOKEN
 
 Added 2026-11-08, clearing the item queued on 2026-10-29. After approving a new device from the

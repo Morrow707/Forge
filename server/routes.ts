@@ -224,6 +224,7 @@ import {
   redeemCodeInputSchema,
   updateFreeAgentBillingSchema,
   createBodyMetricSchema,
+  recordAthleteHeightSchema,
   createAnnotationSchema,
   testingTrendsQuerySchema,
   insertGoniometerReadingSchema,
@@ -8155,6 +8156,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // The coach's half of the dated heights, same roster-membership gate as the weigh-in above --
+  // a height is measured on a testing day with a coach holding the tape far more often than it is
+  // typed at home, which is the whole reason this pair exists. No delete here on purpose: a
+  // correction is an upsert on the same date, and removing a row the athlete recorded is the
+  // athlete's own act, exactly as it is for a weigh-in.
+  app.get(
+    "/api/coach/roster/:athleteId/heights",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      res.json(await storage.getAthleteHeights(athleteId));
+    },
+  );
+
+  app.post(
+    "/api/coach/roster/:athleteId/heights",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const parsed = recordAthleteHeightSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message });
+      }
+      const row = await storage.recordAthleteHeight(athleteId, parsed.data);
+      res.status(201).json(row);
+    },
+  );
+
   // Snapshots are written automatically whenever a coach changes a testing
   // field via the profile-edit routes above -- this is read-only.
   app.get(
@@ -12439,6 +12474,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/athlete/body-metrics/:id", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     await storage.deleteBodyMetric(user.id, Number(req.params.id));
+    res.status(204).end();
+  });
+
+  // DATED STANDING HEIGHTS. The same trio as body-metrics above and the same gates, because it is
+  // the same act -- a body measurement the athlete records about themselves -- and it is a separate
+  // table for the reason stated on `athleteHeights` in shared/schema.ts.
+  //
+  // NONE OF THESE WRITES `users.heightIn`. That column has one writer (the profile edit, and
+  // signup) and it is what the camera's height ruler divides by; a weigh-in-shaped surface moving
+  // it would both give a fact a second writer and shift every subsequent capture's scale with
+  // nothing on screen saying so. An athlete who has grown edits their profile.
+  app.get("/api/athlete/heights", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    res.json(await storage.getAthleteHeights(user.id));
+  });
+
+  app.post("/api/athlete/heights", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = recordAthleteHeightSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    const row = await storage.recordAthleteHeight(user.id, parsed.data);
+    res.status(201).json(row);
+  });
+
+  app.delete("/api/athlete/heights/:id", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    await storage.deleteAthleteHeight(user.id, Number(req.params.id));
     res.status(204).end();
   });
 

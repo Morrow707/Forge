@@ -149,6 +149,15 @@ export const ANVIL_SIGNAL_TABLES: Record<string, string> = {
     "Whether the seat is PARKED. An off-season hold stops the training that every slow-channel " +
     "signal is computed from, by design, so a parked athlete's channel collapses for a reason that " +
     "is not fatigue. Context, never arithmetic.",
+  athlete_heights:
+    "Dated standing heights, and the one table here that was CREATED for the Anvil rather than " +
+    "borrowed from a feature that already wrote it. The exclusion it serves is a growth spurt, " +
+    "which moves every number this drill reads in the direction a problem would -- so without it a " +
+    "14-year-old in a spurt is flagged every week for a reason no amount of rest fixes. Forge held " +
+    "no dated height anywhere: users.height_in and the three other height_in columns are each one " +
+    "current value on a person-shaped row, so there was nothing to differentiate. It still obeys " +
+    "rule 3 of this file -- the Anvil READS it and the write paths are the athlete's and their " +
+    "coach's, the same pair the weigh-in beside it has.",
 };
 
 /**
@@ -890,6 +899,23 @@ export const ANVIL_SIGNALS = [
     populated: "when_logged",
     why: "Recovery substrate. Carried beside calories because the two fall together in an under-eating athlete and separately in a badly-composed diet, and the distinction changes the advice.",
   },
+  {
+    id: "growth_velocity",
+    table: "athlete_heights",
+    column: "derived: heightIn over dated rows",
+    channel: "exclusion",
+    kind: "derived",
+    unit: "cm/yr",
+    populated: "when_logged",
+    why:
+      "Centimetres per year from the athlete's own dated heights, and an EXCLUSION rather than a " +
+      "context signal for the reason this file separates the two: a spurt does not explain a " +
+      "finding about training, it says the finding is not about training. Coordination worsens " +
+      "while limb lengths change faster than the control of them, which is the same direction " +
+      "fatigue moves every channel -- so a flag with a spurt beside it is a growing adolescent, " +
+      "not a deload. Nothing here is a threshold: the velocity is reported with the span it was " +
+      "measured over, because calling one 'rapid' needs reference data this repo does not hold.",
+  },
 ] as const satisfies readonly AnvilSignal[];
 
 /**
@@ -982,6 +1008,13 @@ export const NOT_AN_ANVIL_SIGNAL: Record<string, string> = {
     "Why the session closed. An idle-swept session is a less reliable duration than a completed one, which is worth knowing and is not worth a channel reading until somebody has measured how often it happens.",
   "cara_sessions.loggedByCoachId": "Who logged it. Provenance.",
   "cara_sessions.note": NON_SIGNAL_REASON.FREE_TEXT,
+  "athlete_heights.id": NON_SIGNAL_REASON.ROW_ID,
+  "athlete_heights.athleteId": NON_SIGNAL_REASON.ATHLETE_KEY,
+  "athlete_heights.date":
+    "Read by the growth signal as one end of the span, which is the denominator of the velocity -- so it is half the computation rather than merely the time index, and it is still not a signal of its own.",
+  "athlete_heights.heightIn":
+    "Read by the growth signal as the series it differentiates. A single standing height is a fact about the person (users.height_in is already classified that way) and only the RATE is news about a week.",
+  "athlete_heights.createdAt": NON_SIGNAL_REASON.AUDIT_TIMESTAMP,
   "imported_testing_data.id": NON_SIGNAL_REASON.ROW_ID,
   "imported_testing_data.athleteId": NON_SIGNAL_REASON.ATHLETE_KEY,
   "imported_testing_data.date": NON_SIGNAL_REASON.TIME_INDEX,
@@ -1228,7 +1261,19 @@ export type AnvilAbsence =
   /** The athlete has opted out of camera tracking, so no capture exists to read. */
   | "tracking_opted_out"
   /** The capture exists and its own diagnostics say it is not comparable (a different device, a refused take). */
-  | "capture_not_comparable";
+  | "capture_not_comparable"
+  /**
+   * A velocity needs two dated heights far enough apart, and this athlete's series does not have
+   * them yet -- none on file, only one, two inside four months, or nothing inside the last two
+   * years.
+   *
+   * ONE MEMBER FOR ALL FOUR OF THE GROWTH MODULE'S OWN ABSENCES, because what a reader can DO is
+   * identical in every case: record a standing height. The four-way detail stays available on
+   * `growthVelocity` for anybody who wants it; collapsing it HERE is what keeps the fixable line a
+   * statement of the next action rather than a taxonomy. It is deliberately not `no_data`: that
+   * reads as "this athlete did not do the thing today", and the thing here is months long.
+   */
+  | "needs_two_dated_heights";
 
 /**
  * One signal's value on one athlete-day: a number, a list, a boolean, or a stated absence. Never

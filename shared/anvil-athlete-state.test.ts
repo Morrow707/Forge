@@ -75,6 +75,7 @@ function base(over: Partial<AnvilStateInput> = {}): AnvilStateInput {
     testing: null,
     nutrition: null,
     bodyMassLbs: 186,
+    datedHeightsCm: [],
     openInjuries: [],
     restrictedJointAngleDeg: null,
     caraTrainingMinutes: 62,

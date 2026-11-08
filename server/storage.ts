@@ -74,6 +74,7 @@ import {
   pushSubscriptions,
   teamPosts,
   bodyMetrics,
+  athleteHeights,
   testingResults,
   goniometerReadings,
   goniometerBaselines,
@@ -274,6 +275,7 @@ import type {
   CreateSkillDayCommentInput,
   CreateExerciseReportInput,
   CreateBodyMetricInput,
+  RecordAthleteHeightInput,
   ClaimProvisionalAthleteInput,
   TestingMetric,
   InsertGoniometerReading,
@@ -8649,6 +8651,47 @@ export const storage = {
     await db
       .delete(bodyMetrics)
       .where(and(eq(bodyMetrics.id, id), eq(bodyMetrics.athleteId, athleteId)));
+  },
+
+  // ---------- Dated standing heights (the Anvil's growth signal's only input) ----------
+  // Its own table rather than a column on body_metrics, because weight there is NOT NULL and the
+  // strength percentile's denominator reads the most recent body_metrics row: see the comment on
+  // `athleteHeights` in shared/schema.ts. These three mirror the body-metrics trio above exactly,
+  // including the athlete-scoped delete.
+  async getAthleteHeights(athleteId: number) {
+    return db.query.athleteHeights.findMany({
+      where: eq(athleteHeights.athleteId, athleteId),
+      orderBy: asc(athleteHeights.date),
+    });
+  },
+
+  /**
+   * One row per athlete per DAY: a second answer on the same day is a correction, not a duplicate.
+   *
+   * Which is why this is an upsert on the unique index rather than a plain insert. An athlete who
+   * mistypes 68 for 58 and immediately fixes it must not leave both in the series -- the growth
+   * module takes the oldest row inside its window as one endpoint, so a bad row poisons every
+   * velocity for up to two years (MAX_GROWTH_SPAN_DAYS), which is the one error this surface can
+   * make that the range check cannot catch.
+   */
+  async recordAthleteHeight(athleteId: number, input: RecordAthleteHeightInput) {
+    const [row] = await db
+      .insert(athleteHeights)
+      .values({ athleteId, date: input.date, heightIn: input.heightIn })
+      .onConflictDoUpdate({
+        target: [athleteHeights.athleteId, athleteHeights.date],
+        set: { heightIn: input.heightIn },
+      })
+      .returning();
+    return row;
+  },
+
+  // Scoped to athleteId, same reason as deleteBodyMetric: the way out of a typo that passed the
+  // range check, which otherwise sits in the series until it ages out of the window.
+  async deleteAthleteHeight(athleteId: number, id: number) {
+    await db
+      .delete(athleteHeights)
+      .where(and(eq(athleteHeights.id, id), eq(athleteHeights.athleteId, athleteId)));
   },
 
   // ---------- Nutrition targets ----------

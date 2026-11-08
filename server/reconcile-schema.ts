@@ -3837,6 +3837,29 @@ ALTER TABLE "anvil_checks" ADD COLUMN IF NOT EXISTS "timer_resolution_ms" real;
 -- the week, the coach's column. Never a scan across athletes.
 CREATE INDEX IF NOT EXISTS "anvil_checks_athlete_date_idx"
   ON "anvil_checks" ("athlete_id", "date");
+
+-- DATED STANDING HEIGHTS, which the Anvil's growth signal is computed from and which Forge did
+-- not collect: users.height_in is one current value, so there was no series to differentiate.
+-- (No backticks anywhere in this file: the whole of it is one template literal.)
+--
+-- real, not integer like users.height_in, because the growth module's floor is set by half-inch
+-- quantization and an integer column would double it.
+--
+-- The UNIQUE index is what makes a second answer on one day a correction instead of a duplicate.
+-- It is created separately from the table for the reason stated above: a constraint written inside
+-- CREATE TABLE IF NOT EXISTS never reaches a database that already has the table, which is the
+-- class server/fk-drift-job.ts reports. This table is new everywhere today, so both spellings do
+-- the same thing now and only the separate one will still be true next year.
+CREATE TABLE IF NOT EXISTS "athlete_heights" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "height_in" real NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "athlete_heights_athlete_idx" ON "athlete_heights" ("athlete_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "athlete_heights_athlete_date_unique"
+  ON "athlete_heights" ("athlete_id", "date");
 `;
 
 async function main() {

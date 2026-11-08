@@ -165,6 +165,7 @@ function fullDay(overrides: Partial<AnvilStateInput> = {}): AnvilStateInput {
     testing: null,
     nutrition: { caloriesKcal: 2400, proteinG: 150, ironMg: 11, vitaminB12Mcg: 3, vitaminDMcg: 12 },
     bodyMassLbs: 205,
+    datedHeightsCm: [],
     openInjuries: ["left_knee"],
     restrictedJointAngleDeg: null,
     caraTrainingMinutes: 62,

@@ -8,6 +8,7 @@ import {
   type AnvilReading,
   type AnvilSignalId,
 } from "./anvil-inputs";
+import { growthVelocity, type DatedHeight } from "./anvil-growth";
 
 /**
  * THE ONE PLACE FORGE'S COLUMNS BECOME ANVIL INPUTS.
@@ -143,6 +144,18 @@ export type AnvilStateInput = {
   nutrition: NutritionTotals | null;
   /** Most recent body-mass weigh-in on or before `date`, normalised to pounds by the caller. */
   bodyMassLbs: number | null;
+  /**
+   * Every dated standing height on or before `date`, in CENTIMETRES, oldest first or in any order
+   * -- `growthVelocity` sorts.
+   *
+   * THE WHOLE SERIES, not the latest two, and not a pre-computed velocity. The module picks the
+   * OLDEST row still inside its two-year window as one endpoint precisely so the span is as long
+   * as the window allows and the half-inch quantization is divided by as many days as possible;
+   * handing it two rows would compute a four-week velocity whenever somebody answered twice in a
+   * month. Centimetres because that is the unit the module's constants are reasoned in, and the
+   * conversion belongs with the query that knows the column is inches.
+   */
+  datedHeightsCm: DatedHeight[];
   /** Open injuries on `date`: body parts, which is all a context signal needs. */
   openInjuries: string[];
   /** Any goniometer reading classified as restricted on or before `date`, as a degree value. */
@@ -366,6 +379,11 @@ export function assembleAnvilState(input: AnvilStateInput): AnvilAthleteState {
     iron_mg: reading(n?.ironMg, "no_data"),
     vitamin_b12_mcg: reading(n?.vitaminB12Mcg, "no_data"),
     vitamin_d_mcg: reading(n?.vitaminDMcg, "no_data"),
+    // THE RATE, NEVER THE HEIGHT. `growthVelocity` returns a velocity or one of four reasons, and
+    // all four collapse to one absence here because the action a reader takes is the same for each
+    // -- see `needs_two_dated_heights` in anvil-inputs.ts. The four-way detail is still on the
+    // module for a caller that wants to say which.
+    growth_velocity: growthReading(input.datedHeightsCm),
   };
 
   // A SIGNAL DECLARED AND NOT ASSEMBLED IS A COMPILER ERROR, not a blank. `readings` above is
@@ -382,6 +400,13 @@ export function assembleAnvilState(input: AnvilStateInput): AnvilAthleteState {
     "not_a_native_capture",
     "tracking_opted_out",
     "capture_not_comparable",
+    // FIXABLE, and the only one here whose remedy takes MONTHS rather than a setting. It still
+    // belongs: what makes an absence fixable is that somebody can act on it, and "record a
+    // standing height" is an action where "they did not train today" is not. It is also a fact
+    // about the ACCOUNT rather than about the day -- true on every morning in a week by
+    // construction -- so `fixableAcrossDays` groups it once per athlete instead of printing it
+    // under all seven, which is the wall-of-amber lesson from 2026-11-08.
+    "needs_two_dated_heights",
   ];
   const fixableAbsences = Object.entries(readings)
     .filter(([, r]) => "absent" in r && FIXABLE.includes(r.absent))
@@ -397,6 +422,17 @@ export function assembleAnvilState(input: AnvilStateInput): AnvilAthleteState {
  * and counting those as failures would make a day of untracked drills read as a day of collapsing
  * technique -- which is the inversion this whole file is built to avoid.
  */
+/**
+ * The growth velocity as a reading, or the one absence that covers every reason it is missing.
+ *
+ * Exported so it can be driven directly: a scan over this mapping can only see the words it is
+ * written with, never which way it goes, which is the `form-check-destination.ts` lesson.
+ */
+export function growthReading(heightsCm: readonly DatedHeight[]): AnvilReading<number> {
+  const v = growthVelocity(heightsCm);
+  return "absent" in v ? { absent: "needs_two_dated_heights" } : { value: v.cmPerYear };
+}
+
 export function sequencedShare(skills: readonly SkillRow[]): number | null {
   const judged = skills.filter((s) => s.wellSequenced != null);
   if (judged.length === 0) return null;

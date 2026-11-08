@@ -82,6 +82,42 @@ export function growthVelocity(heights: readonly DatedHeight[]): GrowthVelocity 
 }
 
 /**
+ * WHETHER TO ASK FOR A HEIGHT TODAY, which is what `HEIGHT_ASK_CADENCE_DAYS` was declared for and
+ * what nothing read until the input was built.
+ *
+ * MONTHLY ASKING, FOUR-MONTHLY MEASURING, and the two numbers are not in tension. The minimum SPAN
+ * exists because quantization divided by too few days is noise; the asking cadence exists because
+ * a person answers when they are put in front of the question, and an athlete asked every four
+ * months answers roughly never. Asking monthly builds a series whose own endpoints are then far
+ * enough apart.
+ *
+ * IT RETURNS A REASON AND NOT A BARE BOOLEAN, for the same reason everything else here does: "this
+ * athlete has never been asked" and "they answered three weeks ago" produce the same `false` on a
+ * boolean and want different sentences on a screen.
+ *
+ * `today` is passed in and never read from the clock, so a test states the day rather than
+ * depending on when it runs -- the same rule `anvil-slow-channel.ts` follows.
+ */
+export type HeightAsk =
+  | { readonly ask: true; readonly because: "never_recorded" | "due" }
+  | { readonly ask: false; readonly answeredOn: string; readonly nextDueOn: string };
+
+export function heightAskDue(heights: readonly DatedHeight[], today: string): HeightAsk {
+  const dated = heights
+    .filter((h) => Number.isFinite(h.cm) && h.cm > 0 && !Number.isNaN(Date.parse(h.onIso)))
+    .map((h) => h.onIso)
+    .sort();
+  const latest = dated[dated.length - 1];
+  if (latest == null) return { ask: true, because: "never_recorded" };
+  const nextDue = Date.parse(latest) + HEIGHT_ASK_CADENCE_DAYS * DAY_MS;
+  // A STRING COMPARISON WOULD BE WRONG HERE and a date comparison is not: the cadence is a count
+  // of days, so the next due day has to be computed rather than compared lexicographically. The
+  // ISO slice back out is what keeps the answer renderable.
+  if (Date.parse(today) >= nextDue) return { ask: true, because: "due" };
+  return { ask: false, answeredOn: latest, nextDueOn: new Date(nextDue).toISOString().slice(0, 10) };
+}
+
+/**
  * MATURITY STATUS: NOT COMPUTABLE FROM WHAT FORGE COLLECTS, STATED RATHER THAN APPROXIMATED.
  *
  * Decision-list item 10 asked for growth rate AND maturity status. The rate is above. The status

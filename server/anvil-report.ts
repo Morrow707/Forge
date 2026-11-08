@@ -18,6 +18,8 @@ import {
   besideLine,
   coverageLine,
   fixableAcrossDays,
+  weekBeside,
+  formatBeside,
   fixableLine,
   type AnvilDayContext,
 } from "@shared/anvil-day-context";
@@ -336,6 +338,20 @@ export function buildAnvilWeekPdf(data: {
             .fillColor("#777777")
             .text(`read ${coverageLine(day.context)}`, { indent: 22 });
         }
+      }
+
+      // WHAT IS TRUE OF THE WHOLE WEEK rather than of one morning, once per athlete and ABOVE the
+      // blanks, because a reading is worth more to a reader than a gap. A growth rate is the only
+      // one today and it is the reason this exists: at a span of four months it holds one value
+      // across any week, and it was being drawn eleventh on a line that prints five.
+      for (const b of weekBeside(
+        entry.week.days.map((d) => d.context).filter((c): c is AnvilDayContext => c != null),
+      )) {
+        doc
+          .font("Helvetica")
+          .fontSize(8)
+          .fillColor("#555555")
+          .text(`this week:  ${formatBeside(b)}`, { indent: 10, width: width - 10 });
       }
 
       // A BLANK SOMEBODY CAN CLOSE SAYS SO -- ONCE PER ATHLETE. Under each morning it printed the

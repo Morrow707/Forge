@@ -58,6 +58,32 @@ export const NOT_BESIDE_THE_MORNING: Record<string, string> = {
   height_in: "Typed once by the athlete. The camera's rulers read it; a coach reading a morning does not.",
 };
 
+/**
+ * SIGNALS THAT ARE NEWS ABOUT THE WEEK AND NOT ABOUT A MORNING: said once per athlete, never on a
+ * day's line.
+ *
+ * The third membership class, and it exists because wiring the first one found the gap.
+ * `growth_velocity` is computed over a span of at least four months, so its value is identical on
+ * every morning of any week by construction -- and `besideLine` prints the first FIVE present
+ * fields, where it sits eleventh. On an ordinary day with a check-in it was therefore never drawn
+ * at all, and on a quiet day with no check-in it WOULD be: the same fact appearing or vanishing
+ * depending on how many unrelated fields that morning happened to have. Invisible on the days that
+ * matter is the camera registry's own failure -- 270 records shipped and read by one tracker of
+ * fifteen -- and inconsistent is worse than either.
+ *
+ * NOT a constancy check over the data, which was the first design and is wrong: a week in which an
+ * athlete happens to sleep 7.8 hours every night is not a week in which sleep stopped being news
+ * about each morning. Whether a signal CAN change between two mornings is a property of the
+ * signal, so it is declared, with its reason, exactly as the five above are.
+ *
+ * It is still a PRESENT reading and still carried in `beside` -- this decides only where it is
+ * drawn. `weekBeside` is the reader.
+ */
+export const BESIDE_THE_WEEK_NOT_THE_MORNING: Record<string, string> = {
+  growth_velocity:
+    "Centimetres per year over a span of at least four months, so it holds the same value on every morning of a week. Drawn once per athlete beside the blanks, where a reader meets it instead of losing it off the end of a five-field line.",
+};
+
 /** One present reading, ready to render. */
 export type BesideTheMorning = {
   signalId: string;
@@ -119,6 +145,12 @@ export const ABSENCE_REMEDY: Partial<Record<AnvilAbsence, string>> = {
   // record" says the same thing and carries none of that.
   capture_not_comparable:
     "A capture exists and its own record says it cannot be compared with this athlete's others -- a different phone, or a take the camera pipeline did not trust.",
+  // THE SENTENCE NAMES THE SPAN, which is what makes one remedy honest for all four of the growth
+  // module's reasons. "No height on file" and "two heights measured a month apart" need the same
+  // next action and differ only in when it pays off, so a reader who is told the span can work out
+  // which case they are in; a four-way taxonomy here would say less and read as an error list.
+  needs_two_dated_heights:
+    "A growth rate needs two standing heights measured at least four months apart. Recording one today is what starts it.",
 };
 
 /**
@@ -186,7 +218,13 @@ export const BESIDE_IN_ORDER: readonly string[] = [
 ];
 
 export function besideLine(context: AnvilDayContext, limit = 5): string {
-  const byId = new Map(context.beside.map((b) => [b.signalId, b]));
+  const byId = new Map(
+    // A WEEK-SHAPED SIGNAL NEVER COMPETES FOR ONE OF THE FIVE SLOTS. Filtered here rather than
+    // left out of BESIDE_IN_ORDER, so that a signal added to that order and to the week map is
+    // drawn once rather than twice -- the ordering list says WHERE a day field goes and this says
+    // whether it is a day field at all.
+    context.beside.filter((b) => !(b.signalId in BESIDE_THE_WEEK_NOT_THE_MORNING)).map((b) => [b.signalId, b]),
+  );
   const bits: string[] = [];
   for (const id of BESIDE_IN_ORDER) {
     if (bits.length >= limit) break;
@@ -279,6 +317,27 @@ export function fixableAcrossDays(contexts: readonly AnvilDayContext[]): Fixable
     labels: [...entry.labels],
     dates: entry.dates.size === read.length ? null : [...entry.dates].sort(),
   }));
+}
+
+/**
+ * THE WEEK-SHAPED READINGS, ONCE PER ATHLETE, in the order the declaration lists them.
+ *
+ * The present-reading sibling of `fixableAcrossDays`: that one groups a blank somebody can close,
+ * this one groups a value that cannot change between two mornings. Reads the LAST day that carried
+ * each, so a height recorded mid-window is reflected rather than averaged away -- the value is a
+ * rate over months and the newest one is the current answer.
+ */
+export function weekBeside(contexts: readonly AnvilDayContext[]): BesideTheMorning[] {
+  const latest = new Map<string, BesideTheMorning>();
+  for (const context of contexts.filter((c) => c != null)) {
+    for (const b of context.beside) {
+      if (!(b.signalId in BESIDE_THE_WEEK_NOT_THE_MORNING)) continue;
+      latest.set(b.signalId, b);
+    }
+  }
+  return Object.keys(BESIDE_THE_WEEK_NOT_THE_MORNING)
+    .map((id) => latest.get(id))
+    .filter((b): b is BesideTheMorning => b != null);
 }
 
 /** One line: what is blank, on which days, and what closes it. */

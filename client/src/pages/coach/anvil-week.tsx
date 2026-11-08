@@ -11,6 +11,8 @@ import {
   besideLine,
   fixableAcrossDays,
   fixableLine,
+  weekBeside,
+  formatBeside,
   type AnvilDayContext,
 } from "@shared/anvil-day-context";
 import type { AnvilReading } from "@shared/anvil-reading";
@@ -155,6 +157,21 @@ export default function CoachAnvilWeek() {
               {entry.week.days.length === 0 && (
                 <p className="text-sm text-muted-foreground">No check in this window.</p>
               )}
+              {/* WHAT IS TRUE OF THE WHOLE WEEK, once per athlete and above the blanks. A growth
+                  rate spans four months at least, so it holds one value across any week -- and on
+                  a day's line it sat eleventh where five are drawn, so it was invisible on every
+                  morning that had a check-in beside it. */}
+              {weekBeside(
+                entry.week.days.map((d) => d.context).filter((c): c is AnvilDayContext => c != null),
+              ).map((b) => (
+                <p
+                  key={b.signalId}
+                  className="pt-2 text-xs text-muted-foreground"
+                  data-testid={`anvil-week-beside-${entry.athleteId}-${b.signalId}`}
+                >
+                  This week: {formatBeside(b)}
+                </p>
+              ))}
               {/* A BLANK SOMEBODY CAN CLOSE SAYS SO -- ONCE PER ATHLETE, not once per morning.
                   Drawn under each day it put the same five sentences under all seven, which reads
                   as a broken page rather than as information. `fixableAcrossDays` names the days

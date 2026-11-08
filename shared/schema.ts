@@ -3432,6 +3432,63 @@ export const bodyMetrics = pgTable(
   }),
 );
 
+/**
+ * DATED STANDING HEIGHTS -- ITS OWN TABLE, AND IT IS NOT `body_metrics`.
+ *
+ * The Anvil's growth signal (`shared/anvil-growth.ts`) needs two heights at least four months
+ * apart. Forge held none: `users.heightIn` is one current integer and the other three `height_in`
+ * columns (`provisional_athletes`, `archived_athletes`, `research_subjects`) are the same single
+ * value on a person-shaped row. So the input had to be collected before the signal could be read,
+ * which is why this table lands with it.
+ *
+ * **WHY NOT A COLUMN ON `body_metrics`, WHICH IS THE DATED BODY LOG.** Because `weight` there is
+ * `notNull`, so a height-only entry would need it nullable -- and `bodyweightAtLiftSql` takes "the
+ * most recent `body_metrics` entry on or before the lift's date" as the strength percentile's
+ * DENOMINATOR. A height-only row with a null weight becomes that most-recent entry and returns
+ * null, which silently removes that athlete's percentile: a correct empty state and a broken gate
+ * being the same pixels, in the one place in this app whose numbers are simply true. Keeping the
+ * two tables apart keeps that column required.
+ *
+ * **IT DOES NOT WRITE `users.heightIn`, AND THAT IS THE LOAD-BEARING DECISION.** That column is
+ * written by the profile edit and by signup, and it is what the camera's height ruler divides by
+ * -- `HEIGHT_RULER_UNCERTAINTY` is the heaviest lever on two of the three lifts under test, and
+ * the day `heightIn` first arrived on the admin account it moved eight numbers at once. A
+ * weigh-in-shaped surface writing it would be a second writer of a fact that already has one (the
+ * billing sweep's whole lesson) AND would move every subsequent capture's scale with nothing on
+ * screen to say so. An athlete who has really grown edits their profile, deliberately, which is
+ * the one writer. `server/the-dated-height-never-moves-the-camera.test.ts` holds both halves.
+ *
+ * ONE ROW PER ANSWER, NOT PER CHANGE, which is why this is a table and not a snapshot on the
+ * profile edit. A 14-year-old who measures again and is the same height has produced the most
+ * reassuring reading this signal can give -- a velocity near zero, "not in a spurt" -- and a
+ * change-triggered history throws exactly that away. The unique index makes a second answer on
+ * one day a CORRECTION rather than a duplicate.
+ *
+ * `real` rather than `integer` (which is what `users.heightIn` is) because the growth module
+ * reasons about half-inch quantization explicitly: at the nearest half-inch, 1.3 cm of rounding
+ * over 120 days is already about 4 cm/yr of apparent velocity, and an integer column would double
+ * that floor for no reason.
+ */
+export const athleteHeights = pgTable(
+  "athlete_heights",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The day the height was measured, which is the only thing a velocity is computed over. */
+    date: date("date").notNull(),
+    /** Inches, as the athlete types them. Converted to centimetres by the Anvil's own reader. */
+    heightIn: real("height_in").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteIdx: index("athlete_heights_athlete_idx").on(table.athleteId),
+    /** One answer per athlete per day: a second one the same day corrects the first. */
+    athleteDateUnique: uniqueIndex("athlete_heights_athlete_date_unique").on(table.athleteId, table.date),
+  }),
+);
+
 // One row per athlete, coach-set (or self-set for a Free Agent with no
 // coach -- see updateNutritionTargetsSchema/the athlete nutrition routes)
 // macro and micronutrient targets. Deliberately NOT AI-generated -- the AI
@@ -10910,6 +10967,33 @@ export const createBodyMetricSchema = z.object({
 });
 export type CreateBodyMetricInput = z.infer<typeof createBodyMetricSchema>;
 export type BodyMetric = typeof bodyMetrics.$inferSelect;
+
+/**
+ * A DATED STANDING HEIGHT. Range-checked where `users.heightIn` is not, and that asymmetry is
+ * deliberate.
+ *
+ * `updateProfileSchema` accepts `min(0).nullable()` because a profile height is read by rulers
+ * that already guard a non-positive value in six places, so a bad one degrades. A dated height is
+ * read as a DIFFERENCE over months: typing 7 where 70 was meant turns into roughly -190 cm/yr on
+ * a coach's page -- a number that reads as a medical emergency and is a missing digit. 36 to 96
+ * inches covers every athlete Forge will ever hold (a ten-year-old at three feet, an eight-foot
+ * adult) and refuses both halves of that typo.
+ *
+ * ONE DAY OF FUTURE TOLERANCE, not zero. The date is the athlete's own local day and the server's
+ * is UTC, so an athlete at UTC+13 typing today is legitimately a day ahead -- the same reason the
+ * Anvil has the client decide the check's calendar day. Past that it is a mistyped year, which
+ * would sit unread (every Anvil query is `lte(date, to)`) until it silently became the series'
+ * endpoint a year later.
+ */
+export const recordAthleteHeightSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+  heightIn: z.coerce
+    .number()
+    .min(36, "That height looks too small -- enter it in inches")
+    .max(96, "That height looks too large -- enter it in inches"),
+});
+export type RecordAthleteHeightInput = z.infer<typeof recordAthleteHeightSchema>;
+export type AthleteHeight = typeof athleteHeights.$inferSelect;
 
 export type TestingResult = typeof testingResults.$inferSelect;
 

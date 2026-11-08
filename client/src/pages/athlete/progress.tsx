@@ -47,6 +47,7 @@ import { GoalsPanel } from "@/components/goals-panel";
 import { VideoReviewList } from "@/components/video-review-list";
 import { AskCoachForReview } from "@/components/ask-coach-for-review";
 import { StrengthProfileCard } from "@/components/strength-profile-card";
+import { StandingHeightPanel } from "@/components/standing-height-panel";
 import { VideoWorkbenchCard } from "@/components/video-workbench";
 import { ReadFailed } from "@/components/read-failed";
 import { WeaknessReportPanel } from "@/components/weakness-report-panel";
@@ -652,6 +653,12 @@ export default function AthleteProgress() {
                   Log Entry
                 </Button>
               </form>
+
+              {/* The same component the coach's metrics tab uses, so the prompt and the cadence
+                  cannot diverge between the two surfaces that type a body measurement. */}
+              <div className="border-t pt-4">
+                <StandingHeightPanel fetchUrl="/api/athlete/heights" />
+              </div>
 
               {chartData.length >= 2 && (
                 <div className="h-56">

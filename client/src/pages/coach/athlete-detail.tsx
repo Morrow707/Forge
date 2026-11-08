@@ -19,6 +19,7 @@ import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
 import { AthleteSwitcher } from "@/components/athlete-switcher";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { BodyMetricsPanel } from "@/components/body-metrics-panel";
+import { StandingHeightPanel } from "@/components/standing-height-panel";
 import { ImportedTestingDataPanel } from "@/components/imported-testing-data-panel";
 import { TestingHistoryPanel } from "@/components/testing-history-panel";
 import { GoniometerPanel } from "@/components/goniometer-panel";
@@ -636,6 +637,16 @@ export default function AthleteDetailPage() {
                       athleteName={athlete.name}
                       fetchUrl={`/api/coach/roster/${athlete.id}/body-metrics`}
                     />
+                    {/* Height sits with the weigh-in because that is the act it rides along with:
+                        a testing day with a coach holding the tape is where it is measured far
+                        more often than it is typed at home. Same component as the athlete's own
+                        page, so the two prompts cannot drift apart. */}
+                    <div className="mt-6 border-t pt-4">
+                      <StandingHeightPanel
+                        athleteName={athlete.name}
+                        fetchUrl={`/api/coach/roster/${athlete.id}/heights`}
+                      />
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>

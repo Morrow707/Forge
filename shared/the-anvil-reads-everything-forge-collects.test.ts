@@ -109,7 +109,7 @@ function tablesInSchema(): Set<string> {
  * and for the second reason as much as the first: a fixed window also PASSES for a match that sits
  * inside it and belongs to the table below.
  */
-function columnsOf(table: string): string[] {
+function columnsOf(table: string): { name: string; builder: string }[] {
   const m = new RegExp(`pgTable\\(\\s*\\n?\\s*"${table}"`).exec(SCHEMA);
   if (!m) return [];
   let i = SCHEMA.indexOf("(", m.index + "pgTable".length);
@@ -127,13 +127,27 @@ function columnsOf(table: string): string[] {
   }
   const body = SCHEMA.slice(m.index, end);
   // A column declaration sits at the table literal's own indentation and calls a drizzle builder.
-  // The index/uniqueIndex entries in the second argument match the same shape, which is why they
-  // are classified too rather than filtered out here -- a filter would be a place for a real
-  // column to hide.
-  return [...body.matchAll(/^\s{2,6}(\w+):\s*(\w+)\(/gm)].map((x) => x[1]);
+  // The index/uniqueIndex entries in pgTable's SECOND argument match the same shape, so the
+  // BUILDER is carried out of here beside the name and the caller skips on that.
+  //
+  // IT USED TO SKIP ON THE NAME ENDING IN "Idx", WHICH IS THIS REPO'S OWN ENUMERATE-THE-ACCEPTED-
+  // FORMS TRAP and it cost a false red: `athlete_heights` declares its unique index as
+  // `athleteDateUnique`, a perfectly ordinary name that does not end in Idx, so a correct schema
+  // addition was reported as an unclassified COLUMN. The same filter would silently skip a real
+  // column somebody called `lastIdx`, which is the half that would not announce itself. The
+  // builder is the fact; the name is a convention.
+  return [...body.matchAll(/^\s{2,6}(\w+):\s*(\w+)\(/gm)].map((x) => ({ name: x[1], builder: x[2] }));
 }
 
-const INDEX_BUILDERS = /Idx$/;
+/** The real COLUMNS of a table: every declaration whose builder is not a constraint. */
+function columnNamesOf(table: string): string[] {
+  return columnsOf(table)
+    .filter((c) => !CONSTRAINT_BUILDERS.has(c.builder))
+    .map((c) => c.name);
+}
+
+/** The drizzle builders that declare a constraint rather than a column. */
+const CONSTRAINT_BUILDERS = new Set(["index", "uniqueIndex", "primaryKey", "foreignKey", "unique", "check"]);
 
 describe("the Anvil's declared inputs cover what Forge collects", () => {
   it("every table the Anvil declares as signal-bearing really exists in the schema", () => {
@@ -151,8 +165,7 @@ describe("the Anvil's declared inputs cover what Forge collects", () => {
     const read = new Set(ANVIL_SIGNALS.map((s) => `${s.table}.${s.column}`));
     const unclassified: string[] = [];
     for (const table of Object.keys(ANVIL_SIGNAL_TABLES)) {
-      for (const col of columnsOf(table)) {
-        if (INDEX_BUILDERS.test(col)) continue; // an index declaration, not a column
+      for (const col of columnNamesOf(table)) {
         const key = `${table}.${col}`;
         if (read.has(key)) continue;
         if (key in NOT_AN_ANVIL_SIGNAL) continue;
@@ -209,7 +222,7 @@ describe("the Anvil's declared inputs cover what Forge collects", () => {
 
   it("every refused column still exists; a renamed one must be re-decided", () => {
     const byTable = new Map<string, Set<string>>();
-    for (const t of Object.keys(ANVIL_SIGNAL_TABLES)) byTable.set(t, new Set(columnsOf(t)));
+    for (const t of Object.keys(ANVIL_SIGNAL_TABLES)) byTable.set(t, new Set(columnNamesOf(t)));
     const gone = Object.keys(NOT_AN_ANVIL_SIGNAL).filter((k) => {
       const [t, c] = k.split(".");
       return !byTable.get(t)?.has(c);
@@ -475,7 +488,7 @@ describe("the comment strip is driven directly, because on today's schema it is 
     const eaten = declared.filter((id) => !SCHEMA.includes(`export const ${id} = pgTable(`));
     expect(eaten, "the strip removed a table declaration -- the haystack is broken, not the needle").toEqual([]);
     expect(tablesInSchema().size).toBeGreaterThanOrEqual(declared.length);
-    expect(columnsOf("wellness_checkins")).toContain("hrv");
-    expect(columnsOf("workout_set_entries")).toContain("velocityLossPercent");
+    expect(columnNamesOf("wellness_checkins")).toContain("hrv");
+    expect(columnNamesOf("workout_set_entries")).toContain("velocityLossPercent");
   });
 });

@@ -1,6 +1,7 @@
 import { and, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
 import {
   bodyMetrics,
+  athleteHeights,
   caraSessions,
   coachAthletes,
   foodLogEntries,
@@ -112,6 +113,7 @@ export async function fetchAnvilStateInputs(
     testingRows,
     nutritionRows,
     bodyMassRows,
+    heightRows,
     injuryRows,
     goniometerRows,
     caraRows,
@@ -215,6 +217,17 @@ export async function fetchAnvilStateInputs(
       .from(bodyMetrics)
       .where(and(eq(bodyMetrics.athleteId, athleteId), lte(bodyMetrics.date, to)))
       .orderBy(bodyMetrics.date),
+
+    // THE WHOLE SERIES up to the end of the range, not a window: the growth module's own window is
+    // two years and it picks its endpoints inside it, so narrowing here would silently shorten
+    // every span and raise the quantization floor. `lte(date, to)` and not `between` for the same
+    // reason the weigh-in above is -- a velocity on the first day of the range is computed from
+    // heights measured long before it.
+    db
+      .select({ date: athleteHeights.date, heightIn: athleteHeights.heightIn })
+      .from(athleteHeights)
+      .where(and(eq(athleteHeights.athleteId, athleteId), lte(athleteHeights.date, to)))
+      .orderBy(athleteHeights.date),
 
     db
       .select({
@@ -416,6 +429,13 @@ export async function fetchAnvilStateInputs(
       // compared against a pound one is a 2.2x step in a trend read for low energy availability.
       // The same argument the strength percentile's denominator settled, one column over.
       bodyMassLbs: bodyMass ? (bodyMass.weightUnit === "kg" ? bodyMass.weight * 2.20462 : bodyMass.weight) : null,
+      // INCHES -> CENTIMETRES here, because `AnvilStateInput` says centimetres and the module's
+      // constants are reasoned in them: the half-inch quantization the minimum span exists to
+      // divide down is 1.27 cm, and a series half in one unit would read as a growth spurt. Same
+      // argument as the pound normalisation on the line above, one column over.
+      datedHeightsCm: heightRows
+        .filter((h) => h.date <= date)
+        .map((h) => ({ onIso: h.date, cm: h.heightIn * 2.54 })),
       openInjuries: injuryRows
         .filter((i) => i.occurredOn <= date && (!i.resolved || i.resolvedOn == null || i.resolvedOn >= date))
         .map((i) => i.bodyPart),
