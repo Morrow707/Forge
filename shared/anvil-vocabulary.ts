@@ -91,6 +91,29 @@ export const ANVIL_FORBIDDEN_TERM_WORDS: ReadonlyArray<string> =
  * `shared/anvil-*`, and a rule keyed on names alone would miss it -- which is the assertion
  * direction this repo has had to relearn five times.
  */
+/**
+ * THE SERVER SIDE OF THE SAME QUESTION, AND IT IS A SEPARATE PREDICATE ON PURPOSE.
+ *
+ * `isAnvilSurface` admits a file two ways: its path, or its IMPORT of an Anvil module. The second
+ * clause is the point on the client, where a card named `morning-card.tsx` can render an Anvil
+ * number -- and it is wrong on the server, where `routes.ts` and `storage.ts` import Anvil modules
+ * while serving the whole platform. Running the vocabulary over them finds "readiness" (a shipped
+ * feature), "recovery" (another), "concussion" and "diagnos" (the consent and compliance text that
+ * exists to REFUSE those claims) and would make the ratchet a demand to rename live features.
+ *
+ * So on the server membership is the PATH alone: a file whose job is the Anvil is named for it.
+ * Written as its own export rather than a mode flag on `isAnvilSurface`, because a flag would make
+ * "widen the client rule" a change that silently also moved the server rule, and the client rule is
+ * the one question 24 is going to move.
+ *
+ * What it is for is narrow and real: `server/anvil-report.ts` prints a page a coach reads, and a
+ * printed sentence outlives the screen it came from.
+ */
+export function serverFileIsAnvilOutput(relativePath: string): boolean {
+  const p = relativePath.replace(/\\/g, "/");
+  return /(^|\/)anvil[-/]/.test(p);
+}
+
 export function isAnvilSurface(relativePath: string, source: string): boolean {
   const p = relativePath.replace(/\\/g, "/");
   if (/(^|\/)anvil[-/]/.test(p) || /(^|\/)anvil\.tsx?$/.test(p)) return true;

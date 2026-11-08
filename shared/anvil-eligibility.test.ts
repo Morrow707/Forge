@@ -5,7 +5,12 @@ import {
   anvilEligibility,
   type AnvilSubject,
 } from "./anvil-eligibility";
-import { ANVIL_AGREEMENT, ANVIL_AGREEMENT_NEVER_CLAIMS } from "./anvil-agreement";
+import {
+  ANVIL_ACCURACY_CAVEAT,
+  ANVIL_AGREEMENT,
+  ANVIL_AGREEMENT_NEVER_CLAIMS,
+  ANVIL_NOT_A_MEDICAL_TEST,
+} from "./anvil-agreement";
 import { ROLES_THAT_FILM_THEIR_OWN_TRAINING_LIST } from "./roles-that-film-their-own-training";
 
 const TODAY = "2026-11-07";
@@ -126,6 +131,20 @@ describe("the agreement says what the software does and claims nothing else", ()
       expect(body, `the agreement declares it refuses "${claim}" and must say so`).toContain(claim);
     }
     expect(ANVIL_AGREEMENT_NEVER_CLAIMS).toContain("concussion");
+  });
+
+  it("carries the two sentences every other surface renders, so they cannot drift", () => {
+    // Both are constants because they are read in more than one place -- the agreement itself,
+    // the weekly printout, and whatever screen comes next -- and both say something that stops
+    // being true the day a threshold is checked against a reference instrument. A surface that
+    // re-typed either would be a second wording for counsel to review under question 18, and
+    // the vocabulary sweep over an Anvil surface is what catches a re-typed copy.
+    expect(ANVIL_AGREEMENT).toContain(ANVIL_ACCURACY_CAVEAT);
+    expect(ANVIL_AGREEMENT).toContain(ANVIL_NOT_A_MEDICAL_TEST);
+    // And each says the thing it exists to say, so neither can be hollowed out to a blank that
+    // still satisfies the containment above.
+    expect(ANVIL_ACCURACY_CAVEAT.toLowerCase()).toContain("not calibrated");
+    expect(ANVIL_NOT_A_MEDICAL_TEST.toLowerCase()).toContain("not a concussion test");
   });
 
   it("states the four things a reader needs and the one they must not assume", () => {

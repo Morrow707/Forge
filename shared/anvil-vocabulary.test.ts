@@ -6,6 +6,7 @@ import {
   ANVIL_FORBIDDEN_TERM_WORDS,
   ANVIL_PERMITTED_TERMS,
   isAnvilSurface,
+  serverFileIsAnvilOutput,
 } from "./anvil-vocabulary";
 
 /**
@@ -75,6 +76,24 @@ function stripComments(src: string): string {
     out.push(cut === -1 ? line : line.slice(0, cut));
   }
   return out.join("\n");
+}
+
+/**
+ * THE SERVER HALF OF THE SCOPE, AND IT IS HERE BECAUSE A PDF IS A SURFACE.
+ *
+ * The scan was client-only when it was written, which was correct while the only Anvil output
+ * was a screen. `server/anvil-report.ts` prints a coach's weekly page, and a printed sentence is
+ * read by a person exactly as a rendered one is -- and outlives it. A scan that could not see a
+ * file because it sits in a different directory is this repo's most repeated self-inflicted
+ * failure (the upload-directory list, the `/email.*\.ts$/` glob, `parental_notice`), so the
+ * sweep below takes the UNION and `isAnvilSurface` still decides membership.
+ */
+function serverFiles(): Array<{ path: string; source: string }> {
+  const root = join(import.meta.dirname, "..", "server");
+  return readdirSync(root)
+    .filter((e) => /\.tsx?$/.test(e) && !/\.(test|itest)\.tsx?$/.test(e))
+    .map((e) => ({ path: `server/${e}`, source: readFileSync(join(root, e), "utf8") }))
+    .filter((f) => serverFileIsAnvilOutput(f.path));
 }
 
 function clientFiles(): Array<{ path: string; source: string }> {
@@ -184,7 +203,10 @@ describe("what counts as an Anvil surface is discovered from what a file does", 
 
 describe("the scan's scope is narrow, in both directions", () => {
   it("every real Anvil surface uses only permitted words", () => {
-    const surfaces = clientFiles().filter((f) => isAnvilSurface(f.path, f.source));
+    const surfaces = [
+      ...clientFiles().filter((f) => isAnvilSurface(f.path, f.source)),
+      ...serverFiles(),
+    ];
     const offences: string[] = [];
     for (const { path, source } of surfaces) {
       const body = stripComments(source).toLowerCase();
@@ -198,10 +220,32 @@ describe("the scan's scope is narrow, in both directions", () => {
         "shared/anvil-vocabulary.ts carries the reason for each refusal, and question 24 in " +
         "docs/legal-open-questions.md is where the list itself gets settled.",
     ).toEqual([]);
-    // SAID RATHER THAN IMPLIED: zero surfaces today, so the case above passes vacuously. The
-    // predicate is proven on constructed input in the describe block above; this one starts
-    // working the day the first screen is committed.
-    expect(surfaces.length).toBe(0);
+    // NOT VACUOUS ANY MORE, and the number is asserted so it cannot quietly become one again:
+    // a refactor that moved every Anvil file out of the scan's reach would leave the case above
+    // green with nothing in it. The first surface landed 2026-11-08.
+    expect(
+      surfaces.length,
+      "no Anvil surface is in scope, so the sweep above proves nothing. Either isAnvilSurface " +
+        "stopped recognising them or the files moved out of both walks.",
+    ).toBeGreaterThan(0);
+    expect(surfaces.map((s) => s.path)).toContain("server/anvil-report.ts");
+  });
+
+  it("leaves routes.ts and storage.ts out of the server scope, by path and not by import", () => {
+    // THE CASE THAT KEEPS THE SERVER SWEEP HONEST. Both files import Anvil modules, so the
+    // client predicate's second clause admits them -- and both hold "readiness" and "recovery"
+    // (shipped features) plus "concussion" and "diagnos" (the consent and compliance text that
+    // exists to refuse those claims). Scanning them would turn this ratchet into a demand to
+    // rename live features and to delete the sentences that say what the Anvil is not.
+    const routes = readFileSync(join(import.meta.dirname, "..", "server", "routes.ts"), "utf8");
+    expect(
+      isAnvilSurface("server/routes.ts", routes),
+      "the client predicate still admits routes.ts by its import; if this flips, the server " +
+        "sweep below is resting on something that changed",
+    ).toBe(true);
+    expect(serverFileIsAnvilOutput("server/routes.ts")).toBe(false);
+    expect(serverFileIsAnvilOutput("server/storage.ts")).toBe(false);
+    expect(serverFileIsAnvilOutput("server/anvil-report.ts")).toBe(true);
   });
 
   it("leaves the shipped readiness, recovery and fatigue surfaces out of scope", () => {

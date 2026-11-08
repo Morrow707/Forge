@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { readCheck, type AnvilRawCheck } from "./anvil-reading";
+import {
+  FAST_CHANNEL_MIN_DAYS,
+  fastChannelWeek,
+  readCheck,
+  readSeries,
+  type AnvilRawCheck,
+} from "./anvil-reading";
+import { CORROBORATION_Z } from "./anvil-corroboration";
 import { BASELINE_BURN_IN_CHECKS, BASELINE_MIN_CHECKS } from "./anvil-baseline";
 
 let seed = 7;
@@ -144,5 +151,68 @@ describe("the burn-in and the no-spread case", () => {
     const r = readCheck(check({ tapCounts: null }), history(24));
     expect(r.numbers.tapCount).toBeNull();
     if (r.comparison.kind === "compared") expect(r.comparison.tapMoved).toBeNull();
+  });
+});
+
+describe("a series is scored as it stood, never with hindsight", () => {
+  it("scores each check against only the checks before it", () => {
+    const series = [...history(24, 270), check()];
+    const read = readSeries(series);
+    expect(read).toHaveLength(25);
+    // The early ones cannot be compared and the late ones can -- which is the whole property:
+    // the first day of a second week has a thinner baseline than the last, and says so.
+    expect(read[0].reading.comparison.kind).toBe("learning");
+    expect(read[read.length - 1].reading.comparison.kind).toBe("compared");
+    // And each one matches what readCheck returns on its own prefix, which is what "as it stood"
+    // means. Asserted against the real function rather than re-derived here.
+    for (const i of [5, 12, 24]) {
+      expect(read[i].reading).toEqual(readCheck(series[i], series.slice(0, i)));
+    }
+  });
+
+  it("never lets a later check change an earlier reading", () => {
+    // THE CASE THE DOCBLOCK IS ABOUT. A reading an athlete saw on Tuesday has to stay true, so
+    // appending Friday must leave Tuesday byte-identical. Scoring against the whole series --
+    // the obvious implementation -- fails this.
+    const series = history(24, 270);
+    const tuesday = readSeries(series)[20].reading;
+    const withMore = readSeries([...series, check({ trialsMs: Array(25).fill(500) })])[20].reading;
+    expect(withMore).toEqual(tuesday);
+  });
+});
+
+describe("the fast channel is one witness, and says so when it has none", () => {
+  const compared = () => ({ reading: readCheck(check(), history(24, 270)) });
+
+  it("needs three compared in-window days before it is a witness at all", () => {
+    const two = fastChannelWeek([compared(), compared()]);
+    expect("absent" in two).toBe(true);
+    if ("absent" in two) expect(two.absent).toContain(`of ${FAST_CHANNEL_MIN_DAYS}`);
+    expect("z" in fastChannelWeek([compared(), compared(), compared()])).toBe(true);
+  });
+
+  it("takes the median of the days and not the mean, so one morning cannot carry a week", () => {
+    const h = history(24, 270);
+    const ordinary = { reading: readCheck(check({ trialsMs: Array(25).fill(272) }), h) };
+    const terrible = { reading: readCheck(check({ trialsMs: Array(25).fill(900) }), h) };
+    const week = fastChannelWeek([ordinary, ordinary, ordinary, ordinary, terrible]);
+    expect("z" in week).toBe(true);
+    if ("z" in week) {
+      // The mean of those five z-scores clears the corroboration threshold on its own; the
+      // median does not, and that difference is the whole reason this is a median.
+      expect(week.z).toBeLessThan(CORROBORATION_Z);
+    }
+  });
+
+  it("leaves a late check and a practice run out of the week", () => {
+    const h = history(24, 270);
+    const late = { reading: readCheck(check({ window: "late" }), h) };
+    const practice = { reading: readCheck(check({ window: "practice" }), h) };
+    const week = fastChannelWeek([late, practice, compared(), compared(), compared()]);
+    expect("z" in week).toBe(true);
+    // Five readings in, three counted: the two outside the window are kept and shown elsewhere
+    // and never vote. One more of either must still leave it a witness, not tip it over.
+    const thin = fastChannelWeek([late, practice, compared(), compared()]);
+    expect("absent" in thin).toBe(true);
   });
 });

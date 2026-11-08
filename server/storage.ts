@@ -173,8 +173,13 @@ import {
   researchConsentRequests,
   type ResearchConsentRequest,
   type MediaRemovalRequest,
+  anvilChecks,
+  type AnvilCheck,
+  type InsertAnvilCheck,
 } from "@shared/schema";
 import { ageBandFor, ageBandBounds, NORM_MIN_COHORT } from "@shared/cohort-norms";
+import { anvilEligibility } from "@shared/anvil-eligibility";
+import { ANVIL_AGREEMENT, ANVIL_AGREEMENT_VERSION } from "@shared/anvil-agreement";
 import { DEMO_ACCOUNT_EMAILS_SQL_LIST } from "./demo-accounts";
 import { ageFromDateOfBirth } from "@shared/privacy-tiers";
 import {
@@ -34738,5 +34743,163 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       out.push(sources);
     }
     return out;
+  },
+
+  // -------------------------------------------------------------------------
+  // THE ANVIL. Four reads and two writes, and nothing here derives a number.
+  //
+  // Every threshold, z-score, lapse count and verdict is computed on read from
+  // `shared/anvil-*.ts`, which is why this table stores the trials raw and why none of these
+  // methods returns a score. A stored number goes stale against the constant that produced it;
+  // the camera work's whole history is the argument (FITTED_OVERRIDES moves and the ledger
+  // replays, because the inputs were kept).
+  // -------------------------------------------------------------------------
+
+  /**
+   * WHERE THE ANVIL'S OWN AGREEMENT STANDS FOR ONE ACCOUNT.
+   *
+   * Read exactly the way getBiometricConsentStatus reads the biometric release -- latest row
+   * wins, a WITHDRAWN row is a no -- plus the same text comparison the Terms use, so editing
+   * `ANVIL_AGREEMENT` re-asks everybody who accepted the older wording. A version FLAG would not:
+   * somebody would change the text and forget the number, which is the failure that rule exists
+   * for. `ANVIL_AGREEMENT_VERSION` is carried on the row for a reader, never as the test.
+   */
+  async getAnvilAgreementStatus(userId: number): Promise<{
+    accepted: boolean;
+    acceptedAt: string | null;
+    /** Accepted, under text that is no longer what the agreement says today. */
+    stale: boolean;
+    withdrawnAt: string | null;
+  }> {
+    const latest = await db.query.consentRecords.findFirst({
+      where: and(eq(consentRecords.userId, userId), eq(consentRecords.consentType, "anvil_check")),
+      orderBy: [desc(consentRecords.createdAt), desc(consentRecords.id)],
+    });
+    const withdrawn = latest != null && latest.documentText.startsWith("WITHDRAWN ");
+    const accepted = latest != null && !withdrawn;
+    return {
+      accepted,
+      acceptedAt: accepted ? latest!.createdAt.toISOString() : null,
+      stale: accepted && !latest!.documentText.includes(ANVIL_AGREEMENT),
+      withdrawnAt: withdrawn ? latest!.createdAt.toISOString() : null,
+    };
+  },
+
+  /**
+   * ACCEPTING THE AGREEMENT. The one write that opens the Anvil for an account.
+   *
+   * The eligibility rule is re-asked HERE and not only at the route, for the reason every other
+   * consent check in this file is: a route gate protects one door. `hasAnvilConsent: true` is
+   * passed deliberately -- this call is what makes it true, so asking the gate about it would
+   * refuse every first acceptance. Everything else the gate decides (the role, the age, the
+   * tracking opt-out) is checked for real.
+   */
+  async recordAnvilAgreement(
+    userId: number,
+    context?: { ipAddress?: string; userAgent?: string; todayIso?: string },
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const user = await this.getUser(userId);
+    if (!user) return { ok: false, error: "Not found." };
+    const eligibility = anvilEligibility(
+      {
+        role: user.role,
+        dateOfBirth: user.dateOfBirth ?? null,
+        hasAnvilConsent: true,
+        trackingOptOut: user.trackingOptOut === true,
+      },
+      context?.todayIso ?? new Date().toISOString().slice(0, 10),
+    );
+    if (!eligibility.allowed) return { ok: false, error: eligibility.says };
+    await this.logConsentRecord({
+      userId,
+      consentType: "anvil_check",
+      // The whole text, snapshotted, so a reader sees the version they accepted rather than
+      // today's -- and the version line with it, since the text alone does not date itself.
+      documentText: `The Anvil, version ${ANVIL_AGREEMENT_VERSION}\n\n${ANVIL_AGREEMENT}`,
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+    });
+    return { ok: true };
+  },
+
+  /** Withdrawing it. Writes the WITHDRAWN row the status read above treats as a no, and keeps
+   * every check already taken: the athlete's past results are theirs and are deleted with the
+   * account, which is what the agreement says in words. */
+  async withdrawAnvilAgreement(userId: number): Promise<{ ok: true }> {
+    await this.logConsentRecord({
+      userId,
+      consentType: "anvil_check",
+      documentText:
+        `WITHDRAWN ${new Date().toISOString()}\n\nThe account holder stopped taking the Anvil ` +
+        `daily check. Checks already taken are kept and are deleted with the account.`,
+    });
+    return { ok: true };
+  },
+
+  /**
+   * ONE ATHLETE'S CHECKS, **OLDEST FIRST**, and the order is in the name on purpose.
+   *
+   * `readCheck` and `baselineChecksFor` both take the history oldest first, because the per-task
+   * burn-in drops from the OLD end. Handed newest-first they discard the most recent checks and
+   * return a plausible number computed from the wrong end of the series -- no error, no empty
+   * result, just a wrong z-score. A method called `getAnvilChecks` would get that wrong once a
+   * year; this one cannot be called without reading which way it goes.
+   */
+  async getAnvilChecksOldestFirst(
+    athleteId: number,
+    opts: { sinceDate?: string; limit?: number } = {},
+  ): Promise<AnvilCheck[]> {
+    const rows = await db.query.anvilChecks.findMany({
+      where: opts.sinceDate
+        ? and(eq(anvilChecks.athleteId, athleteId), gte(anvilChecks.date, opts.sinceDate))
+        : eq(anvilChecks.athleteId, athleteId),
+      orderBy: [asc(anvilChecks.date), asc(anvilChecks.takenAt), asc(anvilChecks.id)],
+      ...(opts.limit ? { limit: opts.limit } : {}),
+    });
+    return rows;
+  },
+
+  /** Writes one check. Raw trials in, the stored row out. */
+  async insertAnvilCheck(input: InsertAnvilCheck): Promise<AnvilCheck> {
+    const [row] = await db.insert(anvilChecks).values(input).returning();
+    return row;
+  },
+
+  /**
+   * THE COACH'S WEEK: every check their athletes took in a date range, with the athlete's name.
+   *
+   * Scope comes from `athleteIdsInCoachScope`, which is the hold-aware, team-narrowed answer the
+   * rest of the coach side already uses -- so this adds no `coach_athletes` query of its own and
+   * a narrowed assistant sees only their teams. **A PARKED ATHLETE IS INCLUDED**, which is the
+   * off-season design rather than an oversight: `coachMayReadSeat(PARKED)` is the one of the five
+   * questions whose answer is yes, and a check an athlete took in June is theirs and their
+   * coach's to read in August.
+   *
+   * The coach's OWN id is dropped. It is in the scope set (a coach films their own training and
+   * takes their own check), and their own reading belongs on their own dashboard card -- a coach
+   * appearing as a row in their own roster table reads as a bug, every time.
+   */
+  async getAnvilChecksForCoachRoster(
+    coachId: number,
+    range: { from: string; to: string },
+  ): Promise<Array<AnvilCheck & { athleteName: string }>> {
+    const ids = (await this.athleteIdsInCoachScope(coachId)).filter((id) => id !== coachId);
+    if (ids.length === 0) return [];
+    const rows = await db
+      .select({
+        check: anvilChecks,
+        athleteName: users.name,
+      })
+      .from(anvilChecks)
+      .innerJoin(users, eq(users.id, anvilChecks.athleteId))
+      .where(
+        and(
+          inArray(anvilChecks.athleteId, ids),
+          gte(anvilChecks.date, range.from),
+          lte(anvilChecks.date, range.to),
+        ),
+      )
+      .orderBy(asc(anvilChecks.date), asc(anvilChecks.takenAt));
+    return rows.map((r) => ({ ...r.check, athleteName: r.athleteName }));
   },
 };

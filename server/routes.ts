@@ -279,6 +279,23 @@ import { promises as fsp } from "node:fs";
 import { computeReadiness } from "@shared/wellness";
 import { z } from "zod";
 import { startOfWeek, addWeeks, formatISO } from "date-fns";
+import { anvilEligibility, type AnvilRefusal } from "@shared/anvil-eligibility";
+import { ANVIL_AGREEMENT, ANVIL_AGREEMENT_VERSION } from "@shared/anvil-agreement";
+import {
+  ANVIL_WINDOW_CLOSES_MINUTES,
+  ANVIL_WINDOW_OPENS_MINUTES,
+  checkThatCounts,
+  windowLabelFor,
+} from "@shared/anvil-window";
+import { readCheck } from "@shared/anvil-reading";
+import {
+  anvilRange,
+  anvilRawCheck,
+  anvilRowForClient,
+  assembleAnvilWeek,
+  buildAnvilWeekPdf,
+  type AnvilRosterWeek,
+} from "./anvil-report";
 
 // Form-check clips are opt-in and athlete-initiated: recorded in the
 // browser, previewed, then either saved here or discarded and never sent.
@@ -11636,6 +11653,303 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })),
       billingOpen: BILLING_LIVE,
     });
+  });
+
+
+  // =========================================================================
+  // THE ANVIL. The daily check's own routes.
+  //
+  // Six for the person taking it, three for their coach, and not one of them stores a derived
+  // number: every z-score, lapse count and verdict on these responses is computed on read from
+  // `shared/anvil-*.ts` over the raw trials. See shared/schema.ts on anvilChecks for why.
+  // =========================================================================
+
+  /**
+   * MAY THIS PERSON TAKE THE ANVIL -- asked by the gate below AND by the client, which never
+   * re-derives it. The same rule, and the same reason, as camera-access above: two copies of a
+   * three-branch gate drift silently, and the drift is only visible to the person it strands.
+   *
+   * The verdict comes from `anvilEligibility`, which is pure and knows nothing about Express.
+   * This function's whole job is to fetch the four facts it needs.
+   */
+  async function anvilAccessFor(user: { id: number; role: string }): Promise<
+    | { allowed: true; reason: "adult_with_consent"; agreementStale: boolean }
+    | { allowed: false; reason: AnvilRefusal; says: string; agreementStale: boolean }
+  > {
+    const [row, agreement] = await Promise.all([
+      storage.getUser(user.id),
+      storage.getAnvilAgreementStatus(user.id),
+    ]);
+    const verdict = anvilEligibility(
+      {
+        role: row?.role ?? user.role,
+        dateOfBirth: row?.dateOfBirth ?? null,
+        hasAnvilConsent: agreement.accepted,
+        trackingOptOut: row?.trackingOptOut === true,
+      },
+      todayIso(),
+    );
+    return { ...verdict, agreementStale: agreement.stale };
+  }
+
+  // Gates every route that reads or writes a check. 403 and never 402: this is a refusal about
+  // WHO is asking, not about a plan, and the client draws "See plans" off freeAgentPaywall --
+  // which would be the wrong thing to offer somebody who is seventeen or who opted out.
+  async function requireAnvilAccess(req: any, res: any, next: any) {
+    const access = await anvilAccessFor(currentUser(req));
+    if (!access.allowed) {
+      return res.status(403).json({ message: access.says, anvilRefusal: access.reason });
+    }
+    next();
+  }
+
+
+  /** `days` of one person's checks, scored and packaged. The whole history is read and only the
+   * range is returned -- see `assembleAnvilWeek` on why trimming before scoring is wrong. */
+  async function anvilWeekFor(athleteId: number, days: number) {
+    const rows = await storage.getAnvilChecksOldestFirst(athleteId);
+    return assembleAnvilWeek(athleteId, rows, anvilRange(todayIso(), days));
+  }
+
+  /**
+   * THE ROSTER'S WEEK. One query for the range, one per athlete for their history.
+   *
+   * The per-athlete read is a second pass on purpose: a week's rows are not enough to score
+   * against, because the baseline is twenty mornings wide, and a roster-wide read of every
+   * athlete's whole history would be the whole table. Bounded by the scope set, which is what
+   * a coach's roster already is.
+   */
+  async function anvilRosterWeek(coachId: number, days: number): Promise<AnvilRosterWeek> {
+    const range = anvilRange(todayIso(), days);
+    const inRange = await storage.getAnvilChecksForCoachRoster(coachId, range);
+    const names = new Map<number, string>();
+    for (const row of inRange) names.set(row.athleteId, row.athleteName);
+    const athletes = await Promise.all(
+      Array.from(names.entries()).map(async ([athleteId, athleteName]) => ({
+        athleteId,
+        athleteName,
+        week: await anvilWeekFor(athleteId, days),
+      })),
+    );
+    athletes.sort((a, b) => a.athleteName.localeCompare(b.athleteName));
+    // EVERYBODY WHO TOOK NONE IS NAMED. A coach reading a short list cannot otherwise tell a
+    // quiet week from a roster nobody has set up, and the second is the one they can act on.
+    const roster = await storage.getRosterForCoach(coachId);
+    const noChecks = roster
+      .filter((a: any) => !names.has(a.id))
+      .map((a: any) => ({ athleteId: a.id, athleteName: a.name as string }))
+      .sort((a: { athleteName: string }, b: { athleteName: string }) =>
+        a.athleteName.localeCompare(b.athleteName),
+      );
+    return { from: range.from, to: range.to, athletes, noChecks };
+  }
+
+  app.get(
+    "/api/anvil/access",
+    requireRole(["athlete", "coach", "admin"]),
+    async (req, res) => {
+      res.json(await anvilAccessFor(currentUser(req)));
+    },
+  );
+
+  /** The agreement's text, so the card can show it without the string entering the eager bundle. */
+  app.get("/api/anvil/agreement", requireAuth, async (_req, res) => {
+    res.json({ version: ANVIL_AGREEMENT_VERSION, text: ANVIL_AGREEMENT });
+  });
+
+  app.post(
+    "/api/anvil/agreement",
+    requireRole(["athlete", "coach", "admin"]),
+    async (req, res) => {
+      const user = currentUser(req);
+      const result = await storage.recordAnvilAgreement(user.id, {
+        ipAddress: req.ip,
+        userAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
+        todayIso: todayIso(),
+      });
+      if (!result.ok) return res.status(403).json({ message: result.error });
+      res.json(await anvilAccessFor(user));
+    },
+  );
+
+  app.post(
+    "/api/anvil/agreement/withdraw",
+    requireRole(["athlete", "coach", "admin"]),
+    async (req, res) => {
+      const user = currentUser(req);
+      await storage.withdrawAnvilAgreement(user.id);
+      res.json(await anvilAccessFor(user));
+    },
+  );
+
+  /**
+   * SUBMITTING A CHECK. **IT IS NEVER REFUSED FOR WHAT IT MEASURED.**
+   *
+   * The schema is strict about SHAPE and deliberately permissive about QUALITY. Three trials
+   * instead of twenty-five, a 2,400 ms median, every trial missed: all written, all scored, all
+   * shown. An athlete who backgrounded the app mid-task did something, and a refusal would
+   * destroy the only record of it to protect a comparison that can simply be skipped -- Rule #1,
+   * one surface over from the camera.
+   *
+   * What the client decides and the server cannot: the local calendar day and the local minute,
+   * because only the phone knows what time it is where the athlete is standing. What the SERVER
+   * decides and the client may not: the window label, from `windowLabelFor`. A client that sent
+   * its own label could call four in the afternoon in-window and put it in somebody's normal.
+   */
+  const anvilCheckSubmission = z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A local calendar date is required."),
+    localMinutes: z.number().int().min(0).max(24 * 60 - 1),
+    practice: z.boolean().optional(),
+    // Bounded only to stop an abusive payload. Every length under the bound is accepted.
+    trialsMs: z.array(z.number().finite().min(0).max(60_000)).max(200),
+    omissions: z.number().int().min(0).max(200).default(0),
+    rulesMissed: z.number().int().min(0).max(200).nullable().optional(),
+    goTrialsMs: z.array(z.number().finite().min(0).max(60_000)).max(200).nullable().optional(),
+    sequenceBest: z.number().int().min(0).max(30).nullable().optional(),
+    tapCounts: z.array(z.number().int().min(0).max(1_000)).max(10).nullable().optional(),
+    partsRun: z.array(z.string().max(40)).max(10).default([]),
+    timerResolutionMs: z.number().finite().min(0).max(1_000).nullable().optional(),
+  });
+
+  app.post(
+    "/api/anvil/checks",
+    requireRole(["athlete", "coach", "admin"]),
+    requireAnvilAccess,
+    async (req, res) => {
+      const parsed = anvilCheckSubmission.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message ?? "Invalid check." });
+      }
+      const user = currentUser(req);
+      const input = parsed.data;
+      const row = await storage.insertAnvilCheck({
+        athleteId: user.id,
+        date: input.date,
+        window: windowLabelFor(input.localMinutes, { practice: input.practice }),
+        trialsMs: input.trialsMs,
+        omissions: input.omissions,
+        rulesMissed: input.rulesMissed ?? null,
+        goTrialsMs: input.goTrialsMs ?? null,
+        sequenceBest: input.sequenceBest ?? null,
+        tapCounts: input.tapCounts ?? null,
+        partsRun: input.partsRun,
+        timerResolutionMs: input.timerResolutionMs ?? null,
+      });
+      // Scored against every check BEFORE this one, which is what the athlete is shown now and
+      // what `readSeries` will report for this day forever after -- see its docblock on why a
+      // reading never moves with hindsight.
+      const history = (await storage.getAnvilChecksOldestFirst(user.id)).filter((c) => c.id !== row.id);
+      res.status(201).json({
+        check: anvilRowForClient(row),
+        reading: readCheck(anvilRawCheck(row), history.map(anvilRawCheck)),
+        countsToday: checkThatCounts(
+          [...history.filter((c) => c.date === row.date), row].map((c) => ({
+            id: c.id,
+            takenAt: c.takenAt,
+            window: c.window,
+          })),
+        )?.id === row.id,
+      });
+    },
+  );
+
+  /**
+   * TODAY, for the person taking it: the check that counts, its reading, and the window.
+   *
+   * `date` is the client's own local day -- the same fact the submission carries, for the same
+   * reason. Without it the server would answer about its own UTC day, which for an athlete in
+   * California at 17:00 is tomorrow.
+   */
+  app.get(
+    "/api/anvil/today",
+    requireRole(["athlete", "coach", "admin"]),
+    requireAnvilAccess,
+    async (req, res) => {
+      const user = currentUser(req);
+      const date = typeof req.query.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
+        ? req.query.date
+        : todayIso();
+      const all = await storage.getAnvilChecksOldestFirst(user.id);
+      const today = all.filter((c) => c.date === date);
+      const counts = checkThatCounts(today);
+      const shown = counts ?? today[today.length - 1] ?? null;
+      const history = all.filter((c) => c.date < date);
+      res.json({
+        date,
+        window: {
+          opensMinutes: ANVIL_WINDOW_OPENS_MINUTES,
+          closesMinutes: ANVIL_WINDOW_CLOSES_MINUTES,
+        },
+        attemptsToday: today.length,
+        // A second attempt is KEPT and shown and does not count. Saying which one counts is what
+        // makes "one attempt counts" on the pre-check screen true rather than a slogan.
+        countsTodayId: counts?.id ?? null,
+        check: shown ? anvilRowForClient(shown) : null,
+        reading: shown ? readCheck(anvilRawCheck(shown), history.map(anvilRawCheck)) : null,
+      });
+    },
+  );
+
+  /** The person's own last `days` days: every check, each scored as it stood, plus the week's
+   * fast-channel witness and the weekly verdict that witness alone can never carry. */
+  app.get(
+    "/api/anvil/week",
+    requireRole(["athlete", "coach", "admin"]),
+    requireAnvilAccess,
+    async (req, res) => {
+      const user = currentUser(req);
+      const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 90);
+      res.json(await anvilWeekFor(user.id, days));
+    },
+  );
+
+  /**
+   * THE COACH'S PACKAGE: one call, every athlete, the daily view and the weekly one together.
+   *
+   * Scott asked for both, and the distinction between them is the whole point: the DAILY column
+   * is a reading with no claim attached -- what the number was and where it sat against that
+   * athlete's own normal -- and the WEEKLY line is the only place the Anvil asserts anything,
+   * which it will not do on one witness. A daily FLAG at the corroboration threshold would fire
+   * about 16.9 times per athlete per season on noise alone, measured; a daily VIEW costs nothing
+   * and is what "daily will show good spikes" asks for.
+   */
+  app.get("/api/coach/anvil/week", requireRole(["coach", "admin"]), async (req, res) => {
+    const user = currentUser(req);
+    const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 90);
+    res.json(await anvilRosterWeek(user.id, days));
+  });
+
+  /** One athlete, for the coach's athlete page. Scoped exactly as every other per-athlete coach
+   * route is, so an out-of-scope id is a 404 with no name in the body. */
+  app.get(
+    "/api/coach/roster/:athleteId/anvil",
+    requireRole(["coach", "admin"]),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      if (!Number.isFinite(athleteId) || !(await storage.athleteIsInCoachScope(user.id, athleteId))) {
+        return res.status(404).json({ message: "Athlete not found." });
+      }
+      const days = Math.min(Math.max(Number(req.query.days) || 28, 1), 365);
+      res.json(await anvilWeekFor(athleteId, days));
+    },
+  );
+
+  /** The week as a PDF a coach can print or email. Same roster, same scope, same numbers -- it
+   * renders `anvilRosterWeek`'s own output rather than re-querying, so the page and the paper
+   * can never disagree. */
+  app.get("/api/coach/anvil/week.pdf", requireRole(["coach", "admin"]), async (req, res) => {
+    const user = currentUser(req);
+    const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 90);
+    const week = await anvilRosterWeek(user.id, days);
+    const coach = await storage.getUser(user.id);
+    const pdf = await buildAnvilWeekPdf({ week, coachName: coach?.name ?? "Forge" });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="anvil-${week.from}-to-${week.to}.pdf"`,
+    );
+    res.end(pdf);
   });
 
   app.get("/api/athlete/coaches", requireRole("athlete"), async (req, res) => {

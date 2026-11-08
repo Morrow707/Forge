@@ -40,6 +40,37 @@ export const ANVIL_AGREEMENT_NEVER_CLAIMS: ReadonlyArray<string> = [
   "diagnosis",
 ];
 
+/**
+ * THE ONE CAVEAT SENTENCE, AND IT IS THE ANVIL'S OWN RATHER THAN THE CAMERA'S.
+ *
+ * `CAMERA_ACCURACY_INLINE` was the obvious thing to reach for and is wrong here: it says "camera
+ * metrics", and a tap latency is not one. Borrowing it would put a true sentence about a
+ * different instrument under a number it does not describe, which is worse than no caveat --
+ * a reader who checks it finds it does not apply and discounts the next one too.
+ *
+ * It is a constant rather than typed at each surface for the reason `shared/camera-accuracy-copy.ts`
+ * is: the day a threshold is checked against a reference instrument, this sentence stops being
+ * true everywhere at once. A test asserts the agreement's own "HOW ACCURATE IT IS" section still
+ * carries it, so the two cannot drift.
+ */
+/**
+ * THE REFUSAL SENTENCE, AND WHY IT IS A CONSTANT RATHER THAN TYPED WHEREVER IT IS NEEDED.
+ *
+ * It contains two words `shared/anvil-vocabulary.ts` forbids on an Anvil surface, and that is the
+ * whole point of it: telling a reader "this is not a concussion test" is the opposite of modelling
+ * one. This module is the ONE place those words are allowed to appear, earned the same way
+ * `anvil-never-models.test.ts` grants its exemption -- off a declared prohibition, not off a
+ * filename -- and the consequence is that every surface RENDERS this constant instead of writing
+ * the sentence again. A re-typed copy on a page would be caught by the vocabulary sweep, which is
+ * exactly the right outcome: there is one wording, it is the wording counsel will review under
+ * question 18, and a second copy is a second thing to review.
+ */
+export const ANVIL_NOT_A_MEDICAL_TEST =
+  "This is not a medical test and not a diagnosis. It is not a concussion test and must not be used as one.";
+
+export const ANVIL_ACCURACY_CAVEAT =
+  "Not calibrated. No threshold in the Anvil has been checked against a reference instrument and no athlete's results have been compared with a clinical measure.";
+
 export const ANVIL_AGREEMENT = `The Anvil: what the daily check does
 
 WHAT YOU DO
@@ -64,14 +95,13 @@ results and a weekly summary. Nobody else sees them. Forge does not rank you aga
 teammates and does not show your coach a comparison between athletes.
 
 WHAT THIS IS NOT
-This is not a medical test and not a diagnosis. It is not a concussion test and must not be
-used as one: if you have taken a blow to the head, see a clinician, not this screen. Forge
+${ANVIL_NOT_A_MEDICAL_TEST} If you have taken a blow to the head, see a
+clinician rather than a phone. Forge
 does not model, score or flag concussion, eating disorders or energy deficiency, and will not
 tell your coach that you have any of them.
 
 HOW ACCURATE IT IS
-Not calibrated. No threshold in the Anvil has been checked against a reference instrument and
-no athlete's results have been compared with a clinical measure. Treat what you see as a
+${ANVIL_ACCURACY_CAVEAT} Treat what you see as a
 record of what you did on the day, not as a verdict.
 
 YOU CAN STOP

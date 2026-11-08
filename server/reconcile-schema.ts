@@ -3339,6 +3339,18 @@ DO $$ BEGIN
   ALTER TYPE "consent_type" ADD VALUE IF NOT EXISTS 'privacy_policy';
 EXCEPTION WHEN undefined_object THEN NULL; END $$;
 
+-- THE ANVIL'S OWN AGREEMENT (shared/schema.ts consentTypeEnum, shared/anvil-agreement.ts).
+--
+-- A pgEnum value added in shared/schema.ts does NOTHING to a database that already has the type:
+-- CREATE TYPE is skipped and the value has to be added here by name. This was missed on
+-- 2026-11-07 and the first attempt to accept the agreement against the integration harness
+-- failed with "invalid input value for enum consent_type: anvil_check" -- which on production
+-- would have been a 500 the first time anybody ticked the box, on the one write that has to
+-- succeed before the check can be taken at all.
+DO $$ BEGIN
+  ALTER TYPE "consent_type" ADD VALUE IF NOT EXISTS 'anvil_check';
+EXCEPTION WHEN undefined_object THEN NULL; END $$;
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'weight_unit_lbs_default_2026_09_09') THEN
