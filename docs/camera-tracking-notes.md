@@ -14,7 +14,7 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-09, round twelve)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-09, round thirteen)
 
 **ROUND TWELVE (2026-11-09), THE ONE-LINE VERSION:** squat, RDL and box jump on **build 720**.
 The squat's fault was the CLOCK, not the scale -- a 0.2-0.4s stand at lockout between reps was
@@ -24,6 +24,15 @@ the phase ENDS INSIDE is still a rest, `REST_AT_TOP_MIN_SECONDS` 0.4) and the sq
 whole 44-capture corpus; no rep count and no range of motion changes anywhere.** The RDL (-25%,
 pure scale, mean error == range error) and the box jump (height +5.0%, velocities -50%) are read,
 measured and NOT fixed; see "Round twelve" for what to do next on each.
+
+**ROUND THIRTEEN (2026-11-09 evening), MEASURED AND NOTHING SHIPPED -- READ "Round thirteen"
+BEFORE TOUCHING THE SQUAT'S BAR POINT OR THE JUMP'S STEP-DOWN.** Set 2 of all three lifts is
+missing from the export (the bug build 726 fixes). The squat's set 3 reads +17.8% on range with
+the clock right; the hip read the sensor to -1.8% and the shoulder +15%. **The same check on set 1
+says the opposite way round** (shoulder/hip 1.05 on every real rep, and set 1 reads LOW), so a
+hip bar point helps set 3 and hurts set 1 -- not fitted, Rule #5. The box jump's nine "reps" on a
+five-rep set (five ups, four step-downs) are the next RULE, and **the set-3 export is not in the
+repo** -- it has to be re-downloaded before that rule can be costed.
 
 Scott, 2026-10-29: "I want you keeping a running log wherever you need to ... so we don't keep
 going in circles with what works and what doesn't, when your feed goes stale you don't remember
@@ -6404,6 +6413,70 @@ machinery. **It is already measurable without a phone**: take any stored FILE-pa
 its trace to the live path's measured profile (19 dropouts, `cadenceHeld` 0.935, 1.5s lost) and
 replay both through `summarizeTrackedSet`. If the numbers barely move, the honest answer is to
 tighten the gate instead and skip the second pass. **Do that measurement first.**
+
+## Round thirteen, 2026-11-09 evening: set 3 on 724, measured, nothing shipped
+
+Export `93688684-forge-captures-recent.json` (2026-11-09 20:55 UTC). **It is NOT committed** --
+it lived in a session scratchpad that went with the container, and the committed
+`__fixtures__/ovr-2026-11-09-export.json` holds set 1 only. The numbers below for set 3 are the
+previous session's measurements, recorded in its handoff; the set-1 numbers were re-measured
+here off the committed fixture. **Re-download that export and commit it as a fixture before
+anything below is acted on.**
+
+Set 2 is missing on all three lifts: the six tracker dialogs that skipped `onCapture` when no
+video upload was in flight, fixed in 726. **Pairing, confirmed by Scott: Forge set 3 is OVR set 3
+for the squat and OVR set 2 for the RDL and the box jump.**
+
+### Back Squat set 3 vs OVR set 3: ROM +17.8%, mean +22.0%, peak +15.8%
+
+The CLOCK is right (drive windows 0.934 / 0.900 / 0.934 / 0.934 / 1.034s against the sensor's
+0.95 / 0.95 / 0.92 / 0.97 / 1.03), so round twelve holds and this is distance. Every ruler moved
+under 3% between sets 1 and 3 while the scale the sensor needs dropped 16.6%, so it is not the
+ruler either. Off `bodyWitnessTrace`, set 3's HIP travelled 22.1in against the sensor's 22.5
+(-1.8%) and the SHOULDER -- the point the bar-on-back rule (2026-09-28) calls the bar -- 25.8in
+(+15%), on shallow reps.
+
+**The same measurement on set 1, the only stored squat with a witness trace** (`hp` and `sh` in
+analysis pixels, median-of-7 smoothing, bottom against the top within 2.5s after it):
+
+| rep | hip px | shoulder px | shoulder / hip |
+|---|---|---|---|
+| 1 | 166.1 | 174.2 | 1.049 |
+| 2 | 170.3 | 178.7 | 1.049 |
+| 3 | 165.4 | 173.1 | 1.047 |
+| 4 | 165.3 | 177.7 | 1.075 |
+| 5 | 175.7 | 167.8 | 0.955 |
+
+(The first hip excursion in the trace, at 1.0s, moves the hip 332px and the shoulder 40px -- the set-up, not a squat -- and is left out.)
+Set 1 reads range of motion **-8.3%** off the shoulder, so the hip would read it about **-12.7%**.
+**A hip bar point is +17 points on set 3 and -4.4 on set 1.** Two takes, opposite answers: this is
+Rule #5's case exactly, and the shoulder/hip ratio itself moves with depth (1.05 on 31.5in reps,
+1.17 on 22.5in reps), which is a geometry to model, not a constant to fit. **Not changed.**
+What would settle it: the witness trace on the 10-29 and 11-05 squats (the server derives it at
+download from the stored skeleton file, so a fresh export of those days carries it) -- five more
+takes of the ratio against depth before the bar-on-back rule is touched.
+
+Also: loosening `heightRulerUncertainty` is NOT the lever -- the height ruler reads 12.7% LOW on
+set 1 and 7.3% HIGH on set 3.
+
+### Romanian Deadlift set 3 vs OVR set 2: ROM +25.0%, mean +65.2%, peak +80.3%
+
+Mean error 2.6x the range error, so the CLOCK -- the opposite of set 1 (pure scale, -25%). Reps
+1-6 run a third long and 7-8 are right; rep velocities 0.69-1.75 against a sensor flat at
+0.63-0.79; a plate joined the blend for the first time on an RDL and voted 34% high. A segmenting
+failure, not a calibration point. Not fitted.
+
+### Box Jump set 3 vs OVR jump squat set 2: nine "jumps" on a five-rep set
+
+Five ups and four step-downs off the box (the ankle at the floor, then ~92cm for 1-2s, five
+times, with four returns). The ups: takeoff 2.85 m/s against 2.71 (+5.3%), height 14.2in against
+25.8 (-45%). The step-downs: 7.2in, 1.81 m/s. Set 1 (2.9-4.0s on the ground) did not do it; set 3
+(1.25-2.3s) did, so the step-down is counted only at a real set's pace. **`summarizeJumpSet`
+already rejects a landing more than 3cm below its takeoff (`dismount_rejected`)**, so a step-down
+that reaches the rep list got past that test -- its takeoff and landing were measured from the
+wrong surface, most likely because the baseline had not re-anchored to the box top before he
+stepped off at that tempo. That is a hypothesis about `summarizeJumpSet`'s grounded branch, and it
+cannot be checked without the set-3 trace: **the rule waits on the export.**
 
 ## Round twelve, 2026-11-09: the squat's clock, not its scale -- a lockout pause was counted as lifting
 
