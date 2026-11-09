@@ -350,7 +350,10 @@ def finish(name):
             # face_muscles.py, which says so at length. It runs after the recolour so it inherits
             # the head's colour, and before the key light and the rim so the face is lit with the
             # rest of the figure.
-            face_muscles.draw(rgb, hm, lum, "front" if name.endswith("front") else "back", target, K)
+            # ONE call to extremity_tones, and both the skull and the extremities read from it
+            _bone, _tendon = extremity_tones(target, K)
+            face_muscles.draw(rgb, hm, lum, "front" if name.endswith("front") else "back",
+                              target, K, tendon=_tendon)
             # the hands, the feet and the shin's bone, in the same two tones the cranium uses
             recolour_extremities(rgb, lum, body, lab, hm, target, K)
             dome = kf("r_head_dome", 0.0)

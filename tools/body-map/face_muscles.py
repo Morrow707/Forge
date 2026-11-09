@@ -152,8 +152,10 @@ def _shapes(spec, mid, half, top, height, shape):
     return out
 
 
-def draw(rgb, head, lum, view, target, K):
-    """Paint the facial muscles into `rgb` over `head`. `target` is the colour the head follows."""
+def draw(rgb, head, lum, view, target, K, tendon=None):
+    """Paint the facial muscles into `rgb` over `head`. `target` is the colour the head follows;
+    `tendon` is the figure's ONE tendon tone, passed in by `realistic.py` so the skull's sheet,
+    the hand's extensor tendons and the foot's are the same material."""
     kf = lambda k, d: float(K.get(k, d))
     strength = kf("r_face_muscles", 0.0)
     if strength <= 0 or not head.any():
@@ -215,10 +217,15 @@ def draw(rgb, head, lum, view, target, K):
     # almost no blood in it and reading as a pale muscle is how it goes unnoticed.
     apo = head & ~claimed
     if apo.any():
-        pale = target * kf("r_face_tendon", 1.30)
-        grey = float(pale @ np.array([0.299, 0.587, 0.114], np.float32))
-        pale = pale + (grey - pale) * kf("r_face_tendon_grey", 0.42)
-        paint[apo] = pale
+        # THE SKULL'S SHEET TAKES THE FIGURE'S TENDON TONE, and the fact that it did not is a
+        # defect this file's own README asserted was already fixed. The 2026-11-09 pass wrote
+        # "the SAME two tones are what the head's cranium sheet uses -- which is the whole reason
+        # these were done together", and then wired only the hands and feet to them: the skull
+        # went on computing its own pale from r_face_tendon 1.30 / r_face_tendon_grey 0.42 while
+        # the extremities used 1.18 / 0.55. Intent and code differed and the comment is what made
+        # it look settled. The two knobs are gone rather than left as a fallback, because a
+        # fallback is how they drift apart again.
+        paint[apo] = tendon if tendon is not None else target * 1.18
         cover[apo] = 1.0
 
     yy, xx = np.mgrid[0:head.shape[0], 0:head.shape[1]].astype(np.float32)

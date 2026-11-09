@@ -378,6 +378,16 @@ carrying two different ivories and two different tendon greys reads as parts fro
 tendon 55% of the way to neutral because a tendon has almost no blood in it -- so moving the
 head's colour moves all of them together and they cannot drift apart.
 
+**THE PARAGRAPH ABOVE WAS FALSE FOR ONE COMMIT, AND THE WAY IT WAS FOUND IS THE POINT.** It was
+written, and committed, while only the hands and feet were wired to `extremity_tones`: the skull
+went on computing its own pale from `r_face_tendon` 1.30 and `r_face_tendon_grey` 0.42 against the
+extremities' 1.18 and 0.55, so the figure carried exactly the two different tendons the sentence
+claimed it could not. **Intent and code differed and the comment is what made it look settled** --
+this repo's own standing sentence, earned again. Scott asked for the head to be rendered "with the
+parameters we've already set" and the grep that answers that question is what turned it up.
+`face_muscles.draw` takes the tone as an argument now and the two face knobs are DELETED rather
+than left as a fallback, because a fallback is how they drift apart again.
+
 **What is NOT done, and is still Scott's:** the head is a drawing where the body is a render. One
 export of the same four views, same camera, same pose, with the head's muscle layer turned on,
 into `source3d/`, replaces `face_muscles.py` entirely and costs nothing else -- every other stage

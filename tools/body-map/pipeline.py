@@ -95,8 +95,8 @@ KNOBS = {
     "r_face_fibre_px": 4.2,
     "r_face_seam": 0.42,   # how dark the crease between two drawn facial muscles goes
     "r_face_variation": 0.07, # a little tone per muscle, so one belly is told from the next
-    "r_face_tendon": 1.30, # the galea and periosteum: every pixel no belly claims
-    "r_face_tendon_grey": 0.42, # how far that sheet is pulled toward neutral (a tendon has no blood)
+    # the galea is every pixel no belly claims; its COLOUR is r_tendon_grey / r_tendon_level
+    # below, shared with the hands and the feet, so the figure has one tendon and not three
     "r_face_aperture": 0.42, # how dark the mouth line is
     "r_eye_sclera": 1.55,  # the white of the eye, off the head's own colour pulled toward neutral
     "r_eye_iris": 0.52,
