@@ -148,8 +148,16 @@ shoulder ruler -- it stands down wherever the height ruler does (+2.5% with all 
 0.4 is the small step (+41.8%); the **row's 21.9cm against 41-47** is the midpoint of a braced hand
 and the working hand, so a unilateral lift is traced by its WORKING hand now, and it asks for a
 dumbbell. The bench's plate was found, measured 7% SMALL, and admitting it (a per-lift aspect
-ceiling, built) was costed at +6.2% and not shipped. Held on the branch with the reps-keypad fix;
-`verify_build` then `beta` when the hold lifts. See "Round eleven".
+ceiling, built) was costed at +6.2% and not shipped. **SHIPPED as build 716** (2026-11-06 19:59 UTC, `af7d4d3`; 715 its
+`verify_build`) once Scott lifted the hold -- this line said "held on the branch" for three days
+after it went out. **THE BUILD TO FILM ON IS 718**: it added no camera work of its own (it is the
+Anvil's client half) but it is cut from a branch that merged main including 716, so it CONTAINS
+round eleven, and CLAUDE.md said "714 remains the one to film on" until 2026-11-09. 714 is round
+TEN. Filming on it would have cost round eleven's three fixes, the supine-stature rule among them
+(a bench reading -12.6% against +2.5%). **Check ancestry, never the run list**:
+`git merge-base --is-ancestor <camera commit> <build commit>`. The build to film on is the newest
+build that CONTAINS the newest camera commit, which is not always the newest that ADDED one.
+See "Round eleven".
 **AND PER-SIDE FILMING IS BUILT (2026-11-06):** every set of a unilateral exercise is two rows,
 one per side, each logged, filmed and measured on its own (`shared/unilateral-sides.ts`,
 `workout_set_entries.side`); the tracker is told the side (`trace.declaredSide`) and records whether

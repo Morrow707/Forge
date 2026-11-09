@@ -3506,8 +3506,14 @@ halves before splitting anything else:
   UTC, `3e04c93`: the Anvil's client half -- the four tasks, the dashboard card, the coach's week
   and the print button; 717 was its `verify_build` on the same commit, which passed Apple's own
   `--validate-app`). **This is the first build that carries a feature with no camera in it**, so
-  it is not a calibration build and 714 remains the one to film on until a later build moves a
-  camera number. The Anvil's server half went live on Render with the same push and needs no
+  it added no camera work of its own -- **but it is cut from a branch that MERGED main including
+  715/716, so it CONTAINS round eleven and is the build to film on.** An earlier version of this
+  line said "714 remains the one to film on", which was wrong in the one way that costs a
+  calibration morning: 714 is round TEN, and round eleven's three fixes are not in it -- the
+  supine-stature rule alone is the difference between a bench reading -12.6% and +2.5%. Verified
+  by ancestry, not by the run list: `git merge-base --is-ancestor <round-eleven> <build-718>`.
+  **The rule this restates: the build to film on is the newest build that CONTAINS the newest
+  camera commit, which is not always the newest build that ADDED one.** The Anvil's server half went live on Render with the same push and needs no
   build. Before 718, **716** (2026-11-06 19:59 UTC, `af7d4d3`: round eleven and the unilateral
   per-side rows; 715 was its `verify_build` on the same commit). Before it, **714** (2026-11-06
   13:33 UTC, `5003fef`: round ten -- a rep ends when the bar comes to rest, the RDL's whole window, the
