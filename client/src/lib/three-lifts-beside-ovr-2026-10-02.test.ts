@@ -73,11 +73,35 @@ describe("the live path samples by time and is judged by its largest gap", () =>
     expect(swift).toContain("bypassStrideGuard: true");
     expect(swift).toContain("guard bypassStrideGuard || thisFrameIndex % ctx.sampleEveryNthFrame == 0 else { return }");
   });
-  it("gates on coverage and the largest inter-frame gap, not on the drop rate", () => {
-    expect(swift).toContain("guard coverage >= Self.minLiveCoverage, maxGapSeconds <= Self.maxLiveInterFrameGapSeconds else {");
+  /* 2026-11-09 ADDED THE SECOND GAP, and the two are not the same measurement.
+   *
+   * `maxInterFrameGapSeconds` is the gap between frames the sampler PROCESSED; it says whether
+   * the sampler kept up and nothing about whether the TRACE has a hole, because a frame can be
+   * processed and still yield no pose. Measured on the stored corpus: the 2026-11-06 single-arm
+   * row ran LIVE with a 2.302s hole in its final trace and the 11-06 bench with a 0.759s one,
+   * both under a gate asking about a quarter of a second.
+   *
+   * What a hole costs, replayed on a clean take with one punched into it: a 0.76s hole moves the
+   * set mean up to 12.9%, and a 2.3s hole DELETES REPS (a five-rep squat reads three). Nineteen
+   * scattered two-sample dropouts -- the live path's whole measured profile otherwise -- move it
+   * 1-6% and never change the count. The reps are the damage, so the trace's own gap is gated. */
+  it("gates on coverage AND both gaps -- the sampler's and the trace's -- not on the drop rate", () => {
+    expect(swift).toContain("guard coverage >= Self.minLiveCoverage,");
+    expect(swift).toContain("maxGapSeconds <= Self.maxLiveInterFrameGapSeconds,");
+    expect(swift).toContain("maxTracedGapSeconds <= Self.maxLiveInterFrameGapSeconds else {");
     expect(swift).toMatch(/minLiveCoverage = 0\.5/);
     expect(swift).toMatch(/maxLiveInterFrameGapSeconds = 0\.25/);
     expect(swift).not.toContain("guard coverage >= 0.9, dropRate <= 0.05 else {");
+    // the traced gap is measured ONLY where a body was found -- the whole point of the second
+    // number. Measuring it beside the processed one would make it the same number twice.
+    expect(swift).toContain("state.previousTracedTimestamp = timestampSeconds");
+    const tracedAt = swift.indexOf("state.previousTracedTimestamp = timestampSeconds");
+    const trackedAt = swift.indexOf("state.trackedCount += 1");
+    expect(trackedAt).toBeGreaterThan(0);
+    expect(tracedAt - trackedAt, "the traced gap is updated inside the body-found branch").toBeGreaterThan(0);
+    expect(tracedAt - trackedAt).toBeLessThan(400);
+    // and it reaches the export, because zod strips what it does not declare
+    expect(swift).toContain('result["maxTracedGapSeconds"] = maxTracedGapSeconds');
   });
 });
 

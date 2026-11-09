@@ -35,6 +35,47 @@ const TRACKER_DIALOGS = readdirSync(COMPONENTS)
 /** The one deliberate escape, and it costs a sentence of justification in the source. */
 const EXEMPTION = "diagnostics-exempt:";
 
+/* COMMENTS COME OFF BEFORE ANY NEGATIVE ASSERTION. A comment explaining a fix is exactly where
+ * the old form gets quoted, so prose about what the code no longer does is indistinguishable
+ * from the code still doing it -- CLAUDE.md calls this the most repeated self-inflicted failure
+ * in this repo, and the 2026-11-09 fix below quotes `onCapture` in its own explanation.
+ *
+ * LINE-AWARE, NOT THE TWO-REGEX VERSION. A non-greedy block-comment regex pairs a comment opener
+ * inside a string or a regex with the next real closer thousands of lines away; on a big file it
+ * silently empties the haystack, which reads as the code being wrong. A block comment counts only
+ * when its opener starts the line, and an end-of-line comment is cut only where the slashes have
+ * balanced quotes before them. */
+function stripComments(src: string): string {
+  const out: string[] = [];
+  let inBlock = false;
+  for (const line of src.split("\n")) {
+    let l = line;
+    if (inBlock) {
+      const close = l.indexOf("*/");
+      if (close === -1) { out.push(""); continue; }
+      l = l.slice(close + 2);
+      inBlock = false;
+    }
+    const open = l.search(/^\s*\/\*/);
+    if (open !== -1) {
+      const close = l.indexOf("*/", open);
+      if (close === -1) { inBlock = true; out.push(l.slice(0, open)); continue; }
+      l = l.slice(0, open) + l.slice(close + 2);
+    }
+    let quote: string | null = null;
+    for (let i = 0; i < l.length; i++) {
+      const c = l[i];
+      if (quote) {
+        if (c === "\\") i++;
+        else if (c === quote) quote = null;
+      } else if (c === '"' || c === "'" || c === "`") quote = c;
+      else if (c === "/" && l[i + 1] === "/") { l = l.slice(0, i); break; }
+    }
+    out.push(l);
+  }
+  return out.join("\n");
+}
+
 function matchedBlock(source: string, openBraceIdx: number): { body: string; end: number } {
   let depth = 1;
   let i = openBraceIdx + 1;
@@ -231,5 +272,68 @@ describe("a skill capture survives its video failing", () => {
     // upload is still sharing the save's try and the numbers are still hostage to it.
     const between = src.slice(upload, log);
     expect(between).toMatch(/catch\s*(\([^)]*\))?\s*\{/);
+  });
+});
+
+/* AND THE SALVAGE MUST NOT BE CONDITIONAL ON THE UPLOAD EXISTING.
+ *
+ * Scott, 2026-11-09, having filmed a back squat and lost it: "I just got a couldn't analyze so it
+ * cancelled it. Didn't save my back squat." Then the half that makes it a bug rather than a bad
+ * day: "It didn't show up in the debug or in the diagnostics."
+ *
+ * The rule above -- if a try reports the take, its catch must too -- was satisfied. The hole was
+ * one level out. On the `if (!result)` branch, where the analysis has ALREADY failed, six dialogs
+ * wrapped the entire salvage in `if (inFlightUpload) { ... }` and then plainly returned. With no
+ * upload in flight the function did nothing at all: no onCapture, no row, no diagnostics blob, not
+ * one debug line. A filmed set came out identical to a set nobody pointed a camera at, which is
+ * the precise failure Rule #1 exists to refuse and the one case a tracking report can never show
+ * anybody, because an absence has nothing to show.
+ *
+ * REACHABLE TWO WAYS, the second of them the common one:
+ *   - video recording switched off for the exercise, so there was never an upload; or
+ *   - the analysis throwing BEFORE `onBlobReady` fired. `use-av-body-tracking.ts` awaits the
+ *     re-encode AFTER the analysis, so an analysis that falls over early -- the native stall
+ *     watchdog giving up is the documented case -- leaves `uploadPromise` null even though video
+ *     was on and the recording happened.
+ *
+ * THE RULE IS STRUCTURAL, NOT ABOUT WORDING: on that branch the call reporting the take must not
+ * sit inside ANY conditional on the upload. The upload decides whether a CLIP is attached; it
+ * never decides whether a ROW exists.
+ */
+describe("a take whose analysis failed is reported even when there is no upload", () => {
+  const SALVAGE_GUARD = "if (inFlightUpload) {";
+  const withSalvage = TRACKER_DIALOGS.filter((f) =>
+    readFileSync(join(COMPONENTS, f), "utf8").includes("const inFlightUpload = uploadPromise"),
+  );
+
+  it("finds the dialogs that salvage a failed analysis", () => {
+    expect(withSalvage.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it.each(withSalvage)("%s reports the take outside EVERY upload conditional", (file) => {
+    const src = stripComments(readFileSync(join(COMPONENTS, file), "utf8"));
+    // EVERY such block, not just the first. The first draft of this case checked only the first
+    // one, and a mutation that moved the report into a SECOND `if (inFlightUpload)` straight
+    // after it passed -- which is the bug wearing a new brace.
+    let found = 0;
+    for (let at = src.indexOf(SALVAGE_GUARD); at !== -1; at = src.indexOf(SALVAGE_GUARD, at + 1)) {
+      found++;
+      const { body } = matchedBlock(src, src.indexOf("{", at));
+      expect(body, `onCapture must not be inside an \`${SALVAGE_GUARD}\` block`).not.toContain("onCapture(");
+    }
+    expect(found, "the upload conditional").toBeGreaterThan(0);
+  });
+
+  it.each(withSalvage)("%s reports the take and says so in the debug console", (file) => {
+    const src = stripComments(readFileSync(join(COMPONENTS, file), "utf8"));
+    const at = src.indexOf(SALVAGE_GUARD);
+    const { end } = matchedBlock(src, src.indexOf("{", at));
+    // Between the conditional closing and the function returning. Bounded by the block's own
+    // brace, never a character count -- a window would move the moment somebody adds a comment.
+    const after = src.slice(end, end + 1600);
+    expect(after, "onCapture after the conditional").toContain("onCapture(");
+    // and the failure reaches the ONE instrument that exists on a phone. There is no console on
+    // an iPhone; a failure nobody can read is the half of this bug Scott actually reported.
+    expect(after, "a debug line for the failure").toContain("logDebug(");
   });
 });

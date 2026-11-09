@@ -9889,6 +9889,9 @@ export const trackingDiagnosticsSchema = z.object({
       lowPowerModeEnabled: z.boolean().optional(),
       freeDiskSpaceBytes: z.number().optional(),
       maxInterFrameGapSeconds: z.number().optional(),
+      /** The largest hole in the TRACE, beside the sampler's own gap above. Declared here because
+       *  zod strips what it does not declare, silently -- which has cost two diagnostics. */
+      maxTracedGapSeconds: z.number().optional(),
       // Box-jump-only (see AvBodyTrackingPlugin.swift's detectBoxTopCandidate) -- Vision's own
       // median-of-candidate-frames read on where the box's top surface sits, in normalized
       // image-space Y. This is a DIFFERENT detector from objectDetection below (that's the

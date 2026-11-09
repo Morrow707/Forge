@@ -1,5 +1,6 @@
 import type { MovementProfile } from "@shared/schema";
 import { declareObjectSystem } from "@shared/capture-object-system";
+import { logDebug } from "@/lib/debug-console";
 import { type TrackingDiagnostics } from "@/lib/tracking-diagnostics";
 import { measureTraceSampling } from "@/lib/trace-sampling";
 import { useEffect, useRef, useState } from "react";
@@ -362,30 +363,37 @@ export function AvHorizontalLoadTrackerDialog({
       const inFlightUpload = uploadPromiseRef.current as Promise<
         { status: "uploaded"; url: string } | { status: "queued" }
       > | null;
+      // THE SALVAGE IS UNCONDITIONAL. It used to sit INSIDE `if (inFlightUpload)`, so a take whose
+      // analysis fell over with no upload in flight returned here having done nothing at all -- no
+      // onCapture, no row, no diagnostics, not even a debug line. Scott, 2026-11-09, on a back squat
+      // he filmed and lost: "Didn't save my back squat ... It didn't show up in the debug or in the
+      // diagnostics." A filmed set came out identical to one nobody pointed a camera at, which is the
+      // exact failure Rule #1 exists to refuse, and it was reachable two ways: video recording off,
+      // or -- the common one -- the analysis throwing BEFORE onBlobReady ever fired, since the
+      // re-encode is awaited AFTER the analysis rather than before it.
+      let salvagedVideoUrl: string | undefined;
       if (inFlightUpload) {
         try {
           const uploadResult = await inFlightUpload;
-          toast.error("Couldn't finish analyzing this take, but your video was saved for your coach.");
-          onCapture(null, uploadResult.status === "uploaded" ? uploadResult.url : undefined, null);
-          onOpenChange(false);
-          return;
+          salvagedVideoUrl = uploadResult.status === "uploaded" ? uploadResult.url : undefined;
         } catch {
-          // "Nothing left to salvage" was wrong: THE FAILURE IS THE THING TO SALVAGE.
-          //
-          // This caught an upload failure on top of an analysis failure and did nothing at all, so a
-          // set where the camera ran, the analysis fell over AND the clip did not make it came out
-          // identical to a set nobody ever pointed a camera at. That is the exact case the tracking
-          // report exists for, and it was the one case guaranteed never to reach it.
-          //
-          // Handing up the empty metrics with no video URL records that a capture was attempted and
-          // came back with nothing. The report flags it as a set whose diagnostics are missing, which
-          // is a fact somebody can act on, rather than an absence nobody can see.
-          onCapture(null, undefined, null);
-          onOpenChange(false);
-        } finally {
-          setSaving(false);
+          // The clip did not make it either. The ROW still does: handing up the empty metrics records
+          // that a capture was attempted and came back with nothing, which the tracking report can
+          // show somebody, where an absence is invisible by construction.
         }
       }
+      logDebug(
+        "CAM",
+        `analysis produced nothing; saving the set anyway (video ${inFlightUpload ? (salvagedVideoUrl ? "attached" : "queued or failed") : "not recorded"})`,
+      );
+      toast.error(
+        inFlightUpload
+          ? "Couldn't finish analyzing this take, but your video was saved for your coach."
+          : "Couldn't finish analyzing this take. The set was saved without numbers.",
+      );
+      onCapture(null, salvagedVideoUrl, null);
+      setSaving(false);
+      onOpenChange(false);
       setReadFailed(true);
       changeStep("calibrate");
       return;

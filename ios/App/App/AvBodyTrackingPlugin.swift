@@ -1775,9 +1775,20 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // a coarser cadence (the stored corpus the thresholds were calibrated on ran at 7-15Hz).
         // Coverage and drop rate are still recorded for the report.
         let maxGapSeconds = run.state.maxInterFrameGapSeconds ?? 0
-        guard coverage >= Self.minLiveCoverage, maxGapSeconds <= Self.maxLiveInterFrameGapSeconds else {
+        // AND THE GAP IN THE TRACE, which is the test that actually protects the reps. Both are
+        // held to the same quarter second: a hole is a hole whether the sampler slept through it
+        // or Vision found nobody in it, and the number that reaches the athlete is built from the
+        // frames that produced a body. Measured on the corpus, this sends exactly two of the nine
+        // stored live takes to the file (the 11-06 bench at 0.759s and the single-arm row at
+        // 2.302s -- the two whose holes are big enough to lose reps) and leaves the other seven
+        // live at no cost to the athlete, their traced gaps sitting at 0.075-0.200s.
+        let maxTracedGapSeconds = run.state.maxTracedGapSeconds ?? 0
+        guard coverage >= Self.minLiveCoverage,
+              maxGapSeconds <= Self.maxLiveInterFrameGapSeconds,
+              maxTracedGapSeconds <= Self.maxLiveInterFrameGapSeconds else {
             let why = "coverage=\(String(format: "%.2f", coverage)) dropRate=\(String(format: "%.3f", dropRate)) "
                 + "maxGap=\(String(format: "%.2f", maxGapSeconds))s "
+                + "maxTracedGap=\(String(format: "%.2f", maxTracedGapSeconds))s "
                 + "processed=\(run.state.processedCount) expected=\(String(format: "%.0f", expectedFrames))"
             lastLiveFallbackReason = why
             logDiag("live analysis unusable: \(lastLiveFallbackReason!)")
@@ -1833,6 +1844,9 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         }
         if let maxInterFrameGapSeconds = state.maxInterFrameGapSeconds {
             result["maxInterFrameGapSeconds"] = maxInterFrameGapSeconds
+        }
+        if let maxTracedGapSeconds = state.maxTracedGapSeconds {
+            result["maxTracedGapSeconds"] = maxTracedGapSeconds
         }
         if let videoAsset = lastUploadCopyTelemetry {
             result["videoAsset"] = videoAsset
@@ -2468,6 +2482,12 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             if let observation = ctx.poseRequest.results?.first as? VNHumanBodyPoseObservation {
                 tracked = true
                 state.trackedCount += 1
+                // The hole in the TRACE, not in the sampler -- see maxTracedGapSeconds.
+                if let previousTraced = state.previousTracedTimestamp {
+                    let tracedGap = timestampSeconds - previousTraced
+                    if tracedGap > (state.maxTracedGapSeconds ?? 0) { state.maxTracedGapSeconds = tracedGap }
+                }
+                state.previousTracedTimestamp = timestampSeconds
                 for (jointName, label) in Self.bodyPoseJoints {
                     guard let point = try? observation.recognizedPoint(jointName), point.confidence > 0.1 else {
                         continue
@@ -3515,6 +3535,19 @@ private final class AvFrameRunState {
     // stall signal that reader status alone reads as "completed".
     var previousProcessedTimestamp: Double?
     var maxInterFrameGapSeconds: Double?
+    // AND THE SAME GAP OVER FRAMES THAT ACTUALLY PRODUCED A BODY, which is the one that matters
+    // and the one the live gate was missing. A frame can be processed and still yield no pose --
+    // Vision ran cleanly and found nobody -- so the processed-frame gap above measures whether
+    // the SAMPLER kept up and says nothing about whether the TRACE has a hole in it. Measured
+    // 2026-11-09 across the stored corpus: the 11-06 single-arm row ran LIVE with a 2.302s hole
+    // in its final trace and the 11-06 bench with a 0.759s one, both under a gate asking about a
+    // quarter of a second, because the sampler never missed a beat through either. Replaying a
+    // clean take with one hole punched into it, a 0.76s hole moves the set mean up to 12.9% and a
+    // 2.3s hole DELETES REPS (a five-rep squat reads three), where nineteen scattered two-sample
+    // dropouts -- the live path's whole measured profile otherwise -- move it 1-6% and never
+    // change the count. A lost rep is the damage; scattered jitter is not.
+    var previousTracedTimestamp: Double?
+    var maxTracedGapSeconds: Double?
     // Isolating hand-pose's OWN incremental per-frame cost, since that is what decides whether
     // it is safe to keep running on every sampled frame.
     var handPoseElapsedSeconds: Double = 0

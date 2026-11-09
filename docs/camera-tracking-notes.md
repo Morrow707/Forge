@@ -6228,6 +6228,77 @@ the right body point, read 30% low off a smoothed trace at `effectiveHz` 40 with
    refit of the height or shoulder ruler.
 
 
+## A FILMED BACK SQUAT SAVED NOTHING, AND THE LIVE GATE WAS MEASURING THE WRONG HOLE (2026-11-09)
+
+*Written by the Opus session of 2026-11-09, same evening as round twelve. Two separate faults,
+both found because Scott kept filming after the round shipped.*
+
+### 1. "DIDN'T SAVE MY BACK SQUAT ... IT DIDN'T SHOW UP IN THE DEBUG OR IN THE DIAGNOSTICS"
+
+**THE WORST SHAPE THIS REPO CAN SHIP: a set was filmed and NOTHING was written down.** Not a row,
+not a clip, not a `trackingDiagnostics` blob, not one line in the debug console. A filmed set came
+out identical to a set nobody pointed a camera at -- which is the exact failure Rule #1 exists to
+refuse, and the one case the admin tracking report can never surface, because an absence has
+nothing to show.
+
+**THE CAUSE IS ONE CONDITIONAL, IN SIX DIALOGS.** On the `if (!result)` branch -- where the
+analysis has already failed -- the entire salvage sat inside `if (inFlightUpload) { ... }` and the
+function then plainly `return`ed. With no upload in flight, nothing ran.
+
+**AND IT WAS REACHABLE TWO WAYS, the second of them the common one:**
+- video recording switched off for that exercise, so there never was an upload; or
+- **the analysis throwing BEFORE `onBlobReady` ever fired.** `use-av-body-tracking.ts` awaits the
+  re-encode AFTER the analysis, not before it, so an analysis that falls over early -- the native
+  stall watchdog giving up is the documented case, and "couldn't analyze" is its toast -- leaves
+  `uploadPromise` null even though video was on and the recording really happened.
+
+**THE EXISTING RATCHET WAS SATISFIED AND THE HOLE WAS ONE LEVEL OUT.**
+`refused-capture-survives.test.ts` has enforced "if a try reports the take, its catch must too"
+since 2026-09-16, and every one of those catches did. The bug was in the branch ABOVE them.
+
+Fixed in all six (`av-bar`, `av-horizontal-load`, `av-jump`, `av-kb-swing`, `av-medball`,
+`av-swing`): the upload is awaited for its URL if there is one and the take is reported
+UNCONDITIONALLY, with a `logDebug("CAM", ...)` line saying whether a clip was attached, queued or
+never recorded. **The toast now tells the truth in both cases** -- it said "your video was saved
+for your coach" on a path that could only be reached when there was a video, and says "the set was
+saved without numbers" when there is not.
+
+**The new case states what is FORBIDDEN and scans EVERY such block, not the first.** Its own first
+draft checked only the first `if (inFlightUpload)`, and a mutation that moved the report into a
+SECOND one straight after it PASSED -- the bug wearing a new brace. Three mutations now, each
+caught: the report back inside a conditional, the debug line removed, and `onCapture` deleted
+outright (the original bug).
+
+### 2. THE LIVE GATE MEASURED THE SAMPLER'S CADENCE, NOT THE TRACE'S HOLES
+
+Found measuring the corpus for the queued design below. `AvBodyTrackingPlugin.swift` gated on
+`maxInterFrameGapSeconds`, the gap between frames the sampler **PROCESSED** -- which says whether
+the sampler kept up and nothing about whether the TRACE has a hole, because a frame can be
+processed and still yield no pose. **The 2026-11-06 single-arm row ran LIVE with a 2.302s hole in
+its final trace; the 11-06 bench with a 0.759s one.** Both under a gate asking about a quarter of
+a second.
+
+**WHAT A HOLE COSTS, measured by punching one into a clean file-path take and replaying:**
+
+| hole | what it does |
+|---|---|
+| 0.76s (admitted today) | set mean off by up to **12.9%**, rep count intact |
+| 2.30s (admitted today) | **rep count 5 -> 3**, and the count is the damage |
+| 7.96s (correctly caught) | rep count 5 -> 2, mean -65.6% |
+| 19 scattered 2-sample dropouts (the live path's whole measured profile) | mean 1-6%, **count never changes** |
+
+So scattered jitter is not the problem and one contiguous hole is. `maxTracedGapSeconds` is the
+gap between frames that each produced a BODY, updated only inside the pose-found branch, gated at
+the same quarter second and reported in the export (declared in `shared/schema.ts` too -- zod
+strips what it does not declare, which has cost two diagnostics). **On the corpus this sends
+exactly two of the nine stored live takes to the file -- the two whose holes lose reps -- and
+leaves the other seven live at no cost to the athlete** (their traced gaps are 0.075-0.200s).
+
+**AND IT CHANGES THE PRIORITY OF THE QUEUED DESIGN BELOW.** "Show fast, correct quietly" was
+chosen to recover what the live path loses; the measurement says what it loses on a typical take
+is **1-6% and no reps**, and that the dangerous case is the one this gate now catches for free.
+The design stays queued and worth building; it is no longer the urgent half.
+
 ## QUEUED AND DESIGNED, NOT BUILT: "SHOW FAST, CORRECT QUIETLY" -- THE LIVE PASS STOPS BEING THE MEASUREMENT
 
 *Written by the Opus session of 2026-11-09, on Scott's instruction, and labelled so another

@@ -202,6 +202,13 @@ export type AvAnalysisResult = {
   // boxTopNormalizedY below.
   freeDiskSpaceBytes?: number;
   maxInterFrameGapSeconds?: number;
+  /** The largest hole in the TRACE -- the gap between two frames that each produced a body --
+   *  where the field above is the gap between frames the sampler PROCESSED. The live gate reads
+   *  this one as well as that one, because a frame can be processed and still yield no pose, and
+   *  it is the hole in the trace that costs reps (2026-11-09: a 2.3s hole turns a five-rep squat
+   *  into three; nineteen scattered two-sample dropouts move the set mean 1-6% and change no
+   *  count). See maxTracedGapSeconds in AvBodyTrackingPlugin.swift. */
+  maxTracedGapSeconds?: number;
   // Vision's own raw normalized (0-1, bottom-left-origin) convention, same as PoseJoint.y
   // above -- see AvBodyTrackingPlugin.swift's detectBoxTopCandidate for how this is found
   // (VNDetectRectanglesRequest, median across the whole clip) and vision-body-landmarks.ts's
