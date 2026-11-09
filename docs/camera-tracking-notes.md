@@ -6228,6 +6228,110 @@ the right body point, read 30% low off a smoothed trace at `effectiveHz` 40 with
    refit of the height or shoulder ruler.
 
 
+## QUEUED AND DESIGNED, NOT BUILT: "SHOW FAST, CORRECT QUIETLY" -- THE LIVE PASS STOPS BEING THE MEASUREMENT
+
+*Written by the Opus session of 2026-11-09, on Scott's instruction, and labelled so another
+session can pick it up cold. Scott, twice in one evening: "We need to be ready for anything,
+everything is possible, phones dying, phones losing service, people recording and exiting really
+fast people doing what I'm doing which is as soon as it goes back to my lift screen I'm exiting
+out. Everything. Everything needs to survive always." And, choosing between three designs: "I
+think the show fast correct quietly will be best for the athlete correct? Last thing I want is
+for someone to be waiting looking at a loading screen for 5 minutes as they wait for their next
+set. Build it but queue it I'm going to film now."*
+
+**HELD on 2026-11-09 while he films on build 724. Nothing in this section is implemented.**
+
+### THE MEASUREMENT THAT FORCED IT: THE LIVE PASS LOSES 1-6 SECONDS OF TRACE AND THE FILE PASS LOSES NONE
+
+Across every stored capture in `client/src/lib/__fixtures__` that carries both a `recording` and a
+`sampling` block:
+
+| path | takes | median `cadenceHeld` | median dropouts | median seconds of trace lost |
+|---|---|---|---|---|
+| **live** | 9 | 0.935 | **19** | **1.49 s** |
+| **file** | 3 | **1.000** | **0** | **0.00 s** |
+
+Every file-analysed take has 0-1 dropouts. Every live-analysed take is missing between 1.3 and 6.2
+seconds: the 2026-11-06 bench lost **4.70s across 33 dropouts**, the single-arm row **6.24s across
+32**. **Which path a take lands on is decided by a gate, and it changes the quality of the trace
+every number is computed from.**
+
+### AND THE GATE IS BLIND TO THE HOLES THAT MATTER
+
+`AvBodyTrackingPlugin.swift` (`minLiveCoverage` 0.5, `maxLiveInterFrameGapSeconds` 0.25):
+
+    guard coverage >= Self.minLiveCoverage, maxGapSeconds <= Self.maxLiveInterFrameGapSeconds
+
+`maxGapSeconds` is `run.state.maxInterFrameGapSeconds` -- the gap between frames the live sampler
+**PROCESSED**. It is not the gap in the TRACE that comes out, because a frame can be processed and
+still yield no usable body. **The 2026-11-06 single-arm row ran LIVE with a 2.302s hole in its
+final trace; the 11-06 bench ran LIVE with a 0.759s hole.** Both passed a gate asking about a
+quarter of a second. The 2026-11-09 squat fell back only because its hole was **7.96s** -- Scott
+swiping out of the app mid-take -- which is too big to miss.
+
+**NO THRESHOLD FIXES THIS.** When iOS backgrounds the app the camera feed stops and the frames are
+never captured. The live pass cannot survive being backgrounded, by construction, and Scott's own
+filming rhythm backgrounds it on every set.
+
+### THE DESIGN HE CHOSE, AND WHY IT IS NOT "ALWAYS ANALYSE THE FILE"
+
+Always reading the file costs **18-22 seconds per take** (the plugin's own note at
+`AvBodyTrackingPlugin.swift` ~line 3330, measured on a real phone). That wait lands on every
+athlete, not on the one person calibrating, and Rule #2 already forbids paying for correctness
+with the athlete's time ("Analysis time is cut by SPEEDING UP, never by CUTTING").
+
+So: **the live pass keeps drawing the athlete's numbers immediately, and the file pass runs behind
+it and REPLACES them when it lands.** The screen is fast; the stored row is right.
+
+### THE SHAPE, IN THE ORDER IT HAS TO BE BUILT
+
+1. **A native flag to force the file read.** `analyzeRecording` currently decides live-vs-file
+   internally and only reads the file when the live gate FAILS. It needs an optional
+   `forceFileAnalysis` that skips the gate's acceptance, so the second pass can be asked for
+   explicitly. Small and low-risk; everything else hangs off it.
+2. **The recording file must outlive the first pass.** `use-av-body-tracking.ts` deletes it
+   (`deleteAvRecording(path)`) the moment the first result is in hand. The second pass needs it,
+   so the delete moves to after the correction -- and must still happen on every exit, including
+   failure, or a take leaks a video file per set.
+3. **The hook runs the second pass in the background and reports it.** When the first result came
+   back `analysisPath: "live"`, kick off `forceFileAnalysis` and hand the corrected
+   `{ rawFrames, skeletonFrames, recordingStats }` to a new `onCorrectedAnalysis` callback. When
+   the first result was ALREADY the file pass, there is nothing to correct and the callback never
+   fires.
+4. **THE CORRECTION IS A TRACE CORRECTION, which is what makes it tractable.** Everything an
+   athlete reads -- reps, range of motion, velocities, the scale blend, the trust score -- is
+   derived from the trace by `summarizeTrackedSet`, in TypeScript, which is exactly what
+   `capture-replay.ts` proves by re-deriving all of it offline. So the correction does not need to
+   re-run the dialogs' UI: it re-runs the same summariser over the better trace and replaces the
+   stored numbers.
+5. **The save path has to be able to correct a capture it has already confirmed.** This is the one
+   place with a trap already recorded in CLAUDE.md: build 620/625's `capturePersistedRef` +
+   `buildLogPayload` WeakMap decides which captures a later save may OMIT. **A correction must
+   force its capture to be INCLUDED**, or the server keeps the live numbers forever and the
+   correction is silently dropped -- the exact failure build 625 fixed in the other direction.
+6. **The export must say a correction happened.** `analysisPath` already records which pass
+   produced the numbers; it needs a sibling saying whether the row was corrected after the fact,
+   and what the live pass had read, or a calibration session cannot tell a corrected take from one
+   that never needed it.
+
+### WHAT ALREADY SURVIVES, so nobody rebuilds it
+
+Checked, and this half is in good shape: the queued save's BODY is written to a FILE on the phone
+(`pending-log-files.ts`, build 560) so the 5MB localStorage quota cannot trim it; the flush listens
+on `online`, `networkStatusChange` AND `resume` (build 625 -- `online` alone is the bug, a request
+that dies with `TypeError: Load failed` never went offline); a 400 holds a queued set for a week
+rather than deleting it (build 571); the video upload has its own retry queue; and the 409
+catch-up recovers a lost response. **All three of 2026-11-09's sets reached the server with their
+clips despite Scott backgrounding the app mid-take on at least one of them.**
+
+### WHAT TO MEASURE WHEN IT IS BUILT
+
+The claim to prove is that the corrected numbers differ from the live ones by something worth the
+machinery. **It is already measurable without a phone**: take any stored FILE-path capture, degrade
+its trace to the live path's measured profile (19 dropouts, `cadenceHeld` 0.935, 1.5s lost) and
+replay both through `summarizeTrackedSet`. If the numbers barely move, the honest answer is to
+tighten the gate instead and skip the second pass. **Do that measurement first.**
+
 ## Round twelve, 2026-11-09: the squat's clock, not its scale -- a lockout pause was counted as lifting
 
 *Written by the Opus session of 2026-11-09. Scott: "Make sure you take all the notes too I'm tired
