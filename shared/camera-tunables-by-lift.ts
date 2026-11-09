@@ -379,7 +379,7 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // it was fitted on the lowering and is gone -- see VELOCITY_OVERRIDES_REMOVED_2026_11_05 and
   // the-concentric-is-the-way-up.test.ts.
   "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0 },
-  "Back Squat": { heightRulerUncertainty: 0.12, driveOnsetFraction: 0, velocitySmoothingMs: 130 },
+  "Back Squat": { heightRulerUncertainty: 0.12, driveOnsetFraction: 0.02, velocitySmoothingMs: 130 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
   "Dumbbell Shoulder Press": { biacromialToleranceFraction: 0.4 },
 };
@@ -414,6 +414,24 @@ export const VELOCITY_OVERRIDES_REMOVED_2026_11_05: Record<string, string[]> = {
  *  an override with no evidence here is a number somebody guessed, and the test refuses it. */
 export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
   "Back Squat":
+    "2026-11-09, round twelve. driveOnsetFraction 0 -> 0.02, PUTTING BACK THE VALUE ROUND NINE " +
+    "REMOVED, on evidence round nine did not have: a set with PAUSES in it. At 0 the reported " +
+    "window has no speed-based close at all -- the threshold is zero, so trimPhaseToDrive never " +
+    "closes early and the window is whatever the phase and the rest rule leave it. That is not a " +
+    "small value, it is a different KIND of value, and it is structurally unprotected against any " +
+    "non-moving time inside the phase. Round nine's own argument for it ('a positive fraction only " +
+    "ever trims the zero-speed turnaround samples, which the sensor counts') is true of a " +
+    "continuous set and was measured on four of them. On 2026-11-09 Scott stood 0.20-0.37s at " +
+    "lockout between reps and the set read -40.3% against the sensor (0.43 against 0.72) with a " +
+    "fake 54% velocity loss across a set the sensor says was flat. Swept over all five paired " +
+    "squats WITH the round-twelve rest fix in (see bar-tracking.ts, REST_AT_TOP_MIN_SECONDS): at 0 " +
+    "they read -0.2 / -1.1 / +2.2 / +1.4 / -34.1% (bias -6.3%, worst 34.1%), at 0.02 they read " +
+    "+1.8 / +2.2 / +4.6 / +2.7 / -16.2% (bias -1.0%, worst 16.2%). So the four continuous takes " +
+    "pay 2-3 points and all four stay inside 5%, the bias falls sixfold and the worst case halves. " +
+    "0.03 is NOT the next step and buys nothing: the 11-09 take reads -16.2% there too (the " +
+    "threshold has already passed the last slow sample of every rep) while the four continuous " +
+    "takes each give up another point. The next paused squat is what says whether to move again. " +
+    "Rep counts and range of motion unchanged at every value; no other lift reads this record. " +
     "2026-11-05, round ten. heightRulerUncertainty 0.11 -> 0.12, the same one-point step round two " +
     "took (0.1 -> 0.11), worth about +1% of scale on every squat take. Set 2 beside the OVR (135x5, " +
     "build 712, file path) read its range -2.7% as filmed and set 1 -1.9%; across the eight squat " +

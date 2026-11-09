@@ -1750,3 +1750,136 @@ export const OVR_SINGLE_ARM_DUMBBELL_ROW_2026_11_06 = {
     barPointFromBareLoneHand: 11,
   },
 };
+
+/* ========================================================================================
+ * ROUND TWELVE, 2026-11-09. Back Squat, Romanian Deadlift and Box Jump on build 720, beside
+ * the OVR. The three lifts under test and nothing else -- Scott: "I am only doing squats box
+ * jumps and rdls so don't touch anything else."
+ *
+ * READ THE OVR'S EXERCISE LABELS AS THE SENSOR'S OWN VOCABULARY, not as the lift:
+ *   OVR "BACK SQUAT"  -> Back Squat          (135lb x 5)
+ *   OVR "DEADLIFT"    -> Romanian Deadlift   (135lb x 8)
+ *   OVR "JUMP SQUAT"  -> Box Jump            (1lb x 6, onto a 24in box)
+ * Same convention as the OVR's "Push Press" being the Barbell Shoulder Press (2026-10-31).
+ *
+ * THE 1LB ON THE JUMP IS DELIBERATE AND CHANGES NOTHING WE SCORE -- see the status board's
+ * "How to read an OVR screen". The jump's load reaches only the sensor's watts, and Forge
+ * computes no jump power at all.
+ *
+ * WHAT THE SESSION FOUND, so nobody re-derives it (full write-up: docs/camera-tracking-notes.md,
+ * "Round twelve"):
+ *  - SQUAT: the distance is nearly right (-8.3%) and the CLOCK is wrong (mean -40.3%). Forge
+ *    counts the 0.20-0.37s he stands at lockout as part of the lift, on every rep. Strip it and
+ *    reps 1-3 land on the sensor to 0.02s.
+ *  - RDL: mean error equals ROM error, so the window is right and it is purely SCALE (-25%).
+ *    7 reps found against 8 logged, rep 1's ROM 51.5cm against 35.6-41.1 for the rest.
+ *  - BOX JUMP: height +5.0%, velocities -50% and -68%, six reps found against five logged.
+ * ====================================================================================== */
+
+/** Back squat, 135lb x 5, build 720, beside the OVR. Five reps, no setup rep on a barbell lift.
+ *  The sensor's reps are flat (0.70-0.78) where Forge reads a 54% velocity LOSS -- that decay is
+ *  the lockout pause being absorbed into each successive rep, not fatigue. */
+export const OVR_BACK_SQUAT_2026_11_09 = {
+  build: 720,
+  loadLb: 135,
+  repsPerSet: 5,
+  camera: "front of the rack; the shoulders carried the bar (794 shoulder points); file path after a live fallback (coverage 0.60, maxGap 7.96s), cadence 0.996, 1 dropout",
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.13, romIn: 30.4, meanW: 465, peakW: 677, tpvS: 0.70, eai: 1.61 },
+      { meanVelocityMps: 0.71, peakVelocityMps: 0.99, romIn: 30.8, meanW: 427, peakW: 595, tpvS: 0.76, eai: 1.29 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 0.98, romIn: 32.7, meanW: 420, peakW: 586, tpvS: 0.79, eai: 1.22 },
+      { meanVelocityMps: 0.71, peakVelocityMps: 1.05, romIn: 31.2, meanW: 426, peakW: 628, tpvS: 0.79, eai: 1.32 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.10, romIn: 32.4, meanW: 447, peakW: 661, tpvS: 0.89, eai: 1.22 },
+    ],
+    set: { meanVelocityMps: 0.72, peakVelocityMps: 1.05, romIn: 31.5, meanW: 437, peakW: 629, tpvS: 0.78, eai: 1.33 },
+  },
+  forgeOnDevice: {
+    repCount: 5,
+    meanVelocityMps: 0.43,
+    peakVelocityMps: 0.9,
+    romCm: 73.4,
+    velocityLossPercent: 54.2,
+    repMeans: [0.59, 0.54, 0.48, 0.44, 0.27],
+    repPeaks: [1.17, 0.95, 0.96, 0.88, 0.53],
+    repRoms: [74.1, 75.1, 74.1, 75.8, 67.9],
+    repConcentricSeconds: [1.27, 1.4, 1.53, 1.73, 2.54],
+    /** Measured off the stored trace: the seconds of each rep's window in which the bar had
+     *  already arrived at the top and was standing. Reps 1-4; rep 5's 3.1s hold was the one the
+     *  rest-at-top rule DID cut (heldAtTopSeconds 3.102), which is why it is not in this list. */
+    standingSecondsInsideTheWindow: [0.3, 0.2, 0.33, 0.37],
+    /** The same four reps' windows with that standing time removed, against the sensor's own
+     *  implied concentric (its romIn / its mean): 0.99 / 1.10 / 1.19 / 1.12. */
+    driveOnlySeconds: [0.97, 1.1, 1.17, 1.37],
+  },
+};
+
+/** Romanian deadlift, 135lb x 8, build 720. The OVR calls it "Deadlift". Its mean error equals
+ *  its range-of-motion error, which is what says the window is right and the SCALE is the fault. */
+export const OVR_ROMANIAN_DEADLIFT_2026_11_09 = {
+  build: 720,
+  loadLb: 135,
+  repsPerSet: 8,
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.72, peakVelocityMps: 1.16, romIn: 22.4, meanW: 432, peakW: 694, tpvS: 0.48, eai: 2.37 },
+      { meanVelocityMps: 0.77, peakVelocityMps: 1.31, romIn: 20.1, meanW: 460, peakW: 785, tpvS: 0.39, eai: 3.30 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.18, romIn: 19.9, meanW: 445, peakW: 710, tpvS: 0.35, eai: 3.37 },
+      { meanVelocityMps: 0.80, peakVelocityMps: 1.25, romIn: 19.8, meanW: 480, peakW: 752, tpvS: 0.36, eai: 3.47 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.35, romIn: 19.7, meanW: 485, peakW: 809, tpvS: 0.36, eai: 3.65 },
+      { meanVelocityMps: 0.79, peakVelocityMps: 1.29, romIn: 19.5, meanW: 474, peakW: 776, tpvS: 0.36, eai: 3.59 },
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.21, romIn: 19.3, meanW: 448, peakW: 727, tpvS: 0.39, eai: 3.05 },
+      { meanVelocityMps: 0.71, peakVelocityMps: 1.11, romIn: 18.8, meanW: 425, peakW: 669, tpvS: 0.42, eai: 2.63 },
+    ],
+    set: { meanVelocityMps: 0.76, peakVelocityMps: 1.23, romIn: 19.9, meanW: 456, peakW: 740, tpvS: 0.38, eai: 3.17 },
+  },
+  forgeOnDevice: {
+    repCount: 7,
+    meanVelocityMps: 0.56,
+    peakVelocityMps: 1.1,
+    romCm: 37.8,
+    repMeans: [0.65, 0.51, 0.51, 0.64, 0.52, 0.57, 0.54],
+    repPeaks: [1.31, 1.01, 1.01, 1.13, 1.04, 1.11, 1.09],
+    repRoms: [51.5, 38.3, 38.4, 37.8, 35.9, 35.6, 41.1],
+    repConcentricSeconds: [0.82, 0.78, 0.78, 0.62, 0.72, 0.67, 0.77],
+  },
+};
+
+/** Box jump x 5 onto a 24in box, build 720. The OVR screen is headed "JUMP SQUAT" at 1lb x 6 and
+ *  ITS REP 1 IS THE SETUP REP -- 33.3in of range against 26.8-28.2 for the five real ones, and
+ *  0.91 m/s against 1.41-1.54. The sensor's own set row averages it in, so read
+ *  `reportedOverOurReps`, never the screen's bottom row. */
+export const OVR_BOX_JUMP_HIP_2026_11_09 = {
+  build: 720,
+  boxHeightIn: 24,
+  repsPerSet: 5,
+  sensor: {
+    ignoredRep1: { meanVelocityMps: 0.91, peakVelocityMps: 1.82, romIn: 33.3, meanW: 4, peakW: 8, tpvS: 0.32, eai: 5.60 },
+    reps: [
+      { meanVelocityMps: 1.52, peakVelocityMps: 2.70, romIn: 27.8, meanW: 6, peakW: 12, tpvS: 0.17, eai: 15.77 },
+      { meanVelocityMps: 1.41, peakVelocityMps: 2.64, romIn: 26.9, meanW: 6, peakW: 11, tpvS: 0.13, eai: 19.57 },
+      { meanVelocityMps: 1.48, peakVelocityMps: 2.66, romIn: 27.7, meanW: 6, peakW: 11, tpvS: 0.17, eai: 15.53 },
+      { meanVelocityMps: 1.54, peakVelocityMps: 2.63, romIn: 28.2, meanW: 6, peakW: 11, tpvS: 0.12, eai: 20.86 },
+      { meanVelocityMps: 1.43, peakVelocityMps: 2.70, romIn: 26.8, meanW: 6, peakW: 11, tpvS: 0.18, eai: 14.98 },
+    ],
+    /** Reps 2-6 only, the five Forge measured. 27.48in = 69.80cm of hip rise. */
+    reportedOverOurReps: { meanVelocityMps: 1.476, peakVelocityMps: 2.666, romIn: 27.48 },
+    /** What the screen's own bottom row says, setup rep included -- recorded so the two are never
+     *  confused for one another. */
+    setRowIncludingSetupRep: { meanVelocityMps: 1.38, peakVelocityMps: 2.52, romIn: 28.4, meanW: 5, peakW: 10, tpvS: 0.18, eai: 15.38 },
+  },
+  forgeOnDevice: {
+    repCount: 6,
+    jumpHeightCm: 73.3,
+    meanVelocityMps: 0.74,
+    peakVelocityMps: 0.85,
+    boxRiseScaleErrorRatio: 1.399,
+    netRisesCm: [89.4, 90.8, 84.5, 85.3, 81.2, 77.5],
+    repJumpHeightsCm: [73.3, 73.1, 67, 67.9, 63.3, 60.8],
+    repTakeoffVelocitiesMps: [4.27, 4.32, 3.45, 4.23, 3.38, 3.32],
+    /** The countermovement read disagrees rep to rep, which is the open fault on this lift:
+     *  a 1.4cm dip on rep 1, NO countermovement block at all on rep 2, 35.5cm on rep 4. */
+    repDipDepthsCm: [1.4, null, 8.6, 35.5, 27.8, 22.2],
+    repRiseToApexMeanMps: [0.82, null, 0.33, 0.35, 1.45, 1.53],
+  },
+};
