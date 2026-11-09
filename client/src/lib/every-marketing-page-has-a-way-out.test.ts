@@ -33,6 +33,7 @@ const MARKETING_PAGES: Record<string, string> = {
   "/pricing": "client/src/pages/pricing.tsx",
   "/for-high-schools": "client/src/pages/for-high-schools.tsx",
   "/for-athletes": "client/src/pages/for-athletes.tsx",
+  "/in-season-template": "client/src/pages/in-season-template.tsx",
   "/camera-validation": "client/src/pages/camera-validation.tsx",
   "/movements": "client/src/pages/movement.tsx",
 };

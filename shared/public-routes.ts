@@ -78,6 +78,17 @@ export const PUBLIC_ROUTES: PublicRoute[] = [
     image: "/marketing/shot-trophies.png",
   },
   {
+    // Where the Instagram bio link lands: a free printable for coaches, given for joining the
+    // launch list (client/src/pages/in-season-template.tsx).
+    path: "/in-season-template",
+    title: "Free in-season lifting template",
+    description:
+      "A printable 2-day in-season lifting template for high school teams: jumps, a squat, a hinge, push and pull, and rules that keep legs fresh for games.",
+    index: true,
+    priority: 0.7,
+    image: "/downloads/in-season-2-day-lift.png",
+  },
+  {
     path: "/camera-validation",
     title: "What the camera is tested on",
     description:

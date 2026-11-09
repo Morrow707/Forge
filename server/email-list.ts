@@ -39,7 +39,8 @@ import { publicOrigin } from "./public-origin";
  * - A TEST SEND GOES TO THE ADMIN AND NOBODY ELSE, and is not a campaign.
  */
 
-const SOURCES = ["signup", "footer", "other"] as const;
+// "template": the free in-season template page (/in-season-template), where the Instagram bio link lands.
+const SOURCES = ["signup", "footer", "template", "other"] as const;
 
 const joinSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),

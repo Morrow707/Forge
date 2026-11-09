@@ -36,6 +36,7 @@ import { bootedFromPrerender } from "@/lib/prerendered-boot";
 import PricingPage from "@/pages/pricing";
 import ForHighSchoolsPage from "@/pages/for-high-schools";
 import ForAthletesPage from "@/pages/for-athletes";
+import InSeasonTemplatePage from "@/pages/in-season-template";
 import CameraValidationPage from "@/pages/camera-validation";
 import MovementPage, { MovementIndexPage } from "@/pages/movement";
 import LoginPage from "@/pages/login";
@@ -449,6 +450,10 @@ function Router() {
         <Route path="/pricing" component={WebOnlyPage(PricingPage)} />
         <Route path="/for-high-schools" component={WebOnlyPage(ForHighSchoolsPage)} />
         <Route path="/for-athletes" component={WebOnlyPage(ForAthletesPage)} />
+        {/* The free in-season template, where the Instagram bio link lands. A web page like the
+            sales pages: it collects an email for the launch list, so inside the native app it
+            goes to login the way they do. */}
+        <Route path="/in-season-template" component={WebOnlyPage(InSeasonTemplatePage)} />
         {/* What the camera has actually been validated on. Public deliberately: the value of the
             page is entirely in it being readable before somebody buys. */}
         <Route path="/camera-validation" component={CameraValidationPage} />

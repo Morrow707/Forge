@@ -21,6 +21,7 @@ describe("the public pages prerender their bodies", () => {
       "/pricing": /^Pricing$/,
       "/for-high-schools": /rosters of minors/,
       "/for-athletes": /Today's session/,
+      "/in-season-template": /in-season lift you can run this week/,
       "/camera-validation": /camera has actually been tested/,
       "/movements": /How to film it/,
       "/movements/back-squat": /Filming a back squat/,
