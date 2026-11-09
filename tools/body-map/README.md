@@ -324,3 +324,29 @@ up as good as the quads.
 A public-domain anatomy plate (Gray's 1918, Wikimedia) was the one qualitatively different path
 and `upload.wikimedia.org` is outside this environment's network policy. Not worth widening it for
 on a third speculative attempt; the export is the answer.
+
+### A MUSCLE IS LABELLED ON THE VIEW THAT HOLDS IT (2026-11-09)
+
+Found by loading the page in a real browser for the first time, after twenty-six publishes of it.
+The back view was labelling **Chest**, **Biceps** and **Quads**, and the front was labelling
+**Lats**, **Traps**, **Triceps**, **Hamstrings** and **Glutes** -- so a coach reading the back of
+a body saw "Chest" with a leader line into the shoulder blade.
+
+**The cause is that `count > 400` is an absolute number and the question is a relative one.** A
+muscle that wraps round the silhouette leaves slivers on the far side, and a sliver of a big
+muscle clears any threshold a small muscle also has to clear: Chest is 506 px on the back against
+64,908 on the front, and Quads 4,930 against 89,938. Raising the number would have dropped real
+small groups instead -- the test cannot be a count. `labelled()` takes the tile's share of the
+group's own best tile and wants 12%: everything dropped is under it, while Neck and Adductors sit
+at 25% and are genuinely visible from behind, so they keep both labels. **The same rule decides
+which way a tap turns the figure**, so a muscle always opens on the view it is on rather than on a
+sliver of itself.
+
+Every one of the eighteen groups still has a label somewhere -- five front-only, seven back-only,
+six on both -- which is the property to check after any change to that threshold.
+
+**The lesson is the cheap one: load the page.** Both bugs were plainly visible the first time it
+was rendered in a browser, and neither is visible in the tile images the pipeline prints.
+`playwright` and Chromium are preinstalled in this sandbox; `python3.13 -m http.server` over the
+`site/` folder plus a screenshot at 1280 and at 390 is a minute's work and should run before any
+publish that changes the page.

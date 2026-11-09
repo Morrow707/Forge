@@ -191,6 +191,22 @@ h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 24px; 
   }
 
   const key = () => `${state.sex}-${state.view}`;
+  // A GROUP IS LABELLED ON THE VIEW THAT HOLDS IT, not on any view it bleeds a few pixels onto.
+  // The old test was `count > 400`, and a muscle that wraps round the silhouette leaves slivers
+  // on the far side that clear it: the BACK was labelling Chest (506 px against 64,908 on the
+  // front), Biceps and Quads, and the FRONT was labelling Lats, Traps, Triceps, Hamstrings and
+  // Glutes. A coach reading the back of a body saw "Chest" with a leader line into the shoulder
+  // blade. So the test is a SHARE of the group's own best tile, not an absolute count: an
+  // absolute number cannot tell a sliver of a big muscle from the whole of a small one, which is
+  // why it was wrong in both directions. Neck and Adductors sit at 25% and are genuinely visible
+  // from behind; everything dropped is under 12%.
+  const LABEL_SHARE = 0.12;
+  const labelled = (tile, g) => {
+    const here = (MAN.tiles[tile]?.groups[g] || {}).count || 0;
+    if (here <= 400) return false;
+    const best = Math.max(...Object.values(MAN.tiles).map((t) => (t.groups[g] || {}).count || 0));
+    return best <= 0 || here / best >= LABEL_SHARE;
+  };
   function gutter(boxW) { return boxW < 520 ? 42 : 100; }
 
   async function draw() {
@@ -216,7 +232,7 @@ h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 24px; 
   function drawLabels(box, g) {
     const t = MAN.tiles[key()]; svg.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
     const small = box.width < 520, fs = small ? 11 : 13.5, cw = fs * 0.56;
-    const items = Object.entries(t.groups).filter(([, v]) => v.count > 400).map(([name, v]) => ({ name, text: LABEL[name] || name, x: fit.ox + v.ax * fit.s, y: fit.oy + v.ay * fit.s, side: v.ax < t.w / 2 ? "L" : "R" }));
+    const items = Object.entries(t.groups).filter(([name]) => labelled(key(), name)).map(([name, v]) => ({ name, text: LABEL[name] || name, x: fit.ox + v.ax * fit.s, y: fit.oy + v.ay * fit.s, side: v.ax < t.w / 2 ? "L" : "R" }));
     // The body's edge at a given stage y, from the silhouette extents the build recorded.
     const edgeAt = (sy, side, pad) => {
       const ty = (sy - fit.oy) / fit.s; let best = side === "L" ? Infinity : -Infinity;
@@ -296,9 +312,11 @@ h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 24px; 
   const ordinal = (n) => n + (["th","st","nd","rd"][(n % 100 >> 3 ^ 1 && n % 10) || 0] || "th");
 
   function bestViewFor(g) {
-    const here = MAN.tiles[key()].groups[g]; if (here && here.count > 400) return state.view;
+    // the same rule decides which way a tap turns the figure, so a muscle always opens on the
+    // view it is actually on rather than on a sliver of itself
+    if (labelled(key(), g)) return state.view;
     const other = state.view === "front" ? "back" : "front";
-    const there = MAN.tiles[`${state.sex}-${other}`].groups[g]; return there && there.count > 400 ? other : state.view;
+    return labelled(`${state.sex}-${other}`, g) ? other : state.view;
   }
   function select(g, turn = true) {
     state.selected = g; state.hover = null;
