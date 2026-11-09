@@ -159,7 +159,10 @@ describe("the drive window was fitted on thirteen sensor-paired sets", () => {
     // and the whole window in round ten (0). Each is marked fitted, reaches its own lift, and
     // reaches nobody else -- the Conventional Deadlift shares the RDL's bucket and not its window.
     const squat = cameraTunablesFor("Back Squat", "squat");
-    expect(squat.values.driveOnsetFraction).toBe(0);
+    // 0 from round nine until round twelve (2026-11-09), which put it back to 0.02: at 0 the
+    // reported window has no speed-based close at all, so a lockout the athlete stands in lands
+    // inside the rep. See FITTED_OVERRIDE_EVIDENCE["Back Squat"].
+    expect(squat.values.driveOnsetFraction).toBe(0.02);
     expect(squat.sources.driveOnsetFraction).toBe("fitted");
     const rdl = cameraTunablesFor("Romanian Deadlift", "deadlift");
     expect(rdl.values.driveOnsetFraction).toBe(0);

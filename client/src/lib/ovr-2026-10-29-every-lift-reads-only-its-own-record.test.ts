@@ -59,10 +59,14 @@ const SENSOR: Record<string, { mean: number; peak: number; reps: number }> = {
  *  motion is the phone's to the half-centimetre -- direction does not change a magnitude -- and the
  *  velocities are the drives'. */
 const CORRECTED: Record<string, { reps: number; romCm: number; mean: number; peak: number }> = {
-  // Round nine (2026-11-05): the squat's record is the whole travel window (driveOnsetFraction
-  // 0) and a 130ms smoothing, the RDL's window 0.02 -- see FITTED_OVERRIDE_EVIDENCE.
-  "2026-10-29 Back Squat set 1": { reps: 5, romCm: 71.8, mean: 0.80, peak: 1.16 },
-  "2026-10-19 Back Squat set 2": { reps: 5, romCm: 71.8, mean: 0.83, peak: 1.19 },
+  // Round nine (2026-11-05) gave the squat the whole travel window (driveOnsetFraction 0) and a
+  // 130ms smoothing; ROUND TWELVE (2026-11-09) put the window back to 0.02 on the first squat
+  // with PAUSES in it -- at 0 the reported window has no speed-based close at all and the stand
+  // at lockout lands inside the rep (-40.3% on the 11-09 take). These two takes pay for it: set 1
+  // 0.80 -> 0.81 and the 10-19 set 0.83 -> 0.86, both against sensors the notes record as
+  // scale-faulted anyway. See FITTED_OVERRIDE_EVIDENCE["Back Squat"].
+  "2026-10-29 Back Squat set 1": { reps: 5, romCm: 71.8, mean: 0.81, peak: 1.16 },
+  "2026-10-19 Back Squat set 2": { reps: 5, romCm: 71.8, mean: 0.86, peak: 1.19 },
   // Round ten (2026-11-05): the RDL's window is 0 and the rest-at-top rule gives the 10-19 take
   // its eighth rep (the last drive, merged with the stand-and-hold before the bar went down).
   "2026-10-29 Romanian Deadlift set 1": { reps: 8, romCm: 84.1, mean: 0.97, peak: 1.55 },
@@ -114,7 +118,7 @@ describe("the 2026-10-29 export replays through each lift's own record", () => {
   it("the squat's own numbers reach the squat traces and not the RDL's", () => {
     expect(Object.keys(FITTED_OVERRIDES["Back Squat"]).sort()).toEqual(["driveOnsetFraction", "heightRulerUncertainty", "velocitySmoothingMs"]);
     const squat = cameraTunablesFor("Back Squat", "squat");
-    expect(squat.values.driveOnsetFraction).toBe(0);
+    expect(squat.values.driveOnsetFraction).toBe(0.02);
     expect(squat.sources.driveOnsetFraction).toBe("fitted");
     expect(squat.values.velocitySmoothingMs).toBe(130);
     const rdl = cameraTunablesFor("Romanian Deadlift", romBucketForExercise("Romanian Deadlift"));

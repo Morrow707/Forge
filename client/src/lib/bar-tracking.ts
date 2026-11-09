@@ -1377,14 +1377,60 @@ export function trimPhaseToTravel(
  * rep (its travel and drive windows, its distance, its gaps) reads to the rest; the phase itself
  * keeps its segmenter endpoints, so alternation is untouched and no count changes by this.
  *
- * Inert by construction on every rep that reverses out of its top: there the phase ENDS within
- * the margin of the rest, so no cut is made and every number reads as before -- a paused lockout
- * followed by the lowering is unchanged, because its rest is where the phase already ends. A full
- * second motionless is a hold, not a sticking point: a grinding stall at a sticking point is
- * slower than that and still moving, and a rep that genuinely stopped dead for a second mid-lift
- * is reported to the stop (Rule #1: it keeps its row and its distance to there).
+ * A full second motionless is a hold, not a sticking point: a grinding stall at a sticking point
+ * is slower than that and still moving, and a rep that genuinely stopped dead for a second
+ * mid-lift is reported to the stop (Rule #1: it keeps its row and its distance to there).
+ *
+ * AND A REST THE PHASE ENDS INSIDE IS STILL A REST -- 2026-11-09, round twelve, and this is the
+ * half the rule shipped without.
+ *
+ * The first version said it was "inert by construction on every rep that reverses out of its top:
+ * there the phase ENDS within the margin of the rest, so no cut is made and every number reads as
+ * before -- a paused lockout followed by the lowering is unchanged, because its rest is where the
+ * phase already ends." Every clause of that is true about the phase's ENDPOINT and wrong about
+ * its DURATION. The pause sits INSIDE the phase, the concentric window runs to the phase's end,
+ * and so the standing time is counted as lifting. "Every number reads as before" was the defect,
+ * said out loud and mistaken for a guarantee.
+ *
+ * What it cost, measured: the 2026-11-09 back squat stood 0.20-0.37s at lockout between reps and
+ * Forge read the set at 0.43 m/s against the sensor's 0.72, **-40.3%**, with a 54% "velocity
+ * loss" across a set the sensor says was flat (0.78 / 0.71 / 0.70 / 0.71 / 0.74) -- the decay was
+ * each successive rep absorbing a slightly longer pause. Its range of motion was -8.3%, so the
+ * distance was nearly right and the CLOCK was the whole of it.
+ *
+ * THE RULE AS SHIPPED COULD ONLY EVER FIRE ON THE LAST REP OF A SET, which is why nothing caught
+ * it: a full second of stillness is something an athlete gives you after the last rep (the
+ * 2026-11-05 RDL's 2.1s lockout, the take it was fitted on) and never between two reps. On the
+ * 11-09 squat it fired exactly once, on rep 5, where he stood 3.1s before racking.
+ *
+ * So the second's worth of stillness is a CONFIRMATION window, not the definition of a rest, and
+ * when the phase ends before it elapses there is still something to cut: the standing time from
+ * the arrival to the phase's end. That case needs its own floor, REST_AT_TOP_MIN_SECONDS, because
+ * the alternative reading -- cut wherever the bar is briefly within the extent -- would eat the
+ * deceleration dwell at the top of a rep that reverses straight out of it.
+ *
+ * NOT FIXED WITH THE SQUAT'S OWN `driveOnsetFraction`, and that was measured before this was
+ * written: swept over the five sensor-paired squat takes, 0 (the shipped value, round nine) gives
+ * a median |error| of 1.4% on the four takes with no pause and -39.6% on this one; 0.04 drags
+ * this one only to -14.8% and pushes the other four from about +1.5% to +3-7%. A per-lift knob
+ * cannot separate "he paused" from "he lifted slowly", because it is a speed threshold and a
+ * standing bar and a slow bar differ in DURATION, not in speed. The rest rule can, and it is
+ * inert on a take with no pause -- which is what makes it shareable (see "what 'its own numbers'
+ * means" in CLAUDE.md: a NUMBER somebody could fit from one take is per-lift, a RULE is shared).
  */
 export const REST_AT_TOP_SECONDS = 1.0;
+/** THE FLOOR FOR THE CASE ABOVE: how long the bar must have been standing, when the phase ends
+ *  before REST_AT_TOP_SECONDS can elapse, before that counts as the rep being over.
+ *
+ *  It is a different question from REST_AT_TOP_SECONDS and needs its own number. That one asks
+ *  "is this a hold rather than a sticking point", with the whole rest of the phase available to
+ *  answer it. This one asks "did the bar ARRIVE, or is this the last few centimetres of
+ *  deceleration", with only the tail of the phase to answer it, and the thing it must not do is
+ *  cut into a rep that reverses straight out of its top.
+ *
+ *  Fitted on the corpus, never on the one take that prompted it -- see the sweep in
+ *  docs/camera-tracking-notes.md, "Round twelve". */
+export const REST_AT_TOP_MIN_SECONDS = 0.4;
 /** How far the bar may creep inside that second and still be at rest, in travel margins: four
  *  (4cm on a 1cm margin, 3cm on the bench's 0.75). The 2026-11-05 hold crept 2cm in its second,
  *  the 2026-10-19 hold 3cm; a bar moving 4cm in a second is at a tenth of the slowest rep mean
@@ -1398,6 +1444,7 @@ export function restArrivalAfterPeak(
   endIdx: number,
   margin: number,
   restSeconds: number = REST_AT_TOP_SECONDS,
+  minRestSeconds: number = REST_AT_TOP_MIN_SECONDS,
 ): number | null {
   if (!(peakIdx >= 0 && peakIdx < endIdx) || !(margin > 0) || !(restSeconds > 0)) return null;
   // "At rest" is the bar moving less than two margins in a whole second -- an EXTENT over the
@@ -1423,7 +1470,30 @@ export function restArrivalAfterPeak(
       }
     }
     if (!still) continue;
-    if (!reachedRest) return null; // the phase ends inside the rest: nothing after it to cut
+    if (!reachedRest) {
+      // THE PHASE ENDS INSIDE THE REST. The first version returned null here, on the reasoning
+      // that there was "nothing after it to cut" -- true of the bar's POSITION and false of the
+      // rep's CLOCK, which runs to the phase's end whether or not the bar is still moving. What
+      // is cut is the standing time itself, and the only thing in question is whether there is
+      // enough of it to call an arrival rather than the last of the deceleration. See the
+      // docblock above for the 2026-11-09 squat this cost 40% of its mean velocity on.
+      if (times[endIdx] - times[r] < minRestSeconds * 1000) return null;
+      // AND IT IS CUT AT THE ARRIVAL, NOT AT `r`. `r` is where the bar stopped moving MORE than
+      // the extent allowance -- up to four margins, so up to 4cm, short of where it finally got.
+      // Returning it throws those last centimetres of real travel away with the standing time and
+      // reads the mean HIGH: measured across the corpus, cutting at `r` moved three takes that
+      // have no pause in them at all 1.0-2.6 points further from their sensors (the 09-29 bench
+      // set 7, the 10-30 press set 1, the 11-06 bench). Walking forward to where the bar first
+      // comes within ONE margin of the furthest it reached keeps the travel and drops only the
+      // stand. This is the "the arrival sits a few centimetres of deceleration before the top"
+      // caveat the first version of this rule raised, paid for properly rather than avoided by
+      // not cutting at all.
+      const top = towardTop > 0 ? hi : lo;
+      for (let j = r; j <= endIdx; j++) {
+        if (Math.abs(positions[j] - top) <= margin) return j;
+      }
+      return r;
+    }
     // The bar came to rest at r. Only a phase that goes on PAST the rest is cut there -- past the
     // furthest the rest itself reached, not past r: the arrival sits a few centimetres of
     // deceleration before the top, and a rep that reverses out of a paused lockout must read to
@@ -1874,9 +1944,30 @@ export function summarizeTrackedSet(
     // that the raw points show creeping 3cm (the 2026-10-19 RDL's hold, missed on the smoothed
     // series at every extent tried). A rest is an extent over a whole second, so raw jitter of a
     // centimetre either way cannot invent one.
-    const restIdx = restArrivalAfterPeak(points.map((p) => p.y), points.map((p) => p.t), restPeak.peakIdx, phase.endIdx, tune.travelOnsetMarginM);
+    const rawY = points.map((p) => p.y);
+    const rawT = points.map((p) => p.t);
+    // TWO ANSWERS FROM ONE RULE, AND THE SPLIT IS THE POINT.
+    //
+    // `repEndIdx` is the rep-DECIDING end: it feeds the reported range of motion, the travel
+    // window, and through that window's duration every phantom, rack-move and overlong test that
+    // decides which phases are reps at all. It keeps the original reading -- a rest confirmed by
+    // a WHOLE second of stillness -- because "changing what a number is read over must not change
+    // which reps exist" is this file's own rule, three paragraphs down, and the first version of
+    // the 2026-11-09 fix broke it: letting a short rest move this index turned a ten-rep bench
+    // (bench-settle-2026-09-29) into eleven and moved eight other takes that have no pause in
+    // them at all.
+    //
+    // `reportEndIdx` is the rep-REPORTING end, and only the drive window reads it. That is where
+    // the short rest belongs: a lockout the athlete stands in for a third of a second is not part
+    // of the lift, and the reported mean is the number that says so.
+    const restIdx = restArrivalAfterPeak(rawY, rawT, restPeak.peakIdx, phase.endIdx, tune.travelOnsetMarginM, REST_AT_TOP_SECONDS, REST_AT_TOP_SECONDS);
     const repEndIdx = restIdx ?? phase.endIdx;
+    const reportEndIdx = restArrivalAfterPeak(rawY, rawT, restPeak.peakIdx, phase.endIdx, tune.travelOnsetMarginM) ?? repEndIdx;
     const heldAtTopSeconds = restIdx == null ? 0 : (points[phase.endIdx].t - points[restIdx].t) / 1000;
+    /** Seconds the REPORTED window would otherwise have spent standing at the top -- the short
+     *  rest above, which `heldAtTopSeconds` cannot show because it only ever counts the confirmed
+     *  one. 0 on a rep that reverses straight out of its top. */
+    const stoodAtTopSeconds = reportEndIdx === repEndIdx ? 0 : (points[repEndIdx].t - points[reportEndIdx].t) / 1000;
     let largestGapInPhaseSeconds = 0;
     let distanceInLargestGapM = 0;
     for (let idx = phase.startIdx + 1; idx <= repEndIdx; idx++) {
@@ -1908,7 +1999,17 @@ export function summarizeTrackedSet(
     // must not change which reps exist.
     const moving = trimPhaseToTravel(ySmoothed, phase.startIdx, repEndIdx, wholePhasePeak.peakIdx, tune.travelOnsetMarginM);
     const duration = (points[moving.endIdx].t - points[moving.startIdx].t) / 1000;
-    const drive = trimPhaseToDrive(speedsMps, phase.startIdx, repEndIdx, wholePhasePeak.peakIdx, tune.driveOnsetFraction) ?? moving;
+    // THE DRIVE WINDOW IS THE ONE THAT READS THE SHORT REST (reportEndIdx above). Its peak and
+    // its travel fallback are re-found over that window rather than reused from the wider one:
+    // a peak index outside the window would make trimPhaseToDrive return null and silently hand
+    // the reported number back to the untrimmed travel window, which is the bug this is fixing.
+    const reportPeak = reportEndIdx === repEndIdx
+      ? wholePhasePeak
+      : robustPeakSpeed(speedsReportedMps, phase.startIdx, reportEndIdx, confidences, tune.maxPlausibleSpeedMps, tune.minTrackingConfidence);
+    const movingReport = reportEndIdx === repEndIdx
+      ? moving
+      : trimPhaseToTravel(ySmoothed, phase.startIdx, reportEndIdx, reportPeak.peakIdx, tune.travelOnsetMarginM);
+    const drive = trimPhaseToDrive(speedsMps, phase.startIdx, reportEndIdx, reportPeak.peakIdx, tune.driveOnsetFraction) ?? movingReport;
     const driveDuration = (points[drive.endIdx].t - points[drive.startIdx].t) / 1000;
     // RANGE OF MOTION OVER THE TIME THE BAR WAS TRAVELLING -- a bar sensor's definition of mean
     // concentric velocity, and the one this is calibrated against. The sample mean of the

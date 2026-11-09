@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { restArrivalAfterPeak, REST_AT_TOP_SECONDS, REST_AT_TOP_EXTENT_MARGINS, summarizeTrackedSet } from "./bar-tracking";
+import { restArrivalAfterPeak, REST_AT_TOP_SECONDS, REST_AT_TOP_MIN_SECONDS, REST_AT_TOP_EXTENT_MARGINS, summarizeTrackedSet } from "./bar-tracking";
 import { measureCountermovement, APEX_MAX_SECONDS_AFTER_TAKEOFF } from "./jump-tracking";
 import { kalmanSmooth } from "./bar-tracking";
 import { cameraTunablesFor } from "@shared/camera-tunables-by-lift";
@@ -145,21 +145,123 @@ describe("the sensor's window on a jump runs to the hip's apex", () => {
   });
 });
 
+
+/* ROUND TWELVE, 2026-11-09: A REST THE PHASE ENDS INSIDE IS STILL A REST.
+ *
+ * The rule above shipped with a clause saying it was "inert by construction on every rep that
+ * reverses out of its top ... because its rest is where the phase already ends", and that was
+ * true of the bar's POSITION and false of the rep's CLOCK. A lockout the athlete stands in for a
+ * third of a second sits INSIDE the phase, and the reported window ran to the phase's end, so the
+ * standing was counted as lifting. On the 2026-11-09 back squat that was -40.3% of the set's mean
+ * (0.43 against the sensor's 0.72) and a 54% "velocity loss" across a set the sensor says was
+ * flat -- each successive rep absorbing a slightly longer pause.
+ *
+ * It could only ever fire on the LAST rep of a set, which is why nothing caught it: a whole
+ * second of stillness is something an athlete gives you after the last rep and never between two.
+ *
+ * Three properties, on synthetic input so the property is what is pinned:
+ *   - a stand of at least REST_AT_TOP_MIN_SECONDS that runs to the phase's end IS a rest;
+ *   - a shorter one is NOT (that is the deceleration at the top of a rep that reverses out of it,
+ *     and the 2026-10-29 RDL's 0.15s tails are the corpus case -- cutting them moved that take
+ *     from +7.8% to +12.2% against its sensor, which is why the floor is where it is);
+ *   - and the cut lands at the ARRIVAL, not at the first sample inside the extent allowance,
+ *     because the allowance is four margins and returning its first sample throws up to 4cm of
+ *     real travel away with the stand.
+ *
+ * Mutations, each caught by the case named: returning null for the short rest (the first two
+ * cases); returning `r` instead of the arrival ("cuts at the arrival"); the floor read as a
+ * sample count rather than seconds ("a stand shorter than the floor"); and the REPORTING end
+ * reaching the rep-deciding index, which the source case below forbids and which turned a ten-rep
+ * bench into eleven when it was tried. */
+describe("a rest the phase ends inside is still a rest", () => {
+  const dt = 33;
+  // y is DOWN: the bar rises as y falls. 0 -> -0.6 over 20 samples (0.66s), arriving at sample 20.
+  const rise = Array.from({ length: 21 }, (_, i) => -0.6 * (i / 20));
+  const margin = 0.01;
+  // A stand of `n` samples at the top, drifting 2mm a sample -- well inside four margins over the
+  // span, and well outside one, so the arrival walk has something to find.
+  const stand = (n: number) => Array.from({ length: n }, (_, i) => -0.6 - 0.0002 * i);
+  const peakIdx = 10;
+
+  it("a stand that runs to the phase's end, at least the floor long, is a rest", () => {
+    const n = Math.ceil((REST_AT_TOP_MIN_SECONDS * 1000) / dt) + 2;
+    const y = [...rise, ...stand(n)];
+    const r = restArrivalAfterPeak(y, times(y.length, dt), peakIdx, y.length - 1, margin);
+    expect(r).not.toBeNull();
+    // and it is cut inside the stand rather than at the phase's end
+    expect(r!).toBeGreaterThanOrEqual(20);
+    expect(r!).toBeLessThan(y.length - 1);
+  });
+
+  it("a stand shorter than the floor is not a rest: that is the deceleration at the top", () => {
+    const n = Math.floor((REST_AT_TOP_MIN_SECONDS * 1000) / dt) - 2;
+    const y = [...rise, ...stand(n)];
+    expect(restArrivalAfterPeak(y, times(y.length, dt), peakIdx, y.length - 1, margin)).toBeNull();
+  });
+
+  it("cuts at the arrival, not at the first sample inside the extent allowance", () => {
+    // The last 3cm of the rise sit inside four margins of the top, so the first sample that is
+    // "still enough" is three samples before the bar actually gets there. The cut must not be
+    // there: it must be where the bar is within ONE margin of the furthest it reached.
+    const slowFinish = [...rise.slice(0, 18), -0.57, -0.585, -0.6];
+    const n = Math.ceil((REST_AT_TOP_MIN_SECONDS * 1000) / dt) + 2;
+    const y = [...slowFinish, ...stand(n)];
+    const r = restArrivalAfterPeak(y, times(y.length, dt), peakIdx, y.length - 1, margin)!;
+    expect(r).not.toBeNull();
+    expect(Math.abs(y[r] - Math.min(...y)), "cut at a sample still short of the top").toBeLessThanOrEqual(margin);
+  });
+
+  it("the confirmed-rest reading is unchanged: a caller may ask for the full second on both", () => {
+    const n = Math.ceil((REST_AT_TOP_MIN_SECONDS * 1000) / dt) + 2;
+    const y = [...rise, ...stand(n)];
+    const t = times(y.length, dt);
+    // what the rep-DECIDING end asks for -- min == the full second, so a short rest cannot reach it
+    expect(restArrivalAfterPeak(y, t, peakIdx, y.length - 1, margin, REST_AT_TOP_SECONDS, REST_AT_TOP_SECONDS)).toBeNull();
+    // and what the rep-REPORTING end asks for
+    expect(restArrivalAfterPeak(y, t, peakIdx, y.length - 1, margin)).not.toBeNull();
+  });
+
+  it("the floor is shorter than the confirmation window and longer than a sample", () => {
+    expect(REST_AT_TOP_MIN_SECONDS).toBeLessThan(REST_AT_TOP_SECONDS);
+    expect(REST_AT_TOP_MIN_SECONDS).toBeGreaterThan(0.1);
+  });
+});
+
 describe("the source states the three rules where they are applied", () => {
   const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
   const bar = strip(readFileSync(join(__dirname, "bar-tracking.ts"), "utf8"));
-  it("every measurement on a rep reads to repEndIdx, and the count-trim's window does too", () => {
+  /* ROUND TWELVE SPLIT THIS INTO TWO ENDS, AND THE SPLIT IS WHAT THIS CASE NOW STATES.
+   *
+   * `repEndIdx` is the rep-DECIDING end: the reported range of motion, the travel window, and
+   * through that window's duration every phantom, rack-move and overlong test that decides which
+   * phases are reps. It still reads the rest CONFIRMED by a whole second, which is why the first
+   * version of the 2026-11-09 fix -- letting a short rest move this index -- turned a ten-rep
+   * bench into eleven and moved eight takes with no pause in them.
+   *
+   * `reportEndIdx` is the rep-REPORTING end and ONLY the drive window reads it. That is where a
+   * lockout stood in for a third of a second belongs: it is not part of the lift, and the mean is
+   * the number that says so.
+   *
+   * So the forbidden form is the drive window reading `repEndIdx`, and the required form is it
+   * reading `reportEndIdx`. */
+  it("the deciding end and the reporting end are two, and only the drive window reads the second", () => {
     for (const needle of [
       "trimPhaseToTravel(ySmoothed, phase.startIdx, repEndIdx,",
-      "trimPhaseToDrive(speedsMps, phase.startIdx, repEndIdx,",
+      "trimPhaseToDrive(speedsMps, phase.startIdx, reportEndIdx,",
       "Math.abs(ySmoothed[repEndIdx] - ySmoothed[phase.startIdx])",
       "Math.abs(points[phase.repEndIdx].y - points[phase.startIdx].y)",
       "seconds(ecc ? ecc.startIdx : phase.startIdx, phase.repEndIdx)",
       "if (phaseStats[i].windows.sampleStarved) score = Math.max(score, MIN_COUNT_TRIM_ODDNESS)",
     ]) expect(bar, needle).toContain(needle);
+    // and the drive window must NOT go back to the deciding end -- that is the form that put the
+    // stand inside the rep, and it is also the form that would let a short rest change a count
+    expect(bar).not.toContain("trimPhaseToDrive(speedsMps, phase.startIdx, repEndIdx,");
+    // the deciding end takes the FULL second on both arguments, so a short rest cannot reach it
+    expect(bar).toContain("tune.travelOnsetMarginM, REST_AT_TOP_SECONDS, REST_AT_TOP_SECONDS);");
     // the rest is found on the RAW series, never the smoothed one (the Kalman overshoot at lockout
     // read as movement inside the 2026-10-19 hold on the smoothed series)
-    expect(bar).toContain("restArrivalAfterPeak(points.map((p) => p.y), points.map((p) => p.t),");
+    expect(bar).toContain("const rawY = points.map((p) => p.y);");
+    expect(bar).toContain("const rawT = points.map((p) => p.t);");
     expect(bar).not.toContain("restArrivalAfterPeak(ySmoothed,");
   });
 });

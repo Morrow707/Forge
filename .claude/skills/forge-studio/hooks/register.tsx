@@ -34,15 +34,21 @@ const busy = atom({ plugin: 'forge-studio', key: 'busy' }, null as string | null
 
 
 const KNOB_HELP = [
-  'denoise 8 (grain removal; 0 off)', 'blur 1.8', 'sharpen 0.38', 'sharpen_sigma 3.0', 'gamma 0.92',
-  'color 1.05', 'striations 0.17 (fibre-line darkness; 0 off)', 'stripe_period 13', 'stripe_min_area 1400',
-  'edge_shade 0.07', 'feather 1.6', 'face_scale 0.96', 'face_fade 14', 'preview_height 520',
-  '-- the smoothing pass (2026-10-24) --',
-  'outline_smooth 2.5 (silhouette blur before threshold)', 'label_smooth 4 (hover-shape blur; 0 = staircase)',
-  'label_min_island 2500 (a group speck under this many px joins its neighbour)', 'label_close 3 (close + fill each group first)',
-  'hand_zone 0.08 (hand = this fraction of figure height above each arm\'s end: skin, no group)', 'foot_zone 0.075 (same, from the bottom)',
-  'flatten 0.6 (pull each blob toward its median colour)', 'flatten_blur 3 (soften the seams)',
-  'skin_smooth 0.85 (ungrouped body pixels toward smooth skin)', 'skin_sigma 7', 'match_color 1 (match each tile to the male front)',
+  '-- the realistic figures (2026-11-08). The page draws these and nothing else. --',
+  'r_sat 0.80 (chroma on muscle colour; the candy that buried the form)',
+  'r_shade_gain 1.95 (how hard the render\'s own shading is amplified; 1 = the flat source)',
+  'r_shade_hold 90 (the percentile of each muscle\'s own value the gain must leave where it was)',
+  'r_shade_floor 0.26', 'r_value 1.0', 'r_gamma 1.0 (whole tile; >1 deepens)',
+  'r_fibre 1.2 (the render\'s OWN fibre texture, amplified -- real striations, not drawn stripes)',
+  'r_fibre_sigma 2.2', 'r_fibre_clip 26',
+  'r_seam 0.38 (the crease where a muscle meets another: the insertions)', 'r_seam_px 8',
+  'r_seam_falloff 0.75', 'r_seam_blur 1.3',
+  'r_belly 0.13 (each belly rounds up away from its own creases)', 'r_belly_px 46',
+  'r_light 0.10 (a soft key from the upper left)', 'r_rim 0.17 (roundness at the silhouette)', 'r_rim_px 26',
+  'r_sharpen 0.55', 'r_sharpen_sigma 1.6', 'r_label_smooth 1.6', 'r_scale 2', 'r_quality 86',
+  'r_bare_gain 1.35 / r_bare_sat 0.95 / r_bare_value 0.93 (head, hands, feet, bone)',
+  'preview_height 520',
+  '-- the diagram knobs are still in pipeline.py and nothing on the page reads them --',
 ].join('\n  ')
 
 function parseResult(stdout: string, tag: string): Record<string, unknown> | null {
@@ -70,11 +76,12 @@ function newId() { return Date.now().toString(36) }
 /** Run the body-map pipeline and register what it produced as a version. */
 async function renderBodyMap($: any, cwd: string, args: { stage?: string; knobs?: Record<string, number>; label?: string; reset?: boolean }) {
   const work = `${cwd}/.studio/bodymap`
-  const argv = [PY, `${cwd}/tools/body-map/pipeline.py`, '--work', work, '--stage', args.stage ?? 'hd']
+  const argv = [PY, `${cwd}/tools/body-map/pipeline.py`, '--work', work, '--stage', args.stage ?? 'realistic']
   if (args.reset) argv.push('--reset')
   for (const [k, v] of Object.entries(args.knobs ?? {})) argv.push('--set', `${k}=${v}`)
-  // A first run needs every stage; `hd` alone wants the tiles from an earlier run.
-  if ((args.stage ?? 'hd') === 'hd' && !(await $.fs.exists(`${work}/manifest.json`))) argv[argv.indexOf('--stage') + 1] = 'all'
+  // `realistic` reads tools/body-map/source3d directly, so it needs no earlier stage; `hd`
+  // (the diagram, which the page no longer draws) still wants the tiles a full run leaves behind.
+  if ((args.stage ?? 'realistic') === 'hd' && !(await $.fs.exists(`${work}/manifest.json`))) argv[argv.indexOf('--stage') + 1] = 'all'
   await update($, busy, () => `rendering body map (${argv[argv.indexOf('--stage') + 1]})`)
   try {
     const ran = await $.process.run(argv, { cwd, timeoutMs: 600_000 })
@@ -129,12 +136,12 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     repoRoot = e.cwd
     await $.command.register({ name: 'studio', description: 'Open the Forge Studio pane (renders, Approve / Redo / Compare).' })
-    await $.command.register({ name: 'tune', description: 'Turn a body-map knob and re-render: /tune striations 0.12 denoise 6 | list | reset', argumentHint: 'knob value ... | list | reset' })
+    await $.command.register({ name: 'tune', description: 'Turn a body-map knob and re-render: /tune r_seam 0.5 r_fibre 1.6 | list | reset', argumentHint: 'knob value ... | list | reset' })
     await $.tool.register({
       name: 'render', isDeferred: false,
-      description: 'Run the Forge body-map pipeline (tools/body-map) and show the result in the studio pane. stage "hd" reruns the finish with the knobs given (fast); "all" rebuilds from the source renders. Knobs: denoise, blur, sharpen, sharpen_sigma, gamma, color, striations, stripe_period, stripe_min_area, edge_shade, feather, outline_smooth, label_smooth, label_min_island, label_close, hand_zone, foot_zone, flatten, flatten_blur, skin_smooth, skin_sigma, match_color, face_scale, face_fade, preview_height. Returns the knobs in force and the site folder to publish the artifact from.',
+      description: 'Run the Forge body-map pipeline (tools/body-map) and show the result in the studio pane. stage "realistic" (the default) rebuilds the four realistic figures from tools/body-map/source3d with the r_* knobs given -- that is what the page draws. stage "hd" reruns the DIAGRAM finish and "all" rebuilds the diagram from the source renders; nothing on the page has drawn the diagram since 2026-11-08. Realistic knobs: r_sat, r_shade_gain, r_shade_hold, r_shade_floor, r_value, r_gamma, r_fibre, r_fibre_sigma, r_fibre_clip, r_seam, r_seam_px, r_seam_falloff, r_seam_blur, r_belly, r_belly_px, r_light, r_rim, r_rim_px, r_sharpen, r_sharpen_sigma, r_feather, r_label_smooth, r_bare_gain, r_bare_sat, r_bare_value, r_scale, r_quality, preview_height. Returns the knobs in force and the site folder to publish the artifact from.',
       inputSchema: { type: 'object', properties: {
-        stage: { type: 'string', enum: ['hd', 'all'] },
+        stage: { type: 'string', enum: ['realistic', 'hd', 'all'] },
         knobs: { type: 'object', additionalProperties: { type: 'number' } },
         label: { type: 'string' }, reset: { type: 'boolean' },
       } },
@@ -166,11 +173,11 @@ export const register: Register = on => {
     const cwd = repoRootFor($)
     if (!words.length || words[0] === 'list') {
       const cur = (await read($, versions)).slice().reverse().find(v => v.kind === 'bodymap')
-      return { text: `Body-map knobs (default in brackets):\n  ${KNOB_HELP}\n\nIn force: ${cur?.knobs ? JSON.stringify(cur.knobs) : 'defaults (nothing rendered yet)'}\n\n/tune striations 0.12 denoise 6` }
+      return { text: `Body-map knobs (default in brackets):\n  ${KNOB_HELP}\n\nIn force: ${cur?.knobs ? JSON.stringify(cur.knobs) : 'defaults (nothing rendered yet)'}\n\n/tune r_seam 0.5 r_fibre 1.6` }
     }
     if (words[0] === 'reset') {
-      const r = await renderBodyMap($, cwd, { stage: 'hd', reset: true, label: 'defaults' })
-      if (r.ok) void $.prompt.submit({ text: `Forge Studio: /tune reset re-rendered the body map at the default knobs (version "${r.version.label}", site ${r.version.site}). Republish the body map artifact ${ARTIFACT} from that site folder (index.html plus img/, lab/, manifest.json, exercises.json) and tell Scott in one line.` })
+      const r = await renderBodyMap($, cwd, { stage: 'realistic', reset: true, label: 'defaults' })
+      if (r.ok) void $.prompt.submit({ text: `Forge Studio: /tune reset re-rendered the body map at the default knobs (version "${r.version.label}", site ${r.version.site}). Republish the body map artifact ${ARTIFACT} from that site folder (index.html plus img3d/, lab3d/, manifest3d.json, exercises.json) and tell Scott in one line.` })
       return { text: r.text }
     }
     if (words.length % 2 !== 0) return { text: 'Pairs, please: /tune knob value [knob value ...]. /tune list shows the knobs.' }
@@ -184,9 +191,9 @@ export const register: Register = on => {
       knobs[knob] = n
     }
     const label = Object.entries(knobs).map(([k, v]) => `${k} ${v}`).join(', ')
-    const r = await renderBodyMap($, cwd, { stage: 'hd', knobs, label })
+    const r = await renderBodyMap($, cwd, { stage: 'realistic', knobs, label })
     if (r.ok) {
-      void $.prompt.submit({ text: `Forge Studio: /tune re-rendered the body map with ${label} (version "${r.version.label}", site ${r.version.site}). Republish the body map artifact ${ARTIFACT} from that site folder (index.html plus img/, lab/, manifest.json, exercises.json) and tell Scott in one line what moved.` })
+      void $.prompt.submit({ text: `Forge Studio: /tune re-rendered the body map with ${label} (version "${r.version.label}", site ${r.version.site}). Republish the body map artifact ${ARTIFACT} from that site folder (index.html plus img3d/, lab3d/, manifest3d.json, exercises.json) and tell Scott in one line what moved.` })
     }
     return { text: r.text }
   })

@@ -72,27 +72,40 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     expect(byId(RDL).trackingDiagnostics.recording.analysisPath).toBe("live");
   });
 
-  it("the squat: the whole travel window and a 130ms smoothing, +2.4% / -3.9% against the sensor, rep for rep", () => {
+  /* ROUND TWELVE (2026-11-09) MOVED THE SQUAT'S WINDOW BACK TO 0.02, so the two assertions this
+   * case makes about the LIVE record are restated. What round ten measured is unchanged and is
+   * still the point of the case: these are the numbers the 11-05 take reads, and they move from
+   * 0.85/+2.4% to 0.87/+4.6% at the window round twelve shipped. Round nine took 0.02 -> 0 on
+   * four CONTINUOUS sets; round twelve put it back on the first set with pauses in it, where 0
+   * means the reported window has no speed-based close at all and the stand lands inside the
+   * rep (-40.3% on the 11-09 squat). See FITTED_OVERRIDE_EVIDENCE["Back Squat"] for the sweep. */
+  it("the squat: a 0.02 window and a 130ms smoothing, +4.6% / -3.9% against the sensor, rep for rep", () => {
     const own = cameraTunablesFor("Back Squat", "squat");
-    expect(own.values.driveOnsetFraction).toBe(0);
+    expect(own.values.driveOnsetFraction).toBe(0.02);
     expect(own.values.velocitySmoothingMs).toBe(130);
     expect(own.sources.velocitySmoothingMs).toBe("fitted");
     const m = replay(byId(SQUAT));
     const s = OVR_BACK_SQUAT_2026_11_05.sensor;
     expect(m.repBreakdown.length).toBe(5);
     expect(m.romCm).toBe(73.0);
-    expect(m.meanVelocityMps).toBe(0.85);
+    // 0.85 / +2.4% at round nine's 0 window; 0.87 / +4.6% at round twelve's 0.02. The range of
+    // motion and the peak are untouched by the window, which is the property that says a window
+    // moves the mean and a smoothing moves the peak.
+    expect(m.meanVelocityMps).toBe(0.87);
     expect(m.peakVelocityMps).toBe(1.22);
-    expect(m.meanVelocityMps! / s.reported.meanVelocityMps - 1).toBeCloseTo(0.024, 2);
+    expect(m.meanVelocityMps! / s.reported.meanVelocityMps - 1).toBeCloseTo(0.046, 2);
     expect(m.peakVelocityMps! / s.reported.peakVelocityMps - 1).toBeCloseTo(-0.039, 2);
     m.repBreakdown.forEach((r: any, i: number) => {
-      expect(Math.abs(r.meanVelocityMps - s.reps[i].meanVelocityMps), `rep ${i + 1} mean`).toBeLessThan(0.07);
+      // 0.11 rather than round nine's 0.07, and the loosening is the round-twelve window's cost
+      // stated rather than hidden: the five reps read 0.84 / 0.90 / 0.85 / 0.94 / 0.84 against the
+      // sensor's 0.85 / 0.87 / 0.81 / 0.84 / 0.79, where at the 0 window they read
+      // 0.84 / 0.90 / 0.82 / 0.90 / 0.79. Rep 4 is the worst at 0.10 (it was 0.06).
+      expect(Math.abs(r.meanVelocityMps - s.reps[i].meanVelocityMps), `rep ${i + 1} mean`).toBeLessThan(0.11);
       expect(r.peakVelocityMps, `rep ${i + 1} peak`).toBeLessThan(s.reps[i].peakVelocityMps);
       expect(r.peakVelocityMps / s.reps[i].peakVelocityMps, `rep ${i + 1} peak`).toBeGreaterThan(0.93);
-      // the drive-window distance is inside 2% of the sensor's rep on every rep ...
-      expect(Math.abs(r.windows.driveRomCm / sensorRomCm(s.reps[i].romIn) - 1), `rep ${i + 1} drive distance`).toBeLessThan(0.02);
-      // ... and the whole window IS the phase now
-      expect(r.windows.driveSeconds, `rep ${i + 1}`).toBe(r.windows.phaseSeconds);
+      // the drive-window distance is inside 3% of the sensor's rep on every rep -- it was 2% at
+      // the 0 window, and the 0.02 window trims a sample off the slow end of three of the five
+      expect(Math.abs(r.windows.driveRomCm / sensorRomCm(s.reps[i].romIn) - 1), `rep ${i + 1} drive distance`).toBeLessThan(0.03);
       expect(r.windows.sampleStarved, `rep ${i + 1}`).toBe(false);
     });
     // The step's size, so nobody re-derives it: at 0.02 / 165 (round eight's record, what the
@@ -238,16 +251,20 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     const m = replay(f);
     expect(m.repBreakdown.length).toBe(5);
     expect(m.romCm).toBe(71.9);
-    expect(m.meanVelocityMps).toBe(0.84);
+    // 0.84 / +2.4% at round nine's 0 window; 0.85 / +3.7% at round twelve's 0.02.
+    expect(m.meanVelocityMps).toBe(0.85);
     expect(m.peakVelocityMps).toBe(1.26);
     expect(m.romCm! / sensorRomCm(s.reported.romIn) - 1).toBeCloseTo(-0.027, 2);
-    expect(m.meanVelocityMps! / s.reported.meanVelocityMps - 1).toBeCloseTo(0.024, 2);
+    expect(m.meanVelocityMps! / s.reported.meanVelocityMps - 1).toBeCloseTo(0.037, 2);
     expect(m.peakVelocityMps! / s.reported.peakVelocityMps - 1).toBeCloseTo(0.016, 2);
     m.repBreakdown.forEach((r: any, i: number) => {
-      expect(Math.abs(r.meanVelocityMps - s.reps[i].meanVelocityMps), `rep ${i + 1} mean`).toBeLessThan(0.035);
-      // the drive window IS the phase, and on four of five reps it is one 33ms sample short of
-      // the sensor's concentric (its range over its mean): the whole of the mean's +2.4%
-      expect(r.windows.driveSeconds, `rep ${i + 1}`).toBe(r.windows.phaseSeconds);
+      expect(Math.abs(r.meanVelocityMps - s.reps[i].meanVelocityMps), `rep ${i + 1} mean`).toBeLessThan(0.055);
+      // ROUND TWELVE: the drive window is the phase or ONE 33ms sample shorter, where at round
+      // nine's 0 window it was always the phase exactly. The 0.02 threshold trims the slow end of
+      // reps 1, 2 and 5 by a sample and leaves 3 and 4 alone (0.834/0.868, 0.767/0.800,
+      // 0.867/0.867, 0.901/0.901, 0.934/0.967), which is the whole of the mean's +2.4% -> +3.7%.
+      expect(r.windows.phaseSeconds - r.windows.driveSeconds, `rep ${i + 1}`).toBeLessThan(0.035);
+      expect(r.windows.driveSeconds, `rep ${i + 1}`).toBeLessThanOrEqual(r.windows.phaseSeconds);
       const sensorSeconds = (s.reps[i].romIn * 0.0254) / s.reps[i].meanVelocityMps;
       expect(sensorSeconds - r.windows.driveSeconds, `rep ${i + 1} window`).toBeGreaterThanOrEqual(-0.001);
       expect(sensorSeconds - r.windows.driveSeconds, `rep ${i + 1} window`).toBeLessThan(0.05);

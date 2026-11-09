@@ -95,6 +95,13 @@ describe("the count-trim removes surplus and never a set", () => {
     // lowerings; the pulls count seven, one lost to the same trace fault
     "ovr-2026-10-30-export.json:2026-10-30 Pendlay Row set 2": 7,
     "ovr-2026-10-30-export.json:2026-10-30 Barbell Shoulder Press set 3": 7,
+    // ROUND TWELVE (2026-11-09): the RDL finds 7 of 8, with rep 1 reading 51.5cm against 35.6-41.1
+    // for the other six -- so the missing pull is merged into rep 1 rather than lost, which is the
+    // same shape the 10-29 RDL had before the rest-at-top rule and is NOT what that rule cures (no
+    // rep of this take holds at the top; `heldAtTopSeconds` is 0 on all seven). It is the lift's
+    // open segmenter item and is recorded with the take's -25% SCALE error, which is the bigger
+    // fault on it; see docs/camera-tracking-notes.md "Round twelve".
+    "ovr-2026-11-09-export.json:2026-11-09 Romanian Deadlift set 1": 7,
     // and bench set 3: the phone counted 8 on the lowerings; the presses count 7, the slow last
     // one (66cm, 2.6x the median duration) dropped by the same edge rule as the 10-06 bench's.
     "ovr-2026-10-30-export.json:2026-10-30 Bench Press set 3": 7,

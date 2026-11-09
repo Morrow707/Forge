@@ -14,7 +14,16 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-06, round eleven)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-09, round twelve)
+
+**ROUND TWELVE (2026-11-09), THE ONE-LINE VERSION:** squat, RDL and box jump on **build 720**.
+The squat's fault was the CLOCK, not the scale -- a 0.2-0.4s stand at lockout between reps was
+counted as lifting, worth **-40.3%** of its mean -- and it is fixed two ways: a shared RULE (a rest
+the phase ENDS INSIDE is still a rest, `REST_AT_TOP_MIN_SECONDS` 0.4) and the squat's own
+`driveOnsetFraction` back to 0.02. **Squat -40.3% -> -15.3%; only Back Squat takes move in the
+whole 44-capture corpus; no rep count and no range of motion changes anywhere.** The RDL (-25%,
+pure scale, mean error == range error) and the box jump (height +5.0%, velocities -50%) are read,
+measured and NOT fixed; see "Round twelve" for what to do next on each.
 
 Scott, 2026-10-29: "I want you keeping a running log wherever you need to ... so we don't keep
 going in circles with what works and what doesn't, when your feed goes stale you don't remember
@@ -27,6 +36,53 @@ of every session, before the push, and date the heading.** The replayable record
 **Under test (Scott, 2026-10-20): Back Squat, Romanian Deadlift, Box Jump. And from 2026-10-30, at
 his choice, Bench Press, Pendlay Row and Barbell Shoulder Press ("reps of probably 8 ... multiple
 sets"). Every round fixes something on every lift filmed that round.**
+
+### HOW TO READ AN OVR SCREEN -- STANDING RULES, NOT PER-TAKE DECISIONS (2026-11-09)
+
+Both of these have been settled take by take in six different comment blocks; they are standing
+rules now so no session asks again.
+
+- **ON A JUMP, THE OVR'S REP 1 IS THE SETUP REP AND IS NOT ONE OF OURS.** Scott, 2026-11-09:
+  "For box jump or 'jump squat' on the OVR, skip rep one that is a setup rep." **"JUMP SQUAT" is
+  the OVR's own name for the profile he selects when he films a BOX JUMP** -- he confirmed the
+  same morning that he is "only doing squats box jumps and rdls" -- so a screen headed JUMP SQUAT
+  and a Forge capture against Box Jump are the same take, exactly as the OVR's "Deadlift" screen
+  is his Romanian Deadlift and its "Push Press" was the Barbell Shoulder Press (2026-10-31: "they
+  don't have another name"). **Read the OVR's exercise label as the sensor's vocabulary, never as
+  a statement about which lift was performed** -- the pairing is decided by the date, the load and
+  the rep count, and by the Forge export. The rule is **recorded, never deleted** -- the
+  ground-truth entries
+  carry it as `ignoredRep1` beside the reps, so a later session can see what was excluded and
+  re-derive the set either way. Same shape as Rule #1 one layer up: the number is kept and
+  labelled rather than thrown away. It is also VISIBLE in the data rather than taken on trust --
+  on 11-05 set 1 the setup rep reads 34.9in of ROM against 26-28in for the five real reps, and
+  0.93 m/s mean against 1.40-1.56. A jump rep 1 that looks like the others is worth a question
+  before it is dropped. The set row the sensor prints still averages it in, so **never read the
+  sensor's own set aggregate on a jump** -- `reportedOverOurReps` is computed over our reps only.
+  (Not jump-only in general: the 10-30 shoulder press skipped reps 1-2 and the Pendlay row the
+  same, on his word each time. What is standing is the JUMP case.)
+- **THE OVR'S LOAD FIELD ON A JUMP: 1LB IS FINE AND BODY WEIGHT WOULD CHANGE NOTHING WE COMPARE.**
+  Scott, 2026-11-09: "I've just been putting 1lb as the OVR needs a weight, should I be putting in
+  how much I weigh?" No. Every number a jump take is scored on is KINEMATIC -- mean velocity, peak
+  velocity, ROM, time to peak velocity -- and all four come from tether displacement over time,
+  with no load term in them. The load reaches only the sensor's POWER and its load-velocity
+  figures, and **Forge computes no power at all on a jump**: `jump-tracking.ts` says so in its own
+  comment ("loadKg has no equivalent here ... this is display of body-flight kinematics, not force
+  or power"), where `bar-tracking.ts` has `meanPowerWatts = loadKg * g * meanVelocity` for a bar
+  lift. So there is nothing to pair a jump wattage with. Checked rather than assumed: across all
+  four jump takes in `tracker-ground-truth.ts` (10-01 jump squat, 10-01 box jump, 11-05 box jump
+  sets 1 and 2) **not one row records a load and not one records a watt figure** -- the field has
+  never entered a comparison.
+  **And there is a reason not to change it now**: every jump row in the repo was taken at 1lb, so
+  switching the field mid-series would introduce a difference between takes that is not supposed
+  to matter, and if it turned out to matter the one jump series we have would carry a confound.
+  The OVR's firmware is not inspectable from here, so "the load cannot affect the kinematics" is
+  an inference from physics, not a reading of their code -- what IS measured is that at 1lb those
+  kinematics agree with Forge's hip measurements to 2-3% on both 11-05 sets (hip peak +2.1% and
+  +0.3%, net rise 69.7cm against the sensor's 69.3), which a corrupted velocity would not do.
+  **If a jump POWER comparison is ever wanted, that is a new number to build, not a calibration
+  fix**: Forge would compute body weight x g x hip velocity, and body weight would then have to go
+  in the OVR for it to be paired. Say so and it gets built; until then 1lb.
 
 **THE STANDING ORDER FOR THE NEXT SESSION (Scott, 2026-10-29, after build 697 shipped the RDL's
 record):** "Ok I'll record all 3, but I want you to change something on all lifts after this
@@ -148,8 +204,22 @@ shoulder ruler -- it stands down wherever the height ruler does (+2.5% with all 
 0.4 is the small step (+41.8%); the **row's 21.9cm against 41-47** is the midpoint of a braced hand
 and the working hand, so a unilateral lift is traced by its WORKING hand now, and it asks for a
 dumbbell. The bench's plate was found, measured 7% SMALL, and admitting it (a per-lift aspect
-ceiling, built) was costed at +6.2% and not shipped. Held on the branch with the reps-keypad fix;
-`verify_build` then `beta` when the hold lifts. See "Round eleven".
+ceiling, built) was costed at +6.2% and not shipped. **SHIPPED as build 716** (2026-11-06 19:59 UTC, `af7d4d3`; 715 its
+`verify_build`) once Scott lifted the hold -- this line said "held on the branch" for three days
+after it went out. **THE BUILD TO FILM ON IS 720** (2026-11-08 05:30 UTC,
+`ac76663`; 719 its `verify_build`), which is what Scott has installed. It added no camera work of
+its own -- nor did 718, 721 or 722: all four are the Anvil, and **the last camera-path commit on
+`main` is still `af7d4d3`**, build 716's. So 720 CONTAINS round eleven and its camera is 716's
+code, and filming on it loses nothing against 721 or 722.
+**THIS LINE HAS NOW BEEN WRONG TWICE, THE SAME WAY EACH TIME -- a build number taken from what was
+last written down.** CLAUDE.md said "714 remains the one to film on" until 2026-11-09, and 714 is
+round TEN: filming on it would have cost round eleven's three fixes, the supine-stature rule among
+them (a bench reading -12.6% against +2.5%). The correction said 718, which was already two betas
+stale as it was written, because 719 and 720 went out at 05:17 and 05:30 that same morning.
+**Check ancestry, and read the number off the iOS workflow's run list, never off a note**:
+`git merge-base --is-ancestor <camera commit> <build commit>`. The build to film on is the newest
+build that CONTAINS the newest camera commit, which is not always the newest that ADDED one.
+See "Round eleven".
 **AND PER-SIDE FILMING IS BUILT (2026-11-06):** every set of a unilateral exercise is two rows,
 one per side, each logged, filmed and measured on its own (`shared/unilateral-sides.ts`,
 `workout_set_entries.side`); the tracker is told the side (`trace.declaredSide`) and records whether
@@ -6156,6 +6226,152 @@ the right body point, read 30% low off a smoothed trace at `effectiveHz` 40 with
 4. The squat's fourth and fifth paired take, read against the board's signature before any
    refit of the height or shoulder ruler.
 
+
+## Round twelve, 2026-11-09: the squat's clock, not its scale -- a lockout pause was counted as lifting
+
+*Written by the Opus session of 2026-11-09. Scott: "Make sure you take all the notes too I'm tired
+of going backwards? Label them in case fable takes over." Everything needed to continue is here;
+the one-line version is at the top of the status board.*
+
+**WHAT WAS FILMED.** Back Squat 135x5, Romanian Deadlift 135x8 and Box Jump x5 onto a 24in box, on
+**build 720**, beside the OVR. Scott: "I am only doing squats box jumps and rdls so don't touch
+anything else." The OVR's screens are headed BACK SQUAT, **DEADLIFT** and **JUMP SQUAT** -- its own
+vocabulary, not three different lifts; see the status board's "How to read an OVR screen".
+Fixture: `client/src/lib/__fixtures__/ovr-2026-11-09-export.json`. Ground truth:
+`OVR_BACK_SQUAT_2026_11_09`, `OVR_ROMANIAN_DEADLIFT_2026_11_09`, `OVR_BOX_JUMP_HIP_2026_11_09`.
+
+| lift | Forge | OVR | error |
+|---|---|---|---|
+| Back Squat range | 73.4 cm | 80.0 cm | -8.3% |
+| Back Squat mean | 0.43 | 0.72 | **-40.3%** |
+| Back Squat peak | 0.90 | 1.05 | -14.3% |
+| RDL range | 37.8 cm | 50.6 cm | **-25.2%** |
+| RDL mean | 0.56 | 0.76 | -26.3% |
+| Box Jump height | 73.3 cm | 69.8 cm | +5.0% |
+| Box Jump mean | 0.74 | 1.48 | **-49.9%** |
+
+### THE SQUAT: A MEAN ERROR FIVE TIMES THE DISTANCE ERROR IS THE CLOCK, AND THIS IS THE THIRD TIME
+
+The 2026-10-06 bench made this argument first and round six made it again: **a scale error moves
+the distance and the velocity by the same factor, so an error that moves one and not the other is
+not scale.** Range -8.3%, mean -40.3%. It is the clock.
+
+**WHAT THE CLOCK WAS COUNTING.** Measured off the stored trace, per rep, the seconds inside the
+reported window in which the bar had already arrived at the top and was standing: **0.30, 0.20,
+0.33, 0.37s**. Take them out and the drive durations are 0.97 / 1.10 / 1.17 / 1.37s against the
+sensor's own implied concentric (its range over its mean) of 0.99 / 1.10 / 1.19 / 1.12s -- reps 1,
+2 and 3 to within 0.02s. Rep 1's mean goes 0.59 -> 0.77 against the sensor's 0.78.
+
+**IT ALSO MANUFACTURED A FATIGUE CURVE THAT IS NOT THERE.** Forge read 0.59 / 0.54 / 0.48 / 0.44 /
+0.27 and called it a 54% velocity loss; the sensor read 0.78 / 0.71 / 0.70 / 0.71 / 0.74, flat.
+Scott stood a little longer at lockout as the set went on and each rep absorbed it. **A monotone
+decay in the per-rep means beside a flat sensor is the signature of this class** -- look for it.
+
+**WHY IT WAS CLOSER ON 11-05 AND NOT A CONSTANT ANYBODY MOVED.** On 11-05 his concentrics ran
+0.87 / 0.80 / 0.87 / 0.90 / 0.97s, continuous, no pause, and Forge read 0.84 against the sensor.
+Today he paused. Round ten (build 714) shipped `restArrivalAfterPeak` -- "a rep ends when the bar
+comes to rest" -- for exactly this, and **`REST_AT_TOP_SECONDS = 1.0` means it demands a WHOLE
+SECOND of stillness before it will call the bar rested.** Between reps he stands 0.2-0.4s, so it
+never fired. It fired exactly once in the set: rep 5, where he stood 3.1s before racking.
+
+**SO THE RULE, AS SHIPPED, COULD ONLY EVER FIRE ON THE LAST REP OF A SET.** That is the finding to
+carry forward. Its own docblock claimed it was "inert by construction on every rep that reverses
+out of its top ... because its rest is where the phase already ends" -- true of the bar's POSITION
+and false of the rep's CLOCK, which runs to the phase's end whether or not the bar is moving.
+**"Every number reads as before" was the defect, written down and mistaken for a guarantee.**
+
+### THE TWO CHANGES, AND THE SPLIT BETWEEN THEM IS THE POINT
+
+**1. A RULE (shared): a rest the phase ENDS INSIDE is still a rest.** `REST_AT_TOP_MIN_SECONDS`
+in `bar-tracking.ts`. The second's worth of stillness is a CONFIRMATION window, not the definition
+of a rest; when the phase ends before it elapses there is still the standing time to cut.
+
+- **The floor is 0.4s and it was measured, both ways.** Below ~0.36 the rule also cuts the
+  2026-10-29 RDL's 0.15s tails, and that take moves from **+7.8% to +12.2%** against its sensor --
+  so those tails are time the sensor COUNTS AS LIFTING, not a stand, and leaving them alone is
+  correct rather than convenient. Above 0.40 the squat's benefit starts to come off (0.42 takes
+  rep 1 back from 0.94s to 1.24s). 0.4 is the round number inside [0.36, 0.40] and is the FIRST
+  value: both bounds come from two takes, so re-measure it on the next paused take.
+- **THE CUT LANDS AT THE ARRIVAL, NOT AT THE FIRST STILL SAMPLE.** The extent allowance is four
+  margins, so the first sample that is "still enough" can be 4cm short of where the bar got.
+  Returning it throws that real travel away with the stand and reads the mean HIGH: **it moved
+  three takes with no pause in them 1.0-2.6 points further from their sensors** (the 09-29 bench
+  set 7, the 10-30 press set 1, the 11-06 bench). Walking forward to within ONE margin of the
+  furthest the bar reached puts all three back exactly where they were.
+- **AND THE RULE HAS TWO ENDS NOW, WHICH IS WHAT KEEPS IT SAFE.** `repEndIdx` is the
+  rep-DECIDING end -- the reported range of motion, the travel window, and through that window's
+  duration every phantom, rack-move and overlong test that decides which phases are reps -- and it
+  still takes the full second. `reportEndIdx` is the rep-REPORTING end and only the drive window
+  reads it. **The first version did not split them and turned a ten-rep bench
+  (`bench-settle-2026-09-29`) into eleven**, besides moving eight takes with no pause in them.
+  "Changing what a number is read over must not change which reps exist" is this file's own rule
+  and it was broken inside an hour of being quoted.
+
+**2. A NUMBER (this lift's own): `FITTED_OVERRIDES["Back Squat"].driveOnsetFraction` 0 -> 0.02.**
+Round nine took it 0.02 -> 0 on four CONTINUOUS sets, with the argument that "a positive fraction
+only ever trims the zero-speed turnaround samples, which the sensor counts". True of those four.
+**At 0 the reported window has no speed-based close AT ALL** -- the threshold is zero, so
+`trimPhaseToDrive` never closes early -- which is not a small value but a different KIND of value,
+and it leaves the window entirely at the mercy of the phase boundary. Swept over all five paired
+squats with the rest fix in:
+
+| driveOnsetFraction | 10-01 s1 | 10-01 s2 | 11-05 s1 | 11-05 s2 | **11-09** | bias |
+|---|---|---|---|---|---|---|
+| 0 | -0.2% | -1.1% | +2.2% | +1.4% | **-34.1%** | -6.3% |
+| **0.02** | +1.8% | +2.2% | +4.6% | +2.7% | **-16.2%** | **-1.0%** |
+| 0.03 | +2.8% | +3.2% | +5.8% | +3.9% | -16.2% | -0.1% |
+
+The four continuous takes pay 2-3 points and all stay inside 5%; the bias falls sixfold and the
+worst case halves. **0.03 is NOT the next step and buys nothing** -- the 11-09 take reads -16.2%
+there too, because the threshold has already passed the last slow sample of every rep.
+
+**WHAT THE TWO TOGETHER COST, on every stored trace in the corpus (44 captures): ONLY BACK SQUAT
+TAKES MOVE.** Bench, Pendlay row, barbell and dumbbell shoulder press, RDL and both jumps are
+bit-identical. **No rep count changes anywhere and no range of motion changes anywhere.** The squat
+takes: 11-09 0.44 -> 0.61, 11-05 s1 0.85 -> 0.87, 11-05 s2 0.84 -> 0.85, 10-29 s1 0.80 -> 0.81,
+10-19 s2 0.83 -> 0.86, 10-01 s1 1.00 -> 1.02, 10-01 s2 0.92 -> 0.95, and the three walkout squats
+(no sensor) by a point each.
+
+**THE SQUAT'S SET MEAN: -40.3% -> -15.3%** (0.43 -> 0.61 against 0.72), and its reps read
+0.94 / 1.37 / 1.23 / 1.33 / 1.13s against the sensor's 0.99 / 1.10 / 1.19 / 1.12 / 1.11.
+
+### WHAT IS STILL OPEN ON THE SQUAT, NAMED SO IT IS NOT MISTAKEN FOR DONE
+
+- **Reps 2 and 4 still run ~0.2s long.** The bar point DRIFTS while he stands -- it is carried by
+  the SHOULDERS on a back squat (`barWitness: "shoulders"`, `torsoStillThisTake: false`) -- so the
+  "furthest the bar reached" that the arrival walk aims at is further than the real arrival, and
+  the cut lands late. A shoulder landmark keeps rising for a second after lockout because the
+  athlete finishes straightening; the bar does not.
+- **Rep 5 is the rack rep and its trace creeps 12cm over 4.6s after the lift.** Swept: the rest
+  rule's extent allowance (`REST_AT_TOP_EXTENT_MARGINS`, 4 margins = 4cm) is what bounds it -- at
+  8 margins the arrival lands on the true one. **NOT SHIPPED: that is one rep choosing a shared
+  constant**, and 8cm of creep in a second would let a grinding sticking point read as a rest.
+- The peak now reads **+1.9%** against the sensor, which was -14.3%. Not fitted; it followed.
+
+### THE OTHER TWO: READ, MEASURED, AND DELIBERATELY NOT FIXED THIS ROUND
+
+- **THE RDL IS A PURE SCALE ERROR AND THE ARITHMETIC SAYS SO.** Mean -26.3% against range -25.2%:
+  the two move together, which is exactly the test the squat FAILED. So its window is right and
+  the scale is 25% low. It also finds **7 reps against 8 logged**, with rep 1's range 51.5cm
+  against 35.6-41.1 for the other six -- the missing pull is merged into rep 1, not lost, and
+  **none of its reps holds at the top** (`heldAtTopSeconds` is 0 on all seven), so round twelve's
+  rule is not what it needs. Recorded in `KNOWN_UNDERCOUNTS`. **Next: read
+  `calibration.scaleBlend` on this take for which ruler carried the vote, then a small step in
+  `FITTED_OVERRIDES["Romanian Deadlift"]`, costed on every ledger row.**
+- **THE BOX JUMP'S HEIGHT IS GOOD (+5.0%) AND ITS VELOCITIES ARE NOT** (-49.9% mean, -68.1% peak),
+  with **6 reps found against 5 logged**. `boxRise` carried a 1.399 scale correction off net rises
+  of 77-91cm onto a 61cm box. The countermovement read disagrees rep to rep: dip **1.4cm** on rep
+  1, **no countermovement block at all** on rep 2, **35.5cm** on rep 4; `riseToApexMeanVelocity`
+  0.82 / - / 0.33 / 0.35 / 1.45 / 1.53. **Next: read the `bodyWitnessTrace` hip series on this
+  take before proposing anything** -- the fixture carries it (415 points).
+
+### THE HARNESS, so the next session does not rebuild it
+
+Two scratch scripts drove every number above and are worth recreating in ten minutes:
+a **snapshot** that replays every capture in every `__fixtures__` file through `replayCapture` and
+prints one line each (run before and after a change, diff the two -- that is how the rep-count
+regression was caught), and a **score** that maps each fixture to its `OVR_*` ground truth and
+prints the mean/peak error. The second's mapping table is the only part worth keeping by hand.
 
 ## Round eleven, 2026-11-06: bench, dumbbell shoulder press and single-arm dumbbell row on 714 -- the first dumbbell lifts beside the sensor
 

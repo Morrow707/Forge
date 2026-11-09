@@ -150,8 +150,13 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     // the pair round four shipped moves set 1 by four points and leaves it 25% high
     const old1 = replay(s1, { driveOnsetFraction: 0.03, velocitySmoothingMs: 200 });
     expect(old1.meanVelocityMps! / CORRECTED[s1.id].sensor.mean - 1).toBeGreaterThan(0.2);
-    // and at the whole travel window set 1 is inside 10%
-    expect(Math.abs(replay(s1, { driveOnsetFraction: 0 }).meanVelocityMps! / CORRECTED[s1.id].sensor.mean - 1)).toBeLessThan(0.1);
+    // and at the whole travel window set 1 is inside 12% -- it was inside 10% until round twelve
+    // (2026-11-09) let the reported window end at a SHORT rest the phase ends inside. That only
+    // bites at a 0 window, which is exactly the point: with no speed-based close the window is
+    // whatever the phase and the rest rule leave it, which is why the squat's 0 was put back to
+    // 0.02. The bench ships at the shared 0.04 and does not move (see the corpus diff in
+    // docs/camera-tracking-notes.md, "Round twelve": only Back Squat takes moved).
+    expect(Math.abs(replay(s1, { driveOnsetFraction: 0 }).meanVelocityMps! / CORRECTED[s1.id].sensor.mean - 1)).toBeLessThan(0.12);
   });
 
   it("the row's scale reads its own depth uncertainty: -10.8% as filmed, inside 1% at the row's own record, and the bench's blend does not move", () => {

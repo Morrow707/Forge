@@ -49,6 +49,82 @@ KNOBS = {
     "final_sharpen_sigma": 2.0, # width of that unsharp mask, at 2x
     "symmetrize": 1,       # 1 = mirror the torso/leg column of the silhouette about the figure's axis, fuller side wins
     "sym_column": 0.24,    # half-width of that column as a fraction of the tile width (the arms lie outside it)
+    # realistic.py: the finish for the 3D figures (2026-11-08). Scott: "only realistic ... it just
+    # looks flat, missing some edits around the striations, where muscles insert to others".
+    # The shading is in the source; these knobs uncover it. See realistic.py's docstring.
+    "r_scale": 2,          # the scale the shading, seams and fibre are COMPUTED at
+    "r_out_scale": 1,      # the scale the tile is WRITTEN at (the page caches an overlay per muscle)
+    "r_sat": 0.80,         # chroma multiplier on muscle colour: the candy that was burying the form
+    "r_shade_gain": 1.95,  # gamma about each group's own median value; 1.0 = the source, untouched
+    "r_shade_floor": 0.26, # how dark that amplification may drive a pixel (a guard, not a look)
+    "r_shade_hold": 90.0,  # the percentile of each group's own value the gain must leave where it was
+    "r_value": 1.00,       # re-centres each muscle's midtone so the shading has room below white
+    "r_gamma": 1.0,        # whole-tile gamma after everything (<1 lifts, >1 deepens)
+    "r_fibre": 1.20,       # the render's OWN high-frequency fibre, amplified (0 = the flat source)
+    "r_fibre_sigma": 2.2,  # the scale that high-pass is taken at, at r_scale
+    "r_fibre_clip": 26.0,  # cap on one fibre sample, so a speck cannot become a black dot
+    "r_seam": 0.38,        # the crease where a muscle meets another muscle, bone or skin
+    "r_seam_px": 8.0,      # how far that crease reaches into each belly, at r_scale
+    "r_seam_falloff": 0.75,# <1 keeps the crease tight to the boundary, >1 spreads it
+    "r_seam_blur": 1.3,    # softens the crease so a seam is a groove, not a drawn line
+    "r_belly": 0.13,       # the other half of a seam: each belly rounds up away from its creases
+    "r_belly_px": 46.0,    # how far into a belly that rounding reaches, at r_scale
+    "r_light": 0.10,       # a soft key from the upper left, so the figure has a direction
+    "r_rim": 0.17,         # darkening at the silhouette (roundness)
+    "r_rim_px": 26.0,      # how far in that reaches, at r_scale
+    "r_sharpen": 0.55,     # unsharp after the shading moves
+    "r_sharpen_sigma": 1.6,
+    "r_feather": 0.0,      # alpha blur; 0 keeps the render's own edge (the fingers are 2 px wide)
+    "r_label_smooth": 1.6, # sigma on each group's soft mask before the 2x argmax
+    "r_bare_gain": 1.35,   # the head, hands, feet and exposed bone get the shading move too
+    "r_head_tint": 1.00,   # the head alone (not the hands, not the feet): how far it takes the colour below
+    "r_head_r": 195.0,     # a deep red. Each pixel takes this chroma and keeps its own shading.
+    "r_head_g": 58.0,
+    "r_head_b": 54.0,
+    "r_head_value": 0.48,  # how far the head's own value is pulled down (chroma alone only ever gives a LIGHT red)
+    "r_head_match": 1,     # 1 = the head takes HEAD_TAKES_COLOUR_FROM's own colour AND level off the
+                           #     finished tile (realistic.py names the group); 0 = the three knobs above
+    "r_head_face": 1.00,   # how far the doll face is smoothed away; 0 keeps the eyes, nose and lips
+    "r_head_face_sigma": 17.0, # the scale the head's own local level is taken at
+    "r_head_face_depth": 14.0, # a pixel this far below that level is a feature (eye, nostril, lip)
+    "r_head_face_radius": 9,   # how far the inpaint reaches for the tone that fills a feature
+    "r_face_muscles": 1.0, # DRAW the facial muscles (face_muscles.py); the render has none
+    "r_face_round": 0.55,  # rounding as a fraction of the shape's MINOR axis, never its area
+    "r_face_level": 0.50,  # the level set that keeps a blurred shape its own size
+    "r_face_fibre": 0.34,  # how dark the fibre lines inside each drawn facial muscle are
+    "r_face_fibre_px": 4.2,
+    "r_face_seam": 0.42,   # how dark the crease between two drawn facial muscles goes
+    "r_face_variation": 0.07, # a little tone per muscle, so one belly is told from the next
+    # the galea is every pixel no belly claims; its COLOUR is r_tendon_grey / r_tendon_level
+    # below, shared with the hands and the feet, so the figure has one tendon and not three
+    "r_face_aperture": 0.42, # how dark the mouth line is
+    "r_eye_sclera": 1.55,  # the white of the eye, off the head's own colour pulled toward neutral
+    "r_eye_iris": 0.52,
+    "r_eye_iris_size": 1.55, # iris radius as a multiple of the eye opening's half-height
+    "r_eye_pupil": 0.16,
+    "r_eye_lid_shadow": 0.72, # the upper lid's shadow: without it the eye is a bead, not a socket
+    "r_face_shade": 0.85,  # how much of the mannequin's own light models the drawing
+    "r_face_shade_floor": 0.55,
+    "r_face_shade_ceil": 1.45,
+    "r_face_soften": 0.8,
+    # the hands, feet, shin bone and clavicles: tendon over bone, in the figure's own palette
+    "r_extremity": 0.92,   # how far they are pulled out of the render's neutral grey
+    "r_bone_white": 0.80,  # how far the bone tone goes from the figure's colour toward white
+    "r_bone_level": 0.96,
+    "r_tendon_grey": 0.55, # how far the tendon tone is pulled toward neutral (a tendon has no blood)
+    "r_tendon_level": 1.18,
+    "r_bone_pct": 72.0,    # the part's own percentile above which a pixel reads as bone
+    "r_bone_curve": 1.4,   # how sharply tendon gives way to bone across that ramp
+    "r_extremity_floor": 0.45,
+    "r_extremity_ceil": 1.55,
+    "r_head_dome": 0.0,    # 1 paints the cranium as a shaded solid instead of editing the doll
+                           #   face; off by default -- it reads as a blob and loses the jaw
+    "r_head_dome_px": 56.0,# pixels from the silhouette over which that solid shades up
+    "r_head_dome_level": 1.15,
+    "r_head_neck": 0.25,   # the head stops where its own shape narrows to this share of the skull's width
+    "r_bare_sat": 0.95,
+    "r_bare_value": 0.93,
+    "r_quality": 86,       # webp quality for the realistic tiles
     # face.py: the graft
     "face_scale": 0.96,    # male head width relative to the female head box
     "face_fade": 14,       # rows the graft fades over at the neck
@@ -66,7 +142,7 @@ def run(script, env):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--work", required=True)
-    ap.add_argument("--stage", default="all", choices=["all", "hd", "preview"])
+    ap.add_argument("--stage", default="all", choices=["all", "hd", "realistic", "preview"])
     ap.add_argument("--set", action="append", default=[], help="knob=value")
     ap.add_argument("--reset", action="store_true", help="forget tuned knobs first")
     a = ap.parse_args()
@@ -91,6 +167,9 @@ def main():
         run("face.py", env)
     if a.stage in ("all", "hd"):
         run("hd.py", env)
+    if a.stage in ("all", "realistic"):
+        run("realistic.py", env)
+    env = dict(env, BODYMAP_PREVIEW_DIR="img3d" if a.stage == "realistic" else "img")
     run("preview.py", env)
     # the review page beside the rendered site, so the folder publishes as one artifact
     shutil.copy(HERE / "page/index.html", work / "site/index.html")
