@@ -350,3 +350,35 @@ was rendered in a browser, and neither is visible in the tile images the pipelin
 `playwright` and Chromium are preinstalled in this sandbox; `python3.13 -m http.server` over the
 `site/` folder plus a screenshot at 1280 and at 390 is a minute's work and should run before any
 publish that changes the page.
+
+### ONE BONE TONE AND ONE TENDON TONE, ACROSS THE HANDS, THE FEET AND THE SKULL (2026-11-09)
+
+Scott: "Do 1 and 3 as they are related" -- the bare-skeleton hands and feet, and the head.
+
+**THE HANDS AND FEET ARE NOT A GAP IN THE RENDER, WHICH IS THE FINDING.** It is tempting to read
+four white claws on an all-muscle figure as something missing, and the first plan was to draw the
+intrinsic muscles onto them the way the face was drawn. Reading the source settles it the other
+way: the dorsum of a hand and the dorsum of a foot really are extensor tendon over bone with
+almost no muscle on them, and that is exactly what the render draws -- strands running to each
+digit over white bone. **It is anatomically right and it was only ever wrong in colour**: the
+render draws them at a chroma of 9-22 where every muscle sits past 100, so they read as a grey
+stock asset rather than as this body's own hands.
+
+So they are recoloured, never repainted. `recolour_extremities` takes every ungrouped component
+that is not the head -- both hands, both feet with the shin's subcutaneous tibia, the clavicles --
+and tells bone from tendon by the part's OWN luminance rather than a fixed level, because the
+bones are the bright things in a hand and the tendons the strands between them, and both sit
+differently on a foot in shadow than on a hand in the light. Each pixel keeps its own value about
+the part's median, so every bit of the render's modelling survives.
+
+**AND THE TWO TONES ARE SHARED WITH THE SKULL, which is why these were done together.** The
+cranium's sheet, the hand's bone and the foot's tendons are the same two materials, and a figure
+carrying two different ivories and two different tendon greys reads as parts from two places.
+`extremity_tones` derives both from the figure's own colour -- bone 80% of the way to white,
+tendon 55% of the way to neutral because a tendon has almost no blood in it -- so moving the
+head's colour moves all of them together and they cannot drift apart.
+
+**What is NOT done, and is still Scott's:** the head is a drawing where the body is a render. One
+export of the same four views, same camera, same pose, with the head's muscle layer turned on,
+into `source3d/`, replaces `face_muscles.py` entirely and costs nothing else -- every other stage
+works on it unchanged.

@@ -156,6 +156,63 @@ def head_mask(lab, body):
     return head
 
 
+def extremity_tones(target, K):
+    """The ONE bone tone and the ONE tendon tone the whole figure uses.
+
+    The hands, the feet and the shin are not a gap in the render the way the face was: the dorsum
+    of a hand and the dorsum of a foot really are extensor tendon over bone with almost no muscle
+    on them, and that is what the render draws. What was wrong is that it draws them in a neutral
+    grey while every other part of the figure is coloured, so four white claws read as a stock
+    asset rather than as this body's own hands. They are pulled into the figure's palette here,
+    and the SAME two tones are what the head's cranium sheet uses -- which is the whole reason
+    these were done together: a figure with two different ivories and two different tendon greys
+    reads as parts from two places.
+    """
+    kf = lambda k, d: float(K.get(k, d))
+    w = np.array([0.299, 0.587, 0.114], np.float32)
+    grey = float(target @ w)
+    bone = np.clip(target + (np.float32(255.0) - target) * kf("r_bone_white", 0.80), 0, 255) * kf("r_bone_level", 0.96)
+    tendon = (target + (grey - target) * kf("r_tendon_grey", 0.55)) * kf("r_tendon_level", 1.18)
+    return np.clip(bone, 0, 255), np.clip(tendon, 0, 255)
+
+
+def recolour_extremities(rgb, lum, body, lab, head, target, K):
+    """Every ungrouped part that is not the head: hands, feet, the shin's bone, the clavicles.
+
+    Bone and tendon are told apart by the part's OWN luminance, not by a fixed level: the bones
+    are the bright things in a hand and the tendons are the strands between them, and both sit
+    differently on a foot in shadow than on a hand in the light. Each pixel keeps its own value
+    about the part's median, so every bit of the render's modelling survives -- this is a
+    recolour, the same move the head's tint makes, and not a repaint.
+    """
+    kf = lambda k, d: float(K.get(k, d))
+    strength = kf("r_extremity", 0.0)
+    if strength <= 0:
+        return
+    bare = (lab == 0) & body & ~head
+    if not bare.any():
+        return
+    bone, tendon = extremity_tones(target, K)
+    comp, n = ndi.label(bare)
+    w = np.array([0.299, 0.587, 0.114], np.float32)
+    for i in range(1, n + 1):
+        m = comp == i
+        if m.sum() < 200:
+            continue
+        l = lum[m]
+        med = float(np.median(l))
+        if med < 1.0:
+            continue
+        # bone above the part's own upper quartile, tendon below it, over a ramp so a highlight
+        # on a tendon does not flip to bone pixel by pixel
+        hi, lo = float(np.percentile(l, kf("r_bone_pct", 72.0))), float(np.percentile(l, 30.0))
+        t = np.clip((l - lo) / max(hi - lo, 1e-3), 0, 1) ** kf("r_bone_curve", 1.4)
+        tone = tendon[None, :] * (1 - t)[:, None] + bone[None, :] * t[:, None]
+        scale = np.clip(l / med, kf("r_extremity_floor", 0.45), kf("r_extremity_ceil", 1.55))
+        px = np.clip(tone * scale[:, None], 0, 255)
+        rgb[m] = rgb[m] * (1 - strength) + px * strength
+
+
 def finish(name):
     src = Image.open(SRC / f"{name}.webp").convert("RGBA")
     lab1 = np.array(Image.open(SRC / f"lab/{name}.png"))
@@ -294,6 +351,8 @@ def finish(name):
             # the head's colour, and before the key light and the rim so the face is lit with the
             # rest of the figure.
             face_muscles.draw(rgb, hm, lum, "front" if name.endswith("front") else "back", target, K)
+            # the hands, the feet and the shin's bone, in the same two tones the cranium uses
+            recolour_extremities(rgb, lum, body, lab, hm, target, K)
             dome = kf("r_head_dome", 0.0)
             if dome > 0:
                 d = ndi.distance_transform_edt(hm)

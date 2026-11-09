@@ -107,6 +107,16 @@ KNOBS = {
     "r_face_shade_floor": 0.55,
     "r_face_shade_ceil": 1.45,
     "r_face_soften": 0.8,
+    # the hands, feet, shin bone and clavicles: tendon over bone, in the figure's own palette
+    "r_extremity": 0.92,   # how far they are pulled out of the render's neutral grey
+    "r_bone_white": 0.80,  # how far the bone tone goes from the figure's colour toward white
+    "r_bone_level": 0.96,
+    "r_tendon_grey": 0.55, # how far the tendon tone is pulled toward neutral (a tendon has no blood)
+    "r_tendon_level": 1.18,
+    "r_bone_pct": 72.0,    # the part's own percentile above which a pixel reads as bone
+    "r_bone_curve": 1.4,   # how sharply tendon gives way to bone across that ramp
+    "r_extremity_floor": 0.45,
+    "r_extremity_ceil": 1.55,
     "r_head_dome": 0.0,    # 1 paints the cranium as a shaded solid instead of editing the doll
                            #   face; off by default -- it reads as a blob and loses the jaw
     "r_head_dome_px": 56.0,# pixels from the silhouette over which that solid shades up
