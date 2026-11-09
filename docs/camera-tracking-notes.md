@@ -6352,7 +6352,32 @@ takes: 11-09 0.44 -> 0.61, 11-05 s1 0.85 -> 0.87, 11-05 s2 0.84 -> 0.85, 10-29 s
 
 - **THE RDL IS A PURE SCALE ERROR AND THE ARITHMETIC SAYS SO.** Mean -26.3% against range -25.2%:
   the two move together, which is exactly the test the squat FAILED. So its window is right and
-  the scale is 25% low. It also finds **7 reps against 8 logged**, with rep 1's range 51.5cm
+  the scale is 25% low.
+  **AND NO RULER IT MEASURED CAN REACH THE SENSOR, WHICH IS WHAT STOPS THIS BEING A CONSTANT.**
+  The take shipped `scaleFactor` **0.0041784** and the sensor's own range requires **0.0055870**.
+  Its three candidates are `body_3d` 0.0036390 (-34.9% of what is needed), `depth` 0.0049213
+  (-11.9%) and `shoulder_width` 0.0046062 (-17.6%) -- **every one of them low**, and the highest
+  is still 12% short. So no reweighting of these three lands on the sensor, exactly as the
+  2026-10-07 bench could not be reached by any blend of what it measured. **Do not fit a ruler
+  uncertainty to this take.**
+  **AND THE OBJECT SYSTEM PRODUCED NOTHING, WHICH IS WHERE THE WORK IS.**
+  `objectDetection.framesWithCoreMlImplement` is **0** over 509 tracked frames,
+  `objectLock.framesLockHeld` 0, `freshDetections` 0, `referenceObject` null, and
+  `objectGate.plateScaleIfAdmitted` null -- so there was no plate reading to admit OR refuse. The
+  pose-side implement witness ran (502 / 492 frames at 0.55 confidence) and the CoreML detector
+  found no barbell at all. CLAUDE.md's own rule applies without qualification: "Never fit a
+  body-ruler constant without first saying what the object system produced. If the answer is
+  'nothing', the work is the detector, not the constant."
+  **AND THE POSTURE MEASUREMENT READS 4.39 DEGREES ON A HINGE, FOR THE THIRD TAKE RUNNING**
+  (7.13 on 10-08, 1.53 on 10-19, 4.39 today; `torsoFromVerticalP90Deg` 21.5). It is the one
+  independent check that a posture LABEL matches the posture FILMED, and the mechanism is now
+  named: `measurePostureFromFrames` takes `atan2(|dx|, |dy|)` on the shoulder-to-hip vector in
+  IMAGE coordinates and reports the MEDIAN over every frame of the set. Two things defeat it --
+  a hinge filmed anything but square-on rotates the torso OUT of the image plane, where |dx|
+  barely moves; and a median over a set that is half standing is near the standing value by
+  construction. **The headline should be the extreme, not the median**, and the field already
+  carries a P90. It records and gates nothing today (2026-10-06: "It measures and overrides
+  nothing"), so changing it moves no number and is safe whenever somebody takes it. It also finds **7 reps against 8 logged**, with rep 1's range 51.5cm
   against 35.6-41.1 for the other six -- the missing pull is merged into rep 1, not lost, and
   **none of its reps holds at the top** (`heldAtTopSeconds` is 0 on all seven), so round twelve's
   rule is not what it needs. Recorded in `KNOWN_UNDERCOUNTS`. **Next: read
@@ -6362,8 +6387,25 @@ takes: 11-09 0.44 -> 0.61, 11-05 s1 0.85 -> 0.87, 11-05 s2 0.84 -> 0.85, 10-29 s
   with **6 reps found against 5 logged**. `boxRise` carried a 1.399 scale correction off net rises
   of 77-91cm onto a 61cm box. The countermovement read disagrees rep to rep: dip **1.4cm** on rep
   1, **no countermovement block at all** on rep 2, **35.5cm** on rep 4; `riseToApexMeanVelocity`
-  0.82 / - / 0.33 / 0.35 / 1.45 / 1.53. **Next: read the `bodyWitnessTrace` hip series on this
-  take before proposing anything** -- the fixture carries it (415 points).
+  0.82 / - / 0.33 / 0.35 / 1.45 / 1.53.
+  **AND THE MECHANISM IS NAMED, WHICH IS MOST OF THE NEXT SESSION'S WORK.** Read those six rows
+  beside the sensor's 1.476 and 69.8cm: **reps 5 and 6, the two with REAL dips (27.8 and 22.2cm),
+  read `riseToApexCm` 73.9 and 67.2 and means 1.45 and 1.53 -- on the sensor.** The three that
+  read a shallow dip (1.4, 8.6, 35.5cm with rises of 28.8, 35.1, 30.9cm) are the ones a mile off.
+  **So the pipeline is right where it finds the countermovement and wrong where it misses it**,
+  and the set mean is an average over both.
+  `measureCountermovement`'s bottom search walks back from takeoff and **breaks at the FIRST
+  sample more than `COUNTERMOVEMENT_HYSTERESIS_M` (1cm) above the deepest point so far** -- so a
+  wobble partway down the descent ends the search and the shallow point becomes "the bottom". A
+  1.4cm dip over 0.06s is not a countermovement; it is the jitter the hysteresis exists to
+  tolerate, being accepted AS the dip because line 225's floor is the hysteresis itself.
+  **NOT FIXED TODAY, deliberately:** taking the deepest reversal in the window instead of the
+  first is an algorithm change on a lift whose SCALE is also in question (`boxRise` is carrying a
+  1.399 correction), with five jump takes in the corpus, proposed at the end of a long session --
+  which is the shape this file warns about. **The next session's job, and it is well posed:**
+  sweep "deepest dip in the window" against "first reversal" over every jump take with a sensor,
+  with the rep counts held, and read `bodyWitnessTrace` (this fixture carries 415 hip points) to
+  confirm the real dip is where reps 5 and 6 say it is.
 
 ### THE HARNESS, so the next session does not rebuild it
 
