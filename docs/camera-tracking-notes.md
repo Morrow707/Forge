@@ -28,6 +28,53 @@ of every session, before the push, and date the heading.** The replayable record
 his choice, Bench Press, Pendlay Row and Barbell Shoulder Press ("reps of probably 8 ... multiple
 sets"). Every round fixes something on every lift filmed that round.**
 
+### HOW TO READ AN OVR SCREEN -- STANDING RULES, NOT PER-TAKE DECISIONS (2026-11-09)
+
+Both of these have been settled take by take in six different comment blocks; they are standing
+rules now so no session asks again.
+
+- **ON A JUMP, THE OVR'S REP 1 IS THE SETUP REP AND IS NOT ONE OF OURS.** Scott, 2026-11-09:
+  "For box jump or 'jump squat' on the OVR, skip rep one that is a setup rep." **"JUMP SQUAT" is
+  the OVR's own name for the profile he selects when he films a BOX JUMP** -- he confirmed the
+  same morning that he is "only doing squats box jumps and rdls" -- so a screen headed JUMP SQUAT
+  and a Forge capture against Box Jump are the same take, exactly as the OVR's "Deadlift" screen
+  is his Romanian Deadlift and its "Push Press" was the Barbell Shoulder Press (2026-10-31: "they
+  don't have another name"). **Read the OVR's exercise label as the sensor's vocabulary, never as
+  a statement about which lift was performed** -- the pairing is decided by the date, the load and
+  the rep count, and by the Forge export. The rule is **recorded, never deleted** -- the
+  ground-truth entries
+  carry it as `ignoredRep1` beside the reps, so a later session can see what was excluded and
+  re-derive the set either way. Same shape as Rule #1 one layer up: the number is kept and
+  labelled rather than thrown away. It is also VISIBLE in the data rather than taken on trust --
+  on 11-05 set 1 the setup rep reads 34.9in of ROM against 26-28in for the five real reps, and
+  0.93 m/s mean against 1.40-1.56. A jump rep 1 that looks like the others is worth a question
+  before it is dropped. The set row the sensor prints still averages it in, so **never read the
+  sensor's own set aggregate on a jump** -- `reportedOverOurReps` is computed over our reps only.
+  (Not jump-only in general: the 10-30 shoulder press skipped reps 1-2 and the Pendlay row the
+  same, on his word each time. What is standing is the JUMP case.)
+- **THE OVR'S LOAD FIELD ON A JUMP: 1LB IS FINE AND BODY WEIGHT WOULD CHANGE NOTHING WE COMPARE.**
+  Scott, 2026-11-09: "I've just been putting 1lb as the OVR needs a weight, should I be putting in
+  how much I weigh?" No. Every number a jump take is scored on is KINEMATIC -- mean velocity, peak
+  velocity, ROM, time to peak velocity -- and all four come from tether displacement over time,
+  with no load term in them. The load reaches only the sensor's POWER and its load-velocity
+  figures, and **Forge computes no power at all on a jump**: `jump-tracking.ts` says so in its own
+  comment ("loadKg has no equivalent here ... this is display of body-flight kinematics, not force
+  or power"), where `bar-tracking.ts` has `meanPowerWatts = loadKg * g * meanVelocity` for a bar
+  lift. So there is nothing to pair a jump wattage with. Checked rather than assumed: across all
+  four jump takes in `tracker-ground-truth.ts` (10-01 jump squat, 10-01 box jump, 11-05 box jump
+  sets 1 and 2) **not one row records a load and not one records a watt figure** -- the field has
+  never entered a comparison.
+  **And there is a reason not to change it now**: every jump row in the repo was taken at 1lb, so
+  switching the field mid-series would introduce a difference between takes that is not supposed
+  to matter, and if it turned out to matter the one jump series we have would carry a confound.
+  The OVR's firmware is not inspectable from here, so "the load cannot affect the kinematics" is
+  an inference from physics, not a reading of their code -- what IS measured is that at 1lb those
+  kinematics agree with Forge's hip measurements to 2-3% on both 11-05 sets (hip peak +2.1% and
+  +0.3%, net rise 69.7cm against the sensor's 69.3), which a corrupted velocity would not do.
+  **If a jump POWER comparison is ever wanted, that is a new number to build, not a calibration
+  fix**: Forge would compute body weight x g x hip velocity, and body weight would then have to go
+  in the OVR for it to be paired. Say so and it gets built; until then 1lb.
+
 **THE STANDING ORDER FOR THE NEXT SESSION (Scott, 2026-10-29, after build 697 shipped the RDL's
 record):** "Ok I'll record all 3, but I want you to change something on all lifts after this
 round. 1.5% is good but I want to make it 0% and steady." Then: "Small changes. .001% changes."
