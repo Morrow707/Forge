@@ -206,7 +206,8 @@ and the working hand, so a unilateral lift is traced by its WORKING hand now, an
 dumbbell. The bench's plate was found, measured 7% SMALL, and admitting it (a per-lift aspect
 ceiling, built) was costed at +6.2% and not shipped. **SHIPPED as build 716** (2026-11-06 19:59 UTC, `af7d4d3`; 715 its
 `verify_build`) once Scott lifted the hold -- this line said "held on the branch" for three days
-after it went out. **THE BUILD TO FILM ON IS 720** (2026-11-08 05:30 UTC,
+after it went out. **THE BUILD TO FILM ON IS 724** (2026-11-09 19:36 UTC, `ce0b025`, round
+twelve; 723 its `verify_build`). Round twelve was FILMED on **720** (2026-11-08 05:30 UTC,
 `ac76663`; 719 its `verify_build`), which is what Scott has installed. It added no camera work of
 its own -- nor did 718, 721 or 722: all four are the Anvil, and **the last camera-path commit on
 `main` is still `af7d4d3`**, build 716's. So 720 CONTAINS round eleven and its camera is 716's
