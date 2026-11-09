@@ -3502,9 +3502,13 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **THE BUILD ON SCOTT'S PHONE IS 720** (2026-11-08
-  05:30 UTC, `ac76663`: "the Anvil reads the rest of the app"; 719 was its `verify_build` on the
-  same commit, the pair pattern this paragraph is about), **and it is the build to film on.**
+  branch `verify_build` for the arbiter plumbing. **THE BUILD TO FILM ON IS 726** (2026-11-09 20:41 UTC,
+  `baf487d`: round twelve's squat window, the unconditional capture salvage so a failed analysis
+  still saves a row, and the traced-gap live gate; 725 was its `verify_build` on the same commit,
+  the pair pattern this paragraph is about). **724 IS SUPERSEDED** -- the same round-twelve camera
+  code with neither fix -- and it lasted under an hour, which is this paragraph's whole point.
+  **THE BUILD ON SCOTT'S PHONE IS 720** (2026-11-08 05:30 UTC, `ac76663`: "the Anvil reads the
+  rest of the app"; 719 its `verify_build`), which is what round twelve was FILMED on.
   Scott, 2026-11-09: "We are actually on build 720." **NONE OF THE FOUR ANVIL BUILDS CARRIES A
   CAMERA CHANGE** -- 718 `3e04c93` (the client half: the four tasks, the card, the coach's week,
   the print button; 717 its `verify_build`), 720 `ac76663`, 721 `5a3cbe9` (the slow channel's
