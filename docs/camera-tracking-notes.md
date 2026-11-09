@@ -150,11 +150,17 @@ and the working hand, so a unilateral lift is traced by its WORKING hand now, an
 dumbbell. The bench's plate was found, measured 7% SMALL, and admitting it (a per-lift aspect
 ceiling, built) was costed at +6.2% and not shipped. **SHIPPED as build 716** (2026-11-06 19:59 UTC, `af7d4d3`; 715 its
 `verify_build`) once Scott lifted the hold -- this line said "held on the branch" for three days
-after it went out. **THE BUILD TO FILM ON IS 718**: it added no camera work of its own (it is the
-Anvil's client half) but it is cut from a branch that merged main including 716, so it CONTAINS
-round eleven, and CLAUDE.md said "714 remains the one to film on" until 2026-11-09. 714 is round
-TEN. Filming on it would have cost round eleven's three fixes, the supine-stature rule among them
-(a bench reading -12.6% against +2.5%). **Check ancestry, never the run list**:
+after it went out. **THE BUILD TO FILM ON IS 720** (2026-11-08 05:30 UTC,
+`ac76663`; 719 its `verify_build`), which is what Scott has installed. It added no camera work of
+its own -- nor did 718, 721 or 722: all four are the Anvil, and **the last camera-path commit on
+`main` is still `af7d4d3`**, build 716's. So 720 CONTAINS round eleven and its camera is 716's
+code, and filming on it loses nothing against 721 or 722.
+**THIS LINE HAS NOW BEEN WRONG TWICE, THE SAME WAY EACH TIME -- a build number taken from what was
+last written down.** CLAUDE.md said "714 remains the one to film on" until 2026-11-09, and 714 is
+round TEN: filming on it would have cost round eleven's three fixes, the supine-stature rule among
+them (a bench reading -12.6% against +2.5%). The correction said 718, which was already two betas
+stale as it was written, because 719 and 720 went out at 05:17 and 05:30 that same morning.
+**Check ancestry, and read the number off the iOS workflow's run list, never off a note**:
 `git merge-base --is-ancestor <camera commit> <build commit>`. The build to film on is the newest
 build that CONTAINS the newest camera commit, which is not always the newest that ADDED one.
 See "Round eleven".

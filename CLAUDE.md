@@ -3502,19 +3502,28 @@ halves before splitting anything else:
   the numbering in this file has drifted twice. Read the run list, not the last number written
   down: run 623 `d33f942d`, 624 `d619c07d`, **625 `0daa3e6e` (landed)**, **626 `5cdd12aa` (the
   posture sweep + the filmable-54 audit, uploaded 18:55 and processing at Apple)**, 627 the
-  branch `verify_build` for the arbiter plumbing. **The newest build is 718** (2026-11-08 03:49
-  UTC, `3e04c93`: the Anvil's client half -- the four tasks, the dashboard card, the coach's week
-  and the print button; 717 was its `verify_build` on the same commit, which passed Apple's own
-  `--validate-app`). **This is the first build that carries a feature with no camera in it**, so
-  it added no camera work of its own -- **but it is cut from a branch that MERGED main including
-  715/716, so it CONTAINS round eleven and is the build to film on.** An earlier version of this
-  line said "714 remains the one to film on", which was wrong in the one way that costs a
-  calibration morning: 714 is round TEN, and round eleven's three fixes are not in it -- the
-  supine-stature rule alone is the difference between a bench reading -12.6% and +2.5%. Verified
-  by ancestry, not by the run list: `git merge-base --is-ancestor <round-eleven> <build-718>`.
-  **The rule this restates: the build to film on is the newest build that CONTAINS the newest
-  camera commit, which is not always the newest build that ADDED one.** The Anvil's server half went live on Render with the same push and needs no
-  build. Before 718, **716** (2026-11-06 19:59 UTC, `af7d4d3`: round eleven and the unilateral
+  branch `verify_build` for the arbiter plumbing. **THE BUILD ON SCOTT'S PHONE IS 720** (2026-11-08
+  05:30 UTC, `ac76663`: "the Anvil reads the rest of the app"; 719 was its `verify_build` on the
+  same commit, the pair pattern this paragraph is about), **and it is the build to film on.**
+  Scott, 2026-11-09: "We are actually on build 720." **NONE OF THE FOUR ANVIL BUILDS CARRIES A
+  CAMERA CHANGE** -- 718 `3e04c93` (the client half: the four tasks, the card, the coach's week,
+  the print button; 717 its `verify_build`), 720 `ac76663`, 721 `5a3cbe9` (the slow channel's
+  anchor) and 722 `0aa3173` (the growth input) -- so the camera in every one of them is build
+  716's, and **the last camera-path commit on `main` is still `af7d4d3`** (verified with a
+  `git log 1023bb6..origin/main --` over the tracker libraries, the tracker dialogs, the
+  registry, the arbiter, the ledger and `ios/`: one hit, the unilateral side column, which IS
+  716). So filming on 720 loses nothing against 721 or 722 whichever of those is a beta.
+  Round eleven `1023bb6` is an ancestor of all four, checked rather than assumed.
+  **TWO EARLIER VERSIONS OF THIS LINE WERE WRONG AND BOTH FAILED THE SAME WAY -- by naming a
+  build from the last number written down here instead of reading the run list.** It said "714
+  remains the one to film on", which is round TEN and misses round eleven's three fixes -- the
+  supine-stature rule alone is the difference between a bench reading -12.6% and +2.5%; corrected
+  to 718, which was true for ninety minutes and was already two betas stale when it was written,
+  because 719/720 went out at 05:17 and 05:30 the same morning.
+  **The rule this restates, twice over: the build to film on is the newest build that CONTAINS the
+  newest camera commit, which is not always the newest build that ADDED one -- and the number is
+  read off the iOS workflow's run list, never off this file.** The Anvil's server halves went live
+  on Render with the same pushes and need no build. Before 720, **718**; before that, **716** (2026-11-06 19:59 UTC, `af7d4d3`: round eleven and the unilateral
   per-side rows; 715 was its `verify_build` on the same commit). Before it, **714** (2026-11-06
   13:33 UTC, `5003fef`: round ten -- a rep ends when the bar comes to rest, the RDL's whole window, the
   squat's 0.12 step, the jump's mean to the hip's apex -- plus the day-wipe save fix (`09b931f`)
@@ -3673,11 +3682,16 @@ halves before splitting anything else:
   by the same rule; the every-lift test pins that the press's window reaches the press trace and
   the row's record lands set 2. See docs/camera-tracking-notes.md "Round five, 2026-10-30".
   Calibration work, uploaded on commit as build **705** (704 was its `verify_build` on `bfcc130`).
-- **THE QUEUE IS EMPTY AS OF BUILD 718** (2026-11-08: the Anvil's client half -- the four tasks,
-  the agreement, the dashboard card, the coach's week and the PDF button. Scott: "lets upload all
-  to forge and see what it looks like when it lands", which is what a beta is for; 717 was its
-  `verify_build`). Before it, **716** (round eleven and the per-side unilateral rows, 715 its
-  `verify_build`). Before that, build 714 and the entry below.
+- **THE QUEUE IS EMPTY AS OF BUILD 720** (2026-11-08 05:30 UTC, `ac76663`: the Anvil reading the
+  rest of the app -- the 53 declared inputs get a caller, the day-context line, the grouped
+  blanks; 719 was its `verify_build` on the same commit). Before it, **718** the same morning
+  (`3e04c93`, the Anvil's client half -- the four tasks, the agreement, the dashboard card, the
+  coach's week and the PDF button. Scott: "lets upload all to forge and see what it looks like
+  when it lands", which is what a beta is for; 717 its `verify_build`). Before that, **716**
+  (round eleven and the per-side unilateral rows, 715 its `verify_build`), then build 714 and the
+  entry below. **721 `5a3cbe9` and 722 `0aa3173` are the slow channel's anchor and the growth
+  input**, each a single run on its own commit; neither carries a camera change, so the camera on
+  720 and the camera on 722 are the same code.
 - **THE QUEUE WAS EMPTY AS OF BUILD 714** (2026-11-06: round ten, the day-wipe save fix and the
   Forge-code removal, held behind 712 on Scott's word and released with "Push all and upload").
   Before it, 712 (round nine), 710 (round eight), 707 (round seven) and 705 (round five); nothing
