@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { MUSCLE_REGIONS } from "@shared/muscle-map";
+import MANIFEST from "./body-map-manifest.json";
+
+// The figure's groups come from the 3D body map's manifest now (2026-11-10), not from SVG
+// regions typed in body-map.tsx: the manifest's group list is the label maps' index.
+const DRAWN = new Set(
+  Object.values((MANIFEST as unknown as { tiles: Record<string, { groups: Record<string, unknown> }> }).tiles)
+    .flatMap((t) => Object.keys(t.groups)),
+);
 
 // ONE FIGURE, EVERYWHERE A MUSCLE IS DRAWN.
 //
@@ -36,15 +44,13 @@ describe("the muscle load map and the strength profile draw the same body", () =
     expect(bodyMap).toContain("The label is a tap target too, not just the muscle.");
   });
 
-  it("every leader points at a group the figure actually draws", () => {
+  it("derives its labels from the figure rather than typing a second list", () => {
+    // BODY_MAP_LEADERS is computed from the manifest, so a label cannot point at a group the
+    // figure does not draw -- the failure the old hand-typed list could have.
     const bodyMap = read("client/src/components/body-map.tsx");
-    const drawn = new Set(
-      Array.from(bodyMap.matchAll(/\{\s*group:\s*"([^"]+)"/g)).map((m) => m[1]),
-    );
-    const leadBlock = bodyMap.slice(bodyMap.indexOf("BODY_MAP_LEADERS"));
-    const leads = Array.from(leadBlock.matchAll(/group:\s*"([^"]+)"/g)).map((m) => m[1]);
-    expect(leads.length).toBeGreaterThan(12);
-    for (const g of leads) expect(drawn, `${g} is labelled but not drawn`).toContain(g);
+    expect(bodyMap).toContain('front: leadersFor("front")');
+    expect(bodyMap).toContain('back: leadersFor("back")');
+    expect(DRAWN.size).toBeGreaterThan(12);
   });
 
   it("keeps no schematic shapes behind", () => {
@@ -59,10 +65,7 @@ describe("the muscle load map and the strength profile draw the same body", () =
   // worth pinning: a region that maps to a group the figure does not draw would be a fill that
   // silently goes nowhere.
   it("maps every region it claims to map onto a group the figure really draws", () => {
-    const bodyMap = read("client/src/components/body-map.tsx");
-    const drawnGroups = new Set(
-      Array.from(bodyMap.matchAll(/\{\s*group:\s*"([^"]+)"/g)).map((m) => m[1]),
-    );
+    const drawnGroups = DRAWN;
     const mapped = Array.from(
       heatMap.matchAll(/^\s{2}(\w+):\s*\[([^\]]+)\],/gm),
     );

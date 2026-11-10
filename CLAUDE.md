@@ -7134,9 +7134,17 @@ app: no build, no Render deploy.
   the tsconfig recipe in the types file header. Two things that cost a round each: an `atom`
   ref's plugin and key must be STRING LITERALS (the scan reads them), and a tool hook's answer
   is `{ result, text }` or `{ isError: true, result, text }`, never `{ text, isError }`.
-- **The body map itself is NOT wired into the app.** Scott, 2026-10-24: "no don't wire, i want
-  to work, give me the artifact." He works it through the artifact and `/tune`; the wiring into
-  `client/src/components/body-map.tsx` waits on his word.
+- **THE BODY MAP IS WIRED INTO THE APP AS OF 2026-11-10** (Scott: "upload the body map we're good
+  where its at"). `client/src/components/body-map.tsx` draws the artifact's own tiles from
+  `client/public/body-map/` on a canvas, with `client/src/lib/body-map-manifest.json` as the group
+  index, behind the same props the SVG had, so the picker, the strength profile and the Muscle
+  Load Map changed no call site. The head is the real Z-Anatomy head musculature
+  (`tools/body-map/head_render.py`) and carries NO muscle group, so nothing taps or scores on a
+  face (`body-map-regions.test.ts` reads the label maps). Female/Male is the VIEWER's choice kept
+  in this browser, never `users.gender`. The CC BY-SA credit is drawn on every figure large
+  enough to hold it. **To change the figure, re-run `tools/body-map/pipeline.py --stage
+  realistic`, republish the artifact, and copy `site/img3d`, `site/lab3d` and
+  `site/manifest3d.json` over the app's copies** -- the app reads files, not the artifact.
 
 ## The top-twenty list, 2026-10-15: what Scott decided and what shipped
 

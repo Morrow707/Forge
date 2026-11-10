@@ -25,7 +25,9 @@
  * `server/static-cache-headers.test.ts` reads this policy and the middleware wiring in vite.ts.
  */
 export const IMMUTABLE_ASSET_PREFIX = "/assets/";
-export const LONG_LIVED_UNHASHED_PREFIXES = ["/mediapipe-wasm/", "/onnxruntime-wasm/", "/models/", "/fonts/", "/marketing/"];
+// "/body-map/" (2026-11-10): the 3D body map's four tiles and label maps, ~1.1MB, unhashed, and
+// read on every screen that shows a muscle. A day, like the fonts; a re-render lands a day late.
+export const LONG_LIVED_UNHASHED_PREFIXES = ["/mediapipe-wasm/", "/onnxruntime-wasm/", "/models/", "/fonts/", "/marketing/", "/body-map/"];
 /** The icons at the root (`/favicon-32.png`, `/apple-touch-icon.png`, `/icon-192.png`, ...):
  * unhashed, a few KB, and the kind of file that changes once a year. A day, like the fonts. */
 export const LONG_LIVED_ROOT_FILE = /^\/[^/]+\.(png|ico|svg|webp|jpg|woff2?)$/;

@@ -1,156 +1,157 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { inflateSync } from "node:zlib";
 import { MUSCLE_GROUPS } from "@shared/exercise-taxonomy";
 import { SCORABLE_MUSCLE_GROUPS } from "@shared/strength-score";
+import MANIFEST from "./body-map-manifest.json";
 
 /**
- * THE FIGURE AND THE LIBRARY HAVE TO AGREE.
+ * THE FIGURE AND THE LIBRARY HAVE TO AGREE -- now a 3D render rather than SVG paths (2026-11-10).
  *
- * Every region on the body map is keyed to a muscleGroup from the exercise taxonomy. A region
- * keyed to something else is a region nothing can ever fill: tapping it filters to zero
- * exercises, or tints a muscle no score will ever arrive for, and both failures look like an
- * empty database rather than a typo in an SVG.
- *
- * Read out of the source rather than by importing the component, because importing it pulls in
- * React and the whole client tree for what is a question about a list of strings.
+ * The body map is the Body Map artifact's tiles (client/public/body-map/) and their label maps,
+ * where every pixel's value is the 1-based index of a muscle group in the manifest. These cases
+ * hold the manifest, the label maps and the component to the same rules the SVG figure was held
+ * to: every group a real muscleGroup, both views drawn, the scored groups on the figure, a
+ * keyboard path to every group, and nothing attached to the head.
  */
-const src = readFileSync("client/src/components/body-map.tsx", "utf8");
-const drawn = Array.from(src.matchAll(/\{\s*group:\s*"([^"]+)"/g)).map((m) => m[1]);
+type Tile = { w: number; h: number; groups: Record<string, { count: number; ax: number; ay: number }> };
+const M = MANIFEST as unknown as { groups: string[]; tiles: Record<string, Tile> };
+const KEYS = ["female-front", "female-back", "male-front", "male-back"] as const;
+const MIN_GROUPS_PER_TILE = 10;
+const MAX_UNDRAWN_SCORED = 2;
+/** Crown to roughly the chin: the top tenth of every tile is the head. */
+const HEAD_SHARE_OF_HEIGHT = 0.1;
+const src = readFileSync(join(process.cwd(), "client/src/components/body-map.tsx"), "utf8");
 
-/** Each region as {group, view, label, d}, parsed out of the same source. Same reasoning as
- *  `drawn` above: this is a question about path strings, not about React. */
-const ALL_REGIONS = Array.from(
-  src.matchAll(
-    /\{\s*group:\s*"([^"]+)",\s*view:\s*"([^"]+)",\s*label:\s*"([^"]+)",\s*d:\s*([\s\S]*?),\s*\},/g,
-  ),
-).map((m) => ({
-  group: m[1],
-  view: m[2],
-  label: m[3],
-  // The `d` is written as adjacent string literals joined by +; rebuild it the way the bundler
-  // would rather than matching one quoted run and silently testing a third of the shape.
-  d: (m[4].match(/"([^"]*)"/g) ?? []).map((q) => q.slice(1, -1)).join(""),
-}));
+/** An 8-bit greyscale, non-interlaced PNG (what tools/body-map writes), as rows of bytes. Read
+ *  with zlib rather than a PNG package: one more dependency for one test is not worth it. */
+const PNG_SIGNATURE_BYTES = 8;
+const CHUNK_HEADER_BYTES = 8;
+const CHUNK_CRC_BYTES = 4;
+/** PNG row filters, in the order of the filter byte that names them. */
+const FILTERS = ["none", "sub", "up", "average", "paeth"] as const;
+const BYTE_MASK = 0xff;
+/** The Paeth predictor: whichever of left, up and up-left is nearest left + up - up-left. */
+function paeth(a: number, b: number, c: number): number {
+  const p = a + b - c;
+  const [pa, pb, pc] = [Math.abs(p - a), Math.abs(p - b), Math.abs(p - c)];
+  if (pa <= pb && pa <= pc) return a;
+  return pb <= pc ? b : c;
+}
+function readGreyPng(path: string): { width: number; height: number; rows: Uint8Array[] } {
+  const buf = readFileSync(path);
+  const chunks: { type: string; data: Buffer }[] = [];
+  const walk = (at: number): void => {
+    if (at >= buf.length) return;
+    const len = buf.readUInt32BE(at);
+    const type = buf.toString("ascii", at + CHUNK_CRC_BYTES, at + CHUNK_HEADER_BYTES);
+    chunks.push({ type, data: buf.subarray(at + CHUNK_HEADER_BYTES, at + CHUNK_HEADER_BYTES + len) });
+    walk(at + CHUNK_HEADER_BYTES + len + CHUNK_CRC_BYTES);
+  };
+  walk(PNG_SIGNATURE_BYTES);
+  const ihdr = chunks.find((c) => c.type === "IHDR")!.data;
+  const width = ihdr.readUInt32BE(0);
+  const height = ihdr.readUInt32BE(CHUNK_CRC_BYTES);
+  const raw = inflateSync(Buffer.concat(chunks.filter((c) => c.type === "IDAT").map((c) => c.data)));
+  const stride = width + 1;
+  const rows = Array.from({ length: height }).reduce<Uint8Array[]>((done, _, y) => {
+    const filter = raw[y * stride];
+    const line = raw.subarray(y * stride + 1, (y + 1) * stride);
+    const prev = done[y - 1] ?? new Uint8Array(width);
+    const out = new Uint8Array(width);
+    line.forEach((v, x) => {
+      const a = x > 0 ? out[x - 1] : 0;
+      const b = prev[x];
+      const c = x > 0 ? prev[x - 1] : 0;
+      const predict = {
+        none: 0,
+        sub: a,
+        up: b,
+        average: (a + b) >> 1,
+        paeth: paeth(a, b, c),
+      }[FILTERS[filter] ?? "none"];
+      out[x] = (v + predict) & BYTE_MASK;
+    });
+    return [...done, out];
+  }, []);
+  return { width, height, rows };
+}
+const labelMap = (key: string) => readGreyPng(join(process.cwd(), `client/public/body-map/lab3d/${key}.png`));
 
 describe("the body map's regions", () => {
-  it("found the regions at all", () => {
-    // Guards against the regex silently matching nothing and the file passing vacuously.
-    expect(drawn.length).toBeGreaterThan(10);
-  });
-
   it("names only real muscle groups", () => {
-    const unknown = Array.from(new Set(drawn)).filter(
-      (g) => !(MUSCLE_GROUPS as readonly string[]).includes(g),
-    );
-    expect(unknown, "a region keyed to a group the library does not use").toEqual([]);
+    const unknown = M.groups.filter((g) => !(MUSCLE_GROUPS as readonly string[]).includes(g));
+    expect(unknown, "a group the library does not use").toEqual([]);
   });
 
-  it("draws both a front and a back", () => {
-    expect(src).toContain('view: "front"');
-    expect(src).toContain('view: "back"');
+  it("has all four tiles, front and back of both figures, each with groups on it", () => {
+    KEYS.forEach((key) => {
+      expect(M.tiles[key], key).toBeTruthy();
+      expect(Object.keys(M.tiles[key].groups).length, key).toBeGreaterThan(MIN_GROUPS_PER_TILE);
+    });
   });
 
-  it("covers most of what gets scored, and is honest about the rest", () => {
-    // Not every scorable group has somewhere sensible to draw it -- the profile falls back to
-    // a list row for those rather than dropping them out of the score silently. What matters
-    // is that the gap is DECLARED, which UNDRAWN_SCORABLE_GROUPS does.
-    const missing = SCORABLE_MUSCLE_GROUPS.filter((g) => !drawn.includes(g));
+  it("ships every tile and label map the manifest names, at the manifest's size", () => {
+    KEYS.forEach((key) => {
+      const lab = labelMap(key);
+      expect([lab.width, lab.height], key).toEqual([M.tiles[key].w, M.tiles[key].h]);
+      expect(readFileSync(join(process.cwd(), `client/public/body-map/img3d/${key}.webp`)).length, key).toBeGreaterThan(0);
+    });
+  });
+
+  it("decodes the label maps exactly, or the head case below would pass on noise", () => {
+    // Every labelled pixel is counted in the manifest, per group. Decoded and counted here, the
+    // two must agree to the pixel -- a reader that mangled rows would not.
+    KEYS.forEach((key) => {
+      const lab = labelMap(key);
+      const labelled = lab.rows.reduce((n, row) => n + row.filter((v) => v > 0).length, 0);
+      const counted = Object.values(M.tiles[key].groups).reduce((n, g) => n + g.count, 0);
+      expect(labelled, key).toBe(counted);
+    });
+  });
+
+  it("covers what gets scored, and is honest about the rest", () => {
     expect(src).toContain("UNDRAWN_SCORABLE_GROUPS");
-    // If this ever grows past a couple, the figure has stopped being a map of the score.
-    expect(missing.length, `undrawn: ${missing.join(", ")}`).toBeLessThanOrEqual(2);
+    const onFigure = new Set(KEYS.flatMap((k) => Object.keys(M.tiles[k].groups)));
+    const missing = SCORABLE_MUSCLE_GROUPS.filter((g) => !onFigure.has(g));
+    expect(missing.length, `undrawn: ${missing.join(", ")}`).toBeLessThanOrEqual(MAX_UNDRAWN_SCORED);
   });
 
-  it("gives every region a keyboard path and a fat touch target", () => {
-    // An SVG shape is not a button unless it behaves like one, and the thin regions (forearms,
-    // calves) are unhittable on a phone without the transparent wide stroke.
+  it("gives every group a keyboard path, and the label is a tap target", () => {
+    // A canvas has no buttons of its own: the component draws real ones, over each label when
+    // labelled and as a visually hidden list otherwise.
     expect(src).toContain('role="button"');
     expect(src).toContain("tabIndex={0}");
-    expect(src).toContain('stroke="transparent"');
-  });
-});
-
-// EVERY MUSCLE HAS TO LAND ON THE BODY.
-//
-// The previous figure drew limb muscles as a stroke along the same line the limb itself was
-// stroked on, so a muscle could not drift off its limb -- by construction. That trick is gone
-// (it is why every limb muscle was a capsule, which is the "blocky" Scott objected to), so the
-// guarantee has to come back as a measurement instead.
-//
-// Absolute coordinates, walked out of the path data rather than read off it: the outlines are
-// written with relative curves, so the raw numbers in the string are deltas and mean nothing on
-// their own. That is exactly the kind of check a human eye passes and then regrets.
-describe("every region sits on the figure", () => {
-  // The envelope the silhouette occupies in the 240x470 viewBox, with a little slack for the
-  // stroke. Anything outside this is drawing in empty space beside the body.
-  const BODY = { minX: 58, maxX: 182, minY: 70, maxY: 450 };
-
-  function pointsOf(d: string): { x: number; y: number }[] {
-    const out: { x: number; y: number }[] = [];
-    let x = 0;
-    let y = 0;
-    let startX = 0;
-    let startY = 0;
-    // Split into command letters and their number runs.
-    const tokens = d.match(/[MmLlCcZz][^MmLlCcZz]*/g) ?? [];
-    for (const token of tokens) {
-      const cmd = token[0];
-      const nums = (token.slice(1).match(/-?\d*\.?\d+/g) ?? []).map(Number);
-      if (cmd === "Z" || cmd === "z") {
-        x = startX;
-        y = startY;
-        continue;
-      }
-      const step = cmd === "C" || cmd === "c" ? 6 : 2;
-      for (let i = 0; i + step <= nums.length; i += step) {
-        const rel = cmd === cmd.toLowerCase();
-        // Only the END point of a curve moves the pen; the control points are pulled toward,
-        // never reached, so including them would fail a shape that is perfectly inside.
-        const dx = nums[i + step - 2];
-        const dy = nums[i + step - 1];
-        x = rel ? x + dx : dx;
-        y = rel ? y + dy : dy;
-        if (cmd === "M" || cmd === "m") {
-          startX = x;
-          startY = y;
-        }
-        out.push({ x, y });
-      }
-    }
-    return out;
-  }
-
-  it("walks a path correctly, or the rest of this proves nothing", () => {
-    // M to (10,10), then a relative curve ending +5,+5, then a relative line -3,0.
-    const pts = pointsOf("M10 10 c1 1 2 2 5 5 l-3 0 Z");
-    expect(pts).toEqual([
-      { x: 10, y: 10 },
-      { x: 15, y: 15 },
-      { x: 12, y: 15 },
-    ]);
+    expect(src).toContain("The label is a tap target too, not just the muscle.");
+    expect(src).toContain('className="sr-only"');
   });
 
-  for (const region of ALL_REGIONS) {
-    it(`${region.view}/${region.label} stays inside the body`, () => {
-      const pts = pointsOf(region.d);
-      expect(pts.length).toBeGreaterThan(3);
-      for (const p of pts) {
-        expect(p.x, `${region.label} x`).toBeGreaterThanOrEqual(BODY.minX);
-        expect(p.x, `${region.label} x`).toBeLessThanOrEqual(BODY.maxX);
-        expect(p.y, `${region.label} y`).toBeGreaterThanOrEqual(BODY.minY);
-        expect(p.y, `${region.label} y`).toBeLessThanOrEqual(BODY.maxY);
-      }
+  // THE HEAD CARRIES NO MUSCLE GROUP. The head is the real head musculature now (Scott asked for
+  // "the muscles in the face", 2026-11-08, and approved it 2026-11-10), but nothing on it is a
+  // Forge group: no tap lands there, no score or set count can ever attach to a face. Read off the
+  // label maps themselves. The neck and the traps reach up behind the jaw and are allowed.
+  it("puts no muscle group on the head", () => {
+    const allowed = new Set([0, M.groups.indexOf("Neck") + 1, M.groups.indexOf("Traps") + 1]);
+    KEYS.forEach((key) => {
+      const lab = labelMap(key);
+      const headRows = lab.rows.slice(0, Math.round(lab.height * HEAD_SHARE_OF_HEIGHT));
+      const onHead = headRows.reduce((n, row) => n + row.filter((v) => !allowed.has(v)).length, 0);
+      expect(onHead, `${key}: a group drawn on the head`).toBe(0);
     });
-  }
+  });
 
-  // The reason the head is blank is a rule about minors, not a style choice -- see the header
-  // of body-map.tsx. A face is the one addition that would make this the wrong kind of picture.
-  it("draws no face", () => {
-    const src = readFileSync(join(process.cwd(), "client/src/components/body-map.tsx"), "utf8");
-    expect(src).toContain("THE FIGURE HAS NO FACE");
-    for (const region of ALL_REGIONS) {
-      // No region may sit in the head, which is the top of the viewBox.
-      for (const p of pointsOf(region.d)) expect(p.y).toBeGreaterThan(66);
-    }
+  it("never chooses the figure from the account", () => {
+    // The figure is the viewer's own preference, kept in this browser -- never users.gender.
+    expect(src).toContain("forge.bodyMap.figure");
+    // Forbidden: any read of the account's gender or the signed-in user. Matches "user.gender",
+    // "user?.gender", "useAuth", "/api/auth/me"; does not match "figure".
+    // https://regex101.com/?regex=user%5C%3F%3F%5C.gender%7CuseAuth%7C%5C%2Fapi%5C%2Fauth%5C%2Fme&testString=user%3F.gender
+    expect(src).not.toMatch(/user\??\.gender|useAuth|\/api\/auth\/me/);
+  });
+
+  it("carries the licence credit the anatomy asks for", () => {
+    expect(src).toContain("Z-Anatomy (CC BY-SA 4.0)");
+    expect(src).toContain("{BODY_MAP_CREDIT}");
   });
 });
