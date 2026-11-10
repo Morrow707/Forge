@@ -3815,6 +3815,16 @@ halves before splitting anything else:
   the row is labelled by the helper; a second filmed row take -- the first on the working-hand rule
   with a declared side -- is what gives the row its first ledger row. Client plus a server column:
   `verify_build` then `beta` with round eleven when the hold lifts.
+- **ROUND SIXTEEN, 2026-11-10 EVENING: SET 3 ON BUILD 732, AND WHY THE LEFT ROW FOUND 4 OF 8.** Four
+  reasons: the pickup swallowed pull 1, the working wrist was unseen for 1.36s (one pull lost in the
+  hole; the live gate measures BODY gaps, not the wrist, so the take was not re-read from the file --
+  next), the rep before the hole was deleted as a rack move, and the last pull merged with the
+  set-down. The third is FIXED, shared: a phantom phase holding a 0.5s+ trace hole does not end the
+  set's run (left 4 -> 5; the 10-02 bench 9 -> 10 of 10; nothing else in the corpus moves). Bench set
+  3 read 15cm a rep because the hand vanished at the chest on every press -- a tracking hole, not a
+  scale, not a ledger row. Steps: bench depth 0.15, press 3D 0.12 + window 0, row depth 0.6. The
+  row's body rulers read -20% to -39% on every take; no uncertainty reaches that. See
+  docs/camera-tracking-notes.md, "Round sixteen".
 - **ROUND FIFTEEN, 2026-11-10 EVENING: SET 2 OF ALL THREE ON BUILD 730, ROUND FOURTEEN HELD, ONE
   MORE STEP EACH, AND THE EXPORT NOW CARRIES `side`.** Press set 2 read **+10.1%** as filmed (set 1
   +46.5% on 728) -- round fourteen's record working on a take it was not fitted on. Bench set 2 read

@@ -2026,3 +2026,81 @@ export const OVR_DUMBBELL_SHOULDER_PRESS_SET2_2026_11_10 = {
     reportedOverOurReps: { meanVelocityMps: 0.971, peakVelocityMps: 1.564, romIn: 21.14 },
   },
 };
+
+// Round sixteen, 2026-11-10, SET 3 of each lift on build 732.
+// Bench press 135lb x8. Forge read 15cm a rep on this take because the hand went unseen at the
+// bottom of every press; it is ground truth for the hole, not for the scale.
+export const OVR_BENCH_PRESS_SET3_2026_11_10 = {
+  build: 732,
+  loadLb: 135,
+  repsPerSet: 8,
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.07, romIn: 13.9 },
+      { meanVelocityMps: 0.76, peakVelocityMps: 1.10, romIn: 13.9 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.07, romIn: 13.7 },
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.07, romIn: 14.6 },
+      { meanVelocityMps: 0.76, peakVelocityMps: 1.05, romIn: 14.1 },
+      { meanVelocityMps: 0.73, peakVelocityMps: 1.03, romIn: 14.2 },
+      { meanVelocityMps: 0.76, peakVelocityMps: 1.02, romIn: 14.9 },
+      { meanVelocityMps: 0.68, peakVelocityMps: 0.91, romIn: 16.7 },
+    ],
+    reported: { meanVelocityMps: 0.74, peakVelocityMps: 1.04, romIn: 14.5 },
+  },
+};
+
+// Dumbbell shoulder press (the OVR's "Push Press"), set 3, 30lb. The OVR counted eleven; Scott:
+// "skip first 3 reps on shoulder press", so the eight from the 1.07 rep are the set.
+export const OVR_DUMBBELL_SHOULDER_PRESS_SET3_2026_11_10 = {
+  build: 732,
+  loadLb: 30,
+  repsPerSet: 8,
+  sensor: {
+    ignoredSetupMeansMps: [0.86, 0.60, 0.32],
+    reps: [
+      { meanVelocityMps: 1.07, peakVelocityMps: 1.69, romIn: 22.7 },
+      { meanVelocityMps: 1.04, peakVelocityMps: 1.69, romIn: 21.6 },
+      { meanVelocityMps: 1.14, peakVelocityMps: 1.68, romIn: 20.9 },
+      { meanVelocityMps: 1.00, peakVelocityMps: 1.56, romIn: 20.2 },
+      { meanVelocityMps: 1.09, peakVelocityMps: 1.57, romIn: 21.1 },
+      { meanVelocityMps: 0.98, peakVelocityMps: 1.56, romIn: 20.4 },
+      { meanVelocityMps: 0.97, peakVelocityMps: 1.50, romIn: 21.3 },
+      { meanVelocityMps: 0.97, peakVelocityMps: 1.47, romIn: 21.6 },
+    ],
+    reportedOverOurReps: { meanVelocityMps: 1.0325, peakVelocityMps: 1.59, romIn: 21.225 },
+  },
+};
+
+// Single-arm dumbbell row, set 3 (Forge's Set 3 Left and Set 3 Right), 70lb. The OVR read one set
+// of 17: reps 1-8 the left arm, 9-16 the right, and the 17th (10.0in) the dumbbell going down.
+export const OVR_SINGLE_ARM_DUMBBELL_ROW_SET3_2026_11_10 = {
+  build: 732,
+  loadLb: 70,
+  repsPerSide: 8,
+  sensorOrder: "reps 1-8 left arm, reps 9-16 right arm, rep 17 the set-down",
+  sensor: {
+    left: [
+      { meanVelocityMps: 1.18, peakVelocityMps: 1.87, romIn: 26.7 },
+      { meanVelocityMps: 0.94, peakVelocityMps: 1.51, romIn: 17.4 },
+      { meanVelocityMps: 0.91, peakVelocityMps: 1.45, romIn: 17.4 },
+      { meanVelocityMps: 0.86, peakVelocityMps: 1.40, romIn: 16.2 },
+      { meanVelocityMps: 0.86, peakVelocityMps: 1.32, romIn: 16.2 },
+      { meanVelocityMps: 0.86, peakVelocityMps: 1.39, romIn: 17.0 },
+      { meanVelocityMps: 0.83, peakVelocityMps: 1.32, romIn: 16.3 },
+      { meanVelocityMps: 0.77, peakVelocityMps: 1.24, romIn: 15.8 },
+    ],
+    right: [
+      { meanVelocityMps: 0.87, peakVelocityMps: 1.24, romIn: 22.1 },
+      { meanVelocityMps: 0.85, peakVelocityMps: 1.36, romIn: 16.1 },
+      { meanVelocityMps: 0.78, peakVelocityMps: 1.27, romIn: 13.9 },
+      { meanVelocityMps: 0.87, peakVelocityMps: 1.38, romIn: 16.0 },
+      { meanVelocityMps: 0.86, peakVelocityMps: 1.35, romIn: 15.5 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.38, romIn: 15.2 },
+      { meanVelocityMps: 0.85, peakVelocityMps: 1.38, romIn: 15.7 },
+      { meanVelocityMps: 0.76, peakVelocityMps: 1.22, romIn: 15.5 },
+    ],
+    setDown: { meanVelocityMps: 0.69, peakVelocityMps: 0.96, romIn: 10.0 },
+    reportedLeft: { meanVelocityMps: 0.901, peakVelocityMps: 1.4375, romIn: 17.875 },
+    reportedRight: { meanVelocityMps: 0.831, peakVelocityMps: 1.3225, romIn: 16.25 },
+  },
+} as const;

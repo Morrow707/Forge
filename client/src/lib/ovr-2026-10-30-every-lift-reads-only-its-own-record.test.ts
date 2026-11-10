@@ -94,8 +94,8 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     expect(VELOCITY_OVERRIDES_REMOVED_2026_11_05["Barbell Shoulder Press"]).toEqual(["driveOnsetFraction"]);
     // Round fourteen (2026-11-10) gave the bench a window again, fitted on the corrected labels and
     // dated after the fix; the smoothing and the cap stay gone.
-    expect(FITTED_OVERRIDES["Bench Press"]).toEqual({ body3DCorrectedUncertainty: 0.25, depthRulerUncertainty: 0.18, driveOnsetFraction: 0.03 });
-    expect(FITTED_OVERRIDE_EVIDENCE["Bench Press"]).toMatch(/^2026-11-10, round fifteen[\s\S]*2026-11-10, round fourteen/);
+    expect(FITTED_OVERRIDES["Bench Press"]).toEqual({ body3DCorrectedUncertainty: 0.25, depthRulerUncertainty: 0.15, driveOnsetFraction: 0.03 });
+    expect(FITTED_OVERRIDE_EVIDENCE["Bench Press"]).toMatch(/^2026-11-10, round sixteen[\s\S]*2026-11-10, round fifteen[\s\S]*2026-11-10, round fourteen/);
     expect(FITTED_OVERRIDES["Barbell Shoulder Press"]).toBeUndefined();
     expect(Object.keys(FITTED_OVERRIDES["Pendlay Row"])).toEqual(["depthRulerUncertainty"]);
     for (const [name, bucket] of [["Pendlay Row", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"]]) {
@@ -276,8 +276,8 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     // +5.5% as filmed; +3.58% through the live constants after round six's MAD-to-sigma correction,
     // and +3.91% since round fourteen's bench 3D-pose uncertainty 0.25 (2026-11-10), which moves the
     // two plate-led bench rows 0.1-0.3 points the wrong way and the two without a plate 0.4-1.6 the right way;
-    // +3.77% since round fifteen's bench depth uncertainty 0.18 (same day), which moves every bench row toward the sensor
-    expect(row.liveErrorPct).toBeCloseTo(3.77, 1);
+    // +3.77% after round fifteen's bench depth uncertainty 0.18 and +3.56% after round sixteen's 0.15 (same day)
+    expect(row.liveErrorPct).toBeCloseTo(3.56, 1);
     expect(f.shipped.reps).toBe(8);
     const m = replay(f);
     expect(m.repBreakdown.length).toBe(7);

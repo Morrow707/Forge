@@ -14,7 +14,20 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-10, round fifteen)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-10, round sixteen)
+
+**ROUND SIXTEEN (2026-11-10 evening), THE ONE-LINE VERSION:** set 3 of all three on **build 732**.
+**The left row found 4 of 8 for four separate reasons** -- the pickup swallowed the first pull, the
+working wrist went unseen for 1.36s (one pull lost inside the hole), the rep before that hole was
+deleted as a "rack move", and the last pull merged with the set-down. The third is fixed by a
+SHARED rule (a phantom phase that holds a 0.5s+ hole in the trace does not end the set's run): left
+4 -> 5, and the 10-02 bench 9 -> 10 of 10. **The bench's set 3 read 15cm a rep** because the hand
+went unseen at the chest on every press (seven holes, 5.4s) -- a tracking hole, not a scale; it is
+not a ledger row. Per-lift steps: bench depth 0.15, press 3D 0.12 + window 0, row depth 0.6 (ledger
+in "Round sixteen"). **Next, named:** the live/file gate measures holes in the BODY, not the
+working WRIST (left row: 1.36s wrist hole, body gap 0.19s, so it stayed live); the row's body
+rulers read -20% to -39% on every take and no uncertainty reaches it; the pickup and the set-down
+are each merged into an edge rep on the row.
 
 **ROUND FIFTEEN (2026-11-10 evening), THE ONE-LINE VERSION:** set 2 of all three on **build 730**,
 the first takes on round fourteen's record, plus the export fix (every capture in the download now
@@ -541,6 +554,63 @@ this file is that several of the constraints below are not visible from the
 code alone and not discoverable by testing the wrong exercise, so a session
 that reaches for the obvious answer will get a plausible number that is
 wrong.
+
+## Round sixteen, 2026-11-10 evening: set 3 of bench, dumbbell press and single-arm row (build 732)
+
+OVR screens: bench set 3 (135x8: 0.74 / 1.04 / 14.5in), press set 3 ("Push Press" 30lb x11, the
+first three set-up on Scott's word -> 1.03 / 1.59 / 21.2in over eight), row set 3 (70lb x17: reps
+1-8 left 0.90 / 1.44 / 17.9in, 9-16 right 0.83 / 1.32 / 16.3in, 17 the set-down at 10.0in). Export
+at 20:05; the capture download now carries `side` (round fifteen's fix, live on Render).
+
+**Scott: "what the heck happened to my left side video for rows? Right side captured all 8 but left
+only did 4??"** The video was recorded (hasVideo true); the rep count was not. Read off the stored
+trace (`replay` with the left take's points cut at different starts):
+1. **The pickup swallowed pull 1.** The hand goes down to the dumbbell (0.5-2.5s) and the first pull
+   comes straight out of the lift-off as one 47-56cm upward phase, which the edge rules drop as
+   oversized. Starting the replay at 2.8s returns it.
+2. **The working wrist went unseen for 1.36s** (4.5-5.9s; framesNoWristOrImplement 23). One pull is
+   inside that hole and no rule can return it. **The live path kept the take** because its gate
+   measures gaps in the BODY observation (`maxTracedGapSeconds`, 0.19s here), not in the working
+   wrist. The right take fell back to the file path on a 0.43s body gap and found 8 of 8. **Next:**
+   a wrist-gap measure in `AvBodyTrackingPlugin.swift` beside the body one (for a unilateral lift,
+   the declared side's wrist), so a take with a hand-hole is re-read from the file.
+3. **The rep before the hole was deleted as a rack move.** The phase across the hole fails the shape
+   tests, which split the set into a run of 1 and a run of 4, and the isolation rule
+   (`ISOLATED_RUN_MAX_FRACTION`) removes a run a quarter the size of the largest. **FIXED, shared:**
+   a phantom that holds a sampling hole of 0.5s+ (`TRACE_HOLE_SECONDS`, `holdsTraceHole`) does not
+   end the run; it is still not counted. Left 4 -> 5. Across the corpus it moved exactly one other
+   take, the 10-02 bench, 9 -> 10 of its 10 (off `KNOWN_UNDERCOUNTS`). Mutation-tested.
+4. **The last pull merged with the set-down.**
+
+**Bench set 3 read 15cm a rep (scale_suspect).** Scale 0.00413, the same as set 2. The hand went
+unseen for 0.3-0.6s at the bottom of every press (gaps at 9.8, 10.9, 11.9, 12.8, 13.8, 15.9, 16.9s;
+cadenceHeld 0.77; 77 frames under the wrist floor) on the FILE path, so each rep's range was cut off
+at the chest: 30 / 30 / 13.5 / 13 / 11 / 29 / 16.5 / 17.5cm against the sensor's 35-42. Not a scale,
+not a ledger row. Next on the bench: what hides the wrist at the chest from this camera spot.
+
+**Fixes, one step per lift, costed on every ledger row:**
+- **Bench `depthRulerUncertainty` 0.18 -> 0.15** (round fifteen's named next step): 10-30 +1.58 ->
+  +0.13, 10-30 set 3 +3.77 -> +3.56, 11-06 +0.32 -> -2.77 (moves away), 11-10 set 1 -7.28 -> -4.84,
+  set 2 -14.20 -> -13.12; mean absolute 5.43 -> 4.88.
+- **Press `body3DCorrectedUncertainty` 0.15 -> 0.12 and `driveOnsetFraction` 0.01 -> 0:** 11-06 +25.2
+  -> +21.6, set 1 +27.4 -> +25.1, set 2 +6.5 -> +4.3, set 3 (new row) +12.8 -> +10.2. With the scale
+  divided out: set 1 +13.1 -> +5.3, set 2 +17.0 -> +14.2, set 3 +10.8 -> +7.3. No rep count moves.
+- **Row `depthRulerUncertainty` 0.4 -> 0.6:** set 1 left -4.4 -> -2.7, right +10.5 -> +11.0 (moves
+  away), set 3 left -38.1 -> -35.4, right -30.5 -> -28.3.
+
+**Known not to work / open, so it is not re-proposed:**
+- **The row's body rulers read -20% to -39% on every take** (3D pair -35/-20/-33/-39%; depth lower
+  still); set 1 only landed because the shoulder ruler voted. On set 3 the shoulder was refused on
+  the left (spread 0.444) and voted on the right at a spread of 0.62 reading 2x high. Swept and
+  rejected: body3D 0.3 (set 1 right +22%, set 3 left -42%), depthRulerBias 0.6 (moves nothing; the
+  collapse is weighted, not biased, on these takes). Rule #4: the dumbbell was found (19 and 45
+  candidates) and never held a lock (best confidence 0.60-0.63), and has no standard size anyway.
+- The press finds 7 of 8 on set 3 (the set-up merged with the first press, as on 11-06).
+- The row's timing was left at 0.01: 0 reads the left closer and the right further.
+
+Tests: `ovr-2026-11-10-set-three-reads-only-its-own-record.test.ts` (6 cases), ledger rows
+`2026-11-10-dumbbell-shoulder-press-set-3`, `-single-arm-dumbbell-row-set-3-left` / `-right`, ground
+truth `OVR_*_SET3_2026_11_10`, fixture `__fixtures__/ovr-2026-11-10-set3-export.json`.
 
 ## Round fifteen, 2026-11-10 evening: set 2 of bench, dumbbell press and single-arm row (build 730)
 

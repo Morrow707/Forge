@@ -2545,6 +2545,21 @@ export function summarizeTrackedSet(
   // the reps to remove nothing. Two equal runs are both kept. A single-rep set with an un-rack
   // beside it is two runs of one, kept too, and left to the edge tests above.
   const ISOLATED_RUN_MAX_FRACTION = 0.25;
+  // A HOLE IN THE TRACE IS NOT A RACK MOVE. What the isolation rule reads as "a phase the shape
+  // tests threw out" can also be a stretch where the tracker lost the hand: the phase that spans
+  // it is malformed because the samples are missing, not because the athlete did something other
+  // than a rep. Single-arm row, Set 3 Left, 2026-11-10 (build 732): the working wrist went
+  // unseen for 1.36s mid-set, the phase across that hole failed the shape tests, and the one rep
+  // before it became "a run of one beside a run of four" and was deleted as a rack move. A
+  // phantom that holds a sampling hole of TRACE_HOLE_SECONDS or more does not end the run; it is
+  // still not counted as a rep. Measured on the corpus before shipping: see
+  // a-hole-in-the-trace-is-not-a-rack-move.test.ts.
+  const TRACE_HOLE_SECONDS = 0.5;
+  function holdsTraceHole(phase: (typeof phaseStats)[number]): boolean {
+    const from = Math.max(1, phase.startIdx);
+    const to = Math.min(points.length - 1, phase.endIdx + 1);
+    return points.slice(from, to + 1).some((p, k) => p.t - points[from + k - 1].t >= TRACE_HOLE_SECONDS * 1000);
+  }
   const phaseIndex = new Map<(typeof phaseStats)[number], number>();
   phaseStats.forEach((phase, i) => phaseIndex.set(phase, i));
   const runs: number[][] = [];
@@ -2553,6 +2568,7 @@ export function summarizeTrackedSet(
     phaseStats.forEach((phase, i) => {
       if (!isConcentric[i]) return;
       if (isPhantomByShape(phase)) {
+        if (holdsTraceHole(phase)) return;
         if (run.length > 0) runs.push(run);
         run = [];
         return;

@@ -64,17 +64,18 @@ const ROUND_FOURTEEN_DRIVE_ONSETS = { press: PRESS_DRIVE_ONSET, row: ROW_DRIVE_O
 // Round fifteen (same day, set 2 on build 730) moved the row's and the press's drive onset and added the
 // press's 3D-bone uncertainty; this file pins only what round fourteen fitted that still stands.
 // ovr-2026-11-10-set-two-reads-only-its-own-record.test.ts pins round fifteen.
-const ROW_OWN = { depthRulerUncertainty: ROW_DEPTH_UNCERTAINTY };
+// Round sixteen moved the row's depth 0.4 -> 0.6, so only the history constant remains of it.
+const ROW_OWN = {};
 const PRESS_OWN = {
   biacromialToleranceFraction: PRESS_SHOULDER_TOLERANCE, heightRulerUncertainty: PRESS_HEIGHT_UNCERTAINTY,
   depthRulerUncertainty: PRESS_DEPTH_UNCERTAINTY,
 };
 /** liveErrorPct on each ledger row at the lift's own record (as filmed in the comment). */
-const BENCH_11_10_LIVE = -7.28; // -10.2 as filmed; -8.57 after round fourteen, -7.28 after round fifteen
-const PRESS_11_10_LIVE = 27.42; // +46.5; +31.3 after round fourteen
-const PRESS_11_06_LIVE = 25.17; // +41.8; +31.22 after round fourteen
-const ROW_LEFT_11_10_LIVE = -4.38; // -9.0
-const ROW_RIGHT_11_10_LIVE = 10.53; // +9.2
+const BENCH_11_10_LIVE = -4.84; // -10.2 as filmed; -8.57 after round fourteen, -7.28 after fifteen, -4.84 after sixteen
+const PRESS_11_10_LIVE = 25.1; // +46.5; +31.3 after round fourteen, +27.42 after fifteen
+const PRESS_11_06_LIVE = 21.6; // +41.8; +31.22 after round fourteen, +25.17 after fifteen
+const ROW_LEFT_11_10_LIVE = -2.65; // -9.0; -4.38 after round fourteen
+const ROW_RIGHT_11_10_LIVE = 11.0; // +9.2; +10.53 after round fourteen
 const LIVE_ERROR_PCT: Record<string, number> = {
   "2026-11-10-bench-press-set-1": BENCH_11_10_LIVE,
   "2026-11-10-dumbbell-shoulder-press-set-1": PRESS_11_10_LIVE,
@@ -120,6 +121,7 @@ describe("round fourteen: every lift touched, each in its own record", () => {
     expect(FITTED_OVERRIDES["Single-Arm Dumbbell Row"]).toMatchObject(ROW_OWN);
     expect(FITTED_OVERRIDES["Dumbbell Shoulder Press"]).toMatchObject(PRESS_OWN);
     expect(ROUND_FOURTEEN_DRIVE_ONSETS).toEqual({ press: 0.02, row: 0.02 });
+    expect(ROW_DEPTH_UNCERTAINTY).toBe(0.4);
   });
 
   it("the window moves each take's mean toward the sensor and no rep count, and it reaches only its own lift", () => {

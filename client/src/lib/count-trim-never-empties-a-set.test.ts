@@ -77,7 +77,9 @@ describe("the count-trim removes surplus and never a set", () => {
     "bench-set9-2026-09-30.json": 7,
     "bench-unrack-capture.json": 9,
     "bench-2026-10-06.json": 9,
-    "bench-set2-2026-10-02.json": 9,
+    // The 10-02 bench (bench-set2-2026-10-02.json) left the list on 2026-11-10 (round sixteen):
+    // a phase that holds a hole in the trace no longer ends the set's run, so the rep beside the
+    // hole is not deleted as a rack move, and it counts 10 of 10.
     "push-press-set2-2026-10-02.json": 9,
     // A multi-capture export is keyed per capture (file:setId), because one file holds takes
     // that count differently. The 2026-10-29 export's 10-19 RDL set 2 was here at 7 of 8 -- "the
@@ -112,6 +114,13 @@ describe("the count-trim removes surplus and never a set", () => {
     // counts TEN of eight at half the travel (the midpoint of a braced and a working hand), which
     // is an over-count and passes this file's rule; the working-hand rule is its fix.
     "ovr-2026-11-06-export.json:2026-11-06 Dumbbell Shoulder Press set 1": 7,
+    // Round sixteen (2026-11-10, build 732). The press's set 3 finds 7 of 8, the set-up merged
+    // with the first press as on 11-06. The left row (Set 3 Left) finds 5 of 8: the pickup
+    // swallowed the first pull, the working wrist was unseen for 1.36s (one pull inside the hole),
+    // and the last merged with the set-down. It found 4 on the phone; the trace-hole rule returned
+    // the rep beside the hole. See docs/camera-tracking-notes.md "Round sixteen".
+    "ovr-2026-11-10-set3-export.json:2026-11-10 Dumbbell Shoulder Press set 3": 7,
+    "ovr-2026-11-10-set3-export.json:2026-11-10 Single-Arm Dumbbell Row set 5": 5,
   };
 
   it.each(

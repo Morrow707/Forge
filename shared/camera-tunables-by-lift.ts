@@ -385,11 +385,11 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
     biacromialToleranceFraction: 0.4,
     heightRulerUncertainty: 0.4,
     depthRulerUncertainty: 0.6,
-    body3DCorrectedUncertainty: 0.15,
-    driveOnsetFraction: 0.01,
+    body3DCorrectedUncertainty: 0.12,
+    driveOnsetFraction: 0,
   },
-  "Bench Press": { body3DCorrectedUncertainty: 0.25, depthRulerUncertainty: 0.18, driveOnsetFraction: 0.03 },
-  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.4, driveOnsetFraction: 0.01 },
+  "Bench Press": { body3DCorrectedUncertainty: 0.25, depthRulerUncertainty: 0.15, driveOnsetFraction: 0.03 },
+  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0.01 },
 };
 
 /** THE VELOCITY OVERRIDES REMOVED ON 2026-11-05, AND WHY -- kept as data so the next reader does
@@ -525,6 +525,13 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
     "moves, since each reads its own record.",
   "Dumbbell Shoulder Press":
+    "2026-11-10, round sixteen, set 3 on build 732 (30lb x11 on the OVR, the first three set-up on " +
+    "Scott's word, eight read): body3DCorrectedUncertainty 0.15 -> 0.12 and driveOnsetFraction 0.01 -> 0. " +
+    "Range of motion through the blend: 11-06 +25.2 -> +21.6, set 1 +27.4 -> +25.1, set 2 +6.5 -> +4.3, " +
+    "set 3 +12.8 -> +10.2 -- every press take closer, the 3D pair again the lowest ruler and the nearest " +
+    "the sensor. Mean with the scale divided out: set 1 +13.1 -> +5.3, set 2 +17.0 -> +14.2, set 3 " +
+    "+10.8 -> +7.3; no rep count moves (set 3 finds 7 of 8 at every fraction). 0.10 is the next 3D step. " +
+    "EARLIER: " +
     "2026-11-10, round fifteen, set 2 on build 730 (30lb, the OVR's reps from the 0.92 rep on Scott's " +
     "word, 8 of 8): body3DCorrectedUncertainty 0.2 -> 0.15 and driveOnsetFraction 0.02 -> 0.01 on this " +
     "lift only. Round fourteen's record read set 2 +10.1% as filmed, the first take on it (set 1 +46.5% " +
@@ -566,6 +573,13 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
   // ROUND FOURTEEN, 2026-11-10, build 728 beside the OVR. Costed by
   // client/src/lib/ovr-2026-11-10-every-lift-reads-only-its-own-record.test.ts.
   "Bench Press":
+    "2026-11-10, round sixteen: depthRulerUncertainty 0.18 -> 0.15 on this lift only, round fifteen's " +
+    "named next step. Ledger: 10-30 +1.58 -> +0.13, 10-30 set 3 +3.77 -> +3.56, 11-06 +0.32 -> -2.77 " +
+    "(the one that moves away), 11-10 set 1 -7.28 -> -4.84, set 2 -14.20 -> -13.12; mean absolute 5.43 " +
+    "-> 4.88. Set 3 (build 732) is NOT costed here: the hand went unseen for 0.3-0.6s at the bottom of " +
+    "every press (seven holes, 5.4s in all), so each rep's range was cut off at the chest and the take " +
+    "read 15cm a rep against the sensor's 36.8 -- a tracking hole, not a scale. " +
+    "EARLIER: " +
     "2026-11-10, round fifteen, set 2 on build 730 (135lb x8): depthRulerUncertainty 0.2 -> 0.18 on " +
     "this lift only. Both 11-10 sets read low (set 1 -8.6%, set 2 -14.8% on the round-fourteen record) " +
     "and the depth ruler is the high ruler on both, so a little more weight on it lifts both: set 1 " +
@@ -587,6 +601,15 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "0.04, and +33.1% and +4.6% at 0.03; both takes move toward the sensor, no rep count moves, and " +
     "the peak does not move. 0.02 is the next step.",
   "Single-Arm Dumbbell Row":
+    "2026-11-10, round sixteen, Set 3 Left and Right on build 732 (the OVR's 17: reps 1-8 left, " +
+    "9-16 right, 17 the set-down): depthRulerUncertainty 0.4 -> 0.6 on this lift only, the statement " +
+    "the Pendlay Row's record makes about the same instrument. Set 1 left -4.4 -> -2.7, right +10.5 " +
+    "-> +11.0 (the one that moves away), Set 3 left -38.1 -> -35.4, right -30.5 -> -28.3. Set 3 reads a " +
+    "third low because the shoulder ruler did not vote (left refused at spread 0.444, right at " +
+    "0.62) and the 3D bones read -33% and -39% on their own: the row's body rulers read -20% to -39% " +
+    "on all four takes, and no uncertainty reaches that. The dumbbell was detected (19 and 45 " +
+    "candidates) and never held a lock; a dumbbell has no standard size to be a ruler anyway. " +
+    "EARLIER: " +
     "2026-11-10, round fifteen: driveOnsetFraction 0.02 -> 0.01 on this lift only. Costed on set 1 (the " +
     "only row set with a sensor screen): with the scale divided out the left reads +28.4 -> +26.2% and " +
     "the right +1.2 -> +0.2%; no rep count moves on any of the four takes. Set 2 (Set 2 Left and Right " +
