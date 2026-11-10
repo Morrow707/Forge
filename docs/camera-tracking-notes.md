@@ -23,7 +23,8 @@ own record. Range of motion: **bench -10.2% -> -8.6%, press +46.5% -> +31.3% (an
 two sides need scales 1.45x apart). Mean velocity with the scale divided out moves toward the sensor
 on every take and no rep count moves. **The press's remaining +31% is the 3D bone median** (it lands
 on the shoulder width / upper arm; the torso reads +5.8% and on 11-06 within 2%) -- next to build.
-Read "Round fourteen" below before touching any of the three.
+Read "Round fourteen" below before touching any of the three. **Shipped as build 730** (729 its
+`verify_build`, both on `44e6722`) -- the build to film on next.
 
 **ROUND TWELVE (2026-11-09), THE ONE-LINE VERSION:** squat, RDL and box jump on **build 720**.
 The squat's fault was the CLOCK, not the scale -- a 0.2-0.4s stand at lockout between reps was

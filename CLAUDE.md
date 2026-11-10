@@ -3831,7 +3831,8 @@ halves before splitting anything else:
   -- that bone rule is next. Also in this upload: the one-set pager for a unilateral lift (`f5eba4a`,
   Set 1 / Set 2 with Film Left and Film Right inside), held earlier on Scott's word and released with
   "upload everything to Apple including what you built earlier". See docs/camera-tracking-notes.md,
-  "Round fourteen". Calibration work: `verify_build` then `beta`.
+  "Round fourteen". Calibration work: shipped as build **730** (`44e6722`, 2026-11-10 19:15 UTC; 729
+  was its `verify_build` on the same commit). **730 is the build to film on next.**
 - **ROUND ELEVEN, 2026-11-06: THE FIRST DUMBBELL LIFTS BESIDE THE SENSOR -- A SUPINE SPAN IS NOT A
   STATURE, A DUMBBELL LIFT ASKS FOR A DUMBBELL, AND A UNILATERAL LIFT IS TRACED BY ITS WORKING
   HAND.** Bench Press 135x8, Dumbbell Shoulder Press 35x8 and Single-Arm Dumbbell Row 70x8 on 714;
