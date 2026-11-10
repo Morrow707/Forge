@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type TouchEvent } from "react";
 import { eachSideSuffix } from "@shared/prescription-laterality";
-import { isUnilateral, pairIndexFor, setRowCountFor, setRowLabel, sideForNewSet, sideLabel, type BodySide } from "@shared/unilateral-sides";
+import { filmSideLabel, isUnilateral, pairIndexFor, rowsPerSet, setPills, setRowCountFor, setStartIndex, sideForNewSet, sideLabel, type BodySide } from "@shared/unilateral-sides";
 import type { Autoregulation } from "@shared/autoregulation";
 import { shedTracesToFit, describeShed } from "@shared/shed-traces-to-fit";
 import { useParams, useLocation } from "wouter";
@@ -2348,12 +2348,13 @@ export function WorkoutPage({
     const nextItems = commitItems((prev) => {
       const next = prev.map((it) => {
         if (it.key !== key) return it;
-        const nextNumber = it.sets.length > 0 ? it.sets[it.sets.length - 1].setNumber + 1 : 1;
+        const firstNumber = it.sets.length > 0 ? it.sets[it.sets.length - 1].setNumber + 1 : 1;
+        // A unilateral set is a pair of rows (left, right), so adding a set adds both.
         return {
           ...it,
           sets: [
             ...it.sets,
-            {
+            ...Array.from({ length: rowsPerSet(it.laterality) }, (_, k) => firstNumber + k).map((nextNumber) => ({
               setNumber: nextNumber,
               side: sideForNewSet(nextNumber, it.laterality),
               reps: it.prescribedReps,
@@ -2407,7 +2408,7 @@ export function WorkoutPage({
               captureDeviceInfo: null,
               trackingDiagnostics: null,
               skeletonFrames: null,
-            },
+            })),
           ],
         };
       });
@@ -2419,7 +2420,9 @@ export function WorkoutPage({
   function removeSet(key: string) {
     const nextItems = commitItems((prev) => {
       return prev.map((it) =>
-        it.key === key && it.sets.length > 1 ? { ...it, sets: it.sets.slice(0, -1) } : it,
+        it.key === key && it.sets.length > rowsPerSet(it.laterality)
+          ? { ...it, sets: it.sets.slice(0, -rowsPerSet(it.laterality)) }
+          : it,
       );
     });
     scheduleAutosave(nextItems);
@@ -2661,7 +2664,7 @@ export function WorkoutPage({
 
   function handleSwipeEnd(item: ItemState, e: TouchEvent<HTMLDivElement>) {
     const state = endSwipeGesture();
-    if (!state || state.axis !== "horizontal" || item.sets.length < 2) return;
+    if (!state || state.axis !== "horizontal" || item.sets.length <= rowsPerSet(item.laterality)) return;
     // changedTouches can come back empty in rare cases (e.g. the OS
     // cancels the touch sequence) -- lastDx (kept current by every
     // preventDefault()-ed touchmove above) is the same measurement one
@@ -2669,8 +2672,9 @@ export function WorkoutPage({
     const t = e.changedTouches[0];
     const dx = t ? t.clientX - state.x : state.lastDx;
     if (Math.abs(dx) < SWIPE_TRIGGER_PX) return;
-    const current = visibleSetByKey[item.key] ?? 0;
-    const next = current + (dx < 0 ? 1 : -1);
+    const per = rowsPerSet(item.laterality);
+    const current = setStartIndex(visibleSetByKey[item.key] ?? 0, item.laterality);
+    const next = current + (dx < 0 ? per : -per);
     if (next < 0 || next >= item.sets.length) return;
     // The tactile "slider" snap the swipe was missing -- same cue
     // jumpToSet's own rail-tap destination already earns a haptic
@@ -2949,25 +2953,29 @@ export function WorkoutPage({
                                       thin progress sliver. */}
                                   {item.sets.length > 0 && (
                                     <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                      {item.sets.map((set, i) => (
-                                        <button
-                                          key={set.setNumber}
-                                          type="button"
-                                          aria-label={`Show ${setRowLabel(set.setNumber, set.side, item.laterality)}`}
-                                          aria-pressed={i === visibleSetIndex}
-                                          onClick={() => jumpToSet(item, i)}
-                                          className={cn(
-                                            "rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors",
-                                            isSetComplete(item, set)
-                                              ? "bg-amber-400 text-black"
-                                              : "bg-white text-black",
-                                            i === visibleSetIndex &&
-                                              "ring-2 ring-orange-400 ring-offset-1 ring-offset-background",
-                                          )}
-                                        >
-                                          {setRowLabel(set.setNumber, set.side, item.laterality)}
-                                        </button>
-                                      ))}
+                                      {/* One pill per prescribed SET, even on a unilateral lift whose
+                                          set is two rows (left, right): the two sides are filmed from
+                                          inside the set, not paged between (setPills). */}
+                                      {setPills(item.sets.length, item.laterality).map((pill) => {
+                                        const showing = pill.rowIndexes.includes(visibleSetIndex);
+                                        const done = pill.rowIndexes.every((i) => isSetComplete(item, item.sets[i]));
+                                        return (
+                                          <button
+                                            key={pill.label}
+                                            type="button"
+                                            aria-label={`Show ${pill.label}`}
+                                            aria-pressed={showing}
+                                            onClick={() => jumpToSet(item, pill.rowIndexes[0])}
+                                            className={cn(
+                                              "rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors",
+                                              done ? "bg-amber-400 text-black" : "bg-white text-black",
+                                              showing && "ring-2 ring-orange-400 ring-offset-1 ring-offset-background",
+                                            )}
+                                          >
+                                            {pill.label}
+                                          </button>
+                                        );
+                                      })}
                                     </div>
                                   )}
                                 </div>
@@ -3326,7 +3334,16 @@ function ExerciseLogContent({
   // weight forward into later sets. The "Same as Set N" button below is the
   // explicit, one-tap way to repeat a weight instead.
   function handleWeightChange(setNumber: number, value: string) {
-    onUpdateSet(setNumber, { weight: value });
+    updateWholeSet(setNumber, { weight: value });
+  }
+
+  // A unilateral set is two rows (left, right) shown as ONE set: the reps and the load are typed
+  // once and written to both rows, and only the filming is per side (see setPills).
+  function updateWholeSet(setNumber: number, patch: Partial<SetRow>) {
+    const start = setStartIndex(setNumber - 1, item.laterality);
+    for (let i = start; i < start + rowsPerSet(item.laterality) && i < item.sets.length; i++) {
+      onUpdateSet(item.sets[i].setNumber, patch);
+    }
   }
   // One column per material the exercise actually needs -- not mutually
   // exclusive, so a combo movement (dumbbell box step-up) shows both a
@@ -3883,6 +3900,14 @@ function ExerciseLogContent({
         </div>
         <div className="space-y-1.5">
           {item.sets.map((set) => {
+            const rowIndex = set.setNumber - 1;
+            const setStart = setStartIndex(activeSetIndex, item.laterality);
+            if (rowIndex < setStart || rowIndex >= setStart + rowsPerSet(item.laterality)) return null;
+            // The second row of a unilateral set (the right side) shares the first row's reps and
+            // load, so it draws no inputs of its own: only its Film button and its results.
+            const sharesInputs = rowIndex !== setStart;
+            const filmSide = filmSideLabel(set.side, item.laterality);
+            const sidePrefix = filmSide && set.side ? `${sideLabel(set.side)}: ` : "";
             const complete = isSetComplete(item, set);
             const tracked =
               set.peakVelocityMps != null || set.barPathDeviationCm != null || set.jumpHeightCm != null;
@@ -3907,27 +3932,26 @@ function ExerciseLogContent({
             const isPR =
               complete &&
               isRepCountPR(item.setHistory, set.reps, item.weightMode, set.weight, earlierSetsThisSession);
-            const prevSet = item.sets.find((s) => s.setNumber === set.setNumber - 1);
+            const prevSet = item.sets.find((s) => s.setNumber === set.setNumber - rowsPerSet(item.laterality));
             const canQuickFillSame =
+              !sharesInputs &&
               item.weightMode === "numeric" &&
               !!prevSet?.weight.trim() &&
               set.weight.trim() !== prevSet.weight.trim();
-            if (set.setNumber - 1 !== activeSetIndex) return null;
             return (
               <div key={set.setNumber}>
+                {!sharesInputs && (
                 <div
                   className="grid items-center gap-2"
                   style={{ gridTemplateColumns: gridTemplate }}
                 >
                   <span className="text-sm font-semibold text-muted-foreground">
-                    {isUnilateral(item.laterality)
-                      ? `${pairIndexFor(set.setNumber, item.laterality)}${set.side ? ` ${sideLabel(set.side)[0]}` : ""}`
-                      : set.setNumber}
+                    {pairIndexFor(set.setNumber, item.laterality)}
                   </span>
                   <Input
                     placeholder={item.lastPerformance?.reps || "Reps"}
                     value={set.reps}
-                    onChange={(e) => onUpdateSet(set.setNumber, { reps: e.target.value })}
+                    onChange={(e) => updateWholeSet(set.setNumber, { reps: e.target.value })}
                     className="h-9 text-sm"
                   />
                   {isBodyweightOnly ? (
@@ -3951,7 +3975,7 @@ function ExerciseLogContent({
                           key="band"
                           placeholder="e.g. Green"
                           value={set.bandColor}
-                          onChange={(e) => onUpdateSet(set.setNumber, { bandColor: e.target.value })}
+                          onChange={(e) => updateWholeSet(set.setNumber, { bandColor: e.target.value })}
                           className="h-9 text-sm"
                         />
                       ) : (
@@ -3961,7 +3985,7 @@ function ExerciseLogContent({
                           inputMode="decimal"
                           placeholder="Height"
                           value={set.boxHeight}
-                          onChange={(e) => onUpdateSet(set.setNumber, { boxHeight: e.target.value })}
+                          onChange={(e) => updateWholeSet(set.setNumber, { boxHeight: e.target.value })}
                           className="h-9 text-sm"
                         />
                       ),
@@ -3997,12 +4021,13 @@ function ExerciseLogContent({
                     )}
                   </div>
                 </div>
-                {historyMatch && !isPR && (
+                )}
+                {!sharesInputs && historyMatch && !isPR && (
                   <p className="mt-0.5 pl-9 text-[10px] text-muted-foreground">
                     Last @ {set.reps} reps: {formatLoad(historyMatch, item.weightUnit)}
                   </p>
                 )}
-                {(item.trackingLevel !== "none" || videoRequired || usesPlateCalc || canQuickFillSame) && (
+                {(item.trackingLevel !== "none" || videoRequired || (usesPlateCalc && !sharesInputs) || canQuickFillSame) && (
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {canQuickFillSame && (
                       <button
@@ -4011,7 +4036,7 @@ function ExerciseLogContent({
                         className="flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
                       >
                         <Copy className="h-3 w-3" />
-                        Same as Set {prevSet!.setNumber} ({prevSet!.weight} {unit})
+                        Same as Set {pairIndexFor(prevSet!.setNumber, item.laterality)} ({prevSet!.weight} {unit})
                       </button>
                     )}
                     {item.trackingLevel !== "none" && cameraAllowed && !user?.trackingOptOut && processingSets.has(set.setNumber) && (
@@ -4069,7 +4094,7 @@ function ExerciseLogContent({
                             // its usual label reads as broken.
                             `Enter ${unit} to record`
                           : tracked
-                          ? item.trackingLevel === "jump" && set.jumpHeightCm != null
+                          ? sidePrefix + (item.trackingLevel === "jump" && set.jumpHeightCm != null
                             ? `${formatDistanceCm(set.jumpHeightCm, distanceUnit)} jump — retake`
                             : item.trackingLevel === "full" && set.meanVelocityMps != null
                               ? // Average (mean concentric) velocity, not peak -- this is the
@@ -4077,7 +4102,9 @@ function ExerciseLogContent({
                                 // 0.5 m/s"), and it's the first thing shown back to them after
                                 // a tracked set, right here on the set row.
                                 `${set.meanVelocityMps} m/s avg — retake`
-                              : `Path ${set.barPathDeviationCm} cm — retake`
+                              : `Path ${set.barPathDeviationCm} cm — retake`)
+                          : filmSide
+                            ? filmSide
                           : item.trackingLevel === "jump"
                             ? "Track this jump"
                             : mergedTracking
@@ -4114,12 +4141,12 @@ function ExerciseLogContent({
                       >
                         <Video className="h-3 w-3" />
                         {set.formCheckVideoUrl
-                          ? set.formCheckFlag === "best"
+                          ? sidePrefix + (set.formCheckFlag === "best"
                             ? "Best set video"
                             : set.formCheckFlag === "worst"
                               ? "Worst set video"
-                              : "View video"
-                          : "Record & Analyze"}
+                              : "View video")
+                          : filmSide ?? "Record & Analyze"}
                       </button>
                     )}
                     {mergedTracking && set.formCheckVideoUrl && (
@@ -4129,6 +4156,7 @@ function ExerciseLogContent({
                         className="flex items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10px] font-semibold text-success"
                       >
                         <Video className="h-3 w-3" />
+                        {sidePrefix}
                         {set.formCheckFlag === "best"
                           ? "Best set video"
                           : set.formCheckFlag === "worst"
@@ -5123,7 +5151,7 @@ function ExerciseLogContent({
           <button
             type="button"
             onClick={onRemoveSet}
-            disabled={item.sets.length <= 1}
+            disabled={item.sets.length <= rowsPerSet(item.laterality)}
             aria-label="Remove set"
             className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
           >

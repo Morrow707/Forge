@@ -58,3 +58,39 @@ export function setRowLabel(
   const pair = pairIndexFor(setNumber, laterality);
   return side ? `Set ${pair} · ${sideLabel(side)}` : `Set ${pair} · side not recorded`;
 }
+
+/* ONE PILL PER SET, TWO FILM BUTTONS INSIDE IT (Scott, 2026-11-10, on the pager reading "Set 1 ·
+ * Left, Set 1 · Right, Set 2 · Left ..." for a single-arm row: "it should still only say set one
+ * set 2 set 3 ... then when I click on set one, there's two buttons that say film right and film
+ * left ... data isn't going to change, but I need to be able to film both sides of the body. The
+ * way it looks now is scrambled").
+ *
+ * The data model is unchanged -- a unilateral set is still two rows, one per side, so each side
+ * keeps its own clip, numbers and trace -- and only the SCREEN groups them. The reps and the load
+ * are typed once and written to both rows of the pair. */
+
+/** How many rows one prescribed set occupies: two on a unilateral lift (left, right), one otherwise. */
+export function rowsPerSet(laterality: string | null | undefined): number {
+  return isUnilateral(laterality) ? 2 : 1;
+}
+
+/** The index of the first row of the set a row belongs to (rows are positional, 0-based). */
+export function setStartIndex(rowIndex: number, laterality: string | null | undefined): number {
+  const per = rowsPerSet(laterality);
+  return rowIndex - (rowIndex % per);
+}
+
+/** The pager's pills: one per prescribed set, each naming the row indexes it covers. */
+export function setPills(rowCount: number, laterality: string | null | undefined): { label: string; rowIndexes: number[] }[] {
+  const per = rowsPerSet(laterality);
+  return Array.from({ length: Math.ceil(rowCount / per) }, (_, p) => ({
+    label: `Set ${p + 1}`,
+    rowIndexes: Array.from({ length: per }, (_, k) => p * per + k).filter((i) => i < rowCount),
+  }));
+}
+
+/** "Film Left" / "Film Right" on a unilateral row; null on a bilateral one (its button keeps its label). */
+export function filmSideLabel(side: BodySide | null | undefined, laterality: string | null | undefined): string | null {
+  if (!isUnilateral(laterality)) return null;
+  return side ? `Film ${sideLabel(side)}` : "Film (side not recorded)";
+}

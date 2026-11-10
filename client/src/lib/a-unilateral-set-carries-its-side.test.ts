@@ -67,8 +67,16 @@ describe("the side of a unilateral set", () => {
     expect(src).toMatch(/setNumber: s\.setNumber,\s*side: s\.side,/);
     // The AV bar tracker is handed the row's side.
     expect(src).toMatch(/<AvBarTrackerDialog[\s\S]*?side=\{trackedRow\?\.side \?\? null\}/);
-    // And the row is labelled by the helper, never by a hand-typed "Left"/"Right".
-    expect(src).toMatch(/setRowLabel\(set\.setNumber, set\.side, item\.laterality\)/);
+    // The pager draws ONE pill per prescribed set (Scott, 2026-11-10: "it should still only say set
+    // one set 2 set 3"), and each side is filmed from inside the set by its own button, labelled by
+    // the helper, never a hand-typed "Left"/"Right".
+    expect(src).toMatch(/setPills\(item\.sets\.length, item\.laterality\)\.map/);
+    expect(src).not.toMatch(/setRowLabel\(/);
+    expect(src).toMatch(/filmSideLabel\(set\.side, item\.laterality\)/);
+    // The reps and the load are typed once and written to both rows of the set.
+    expect(src).toMatch(/onChange=\{\(e\) => updateWholeSet\(set\.setNumber, \{ reps: e\.target\.value \}\)\}/);
+    // Adding or removing a set moves a whole pair.
+    expect(src).toMatch(/Array\.from\(\{ length: rowsPerSet\(it\.laterality\) \}/);
   });
 
   it("the server writes it, reads it back, exports it and prints it", () => {

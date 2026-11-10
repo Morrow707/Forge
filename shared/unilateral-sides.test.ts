@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pairIndexFor, setRowCountFor, setRowLabel, sideForNewSet, sideLabel } from "./unilateral-sides";
+import { filmSideLabel, pairIndexFor, rowsPerSet, setPills, setRowCountFor, setRowLabel, setStartIndex, sideForNewSet, sideLabel } from "./unilateral-sides";
 
 describe("a unilateral set is one row per side", () => {
   it("builds two rows per prescribed set on a unilateral lift, and one otherwise", () => {
@@ -28,5 +28,25 @@ describe("a unilateral set is one row per side", () => {
     expect(setRowLabel(3, null, "bilateral")).toBe("Set 3");
     expect(setRowLabel(3, "left", "bilateral")).toBe("Set 3");
     expect(sideLabel(null)).toBe("");
+  });
+});
+
+describe("the screen shows one set and two film buttons, not two sets", () => {
+  it("draws one pill per prescribed set, each covering both of its rows", () => {
+    expect(setPills(10, "unilateral")).toEqual([1, 2, 3, 4, 5].map((n) => ({ label: `Set ${n}`, rowIndexes: [2 * n - 2, 2 * n - 1] })));
+    expect(setPills(5, "bilateral").map((p) => p.rowIndexes)).toEqual([[0], [1], [2], [3], [4]]);
+    // An odd row count (an older day) still shows every row, the last set alone.
+    expect(setPills(3, "unilateral").map((p) => p.rowIndexes)).toEqual([[0, 1], [2]]);
+  });
+
+  it("finds a row's set and labels the film buttons by side", () => {
+    expect([0, 1, 2, 3].map((i) => setStartIndex(i, "unilateral"))).toEqual([0, 0, 2, 2]);
+    expect(setStartIndex(3, "bilateral")).toBe(3);
+    expect(rowsPerSet("unilateral")).toBe(2);
+    expect(rowsPerSet(null)).toBe(1);
+    expect(filmSideLabel("left", "unilateral")).toBe("Film Left");
+    expect(filmSideLabel("right", "unilateral")).toBe("Film Right");
+    expect(filmSideLabel(null, "unilateral")).toBe("Film (side not recorded)");
+    expect(filmSideLabel("left", "bilateral")).toBeNull();
   });
 });
