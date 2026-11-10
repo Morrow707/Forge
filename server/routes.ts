@@ -4,9 +4,11 @@ import { summarizeCaptureRepeatability } from "@shared/capture-repeatability";
 import { WITHDRAWN_ADD_ONS } from "@shared/free-agent-tiers";
 import {
   applyExerciseVideoBackfill,
+  decideProposal,
   DEFAULT_MAX_DURATION_SECONDS,
   DEMO_VIDEO_CHANNELS,
-  planExerciseVideoBackfill,
+  latestDryRun,
+  saveDryRun,
   targetsNeedingVideo,
 } from "./exercise-video-backfill";
 import { youTubeConfigured } from "./youtube-catalog";
@@ -3225,22 +3227,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     maxSearches: z.number().int().min(1).max(95).optional(),
   });
 
-  for (const mode of ["dry-run", "apply"] as const) {
-    app.post(`/api/admin/exercise-videos/${mode}`, requireRole("admin"), async (req, res) => {
-      const parsed = videoBackfillBody.safeParse(req.body ?? {});
-      if (!parsed.success) {
-        return res.status(400).json({ message: parsed.error.issues[0]?.message });
-      }
-      if (!youTubeConfigured()) {
-        return res.status(503).json({
-          message: "YOUTUBE_API_KEY is not set on this server, so no catalogue can be read.",
-        });
-      }
-      const run = mode === "apply" ? applyExerciseVideoBackfill : planExerciseVideoBackfill;
-      const report = await run(parsed.data);
-      res.json(report);
-    });
-  }
+  // The dry run is the only route that talks to YouTube. It is SAVED (exercise_video_runs) and
+  // Apply writes that saved run -- exactly the list that was reviewed, with no quota spent.
+  // planExerciseVideoBackfill is what saveDryRun runs.
+  app.post("/api/admin/exercise-videos/dry-run", requireRole("admin"), async (req, res) => {
+    const parsed = videoBackfillBody.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    if (!youTubeConfigured()) {
+      return res.status(503).json({
+        message: "YOUTUBE_API_KEY is not set on this server, so no catalogue can be read.",
+      });
+    }
+    res.json(await saveDryRun(parsed.data));
+  });
+
+  /** The newest saved dry run with its decisions, or null. No YouTube call. */
+  app.get("/api/admin/exercise-videos/latest", requireRole("admin"), async (_req, res) => {
+    res.json(await latestDryRun());
+  });
+
+  /** Approve or reject one proposal of a saved run; a null decision clears it. */
+  app.post("/api/admin/exercise-videos/decide", requireRole("admin"), async (req, res) => {
+    const parsed = z
+      .object({
+        runId: z.number().int().positive(),
+        key: z.string().regex(/^(exercise|skill):\d+$/),
+        decision: z.enum(["approve", "reject"]).nullable(),
+      })
+      .safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const run = await decideProposal(parsed.data.runId, parsed.data.key, parsed.data.decision);
+    if (!run) return res.status(404).json({ message: "That dry run no longer exists, run it again." });
+    res.json(run);
+  });
+
+  /** Write a saved run: tier A not rejected, tier B approved, placeholders only. */
+  app.post("/api/admin/exercise-videos/apply", requireRole("admin"), async (req, res) => {
+    const parsed = z.object({ runId: z.number().int().positive() }).safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Run a dry run first; Apply writes a saved one." });
+    }
+    const run = await applyExerciseVideoBackfill(parsed.data.runId);
+    if (!run) return res.status(404).json({ message: "That dry run no longer exists, run it again." });
+    res.json(run);
+  });
 
   /** What is still on a search link, with no API call and no quota spent. Answers "is the
    *  backfill worth running" and "did it work" without touching YouTube at all. */

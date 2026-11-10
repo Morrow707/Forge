@@ -351,3 +351,90 @@ describe("tiers", () => {
     expect(tierFor({ ...accepted, equipmentAssumed: true }, 45, "Catalyst Athletics", AUTO_APPLY_CHANNELS)).toBe("B");
   });
 });
+
+
+/* THE 2026-11-10 DRY RUN. Scott ran it on production and five proposed Tier A matches were the
+ * wrong video, plus a Tier B one naming the wrong body part. Each is pinned here, beside the
+ * neighbour that must keep matching, so a fix cannot be bought by refusing the good ones. */
+// Its own library, built from the shared one plus the exercises these cases need: the vocabulary
+// is DERIVED from whatever library it is handed, so adding "Kettlebell Snatch" to the shared one
+// makes "snatch" a head and moves the shared fixtures' expectations, which are not about this.
+const LIBRARY_1110: LibraryExercise[] = [
+  ...LIBRARY,
+  // The 2026-11-10 dry run's wrong matches (shared/__fixtures__/exercise-video-dry-run-2026-11-10.txt).
+  lib("Kettlebell Snatch", "Kettlebell", ["Full Body", "Shoulders"]),
+  lib("Kettlebell Clean", "Kettlebell", ["Full Body", "Shoulders"]),
+  lib("Kettlebell Clean to Press", "Kettlebell", ["Full Body", "Shoulders"]),
+  lib("Kettlebell Halo", "Kettlebell", ["Shoulders"]),
+  lib("Dumbbell Sumo Deadlift", "Dumbbell", ["Glutes", "Hamstrings"]),
+  lib("Cable Lateral Raise", "Cable", ["Shoulders"]),
+  lib("Lateral Raise", "Dumbbell", ["Shoulders"]),
+  lib("Behind-the-Neck Press", "Barbell", ["Shoulders"]),
+  lib("Cable Woodchop", "Cable", ["Abs"]),
+  lib("Low-to-High Cable Fly", "Cable", ["Chest"]),
+  // A shoulders exercise whose SECONDARY muscles include the hips, which is exactly the shape that
+  // let "Hip Internal Rotation" through: a check against every listed muscle cannot refuse it.
+  lib("Band Internal Rotation", "Band", ["Shoulders", "Hips"]),
+  lib("Band External Rotation", "Band", ["Shoulders"]),
+  lib("Banded Rotation", "Band", ["Shoulders"]),
+  lib("Hex Bar Deadlift", "Trap Bar", ["Hamstrings", "Quads"]),
+];
+const VOCAB_1110 = buildVocabulary(LIBRARY_1110);
+const byName1110 = new Map(LIBRARY_1110.map((e) => [e.name, e]));
+function verdict1110(exerciseName: string, title: string, durationSeconds = 45) {
+  const ex = byName1110.get(exerciseName);
+  if (!ex) throw new Error(`not in the 2026-11-10 library: ${exerciseName}`);
+  const prepared = prepareTitle(title, VOCAB_1110);
+  return compare(ex, exerciseSignature(ex, VOCAB_1110), prepared, titleSignature(prepared, VOCAB_1110), VOCAB_1110, durationSeconds, 180);
+}
+
+describe("the 2026-11-10 dry run's wrong matches", () => {
+  it("refuses two kettlebells for a one-bell lift", () => {
+    for (const [name, title] of [
+      ["Kettlebell Snatch", "Dual Kettlebell Snatch"],
+      ["Kettlebell Clean", "Dual Kettlebell Clean"],
+      ["Kettlebell Clean to Press", "Dual KB Clean and Press"],
+      ["Kettlebell Snatch", "Double Kettlebell Snatch | Functional Bodybuilding"],
+    ] as const) {
+      const v = verdict1110(name, title);
+      expect(v.ok, `${name} <- ${title}`).toBe(false);
+      if (!v.ok) expect(v.detail).toMatch(/two kettlebells/);
+    }
+    expect(verdict1110("Kettlebell Snatch", "Kettlebell Snatch").ok).toBe(true);
+  });
+
+  it("still reads a pair of dumbbells as an ordinary dumbbell lift", () => {
+    expect(verdict1110("Dumbbell Sumo Deadlift", "Dual DB Sumo Deadlift").ok).toBe(true);
+  });
+
+  it("sends a bracket naming a variation to a person instead of auto-applying it", () => {
+    const v = verdict1110("Cable Lateral Raise", "Cable Lateral Raise (behind back)", 15);
+    expect(v.ok).toBe(true);
+    if (!v.ok) return;
+    expect(v.bracketWords).toEqual(["behind"]);
+    expect(tierFor(v, 15, "Functional Bodybuilding", AUTO_APPLY_CHANNELS)).toBe("B");
+    // the plain title still auto-applies
+    const plain = verdict1110("Cable Lateral Raise", "Cable Lateral Raise", 15);
+    expect(plain.ok && tierFor(plain, 15, "Functional Bodybuilding", AUTO_APPLY_CHANNELS)).toBe("A");
+  });
+
+  it("does not let a bracket alone refuse the right video", () => {
+    // Forge's woodchop IS high to low ("cable set high ... pull down"): review, not refusal
+    const v = verdict1110("Cable Woodchop", "Cable Woodchop (High to Low)", 30);
+    expect(v.ok).toBe(true);
+    // decoration in brackets is not a variation
+    const d = verdict1110("Machine Chest Fly", "Machine Chest Fly (Exercise Demonstration)", 30);
+    expect(d.ok && d.bracketWords).toEqual([]);
+  });
+
+  it("refuses a title that leads with a body part this exercise is not about", () => {
+    const v = verdict1110("Band Internal Rotation", "Band Hip Internal Rotation");
+    expect(v.ok).toBe(false);
+    if (!v.ok) expect(v.reason).toBe("muscle-unexplained");
+    expect(verdict1110("Band External Rotation", "Banded Shoulder External Rotation").ok).toBe(true);
+  });
+
+  it("reads the trap in a trap bar as the bar, not the trapezius", () => {
+    expect(verdict1110("Hex Bar Deadlift", "Trap Bar Deadlift").ok).toBe(true);
+  });
+});

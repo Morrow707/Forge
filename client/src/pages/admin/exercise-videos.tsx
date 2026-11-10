@@ -70,6 +70,23 @@ type Report = {
   duplicateSignatures: Array<[string, string]>;
   boilerplateByChannel: Record<string, string[]>;
   written?: number;
+  cacheHits?: number;
+  // A SAVED dry run (server/exercise-video-backfill.ts). Apply writes this, nothing fresher.
+  runId?: number;
+  createdAt?: string;
+  appliedAt?: string | null;
+  decisions?: Record<string, Decision>;
+};
+
+type Decision = "approve" | "reject";
+const keyOf = (p: { kind: string; id: number }) => `${p.kind}:${p.id}`;
+
+/** Mirrors shouldWrite() on the server: tier A unless rejected, tier B only when approved. The
+ *  server decides; this is only the count the Apply button shows before it is pressed. */
+const willWrite = (p: Proposal, decisions: Record<string, Decision> | undefined) => {
+  const d = decisions?.[keyOf(p)];
+  if (d === "reject") return false;
+  return p.match.tier === "A" || d === "approve";
 };
 
 type Pending = {
@@ -97,9 +114,10 @@ const mmss = (s: number | null) =>
  * channel whose median winning clip runs two and a half minutes is not supplying shorts, whatever
  * anybody's impression of it. Squat University came out of the list on exactly that test.
  *
- * APPLY IS A SEPARATE RUN, NOT "WRITE WHAT YOU JUST SHOWED ME". It re-pulls and re-matches, and
- * re-checks per row that the URL is still a placeholder. A stored plan that wrote blind would
- * overwrite a URL an admin set in between, and that is indistinguishable from data loss.
+ * APPLY WRITES THE SAVED DRY RUN, EXACTLY WHAT WAS REVIEWED (2026-11-10). It used to re-run the
+ * plan, which spent the day's quota a second time and wrote a fresh match rather than the list a
+ * person had read. Each row is still re-checked at write time: a URL an admin set in between is
+ * never overwritten. Tier A is written unless a person rejected it; tier B only when approved.
  */
 /** Scott, 2026-09-28: "give me an easy copy and paste button on all fields too so i can stop
  *  taking photos of everything." Every card copies itself as plain text, and the run header
@@ -264,19 +282,41 @@ export default function AdminExerciseVideos() {
     queryFn: () => getJson("/api/admin/exercise-videos/pending"),
   });
 
+  // The saved dry run, so a reviewed list survives a reload and Apply has something to write.
+  const latest = useQuery<Report | null>({
+    queryKey: ["/api/admin/exercise-videos/latest"],
+    queryFn: () => getJson("/api/admin/exercise-videos/latest"),
+  });
+  const shown = report ?? latest.data ?? null;
+
+  const decide = useMutation({
+    mutationFn: async (args: { key: string; decision: Decision | null }) => {
+      const res = await apiRequest("POST", "/api/admin/exercise-videos/decide", {
+        runId: shown?.runId,
+        ...args,
+      });
+      return (await res.json()) as Report;
+    },
+    onSuccess: (data) => setReport(data),
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "Could not save that decision."),
+  });
+
   const run = useMutation({
     mutationFn: async (which: "dry-run" | "apply") => {
       setMode(which);
       const seconds = Number(cap);
-      const body: Record<string, unknown> =
+      let body: Record<string, unknown> =
         Number.isFinite(seconds) && seconds >= 10 ? { maxDurationSeconds: seconds } : {};
       // Opt-in, because it is the only expensive path here -- see the checkbox's own copy.
       if (searchUnmatched) body.searchUnmatched = true;
+      // Apply writes the SAVED run, so all it sends is which one.
+      if (which === "apply") body = { runId: shown?.runId };
       const res = await apiRequest("POST", `/api/admin/exercise-videos/${which}`, body);
       return (await res.json()) as Report;
     },
     onSuccess: (data, which) => {
       setReport(data);
+      latest.refetch();
       if (which === "apply") {
         pending.refetch();
         toast.success(
@@ -392,9 +432,16 @@ export default function AdminExerciseVideos() {
               )}
               Dry run
             </Button>
-            <Button variant="secondary" onClick={() => run.mutate("apply")} disabled={busy}>
+            <Button
+              variant="secondary"
+              onClick={() => run.mutate("apply")}
+              disabled={busy || !shown?.runId}
+              title={shown?.runId ? undefined : "Run a dry run first; Apply writes a saved one."}
+            >
               {busy && mode === "apply" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Apply
+              {shown?.runId
+                ? `Apply ${shown.proposals.filter((p) => willWrite(p, shown.decisions)).length}`
+                : "Apply"}
             </Button>
             {busy && (
               <span className="text-xs text-muted-foreground">
@@ -404,12 +451,22 @@ export default function AdminExerciseVideos() {
           </CardContent>
         </Card>
 
-        {report && (
+        {latest.isError && !report && (
+          <ReadFailed what="the saved dry run" onRetry={() => latest.refetch()} error={latest.error} />
+        )}
+        {shown && (() => { const report = shown; return (
           <>
             <Card>
               <CardHeader>
                 <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                  <span>{report.written == null ? "Dry run" : `Applied, ${report.written} written`}</span>
+                  <span>
+                    {report.written == null ? "Dry run" : `Applied, ${report.written} written`}
+                    {report.createdAt && (
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        saved {new Date(report.createdAt).toLocaleString()}
+                      </span>
+                    )}
+                  </span>
                   <span className="ml-auto flex gap-1">
                     <CopyButton text={() => summaryText(report)} label="Copy summary" />
                     <CopyButton text={() => wholeReportText(report)} label="Copy whole report" />
@@ -432,7 +489,8 @@ export default function AdminExerciseVideos() {
                   nothing unrecognised in the title, equipment stated rather than assumed, under
                   two minutes, from a channel you have watched.{" "}
                   <strong>Tier B {report.tierCounts?.B ?? 0}</strong>, a match nothing is wrong
-                  with that nobody has confirmed. Apply writes tier A only.
+                  with that nobody has confirmed. Apply writes tier A unless you reject it, and tier
+                  B only when you approve it, from this saved run, with no YouTube call.
                   <br />
                   {report.searchFill && (
                     <>
@@ -447,7 +505,8 @@ export default function AdminExerciseVideos() {
                   )}
                   <br />
                   Cap {mmss(report.maxDurationSeconds)}. {report.quota.units} quota units over{" "}
-                  {report.quota.calls} calls, out of 10,000 free a day.
+                  {report.quota.calls} calls, out of 10,000 free a day
+                  {report.cacheHits ? `, plus ${report.cacheHits} answered from the day's cache for free` : ""}.
                 </CardDescription>
               </CardHeader>
               <CardContent className="overflow-x-auto">
@@ -543,6 +602,14 @@ export default function AdminExerciseVideos() {
                       <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">
                         {p.match.channel} &middot; {mmss(p.match.durationSeconds)}
                       </span>
+                      {report.runId && (
+                        <DecisionButtons
+                          tier={p.match.tier}
+                          decision={report.decisions?.[keyOf(p)]}
+                          busy={decide.isPending}
+                          onDecide={(decision) => decide.mutate({ key: keyOf(p), decision })}
+                        />
+                      )}
                     </div>
                   ))
                 )}
@@ -601,7 +668,7 @@ export default function AdminExerciseVideos() {
 
             <NoMatchCard unmatched={report.unmatched} />
           </>
-        )}
+        ); })()}
       </div>
     </AppShell>
   );
@@ -673,5 +740,47 @@ function NoMatchCard({ unmatched }: { unmatched: Unmatched[] }) {
         })}
       </CardContent>
     </Card>
+  );
+}
+
+
+/** A person's call on one match. Tier A is written unless rejected, so it offers Reject; tier B
+ *  is written only when approved, so it offers both. Pressing the current choice clears it. */
+function DecisionButtons({
+  tier,
+  decision,
+  busy,
+  onDecide,
+}: {
+  tier: "A" | "B";
+  decision: Decision | undefined;
+  busy: boolean;
+  onDecide: (d: Decision | null) => void;
+}) {
+  return (
+    <span className="flex shrink-0 gap-1">
+      {tier === "B" && (
+        <Button
+          type="button"
+          size="sm"
+          variant={decision === "approve" ? "default" : "outline"}
+          className="h-7 px-2 text-xs"
+          disabled={busy}
+          onClick={() => onDecide(decision === "approve" ? null : "approve")}
+        >
+          {decision === "approve" ? "Approved" : "Approve"}
+        </Button>
+      )}
+      <Button
+        type="button"
+        size="sm"
+        variant={decision === "reject" ? "destructive" : "outline"}
+        className="h-7 px-2 text-xs"
+        disabled={busy}
+        onClick={() => onDecide(decision === "reject" ? null : "reject")}
+      >
+        {decision === "reject" ? "Rejected" : "Reject"}
+      </Button>
+    </span>
   );
 }

@@ -86,6 +86,11 @@ export type Vocabulary = {
    *  equipment. A head's default is learned over many names; a phrase's over the few that carry
    *  it, so it only speaks when they all agree. Keyed by the name's tokens minus equipment. */
   phraseEquipment: Record<string, string>;
+  /** Every plain word of every library NAME, lowercased and split at anything that is not a
+   *  letter or digit -- so "Behind-the-Neck Press" contributes "behind", which the token set
+   *  only ever holds folded into a compound. Read by the bracket rule in compare(): a word in a
+   *  title's brackets that some library name uses is naming a variation, not decorating one. */
+  nameWords: Set<string>;
 };
 
 /** Name-final in at least this share of the names it appears in. */
@@ -224,5 +229,8 @@ export function buildVocabulary(library: LibraryExercise[]): Vocabulary {
     if (share >= DEFAULT_EQUIPMENT_SHARE) defaultEquipment[head] = { equipment: top, share, n };
   }
 
-  return { heads, equipment, muscles, modifiers, compounds, knownTokens, defaultEquipment, phraseEquipment };
+  const nameWords = new Set<string>();
+  for (const e of lifts) for (const w of e.name.toLowerCase().split(/[^a-z0-9]+/)) if (w) nameWords.add(w);
+
+  return { heads, equipment, muscles, modifiers, compounds, knownTokens, defaultEquipment, phraseEquipment, nameWords };
 }

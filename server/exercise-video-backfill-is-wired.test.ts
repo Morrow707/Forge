@@ -1,10 +1,15 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
+import { mkdtempSync } from "fs";
+import { tmpdir } from "os";
 import {
   CHANNELS_CUT_ON_EVIDENCE,
   DEFAULT_MAX_DURATION_SECONDS,
   DEMO_VIDEO_CHANNELS,
+  readYouTubeCache,
+  shouldWrite,
+  writeYouTubeCache,
 } from "./exercise-video-backfill";
 
 const routes = readFileSync(join(import.meta.dirname, "routes.ts"), "utf8");
@@ -19,26 +24,35 @@ const read = (p: string) => readFileSync(join(repo, p), "utf8");
  * reaches it, so that is what this asserts, not the module's internals.
  */
 describe("the demo-video backfill is reachable", () => {
-  it("registers the dry run, the apply and the no-quota pending read", () => {
-    expect(routes).toContain('/api/admin/exercise-videos/${mode}');
-    expect(routes).toMatch(/\["dry-run", "apply"\]/);
-    expect(routes).toContain('/api/admin/exercise-videos/pending');
+  it("registers the dry run, the saved run, the decisions, the apply and the pending read", () => {
+    for (const path of ["dry-run", "latest", "decide", "apply", "pending"]) {
+      expect(routes).toContain(`"/api/admin/exercise-videos/${path}"`);
+    }
   });
 
   it("calls the backfill rather than re-deriving it", () => {
-    for (const fn of ["planExerciseVideoBackfill", "applyExerciseVideoBackfill", "targetsNeedingVideo"]) {
+    for (const fn of ["saveDryRun", "latestDryRun", "decideProposal", "applyExerciseVideoBackfill", "targetsNeedingVideo"]) {
       // Twice: once imported, once called. An import with no call is the bug above.
       expect(routes.split(fn).length - 1).toBeGreaterThanOrEqual(2);
     }
   });
 
-  it("keeps all three routes admin-only", () => {
-    // Counted per REGISTRATION, not per literal: the dry run and the apply are one app.post in
-    // a loop, so two occurrences of the gate cover three routes and a raw count reads as a hole.
+  it("keeps every route admin-only", () => {
+    // Counted per REGISTRATION: every app.get/app.post in the block carries the gate.
     const block = routes.slice(routes.indexOf("videoBackfillBody"), routes.indexOf("ExercisePickerDialog"));
     const registrations = block.match(/app\.(get|post)\(([^\n]*)/g) ?? [];
-    expect(registrations).toHaveLength(2);
+    expect(registrations).toHaveLength(5);
     for (const line of registrations) expect(line).toContain('requireRole("admin")');
+  });
+
+  it("applies a SAVED run and never asks YouTube to", () => {
+    // Apply used to re-run the plan: it spent the day's quota twice and wrote a fresh match
+    // rather than the list a person had read (2026-11-10). The apply handler must not call the
+    // planner, the dry run, or the YouTube client.
+    const start = routes.indexOf('"/api/admin/exercise-videos/apply"');
+    const handler = routes.slice(start, routes.indexOf("app.", start + 10));
+    expect(handler).toContain("applyExerciseVideoBackfill(parsed.data.runId)");
+    expect(handler).not.toMatch(/saveDryRun|planExerciseVideoBackfill|youTubeConfigured|searchVideosFor/);
   });
 
   it("says a missing key is a missing key, not a 500", () => {
@@ -61,6 +75,8 @@ describe("the report has somewhere to be read", () => {
     const page = read("client/src/pages/admin/exercise-videos.tsx");
     expect(page).toContain("/api/admin/exercise-videos/pending");
     expect(page).toContain("exercise-videos/${which}");
+    expect(page).toContain("/api/admin/exercise-videos/latest");
+    expect(page).toContain("/api/admin/exercise-videos/decide");
     // The per-channel median is the evidence for cutting a talky channel. A page that dropped it
     // would leave that decision to somebody's impression, which is what the column replaced.
     expect(page).toContain("medianWinningDurationSeconds");
@@ -80,11 +96,29 @@ describe("the report has somewhere to be read", () => {
     expect(read("shared/exercise-video-match.ts")).not.toContain("export function bestVideoForExercise");
   });
 
-  it("applies tier A only", () => {
+  it("writes tier A unless rejected, and tier B only when a person approved it", () => {
     // Tier B is a match nothing is wrong with that nobody has confirmed. Writing it without a
-    // person is the old behaviour wearing a new name.
+    // person is the old behaviour wearing a new name; a tier-A match a person turned down
+    // (2026-11-10: Dual Kettlebell Snatch) is not written either.
+    expect(shouldWrite("A", undefined)).toBe(true);
+    expect(shouldWrite("A", "approve")).toBe(true);
+    expect(shouldWrite("A", "reject")).toBe(false);
+    expect(shouldWrite("B", undefined)).toBe(false);
+    expect(shouldWrite("B", "approve")).toBe(true);
+    expect(shouldWrite("B", "reject")).toBe(false);
+    // and the write loop asks that one rule, nothing of its own
     const backfill = read("server/exercise-video-backfill.ts");
-    expect(backfill).toMatch(/tier !== "A"[\s\S]{0,40}continue/);
+    const apply = backfill.slice(backfill.indexOf("export async function applyExerciseVideoBackfill"));
+    expect(apply).toContain("shouldWrite(proposal.match.tier,");
+  });
+
+  it("answers a repeat YouTube read from the day's cache, and not after it expires", () => {
+    const key = `test-${mkdtempSync(tmpdir() + "/k").split("/").pop()}`;
+    const t0 = 1_800_000_000_000;
+    writeYouTubeCache("catalogue", key, { videos: [1, 2, 3] }, t0);
+    expect(readYouTubeCache("catalogue", key, 24, t0 + 23 * 3600_000)).toEqual({ videos: [1, 2, 3] });
+    expect(readYouTubeCache("catalogue", key, 24, t0 + 25 * 3600_000)).toBeNull();
+    expect(readYouTubeCache("catalogue", `${key}-absent`, 24, t0)).toBeNull();
   });
 });
 

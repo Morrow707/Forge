@@ -20,7 +20,7 @@
  * by relaxing one of these.
  */
 import { FILLER, normalize, redFlag } from "./exercise-name-grammar";
-import type { LibraryExercise, Vocabulary } from "./exercise-vocabulary";
+import { MUSCLE_SYNONYMS, type LibraryExercise, type Vocabulary } from "./exercise-vocabulary";
 
 export type Signature = {
   head: string | null;
@@ -262,7 +262,14 @@ export type RejectReason =
   | "duration";
 
 export type Verdict =
-  | { ok: true; unknown: string[]; equipmentAssumed: boolean }
+  | {
+      ok: true;
+      unknown: string[];
+      equipmentAssumed: boolean;
+      /** Words in the title's brackets that may name a variation -- see compare(). Optional so a
+       *  verdict built by hand elsewhere still type-checks; absent reads as none. */
+      bracketWords?: string[];
+    }
   | { ok: false; reason: RejectReason; detail: string };
 
 /**
@@ -332,6 +339,49 @@ export function compare(
         .filter(Boolean)
         .join("; "),
     };
+  }
+
+  // TWO KETTLEBELLS ARE A DIFFERENT LIFT FROM ONE. "dual" is FILLER because "Dual DB Sumo
+  // Deadlift" is a dumbbell sumo deadlift -- a pair is what a dumbbell lift usually is. A
+  // kettlebell lift is the opposite: Forge's Kettlebell Snatch, Clean and Clean to Press are one
+  // bell ("punch the hand through"), and the 2026-11-10 dry run auto-applied Dual Kettlebell
+  // Snatch, Dual Kettlebell Clean and Dual KB Clean and Press to all three. Read off the RAW
+  // first segment, because the filler pass has already dropped the word from the tokens.
+  const kettlebellLift = exSig.equipmentSet.has("kettlebell") || exSig.equipment === "kettlebell";
+  const twoImplements = /\b(dual|double|two|2)\b/i;
+  if (kettlebellLift && twoImplements.test(prepared.rawFirstSegment) && !twoImplements.test(ex.name)) {
+    return {
+      ok: false,
+      reason: "modifier",
+      detail: "title is two kettlebells; this exercise is one",
+    };
+  }
+
+  // A BRACKET THAT NAMES A VARIATION NEEDS A PERSON. "Cable Lateral Raise (behind back)"
+  // auto-applied to Cable Lateral Raise on 2026-11-10 because brackets are only read when they
+  // hold nothing but equipment or library modifiers -- otherwise they are ignored, which is right
+  // for "(Exercise Demonstration)" and "(KNOW THE DIFFERENCE!)" and wrong for "(behind back)". A
+  // bracket word that some library NAME uses ("behind", from Behind-the-Neck Press), and that is
+  // not filler, equipment, a muscle or a word of this exercise's own name, may be a variation
+  // this exercise does not have. MAY: "Cable Woodchop (High to Low)" is exactly Forge's
+  // woodchop ("cable set high ... pull down"), so this is a reason for review (tier B), never a
+  // refusal. Collected here and read by tierFor.
+  const ownWords = new Set(ex.name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  const isMuscleWord = (w: string) =>
+    Boolean(vocab.muscles[w] || vocab.muscles[`${w}s`] || MUSCLE_SYNONYMS[w] || MUSCLE_SYNONYMS[`${w}s`]);
+  const bracketWords: string[] = [];
+  for (const bracket of prepared.raw.matchAll(/[(（]([^)）]*)[)）]/g)) {
+    for (const w of bracket[1].toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)) {
+      if (
+        vocab.nameWords.has(w) &&
+        !ownWords.has(w) &&
+        !FILLER.has(w) &&
+        !vocab.equipment[w] &&
+        !isMuscleWord(w)
+      ) {
+        bracketWords.push(w);
+      }
+    }
   }
 
   // EQUIPMENT IS COMPARED AS A SET, AND THE NAME'S OWN WORDS ARE THE TRUTH.
@@ -421,6 +471,32 @@ export function compare(
       };
     }
   }
+  // A BODY PART IN THE TITLE'S NAME HAS TO BE THIS EXERCISE'S OWN. The check above accepts any
+  // muscle the metadata lists, secondary muscles included, and reads only the tokens the parser
+  // classed as muscles. "Hip Internal Rotation" reached Band Internal Rotation -- a SHOULDERS
+  // exercise -- as a proposal on 2026-11-10 all the same. So the raw first segment is read
+  // word by word too, and a body-part word there must be in the exercise's own name or be its
+  // PRIMARY muscle group: a title that leads with a different region is a different exercise.
+  const primary = new Set(
+    [ex.muscleGroups[0] ?? "", ex.name]
+      .flatMap((g) => g.toLowerCase().split(/[^a-z0-9]+/))
+      .filter(Boolean)
+      .flatMap((t) => [t, vocab.muscles[t] ?? t]),
+  );
+  const firstWords = prepared.rawFirstSegment.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  for (let i = 0; i < firstWords.length; i++) {
+    const w = firstWords[i];
+    const region = MUSCLE_SYNONYMS[w];
+    // "Trap Bar Deadlift": the trap there is the bar, not the trapezius
+    if (region && firstWords[i + 1] === "bar") continue;
+    if (region && !primary.has(region) && !primary.has(w)) {
+      return {
+        ok: false,
+        reason: "muscle-unexplained",
+        detail: `title leads with ${w}; this exercise is a ${ex.muscleGroups[0] ?? "?"} exercise`,
+      };
+    }
+  }
 
   if (titleSig.unknown.length > MAX_UNKNOWN_TOKENS) {
     return {
@@ -436,7 +512,7 @@ export function compare(
     return { ok: false, reason: "duration", detail: `${durationSeconds}s` };
   }
 
-  return { ok: true, unknown: titleSig.unknown, equipmentAssumed };
+  return { ok: true, unknown: titleSig.unknown, equipmentAssumed, bracketWords };
 }
 
 /**
@@ -465,6 +541,8 @@ export function tierFor(
   // A demo's title is the exercise name and the house style, nothing else.
   if (trailingWords > 0) return "B";
   if (verdict.equipmentAssumed) return "B";
+  // A bracket that may name a variation: a person decides (see compare, 2026-11-10).
+  if ((verdict.bracketWords?.length ?? 0) > 0) return "B";
   if (durationSeconds > TIER_A_MAX_SECONDS) return "B";
   if (!allowlist.some((c) => c.toLowerCase() === channel.toLowerCase())) return "B";
   return "A";

@@ -33,7 +33,10 @@
  * wrong lift with the confidence of a chosen one, which is worse than a search box.
  */
 import { eq, isNull, or, sql } from "drizzle-orm";
-import { exercises, skillExercises } from "@shared/schema";
+import { exercises, exerciseVideoRuns, skillExercises } from "@shared/schema";
+import { mkdirSync, readFileSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import { isSeededSearchPlaceholder, type VideoCandidate } from "@shared/exercise-video-match";
 import type { LibraryExercise } from "@shared/exercise-vocabulary";
 import type { Tier } from "@shared/exercise-signature-match";
@@ -195,7 +198,31 @@ export type BackfillReport = {
   boilerplateByChannel: Record<string, string[]>;
   /** Set only by apply(); a dry run leaves it undefined so the two are never confused. */
   written?: number;
+  /** YouTube reads answered from the day's cache instead of the API -- see readYouTubeCache. */
+  cacheHits?: number;
 };
+
+/** A saved dry run: the report, which run it is, and the admin's decisions so far. */
+export type SavedRun = BackfillReport & {
+  runId: number;
+  createdAt: string;
+  appliedAt: string | null;
+  decisions: Record<string, Decision>;
+};
+export type Decision = "approve" | "reject";
+export const proposalKey = (p: { kind: string; id: number }) => `${p.kind}:${p.id}`;
+
+/**
+ * WHAT APPLY WRITES, AS ONE RULE. Tier A unless a person rejected it; tier B only when a person
+ * approved it. Tier B is a match nothing is wrong with that nobody has confirmed -- writing it
+ * without a person is the old behaviour wearing a new name -- and a tier-A match a person has
+ * looked at and turned down (the 2026-11-10 run's Dual Kettlebell Snatch) is not written either.
+ */
+export function shouldWrite(tier: Tier, decision: Decision | undefined): boolean {
+  if (decision === "reject") return false;
+  if (tier === "A") return true;
+  return decision === "approve";
+}
 
 /**
  * THE WHOLE LIFT LIBRARY, with the metadata the grammar needs.
@@ -265,6 +292,44 @@ export function watchUrlFor(videoId: string): string {
 }
 
 /**
+ * A DAY'S CACHE OF WHAT YOUTUBE SAID, SO A SECOND RUN COSTS NOTHING (2026-11-10).
+ *
+ * Scott's dry run of 2026-11-10 spent 10,048 units of a 10,000-a-day allowance -- about 95
+ * searches at 100 each plus the channel lists -- so a second dry run, or the Apply that used to
+ * re-run the plan, could not run until the next day. A channel's catalogue is kept for a day and
+ * a search's results for a week: the catalogue is what grows, a search's top results barely move.
+ *
+ * In the OS temp directory, not under STORAGE_PATH: everything under /uploads is served, and a
+ * deploy clearing a cache is harmless. Anything unreadable is a miss, never an error.
+ */
+export const CATALOGUE_CACHE_HOURS = 24;
+export const SEARCH_CACHE_HOURS = 24 * 7;
+const CACHE_DIR = join(tmpdir(), "forge-youtube-cache");
+
+function cachePath(kind: string, key: string): string {
+  return join(CACHE_DIR, `${kind}-${key.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 120)}.json`);
+}
+
+export function readYouTubeCache<T>(kind: string, key: string, maxAgeHours: number, now = Date.now()): T | null {
+  try {
+    const entry = JSON.parse(readFileSync(cachePath(kind, key), "utf8")) as { at: number; value: T };
+    if (typeof entry.at !== "number" || now - entry.at > maxAgeHours * 3600_000) return null;
+    return entry.value;
+  } catch {
+    return null;
+  }
+}
+
+export function writeYouTubeCache(kind: string, key: string, value: unknown, now = Date.now()): void {
+  try {
+    mkdirSync(CACHE_DIR, { recursive: true });
+    writeFileSync(cachePath(kind, key), JSON.stringify({ at: now, value }));
+  } catch {
+    // a cache that cannot be written costs quota next time, nothing else
+  }
+}
+
+/**
  * Pull the channels, match every target, and report. Writes NOTHING.
  *
  * A channel that fails to resolve is reported as an empty catalogue rather than aborting the run:
@@ -282,6 +347,7 @@ export async function planExerciseVideoBackfill(options?: {
   const channels = options?.channels ?? DEMO_VIDEO_CHANNELS;
   const maxDurationSeconds = options?.maxDurationSeconds ?? DEFAULT_MAX_DURATION_SECONDS;
   const quota = newQuotaLedger();
+  let cacheHits = 0;
 
   const pool: VideoCandidate[] = [];
   const catalogueSizes = new Map<string, number>();
@@ -291,7 +357,15 @@ export async function planExerciseVideoBackfill(options?: {
     let result: Awaited<ReturnType<typeof channelCatalogue>> = null;
     let status: ChannelSummary["status"] = "ok";
     try {
-      result = await channelCatalogue(handle, quota, options?.maxVideosPerChannel);
+      const cacheKey = `${handle}:${options?.maxVideosPerChannel ?? "default"}`;
+      const cached = readYouTubeCache<NonNullable<typeof result>>("catalogue", cacheKey, CATALOGUE_CACHE_HOURS);
+      if (cached) {
+        result = cached;
+        cacheHits += 1;
+      } else {
+        result = await channelCatalogue(handle, quota, options?.maxVideosPerChannel);
+        if (result) writeYouTubeCache("catalogue", cacheKey, result);
+      }
       if (!result) status = "handle_not_found";
     } catch {
       // An API error -- most often quota -- is reported as itself rather than as a dead handle.
@@ -336,7 +410,16 @@ export async function planExerciseVideoBackfill(options?: {
         run.vocabulary,
         maxDurationSeconds,
         options.maxSearches ?? DEFAULT_MAX_SEARCHES,
-        (query) => searchVideosFor(query, quota),
+        async (query) => {
+          const cached = readYouTubeCache<Awaited<ReturnType<typeof searchVideosFor>>>("search", query, SEARCH_CACHE_HOURS);
+          if (cached) {
+            cacheHits += 1;
+            return cached;
+          }
+          const found = await searchVideosFor(query, quota);
+          writeYouTubeCache("search", query, found);
+          return found;
+        },
       )
     : null;
 
@@ -402,33 +485,81 @@ export async function planExerciseVideoBackfill(options?: {
     unknownWords: run.unknownWords,
     duplicateSignatures: run.duplicateSignatures,
     boilerplateByChannel: run.boilerplateByChannel,
+    cacheHits,
   };
 }
 
-/**
- * Run the plan and write it.
- *
- * The placeholder check runs AGAIN here, per row, inside the write. The plan may have been
- * produced minutes ago and an admin may have set a real URL in between; re-reading is one cheap
- * query against the possibility of overwriting somebody's choice.
- */
-export async function applyExerciseVideoBackfill(options?: {
-  channels?: string[];
-  maxDurationSeconds?: number;
-  maxVideosPerChannel?: number;
-  /** Search YouTube for the exercises the channel pass left empty. Expensive -- see the
-   *  comment on searchForUnmatched: 100 units a search against 10,000 a day. */
-  searchUnmatched?: boolean;
-  maxSearches?: number;
-}): Promise<BackfillReport> {
+function toSaved(row: typeof exerciseVideoRuns.$inferSelect): SavedRun {
+  return {
+    ...(row.report as unknown as BackfillReport),
+    runId: row.id,
+    createdAt: row.createdAt.toISOString(),
+    appliedAt: row.appliedAt ? row.appliedAt.toISOString() : null,
+    decisions: (row.decisions ?? {}) as Record<string, Decision>,
+    ...(row.written != null ? { written: row.written } : {}),
+  };
+}
+
+/** Run the plan and keep it. Writes nothing to the library. */
+export async function saveDryRun(options?: Parameters<typeof planExerciseVideoBackfill>[0]): Promise<SavedRun> {
   const { db } = await import("./db");
   const report = await planExerciseVideoBackfill(options);
+  const [row] = await db
+    .insert(exerciseVideoRuns)
+    .values({ report: report as unknown as Record<string, unknown>, decisions: {} })
+    .returning();
+  return toSaved(row);
+}
+
+/** The newest saved dry run, or null. Spends no quota. */
+export async function latestDryRun(): Promise<SavedRun | null> {
+  const { db } = await import("./db");
+  const { desc } = await import("drizzle-orm");
+  const [row] = await db.select().from(exerciseVideoRuns).orderBy(desc(exerciseVideoRuns.id)).limit(1);
+  return row ? toSaved(row) : null;
+}
+
+/** Record (or clear, with null) a person's call on one proposal of a saved run. */
+export async function decideProposal(
+  runId: number,
+  key: string,
+  decision: Decision | null,
+): Promise<SavedRun | null> {
+  const { db } = await import("./db");
+  return db.transaction(async (tx) => {
+    const [row] = await tx.select().from(exerciseVideoRuns).where(eq(exerciseVideoRuns.id, runId)).for("update");
+    if (!row) return null;
+    const report = row.report as unknown as BackfillReport;
+    if (!report.proposals.some((p) => proposalKey(p) === key)) return toSaved(row);
+    const decisions = { ...((row.decisions ?? {}) as Record<string, Decision>) };
+    if (decision) decisions[key] = decision;
+    else delete decisions[key];
+    const [updated] = await tx
+      .update(exerciseVideoRuns)
+      .set({ decisions })
+      .where(eq(exerciseVideoRuns.id, runId))
+      .returning();
+    return toSaved(updated);
+  });
+}
+
+/**
+ * Write a SAVED dry run -- exactly the list that was reviewed, with no YouTube call.
+ *
+ * Until 2026-11-10 this re-ran the plan, which meant two things: it could not run on a day the
+ * dry run had spent the quota, and what it wrote was a fresh match rather than the list a person
+ * had read. The placeholder check still runs AGAIN here, per row, inside the write: an admin may
+ * have set a real URL since the dry run, and overwriting that would be indistinguishable from
+ * data loss.
+ */
+export async function applyExerciseVideoBackfill(runId: number): Promise<SavedRun | null> {
+  const { db } = await import("./db");
+  const [row] = await db.select().from(exerciseVideoRuns).where(eq(exerciseVideoRuns.id, runId));
+  if (!row) return null;
+  const run = toSaved(row);
   let written = 0;
-  for (const proposal of report.proposals) {
-    // ONLY TIER A IS APPLIED WITHOUT A PERSON. Tier B is a match nothing is wrong with and
-    // nobody has confirmed -- an unrecognised word, assumed equipment, over two minutes, or a
-    // channel nobody has watched. Applying those is the old behaviour under a new name.
-    if (proposal.match.tier !== "A") continue;
+  for (const proposal of run.proposals) {
+    if (!shouldWrite(proposal.match.tier, run.decisions[proposalKey(proposal)])) continue;
     const table = proposal.kind === "exercise" ? exercises : skillExercises;
     const [current] = await db
       .select({ videoUrl: table.videoUrl })
@@ -438,5 +569,10 @@ export async function applyExerciseVideoBackfill(options?: {
     await db.update(table).set({ videoUrl: proposal.url }).where(eq(table.id, proposal.id));
     written += 1;
   }
-  return { ...report, written };
+  const [updated] = await db
+    .update(exerciseVideoRuns)
+    .set({ appliedAt: new Date(), written })
+    .where(eq(exerciseVideoRuns.id, runId))
+    .returning();
+  return toSaved(updated);
 }

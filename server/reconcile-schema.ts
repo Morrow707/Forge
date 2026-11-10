@@ -3860,6 +3860,18 @@ CREATE TABLE IF NOT EXISTS "athlete_heights" (
 CREATE INDEX IF NOT EXISTS "athlete_heights_athlete_idx" ON "athlete_heights" ("athlete_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "athlete_heights_athlete_date_unique"
   ON "athlete_heights" ("athlete_id", "date");
+
+-- A saved demo-video dry run and the admin's per-row decisions (2026-11-10). Apply writes from
+-- this, never from a fresh plan: what was reviewed is what is written. See
+-- server/exercise-video-backfill.ts.
+CREATE TABLE IF NOT EXISTS "exercise_video_runs" (
+  "id" serial PRIMARY KEY,
+  "report" json NOT NULL,
+  "decisions" json NOT NULL DEFAULT '{}'::json,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "applied_at" timestamp,
+  "written" integer
+);
 `;
 
 async function main() {

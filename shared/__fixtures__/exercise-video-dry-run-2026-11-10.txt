@@ -1,0 +1,316 @@
+# The production dry run of 2026-11-10 (Scott's paste): tier | exercise -> title | channel | length.
+# Every line here was a PROPOSED match. The ones listed in WRONG in the test are the ones a person
+# found wrong on review; every other line must still match after a matcher change.
+A | Tuck Jump -> Tuck Jump | Functional Bodybuilding | 0:06
+A | Back Squat -> Back Squat | Functional Bodybuilding | 0:14
+A | Box Squat -> Box Squat | Functional Bodybuilding | 0:17
+A | Snatch Pull -> Snatch Pull | Functional Bodybuilding | 0:13
+A | Pull-Up -> Pull-up | Olympic Weightlifting Exercise Library | Catalyst Athletics | 0:55
+A | Copenhagen Plank -> Copenhagen Plank | Functional Bodybuilding | 0:16
+B | Barbell Shoulder Press -> Barbell Shoulder Press - Shoulder Exercise - Bodybuilding.com | Bodybuilding.com | 0:49
+A | Prone Y-Raise -> Prone Y Raise | Functional Bodybuilding | 0:15
+A | Push Press -> Barbell Push Press | Functional Bodybuilding | 0:13
+A | Deficit Deadlift -> Deficit Deadlift | Renaissance Periodization | 0:11
+A | Face Pull -> Cable Face Pull | Functional Bodybuilding | 0:16
+A | Hang Clean -> Hang Clean | Functional Bodybuilding | 0:14
+A | Clean Pull -> Clean Pull | Functional Bodybuilding | 0:14
+A | Single-Leg Romanian Deadlift -> Single Leg Dumbbell Romanian Deadlift | Functional Bodybuilding | 0:16
+A | Approach Jump -> Approach Jump | Functional Bodybuilding | 0:09
+A | Overhead Squat -> Overhead Squat | Functional Bodybuilding | 0:10
+B | Medicine Ball Scoop Toss -> Med Ball Scoop Toss | The Virtual Strength Coach | 0:09
+A | Band Pull-Apart -> Band Pull Apart | Functional Bodybuilding | 0:15
+A | Cat-Cow -> Cat Cow | Functional Bodybuilding | 0:17
+A | Broad Jump -> Broad Jump | Functional Bodybuilding | 0:10
+A | Bench Press -> Barbell Bench Press | Functional Bodybuilding | 0:13
+A | Box Jump -> Box Jump | Olympic Weightlifting Exercise Library | Catalyst Athletics | 1:10
+A | Deadlift -> Deadlift | Renaissance Periodization | 0:12
+B | 90/90 Hip Switch -> 90/90 Hip Switch (Improve Hip Health &amp; Mobility) | Simone Sports Performance | 1:09
+A | Hip Thrust -> Barbell Hip Thrust | Renaissance Periodization | 0:11
+B | Foam Roll Thoracic Spine -> Foam Roll Thoracic Spine | Taylored Physical Therapy | 0:14
+A | Clean & Jerk -> Clean-Jerk | Olympic Weightlifting Exercise Library | Catalyst Athletics | 0:55
+A | Kettlebell Swing -> Kettlebell Swing | Olympic Weightlifting Exercise Library | Catalyst Athletics | 1:00
+A | Band External Rotation -> Banded Shoulder External Rotation | Functional Bodybuilding | 0:13
+A | Dumbbell Curl -> Dual Dumbbell Bicep Curl | Functional Bodybuilding | 0:20
+A | Bulgarian Split Squat -> Bulgarian Split Squat - Olympic Weightlifting Exercise Library - Catalyst Athletics | Catalyst Athletics | 0:33
+B | Ankle Dorsiflexion Mobilization -> Ankle Dorsiflexion Mobilization | [P]rehab | 1:06
+A | Nordic Hamstring Curl -> Nordic Hamstring Curl | Functional Bodybuilding | 0:16
+A | Seated Straddle Stretch -> Seated Straddle Stretch | Functional Bodybuilding | 0:16
+B | Standing Quad Stretch -> Standing Quad Stretch | NHS inform | 0:16
+A | Jefferson Curl -> Jefferson Curl | Functional Bodybuilding | 0:20
+B | Foam Roll Quads -> How To Foam Roll Your Quads | Movement As Medicine | 2:39
+A | Plank -> Plank | Functional Bodybuilding | 0:13
+B | Dead Hang -> How To Dead Hang Correctly | FitnessFAQs | 0:55
+A | Hanging Leg Raise -> Hanging Leg Raise | Functional Bodybuilding | 0:17
+A | Bent-Over Row -> Barbell Bent Over Row | Renaissance Periodization | 0:15
+B | Suitcase Carry -> Suitcase Carry | ken whittier | 0:28
+A | Superman Hold -> Superman Hold | Functional Bodybuilding | 0:11
+B | Banded Ankle Eversion -> Banded Ankle Eversion | Devon Hoffman | 0:23
+A | Close-Grip Bench Press -> Close Grip Bench Press | Functional Bodybuilding | 0:18
+B | Seated Calf Raise -> How to Do Seated Calf Raises | LIVESTRONG | 1:59
+A | Incline Dumbbell Press -> Incline Dumbbell Press | Renaissance Periodization | 0:12
+A | Chest-Supported Row -> Chest Supported Row | Renaissance Periodization | 0:17
+A | Snatch -> Full Snatch | Functional Bodybuilding | 0:14
+A | Lat Pulldown -> Lat Pulldown | Olympic Weightlifting Exercise Library | Catalyst Athletics | 0:40
+A | Barbell Shrug -> Barbell Shrug | Renaissance Periodization | 0:11
+A | Side Plank -> Side Plank | Functional Bodybuilding | 0:15
+B | Barbell Curl -> Barbell Curl - Biceps Exercise - Bodybuilding.com | Bodybuilding.com | 0:45
+A | Hammer Curl -> Hammer Curl | Renaissance Periodization | 0:14
+A | Russian Twist -> Russian Twist | Functional Bodybuilding | 0:14
+A | Cable Crunch -> Cable Crunch | Functional Bodybuilding | 0:16
+A | Back Extension -> Back Extensions | Functional Bodybuilding | 0:16
+B | Standing Calf Raise -> Standing Calf Raises - Calves Exercise - Bodybuilding.com | Bodybuilding.com | 1:03
+A | Dumbbell Box Step-Up -> Dumbbell Box Step Ups | Functional Bodybuilding | 0:15
+A | A-Skip -> A Skips | Functional Bodybuilding | 0:12
+A | B-Skip -> B Skips | Functional Bodybuilding | 0:10
+A | Couch Stretch -> Couch Stretch | Functional Bodybuilding | 0:11
+B | Landmine Rotation -> Landmine Rotation | O.B. Training & Sports Performance | 0:26
+B | Band Internal Rotation -> Hip Internal Rotation | [P]rehab | 0:34
+B | Wall Sprint Drill -> Sprint Wall Drill | Tyler Miller | 0:11
+A | Lateral Shuffle -> Lateral Shuffle | Functional Bodybuilding | 0:11
+B | Suitcase Hold -> Suitcase Hold | Mike Boyle Strength & Conditioning | 0:32
+B | Single-Leg Balance Reach -> Single Leg Balance and Reach | UCLA Recreation | 1:21
+B | Neck Bridge -> How to Do the Neck Bridge | LIVESTRONG | 1:28
+A | Pallof Press -> Pallof Press | Olympic Weightlifting Exercise Library | Catalyst Athletics | 0:50
+A | Dumbbell Romanian Deadlift -> Dumbbell Romanian Deadlift | Functional Bodybuilding | 0:16
+B | Machine Row -> Machine Rows: Know the Difference ⚠️ #rows | Hazzytrainer | 0:14
+B | Skater Squat -> Skater Squat Demonstration:  5 Single Leg Exercises for Strength and Athleticism | Kettlebell Kings | 0:25
+A | Wall Sit -> Wall Sit | Functional Bodybuilding | 0:13
+A | Dumbbell Bench Press -> Dumbbell Bench Press | Functional Bodybuilding | 0:14
+A | Machine Chest Press -> Machine Chest Press | Renaissance Periodization | 0:11
+A | Split Jerk -> Split Jerk | Functional Bodybuilding | 0:14
+A | Lateral Raise -> Lateral Raise | Renaissance Periodization | 0:11
+B | Squat to Upright Row -> Dumbbell Squat to Upright Row | FITASTIC | 0:12
+A | Renegade Row -> Renegade Row | Functional Bodybuilding | 0:11
+B | Assisted Pull-Up -> Machine assisted pull ups | KENZ | 0:17
+B | Straight-Arm Pushdown -> Straight Arm Pushdown - The Proper Lift - BPI Sports | BPI Sports | 1:43
+A | Machine Shoulder Press -> Machine Shoulder Press | Renaissance Periodization | 0:13
+B | Medicine Ball Slam -> How to Properly Perform Medicine Ball Slams (Exercise Demonstration) (STOP MAKING THIS MISTAKE) | Gerardi Performance | 0:19
+A | Cossack Squat -> Cossack Squat | Functional Bodybuilding | 0:16
+A | Dumbbell Shoulder Press -> Dumbbell Shoulder Press | Functional Bodybuilding | 0:13
+A | Arnold Press -> Arnold Press | Olympic Weightlifting Exercise Library | Catalyst Athletics | 0:40
+A | Tricep Rope Pushdown -> Rope Tricep Pushdown | Olympic Weightlifting Exercise Library | Catalyst Athletics | 0:43
+A | Glute Bridge -> Glute Bridges | Functional Bodybuilding | 0:13
+B | Landmine Press -> Landmine Press Variation | [P]rehab | 0:20
+B | Wrist Flexor Stretch -> WRIST FLEXOR STRETCH | Muscle & Motion | 0:05
+A | Mountain Climber -> Mountain Climbers | Functional Bodybuilding | 0:13
+A | Farmer's Carry -> DB Farmers Carry | Functional Bodybuilding | 0:14
+A | Reverse-Grip Lat Pulldown -> Reverse-Grip Lat Pulldown | Olympic Weightlifting Exercise Library | Catalyst Athletics | 0:37
+A | Goblet Squat -> Goblet Squat | Functional Bodybuilding | 0:13
+B | Battle Ropes -> Battle Rope Variations | [P]rehab | 0:16
+A | Zercher Squat -> Zercher Squat | Functional Bodybuilding | 0:15
+A | Sprawl -> Sprawls | Functional Bodybuilding | 0:11
+B | Pin Squat -> Pin Squats - How To Increase Squat With Supramaximal Load | CanditoTrainingHQ | 1:45
+B | Serratus Wall Slide -> Serratus Wall Slides | The Active Life | 0:36
+B | Sleeper Stretch -> Sleeper Shoulder Stretch - Physical Therapy Exercises | TSAOG Orthopaedics & Spine | 1:00
+A | Seated Cable Row -> Seated Cable Row | Functional Bodybuilding | 0:16
+A | EZ-Bar Curl -> EZ Bar Curl | Functional Bodybuilding | 0:16
+B | Barbell Good Morning -> Good Morning | Functional Bodybuilding | 0:16
+A | Incline Barbell Bench Press -> Barbell Incline Bench Press | Functional Bodybuilding | 0:17
+A | Pendlay Row -> Pendlay Row | Functional Bodybuilding | 0:13
+A | Front Squat -> Front Squat | Renaissance Periodization | 0:09
+A | Romanian Deadlift -> Romanian Deadlift | Functional Bodybuilding | 0:14
+A | Single-Arm Dumbbell Row -> Single Arm Dumbbell Row | Functional Bodybuilding | 0:14
+A | Hex Bar Jump -> Trap Bar Jump | Functional Bodybuilding | 0:12
+A | Push-Up -> Pushup | Renaissance Periodization | 0:11
+A | Chin-Up -> Chin-Up - Olympic Weightlifting Exercise Library - Catalyst Athletics | Catalyst Athletics | 0:33
+A | Hex Bar Deadlift -> Trap Bar Deadlift | Renaissance Periodization | 0:10
+A | Clamshell -> Clamshell | Olympic Weightlifting Exercise Library | Catalyst Athletics | 0:38
+A | Fire Hydrant -> Fire Hydrant | Functional Bodybuilding | 0:08
+B | Standing Hip Circle -> Standing Hip Circles | Juniper Strength & Recovery Studio | 0:49
+A | Frog Stretch -> Frog Stretch | Functional Bodybuilding | 0:17
+A | Bird Dog -> Bird Dog | Functional Bodybuilding | 0:16
+B | Banded Ankle Inversion -> Banded Ankle Inversion | Devon Hoffman | 0:24
+A | Pause Back Squat -> Pause Back Squat | Olympic Weightlifting Exercise Library | Catalyst Athletics | 1:02
+A | Reverse Lunge -> Reverse Lunge | Renaissance Periodization | 0:11
+A | Floor Press -> Barbell Floor Press | Functional Bodybuilding | 0:13
+A | Lateral Lunge -> Lateral Lunge | Olympic Weightlifting Exercise Library | Catalyst Athletics | 1:04
+B | Calf Stretch (Wall) -> Wall Calf Stretch - soleus and gastrocnemius assisted stretch for ankle Dorsiflexion | Rehab Hero | 0:21
+A | Walking Lunge -> Dumbbell Walking Lunge | Renaissance Periodization | 0:10
+A | Tibialis Raise -> Bodyweight Tibialis Raises | Functional Bodybuilding | 0:19
+A | Quadruped Thoracic Rotation -> Quadruped Thoracic Rotation | Functional Bodybuilding | 0:15
+B | Open Book Stretch -> Open Book Stretch | Evolution Physical Therapy & Fitness | 0:12
+A | Leg Press -> Leg Press | Renaissance Periodization | 0:11
+A | Leg Extension -> Leg Extension | Renaissance Periodization | 0:11
+A | Lying Leg Curl -> Lying Leg Curl | Renaissance Periodization | 0:13
+A | Reverse Hyper -> Reverse Hyper | Olympic Weightlifting Exercise Library | Catalyst Athletics | 0:55
+A | Cable Pull-Through -> Cable Pull Through | Renaissance Periodization | 0:11
+B | Decline Bench Press -> How To: Barbell Decline Bench Press | ScottHermanFitness | 2:04
+A | Cable Fly -> Cable Flye | Renaissance Periodization | 0:12
+A | Hip Adduction Machine -> Hip Adduction Machine | Functional Bodybuilding | 0:20
+B | Hip Abduction Machine -> Hip Abduction Machine (KNOW THE DIFFERENCE!) | Andrew Kwong (DeltaBolic) | 0:11
+B | Machine Chest Fly -> Pec Fly | Olympic Weightlifting Exercise Library | Catalyst Athletics | 0:40
+B | Wrist Extensor Stretch -> Wrist Extensor Stretch | Baptist Health | 0:45
+A | Step-Down -> Step-Down | Olympic Weightlifting Exercise Library | Catalyst Athletics | 0:54
+A | Sumo Deadlift -> Sumo Deadlift | Renaissance Periodization | 0:10
+A | Rear Delt Fly -> Rear Delt Fly | Olympic Weightlifting Exercise Library | Catalyst Athletics | 0:42
+A | Rack Pull -> Rack Pull | Functional Bodybuilding | 0:14
+A | Sled Push -> Sled Push | Functional Bodybuilding | 0:11
+A | Straight-Arm Pulldown -> Straight Arm Pulldown | Renaissance Periodization | 0:12
+B | Sled Drag -> Sled Drag | Movement As Medicine | 0:27
+B | Meadows Row -> The Meadows Row #backday #backexercise #backworkout #workout #bodybuilding | Jeff Nippard Clips | 0:25
+A | Power Clean -> Power Clean | Functional Bodybuilding | 0:16
+A | Preacher Curl -> Barbell Preacher Curl | Functional Bodybuilding | 0:16
+A | Concentration Curl -> Concentration Curl | Functional Bodybuilding | 0:14
+A | Cable Curl -> Cable Bicep Curl | Functional Bodybuilding | 0:14
+A | Zottman Curl -> Zottman Curls | Functional Bodybuilding | 0:15
+A | Skull Crusher -> EZ Bar Skull Crusher | Functional Bodybuilding | 0:16
+A | Overhead Tricep Extension -> Dumbbell Overhead Tricep Extension | Functional Bodybuilding | 0:18
+B | Cable Woodchop -> Cable Woodchop (High to Low) | Best Exercise for Core | Rotational Movement Patterns | Rob Morgan  | 0:36
+B | Pike Push-Up -> Pike Pushup | LivestrongWoman | 0:49
+A | Inverted Row -> Inverted Row | Renaissance Periodization | 0:13
+A | Bench Dip -> Bench Dips | Functional Bodybuilding | 0:12
+A | V-Up -> V-Up | Renaissance Periodization | 0:09
+B | Toes-to-Bar -> Toes to Bar | M Squared Fitness | 0:15
+A | Weighted Plank -> Weighted Plank | Functional Bodybuilding | 0:14
+B | Trap Bar Squat -> Hex Bar Squat: Mastering the Ultimate Leg and Core Exercise | Twin Cities Orthopedics | 0:10
+A | T-Bar Row -> T Bar Row | Functional Bodybuilding | 0:13
+A | Depth Jump -> Depth Jump | Olympic Weightlifting Exercise Library | Catalyst Athletics | 1:20
+B | Lateral Bound -> Lateral Bound | Olympia Fitness and Performance | 0:08
+A | Belt Squat -> Belt Squat | Functional Bodybuilding | 0:17
+B | Chin Tuck -> Chin Tucks | Burke Street Chiropractic | 0:18
+B | Ab Wheel Rollout -> Ab Wheel Rollouts For Beginners | FitnessFAQs | 0:59
+A | Shuttle Run -> Shuttle Run | Functional Bodybuilding | 0:13
+A | Turkish Get-Up -> Turkish Get Up | Functional Bodybuilding | 0:29
+A | Dip -> Dip | Renaissance Periodization | 0:11
+A | Hang Snatch -> Full Hang Snatch | Functional Bodybuilding | 0:13
+B | McGill Curl-Up -> McGill Curl Up | Zack Henderson | 1:17
+A | Diamond Push-Up -> Diamond Push Ups | Functional Bodybuilding | 0:10
+A | Lateral Band Walk -> Lateral Band Walk | Functional Bodybuilding | 0:12
+B | Step-Up with Bicep Curl -> Dumbbell Step Up and Bicep Curl | canfitpro | 0:14
+A | Seal Row -> Seal Row | Renaissance Periodization | 0:15
+A | Seated Barbell Press -> Seated Barbell Shoulder Press | Renaissance Periodization | 0:12
+A | Z Press -> Z Press | Functional Bodybuilding | 0:17
+B | Battle Rope Circles -> Battle Rope Circles | Jacob Wright | 0:33
+A | Muscle Snatch -> Muscle Snatch | Functional Bodybuilding | 0:15
+A | Frog Pump -> Frog Pump | Functional Bodybuilding | 0:14
+B | Deadlift to Bent-Over Row -> Deadlift to Bent-Over Row | Empower Personalized Fitness | 0:45
+B | Snatch-Grip High Pull -> Barbell Snatch Grip High Pull | Joe Belden | 0:05
+A | Clean High Pull -> Clean High Pull | Functional Bodybuilding | 0:16
+A | Kettlebell Around-the-World -> KB Around the World | Functional Bodybuilding | 0:17
+A | Reverse Crunch -> Reverse Crunch | Olympic Weightlifting Exercise Library | Catalyst Athletics | 1:01
+B | Med Ball Chest Pass -> Med Ball Chest Pass | CresseyPerf | 0:18
+A | Dumbbell Thruster -> Dumbbell Thruster | Functional Bodybuilding | 0:15
+B | Squat to Front Raise -> Squat to Front Raise | Rutgers Recreation | 0:13
+B | Barbell Thruster -> How To Do Barbell Thrusters | Exercise Guide | Bodybuilding.com | 1:53
+B | Reverse Lunge to Bicep Curl -> Reverse Lunge with Bicep Curl | Momentum Physical Therapy and Performance Training | 0:18
+B | Reverse Lunge to Overhead Press -> Reverse Lunge with Overhead Dumbbell Press | 24Life | 0:17
+B | Walking Lunge with Bicep Curl -> Walking Lunge with Bicep Curl | Momentum Physical Therapy and Performance Training | 0:24
+B | Walking Lunge with Overhead Press -> Dumbbell Walking Lunge with Overhead Press | Ideal Bodies Online | 0:39
+B | Lateral Lunge with Overhead Press -> Dumbbell lateral lunge to overhead press | Ty Training | 0:29
+B | Reverse Lunge with Front Raise -> Reverse lunge front raise | Be Refined Fitness | 0:07
+B | Reverse Lunge with Tricep Kickback -> Reverse Lunge Tricep Kickback | daniellagimodierept | 0:36
+B | Split Squat with Hammer Curl -> Split squat with hammer curl | Heather Murphy | 0:28
+A | Machine Lateral Raise -> Machine Lateral Raise | Renaissance Periodization | 0:12
+B | Squat to Bicep Curl -> Squat With Bicep Curl | LIVESTRONG | 1:10
+B | Step-Up with Lateral Raise -> Step Up with Lateral Raise | KFIT Body | 0:11
+B | Step-Up with Hammer Curl -> Step Up with Hammer Curl | S Shel | 0:11
+B | Single-Leg RDL to Row -> Single Leg RDL to Row | Pittsburg State University Sport Performance | 0:11
+B | Romanian Deadlift to Bicep Curl -> Romanian Deadlift To Bicep Curl | Cloud Gym - Workouts | 0:25
+B | Incline Cable Fly -> How to do an Incline Cable Fly | Tiger Fitness | Tiger Fitness | 0:41
+A | Sumo Deadlift High Pull -> Kettlebell Sumo Deadlift High Pull | Functional Bodybuilding | 0:13
+A | Kettlebell Clean to Press -> Dual KB Clean and Press | Functional Bodybuilding | 0:17
+B | Push-Up to Renegade Row -> Push-Up to Renegade Row | Pilates & Fitness TV | 0:43
+B | Burpee to Overhead Press -> Burpee to OverHead Press DumbBell | Tomas Echavarria | 0:13
+B | Plate Front Raise -> Plate Front Raise | KZFITNESS | 0:06
+A | Cuban Press -> Cuban Press | Functional Bodybuilding | 0:16
+B | Reverse Lunge with Torso Rotation -> Reverse Lunge with Torso Rotation | Fairview Ways to Wellness | 0:12
+B | Bear Crawl to Push-Up -> Bear Crawl To Push Up | Hannah Eden | 0:25
+A | Burpee with Broad Jump -> Burpee Broad Jump | Functional Bodybuilding | 0:17
+B | Lateral Lunge with Bicep Curl -> Lateral Lunge with Bicep Curl - XFit Daily | XHIT Daily | 1:06
+B | Curtsy Lunge with Bicep Curl -> Curtsy Lunge to Bicep Curl | Courtney Morkes | 0:33
+B | Deadlift to Hammer Curl -> Dumbbell Deadlift to Hammer Curl | Tyler Robbins | 0:25
+B | Goblet Squat with Front Raise -> Goblet Squat to Front Raise - Smarter Sweat | Amanda Capritto | 0:18
+B | Reverse Lunge to Bicep Curl to Press -> Reverse lunge to dumbbell bicep curl to shoulder press | Gudgie | 0:23
+B | Squat to Bicep Curl to Press -> Squat with dumbbell bicep curl to shoulder press | Gudgie | 0:17
+B | Step-Up to Shoulder Press -> Step Up to Shoulder Press | Liv Fitness | 0:46
+B | Egyptian Lateral Raise -> Egyptian Lateral Raise | Stephen Finlayson | 0:10
+B | Man Maker -> How To Do Man Makers | Exercise Guide | Bodybuilding.com | 1:20
+A | Push-Up to Shoulder Tap -> Push Up With Shoulder Tap | Functional Bodybuilding | 0:11
+A | Prone T-Raise -> Prone T Raise | Functional Bodybuilding | 0:12
+A | Glute Ham Raise -> Glute Ham Raise | Renaissance Periodization | 0:08
+A | Wall Ball -> Wall Balls | Functional Bodybuilding | 0:12
+B | Goblet Squat to Overhead Press -> Goblet Squat to Overhead Press | 24 Hour Fitness | 24 Hour Fitness | 0:45
+A | Low-to-High Cable Fly -> Cable Chest Fly Low to High | Functional Bodybuilding | 0:16
+A | Pigeon Stretch -> Pigeon Stretch | Functional Bodybuilding | 0:14
+A | 90/90 Stretch -> 90/90 Glute Stretch | Functional Bodybuilding | 0:20
+A | Child's Pose -> Child's Pose | Functional Bodybuilding | 0:14
+B | Countermovement Jump -> Countermovement Jump - Hands on Hips | Speed School Performance | 0:06
+A | World's Greatest Stretch -> Worlds Greatest Stretch | Functional Bodybuilding | 0:20
+A | Bear Crawl -> Bear Crawl | Functional Bodybuilding | 0:12
+A | Dumbbell Front Raise -> Dumbbell Front Raise | Renaissance Periodization | 0:12
+A | Dumbbell Pullover -> Dumbbell Pullover | Renaissance Periodization | 0:15
+A | Cable Pullover -> Cable Pullover | Functional Bodybuilding | 0:21
+B | Cable Hammer Curl -> How To: Cable Hammer Curl | Shaun Stafford | Bodybuilding.com | 0:46
+A | Incline Dumbbell Curl -> Incline Dumbbell Curl | Renaissance Periodization | 0:17
+A | Spider Curl -> EZ Bar Spider Curl | Renaissance Periodization | 0:14
+A | Cross-Body Hammer Curl -> Cross Body Hammer Curl | Functional Bodybuilding | 0:18
+A | Cable Rope Curl -> Rope Cable Curl | Olympic Weightlifting Exercise Library | Catalyst Athletics | 0:38
+A | Snatch-Grip Deadlift -> Snatch Grip Deadlift | Functional Bodybuilding | 0:17
+A | Stiff-Leg Deadlift -> How To: Barbell Stiff-Leg Deadlift | ScottHermanFitness | 1:57
+A | Seated Good Morning -> Seated Good Morning | Functional Bodybuilding | 0:18
+A | Dumbbell Deadlift -> Dumbbell Deadlift | Functional Bodybuilding | 0:14
+A | Dumbbell Sumo Deadlift -> Dual DB Sumo Deadlift | Functional Bodybuilding | 0:21
+B | Drag Curl -> How To: Barbell Drag Curl (Increase Bicep Peaks!) | ScottHermanFitness | 2:06
+A | Wide-Grip Bench Press -> Wide Grip Bench Press | Renaissance Periodization | 0:11
+B | Chest-Supported Dumbbell Row -> Chest Supported Row | Renaissance Periodization | 0:17
+A | Overhead Carry -> Dual Dumbbell Overhead Carry | Functional Bodybuilding | 0:10
+A | Muscle Clean -> Muscle Clean | Functional Bodybuilding | 0:14
+A | Power Snatch -> Power Snatch | Functional Bodybuilding | 0:11
+A | Hang Power Clean -> Hang Power Clean | Functional Bodybuilding | 0:13
+A | Hang Power Snatch -> Hang Power Snatch | Functional Bodybuilding | 0:11
+A | Block Clean -> Block Clean | Olympic Weightlifting Exercise Library | Catalyst Athletics | 1:34
+A | Block Snatch -> Block Snatch | Olympic Weightlifting Exercise Library | Catalyst Athletics | 1:36
+A | Snatch Balance -> Snatch Balance | Functional Bodybuilding | 0:16
+A | Jerk Balance -> Jerk Balance | Functional Bodybuilding | 0:18
+A | Tall Clean -> Tall Clean | Olympic Weightlifting Exercise Library | Catalyst Athletics | 1:23
+B | Barbell Reverse Lunge -> Barbell Reverse Lunge | Exercise Database | Bodybuilding.com | 1:23
+A | Barbell Walking Lunge -> Barbell Walking Lunge | Renaissance Periodization | 0:09
+B | Machine Hack Squat -> Hack Squat | Renaissance Periodization | 0:14
+A | Squat Jump -> How To: Squat Jump | ScottHermanFitness | 1:22
+B | Bounding -> Bounding | [P]rehab | 0:31
+A | Drop Jump -> Drop Jumps | Functional Bodybuilding | 0:14
+A | Cable Lateral Raise -> Cable Lateral Raise (behind back) | Functional Bodybuilding | 0:15
+A | Svend Press -> Svend Press | Functional Bodybuilding | 0:14
+A | Decline Dumbbell Fly -> Decline Dumbbell Pec Fly | Functional Bodybuilding | 0:16
+B | Waiter's Carry -> How To Do A Waiter's Carry | Exercise Guide | Bodybuilding.com | 0:47
+A | Single-Leg Hip Thrust -> Single Leg Hip Thrust | Renaissance Periodization | 0:10
+A | Banded Glute Bridge -> Banded Glute Bridges | Functional Bodybuilding | 0:14
+A | Step-Up -> Step-Up | Olympic Weightlifting Exercise Library | Catalyst Athletics | 1:04
+A | Single-Leg Calf Raise -> How To: Single-Leg Calf Raise | ScottHermanFitness | 1:47
+A | Bayesian Cable Curl -> Cable Bayesian Curl | Functional Bodybuilding | 0:17
+A | Cable Overhead Tricep Extension -> Cable Overhead Triceps Extension | Renaissance Periodization | 0:12
+A | JM Press -> JM Press | Renaissance Periodization | 0:14
+A | Tate Press -> Dumbbell Tate Press | Functional Bodybuilding | 0:16
+A | Dumbbell Kickback -> Dual DB Tricep Kickbacks | Functional Bodybuilding | 0:17
+B | Standing Leg Curl -> How To: Standing Leg Curl (BM) | ScottHermanFitness | 2:15
+A | Seated Leg Curl -> Seated Leg Curl | Renaissance Periodization | 0:11
+A | Single-Leg Leg Extension -> Single Leg Machine Leg Extension | Functional Bodybuilding | 0:17
+A | Cable Kickback -> Cable Kickback | Functional Bodybuilding | 0:16
+A | B-Stance Hip Thrust -> B Stance Hip Thrust | Functional Bodybuilding | 0:13
+B | Donkey Calf Raise -> Donkey Calf Raises - Calf Exercise - Bodybuilding.com | Bodybuilding.com | 0:54
+A | Single-Arm Lat Pulldown -> Single Arm Cable Lat Pulldown | Functional Bodybuilding | 0:15
+A | Hanging Windshield Wiper -> How To: Hanging Windshield Wiper | ScottHermanFitness | 1:51
+A | Weighted Sit-Up -> Weighted Sit Ups | Functional Bodybuilding | 0:15
+A | Wrist Roller -> Wrist Roller | Olympic Weightlifting Exercise Library | Catalyst Athletics | 1:11
+A | Reverse Barbell Curl -> Barbell Reverse Curl | Functional Bodybuilding | 0:16
+B | Behind-the-Back Wrist Curl -> Behind The Back Wrist Curl - Forearm Exercise - Bodybuilding.com | Bodybuilding.com | 0:34
+A | Sled Sprint -> Sled Sprint | Functional Bodybuilding | 0:11
+A | Decline Sit-Up -> Decline Sit-Up | Olympic Weightlifting Exercise Library | Catalyst Athletics | 0:40
+A | Ankle CARs -> Ankle CARs | Functional Bodybuilding | 0:23
+A | Bicycle Crunch -> Bicycle Crunch | Functional Bodybuilding | 0:07
+A | Shoulder CARs -> Shoulder CARs | Functional Bodybuilding | 0:27
+A | Devil Press -> Devil Press | Functional Bodybuilding | 0:17
+A | Kettlebell Snatch -> Dual Kettlebell Snatch | Functional Bodybuilding | 0:13
+A | Kettlebell Clean -> Dual Kettlebell Clean | Functional Bodybuilding | 0:14
+A | Downward Dog -> Downward Dog | Functional Bodybuilding | 0:13
+A | Thread the Needle -> Thread the Needle | Functional Bodybuilding | 0:13
+A | Pause Front Squat -> Pause Front Squat - Olympic Weightlifting Exercise Library - Catalyst Athletics | Catalyst Athletics | 0:42
+A | Dead Bug -> Dead Bug | Olympic Weightlifting Exercise Library | Catalyst Athletics | 1:06
+A | Push Jerk -> Push Jerk | Functional Bodybuilding | 0:15
+A | Tall Snatch -> Tall Snatch | Olympic Weightlifting Exercise Library | Catalyst Athletics | 1:34
+A | Hip CARs -> Hip CARs | Functional Bodybuilding | 0:27
+A | Prone Press-Up -> Prone Press Up | Functional Bodybuilding | 0:21
+A | Single-Arm Landmine Press -> Single Arm Landmine Press | Functional Bodybuilding | 0:14
+A | Incline Dumbbell Fly -> Incline Dumbbell Fly | Functional Bodybuilding | 0:16
+B | Sissy Squat -> How To: Sissy Squat | ScottHermanFitness | 2:24
+A | Behind-the-Neck Press -> Press Behind the Neck | Olympic Weightlifting Exercise Library | Catalyst Athletics | 1:16

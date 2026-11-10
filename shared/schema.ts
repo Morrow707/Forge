@@ -6031,6 +6031,22 @@ export type AdminAthleteQueryFilters = z.infer<typeof adminAthleteQueryFiltersSc
 // time. filters is snapshotted whole, not decomposed into columns, since
 // adminAthleteQueryFiltersSchema is still evolving and a saved view should
 // survive fields being added around it.
+// A demo-video dry run, kept so Apply writes exactly what was reviewed (2026-11-10). Scott's
+// dry run of that day spent the whole day's YouTube quota, and Apply re-ran the plan from scratch
+// -- so it could not run the same day, and what it would have written was not the list he had
+// read. `report` is the dry run's report as returned; `decisions` is keyed "<kind>:<id>" and holds
+// "approve" (a tier-B match a person checked) or "reject" (any match a person turned down). No
+// foreign key on purpose: it is an admin's working list, not a record about anyone.
+export const exerciseVideoRuns = pgTable("exercise_video_runs", {
+  id: serial("id").primaryKey(),
+  report: json("report").$type<Record<string, unknown>>().notNull(),
+  decisions: json("decisions").$type<Record<string, "approve" | "reject">>().notNull().default({}),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  appliedAt: timestamp("applied_at"),
+  written: integer("written"),
+});
+export type ExerciseVideoRun = typeof exerciseVideoRuns.$inferSelect;
+
 export const adminSavedViews = pgTable("admin_saved_views", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
