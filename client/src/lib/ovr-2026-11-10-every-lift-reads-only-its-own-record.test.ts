@@ -59,15 +59,20 @@ const PRESS_HEIGHT_UNCERTAINTY = 0.4;
 const PRESS_DEPTH_UNCERTAINTY = 0.6;
 const PRESS_DRIVE_ONSET = 0.02;
 const BENCH_OWN = { body3DCorrectedUncertainty: BENCH_3D_POSE_UNCERTAINTY, driveOnsetFraction: BENCH_DRIVE_ONSET };
-const ROW_OWN = { depthRulerUncertainty: ROW_DEPTH_UNCERTAINTY, driveOnsetFraction: ROW_DRIVE_ONSET };
+/** Round fourteen's drive onsets for the two lifts round fifteen moved on, kept as the history. */
+const ROUND_FOURTEEN_DRIVE_ONSETS = { press: PRESS_DRIVE_ONSET, row: ROW_DRIVE_ONSET };
+// Round fifteen (same day, set 2 on build 730) moved the row's and the press's drive onset and added the
+// press's 3D-bone uncertainty; this file pins only what round fourteen fitted that still stands.
+// ovr-2026-11-10-set-two-reads-only-its-own-record.test.ts pins round fifteen.
+const ROW_OWN = { depthRulerUncertainty: ROW_DEPTH_UNCERTAINTY };
 const PRESS_OWN = {
   biacromialToleranceFraction: PRESS_SHOULDER_TOLERANCE, heightRulerUncertainty: PRESS_HEIGHT_UNCERTAINTY,
-  depthRulerUncertainty: PRESS_DEPTH_UNCERTAINTY, driveOnsetFraction: PRESS_DRIVE_ONSET,
+  depthRulerUncertainty: PRESS_DEPTH_UNCERTAINTY,
 };
 /** liveErrorPct on each ledger row at the lift's own record (as filmed in the comment). */
-const BENCH_11_10_LIVE = -8.57; // -10.2 as filmed
-const PRESS_11_10_LIVE = 31.3; // +46.5
-const PRESS_11_06_LIVE = 31.22; // +41.8
+const BENCH_11_10_LIVE = -7.28; // -10.2 as filmed; -8.57 after round fourteen, -7.28 after round fifteen
+const PRESS_11_10_LIVE = 27.42; // +46.5; +31.3 after round fourteen
+const PRESS_11_06_LIVE = 25.17; // +41.8; +31.22 after round fourteen
 const ROW_LEFT_11_10_LIVE = -4.38; // -9.0
 const ROW_RIGHT_11_10_LIVE = 10.53; // +9.2
 const LIVE_ERROR_PCT: Record<string, number> = {
@@ -111,9 +116,10 @@ describe("round fourteen: every lift touched, each in its own record", () => {
   });
 
   it("each lift's own record carries its round-fourteen numbers", () => {
-    expect(FITTED_OVERRIDES["Bench Press"]).toEqual(BENCH_OWN);
-    expect(FITTED_OVERRIDES["Single-Arm Dumbbell Row"]).toEqual(ROW_OWN);
-    expect(FITTED_OVERRIDES["Dumbbell Shoulder Press"]).toEqual(PRESS_OWN);
+    expect(FITTED_OVERRIDES["Bench Press"]).toMatchObject(BENCH_OWN);
+    expect(FITTED_OVERRIDES["Single-Arm Dumbbell Row"]).toMatchObject(ROW_OWN);
+    expect(FITTED_OVERRIDES["Dumbbell Shoulder Press"]).toMatchObject(PRESS_OWN);
+    expect(ROUND_FOURTEEN_DRIVE_ONSETS).toEqual({ press: 0.02, row: 0.02 });
   });
 
   it("the window moves each take's mean toward the sensor and no rep count, and it reaches only its own lift", () => {

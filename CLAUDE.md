@@ -3815,6 +3815,17 @@ halves before splitting anything else:
   the row is labelled by the helper; a second filmed row take -- the first on the working-hand rule
   with a declared side -- is what gives the row its first ledger row. Client plus a server column:
   `verify_build` then `beta` with round eleven when the hold lifts.
+- **ROUND FIFTEEN, 2026-11-10 EVENING: SET 2 OF ALL THREE ON BUILD 730, ROUND FOURTEEN HELD, ONE
+  MORE STEP EACH, AND THE EXPORT NOW CARRIES `side`.** Press set 2 read **+10.1%** as filmed (set 1
+  +46.5% on 728) -- round fourteen's record working on a take it was not fitted on. Bench set 2 read
+  -14.8% beside set 1's -8.6% (Rule #5 scatter). Bench `depthRulerUncertainty` 0.18 (every bench
+  ledger row closer); press `body3DCorrectedUncertainty` 0.15 + `driveOnsetFraction` 0.01 (11-06
+  +31.2 -> +25.2, s1 +31.3 -> +27.4, s2 +10.1 -> +6.5); row `driveOnsetFraction` 0.01 (set 1 only has
+  a sensor screen). **The row's left/right gap is perspective, not a constant**: set 1's right arm
+  travelled 203 trace units for 43.5cm where the left travelled 150 for 46.8 -- the next row work is
+  a per-side scale from the working wrist's 3D depth. **Press set 2's OVR rows start at the 0.92 rep**
+  (Scott), the fourth row on the screen. The capture download dropped `side` on every row (the route
+  maps fields by hand); fixed server-side. See docs/camera-tracking-notes.md, "Round fifteen".
 - **ROUND FOURTEEN, 2026-11-10: BENCH, DUMBBELL SHOULDER PRESS AND THE SINGLE-ARM ROW (EACH SIDE ITS
   OWN ROW) ON BUILD 728 -- EVERY LIFT TOUCHED, EVERY FIX IN THAT LIFT'S OWN RECORD.** Scott: "For
   calibration I want every lift to at least be touched ... We are trying to get to 0% deviation from

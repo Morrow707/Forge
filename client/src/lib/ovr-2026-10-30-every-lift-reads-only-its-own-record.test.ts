@@ -94,8 +94,8 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     expect(VELOCITY_OVERRIDES_REMOVED_2026_11_05["Barbell Shoulder Press"]).toEqual(["driveOnsetFraction"]);
     // Round fourteen (2026-11-10) gave the bench a window again, fitted on the corrected labels and
     // dated after the fix; the smoothing and the cap stay gone.
-    expect(FITTED_OVERRIDES["Bench Press"]).toEqual({ body3DCorrectedUncertainty: 0.25, driveOnsetFraction: 0.03 });
-    expect(FITTED_OVERRIDE_EVIDENCE["Bench Press"]).toMatch(/^2026-11-10, round fourteen/);
+    expect(FITTED_OVERRIDES["Bench Press"]).toEqual({ body3DCorrectedUncertainty: 0.25, depthRulerUncertainty: 0.18, driveOnsetFraction: 0.03 });
+    expect(FITTED_OVERRIDE_EVIDENCE["Bench Press"]).toMatch(/^2026-11-10, round fifteen[\s\S]*2026-11-10, round fourteen/);
     expect(FITTED_OVERRIDES["Barbell Shoulder Press"]).toBeUndefined();
     expect(Object.keys(FITTED_OVERRIDES["Pendlay Row"])).toEqual(["depthRulerUncertainty"]);
     for (const [name, bucket] of [["Pendlay Row", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"]]) {
@@ -182,10 +182,14 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     const benchBlend = reconcileScaleEstimates(bench.candidates.map((c) => ({
       source: c.source as "body_3d", scale: c.scaleX1000 / 1000,
       uncertaintyFraction: c.source === "depth"
-        ? cameraTunablesFor("Bench Press", "horizontal_press_or_row").values.depthRulerUncertainty
+        // The row's 0.6 must not reach the bench: what the bench is handed for depth is its own
+        // record's (0.18 since round fifteen), never the row's. Read at the shared 0.2, the value the
+        // bench was filmed at, so the blend reproduces the phone's.
+        ? shared
         : bench.uncertaintiesAsFilmed[c.source],
     }))).scale! * 1000;
     expect(Math.abs(benchBlend / bench.shippedScaleX1000 - 1)).toBeLessThan(0.0001);
+    expect(cameraTunablesFor("Bench Press", "horizontal_press_or_row").values.depthRulerUncertainty).not.toBe(own);
     expect(OVR_PENDLAY_ROW_2026_10_30.sensor.reported.romIn * 2.54).toBeCloseTo(row.sensorRomCm, 1);
   });
 
@@ -271,8 +275,9 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     expect(f.trackingDiagnostics.calibration.objectGate.plateBoxToExpectedRatio).toBeCloseTo(0.849, 3);
     // +5.5% as filmed; +3.58% through the live constants after round six's MAD-to-sigma correction,
     // and +3.91% since round fourteen's bench 3D-pose uncertainty 0.25 (2026-11-10), which moves the
-    // two plate-led bench rows 0.1-0.3 points the wrong way and the two without a plate 0.4-1.6 the right way
-    expect(row.liveErrorPct).toBeCloseTo(3.91, 1);
+    // two plate-led bench rows 0.1-0.3 points the wrong way and the two without a plate 0.4-1.6 the right way;
+    // +3.77% since round fifteen's bench depth uncertainty 0.18 (same day), which moves every bench row toward the sensor
+    expect(row.liveErrorPct).toBeCloseTo(3.77, 1);
     expect(f.shipped.reps).toBe(8);
     const m = replay(f);
     expect(m.repBreakdown.length).toBe(7);

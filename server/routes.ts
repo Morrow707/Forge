@@ -3954,6 +3954,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       hasVideo: r.hasVideo,
       videoCheckEnabled: r.videoCheckEnabled,
       setNumber: r.setNumber,
+      // Which arm a unilateral row filmed ("left" / "right"); null on a bilateral lift and on a
+      // row saved before sides existed. The OVR reads a one-side-at-a-time set as one set of
+      // twice the reps, so this is what pairs a capture with its half of the sensor screen.
+      side: r.side ?? null,
       heightIn: r.heightIn,
       // The replay takes kilograms; sets are logged in whichever unit the athlete preferred at
       // the time. weightUnit is null on bodyweight and band sets and on anything logged before

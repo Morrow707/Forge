@@ -88,6 +88,23 @@ describe("a unilateral set keeps its side", () => {
     expect(formatTrackingReport(exported)).toMatch(/\(set 1, left side, 8 reps/);
   });
 
+  it("the capture download (the replay query) carries each side's row with its side", async () => {
+    // 2026-11-10: the download Scott reads for calibration had no side on any row capture, so the
+    // left and right takes could only be told apart by trace.declaredSide. The replay query and
+    // the route's mapping both carry it now.
+    const ctx = await setup("unilateral");
+    await storage.submitWorkoutLog(
+      ctx.athlete.id,
+      submitWorkoutLogSchema.parse(payload(ctx, [{ setNumber: 1, side: "left", reps: "8", weight: "70" }, { setNumber: 2, side: "right", reps: "8", weight: "70" }])) as never,
+    );
+    // The replay query keeps rows with a stored trace; write one directly (the capture gate is a
+    // different test's subject).
+    const trace = [{ t: 0, x: 0, y: 0 }, { t: 33, x: 0, y: 10 }];
+    await Promise.all((await storedSets(ctx.athlete.id)).map((r) => db.update(workoutSetEntries).set({ barPathTrace: trace }).where(eq(workoutSetEntries.id, r.id))));
+    const rows = await storage.getStoredCapturesForReplay(10);
+    expect(rows.map((r) => [r.setNumber, (r as { side: string | null }).side]).sort()).toEqual([[1, "left"], [2, "right"]]);
+  });
+
   it("a re-save keeps the side, and a bilateral lift or an older client stores null", async () => {
     const ctx = await setup("unilateral");
     await storage.submitWorkoutLog(

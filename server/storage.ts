@@ -26557,6 +26557,7 @@ ${catalog}`;
         hasVideo: sql<boolean>`${workoutSetEntries.formCheckVideoUrl} is not null`,
         videoCheckEnabled: programExercises.videoCheckEnabled,
         setNumber: workoutSetEntries.setNumber,
+        side: workoutSetEntries.side,
         heightIn: users.heightIn,
         weight: workoutSetEntries.weight,
         weightUnit: workoutSetEntries.weightUnit,

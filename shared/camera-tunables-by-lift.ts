@@ -385,10 +385,11 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
     biacromialToleranceFraction: 0.4,
     heightRulerUncertainty: 0.4,
     depthRulerUncertainty: 0.6,
-    driveOnsetFraction: 0.02,
+    body3DCorrectedUncertainty: 0.15,
+    driveOnsetFraction: 0.01,
   },
-  "Bench Press": { body3DCorrectedUncertainty: 0.25, driveOnsetFraction: 0.03 },
-  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.4, driveOnsetFraction: 0.02 },
+  "Bench Press": { body3DCorrectedUncertainty: 0.25, depthRulerUncertainty: 0.18, driveOnsetFraction: 0.03 },
+  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.4, driveOnsetFraction: 0.01 },
 };
 
 /** THE VELOCITY OVERRIDES REMOVED ON 2026-11-05, AND WHY -- kept as data so the next reader does
@@ -524,6 +525,14 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
     "moves, since each reads its own record.",
   "Dumbbell Shoulder Press":
+    "2026-11-10, round fifteen, set 2 on build 730 (30lb, the OVR's reps from the 0.92 rep on Scott's " +
+    "word, 8 of 8): body3DCorrectedUncertainty 0.2 -> 0.15 and driveOnsetFraction 0.02 -> 0.01 on this " +
+    "lift only. Round fourteen's record read set 2 +10.1% as filmed, the first take on it (set 1 +46.5% " +
+    "as filmed on 728); the 3D pair is the lowest ruler on every press take and the others read high, so " +
+    "trusting it more lowers the press on all three: 11-06 +31.2 -> +25.2, set 1 +31.3 -> +27.4, set 2 " +
+    "+10.1 -> +6.5. The set-to-set spread is the open item (1.19x on one camera minutes apart). TIMING: " +
+    "with the scale divided out set 1 +15.7 -> +13.1, set 2 +15.0 unchanged; no rep count moves. " +
+    "EARLIER: " +
     "2026-11-10, round fourteen, build 728 (30lb, the OVR's reps 5-12 on Scott's word): heightRulerUncertainty " +
     "0.1 -> 0.4, depthRulerUncertainty 0.2 -> 0.6 and driveOnsetFraction 0.04 -> 0.02 on this lift only. The " +
     "range of motion read +46.5% (80.0cm against 54.6) and on 11-06 +47.0%: the SAME error twice, so it is a " +
@@ -557,6 +566,16 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
   // ROUND FOURTEEN, 2026-11-10, build 728 beside the OVR. Costed by
   // client/src/lib/ovr-2026-11-10-every-lift-reads-only-its-own-record.test.ts.
   "Bench Press":
+    "2026-11-10, round fifteen, set 2 on build 730 (135lb x8): depthRulerUncertainty 0.2 -> 0.18 on " +
+    "this lift only. Both 11-10 sets read low (set 1 -8.6%, set 2 -14.8% on the round-fourteen record) " +
+    "and the depth ruler is the high ruler on both, so a little more weight on it lifts both: set 1 " +
+    "-8.6 -> -7.3, set 2 -14.8 -> -14.2, and on the other ledger rows 10-30 +2.29 -> +1.58, 10-30 set 3 " +
+    "+3.91 -> +3.77, 11-06 +2.14 -> +0.32 -- every bench take closer, none crossing the sensor. 0.15 " +
+    "is the next step (11-06 crosses to -2.8 there). Rejected: body3D 0.3 (the plate-led 10-30 rows " +
+    "move away) and smoothing 200 (set 2's peak +10.8 -> +12.6). OPEN: set 1 and set 2 read 6 points " +
+    "apart on one camera; with the scale divided out the mean reads +33% and +12%, a window the drive " +
+    "fraction does not move (0.02 changes set 2 by nothing). " +
+    "EARLIER: " +
     "2026-11-10, round fourteen, build 728 beside the OVR (135lb x8, file path, 8 of 8). " +
     "body3DCorrectedUncertainty 0.2 -> 0.25 and driveOnsetFraction 0.04 -> 0.03 on this lift only. " +
     "SCALE: range of motion 32.6cm against the sensor's 36.3 (-10.2%); the collapsed 3D pair read " +
@@ -568,6 +587,14 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "0.04, and +33.1% and +4.6% at 0.03; both takes move toward the sensor, no rep count moves, and " +
     "the peak does not move. 0.02 is the next step.",
   "Single-Arm Dumbbell Row":
+    "2026-11-10, round fifteen: driveOnsetFraction 0.02 -> 0.01 on this lift only. Costed on set 1 (the " +
+    "only row set with a sensor screen): with the scale divided out the left reads +28.4 -> +26.2% and " +
+    "the right +1.2 -> +0.2%; no rep count moves on any of the four takes. Set 2 (Set 2 Left and Right " +
+    "on build 730) has no OVR screen and fits nothing. SCALE IS NOT A CONSTANT HERE: the trace travel " +
+    "per rep is 150 units (left) against 203 (right) on set 1 for 46.8 against 43.5cm on the sensor, " +
+    "so the right arm was nearer the lens; on set 2 the two sides travel 162 and 164 units. A per-side " +
+    "scale wants the working hand's own depth from the 3D pose, not another body-ruler number. " +
+    "EARLIER: " +
     "2026-11-10, round fourteen, build 728 beside the OVR (70lb, ten reps per side on purpose, filmed " +
     "as two rows: Set 1 Left and Set 1 Right; the OVR's reps 1-10 are the left arm and 11-20 the right). " +
     "depthRulerUncertainty 0.2 -> 0.4 and driveOnsetFraction 0.04 -> 0.02 on this lift only. SCALE: the " +

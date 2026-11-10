@@ -169,7 +169,7 @@ describe("the drive window was fitted on thirteen sensor-paired sets", () => {
     expect(rdl.values.driveOnsetFraction).toBe(0);
     expect(rdl.sources.driveOnsetFraction).toBe("fitted");
     // Round fourteen (2026-11-10): the bench 0.03, the dumbbell press 0.02, the single-arm row 0.02.
-    for (const [name, value] of [["Bench Press", 0.03], ["Dumbbell Shoulder Press", 0.02], ["Single-Arm Dumbbell Row", 0.02]] as const) {
+    for (const [name, value] of [["Bench Press", 0.03], ["Dumbbell Shoulder Press", 0.01], ["Single-Arm Dumbbell Row", 0.01]] as const) {
       const own = cameraTunablesFor(name, romBucketForExercise(name));
       expect(own.values.driveOnsetFraction, name).toBe(value);
       expect(own.sources.driveOnsetFraction, name).toBe("fitted");

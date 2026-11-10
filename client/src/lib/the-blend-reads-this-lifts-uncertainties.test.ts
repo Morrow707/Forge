@@ -89,7 +89,9 @@ describe("the blend is handed this lift's uncertainties", () => {
     // Neither of these has an entry in FITTED_OVERRIDES. The Back Squat did until 2026-10-29,
     // when it got its own heightRulerUncertainty; the Front Squat shares its ROM bucket and not
     // its record, which is the separation this case is about.
-    for (const [name, bucket] of [["Front Squat", "squat"], ["Bench Press", "press"]] as const) {
+    // The Bench Press has had its own depthRulerUncertainty since round fifteen (2026-11-10), so the
+    // incline bench, which shares its bucket and not its record, stands in for it.
+    for (const [name, bucket] of [["Front Squat", "squat"], ["Incline Barbell Bench Press", "press"]] as const) {
       const v = cameraTunablesFor(name, bucket as never);
       expect(v.values.heightRulerUncertainty).toBe(0.1);
       expect(v.values.depthRulerUncertainty).toBe(0.2);

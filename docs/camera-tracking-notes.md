@@ -14,7 +14,23 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-10, round fourteen)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-10, round fifteen)
+
+**ROUND FIFTEEN (2026-11-10 evening), THE ONE-LINE VERSION:** set 2 of all three on **build 730**,
+the first takes on round fourteen's record, plus the export fix (every capture in the download now
+carries `side`; the four row takes -- Set 1 L/R, Set 2 L/R -- all had their videos). Round fourteen
+held where it was tested: **press set 2 +10.1% as filmed** (set 1 was +46.5% on 728). Bench set 2
+read **-14.8%** against set 1's -8.6% on the same record (six points of scatter on one camera, Rule
+#5). One step per lift, each in its own record: **bench `depthRulerUncertainty` 0.18** (every bench
+ledger row closer: 11-10 s1 -8.6 -> -7.3, s2 -14.8 -> -14.2, 11-06 +2.1 -> +0.3, 10-30 +2.3 -> +1.6 /
++3.9 -> +3.8); **press `body3DCorrectedUncertainty` 0.15 + `driveOnsetFraction` 0.01** (11-06 +31.2 ->
++25.2, s1 +31.3 -> +27.4, s2 +10.1 -> +6.5; mean at true scale s1 +15.7 -> +13.1, s2 unchanged);
+**row `driveOnsetFraction` 0.01** (costed on set 1 only -- set 2 has no OVR screen; mean at true scale
+left +28.4 -> +26.2, right +1.2 -> +0.2). No rep count moves. **Next, named:** the row needs a
+per-side scale from the working hand's own depth (set 1: 150 trace units left vs 203 right for
+46.8 vs 43.5cm, the right arm nearer the lens; set 2: 162 vs 164 -- the setup moved between sets);
+the press's 3D bone choice; the bench's set-to-set spread and its window (+33% / +12% at true scale).
+Read "Round fifteen" below.
 
 **ROUND FOURTEEN (2026-11-10), THE ONE-LINE VERSION:** bench, dumbbell shoulder press and the
 single-arm row (each side its own row) on **build 728**; every lift touched, every fix in that lift's
@@ -525,6 +541,59 @@ this file is that several of the constraints below are not visible from the
 code alone and not discoverable by testing the wrong exercise, so a session
 that reaches for the obvious answer will get a plausible number that is
 wrong.
+
+## Round fifteen, 2026-11-10 evening: set 2 of bench, dumbbell press and single-arm row (build 730)
+
+Scott sent the set-2 OVR screens (bench 135x8; the press as the OVR's "Push Press" 30lb x11 with
+"skip the first 4 reps, first actual rep is the .92 rep" -- the 0.92 is the fourth row on the screen
+after 0.85, 0.60, 0.51, so the eight from it on are the set and match the eight logged; read
+literally "skip four" leaves seven, and the anchor he named wins) and the evening export. Row set 2
+has no OVR screen; the row screen he re-sent is set 1 (70lb x20, reps 1-10 left, 11-20 right), whose
+per-rep numbers are now in `OVR_SINGLE_ARM_DUMBBELL_ROW_2026_11_10`.
+
+**The export, his question:** all four row takes are in it as four captures (sets 1-4: Set 1 Left,
+Set 1 Right, Set 2 Left, Set 2 Right), each `hasVideo: true`, each with `trace.declaredSide` and
+`unilateralWorkingHand` agreeing. **But no capture carried `side`**: `getStoredCapturesForReplay`
+did not select it and the route builds each capture field by field. Both carry it now
+(`server/the-capture-download-carries-the-side.test.ts`, mutation-checked; an itest case drives the
+query). Server-side: ships on Render.
+
+**What was measured, at round fourteen's record (as filmed on 730 for set 2):**
+
+| take | ROM vs OVR | mean vs OVR | peak vs OVR | mean at true scale |
+|---|---|---|---|---|
+| bench s1 (728, replayed) | -8.6% | +22.2% | +26.5% | +33.7% |
+| bench s2 | -14.8% | -5.1% | +10.8% | +11.3% |
+| press s1 (728, replayed) | +31.3% | +51.9% | +46.4% | +15.7% |
+| press s2 | +10.1% | +26.7% | +34.3% | +15.1% |
+| row s1 left / right | -4.5% / +10.5% | +22.6% / +11.9% | +25.4% / +26.6% | +28.4% / +1.2% |
+
+**Fixes (one per lift, each costed on every ledger row of that lift; nothing else moves):**
+- **Bench `depthRulerUncertainty` 0.2 -> 0.18.** The depth ruler is the highest of the bench's rulers
+  and both 11-10 sets read low. Ledger: 10-30 +2.29 -> +1.58, 10-30 s3 +3.91 -> +3.77, 11-06 +2.14 ->
+  +0.32, 11-10 s1 -8.57 -> -7.28, s2 -14.8 -> -14.20. 0.15 is the next step (11-06 crosses to -2.8).
+  **Rejected:** body3D 0.3 (moves the plate-led 10-30 rows away) and smoothing 200 (s2 peak worse).
+- **Press `body3DCorrectedUncertainty` 0.2 -> 0.15 and `driveOnsetFraction` 0.02 -> 0.01.** The 3D
+  pair is the lowest ruler on all three press takes. Ledger: 11-06 +31.22 -> +25.17, s1 +31.30 ->
+  +27.42, s2 +10.1 -> +6.46. Window: s1 +15.7 -> +13.1 at true scale, s2 unchanged (0 would take s1
+  to +5.3 and s2 to +13.1 -- the next step).
+- **Row `driveOnsetFraction` 0.02 -> 0.01**, costed on set 1 only (left +28.4 -> +26.2, right +1.2 ->
+  +0.2 at true scale). 0 reads set 2 right -8% at true scale against the set-1 proxy; held.
+
+**Known not to work / not done, so it is not re-proposed:**
+- The row's left/right gap is not a constant. Trace travel per rep, set 1: left ~150 units for
+  46.8cm, right ~203 units for 43.5cm -- the right arm moved nearer the lens. Set 2: 162 vs 164
+  units, so the setup changed between sets. The body rulers measure the torso, not the hand; a
+  per-side scale wants the working wrist's depth from the 3D pose relative to the shoulders.
+  `biacromialToleranceFraction` 0.3 was swept: it fixes the right (+10.5 -> -1.9) and breaks the
+  left (-4.5 -> -19.0).
+- The bench's set 1 and set 2 read six points apart on one camera; its window reads +33% and +12%
+  at true scale and the drive fraction does not move set 2 at all. A timing rule, not a constant.
+
+Tests: `ovr-2026-11-10-set-two-reads-only-its-own-record.test.ts` (6 cases), two ledger rows
+(`2026-11-10-bench-press-set-2`, `-dumbbell-shoulder-press-set-2`), ground truth
+`OVR_BENCH_PRESS_SET2_2026_11_10`, `OVR_DUMBBELL_SHOULDER_PRESS_SET2_2026_11_10`, the row's set-1
+per-rep screen, fixture `__fixtures__/ovr-2026-11-10-set2-export.json`.
 
 ## Round fourteen, 2026-11-10: bench, dumbbell shoulder press, single-arm row (build 728)
 
