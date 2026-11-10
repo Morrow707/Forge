@@ -122,6 +122,21 @@ KNOBS = {
     "r_head_dome_px": 56.0,# pixels from the silhouette over which that solid shades up
     "r_head_dome_level": 1.15,
     "r_head_neck": 0.25,   # the head stops where its own shape narrows to this share of the skull's width
+    # head_render.py (2026-11-10): the head from the real Z-Anatomy model, replacing the drawn face.
+    "r_head_render": 1,    # 1 = the rendered head (source3d/head/); 0 = the old mannequin + face_muscles.py
+    "r_headr_scale": 1.0,  # the fitted head, scaled about its crown
+    "r_headr_width": 1.0,  # extra width multiplier on that fit
+    "r_headr_dy": 0.0,     # nudge down (px at the finish scale)
+    "r_headr_floor": 0.40, # how dark a pixel may go against its material's median
+    "r_headr_ceil": 1.45,  # how bright (the shaders' highlights)
+    "r_headr_muscle_level": 0.92,
+    "r_headr_muscle_contrast": 1.0,
+    "r_headr_tendon_contrast": 0.8,
+    "r_headr_bone_contrast": 0.8,
+    "r_headr_bone_level": 0.82, # the face's bone and teeth, a touch under the hands' ivory so they do not glare
+    "r_headr_ear_level": 0.85,
+    "r_headr_eye_level": 0.8,
+    "r_headr_eye_contrast": 0.9,
     "r_bare_sat": 0.95,
     "r_bare_value": 0.93,
     "r_quality": 86,       # webp quality for the realistic tiles

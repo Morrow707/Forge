@@ -36,6 +36,7 @@ from PIL import Image
 from scipy import ndimage as ndi
 
 import face_muscles
+import head_render
 
 HERE = pathlib.Path(os.environ.get("BODYMAP_HERE", pathlib.Path(__file__).resolve().parent))
 SRC = HERE / "source3d"
@@ -63,6 +64,8 @@ NAMES = ("female-front", "female-back", "male-front", "male-back")
 # them, so each front tile leaves its answer here for the back of the same figure.
 HEAD_TAKES_COLOUR_FROM = "Hip Flexors"
 head_colour_cache: dict = {}
+# the fitted head box per figure, measured on its FRONT tile and reused for its back (see head_render.fit_for)
+head_fit_cache: dict = {}
 
 (ROOT / "site/img3d").mkdir(parents=True, exist_ok=True)
 (ROOT / "site/lab3d").mkdir(parents=True, exist_ok=True)
@@ -226,6 +229,21 @@ def finish(name):
     body = alpha > 110
     lab = upscale_labels(lab1, body, kf("r_label_smooth", 1.6))
     lab[~body] = 0
+
+    # --- 0. the head from the real 3D model (head_render.py), placed BEFORE the fibre is read so
+    # its own surface texture is recovered by the same pass the body's is. Scott, 2026-11-10: "the
+    # face doesn't match the body, nor the same style ... they wrap all the way around your head".
+    head_cls = None
+    if ki("r_head_render", 1) and head_render.available(SRC):
+        hm0 = head_mask(lab, body)
+        fig, view = name.split("-")
+        if view == "front" and hm0.any():
+            head_fit_cache[fig] = head_render.fit_for(hm0)
+        fit = head_fit_cache.get(fig)
+        if fit is not None and hm0.any():
+            head_cls = head_render.place(rgb, alpha, lab, hm0, view, fit, SRC, K)
+            body = alpha > 110
+            lab[~body] = 0
     lum = rgb @ np.array([0.299, 0.587, 0.114], np.float32)
 
     # --- 1. the fibre the render already has, kept before the tone move rescales it
@@ -272,6 +290,8 @@ def finish(name):
     tint = kf("r_head_tint", 0.0)
     if tint > 0:
         hm = head_mask(lab, body)
+        if head_cls is not None:
+            hm = hm | (head_cls > 0)
         if hm.any():
             target = np.array([kf("r_head_r", 232.0), kf("r_head_g", 150.0), kf("r_head_b", 146.0)], np.float32)
             value = kf("r_head_value", 1.0)
@@ -302,7 +322,7 @@ def finish(name):
             # off and leaves a blank cranium; the silhouette is the alpha channel and is not
             # touched, so the jaw and the ears still read as a head. This does not put a skull
             # there -- see the README: that geometry is not in the render.
-            fs = kf("r_head_face", 0.0)
+            fs = kf("r_head_face", 0.0) if head_cls is None else 0.0
             if fs > 0:
                 # A BLUR CANNOT DO THIS AND TRYING IT IS THE WRONG SHAPE. The eyes and the mouth
                 # are deep dark features: at a sigma small enough to keep the brow, the cheek and
@@ -344,7 +364,8 @@ def finish(name):
             # Three attempts at taking the face off read as three failures of the removal; the
             # removal had worked each time and this was putting it back. The head carries no
             # muscle fibre to recover in the first place, so it is excluded outright.
-            fibre[hm] = 0
+            if head_cls is None:
+                fibre[hm] = 0
             # Scott: "redraw the man and womans head but make it the face with only muscles,
             # not smooth". The render has no facial muscles in it, so they are DRAWN -- see
             # face_muscles.py, which says so at length. It runs after the recolour so it inherits
@@ -352,8 +373,12 @@ def finish(name):
             # rest of the figure.
             # ONE call to extremity_tones, and both the skull and the extremities read from it
             _bone, _tendon = extremity_tones(target, K)
-            face_muscles.draw(rgb, hm, lum, "front" if name.endswith("front") else "back",
-                              target, K, tendon=_tendon)
+            if head_cls is not None:
+                # the rendered head: each material into the figure's palette (head_render.py)
+                head_render.recolour(rgb, head_cls, target, _bone, _tendon, K)
+            else:
+                face_muscles.draw(rgb, hm, lum, "front" if name.endswith("front") else "back",
+                                  target, K, tendon=_tendon)
             # the hands, the feet and the shin's bone, in the same two tones the cranium uses
             recolour_extremities(rgb, lum, body, lab, hm, target, K)
             dome = kf("r_head_dome", 0.0)

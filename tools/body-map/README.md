@@ -392,3 +392,44 @@ than left as a fallback, because a fallback is how they drift apart again.
 export of the same four views, same camera, same pose, with the head's muscle layer turned on,
 into `source3d/`, replaces `face_muscles.py` entirely and costs nothing else -- every other stage
 works on it unchanged.
+
+### THE HEAD IS THE REAL 3D MODEL NOW, NOT A DRAWING (2026-11-10)
+
+Scott: "the face doesn't match the body, nor the same style, the muscles in your face don't just
+sit on the front, they wrap all the way around your head ... the look is off." Both halves were the
+same fault: `face_muscles.py` drew flat shapes on the front of the mannequin head, so nothing
+wrapped the skull and nothing was lit or textured like the body.
+
+**The export this README asked for three times is done, from inside the sandbox.** Z-Anatomy's own
+model (`github.com/Z-Anatomy/Models-of-human-anatomy`, `Z-Anatomy.zip` -> `Startup.blend`, 300 MB,
+CC BY-SA 4.0) is reachable over git, and `bpy` 5.2.3 installs from PyPI into a venv. EEVEE needs a
+GPU and this box has none, so `render_head.py` renders with Cycles on the CPU (64 samples, ~5 min
+for both views): every muscle of the head (frontalis, epicranial aponeurosis, occipitalis,
+temporalis, temporoparietalis, both parts of masseter, orbicularis oculi and oris, the zygomatics,
+levators, depressors, buccinator, nasalis, procerus, corrugator, risorius, mentalis), the cranium,
+mandible, teeth, eyes and outer ears, plus the neck muscles that attach to the skull, orthographic
+front and back, with Z-Anatomy's own muscle and tendon shaders. A second CLASS pass swaps every
+material for a flat colour (muscle / tendon / bone / eye / ear), and `render.json` records the
+HEAD's own pixel box from the 3D bounds, since the neck muscles run off the frame. The four PNGs and
+the json are checked in under `source3d/head/`.
+
+`head_render.py` places it at step 0 of `realistic.py`, BEFORE the fibre is read, so the head's own
+surface texture goes through the same fibre pass as the body. The fit is measured on each figure's
+FRONT tile (crown to chin, ear to ear, with separate x and y scales because the female mannequin is
+the male mesh at another width) and reused for its back. It draws only where the mannequin head was
+or above its last row, never over a labelled muscle (the neck and traps still draw over the skull
+base), and clears the mannequin's anti-aliased rim, which otherwise left a dark ring. Where the head
+used to be tinted, `recolour()` puts each material into the figure's palette: muscle takes the head
+colour (the hip flexors'), tendon and bone take the ONE tendon and bone tones the hands and feet use
+(`extremity_tones`), ears the tendon tone, eyes muted, each pixel keeping its own luminance about its
+material's median. Knobs `r_head_render` (1; 0 brings back the drawing) and `r_headr_*`.
+`face_muscles.py` stays as the fallback and is no longer what ships.
+
+**One gap that is the source's, not a choice:** Z-Anatomy has no semispinalis capitis, the muscle
+that covers the middle of the occiput, so from behind a band of occipital bone shows between the
+splenii and above the traps. Nothing is painted over it.
+
+To re-render: `python3.13 -m venv bpyenv && bpyenv/bin/pip install bpy==5.2.3`, fetch
+`Z-Anatomy.zip` with a blob-filtered clone of that repo, unzip `Startup.blend`, then
+`bpyenv/bin/python render_head.py -- Startup.blend <outdir> 1024 64` and copy the outputs into
+`source3d/head/`. The .blend's embedded scripts are not run (`use_scripts=False`).
