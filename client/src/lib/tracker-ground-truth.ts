@@ -1883,3 +1883,69 @@ export const OVR_BOX_JUMP_HIP_2026_11_09 = {
     repRiseToApexMeanMps: [0.82, null, 0.33, 0.35, 1.45, 1.53],
   },
 };
+
+/* ========================================================================================
+ * ROUND FOURTEEN, 2026-11-10. Bench Press, Dumbbell Shoulder Press and Single-Arm Dumbbell Row
+ * beside the OVR, on build 728 (the per-side filming as six rows; the one-set pager with Film
+ * Left / Film Right is f5eba4a, not yet on the phone). Sensor numbers as Scott sent them; the
+ * Forge side of each take comes from the export and is filled in when it is read, never guessed.
+ * ======================================================================================== */
+
+// Bench press beside the OVR, 2026-11-10 set 1, 135lb x 8. The OVR counted eight.
+export const OVR_BENCH_PRESS_2026_11_10 = {
+  build: 728,
+  loadLb: 135,
+  repsPerSet: 8,
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.07, romIn: 15.4, meanW: 451, peakW: 644, tpvS: 0.30, eai: 3.53 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 1.02, romIn: 13.7, meanW: 429, peakW: 611, tpvS: 0.28, eai: 3.53 },
+      { meanVelocityMps: 0.70, peakVelocityMps: 1.00, romIn: 13.7, meanW: 423, peakW: 603, tpvS: 0.33, eai: 3.01 },
+      { meanVelocityMps: 0.74, peakVelocityMps: 1.02, romIn: 13.7, meanW: 445, peakW: 611, tpvS: 0.31, eai: 3.23 },
+      { meanVelocityMps: 0.77, peakVelocityMps: 1.07, romIn: 14.3, meanW: 464, peakW: 644, tpvS: 0.26, eai: 4.11 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 1.02, romIn: 13.6, meanW: 434, peakW: 611, tpvS: 0.28, eai: 3.53 },
+      { meanVelocityMps: 0.72, peakVelocityMps: 1.02, romIn: 13.6, meanW: 435, peakW: 611, tpvS: 0.30, eai: 3.32 },
+      { meanVelocityMps: 0.67, peakVelocityMps: 0.99, romIn: 16.6, meanW: 402, peakW: 595, tpvS: 0.31, eai: 3.14 },
+    ],
+    reported: { meanVelocityMps: 0.72, peakVelocityMps: 1.02, romIn: 14.3, meanW: 435, peakW: 616, tpvS: 0.29, eai: 3.42 },
+  },
+};
+
+// Dumbbell shoulder press beside the OVR (its "Push Press" label), 2026-11-10 set 1, 30lb. The
+// OVR counted twelve; Scott: "skip rep 1-4, looks like those were set up reps, the .91 seems like
+// the start", so the sensor's reps 5-12 are the eight.
+export const OVR_DUMBBELL_SHOULDER_PRESS_2026_11_10 = {
+  build: 728,
+  loadLb: 30,
+  repsPerSet: 8,
+  sensor: {
+    ignoredSetupReps: [
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.22, romIn: 9.2, meanW: 100, peakW: 163, tpvS: 0.21, eai: 5.72 },
+      { meanVelocityMps: 1.02, peakVelocityMps: 1.67, romIn: 23.0, meanW: 135, peakW: 222, tpvS: 0.15, eai: 10.88 },
+      { meanVelocityMps: 0.47, peakVelocityMps: 0.66, romIn: 18.2, meanW: 63, peakW: 88, tpvS: 0.47, eai: 1.38 },
+      { meanVelocityMps: 0.36, peakVelocityMps: 0.52, romIn: 15.3, meanW: 47, peakW: 69, tpvS: 0.35, eai: 1.49 },
+    ],
+    reps: [
+      { meanVelocityMps: 0.91, peakVelocityMps: 1.60, romIn: 23.7, meanW: 120, peakW: 213, tpvS: 0.19, eai: 8.06 },
+      { meanVelocityMps: 0.94, peakVelocityMps: 1.60, romIn: 20.3, meanW: 125, peakW: 212, tpvS: 0.18, eai: 8.44 },
+      { meanVelocityMps: 0.92, peakVelocityMps: 1.53, romIn: 20.7, meanW: 122, peakW: 203, tpvS: 0.18, eai: 8.08 },
+      { meanVelocityMps: 0.86, peakVelocityMps: 1.42, romIn: 20.9, meanW: 114, peakW: 189, tpvS: 0.21, eai: 6.56 },
+      { meanVelocityMps: 0.88, peakVelocityMps: 1.43, romIn: 21.0, meanW: 116, peakW: 191, tpvS: 0.18, eai: 7.57 },
+      { meanVelocityMps: 0.94, peakVelocityMps: 1.64, romIn: 22.0, meanW: 126, peakW: 218, tpvS: 0.19, eai: 8.27 },
+      { meanVelocityMps: 0.90, peakVelocityMps: 1.51, romIn: 21.2, meanW: 119, peakW: 202, tpvS: 0.21, eai: 7.00 },
+      { meanVelocityMps: 0.87, peakVelocityMps: 1.51, romIn: 22.2, meanW: 116, peakW: 202, tpvS: 0.22, eai: 6.72 },
+    ],
+    // Reps 5-12, the eight Forge is asked to read.
+    reportedOverOurReps: { meanVelocityMps: 0.902, peakVelocityMps: 1.53, romIn: 21.5 },
+    reportedAllTwelve: { meanVelocityMps: 0.81, peakVelocityMps: 1.35, romIn: 19.8, meanW: 108, peakW: 181, tpvS: 0.22, eai: 6.68 },
+  },
+};
+
+// Single-arm dumbbell row beside the OVR (its "Pendlay Row" label), 2026-11-10. Scott did TEN
+// reps on purpose "to see what the camera would do", and on the OVR "first 10 are left second 10
+// are right". The sensor's per-rep screen has not arrived yet; the reps go here when it does.
+export const OVR_SINGLE_ARM_DUMBBELL_ROW_2026_11_10 = {
+  build: 728,
+  repsPerSide: 10,
+  sensorOrder: "reps 1-10 left arm, reps 11-20 right arm",
+} as const;
