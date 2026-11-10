@@ -381,7 +381,14 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0 },
   "Back Squat": { heightRulerUncertainty: 0.12, driveOnsetFraction: 0.02, velocitySmoothingMs: 130 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
-  "Dumbbell Shoulder Press": { biacromialToleranceFraction: 0.4 },
+  "Dumbbell Shoulder Press": {
+    biacromialToleranceFraction: 0.4,
+    heightRulerUncertainty: 0.4,
+    depthRulerUncertainty: 0.6,
+    driveOnsetFraction: 0.02,
+  },
+  "Bench Press": { body3DCorrectedUncertainty: 0.25, driveOnsetFraction: 0.03 },
+  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.4, driveOnsetFraction: 0.02 },
 };
 
 /** THE VELOCITY OVERRIDES REMOVED ON 2026-11-05, AND WHY -- kept as data so the next reader does
@@ -517,6 +524,18 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
     "moves, since each reads its own record.",
   "Dumbbell Shoulder Press":
+    "2026-11-10, round fourteen, build 728 (30lb, the OVR's reps 5-12 on Scott's word): heightRulerUncertainty " +
+    "0.1 -> 0.4, depthRulerUncertainty 0.2 -> 0.6 and driveOnsetFraction 0.04 -> 0.02 on this lift only. The " +
+    "range of motion read +46.5% (80.0cm against 54.6) and on 11-06 +47.0%: the SAME error twice, so it is a " +
+    "bias and not scatter. The height ruler read +48.8% and +44.4%, and the body itself says why: the " +
+    "hip-to-ankle span over the shoulder-to-hip span, read off bodyWitnessTrace, is 1.12 and 1.09 on the two " +
+    "press takes against 1.26 to 1.96 on every other take in the corpus -- the nose-to-ankle span is not a " +
+    "stature on this lift (seated, or the feet cropped). The depth ruler read +57% and +13%. Together: " +
+    "+41.8% -> +31.2% (11-06) and +46.5% -> +31.3% (11-10), the two takes now identical. What is left is the " +
+    "3D witness: its bone median landed on the shoulder width (+19.8%) and the upper arm (+13%) where the " +
+    "torso read +5.8% and within 2% -- a bone choice, the next thing to build. TIMING: with the scale divided " +
+    "out the mean reads +17.3% and +24.0% at 0.04, +15.8% and +18.3% at 0.02; no rep count moves. " +
+    "EARLIER: " +
     "2026-11-06, round eleven, build 714 beside the OVR (35lb x8, live path, 7 of 8; the first dumbbell " +
     "lift ever filmed beside the sensor). biacromialToleranceFraction 0.2 -> 0.4 on this lift only. The " +
     "take shipped 2.980e-3 against the 2.027e-3 the sensor requires (range of motion 85.6cm against " +
@@ -535,6 +554,30 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "the height ruler instead was swept and makes the take WORSE (0.2 -> +49.5%), because the weight it " +
     "gives up lands on the shoulder. Replayed on every ledger row: no other identity reads this record, " +
     "so none moves.",
+  // ROUND FOURTEEN, 2026-11-10, build 728 beside the OVR. Costed by
+  // client/src/lib/ovr-2026-11-10-every-lift-reads-only-its-own-record.test.ts.
+  "Bench Press":
+    "2026-11-10, round fourteen, build 728 beside the OVR (135lb x8, file path, 8 of 8). " +
+    "body3DCorrectedUncertainty 0.2 -> 0.25 and driveOnsetFraction 0.04 -> 0.03 on this lift only. " +
+    "SCALE: range of motion 32.6cm against the sensor's 36.3 (-10.2%); the collapsed 3D pair read " +
+    "-7.7% and the shoulder -12.8%, with the 3D bones scattering from -16% to -39%. Loosening the 3D " +
+    "witness moves weight to the shoulder ruler. On the four bench ledger rows: 11-10 set 1 -10.2 -> " +
+    "-8.6 and 11-06 set 1 +2.5 -> +2.1 (no plate in the vote), and the two plate-led 10-30 rows a little " +
+    "the wrong way, +2.20 -> +2.29 and +3.58 -> +3.91; mean absolute 4.63 -> 4.24. 0.3 is the next step, " +
+    "to be costed the same way. TIMING: with the scale divided out, the mean reads +36.2% (11-10) and +6.3% (11-06) at " +
+    "0.04, and +33.1% and +4.6% at 0.03; both takes move toward the sensor, no rep count moves, and " +
+    "the peak does not move. 0.02 is the next step.",
+  "Single-Arm Dumbbell Row":
+    "2026-11-10, round fourteen, build 728 beside the OVR (70lb, ten reps per side on purpose, filmed " +
+    "as two rows: Set 1 Left and Set 1 Right; the OVR's reps 1-10 are the left arm and 11-20 the right). " +
+    "depthRulerUncertainty 0.2 -> 0.4 and driveOnsetFraction 0.04 -> 0.02 on this lift only. SCALE: the " +
+    "depth ruler read -64% (left) and -29% (right), the statement the Pendlay Row's record already makes " +
+    "about the same instrument on a hinged row (0.6). Left -9.0% -> -4.4%, right +9.2% -> +10.5%, mean " +
+    "absolute 9.1 -> 7.5, and the spread between the two sides 18.2 -> 14.9 points; 0.6 is the next step " +
+    "(-2.7 / +11.0). The two sides need scales 1.45x apart because the phone sat at a different distance " +
+    "from each arm, which no constant can close (Rule #5). TIMING: with the scale divided out the mean " +
+    "reads +33.6% (left) and +6.6% (right) at 0.04 and +27.9% / +1.4% at 0.02; both sides move toward the " +
+    "sensor, no rep count moves (9 of 10 on each side, logged as 8).",
 };
 
 /** Where each of an identity's numbers came from. The report prints this, so a reader can tell

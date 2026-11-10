@@ -164,7 +164,11 @@ describe("a reported velocity's distance and time come from the same window", ()
     const m: any = summarizeTrackedSet(
       points, f.loadKg ?? undefined, f.heightIn ?? undefined, firstMoveForExercise("Bench Press"), [],
       f.trackingDiagnostics?.calibration?.positionScaleCorrection ?? 1, false, romKind,
-      { x: 0, y: 1 }, f.loggedReps ?? null, cameraTunablesFor("Bench Press", romKind),
+      // At the SHARED window: this case is about which window the set mean reads, and it needs the
+      // two windows to differ, which they do by 0.010 m/s at the bench's own 0.03 (round fourteen)
+      // -- too close to tell apart at the hundredth the mean is rounded to.
+      { x: 0, y: 1 }, f.loggedReps ?? null,
+      (() => { const t = cameraTunablesFor("Bench Press", romKind); t.values.driveOnsetFraction = 0.04; return t; })(),
     );
     expect(m).toBeTruthy();
     const sum = (pick: (w: any) => number) =>

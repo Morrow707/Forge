@@ -81,8 +81,9 @@ describe("the 2026-11-06 export: three systems on three lifts", () => {
   it("the bench: the trace replays to the shipped numbers at the shared record, and its scale error is the yardstick's", () => {
     const f = byId(BENCH);
     const own = cameraTunablesFor("Bench Press", "horizontal_press_or_row");
-    expect(FITTED_OVERRIDES["Bench Press"]).toBeUndefined();
-    const m = replay(f);
+    // The SHARED record this take was filmed on: the bench's own window (0.03) and 3D-pose
+    // uncertainty (0.25) arrived in round fourteen, 2026-11-10, and are replayed below.
+    const m = replay(f, { driveOnsetFraction: 0.04, body3DCorrectedUncertainty: 0.2 });
     expect(m.repBreakdown.length).toBe(8);
     // Within a hundredth: the stored trace is rounded to a hundredth of a unit, and the live
     // path's phone series is not (0.65 against a shipped 0.64 on the mean; the peak and the range
@@ -100,6 +101,12 @@ describe("the 2026-11-06 export: three systems on three lifts", () => {
     expect(withoutSpan.rejected).toEqual([]);
     const blend = reconcileScaleEstimates(withoutSpan.kept, own.values.maxScaleAgreementTolerance).scale!;
     expect((blend / required - 1) * 100).toBeCloseTo(2.53, 1);
+    // And at the bench's own record since round fourteen (3D pose at 0.25): +2.14%.
+    const atOwn = reconcileScaleEstimates(
+      withoutSpan.kept.map((c: any) => (c.source === "body_3d" ? { ...c, uncertaintyFraction: own.values.body3DCorrectedUncertainty } : c)),
+      own.values.maxScaleAgreementTolerance,
+    ).scale!;
+    expect((atOwn / required - 1) * 100).toBeCloseTo(2.14, 1);
     expect((cal.scaleFactor / required - 1) * 100).toBeCloseTo(-12.61, 1);
     // The ledger row carries the same take.
     expect(ledgerRow("2026-11-06-bench-press-set-1").shippedScaleX1000).toBeCloseTo(cal.scaleFactor * 1000, 9);

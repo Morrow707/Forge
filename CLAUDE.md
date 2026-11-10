@@ -3815,6 +3815,23 @@ halves before splitting anything else:
   the row is labelled by the helper; a second filmed row take -- the first on the working-hand rule
   with a declared side -- is what gives the row its first ledger row. Client plus a server column:
   `verify_build` then `beta` with round eleven when the hold lifts.
+- **ROUND FOURTEEN, 2026-11-10: BENCH, DUMBBELL SHOULDER PRESS AND THE SINGLE-ARM ROW (EACH SIDE ITS
+  OWN ROW) ON BUILD 728 -- EVERY LIFT TOUCHED, EVERY FIX IN THAT LIFT'S OWN RECORD.** Scott: "For
+  calibration I want every lift to at least be touched ... We are trying to get to 0% deviation from
+  the OVR data. Consistent 0%." Bench `body3DCorrectedUncertainty` 0.25 + `driveOnsetFraction` 0.03;
+  press `heightRulerUncertainty` 0.4 + `depthRulerUncertainty` 0.6 + `driveOnsetFraction` 0.02; the
+  single-arm row's first record, `depthRulerUncertainty` 0.4 + `driveOnsetFraction` 0.02. Range of
+  motion: bench -10.2 -> -8.6, press +46.5 -> +31.3 (11-06 +41.8 -> +31.2, the two now identical), row
+  left -9.0 -> -4.4, row right +9.2 -> +10.5 (the two sides need scales 1.45x apart, Rule #5). The
+  window moves every take's mean toward the sensor with the scale divided out; no rep count moves.
+  **Read the OVR for a one-side-at-a-time row as one set of twenty: reps 1-10 the left arm, 11-20 the
+  right** (Scott). **The press's height ruler is not a stature on that lift**: hip-to-ankle over
+  shoulder-to-hip reads 1.09-1.12 against 1.26-1.96 on every other take (seated, or the feet cropped);
+  the press's remaining +31% is the 3D bone median landing on the arm while the torso reads within 6%
+  -- that bone rule is next. Also in this upload: the one-set pager for a unilateral lift (`f5eba4a`,
+  Set 1 / Set 2 with Film Left and Film Right inside), held earlier on Scott's word and released with
+  "upload everything to Apple including what you built earlier". See docs/camera-tracking-notes.md,
+  "Round fourteen". Calibration work: `verify_build` then `beta`.
 - **ROUND ELEVEN, 2026-11-06: THE FIRST DUMBBELL LIFTS BESIDE THE SENSOR -- A SUPINE SPAN IS NOT A
   STATURE, A DUMBBELL LIFT ASKS FOR A DUMBBELL, AND A UNILATERAL LIFT IS TRACED BY ITS WORKING
   HAND.** Bench Press 135x8, Dumbbell Shoulder Press 35x8 and Single-Arm Dumbbell Row 70x8 on 714;

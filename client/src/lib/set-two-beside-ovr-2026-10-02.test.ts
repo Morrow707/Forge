@@ -64,7 +64,8 @@ describe("the bench whose wrists Vision lost for half the take", () => {
   // LOWERING's mean under the inverted direction rule. Read as the press it reads high at the
   // shared drive window; the holes are the fault and the bench's drive window is open
   // (docs/camera-tracking-notes.md, "Round eight").
-  it.fails("lands within 20% of the sensor's mean", () => {
+  // Inside since 2026-11-10: round fourteen's bench window (0.03, fitted on the drives) brings it in.
+  it("lands within 20% of the sensor's mean", () => {
     const result = replayCapture((bench as StoredCapture[])[0]);
     expect(Math.abs(result.metrics!.meanVelocityMps! - 0.76) / 0.76).toBeLessThan(0.2);
   });

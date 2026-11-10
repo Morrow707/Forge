@@ -14,7 +14,16 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-09, round thirteen)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-10, round fourteen)
+
+**ROUND FOURTEEN (2026-11-10), THE ONE-LINE VERSION:** bench, dumbbell shoulder press and the
+single-arm row (each side its own row) on **build 728**; every lift touched, every fix in that lift's
+own record. Range of motion: **bench -10.2% -> -8.6%, press +46.5% -> +31.3% (and 11-06 +41.8% ->
++31.2%), row left -9.0% -> -4.4%, row right +9.2% -> +10.5%** (the one that moved the wrong way; the
+two sides need scales 1.45x apart). Mean velocity with the scale divided out moves toward the sensor
+on every take and no rep count moves. **The press's remaining +31% is the 3D bone median** (it lands
+on the shoulder width / upper arm; the torso reads +5.8% and on 11-06 within 2%) -- next to build.
+Read "Round fourteen" below before touching any of the three.
 
 **ROUND TWELVE (2026-11-09), THE ONE-LINE VERSION:** squat, RDL and box jump on **build 720**.
 The squat's fault was the CLOCK, not the scale -- a 0.2-0.4s stand at lockout between reps was
@@ -515,6 +524,67 @@ this file is that several of the constraints below are not visible from the
 code alone and not discoverable by testing the wrong exercise, so a session
 that reaches for the obvious answer will get a plausible number that is
 wrong.
+
+## Round fourteen, 2026-11-10: bench, dumbbell shoulder press, single-arm row (build 728)
+
+Scott: "For calibration I want every lift to at least be touched. If there's only one fix, fix it,
+if there's multiple, fix them. We are trying to get to 0% deviation from the OVR data. Consistent
+0%." And: "Only the 3 exercises today, bench row and shoulder press."
+
+**What was filmed** (OVR numbers in `tracker-ground-truth.ts`, `OVR_*_2026_11_10`; Forge captures in
+`__fixtures__/ovr-2026-11-10-export.json`; ledger rows `2026-11-10-*`):
+- Bench 135x8, FILE path (live fell back at coverage 0.83). OVR mean 0.72 / peak 1.02 / ROM 14.3in.
+- Dumbbell shoulder press 30lb; the OVR counted 12 and **reps 1-4 are set-up** (Scott: "the .91 seems
+  like the start"), so the sensor's reps 5-12: mean 0.902 / peak 1.53 / ROM 21.5in.
+- Single-arm dumbbell row 70lb, **ten reps per side on purpose** (logged 8), filmed as two rows on
+  build 728's per-side pager: Set 1 · Left and Set 1 · Right. The OVR recorded all twenty in one set:
+  **reps 1-10 left, 11-20 right**. Left mean 0.954 / peak 1.499 / ROM 18.43in; right 0.894 / 1.446 /
+  17.13in. Forge found 9 of 10 on each side, with the working hand matching the declared side on both.
+
+**As filmed (shipped):**
+
+| take | ROM | mean | peak | mean with the scale divided out |
+|---|---|---|---|---|
+| bench | -10.2% | +22.2% | +24.5% | +36.2% |
+| press | +46.5% | +71.8% | +63% | +17.3% |
+| row left | -9.0% | +21.6% | +18.7% | +33.6% |
+| row right | +9.2% | +16.3% | +29.3% | +6.6% |
+
+**The fixes, each in that lift's own `FITTED_OVERRIDES` record, each with `FITTED_OVERRIDE_EVIDENCE`:**
+- **Bench**: `body3DCorrectedUncertainty` 0.2 -> 0.25 (scale), `driveOnsetFraction` 0.04 -> 0.03
+  (window). Ledger: 11-10 -10.2 -> -8.6, 11-06 +2.5 -> +2.1, and the two plate-led 10-30 rows a little
+  the wrong way (+2.20 -> +2.29, +3.58 -> +3.91); mean absolute 4.63 -> 4.24. Window: every bench take
+  with a sensor mean moves toward it except 11-06 at its shipped scale (-7.1 -> -8.6; with the scale
+  divided out it improves, +6.3 -> +4.6), and the 10-02 bench (wrists lost for half the take) comes
+  inside 20% of the sensor for the first time (`set-two-beside-ovr-2026-10-02.test.ts`, no longer
+  `it.fails`). **Next steps: 0.3 and 0.02, each costed the same way.**
+- **Dumbbell shoulder press**: `heightRulerUncertainty` 0.1 -> 0.4, `depthRulerUncertainty` 0.2 -> 0.6
+  (scale), `driveOnsetFraction` 0.04 -> 0.02 (window). The +46.5% is the SAME as 11-06's +47%, a bias
+  and not scatter. **Why the height ruler is wrong on this lift, measured:** hip-to-ankle over
+  shoulder-to-hip, off `bodyWitnessTrace`, is 1.12 (11-10) and 1.09 (11-06) against 1.26-1.96 on every
+  other take in the corpus, so the nose-to-ankle span is not a stature here -- either the press is done
+  seated or the feet are cropped; the label was NOT changed to seated, because nobody has said which.
+  Ledger: 11-06 +41.8 -> +31.2, 11-10 +46.5 -> +31.3, the two now identical. **What is left is the 3D
+  witness**: its bone median landed on the shoulder width (+19.8%) and on 11-06 the upper arm (+13%)
+  while the torso read +5.8% and within 2%. Choosing the torso on an overhead lift is a RULE in
+  `body-3d-ruler.ts` and the next thing to build; no uncertainty can reach it.
+- **Single-arm dumbbell row** (its first record): `depthRulerUncertainty` 0.2 -> 0.4 (the depth ruler
+  read -64% and -29%; the Pendlay Row's record already says 0.6 about the same instrument on a hinged
+  row), `driveOnsetFraction` 0.04 -> 0.02. Left -9.0 -> -4.4, right +9.2 -> +10.5, mean absolute
+  9.1 -> 7.5, the side-to-side spread 18.2 -> 14.9 points. **0.6 is the next step** (-2.7 / +11.0).
+  The two sides need scales 1.45x apart (2.14e-3 against 3.11e-3) because the phone sat at a different
+  distance from each arm; that is the take's geometry and no constant closes it (Rule #5).
+
+**Swept and NOT shipped:** the press's height uncertainty alone (0.4 gives +35 / +41); the press's
+shoulder tolerance 0.8 (moves the two takes apart, +23.7 / +29.1); velocity smoothing on any of the
+three (no take improves on both mean and peak); a bench drive onset of 0.02 (11-06 at its shipped scale
+-10%). **Rep counts**: no setting swept moves any count on any of the four takes. The row's 9 of 10 on
+each side is a count fault for a later round (it was logged as 8, which bounds the count-trim).
+
+**Verified:** the whole client and shared suites (3,542 tests) green; the ledger replays every row
+and the squat, RDL and jump rows did not move; `ovr-2026-11-10-every-lift-reads-only-its-own-record.test.ts`
+pins that each fix reaches its own lift and no other, and that the window moves every take's mean
+toward the sensor.
 
 ## Set 2 beside OVR, 2026-10-02: bench, Pendlay row, push press (build 594)
 

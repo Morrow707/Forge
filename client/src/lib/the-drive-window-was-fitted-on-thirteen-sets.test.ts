@@ -91,9 +91,10 @@ describe("the drive window was fitted on thirteen sensor-paired sets", () => {
     // The registry hands every one of the 269 filmable things a COPY of it, and the two may not
     // drift -- camera-tunables-are-a-copy.test.ts owns that check; this is the reason it matters
     // here: a refit that moved one and not the other would be invisible on every lift but one.
-    // A lift with no entry of its own reads the copy -- the Bench Press included, again, since
-    // 2026-11-05 (its 0.03 of round four was fitted on the lowering and is gone).
-    expect(cameraTunablesFor("Bench Press", "horizontal_press_or_row").values.driveOnsetFraction)
+    // A lift with no entry of its own reads the copy. (The Bench Press read it from 2026-11-05,
+    // when round four's 0.03 -- fitted on the lowering -- was removed, until 2026-11-10, when round
+    // fourteen fitted 0.03 again on the DRIVES; see FITTED_OVERRIDE_EVIDENCE["Bench Press"].)
+    expect(cameraTunablesFor("Incline Barbell Bench Press", "horizontal_press_or_row").values.driveOnsetFraction)
       .toBe(DRIVE_ONSET_FRACTION);
   });
 
@@ -167,7 +168,13 @@ describe("the drive window was fitted on thirteen sensor-paired sets", () => {
     const rdl = cameraTunablesFor("Romanian Deadlift", "deadlift");
     expect(rdl.values.driveOnsetFraction).toBe(0);
     expect(rdl.sources.driveOnsetFraction).toBe("fitted");
-    for (const [name, bucket] of [["Bench Press", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"], ["Conventional Deadlift", "deadlift"], ["Pendlay Row", "horizontal_press_or_row"], ["Front Squat", "squat"]]) {
+    // Round fourteen (2026-11-10): the bench 0.03, the dumbbell press 0.02, the single-arm row 0.02.
+    for (const [name, value] of [["Bench Press", 0.03], ["Dumbbell Shoulder Press", 0.02], ["Single-Arm Dumbbell Row", 0.02]] as const) {
+      const own = cameraTunablesFor(name, romBucketForExercise(name));
+      expect(own.values.driveOnsetFraction, name).toBe(value);
+      expect(own.sources.driveOnsetFraction, name).toBe("fitted");
+    }
+    for (const [name, bucket] of [["Barbell Shoulder Press", "overhead_press"], ["Conventional Deadlift", "deadlift"], ["Pendlay Row", "horizontal_press_or_row"], ["Front Squat", "squat"]]) {
       const other = cameraTunablesFor(name, bucket);
       expect(other.values.driveOnsetFraction, name).toBe(DRIVE_ONSET_FRACTION);
       expect(other.sources.driveOnsetFraction, name).not.toBe("fitted");

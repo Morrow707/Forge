@@ -305,8 +305,15 @@ describe("the per-lift numbers are a copy of today's numbers", () => {
     // the lowering (the direction rule was inverted) and are gone -- see
     // VELOCITY_OVERRIDES_REMOVED_2026_11_05, whose entries this case also holds to NOT being fitted.
     expect(fittedSeen).toBeGreaterThanOrEqual(1);
+    // A removed field may come back only as a NEW fit on the corrected labels: its evidence must be
+    // dated after the 2026-11-05 direction fix (the bench's window came back that way in round
+    // fourteen, 2026-11-10). Anything else is the descent-fitted number returning.
     for (const [name, removed] of Object.entries(VELOCITY_OVERRIDES_REMOVED_2026_11_05)) {
-      for (const field of removed) expect((FITTED_OVERRIDES[name] ?? {})[field as keyof CameraTunables], `${name}.${field}`).toBeUndefined();
+      for (const field of removed) {
+        if ((FITTED_OVERRIDES[name] ?? {})[field as keyof CameraTunables] === undefined) continue;
+        const dated = /^(\d{4}-\d{2}-\d{2})/.exec(FITTED_OVERRIDE_EVIDENCE[name] ?? "")?.[1] ?? "";
+        expect(dated > "2026-11-05", `${name}.${field} is back without evidence dated after the direction fix`).toBe(true);
+      }
     }
   });
 });

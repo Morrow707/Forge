@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { summarizeTrackedSet, DRIVE_ONSET_FRACTION, VELOCITY_SMOOTHING_MS, MAX_PEAK_TO_MEAN_RATIO } from "./bar-tracking";
 import { firstMoveForExercise, romBucketForExercise } from "./exercise-camera-profile";
 import { reconcileScaleEstimates } from "./pose-tracking";
-import { cameraTunablesFor, FITTED_OVERRIDES, VELOCITY_OVERRIDES_REMOVED_2026_11_05 } from "@shared/camera-tunables-by-lift";
+import { cameraTunablesFor, FITTED_OVERRIDES, FITTED_OVERRIDE_EVIDENCE, VELOCITY_OVERRIDES_REMOVED_2026_11_05 } from "@shared/camera-tunables-by-lift";
 import { ledgerRow } from "@shared/accuracy-ledger";
 import { reconcileScaleEstimates as blendScales, rejectImplausibleScales } from "./pose-tracking";
 import {
@@ -56,12 +56,14 @@ const S = (o: any) => ({ mean: o.sensor.reported.meanVelocityMps as number, peak
 const CORRECTED: Record<string, { reps: number; romCm: number; mean: number; peak: number; sensor: { mean: number; peak: number } }> = {
   "2026-10-30 Pendlay Row set 1": { reps: 8, romCm: 51.1, mean: 0.75, peak: 1.33, sensor: S(OVR_PENDLAY_ROW_2026_10_30) },
   "2026-10-30 Barbell Shoulder Press set 1": { reps: 7, romCm: 63.9, mean: 0.85, peak: 1.66, sensor: S(OVR_BARBELL_SHOULDER_PRESS_2026_10_30) },
-  "2026-10-30 Bench Press set 1": { reps: 8, romCm: 37.1, mean: 0.90, peak: 1.32, sensor: S(OVR_BENCH_2026_10_30) },
+  // The bench's means moved 0.90 -> 0.86 and 0.97 -> 0.95 on 2026-11-10 (round fourteen, its own
+  // driveOnsetFraction 0.03, fitted on the DRIVES); its peaks and ranges did not move.
+  "2026-10-30 Bench Press set 1": { reps: 8, romCm: 37.1, mean: 0.86, peak: 1.32, sensor: S(OVR_BENCH_2026_10_30) },
   "2026-10-30 Pendlay Row set 2": { reps: 7, romCm: 78.4, mean: 1.18, peak: 1.91, sensor: S(OVR_PENDLAY_ROW_SET2_2026_10_30) },
   "2026-10-30 Barbell Shoulder Press set 2": { reps: 7, romCm: 56.2, mean: 0.71, peak: 1.29, sensor: S(OVR_BARBELL_SHOULDER_PRESS_SET2_2026_10_30) },
   "2026-10-30 Pendlay Row set 3": { reps: 8, romCm: 67.6, mean: 0.90, peak: 1.62, sensor: S(OVR_PENDLAY_ROW_SET3_2026_10_30) },
   "2026-10-30 Barbell Shoulder Press set 3": { reps: 7, romCm: 62.2, mean: 0.84, peak: 1.59, sensor: S(OVR_BARBELL_SHOULDER_PRESS_SET3_2026_10_30) },
-  "2026-10-30 Bench Press set 3": { reps: 7, romCm: 42.0, mean: 0.97, peak: 1.51, sensor: S(OVR_BENCH_SET3_2026_10_30) },
+  "2026-10-30 Bench Press set 3": { reps: 7, romCm: 42.0, mean: 0.95, peak: 1.51, sensor: S(OVR_BENCH_SET3_2026_10_30) },
 };
 
 describe("the 2026-10-30 export replays through each lift's own record", () => {
@@ -87,13 +89,16 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     }
   });
 
-  it("no lift on this export carries a velocity number of its own: the three fitted on the lowering are gone", () => {
+  it("no lift on this export carries a velocity number fitted on the lowering: the three are gone, and the bench's one window since is fitted on the drives", () => {
     expect(VELOCITY_OVERRIDES_REMOVED_2026_11_05["Bench Press"]).toEqual(["driveOnsetFraction", "velocitySmoothingMs", "maxPeakToMeanRatio"]);
     expect(VELOCITY_OVERRIDES_REMOVED_2026_11_05["Barbell Shoulder Press"]).toEqual(["driveOnsetFraction"]);
-    expect(FITTED_OVERRIDES["Bench Press"]).toBeUndefined();
+    // Round fourteen (2026-11-10) gave the bench a window again, fitted on the corrected labels and
+    // dated after the fix; the smoothing and the cap stay gone.
+    expect(FITTED_OVERRIDES["Bench Press"]).toEqual({ body3DCorrectedUncertainty: 0.25, driveOnsetFraction: 0.03 });
+    expect(FITTED_OVERRIDE_EVIDENCE["Bench Press"]).toMatch(/^2026-11-10, round fourteen/);
     expect(FITTED_OVERRIDES["Barbell Shoulder Press"]).toBeUndefined();
     expect(Object.keys(FITTED_OVERRIDES["Pendlay Row"])).toEqual(["depthRulerUncertainty"]);
-    for (const [name, bucket] of [["Bench Press", "horizontal_press_or_row"], ["Pendlay Row", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"]]) {
+    for (const [name, bucket] of [["Pendlay Row", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"]]) {
       const t = cameraTunablesFor(name, bucket);
       expect(t.values.driveOnsetFraction, name).toBe(DRIVE_ONSET_FRACTION);
       expect(t.values.velocitySmoothingMs, name).toBe(VELOCITY_SMOOTHING_MS);
@@ -264,8 +269,10 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     const f = byId("2026-10-30 Bench Press set 3");
     const row = ledgerRow("2026-10-30-bench-press-set-3");
     expect(f.trackingDiagnostics.calibration.objectGate.plateBoxToExpectedRatio).toBeCloseTo(0.849, 3);
-    // +5.5% as filmed; +3.58% through the live constants since round six's MAD-to-sigma correction
-    expect(row.liveErrorPct).toBeCloseTo(3.58, 1);
+    // +5.5% as filmed; +3.58% through the live constants after round six's MAD-to-sigma correction,
+    // and +3.91% since round fourteen's bench 3D-pose uncertainty 0.25 (2026-11-10), which moves the
+    // two plate-led bench rows 0.1-0.3 points the wrong way and the two without a plate 0.4-1.6 the right way
+    expect(row.liveErrorPct).toBeCloseTo(3.91, 1);
     expect(f.shipped.reps).toBe(8);
     const m = replay(f);
     expect(m.repBreakdown.length).toBe(7);
