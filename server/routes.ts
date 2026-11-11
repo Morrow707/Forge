@@ -35,6 +35,7 @@ import rateLimit from "express-rate-limit";
 import { setupAuth, requireAuth, requireRole, toPublicUser, toPublicUserWithSections } from "./auth";
 import { registerInstitutionalAgreementRoutes } from "./institutional-agreement-routes";
 import { registerEmailListRoutes } from "./email-list";
+import { registerVelocityZoneRoutes } from "./velocity-zones";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import {
   getEntitlements,
@@ -1661,6 +1662,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   registerInstitutionalAgreementRoutes(app);
   registerEmailListRoutes(app);
+  registerVelocityZoneRoutes(app);
   // attachNativeTokenAuth is mounted inside setupAuth itself now (before the
   // auth routes it needs to cover) -- see its own comment there for why.
   // Keeps "see who's logged in"'s lastSeenAt reasonably fresh -- reads

@@ -15,6 +15,7 @@ const SkillDayViewDialog = lazyDialog(() => import("@/components/skill-day-view-
 import { CoachDigestBanner } from "@/components/coach-digest-banner";
 import { WeeklyDigestCard } from "@/components/weekly-digest-card";
 import { TeamPrWallCard } from "@/components/team-pr-wall-card";
+import { BarSpeedWeekCard } from "@/components/bar-speed-week-card";
 import { ReviewQueueCard } from "@/components/review-queue-card";
 import { ReengagementBanner } from "@/components/reengagement-banner";
 import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
@@ -173,6 +174,8 @@ export default function CoachDashboard() {
     // point of the whole queue.
     "review-queue",
     "weekly-digest",
+    // Between This Week and Team PR Wall: only the athletes whose bar speed left their zone.
+    "bar-speed",
     "team-pr-wall",
     "reengagement",
     "next-3-days",
@@ -226,6 +229,17 @@ export default function CoachDashboard() {
         onToggle={widgetVisibility.setHidden}
       >
         <WeeklyDigestCard />
+      </SortableHideableWidget>
+    ),
+    "bar-speed": (
+      <SortableHideableWidget
+        id="bar-speed"
+        label="Bar Speed"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("bar-speed")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <BarSpeedWeekCard />
       </SortableHideableWidget>
     ),
     "team-pr-wall": (

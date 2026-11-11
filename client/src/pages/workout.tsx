@@ -6,6 +6,7 @@ import { shedTracesToFit, describeShed } from "@shared/shed-traces-to-fit";
 import { useParams, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
+import { VelocityZonePanel } from "@/components/velocity-zone-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -3688,6 +3689,9 @@ function ExerciseLogContent({
             : ""}
           {item.restSeconds ? ` · Rest ${item.restSeconds}s` : ""}
         </p>
+        {item.kind === "exercise" && item.trackingLevel === "full" && (
+          <VelocityZonePanel exerciseId={item.exerciseId} exerciseName={item.exerciseName} speeds={item.sets.map((s) => s.meanVelocityMps ?? null)} />
+        )}
         <div>
           {suggestedFromOneRm != null && item.weightMode === "numeric" && (
             <div className="mt-0.5 flex items-center gap-1.5 text-xs">

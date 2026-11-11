@@ -1,3 +1,4 @@
+import { BarSpeedTab } from "@/components/bar-speed-tab";
 import { format } from "date-fns";
 import { useState } from "react";
 import { useParams, useLocation, useSearch } from "wouter";
@@ -620,6 +621,7 @@ export default function AthleteDetailPage() {
               <TabsList className="h-auto flex-wrap justify-start">
                 <TabsTrigger value="metrics">Body Metrics</TabsTrigger>
                 <TabsTrigger value="testing">Testing History</TabsTrigger>
+                <TabsTrigger value="bar-speed">Bar Speed</TabsTrigger>
                 <TabsTrigger value="rom">Goniometer</TabsTrigger>
                 <TabsTrigger value="movement-screen">Movement Screen</TabsTrigger>
                 <TabsTrigger value="weakness">Weakness Report</TabsTrigger>
@@ -658,6 +660,10 @@ export default function AthleteDetailPage() {
                   </CardContent>
                 </Card>
                 <ImportedTestingDataPanel athleteId={athlete.id} />
+              </TabsContent>
+
+              <TabsContent value="bar-speed">
+                <BarSpeedTab athleteId={athlete.id} athleteName={athlete.name} />
               </TabsContent>
 
               <TabsContent value="rom">

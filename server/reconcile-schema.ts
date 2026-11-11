@@ -3872,6 +3872,32 @@ CREATE TABLE IF NOT EXISTS "exercise_video_runs" (
   "applied_at" timestamp,
   "written" integer
 );
+
+-- Velocity zones (2026-11-11): a target bar speed per athlete per lift. See server/velocity-zones.ts.
+CREATE TABLE IF NOT EXISTS "velocity_zones" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "exercise_id" integer NOT NULL REFERENCES "exercises"("id") ON DELETE CASCADE,
+  "low_mps" real NOT NULL,
+  "high_mps" real NOT NULL,
+  "goal" text,
+  "note" text,
+  "set_by_user_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "velocity_zones_athlete_exercise_idx" ON "velocity_zones" ("athlete_id", "exercise_id");
+
+-- What people ask Hardy (2026-11-11): counts for the admin report, never the question. See server/hardy.ts.
+CREATE TABLE IF NOT EXISTS "hardy_question_events" (
+  "id" serial PRIMARY KEY,
+  "day" date NOT NULL,
+  "asker_key" text NOT NULL,
+  "user_group" text NOT NULL,
+  "kind" text NOT NULL,
+  "words" json NOT NULL DEFAULT '[]'::json,
+  "outcome" text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "hardy_question_events_day_idx" ON "hardy_question_events" ("day");
 `;
 
 async function main() {

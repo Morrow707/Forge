@@ -6048,6 +6048,55 @@ export const exerciseVideoRuns = pgTable("exercise_video_runs", {
 });
 export type ExerciseVideoRun = typeof exerciseVideoRuns.$inferSelect;
 
+// VELOCITY ZONES (2026-11-11): a target bar speed per athlete per lift. Each camera set's mean
+// velocity is read against it as in zone / slow / fast (shared/velocity-zones.ts). A coach sets a
+// coached athlete's; a Free Agent, coach or admin sets their own. The tags only describe a set;
+// nothing here changes a prescription. See server/velocity-zones.ts.
+export const velocityZones = pgTable(
+  "velocity_zones",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    exerciseId: integer("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    lowMps: real("low_mps").notNull(),
+    highMps: real("high_mps").notNull(),
+    goal: text("goal"),
+    note: text("note"),
+    setByUserId: integer("set_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteExerciseIdx: uniqueIndex("velocity_zones_athlete_exercise_idx").on(table.athleteId, table.exerciseId),
+  }),
+);
+export type VelocityZone = typeof velocityZones.$inferSelect;
+
+// WHAT PEOPLE ASK HARDY (2026-11-11), for the admin report. One row per question, recording only
+// its kind, which of Forge's own words it matched (a fixed list in shared/hardy-vocabulary.ts, so
+// nothing a person typed can land here), how Hardy did, the asker's group and the day. Never the
+// question. `askerKey` is a keyed hash of the account id, kept only so the report can count
+// DIFFERENT people behind a row and hide any row fewer than ten people are behind; nothing maps
+// it back to an account. See server/hardy.ts.
+export const hardyQuestionEvents = pgTable(
+  "hardy_question_events",
+  {
+    id: serial("id").primaryKey(),
+    day: date("day").notNull(),
+    askerKey: text("asker_key").notNull(),
+    userGroup: text("user_group").notNull(),
+    kind: text("kind").notNull(),
+    words: json("words").$type<string[]>().notNull().default([]),
+    outcome: text("outcome").notNull(),
+  },
+  (table) => ({
+    dayIdx: index("hardy_question_events_day_idx").on(table.day),
+  }),
+);
+
 export const adminSavedViews = pgTable("admin_saved_views", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),

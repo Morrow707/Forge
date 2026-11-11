@@ -52,6 +52,8 @@ export const NUMERIC_ROUTE_PARAMS = [
   // and caught by numeric-route-params.test.ts rather than remembered.
   "setId",
   "pageNumber",
+  // The velocity-zone team route (POST /api/coach/teams/:teamId/velocity-zones/:exerciseId).
+  "teamId",
 ] as const;
 
 /** Whitespace, "", "1.5", "1e3", "0x1", "abc", "0", "-1" and Number's other
