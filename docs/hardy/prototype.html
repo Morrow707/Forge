@@ -1,0 +1,1907 @@
+<title>Hardy the Hammer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: a phone-width Forge mock on the left, the prototype's test controls on the right (stacked on a phone). Hardy floats in the mock's corner. */
+:root {
+  --bg: #f4f2f0;
+  --surface: #ffffff;
+  --surface-2: #efebe7;
+  --fg: #1c1714;
+  --muted: #6d625b;
+  --line: #ddd5ce;
+  --forge: #c6431a;
+  --forge-soft: #fbe6dd;
+  --good: #2f7d4f;
+  --warn: #a8660c;
+  --hardy-dark: #141010;
+  --hardy-red: #c8102e;
+  --pulse: rgba(198, 67, 26, 0.35);
+  --hardy-ring: #fbf6f2;
+  --font-display: "Barlow Condensed", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141110; --surface: #1d1917; --surface-2: #272220; --fg: #f1ebe6; --muted: #a59990;
+    --line: #3a322e; --forge: #ec6a3c; --forge-soft: #3b2219; --good: #5fbf86; --warn: #e2a24a;
+    --hardy-dark: #0a0808; --hardy-red: #e0223f; --pulse: rgba(236, 106, 60, 0.4); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141110; --surface: #1d1917; --surface-2: #272220; --fg: #f1ebe6; --muted: #a59990;
+  --line: #3a322e; --forge: #ec6a3c; --forge-soft: #3b2219; --good: #5fbf86; --warn: #e2a24a;
+  --hardy-dark: #0a0808; --hardy-red: #e0223f; --pulse: rgba(236, 106, 60, 0.4); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.01em; text-wrap: balance; margin: 0; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--forge); outline-offset: 2px; }
+.wrap { max-width: 1060px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); } }
+.intro { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.intro h1 { font-size: 34px; }
+.intro p { margin: 0; color: var(--muted); max-width: 70ch; }
+.tag { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 8px; border-radius: 999px; background: var(--forge-soft); color: var(--forge); font-weight: 600; }
+
+/* ---------- the phone ---------- */
+.phone { position: relative; width: 100%; max-width: 400px; height: 760px; border-radius: 30px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 18px 40px rgba(0,0,0,0.12); }
+.appbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; border-bottom: 1px solid var(--line); }
+.appbar .brand { font-family: var(--font-display); font-size: 22px; letter-spacing: 0.06em; color: var(--forge); }
+.appbar .who { font-size: 12px; color: var(--muted); flex: 1; min-width: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.appbar { gap: 10px; }
+.appbar .pbtn { border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 4px 10px; font-size: 12px; }
+.screen { flex: 1; overflow-y: auto; padding: 14px 16px 90px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
+.nav { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--line); background: var(--surface); }
+.nav button { background: none; border: 0; padding: 10px 0 12px; font-size: 12px; color: var(--muted); }
+.nav button[aria-current="page"] { color: var(--forge); font-weight: 600; }
+.card { background: var(--surface-2); border-radius: 14px; padding: 12px 14px; }
+.card h3 { font-size: 18px; margin-bottom: 6px; }
+.row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); }
+.row:first-of-type { border-top: 0; }
+.row .k { min-width: 0; }
+.row .v { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); }
+.sub { font-size: 12px; color: var(--muted); }
+.daynav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.daynav button { background: var(--surface-2); border: 0; border-radius: 10px; padding: 6px 12px; }
+.caveat { font-size: 11px; color: var(--warn); }
+.hl { animation: pulse 1.6s ease-out 2; border-radius: 8px; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 var(--pulse); background: var(--forge-soft); } 100% { box-shadow: 0 0 0 12px transparent; } }
+@media (prefers-reduced-motion: reduce) { .hl { animation: none; background: var(--forge-soft); outline: 2px solid var(--forge); } .screen { scroll-behavior: auto; } }
+.chart { width: 100%; height: auto; display: block; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 10px; font-size: 12px; }
+.recbar { display: flex; gap: 8px; }
+.recbar button { flex: 1; border: 0; border-radius: 12px; padding: 10px; background: var(--forge); color: #fff; font-weight: 600; }
+.recbar button.ghost { background: var(--surface-2); color: var(--fg); }
+.recording-banner { background: var(--hardy-red); color: #fff; border-radius: 12px; padding: 10px 12px; font-weight: 600; text-align: center; }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.keypad span { background: var(--surface); border-radius: 10px; text-align: center; padding: 10px 0; font-variant-numeric: tabular-nums; }
+
+/* ---------- Hardy ---------- */
+.hardy-btn { position: absolute; bottom: 70px; right: 14px; width: 62px; height: 62px; border-radius: 50%; border: 2px solid var(--hardy-red); background: var(--hardy-ring); box-shadow: 0 6px 18px rgba(0,0,0,0.25); display: grid; place-items: center; z-index: 5; transition: transform 0.15s ease; touch-action: none; }
+.hardy-btn:hover { transform: rotate(-12deg); }
+.hardy-btn.left { right: auto; left: 14px; }
+.hardy-btn svg { width: 46px; height: 46px; }
+.panel { position: absolute; left: 10px; right: 10px; bottom: 140px; max-height: 520px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 14px 36px rgba(0,0,0,0.28); display: flex; flex-direction: column; z-index: 6; overflow: hidden; }
+.panel header { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: linear-gradient(90deg, var(--hardy-dark), var(--hardy-red)); color: #fff; }
+#panelIcon { width: 36px; height: 36px; flex: none; border-radius: 50%; background: var(--hardy-ring); display: grid; place-items: center; }
+.panel header svg { width: 28px; height: 28px; flex: none; }
+.panel header .t { flex: 1; min-width: 0; }
+.panel header strong { font-family: var(--font-display); font-size: 19px; letter-spacing: 0.03em; display: block; }
+.panel header small { opacity: 0.85; font-size: 11px; }
+.panel header button { background: rgba(255,255,255,0.16); border: 0; border-radius: 8px; padding: 4px 9px; color: #fff; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line); }
+.tabs button { background: none; border: 0; padding: 8px; font-size: 13px; color: var(--muted); }
+.tabs button[aria-selected="true"] { color: var(--fg); font-weight: 600; box-shadow: inset 0 -2px 0 var(--hardy-red); }
+.log { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; min-height: 120px; }
+.msg { max-width: 88%; padding: 8px 11px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.me { align-self: flex-end; background: var(--forge); color: #fff; border-bottom-right-radius: 4px; }
+.msg.hardy { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; }
+.msg .src { display: block; margin-top: 5px; font-size: 11px; color: var(--muted); }
+.goto { margin-top: 7px; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 9px; padding: 6px 10px; background: var(--hardy-dark); color: #fff; font-size: 12px; font-weight: 600; }
+.composer { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
+.composer input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); border-radius: 10px; padding: 9px 10px; font: inherit; }
+.composer button { border: 0; border-radius: 10px; padding: 0 12px; background: var(--hardy-red); color: #fff; font-weight: 600; }
+.draft { margin-top: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; display: grid; gap: 6px; }
+.draft h4 { margin: 0; font-family: var(--font-display); font-size: 16px; }
+.draft .dday { font-size: 12px; }
+.draft .dday b { display: block; }
+.draft .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.draft .acts button { border: 0; border-radius: 9px; padding: 6px 10px; font-size: 12px; font-weight: 600; background: var(--surface-2); }
+.draft .acts button.yes { background: var(--good); color: #fff; }
+.foot { padding: 4px 12px 8px; font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.results { flex: 1; overflow-y: auto; padding: 6px 12px 10px; min-height: 120px; }
+.result { display: block; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line); padding: 8px 2px; }
+.result b { font-size: 12px; color: var(--muted); font-weight: 600; display: block; }
+
+/* ---------- test controls ---------- */
+.side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+.box h2 { font-size: 20px; margin-bottom: 8px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { border: 1px solid var(--line); background: var(--surface-2); border-radius: 9px; padding: 6px 10px; font-size: 13px; }
+.seg button[aria-pressed="true"] { background: var(--forge); border-color: var(--forge); color: #fff; }
+.box p { margin: 6px 0 0; color: var(--muted); font-size: 13px; max-width: 65ch; }
+.list { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; display: grid; gap: 4px; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.tile { background: var(--surface-2); border-radius: 14px; padding: 10px 12px; display: grid; gap: 2px; }
+.tile b { font-family: var(--font-display, inherit); font-size: 24px; font-variant-numeric: tabular-nums; }
+.tile span { font-size: 12px; color: var(--muted); }
+.chg { font-size: 11px; color: var(--muted); white-space: nowrap; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.chg.up { color: var(--forge); }
+.abar { display: grid; grid-template-columns: 92px minmax(0, 1fr) 40px 58px; gap: 8px; align-items: center; font-size: 12px; padding: 4px 0; }
+.abar.miss { grid-template-columns: 110px minmax(0, 1fr) 40px; }
+.abar i { display: block; height: 8px; border-radius: 4px; background: var(--forge); }
+.abar span:nth-child(3) { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.wtable { display: grid; margin-top: 8px; }
+.wrow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto 64px; gap: 8px; align-items: center; text-align: left; background: none; border: 0; border-top: 1px solid var(--line); padding: 7px 0; font: inherit; color: inherit; cursor: pointer; }
+.wrow:first-child { border-top: 0; }
+.wrow .rk { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.wrow .wd { min-width: 0; overflow-wrap: anywhere; }
+.wrow small { display: block; font-size: 11px; color: var(--muted); }
+.wrow .v { font-variant-numeric: tabular-nums; }
+.wrow .chg { text-align: right; }
+.wdetail { padding: 2px 0 8px 30px; }
+.chip[aria-pressed="true"] { background: var(--forge); border-color: var(--forge); color: #fff; }
+.looks { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-top: 8px; }
+.look { display: grid; justify-items: center; gap: 2px; padding: 10px 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-align: center; font: inherit; color: inherit; cursor: pointer; }
+.look[aria-pressed="true"] { border: 2px solid var(--forge); padding: 9px 5px; }
+.lookart { width: 58px; height: 58px; border-radius: 50%; background: var(--hardy-ring); border: 2px solid var(--hardy-red); display: grid; place-items: center; }
+.lookart svg { width: 44px; height: 44px; }
+.look b { font-size: 13px; margin-top: 4px; }
+.look small { font-size: 11px; color: var(--muted); line-height: 1.3; }
+.bars { display: grid; gap: 6px; margin-top: 6px; }
+.bar { display: grid; grid-template-columns: 90px minmax(0, 1fr) 30px; gap: 8px; align-items: center; font-size: 12px; }
+.bar i { display: block; height: 8px; border-radius: 4px; background: var(--forge); }
+.bar span:last-child { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+label.sw { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 6px; }
+
+.kv .row .v, .acard .row .v { white-space: normal; text-align: right; overflow-wrap: anywhere; min-width: 0; }
+.kv .row .k { flex: none; }
+.pill { font-family: var(--font-body); font-size: 11px; font-weight: 600; background: var(--forge-soft); color: var(--forge); border-radius: 999px; padding: 2px 8px; vertical-align: middle; }
+.meter { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 2px 0 4px; }
+.meter i { display: block; height: 100%; background: var(--forge); }
+.scanbox { border: 2px dashed var(--line); border-radius: 12px; padding: 28px 10px; text-align: center; color: var(--muted); margin-bottom: 8px; }
+.back { align-self: flex-start; background: none; border: 0; color: var(--forge); font-weight: 600; padding: 0; }
+.report h3 { font-size: 22px; }
+.rh { font-family: var(--font-display); font-size: 16px; margin: 12px 0 4px; }
+.rp { margin: 4px 0; white-space: pre-wrap; }
+.tw { overflow-x: auto; margin: 6px 0; }
+.tw table { border-collapse: collapse; font-size: 12px; width: 100%; font-variant-numeric: tabular-nums; }
+.tw th, .tw td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.tw th { color: var(--muted); font-weight: 600; }
+.rbars { display: grid; gap: 4px; margin: 6px 0; }
+.rbar { display: grid; grid-template-columns: 82px minmax(0, 1fr) 54px; gap: 6px; align-items: center; font-size: 11px; font-variant-numeric: tabular-nums; }
+.rbar .track { position: relative; height: 9px; background: var(--line); border-radius: 4px; }
+.rbar .track i { position: absolute; inset: 0 auto 0 0; background: var(--forge); border-radius: 4px; }
+.rbar .track em { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--fg); }
+.rbar span:last-child { text-align: right; color: var(--muted); }
+.hardyhead { display: flex; align-items: center; gap: 10px; }
+.hardyhead > div { flex: 1; min-width: 0; }
+.hicon svg { width: 40px; height: 40px; display: block; }
+.big { font-family: var(--font-display); font-size: 40px; line-height: 1; color: var(--hardy-red); }
+.goal { padding: 4px 0; }
+.linkish { background: none; border: 0; padding: 0; color: var(--forge); text-align: left; font-weight: 600; min-width: 0; }
+.macts { display: flex; flex-wrap: wrap; gap: 6px; }
+.ghostgo { background: var(--surface); color: var(--fg); border: 1px solid var(--line); }
+.acard { margin-top: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; display: grid; gap: 4px; }
+.acard h4 { margin: 0; font-family: var(--font-display); font-size: 16px; }
+.acard .acts { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+.acard .acts button { border: 0; border-radius: 9px; padding: 6px 12px; font-size: 12px; font-weight: 600; background: var(--surface-2); }
+.acard .acts button.yes { background: var(--good); color: #fff; }
+.wrapv { white-space: normal !important; text-align: right; overflow-wrap: anywhere; }
+.ok { color: var(--good); }
+.photo { border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 0 10px; display: grid; place-items: center; font-size: 12px; cursor: pointer; }
+.tip { position: absolute; right: 84px; bottom: 82px; max-width: 220px; background: var(--hardy-dark); color: #fff; border-radius: 12px 12px 2px 12px; padding: 8px 28px 8px 10px; font-size: 12px; z-index: 5; box-shadow: 0 6px 16px rgba(0,0,0,0.25); }
+.tip.left { right: auto; left: 84px; border-radius: 12px 12px 12px 2px; }
+.tip button { position: absolute; top: 4px; right: 4px; background: none; border: 0; color: #fff; opacity: 0.8; padding: 2px 6px; }
+.offbox { border-color: var(--warn); }
+.rule { font-size: 12px; color: var(--warn); margin: 2px 0 6px 26px; max-width: 60ch; }
+table.tiers { border-collapse: collapse; font-size: 12px; width: 100%; margin-top: 6px; }
+table.tiers th, table.tiers td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.tiers th { color: var(--muted); font-weight: 600; }
+.view { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.view[hidden] { display: none !important; }
+</style>
+
+<div class="wrap">
+  <div class="intro">
+    <h1>Hardy the Hammer</h1>
+    <span class="tag">Prototype · sample data</span>
+    <p>A working test of Forge's all-in-one assistant. The athletes, meals and lifts are invented sample data, and the screens are simplified stand-ins for Forge's real pages. Tap Hardy in the phone's corner: ask about any day, tell him what to change, or ask for a report. He takes you to the page, and nothing changes until you confirm.</p>
+  </div>
+
+  <div>
+    <div class="phone" id="phone">
+      <div class="appbar"><span class="brand">FORGE</span><span class="who" id="who"></span><button class="pbtn" id="profileBtn">Profile</button></div>
+      <div class="screen" id="screen" tabindex="-1"></div>
+      <nav class="nav" id="nav" aria-label="App pages">
+        <button data-page="home">Home</button>
+        <button data-page="day">Training</button>
+        <button data-page="nutrition">Nutrition</button>
+        <button data-page="progress">Progress</button>
+        <button data-page="hardy">Hardy</button>
+      </nav>
+      <div class="tip" id="tip" hidden><span id="tipText"></span><button id="tipClose" aria-label="Dismiss tip">×</button></div>
+      <button class="hardy-btn" id="hardyBtn" aria-label="Open Hardy the Hammer" aria-expanded="false"></button>
+      <section class="panel" id="panel" hidden aria-label="Hardy the Hammer">
+        <header>
+          <span id="panelIcon"></span>
+          <div class="t"><strong>Hardy the Hammer</strong><small id="modeLine"></small></div>
+          <button id="closeBtn" aria-label="Close Hardy">Close</button>
+        </header>
+        <div class="tabs" role="tablist">
+          <button role="tab" id="tabAsk" aria-selected="true">Ask Hardy</button>
+          <button role="tab" id="tabSearch" aria-selected="false">Search</button>
+        </div>
+        <div id="askView" class="view">
+          <div class="log" id="log" aria-live="polite"></div>
+          <div class="composer">
+            <label class="photo" for="photoInput" title="Log a meal from a photo">Photo</label>
+            <input type="file" id="photoInput" accept="image/*" hidden>
+            <input id="askInput" placeholder="Ask, or tell Hardy what to change" autocomplete="off">
+            <button id="askBtn">Ask</button>
+          </div>
+          <div class="foot"><span id="capLine"></span><span id="engineLine"></span></div>
+        </div>
+        <div id="searchView" class="view" hidden>
+          <div class="composer" style="border-top:0;border-bottom:1px solid var(--line)">
+            <input id="searchInput" placeholder="Search: squat, chicken, knee, 7/14" autocomplete="off">
+          </div>
+          <div class="results" id="results"></div>
+          <div class="foot"><span>Search is free and works without AI.</span></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="side">
+    <div class="box">
+      <h2>Who is using the app</h2>
+      <div class="seg" id="roles">
+        <button data-role="coached">Coached athlete</button>
+        <button data-role="free_basic">Free Agent · Basic</button>
+        <button data-role="free_ai">Free Agent · AI Coach</button>
+        <button data-role="coach">Head coach</button>
+        <button data-role="assistant">Assistant coach</button>
+        <button data-role="admin">Forge admin</button>
+      </div>
+      <p id="roleNote"></p>
+      <table class="tiers">
+        <thead><tr><th>Plan</th><th>What Hardy does</th></tr></thead>
+        <tbody>
+          <tr><td>Everyone</td><td>Find, search, Take me there, app help</td></tr>
+          <tr><td>Coached athlete</td><td>+ changes, logging by talking, goals, meet mode, reports, notes to coach. No advice, no programs.</td></tr>
+          <tr><td>AI Coach ($9.99)</td><td>+ everything, including advice, next-session weights and program building</td></tr>
+          <tr><td>Coaches</td><td>+ the roster, "worth a look", roster reports, messages to athletes</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="box">
+      <h2>Try these</h2>
+      <div class="chips" id="tryChips"></div>
+      <p>Every number comes from the logs and every answer names its source. Changes show a card first; nothing happens until you tap the button.</p>
+    </div>
+
+    <div class="box">
+      <h2>Hardy stays out of the way</h2>
+      <div class="seg">
+        <button id="recBtn">Simulate camera recording</button>
+        <button id="logBtn">Simulate logging a set</button>
+      </div>
+      <p>Hardy hides while the camera records or the rep keypad is open.</p>
+      <label class="sw"><input type="checkbox" id="hideHardy"> Turn Hardy off (Settings)</label>
+      <label class="sw"><input type="checkbox" id="leftCorner"> Move Hardy to the left corner</label>
+    </div>
+
+    <div class="box offbox">
+      <h2>Things I'd leave out (off by default)</h2>
+      <label class="sw"><input type="checkbox" id="optProactive"> Hardy speaks first with tips</label>
+      <p class="rule">Off because an assistant that interrupts gets turned off. On here, Hardy shows one tip per page beside his button.</p>
+      <label class="sw"><input type="checkbox" id="optRead"> Read answers aloud</label>
+      <p class="rule">Off because read-aloud was switched off in Forge on 2026-10-04 until people ask for it. On here, each answer gets a Read aloud button. <span id="readNote"></span></p>
+      <label class="sw"><input type="checkbox" id="optMsg"> Athletes can message other athletes</label>
+      <p class="rule">Off because Forge's rule is zero contact between athletes, to keep minors safe. On here, "tell Jordan nice lift" works for athletes too. Coach-to-athlete messages always work.</p>
+    </div>
+
+    <div class="box">
+      <h2>Guardrails</h2>
+      <ul class="list">
+        <li>Pricing: Basic gets the finder; AI Coach unlocks advice, changes and reports, so Hardy can't give the $9.99 tier away.</li>
+        <li>No medical answers on any plan. "My knee hurts" gets "see a doctor or athletic trainer" and an injury-notes report to show them.</li>
+        <li>Hardy never changes a password, deletes an account or removes a coach. An email change waits for the link sent to the new address.</li>
+        <li>Patterns are observations, never cause and effect. Camera numbers carry the accuracy note.</li>
+        <li>For counsel before launch: Hardy reads a minor's whole history and sends parts of it to the AI provider.</li>
+      </ul>
+    </div>
+
+    <div class="box">
+      <h2>What people ask about</h2>
+      <p>Hardy records the kind of question and which of Forge's own words it matched, never what was typed. Your questions in this test, by kind:</p>
+      <div class="bars" id="bars"></div>
+      <div class="seg" style="margin-top:10px"><button id="openAdmin">Open the admin report</button></div>
+    </div>
+
+    <div class="box">
+      <h2>Built into this test</h2>
+      <ul class="list">
+        <li>Hammer in the corner, black to red; tap to open and close. Plain search tab with no AI.</li>
+        <li>Deep questions: heaviest lift, diet before it, weekly volume, time between PRs, the program block.</li>
+        <li>Changes with confirm cards: email, phone, height, body weight, nutrition targets, moving a planned workout.</li>
+        <li>Logging by talking: food, a meal photo, check-ins, "scan this" for the barcode scanner.</li>
+        <li>Schedule help, reminders, goals with real pace, meet mode with a countdown.</li>
+        <li>Hardy tab: 13 reports with PDF download and send to coach, weekly recap (opt-in), notes from athletes for coaches.</li>
+        <li>Recommendations for AI Coach and coaches: next-session weights from your check-ins, deload weeks, protein gaps.</li>
+        <li>Chats are not saved. Reports are, because you chose to save them. 50 questions a day.</li>
+        <li>With AI allowed here, Hardy answers through Claude using the same functions; without it, his built-in finder answers.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(() => {
+  "use strict";
+  // ================= SAMPLE DATA (invented; no real person) =================
+  const TODAY = "2026-11-10", END = "2026-11-15", DAILY_CAP = 50;
+  let seed = 7;
+  const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+  const pick = (a) => a[Math.floor(rnd() * a.length)];
+  const iso = (d) => d.toISOString().slice(0, 10);
+  const addDays = (s, n) => { const d = new Date(s + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
+  const WD = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+  const weekday = (s) => WD[new Date(s + "T12:00:00Z").getUTCDay()];
+  const nice = (s) => { const d = new Date(s + "T12:00:00Z"); return `${WD[d.getUTCDay()].slice(0, 3)}, ${MONTHS[d.getUTCMonth()][0].toUpperCase()}${MONTHS[d.getUTCMonth()].slice(1, 3)} ${d.getUTCDate()}`; };
+  const daysBetween = (a, b) => Math.round((new Date(b + "T12:00:00Z") - new Date(a + "T12:00:00Z")) / 864e5);
+  const mondayOf = (d) => { let x = d; while (weekday(x) !== "Monday") x = addDays(x, -1); return x; };
+
+  const FOODS = {
+    breakfast: [["Eggs, 3 scrambled", 215, 19, 2, 15], ["Oatmeal with banana", 360, 10, 68, 6], ["Greek yogurt and berries", 240, 22, 28, 4], ["Bagel with peanut butter", 470, 16, 60, 18]],
+    lunch: [["Chicken burrito bowl", 720, 48, 80, 20], ["Turkey sandwich", 520, 34, 52, 16], ["Salmon and rice", 650, 42, 62, 22], ["Chicken Caesar wrap", 610, 40, 44, 28]],
+    dinner: [["Steak, potatoes, broccoli", 780, 55, 60, 30], ["Spaghetti with meat sauce", 820, 42, 104, 22], ["Grilled chicken and sweet potato", 640, 52, 58, 14], ["Tacos, 3 beef", 690, 36, 54, 34]],
+    snack: [["Protein shake", 180, 30, 6, 3], ["Apple and almonds", 260, 7, 26, 15], ["Chocolate milk", 210, 8, 30, 5], ["Granola bar", 190, 4, 29, 7]],
+  };
+  const ALL_FOODS = Object.entries(FOODS).flatMap(([meal, list]) => list.map((f) => ({ meal, name: f[0], kcal: f[1], protein: f[2], carbs: f[3], fat: f[4] })));
+  const BARCODE_ITEM = { meal: "snack", name: "Protein bar (scanned)", kcal: 230, protein: 20, carbs: 24, fat: 8 };
+  const PLAN = { Monday: "Lower A", Tuesday: "Upper A", Thursday: "Lower B", Friday: "Upper B" };
+  const LIFTS = {
+    "Lower A": [["Back Squat", 3, 5, 275], ["Romanian Deadlift", 3, 8, 205], ["Walking Lunge", 3, 10, 50]],
+    "Upper A": [["Bench Press", 4, 6, 205], ["Pendlay Row", 4, 6, 175], ["Dumbbell Shoulder Press", 3, 10, 50]],
+    "Lower B": [["Power Clean", 5, 2, 185], ["Back Squat", 4, 3, 295], ["Box Jump", 4, 3, 0]],
+    "Upper B": [["Bench Press", 5, 3, 225], ["Pull-Up", 4, 8, 0], ["Barbell Shoulder Press", 3, 6, 115]],
+  };
+  const MAIN_LIFTS = ["Back Squat", "Bench Press", "Power Clean", "Romanian Deadlift", "Pendlay Row"];
+  const CAMERA_LIFTS = new Set(["Back Squat", "Bench Press", "Romanian Deadlift", "Pendlay Row", "Power Clean"]);
+  const NOTES = ["Knee felt tight on the first warm-up set.", "Bar speed felt quick today.", "Slept badly, kept it smooth.", "Coach said keep elbows tucked on bench.", "Grip gave out on the last set.", "New belt, felt solid.", "Hips a little sore from sprints."];
+  const INJURY_NOTES = ["Left hamstring felt tight after sprints.", "Right shoulder achy on overhead work.", "Lower back stiff in the morning."];
+  const BLOCKS = [
+    { name: "Base", from: "2026-06-01", to: "2026-07-26", focus: "Volume and technique: sets of 5-10 at RPE 6-7.", by: "Coach Sample" },
+    { name: "Strength", from: "2026-07-27", to: "2026-09-20", focus: "Heavier triples and fives at RPE 7-8, power cleans added.", by: "Coach Sample" },
+    { name: "Peak", from: "2026-09-21", to: "2026-11-15", focus: "Heavy doubles and triples, lower volume, every 4th week a deload.", by: "Coach Sample" },
+  ];
+  const blockAt = (d) => BLOCKS.find((b) => d >= b.from && d <= b.to) || null;
+
+  function buildAthlete(name, start, weekBump, sport, profile, meets) {
+    const days = {}, tests = [];
+    let d = start, i = 0;
+    while (d <= END) {
+      const wd = weekday(d), week = Math.floor(i / 7), future = d > TODAY;
+      const b = blockAt(d);
+      const deload = b && Math.floor(daysBetween(b.from, d) / 7) % 4 === 3;
+      const day = { date: d, foods: [], workout: null, checkin: null };
+      if (!future) {
+        ["breakfast", "lunch", "dinner", "snack"].forEach((meal, mi) => {
+          if (meal === "snack" && rnd() < 0.35) return;
+          const f = pick(FOODS[meal]);
+          day.foods.push({ id: `${d}-f${mi}`, meal, name: f[0], kcal: f[1], protein: f[2], carbs: f[3], fat: f[4], sodiumMg: Math.round(300 + rnd() * 900), ironMg: +(1 + rnd() * 5).toFixed(1) });
+        });
+        if (rnd() < 0.85) {
+          const injury = rnd() < 0.04 ? pick(INJURY_NOTES) : "";
+          day.checkin = { sleep: +(6 + rnd() * 3).toFixed(1), soreness: injury ? 4 : 1 + Math.floor(rnd() * 4), note: injury || (rnd() < 0.2 ? pick(NOTES) : ""), injury: !!injury };
+        }
+      }
+      if (PLAN[wd] && (future || rnd() < 0.92)) {
+        const title = PLAN[wd];
+        const sets = [];
+        LIFTS[title].forEach(([ex, n, reps, base], ei) => {
+          let load = base ? Math.round((base + week * weekBump + (rnd() - 0.5) * 20) / 5) * 5 : 0;
+          if (deload && load) load = Math.round((load * 0.85) / 5) * 5;
+          for (let s = 1; s <= n; s++) {
+            const r = { id: `${d}-s${ei}-${s}`, exercise: ex, set: s, reps, load };
+            if (!future) { r.rpe = +(6.5 + rnd() * 2.5).toFixed(1); if (CAMERA_LIFTS.has(ex) && load) r.velocity = +(1.0 - 0.55 * (load / (base * 1.45)) + (rnd() - 0.5) * 0.06).toFixed(2); }
+            sets.push(r);
+          }
+        });
+        day.workout = { title, sets, planned: future, note: !future && rnd() < 0.3 ? pick(NOTES) : "" };
+      }
+      if (d.endsWith("-01") || d === start) tests.push({ date: d, forty: +(5.05 - week * 0.006 + (rnd() - 0.5) * 0.06).toFixed(2), vertical: +(28 + week * 0.08 + (rnd() - 0.5) * 1.2).toFixed(1), broad: Math.round(108 + week * 0.25 + (rnd() - 0.5) * 3) });
+      days[d] = day;
+      d = addDays(d, 1); i++;
+    }
+    const weighIns = [];
+    for (let w = start; w <= TODAY; w = addDays(w, 7)) weighIns.push({ date: w, lb: Math.round((profile.startLb + daysBetween(start, w) * 0.03 + (rnd() - 0.5) * 2) * 10) / 10 });
+    return { name, sport, days, tests, meets, profile: { ...profile, weighIns, goals: [], reminders: [] } };
+  }
+  const ATHLETES = [
+    buildAthlete("Sample Athlete", "2026-06-01", 2.5, "Track and field (discus)", { email: "sample.athlete@example.com", phone: "(555) 010-2244", heightIn: 75, startLb: 238, targets: { kcal: 1900, protein: 120 } },
+      [{ date: "2026-07-18", name: "Summer Throws Classic", result: "52.10 m", mark: 52.1 }, { date: "2026-09-26", name: "Fall Open", result: "55.34 m", mark: 55.34 }, { date: "2026-10-24", name: "Regional Qualifier", result: "54.02 m", mark: 54.02 }]),
+    buildAthlete("Jordan Sample", "2026-08-03", 2, "Football", { email: "jordan.sample@example.com", phone: "(555) 010-3311", heightIn: 72, startLb: 205, targets: { kcal: 1850, protein: 115 } }, []),
+    buildAthlete("Riley Sample", "2026-08-03", 1.5, "Football", { email: "riley.sample@example.com", phone: "(555) 010-4422", heightIn: 70, startLb: 188, targets: { kcal: 1800, protein: 110 } }, []),
+  ];
+  const COACH_PROFILE = { name: "Coach Sample", email: "coach.sample@example.com", phone: "(555) 010-7788", heightIn: 71, weighIns: [{ date: TODAY, lb: 205 }], goals: [], reminders: [] };
+  const TEAMS = { "Varsity Throws": ["Sample Athlete"], "Varsity Football": ["Jordan Sample", "Riley Sample"] };
+
+  // ================= WHO IS USING IT, AND WHAT THEIR PLAN INCLUDES =================
+  // Features: find (find, search, take me there), help (app help), act (changes, logging by talking,
+  // reminders, goals, meet mode, notes to coach), reports, advice (recommendations, general guidance),
+  // programs (build or edit a program), roster (coach views).
+  const ALL = ["find", "help", "act", "reports", "advice", "programs", "roster"];
+  const ROLES = {
+    coached: { label: "Coached athlete", roster: ["Sample Athlete"], who: "Sample Athlete · coached", features: ["find", "help", "act", "reports"],
+      note: "Full finder, changes and reports. No advice and no program building: the coach stays in charge, and Hardy passes observations to the coach instead." },
+    free_basic: { label: "Free Agent · Basic", roster: ["Sample Athlete"], who: "Sample Athlete · Basic $4.99", features: ["find", "help"],
+      note: "Basic plan: find, search, Take me there and app help. Changes, reports and advice are part of AI Coach, so Hardy says so and offers the upgrade." },
+    free_ai: { label: "Free Agent · AI Coach", roster: ["Sample Athlete"], who: "Sample Athlete · AI Coach $9.99", features: ALL.filter((f) => f !== "roster"),
+      note: "Everything: finder, changes, reports, recommendations and program building." },
+    coach: { label: "Head coach", roster: ["Sample Athlete", "Jordan Sample", "Riley Sample"], who: "Coach · all teams", features: ALL,
+      note: "Everything, across the roster, plus the coach's \"worth a look\" list and roster reports. Name an athlete in a question." },
+    assistant: { label: "Assistant coach", roster: TEAMS["Varsity Football"], who: "Assistant · Varsity Football", features: ALL,
+      note: "Same as the head coach, but only for their assigned team (Varsity Football). Sample Athlete is off-limits." },
+    admin: { label: "Forge admin", roster: ["Sample Athlete"], who: "Forge admin", features: [], note: "The admin's report on what people ask Hardy: counts by kind and by Forge's own words, where he came up short, and what Basic users ask for that's on AI Coach. Never what anyone typed, never a person." },
+  };
+  const state = { role: "coached", page: "home", date: TODAY, exercise: "Back Squat", athlete: "Sample Athlete", reportId: null, open: false, tab: "ask", recording: false, logging: false, busy: false, turns: [], ctx: {}, scanner: false, coachNotes: [], worth: [], messages: [] };
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+  const opts = { proactive: false, readAloud: false, athleteMessages: false, recap: store.get("hardy.recap", false) };
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const athleteByName = (n) => { const q = String(n || "").toLowerCase().trim(); return ATHLETES.find((a) => a.name.toLowerCase() === q) || ATHLETES.find((a) => q && a.name.split(" ")[0].toLowerCase() === q.split(" ")[0]); };
+  const role = () => ROLES[state.role];
+  const can = (f) => role().features.includes(f);
+  const coachSide = () => state.role === "coach" || state.role === "assistant";
+  const allowed = () => role().roster.map(athleteByName);
+  const scoped = (name) => { const a = athleteByName(name || state.athlete); return a && role().roster.includes(a.name) ? a : null; };
+  const selfProfile = () => (coachSide() ? COACH_PROFILE : athleteByName("Sample Athlete").profile);
+  const possessive = (name) => (!coachSide() && name === "Sample Athlete" ? "Your" : `${name}'s`);
+  const NOT_YOURS = { error: "That athlete isn't on a team you can see, so I can't look at their logs." };
+  function gateText(f) {
+    if (state.role === "coached" && (f === "advice" || f === "programs")) return f === "programs" ? "Your coach builds your program, so I can't make or change one. I can show you what's on your calendar." : "That one's for your coach. I can find anything you've logged, make a report, or pass a note to your coach.";
+    return "That's part of AI Coach ($9.99 a month). On Basic, I can find anything you've logged, search, and help with the app.";
+  }
+  const totals = (foods) => foods.reduce((t, f) => ({ kcal: t.kcal + f.kcal, protein: t.protein + f.protein, carbs: t.carbs + f.carbs, fat: t.fat + f.fat, sodiumMg: t.sodiumMg + (f.sodiumMg || 0), ironMg: +(t.ironMg + (f.ironMg || 0)).toFixed(1) }), { kcal: 0, protein: 0, carbs: 0, fat: 0, sodiumMg: 0, ironMg: 0 });
+  const e1rm = (s) => (s.load ? Math.round(s.load * (1 + s.reps / 30)) : 0);
+
+  // ---- Hardy's looks: every one black to red, every one a hammer; the choice is kept in this browser ----
+  const SPARK = "#f5a524";
+  const LOOKS = [
+    { id: "classic", name: "Classic", note: "The friendly mallet", draw: (g) => `
+      <rect x="28" y="24" width="8" height="34" rx="3" fill="url(#${g})"/>
+      <path d="M8 12 h34 l12 5 v10 l-12 5 h-34 a4 4 0 0 1 -4 -4 v-12 a4 4 0 0 1 4 -4z" fill="url(#${g})"/>
+      <circle cx="20" cy="22" r="3.2" fill="#fff"/><circle cx="30" cy="22" r="3.2" fill="#fff"/>
+      <circle cx="21" cy="22.6" r="1.5" fill="#141010"/><circle cx="31" cy="22.6" r="1.5" fill="#141010"/>
+      <path d="M21 28 q4 3 8 0" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/>` },
+    { id: "sledge", name: "Sledge", note: "Game-day focus", draw: (g) => `<g transform="rotate(-24 32 32)">
+      <rect x="29.5" y="22" width="5" height="40" rx="2.5" fill="url(#${g})"/>
+      <rect x="12" y="7" width="40" height="18" rx="3" fill="url(#${g})"/>
+      <rect x="9" y="9" width="5" height="14" rx="1.5" fill="#141010"/><rect x="50" y="9" width="5" height="14" rx="1.5" fill="#141010"/>
+      <circle cx="26" cy="16.5" r="2.7" fill="#fff"/><circle cx="38" cy="16.5" r="2.7" fill="#fff"/>
+      <circle cx="26.6" cy="17" r="1.3" fill="#141010"/><circle cx="38.6" cy="17" r="1.3" fill="#141010"/>
+      <path d="M22 11.5 L29 13.5 M42 11.5 L35 13.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M29 21.5 h6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></g>` },
+    { id: "peen", name: "Ball-peen buddy", note: "Rounder, for younger athletes", draw: (g) => `
+      <rect x="22.5" y="27" width="7" height="31" rx="3.5" fill="url(#${g})"/>
+      <rect x="8" y="11" width="32" height="20" rx="6" fill="url(#${g})"/>
+      <rect x="38" y="17" width="5" height="8" fill="url(#${g})"/><circle cx="49" cy="21" r="8" fill="url(#${g})"/>
+      <circle cx="18" cy="19.5" r="4.2" fill="#fff"/><circle cx="30" cy="19.5" r="4.2" fill="#fff"/>
+      <circle cx="18.6" cy="20.2" r="2.1" fill="#141010"/><circle cx="30.6" cy="20.2" r="2.1" fill="#141010"/>
+      <circle cx="19.4" cy="19.2" r="0.8" fill="#fff"/><circle cx="31.4" cy="19.2" r="0.8" fill="#fff"/>
+      <circle cx="13" cy="26" r="1.8" fill="#ff9d8a" opacity="0.7"/><circle cx="35" cy="26" r="1.8" fill="#ff9d8a" opacity="0.7"/>
+      <path d="M19.5 25.5 q4.5 4 9 0" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/>` },
+    { id: "smith", name: "Blacksmith", note: "Headband, a wink and a spark", draw: (g) => `
+      <rect x="28" y="24" width="8" height="34" rx="3" fill="url(#${g})"/>
+      <path d="M8 12 h34 l12 5 v10 l-12 5 h-34 a4 4 0 0 1 -4 -4 v-12 a4 4 0 0 1 4 -4z" fill="url(#${g})"/>
+      <rect x="4" y="14" width="38" height="3.4" fill="#fff" opacity="0.9"/><path d="M5 15.7 l-3.5 -3 M5 15.7 l-3.5 3" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.9"/>
+      <path d="M17.5 23 q2.5 -2.4 5 0" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <circle cx="30" cy="22.5" r="3.2" fill="#fff"/><circle cx="31" cy="23" r="1.5" fill="#141010"/>
+      <path d="M19 27.5 q5 4 11 0" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <path d="M55 2 l1.6 3.6 3.6 1.6 -3.6 1.6 -1.6 3.6 -1.6 -3.6 -3.6 -1.6 3.6 -1.6z" fill="${SPARK}"/><circle cx="60" cy="14" r="1.3" fill="${SPARK}"/>` },
+    { id: "mark", name: "Forge mark", note: "No face: a logo, not a character", draw: (g) => `
+      <rect x="29" y="27" width="6" height="31" rx="2" fill="url(#${g})"/>
+      <path d="M8 14 h36 l12 4 v10 l-12 4 h-36z" fill="url(#${g})"/><rect x="14" y="14" width="3" height="18" fill="#fff" opacity="0.25"/>
+      <path d="M50 10 l5 -6 M54 13 l7 -3 M46 8 l1 -6" stroke="${SPARK}" stroke-width="2.4" stroke-linecap="round"/>` },
+    { id: "anvil", name: "On the anvil", note: "Hardy resting on his anvil", draw: (g) => `
+      <path d="M10 46 h40 q-4 4 -12 5 v4 h6 v5 h-24 v-5 h6 v-4 q-10 -1 -16 -5z" fill="#2a2420"/>
+      <g transform="rotate(-38 32 30)"><rect x="29" y="22" width="6" height="30" rx="2.5" fill="url(#${g})"/>
+      <path d="M12 8 h30 l10 4 v8 l-10 4 h-30 a3 3 0 0 1 -3 -3 v-10 a3 3 0 0 1 3 -3z" fill="url(#${g})"/>
+      <circle cx="22" cy="16" r="2.7" fill="#fff"/><circle cx="31" cy="16" r="2.7" fill="#fff"/>
+      <circle cx="22.7" cy="16.5" r="1.3" fill="#141010"/><circle cx="31.7" cy="16.5" r="1.3" fill="#141010"/>
+      <path d="M23 20.5 q3.5 2.5 7 0" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round"/></g>` },
+  ];
+  const lookId = "mark"; // Scott, 2026-11-11: the mascot is the Forge mark, no face
+  function hammerSvg(id, look) {
+    const L = LOOKS.find((l) => l.id === (look || lookId)) || LOOKS[0];
+    return `<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--hardy-dark)"/><stop offset="1" stop-color="var(--hardy-red)"/></linearGradient></defs>${L.draw(id)}</svg>`;
+  }
+  function drawLooks() {
+    $("looks").innerHTML = LOOKS.map((l) => `<button class="look" data-look="${l.id}" aria-pressed="${l.id === lookId}"><span class="lookart">${hammerSvg("lk-" + l.id, l.id)}</span><b>${esc(l.name)}</b><small>${esc(l.note)}</small></button>`).join("");
+  }
+  function setLook(id) {
+    lookId = id; store.set("hardy.look", id);
+    $("hardyBtn").innerHTML = hammerSvg("hg1"); $("panelIcon").innerHTML = hammerSvg("hg2");
+    drawLooks(); render();
+  }
+
+  // ================= THE APP'S PAGES (simplified stand-ins) =================
+  const curAthlete = () => scoped(state.athlete) || allowed()[0];
+  function render(highlight) {
+    if (state.role === "admin") { renderAdmin(); return; }
+    const a = curAthlete();
+    state.athlete = a.name;
+    $("who").textContent = role().who + (coachSide() ? ` · viewing ${a.name}` : "");
+    document.querySelectorAll("#nav button").forEach((b) => b.setAttribute("aria-current", b.dataset.page === (state.page === "report" ? "hardy" : state.page) ? "page" : "false"));
+    const scr = $("screen");
+    const day = a.days[state.date];
+    let html = "";
+    if (state.page === "home") {
+      const last = Object.values(a.days).filter((d) => d.workout && !d.workout.planned).slice(-1)[0];
+      html += `<div class="card"><h3>Today</h3><div class="sub">${nice(TODAY)} · ${esc(a.sport)}</div><div class="recbar" style="margin-top:10px"><button id="homeTrain">Open training</button><button class="ghost" id="homeFood">Log food</button></div></div>`;
+      html += `<div class="card"><h3>Last session</h3><div class="sub">${nice(last.date)} · ${esc(last.workout.title)}</div>${last.workout.sets.filter((s) => s.set === 1).map((s) => `<div class="row"><span class="k">${esc(s.exercise)}</span><span class="v">${s.load ? s.load + " lb" : "BW"} × ${s.reps}</span></div>`).join("")}</div>`;
+      if (coachSide()) html += `<div class="card"><h3>Roster</h3>${allowed().map((x) => `<div class="row"><button class="chip" data-ath="${esc(x.name)}">${esc(x.name)}</button><span class="v">${esc(x.sport)}</span></div>`).join("")}</div>`;
+    } else if (state.page === "day" || state.page === "nutrition") {
+      html += `<div class="daynav"><button data-shift="-1" aria-label="Previous day">‹</button><strong>${nice(state.date)}</strong><button data-shift="1" aria-label="Next day">›</button></div>`;
+      if (!day) html += `<div class="card">Nothing logged on this day.</div>`;
+      else if (state.page === "day") {
+        if (state.recording) html += `<div class="recording-banner">● Recording set · camera on</div>`;
+        if (state.logging) html += `<div class="card"><h3>Reps</h3><div class="keypad">${[1, 2, 3, 4, 5, 6, 7, 8, 9, "", 0, "✓"].map((k) => `<span>${k}</span>`).join("")}</div></div>`;
+        const b = blockAt(state.date);
+        if (b) html += `<div class="sub">${esc(b.name)} block · week ${Math.floor(daysBetween(b.from, state.date) / 7) + 1}</div>`;
+        if (!day.workout) html += `<div class="card"><h3>Rest day</h3><div class="sub">No training ${state.date > TODAY ? "planned" : "logged"}.</div></div>`;
+        else {
+          const byEx = {};
+          day.workout.sets.forEach((s) => (byEx[s.exercise] = byEx[s.exercise] || []).push(s));
+          html += `<div class="card"><h3>${esc(day.workout.title)}${day.workout.planned ? ' <span class="pill">Planned</span>' : ""}</h3>${day.workout.note ? `<div class="sub" data-id="${day.date}-wnote">Note: ${esc(day.workout.note)}</div>` : ""}</div>`;
+          Object.entries(byEx).forEach(([ex, sets]) => {
+            html += `<div class="card" data-id="${esc(day.date + "-" + ex)}"><h3>${esc(ex)}</h3>${sets.map((s) => `<div class="row" data-id="${s.id}"><span class="k">Set ${s.set}${s.velocity ? ` · ${s.velocity} m/s` : ""}</span><span class="v">${s.load ? s.load + " lb" : "BW"} × ${s.reps}${s.rpe ? ` · RPE ${s.rpe}` : ""}</span></div>`).join("")}${sets.some((s) => s.velocity) ? `<div class="caveat">Speed is a camera reading and isn't fully calibrated yet.</div>` : ""}</div>`;
+          });
+        }
+        if (day.checkin) html += `<div class="card" data-id="${day.date}-checkin"><h3>Check-in</h3><div class="row"><span>Sleep</span><span class="v">${day.checkin.sleep} h</span></div><div class="row"><span>Soreness</span><span class="v">${day.checkin.soreness} of 5</span></div>${day.checkin.note ? `<div class="sub">${esc(day.checkin.note)}</div>` : ""}</div>`;
+        if (state.date <= TODAY) html += `<div class="recbar"><button id="recInline">${state.recording ? "Stop recording" : "Record set"}</button></div>`;
+      } else {
+        const t = totals(day.foods), tg = a.profile.targets;
+        if (state.scanner) html += `<div class="card scanner" data-id="scanner"><h3>Scan barcode</h3><div class="scanbox">Point the camera at a barcode</div><div class="row"><span class="k">Found: ${esc(BARCODE_ITEM.name)}</span><span class="v">${BARCODE_ITEM.kcal} kcal · ${BARCODE_ITEM.protein} g P</span></div><div class="recbar"><button id="scanAdd">Add to snack</button><button class="ghost" id="scanClose">Close</button></div><div class="sub">Prototype: the scan is simulated.</div></div>`;
+        html += `<div class="card" data-id="${day.date}-totals"><h3>Totals</h3>
+          <div class="row"><span>Calories</span><span class="v">${t.kcal} of ${tg.kcal}</span></div><div class="meter"><i style="width:${Math.min(100, (t.kcal / tg.kcal) * 100)}%"></i></div>
+          <div class="row"><span>Protein</span><span class="v">${t.protein} of ${tg.protein} g</span></div><div class="meter"><i style="width:${Math.min(100, (t.protein / tg.protein) * 100)}%"></i></div>
+          <div class="row"><span>Carbs · fat</span><span class="v">${t.carbs} · ${t.fat} g</span></div><div class="row"><span>Sodium · iron</span><span class="v">${t.sodiumMg} mg · ${t.ironMg} mg</span></div>
+          <div class="sub">Targets set by ${state.role === "coached" ? "your coach" : coachSide() ? "you (coach)" : "you"}.</div></div>`;
+        ["breakfast", "lunch", "dinner", "snack"].forEach((m) => {
+          const fs = day.foods.filter((f) => f.meal === m);
+          if (!fs.length) return;
+          html += `<div class="card"><h3>${m[0].toUpperCase() + m.slice(1)}</h3>${fs.map((f) => `<div class="row" data-id="${f.id}"><span class="k">${esc(f.name)}</span><span class="v">${f.kcal} kcal · ${f.protein} g P</span></div>`).join("")}</div>`;
+        });
+        if (state.date === TODAY && !state.scanner) html += `<div class="recbar"><button class="ghost" id="scanOpen">Scan barcode</button></div>`;
+      }
+    } else if (state.page === "progress") {
+      const exs = [...new Set(Object.values(a.days).flatMap((d) => (d.workout && !d.workout.planned ? d.workout.sets.map((s) => s.exercise) : [])))];
+      if (!exs.includes(state.exercise)) state.exercise = exs[0];
+      const pts = Object.values(a.days).filter((d) => d.workout && !d.workout.planned).map((d) => ({ date: d.date, best: Math.max(0, ...d.workout.sets.filter((s) => s.exercise === state.exercise).map(e1rm)) })).filter((p) => p.best > 0);
+      html += `<div class="chips">${exs.map((e) => `<button class="chip" data-ex="${esc(e)}" ${e === state.exercise ? 'aria-pressed="true"' : ""}>${esc(e)}</button>`).join("")}</div>`;
+      if (pts.length) {
+        const W = 340, H = 160, lo = Math.min(...pts.map((p) => p.best)) - 10, hi = Math.max(...pts.map((p) => p.best)) + 10;
+        const x = (i) => 30 + (i / Math.max(1, pts.length - 1)) * (W - 44), y = (v) => H - 24 - ((v - lo) / (hi - lo)) * (H - 40);
+        const best = pts.reduce((b, p) => (p.best > b.best ? p : b), pts[0]);
+        html += `<div class="card" data-id="chart-${esc(state.exercise)}"><h3>${esc(state.exercise)} · estimated max</h3>
+          <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(state.exercise)} estimated max over time, best ${best.best} lb on ${nice(best.date)}">
+          ${[lo, (lo + hi) / 2, hi].map((v) => `<line x1="30" x2="${W - 10}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="0" y="${y(v) + 4}" font-size="10" fill="var(--muted)">${Math.round(v)}</text>`).join("")}
+          <polyline fill="none" stroke="var(--forge)" stroke-width="2" points="${pts.map((p, i) => `${x(i)},${y(p.best)}`).join(" ")}"/>
+          <circle cx="${x(pts.indexOf(best))}" cy="${y(best.best)}" r="5" fill="var(--hardy-red)"/>
+          <text x="30" y="${H - 6}" font-size="10" fill="var(--muted)">${nice(pts[0].date)}</text><text x="${W - 10}" y="${H - 6}" font-size="10" fill="var(--muted)" text-anchor="end">${nice(pts[pts.length - 1].date)}</text></svg>
+          <div class="sub" data-id="best-${esc(state.exercise)}">Best: ${best.best} lb estimated on ${nice(best.date)}</div></div>`;
+        html += `<div class="card"><h3>Sessions</h3>${pts.slice(-8).reverse().map((p) => `<div class="row" data-id="prog-${p.date}"><button class="chip" data-goday="${p.date}">${nice(p.date)}</button><span class="v">${p.best} lb</span></div>`).join("")}</div>`;
+      }
+    } else if (state.page === "profile") {
+      const p = selfProfile(), lastW = p.weighIns[p.weighIns.length - 1];
+      html += `<div class="card"><h3>Profile</h3>
+        <div class="row" data-id="pf-email"><span>Email</span><span class="v">${esc(p.email)}</span></div>${p.pendingEmail ? `<div class="sub">Waiting for confirmation: ${esc(p.pendingEmail)}</div>` : ""}
+        <div class="row" data-id="pf-phone"><span>Phone</span><span class="v">${esc(p.phone)}</span></div>
+        <div class="row" data-id="pf-height"><span>Height</span><span class="v">${fmtHeight(p.heightIn)}</span></div>
+        <div class="row" data-id="pf-weight"><span>Body weight</span><span class="v">${lastW.lb} lb · ${nice(lastW.date)}</span></div>
+        <div class="row"><span>Units</span><span class="v">Pounds</span></div></div>
+        <div class="card"><h3>Documents</h3><div class="row"><span>Participation waiver</span><span class="v">On file</span></div><div class="row"><span>Medical clearance</span><span class="v">On file</span></div></div>
+        <div class="card"><h3>Account</h3><div class="row"><span>Password</span><span class="v">Change</span></div><div class="row"><span>Coach</span><span class="v">${state.role === "coached" ? "Coach Sample" : coachSide() ? "-" : "None"}</span></div><div class="row"><span>Delete account</span><span class="v">Delete</span></div><div class="sub">Hardy never changes these three.</div></div>`;
+    } else if (state.page === "hardy") {
+      html += hardyTab(a);
+    } else if (state.page === "report") {
+      const r = reportStore.get(state.reportId);
+      if (!r) html += `<div class="card">That report is gone.</div>`;
+      else {
+        const sendLabel = state.role === "coached" ? "Send to my coach" : coachSide() ? "Send to athlete" : null;
+        html += `<button class="back" id="backHardy">‹ Hardy</button><div class="card report"><h3>${esc(r.title)}</h3><div class="sub">${esc(r.athlete)} · ${esc(r.created)} · sample data</div>${blocksHtml(r.blocks)}
+          <div class="recbar" style="margin-top:10px;flex-wrap:wrap"><button id="pdfBtn">Download PDF</button>${sendLabel ? `<button class="ghost" id="sendBtn">${sendLabel}</button>` : ""}<button class="ghost" id="delBtn">Delete</button></div><div class="sub" id="reportMsg"></div></div>`;
+      }
+    }
+    scr.innerHTML = html;
+    if (highlight) {
+      const el = scr.querySelector(`[data-id="${CSS.escape(highlight)}"]`);
+      if (el) { el.classList.add("hl"); el.scrollIntoView({ block: "center" }); }
+    } else scr.scrollTop = 0;
+    hardyVisibility();
+    proactiveTip();
+  }
+
+  function hardyTab(a) {
+    const p = selfProfile();
+    let h = `<div class="card hardyhead"><span class="hicon">${hammerSvg("hg3")}</span><div><h3>Hardy</h3><div class="sub">${esc(role().label)}: ${can("advice") ? "finds, shows, changes, reports and advises" : can("act") ? "finds, shows, changes and reports" : "finds and shows"}</div></div><button class="chip" id="openHardy2">Ask Hardy</button></div>`;
+    if (p.meet) h += `<div class="card"><h3>Meet mode</h3><div class="big">${daysBetween(TODAY, p.meet.date)} days</div><div class="sub">to ${esc(p.meet.name)}, ${nice(p.meet.date)}</div>${a.meets.length ? `<button class="chip" data-mk="meets">How I prepped for my best meets</button>` : ""}</div>`;
+    if (p.goals.length) h += `<div class="card"><h3>Goals</h3>${p.goals.map((g) => { const ga = athleteByName(g.athlete) || a, st = goalStatus(ga, g); const pct = Math.min(100, Math.round((st.now / g.target) * 100)); return `<div class="goal"><div class="row"><span class="k">${esc(g.exercise)} ${g.target} lb by ${nice(g.by)}</span><span class="v">${st.now} lb</span></div><div class="meter"><i style="width:${pct}%"></i></div><div class="sub">${st.left === 0 ? "Done." : st.eta ? (st.onPace ? `On pace: about ${nice(st.eta)} at +${st.rate} lb a week.` : `Behind: about ${nice(st.eta)} at +${st.rate} lb a week.`) : "No gain in 12 weeks, so no projection yet."}</div></div>`; }).join("")}</div>`;
+    if (p.reminders.length) h += `<div class="card"><h3>Reminders</h3>${p.reminders.map((r) => `<div class="row"><span class="k">${esc(r.what)}</span><span class="v">${nice(r.date)}</span></div>`).join("")}</div>`;
+    if (coachSide()) {
+      const notes = state.coachNotes.filter((n) => role().roster.includes(n.from));
+      h += `<div class="card"><h3>Notes from athletes</h3>${notes.length ? notes.map((n) => `<div class="row"><span class="k">${esc(n.from)}: ${esc(n.text)}</span><span class="v">${nice(n.date)}</span></div>`).join("") : `<div class="sub">None yet. A coached athlete's "I can't train Thursday" lands here.</div>`}<button class="chip" data-mk="roster" style="margin-top:8px">Worth a look this week</button></div>`;
+    }
+    if (state.messages.length) h += `<div class="card"><h3>Messages sent</h3>${state.messages.map((m) => `<div class="row"><span class="k">To ${esc(m.to)}: ${esc(m.text)}</span><span class="v">${nice(m.date)}</span></div>`).join("")}</div>`;
+    if (can("reports")) {
+      h += `<div class="card"><h3>Weekly recap</h3><label class="sw"><input type="checkbox" id="recapToggle" ${opts.recap ? "checked" : ""}> Have a recap waiting here every Sunday</label>${opts.recap ? `<button class="chip" data-mk="recap" style="margin-top:6px">Open this week's recap</button>` : `<div class="sub">Off. It's opt-in, and it never pops up.</div>`}</div>`;
+      h += `<div class="card"><h3>Make a report</h3><div class="chips">${REPORT_KINDS.filter(([k]) => (k === "roster" ? coachSide() : true) && (k !== "meets" || a.meets.length)).map(([k, l]) => `<button class="chip" data-mk="${k}">${esc(l)}</button>`).join("")}</div><div class="sub" style="margin-top:6px">Or ask: "make a report of my squat PR prep".</div></div>`;
+      const saved = reportStore.all();
+      h += `<div class="card"><h3>Saved reports</h3>${saved.length ? saved.map((r) => `<div class="row"><button class="linkish" data-rid="${esc(r.id)}">${esc(r.title)}</button><span class="v">${esc(r.athlete.split(" · ")[0])}</span></div>`).join("") : `<div class="sub">Nothing saved yet.</div>`}</div>`;
+    } else h += `<div class="card"><h3>Reports</h3><div class="sub">Reports, goals, meet mode and changes are part of AI Coach ($9.99 a month).</div></div>`;
+    return h;
+  }
+  // ---------- deep questions: every number here is computed by this code, never by the AI ----------
+  const ALIASES = [["clean", "Power Clean"], ["squat", "Back Squat"], ["bench", "Bench Press"], ["romanian", "Romanian Deadlift"], ["rdl", "Romanian Deadlift"], ["deadlift", "Romanian Deadlift"], ["pendlay", "Pendlay Row"], ["single-arm", "Single-Arm Dumbbell Row"], ["shoulder press", "Barbell Shoulder Press"], ["overhead", "Barbell Shoulder Press"], ["row", "Pendlay Row"], ["jump", "Box Jump"], ["pull", "Pull-Up"], ["lunge", "Walking Lunge"]];
+  function resolveExercise(text) {
+    const s = String(text || "").toLowerCase();
+    const exact = Object.values(LIFTS).flat().map((l) => l[0]).find((n) => s.includes(n.toLowerCase()));
+    if (exact) return exact;
+    const hit = ALIASES.find(([k]) => s.includes(k));
+    return hit ? hit[1] : null;
+  }
+  function sessionsOf(a, ex) {
+    return Object.values(a.days).filter((d) => d.workout && !d.workout.planned && d.workout.sets.some((s) => s.exercise === ex)).map((d) => {
+      const sets = d.workout.sets.filter((s) => s.exercise === ex);
+      const top = sets.reduce((b, s) => (s.load > b.load || (s.load === b.load && s.reps > b.reps) ? s : b), sets[0]);
+      return { date: d.date, top, sets };
+    });
+  }
+  function heaviest({ athlete, exercise }) {
+    const a = scoped(athlete); if (!a) return NOT_YOURS;
+    const ex = resolveExercise(exercise); if (!ex) return { error: `No ${exercise} logged.` };
+    const ss = sessionsOf(a, ex); if (!ss.length) return { error: `No ${ex} logged.` };
+    const best = ss.reduce((b, s) => (s.top.load > b.top.load || (s.top.load === b.top.load && s.top.reps > b.top.reps) ? s : b), ss[0]);
+    return { athlete: a.name, exercise: ex, date: best.date, load_lb: best.top.load, reps: best.top.reps, rpe: best.top.rpe, camera_velocity_mps: best.top.velocity, set_id: best.top.id, sessions_logged: ss.length };
+  }
+  function prTimeline({ athlete, exercise }) {
+    const a = scoped(athlete); if (!a) return NOT_YOURS;
+    const ex = resolveExercise(exercise); if (!ex) return { error: `No ${exercise} logged.` };
+    let max = 0, prev = null; const prs = [];
+    sessionsOf(a, ex).forEach((s) => {
+      if (s.top.load > max) { prs.push({ date: s.date, load_lb: s.top.load, reps: s.top.reps, days_since_previous_pr: prev ? daysBetween(prev, s.date) : null }); max = s.top.load; prev = s.date; }
+    });
+    const gaps = prs.map((p) => p.days_since_previous_pr).filter((g) => g != null);
+    return { athlete: a.name, exercise: ex, prs, average_days_between_prs: gaps.length ? Math.round(gaps.reduce((x, y) => x + y, 0) / gaps.length) : null, longest_gap_days: gaps.length ? Math.max(...gaps) : null };
+  }
+  function dayTotals(d) { const t = totals(d.foods); return { kcal: t.kcal, protein: t.protein, carbs: t.carbs, fat: t.fat }; }
+  function avgOf(list) { const n = list.length || 1; return ["kcal", "protein", "carbs", "fat"].reduce((o, k) => ({ ...o, [k]: Math.round(list.reduce((x, y) => x + y[k], 0) / n) }), {}); }
+  function dietWindow({ athlete, end_date, days = 14 }) {
+    const a = scoped(athlete); if (!a) return NOT_YOURS;
+    const end = end_date || addDays(TODAY, 1);
+    days = Math.max(1, Math.min(60, +days || 14));
+    const from = addDays(end, -days), to = addDays(end, -1);
+    const daily = Object.values(a.days).filter((d) => d.date >= from && d.date <= to && d.foods.length).map((d) => ({ date: d.date, ...dayTotals(d) }));
+    const usual = Object.values(a.days).filter((d) => d.foods.length && (d.date < from || d.date > to)).map(dayTotals);
+    if (!daily.length) return { error: "No food logged in that window." };
+    return { athlete: a.name, from, to, days_logged: daily.length, daily, average: avgOf(daily), usual_average: avgOf(usual) };
+  }
+  function weeklyVolume({ athlete, end_date, weeks = 4, exercise }) {
+    const a = scoped(athlete); if (!a) return NOT_YOURS;
+    const ex = exercise ? resolveExercise(exercise) : null;
+    weeks = Math.max(1, Math.min(16, +weeks || 4));
+    const lastMon = mondayOf(end_date || TODAY);
+    const out = [];
+    for (let w = weeks - 1; w >= 0; w--) {
+      const from = addDays(lastMon, -7 * w), to = addDays(from, 6);
+      let tonnage = 0, sets = 0, reps = 0, sessions = 0;
+      Object.values(a.days).forEach((d) => {
+        if (d.date < from || d.date > to || !d.workout || d.workout.planned) return;
+        const ss = d.workout.sets.filter((s) => !ex || s.exercise === ex);
+        if (!ss.length) return;
+        sessions++; ss.forEach((s) => { sets++; reps += s.reps; tonnage += s.load * s.reps; });
+      });
+      out.push({ week_of: from, sessions, sets, reps, tonnage_lb: tonnage, deload: !!(blockAt(from) && sessions && Math.floor(daysBetween(blockAt(from).from, from) / 7) % 4 === 3) });
+    }
+    return { athlete: a.name, exercise: ex || "all lifts", weeks: out };
+  }
+  function programAt({ athlete, date }) {
+    const a = scoped(athlete); if (!a) return NOT_YOURS;
+    const d = date || TODAY, b = blockAt(d);
+    if (!b) return { error: `No program block covers ${d}.` };
+    return {
+      athlete: a.name, date: d, block: b.name, block_from: b.from, block_to: b.to, week_of_block: Math.floor(daysBetween(b.from, d) / 7) + 1,
+      focus: b.focus, built_by: state.role.startsWith("free") ? "you" : b.by,
+      weekly_schedule: Object.entries(PLAN).map(([day, title]) => ({ day, session: title, lifts: LIFTS[title].map(([n, s, r]) => `${n} ${s}x${r}`).join(", ") })),
+    };
+  }
+
+  // ================= READING THE LOGS (shared by the AI tools and the built-in finder) =================
+  function daySummary(a, d) {
+    const day = a.days[d];
+    if (!day) return null;
+    return {
+      athlete: a.name, date: d, weekday: weekday(d),
+      workout: day.workout ? { title: day.workout.title, planned: day.workout.planned || undefined, note: day.workout.note || undefined, sets: day.workout.sets.map((s) => ({ id: s.id, exercise: s.exercise, set: s.set, load_lb: s.load || "bodyweight", reps: s.reps, rpe: s.rpe, camera_velocity_mps: s.velocity })) } : null,
+      foods: day.foods.map((f) => ({ id: f.id, meal: f.meal, name: f.name, kcal: f.kcal, protein_g: f.protein })),
+      totals: totals(day.foods),
+      checkin: day.checkin,
+    };
+  }
+  function findDays({ athlete, from, to, weekday: wd, text } = {}) {
+    const a = scoped(athlete);
+    if (!a) return NOT_YOURS;
+    const q = (text || "").toLowerCase().trim();
+    const out = Object.values(a.days).filter((d) => (!from || d.date >= from) && (!to || d.date <= to) && (!wd || weekday(d.date).toLowerCase() === String(wd).toLowerCase()))
+      .filter((d) => !q || JSON.stringify([d.workout, d.foods.map((f) => f.name), d.checkin && d.checkin.note]).toLowerCase().includes(q))
+      .map((d) => ({ date: d.date, weekday: weekday(d.date), workout: d.workout ? d.workout.title + (d.workout.planned ? " (planned)" : "") : "rest", foods: d.foods.map((f) => f.name).join(", "), note: (d.workout && d.workout.note) || (d.checkin && d.checkin.note) || undefined }));
+    return { athlete: a.name, count: out.length, days: out.slice(-12) };
+  }
+  function getDay({ athlete, date }) {
+    const a = scoped(athlete);
+    if (!a) return NOT_YOURS;
+    return daySummary(a, date) || { error: `Nothing logged on ${date}.` };
+  }
+  function liftHistory({ athlete, exercise }) {
+    const a = scoped(athlete);
+    if (!a) return NOT_YOURS;
+    const ex = resolveExercise(exercise);
+    if (!ex) return { error: `No ${exercise} logged.` };
+    const sessions = sessionsOf(a, ex).map((s) => ({ date: s.date, top_set: `${s.top.load || "BW"} x ${s.top.reps} @ RPE ${s.top.rpe}`, est_max_lb: e1rm(s.top), heaviest_lb: s.top.load, camera_velocity_mps: s.top.velocity }));
+    if (!sessions.length) return { error: `No ${ex} logged.` };
+    const best = sessions.reduce((b, s) => (s.est_max_lb > b.est_max_lb ? s : b), sessions[0]);
+    return { athlete: a.name, exercise: ex, sessions: sessions.length, best, last: sessions[sessions.length - 1], recent: sessions.slice(-6) };
+  }
+
+  // ================= ACTIONS: Hardy proposes a card, the person confirms, only then does anything change =================
+  // A card is { title, rows: [[label, value]], note?, confirm, apply() -> sentence }.
+  const parseHeight = (v) => { const s = String(v); const m = s.match(/(\d)\s*(?:'|ft|foot|feet)\s*(\d{1,2})?/); if (m) return +m[1] * 12 + (+m[2] || 0); const n = parseFloat(s); return n >= 48 && n <= 96 ? Math.round(n) : null; };
+  const fmtHeight = (inch) => `${Math.floor(inch / 12)}'${inch % 12}"`;
+  const dayFromWord = (name, after = mondayOf(TODAY)) => {
+    const s = String(name || "").toLowerCase();
+    if (/^\d{4}-\d\d-\d\d$/.test(s)) return s;
+    if (s === "today") return TODAY;
+    if (s === "tomorrow") return addDays(TODAY, 1);
+    const w = WD.find((x) => s.startsWith(x.toLowerCase().slice(0, 3)));
+    if (!w) return null;
+    let d = after; while (weekday(d) !== w) d = addDays(d, 1); return d;
+  };
+  const nextDayFromWord = (name) => dayFromWord(name, addDays(TODAY, 1));
+  const MONTH_RX = MONTHS.map((m) => m.slice(0, 3)).join("|");
+  function parseMonthDay(q) {
+    const s = q.toLowerCase();
+    const md = s.match(/\b(\d{1,2})\/(\d{1,2})\b/);
+    if (md) return `2026-${md[1].padStart(2, "0")}-${md[2].padStart(2, "0")}`;
+    const m = s.match(new RegExp(`\\b(${MONTH_RX})[a-z]*\\.?\\s+(\\d{1,2})`));
+    if (m) { const mm = MONTHS.findIndex((x) => x.startsWith(m[1])) + 1; const y = mm < 6 ? 2027 : 2026; return `${y}-${String(mm).padStart(2, "0")}-${m[2].padStart(2, "0")}`; }
+    return null;
+  }
+  const refuse = (text, target) => ({ refuse: text, target });
+
+  function proposeChange({ field, value, athlete, from_day, to_day }) {
+    if (!can("act")) return refuse(gateText("act"));
+    field = String(field || "").toLowerCase();
+    if (/password|delete|close|remove.*coach|leave/.test(field)) return refuse("I never change a password, delete an account or remove a coach. Those are on your Profile page.", { page: "profile" });
+    const self = selfProfile();
+    if (["email", "phone", "height", "weight"].includes(field)) {
+      if (athlete && coachSide() && scoped(athlete)) return refuse("Athletes change their own profile. You can change their nutrition targets and schedule.");
+      if (field === "email") {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || ""))) return refuse("That doesn't look like an email address.");
+        return { card: { title: "Change your email", rows: [["Now", self.email], ["New", value]], note: "Takes effect only after you click the link sent to the new address, so nobody holding your phone can take over the account.", confirm: "Send confirmation link", apply: () => { self.pendingEmail = value; render(); return `Check ${value} for the link. Your email changes when you click it. (Prototype: nothing was sent.)`; } } };
+      }
+      if (field === "phone") {
+        const digits = String(value || "").replace(/\D/g, "");
+        if (digits.length < 10) return refuse("That phone number looks too short.");
+        const nv = `(${digits.slice(-10, -7)}) ${digits.slice(-7, -4)}-${digits.slice(-4)}`;
+        return { card: { title: "Change your phone number", rows: [["Now", self.phone], ["New", nv]], confirm: "Change it", apply: () => { self.phone = nv; render(); return `Done. Your phone number is now ${nv}.`; } } };
+      }
+      if (field === "height") {
+        const h = parseHeight(value);
+        if (!h) return refuse("I didn't catch a height. Try 6'3\" or 75 inches.");
+        return { card: { title: "Change your height", rows: [["Now", fmtHeight(self.heightIn)], ["New", fmtHeight(h)]], note: "The camera uses your height as a measuring stick, so camera numbers from now on will use the new height.", confirm: "Change it", apply: () => { self.heightIn = h; render(); return `Done. Your height is now ${fmtHeight(h)}.`; } } };
+      }
+      const w = parseFloat(value), lb = /kg/i.test(String(value)) ? Math.round(w * 2.20462) : w;
+      if (!(lb > 60 && lb < 500)) return refuse("I didn't catch a body weight.");
+      const last = self.weighIns[self.weighIns.length - 1];
+      return { card: { title: "Log a weigh-in", rows: [["Last", `${last.lb} lb on ${nice(last.date)}`], ["New", `${lb} lb today`]], note: "Saved as a new weigh-in. Earlier weigh-ins stay in your history.", confirm: "Log it", apply: () => { self.weighIns.push({ date: TODAY, lb }); render(); return `Logged ${lb} lb for today.`; } } };
+    }
+    if (field === "protein_target" || field === "calorie_target") {
+      if (state.role === "coached") return refuse("Your coach sets your nutrition targets. I can show how you're tracking against them.", { page: "nutrition", date: TODAY });
+      const a = scoped(athlete) || (coachSide() ? null : athleteByName("Sample Athlete"));
+      if (!a) return refuse(NOT_YOURS.error);
+      const n = Math.round(parseFloat(value)), key = field === "protein_target" ? "protein" : "kcal", unit = key === "protein" ? " g" : " kcal";
+      if (!(n > 0 && n < 9000)) return refuse("I didn't catch a number.");
+      return { card: { title: `${possessive(a.name)} ${key === "protein" ? "protein" : "calorie"} target`, rows: [["Now", a.profile.targets[key] + unit], ["New", n + unit]], confirm: "Change it", apply: () => { a.profile.targets[key] = n; render(); return `Done. ${possessive(a.name)} ${key === "protein" ? "protein" : "calorie"} target is now ${n}${unit}.`; } } };
+    }
+    if (field === "move_workout") {
+      if (state.role === "coached") return refuse("Your coach sets your schedule. Want me to send them a note that you can't make it?");
+      const a = scoped(athlete) || (coachSide() ? null : athleteByName("Sample Athlete"));
+      if (!a) return refuse(NOT_YOURS.error);
+      const from = dayFromWord(from_day), to = dayFromWord(to_day);
+      if (!from || !to) return refuse("Tell me which day and where to, like \"move Thursday's workout to Saturday\".");
+      const df = a.days[from], dt = a.days[to];
+      if (!df || !df.workout) return refuse(`There's no workout on ${nice(from)} to move.`);
+      if (!df.workout.planned) return refuse(`${nice(from)} is already logged, so it stays where it is.`);
+      if (dt && dt.workout) return refuse(`${nice(to)} already has ${dt.workout.title}.`);
+      return { card: { title: `Move ${possessive(a.name)} ${df.workout.title}`, rows: [["From", nice(from)], ["To", nice(to)]], confirm: "Move it", apply: () => { const title = df.workout.title; a.days[to] = a.days[to] || { date: to, foods: [], workout: null, checkin: null }; a.days[to].workout = df.workout; df.workout = null; render(); return `Done. ${title} moved to ${nice(to)}.`; } }, target: { athlete: a.name, page: "day", date: to } };
+    }
+    return refuse("I can change your email, phone, height, body weight, nutrition targets, or move a planned workout.");
+  }
+
+  // ---- logging by talking ----
+  function proposeFood({ text, meal }) {
+    if (!can("act")) return refuse(gateText("act"));
+    const s = String(text || "").toLowerCase();
+    const words = s.split(/[^a-z]+/).filter((w) => w.length > 3);
+    const hit = ALL_FOODS.map((f) => ({ f, score: words.filter((w) => f.name.toLowerCase().includes(w)).length })).filter((x) => x.score > 0).sort((x, y) => y.score - x.score)[0];
+    if (!hit) return refuse("I couldn't match that food. Scan its barcode or pick it from the food list.", { page: "nutrition", date: TODAY, scanner: true });
+    const m = meal || (/(breakfast|lunch|dinner|snack)/.exec(s) || [])[1] || hit.f.meal;
+    return { card: { title: "Add to today's food log", rows: [["Food", hit.f.name], ["Meal", m], ["Counts", `${hit.f.kcal} kcal · ${hit.f.protein} g protein`]], confirm: "Add it", apply: () => addFood({ ...hit.f, meal: m }) }, target: { page: "nutrition", date: TODAY } };
+  }
+  function addFood(f) {
+    const a = athleteByName("Sample Athlete"); const day = a.days[TODAY];
+    const id = `${TODAY}-x${day.foods.length}-${Math.floor(rnd() * 1e4)}`;
+    day.foods.push({ id, meal: f.meal, name: f.name, kcal: f.kcal, protein: f.protein, carbs: f.carbs, fat: f.fat, sodiumMg: 300, ironMg: 1 });
+    state.ctx.highlight = id; render(id);
+    return `Added ${f.name} to ${f.meal}.`;
+  }
+  function proposeCheckin({ sleep, soreness, note }) {
+    if (!can("act")) return refuse(gateText("act"));
+    const a = athleteByName("Sample Athlete");
+    const rows = []; if (sleep) rows.push(["Sleep", `${sleep} h`]); if (soreness) rows.push(["Soreness", `${soreness} of 5`]); if (note) rows.push(["Note", note]);
+    if (!rows.length) return refuse("Tell me how you slept or how sore you are, like \"slept 6 hours, legs are sore\".");
+    return { card: { title: "Today's check-in", rows, confirm: "Save check-in", apply: () => { const d = a.days[TODAY]; d.checkin = { ...(d.checkin || { sleep: 7, soreness: 2, note: "" }), ...(sleep ? { sleep: +sleep } : {}), ...(soreness ? { soreness: +soreness } : {}), ...(note ? { note } : {}) }; render(`${TODAY}-checkin`); return "Check-in saved for today."; } }, target: { page: "day", date: TODAY, highlight: `${TODAY}-checkin` } };
+  }
+
+  // ---- schedule help ----
+  function cantTrain({ day }) {
+    const d = nextDayFromWord(day);
+    if (!d) return refuse("Which day can't you make?");
+    const a = athleteByName("Sample Athlete"), w = a.days[d] && a.days[d].workout;
+    if (!w) return refuse(`You don't have a workout on ${nice(d)}.`);
+    if (state.role === "coached") {
+      const msg = `I can't train ${nice(d)} (${w.title}).`;
+      return { card: { title: "Send your coach a note", rows: [["To", "Coach Sample"], ["Note", msg]], note: "Your coach decides where it goes. Notes show up on their Hardy tab.", confirm: "Send note", apply: () => { state.coachNotes.unshift({ from: "Sample Athlete", text: msg, date: TODAY }); return "Sent. Your coach will see it on their Hardy tab. (Prototype: switch to Head coach to see it.)"; } } };
+    }
+    if (!can("act")) return refuse(gateText("act"));
+    let to = addDays(d, 1); while (to <= END && a.days[to] && a.days[to].workout) to = addDays(to, 1);
+    if (to > END) return refuse("There's no open day left this week to move it to.");
+    return proposeChange({ field: "move_workout", from_day: d, to_day: to });
+  }
+
+  // ---- reminders, goals, meet ----
+  function proposeReminder({ what, when }) {
+    if (!can("act")) return refuse(gateText("act"));
+    const d = nextDayFromWord(when) || parseMonthDay(String(when || "")) || addDays(TODAY, 1);
+    const p = selfProfile();
+    return { card: { title: "Set a reminder", rows: [["Remind me to", what], ["On", nice(d)]], note: "Arrives as a phone notification that morning.", confirm: "Set reminder", apply: () => { p.reminders.push({ what, date: d }); render(); return `Reminder set for ${nice(d)}.`; } } };
+  }
+  function bestLoad(a, ex, until = TODAY) { const ss = sessionsOf(a, ex).filter((s) => s.date <= until); return ss.length ? Math.max(...ss.map((s) => s.top.load)) : 0; }
+  function goalStatus(a, g) {
+    const now = bestLoad(a, g.exercise), then = bestLoad(a, g.exercise, addDays(TODAY, -84));
+    const rate = then ? (now - then) / 12 : 0;
+    const left = Math.max(0, g.target - now);
+    const weeks = left === 0 ? 0 : rate > 0 ? Math.ceil(left / rate) : null;
+    const eta = weeks == null ? null : addDays(TODAY, weeks * 7);
+    return { now, rate: Math.round(rate * 10) / 10, left, eta, onPace: left === 0 ? true : eta ? eta <= g.by : false };
+  }
+  function proposeGoal({ exercise, target, by }) {
+    if (!can("act")) return refuse(gateText("act"));
+    const a = athleteByName("Sample Athlete"), ex = resolveExercise(exercise);
+    if (!ex) return refuse("Which lift is the goal for?");
+    const t = Math.round(+target);
+    if (!(t > 0)) return refuse("What weight is the goal?");
+    let d = parseMonthDay(String(by || "")) || null;
+    if (!d) {
+      const mi = MONTHS.findIndex((m) => String(by || "").toLowerCase().includes(m.slice(0, 3)));
+      if (mi >= 0) { const y = mi < 10 ? 2027 : 2026, m = mi + 1; d = addDays(m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`, -1); }
+    }
+    d = d || addDays(TODAY, 90);
+    const st = goalStatus(a, { exercise: ex, target: t, by: d });
+    return { card: { title: "Set a goal", rows: [["Goal", `${ex} ${t} lb`], ["By", nice(d)], ["Best now", `${st.now} lb`], ["Pace", st.rate > 0 ? `+${st.rate} lb a week over the last 12 weeks` : "no gain in the last 12 weeks"], ["On pace?", st.left === 0 ? "Already there" : st.eta ? (st.onPace ? `Yes, about ${nice(st.eta)}` : `Not yet: at this pace about ${nice(st.eta)}`) : "Can't tell yet"]], note: "Pace is your real rate of progress, not a promise.", confirm: "Save goal", apply: () => { selfProfile().goals.push({ exercise: ex, target: t, by: d, athlete: a.name }); state.page = "hardy"; render(); return "Goal saved. It's on your Hardy tab."; } } };
+  }
+  function proposeMeet({ date, name }) {
+    if (!can("act")) return refuse(gateText("act"));
+    const d = parseMonthDay(String(date || "")) || date;
+    if (!d || !/^\d{4}-\d\d-\d\d$/.test(d)) return refuse("When is the meet? Try \"my meet is December 12\".");
+    return { card: { title: "Meet mode", rows: [["Meet", name || "Next meet"], ["Date", nice(d)], ["Countdown", `${daysBetween(TODAY, d)} days`]], note: "Your Hardy tab shows the countdown and how your best meets were prepared for.", confirm: "Turn on meet mode", apply: () => { selfProfile().meet = { date: d, name: name || "Next meet" }; state.page = "hardy"; render(); return `Meet mode is on: ${daysBetween(TODAY, d)} days to go.`; } } };
+  }
+
+  // ---- messages ----
+  function proposeMessage({ to, text }) {
+    const a = athleteByName(to);
+    if (!a) return refuse("Who should get it?");
+    if (coachSide()) {
+      if (!scoped(a.name)) return refuse(NOT_YOURS.error);
+      return { card: { title: `Message ${a.name}`, rows: [["Message", text]], note: "Coach to athlete, like every message in Forge. Minors' guardians can see their child's messages.", confirm: "Send", apply: () => { state.messages.unshift({ from: "Coach Sample", to: a.name, text, date: TODAY }); return `Sent to ${a.name}. (Prototype: nothing was sent.)`; } } };
+    }
+    if (!opts.athleteMessages) return refuse("Forge doesn't let athletes message each other. That keeps minors safe, so it's off. You can send a note to your coach instead.");
+    return { card: { title: `Message ${a.name}`, rows: [["Message", text]], note: "This is the athlete-to-athlete switch you turned on in the test panel. Forge's rule today is zero contact between athletes.", confirm: "Send anyway", apply: () => { state.messages.unshift({ from: "Sample Athlete", to: a.name, text, date: TODAY }); return `Sent to ${a.name}. (Prototype: nothing was sent.)`; } } };
+  }
+
+  // ---- app help (Forge's own help; never tells anyone where to stand) ----
+  const HELP = [
+    [/film|record|camera|video/, "Open a training day and tap Record set on the lift. Film from wherever is easy; Forge reads any angle. The numbers come back after the set.", { page: "day", date: TODAY }],
+    [/\brpe\b|effort/, "RPE is how hard a set felt from 1 to 10. A 10 is everything you had; an 8 means about two reps left in the tank.", null],
+    [/waiver|document|paperwork|clearance/, "Your documents (waiver and medical clearance) are under Profile → Documents. Anything missing is marked there.", { page: "profile" }],
+    [/barcode|scan/, "On the Nutrition page tap Scan barcode, or just tell me \"scan this\" and I'll open it.", { page: "nutrition", date: TODAY, scanner: true }],
+    [/unit|kilo|kg\b|pounds/, "You can show weights in pounds or kilograms under Profile → Units. Anything you logged keeps the unit you typed.", { page: "profile" }],
+    [/anvil/, "The Anvil is the four-minute morning reaction check on your dashboard. It compares you only with your own earlier mornings.", null],
+    [/class|lesson/, "Classes are under Library → Classes. Chapter one of every Forge class is free.", null],
+  ];
+  function appHelp(q) { const s = q.toLowerCase(); const h = HELP.find(([rx]) => rx.test(s)); return h ? { text: h[1], target: h[2], source: "Forge help" } : null; }
+
+  // ---- recommendations (AI Coach Free Agents and coaches only) ----
+  function nextSession({ athlete }) {
+    if (!can("advice")) return refuse(gateText("advice"));
+    const a = scoped(athlete) || athleteByName("Sample Athlete");
+    const next = Object.values(a.days).find((d) => d.date > TODAY && d.workout && d.workout.planned);
+    if (!next) return refuse("Nothing is planned yet this week.");
+    const last = [...Object.values(a.days)].reverse().find((d) => d.date <= TODAY && d.checkin);
+    const ready = last && last.checkin.sleep >= 6.5 && last.checkin.soreness <= 3;
+    const b = blockAt(next.date), deload = b && Math.floor(daysBetween(b.from, next.date) / 7) % 4 === 3;
+    const lines = [...new Set(next.workout.sets.map((s) => s.exercise))].map((ex) => {
+      const ss = sessionsOf(a, ex); const prev = ss[ss.length - 1];
+      if (!prev || !prev.top.load) return `${ex}: as written`;
+      const avgRpe = prev.sets.reduce((x, s) => x + (s.rpe || 8), 0) / prev.sets.length;
+      const factor = deload ? 0.85 : !ready ? 0.95 : avgRpe < 7.5 ? 1.025 : 1;
+      return `${ex}: ${Math.round((prev.top.load * factor) / 5) * 5} lb (last time ${prev.top.load} at RPE ${avgRpe.toFixed(1)})`;
+    });
+    const why = deload ? "It's a deload week in the block, so loads drop about 15%." : !ready ? `You logged ${last.checkin.sleep} h sleep and soreness ${last.checkin.soreness} of 5, so I'd take about 5% off.` : "You're recovered and your last sets felt easy, so a small bump.";
+    const p7 = Object.values(a.days).filter((d) => d.date > addDays(TODAY, -7) && d.date <= TODAY && d.foods.length).map((d) => totals(d.foods).protein);
+    const gap = Math.round(a.profile.targets.protein - p7.reduce((x, y) => x + y, 0) / (p7.length || 1));
+    return { text: `${next.workout.title} on ${nice(next.date)}. ${why}\n${lines.map((l) => "• " + l).join("\n")}${gap > 10 ? `\nAlso: you've averaged ${gap} g under your protein target this week.` : ""}`, source: `Your last sessions and check-ins`, target: { athlete: a.name, page: "day", date: next.date } };
+  }
+
+  // ---- medical guard ----
+  const MEDICAL = /\b(hurts?|pain|painful|injur(ed|y)|swollen|sprain(ed)?|tweak(ed)?|torn|tear|concussion|dizzy|numb|doctor)\b/;
+  function medical() {
+    return { text: "I can't diagnose or treat anything. Please see a doctor or athletic trainer. I can make a report of your soreness and injury notes to show them.", source: null, target: null, offer: { kind: "injury" } };
+  }
+
+  // ================= REPORTS: computed by code, laid out as blocks the screen and the PDF both draw =================
+  // Block types: {h}, {p}, {kv: [[k, v]]}, {bars: [{label, value}], unit, ref?: {value, label}}, {table: {head, rows}}, {note}
+  const REPORT_KINDS = [
+    ["pr_prep", "PR prep (heaviest lift)"], ["diet", "Diet vs targets, 14 days"], ["volume", "Training volume, 8 weeks"],
+    ["timeline", "PR history"], ["block_review", "Block review"], ["compare_blocks", "Compare two blocks"],
+    ["sleep_perf", "Sleep and soreness beside training"], ["testing", "Testing battery"], ["injury", "Soreness and injury notes"],
+    ["meets", "Before my best meets"], ["year", "Year in review"], ["recap", "Weekly recap"], ["roster", "Roster: worth a look"],
+  ];
+  const weekLabel = (d) => nice(d).slice(5);
+  const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+  const r0 = (x) => Math.round(x);
+  function weekStats(a, from, to) {
+    const ds = Object.values(a.days).filter((d) => d.date >= from && d.date <= to && d.date <= TODAY);
+    const ws = ds.filter((d) => d.workout && !d.workout.planned);
+    const fd = ds.filter((d) => d.foods.length), cd = ds.filter((d) => d.checkin);
+    return {
+      sessions: ws.length, planned: ds.filter((d) => d.workout).length,
+      tonnage: ws.reduce((t, d) => t + d.workout.sets.reduce((x, s) => x + s.load * s.reps, 0), 0),
+      kcal: r0(avg(fd.map((d) => totals(d.foods).kcal))), protein: r0(avg(fd.map((d) => totals(d.foods).protein))), foodDays: fd.length,
+      sleep: +avg(cd.map((d) => d.checkin.sleep)).toFixed(1), soreness: +avg(cd.map((d) => d.checkin.soreness)).toFixed(1),
+    };
+  }
+  function bestIn(a, ex, from, to) { const ss = sessionsOf(a, ex).filter((s) => s.date >= from && s.date <= to); return ss.length ? Math.max(...ss.map((s) => s.top.load)) : null; }
+  const cameraNote = { note: "Bar speeds are camera readings and aren't fully calibrated yet." };
+  const notCause = { note: "Shown side by side, not as cause and effect. A pattern here is worth asking your coach about; it doesn't prove anything." };
+
+  function makeReport({ kind = "pr_prep", athlete, exercise, block, block_b }) {
+    if (!can("reports")) return refuse(gateText("reports"));
+    if (kind === "roster" && !coachSide()) return refuse("Roster reports are for coaches.");
+    const a = kind === "roster" ? allowed()[0] : scoped(athlete);
+    if (!a) return refuse(NOT_YOURS.error);
+    const R = { id: "r" + Date.now().toString(36) + Math.floor(rnd() * 1e5), kind, athlete: kind === "roster" ? role().who : a.name, created: `${nice(TODAY)}`, blocks: [] };
+    const B = R.blocks;
+    if (kind === "pr_prep") {
+      const pr = heaviest({ athlete: a.name, exercise: exercise || "clean" });
+      if (pr.error) return refuse(pr.error);
+      R.title = `${pr.exercise} PR prep`;
+      B.push({ h: "The lift" }, { kv: [["Heaviest", `${pr.load_lb} lb × ${pr.reps}`], ["Date", nice(pr.date)], ["RPE", pr.rpe], ...(pr.camera_velocity_mps ? [["Camera speed", `${pr.camera_velocity_mps} m/s`]] : [])] });
+      const dw = dietWindow({ athlete: a.name, end_date: pr.date, days: 14 });
+      if (!dw.error) {
+        B.push({ h: "Diet, the 14 days before" }, { bars: dw.daily.map((d) => ({ label: weekLabel(d.date), value: d.kcal })), unit: "kcal", ref: { value: a.profile.targets.kcal, label: "target" } });
+        B.push({ table: { head: ["Daily average", "Those 14 days", "Your usual day"], rows: [["Calories", dw.average.kcal, dw.usual_average.kcal], ["Protein (g)", dw.average.protein, dw.usual_average.protein], ["Carbs (g)", dw.average.carbs, dw.usual_average.carbs], ["Fat (g)", dw.average.fat, dw.usual_average.fat]] } });
+      }
+      const v = weeklyVolume({ athlete: a.name, end_date: addDays(pr.date, -1), weeks: 4 });
+      B.push({ h: "Training volume, the 4 weeks before" }, { bars: v.weeks.map((w) => ({ label: weekLabel(w.week_of) + (w.deload ? " (deload)" : ""), value: w.tonnage_lb })), unit: "lb moved" });
+      const t = prTimeline({ athlete: a.name, exercise: pr.exercise });
+      B.push({ h: "PR history" }, { table: { head: ["Date", "Weight", "Days since last PR"], rows: t.prs.map((p) => [nice(p.date), `${p.load_lb} × ${p.reps}`, p.days_since_previous_pr ?? "first"]) } });
+      const pg = programAt({ athlete: a.name, date: pr.date });
+      if (!pg.error) B.push({ h: "Programming" }, { p: `Week ${pg.week_of_block} of the ${pg.block} block (${nice(pg.block_from)} to ${nice(pg.block_to)}), built by ${pg.built_by}. ${pg.focus}` }, { table: { head: ["Day", "Session"], rows: pg.weekly_schedule.map((d) => [d.day, `${d.session}: ${d.lifts}`]) } });
+      if (pr.camera_velocity_mps) B.push(cameraNote);
+    } else if (kind === "diet") {
+      R.title = "Diet vs targets, last 14 days";
+      const dw = dietWindow({ athlete: a.name, days: 14 });
+      if (dw.error) return refuse(dw.error);
+      const hitK = dw.daily.filter((d) => d.kcal >= a.profile.targets.kcal * 0.9).length, hitP = dw.daily.filter((d) => d.protein >= a.profile.targets.protein * 0.9).length;
+      B.push({ kv: [["Calorie target", `${a.profile.targets.kcal} kcal`], ["Protein target", `${a.profile.targets.protein} g`], ["Days near calorie target", `${hitK} of ${dw.days_logged}`], ["Days near protein target", `${hitP} of ${dw.days_logged}`]] });
+      B.push({ h: "Calories" }, { bars: dw.daily.map((d) => ({ label: weekLabel(d.date), value: d.kcal })), unit: "kcal", ref: { value: a.profile.targets.kcal, label: "target" } });
+      B.push({ h: "Protein" }, { bars: dw.daily.map((d) => ({ label: weekLabel(d.date), value: d.protein })), unit: "g", ref: { value: a.profile.targets.protein, label: "target" } });
+      B.push({ p: "\"Near\" means within 10% of the target." });
+    } else if (kind === "volume") {
+      R.title = "Training volume, last 8 weeks";
+      const v = weeklyVolume({ athlete: a.name, weeks: 8 });
+      B.push({ bars: v.weeks.map((w) => ({ label: weekLabel(w.week_of) + (w.deload ? " (deload)" : ""), value: w.tonnage_lb })), unit: "lb moved" });
+      B.push({ table: { head: ["Week of", "Sessions", "Sets", "Reps", "Lb moved"], rows: v.weeks.map((w) => [weekLabel(w.week_of), w.sessions, w.sets, w.reps, w.tonnage_lb.toLocaleString()]) } });
+    } else if (kind === "timeline") {
+      const t = prTimeline({ athlete: a.name, exercise: exercise || "squat" });
+      if (t.error) return refuse(t.error);
+      R.title = `${t.exercise} PR history`;
+      B.push({ kv: [["PRs", t.prs.length], ["Average gap", `${t.average_days_between_prs} days`], ["Longest gap", `${t.longest_gap_days} days`]] });
+      B.push({ bars: t.prs.map((p) => ({ label: weekLabel(p.date), value: p.load_lb })), unit: "lb" });
+      B.push({ table: { head: ["Date", "Weight", "Days since last PR"], rows: t.prs.map((p) => [nice(p.date), `${p.load_lb} × ${p.reps}`, p.days_since_previous_pr ?? "first"]) } });
+    } else if (kind === "block_review") {
+      const b = BLOCKS.find((x) => x.name.toLowerCase() === String(block || "").toLowerCase()) || BLOCKS.filter((x) => x.to <= TODAY).pop() || BLOCKS[1];
+      R.title = `${b.name} block review`;
+      const early = addDays(b.from, 13), late = addDays(b.to > TODAY ? TODAY : b.to, -13);
+      B.push({ p: `${nice(b.from)} to ${nice(b.to)}. ${b.focus}` });
+      B.push({ table: { head: ["Lift", "First 2 weeks", "Last 2 weeks", "Change"], rows: MAIN_LIFTS.map((ex) => { const s = bestIn(a, ex, b.from, early), e = bestIn(a, ex, late, b.to); return [ex, s ? `${s} lb` : "-", e ? `${e} lb` : "-", s && e ? `${e - s >= 0 ? "+" : ""}${e - s} lb` : "-"]; }) } });
+      const st = weekStats(a, b.from, b.to);
+      B.push({ kv: [["Sessions", `${st.sessions} of ${st.planned}`], ["Lb moved", st.tonnage.toLocaleString()], ["Average day", `${st.kcal} kcal · ${st.protein} g protein`], ["Average sleep", `${st.sleep} h`]] });
+    } else if (kind === "compare_blocks") {
+      const x = BLOCKS.find((b) => b.name.toLowerCase() === String(block || "strength").toLowerCase()) || BLOCKS[1];
+      const y = BLOCKS.find((b) => b.name.toLowerCase() === String(block_b || "peak").toLowerCase()) || BLOCKS[2];
+      R.title = `${x.name} vs ${y.name}`;
+      const sx = weekStats(a, x.from, x.to), sy = weekStats(a, y.from, y.to);
+      const wx = Math.max(1, daysBetween(x.from, x.to < TODAY ? x.to : TODAY) / 7), wy = Math.max(1, daysBetween(y.from, y.to < TODAY ? y.to : TODAY) / 7);
+      B.push({ table: { head: ["", x.name, y.name], rows: [...MAIN_LIFTS.map((ex) => [`Best ${ex}`, bestIn(a, ex, x.from, x.to) ?? "-", bestIn(a, ex, y.from, y.to) ?? "-"]), ["Lb moved a week", r0(sx.tonnage / wx).toLocaleString(), r0(sy.tonnage / wy).toLocaleString()], ["Average kcal", sx.kcal, sy.kcal], ["Average protein (g)", sx.protein, sy.protein], ["Average sleep (h)", sx.sleep, sy.sleep]] } });
+      B.push(notCause);
+    } else if (kind === "sleep_perf") {
+      R.title = "Sleep and soreness beside training";
+      const rows = [];
+      for (let w = 7; w >= 0; w--) { const from = addDays(mondayOf(TODAY), -7 * w), st = weekStats(a, from, addDays(from, 6)); const best = bestIn(a, "Back Squat", from, addDays(from, 6)); rows.push([weekLabel(from), `${st.sleep} h`, st.soreness, st.tonnage.toLocaleString(), best ? `${best} lb` : "-"]); }
+      B.push({ table: { head: ["Week of", "Sleep", "Soreness (1-5)", "Lb moved", "Best squat"], rows } }, notCause);
+    } else if (kind === "testing") {
+      R.title = "Testing battery";
+      B.push({ table: { head: ["Date", "40 yd (s)", "Vertical (in)", "Broad (in)"], rows: a.tests.map((t) => [nice(t.date), t.forty, t.vertical, t.broad]) } });
+      const f = a.tests[0], l = a.tests[a.tests.length - 1];
+      B.push({ kv: [["40 yd", `${f.forty} → ${l.forty} s`], ["Vertical", `${f.vertical} → ${l.vertical} in`], ["Broad", `${f.broad} → ${l.broad} in`]] });
+      B.push({ note: "Times filmed with the camera aren't fully calibrated yet." });
+    } else if (kind === "injury") {
+      R.title = "Soreness and injury notes";
+      const notes = Object.values(a.days).filter((d) => d.checkin && (d.checkin.injury || d.checkin.soreness >= 4 || /knee|hamstring|shoulder|back|hip|sore|tight/i.test(d.checkin.note))).map((d) => [nice(d.date), d.checkin.soreness, d.checkin.note || "(no note)"]);
+      B.push({ p: "Everything you logged about soreness and pain, to show a doctor or athletic trainer. Hardy doesn't diagnose." });
+      B.push({ table: { head: ["Date", "Soreness (1-5)", "Note"], rows: notes.slice(-25) } });
+    } else if (kind === "meets") {
+      if (!a.meets.length) return refuse("There are no meets on record for this athlete.");
+      R.title = "Before my best meets";
+      const rows = [...a.meets].sort((x, y) => y.mark - x.mark).map((m) => { const st = weekStats(a, addDays(m.date, -14), addDays(m.date, -1)); return [`${m.name} (${nice(m.date)})`, m.result, st.tonnage.toLocaleString(), st.kcal, `${st.sleep} h`]; });
+      B.push({ table: { head: ["Meet", "Result", "Lb moved, 2 weeks before", "Average kcal", "Average sleep"], rows } }, notCause);
+    } else if (kind === "year") {
+      R.title = "Year in review";
+      const st = weekStats(a, "2026-01-01", TODAY);
+      B.push({ kv: [["Sessions", st.sessions], ["Lb moved", st.tonnage.toLocaleString()], ["Days food logged", st.foodDays], ["Average day", `${st.kcal} kcal · ${st.protein} g protein`], ["Average sleep", `${st.sleep} h`]] });
+      B.push({ table: { head: ["Lift", "PRs this year", "Best"], rows: MAIN_LIFTS.map((ex) => { const t = prTimeline({ athlete: a.name, exercise: ex }); return [ex, t.prs ? t.prs.length : 0, t.prs && t.prs.length ? `${t.prs[t.prs.length - 1].load_lb} lb` : "-"]; }) } });
+      if (a.meets.length) { const best = [...a.meets].sort((x, y) => y.mark - x.mark)[0]; B.push({ kv: [["Best meet", `${best.result} at ${best.name}, ${nice(best.date)}`]] }); }
+    } else if (kind === "recap") {
+      const from = addDays(mondayOf(TODAY), -7), to = addDays(from, 6);
+      R.title = `Weekly recap, week of ${weekLabel(from)}`;
+      const st = weekStats(a, from, to), prs = MAIN_LIFTS.flatMap((ex) => { const t = prTimeline({ athlete: a.name, exercise: ex }); return (t.prs || []).filter((p) => p.date >= from && p.date <= to).map((p) => `${ex} ${p.load_lb} lb`); });
+      B.push({ kv: [["Sessions", `${st.sessions} of ${st.planned}`], ["Lb moved", st.tonnage.toLocaleString()], ["PRs", prs.length ? prs.join(", ") : "none this week"], ["Food", `${st.kcal} kcal · ${st.protein} g protein a day (targets ${a.profile.targets.kcal} · ${a.profile.targets.protein} g)`], ["Sleep", `${st.sleep} h a night`]] });
+      const next = Object.values(a.days).filter((d) => d.date > TODAY && d.workout).map((d) => [nice(d.date), d.workout.title]);
+      if (next.length) B.push({ h: "Coming up" }, { table: { head: ["Day", "Session"], rows: next } });
+    } else if (kind === "roster") {
+      R.title = "Roster: worth a look this week";
+      const from = mondayOf(TODAY), rows = [], flags = [];
+      allowed().forEach((x) => {
+        const now = weekStats(x, addDays(from, -7), addDays(from, -1)), prior = [1, 2, 3, 4].map((k) => weekStats(x, addDays(from, -7 * (k + 1)), addDays(from, -7 * k - 1)));
+        const avgT = avg(prior.map((p) => p.tonnage)), missed = now.planned - now.sessions, food = now.foodDays;
+        rows.push([x.name, `${now.sessions} of ${now.planned}`, `${r0(now.tonnage / 1000)}k vs ${r0(avgT / 1000)}k`, `${food} of 7`, now.soreness]);
+        if (missed > 0) flags.push(`${x.name} missed ${missed} session${missed > 1 ? "s" : ""} last week.`);
+        if (avgT && now.tonnage < avgT * 0.8) flags.push(`${x.name}'s volume was ${r0(100 - (now.tonnage / avgT) * 100)}% under their usual week.`);
+        if (food < 5) flags.push(`${x.name} logged food on ${food} of 7 days.`);
+        if (now.soreness >= 3.2) flags.push(`${x.name} averaged soreness ${now.soreness} of 5.`);
+      });
+      state.coachNotes.filter((n) => role().roster.includes(n.from)).forEach((n) => flags.unshift(`Note from ${n.from}: "${n.text}"`));
+      B.push({ h: "Worth a look" }, { p: flags.length ? flags.map((f) => "• " + f).join("\n") : "Nothing stands out this week." });
+      B.push({ h: "Last week" }, { table: { head: ["Athlete", "Sessions", "Lb moved vs usual", "Food logged", "Soreness"], rows } });
+    } else return refuse("I don't know that report.");
+    return { report: R };
+  }
+  const reportStore = { all: () => store.get("hardy.reports", []), save(r) { const l = reportStore.all().filter((x) => x.id !== r.id); l.unshift(r); store.set("hardy.reports", l.slice(0, 40)); }, remove(id) { store.set("hardy.reports", reportStore.all().filter((x) => x.id !== id)); }, get(id) { return reportStore.all().find((x) => x.id === id) || (state.lastReport && state.lastReport.id === id ? state.lastReport : null); } };
+  function saveReport(r) { state.lastReport = r; reportStore.save(r); return r.id; }
+
+  function blocksHtml(blocks) {
+    return blocks.map((b) => {
+      if (b.h) return `<h4 class="rh">${esc(b.h)}</h4>`;
+      if (b.p) return `<p class="rp">${esc(b.p)}</p>`;
+      if (b.note) return `<p class="caveat">${esc(b.note)}</p>`;
+      if (b.kv) return `<div class="kv">${b.kv.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join("")}</div>`;
+      if (b.table) return `<div class="tw"><table><thead><tr>${b.table.head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${b.table.rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+      if (b.bars) {
+        const max = Math.max(...b.bars.map((x) => x.value), b.ref ? b.ref.value : 0) || 1;
+        return `<div class="rbars">${b.bars.map((x) => `<div class="rbar"><span>${esc(x.label)}</span><span class="track"><i style="width:${(x.value / max) * 100}%"></i>${b.ref ? `<em style="left:${(b.ref.value / max) * 100}%" title="${esc(b.ref.label)}"></em>` : ""}</span><span>${Number(x.value).toLocaleString()}</span></div>`).join("")}<div class="sub">${esc(b.unit)}${b.ref ? ` · line = ${esc(b.ref.label)} (${Number(b.ref.value).toLocaleString()})` : ""}</div></div>`;
+      }
+      return "";
+    }).join("");
+  }
+
+  // ---- PDF (jsPDF, drawn from the same blocks) ----
+  async function reportPdf(r) {
+    if (!window.jspdf) throw { code: "no_pdf" };
+    const doc = new window.jspdf.jsPDF({ unit: "pt", format: "letter" });
+    const W = 612, M = 48; let y = 56;
+    const line = (txt, size = 10, bold = false, color = [30, 24, 20]) => { doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setFontSize(size); doc.setTextColor(...color); doc.splitTextToSize(String(txt), W - 2 * M).forEach((l) => { if (y > 740) { doc.addPage(); y = 56; } doc.text(l, M, y); y += size + 4; }); };
+    doc.setFillColor(20, 16, 16); doc.rect(0, 0, W, 34, "F"); doc.setFillColor(200, 16, 46); doc.rect(W / 2, 0, W / 2, 34, "F");
+    doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text("FORGE · Hardy report", M, 22);
+    line(r.title, 18, true); line(`${r.athlete} · made ${r.created} · sample data (prototype)`, 9, false, [110, 98, 91]); y += 6;
+    r.blocks.forEach((b) => {
+      if (b.h) { y += 6; line(b.h, 13, true); }
+      else if (b.p) line(b.p, 10);
+      else if (b.note) line(b.note, 9, false, [168, 102, 12]);
+      else if (b.kv) b.kv.forEach(([k, v]) => line(`${k}: ${v}`, 10));
+      else if (b.table) { line(b.table.head.join("  |  "), 9, true); b.table.rows.forEach((row) => line(row.join("  |  "), 9)); }
+      else if (b.bars) {
+        const max = Math.max(...b.bars.map((x) => x.value), b.ref ? b.ref.value : 0) || 1;
+        b.bars.forEach((x) => { if (y > 740) { doc.addPage(); y = 56; } doc.setFontSize(8); doc.setTextColor(80, 70, 64); doc.text(x.label, M, y); doc.setFillColor(198, 67, 26); doc.rect(M + 110, y - 7, (x.value / max) * (W - 2 * M - 170), 8, "F"); doc.text(Number(x.value).toLocaleString(), W - M - 40, y); y += 12; });
+        line(`${b.unit}${b.ref ? ` · ${b.ref.label} ${Number(b.ref.value).toLocaleString()}` : ""}`, 8, false, [110, 98, 91]);
+      }
+    });
+    return doc.output("arraybuffer");
+  }
+
+  // ---------- program drafts (Hardy drafts, the person approves; nothing saves on its own) ----------
+  const EX_BANK = {
+    strength: { lower: ["Back Squat", "Romanian Deadlift", "Walking Lunge", "Calf Raise"], upper: ["Bench Press", "Pendlay Row", "Barbell Shoulder Press", "Pull-Up"], power: ["Box Jump", "Med Ball Rotational Throw", "Power Clean", "Broad Jump"] },
+  };
+  function draftProgram({ days = 4, goal = "strength", weeks = 4, focus = "", equipment = "full gym", session_minutes = 60 } = {}) {
+    days = Math.max(2, Math.min(6, Math.round(+days || 4)));
+    const split = days <= 2 ? ["Full Body A", "Full Body B"] : days === 3 ? ["Lower", "Upper", "Full Body"] : ["Lower A", "Upper A", "Lower B", "Upper B", "Power", "Conditioning"].slice(0, days);
+    const scheme = /power|speed|throw|explos/i.test(goal + focus) ? [4, 3] : /size|hypertroph|muscle/i.test(goal + focus) ? [3, 10] : /endur|condition/i.test(goal + focus) ? [3, 15] : [4, 5];
+    const bank = EX_BANK.strength;
+    const plan = split.map((title, i) => {
+      const pool = /Upper/.test(title) ? bank.upper : /Power/.test(title) ? bank.power : /Lower/.test(title) ? bank.lower : [bank.lower[0], bank.upper[0], bank.upper[1], bank.power[0]];
+      const n = session_minutes <= 45 ? 3 : 4;
+      const rot = / B$/.test(title) ? 1 : 0;
+      const ex = pool.slice(rot).concat(pool.slice(0, rot)).slice(0, n);
+      if (/throw|discus|rotat/i.test(focus) && !ex.includes("Med Ball Rotational Throw")) ex.unshift("Med Ball Rotational Throw");
+      return { title, exercises: ex.map((e, k) => ({ name: e, sets: k === 0 ? scheme[0] : 3, reps: /Jump|Throw|Clean/.test(e) ? 3 : k === 0 ? scheme[1] : Math.max(scheme[1], 8) })) };
+    });
+    return { name: `${days}-day ${goal} program`, days, weeks: Math.max(1, Math.min(16, +weeks || 4)), goal, focus, equipment, session_minutes, plan };
+  }
+  function parseProgramAsk(q) {
+    const s = q.toLowerCase();
+    if (!/\bprogram|\bplan\b|\bsplit\b|\broutine\b/.test(s) || !/(make|build|create|new|write|design|need)/.test(s)) return null;
+    const words = { two: 2, three: 3, four: 4, five: 5, six: 6 };
+    const dm = s.match(/(\d|two|three|four|five|six)[ -]?(?:days?|x)/);
+    const wm = s.match(/(\d{1,2})[ -]?weeks?/);
+    const mm = s.match(/(\d{2,3})[ -]?min/);
+    const goal = /power|explos|speed/.test(s) ? "power" : /size|hypertroph|muscle/.test(s) ? "size" : /endur|condition/.test(s) ? "conditioning" : "strength";
+    return { days: dm ? (+dm[1] || words[dm[1]]) : 4, weeks: wm ? +wm[1] : 4, session_minutes: mm ? +mm[1] : 60, goal, focus: /discus|throw/.test(s) ? "throws" : "" };
+  }
+  function drawDraft(m, d) {
+    const box = document.createElement("div");
+    box.className = "draft";
+    box.innerHTML = `<h4>Draft: ${esc(d.name)}</h4><div class="sub">${d.weeks} weeks · ${d.days} days a week · about ${d.session_minutes} min${d.focus ? " · " + esc(d.focus) : ""}</div>` +
+      d.plan.map((day, i) => `<div class="dday"><b>Day ${i + 1} · ${esc(day.title)}</b>${day.exercises.map((e) => `${esc(e.name)} ${e.sets}×${e.reps}`).join(" · ")}</div>`).join("") +
+      `<div class="acts"><button class="yes">Approve and save</button><button class="edit">Open in Program Builder</button><button class="no">Discard</button></div>`;
+    box.querySelector(".yes").onclick = () => { box.querySelector(".acts").innerHTML = `<span class="sub">Saved as a draft program. (Prototype: nothing is really saved.)</span>`; };
+    box.querySelector(".edit").onclick = () => { box.querySelector(".acts").innerHTML = `<span class="sub">In Forge this opens the Program Builder with the draft loaded, where you can change anything before saving.</span>`; };
+    box.querySelector(".no").onclick = () => { box.remove(); };
+    m.appendChild(box);
+    log.scrollTop = log.scrollHeight;
+  }
+
+
+  // ================= UNDERSTANDING A QUESTION (the built-in finder; the AI uses the same functions as tools) =================
+  function parseDates(q) {
+    const s = q.toLowerCase();
+    if (/\btoday\b/.test(s)) return { from: TODAY, to: TODAY };
+    if (/\byesterday\b/.test(s)) { const d = addDays(TODAY, -1); return { from: d, to: d }; }
+    const md = s.match(/\b(\d{1,2})\/(\d{1,2})\b/);
+    if (md) { const d = `2026-${md[1].padStart(2, "0")}-${md[2].padStart(2, "0")}`; return { from: d, to: d }; }
+    const mi = MONTHS.findIndex((m) => new RegExp(`\\b${m}\\b|\\b${m.slice(0, 3)}\\b`).test(s));
+    const wd = WD.find((w) => s.includes(w.toLowerCase()));
+    if (mi >= 0) {
+      const dn = s.match(new RegExp(`${MONTHS[mi].slice(0, 3)}[a-z]*\\.?\\s+(\\d{1,2})`));
+      const mm = String(mi + 1).padStart(2, "0");
+      if (dn) { const d = `2026-${mm}-${dn[1].padStart(2, "0")}`; return { from: d, to: d }; }
+      return { from: `2026-${mm}-01`, to: `2026-${mm}-31`, weekday: wd };
+    }
+    if (wd) { let d = addDays(TODAY, -1); while (weekday(d) !== wd) d = addDays(d, -1); return { from: d, to: d }; }
+    return null;
+  }
+  const fromAction = (res) => (res.refuse ? { text: res.refuse, target: res.target || null } : res.card ? { text: "Here it is. Nothing changes until you tap the button.", card: res.card, target: res.target || null } : res);
+  const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+
+  function route(q) {
+    const s = q.toLowerCase().trim();
+    let who = state.athlete;
+    if (coachSide()) { const named = ATHLETES.find((a) => s.includes(a.name.split(" ")[0].toLowerCase())); if (named) who = named.name; }
+    else who = "Sample Athlete";
+    const history = /^(when|what day|show|find|which)/.test(s);
+
+    // messages first, because "tell Jordan my knee hurts" is a message, not a medical question
+    const msg = s.match(/^(?:tell|message|text|send)\s+(\w+)\s+(?:that\s+)?(.+)/);
+    if (msg && athleteByName(msg[1])) return fromAction(proposeMessage({ to: msg[1], text: q.slice(q.toLowerCase().indexOf(msg[2])) }));
+    if (MEDICAL.test(s) && !history) return medical();
+    if (!scoped(who)) return { text: NOT_YOURS.error };
+
+    // app help
+    if (/^(how do i|how can i|what is|what's|whats|where is|where's|where do i|help)/.test(s) && !/(my |did i|i ate|i do)/.test(s)) { const h = appHelp(q); if (h) return h; }
+
+    // account and profile changes
+    if (/password|delete my account|close my account|remove my coach/.test(s)) return fromAction(proposeChange({ field: s.includes("password") ? "password" : "delete" }));
+    const em = q.match(/[\w.+-]+@[\w-]+\.[\w.]+/);
+    if (em && /email/.test(s)) return fromAction(proposeChange({ field: "email", value: em[0] }));
+    const ph = q.match(/\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4}/);
+    if (ph && /phone|number/.test(s)) return fromAction(proposeChange({ field: "phone", value: ph[0] }));
+    if (/height/.test(s) && /(change|update|set|to|now|i'm|i am)/.test(s)) { const hv = q.match(/\d\s*(?:'|ft|foot|feet)\s*\d{0,2}|\d{2}\s*(?:in|inches)/i); return fromAction(proposeChange({ field: "height", value: hv ? hv[0] : "" })); }
+    if (/\b(weigh|weight|bodyweight|weighed)\b/.test(s) && /\d{2,3}/.test(s) && !/(heaviest|lift|squat|bench|clean|goal|remind)/.test(s)) { const wv = q.match(/\d{2,3}(?:\.\d)?\s*(?:kg|lb|lbs|pounds)?/i); return fromAction(proposeChange({ field: "weight", value: wv[0] })); }
+    if (/protein/.test(s) && /target|goal/.test(s) && /\d{2,3}/.test(s)) return fromAction(proposeChange({ field: "protein_target", value: q.match(/\d{2,3}/)[0], athlete: who }));
+    if (/calorie/.test(s) && /target|goal/.test(s) && /\d{3,4}/.test(s)) return fromAction(proposeChange({ field: "calorie_target", value: q.match(/\d{3,4}/)[0], athlete: who }));
+    const mv = s.match(/move (\w+)(?:'s)?(?: \w+)?(?: workout| session| training| lift| day)? to (\w+)/);
+    if (mv) return fromAction(proposeChange({ field: "move_workout", from_day: mv[1], to_day: mv[2], athlete: who }));
+
+    // logging by talking
+    if (/\b(scan|barcode)\b/.test(s)) { if (!can("act")) return { text: gateText("act") }; return { text: "Opening the barcode scanner on today's food log.", target: { page: "nutrition", date: TODAY, scanner: true, auto: true } }; }
+    const ate = s.match(/^(?:i had|i ate|ate|had|log|add)\s+(.+?)(?:\s+for\s+(breakfast|lunch|dinner|snack))?$/);
+    if (ate && !/(workout|set|squat|bench|clean|weigh)/.test(ate[1])) return fromAction(proposeFood({ text: ate[1], meal: ate[2] }));
+    const slept = s.match(/slept\s+(\d+(?:\.\d)?)/), sore = /(sore|tight|stiff|beat up|exhausted)/.test(s);
+    if ((slept || (sore && /\b(legs|i'm|im|i am|feel|feeling)\b/.test(s))) && !history) return fromAction(proposeCheckin({ sleep: slept ? slept[1] : null, soreness: sore ? (/(very|really|super|exhausted|beat up)/.test(s) ? 5 : 4) : null, note: sore ? q.replace(/^.*?(?=\b(legs|my|i'm|im|feel)\b)/i, "") : "" }));
+
+    // schedule, reminders, goals, meet
+    const cant = s.match(/(?:can't|cant|cannot|can not|won't|wont)\s+(?:train|make it|lift|come|go)[^a-z]*(?:on\s+|this\s+)?(\w+)?/);
+    if (cant) return fromAction(cantTrain({ day: cant[1] || "tomorrow" }));
+    const rem = s.match(/remind me (?:to )?(.+?)(?:\s+(?:on|this|next)\s+(\w+))?$/);
+    if (rem) { const whenWord = rem[2] || (rem[1].match(/\b(tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/) || [])[1]; return fromAction(proposeReminder({ what: rem[1].replace(/\b(tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/, "").trim(), when: whenWord })); }
+    const goal = s.match(/(?:i want|goal|hit|get)\s+(?:a |an |to )?(\d{2,3})\s*(?:lb|lbs|pound)?\s*(?:on (?:my |the )?)?([a-z -]+?)(?:\s+by\s+(.+))?$/);
+    if (goal && resolveExercise(goal[2])) return fromAction(proposeGoal({ exercise: goal[2], target: goal[1], by: goal[3] || "" }));
+    if (/\b(meet|competition|comp)\b/.test(s) && /\b(is|on|set)\b/.test(s) && parseMonthDay(q)) return fromAction(proposeMeet({ date: parseMonthDay(q), name: (q.match(/(?:the |my )([A-Z][\w ]+?) (?:is|on)/) || [])[1] }));
+    if (/before my best meets|best meets|prepped for.*meet/.test(s)) return reportReply({ kind: "meets", athlete: who });
+
+    // recommendations
+    if (/(what should i (do|lift|use|put)|next session|suggest|recommend|how much should i)/.test(s)) { if (!can("advice")) return { text: gateText("advice") }; return fromAction(nextSession({ athlete: who })); }
+    if (/\b(should i|what weight|advice|how do i get (stronger|bigger|faster))\b/.test(s) && !can("advice")) return { text: gateText("advice") };
+
+    // program drafts
+    const prog = parseProgramAsk(q);
+    if (prog) { if (!can("programs")) return { text: gateText("programs"), target: state.role === "coached" ? { page: "day", date: TODAY } : null }; return { text: state.role === "assistant" ? "Program changes for the team go through the head coach. Here's a draft you can send them." : "Here's a draft. Nothing is saved until you approve it.", source: "Your request", draft: draftProgram(prog) }; }
+
+    // deep questions and reports
+    const exq = resolveExercise(s) || (/\b(prep|diet|volume|programm?ing|before|that)\b/.test(s) ? state.ctx.exercise : null);
+    const n = s.match(/(\d+|two|three|four)\s*(week|day)/);
+    const windowDays = n ? (+n[1] || WORDS[n[1]]) * (n[2] === "week" ? 7 : 1) : 14;
+    if (/\b(report|pdf)\b/.test(s)) {
+      const kind = /recap/.test(s) ? "recap" : /roster|worth a look/.test(s) ? "roster" : /year/.test(s) ? "year" : /injur|soreness/.test(s) ? "injury" : /test/.test(s) ? "testing" : /compare/.test(s) ? "compare_blocks" : /block/.test(s) ? "block_review" : /sleep/.test(s) ? "sleep_perf" : /meet/.test(s) ? "meets" : /history|timeline/.test(s) ? "timeline" : /diet|food|nutrition|protein/.test(s) && !exq ? "diet" : /volume/.test(s) && !exq ? "volume" : "pr_prep";
+      return reportReply({ kind, athlete: who, exercise: exq || "clean", block: (s.match(/\b(base|strength|peak)\b/) || [])[1], block_b: (s.match(/\b(base|strength|peak)\b.*\b(base|strength|peak)\b/) || [])[2] });
+    }
+    if (/worth a look|who missed|who('s| is) (behind|trending)/.test(s)) return reportReply({ kind: "roster", athlete: who });
+    if (/(compare|vs\.?|versus).*\b(block|summer|fall|base|strength|peak)\b/.test(s)) return reportReply({ kind: "compare_blocks", athlete: who, block: /summer/.test(s) ? "strength" : (s.match(/\b(base|strength|peak)\b/) || [])[1], block_b: /fall/.test(s) ? "peak" : (s.match(/\b(base|strength|peak)\b.*\b(base|strength|peak)\b/) || [])[2] });
+    if (/(heaviest|most|max|biggest|best|pr\b|record)/.test(s) && exq && /(day|when|what|which)/.test(s) && !/(diet|ate|eat|volume|prep|program|how long|between)/.test(s)) {
+      const h = heaviest({ athlete: who, exercise: exq });
+      if (h.error) return { text: "I couldn't find that in the logs." };
+      state.ctx = { athlete: h.athlete, exercise: h.exercise, date: h.date };
+      return { text: `${possessive(h.athlete)} heaviest ${h.exercise}: ${h.load_lb} lb × ${h.reps} on ${nice(h.date)} (RPE ${h.rpe}).${h.camera_velocity_mps ? ` Camera speed ${h.camera_velocity_mps} m/s, not fully calibrated.` : ""} Ask "what was my diet the 2 weeks before?" or "how did I prep?" next.`, source: `${h.exercise}, ${nice(h.date)}`, target: { athlete: h.athlete, page: "day", date: h.date, highlight: h.set_id }, offer: { kind: "pr_prep", athlete: h.athlete, exercise: h.exercise } };
+    }
+    if (/(diet|ate|eat|food|nutrition|calorie|macro|meal)/.test(s) && /(before|leading|prior|lead up|prep)/.test(s)) {
+      if (!can("reports")) return { text: gateText("reports") };
+      const ctx = exq ? heaviest({ athlete: who, exercise: exq }) : null, ok = ctx && !ctx.error;
+      const dw = dietWindow({ athlete: who, end_date: ok ? ctx.date : addDays(TODAY, 1), days: windowDays });
+      if (dw.error) return { text: "I couldn't find food logged then." };
+      if (ok) state.ctx = { athlete: ctx.athlete, exercise: ctx.exercise, date: ctx.date };
+      const diff = (k) => { const d = dw.average[k] - dw.usual_average[k]; return `${d >= 0 ? "+" : ""}${d}`; };
+      return { text: `${windowDays} days before ${ok ? `the ${ctx.exercise} PR on ${nice(ctx.date)}` : "today"} (${nice(dw.from)} to ${nice(dw.to)}, ${dw.days_logged} days logged): ${dw.average.kcal} kcal, ${dw.average.protein} g protein, ${dw.average.carbs} g carbs, ${dw.average.fat} g fat a day. That's ${diff("kcal")} kcal and ${diff("protein")} g protein against your usual day.`, source: `Food log, ${nice(dw.from)} to ${nice(dw.to)}`, target: { athlete: dw.athlete, page: "nutrition", date: dw.to }, offer: { kind: ok ? "pr_prep" : "diet", athlete: dw.athlete, exercise: ok ? ctx.exercise : undefined } };
+    }
+    if (/volume|how did i prep|\bprep(are|aring|aration)?\b|lead(ing)? up/.test(s)) {
+      if (!can("reports")) return { text: gateText("reports") };
+      const ctx = exq ? heaviest({ athlete: who, exercise: exq }) : null, ok = ctx && !ctx.error;
+      const v = weeklyVolume({ athlete: who, end_date: ok ? addDays(ctx.date, -1) : TODAY, weeks: 4 });
+      if (v.error) return { text: v.error };
+      if (ok) state.ctx = { athlete: ctx.athlete, exercise: ctx.exercise, date: ctx.date };
+      const prog2 = ok ? programAt({ athlete: who, date: ctx.date }) : null;
+      return { text: `The 4 weeks ${ok ? `before the ${ctx.exercise} PR on ${nice(ctx.date)}` : "up to today"}:\n${v.weeks.map((w) => `• Week of ${weekLabel(w.week_of)}: ${w.sessions} sessions, ${w.sets} sets, ${w.tonnage_lb.toLocaleString()} lb moved${w.deload ? " (deload)" : ""}`).join("\n")}${prog2 && !prog2.error ? `\nWeek ${prog2.week_of_block} of the ${prog2.block} block: ${prog2.focus}` : ""}`, source: "Workout logs", target: ok ? { athlete: who, page: "day", date: ctx.date } : null, offer: { kind: ok ? "pr_prep" : "volume", athlete: v.athlete, exercise: ok ? ctx.exercise : undefined } };
+    }
+    if (exq && /(how long|between|before i broke|since my last|gap)/.test(s) && /(pr|record|broke|best)/.test(s)) {
+      const t = prTimeline({ athlete: who, exercise: exq });
+      if (t.error || !t.prs.length) return { text: "I couldn't find PRs for that lift." };
+      const last = t.prs[t.prs.length - 1], prev = t.prs[t.prs.length - 2];
+      state.ctx = { athlete: t.athlete, exercise: t.exercise, date: last.date };
+      return { text: `${t.exercise}: ${t.prs.length} PRs since ${nice(t.prs[0].date)}. The latest, ${last.load_lb} lb on ${nice(last.date)}, came ${last.days_since_previous_pr ?? 0} days after the one before${prev ? ` (${prev.load_lb} lb on ${nice(prev.date)})` : ""}. A new PR came every ${t.average_days_between_prs} days on average; the longest wait was ${t.longest_gap_days} days.`, source: `${t.exercise} history`, target: { athlete: t.athlete, page: "progress", exercise: t.exercise, highlight: `best-${t.exercise}` }, offer: { kind: "timeline", athlete: t.athlete, exercise: t.exercise } };
+    }
+    if (/programm?ing|program look|what (was|is) my program|training block|\bblock\b/.test(s)) {
+      const date = (parseDates(q) || {}).from || (exq && state.ctx.exercise === exq ? state.ctx.date : state.ctx.date) || TODAY;
+      const p = programAt({ athlete: who, date });
+      if (p.error) return { text: p.error };
+      return { text: `On ${nice(p.date)}: week ${p.week_of_block} of the ${p.block} block (${nice(p.block_from)} to ${nice(p.block_to)}), built by ${p.built_by}. ${p.focus}\n${p.weekly_schedule.map((d) => `• ${d.day}: ${d.session}, ${d.lifts}`).join("\n")}`, source: `${p.block} block`, target: { athlete: p.athlete, page: "day", date: p.date }, offer: { kind: "block_review", athlete: p.athlete, block: p.block } };
+    }
+    if (/how.*(sleep|soreness).*(affect|train|lift|perform)|sleep.*beside/.test(s)) return reportReply({ kind: "sleep_perf", athlete: who });
+    if (/\b(40|forty|vertical|broad jump|testing)\b/.test(s)) return reportReply({ kind: "testing", athlete: who });
+
+    // finding
+    const ex = resolveExercise(s);
+    const range = parseDates(q);
+    const food = /eat|ate|meal|food|protein|calorie|breakfast|lunch|dinner|snack|carb|sodium|iron/.test(s);
+    if (ex && /best|pr\b|max|heaviest|strongest|progress|last time|when did i last|improv/.test(s)) {
+      const h = liftHistory({ athlete: who, exercise: ex });
+      if (h.error) return { text: "I couldn't find that in the logs." };
+      const last = /last/.test(s) && !/best/.test(s), ref = last ? h.last : h.best;
+      state.ctx = { athlete: h.athlete, exercise: h.exercise, date: ref.date };
+      return { text: `${possessive(h.athlete)} ${last ? "last" : "best"} ${h.exercise}: ${ref.top_set} on ${nice(ref.date)}, about ${ref.est_max_lb} lb estimated max.${ref.camera_velocity_mps ? ` Camera speed ${ref.camera_velocity_mps} m/s, not fully calibrated.` : ""}`, source: `${h.exercise}, ${nice(ref.date)}`, target: { athlete: h.athlete, page: "progress", exercise: h.exercise, highlight: `best-${h.exercise}` }, offer: { kind: "timeline", athlete: h.athlete, exercise: h.exercise } };
+    }
+    if (range) {
+      const days = findDays({ athlete: who, from: range.from, to: range.to, weekday: range.weekday }).days || [];
+      if (!days.length) return { text: "I couldn't find anything logged then." };
+      if (days.length > 1) return { text: `I found ${days.length} ${range.weekday ? range.weekday + "s" : "days"} then:\n${days.map((d) => `• ${nice(d.date)}: ${food ? d.foods : d.workout}`).join("\n")}\nOpening the first one.`, source: `${days.length} days`, target: { athlete: who, page: food ? "nutrition" : "day", date: days[0].date } };
+      const d = getDay({ athlete: who, date: days[0].date });
+      if (food) { const top = d.foods.reduce((b, f) => (f.kcal > b.kcal ? f : b), d.foods[0]); return { text: `${nice(d.date)}: ${d.foods.map((f) => `${f.meal} ${f.name}`).join(", ")}. ${d.totals.kcal} kcal, ${d.totals.protein} g protein.`, source: `Food log, ${nice(d.date)}`, target: { athlete: who, page: "nutrition", date: d.date, highlight: top && top.id } }; }
+      if (ex && d.workout) { const sets = d.workout.sets.filter((x) => x.exercise === ex); if (sets.length) return { text: `${nice(d.date)}, ${ex}: ${sets.map((x) => `${x.load_lb} × ${x.reps}`).join(", ")}.`, source: `${d.workout.title}, ${nice(d.date)}`, target: { athlete: who, page: "day", date: d.date, highlight: `${d.date}-${ex}` } }; }
+      if (d.workout) return { text: `${nice(d.date)}: ${d.workout.title}, ${d.workout.sets.length} sets (${[...new Set(d.workout.sets.map((x) => x.exercise))].join(", ")}).${d.workout.note ? ` Note: "${d.workout.note}"` : ""}`, source: `${d.workout.title}, ${nice(d.date)}`, target: { athlete: who, page: "day", date: d.date } };
+      return { text: `${nice(d.date)} was a rest day. ${d.totals.kcal} kcal logged.`, source: `Day, ${nice(d.date)}`, target: { athlete: who, page: "day", date: d.date } };
+    }
+    if (/\b(log|add|change|edit|delete|remove|update)\b/.test(s)) return { text: can("act") ? "I didn't catch what to change. Try \"I had a protein shake\", \"change my phone to 555 010 9999\" or \"move Thursday to Saturday\"." : gateText("act") };
+    const h = appHelp(q); if (h) return h;
+    const words = s.replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 3 && !["what", "when", "show", "find", "with", "that", "have", "about", "last", "time", "were", "does", "feel", "felt", "tight"].includes(w));
+    for (const w of words) {
+      const hit = findDays({ athlete: who, text: w }).days || [];
+      if (!hit.length) continue;
+      const d = hit[hit.length - 1], day = scoped(who).days[d.date];
+      const wNote = day.workout && day.workout.note && day.workout.note.toLowerCase().includes(w) ? day.workout.note : null;
+      const cNote = day.checkin && day.checkin.note && day.checkin.note.toLowerCase().includes(w) ? day.checkin.note : null;
+      const note = wNote || cNote;
+      return { text: `"${w}" shows up on ${hit.length} day${hit.length > 1 ? "s" : ""}. The most recent is ${nice(d.date)}${note ? `: "${note}"` : ""}.`, source: note ? `${wNote ? "Workout note" : "Check-in"}, ${nice(d.date)}` : nice(d.date), target: { athlete: who, page: food && !note ? "nutrition" : "day", date: d.date, highlight: wNote ? `${d.date}-wnote` : cNote ? `${d.date}-checkin` : undefined } };
+    }
+    return { text: "I couldn't find that. Try a date (\"July 14\"), a lift (\"heaviest clean\"), a food (\"chicken\"), or ask me to change something." };
+  }
+  function reportReply(args) {
+    const res = makeReport(args);
+    if (res.refuse) return { text: res.refuse };
+    const id = saveReport(res.report);
+    return { text: `I made "${res.report.title}". It's saved on your Hardy tab with a PDF button.`, source: "Your logs", reportId: id };
+  }
+
+  // ================= NAVIGATION HARDY HANDS BACK =================
+  function targetLabel(t) {
+    if (t.page === "progress") return `${t.exercise} progress`;
+    if (t.page === "profile") return "Profile";
+    if (t.page === "hardy") return "Hardy tab";
+    return `${t.page === "nutrition" ? "Nutrition" : "Training"}, ${nice(t.date)}`;
+  }
+  function validTarget(t) {
+    if (!t || !["day", "nutrition", "progress", "profile", "hardy"].includes(t.page)) return null;
+    if (t.page === "profile" || t.page === "hardy") return t;
+    const a = scoped(t.athlete || state.athlete);
+    if (!a) return null;
+    if (t.page !== "progress" && !a.days[t.date]) return null;
+    return { ...t, athlete: a.name };
+  }
+  function goTo(t) {
+    if (t.athlete) state.athlete = t.athlete;
+    state.page = t.page;
+    if (t.date) state.date = t.date;
+    if (t.exercise) state.exercise = t.exercise;
+    state.scanner = !!t.scanner;
+    render(t.scanner ? "scanner" : t.highlight);
+  }
+  function openReport(id) { state.reportId = id; state.page = "report"; render(); }
+
+  // ================= QUESTION KINDS (counted, never the words) AND THE DAILY CAP =================
+  function kindOf(q) {
+    const s = q.toLowerCase();
+    if (/report|pdf|recap/.test(s)) return "Reports";
+    if (/program|routine|split/.test(s)) return "Programs";
+    if (/email|phone|height|weigh|target|move|i had|i ate|slept|remind|goal|meet|scan/.test(s)) return "Changes";
+    if (/eat|ate|meal|food|protein|calorie|carb|breakfast|lunch|dinner|snack|diet/.test(s)) return "Nutrition";
+    if (/best|pr\b|max|progress|heaviest|volume|prep/.test(s)) return "Progress";
+    if (/how do i|what is|where/.test(s)) return "App help";
+    if (/squat|bench|lift|workout|train|set|row|press|jump|clean|velocity|rpe/.test(s)) return "Training";
+    return "Other";
+  }
+  const KINDS = ["Training", "Nutrition", "Progress", "Changes", "Reports", "Programs", "App help", "Other"];
+  function countKind(k) { const c = store.get("hardy.kinds", {}); c[k] = (c[k] || 0) + 1; store.set("hardy.kinds", c); drawBars(); }
+  function drawBars() {
+    const c = store.get("hardy.kinds", {}), max = Math.max(1, ...KINDS.map((k) => c[k] || 0));
+    $("bars").innerHTML = KINDS.map((k) => `<div class="bar"><span>${k}</span><span><i style="width:${((c[k] || 0) / max) * 100}%"></i></span><span>${c[k] || 0}</span></div>`).join("");
+  }
+  const todayKey = () => new Date().toISOString().slice(0, 10);
+  function capUsed() { const c = store.get("hardy.cap", { day: "", n: 0 }); return c.day === todayKey() ? c.n : 0; }
+  function spendCap() { store.set("hardy.cap", { day: todayKey(), n: capUsed() + 1 }); drawCap(); }
+  function drawCap() { $("capLine").textContent = `${Math.max(0, DAILY_CAP - capUsed())} of ${DAILY_CAP} questions left today`; }
+
+  // ================= AI HARDY (Claude, through this page's sample capability) =================
+  let sample = null, tts = null, downloads = null, aiOff = false, canImages = false;
+  (async () => {
+    const use = async (n) => { try { return window.claude ? await window.claude.use(n) : null; } catch { return null; } };
+    [sample, tts, downloads] = await Promise.all([use("sample"), use("tts"), use("downloads")]);
+    try { canImages = !!(sample && (await sample.limits()).images); } catch { canImages = false; }
+    drawEngine();
+  })();
+  function drawEngine() { $("engineLine").textContent = sample && !aiOff ? "AI on" : "Built-in finder"; }
+  function rules() {
+    const r = role();
+    return `You are Hardy the Hammer, the assistant inside Forge, a training app. Today is ${TODAY} (all dates 2026 unless said).
+Person asking: ${r.label}. Athletes they may see: ${r.roster.join(", ")}. Default athlete: ${coachSide() ? state.athlete : "Sample Athlete"}.
+Their plan allows: ${r.features.join(", ")}.
+RULES
+1. Every number, date, food and lift comes from a tool. Never guess. If tools find nothing, say "I couldn't find that."
+2. Name where each answer came from (date and entry). 1-4 short sentences, plain text, no markdown, no emoji.
+3. Advice: ${can("advice") ? "allowed, briefly, grounded in their own logs. Never medical: for pain or injury say to see a doctor or athletic trainer and offer the injury report." : state.role === "coached" ? "NOT allowed. This person is coached: find, show, change and report only. For advice say it's one for their coach." : "NOT on this plan (Basic). Say it's part of AI Coach ($9.99)."}
+4. Changes go ONLY through do_action, which shows the person a card to confirm. Never say a change is done. Never change a password, delete an account or remove a coach.
+5. Reports: make_report builds and saves one; say it is on their Hardy tab.
+6. Camera speeds (camera_velocity_mps) are not fully calibrated: say so when you quote one.
+7. Patterns are observations, never cause ("came after", not "because of").
+8. Athletes cannot message other athletes (do_action will refuse unless the test switch is on).
+9. Call show_on_screen once with the best place to look when there is one.`;
+  }
+  let pending = {};
+  const obj = (props, req) => ({ type: "object", properties: props, ...(req ? { required: req } : {}) });
+  const str = { type: "string" }, num = { type: "number" };
+  const tools = [
+    { name: "find_days", description: "Days with logs, filtered by date range, weekday or a word in workouts, foods or notes.", inputSchema: obj({ athlete: str, from: str, to: str, weekday: str, text: str }), execute: (i) => findDays(i || {}) },
+    { name: "get_day", description: "Everything on one day: sets (with ids), foods (with ids), totals, check-in.", inputSchema: obj({ athlete: str, date: str }, ["date"]), execute: (i) => getDay(i || {}) },
+    { name: "heaviest_lift", description: "The heaviest set ever logged for a lift.", inputSchema: obj({ athlete: str, exercise: str }, ["exercise"]), execute: (i) => heaviest(i || {}) },
+    { name: "pr_timeline", description: "Every PR for a lift with days between them.", inputSchema: obj({ athlete: str, exercise: str }, ["exercise"]), execute: (i) => prTimeline(i || {}) },
+    { name: "diet_window", description: "Daily calories and macros for N days before end_date (exclusive), with averages and the usual day.", inputSchema: obj({ athlete: str, end_date: str, days: num }), execute: (i) => (can("reports") ? dietWindow(i || {}) : { error: gateText("reports") }) },
+    { name: "weekly_volume", description: "Sessions, sets, reps and lb moved per week for N weeks ending at end_date.", inputSchema: obj({ athlete: str, end_date: str, weeks: num, exercise: str }), execute: (i) => (can("reports") ? weeklyVolume(i || {}) : { error: gateText("reports") }) },
+    { name: "program_at", description: "The program block and weekly schedule on a date.", inputSchema: obj({ athlete: str, date: str }), execute: (i) => programAt(i || {}) },
+    { name: "do_action", description: "Propose a change; the person confirms on a card. action: change_profile (field email|phone|height|weight, value) | change_target (field protein_target|calorie_target, value, athlete) | move_workout (from_day, to_day, athlete) | log_food (text, meal) | checkin (sleep, soreness, note) | cant_train (day) | reminder (what, when) | goal (exercise, target, by) | meet (date YYYY-MM-DD, name) | message (to, text) | next_session (athlete).",
+      inputSchema: obj({ action: str, field: str, value: str, athlete: str, from_day: str, to_day: str, text: str, meal: str, sleep: num, soreness: num, note: str, day: str, what: str, when: str, exercise: str, target: num, by: str, date: str, name: str, to: str }, ["action"]),
+      execute: (i) => {
+        const a = i || {}, map = { change_profile: () => proposeChange(a), change_target: () => proposeChange(a), move_workout: () => proposeChange({ ...a, field: "move_workout" }), log_food: () => proposeFood(a), checkin: () => proposeCheckin(a), cant_train: () => cantTrain(a), reminder: () => proposeReminder(a), goal: () => proposeGoal(a), meet: () => proposeMeet(a), message: () => proposeMessage(a), next_session: () => nextSession(a) };
+        const f = map[a.action]; if (!f) return { error: "Unknown action." };
+        const res = f();
+        if (res.refuse) return { refused: res.refuse };
+        if (res.card) { pending.card = res.card; if (res.target) pending.target = validTarget(res.target); return { shown_to_person_for_confirmation: res.card.title, rows: res.card.rows }; }
+        if (res.text) { if (res.target) pending.target = validTarget(res.target); return { result: res.text }; }
+        return { ok: true };
+      } },
+    { name: "make_report", description: `Build and save a report. kind: ${REPORT_KINDS.map((k) => k[0]).join(" | ")}. exercise for pr_prep/timeline; block/block_b (base|strength|peak) for block_review/compare_blocks.`, inputSchema: obj({ kind: str, athlete: str, exercise: str, block: str, block_b: str }, ["kind"]),
+      execute: (i) => { const res = makeReport(i || {}); if (res.refuse) return { refused: res.refuse }; pending.reportId = saveReport(res.report); return { saved: res.report.title }; } },
+    { name: "draft_program", description: "Draft a program (days, weeks, goal, focus, session_minutes). Shows it to approve; saves nothing.", inputSchema: obj({ days: num, weeks: num, goal: str, focus: str, session_minutes: num }), execute: (i) => { if (!can("programs")) return { refused: gateText("programs") }; pending.draft = draftProgram(i || {}); return { drafted: true }; } },
+    { name: "app_help", description: "Forge's own help on how to use the app.", inputSchema: obj({ question: str }, ["question"]), execute: (i) => appHelp(String((i || {}).question || "")) || { result: "No help entry for that." } },
+    { name: "show_on_screen", description: "Set where 'Take me there' goes. page: day | nutrition | progress | profile | hardy. highlight: a set or food id from get_day, or 'best-<Exercise>' on progress.", inputSchema: obj({ athlete: str, page: str, date: str, exercise: str, highlight: str }, ["page"]),
+      execute: (i) => { const t = validTarget({ athlete: (i && i.athlete) || state.athlete, ...(i || {}) }); if (!t) return { error: "That place doesn't exist or isn't visible to this person." }; pending.target = t; return { ok: true }; } },
+  ];
+
+  // ================= THE PANEL =================
+  const log = $("log");
+  function addMsg(who, text, extra = {}) {
+    const m = document.createElement("div");
+    m.className = "msg " + who;
+    const body = document.createElement("span"); body.textContent = text; m.appendChild(body);
+    if (extra.source) { const s = document.createElement("span"); s.className = "src"; s.textContent = "From: " + extra.source; m.appendChild(s); }
+    const acts = document.createElement("div"); acts.className = "macts";
+    const target = extra.target ? validTarget(extra.target) : null;
+    if (target) { const b = document.createElement("button"); b.className = "goto"; b.textContent = "Take me there · " + targetLabel(target); b.onclick = () => goTo(target); acts.appendChild(b); }
+    if (extra.reportId) { const b = document.createElement("button"); b.className = "goto"; b.textContent = "Open report"; b.onclick = () => openReport(extra.reportId); acts.appendChild(b); }
+    if (extra.offer && can("reports")) { const b = document.createElement("button"); b.className = "goto ghostgo"; b.textContent = "Save as report"; b.onclick = () => { const r = reportReply(extra.offer); b.remove(); addMsg("hardy", r.text, r); }; acts.appendChild(b); }
+    if (who === "hardy" && opts.readAloud && tts) { const b = document.createElement("button"); b.className = "goto ghostgo"; b.textContent = "Read aloud"; b.onclick = () => tts.speak(text).catch(() => {}); acts.appendChild(b); }
+    if (acts.children.length) m.appendChild(acts);
+    if (extra.card) drawCard(m, extra.card);
+    if (extra.draft) drawDraft(m, extra.draft);
+    log.appendChild(m); log.scrollTop = log.scrollHeight;
+    return m;
+  }
+  function drawCard(m, c) {
+    const box = document.createElement("div"); box.className = "acard";
+    box.innerHTML = `<h4>${esc(c.title)}</h4>${c.rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v wrapv">${esc(v)}</span></div>`).join("")}${c.note ? `<div class="sub">${esc(c.note)}</div>` : ""}<div class="acts"><button class="yes">${esc(c.confirm || "Confirm")}</button><button class="no">Cancel</button></div>`;
+    box.querySelector(".yes").onclick = () => { const done = c.apply(); box.querySelector(".acts").innerHTML = `<span class="sub ok">${esc(done)}</span>`; };
+    box.querySelector(".no").onclick = () => { box.querySelector(".acts").innerHTML = `<span class="sub">Cancelled. Nothing changed.</span>`; };
+    m.appendChild(box);
+  }
+  function suggestions() {
+    if (coachSide()) return ["Who's worth a look this week?", state.role === "assistant" ? "Jordan's heaviest squat day" : "What day did Sample Athlete clean the heaviest?", "Set Jordan's protein target to 185", "Move Thursday's workout to Saturday for Riley", "Tell Riley great work on Monday", "Build a 4-day power program for football, 8 weeks"];
+    const base = ["What day did I clean the heaviest?", "What was my diet the 2 weeks before?", "How did I prep? What was my volume?", "How long before that PR did I break the last one?", "What did my programming look like?", "Make a report of my clean PR prep"];
+    const acts = ["I had a chicken burrito bowl for lunch", "Slept 6 hours, legs are sore", "I can't train Thursday", "Remind me to weigh in Monday", "I want a 380 squat by March", "My meet is December 12", "Change my email to new.me@example.com", "Update my height to 6'4\""];
+    const help = ["How do I film a set?", "What's RPE?", "My knee hurts"];
+    const extra = state.role === "free_ai" ? ["What should I lift next session?", "Make me a new 4-day program for 6 weeks, strength, 60 minutes", "Tell Jordan nice lift"] : state.role === "coached" ? ["What weight should I squat?", "Make me a new program"] : ["Show me my best squat", "What did I eat on a Tuesday in July?"];
+    return [...base.slice(0, 3), ...acts.slice(0, 4), ...extra, ...help, ...base.slice(3), ...acts.slice(4)];
+  }
+  function greet() {
+    log.innerHTML = "";
+    const m = addMsg("hardy", `Hi, I'm Hardy. Ask me about any day, meal or lift, tell me what to change, or ask for a report. ${can("advice") ? "I can give advice too." : state.role === "coached" ? "Coaching stays with your coach." : "On Basic I find and show; AI Coach unlocks the rest."}`);
+    const chips = document.createElement("div"); chips.className = "chips"; chips.style.marginTop = "8px";
+    suggestions().slice(0, 8).forEach((q) => { const b = document.createElement("button"); b.className = "chip"; b.textContent = q; b.onclick = () => ask(q); chips.appendChild(b); });
+    m.appendChild(chips);
+    state.turns = [];
+  }
+  async function ask(q) {
+    q = String(q || "").trim();
+    if (!q || state.busy) return;
+    if (!state.open) openPanel(true);
+    setTab("ask");
+    if (capUsed() >= DAILY_CAP) { addMsg("hardy", `That's ${DAILY_CAP} questions today. Search still works, and I'm back tomorrow.`); return; }
+    $("askInput").value = "";
+    addMsg("me", q);
+    spendCap(); countKind(kindOf(q));
+    state.busy = true; $("askBtn").disabled = true;
+    const thinking = addMsg("hardy", "Looking…");
+    try {
+      if (sample && !aiOff) {
+        pending = {};
+        state.turns.push({ role: "user", content: q });
+        const { text } = await sample([{ role: "user", content: rules() }, { role: "assistant", content: "Understood." }, ...state.turns.slice(-8)], {
+          tools, modelTier: "quick", cache: false, onText: ({ text }) => { thinking.firstChild.textContent = text || "Looking…"; },
+        });
+        state.turns.push({ role: "assistant", content: text });
+        thinking.remove();
+        addMsg("hardy", text.trim() || "I couldn't find that.", { source: pending.target ? targetLabel(pending.target) : null, ...pending });
+        logAsk(q, text.trim() || "I couldn't find that.");
+      } else {
+        const r = route(q);
+        await new Promise((res) => setTimeout(res, 200));
+        thinking.remove();
+        addMsg("hardy", r.text, r);
+        logAsk(q, r.text);
+        if (r.target && r.target.auto) goTo(r.target);
+      }
+    } catch (e) {
+      thinking.remove();
+      if (e && ["not_granted", "tools_unavailable", "unavailable"].includes(e.code)) { aiOff = true; drawEngine(); }
+      state.turns.pop();
+      const r = route(q);
+      addMsg("hardy", (e && e.code === "rate_limited" ? "I'm busy right now, so here's my built-in finder. " : "") + r.text, r);
+    } finally { state.busy = false; $("askBtn").disabled = false; }
+  }
+
+  // ---- photo of a meal ----
+  $("photoInput").addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!file) return;
+    if (!state.open) openPanel(true);
+    addMsg("me", "(photo of a meal)");
+    if (!can("act")) { addMsg("hardy", gateText("act")); return; }
+    if (!sample || aiOff || !canImages) { addMsg("hardy", "Reading a photo needs AI, which isn't on here. Scan the barcode or tell me what you ate.", { target: { page: "nutrition", date: TODAY, scanner: true } }); return; }
+    const thinking = addMsg("hardy", "Looking at your photo…");
+    try {
+      const names = await sample.json(`Which of these foods appear in the photo? Answer as a JSON array of exact names from this list, [] if none: ${JSON.stringify(ALL_FOODS.map((f) => f.name))}`, { images: [file], modelTier: "quick" });
+      thinking.remove();
+      const found = ALL_FOODS.filter((f) => Array.isArray(names) && names.includes(f.name));
+      if (!found.length) { addMsg("hardy", "I couldn't match anything in the photo to the food list. Tell me what it was, or scan the barcode."); return; }
+      addMsg("hardy", "Here's what I see. Nothing is added until you confirm.", { card: { title: "Add to today's food log", rows: found.map((f) => [f.name, `${f.kcal} kcal · ${f.protein} g P`]), note: "Photo matches are a best guess. Check them.", confirm: "Add all", apply: () => found.map((f) => addFood(f)).slice(-1)[0] } });
+    } catch { thinking.remove(); addMsg("hardy", "I couldn't read that photo. Tell me what you ate instead."); }
+  });
+
+  // ---- plain search ----
+  function plainSearch(q) {
+    const s = q.toLowerCase().trim(), out = $("results");
+    if (!s) { out.innerHTML = `<p class="sub">Type a lift, food, word from a note, or a date like 7/14.</p>`; return; }
+    const range = parseDates(q), hits = [];
+    const stripped = s.replace(/\b\d{1,2}\/\d{1,2}\b/g, "").replace(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|yesterday|last|on|in)\b|\d+/g, "").trim();
+    const matchText = stripped.length >= 3 ? stripped : null;
+    allowed().forEach((a) => Object.values(a.days).forEach((d) => {
+      if (range && (d.date < range.from || d.date > range.to)) return;
+      if (range && range.weekday && weekday(d.date) !== range.weekday) return;
+      if (!range && !matchText) return;
+      const add = (page, label, hl) => hits.push({ a: a.name, date: d.date, page, label, hl });
+      if (d.workout) d.workout.sets.filter((x) => x.set === 1 && (!matchText || x.exercise.toLowerCase().includes(matchText))).forEach((x) => add("day", `${x.exercise} · ${x.load || "BW"} × ${x.reps}${d.workout.planned ? " (planned)" : ""}`, `${d.date}-${x.exercise}`));
+      d.foods.filter((f) => !matchText || f.name.toLowerCase().includes(matchText)).forEach((f) => add("nutrition", `${f.name} · ${f.kcal} kcal`, f.id));
+      [[d.workout && d.workout.note, `${d.date}-wnote`], [d.checkin && d.checkin.note, `${d.date}-checkin`]].forEach(([note, hl]) => { if (note && matchText && note.toLowerCase().includes(matchText)) add("day", `Note: ${note}`, hl); });
+    }));
+    hits.sort((x, y) => (x.date < y.date ? 1 : -1));
+    out.innerHTML = hits.length ? `<p class="sub">${hits.length} result${hits.length > 1 ? "s" : ""}${hits.length > 60 ? ", newest 60 shown" : ""}</p>` + hits.slice(0, 60).map((h, i) => `<button class="result" data-i="${i}"><b>${nice(h.date)}${allowed().length > 1 ? " · " + esc(h.a) : ""}</b>${esc(h.label)}</button>`).join("") : `<p class="sub">Nothing found for "${esc(q)}".</p>`;
+    out.onclick = (e) => { const b = e.target.closest(".result"); if (!b) return; const h = hits[+b.dataset.i]; goTo({ athlete: h.a, page: h.page, date: h.date, highlight: h.hl }); };
+  }
+  $("searchInput").addEventListener("input", (e) => plainSearch(e.target.value));
+
+  // ---- visibility, the proactive switch, open and close ----
+  function hardyVisibility() {
+    $("nav").hidden = state.role === "admin";
+    const off = $("hideHardy").checked || state.role === "admin", busy = state.page === "day" && (state.recording || state.logging);
+    $("hardyBtn").hidden = off || busy;
+    if ((off || busy) && state.open) openPanel(false);
+    $("hardyBtn").classList.toggle("left", $("leftCorner").checked);
+    $("tip").classList.toggle("left", $("leftCorner").checked);
+    if (off || busy) $("tip").hidden = true;
+  }
+  const tipsShown = new Set();
+  function proactiveTip() {
+    const tip = $("tip");
+    if (!opts.proactive || state.open || $("hardyBtn").hidden) { tip.hidden = true; return; }
+    const a = curAthlete();
+    let text = null;
+    if (state.page === "nutrition") { const d = a.days[TODAY]; if (d) { const gap = a.profile.targets.protein - totals(d.foods).protein; if (gap > 0) text = `You're ${gap} g under your protein target today.`; } }
+    else if (state.page === "day") { const n = Object.values(a.days).find((d) => d.date > TODAY && d.workout); if (n) text = `Next up: ${n.workout.title} on ${nice(n.date)}.`; }
+    else if (state.page === "progress") { const t = prTimeline({ athlete: a.name, exercise: state.exercise }); if (t.prs && t.prs.length) text = `Your last ${state.exercise} PR was ${daysBetween(t.prs[t.prs.length - 1].date, TODAY)} days ago.`; }
+    else if (state.page === "home") text = "Want this week's recap? Tap me.";
+    if (!text || tipsShown.has(state.page)) { tip.hidden = true; return; }
+    tipsShown.add(state.page);
+    $("tipText").textContent = text; tip.hidden = false;
+  }
+  $("tipClose").onclick = () => { $("tip").hidden = true; };
+  function openPanel(on) {
+    state.open = on;
+    $("panel").hidden = !on;
+    if (on) $("tip").hidden = true;
+    $("hardyBtn").setAttribute("aria-expanded", String(on));
+    $("hardyBtn").setAttribute("aria-label", on ? "Close Hardy the Hammer" : "Open Hardy the Hammer");
+    if (on) { if (!log.children.length) greet(); setTimeout(() => $(state.tab === "ask" ? "askInput" : "searchInput").focus(), 30); }
+  }
+  function setTab(t) {
+    state.tab = t;
+    $("tabAsk").setAttribute("aria-selected", String(t === "ask"));
+    $("tabSearch").setAttribute("aria-selected", String(t === "search"));
+    $("askView").hidden = t !== "ask"; $("searchView").hidden = t !== "search";
+    if (t === "search") plainSearch($("searchInput").value);
+  }
+  $("hardyBtn").onclick = () => openPanel(!state.open);
+  $("closeBtn").onclick = () => openPanel(false);
+  $("tabAsk").onclick = () => setTab("ask");
+  $("tabSearch").onclick = () => setTab("search");
+  $("askBtn").onclick = () => ask($("askInput").value);
+  $("askInput").addEventListener("keydown", (e) => { if (e.key === "Enter") ask($("askInput").value); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.open) openPanel(false); });
+  $("hideHardy").onchange = hardyVisibility;
+  $("leftCorner").onchange = hardyVisibility;
+  $("profileBtn").onclick = () => { state.page = "profile"; render(); };
+
+  // ---- the app's own buttons ----
+  $("screen").addEventListener("click", async (e) => {
+    const t = e.target.closest("button");
+    if (!t) return;
+    if (t.dataset.shift) { state.date = addDays(state.date, +t.dataset.shift); state.scanner = false; render(); }
+    else if (t.dataset.ex) { state.exercise = t.dataset.ex; render(); }
+    else if (t.dataset.goday) { state.page = "day"; state.date = t.dataset.goday; render(); }
+    else if (t.dataset.ath) { state.athlete = t.dataset.ath; render(); }
+    else if (t.dataset.rid) openReport(t.dataset.rid);
+    else if (t.dataset.mk) { const ex = state.ctx.exercise || (t.dataset.mk === "timeline" ? "squat" : "clean"); const r = reportReply({ kind: t.dataset.mk, athlete: curAthlete().name, exercise: ex }); if (r.reportId) openReport(r.reportId); else { openPanel(true); addMsg("hardy", r.text); } }
+    else if (t.id === "openHardy2") openPanel(true);
+    else if (t.id === "homeTrain") { state.page = "day"; state.date = TODAY; render(); }
+    else if (t.id === "homeFood") { state.page = "nutrition"; state.date = TODAY; render(); }
+    else if (t.id === "recInline") { state.recording = !state.recording; render(); syncSim(); }
+    else if (t.id === "scanOpen") { if (!can("act") && !coachSide()) { state.scanner = true; render("scanner"); } else { state.scanner = true; render("scanner"); } }
+    else if (t.id === "scanClose") { state.scanner = false; render(); }
+    else if (t.id === "scanAdd") { state.scanner = false; addFood(BARCODE_ITEM); }
+    else if (t.id === "backHardy") { state.page = "hardy"; render(); }
+    else if (t.id === "delBtn") { reportStore.remove(state.reportId); state.page = "hardy"; render(); }
+    else if (t.id === "sendBtn") { $("reportMsg").textContent = state.role === "coached" ? "Sent to Coach Sample. (Prototype: nothing was sent.)" : "Sent to the athlete. (Prototype: nothing was sent.)"; }
+    else if (t.id === "pdfBtn") {
+      const msgEl = $("reportMsg");
+      if (!downloads) { msgEl.textContent = "PDF download isn't available in this view. In Forge it saves straight to the phone."; return; }
+      try { msgEl.textContent = "Making the PDF…"; const r = reportStore.get(state.reportId); const data = await reportPdf(r); await downloads.save({ filename: `${r.title.replace(/[^\w ,-]/g, "")}.pdf`, data }); msgEl.textContent = "Saved."; }
+      catch (err) { msgEl.textContent = err && err.code === "declined" ? "Not saved." : "Couldn't make the PDF here."; }
+    }
+  });
+  $("screen").addEventListener("change", (e) => { if (e.target.id === "recapToggle") { opts.recap = e.target.checked; store.set("hardy.recap", opts.recap); render(); } });
+  $("nav").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; state.page = b.dataset.page; state.scanner = false; if (state.page === "home") state.date = TODAY; render(); });
+
+
+  // ================= ADMIN: WHAT PEOPLE ASK HARDY =================
+  // What is recorded per question: the kind, which of Forge's own words it matched (a fixed list, so a
+  // name, a school or anything personal can never be one), how it went, the person's group, the day.
+  // Never the words typed. A row shows only when ADMIN_FLOOR or more different people are behind it.
+  const ADMIN_FLOOR = 10;
+  const DAY_MS = 86400000;
+  const VOCAB = [
+    // [Forge word shown in the report, the kind it belongs to, what in a question counts as it]
+    // Each pattern matches the word and its common forms: "squat" matches "squats", "squatted";
+    // "pr" matches "PR" and "PRs" but not "practice" or "program".
+    ["squat", "Training", /\bsquat/], ["bench", "Training", /\bbench/], ["deadlift", "Training", /\bdead ?lift|\brdl\b/],
+    ["clean", "Training", /\bclean/], ["row", "Training", /\brows?\b|\browing/], ["press", "Training", /\bpress/],
+    ["jump", "Training", /\bjump/], ["sprint", "Training", /\bsprint|\bdash\b/], ["bar speed", "Training", /velocity|bar speed|m\/s/],
+    ["RPE", "Training", /\brpe\b/], ["warm-up", "Training", /warm ?-?up/], ["filming", "Training", /\bfilm|\bcamera|\bvideo|\brecord/],
+    ["pain or injury", "Training", /\bpain|\bhurt|\binjur|\bsore knee|\bknee/],
+    ["PR", "Progress", /\bprs?\b|personal (best|record)/], ["max", "Progress", /\bmax|heaviest|\bbest\b/],
+    ["volume", "Progress", /\bvolume/], ["progress", "Progress", /\bprogress|\btrend|\bcompare/],
+    ["protein", "Nutrition", /\bprotein/], ["calories", "Nutrition", /calorie|\bkcal/], ["carbs", "Nutrition", /\bcarb/],
+    ["meals", "Nutrition", /breakfast|lunch|dinner|snack|\bmeal|\bate\b|\beat\b/], ["barcode", "Nutrition", /barcode|\bscan/],
+    ["supplements", "Nutrition", /supplement|creatine|pre-?workout/], ["water", "Nutrition", /\bwater|hydrat/], ["diet", "Nutrition", /\bdiet/],
+    ["email or phone", "Changes", /\bemail|\bphone/], ["height or weight", "Changes", /\bheight|\bweigh/],
+    ["nutrition targets", "Changes", /\btarget/], ["sleep or soreness", "Changes", /\bslept|\bsleep|\bsore\b|soreness/],
+    ["reminders", "Changes", /remind/], ["goals", "Changes", /\bgoal/], ["meets", "Changes", /\bmeet\b|\bmeets\b|\bcompetition/],
+    ["moving a workout", "Changes", /\bmove\b|can't train|cannot train|reschedul/],
+    ["reports", "Reports", /report|\bpdf|\brecap/],
+    ["programs", "Programs", /program|\broutine|\bsplit\b/], ["deload", "Programs", /deload/],
+    ["password", "App help", /password/], ["calendar", "App help", /calendar|\bschedule/], ["coach", "App help", /\bcoach/],
+    ["documents", "App help", /waiver|document|\bform\b/], ["plans and upgrade", "App help", /upgrade|\bplan\b|subscri|price/],
+  ];
+  const GROUPS = { coached: "Coached athletes", free_basic: "Free Agents · Basic", free_ai: "Free Agents · AI Coach", coach: "Coaches", assistant: "Coaches" };
+  const GROUP_FILTERS = [["all", "Everyone"], ["Coached athletes", "Coached athletes"], ["free", "Free Agents"], ["Coaches", "Coaches"]];
+  const OUTCOMES = [["answered", "Answered"], ["missed", "Couldn't answer"], ["plan", "Not on their plan"], ["coach", "Their coach's call"], ["medical", "Sent to a doctor or trainer"]];
+  const WORD_KIND = { ...Object.fromEntries(VOCAB.map(([w, k]) => [w, k])), snatch: "Training" };
+  const wordsIn = (q) => { const s = q.toLowerCase(); return VOCAB.filter(([, , re]) => re.test(s)).map(([w]) => w); };
+  function outcomeOf(text) {
+    const s = String(text || "");
+    if (/part of AI Coach|AI Coach unlocks/.test(s)) return "plan";
+    if (/for your coach|Your coach builds|Coaching stays with your coach/.test(s)) return "coach";
+    if (/doctor|athletic trainer/.test(s)) return "medical";
+    if (/couldn't|can't find|Nothing found|not sure|isn't on a team|didn't catch/i.test(s)) return "missed";
+    return "answered";
+  }
+  // This tester's own questions, kept in this browser, recorded exactly the way the app would.
+  function logAsk(q, text) {
+    if (state.role === "admin") return;
+    const ev = store.get("hardy.events", []);
+    ev.push({ day: 0, at: Date.now(), person: "you", group: GROUPS[state.role], kind: kindOf(q), words: wordsIn(q), outcome: outcomeOf(text) });
+    store.set("hardy.events", ev.slice(-500));
+  }
+
+  // ---- invented usage, so the report has something to show (no real person; seeded, so it never changes) ----
+  const SAMPLE = (() => {
+    let seed = 20261111;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+    const pick = (pairs) => { const t = pairs.reduce((s, [, w]) => s + w, 0); let r = rnd() * t; for (const [v, w] of pairs) { r -= w; if (r <= 0) return v; } return pairs[pairs.length - 1][0]; };
+    const people = Array.from({ length: 640 }, (_, i) => ({ id: "p" + i, group: pick([["Coached athletes", 52], ["Free Agents · Basic", 16], ["Free Agents · AI Coach", 17], ["Coaches", 15]]) }));
+    // How often each word comes up early and late in the 8 weeks, and how often Hardy falls short on it.
+    const W = { squat: [9, 9, 0.04], bench: [8, 8, 0.04], deadlift: [5, 5, 0.05], clean: [4, 5, 0.05], row: [3, 3, 0.05], press: [3, 3, 0.05],
+      jump: [3, 4, 0.06], sprint: [2, 3, 0.08], "bar speed": [3, 7, 0.22], RPE: [3, 3, 0.03], "warm-up": [2, 5, 0.38], filming: [4, 6, 0.12],
+      "pain or injury": [2, 2, 0], PR: [7, 8, 0.03], max: [6, 7, 0.03], volume: [3, 4, 0.06], progress: [4, 5, 0.07],
+      protein: [5, 11, 0.06], calories: [4, 8, 0.07], carbs: [2, 4, 0.1], meals: [6, 10, 0.08], barcode: [2, 5, 0.33], supplements: [1, 4, 0.45],
+      water: [1, 2, 0.2], diet: [2, 4, 0.1], "email or phone": [1, 1, 0.02], "height or weight": [2, 2, 0.03], "nutrition targets": [2, 3, 0.05],
+      "sleep or soreness": [3, 4, 0.04], reminders: [2, 2, 0.05], goals: [2, 3, 0.06], meets: [1, 2, 0.05], "moving a workout": [2, 2, 0.08],
+      reports: [3, 4, 0.05], programs: [3, 4, 0.06], deload: [1, 2, 0.12], password: [1, 1, 0], calendar: [2, 2, 0.28], coach: [2, 2, 0.06],
+      documents: [1, 1, 0.3], "plans and upgrade": [1, 2, 0.04], snatch: [0.1, 0.1, 0.2] };
+    const kindOfWord = Object.fromEntries(VOCAB.map(([w, k]) => [w, k]));
+    kindOfWord.snatch = "Training"; // a word only a handful of people used: the floor hides it
+    const asked = new Map(); // the few people who asked about the snatch, so it stays under the floor
+    const events = [];
+    for (let day = 0; day < 56; day++) {
+      const late = 1 - day / 55; // 1 for the newest day, 0 for the oldest
+      const n = Math.round(150 + 60 * late + rnd() * 30);
+      for (let i = 0; i < n; i++) {
+        const p = people[Math.floor(rnd() * people.length)];
+        if (rnd() < 0.06) { events.push({ day, person: p.id, group: p.group, kind: "Other", words: [], outcome: rnd() < 0.5 ? "missed" : "answered" }); continue; }
+        let w = pick(Object.entries(W).map(([k, [a, b]]) => [k, a + (b - a) * late]));
+        if (w === "snatch") { const who = asked.get(p.id) ?? (asked.size < 6 ? p.id : null); if (!who) w = "squat"; else asked.set(p.id, who); }
+        const words = [w];
+        if (rnd() < 0.18) { const w2 = pick([["PR", 3], ["max", 2], ["protein", 2], ["reports", 1], ["meals", 1]]); if (w2 !== w) words.push(w2); }
+        let outcome = rnd() < W[w][2] ? "missed" : "answered";
+        if (w === "pain or injury") outcome = "medical";
+        const wantsAdvice = ["programs", "deload", "supplements", "warm-up"].includes(w) || rnd() < 0.05;
+        if (wantsAdvice && p.group === "Free Agents · Basic" && rnd() < 0.7) outcome = "plan";
+        if (wantsAdvice && p.group === "Coached athletes" && rnd() < 0.6) outcome = "coach";
+        events.push({ day, person: p.id, group: p.group, kind: kindOfWord[w], words, outcome });
+      }
+    }
+    return events;
+  })();
+
+  const admin = { days: 28, group: "all", open: null, includeMine: true };
+  function adminEvents() {
+    const mine = admin.includeMine ? store.get("hardy.events", []).map((e) => ({ ...e, day: Math.floor((Date.now() - (e.at || Date.now())) / DAY_MS) })) : [];
+    const inGroup = (e) => admin.group === "all" || (admin.group === "free" ? /^Free Agents/.test(e.group) : e.group === admin.group);
+    const all = [...SAMPLE, ...mine].filter(inGroup);
+    return { now: all.filter((e) => e.day < admin.days), before: all.filter((e) => e.day >= admin.days && e.day < admin.days * 2) };
+  }
+  const people = (evs) => new Set(evs.map((e) => e.person)).size;
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+  function change(now, before) {
+    if (!before) return `<span class="chg">new</span>`;
+    const d = Math.round(((now - before) / before) * 100);
+    if (Math.abs(d) < 5) return `<span class="chg">steady</span>`;
+    return `<span class="chg ${d > 0 ? "up" : "down"}">${d > 0 ? "▲" : "▼"} ${Math.abs(d)}%</span>`;
+  }
+  function wordRows(evs) {
+    const m = {};
+    evs.forEach((e) => e.words.forEach((w) => { const r = (m[w] = m[w] || { word: w, kind: WORD_KIND[w] || e.kind, n: 0, who: new Set(), out: {} }); r.n++; r.who.add(e.person); r.out[e.outcome] = (r.out[e.outcome] || 0) + 1; }));
+    return Object.values(m);
+  }
+
+  function renderAdmin() {
+    $("who").textContent = "Forge admin · Hardy usage";
+    document.querySelectorAll("#nav button").forEach((b) => b.setAttribute("aria-current", "false"));
+    const { now, before } = adminEvents();
+    const shown = (r) => r.who.size >= ADMIN_FLOOR;
+    const words = wordRows(now), wordsBefore = Object.fromEntries(wordRows(before).map((r) => [r.word, r]));
+    const top = words.filter(shown).sort((a, b) => b.n - a.n);
+    const hiddenCount = words.length - top.length;
+    const out = (o, evs) => evs.filter((e) => e.outcome === o).length;
+    const mineN = store.get("hardy.events", []).length;
+    let h = `<div class="card"><h3>What people ask Hardy</h3><div class="sub">Counts across everyone. Never what anyone typed, never a person.</div>
+      <div class="chips adm-f" style="margin-top:10px">${[[7, "Last 7 days"], [28, "Last 28 days"]].map(([d, l]) => `<button class="chip" data-adm-days="${d}" aria-pressed="${admin.days === d}">${l}</button>`).join("")}</div>
+      <div class="chips adm-f" style="margin-top:6px">${GROUP_FILTERS.map(([v, l]) => `<button class="chip" data-adm-group="${v}" aria-pressed="${admin.group === v}">${l}</button>`).join("")}</div></div>`;
+    h += `<div class="tiles">
+      <div class="tile"><b>${now.length.toLocaleString()}</b><span>questions ${change(now.length, before.length)}</span></div>
+      <div class="tile"><b>${people(now).toLocaleString()}</b><span>people asked</span></div>
+      <div class="tile"><b>${pct(out("answered", now), now.length)}%</b><span>answered</span></div>
+      <div class="tile"><b>${pct(out("missed", now), now.length)}%</b><span>couldn't answer</span></div></div>`;
+    // What people ask about, by kind, with the change against the period before.
+    const byKind = KINDS.map((k) => ({ k, n: now.filter((e) => e.kind === k), b: before.filter((e) => e.kind === k).length })).filter((r) => people(r.n) >= ADMIN_FLOOR);
+    const maxK = Math.max(1, ...byKind.map((r) => r.n.length));
+    h += `<div class="card"><h3>What they ask about</h3>${byKind.sort((a, b) => b.n.length - a.n.length).map((r) => `<div class="abar"><span>${r.k}</span><span><i style="width:${(r.n.length / maxK) * 100}%"></i></span><span>${r.n.length}</span>${change(r.n.length, r.b)}</div>`).join("")}<div class="sub">Change is against the ${admin.days} days before.</div></div>`;
+    // Top words.
+    h += `<div class="card"><h3>Top words</h3><div class="sub">Forge's own words only (lift names, foods, pages, features). Tap one to see how Hardy did.</div>
+      <div class="wtable">${top.slice(0, 20).map((r, i) => {
+        const b = wordsBefore[r.word];
+        const open = admin.open === r.word;
+        const miss = pct(r.out.missed || 0, r.n);
+        return `<button class="wrow" data-adm-word="${esc(r.word)}" aria-expanded="${open}"><span class="rk">${i + 1}</span><span class="wd">${esc(r.word)}<small>${esc(r.kind)}</small></span><span class="v">${r.n}</span>${change(r.n, b && b.who.size >= ADMIN_FLOOR ? b.n : 0)}</button>${open ? `<div class="wdetail">${OUTCOMES.filter(([o]) => r.out[o]).map(([o, l]) => `<div class="row"><span>${l}</span><span class="v">${pct(r.out[o], r.n)}%</span></div>`).join("")}<div class="sub">${r.who.size} people asked.${miss >= 20 ? ` Hardy fell short on ${miss}% of these: a good place to make him smarter.` : ""}</div></div>` : ""}`;
+      }).join("")}</div>
+      <div class="sub">${hiddenCount ? `${hiddenCount} word${hiddenCount > 1 ? "s" : ""} hidden: fewer than ${ADMIN_FLOOR} people asked.` : `Every word here was asked by ${ADMIN_FLOOR} or more people.`}</div></div>`;
+    // Where Hardy came up short: the words with the highest couldn't-answer rate.
+    const short = top.filter((r) => r.n >= 20).map((r) => ({ ...r, miss: pct(r.out.missed || 0, r.n) })).filter((r) => r.miss >= 10).sort((a, b) => b.miss - a.miss).slice(0, 6);
+    h += `<div class="card"><h3>Where Hardy came up short</h3><div class="sub">The words he most often couldn't answer. Each is a page to make easier to find, or something he should learn.</div>
+      ${short.length ? short.map((r) => `<div class="abar miss"><span>${esc(r.word)}</span><span><i style="width:${r.miss}%"></i></span><span>${r.miss}%</span></div>`).join("") : `<div class="sub" style="margin-top:6px">Nothing above 10%.</div>`}</div>`;
+    // Asked for, but not on their plan: the upgrade signal.
+    const plan = now.filter((e) => e.outcome === "plan"), coach = now.filter((e) => e.outcome === "coach");
+    const planWords = wordRows(plan).filter(shown).sort((a, b) => b.n - a.n).slice(0, 4);
+    h += `<div class="card"><h3>Asked for, but not on their plan</h3>
+      <div class="row"><span>Basic users asking for AI Coach features</span><span class="v">${people(plan) >= ADMIN_FLOOR ? `${plan.length} from ${people(plan)} people` : "fewer than " + ADMIN_FLOOR + " people"}</span></div>
+      ${planWords.map((r) => `<div class="row"><span class="k">· ${esc(r.word)}</span><span class="v">${r.n}</span></div>`).join("")}
+      <div class="row"><span>Coached athletes asking for advice (sent to their coach)</span><span class="v">${people(coach) >= ADMIN_FLOOR ? `${coach.length} from ${people(coach)} people` : "fewer than " + ADMIN_FLOOR + " people"}</span></div>
+      <div class="row"><span>Pain or injury questions sent to a doctor or trainer</span><span class="v">${out("medical", now)}</span></div>
+      <div class="sub">The first line is the upgrade signal: what Basic people want enough to ask for.</div></div>`;
+    // What this suggests: observations from the numbers above, never a cause.
+    const kindsB = Object.fromEntries(KINDS.map((k) => [k, before.filter((e) => e.kind === k).length]));
+    const rising = byKind.filter((r) => r.k !== "Other" && kindsB[r.k] >= 20).map((r) => ({ k: r.k, d: (r.n.length - kindsB[r.k]) / kindsB[r.k] })).sort((a, b) => b.d - a.d)[0];
+    const risingWord = top.filter((r) => wordsBefore[r.word] && wordsBefore[r.word].n >= 20).map((r) => ({ w: r.word, d: (r.n - wordsBefore[r.word].n) / wordsBefore[r.word].n })).sort((a, b) => b.d - a.d)[0];
+    const notes = [];
+    if (rising && rising.d > 0.1) notes.push(`${rising.k} questions are up ${Math.round(rising.d * 100)}% on the ${admin.days} days before. That part of the app is getting more use; it's the one to make smarter next.`);
+    if (risingWord && risingWord.d > 0.2) notes.push(`"${risingWord.w}" is the fastest-growing word (up ${Math.round(risingWord.d * 100)}%).`);
+    if (short[0]) notes.push(`Hardy couldn't answer ${short[0].miss}% of "${short[0].word}" questions. Either the page is hard to find or he doesn't know that area yet.`);
+    if (planWords[0]) notes.push(`Basic users ask for "${planWords[0].word}" more than any other AI Coach feature.`);
+    h += `<div class="card"><h3>What this suggests</h3>${notes.length ? `<ul class="list">${notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : `<div class="sub">Not enough questions yet to say anything.</div>`}<div class="sub">These are patterns in what people ask, not reasons why.</div></div>`;
+    h += `<div class="recbar"><button id="admCsv">Download CSV</button></div><div class="sub" id="admMsg"></div>`;
+    h += `<div class="card"><h3>What's recorded, and what isn't</h3><ul class="list">
+      <li>Recorded per question: its kind, which of Forge's own words it matched, how Hardy did, the person's group (coached athlete, Free Agent, coach) and the day.</li>
+      <li>Never recorded: what was typed, who asked, or any word not on Forge's list, so a name, a school or anything personal can't reach this page.</li>
+      <li>A word, a kind or a plan line shows only when ${ADMIN_FLOOR} or more different people are behind it.</li>
+      <li>Numbers here are invented sample usage (640 made-up people over 8 weeks)${admin.includeMine ? `, plus the ${mineN} question${mineN === 1 ? "" : "s"} you asked in this test` : ""}. One tester is one person, so your words alone never clear the floor.</li></ul>
+      <label class="sw" style="margin-top:8px"><input type="checkbox" id="admMine" ${admin.includeMine ? "checked" : ""}> Include my test questions</label></div>`;
+    $("screen").innerHTML = h;
+    hardyVisibility();
+  }
+  $("screen").addEventListener("click", async (e) => {
+    if (state.role !== "admin") return;
+    const t = e.target.closest("[data-adm-days],[data-adm-group],[data-adm-word],#admCsv");
+    if (!t) return;
+    if (t.id === "admCsv") { await adminCsv(); return; }
+    if (t.dataset.admDays) admin.days = +t.dataset.admDays;
+    if (t.dataset.admGroup) admin.group = t.dataset.admGroup;
+    if (t.dataset.admWord) admin.open = admin.open === t.dataset.admWord ? null : t.dataset.admWord;
+    renderAdmin();
+  });
+  $("screen").addEventListener("change", (e) => { if (state.role === "admin" && e.target.id === "admMine") { admin.includeMine = e.target.checked; renderAdmin(); } });
+  async function adminCsv() {
+    const { now } = adminEvents();
+    const rows = [["word", "kind", "questions", "people", ...OUTCOMES.map(([, l]) => l + " %")]];
+    wordRows(now).filter((r) => r.who.size >= ADMIN_FLOOR).sort((a, b) => b.n - a.n).forEach((r) => rows.push([r.word, r.kind, r.n, r.who.size, ...OUTCOMES.map(([o]) => pct(r.out[o] || 0, r.n))]));
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const msg = $("admMsg");
+    if (!downloads) { msg.textContent = "Download isn't available in this view. In Forge the admin page saves it straight to your computer."; return; }
+    try { await downloads.save({ filename: `hardy-top-words-last-${admin.days}-days.csv`, data: csv }); msg.textContent = "Saved."; }
+    catch (err) { msg.textContent = err && err.code === "declined" ? "Not saved." : "Couldn't save the file here."; }
+  }
+
+  // ---- the test panel ----
+  function setRole(r) {
+    state.role = r; state.athlete = ROLES[r].roster[0]; state.ctx = {};
+    document.querySelectorAll("#roles button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.role === r)));
+    $("roleNote").textContent = role().note;
+    $("modeLine").textContent = can("advice") ? "Finds, changes, reports and advises" : can("act") ? "Finds, changes and reports" : "Finds and shows";
+    if (r === "admin") { state.page = "admin"; $("tryChips").innerHTML = ""; openPanel(false); render(); return; }
+    if (state.page === "admin") state.page = "home";
+    $("tryChips").innerHTML = suggestions().map((q) => `<button class="chip">${esc(q)}</button>`).join("");
+    greet(); render();
+  }
+  $("roles").onclick = (e) => { const b = e.target.closest("button"); if (b) setRole(b.dataset.role); };
+  $("tryChips").onclick = (e) => { const b = e.target.closest("button"); if (b) ask(b.textContent); };
+  function syncSim() {
+    $("recBtn").setAttribute("aria-pressed", String(state.recording)); $("logBtn").setAttribute("aria-pressed", String(state.logging));
+    $("recBtn").textContent = state.recording ? "Stop recording" : "Simulate camera recording";
+    $("logBtn").textContent = state.logging ? "Close the rep keypad" : "Simulate logging a set";
+  }
+  $("recBtn").onclick = () => { state.recording = !state.recording; state.page = "day"; state.date = TODAY; render(); syncSim(); };
+  $("logBtn").onclick = () => { state.logging = !state.logging; state.page = "day"; state.date = TODAY; render(); syncSim(); };
+  $("optProactive").onchange = (e) => { opts.proactive = e.target.checked; tipsShown.clear(); render(); };
+  $("optRead").onchange = (e) => { opts.readAloud = e.target.checked; $("readNote").textContent = e.target.checked && !tts ? "Read-aloud isn't available in this view (it needs a Chromium browser or the desktop app)." : ""; };
+  $("optMsg").onchange = (e) => { opts.athleteMessages = e.target.checked; };
+
+  $("hardyBtn").innerHTML = hammerSvg("hg1");
+  $("panelIcon").innerHTML = hammerSvg("hg2");
+  $("openAdmin").onclick = () => setRole("admin");
+
+  drawBars(); drawCap(); drawEngine(); syncSim();
+  setRole("coached");
+})();
+
+</script>
