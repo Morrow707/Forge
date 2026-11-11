@@ -277,6 +277,7 @@ import {
   CAMERA_DERIVED_SET_COLUMNS,
   guardianDeleteAthleteSchema,
 } from "@shared/schema";
+import { nutritionTargetNumberShape } from "@shared/schema";
 import { readUploadedWaiver } from "./waiver-reader";
 import { promises as fsp } from "node:fs";
 import { computeReadiness } from "@shared/wellness";
@@ -8618,12 +8619,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       updates: z.array(
         z.object({
           athleteId: z.number(),
-          caloriesKcal: z.number().int().min(0).max(20000).optional().nullable(),
-          proteinG: z.number().min(0).max(1000).optional().nullable(),
-          carbsG: z.number().min(0).max(2000).optional().nullable(),
-          fatG: z.number().min(0).max(1000).optional().nullable(),
-          fiberG: z.number().min(0).max(300).optional().nullable(),
-          sodiumMg: z.number().min(0).max(20000).optional().nullable(),
+          ...nutritionTargetNumberShape(),
           notes: z.string().trim().max(1000).optional().nullable(),
         }),
       ),

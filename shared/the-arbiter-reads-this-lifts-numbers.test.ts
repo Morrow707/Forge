@@ -65,7 +65,19 @@ describe("the native arbiter reads this lift's numbers", () => {
   it("is sent at Record AND at Stop", () => {
     // The file path resets separately, so a take analysed from a file would otherwise keep
     // whatever the last live capture set.
-    expect(dialog).toContain("startRecording({ trackingMode: coreMlTrackingMode, arbiterTunables,");
+    // The call's own argument object, bounded by matching its braces, so a reformatted call (one
+    // argument per line, 2026-11-11) is held to the rule rather than to one spelling of it.
+    const at = dialog.indexOf("startRecording({");
+    expect(at).toBeGreaterThanOrEqual(0);
+    let depth = 0;
+    let end = dialog.indexOf("{", at);
+    for (; end < dialog.length; end++) {
+      if (dialog[end] === "{") depth++;
+      if (dialog[end] === "}" && --depth === 0) break;
+    }
+    const recordArgs = dialog.slice(at, end);
+    expect(recordArgs).toContain("trackingMode: coreMlTrackingMode");
+    expect(recordArgs).toContain("arbiterTunables,");
     const stop = dialog.slice(dialog.indexOf("stopRecordingAndAnalyze({"));
     expect(stop.slice(0, 1200)).toContain("arbiterTunables,");
   });

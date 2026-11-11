@@ -25,6 +25,7 @@ import type { AddOnTerm } from "./add-on-terms";
 import { QUIZ_QUESTION_TYPES, type QuizQuestionType, type QuizQuestionPayload } from "./class-quiz-grading";
 import { CLASS_READING_LEVELS, type ClassReadingLevel } from "./class-reading-level";
 import { reviewEventPayloadSchema } from "./video-review";
+import { NUTRITION_TARGET_FIELDS, type NutritionTargetKey } from "./nutrition-target-fields";
 import { PASSWORD_RULES } from "./password-rules";
 import { BODY_PAIN_PARTS } from "./wellness";
 import type { WidgetLayoutEntry } from "./dashboard-widgets";
@@ -11062,6 +11063,16 @@ export const updateNutritionTargetsSchema = z
   });
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
 export type NutritionTargets = typeof nutritionTargets.$inferSelect;
+
+// The number fields of a target, each with the range the targets editor enforces, read off the one
+// list in nutrition-target-fields.ts. Spread by the photographed-sheet import's row schema and its
+// apply route, so that path carries every micronutrient the table holds rather than its own list.
+export function nutritionTargetNumberShape() {
+  const shape = updateNutritionTargetsSchema.shape;
+  return Object.fromEntries(NUTRITION_TARGET_FIELDS.map((f) => [f.key, shape[f.key]])) as {
+    [K in NutritionTargetKey]: (typeof shape)[K];
+  };
+}
 
 // The nutrition AI's one-time (until reset) goal questionnaire -- see
 // NUTRITION_GOALS/the users.nutritionGoal columns above.

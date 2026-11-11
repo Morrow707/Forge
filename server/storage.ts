@@ -356,6 +356,8 @@ import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
 import { CAMERA_CAPTURE_EVIDENCE_COLUMNS, CAMERA_EVIDENCE_NEEDS_A_VALUE } from "@shared/schema";
 import type { ClipSource, ClipSummary } from "@shared/video-clips";
 import { classAiDraftSchema, createRedeemCodeSchema } from "@shared/schema";
+import { nutritionTargetNumberShape } from "@shared/schema";
+import { NUTRITION_TARGET_FIELDS } from "@shared/nutrition-target-fields";
 import { getEntitlements, getVideoRetentionLimits } from "./billing";
 import type { VideoRetentionLimits } from "@shared/video-retention";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
@@ -1818,14 +1820,11 @@ const weighInRowSchema = z.object({
   weightUnit: z.enum(["lbs", "kg"]).optional().nullable(),
 });
 
+// Every target number, from the one list (shared/nutrition-target-fields.ts), with the ranges the
+// targets editor already enforces -- so a micronutrient on a photographed sheet is read, not dropped.
 const nutritionSheetRowSchema = z.object({
   ...PHOTO_IMPORT_ATHLETE_MATCH_FIELDS,
-  caloriesKcal: z.number().int().min(0).max(20000).optional().nullable(),
-  proteinG: z.number().min(0).max(1000).optional().nullable(),
-  carbsG: z.number().min(0).max(2000).optional().nullable(),
-  fatG: z.number().min(0).max(1000).optional().nullable(),
-  fiberG: z.number().min(0).max(300).optional().nullable(),
-  sodiumMg: z.number().min(0).max(20000).optional().nullable(),
+  ...nutritionTargetNumberShape(),
   notes: z.string().trim().max(500).optional().nullable(),
 });
 
@@ -30533,7 +30532,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     const roster = await this.getRosterForCoachIncludingHeld(coachId);
     const rosterList = roster.map((a) => `${a.id}: ${a.name}`).join("\n");
     const system =
-      "You are transcribing a photographed nutrition target/macro sheet (from a coach, dietitian, or meal-plan printout) for a strength coach. Report exactly the numbers written -- never estimate a target that isn't shown. If the sheet names whose targets these are, match that name to the roster; otherwise leave athleteId out.";
+      "You are transcribing a photographed nutrition target/macro sheet (from a coach, dietitian, or meal-plan printout) for a strength coach. Report exactly the numbers written, including any micronutrient targets (calcium, iron, vitamin D, potassium, magnesium, vitamin B12, zinc) and water -- never estimate a target that isn't shown, and convert a micronutrient to the unit asked only when the sheet states its unit. If the sheet names whose targets these are, match that name to the roster; otherwise leave athleteId out.";
     const tool = {
       name: "report_nutrition_targets",
       description: "Reports each athlete's nutrition targets transcribed from the sheet photo.",
@@ -30547,12 +30546,12 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
               properties: {
                 athleteId: { type: "integer", enum: roster.map((a) => a.id) },
                 nameOnSheet: { type: "string" },
-                caloriesKcal: { type: "integer" },
-                proteinG: { type: "number" },
-                carbsG: { type: "number" },
-                fatG: { type: "number" },
-                fiberG: { type: "number" },
-                sodiumMg: { type: "number" },
+                ...Object.fromEntries(
+                  NUTRITION_TARGET_FIELDS.map((f) => [
+                    f.key,
+                    { type: "integer" in f ? "integer" : "number", description: `${f.label} target in ${f.unit}` },
+                  ]),
+                ),
                 notes: { type: "string" },
               },
               required: ["nameOnSheet"],

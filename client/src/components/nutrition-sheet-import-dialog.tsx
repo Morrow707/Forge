@@ -1,3 +1,4 @@
+import { NUTRITION_TARGET_FIELDS, type NutritionTargetKey } from "@shared/nutrition-target-fields";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -34,16 +35,11 @@ type Row = {
   fiberG?: number | null;
   sodiumMg?: number | null;
   notes?: string | null;
-};
+} & { [K in NutritionTargetKey]?: number | null };
 
-const FIELDS: [keyof Row, string][] = [
-  ["caloriesKcal", "Calories"],
-  ["proteinG", "Protein (g)"],
-  ["carbsG", "Carbs (g)"],
-  ["fatG", "Fat (g)"],
-  ["fiberG", "Fiber (g)"],
-  ["sodiumMg", "Sodium (mg)"],
-];
+// Every target the sheet can carry, micronutrients included, from the one list the server reads.
+const ALWAYS_REVIEWED = new Set<keyof Row>(["caloriesKcal", "proteinG", "carbsG", "fatG", "fiberG", "sodiumMg"]);
+const FIELDS: [keyof Row, string][] = NUTRITION_TARGET_FIELDS.map((f) => [f.key, f.key === "caloriesKcal" ? f.label : `${f.label} (${f.unit})`]);
 
 /** Photo of a nutrition target/macro sheet (from a coach, RD, or meal-plan
  * printout) -> sets an athlete's nutrition targets without a coach retyping
@@ -107,6 +103,9 @@ export function NutritionSheetImportDialog({
   }
 
   const matchedCount = rows.filter((r) => r.athleteId != null).length;
+  // The macros are always offered; a water or micronutrient box only when the sheet had one for
+  // somebody, so a plain macro sheet still reviews as six boxes a row, not fourteen empty ones.
+  const visibleFields = FIELDS.filter(([key]) => ALWAYS_REVIEWED.has(key) || rows.some((r) => r[key] != null));
 
   return (
     <Dialog
@@ -161,7 +160,7 @@ export function NutritionSheetImportDialog({
                     </SelectContent>
                   </Select>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {FIELDS.map(([key, label]) => (
+                    {visibleFields.map(([key, label]) => (
                       <div key={key} className="min-w-0 space-y-1">
                         <label className="text-[10px] text-muted-foreground">{label}</label>
                         <Input
