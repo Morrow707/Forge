@@ -36,6 +36,7 @@ import { setupAuth, requireAuth, requireRole, toPublicUser, toPublicUserWithSect
 import { registerInstitutionalAgreementRoutes } from "./institutional-agreement-routes";
 import { registerEmailListRoutes } from "./email-list";
 import { registerVelocityZoneRoutes } from "./velocity-zones";
+import { registerHardyRoutes, isKnownAdult } from "./hardy";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import {
   getEntitlements,
@@ -1663,6 +1664,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerInstitutionalAgreementRoutes(app);
   registerEmailListRoutes(app);
   registerVelocityZoneRoutes(app);
+  // Hardy: search for everyone signed in; answers in a sentence only where Forge already allows AI
+  // help (a coach or admin, or a Free Agent on an AI plan), and only for an adult. See server/hardy.ts.
+  registerHardyRoutes(app, {
+    aiAccessFor: async (user) => {
+      const today = new Date().toISOString().slice(0, 10);
+      if (user.role === "guardian") return { allowed: false, reason: "off" };
+      if (user.role === "athlete") {
+        if (await athleteHasCoach(user.id)) return { allowed: false, reason: "coached" };
+        if (!(await hasAthletePaidForAiAccess(user.id, user.email, "strengthAi"))) return { allowed: false, reason: "plan" };
+      }
+      return (await isKnownAdult(user.id, user.role, today)) ? { allowed: true } : { allowed: false, reason: "minor" };
+    },
+  });
   // attachNativeTokenAuth is mounted inside setupAuth itself now (before the
   // auth routes it needs to cover) -- see its own comment there for why.
   // Keeps "see who's logged in"'s lastSeenAt reasonably fresh -- reads

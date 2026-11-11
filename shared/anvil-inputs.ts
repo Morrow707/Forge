@@ -181,6 +181,11 @@ export const ANVIL_SIGNAL_TABLES: Record<string, string> = {
  * than an omission nobody can see.
  */
 export const NOT_A_SIGNAL_TABLE: Record<string, string> = {
+  // A TARGET, NOT A MEASUREMENT (2026-11-11). A velocity zone is the bar speed somebody chose to
+  // train at; the camera speeds it is read against are already the Anvil's through
+  // workout_set_entries. The zone says what a coach or athlete wanted, which describes no morning.
+  velocity_zones:
+    "A target bar speed a coach or athlete chose (server/velocity-zones.ts), not a measurement of the athlete. The speeds it is read against reach the Anvil through workout_set_entries.",
   // ---- the Anvil's own output, which is the one table here it WRITES ----
   anvil_checks:
     "THE ANVIL'S OWN TABLE, and the only one in this file it writes rather than reads. Its rows " +

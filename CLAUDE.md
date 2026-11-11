@@ -3815,6 +3815,20 @@ halves before splitting anything else:
   the row is labelled by the helper; a second filmed row take -- the first on the working-hand rule
   with a declared side -- is what gives the row its first ledger row. Client plus a server column:
   `verify_build` then `beta` with round eleven when the hold lifts.
+- **2026-11-11: VELOCITY ZONES, HARDY AND THE SHEET'S MICRONUTRIENTS SHIP IN ONE BUILD.** Scott:
+  "build them both, then upload all 3 into one build." (1) Velocity zones (`velocity_zones`,
+  `shared/velocity-zones.ts`, `server/velocity-zones.ts`): a target bar speed per athlete per lift;
+  each camera set's mean velocity is tagged in zone / slow / fast on the open exercise card with a
+  −20% drop tag and the camera caveat; a coach sets a coached athlete's zones (athlete page, Bar
+  Speed tab, or a whole team) and sees a Bar Speed dashboard card listing only athletes worth a
+  look; a Free Agent, coach or admin sets their own; a coached athlete cannot; Free Agents get one
+  suggestion at a time that changes nothing. (2) Hardy, first version (docs/hardy/README.md): search
+  for everyone, answers in a sentence for adults where AI help is already allowed, never a coached
+  athlete or a minor (counsel question open), the admin report behind a floor of 10. (3) b728ac1,
+  the photographed nutrition sheet reads every micronutrient. `hardy_question_events` and
+  `velocity_zones` are new tables, proven on a fresh database and idempotent on a second run.
+  The AI answer path was NOT exercised end to end here (no AI key in this sandbox); search, the
+  refusals, the recording and the report were, in a real browser and on real Postgres.
 - **2026-11-11: A LIFT IS JUDGED ACROSS EVERY SET ON RECORD, NOT ITS NEWEST ONE.** Scott: "every
   week we start high, get it dialed in, then the next week they are high again." No leak (the ledger
   replay proves every sealed take holds); each round chose its step on one or two takes, and one lift

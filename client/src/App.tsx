@@ -171,6 +171,7 @@ const AdminMyCalendar = lazy(withLoadTimeout(() => import("@/pages/admin/my-cale
 const AdminMyWorkout = lazy(withLoadTimeout(() => import("@/pages/admin/my-workout")));
 const AdminPlatformTrends = lazy(withLoadTimeout(() => import("@/pages/admin/platform-trends")));
 const AdminEmailList = lazy(withLoadTimeout(() => import("@/pages/admin/email-list")));
+const AdminHardyUsage = lazy(withLoadTimeout(() => import("@/pages/admin/hardy-usage")));
 const AdminKnowledgeBase = lazy(withLoadTimeout(() => import("@/pages/admin/knowledge-base")));
 const AdminAiSpend = lazy(withLoadTimeout(() => import("@/pages/admin/ai-spend")));
 const AdminExerciseVideos = lazy(withLoadTimeout(() => import("@/pages/admin/exercise-videos")));
@@ -739,6 +740,9 @@ function Router() {
         </Route>
         <Route path="/admin/email-list">
           <ProtectedRoute role="admin" component={AdminEmailList} />
+        </Route>
+        <Route path="/admin/hardy-usage">
+          <ProtectedRoute role="admin" component={AdminHardyUsage} />
         </Route>
         <Route path="/admin/query-engine">
           <ProtectedRoute role="admin" component={AdminQueryEngine} />

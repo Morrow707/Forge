@@ -1,7 +1,8 @@
-# Hardy the Hammer: the in-app assistant (QUEUED, NOT BUILT)
+# Hardy the Hammer: the in-app assistant
 
-Status 2026-11-11: designed and tested as a prototype only. Nothing of Hardy is in the app, on
-Render or in a build yet. `prototype.html` is the tested prototype (invented sample data, a
+Status 2026-11-11: BUILT, first version (server/hardy.ts, client/src/components/hardy-*.tsx,
+client/src/pages/admin/hardy-usage.tsx). What shipped and what did not is listed under "What the
+first version is" below. `prototype.html` is the tested prototype (invented sample data, a
 stand-in for Forge's screens); the published copy is https://claude.ai/artifact/C8ycjQZzAvxvpX4iMDa4XB.
 
 ## Decided by Scott
@@ -44,3 +45,23 @@ stand-in for Forge's screens); the published copy is https://claude.ai/artifact/
 1. Search across your history (dates, exercises, foods, notes). Hardy's finder covers this.
 2. Velocity targets per lift, with the camera accuracy caveat.
 3. Fuller micronutrients (iron, calcium, magnesium, potassium), after asking which ones matter.
+
+## What the first version is (2026-11-11)
+- **Search, for everyone the app shell serves** (athlete, coach, admin): dates ("July 14",
+  "2026-07-14", a weekday), lift names, foods and words in a set's note, over the person's own logs;
+  a coach also searches their roster (naming an athlete narrows to them). Each hit opens its page.
+- **Ask in a sentence, adults only, where Forge already allows AI help**: a coach or admin, or a
+  Free Agent on an AI plan. Never a coached athlete (Scott: coached by the staff) and never a
+  minor -- the counsel question above stands, so it is adults-only until counsel answers. Claude
+  answers from the person's last 180 days of sets, 60 days of food and check-ins, names its dates,
+  points pain at a doctor or trainer, and offers "Take me there" to the day.
+- **Not saved**: the conversation lives in the panel. Each question is recorded for the admin
+  report as kind + Forge's words + outcome + group + day, with a keyed hash in place of the account
+  so the report can count different people (`hardy_question_events`).
+- **Admin: More -> What People Ask Hardy** -- 7 or 28 days, by group, kinds with trend, top 20
+  words, where he came up short, the plan line, plain-sentence suggestions; every row behind the
+  floor of 10 different people.
+- **Hidden on the workout day screen**, which is too busy for a floating button.
+- **NOT in this version** (the prototype has them): changes by confirm card, reports and PDFs, the
+  Hardy tab, goals, reminders, meet mode, program drafting, photo logging, the weekly recap. Each is
+  its own build; the prototype is the spec.

@@ -1,3 +1,4 @@
+import { HardyButton } from "@/components/hardy-button";
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Capacitor } from "@capacitor/core";
@@ -57,6 +58,7 @@ import {
   FileWarning,
   Mail,
   Scale,
+  MessageSquare,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -241,6 +243,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/billing", label: "Billing", icon: CreditCard, overflow: true },
   { href: "/admin/users", label: "Users", icon: Users, overflow: true },
   { href: "/admin/email-list", label: "Email List", icon: Mail, overflow: true },
+  { href: "/admin/hardy-usage", label: "What People Ask Hardy", icon: MessageSquare, overflow: true },
   { href: "/admin/documents", label: "Legal & Compliance", icon: ShieldCheck, overflow: true },
   { href: "/legal", label: "Terms & Privacy", icon: Scale, overflow: true },
   // BOTH OF THESE EXISTED, WORKED, AND HAD NO WAY IN.
@@ -1500,6 +1503,8 @@ export function AppShell({
       {user && <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />}
       <NonIosTrackingNotice />
       <CameraAccuracyNotice />
+      {/* Hardy: search for everyone the shell serves; answers in a sentence where the plan allows. */}
+      {(user?.role === "athlete" || user?.role === "coach" || user?.role === "admin") && <HardyButton />}
     </div>
   );
 }

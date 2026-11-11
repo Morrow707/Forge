@@ -114,6 +114,10 @@ const OWNERSHIP_CHECKS = [
 // was read and judged, not because it was hard to classify -- adding to this
 // list is the thing to be suspicious of in review.
 const GLOBAL_BY_DESIGN = new Set([
+  // The signed-in person's OWN velocity zone for a lift (server/velocity-zones.ts): the URL id is
+  // an exercise, which is platform-wide, and the row read or written is keyed on user.id in
+  // saveZone / the delete's where clause. A coached athlete is refused before either.
+  "/api/me/velocity-zones/:exerciseId",
   // A learning path is platform-wide like a track; the progress on the certificate is read
   // by user.id inside academyProgressForCoach.
   "/api/coach/academy/paths/:id/certificate",
