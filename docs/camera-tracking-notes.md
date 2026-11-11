@@ -14,7 +14,31 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-10, round sixteen)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-11, the all-sets rule)
+
+**HOW A ROUND CHOOSES A SETTINGS STEP NOW (2026-11-11, agreed with Scott; read before touching any
+number).** Scott: "every week we start high, get it dialed in, then the next week they are high
+again." Not a leak -- every sealed take still replays to what it read. It was the method: each step
+was chosen on that round's one or two takes, and the same lift reads 10-20% apart between takes
+with NOTHING changed (bench 11-06 +2% vs 11-10 -9% on one record; press +47% vs +10% minutes
+apart; row -3% vs -35% the same evening). So, `shared/lift-standing.ts`:
+1. **A lift is judged by its average and spread over every sensor-paired set**, never its newest.
+   Today (range of motion, live pipeline): squat 8 sets avg 2.2% / wobble 2.4; RDL 8, 7.2 / 9.6;
+   bench 5, 4.9 / 6.3; barbell press 3, 4.1 / 6.0; Pendlay 3, 8.1 / 11.1; DB press 4, 15.3 / 9.7;
+   single-arm row 4, 19.3 / 21.7. None dialed in (5+ sets all inside +-3%).
+2. **A scale setting moves only once the lift has 5 sets, and only by a step that lowers its
+   average across ALL of them.** Choose it with
+   `npx tsx scripts/sweep-lift-setting.ts "<lift>" <field> <values...>`, which prints every set and
+   the verdict. Bugs (a lost hand, a split rep, a wrong ruler) are fixed the day they are seen.
+   `STANDING_ON_RECORD` (`shared/lift-standing-on-record.json`) is the ratchet: a change that moves
+   a lift's average reds `every-lift-is-judged-across-all-its-sets.test.ts` with the direction.
+3. **Filming routine stays: one set of each of the three lifts, uploaded together.** Sets accumulate
+   across sessions; nothing extra to film.
+**And the take-to-take wobble is the real target**, which settings cannot remove: on a one-arm lift
+the live gate now also reads the WORKING WRIST's unseen time (`wristGaps` in the export, both
+paths) and re-reads the take from the file past 1.0s. Unproven whether the file recovers the hand;
+the next row take's `wristGaps` on both paths answers it.
+
 
 **ROUND SIXTEEN (2026-11-10 evening), THE ONE-LINE VERSION:** set 3 of all three on **build 732**.
 **The left row found 4 of 8 for four separate reasons** -- the pickup swallowed the first pull, the

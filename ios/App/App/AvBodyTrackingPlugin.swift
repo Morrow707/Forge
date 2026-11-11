@@ -1326,6 +1326,80 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     /// quarter second; the live run skips frames by cadence, so a healthy take sits well above.
     private static let minLiveCoverage = 0.5
     private static let maxLiveInterFrameGapSeconds = 0.25
+    /// A UNILATERAL LIFT'S WORKING WRIST MAY NOT BE UNSEEN FOR LONGER THAN THIS ON THE LIVE PATH.
+    /// Rep-sized, not jitter-sized: the 2026-11-09 replay put the damage at holes that hold a rep
+    /// (a 2.3s hole deletes reps; scattered sub-quarter-second dropouts never change a count), and
+    /// the live dumbbell takes of 2026-11-06 and 11-10 lose their working wrist for 0.3-1.0s on
+    /// ordinary frames, so the body gate's quarter second here would send every one of them to the
+    /// file for nothing. The three that lost a pull held 1.36s, 2.30s and 2.46s. A take that fails
+    /// it is read again from the saved file, which decodes every frame at full resolution; whether
+    /// that recovers the hand is what the next row take's `wristGaps` on both paths will show.
+    private static let maxLiveWorkingWristGapSeconds = 1.0
+
+    /// Set at Record from the caller: whether THIS take is a one-arm lift, so the gate reads the
+    /// working wrist. Silence means bilateral, which is every take before this existed.
+    private var liveUnilateralLift = false
+
+    /// One body-producing frame's wrists into the per-wrist gap and travel counters. Static and
+    /// fed by both feeders through the one per-frame function, so the live and file paths record
+    /// the same numbers -- the comparison the next take is for.
+    fileprivate static func recordWristSighting(
+        state: AvFrameRunState,
+        at t: Double,
+        left: (x: Double, y: Double)?,
+        right: (x: Double, y: Double)?
+    ) {
+        if let left = left {
+            if let prev = state.previousLeftWristTimestamp, t - prev > (state.maxLeftWristGapSeconds ?? 0) {
+                state.maxLeftWristGapSeconds = t - prev
+            }
+            state.previousLeftWristTimestamp = t
+            state.leftWristMinY = min(state.leftWristMinY ?? left.y, left.y)
+            state.leftWristMaxY = max(state.leftWristMaxY ?? left.y, left.y)
+        }
+        if let right = right {
+            if let prev = state.previousRightWristTimestamp, t - prev > (state.maxRightWristGapSeconds ?? 0) {
+                state.maxRightWristGapSeconds = t - prev
+            }
+            state.previousRightWristTimestamp = t
+            state.rightWristMinY = min(state.rightWristMinY ?? right.y, right.y)
+            state.rightWristMaxY = max(state.rightWristMaxY ?? right.y, right.y)
+        }
+        if left != nil || right != nil {
+            if let prev = state.previousEitherWristTimestamp, t - prev > (state.maxEitherWristGapSeconds ?? 0) {
+                state.maxEitherWristGapSeconds = t - prev
+            }
+            state.previousEitherWristTimestamp = t
+        }
+    }
+
+    /// The wrist that TRAVELLED further vertically is the working one -- the same rule
+    /// workingHandForUnilateral applies in JS, read here so the native gate needs no side from the
+    /// caller (Vision's left/right is mirror-dependent, so a declared side cannot be trusted to
+    /// name the right joint). Nil until a wrist has been seen.
+    fileprivate static func workingWristGapSeconds(_ state: AvFrameRunState) -> (side: String, gap: Double)? {
+        let leftTravel = (state.leftWristMaxY ?? 0) - (state.leftWristMinY ?? 0)
+        let rightTravel = (state.rightWristMaxY ?? 0) - (state.rightWristMinY ?? 0)
+        if state.leftWristMinY == nil && state.rightWristMinY == nil { return nil }
+        if leftTravel >= rightTravel {
+            return ("left", state.maxLeftWristGapSeconds ?? 0)
+        }
+        return ("right", state.maxRightWristGapSeconds ?? 0)
+    }
+
+    /// The export's account of the hand: every gap, and which wrist the gate would read.
+    /// Records and gates nothing by itself (Rule #1).
+    fileprivate static func wristGapTelemetry(_ state: AvFrameRunState) -> [String: Any] {
+        var out: [String: Any] = [:]
+        if let v = state.maxLeftWristGapSeconds { out["left"] = v }
+        if let v = state.maxRightWristGapSeconds { out["right"] = v }
+        if let v = state.maxEitherWristGapSeconds { out["either"] = v }
+        if let working = workingWristGapSeconds(state) {
+            out["workingSide"] = working.side
+            out["working"] = working.gap
+        }
+        return out
+    }
 
     private func effectiveSampleStride(baseline: Int) -> Int {
         let rateRatio = max(1.0, activeCaptureFrameRate / 60.0)
@@ -1358,6 +1432,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // one outcome worth more than the wait it saves, so an absent liveAnalysis flag leaves
         // this take behaving exactly as it did before Phase 5b existed.
         let liveRequested = call.getBool("liveAnalysis") ?? false
+        liveUnilateralLift = call.getBool("unilateralLift") ?? false
         let thermalState = ProcessInfo.processInfo.thermalState
         let liveContext: AvFrameContext? = {
             guard liveRequested else { return nil }
@@ -1783,12 +1858,18 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // 2.302s -- the two whose holes are big enough to lose reps) and leaves the other seven
         // live at no cost to the athlete, their traced gaps sitting at 0.075-0.200s.
         let maxTracedGapSeconds = run.state.maxTracedGapSeconds ?? 0
+        // AND ON A ONE-ARM LIFT, THE WORKING WRIST'S OWN HOLE -- see maxLiveWorkingWristGapSeconds.
+        // A bilateral take is not held to it: the bar point carries across one hidden hand, and the
+        // body gate above already covers a frame with nobody in it.
+        let workingWristGap = liveUnilateralLift ? (Self.workingWristGapSeconds(run.state)?.gap ?? 0) : 0
         guard coverage >= Self.minLiveCoverage,
               maxGapSeconds <= Self.maxLiveInterFrameGapSeconds,
-              maxTracedGapSeconds <= Self.maxLiveInterFrameGapSeconds else {
+              maxTracedGapSeconds <= Self.maxLiveInterFrameGapSeconds,
+              workingWristGap <= Self.maxLiveWorkingWristGapSeconds else {
             let why = "coverage=\(String(format: "%.2f", coverage)) dropRate=\(String(format: "%.3f", dropRate)) "
                 + "maxGap=\(String(format: "%.2f", maxGapSeconds))s "
                 + "maxTracedGap=\(String(format: "%.2f", maxTracedGapSeconds))s "
+                + "workingWristGap=\(String(format: "%.2f", workingWristGap))s "
                 + "processed=\(run.state.processedCount) expected=\(String(format: "%.0f", expectedFrames))"
             lastLiveFallbackReason = why
             logDiag("live analysis unusable: \(lastLiveFallbackReason!)")
@@ -1848,6 +1929,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         if let maxTracedGapSeconds = state.maxTracedGapSeconds {
             result["maxTracedGapSeconds"] = maxTracedGapSeconds
         }
+        result["wristGaps"] = Self.wristGapTelemetry(state)
         if let videoAsset = lastUploadCopyTelemetry {
             result["videoAsset"] = videoAsset
         }
@@ -2363,6 +2445,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 if let maxInterFrameGapSeconds = state.maxInterFrameGapSeconds {
                     result["maxInterFrameGapSeconds"] = maxInterFrameGapSeconds
                 }
+                if let maxTracedGapSeconds = state.maxTracedGapSeconds {
+                    result["maxTracedGapSeconds"] = maxTracedGapSeconds
+                }
+                result["wristGaps"] = Self.wristGapTelemetry(state)
                 call.resolve(result)
             }
         }
@@ -2521,6 +2607,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                         rightAnkleJoint = (x: Double(point.location.x), y: Double(point.location.y))
                     }
                 }
+                Self.recordWristSighting(state: state, at: timestampSeconds, left: leftWristJoint, right: rightWristJoint)
             }
         } catch {
             state.visionFailureCount += 1
@@ -3548,6 +3635,23 @@ private final class AvFrameRunState {
     // change the count. A lost rep is the damage; scattered jitter is not.
     var previousTracedTimestamp: Double?
     var maxTracedGapSeconds: Double?
+    // AND THE SAME GAP PER WRIST, because a body can be in every frame while the hand doing the
+    // work is not. 2026-11-10, set 3 of the single-arm row: the body's traced gap was 0.19s, so
+    // the take stayed live, while the working wrist was unseen for 1.36s and a whole pull was lost
+    // inside that hole (4 of 8 found). A wrist counts as seen on a frame where Vision returned it
+    // above the same 0.1 confidence every joint here is read at. `eitherWrist` is the gap with
+    // NEITHER wrist seen, which is the hole a bilateral bar cannot carry across; the per-side gaps
+    // and travel are what a unilateral lift's working hand is read from. See wristGapTelemetry.
+    var previousLeftWristTimestamp: Double?
+    var previousRightWristTimestamp: Double?
+    var previousEitherWristTimestamp: Double?
+    var maxLeftWristGapSeconds: Double?
+    var maxRightWristGapSeconds: Double?
+    var maxEitherWristGapSeconds: Double?
+    var leftWristMinY: Double?
+    var leftWristMaxY: Double?
+    var rightWristMinY: Double?
+    var rightWristMaxY: Double?
     // Isolating hand-pose's OWN incremental per-frame cost, since that is what decides whether
     // it is safe to keep running on every sampled frame.
     var handPoseElapsedSeconds: Double = 0

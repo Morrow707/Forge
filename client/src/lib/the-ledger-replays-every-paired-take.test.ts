@@ -5,19 +5,15 @@ import {
   ACCURACY_LEDGER,
   candidatesAsFilmed,
   errorPctAgainstSensor,
-  type LedgerRow,
 } from "@shared/accuracy-ledger";
 import {
   reconcileScaleEstimates,
   HEIGHT_RULER_UNCERTAINTY,
   BIACROMIAL_TOLERANCE_FRACTION,
-  COREML_BOX_LONG_EDGE_UNCERTAINTY,
-  coreMlBoxUncertaintyForConfidence,
-  CALIBRATION_REFERENCES,
 } from "./pose-tracking";
 import { BODY_3D_CORRECTED_UNCERTAINTY, DEPTH_RULER_UNCERTAINTY } from "./body-3d-ruler";
-import { postureForExercise, postureAllowsHeightCalibration, romBucketForExercise } from "./exercise-camera-profile";
 import { cameraTunablesFor } from "@shared/camera-tunables-by-lift";
+import { asFilmedX1000, liveX1000 } from "./ledger-replay";
 
 /* EVERY SENSOR-PAIRED TAKE, REPLAYED TWICE: AS FILMED, AND THROUGH TODAY'S CONSTANTS.
  *
@@ -42,86 +38,6 @@ import { cameraTunablesFor } from "@shared/camera-tunables-by-lift";
  *
  * Records and gates nothing (Rule #1). No constant moves here and FITTED_OVERRIDES stays empty.
  */
-
-/** The live pipeline's uncertainty for a ruler, EVERY ONE READ BY NAME so a refit of any of the
- *  four reaches this file. The first draft typed `0.2` for the two 3D rulers, which is the same
- *  defect this file is about -- a frozen value beside live constants -- in the file that exists
- *  to catch it. `shoulder_width` takes BIACROMIAL_TOLERANCE_FRACTION because that is its FLOOR
- *  (e70cc096 made it `max(floor, spanSpreadFraction, gripFloor)`), and a sealed row carries no
- *  frames, so the floor is the most this replay can know. */
-/* THE LIVE UNCERTAINTIES ARE THIS LIFT'S OWN, read off the registry exactly as the bar dialog
- * reads them, because since 2026-10-29 a lift can carry a FITTED_OVERRIDES entry and a replay
- * that read the module constants would certify a blend no phone produces -- the hybrid this
- * file exists to refuse, one layer up. The module constants are still imported and asserted
- * below so the registry's defaults cannot drift from them unnoticed. */
-function liveUncertainty(source: string, exercise: string, row?: LedgerRow): number {
-  const t = cameraTunablesFor(exercise, romBucketForExercise(exercise)).values;
-  if (source === "height") return t.heightRulerUncertainty;
-  // The floor is the constant; the span's own spread on the day is a fact about the take, and the
-  // phone states the larger of the two (the 10-30 row set 2 shipped at 0.317 over a 0.2 floor).
-  if (source === "shoulder_width") return Math.max(t.biacromialToleranceFraction, row?.shoulderSpanSpreadFraction ?? 0);
-  if (source === "depth") return t.depthRulerUncertainty;
-  if (source === "plate") {
-    // What `computeReferenceObjectScale` states for a bumper plate the detector boxed: the casting
-    // tolerance over the nominal diameter, in quadrature with the detector's own measured noise.
-    // The 2026-10-19 RDL set 2 row is the one take so far with a plate in the vote.
-    const plate = CALIBRATION_REFERENCES.find((r) => r.id === "bumper_plate_perform_better");
-    if (!plate) throw new Error("the bumper plate reference is gone from CALIBRATION_REFERENCES");
-    // FLOORED BY THE BAND THIS TAKE'S OWN CONFIDENCE EARNED since 2026-10-31. Read off the row,
-    // never a constant: the floor is a fact about the take in exactly the way the shoulder span's
-    // spread is, and a replay through the pooled value alone would weight the 10-30 row's six
-    // frames at 0.44 as if they were the bench's 205 at 0.93. A row with no plate in the vote
-    // never reaches this branch, so the missing field decides nothing.
-    return Math.hypot(
-      plate.toleranceM / plate.nominalSizeM,
-      coreMlBoxUncertaintyForConfidence(row?.plateMeanCoreMlConfidence ?? null),
-    );
-  }
-  return t.body3DCorrectedUncertainty;
-}
-
-function blendX1000(
-  candidates: readonly { source: string; scaleX1000: number }[],
-  uncertaintyFor: (source: string) => number,
-): number {
-  const verdict = reconcileScaleEstimates(
-    candidates.map((c) => ({
-      source: c.source as "body_3d",
-      scale: c.scaleX1000 / 1000,
-      uncertaintyFraction: uncertaintyFor(c.source),
-    })),
-  );
-  if (verdict.scale == null) throw new Error("the blend returned no scale");
-  return verdict.scale * 1000;
-}
-
-/** The take as the build that filmed it saw it. */
-function asFilmedX1000(row: LedgerRow): number {
-  return blendX1000(candidatesAsFilmed(row), (s) => {
-    const u = row.uncertaintiesAsFilmed[s];
-    if (u == null) throw new Error(`${row.id}: no as-filmed uncertainty for "${s}"`);
-    return u;
-  });
-}
-
-/** The same candidates through the pipeline as it stands, posture gate included -- because a
- *  relabel moves a take as far as a refit does and is a different event. */
-function liveX1000(row: LedgerRow): number {
-  const heightVotesToday = postureAllowsHeightCalibration(postureForExercise(row.exercise));
-  // THE STATURE YARDSTICK RUNS EXACTLY WHERE THE HEIGHT RULER VOTES (2026-11-06), so a candidate it
-  // convicted on a posture where it no longer runs is admitted today; a grip refusal stands, since
-  // a sealed row carries no span to re-judge it with. See LedgerRow.rejectedAsFilmed.
-  const stillRefused = new Set(
-    (row.rejectedAsFilmed ?? [])
-      .filter((r) => r.yardstick === "grip" || heightVotesToday)
-      .map((r) => r.source),
-  );
-  const candidates = (heightVotesToday
-    ? row.candidates
-    : row.candidates.filter((c) => c.source !== "height")
-  ).filter((c) => !stillRefused.has(c.source));
-  return blendX1000(candidates, (s) => liveUncertainty(s, row.exercise, row));
-}
 
 describe("every ledger row is a record of a real take", () => {
   it("the registry's shared defaults are the module constants the live replay used to read", () => {

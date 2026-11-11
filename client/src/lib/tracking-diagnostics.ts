@@ -264,6 +264,8 @@ export type TrackingDiagnostics = {
     /** The largest hole in the TRACE (frames that produced a body), beside the sampler's own
      *  gap above -- the number the live gate protects the reps with. */
     maxTracedGapSeconds?: number;
+    /** Per-wrist unseen time; see AvAnalysisResult.wristGaps in native-av-preview.ts. */
+    wristGaps?: { left?: number; right?: number; either?: number; working?: number; workingSide?: string };
     // Box-jump-only -- see shared/schema.ts's trackingDiagnosticsSchema comment on this same
     // field for the full explanation of why it's separate from objectDetection below.
     // See shared/schema.ts's trackingDiagnosticsSchema for why each of these is here. All six
@@ -1028,6 +1030,8 @@ export function buildTrackingDiagnostics(args: {
     /** The largest hole in the TRACE (frames that produced a body), beside the sampler's own
      *  gap above -- the number the live gate protects the reps with. */
     maxTracedGapSeconds?: number;
+    /** Per-wrist unseen time; see AvAnalysisResult.wristGaps in native-av-preview.ts. */
+    wristGaps?: { left?: number; right?: number; either?: number; working?: number; workingSide?: string };
     // See shared/schema.ts's trackingDiagnosticsSchema for why each of these is here. All six
     // are produced natively on every take and were stripped on every insert until the schema
     // named them.

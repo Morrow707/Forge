@@ -88,7 +88,8 @@ describe("the live path samples by time and is judged by its largest gap", () =>
   it("gates on coverage AND both gaps -- the sampler's and the trace's -- not on the drop rate", () => {
     expect(swift).toContain("guard coverage >= Self.minLiveCoverage,");
     expect(swift).toContain("maxGapSeconds <= Self.maxLiveInterFrameGapSeconds,");
-    expect(swift).toContain("maxTracedGapSeconds <= Self.maxLiveInterFrameGapSeconds else {");
+    // Since 2026-11-11 the working-wrist gate follows it (a-hidden-working-hand-is-read-again-from-the-file.test.ts).
+    expect(swift).toContain("maxTracedGapSeconds <= Self.maxLiveInterFrameGapSeconds,");
     expect(swift).toMatch(/minLiveCoverage = 0\.5/);
     expect(swift).toMatch(/maxLiveInterFrameGapSeconds = 0\.25/);
     expect(swift).not.toContain("guard coverage >= 0.9, dropRate <= 0.05 else {");

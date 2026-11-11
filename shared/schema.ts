@@ -9908,6 +9908,16 @@ export const trackingDiagnosticsSchema = z.object({
       /** The largest hole in the TRACE, beside the sampler's own gap above. Declared here because
        *  zod strips what it does not declare, silently -- which has cost two diagnostics. */
       maxTracedGapSeconds: z.number().optional(),
+      /** Per-wrist unseen time, 2026-11-11. Declared for the same reason as the line above. */
+      wristGaps: z
+        .object({
+          left: z.number().optional(),
+          right: z.number().optional(),
+          either: z.number().optional(),
+          working: z.number().optional(),
+          workingSide: z.string().optional(),
+        })
+        .optional(),
       // Box-jump-only (see AvBodyTrackingPlugin.swift's detectBoxTopCandidate) -- Vision's own
       // median-of-candidate-frames read on where the box's top surface sits, in normalized
       // image-space Y. This is a DIFFERENT detector from objectDetection below (that's the

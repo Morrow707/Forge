@@ -3815,6 +3815,17 @@ halves before splitting anything else:
   the row is labelled by the helper; a second filmed row take -- the first on the working-hand rule
   with a declared side -- is what gives the row its first ledger row. Client plus a server column:
   `verify_build` then `beta` with round eleven when the hold lifts.
+- **2026-11-11: A LIFT IS JUDGED ACROSS EVERY SET ON RECORD, NOT ITS NEWEST ONE.** Scott: "every
+  week we start high, get it dialed in, then the next week they are high again." No leak (the ledger
+  replay proves every sealed take holds); each round chose its step on one or two takes, and one lift
+  reads 10-20% apart between takes with nothing changed. Rules in `shared/lift-standing.ts`: judged
+  by average and spread over all sets; a scale setting moves only at 5+ sets and only if it lowers
+  the average across all of them (`scripts/sweep-lift-setting.ts`, which shares the ledger's replay,
+  `client/src/lib/ledger-replay.ts`); dialed in = 5+ sets all inside +-3%; bugs fixed on sight.
+  `STANDING_ON_RECORD` is the ratchet. Filming stays one set of each lift per session (Scott's
+  choice). And a one-arm lift's live take is re-read from the file when its working wrist was unseen
+  past 1.0s (`wristGaps`, `maxLiveWorkingWristGapSeconds`); the hook also stopped dropping
+  `arbiterTunables` at Record (inert: every lift holds the defaults). Native: `verify_build`, beta.
 - **ROUND SIXTEEN, 2026-11-10 EVENING: SET 3 ON BUILD 732, AND WHY THE LEFT ROW FOUND 4 OF 8.** Four
   reasons: the pickup swallowed pull 1, the working wrist was unseen for 1.36s (one pull lost in the
   hole; the live gate measures BODY gaps, not the wrist, so the take was not re-read from the file --

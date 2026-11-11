@@ -209,6 +209,12 @@ export type AvAnalysisResult = {
    *  into three; nineteen scattered two-sample dropouts move the set mean 1-6% and change no
    *  count). See maxTracedGapSeconds in AvBodyTrackingPlugin.swift. */
   maxTracedGapSeconds?: number;
+  /** HOW LONG EACH WRIST WENT UNSEEN, in seconds: the largest gap between two frames that each
+   *  returned that wrist, `either` the largest with neither, and `working` the gap of the wrist
+   *  that travelled further (`workingSide`, by Vision's own left/right). A one-arm lift's live
+   *  take is re-read from the file when `working` passes 1.0s (2026-11-10: the left row lost its
+   *  working hand for 1.36s while the body gate read 0.19s). */
+  wristGaps?: { left?: number; right?: number; either?: number; working?: number; workingSide?: string };
   // Vision's own raw normalized (0-1, bottom-left-origin) convention, same as PoseJoint.y
   // above -- see AvBodyTrackingPlugin.swift's detectBoxTopCandidate for how this is found
   // (VNDetectRectanglesRequest, median across the whole clip) and vision-body-landmarks.ts's
@@ -333,6 +339,7 @@ interface AvBodyTrackingPlugin {
     // Strides, never switches -- CLAUDE.md Rule #2. Default 9 and 1.
     body3DStride?: number;
     handPoseStride?: number;
+    unilateralLift?: boolean;
   }): Promise<void>;
   /** `uploadPath` is the 720p copy the native side wrote WHILE recording (see the plugin's
    *  AvUploadCopyWriter). Absent on an older build or when the copy could not be made, in which
@@ -466,6 +473,13 @@ export async function startAvRecording(options?: {
   trackingMode?: string;
   body3DStride?: number;
   handPoseStride?: number;
+  arbiterTunables?: {
+    maxLockDistanceInYardsticks: number;
+    maxPlateSizeInYardsticks: number;
+    maxYardstickDeviationRatio: number;
+  };
+  /** A one-arm lift: the live gate reads the working wrist's unseen time. See wristGaps. */
+  unilateralLift?: boolean;
 }): Promise<void> {
   await AvBodyTracking.startRecording(options);
 }

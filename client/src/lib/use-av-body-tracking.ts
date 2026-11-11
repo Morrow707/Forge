@@ -279,6 +279,8 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     trackingMode?: string;
     body3DStride?: number;
     handPoseStride?: number;
+    /** A one-arm lift; forwarded so the live gate reads the working wrist. */
+    unilateralLift?: boolean;
     // Overwatch's thresholds for this lift, forwarded to the native arbiter. See
     // shared/camera-tunables-by-lift.ts and AvTrackerArbiter.reset.
     arbiterTunables?: {
@@ -307,6 +309,11 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
       trackingMode: options?.trackingMode,
       body3DStride: options?.body3DStride,
       handPoseStride: options?.handPoseStride,
+      // Both were typed on this hook and dropped here until 2026-11-11, so the arbiter numbers
+      // sent at Record never reached the native reset (harmless while every lift holds the
+      // defaults; the Stop call carried them). The wrist gate needs the second.
+      arbiterTunables: options?.arbiterTunables,
+      unilateralLift: options?.unilateralLift,
     }).catch((err) => {
       setError(err instanceof Error ? err.message : "Could not start recording");
       setRecording(false);

@@ -3034,7 +3034,12 @@ export function AvBarTrackerDialog({
                 size="lg"
                 onClick={() => {
                   setError(null);
-                  startRecording({ trackingMode: coreMlTrackingMode, arbiterTunables, ...BAR_SENSOR_STRIDES });
+                  startRecording({
+                    trackingMode: coreMlTrackingMode,
+                    arbiterTunables,
+                    unilateralLift: laterality === "unilateral",
+                    ...BAR_SENSOR_STRIDES,
+                  });
                 }}
                 disabled={!supported || !heightIn}
               >
