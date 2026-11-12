@@ -174,7 +174,6 @@ const AdminPlatformTrends = lazy(withLoadTimeout(() => import("@/pages/admin/pla
 const AdminEmailList = lazy(withLoadTimeout(() => import("@/pages/admin/email-list")));
 const AdminHardyUsage = lazy(withLoadTimeout(() => import("@/pages/admin/hardy-usage")));
 const AdminFeatureUsage = lazy(withLoadTimeout(() => import("@/pages/admin/feature-usage")));
-const AdminKnowledgeBase = lazy(withLoadTimeout(() => import("@/pages/admin/knowledge-base")));
 const AdminAiSpend = lazy(withLoadTimeout(() => import("@/pages/admin/ai-spend")));
 const AdminExerciseVideos = lazy(withLoadTimeout(() => import("@/pages/admin/exercise-videos")));
 const AdminBilling = lazy(withLoadTimeout(() => import("@/pages/admin/billing")));
@@ -821,8 +820,10 @@ function Router() {
         <Route path="/admin/tracking-report">
           <ProtectedRoute role="admin" component={AdminTrackingReport} />
         </Route>
+        {/* Books & Documents is a tab of Teach the AI, and nothing in the app linked to this
+            standalone copy of it (the usage report, 2026-11-12) -- an old address lands on the tab. */}
         <Route path="/admin/knowledge-base">
-          <ProtectedRoute role="admin" component={AdminKnowledgeBase} />
+          <Redirect to="/admin/teach-ai?tab=documents" />
         </Route>
         <Route path="/admin/ai-spend">
           <ProtectedRoute role="admin" component={AdminAiSpend} />

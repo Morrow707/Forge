@@ -1,3 +1,4 @@
+import { useSearch } from "wouter";
 import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -35,10 +36,14 @@ import { cn } from "@/lib/utils";
  * Camera AI left this page entirely. It is a history of past analyses: a
  * record, not an input, and the only tab here that taught nothing.
  */
+const TABS = new Set(["teach", "movement", "documents"]);
+
 export default function AdminTeachAi() {
+  // `?tab=documents` opens a tab directly; the old /admin/knowledge-base address arrives this way.
+  const asked = new URLSearchParams(useSearch()).get("tab") ?? "";
   return (
     <AppShell title="Teach AI">
-      <Tabs defaultValue="teach">
+      <Tabs defaultValue={TABS.has(asked) ? asked : "teach"}>
         <TabsList>
           <TabsTrigger value="teach">Teach</TabsTrigger>
           <TabsTrigger value="movement">Movement</TabsTrigger>

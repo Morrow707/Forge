@@ -95,7 +95,15 @@ export type CatalogPage = { path: string; linked: boolean };
 export function pagePathsFromAppSource(appSource: string): string[] {
   // `<Route path="/coach/roster/:athleteId">` -> "/coach/roster/:athleteId"; `<Redirect to="/x">` no.
   // https://regex101.com/?regex=%3CRoute%5Cs%2Bpath%3D%22(%5B%5E%22%5D%2B)%22&testString=%3CRoute%20path%3D%22%2Fcoach%2Froster%2F%3AathleteId%22%3E
-  const paths = Array.from(appSource.matchAll(/<Route\s+path="([^"]+)"/g), (m) => m[1]);
+  const routes = Array.from(appSource.matchAll(/<Route\s+path="([^"]+)"/g), (m) => ({ path: m[1], at: m.index ?? 0 }));
+  // A Route whose body is only a <Redirect> is an old address forwarding to a page, not a page:
+  // counting it put two forwarding addresses on the report as pages nothing links to.
+  const paths = routes
+    .filter((r) => {
+      const close = appSource.indexOf("</Route>", r.at);
+      return close === -1 || !appSource.slice(r.at, close).includes("<Redirect");
+    })
+    .map((r) => r.path);
   return Array.from(new Set(paths));
 }
 

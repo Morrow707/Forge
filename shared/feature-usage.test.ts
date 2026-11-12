@@ -60,6 +60,14 @@ describe("what a page is counted as", () => {
     expect(paths.length).toBeGreaterThan(MORE_THAN_A_HUNDRED_PAGES);
   });
 
+  it("does not count an old address that only forwards to a page", () => {
+    const app = '<Route path="/a"><Page /></Route>\n<Route path="/old">\n  <Redirect to="/a" />\n</Route>';
+    expect(pagePathsFromAppSource(app)).toEqual(["/a"]);
+    const paths = pagePathsFromAppSource(read("client/src/App.tsx"));
+    expect(paths).not.toContain("/admin/knowledge-base");
+    expect(paths).not.toContain("/admin/research-exports");
+  });
+
   it("matches a real path to its pattern, the more specific pattern winning, and never keeps the id", () => {
     const patterns = ["/athlete/classes/:id", "/athlete/classes/review", "/coach/roster/:athleteId", "/"];
     expect(matchPagePattern("/athlete/classes/review", patterns)).toBe("/athlete/classes/review");
