@@ -3,6 +3,7 @@ import { coachAthletes, foodLogEntries, hardyQuestionEvents, workoutLogEntries, 
 import { db } from "./db";
 import { makeAssignedProgram, makeExercise, resetDatabase } from "./test-support/fixtures";
 import { loginAs, makeLoginableUser, startTestServer, type TestClient, type TestServer } from "./test-support/http-app";
+import { HARDY_ASKS_PER_DAY, takeHardyAsk } from "./hardy";
 
 /* HARDY ON REAL POSTGRES (2026-11-11): search reaches the person's own logs (a coach: their roster)
  * and nobody else's; a coached athlete is not offered answers in a sentence; and what the admin
@@ -116,5 +117,33 @@ describe("Hardy", () => {
 
   it("the admin report is admin-only", async () => {
     expect((await coachClient.request("GET", "/api/admin/hardy-usage")).status).toBe(FORBIDDEN);
+  });
+});
+
+describe("Hardy's daily limit, counted in Postgres", () => {
+  const LIMIT_DAY = "2031-04-04";
+  const NEXT_DAY = "2031-04-05";
+
+  it("allows the fiftieth question of a day and refuses the fifty-first", async () => {
+    type Take = Awaited<ReturnType<typeof takeHardyAsk>>;
+    // One after another, so each answer is the count at that question.
+    const answers = await Array.from({ length: HARDY_ASKS_PER_DAY + 1 }).reduce<Promise<Take[]>>(
+      async (soFar) => [...(await soFar), await takeHardyAsk(stranger.id, LIMIT_DAY)],
+      Promise.resolve([]),
+    );
+    expect(answers[HARDY_ASKS_PER_DAY - 1]).toEqual({ allowed: true, asked: HARDY_ASKS_PER_DAY });
+    expect(answers[HARDY_ASKS_PER_DAY]).toEqual({ allowed: false, asked: HARDY_ASKS_PER_DAY + 1 });
+  });
+
+  it("counts each account on its own, and starts again the next day", async () => {
+    expect((await takeHardyAsk(coach.id, LIMIT_DAY)).asked).toBe(1);
+    expect(await takeHardyAsk(stranger.id, NEXT_DAY)).toEqual({ allowed: true, asked: 1 });
+  });
+
+  it("lets through exactly the limit when many questions land at once", async () => {
+    const BURST = HARDY_ASKS_PER_DAY + 20;
+    const DAY_OF_BURST = "2031-04-06";
+    const results = await Promise.all(Array.from({ length: BURST }, () => takeHardyAsk(coached.id, DAY_OF_BURST)));
+    expect(results.filter((r) => r.allowed)).toHaveLength(HARDY_ASKS_PER_DAY);
   });
 });

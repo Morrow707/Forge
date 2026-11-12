@@ -3829,6 +3829,18 @@ halves before splitting anything else:
   `velocity_zones` are new tables, proven on a fresh database and idempotent on a second run.
   The AI answer path was NOT exercised end to end here (no AI key in this sandbox); search, the
   refusals, the recording and the report were, in a real browser and on real Postgres.
+- **2026-11-12: THE FREE AGENT'S EXERCISE LIBRARY TAB OPENS A LIBRARY, AND HARDY'S 50 A DAY IS
+  ENFORCED.** Both found by the cost audit. (1) Scott gave every Free Agent the Exercise Library on
+  2026-10-02 and the tab went back on the strip; `athlete/exercises.tsx` and `exercise-detail.tsx`
+  went on drawing the "removed" card. They mount the shared `ExerciseBankPage` / `ExerciseDetailPage`
+  on `/api/athlete` now, browse only (`showCreate={false}`, every row `editable: false`,
+  `/athlete/exercises/new` goes back to the list), behind `FreeAgentGate`. Checked in a real browser
+  on a seeded database. (2) docs/hardy said 50 questions a day and nothing counted.
+  `takeHardyAsk` (server/hardy.ts) increments `hardy_ask_days` in ONE statement on the SERVER's day
+  (never the `today` the phone sends), awaited before the logs are read or the model is asked; the
+  51st answers 429 with a sentence. Search is not counted. Keyed by the report's keyed hash, so the
+  row maps to nobody. New table, proven on a fresh database and idempotent on a second run. Client
+  half: `verify_build`, batches.
 - **2026-11-12: THE CAMERA'S MEMORY, LEARNED RULER TRUST AND THE BONE RULES -- BUILT, AND THE
   GATE ADOPTS NOTHING TODAY. HELD on the development branch (Scott: "build the rest and queue it
   I'm going to test the camera now").** Three of the four "make the cameras smarter" items; the

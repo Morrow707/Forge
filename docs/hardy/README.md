@@ -25,7 +25,8 @@ stand-in for Forge's screens); the published copy is https://claude.ai/artifact/
   link sent to the new address.
 - No athlete-to-athlete messages (zero contact between athletes).
 - Camera speeds carry the accuracy caveat. Patterns are stated as observations, never causes.
-- 50 questions a day. Chats are not saved; reports are, because the person chose to save them.
+- 50 questions a day per account, counted on the server (`takeHardyAsk`, enforced since 2026-11-12;
+  search is not counted). Chats are not saved; reports are, because the person chose to save them.
 - **For counsel before launch:** Hardy reads a minor's whole history and sends parts of it to the
   AI provider.
 

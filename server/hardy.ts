@@ -14,7 +14,7 @@
 import type { Express, Request } from "express";
 import { createHmac } from "crypto";
 import { z } from "zod";
-import { and, desc, eq, gte, ilike, inArray, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "./db";
 import { requireAuth, requireRole } from "./auth";
 import { storage } from "./storage";
@@ -22,6 +22,7 @@ import { aiEnabled, askClaudeStructured, fastModel } from "./ai";
 import {
   exercises,
   foodLogEntries,
+  hardyAskDays,
   hardyQuestionEvents,
   users,
   wellnessCheckins,
@@ -49,7 +50,10 @@ export type HardyDeps = { aiAccessFor: (user: User) => Promise<HardyAiAccess> };
 
 const BAD_REQUEST = 400;
 const FORBIDDEN = 403;
-const HTTP = { badRequest: BAD_REQUEST, forbidden: FORBIDDEN };
+const TOO_MANY = 429;
+const HTTP = { badRequest: BAD_REQUEST, forbidden: FORBIDDEN, tooMany: TOO_MANY };
+/** Answers in a sentence one account may ask for in one server day (docs/hardy/README.md). */
+export const HARDY_ASKS_PER_DAY = 50;
 const DAY_MS = 86_400_000;
 const ISO_DATE_LENGTH = 10;
 const QUESTION_MAX = 400;
@@ -273,6 +277,23 @@ export async function recordQuestion(user: User, question: string, outcome: Hard
   }
 }
 
+/** Counts one answer-in-a-sentence against today's limit and says whether it may run.
+ *
+ * ONE STATEMENT, so fifty questions sent at once cannot all read "49 so far". AWAITED and never
+ * caught: a limit that a failed write lets through is not a limit, so a question that cannot be
+ * counted does not reach the model. The day is the SERVER's, never the `today` the phone sends,
+ * which is the athlete's own calendar and theirs to set. */
+export async function takeHardyAsk(userId: number, day: string = isoDaysAgo(0)): Promise<{ allowed: boolean; asked: number }> {
+  const [row] = await db
+    .insert(hardyAskDays)
+    .values({ askerKey: askerKey(userId), day, asks: 1 })
+    .onConflictDoUpdate({ target: [hardyAskDays.askerKey, hardyAskDays.day], set: { asks: sql`${hardyAskDays.asks} + 1` } })
+    .returning({ asks: hardyAskDays.asks });
+  return { allowed: row.asks <= HARDY_ASKS_PER_DAY, asked: row.asks };
+}
+
+export const HARDY_LIMIT_MESSAGE = `That's ${HARDY_ASKS_PER_DAY} questions today, which is the daily limit. Search still finds anything you've logged, and asking opens again tomorrow.`;
+
 /** Adults only for AI answers; an athlete with no date of birth is not known to be an adult. */
 export async function isKnownAdult(userId: number, role: User["role"], today: string) {
   const [row] = await db.select({ dob: users.dateOfBirth }).from(users).where(eq(users.id, userId));
@@ -323,6 +344,9 @@ export function registerHardyRoutes(app: Express, deps: HardyDeps): void {
       void recordQuestion(user, parsed.data.question, "missed", today);
       return res.json({ answer: `Name the athlete you mean, for example "${people[1].name.split(" ")[0]}'s heaviest squat".`, found: false });
     }
+    // The limit is taken here, after every refusal and reply that costs nothing, and before the
+    // logs are read or the model is asked.
+    if (!(await takeHardyAsk(user.id)).allowed) return res.status(HTTP.tooMany).json({ message: HARDY_LIMIT_MESSAGE });
     const subject = named ?? { id: user.id, name: user.name };
     const context = await historyContext(subject.id);
     const result = await askClaudeStructured<AiAnswer>(

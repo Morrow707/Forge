@@ -6097,6 +6097,23 @@ export const hardyQuestionEvents = pgTable(
   }),
 );
 
+// HARDY'S DAILY LIMIT (2026-11-12): how many answers-in-a-sentence one account has asked for on one
+// server day. docs/hardy/README.md has said "50 questions a day" since the design and nothing
+// enforced it. Keyed by the same keyed hash as the report above, so this row maps back to nobody
+// either; one row per asker per day, incremented in a single statement (server/hardy.ts).
+export const hardyAskDays = pgTable(
+  "hardy_ask_days",
+  {
+    id: serial("id").primaryKey(),
+    askerKey: text("asker_key").notNull(),
+    day: date("day").notNull(),
+    asks: integer("asks").notNull().default(0),
+  },
+  (table) => ({
+    askerDayUnique: uniqueIndex("hardy_ask_days_asker_day_unique").on(table.askerKey, table.day),
+  }),
+);
+
 export const adminSavedViews = pgTable("admin_saved_views", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),

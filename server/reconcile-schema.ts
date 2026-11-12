@@ -3898,6 +3898,14 @@ CREATE TABLE IF NOT EXISTS "hardy_question_events" (
   "outcome" text NOT NULL
 );
 CREATE INDEX IF NOT EXISTS "hardy_question_events_day_idx" ON "hardy_question_events" ("day");
+-- Hardy's daily limit (2026-11-12): one row per asker per server day. See server/hardy.ts.
+CREATE TABLE IF NOT EXISTS "hardy_ask_days" (
+  "id" serial PRIMARY KEY,
+  "asker_key" text NOT NULL,
+  "day" date NOT NULL,
+  "asks" integer NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "hardy_ask_days_asker_day_unique" ON "hardy_ask_days" ("asker_key", "day");
 CREATE TABLE IF NOT EXISTS "feature_usage_daily" (
   "id" serial PRIMARY KEY,
   "day" date NOT NULL,

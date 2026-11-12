@@ -1,18 +1,18 @@
-import { LibraryBankRemoved } from "@/components/library-bank-removed";
+import { Redirect, useParams } from "wouter";
+import { ExerciseDetailPage } from "@/pages/exercise-detail";
+import { FreeAgentGate } from "@/components/free-agent-gate";
 
-// Same removal as athlete/exercises.tsx (see that file and
-// library-bank-removed.tsx's own comment) -- this used to mount the full,
-// edit/delete-capable ExerciseDetailPage behind only a FreeAgentGate, which
-// blocks a coached athlete but lets a Free Agent straight through to a real
-// editable page for a feature that's gone for every athlete now, coached or
-// not. No in-app link points here anymore; this just catches a stale
-// bookmark the same way the list page above it does.
+// One exercise from the Free Agent's library: instructions, demo video, muscles, how to film it.
+// Read only. The shared page draws Edit and Delete behind `exercise.editable`, which the server
+// answers false for everything an athlete can see, and there is no athlete route that creates or
+// changes an exercise. `/athlete/exercises/new` would open the shared page's blank create form
+// against a route that does not exist, so that address goes back to the list.
 export default function AthleteExerciseDetail() {
+  const { id } = useParams<{ id: string }>();
+  if (id === "new") return <Redirect to="/athlete/exercises" replace />;
   return (
-    <LibraryBankRemoved
-      title="Exercise Library"
-      redirectTo="/athlete/programs"
-      redirectLabel="Go to My Programs"
-    />
+    <FreeAgentGate title="Exercise Library">
+      <ExerciseDetailPage apiBase="/api/athlete" routeBase="/athlete/exercises" />
+    </FreeAgentGate>
   );
 }
