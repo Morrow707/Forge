@@ -11211,3 +11211,44 @@ export const suggestGoalTargetSchema = z
     message: "testingMetric is required for testing goals",
   });
 export type SuggestGoalTargetInput = z.infer<typeof suggestGoalTargetSchema>;
+
+/* FEATURE USAGE (2026-11-12). Scott: "what if some of them aren't being used, can't be used, cant
+ * even be seen? how would we know? ... no information obviously i don't care who is using it, but
+ * what are people using?" One row per day, per page or action, per kind of account: how many times
+ * it was opened or done, how many of those the server refused or failed, and on how many
+ * person-days. Nothing in it says who: no account id, no path with an id in it (a page is stored as
+ * its route pattern, an action as its route template), no content. See server/feature-usage.ts. */
+export const featureUsageDaily = pgTable(
+  "feature_usage_daily",
+  {
+    id: serial("id").primaryKey(),
+    day: date("day").notNull(),
+    kind: text("kind").notNull(),
+    feature: text("feature").notNull(),
+    userGroup: text("user_group").notNull(),
+    uses: integer("uses").notNull().default(0),
+    refused: integer("refused").notNull().default(0),
+    failed: integer("failed").notNull().default(0),
+    people: integer("people").notNull().default(0),
+  },
+  (table) => ({
+    dayFeatureUnique: uniqueIndex("feature_usage_daily_unique").on(table.day, table.kind, table.feature, table.userGroup),
+  }),
+);
+export type FeatureUsageDaily = typeof featureUsageDaily.$inferSelect;
+
+/** Only what is needed to count a person once per day: a keyed hash that changes every day, so no
+ * row can be joined to another day's, and rows older than yesterday are deleted on every flush. */
+export const featureUsageSeen = pgTable(
+  "feature_usage_seen",
+  {
+    day: date("day").notNull(),
+    kind: text("kind").notNull(),
+    feature: text("feature").notNull(),
+    userGroup: text("user_group").notNull(),
+    personKey: text("person_key").notNull(),
+  },
+  (table) => ({
+    seenUnique: uniqueIndex("feature_usage_seen_unique").on(table.day, table.kind, table.feature, table.userGroup, table.personKey),
+  }),
+);

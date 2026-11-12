@@ -3898,6 +3898,26 @@ CREATE TABLE IF NOT EXISTS "hardy_question_events" (
   "outcome" text NOT NULL
 );
 CREATE INDEX IF NOT EXISTS "hardy_question_events_day_idx" ON "hardy_question_events" ("day");
+CREATE TABLE IF NOT EXISTS "feature_usage_daily" (
+  "id" serial PRIMARY KEY,
+  "day" date NOT NULL,
+  "kind" text NOT NULL,
+  "feature" text NOT NULL,
+  "user_group" text NOT NULL,
+  "uses" integer NOT NULL DEFAULT 0,
+  "refused" integer NOT NULL DEFAULT 0,
+  "failed" integer NOT NULL DEFAULT 0,
+  "people" integer NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "feature_usage_daily_unique" ON "feature_usage_daily" ("day", "kind", "feature", "user_group");
+CREATE TABLE IF NOT EXISTS "feature_usage_seen" (
+  "day" date NOT NULL,
+  "kind" text NOT NULL,
+  "feature" text NOT NULL,
+  "user_group" text NOT NULL,
+  "person_key" text NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "feature_usage_seen_unique" ON "feature_usage_seen" ("day", "kind", "feature", "user_group", "person_key");
 `;
 
 async function main() {

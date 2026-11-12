@@ -37,6 +37,7 @@ import { registerInstitutionalAgreementRoutes } from "./institutional-agreement-
 import { registerEmailListRoutes } from "./email-list";
 import { registerVelocityZoneRoutes } from "./velocity-zones";
 import { registerHardyRoutes, isKnownAdult } from "./hardy";
+import { registerFeatureUsage } from "./feature-usage";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import {
   getEntitlements,
@@ -1661,6 +1662,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // place rather than at ~250 call sites, and why it answers 404.
   registerNumericParamGuards(app);
   setupAuth(app);
+  // What people use: counts per page and per action, nobody named. See server/feature-usage.ts.
+  registerFeatureUsage(app);
   registerInstitutionalAgreementRoutes(app);
   registerEmailListRoutes(app);
   registerVelocityZoneRoutes(app);
