@@ -33881,14 +33881,22 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
       .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
       .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
+      // THE ROLE IS FILTERED BY A JOIN, NEVER BY HANDING POSTGRES EVERY CAPPED ACCOUNT'S ID
+      // (2026-11-12, the 500,000-account scale test). `inArray(athleteId, [...capByAthlete.keys()])`
+      // sent one bind parameter per account: Postgres takes at most 65,535, and building the list
+      // overflowed the stack first ("Maximum call stack size exceeded"), so past ~65k filming
+      // accounts the sweep failed every night and no cap was enforced. The rows a video sweep can
+      // return are only the ones holding a video, so the cap is applied below, in memory.
+      .innerJoin(users, eq(workoutLogs.athleteId, users.id))
       .where(
         and(
-          inArray(workoutLogs.athleteId, [...capByAthlete.keys()]),
+          inArray(users.role, [...ROLES_THAT_FILM_THEIR_OWN_TRAINING_LIST]),
           isNotNull(workoutSetEntries.formCheckVideoUrl),
           eq(workoutSetEntries.videoFavorited, false),
         ),
       );
     for (const row of setRows) {
+      if (!capByAthlete.has(row.athleteId)) continue;
       candidates.push({
         source: "set",
         id: row.id,
@@ -33923,14 +33931,17 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       // coach has since removed is still found and still named. Joining THROUGH the slot
       // dropped exactly those rows once the link became nullable.
       .innerJoin(skillExercises, eq(skillSessionLogs.skillExerciseId, skillExercises.id))
+      // By join, not by an id list -- see the set query above.
+      .innerJoin(users, eq(skillSessionLogs.athleteId, users.id))
       .where(
         and(
-          inArray(skillSessionLogs.athleteId, [...capByAthlete.keys()]),
+          inArray(users.role, [...ROLES_THAT_FILM_THEIR_OWN_TRAINING_LIST]),
           isNotNull(skillSessionLogs.videoUrl),
           eq(skillSessionLogs.videoFavorited, false),
         ),
       );
     for (const row of skillRows) {
+      if (!capByAthlete.has(row.athleteId)) continue;
       candidates.push({
         source: "skill",
         id: row.id,
