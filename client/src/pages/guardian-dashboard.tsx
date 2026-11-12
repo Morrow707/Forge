@@ -29,6 +29,7 @@ import {
   Trash2,
   Flag,
   FileCheck2,
+  MessagesSquare,
   ScanLine,
 } from "lucide-react";
 import { AccountSettingsDialog } from "@/components/account-settings-dialog";
@@ -435,6 +436,7 @@ export default function GuardianDashboardPage() {
 
                 <GuardianParentalVerificationCard athleteId={athlete.id} athleteName={athlete.name} />
                 <GuardianAgreementsCard athleteId={athlete.id} athleteName={athlete.name} />
+                <GuardianCoachConversationsCard athleteId={athlete.id} athleteName={athlete.name} />
                 <GuardianBiometricConsentCard athleteId={athlete.id} athleteName={athlete.name} />
 
                 <Card>
@@ -1176,6 +1178,94 @@ function GuardianAgreementsCard({ athleteId, athleteName }: { athleteId: number;
         <Button asChild size="sm" variant="outline">
           <Link href={`/documents/${athleteId}`}>Open {athleteName}'s documents</Link>
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+type CoachComment = {
+  kind: "workout" | "skill";
+  id: number;
+  body: string;
+  videoUrl: string | null;
+  imageUrl: string | null;
+  date: string | null;
+  createdAt: string;
+  author: { name: string; role: string };
+};
+
+const COMMENTS_SHOWN_AT_FIRST = 5;
+
+/** EVERY MESSAGE BETWEEN A MINOR AND THEIR COACHES, READ-ONLY (Scott, 2026-11-12: contact only
+ * within a team and "always done publicly"). The Team Board is open to the whole team; the per-day
+ * comment threads between a coach and one athlete were the only one-to-one channel in Forge, so
+ * for an athlete under 18 the linked guardian reads every one of them here. Nothing is written
+ * from this card. For an athlete who is 18 or over the server refuses and the card says why. */
+function GuardianCoachConversationsCard({ athleteId, athleteName }: { athleteId: number; athleteName: string }) {
+  const [showAll, setShowAll] = useState(false);
+  const { data, isLoading, isError, error, refetch } = useQuery<CoachComment[]>({
+    queryKey: ["/api/guardian/athletes", athleteId, "coach-comments"],
+    queryFn: () => getJson(`/api/guardian/athletes/${athleteId}/coach-comments`),
+    retry: false,
+  });
+  const rows = data ?? [];
+  const shown = showAll ? rows : rows.slice(0, COMMENTS_SHOWN_AT_FIRST);
+  return (
+    <Card data-testid="card-guardian-coach-conversations">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <MessagesSquare className="h-4 w-4 text-primary" />
+          Messages with coaches
+        </CardTitle>
+        <CardDescription>
+          Every comment between {athleteName} and their coaches on a workout or skill day, newest
+          first. Coaches never message a minor one-to-one in Forge; you can read all of it here.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {isError ? (
+          <ReadFailed what="these messages" error={error} onRetry={() => void refetch()} />
+        ) : isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No messages yet.</p>
+        ) : (
+          <>
+            <ul className="space-y-3">
+              {shown.map((c) => (
+                <li key={`${c.kind}-${c.id}`} className="rounded-lg border p-3 text-sm">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="font-medium">
+                      {c.author.name}
+                      <span className="ml-2 text-xs uppercase text-muted-foreground">{c.author.role}</span>
+                    </span>
+                    <span className="text-xs text-muted-foreground">{format(new Date(c.createdAt), "MMM d, h:mm a")}</span>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap">{c.body}</p>
+                  {(c.videoUrl || c.imageUrl) && (
+                    <div className="mt-2 flex gap-3 text-xs">
+                      {c.videoUrl && (
+                        <a className="text-primary underline" href={c.videoUrl} target="_blank" rel="noreferrer">
+                          Open the video
+                        </a>
+                      )}
+                      {c.imageUrl && (
+                        <a className="text-primary underline" href={c.imageUrl} target="_blank" rel="noreferrer">
+                          Open the drawing
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {rows.length > COMMENTS_SHOWN_AT_FIRST && (
+              <Button size="sm" variant="outline" onClick={() => setShowAll((v) => !v)}>
+                {showAll ? "Show fewer" : `Show all ${rows.length}`}
+              </Button>
+            )}
+          </>
+        )}
       </CardContent>
     </Card>
   );

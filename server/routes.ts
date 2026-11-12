@@ -15456,6 +15456,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(entries);
   });
 
+  // A MINOR'S COACH THREADS ARE NEVER ONE-TO-ONE (Scott, 2026-11-12: "noone should be able to
+  // contact anyone unless they belong to a team, and it should always be done publicly"). The
+  // Team Board is the public channel; the per-day comment threads between a coach and one athlete
+  // are the only private ones, and for an athlete under 18 their linked guardian reads every one.
+  // Read-only: the parent sees, and the coach knows the parent sees. An adult athlete's threads
+  // are their own, so a guardian link that outlived an 18th birthday reads nothing here.
+  app.get("/api/guardian/athletes/:athleteId/coach-comments", requireGuardianAccess, async (req, res) => {
+    const user = currentUser(req);
+    const athlete = await storage.getAthleteForGuardianScoped(user.id, Number(req.params.athleteId));
+    if (!athlete) return res.status(404).json({ message: "No athlete linked to this account." });
+    const adult = !!athlete.dateOfBirth && derivePrivacyTier(athlete.dateOfBirth) === "tier3_adult_18plus";
+    if (adult) {
+      return res.status(403).json({ message: `${athlete.name} is 18 or over, so their coach conversations are their own.` });
+    }
+    res.json(await storage.getCoachCommentsForAthlete(athlete.id));
+  });
+
   // There used to be a PATCH .../profile here, letting a guardian edit their
   // linked athlete's whole profile through the same schema the athlete uses
   // -- name, age, height, weight, sport, position, and every testing and max

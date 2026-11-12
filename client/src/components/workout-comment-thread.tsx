@@ -214,6 +214,12 @@ export function WorkoutCommentThread({
       )}
 
       <div className="space-y-1.5">
+        {/* Said on both sides, every time: for an athlete under 18 nothing here is one-to-one
+            (Scott, 2026-11-12, "always done publicly"); the guardian reads the whole thread on
+            their dashboard. */}
+        <p className="text-xs text-muted-foreground" data-testid="text-thread-guardian-can-read">
+          For an athlete under 18, their parent or guardian can read this conversation.
+        </p>
         <Textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}

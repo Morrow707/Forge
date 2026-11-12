@@ -23299,6 +23299,65 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
   // ---------- Skill day comments ----------
   // Exact mirror of getWorkoutComments/addWorkoutComment for the skill side
   // -- see skillDayComments' own schema comment.
+  /** EVERY COMMENT BETWEEN AN ATHLETE AND THEIR COACHES, both workout days and skill days, newest
+   * first -- what a minor's guardian reads so no coach-to-child thread is one-to-one (Scott,
+   * 2026-11-12: contact is only within a team and "always done publicly"). Read-only; the threads
+   * are written where they always were. Capped, because a parent reads recent context, not an
+   * archive. */
+  async getCoachCommentsForAthlete(athleteId: number, limit = 200) {
+    const workoutAuthor = alias(users, "workout_comment_author");
+    const skillAuthor = alias(users, "skill_comment_author");
+    const [workout, skill] = await Promise.all([
+      db
+        .select({
+          id: workoutComments.id,
+          body: workoutComments.body,
+          videoUrl: workoutComments.videoUrl,
+          imageUrl: workoutComments.imageUrl,
+          date: workoutComments.date,
+          createdAt: workoutComments.createdAt,
+          authorName: workoutAuthor.name,
+          authorRole: workoutAuthor.role,
+        })
+        .from(workoutComments)
+        .innerJoin(assignments, eq(assignments.id, workoutComments.assignmentId))
+        .innerJoin(workoutAuthor, eq(workoutAuthor.id, workoutComments.authorId))
+        .where(eq(assignments.athleteId, athleteId))
+        .orderBy(desc(workoutComments.createdAt))
+        .limit(limit),
+      db
+        .select({
+          id: skillDayComments.id,
+          body: skillDayComments.body,
+          videoUrl: skillDayComments.videoUrl,
+          imageUrl: skillDayComments.imageUrl,
+          date: skillDayComments.date,
+          createdAt: skillDayComments.createdAt,
+          authorName: skillAuthor.name,
+          authorRole: skillAuthor.role,
+        })
+        .from(skillDayComments)
+        .innerJoin(skillAssignments, eq(skillAssignments.id, skillDayComments.skillAssignmentId))
+        .innerJoin(skillAuthor, eq(skillAuthor.id, skillDayComments.authorId))
+        .where(eq(skillAssignments.athleteId, athleteId))
+        .orderBy(desc(skillDayComments.createdAt))
+        .limit(limit),
+    ]);
+    const tag = (kind: "workout" | "skill") => (r: (typeof workout)[number]) => ({
+      kind,
+      id: r.id,
+      body: r.body,
+      videoUrl: r.videoUrl,
+      imageUrl: r.imageUrl,
+      date: r.date,
+      createdAt: r.createdAt,
+      author: { name: r.authorName, role: r.authorRole },
+    });
+    return [...workout.map(tag("workout")), ...skill.map(tag("skill"))]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
+  },
+
   async getSkillDayComments(skillAssignmentId: number, skillProgramDayId: number) {
     const rows = await db.query.skillDayComments.findMany({
       where: and(
