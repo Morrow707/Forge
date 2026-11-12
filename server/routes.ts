@@ -9686,27 +9686,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     parental_notice: "/parent-notice",
   };
 
+  /* A MINOR'S COPY GOES TO A PARENT, NEVER TO THE CHILD (2026-11-12). Until then a minor whose
+   * guardian had not claimed their invite fell through to their OWN address, so "Notice to Parent
+   * or Guardian" -- the one document addressed to the parent -- landed in a child's inbox, found by
+   * the 500,000-account scale test. The order is: the linked guardians; else the address the minor
+   * gave for a parent at signup (their unclaimed guardian invite); else nobody, counted separately
+   * so the coach's toast says the parent has no address on file rather than "no email". */
   const rosterDocumentRecipients = async (roster: { id: number }[]) => {
     const recipients = await storage.getDocumentEmailRecipients(roster.map((a) => a.id));
     const byEmail = new Map<string, { name: string; athleteName: string | null }>();
     let athletesWithoutAddress = 0;
+    let minorsWithoutGuardianAddress = 0;
     for (const athlete of roster) {
       const who = recipients.get(athlete.id);
       if (!who) continue;
       const guardiansWithEmail = who.guardians.filter((g) => g.email);
-      const toGuardians = who.isMinor && guardiansWithEmail.length > 0;
-      const targets = toGuardians
-        ? guardiansWithEmail.map((g) => ({ email: g.email!, name: g.name, athleteName: who.athleteName }))
-        : who.athleteEmail
-          ? [{ email: who.athleteEmail, name: who.athleteName, athleteName: null }]
-          : [];
-      if (targets.length === 0) athletesWithoutAddress += 1;
+      const forGuardians = guardiansWithEmail.map((g) => ({ email: g.email!, name: g.name, athleteName: who.athleteName }));
+      const forPending = who.pendingGuardianEmail
+        ? [{ email: who.pendingGuardianEmail, name: "Parent or Guardian", athleteName: who.athleteName }]
+        : [];
+      const forMinor = forGuardians.length > 0 ? forGuardians : forPending;
+      const forAdult = who.athleteEmail ? [{ email: who.athleteEmail, name: who.athleteName, athleteName: null }] : [];
+      const targets = who.isMinor ? forMinor : forAdult;
+      if (targets.length === 0 && who.isMinor) minorsWithoutGuardianAddress += 1;
+      else if (targets.length === 0) athletesWithoutAddress += 1;
       for (const t of targets) {
         const key = t.email.trim().toLowerCase();
         if (!byEmail.has(key)) byEmail.set(key, { name: t.name, athleteName: t.athleteName });
       }
     }
-    return { athletes: roster.length, byEmail, athletesWithoutAddress };
+    return { athletes: roster.length, byEmail, athletesWithoutAddress, minorsWithoutGuardianAddress };
   };
 
   /** Which documents a coach may send, derived from the public set rather than typed into the
@@ -9725,10 +9734,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireRole("coach"),
     async (req, res, next) => {
       try {
-        const { athletes, byEmail, athletesWithoutAddress } = await rosterDocumentRecipients(
-          await storage.getRosterForCoach(currentUser(req).id),
-        );
-        res.json({ athletes, recipients: byEmail.size, athletesWithoutAddress });
+        const { athletes, byEmail, athletesWithoutAddress, minorsWithoutGuardianAddress } =
+          await rosterDocumentRecipients(await storage.getRosterForCoach(currentUser(req).id));
+        res.json({ athletes, recipients: byEmail.size, athletesWithoutAddress, minorsWithoutGuardianAddress });
       } catch (err) {
         next(err);
       }
@@ -9755,7 +9763,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // The roster is the scope: getRosterForCoach applies per-team narrowing, so a staff
         // coach assigned to one team sends to that team.
         const roster = await storage.getRosterForCoach(user.id);
-        const { athletes, byEmail, athletesWithoutAddress } = await rosterDocumentRecipients(roster);
+        const { athletes, byEmail, athletesWithoutAddress, minorsWithoutGuardianAddress } =
+          await rosterDocumentRecipients(roster);
 
         let emailed = 0;
         let failed = 0;
@@ -9788,6 +9797,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           emailed,
           failed,
           athletesWithoutAddress,
+          minorsWithoutGuardianAddress,
           notConfigured,
         });
       } catch (err) {

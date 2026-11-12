@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
-import { coachAthletes, coachStaff, guardianLinks, legalDocuments, notifications, teams, teamMembers, users } from "@shared/schema";
+import { coachAthletes, coachStaff, guardianInvites, guardianLinks, legalDocuments, notifications, teams, teamMembers, users } from "@shared/schema";
 import { resetDatabase } from "./test-support/fixtures";
 import { loginAs as rawLoginAs, makeLoginableUser, startTestServer, type TestServer } from "./test-support/http-app";
 import { testOutbox } from "./email";
@@ -191,7 +191,7 @@ describe("sending a public document to the roster", () => {
     const client = await loginAs(server.baseUrl, coach);
     const count = await client.get("/api/coach/legal-documents/email-roster/recipients");
     expect(count.status).toBe(200);
-    expect(count.body).toEqual({ athletes: 3, recipients: 2, athletesWithoutAddress: 0 });
+    expect(count.body).toEqual({ athletes: 3, recipients: 2, athletesWithoutAddress: 0, minorsWithoutGuardianAddress: 0 });
 
     const res = await client.post("/api/coach/legal-documents/privacy_policy/email-roster");
     expect(res.status).toBe(200);
@@ -212,6 +212,37 @@ describe("sending a public document to the roster", () => {
     expect(toParent.html).toContain("/api/legal-documents/privacy_policy.pdf");
     // A link, never the text pasted in: a copy in an inbox is the one nobody can correct.
     expect(toParent.html).not.toContain("Privacy Policy body for the test.");
+  });
+
+  it("never sends a minor's copy to the child: the unclaimed invite's parent address, else nobody", async () => {
+    const coach = await makeLoginableUser({ role: "coach" });
+    const waiting = await makeLoginableUser({ role: "athlete", name: "Waiting Kid", dateOfBirth: isoYearsAgo(14) });
+    const noParent = await makeLoginableUser({ role: "athlete", name: "No Parent Kid", dateOfBirth: isoYearsAgo(15) });
+    const DAY_MS = 86_400_000;
+    await db.insert(guardianInvites).values({
+      athleteId: waiting.id,
+      email: "parent-of-waiting@example.com",
+      tokenHash: "unused",
+      expiresAt: new Date(Date.now() + DAY_MS),
+    });
+    await db.insert(coachAthletes).values([
+      { coachId: coach.id, athleteId: waiting.id },
+      { coachId: coach.id, athleteId: noParent.id },
+    ]);
+    await db.insert(legalDocuments).values({ docType: "parental_notice", content: "Notice body." }).onConflictDoNothing();
+
+    const client = await loginAs(server.baseUrl, coach);
+    const count = await client.get("/api/coach/legal-documents/email-roster/recipients");
+    expect(count.body).toEqual({ athletes: 2, recipients: 1, athletesWithoutAddress: 0, minorsWithoutGuardianAddress: 1 });
+
+    const res = await client.post("/api/coach/legal-documents/parental_notice/email-roster");
+    expect(res.status).toBe(200);
+    expect(res.body.minorsWithoutGuardianAddress).toBe(1);
+    const to = testOutbox.map((m) => m.to);
+    expect(to).toEqual(["parent-of-waiting@example.com"]);
+    expect(to).not.toContain(waiting.email);
+    expect(to).not.toContain(noParent.email);
+    expect(testOutbox[0].subject).toContain("Waiting Kid");
   });
 
   it("respects per-team narrowing for a staff coach, and a primary coach sends to everyone", async () => {

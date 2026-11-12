@@ -273,6 +273,11 @@ export default function CoachAthleteDocuments() {
  * what happens. Adults get their own; a minor's guardians get it about the child; one email per
  * address however many athletes it covers. Nothing is recorded against anyone -- it is a copy.
  */
+/** A minor's copy goes to a parent; this names how many have no parent address on file yet. */
+function guardianNotOnFile(n: number): string {
+  return `no parent's address on file for ${n} ${n === 1 ? "minor" : "minors"}`;
+}
+
 function SendDocumentToRoster() {
   const [type, setType] = useState<string>("");
   const [confirming, setConfirming] = useState(false);
@@ -288,7 +293,7 @@ function SendDocumentToRoster() {
     data: count,
     isError: countFailed,
     refetch: refetchCount,
-  } = useQuery<{ athletes: number; recipients: number; athletesWithoutAddress: number }>({
+  } = useQuery<{ athletes: number; recipients: number; athletesWithoutAddress: number; minorsWithoutGuardianAddress: number }>({
     queryKey: ["/api/coach/legal-documents/email-roster/recipients"],
     queryFn: () => getJson("/api/coach/legal-documents/email-roster/recipients"),
     enabled: confirming,
@@ -303,6 +308,7 @@ function SendDocumentToRoster() {
         emailed: number;
         failed: number;
         athletesWithoutAddress: number;
+        minorsWithoutGuardianAddress: number;
         notConfigured: boolean;
       };
     },
@@ -318,7 +324,9 @@ function SendDocumentToRoster() {
         toast.success(
           `${r.title} sent to ${r.emailed} ${r.emailed === 1 ? "address" : "addresses"}${
             r.failed > 0 ? ` — ${r.failed} couldn't be sent` : ""
-          }${r.athletesWithoutAddress > 0 ? ` — ${r.athletesWithoutAddress} with no email on file` : ""}.`,
+          }${r.athletesWithoutAddress > 0 ? ` — ${r.athletesWithoutAddress} with no email on file` : ""}${
+            r.minorsWithoutGuardianAddress > 0 ? ` — ${guardianNotOnFile(r.minorsWithoutGuardianAddress)}` : ""
+          }.`,
         );
       }
     },
@@ -387,6 +395,10 @@ function SendDocumentToRoster() {
                     ? ` ${count.athletesWithoutAddress} ${
                         count.athletesWithoutAddress === 1 ? "has" : "have"
                       } no email address on file and won't get it.`
+                    : ""
+                }${
+                  count.minorsWithoutGuardianAddress > 0
+                    ? ` There's ${guardianNotOnFile(count.minorsWithoutGuardianAddress)}, so they won't get it: a minor's copy goes to a parent, never to the athlete.`
                     : ""
                 }`
               )}

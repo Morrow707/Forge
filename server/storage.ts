@@ -32294,6 +32294,9 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         athleteEmail: string | null;
         isMinor: boolean;
         guardians: { id: number; name: string; email: string | null }[];
+        /** The address the minor gave for a parent at signup, from their newest unclaimed guardian
+         * invite: the one place a document about a child can go before a guardian has an account. */
+        pendingGuardianEmail: string | null;
       }
     >
   > {
@@ -32304,6 +32307,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         athleteEmail: string | null;
         isMinor: boolean;
         guardians: { id: number; name: string; email: string | null }[];
+        pendingGuardianEmail: string | null;
       }
     >();
     if (athleteIds.length === 0) return out;
@@ -32317,6 +32321,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         athleteEmail: a.email || null,
         isMinor: a.dateOfBirth ? derivePrivacyTier(a.dateOfBirth) !== "tier3_adult_18plus" : true,
         guardians: [],
+        pendingGuardianEmail: null,
       });
     }
     const guardian = alias(users, "doc_recipient_guardian");
@@ -32332,6 +32337,16 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .where(inArray(guardianLinks.athleteId, athleteIds));
     for (const l of links) {
       out.get(l.athleteId)?.guardians.push({ id: l.id, name: l.name, email: l.email || null });
+    }
+    // Newest first, so the first unclaimed invite seen per athlete is the address they gave last.
+    const invites = await db
+      .select({ athleteId: guardianInvites.athleteId, email: guardianInvites.email })
+      .from(guardianInvites)
+      .where(and(inArray(guardianInvites.athleteId, athleteIds), isNull(guardianInvites.claimedAt)))
+      .orderBy(desc(guardianInvites.createdAt));
+    for (const i of invites) {
+      const row = out.get(i.athleteId);
+      if (row && !row.pendingGuardianEmail && i.email) row.pendingGuardianEmail = i.email;
     }
     return out;
   },
