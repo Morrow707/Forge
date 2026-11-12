@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { countInteraction } from "@/lib/feature-usage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Gauge } from "lucide-react";
 import { apiRequest, getJson } from "@/lib/queryClient";
@@ -80,6 +81,7 @@ export function VelocityZonePanel({ exerciseId, exerciseName, speeds }: { exerci
   const open = () => {
     setDraft(zone ? { goal: zone.goal ?? "strength", lowMps: mps(zone.lowMps), highMps: mps(zone.highMps) } : { goal: "strength", lowMps: "0.50", highMps: "0.75" });
     setEditing(true);
+    countInteraction("Bar Speed: zone editor opened");
   };
   const editor = editing && (
     <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2">

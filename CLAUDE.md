@@ -3829,6 +3829,22 @@ halves before splitting anything else:
   `velocity_zones` are new tables, proven on a fresh database and idempotent on a second run.
   The AI answer path was NOT exercised end to end here (no AI key in this sandbox); search, the
   refusals, the recording and the report were, in a real browser and on real Postgres.
+- **2026-11-12: "WHAT PEOPLE USE" (More -> What People Use, `/admin/feature-usage`).** Scott: "what if
+  some of them aren't being used, can't be used, cant even be seen? ... i don't want to see who is
+  doing the looking, just what they are looking at." Counts every page (as its route pattern), every
+  API action (as its route template) and a fixed list of named tabs/panels (`UI_INTERACTIONS` in
+  `shared/feature-usage.ts`), by kind of account and platform, with refused/failed, came-from and
+  saved-from-this-page. Each row carries its likeliest WHY (no link in the code, nobody it is for was
+  here, mostly refused, opened but nothing saved, too new). Gates: no account id, no id-bearing path,
+  nothing typed; person-days via a daily-rotating hash deleted after the day; 7/28/90-day totals only;
+  one-group views hide anything under 5 person-days (zeros always shown); admins and demo accounts
+  out by default; 13-month retention; first-party only. **The counter must be mounted before ANY
+  route** (`mountFeatureUsageCounter`, in index.ts and before `setupAuth` in routes.ts) -- the first
+  version sat after setupAuth and the webhooks, so sign-in and Stripe/Apple were never counted;
+  `feature-usage.itest.ts` reds if that order returns. The page list and its "linked" flag are built
+  at build time into `dist/page-catalog.json` (`scripts/generate-page-catalog.ts`). First run found two
+  pages nothing links to: `/admin/knowledge-base` and `/admin/research-exports`, both now shown as tabs
+  elsewhere. Counting starts on deploy (web) and with the next iOS build (iPhone page/tab counts).
 - **2026-11-11: A LIFT IS JUDGED ACROSS EVERY SET ON RECORD, NOT ITS NEWEST ONE.** Scott: "every
   week we start high, get it dialed in, then the next week they are high again." No leak (the ledger
   replay proves every sealed take holds); each round chose its step on one or two takes, and one lift

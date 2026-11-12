@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { countInteraction } from "@/lib/feature-usage";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, TrendingUp, Navigation } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -200,7 +201,10 @@ export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
                       view={view}
                       fills={fills}
                       selected={historyGroup}
-                      onSelect={setHistoryGroup}
+                      onSelect={(group) => {
+                        countInteraction("Strength profile: body map tapped");
+                        setHistoryGroup(group);
+                      }}
                     />
                   </div>
                   <div className="min-w-0 flex-1 space-y-1.5">

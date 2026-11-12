@@ -3,10 +3,11 @@ import { DocumentsGate } from "@/components/document-gate";
 import { useQueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Toaster } from "sonner";
-import { lazy, Suspense, useEffect, useState, type ComponentType } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ComponentType } from "react";
 import { PUBLIC_ROUTES, isIndexable } from "@shared/public-routes";
 import { SITE_NAME, usePageMeta } from "@/lib/page-meta";
 import { trackPageView } from "@/lib/analytics";
+import { countPageView } from "@/lib/feature-usage";
 import { Capacitor } from "@capacitor/core";
 import { queryClient, persistOptions } from "@/lib/queryClient";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
@@ -172,6 +173,7 @@ const AdminMyWorkout = lazy(withLoadTimeout(() => import("@/pages/admin/my-worko
 const AdminPlatformTrends = lazy(withLoadTimeout(() => import("@/pages/admin/platform-trends")));
 const AdminEmailList = lazy(withLoadTimeout(() => import("@/pages/admin/email-list")));
 const AdminHardyUsage = lazy(withLoadTimeout(() => import("@/pages/admin/hardy-usage")));
+const AdminFeatureUsage = lazy(withLoadTimeout(() => import("@/pages/admin/feature-usage")));
 const AdminKnowledgeBase = lazy(withLoadTimeout(() => import("@/pages/admin/knowledge-base")));
 const AdminAiSpend = lazy(withLoadTimeout(() => import("@/pages/admin/ai-spend")));
 const AdminExerciseVideos = lazy(withLoadTimeout(() => import("@/pages/admin/exercise-videos")));
@@ -344,6 +346,12 @@ function RouteMeta() {
   // the processor -- see lib/analytics.ts for why that ordering is not optional.
   useEffect(() => {
     trackPageView(location);
+  }, [location]);
+  // Forge's own usage count: this page and the one before it, patterns only (server/feature-usage.ts).
+  const previousPage = useRef<string | null>(null);
+  useEffect(() => {
+    countPageView(location, previousPage.current);
+    previousPage.current = location;
   }, [location]);
   const known = PUBLIC_ROUTES.find((r) => r.path === location);
   usePageMeta(
@@ -743,6 +751,9 @@ function Router() {
         </Route>
         <Route path="/admin/hardy-usage">
           <ProtectedRoute role="admin" component={AdminHardyUsage} />
+        </Route>
+        <Route path="/admin/feature-usage">
+          <ProtectedRoute role="admin" component={AdminFeatureUsage} />
         </Route>
         <Route path="/admin/query-engine">
           <ProtectedRoute role="admin" component={AdminQueryEngine} />

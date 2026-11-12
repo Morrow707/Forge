@@ -67,8 +67,13 @@ describe("muscle-group history", () => {
  */
 describe("the body map is clickable everywhere it is drawn as a control", () => {
   it("opens the history from the profile card's expanded map", () => {
-    const expanded = card.slice(card.indexOf('<BodyMap\n                      view={view}'));
-    expect(expanded).toContain("onSelect={setHistoryGroup}");
+    // The rule, not one spelling of it: the expanded figure's onSelect leads to setHistoryGroup.
+    // (It also counts the tap for the usage report since 2026-11-12, which a literal
+    // `onSelect={setHistoryGroup}` assertion read as the history being cut off.)
+    const start = card.indexOf('<BodyMap\n                      view={view}');
+    const expanded = card.slice(start, card.indexOf("/>", start));
+    expect(expanded).toContain("onSelect=");
+    expect(expanded).toContain("setHistoryGroup(");
     expect(card).toContain("MuscleHistoryDialog");
   });
 

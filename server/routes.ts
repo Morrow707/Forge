@@ -37,7 +37,7 @@ import { registerInstitutionalAgreementRoutes } from "./institutional-agreement-
 import { registerEmailListRoutes } from "./email-list";
 import { registerVelocityZoneRoutes } from "./velocity-zones";
 import { registerHardyRoutes, isKnownAdult } from "./hardy";
-import { registerFeatureUsage } from "./feature-usage";
+import { mountFeatureUsageCounter, registerFeatureUsage } from "./feature-usage";
 import { hashPassword, comparePasswords } from "./auth-utils";
 import {
   getEntitlements,
@@ -1661,8 +1661,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // registered -- see server/numeric-route-params.ts for why it lives in one
   // place rather than at ~250 call sites, and why it answers 404.
   registerNumericParamGuards(app);
+  // What people use: counts per page and per action, nobody named. The counter goes in before
+  // setupAuth so the sign-in routes are counted too; its own routes (the pings and the admin
+  // report) go after, because they need the session. See server/feature-usage.ts.
+  mountFeatureUsageCounter(app);
   setupAuth(app);
-  // What people use: counts per page and per action, nobody named. See server/feature-usage.ts.
   registerFeatureUsage(app);
   registerInstitutionalAgreementRoutes(app);
   registerEmailListRoutes(app);

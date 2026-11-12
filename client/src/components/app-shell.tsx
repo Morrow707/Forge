@@ -244,6 +244,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/users", label: "Users", icon: Users, overflow: true },
   { href: "/admin/email-list", label: "Email List", icon: Mail, overflow: true },
   { href: "/admin/hardy-usage", label: "What People Ask Hardy", icon: MessageSquare, overflow: true },
+  { href: "/admin/feature-usage", label: "What People Use", icon: BarChart3, overflow: true },
   { href: "/admin/documents", label: "Legal & Compliance", icon: ShieldCheck, overflow: true },
   { href: "/legal", label: "Terms & Privacy", icon: Scale, overflow: true },
   // BOTH OF THESE EXISTED, WORKED, AND HAD NO WAY IN.

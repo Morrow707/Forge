@@ -3904,12 +3904,13 @@ CREATE TABLE IF NOT EXISTS "feature_usage_daily" (
   "kind" text NOT NULL,
   "feature" text NOT NULL,
   "user_group" text NOT NULL,
+  "platform" text NOT NULL,
   "uses" integer NOT NULL DEFAULT 0,
   "refused" integer NOT NULL DEFAULT 0,
   "failed" integer NOT NULL DEFAULT 0,
   "people" integer NOT NULL DEFAULT 0
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "feature_usage_daily_unique" ON "feature_usage_daily" ("day", "kind", "feature", "user_group");
+CREATE UNIQUE INDEX IF NOT EXISTS "feature_usage_daily_unique" ON "feature_usage_daily" ("day", "kind", "feature", "user_group", "platform");
 CREATE TABLE IF NOT EXISTS "feature_usage_seen" (
   "day" date NOT NULL,
   "kind" text NOT NULL,
@@ -3918,6 +3919,21 @@ CREATE TABLE IF NOT EXISTS "feature_usage_seen" (
   "person_key" text NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "feature_usage_seen_unique" ON "feature_usage_seen" ("day", "kind", "feature", "user_group", "person_key");
+CREATE TABLE IF NOT EXISTS "feature_usage_paths" (
+  "id" serial PRIMARY KEY,
+  "day" date NOT NULL,
+  "kind" text NOT NULL,
+  "page" text NOT NULL,
+  "other" text NOT NULL,
+  "uses" integer NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "feature_usage_paths_unique" ON "feature_usage_paths" ("day", "kind", "page", "other");
+CREATE TABLE IF NOT EXISTS "feature_first_seen" (
+  "kind" text NOT NULL,
+  "feature" text NOT NULL,
+  "first_seen" date NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "feature_first_seen_unique" ON "feature_first_seen" ("kind", "feature");
 `;
 
 async function main() {

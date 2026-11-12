@@ -1,4 +1,6 @@
 import { BarSpeedTab } from "@/components/bar-speed-tab";
+import { athleteTabInteraction } from "@shared/feature-usage";
+import { countInteraction } from "@/lib/feature-usage";
 import { format } from "date-fns";
 import { useState } from "react";
 import { useParams, useLocation, useSearch } from "wouter";
@@ -617,7 +619,14 @@ export default function AthleteDetailPage() {
           </div>
 
           <div>
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <Tabs
+              value={activeTab}
+              onValueChange={(tab) => {
+                setActiveTab(tab);
+                const counted = athleteTabInteraction(tab);
+                if (counted) countInteraction(counted);
+              }}
+            >
               <TabsList className="h-auto flex-wrap justify-start">
                 <TabsTrigger value="metrics">Body Metrics</TabsTrigger>
                 <TabsTrigger value="testing">Testing History</TabsTrigger>

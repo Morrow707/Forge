@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { countInteraction } from "@/lib/feature-usage";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check, RotateCcw, Layers } from "lucide-react";
@@ -69,7 +70,10 @@ export function LessonFlashcards({ cards, onDone }: { cards: Flashcard[]; /** Om
         <>
           <button
             type="button"
-            onClick={() => setFlipped((f) => !f)}
+            onClick={() => {
+              if (!flipped) countInteraction("Classes: flashcard flipped");
+              setFlipped((f) => !f);
+            }}
             className={cn(
               "flex min-h-56 w-full items-center justify-center rounded-xl border-2 p-6 text-center transition-colors",
               flipped ? "border-primary bg-primary/5" : "border-border bg-surface hover:bg-surface-elevated",

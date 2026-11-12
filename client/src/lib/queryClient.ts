@@ -66,6 +66,10 @@ function authHeaders(): Record<string, string> {
     // reason -- this header is the server-side half, so a native build can
     // never reach web checkout even if a screen were linked by mistake.
     ...(Capacitor.isNativePlatform() ? { "X-Forge-Platform": Capacitor.getPlatform() } : {}),
+    // The page this request was made from, so the usage report can count what was saved or changed
+    // on which page. The server matches it to the page's pattern and stores only that (never the
+    // path, which can carry an id) -- see server/feature-usage.ts.
+    ...(typeof window !== "undefined" ? { "X-Forge-Page": window.location.pathname } : {}),
   };
 }
 

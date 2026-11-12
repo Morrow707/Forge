@@ -1,4 +1,5 @@
 import { Suspense, lazy, useState } from "react";
+import { countInteraction } from "@/lib/feature-usage";
 import { useLocation } from "wouter";
 import { HardyMark } from "@/components/hardy-mark";
 
@@ -26,6 +27,7 @@ export function HardyButton() {
         aria-expanded={open}
         onClick={() => {
           setLoaded(true);
+          if (!open) countInteraction("Hardy: opened");
           setOpen((o) => !o);
         }}
         className="fixed z-40 grid h-14 w-14 place-items-center rounded-full border-2 border-[#c8102e] bg-[#fbf6f2] shadow-lg transition-transform hover:-rotate-12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"

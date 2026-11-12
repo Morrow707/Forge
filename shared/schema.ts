@@ -11213,11 +11213,11 @@ export const suggestGoalTargetSchema = z
 export type SuggestGoalTargetInput = z.infer<typeof suggestGoalTargetSchema>;
 
 /* FEATURE USAGE (2026-11-12). Scott: "what if some of them aren't being used, can't be used, cant
- * even be seen? how would we know? ... no information obviously i don't care who is using it, but
- * what are people using?" One row per day, per page or action, per kind of account: how many times
- * it was opened or done, how many of those the server refused or failed, and on how many
- * person-days. Nothing in it says who: no account id, no path with an id in it (a page is stored as
- * its route pattern, an action as its route template), no content. See server/feature-usage.ts. */
+ * even be seen? how would we know? ... i don't want to see who is doing the looking, just what they
+ * are looking at." One row per day, per page, action or named interaction, per kind of account,
+ * per platform: how many uses, how many the server refused or failed, and on how many person-days.
+ * Nothing here says who: no account id, no path with an id in it (a page is its route pattern, an
+ * action its route template), no content. See server/feature-usage.ts and shared/feature-usage.ts. */
 export const featureUsageDaily = pgTable(
   "feature_usage_daily",
   {
@@ -11226,13 +11226,14 @@ export const featureUsageDaily = pgTable(
     kind: text("kind").notNull(),
     feature: text("feature").notNull(),
     userGroup: text("user_group").notNull(),
+    platform: text("platform").notNull(),
     uses: integer("uses").notNull().default(0),
     refused: integer("refused").notNull().default(0),
     failed: integer("failed").notNull().default(0),
     people: integer("people").notNull().default(0),
   },
   (table) => ({
-    dayFeatureUnique: uniqueIndex("feature_usage_daily_unique").on(table.day, table.kind, table.feature, table.userGroup),
+    dayFeatureUnique: uniqueIndex("feature_usage_daily_unique").on(table.day, table.kind, table.feature, table.userGroup, table.platform),
   }),
 );
 export type FeatureUsageDaily = typeof featureUsageDaily.$inferSelect;
@@ -11250,5 +11251,36 @@ export const featureUsageSeen = pgTable(
   },
   (table) => ({
     seenUnique: uniqueIndex("feature_usage_seen_unique").on(table.day, table.kind, table.feature, table.userGroup, table.personKey),
+  }),
+);
+
+/** Page to page: "came-from" (the page somebody was on before this one) and "done-on" (an action
+ * saved or changed while on this page). Patterns only, counts only. */
+export const featureUsagePaths = pgTable(
+  "feature_usage_paths",
+  {
+    id: serial("id").primaryKey(),
+    day: date("day").notNull(),
+    kind: text("kind").notNull(),
+    page: text("page").notNull(),
+    other: text("other").notNull(),
+    uses: integer("uses").notNull().default(0),
+  },
+  (table) => ({
+    pathUnique: uniqueIndex("feature_usage_paths_unique").on(table.day, table.kind, table.page, table.other),
+  }),
+);
+
+/** The day each page, action or interaction was first in the app, so a zero on something added
+ * yesterday is not read like a zero on something three months old. */
+export const featureFirstSeen = pgTable(
+  "feature_first_seen",
+  {
+    kind: text("kind").notNull(),
+    feature: text("feature").notNull(),
+    firstSeen: date("first_seen").notNull(),
+  },
+  (table) => ({
+    featureUnique: uniqueIndex("feature_first_seen_unique").on(table.kind, table.feature),
   }),
 );

@@ -104,6 +104,7 @@ import { decodeRtdnPush, rtdnPushAuthorized, verifyGooglePlayPurchase } from "./
 import { storage } from "./storage";
 import { signMediaUrlsDeep } from "./media-url-signing";
 import { verifyRequestOrigin } from "./csrf-protection";
+import { mountFeatureUsageCounter } from "./feature-usage";
 import { NATIVE_APP_ORIGINS } from "./native-app-origins";
 import { pool } from "./db";
 import { requestMemoScope } from "./request-cache";
@@ -217,6 +218,9 @@ app.use(
 // logged-in user's session cookie into a state-changing request. Reuses
 // the same native-app allowlist CORS does above.
 app.use(verifyRequestOrigin(NATIVE_APP_ORIGINS));
+// The usage counter goes in front of every route, the webhooks below included -- a route
+// registered before it is never counted. See server/feature-usage.ts.
+mountFeatureUsageCounter(app);
 // Registered before registerRoutes(app) runs, so it's outside the general
 // /api limiter mounted in routes.ts -- needs its own. Keyed by IP only (no
 // session exists for a server-to-server webhook call); generous relative
