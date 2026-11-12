@@ -399,7 +399,24 @@ the pair by what each states, which is identical for every lift stating 0.2 twic
 2.0 was 60 bench reps). Replayed on every ledger row: RDL median error 12.0% -> 6.7%, every squat
 row identical to the hundredth. See "Second pass, 2026-10-29".
 
+**THE CAMERA HAS A MEMORY AND A LEARNING GATE (2026-11-12), AND TODAY THE GATE ADOPTS NOTHING.**
+Run `npx tsx --tsconfig tsconfig.json scripts/camera-memory.ts --write` after adding a round's
+ledger rows and fixture. It re-records `shared/witness-memory-on-record.json` (per lift: how far
+each ruler, each 3D bone and the object detector sat from the sensor; also in the admin capture
+export as `witnessMemory`) and prints two verdicts: whether the ruler trust LEARNED from that
+record may replace a lift's settings (held-out sets first, then the all-sets rule), and whether
+any rule about which 3D bone to trust may ship. Both read HOLD today. See "The camera's memory".
+
 **WHAT IS KNOWN NOT TO WORK, SO IT IS NOT TRIED AGAIN:**
+- **Setting a ruler's uncertainty to its measured miss against the sensor (2026-11-12).** The
+  root-mean-square of each ruler's error per lift, put straight into the blend, is no better on
+  sets it was not learned from on any lift, and twice as bad on the Back Squat (2.17% -> 4.58%;
+  bench 4.88 -> 6.32; RDL 7.16 -> 7.19). `learnedTrustVerdicts()` re-asks every round; adopt only
+  when it says so.
+- **Leaving 3D bones out of the bone median (2026-11-12).** Without the forearm, without both arm
+  bones, legs only, without the torso, without shoulder width, sample-weighted, well-sampled only:
+  every one sits within half a point of today's 9.2% over the 23 takes that recorded bones and
+  each makes at least one lift worse. `sweepBoneRules()` holds the table.
 - Admitting the bench's 1.96-aspect plate by a per-lift aspect ceiling (round eleven, 11-06): the
   plate was 7% SMALL (box 0.814 of expected), so at 73.9% of the blend it reads the take +6.2%
   where the three body rulers read +2.5%; and with the stature yardstick running it is convicted
@@ -578,6 +595,54 @@ this file is that several of the constraints below are not visible from the
 code alone and not discoverable by testing the wrong exercise, so a session
 that reaches for the obvious answer will get a plausible number that is
 wrong.
+
+## The camera's memory, learned trust and the bone rules (2026-11-12)
+
+Scott, after the audit: "concerning the ai I want it to learn and get smarter ... get better at
+object detecting, get better at detecting body and movement" and then "build them all in order".
+Four things were on the list. The first (feeding the object detector from real takes) is his
+labelling and is not in this change. The other three are built, costed on every sensor-paired
+take, and HELD on the development branch while he films.
+
+**What was built, and which piece of code it is.**
+
+| piece | code | what it does |
+|---|---|---|
+| Witness memory | `shared/witness-memory.ts`, `client/src/lib/witness-takes.ts`, `shared/witness-memory-on-record.json` | Per lift: each ruler's and each 3D bone's lean, miss and times-furthest-out against the sensor, and the object detector's seen / locked / voted counts. In the admin capture export as `witnessMemory`. |
+| Learned ruler trust | `shared/learned-ruler-trust.ts`, `client/src/lib/learned-trust-verdict.ts` | Measures each ruler's uncertainty per lift from the ledger and tests it leave-one-out; may ship only if it wins on held-out sets AND the all-sets rule allows it. |
+| Bone rules | `client/src/lib/bone-rule-sweep.ts` | Seven rules about which 3D bones to leave out, each replayed on every take that recorded bones; a shared rule may ship only if the average falls and no lift with two or more sets gets worse. |
+| The one command | `scripts/camera-memory.ts` | Prints all three and, with `--write`, re-records the memory. |
+
+**What the memory says today (lean % / miss %), the lines worth reading first.**
+
+- **The object of known size has voted in the scale on 7 of 35 takes** (bench 2 of 5, RDL 3 of 8,
+  Pendlay row 1 of 3, barbell press 1 of 3, and never on the Back Squat's 8). On the takes with detector telemetry the
+  squat's plate was seen on 0 of 2 and the bench's on 2 of 3. Rule #4's open item, as a count.
+- **`depth` is the furthest ruler from the sensor more often than any other**: 5 of 8 squats
+  (+21.6 / 27.3), 3 of 8 RDLs, 3 of 4 dumbbell presses (+44.9 / 45.0), 2 of 3 Pendlay rows (-53.5).
+  It leans HIGH on the standing lifts and LOW on the rows.
+- **On the bench every body ruler leans low** (3D pair -21.5, shoulder -7.7, depth -7.3) and the
+  plate, when it votes, reads +6.1 / 6.4 -- the best witness the bench has.
+- **Bones: the torso reads about -40% on both rows** (a hinged torso foreshortens), the forearm
+  reads low on every lift but the squat, and on the squat the torso (-5.4) and shoulder width
+  (-2.8) are the two nearest the sensor while every limb bone reads +8 to +14.
+
+**Why nothing is adopted, in numbers.** Learned trust, held out: squat 2.17% -> 4.58%, bench
+4.88 -> 6.32, RDL 7.16 -> 7.19; the other four lifts have 3 or 4 sets and learning starts at 5.
+Bone rules: 8.7% to 10.2% against today's 9.2%, each worse on at least one lift. The take-to-take
+wobble (Rule #5) is larger than anything a weight can remove, which is what the 11-11 all-sets
+rule already said; this measures it on the two levers people reach for next.
+
+**What it is for, then.** The verdicts are pinned in
+`the-camera-remembers-every-paired-take.test.ts` as a RECORD. When a new round's rows flip one --
+a lift's learned settings win held out, or a bone rule stops costing any lift -- the test reds and
+says where the change goes. That is the loop: film, add rows, run the command, adopt what the
+evidence earned. No number on a phone moved in this change and no take is refused by any of it.
+
+**Open, named.** The memory's object counts cover only takes whose export carried
+`objectLock` (15 of 35). No barbell lift's export shows a secondary class being asked for
+(`secondaryCoreMlClass: null` on every take since 11-05), which is worth reading before the next
+detector retrain. Sprint, mechanics and sled still read shared constants.
 
 ## Round sixteen, 2026-11-10 evening: set 3 of bench, dumbbell press and single-arm row (build 732)
 

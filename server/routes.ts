@@ -1,6 +1,7 @@
 import express, { type Express, type Request } from "express";
 import { findSimilar } from "@shared/exercise-similarity";
 import { summarizeCaptureRepeatability } from "@shared/capture-repeatability";
+import witnessMemoryOnRecord from "@shared/witness-memory-on-record.json";
 import { WITHDRAWN_ADD_ONS } from "@shared/free-agent-tiers";
 import {
   applyExerciseVideoBackfill,
@@ -4111,7 +4112,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
     res.send(
       JSON.stringify(
-        { exportedAt: new Date().toISOString(), captures, skillCaptures, repeatability },
+        // `witnessMemory` is the committed record of how far each scale ruler, each 3D bone and
+        // the object detector sat from the SENSOR on every paired take, per lift
+        // (shared/witness-memory.ts). It is the same for every download until a round re-records
+        // it, names no athlete, and rides here so the file a session is handed after filming
+        // carries what the camera already knew about each lift beside what it just saw.
+        { exportedAt: new Date().toISOString(), captures, skillCaptures, repeatability, witnessMemory: witnessMemoryOnRecord },
         null,
         2,
       ),

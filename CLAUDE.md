@@ -3829,6 +3829,20 @@ halves before splitting anything else:
   `velocity_zones` are new tables, proven on a fresh database and idempotent on a second run.
   The AI answer path was NOT exercised end to end here (no AI key in this sandbox); search, the
   refusals, the recording and the report were, in a real browser and on real Postgres.
+- **2026-11-12: THE CAMERA'S MEMORY, LEARNED RULER TRUST AND THE BONE RULES -- BUILT, AND THE
+  GATE ADOPTS NOTHING TODAY. HELD on the development branch (Scott: "build the rest and queue it
+  I'm going to test the camera now").** Three of the four "make the cameras smarter" items; the
+  fourth, labelling detector images, is his. `scripts/camera-memory.ts --write` is the one command
+  a round runs after adding its ledger rows: it re-records `shared/witness-memory-on-record.json`
+  (per lift, how far each ruler, each 3D bone and the object detector sat from the sensor; in the
+  admin capture export as `witnessMemory`) and prints whether learned ruler trust
+  (`shared/learned-ruler-trust.ts`, leave-one-out then the all-sets rule) or any 3D-bone rule
+  (`client/src/lib/bone-rule-sweep.ts`, no lift may pay) may ship. **Measured on all 35 rows: both
+  HOLD** -- learned trust is worse held out on every lift with five sets (squat 2.17% -> 4.58%)
+  and no bone rule helps without hurting a lift. Do not re-propose either from the notes; the test
+  pins the verdicts and reds when the evidence flips one. The memory's headline: an object of known
+  size has voted in the scale on 7 of 35 takes and never on a squat. No camera number moved.
+  Server half is one export key. See docs/camera-tracking-notes.md, "The camera's memory".
 - **2026-11-12: "WHAT PEOPLE USE" (More -> What People Use, `/admin/feature-usage`).** Scott: "what if
   some of them aren't being used, can't be used, cant even be seen? ... i don't want to see who is
   doing the looking, just what they are looking at." Counts every page (as its route pattern), every
