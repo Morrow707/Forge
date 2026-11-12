@@ -1102,7 +1102,7 @@ export function WorkoutPage({
   const [pendingSync, setPendingSync] = useState(() => hasPendingLog(dayKey));
   const [sharingWorkout, setSharingWorkout] = useState(false);
 
-  const { data, dataUpdatedAt, isLoading, isError, refetch } = useQuery<DayDetail>({
+  const { data, dataUpdatedAt, isLoading, isError, error, refetch } = useQuery<DayDetail>({
     queryKey: [`${apiBase}/day`, assignmentId, programDayId, date],
     queryFn: async () => {
       const url = `${apiBase}/day?assignmentId=${assignmentId}&programDayId=${programDayId}&date=${date}`;
@@ -2479,7 +2479,7 @@ export function WorkoutPage({
   if (isError) {
     return (
       <AppShell title="Workout">
-        <ReadFailed what="this workout" onRetry={() => void refetch()} />
+        <ReadFailed what="this workout" error={error} onRetry={() => void refetch()} />
       </AppShell>
     );
   }

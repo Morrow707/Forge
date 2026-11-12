@@ -206,7 +206,7 @@ export default function DocumentsPage() {
   const key = [`/api/waivers/${targetId ?? 0}`];
   // isError matters: without it a failed read renders every checklist row as "missing", which
   // tells a coach a medical clearance is not on file when nobody actually checked.
-  const { data, isLoading, isError, refetch } = useQuery<{
+  const { data, isLoading, isError, error, refetch } = useQuery<{
     waivers: Waiver[];
     summary: Summary[];
     athleteName: string | null;
@@ -306,6 +306,7 @@ export default function DocumentsPage() {
             ) : isError ? (
               <ReadFailed
                 what={forSomeoneElse ? "these forms" : "your documents"}
+                error={error}
                 onRetry={() => void refetch()}
               />
             ) : (

@@ -182,7 +182,7 @@ export default function AthleteDetailPage() {
   const initialTab = new URLSearchParams(useSearch()).get("tab") || "metrics";
   const [activeTab, setActiveTab] = useState(initialTab);
 
-  const { data: athlete, isLoading, isError, refetch } = useQuery<Athlete>({
+  const { data: athlete, isLoading, isError, error, refetch } = useQuery<Athlete>({
     queryKey: [`/api/coach/roster/${id}`],
   });
 
@@ -333,7 +333,7 @@ export default function AthleteDetailPage() {
       <AppShell title="Athlete">
         <Card>
           <CardContent className="py-12">
-            <ReadFailed what="this athlete's profile" onRetry={() => void refetch()} />
+            <ReadFailed what="this athlete's profile" error={error} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       </AppShell>

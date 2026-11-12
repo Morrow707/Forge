@@ -39,8 +39,7 @@ export default function AthleteClassCertificate() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="w-full max-w-md space-y-4 text-center">
-          <ReadFailed what="the certificate" onRetry={() => void refetch()} />
-          {error instanceof Error && <p className="text-sm text-muted-foreground">{error.message}</p>}
+          <ReadFailed what="the certificate" error={error} onRetry={() => void refetch()} />
           <Button asChild variant="outline" size="sm">
             <Link href={`/athlete/classes/${id}`}>Back to the class</Link>
           </Button>

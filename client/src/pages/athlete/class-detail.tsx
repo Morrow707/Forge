@@ -46,7 +46,7 @@ export default function AthleteClassDetail() {
   const qc = useQueryClient();
   const classId = Number(id);
 
-  const { data, isLoading, isError, refetch } = useQuery<ClassProgress>({
+  const { data, isLoading, isError, error, refetch } = useQuery<ClassProgress>({
     queryKey: [`/api/athlete/classes/${classId}/progress`],
     queryFn: () => getJson(`/api/athlete/classes/${classId}/progress`),
   });
@@ -132,7 +132,7 @@ export default function AthleteClassDetail() {
       <AppShell title="Class">
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="this class" onRetry={() => void refetch()} />
+            <ReadFailed what="this class" error={error} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       </AppShell>
