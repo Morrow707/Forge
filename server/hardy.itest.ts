@@ -14,7 +14,8 @@ const FORBIDDEN = 403;
 const DAY = "2026-07-14";
 const SQUAT_LB = "315";
 const NOT_RECORDED = "Lincoln";
-const OWN_DAY = "2026-11-12";
+// A day that can never be the real one: a case that asks without a date records on today.
+const OWN_DAY = "2031-03-03";
 const WAIT_MS = 5_000;
 const POLL_MS = 25;
 
