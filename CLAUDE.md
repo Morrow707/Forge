@@ -5103,9 +5103,16 @@ many athletes they will have?" Yes: the price is already $4 an athlete in bands,
 IS the plan. `users.plannedAthleteCount` is what the school SAID; the roster is what they HAVE;
 billing uses the larger (`getBilledAthleteCountForCoach`).
 
-- **Coach signup requires `expectedAthletes`** and sets `billingTier` from `bandForAthleteCount`.
-  That is what makes the Service Agreement offered with no admin step. `isBetaAccount` is NOT
-  touched -- it stays the deliberate enforcement switch, so nothing is charged or capped in beta.
+- **Coach signup requires `expectedAthletes`** and writes it to `plannedAthleteCount` -- a PRICE
+  QUOTE, never an entitlement. **Signup writes `billingTier: null`.** It used to write
+  `bandForAthleteCount(expectedAthletes)`, which handed a coach who typed 21 the band's paid
+  entitlements (Full Personalization, multi-team) before any card; `billingTier` is now written
+  only on payment (the Stripe webhook's `applyCoachSubscriptionBand`) or by an admin on purpose
+  (`server/auth.ts` says why). The quote is derived from `plannedAthleteCount` wherever it is
+  shown, and that number is also what offers the Service Agreement with no admin step
+  (`getInstitutionalAgreementStatus` keys on `plannedAthleteCount || billingTier`, then the
+  roster). `isBetaAccount` is not touched by signup and defaults false since 2026-10-11.
+  Corrected 2026-11-12; this line said the opposite for a month.
 - **`GET/PUT /api/coach/plan`** is the one place the plan is read and changed; PUT is primary
   coach only. The coach billing page shows planned, roster, billed band, and an `atCap` notice.
 - **The Stripe webhook writes the band** on a coach subscription (`applyCoachSubscriptionBand`),
