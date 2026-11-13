@@ -581,31 +581,17 @@ app.get("/healthz", async (_req, res) => {
     // applied_backfills marker, and only when no row still holds frames inline and the live
     // rows are small enough to rewrite in seconds -- see set-entries-vacuum-full.ts.
     startSetEntriesVacuumFull();
-    // One-time backlog cleanup for the dev-testing account's accumulated
-    // video volume -- see oneTimeCleanupPreexistingVideosForAccount's own
-    // comment for why this is safe to leave as permanent boot-time code
-    // (self-limiting by a fixed cutoff, not "now" on every boot).
+    // TWO BOOT TASKS WERE REMOVED HERE 2026-11-13. A one-time video cleanup aimed at
+    // athlete@forge.app with a cutoff of 2026-08-31 matched nothing on the day it was written,
+    // and that address is now the reinstated demo athlete, created after the cutoff, so it could
+    // never match again. And a read-only backlog count whose only job was to confirm the cleanup
+    // below was keeping up; the cascade added 2026-10-22 is what keeps it up now. Both ran two
+    // table scans on every boot to log a line nobody read.
     //
-    // Confirmed on production (2026-08-31 03:43 UTC log) that this finds
-    // the right account and runs cleanly, but matches 0 rows -- Jordan's
-    // account genuinely has no old videos. The 1078-video/8.85GB backlog
-    // is NOT on this account; scoping every fix attempt to it was the
-    // wrong assumption from the start. Left running (harmless, matches
-    // nothing) while diagnoseVideoBacklog below establishes where the
-    // backlog actually lives.
-    storage
-      .oneTimeCleanupPreexistingVideosForAccount("athlete@forge.app", new Date("2026-08-31T03:30:37.000Z"))
-      .then((result) => log(`One-time video cleanup: ${JSON.stringify(result)}`))
-      .catch((err) => console.error("One-time video cleanup failed:", err));
-    // Read-only diagnostic -- see diagnoseVideoBacklog's own comment.
-    // Kept running (harmless, cheap) as an ongoing sanity check that
-    // cleanupOrphanedVideoRows below is actually keeping up: rawCounts and
-    // byAthlete's summed counts should read equal on every future boot.
-    storage
-      .diagnoseVideoBacklog()
-      .then((result) => log(`Video backlog diagnostic: ${JSON.stringify(result)}`))
-      .catch((err) => console.error("Video backlog diagnostic failed:", err));
-    // Confirmed via the diagnostic above (production log, 2026-08-31 03:56
+    // What follows stays: it also removes the files of orphaned skill and comment rows, which
+    // no foreign key reaches.
+    //
+    // Confirmed by that diagnostic (production log, 2026-08-31 03:56
     // UTC): all 1078 stuck videos are workout_set_entries rows whose
     // parent chain is gone -- raw count 1078, athlete-joined count 0. See
     // cleanupOrphanedVideoRows' own comment for why that's safe to purge

@@ -11744,6 +11744,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subscription.trialEndsAt.getTime() > Date.now()
           ? subscription.trialEndsAt
           : null,
+      // MAY THIS ACCOUNT USE THE AI COACH'S FEATURES -- a Free Agent on a plan that has them
+      // (or comped, or in a trial). The meal-photo button reads this so it is not drawn for
+      // somebody the route will refuse. A convenience; the routes keep their own gates.
+      aiCoach:
+        !(await athleteHasCoach(user.id)) &&
+        (await hasAthletePaidForAiAccess(user.id, user.email, "strengthAi")),
       addOns: access.addOns,
       // WHICH OF THOSE WERE PAID FOR. Beta, a live trial and enforcement being off
       // all turn an add-on on without anybody having bought it, and a surface that
@@ -12393,7 +12399,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // of food logging -- barcode scan, database search, manual entry -- stays
   // open to every athlete, so a coached athlete can still log every meal
   // they eat. What they lose is having the AI read the plate for them.
-  app.post("/api/athlete/food/analyze-photo", requireRole("athlete"), requireFreeAgent, async (req, res) => {
+  //
+  // AND IT IS PART OF THE AI PLANS, NOT BASIC (2026-11-13). Basic is sold in its own words as
+  // "No AI coach", and this is a main-model vision call on every plate. Logging a meal by
+  // barcode, search or hand stays on every plan.
+  app.post("/api/athlete/food/analyze-photo", requireRole("athlete"), requireFreeAgent, requirePaidAiAccess("strengthAi"), async (req, res) => {
     const schema = z.object({
       images: z
         .array(z.object({ mediaType: z.enum(["image/jpeg", "image/png"]), data: z.string().min(1) }))
@@ -12804,6 +12814,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // athlete per day, roster-wide, forever. Returns null rather than 403
     // because the client already renders nothing for null.
     if (await athleteHasCoach(user.id)) return res.json(null);
+    // AND ONLY ON A PLAN THAT HAS THE AI COACH (2026-11-13). This fired once a day for every
+    // Free Agent whatever they held, Basic included, which is sold as "No AI coach": the one AI
+    // cost on the cheapest plan that nobody had to press anything to incur. Null, not 402, for
+    // the reason above -- the page asks on its own and draws nothing for null.
+    if (!(await hasAthletePaidForAiAccess(user.id, user.email, "strengthAi"))) return res.json(null);
     const date = typeof req.query.date === "string" ? req.query.date : todayIso();
     const briefing = await storage.getOrCreateReadinessBriefing(user.id, date);
     res.json(briefing ? { briefing: briefing.briefing } : null);
@@ -12820,6 +12835,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // their own AI digest of the whole roster. Also fires unprompted, once
     // per athlete per week.
     if (await athleteHasCoach(user.id)) return res.json(null);
+    // The AI plans only, as the readiness note above.
+    if (!(await hasAthletePaidForAiAccess(user.id, user.email, "strengthAi"))) return res.json(null);
     const { digest, isNew } = await storage.getOrCreateAthleteDigest(user.id);
     if (isNew && digest) {
       await notifyUser(

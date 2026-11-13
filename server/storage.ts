@@ -397,6 +397,8 @@ import { heldSeatRefusalMessage, seatIsInSeason } from "@shared/roster-hold";
 import { readingLevelInstruction, type ClassReadingLevel } from "@shared/class-reading-level";
 import { learningStreakFromDays } from "@shared/learning-streak";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
+import { recentForAi } from "./ai-chat-history";
+import { rememberedAiAnswer } from "./ai-answer-cache";
 import { deleteUploadedFile, statUploadedFile, getUploadsDiskFreeBytes } from "./uploaded-files";
 import { deriveBodyWitnessTrace } from "./body-witness-trace";
 import {
@@ -3297,7 +3299,7 @@ Only extract what the admin actually said -- do not infer an age range, gender, 
     groupBy?: "sport" | "position" | "ageBracket" | "gender";
     injuryRegions?: string[];
     includeInjuries?: boolean;
-  }>(system, text, cohortQueryTool, { maxTokens: 512 });
+  }>(system, text, cohortQueryTool, { feature: "research-cohort-question", maxTokens: 512 });
 
   if (!parsed) return null;
   const validMetrics = (parsed.metrics ?? []).filter((k) => COHORT_METRIC_BY_KEY.has(k));
@@ -9079,7 +9081,7 @@ export const storage = {
       "Identify the food items in this photo and estimate nutrition for each.",
       images,
       tool,
-      { maxTokens: 1536 },
+      { feature: "meal-photo", maxTokens: 1536 },
     );
     if (!result || !Array.isArray(result.items)) {
       return { error: "Couldn't analyze that photo -- try again or enter it manually." };
@@ -9512,7 +9514,7 @@ export const storage = {
       `Battery tests (testKey: label, unit, side):\n${testList}\n\nTranscribe every legible score on the sheet.`,
       images,
       tool,
-      { maxTokens: 1536 },
+      { feature: "movement-screen-photo", maxTokens: 1536 },
     );
     if (!result || !Array.isArray(result.rows)) {
       return { error: "Couldn't read that photo -- try a clearer shot or enter it manually." };
@@ -10023,7 +10025,7 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
       // -- the fast model does this exactly as well as the big one, for a
       // fraction of the cost, on what's the highest-volume AI call in the
       // goal-setting flow.
-      { maxTokens: 400, model: fastModel },
+      { feature: "goal-suggestion", maxTokens: 400, model: fastModel },
     );
     const parsed = goalSuggestionSchema.safeParse(result);
     if (!parsed.success) return null;
@@ -11617,7 +11619,7 @@ ${athleteContext}
       content: m.content,
     }));
 
-    const text = await askClaude(system, messages, { maxTokens: 500 });
+    const text = await askClaude(system, messages, { feature: "athlete-chat", maxTokens: 500 });
     const [assistantMessage] = await db
       .insert(athleteChatMessages)
       .values({
@@ -11854,7 +11856,7 @@ Hard rules, no exceptions:
       content: m.content,
     }));
 
-    const text = await askClaude(system, messages, { maxTokens: 500 });
+    const text = await askClaude(system, messages, { feature: "sport-coach-chat", maxTokens: 500 });
     const [assistantMessage] = await db
       .insert(sportCoachMessages)
       .values({
@@ -12542,7 +12544,7 @@ Hard rules, no exceptions:
       equipment?: string;
       movementType?: string;
       searchText?: string;
-    }>(system, query, tool, { model: fastModel, maxTokens: 200 });
+    }>(system, query, tool, { feature: "exercise-search", model: fastModel, maxTokens: 200 });
     if (!result) return null;
     return {
       family: result.family ?? null,
@@ -17568,7 +17570,7 @@ ${catalog}
 
 Design a complete draft skills program matching the athlete's request.`;
 
-    const rawDraft = await askClaudeStructured(system, userPrompt, tool, { maxTokens: 4096 });
+    const rawDraft = await askClaudeStructured(system, userPrompt, tool, { feature: "skill-program-draft", maxTokens: 4096 });
     const parsedDraft = skillProgramDraftSchema.safeParse(rawDraft);
     if (!parsedDraft.success) return null;
     const draft = parsedDraft.data;
@@ -17794,7 +17796,7 @@ ${AGE_APPROPRIATE_SKILL_PRINCIPLES}`;
       ? [{ text: staticSystem, cache: true }, { text: `\n\n${skillChatExtraGuidelines}` }]
       : [{ text: staticSystem, cache: true }];
 
-    const historyText = history
+    const historyText = recentForAi(history)
       .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
       .join("\n");
 
@@ -17816,7 +17818,7 @@ ${historyText}
 
 Respond to the user's latest message by calling ask_question or update_program.`;
 
-    const result = await askClaudeWithTools(system, userPrompt, [askQuestionTool, updateProgramTool], {
+    const result = await askClaudeWithTools(system, userPrompt, [askQuestionTool, updateProgramTool], { feature: "skill-program-chat",
       maxTokens: 8192,
     });
     if (!result) {
@@ -18389,7 +18391,7 @@ ${COMBINATION_EXERCISE_TRAINING_PRINCIPLES}`;
         ]
       : [{ text: staticSystem, cache: true }];
 
-    const historyText = history
+    const historyText = recentForAi(history)
       .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
       .join("\n");
 
@@ -18418,7 +18420,7 @@ Respond to the user's latest message by calling ask_question or update_program.`
     // and this platform's whole "teach the AI" system (getAiKnowledgeGuidelines,
     // getCoachesCornerPrinciplesForAi) exists specifically so this assistant's knowledge comes
     // from curated, vetted guidelines and the fixed exercise library -- not the open web.
-    const result = await askClaudeWithTools(system, userPrompt, [askQuestionTool, updateProgramTool], {
+    const result = await askClaudeWithTools(system, userPrompt, [askQuestionTool, updateProgramTool], { feature: "program-chat",
       maxTokens: 8192,
     });
     if (!result) {
@@ -18931,7 +18933,7 @@ Hard constraint that no amount of teaching can override: this guidelines documen
 Current guidelines document (empty if nothing has been taught yet):
 ${currentGuidelines || "(empty)"}`;
 
-    const historyText = history
+    const historyText = recentForAi(history)
       .map((m) => `${m.role === "admin" ? "Admin" : "Assistant"}: ${m.content}`)
       .join("\n");
 
@@ -18940,7 +18942,7 @@ ${historyText}
 
 Respond to the admin's latest message by calling ask_question or propose_guidelines.`;
 
-    const result = await askClaudeWithTools(system, userPrompt, [askQuestionTool, proposeGuidelinesTool], {
+    const result = await askClaudeWithTools(system, userPrompt, [askQuestionTool, proposeGuidelinesTool], { feature: "nutrition-knowledge-chat",
       maxTokens: 4096,
     });
     if (!result) {
@@ -19295,7 +19297,7 @@ You have two tools, and must pick exactly one every turn:
 Current guidelines document (empty if nothing has been taught yet):
 ${currentGuidelines || "(empty)"}`;
 
-    const historyText = history
+    const historyText = recentForAi(history)
       .map((m) => `${m.role === "admin" ? "Admin" : "Assistant"}: ${m.content}`)
       .join("\n");
 
@@ -19304,7 +19306,7 @@ ${historyText}
 
 Respond to the admin's latest message by calling ask_question or propose_guidelines.`;
 
-    const result = await askClaudeWithTools(system, userPrompt, [askQuestionTool, proposeGuidelinesTool], {
+    const result = await askClaudeWithTools(system, userPrompt, [askQuestionTool, proposeGuidelinesTool], { feature: "ai-knowledge-chat",
       maxTokens: 4096,
     });
     if (!result) {
@@ -19522,7 +19524,7 @@ Propose what these passages support for this movement's tracking profile, or cal
       system,
       userPrompt,
       [askQuestionTool, proposeMovementProfileTool],
-      { maxTokens: 3000 },
+      { feature: "movement-learned-from-library", maxTokens: 3000 },
     );
     if (!result) return fail("Sorry, I couldn't read the library just now -- try again in a bit.");
 
@@ -19654,7 +19656,7 @@ Current active profile for ${movementType}${
         : " -- none applied yet, the tracker is using its built-in hardcoded defaults."
     }`;
 
-    const historyText = history
+    const historyText = recentForAi(history)
       .map((m) => `${m.role === "admin" ? "Admin" : "Assistant"}: ${m.content}`)
       .join("\n");
 
@@ -19675,7 +19677,7 @@ ${sourceText ? `\n\nExtracted text from the URL the admin just shared:\n${source
 
 Respond to the admin's latest message by calling ask_question or propose_movement_profile.`;
 
-    const result = await askClaudeWithTools(system, userPrompt, [askQuestionTool, proposeMovementProfileTool], {
+    const result = await askClaudeWithTools(system, userPrompt, [askQuestionTool, proposeMovementProfileTool], { feature: "movement-knowledge-chat",
       maxTokens: 2048,
     });
     if (!result) {
@@ -20368,7 +20370,7 @@ Respond to the admin's latest message by calling ask_question or propose_movemen
       "You translate a strength coach's plain-English athlete search into structured filters for an internal roster query tool. Only include fields the sentence actually implies -- an unmentioned constraint must be left out, never defaulted.",
       prompt,
       tool,
-      { maxTokens: 600, model: fastModel },
+      { feature: "athlete-search", maxTokens: 600, model: fastModel },
     );
     if (!result) return null;
     const parsed = adminAthleteQueryFiltersSchema.safeParse(result);
@@ -20674,10 +20676,10 @@ When the admin DOES teach something concrete, use propose_entry. A few things to
 Existing taught entries (id, scope, maturity, content):
 ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
 
-    const historyText = history.map((m) => `${m.role === "admin" ? "Admin" : "Assistant"}: ${m.content}`).join("\n");
+    const historyText = recentForAi(history).map((m) => `${m.role === "admin" ? "Admin" : "Assistant"}: ${m.content}`).join("\n");
     const userPrompt = `Conversation so far:\n${historyText}\n\nRespond to the admin's latest message by calling discuss or propose_entry.`;
 
-    const result = await askClaudeWithTools(system, userPrompt, [discussTool, proposeEntryTool], {
+    const result = await askClaudeWithTools(system, userPrompt, [discussTool, proposeEntryTool], { feature: "forge-ai-teaching-chat",
       maxTokens: 4096,
       images: image ? [image] : undefined,
     });
@@ -23454,7 +23456,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
 
     const userText = `Here are frames from a rep of ${exerciseName}. What do you see?\n\nAthlete profile and analytics:\n${athleteContext}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}`;
 
-    const text = await askClaudeVision(system, userText, images, { maxTokens: 600 });
+    const text = await askClaudeVision(system, userText, images, { feature: "skill-form-check", maxTokens: 600 });
 
     return reply(
       text?.trim() ?? "Couldn't get a read on that video -- try again with a clearer angle.",
@@ -27167,7 +27169,12 @@ Form-fault flags detected by on-device pose analysis across that window: ${fault
 
 These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, torso lean, bar path/tilt), not a medical assessment. Identify which of these, if any, represents a genuine CHRONIC pattern worth a coach's attention -- something recurring across multiple sessions, not a one-off. For each chronic pattern: a short title, the fault code it's based on, a plain-language coaching cue the coach could give the athlete, and one physiological/injury-risk note for why it's worth addressing. If nothing here rises to a real chronic pattern, return an empty array rather than manufacturing one.`;
 
-    const result = await askClaudeStructured<{ summary: string; chronicFlaws: OverwatchFlaw[] }>(
+    // THE SAME COUNTS GET THE SAME ANSWER, ASKED FOR ONCE. The coach's analytics page asks for
+    // this every time the exercise is opened, and the whole prompt is the exercise name plus
+    // these counts -- so until another tracked set changes them, a second request is paying for
+    // an answer already in hand. Keyed on the prompt itself, so a new set, a corrected fault or
+    // a renamed exercise is a different key and is asked afresh.
+    const result = await rememberedAiAnswer(`form-overwatch:${athleteId}:${exerciseId}:${prompt}`, () => askClaudeStructured<{ summary: string; chronicFlaws: OverwatchFlaw[] }>(
       "You are an expert strength & conditioning coach reviewing camera-tracked biomechanics flags for one athlete's recent sets of one exercise. Distinguish a genuine recurring pattern from single-session noise. Never diagnose a medical condition, never invent a pattern the counts given don't support, and ground every claim in the specific counts provided.",
       prompt,
       {
@@ -27197,8 +27204,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
           required: ["summary", "chronicFlaws"],
         },
       },
-      { maxTokens: 1200 },
-    );
+      { feature: "form-overwatch", maxTokens: 1200 },
+    ));
     return result ?? null;
   },
 
@@ -30495,7 +30502,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       `Roster (id: name) to match against:\n${rosterList}\n\nTranscribe every row visible in the photo.`,
       images,
       tool,
-      { maxTokens: 2048 },
+      { feature: "testing-day-photo", maxTokens: 2048 },
     );
     if (!result || !Array.isArray(result.rows)) {
       return { error: "Couldn't read that photo -- try a clearer shot or enter it manually." };
@@ -30556,7 +30563,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       `Roster (id: name) to match against:\n${rosterList}\n\nTranscribe every row visible in the photo.`,
       images,
       tool,
-      { maxTokens: 2048 },
+      { feature: "weigh-in-photo", maxTokens: 2048 },
     );
     if (!result || !Array.isArray(result.rows)) {
       return { error: "Couldn't read that photo -- try a clearer shot or enter it manually." };
@@ -30627,7 +30634,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         : "Transcribe every row visible in the photo.",
       images,
       tool,
-      { maxTokens: 2048 },
+      { feature: "nutrition-sheet-photo", maxTokens: 2048 },
     );
     if (!result || !Array.isArray(result.rows)) {
       return { error: "Couldn't read that photo -- try a clearer shot or enter it manually." };
@@ -30690,7 +30697,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       `Roster (id: name) to match against:\n${rosterList}\n\nTranscribe every entry visible in the photo.`,
       images,
       tool,
-      { maxTokens: 2048 },
+      { feature: "injury-intake-photo", maxTokens: 2048 },
     );
     if (!result || !Array.isArray(result.rows)) {
       return { error: "Couldn't read that photo -- try a clearer shot or enter it manually." };
@@ -30760,7 +30767,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       `Roster (id: name) to match against:\n${rosterList}\n\nTranscribe every row visible in the photo.`,
       images,
       tool,
-      { maxTokens: 4096 },
+      { feature: "imported-testing-photo", maxTokens: 4096 },
     );
     if (!result || !Array.isArray(result.rows)) {
       return { error: "Couldn't read that photo -- try a clearer shot or enter it manually." };
@@ -30872,7 +30879,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       "Transcribe every person visible on the intake sheet.",
       images,
       tool,
-      { maxTokens: 4096 },
+      { feature: "player-intake-photo", maxTokens: 4096 },
     );
     if (!result || !Array.isArray(result.rows)) {
       return { error: "Couldn't read that photo -- try a clearer shot or enter it manually." };
@@ -34522,7 +34529,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       "Transcribe the workout program shown in the photo(s).",
       images,
       tool,
-      { maxTokens: 4096 },
+      { feature: "program-draft-photo", maxTokens: 4096 },
     );
     const parsedDraft = programPhotoDraftSchema.safeParse(rawDraft);
     if (!parsedDraft.success) return null;
@@ -34627,7 +34634,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       "Build a coach-education track from the document/screenshot(s) shown.",
       images,
       tool,
-      { maxTokens: 4096 },
+      { feature: "academy-track-draft-photo", maxTokens: 4096 },
     );
     const parsedDraft = academyTrackPhotoDraftSchema.safeParse(rawDraft);
     if (!parsedDraft.success) return null;

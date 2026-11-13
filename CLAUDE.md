@@ -3829,6 +3829,34 @@ halves before splitting anything else:
   `velocity_zones` are new tables, proven on a fresh database and idempotent on a second run.
   The AI answer path was NOT exercised end to end here (no AI key in this sandbox); search, the
   refusals, the recording and the report were, in a real browser and on real Postgres.
+- **2026-11-13: THE REST OF THE COST AUDIT.** Scott: "fix the other things the audit found."
+  (1) **Basic is sold as "No AI coach" and three AI features were open on it.** The meal photo
+  carries `requirePaidAiAccess("strengthAi")`; the daily readiness note and the weekly summary
+  answer null without it (they fire on a page load, so null and never a 402).
+  `/api/athlete/entitlements` carries `aiCoach` and the food scanner's photo button reads it.
+  **Left on every plan on purpose:** the exercise swap (Scott's standing decision), the pain
+  substitution (the same family, and the safety case), and the goal suggestion and plain-word
+  exercise search (cheap model, hundredths of a cent). **Left open to coached athletes and
+  flagged, not changed:** "make this easier" (`/api/athlete/regress-exercise`) is AI for a
+  coached athlete, which the 2026-10-10 rule forbids, but it was built to report to the coach
+  and is the only way an athlete who cannot do the work says so. Scott's call.
+  (2) **A daily ceiling on model calls per account**, 200, asked inside `callAnthropic`
+  (`server/ai-daily-limit.ts`) so a feature added later is covered. It answers empty and never
+  throws (unawaited model calls would become unhandled rejections); the middleware beside it
+  turns a failure caused by the ceiling into a 429 that names it. Admins and work outside a
+  request are not counted. In memory, per instance: a ceiling against a runaway, not a meter.
+  (3) **The six builder and teaching chats send their last 30 messages**, not the whole
+  conversation (`server/ai-chat-history.ts`); each already sends the current program or
+  guidelines in full beside the chat. (4) **The coach's form-flaw summary is asked once per set
+  of counts** (`server/ai-answer-cache.ts`, keyed on its own prompt; a null is never kept).
+  (5) **All 26 unlabelled model calls carry a `feature`**, so nothing lands under "unattributed"
+  on the admin spend screen; the test discovers every call. (6) **Food name searches and found
+  barcodes are remembered for a day** (a miss or an outage never is). (7) **Two dead boot tasks
+  removed** from `server/index.ts`: a one-time video cleanup aimed at `athlete@forge.app` with an
+  August cutoff, and a backlog count. `cleanupOrphanedVideoRows` stays (it reaches skill and
+  comment files no foreign key does). `the-cost-audit-fixes-2026-11-13.test.ts` (22 cases, 13
+  mutations each caught) and `the-cheapest-plan-has-no-ai.itest.ts`. One client file:
+  `verify_build`, batches.
 - **2026-11-12: THE FREE AGENT'S EXERCISE LIBRARY TAB OPENS A LIBRARY, AND HARDY'S 50 A DAY IS
   ENFORCED.** Both found by the cost audit. (1) Scott gave every Free Agent the Exercise Library on
   2026-10-02 and the tab went back on the strip; `athlete/exercises.tsx` and `exercise-detail.tsx`

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -155,7 +155,17 @@ export function FoodScannerDialog({
   // untouched, so a coached athlete still logs every meal they eat -- they
   // just don't get the photo shortcut. Undefined reads as "no" so the
   // option never appears and then vanishes mid-load.
-  const canAnalyzePhoto = useIsFreeAgent() === true;
+  //
+  // And only on a plan that has the AI coach: Basic is sold as "No AI coach" and the route
+  // refuses it, so the button asks the server the same question the route does rather than
+  // being drawn for somebody it will turn away. Asked only of a Free Agent -- nobody else has
+  // an entitlements answer to give.
+  const isFreeAgent = useIsFreeAgent() === true;
+  const { data: entitlements } = useQuery<{ aiCoach?: boolean }>({
+    queryKey: ["/api/athlete/entitlements"],
+    enabled: isFreeAgent,
+  });
+  const canAnalyzePhoto = isFreeAgent && entitlements?.aiCoach === true;
   const [mode, setMode] = useState<Mode>("scan");
   const [source, setSource] = useState<Source>("barcode");
   const [candidate, setCandidate] = useState<FoodCandidate>(emptyManual());

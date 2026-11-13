@@ -45,6 +45,7 @@ import { buildGuardianInviteEmail } from "./guardian-invite-email";
 import { buildGuardianConsentConfirmationEmail } from "./guardian-consent-confirmation-email";
 import { reportJobFailure } from "./job-errors";
 import { apiLimiter } from "./rate-limiters";
+import { aiDailyLimitScope } from "./ai-daily-limit";
 import { totpOtpauthUri } from "./mfa";
 import { formatDeviceLabel, isNativeAppRequest, normalizeIp, resolveLocation, shouldTouchLastSeen, type SessionKind } from "./session-tracking";
 import {
@@ -582,6 +583,9 @@ export function setupAuth(app: Express) {
   // in rate-limiters.ts for why mounting it any later (routes.ts, after
   // setupAuth returns) would silently cover none of these.
   app.use("/api", apiLimiter);
+  // The per-account daily ceiling on model calls. Here for the same reason as the limiter above:
+  // it needs the signed-in account, and it has to wrap every route, the ones below included.
+  app.use("/api", aiDailyLimitScope);
   // Same "before every route below, including the ones in this very
   // function" reasoning as apiLimiter just above -- this used to be mounted
   // in routes.ts, after registerRoutes calls setupAuth(app), which meant

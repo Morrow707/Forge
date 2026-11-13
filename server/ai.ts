@@ -1,3 +1,4 @@
+import { takeAiCall } from "./ai-daily-limit";
 import { recordAiUsage } from "./ai-usage";
 import type { AiProvider, NeutralRequest, NeutralResponse } from "./ai-provider";
 import { recordSystemFailure, recordSystemSuccess } from "./system-events";
@@ -99,6 +100,12 @@ async function callAnthropic(
   body: Record<string, unknown>,
   feature = "unattributed",
 ): Promise<any | null> {
+  // The per-account daily ceiling -- see server/ai-daily-limit.ts for why it lives here and why
+  // it answers empty instead of throwing.
+  if (!takeAiCall()) {
+    console.warn(`AI daily limit reached for an account; ${feature} call not sent`);
+    return null;
+  }
   for (let attempt = 0; attempt <= 1; attempt++) {
     try {
       const res = await fetch(API_URL, {

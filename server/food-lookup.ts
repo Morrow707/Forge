@@ -332,6 +332,23 @@ async function lookupBarcodeUsda(barcode: string): Promise<FoodLookupOutcome> {
  * the athlete should be told to enter it manually rather than to retry
  * something that will not start working. */
 export async function lookupBarcode(barcode: string): Promise<FoodLookupOutcome> {
+  // A product that was found is found again from memory; a miss or an outage is asked afresh,
+  // because a product missing today may be in the database tomorrow.
+  const held = recentBarcodes.get(barcode);
+  if (held && Date.now() - held.at < FOOD_SEARCH_CACHE_TTL_MS) return held.outcome;
+  const outcome = await lookupBarcodeUncached(barcode);
+  if (outcome.status === "found") {
+    recentBarcodes.delete(barcode);
+    recentBarcodes.set(barcode, { at: Date.now(), outcome });
+    if (recentBarcodes.size > FOOD_SEARCH_CACHE_MAX_ENTRIES) {
+      const oldest = recentBarcodes.keys().next().value;
+      if (oldest !== undefined) recentBarcodes.delete(oldest);
+    }
+  }
+  return outcome;
+}
+
+async function lookupBarcodeUncached(barcode: string): Promise<FoodLookupOutcome> {
   const off = await lookupBarcodeOpenFoodFacts(barcode);
   if (off.status === "found") return off;
 
@@ -353,6 +370,31 @@ export async function lookupBarcode(barcode: string): Promise<FoodLookupOutcome>
   return { status: "not_found" };
 }
 
+// THE SAME SEARCH, TYPED AGAIN, IS ANSWERED FROM MEMORY. The search box asks as the athlete
+// types, and "chicken breast" is typed by everybody; each one was a fresh request to USDA,
+// whose key allows a fixed number an hour for the whole platform. Only a real answer is kept
+// (an outage is never remembered as "no results"), for a day, for the most recent few hundred
+// searches. The foods are public reference data and carry nothing about who searched.
+export const FOOD_SEARCH_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+export const FOOD_SEARCH_CACHE_MAX_ENTRIES = 500;
+const recentSearches = new Map<string, { at: number; foods: FoodCandidate[] }>();
+const recentBarcodes = new Map<string, { at: number; outcome: FoodLookupOutcome }>();
+
+function rememberSearch(key: string, foods: FoodCandidate[]): void {
+  recentSearches.delete(key);
+  recentSearches.set(key, { at: Date.now(), foods });
+  if (recentSearches.size > FOOD_SEARCH_CACHE_MAX_ENTRIES) {
+    const oldest = recentSearches.keys().next().value;
+    if (oldest !== undefined) recentSearches.delete(oldest);
+  }
+}
+
+/** Test support: forget every remembered search. */
+export function clearFoodSearchCache(): void {
+  recentSearches.clear();
+  recentBarcodes.clear();
+}
+
 /** Name search against USDA FoodData Central -- covers generic/raw foods
  * (an Open Food Facts barcode lookup can't help with "grilled chicken
  * breast") as well as branded items. Empty array (not an error) if USDA
@@ -363,6 +405,9 @@ export async function searchFoodsByName(
   // The route checks usdaFoodLookupEnabled itself and answers 503 with its own
   // "not set up on this server" wording, so reaching here means it is on.
   if (!usdaFoodLookupEnabled) return { status: "ok", foods: [] };
+  const key = query.trim().toLowerCase();
+  const held = recentSearches.get(key);
+  if (held && Date.now() - held.at < FOOD_SEARCH_CACHE_TTL_MS) return { status: "ok", foods: held.foods };
   try {
     const res = await fetch(
       `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(
@@ -375,7 +420,9 @@ export async function searchFoodsByName(
     // matched nothing when USDA is down sends them to retype it by hand.
     if (!res.ok) return { status: "unavailable" };
     const data = await res.json();
-    return { status: "ok", foods: (data.foods ?? []).map((food: any) => usdaFoodToCandidate(food, null)) };
+    const foods: FoodCandidate[] = (data.foods ?? []).map((food: any) => usdaFoodToCandidate(food, null));
+    rememberSearch(key, foods);
+    return { status: "ok", foods };
   } catch (err) {
     console.error("USDA food search failed:", err);
     return { status: "unavailable" };

@@ -48,7 +48,10 @@ describe("athlete AI controls follow the account, not the program", () => {
 
   it("gates the meal photo shortcut on it", () => {
     const scanner = read("client/src/components/food-scanner-dialog.tsx");
-    expect(scanner).toContain("const canAnalyzePhoto = useIsFreeAgent() === true");
+    // A Free Agent, and (2026-11-13) on a plan that has the AI coach: Basic is sold as "No AI
+    // coach" and the route refuses it, so the button reads the server's own answer.
+    expect(scanner).toContain("const isFreeAgent = useIsFreeAgent() === true");
+    expect(scanner).toContain("const canAnalyzePhoto = isFreeAgent && entitlements?.aiCoach === true");
     expect(scanner).toContain("{canAnalyzePhoto && (");
     // The rest of food logging is untouched.
     expect(scanner).toContain('setMode("search")');
