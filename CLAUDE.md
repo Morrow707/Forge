@@ -3829,6 +3829,14 @@ halves before splitting anything else:
   `velocity_zones` are new tables, proven on a fresh database and idempotent on a second run.
   The AI answer path was NOT exercised end to end here (no AI key in this sandbox); search, the
   refusals, the recording and the report were, in a real browser and on real Postgres.
+- **2026-11-13: BUILD 754 IS VERSION 1.0.1, AND TWO THINGS STOOD BETWEEN 741 AND IT.** 749, 752
+  and 753 never reached TestFlight. (1) "A required agreement is missing or has expired": Apple
+  had posted an updated agreement only the Account Holder can accept (Scott, developer.apple.com
+  Account / App Store Connect Business). Read the upload step's log before blaming the build:
+  archive and signing passed every time. (2) Error 90062: once Apple APPROVED 1.0 the 1.0 train
+  closed, so every new build needs a higher `MARKETING_VERSION` (project.pbxproj, both
+  configurations). It is 1.0.1 now; the build number stays the run number. Bump it again after
+  each App Store approval. 754 carries the authenticator door and the 12 commits since 741.
 - **2026-11-13: THE REST OF THE COST AUDIT.** Scott: "fix the other things the audit found."
   (1) **Basic is sold as "No AI coach" and three AI features were open on it.** The meal photo
   carries `requirePaidAiAccess("strengthAi")`; the daily readiness note and the weekly summary
