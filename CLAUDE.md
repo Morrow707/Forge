@@ -3837,6 +3837,15 @@ halves before splitting anything else:
   closed, so every new build needs a higher `MARKETING_VERSION` (project.pbxproj, both
   configurations). It is 1.0.1 now; the build number stays the run number. Bump it again after
   each App Store approval. 754 carries the authenticator door and the 12 commits since 741.
+- **2026-11-13: A PLAN CHANGE KEEPS THE CODE, AND THE WEBSITE STOPPED TALKING PRE-LAUNCH.** (1) A Free
+  Agent already paying by CARD who picks another plan has the price changed on the subscription they
+  have (`switchFreeAgentTierInPlace`, `POST /api/billing/switch/free-agent-tier`), not a second
+  checkout: the discount lives on the subscription, so it carries with its end date, and the receipt
+  says "Code X stays on: free until DATE" (`currentPlanDiscount`, read from Stripe). No card
+  subscription: the ordinary checkout with the coupon box. Not run against real Stripe; arguments
+  pinned by `a-plan-change-keeps-the-code.test.ts`. (2) The marketing footer reads "Get Forge news
+  and offers" / "Sign me up" and links the App Store page from `VITE_APP_STORE_ID`; the coming-soon
+  card's own wording is unchanged (it only draws while signups are closed).
 - **2026-11-13: FOUR MORE FIRST-WEEK FIXES, SHIPPED TOGETHER** (Scott: "Queue them all and ship them all
   together"). (1) **An admin posts and unposts their own programs** (`programs.is_published`,
   `programIsVisibleTo` in storage.ts is the ONE rule for the list, the detail, assigning and the Free

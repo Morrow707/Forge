@@ -107,6 +107,8 @@ import {
   createCoachSubscriptionCheckout,
   createFreeAgentAddOnCheckout,
   createFreeAgentTierCheckout,
+  currentPlanDiscount,
+  switchFreeAgentTierInPlace,
   createGuardianVerificationCheckout,
   GUARDIAN_VERIFICATION_CHARGE_CENTS,
   createLessonCheckout,
@@ -15202,13 +15204,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (verdict.ok) discount = { code: verdict.code, percentOff: verdict.percentOff, months: verdict.months };
         else codeMessage = verdict.message;
       }
+      // An account that already pays by card changes plan on that card (no second checkout),
+      // and whatever code is on the plan stays on it. The receipt says so, with the end date.
+      const subscription = await storage.getSubscriptionForUser(user.id);
+      const switchesInPlace =
+        Boolean(subscription?.stripeSubscriptionId) &&
+        subscription?.accountType === "free_agent" &&
+        (subscription.status === "active" || subscription.status === "trialing") &&
+        Boolean((await storage.getUser(user.id))?.freeAgentTier);
+      const carried = switchesInPlace ? await currentPlanDiscount(user.id) : null;
       res.json({
         tier: parsed.data.tier,
         label: tier.label,
         codeAccepted: discount != null,
         codeMessage,
         receipt: checkoutReceipt(tier.monthlyPriceCents, discount),
+        switchesInPlace,
+        carriedDiscount: carried
+          ? { code: carried.code, percentOff: carried.percentOff, endsAt: carried.endsAt?.toISOString() ?? null }
+          : null,
       });
+    },
+  );
+
+  // Change plan on the card already on file. Falls back to telling the client to use the
+  // ordinary checkout when there is no live card subscription to change.
+  app.post(
+    "/api/billing/switch/free-agent-tier",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requireWebCheckout,
+    async (req, res) => {
+      const user = currentUser(req);
+      const parsed = z
+        .object({ tier: z.enum(FREE_AGENT_TIER_ORDER as [FreeAgentTierId, ...FreeAgentTierId[]]) })
+        .safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Pick a plan first." });
+      const result = await switchFreeAgentTierInPlace(user.id, parsed.data.tier as FreeAgentTierId);
+      if ("error" in result) return res.status(503).json({ message: result.error });
+      if (!result.switched) return res.status(409).json({ message: "Use checkout for this plan.", useCheckout: true });
+      res.json({ switched: true, tier: parsed.data.tier });
     },
   );
 

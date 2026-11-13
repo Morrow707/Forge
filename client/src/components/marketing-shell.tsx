@@ -15,6 +15,11 @@ import { ForgeMark } from "@/components/forge-mark";
  * and validation pages are listed here for that reason as much as for navigation -- they were
  * otherwise orphans the moment they shipped.
  */
+// The same id the Smart App Banner is built from (vite.config.ts). Absent, no link is drawn:
+// a link to a store page that does not exist is worse than none.
+const APP_STORE_ID = String(import.meta.env.VITE_APP_STORE_ID ?? "").trim();
+const APP_STORE_URL = /^\d{6,}$/.test(APP_STORE_ID) ? `https://apps.apple.com/app/id${APP_STORE_ID}` : null;
+
 export function MarketingNav() {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur">
@@ -67,9 +72,22 @@ export function MarketingFooter() {
           </div>
         </div>
         <div className="flex flex-col items-center gap-2 border-t border-border pt-6 sm:flex-row sm:justify-between">
-          <span className="text-foreground">Get launch updates</span>
+          {/* Forge is live (App Store, 2026-11-13), so this is news, not a launch list. */}
+          <span className="text-foreground">Get Forge news and offers</span>
           <EmailListSignup source="footer" compact className="w-full max-w-sm" />
         </div>
+        {APP_STORE_URL && (
+          <div className="flex flex-col items-center gap-2 border-t border-border pt-6 sm:flex-row sm:justify-between">
+            <span className="text-foreground">Forge is on the App Store</span>
+            <a
+              href={APP_STORE_URL}
+              className="rounded-md border border-border px-4 py-2 font-semibold text-foreground hover:border-primary"
+              data-testid="link-app-store"
+            >
+              Get the iPhone app
+            </a>
+          </div>
+        )}
         <div className="flex flex-col items-center justify-between gap-4 border-t border-border pt-6 sm:flex-row">
           <span>&copy; {new Date().getFullYear()} Forge Performance Systems LLC</span>
           <div className="flex flex-wrap items-center justify-center gap-4">

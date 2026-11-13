@@ -494,6 +494,104 @@ export async function createFreeAgentTierCheckout(
   return { url: session.url };
 }
 
+/**
+ * WHAT IS LEFT OF A CODE ON THE PLAN AN ACCOUNT ALREADY HAS (2026-11-13). Scott: "when a user
+ * goes to upgrade, and clicks a new one, it should either still hold the coupon code if there
+ * is one, and tell them how long they have left." Read from Stripe, which is the only thing
+ * that knows: the discount on the live card subscription, its percentage, and the day it ends.
+ * Null when there is no card subscription, no discount, or Stripe cannot be read.
+ */
+export async function currentPlanDiscount(
+  userId: number,
+): Promise<{ code: string | null; percentOff: number; endsAt: Date | null } | null> {
+  const stripe = getStripeClient();
+  if (!stripe) return null;
+  const sub = await storage.getSubscriptionForUser(userId);
+  if (!sub?.stripeSubscriptionId || !(sub.status === "active" || sub.status === "past_due" || sub.status === "trialing")) {
+    return null;
+  }
+  try {
+    const live = (await stripe.subscriptions.retrieve(sub.stripeSubscriptionId, { expand: ["discounts"] })) as any;
+    for (const d of (live.discounts ?? []) as any[]) {
+      if (!d || typeof d === "string") continue;
+      if (d.end != null && d.end * 1000 <= Date.now()) continue;
+      let coupon = d.coupon ?? d.source?.coupon ?? null;
+      if (typeof coupon === "string") coupon = await stripe.coupons.retrieve(coupon);
+      const percentOff = Number(coupon?.percent_off);
+      if (!Number.isFinite(percentOff) || percentOff <= 0) continue;
+      return { code: coupon?.name ?? null, percentOff, endsAt: d.end != null ? new Date(d.end * 1000) : null };
+    }
+  } catch (err) {
+    console.warn(`Could not read the discount on user ${userId}'s plan: ${(err as Error).message}`);
+  }
+  return null;
+}
+
+/**
+ * CHANGING PLANS ON THE CARD ALREADY ON FILE (2026-11-13). A Free Agent who already pays by
+ * card and picks a different plan has the PRICE on their existing Stripe subscription changed,
+ * rather than being sent through a second checkout. That is what keeps a code: the discount
+ * lives on the subscription, so it carries to the new plan with the same end date, and Stripe
+ * prorates the difference on the next bill. The old path (a new checkout, the old subscription
+ * cancelled) dropped the discount and refused the same code as already used.
+ *
+ * Returns { switched: false } when there is no live card subscription to change, so the caller
+ * falls back to the ordinary checkout.
+ */
+export async function switchFreeAgentTierInPlace(
+  userId: number,
+  tier: FreeAgentTierId,
+): Promise<{ switched: true } | { switched: false; reason: string } | { error: string }> {
+  const closed = chargingClosed();
+  if (closed) return closed;
+  const stripe = getStripeClient();
+  if (!stripe) return { switched: false, reason: "stripe_not_configured" };
+  const priceId = freeAgentPriceId(tier);
+  if (!priceId) return { error: `No Stripe price configured for the ${tier} tier yet.` };
+  const sub = await storage.getSubscriptionForUser(userId);
+  if (
+    !sub?.stripeSubscriptionId ||
+    sub.accountType !== "free_agent" ||
+    !(sub.status === "active" || sub.status === "trialing")
+  ) {
+    return { switched: false, reason: "no_live_card_subscription" };
+  }
+  let live: Stripe.Subscription;
+  try {
+    live = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
+  } catch {
+    return { switched: false, reason: "subscription_unreadable" };
+  }
+  if (!(live.status === "active" || live.status === "trialing")) {
+    return { switched: false, reason: `status_${live.status}` };
+  }
+  const item = live.items.data[0];
+  if (!item) return { switched: false, reason: "no_subscription_item" };
+  try {
+    await stripe.subscriptions.update(live.id, {
+      items: [{ id: item.id, price: priceId, quantity: 1 }],
+      proration_behavior: "create_prorations",
+      // Somebody who had set the old plan to end and then picks a new one is staying.
+      cancel_at_period_end: false,
+      metadata: { ...live.metadata, kind: "free_agent_tier", userId: String(userId), tier },
+    });
+  } catch (err) {
+    return { error: `Couldn't change your plan: ${(err as Error).message}` };
+  }
+  await storage.upsertSubscriptionByUserId(userId, {
+    accountType: "free_agent",
+    tier: entitlementTierForFreeAgentTier(tier),
+    status: "active",
+    cancelAtPeriodEnd: false,
+  });
+  await storage.updateFreeAgentBilling(userId, { freeAgentTier: tier });
+  await storage.logBillingEvent(userId, "free_agent_tier.switched_in_place", {
+    subscriptionId: live.id,
+    tier,
+  });
+  return { switched: true };
+}
+
 /** One sport-specialist coach add-on (Golf Swing / Hitting / Pitching), bought on
  * the web.
  *

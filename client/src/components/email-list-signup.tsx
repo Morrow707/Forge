@@ -58,12 +58,12 @@ export function EmailListSignup({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          aria-label="Email address for launch updates"
+          aria-label="Email address for Forge news"
           className={compact ? "h-9" : undefined}
         />
         <Button type="submit" size={compact ? "sm" : "default"} disabled={mutation.isPending || !email.trim()}>
           <Mail className="h-4 w-4" />
-          {mutation.isPending ? "Joining…" : "Notify me"}
+          {mutation.isPending ? "Joining…" : "Sign me up"}
         </Button>
       </div>
       {mutation.isError && (
@@ -72,7 +72,7 @@ export function EmailListSignup({
         </p>
       )}
       {!compact && (
-        <p className="text-xs text-muted-foreground">Launch news only. Every email has an unsubscribe link.</p>
+        <p className="text-xs text-muted-foreground">Forge news and offers only. Every email has an unsubscribe link.</p>
       )}
     </form>
   );

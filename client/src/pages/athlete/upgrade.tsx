@@ -244,6 +244,10 @@ export default function AthleteUpgrade() {
     codeAccepted: boolean;
     codeMessage: string | null;
     receipt: CheckoutReceipt;
+    /** True when this account already pays by card: the plan changes on that card, no new checkout. */
+    switchesInPlace?: boolean;
+    /** A code still running on the current plan, which stays on through a plan change. */
+    carriedDiscount?: { code: string | null; percentOff: number; endsAt: string | null } | null;
   }>({
     queryKey: ["/api/billing/checkout/free-agent-tier/preview", orderTier, appliedCode],
     queryFn: async () => {
@@ -263,6 +267,21 @@ export default function AthleteUpgrade() {
   async function startWebCheckout(tier: FreeAgentTierId) {
     setCheckoutTier(tier);
     try {
+      if (orderPreview?.switchesInPlace) {
+        // Already paying by card: the plan changes on that card and any code stays on it.
+        try {
+          await apiRequest("POST", "/api/billing/switch/free-agent-tier", { tier });
+          await qc.invalidateQueries({ queryKey: ["/api/athlete/entitlements"] });
+          await qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
+          toast.success(`You're on ${FREE_AGENT_TIERS[tier].label} now.`);
+          setOrderTier(null);
+          setCheckoutTier(null);
+          return;
+        } catch (err) {
+          // 409 means there was no card subscription to change after all: use the checkout.
+          if (!(err instanceof ApiError) || err.status !== 409) throw err;
+        }
+      }
       const res = await apiRequest("POST", "/api/billing/checkout/free-agent-tier", {
         tier,
         // Only a code the receipt accepted rides the checkout; a refused one would fail it.
@@ -586,15 +605,40 @@ export default function AthleteUpgrade() {
                     <span data-testid="receipt-discount">-{formatCents(orderReceipt.discountCentsPerMonth)}</span>
                   </div>
                 )}
-                <div className="flex items-center justify-between gap-3 border-t border-border pt-2 text-base font-bold">
-                  <span>Due today</span>
-                  <span data-testid="receipt-due-today">{formatCents(orderReceipt.dueTodayCents)}</span>
-                </div>
-                <p className="text-xs text-muted-foreground" data-testid="receipt-summary">
-                  {orderReceipt.summary}
-                </p>
+                {orderPreview?.switchesInPlace ? (
+                  <div className="space-y-1 border-t border-border pt-2" data-testid="receipt-switch-note">
+                    {orderPreview.carriedDiscount && (
+                      <p className="font-semibold text-success" data-testid="receipt-carried-code">
+                        {orderPreview.carriedDiscount.code ? `Code ${orderPreview.carriedDiscount.code}` : "Your code"}{" "}
+                        stays on:{" "}
+                        {orderPreview.carriedDiscount.percentOff >= 100
+                          ? "free"
+                          : `${orderPreview.carriedDiscount.percentOff}% off`}
+                        {orderPreview.carriedDiscount.endsAt
+                          ? ` until ${new Date(orderPreview.carriedDiscount.endsAt).toLocaleDateString()}`
+                          : ""}
+                        .
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Your plan changes now on the card you already have on file. Nothing new to enter. Your next
+                      bill is adjusted for the change, then it is {formatCents(orderReceipt.monthlyPriceCents)} each
+                      month until you cancel.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between gap-3 border-t border-border pt-2 text-base font-bold">
+                      <span>Due today</span>
+                      <span data-testid="receipt-due-today">{formatCents(orderReceipt.dueTodayCents)}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground" data-testid="receipt-summary">
+                      {orderReceipt.summary}
+                    </p>
+                  </>
+                )}
               </div>
-              {forgeCodeEntryIsAllowed() && (
+              {forgeCodeEntryIsAllowed() && !orderPreview?.switchesInPlace && (
                 <div className="space-y-1.5">
                   <p className="text-sm font-semibold">Have a coupon code?</p>
                   <div className="flex items-center gap-2">
@@ -632,11 +676,19 @@ export default function AthleteUpgrade() {
                 disabled={checkoutTier !== null || orderPreviewLoading}
                 data-testid="button-checkout"
               >
-                {checkoutTier ? "Opening checkout..." : "Checkout"}
+                {orderPreview?.switchesInPlace
+                  ? checkoutTier
+                    ? "Changing plan..."
+                    : "Change plan"
+                  : checkoutTier
+                    ? "Opening checkout..."
+                    : "Checkout"}
               </Button>
-              <p className="text-xs text-muted-foreground">
-                Your card is entered on the next page, with Stripe. Forge never sees the card number.
-              </p>
+              {!orderPreview?.switchesInPlace && (
+                <p className="text-xs text-muted-foreground">
+                  Your card is entered on the next page, with Stripe. Forge never sees the card number.
+                </p>
+              )}
             </CardContent>
           </Card>
         )}

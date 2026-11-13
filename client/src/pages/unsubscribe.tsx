@@ -32,10 +32,10 @@ export default function UnsubscribePage() {
         </Link>
         <Card>
           <CardHeader>
-            <CardTitle>Unsubscribe from launch updates</CardTitle>
+            <CardTitle>Unsubscribe from Forge emails</CardTitle>
             <CardDescription>
               {mutation.isSuccess
-                ? "Done. You won't get any more launch emails from Forge."
+                ? "Done. You won't get any more emails from the Forge list."
                 : !token
                   ? "This link is missing its code. Open the unsubscribe link from the email itself."
                   : "Press the button and you're off the list. You can join again from the website any time."}
