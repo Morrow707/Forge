@@ -513,7 +513,8 @@ export default function LandingPage() {
             <p className="mt-4 text-muted-foreground">
               One price, shown up front, for exactly what's included, whether you're training
               on your own or running a whole program. Every plan starts with a 14-day free trial
-              with everything unlocked, no credit card required.
+              with the AI coach, the camera and skills unlocked, no credit card required. After
+              the 14 days, pick a plan to keep training.
             </p>
           </div>
 

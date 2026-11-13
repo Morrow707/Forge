@@ -3215,6 +3215,10 @@ export const subscriptions = pgTable(
     seatCap: integer("seat_cap"),
     status: subscriptionStatusEnum("status").notNull().default("trialing"),
     trialEndsAt: timestamp("trial_ends_at"),
+    // The trial END DATE the "your trial ends in a few days" email was sent about, so the note
+    // goes once per end date (a promo code that moves the date earns one more). See
+    // server/trial-ending-job.ts.
+    trialEndingNotifiedFor: timestamp("trial_ending_notified_for"),
     currentPeriodEnd: timestamp("current_period_end"),
     cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
     // ONE OF THE SUBSCRIPTION HANDLES BELOW IS SET, AND IT NAMES THE RAIL THIS ROW BELONGS TO:

@@ -1,3 +1,4 @@
+import { COACH_PURCHASABLE_ADD_ON_ORDER } from "@shared/billing-tiers";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -47,8 +48,14 @@ describe("Stripe price configuration", () => {
     for (const addOn of WITHDRAWN_ADD_ONS) {
       expect(missing).not.toContain(`STRIPE_PRICE_FREE_AGENT_ADDON_${addOn.toUpperCase()}`);
     }
-    expect(missing).toContain("STRIPE_PRICE_COACH_ADDON_COACHES_CORNER");
-    expect(missing.length).toBe(FREE_AGENT_TIER_ORDER.length + offeredAddOns.length + 2);
+    // Every coach add-on checkout sells, read off the list rather than typed: three since
+    // 2026-11-13 (Full Personalization and the coach's video storage joined Coaches Corner).
+    for (const addOn of COACH_PURCHASABLE_ADD_ON_ORDER) {
+      expect(missing).toContain(`STRIPE_PRICE_COACH_ADDON_${addOn.toUpperCase()}`);
+    }
+    expect(missing.length).toBe(
+      FREE_AGENT_TIER_ORDER.length + offeredAddOns.length + COACH_PURCHASABLE_ADD_ON_ORDER.length + 1,
+    );
   });
 
   /** Every Price a checkout route needs, so a test about one of them does not have
@@ -58,7 +65,9 @@ describe("Stripe price configuration", () => {
     for (const addOn of FREE_AGENT_ADD_ON_ORDER) {
       process.env[`STRIPE_PRICE_FREE_AGENT_ADDON_${addOn.toUpperCase()}`] = `price_${addOn}`;
     }
-    process.env.STRIPE_PRICE_COACH_ADDON_COACHES_CORNER = "price_coaches_corner";
+    for (const addOn of COACH_PURCHASABLE_ADD_ON_ORDER) {
+      process.env[`STRIPE_PRICE_COACH_ADDON_${addOn.toUpperCase()}`] = `price_${addOn}`;
+    }
     process.env.STRIPE_PRICE_COACH_PER_ATHLETE = "price_per_athlete";
   }
 

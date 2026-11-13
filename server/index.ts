@@ -91,6 +91,7 @@ import { assertFieldEncryptionConfigured } from "./field-encryption";
 import { startDataRetentionJob } from "./data-retention-job";
 import { startVideoRetentionJob } from "./video-retention-job";
 import { startDatabaseSizeJob } from "./database-size-job";
+import { startTrialEndingJob } from "./trial-ending-job";
 import { startSetTraceOffloadJob } from "./set-trace-offload-job";
 import { startSetEntriesVacuumFull } from "./set-entries-vacuum-full";
 import { startFkDriftJob } from "./fk-drift-job";
@@ -560,6 +561,8 @@ app.get("/healthz", async (_req, res) => {
     // One line a day (and now) saying how full the database is and which tables fill it --
     // see database-size-job.ts for the 61%-full disk that made it worth writing down.
     startDatabaseSizeJob();
+    // One email a few days before a trial ends, to the accounts the plan wall would then stop.
+    startTrialEndingJob();
     // Which declared foreign keys the LIVE database is missing. BEFORE the cleanup below, so
     // the log reads in the order it happened: the drift that let the orphans accumulate, then
     // the orphans going. It repairs nothing -- see fk-drift-job.ts for why that restraint is

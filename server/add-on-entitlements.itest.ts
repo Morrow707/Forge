@@ -84,15 +84,16 @@ describe("a Free Agent's add-ons", () => {
    * harmlessly, because this test is what says why, so nothing is silently passing. The live
    * version of that contract ("beta opens what is offered, and does not claim it was bought") is
    * pinned on the coach side, where Coaches Corner really is sold. */
-  it("offers exactly All Classes today, with the sport coaches withdrawn behind it", () => {
-    // All Classes (2026-10-04) is the one add-on on sale; the three sport coaches stay
-    // withdrawn, which is the difference between unsellable and gone.
-    expect(offered).toEqual(["all_classes"]);
+  it("offers All Classes and extra video storage, with the sport coaches withdrawn behind them", () => {
+    // All Classes (2026-10-04) and Extra Video Storage (2026-11-13, when it got a checkout) are
+    // on sale; the three sport coaches stay withdrawn, which is the difference between
+    // unsellable and gone.
+    expect(offered).toEqual(["all_classes", "video_storage"]);
     // The ids still exist and are still withdrawn, which is the difference between an add-on
     // being unsellable and the add-on framework being gone. Same reasoning as
     // WITHDRAWN_FREE_AGENT_TIERS being kept while empty.
     expect(FREE_AGENT_ADD_ON_ORDER.length).toBeGreaterThan(0);
-    expect(WITHDRAWN_ADD_ONS.length).toBe(FREE_AGENT_ADD_ON_ORDER.length - 1);
+    expect(WITHDRAWN_ADD_ONS.length).toBe(FREE_AGENT_ADD_ON_ORDER.length - offered.length);
   });
 
   it("gives a beta account the offered add-ons, without anybody having bought one", async () => {
@@ -164,9 +165,16 @@ describe("Coaches Corner", () => {
     const { COACHES_CORNER_MONTHLY_PRICE_CENTS } = await import("@shared/billing-tiers");
     const res = await asBetaCoach.get("/api/coach/entitlements");
     expect(res.body.coachesCorner.monthlyPriceCents).toBe(COACHES_CORNER_MONTHLY_PRICE_CENTS);
-    expect(res.body.purchasableAddOns).toEqual([
+    // Three coach add-ons are sold since 2026-11-13; Coaches Corner is still quoted off the
+    // shared constant, and every entry carries the price the shared list gives it.
+    const { BILLING_ADD_ONS, COACH_PURCHASABLE_ADD_ON_ORDER } = await import("@shared/billing-tiers");
+    expect(res.body.purchasableAddOns.map((a: { id: string }) => a.id)).toEqual(COACH_PURCHASABLE_ADD_ON_ORDER);
+    expect(res.body.purchasableAddOns).toContainEqual(
       expect.objectContaining({ id: "coaches_corner", monthlyPriceCents: COACHES_CORNER_MONTHLY_PRICE_CENTS }),
-    ]);
+    );
+    for (const addOn of res.body.purchasableAddOns) {
+      expect(addOn.monthlyPriceCents).toBe(BILLING_ADD_ONS[addOn.id as keyof typeof BILLING_ADD_ONS].monthlyPriceCents);
+    }
   });
 
   it("serves the catalog unlocked to a beta coach", async () => {

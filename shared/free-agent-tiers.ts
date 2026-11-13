@@ -245,7 +245,13 @@ export type SportCoachAddOnId = "golf_swing" | "hitting" | "pitching";
  * Forge class stays the free preview (shared/class-pricing-rule.ts). The only add-on an athlete
  * can buy today; the three sport coaches are withdrawn. */
 export const ALL_CLASSES_ADD_ON_ID = "all_classes" as const;
-export type FreeAgentAddOnId = SportCoachAddOnId | typeof ALL_CLASSES_ADD_ON_ID;
+/** Extra video storage, sold from 2026-11-13 (Scott: "should have a place to checkout"). It had a
+ *  price and no checkout, so the only way anybody ever got it was an admin's tick -- which stays,
+ *  as `users.hasVideoStorageAddOn`, and is OR-ed with this purchase in getVideoRetentionLimits.
+ *  A coach buys the same thing as "coach_video_storage" (shared/billing-tiers.ts): two ids and
+ *  two store products, because the two sides' add-on ids must never overlap. */
+export const VIDEO_STORAGE_ADD_ON_ID = "video_storage" as const;
+export type FreeAgentAddOnId = SportCoachAddOnId | typeof ALL_CLASSES_ADD_ON_ID | typeof VIDEO_STORAGE_ADD_ON_ID;
 
 export const SPORT_COACH_ADD_ON_IDS: SportCoachAddOnId[] = ["golf_swing", "hitting", "pitching"];
 
@@ -295,6 +301,12 @@ export const FREE_AGENT_ADD_ONS: Record<FreeAgentAddOnId, FreeAgentAddOnDef> = {
     monthlyPriceCents: 1999,
     description: "Every chapter of every Forge class, current and future. Chapter 1 of each is free to try.",
   },
+  video_storage: {
+    id: "video_storage",
+    label: "Extra Video Storage",
+    monthlyPriceCents: 999,
+    description: "Keep more of what you film: 10 favorited clips and 20 clips per exercise, up from 5 and 10.",
+  },
 };
 
 // Which of the three above have an actual feature behind them -- same
@@ -310,6 +322,7 @@ export const BUILT_FREE_AGENT_ADD_ONS: Set<FreeAgentAddOnId> = new Set([
   "hitting",
   "pitching",
   "all_classes",
+  "video_storage",
 ]);
 
 /**
@@ -339,7 +352,7 @@ export function addOnIsOffered(id: FreeAgentAddOnId): boolean {
   return !WITHDRAWN_ADD_ONS.includes(id);
 }
 
-export const FREE_AGENT_ADD_ON_ORDER: FreeAgentAddOnId[] = ["golf_swing", "hitting", "pitching", "all_classes"];
+export const FREE_AGENT_ADD_ON_ORDER: FreeAgentAddOnId[] = ["golf_swing", "hitting", "pitching", "all_classes", "video_storage"];
 
 /** The App Store Connect Product id for a sport-coach add-on.
  *

@@ -89,17 +89,21 @@ describe("Coaches Corner is a real, priced coach add-on", () => {
   it("is on the add-on list and carries the shared price", () => {
     expect(BILLING_ADD_ON_ORDER).toContain("coaches_corner");
     // 2026-10-03: personalization is offered as one bundle, never as four pieces.
-    expect(BILLING_ADD_ON_ORDER).toEqual(["full_bundle", "coaches_corner"]);
+    expect(BILLING_ADD_ON_ORDER).toEqual(["full_bundle", "coaches_corner", "coach_video_storage"]);
     expect(BILLING_ADD_ONS.coaches_corner.monthlyPriceCents).toBe(
       COACHES_CORNER_MONTHLY_PRICE_CENTS,
     );
   });
 
-  it("is the one coach add-on checkout will sell", () => {
-    // The personalization add-ons are real, assignable, priced ids with no
-    // self-serve checkout -- "is this an add-on" and "may this be bought here" are
-    // two questions and only the second belongs in a checkout.
-    expect(COACH_PURCHASABLE_ADD_ON_ORDER).toEqual(["coaches_corner"]);
+  it("is one of the three coach add-ons checkout will sell", () => {
+    // Coaches Corner was the only one until 2026-11-13, when Scott asked for a checkout on the
+    // two things that had a price and none ("should have a place to checkout, same with 7 make
+    // it accessible"). The four single personalization pieces are still not sold on their own:
+    // "is this an add-on" and "may this be bought here" are two questions.
+    expect(COACH_PURCHASABLE_ADD_ON_ORDER).toEqual(["full_bundle", "coaches_corner", "coach_video_storage"]);
+    for (const piece of ["custom_colors", "team_identity", "workflow", "personal_page"]) {
+      expect(COACH_PURCHASABLE_ADD_ON_ORDER).not.toContain(piece);
+    }
   });
 
   it("no longer tells a coach it comes with a plan that does not exist", () => {

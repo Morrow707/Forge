@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   ALL_CLASSES_ADD_ON_ID,
+  VIDEO_STORAGE_ADD_ON_ID,
   ALL_FREE_AGENT_TIER_IDS,
   FREE_AGENT_TIER_ORDER,
   appleProductIdForFreeAgentAddOn,
@@ -54,8 +55,17 @@ describe("StoreKit product ids", () => {
     const expected = [
       ...ALL_FREE_AGENT_TIER_IDS.map(appleProductIdForFreeAgentTier),
       appleProductIdForFreeAgentAddOn(ALL_CLASSES_ADD_ON_ID),
-      ...COACH_PURCHASABLE_ADD_ON_ORDER.map(appleProductIdForCoachAddOn),
+      // In the order the plugin lists them: Coaches Corner (2026-10-05), then the three put on
+      // sale 2026-11-13 -- the Free Agent's storage add-on and the two new coach add-ons.
+      appleProductIdForCoachAddOn("coaches_corner"),
+      appleProductIdForFreeAgentAddOn(VIDEO_STORAGE_ADD_ON_ID),
+      appleProductIdForCoachAddOn("full_bundle"),
+      appleProductIdForCoachAddOn("coach_video_storage"),
     ];
+    // And the coach half of that list is exactly what checkout sells, in any order.
+    expect(expected.filter((id) => COACH_PURCHASABLE_ADD_ON_ORDER.map(appleProductIdForCoachAddOn).includes(id)).length).toBe(
+      COACH_PURCHASABLE_ADD_ON_ORDER.length,
+    );
     expect(productIdsInSwift()).toEqual(expected);
   });
 

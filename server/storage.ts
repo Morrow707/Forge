@@ -13500,6 +13500,9 @@ Hard rules, no exceptions:
         input.skillProgramExerciseId,
         getVideoRetentionLimits({
           hasVideoStorageAddOn: athlete?.hasVideoStorageAddOn ?? false,
+          freeAgentAddOns: athlete?.freeAgentAddOns,
+          billingAddOns: athlete?.billingAddOns,
+          addOnTerms: athlete?.addOnTerms as AddOnTerms | null | undefined,
           isBetaAccount: athlete?.isBetaAccount ?? false,
           trialExpiresAt: athlete?.trialExpiresAt ?? null,
           dateOfBirth: athlete?.dateOfBirth ?? null,
@@ -23964,6 +23967,9 @@ ${catalog}`;
     const defaultWeightUnit = athlete?.preferredWeightUnit ?? "lbs";
     const retentionLimits = getVideoRetentionLimits({
       hasVideoStorageAddOn: athlete?.hasVideoStorageAddOn ?? false,
+      freeAgentAddOns: athlete?.freeAgentAddOns,
+      billingAddOns: athlete?.billingAddOns,
+      addOnTerms: athlete?.addOnTerms as AddOnTerms | null | undefined,
       isBetaAccount: athlete?.isBetaAccount ?? false,
       trialExpiresAt: athlete?.trialExpiresAt ?? null,
       dateOfBirth: athlete?.dateOfBirth ?? null,
@@ -33911,6 +33917,11 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         // notice attached. See shared/own-training-routes.ts.
         role: users.role,
         hasVideoStorageAddOn: users.hasVideoStorageAddOn,
+        // A PURCHASED storage add-on counts exactly as the admin's tick does -- see
+        // accountHasExtraVideoStorage. Without these three the sweep would cap a paying account.
+        freeAgentAddOns: users.freeAgentAddOns,
+        billingAddOns: users.billingAddOns,
+        addOnTerms: users.addOnTerms,
         isBetaAccount: users.isBetaAccount,
         trialExpiresAt: users.trialExpiresAt,
         // Without this the beta unlock would swallow every minor here too, and the sweep would
@@ -33925,7 +33936,7 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
     const capByAthlete = new Map<number, number>();
     const roleByAthlete = new Map<number, string>();
     for (const a of athleteRows) {
-      const limits = getVideoRetentionLimits(a);
+      const limits = getVideoRetentionLimits({ ...a, addOnTerms: a.addOnTerms as AddOnTerms | null });
       if (Number.isFinite(limits.totalCap)) capByAthlete.set(a.id, limits.totalCap);
       roleByAthlete.set(a.id, a.role);
     }

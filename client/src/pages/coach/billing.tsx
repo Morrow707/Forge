@@ -27,7 +27,7 @@ import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
  * own list of what is for sale or what it costs. */
 type CoachEntitlements = {
   coachesCorner: { unlocked: boolean; owned: boolean; compedForRoster: boolean };
-  purchasableAddOns: { id: string; label: string; description: string; monthlyPriceCents: number }[];
+  purchasableAddOns: { id: string; label: string; description: string; monthlyPriceCents: number; unlocked: boolean; owned: boolean }[];
   billingOpen: boolean;
 };
 
@@ -381,18 +381,17 @@ export default function CoachBilling() {
         <CardContent className="flex flex-col gap-4 p-6">
           <p className="label-xs">Add-ons</p>
           {entitlements?.purchasableAddOns.map((addOn) => {
-            // Coaches Corner is the only one today. Status is three-valued on
-            // purpose -- owned, comped (beta, a trial, or a roster of 100+), and
-            // for sale -- because one "locked" state for all three either offers
-            // to sell something already owned or implies a purchase that never
-            // happened.
-            const unlocked =
-              addOn.id === "coaches_corner" ? entitlements.coachesCorner.unlocked : false;
-            const owned = addOn.id === "coaches_corner" ? entitlements.coachesCorner.owned : false;
+            // Status is three-valued on purpose -- owned, included (a comp, a trial, a band
+            // that carries it, or for Coaches Corner a roster of 100+), and for sale -- because
+            // one "locked" state for all three either offers to sell something already held or
+            // implies a purchase that never happened. The server decides both flags per add-on
+            // (see /api/coach/entitlements); this page never re-derives an entitlement.
+            const unlocked = addOn.unlocked === true;
+            const owned = addOn.owned === true;
             const status = owned
               ? "Owned"
               : unlocked
-                ? entitlements.coachesCorner.compedForRoster
+                ? addOn.id === "coaches_corner" && entitlements.coachesCorner.compedForRoster
                   ? "Included with your roster size"
                   : "Included with your account"
                 : entitlements.billingOpen

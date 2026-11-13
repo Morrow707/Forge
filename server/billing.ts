@@ -43,7 +43,8 @@ import { resolveVideoRetentionLimits, type VideoRetentionLimits } from "@shared/
 // added there at all), so production stays off the same way local dev does
 // unless someone goes and sets this env var by hand. Combined with
 // isBetaAccount below, nothing is ever restricted by accident.
-import { activeAddOns, type AddOnTerms } from "@shared/add-on-terms";
+import { notifyCoachPlanEnded } from "./plan-ended-email";
+import { activeAddOns, addOnIsActive, type AddOnTerms } from "@shared/add-on-terms";
 
 export const ENFORCEMENT_ENABLED = process.env.BILLING_ENFORCEMENT_ENABLED === "true";
 
@@ -254,13 +255,31 @@ export interface VideoRetentionAccount {
   /** Null for an account with no birthdate on file, which is treated as an adult here -- the
    * minor gate refuses those accounts outright, so one cannot be accumulating video anyway. */
   dateOfBirth?: string | Date | null;
+  /** What the account has BOUGHT, on either side (a Free Agent's add-ons or a coach's), with
+   *  the terms that say whether each purchase is still live. Optional so a caller with only the
+   *  admin's tick in hand still compiles; every caller that reads a real row passes them. */
+  freeAgentAddOns?: string[] | null;
+  billingAddOns?: string[] | null;
+  addOnTerms?: AddOnTerms | null;
+}
+
+/** THE EXTRA-STORAGE ANSWER HAS TWO SOURCES AND THIS IS WHERE THEY MEET. `hasVideoStorageAddOn`
+ *  is an admin's tick (one writer, the admin billing panel); a purchase is an entry in the
+ *  account's owned add-ons with a live term. Read together here rather than having a purchase
+ *  write the tick, so neither can overwrite the other and a refund ends only what was bought. */
+export function accountHasExtraVideoStorage(account: VideoRetentionAccount): boolean {
+  if (account.hasVideoStorageAddOn) return true;
+  return (
+    addOnIsActive(account.freeAgentAddOns, account.addOnTerms, "video_storage") ||
+    addOnIsActive(account.billingAddOns, account.addOnTerms, "coach_video_storage")
+  );
 }
 
 export function getVideoRetentionLimits(account: VideoRetentionAccount): VideoRetentionLimits {
   // The decision itself lives in shared/video-retention.ts beside the numbers, so it can be
   // tested without a database. This supplies the env switch and the age derivation.
   return resolveVideoRetentionLimits({
-    hasVideoStorageAddOn: account.hasVideoStorageAddOn,
+    hasVideoStorageAddOn: accountHasExtraVideoStorage(account),
     isBetaAccount: account.isBetaAccount,
     trialExpiresAt: account.trialExpiresAt,
     isMinor:
@@ -1066,6 +1085,7 @@ async function revokeEverythingForSubscription(
     }
     if (sub.accountType === "coach") {
       await storage.clearCoachBand(sub.userId);
+      notifyCoachPlanEnded(sub.userId);
     }
     await storage.logBillingEvent(
       sub.userId,
@@ -1294,6 +1314,7 @@ async function endStripeSubscription(
       // not something they bought, so it still quotes their price if they come back.
       if (updated.accountType === "coach") {
         await storage.clearCoachBand(updated.userId);
+        notifyCoachPlanEnded(updated.userId);
       }
     }
 

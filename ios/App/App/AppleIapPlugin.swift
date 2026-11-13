@@ -69,7 +69,12 @@ public class AppleIapPlugin: CAPPlugin, CAPBridgedPlugin {
         "com.foreperformancesystems.forge.freeagent.ai_coach_v3",
         "com.foreperformancesystems.forge.freeagent.ai_coach_video_v3",
         "com.foreperformancesystems.forge.addon.all_classes_v1",
-        "com.foreperformancesystems.forge.addon.coaches_corner_v1"
+        "com.foreperformancesystems.forge.addon.coaches_corner_v1",
+        // Sold from 2026-11-13. Neither returns a product until it exists in App Store Connect,
+        // and every surface draws its buy button only for a product the store returned.
+        "com.foreperformancesystems.forge.addon.video_storage_v1",
+        "com.foreperformancesystems.forge.addon.full_bundle_v1",
+        "com.foreperformancesystems.forge.addon.coach_video_storage_v1"
     ]
 
     private var updateListenerTask: Task<Void, Never>?

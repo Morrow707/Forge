@@ -76,9 +76,14 @@ const BUYABLE: Record<string, string> = {
     "App Store subscription group on iOS. Both enums derive from FREE_AGENT_TIER_ORDER, so a " +
     "withdrawn tier is refused by the route rather than by a copy of the list.",
   FREE_AGENT_ADD_ONS:
-    "All Classes, $19.99: POST /api/billing/checkout/free-agent-add-on and ...addon.all_classes_v1 " +
-    "at Apple. The three sport coaches in the same record are withdrawn and the page filters them " +
+    "All Classes, $19.99, and Extra Video Storage, $9.99: POST /api/billing/checkout/free-agent-add-on " +
+    "and one App Store product each. The three sport coaches in the same record are withdrawn and the page filters them " +
     "out with addOnIsOffered -- see tier-withdrawal-machinery.test.ts, which polices the members.",
+  BILLING_ADD_ONS:
+    "Full Personalization, $24.99, Coaches Corner and the coach's extra video storage: POST " +
+    "/api/billing/checkout/coach-add-on, whose enum is COACH_PURCHASABLE_ADD_ON_ORDER, and one " +
+    "App Store product each. Full Personalization was admin-assigned only until 2026-11-13 " +
+    "(Scott: 'make it accessible'); an admin can still grant it.",
   ORG_PER_ATHLETE_CENTS:
     "The $4-an-athlete rate every coach band is built from. POST /api/billing/checkout/coach, web " +
     "only by App Store guideline 3.1.3(c), and the native app may not price it at all " +
@@ -88,12 +93,6 @@ const BUYABLE: Record<string, string> = {
 /** Priced on a public page with no checkout behind it, each with the reason. An entry here is a
  * decision somebody made out loud, never a default. */
 const PRICED_WITHOUT_A_CHECKOUT: Record<string, string> = {
-  BILLING_ADD_ONS:
-    "Full Personalization, $24.99, is admin-assigned on purpose and has no checkout on either " +
-    "rail: COACH_PURCHASABLE_ADD_ON_ORDER is ['coaches_corner'] alone. Scott, 2026-10-08, asked " +
-    "directly: 'we won't be adding to apple, which is fine.' A program's add-on is part of the " +
-    "conversation a school has with Forge when they buy the plan, which is itself sold off the " +
-    "app, so the price on this page is what they will be quoted rather than a button they expect.",
   ORG_BLOCK_SIZE:
     "Not a price at all -- the twenty-athlete threshold above which a band already includes Full " +
     "Personalization. It lands in the discovered set because the band table that reads it prices " +

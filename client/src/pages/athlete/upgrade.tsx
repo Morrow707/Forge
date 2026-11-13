@@ -37,6 +37,7 @@ import {
   SPORT_COACH_ADD_ON_IDS,
 } from "@shared/free-agent-tiers";
 import { AllClassesCard } from "@/components/all-classes-card";
+import { VideoStorageCard } from "@/components/video-storage-card";
 import { Sparkles, Video, RotateCcw, CreditCard } from "lucide-react";
 import {
   FREE_AGENT_TIERS,
@@ -382,6 +383,18 @@ export default function AthleteUpgrade() {
             </CardContent>
           </Card>
         )}
+        {!planRequired && trialEndsAt && !entitlements?.freeAgentTier && (
+          <Card className="mb-6" data-testid="trial-running-banner">
+            <CardContent className="p-5">
+              <p className="text-sm font-semibold">
+                Your free trial runs through {trialEndsAt.toLocaleDateString()}.
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Pick a plan before then to keep training. Nothing you log is lost either way.
+              </p>
+            </CardContent>
+          </Card>
+        )}
         {/* A FORGE CODE, ON THE WEB ONLY. This card used to say Apple's rules did not reach it
             because it writes Forge's own trial row rather than buying a store product; App
             Review read it the other way on 2026-11-06 (Guideline 3.1.1, "the app uses promo
@@ -497,8 +510,9 @@ export default function AthleteUpgrade() {
         )}
         {!supported && !androidNative && <SubscriptionLegalLinks className="mt-4" />}
         {/* All Classes (2026-10-04): the one add-on on sale, on top of any tier. */}
-        <div className="mt-6">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <AllClassesCard />
+          <VideoStorageCard />
         </div>
         <SportCoachAddOns webCheckout={!supported && !androidNative} />
         {supported && !live && (

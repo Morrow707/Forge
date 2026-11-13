@@ -43,6 +43,7 @@ import { hashPassword, comparePasswords } from "./auth-utils";
 import {
   getEntitlements,
   coachPlanIsPaidFor,
+  getVideoRetentionLimits,
   type Entitlements,
   getFreeAgentEntitlements,
   syncCoachSubscriptionBand,
@@ -96,6 +97,8 @@ import { coreAgreementText } from "./seed-data/signup-agreement";
 import { addOnIsActive, withinRefundWindow, ADD_ON_CANCELLATION_POLICY } from "@shared/add-on-terms";
 import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier, ageFromDateOfBirth } from "@shared/privacy-tiers";
 import { BILLING_LIVE, ENFORCEMENT_ENABLED } from "./billing";
+import { activeAddOns, type AddOnTerms } from "@shared/add-on-terms";
+import { VIDEO_RETENTION } from "@shared/video-retention";
 import { freeAgentPlanRequired, planWallCovers, FREE_AGENT_PLAN_REQUIRED_MESSAGE } from "./free-agent-plan";
 import {
   createBillingPortalSession,
@@ -3285,14 +3288,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/coach/entitlements", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const entitlements = await getEntitlementsForCoach(user.id);
+    const coachesCorner = await coachesCornerAccessFor(user);
+    // An add-on is the PROGRAM's, so what is owned is read off the primary coach's row -- the
+    // row a purchase lands on (see applyAppleIapVerification and the Stripe webhook).
+    const primary = await storage.getUser((await storage.getEffectiveCoachIds(user.id))[0]);
+    const ownedAddOns = new Set(activeAddOns(primary?.billingAddOns, primary?.addOnTerms as AddOnTerms | null));
+    /* `unlocked` is "may this program use it today", `owned` is "did it buy it". They differ for a
+     * comped program and for a band that includes the thing, and the page needs both: one "locked"
+     * state for all three either offers to sell something already held or implies a purchase that
+     * never happened. Decided here so the page never re-derives an entitlement. */
+    const addOnStatus = (id: AddOnId): { unlocked: boolean; owned: boolean } => {
+      if (id === "coaches_corner") return { unlocked: coachesCorner.unlocked, owned: coachesCorner.owned };
+      if (id === "full_bundle") {
+        return {
+          unlocked:
+            entitlements.hasCustomColors &&
+            entitlements.hasTeamIdentity &&
+            entitlements.hasWorkflowCustomization &&
+            entitlements.hasPersonalPage,
+          owned: ownedAddOns.has(id),
+        };
+      }
+      if (id === "coach_video_storage") {
+        const limits = primary
+          ? getVideoRetentionLimits({
+              hasVideoStorageAddOn: primary.hasVideoStorageAddOn,
+              freeAgentAddOns: primary.freeAgentAddOns,
+              billingAddOns: primary.billingAddOns,
+              addOnTerms: primary.addOnTerms as AddOnTerms | null,
+              isBetaAccount: primary.isBetaAccount,
+              trialExpiresAt: primary.trialExpiresAt,
+              dateOfBirth: primary.dateOfBirth,
+            })
+          : VIDEO_RETENTION;
+        return { unlocked: limits.totalCap > VIDEO_RETENTION.totalCap, owned: ownedAddOns.has(id) };
+      }
+      return { unlocked: false, owned: ownedAddOns.has(id) };
+    };
     res.json({
       ...entitlements,
-      coachesCorner: await coachesCornerAccessFor(user),
+      coachesCorner,
       purchasableAddOns: COACH_PURCHASABLE_ADD_ON_ORDER.map((id) => ({
         id,
         label: BILLING_ADD_ONS[id].label,
         description: BILLING_ADD_ONS[id].description,
         monthlyPriceCents: BILLING_ADD_ONS[id].monthlyPriceCents,
+        ...addOnStatus(id),
       })),
       // Whether the program's plan is live: the camera, skill recording and the coach AI tools
       // follow it (coachPlanIsActive). The client says so instead of drawing dead buttons.
@@ -11851,6 +11892,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       aiCoach:
         !(await athleteHasCoach(user.id)) &&
         (await hasAthletePaidForAiAccess(user.id, user.email, "strengthAi")),
+      // Whether this account already keeps the larger video limits, from a purchase, an
+      // admin's tick or a comp. The storage card reads it so it never offers to sell what the
+      // account already has; getVideoRetentionLimits is the rule the nightly sweep enforces.
+      extraVideoStorage: await (async () => {
+        const row = await storage.getUser(user.id);
+        if (!row) return false;
+        const limits = getVideoRetentionLimits({
+          hasVideoStorageAddOn: row.hasVideoStorageAddOn,
+          freeAgentAddOns: row.freeAgentAddOns,
+          billingAddOns: row.billingAddOns,
+          addOnTerms: row.addOnTerms as AddOnTerms | null,
+          isBetaAccount: row.isBetaAccount,
+          trialExpiresAt: row.trialExpiresAt,
+          dateOfBirth: row.dateOfBirth,
+        });
+        return limits.totalCap > VIDEO_RETENTION.totalCap;
+      })(),
       addOns: access.addOns,
       // WHICH OF THOSE WERE PAID FOR. Beta, a live trial and enforcement being off
       // all turn an add-on on without anybody having bought it, and a surface that

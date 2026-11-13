@@ -102,7 +102,12 @@ export default function SignupPage() {
   // here or later on the billing page (shared/promo-trial.ts), so the field is optional and
   // the server checks it before the account exists -- a typo is a message on this form, never
   // an account that quietly got no offer.
-  const [promoCode, setPromoCode] = useState("");
+  // A link can carry the promo code (/signup?promo=CODE), so a campaign link -- the Instagram
+  // one that gives 30 days -- fills the field for the visitor. It is still only SENT where a
+  // Forge code may be typed at all (promoCodeApplies: never inside the native app).
+  const [promoCode, setPromoCode] = useState(
+    () => new URLSearchParams(window.location.search).get("promo")?.trim().toUpperCase() ?? "",
+  );
   // Plain-English validation message, shown above the submit button. The
   // page had no error display of its own -- signup failures come back as a
   // toast from the mutation -- so this is only for the things we can catch

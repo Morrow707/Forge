@@ -53,7 +53,11 @@ export type AddOnId =
   // parallel column for one product is a second place for ownership to be
   // missed. See COACHES_CORNER_MONTHLY_PRICE_CENTS below for the price and
   // COACH_PURCHASABLE_ADD_ON_ORDER for the ones checkout will actually sell.
-  | "coaches_corner";
+  | "coaches_corner"
+  // Extra video storage for the coach's OWN training clips (sold from 2026-11-13). Its own id,
+  // never the Free Agent add-on's "video_storage": users.addOnTerms is ONE object keyed by add-on
+  // id for both sides, so the two id sets have to stay disjoint (shared/add-on-terms.test.ts).
+  | "coach_video_storage";
 
 export interface BillingTierDef {
   id: BillingTierId;
@@ -239,6 +243,13 @@ export const BILLING_ADD_ONS: Record<AddOnId, AddOnDef> = {
     description:
       "Admin-authored coach education: program-design theory, Olympic lift progressions, youth development, arm care, season planning. Free for rosters of 100+.",
   },
+  coach_video_storage: {
+    id: "coach_video_storage",
+    label: "Extra Video Storage",
+    monthlyPriceCents: 999,
+    description:
+      "For the clips of your own training: keep 10 favorited and 20 per exercise, up from 5 and 10. Your athletes' video is not part of this.",
+  },
   personal_page: {
     id: "personal_page",
     label: "Personal Page",
@@ -253,7 +264,7 @@ export const BILLING_ADD_ONS: Record<AddOnId, AddOnDef> = {
  * assignment panel and the catalog show Full Personalization and Coaches Corner only. The four
  * ids stay in AddOnId and in ALL_ADD_ON_IDS because an account recorded as owning one keeps it
  * (getEntitlementsForCoach still reads them), and because full_bundle resolves to all four. */
-export const BILLING_ADD_ON_ORDER: AddOnId[] = ["full_bundle", "coaches_corner"];
+export const BILLING_ADD_ON_ORDER: AddOnId[] = ["full_bundle", "coaches_corner", "coach_video_storage"];
 
 /** Everything an account can be RECORDED as owning, offered or not. The admin billing
  * validator reads this so a coach granted a single piece before 2026-10-03 still saves. */
@@ -264,6 +275,7 @@ export const ALL_ADD_ON_IDS: AddOnId[] = [
   "personal_page",
   "full_bundle",
   "coaches_corner",
+  "coach_video_storage",
 ];
 
 /** The coach add-ons a coach can BUY for themselves, as opposed to ones an admin
@@ -272,7 +284,7 @@ export const ALL_ADD_ON_IDS: AddOnId[] = [
  * is on sale, the other is what an account can be recorded as owning. The
  * personalization add-ons above have no self-serve checkout -- they are still
  * granted from the admin billing panel -- so they are deliberately not here. */
-export const COACH_PURCHASABLE_ADD_ON_ORDER: AddOnId[] = ["coaches_corner"];
+export const COACH_PURCHASABLE_ADD_ON_ORDER: AddOnId[] = ["full_bundle", "coaches_corner", "coach_video_storage"];
 
 
 export function formatCents(cents: number): string {

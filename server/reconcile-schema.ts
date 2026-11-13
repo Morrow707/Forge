@@ -2091,6 +2091,7 @@ CREATE TABLE IF NOT EXISTS "subscriptions" (
   "updated_at" timestamp NOT NULL DEFAULT now()
 );
 ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "google_play_purchase_token" text;
+ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "trial_ending_notified_for" timestamp;
 CREATE UNIQUE INDEX IF NOT EXISTS "subscriptions_user_idx" ON "subscriptions" ("user_id");
 CREATE INDEX IF NOT EXISTS "subscriptions_stripe_subscription_idx" ON "subscriptions" ("stripe_subscription_id");
 CREATE INDEX IF NOT EXISTS "subscriptions_google_play_token_idx" ON "subscriptions" ("google_play_purchase_token");

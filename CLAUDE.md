@@ -3857,6 +3857,32 @@ halves before splitting anything else:
   comment files no foreign key does). `the-cost-audit-fixes-2026-11-13.test.ts` (22 cases, 13
   mutations each caught) and `the-cheapest-plan-has-no-ai.itest.ts`. One client file:
   `verify_build`, batches.
+- **2026-11-13, later: EVERYTHING WITH A PRICE HAS A CHECKOUT, AND A TRIAL WARNS BEFORE IT ENDS.**
+  Scott, answering the recommendation list: "there should never be a free plan"; "fix 6, should
+  have a place to checkout, same with 7 make it accessible"; "a hey your account is going to run
+  out in a few days you need to upgrade"; "we can't advertise that forge is online or else apple
+  will get mad"; and no to ticking Beta on the App Review coach and no to an early build.
+  (1) **Extra video storage is sold**: Free Agent add-on `video_storage` and coach add-on
+  `coach_video_storage` (two ids on purpose: `users.addOnTerms` is one object for both sides, so
+  the id sets stay disjoint). A purchase is OR-ed with the admin's tick in
+  `accountHasExtraVideoStorage` (billing.ts); it never writes `hasVideoStorageAddOn`. The coach
+  one covers the coach's OWN clips only. A coached athlete still cannot buy anything.
+  (2) **Full Personalization is sold**: `COACH_PURCHASABLE_ADD_ON_ORDER` is
+  `["full_bundle","coaches_corner","coach_video_storage"]`. This reverses "Full Personalization is
+  not going to Apple" (2026-10-08). `/api/coach/entitlements` carries `unlocked`/`owned` per add-on.
+  (3) **`server/trial-ending-job.ts`**: daily 17:00 UTC, one email three days ahead, once per END
+  DATE (`subscriptions.trial_ending_notified_for`), only to an account the plan wall would stop.
+  `plan-ended-email.ts` tells a coach when their band is cleared. **Neither email carries a link
+  or names a website.** (4) `/signup?promo=CODE` fills the promo field, for the Instagram link
+  (30 days = a `new_accounts` free-time code Scott creates). (5) The landing page and the plans
+  screen say the trial is 14 days and a plan is needed after.
+  **SCOTT'S TO DO, nothing sells until each exists:** Stripe Prices in
+  `STRIPE_PRICE_FREE_AGENT_ADDON_VIDEO_STORAGE`, `STRIPE_PRICE_COACH_ADDON_FULL_BUNDLE`,
+  `STRIPE_PRICE_COACH_ADDON_COACH_VIDEO_STORAGE`; App Store products `...addon.video_storage_v1`
+  (its own group), `...addon.full_bundle_v1` and `...addon.coach_video_storage_v1` (Coach Add-ons
+  group). The app draws a buy button only for a product the store returned, and the web checkout
+  answers "not set up" without its Price. `a-price-has-a-checkout-and-a-trial-has-a-warning.itest.ts`
+  (10 cases, three mutations caught). Native change (three product ids): `verify_build`, batches.
 - **2026-11-13: A PLAN IS WHAT OPENS THE PAID THINGS (three fixes off the plan audit).** Scott:
   "delete the detailed tabs and fix 1, 2 and 3." (1) **A Free Agent needs a plan once the 14-day
   trial ends.** Nothing ever checked for Basic, so an unpaid account kept everything Basic sells.
