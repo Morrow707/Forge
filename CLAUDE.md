@@ -3837,6 +3837,14 @@ halves before splitting anything else:
   closed, so every new build needs a higher `MARKETING_VERSION` (project.pbxproj, both
   configurations). It is 1.0.1 now; the build number stays the run number. Bump it again after
   each App Store approval. 754 carries the authenticator door and the 12 commits since 741.
+- **2026-11-13: THE MEDICAL CLEARANCE IS OPTIONAL FOR EVERY ATHLETE, SO A FREE AGENT NEEDS NO DOCUMENT
+  TO TRAIN.** Scott, the week 1.0 went live, after a coworker signed up and could not open a workout:
+  "free agents, don't need a medical waiver ... that was more just a coaches could upload to see it
+  was there not necessarily a necessity." `medical_clearance` is `required: false` in
+  `shared/required-documents.ts`; the row stays on both athlete checklists and can still be filed.
+  A rostered athlete's participation waiver is unchanged and still required.
+  `a-free-agent-trains-without-a-medical-letter.itest.ts` drives the real compliance route with
+  enforcement on. Client half: `verify_build`, batches.
 - **2026-11-13: THE REST OF THE COST AUDIT.** Scott: "fix the other things the audit found."
   (1) **Basic is sold as "No AI coach" and three AI features were open on it.** The meal photo
   carries `requirePaidAiAccess("strengthAi")`; the daily readiness note and the weekly summary

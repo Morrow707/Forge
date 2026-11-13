@@ -84,8 +84,16 @@ const ATHLETE_SHARED: RequiredDocument[] = [
   {
     kind: "medical_clearance",
     label: "Medical clearance to participate",
-    required: true,
-    why: "A physician's sign-off that training is safe. Forge asks nothing about this at signup, so if it exists it only exists here.",
+    // OPTIONAL FOR EVERY ATHLETE, AND IT NEVER STOPS ANYBODY TRAINING. Scott, 2026-11-17, the
+    // week 1.0 went live: "free agents, don't need a medical waiver. I just had a coworker signup
+    // and they couldn't exercise because they need a medical waiver. A trained athlete should
+    // have one as they have to for their school, that was more just a coaches could upload to see
+    // it was there not necessarily a necessity." It was `required: true`, and with enforcement on
+    // since 2026-10-11 the document gate walled every Free Agent out of their own workouts for a
+    // physician's letter nobody had asked them for. The row stays so one can be filed and a coach
+    // can see it is there; `required: false` is what keeps it out of missingRequiredDocuments.
+    required: false,
+    why: "If your school or doctor gave you one, add it here so it is on file and your coach can see it. It is not needed to train.",
   },
   {
     kind: "photo_media_release",

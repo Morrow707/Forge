@@ -21,59 +21,78 @@ const seed = readFileSync(join(process.cwd(), "server", "seed.ts"), "utf8");
  * rather than scanned for.
  */
 describe("what the document gate actually blocks", () => {
+  // The mechanism is exercised on an audience that still has required paperwork (a rostered
+  // athlete's participation waiver). A Free Agent has NONE since 2026-11-17 and gets cases of
+  // their own below.
   const freeAgent = documentAudienceFor({ role: "athlete", hasCoach: false });
+  const rostered = documentAudienceFor({ role: "athlete", hasCoach: true });
 
-  it("blocks an account with nothing on file", () => {
-    expect(missingRequiredDocuments(freeAgent, {}).length).toBeGreaterThan(0);
+  it("blocks a rostered account with nothing on file", () => {
+    expect(missingRequiredDocuments(rostered, {}).map((d) => d.kind)).toEqual(["participation_waiver"]);
   });
 
   it("clears once every REQUIRED document is accepted", () => {
     const all = Object.fromEntries(
-      REQUIRED_DOCUMENTS[freeAgent].map((d) => [d.kind, "accepted" as const]),
+      REQUIRED_DOCUMENTS[rostered].map((d) => [d.kind, "accepted" as const]),
     );
-    expect(missingRequiredDocuments(freeAgent, all)).toEqual([]);
+    expect(missingRequiredDocuments(rostered, all)).toEqual([]);
   });
 
   it("does not block on a document nobody was asked for", () => {
     // Only required rows count. A recommended document nobody has is not a gap, and counting it
     // would lock every athlete out forever over a row they were never asked to satisfy.
     const requiredOnly = Object.fromEntries(
-      REQUIRED_DOCUMENTS[freeAgent].filter((d) => d.required).map((d) => [d.kind, "accepted" as const]),
+      REQUIRED_DOCUMENTS[rostered].filter((d) => d.required).map((d) => [d.kind, "accepted" as const]),
     );
-    expect(missingRequiredDocuments(freeAgent, requiredOnly)).toEqual([]);
+    expect(missingRequiredDocuments(rostered, requiredOnly)).toEqual([]);
   });
 
   it("does not block while OUR review queue is the hold-up", () => {
     // They uploaded what was asked for. Blocking here punishes somebody for our backlog.
     const pending = Object.fromEntries(
-      REQUIRED_DOCUMENTS[freeAgent].map((d) => [d.kind, "pending_review" as const]),
+      REQUIRED_DOCUMENTS[rostered].map((d) => [d.kind, "pending_review" as const]),
     );
-    expect(missingRequiredDocuments(freeAgent, pending)).toEqual([]);
+    expect(missingRequiredDocuments(rostered, pending)).toEqual([]);
   });
 
-  it("does not hold up a beta tester over a document that needs a physician", () => {
-    // Requiring a doctor's signature before anybody may open a workout is right on the day
-    // Forge charges money and wrong today -- it would be an empty beta, not a gate.
-    const nothing = {};
-    expect(missingRequiredDocuments(freeAgent, nothing, { beta: true }).map((d) => d.kind))
-      .not.toContain("medical_clearance");
-    // ...and the deferral is exactly that, not a quiet removal: outside beta it blocks again.
-    expect(missingRequiredDocuments(freeAgent, nothing).map((d) => d.kind))
-      .toContain("medical_clearance");
+  it("blocks again when a required document has expired", () => {
+    const expired = Object.fromEntries(
+      REQUIRED_DOCUMENTS[rostered].map((d) => [d.kind, "expired" as const]),
+    );
+    expect(missingRequiredDocuments(rostered, expired).map((d) => d.kind)).toEqual(["participation_waiver"]);
   });
 
-  it("keeps the deferred row ON the checklist", () => {
-    // Hiding it would mean nobody uploads one until the day it suddenly locks them out.
-    for (const kind of BETA_DEFERRED_DOCUMENTS) {
-      expect(REQUIRED_DOCUMENTS[freeAgent].map((d) => d.kind)).toContain(kind);
+  /* A MEDICAL CLEARANCE NEVER STOPS ANYBODY TRAINING. Scott, 2026-11-17, the week 1.0 went live:
+   * a coworker signed up as a Free Agent and could not open a workout because the gate wanted a
+   * physician's letter. "free agents, don't need a medical waiver ... that was more just a coaches
+   * could upload to see it was there not necessarily a necessity." These used to assert the
+   * opposite ("outside beta it blocks again"), which is the rule that walled him out. */
+  it("never blocks a Free Agent: with nothing on file, expired, or rejected", () => {
+    expect(REQUIRED_DOCUMENTS[freeAgent].filter((d) => d.required)).toEqual([]);
+    expect(missingRequiredDocuments(freeAgent, {})).toEqual([]);
+    for (const status of ["expired", "rejected", "missing"] as const) {
+      const every = Object.fromEntries(REQUIRED_DOCUMENTS[freeAgent].map((d) => [d.kind, status]));
+      expect(missingRequiredDocuments(freeAgent, every), status).toEqual([]);
     }
   });
 
-  it("blocks again when a clearance has expired", () => {
-    const expired = Object.fromEntries(
-      REQUIRED_DOCUMENTS[freeAgent].map((d) => [d.kind, "expired" as const]),
-    );
-    expect(missingRequiredDocuments(freeAgent, expired).length).toBeGreaterThan(0);
+  it("never blocks ANY athlete on the medical clearance, whatever its state", () => {
+    for (const audience of [freeAgent, rostered]) {
+      for (const status of ["missing", "expired", "rejected"] as const) {
+        expect(
+          missingRequiredDocuments(audience, { medical_clearance: status }).map((d) => d.kind),
+          `${audience} ${status}`,
+        ).not.toContain("medical_clearance");
+      }
+    }
+  });
+
+  it("keeps the medical clearance ON both athlete checklists, so one can still be filed and seen", () => {
+    // Optional is not removed: the row is how an athlete uploads one and how a coach sees it.
+    for (const kind of BETA_DEFERRED_DOCUMENTS) {
+      expect(REQUIRED_DOCUMENTS[freeAgent].map((d) => d.kind)).toContain(kind);
+      expect(REQUIRED_DOCUMENTS[rostered].map((d) => d.kind)).toContain(kind);
+    }
   });
 });
 
