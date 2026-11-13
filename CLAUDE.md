@@ -3836,10 +3836,10 @@ halves before splitting anything else:
   `/api/athlete/entitlements` carries `aiCoach` and the food scanner's photo button reads it.
   **Left on every plan on purpose:** the exercise swap (Scott's standing decision), the pain
   substitution (the same family, and the safety case), and the goal suggestion and plain-word
-  exercise search (cheap model, hundredths of a cent). **Left open to coached athletes and
-  flagged, not changed:** "make this easier" (`/api/athlete/regress-exercise`) is AI for a
-  coached athlete, which the 2026-10-10 rule forbids, but it was built to report to the coach
-  and is the only way an athlete who cannot do the work says so. Scott's call.
+  exercise search (cheap model, hundredths of a cent). **"Make this easier" is Free Agents only**
+  (Scott, same day: "restrict make this easier to free agents only"):
+  `/api/athlete/regress-exercise` carries `requireFreeAgent` and the workout card draws the
+  button on `useIsFreeAgent() === true`. Regressions already recorded still show.
   (2) **A daily ceiling on model calls per account**, 200, asked inside `callAnthropic`
   (`server/ai-daily-limit.ts`) so a feature added later is covered. It answers empty and never
   throws (unawaited model calls would become unhandled rejections); the middleware beside it

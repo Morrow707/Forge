@@ -7616,7 +7616,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // "This is too hard." A regression of the same movement, not a swap.
-  app.post("/api/athlete/regress-exercise", requireRole("athlete"), async (req, res) => {
+  //
+  // FREE AGENTS ONLY (Scott, 2026-11-13: "restrict make this easier to free agents only"). It is
+  // an AI call, and a coached athlete gets no AI: when the work is too hard, the person who
+  // changes it is their coach. Regressions already recorded stay on the athlete's day and in the
+  // coach's view; this only stops new ones being asked for.
+  app.post("/api/athlete/regress-exercise", requireRole("athlete"), requireFreeAgent, async (req, res) => {
     const parsed = z
       .object({
         assignmentId: z.number().int(),

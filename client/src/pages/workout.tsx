@@ -3551,6 +3551,7 @@ function ExerciseLogContent({
   // wrong for me today), and storage.regressExerciseForAthlete refuses to change
   // the pattern at all. The route and the AI behind it have existed for a while
   // with nothing in the client calling them.
+  const mayAskForEasier = useIsFreeAgent();
   const [regressOpen, setRegressOpen] = useState(false);
   const [regressNote, setRegressNote] = useState("");
   const regressMutation = useMutation({
@@ -3663,11 +3664,11 @@ function ExerciseLogContent({
                 <RefreshCw className="h-3.5 w-3.5" />
               </button>
             )}
-            {/* Athlete-only, and unlike the swap it is not gated on AI program
-                permissions: scaling today's work down is not the same privilege as
-                having the AI rewrite your programming, and an athlete who needs a
-                lighter version should not be the one who cannot ask for it. */}
-            {user?.role === "athlete" && !isCorrective && (
+            {/* A Free Agent only. It is an AI call, and a coached athlete gets no AI:
+                their coach is who changes work that is too hard, and the route refuses
+                them, so the button is not drawn for somebody it would turn away. An
+                explicit true, so it never flashes while the answer is still arriving. */}
+            {user?.role === "athlete" && mayAskForEasier === true && !isCorrective && (
               <button
                 type="button"
                 aria-label={`Ask for an easier version of ${item.exerciseName}`}

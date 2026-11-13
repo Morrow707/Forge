@@ -36,6 +36,7 @@ describe("athlete AI is Free Agent only", () => {
     "/api/athlete/skill-programs/:id/form-check",
     "/api/athlete/assignments/:assignmentId/days/:programDayId/modified-workout",
     "/api/athlete/food/analyze-photo",
+    "/api/athlete/regress-exercise",
   ];
   for (const path of refuses) {
     it(`${path} is behind requireFreeAgent`, () => {

@@ -58,6 +58,12 @@ describe("athlete AI controls follow the account, not the program", () => {
     expect(scanner).toContain("startManualEntry");
   });
 
+  it("gates the easier-version button on it, with an explicit true", () => {
+    const workout = read("client/src/pages/workout.tsx");
+    expect(workout).toContain("const mayAskForEasier = useIsFreeAgent();");
+    expect(workout).toContain('user?.role === "athlete" && mayAskForEasier === true && !isCorrective && (');
+  });
+
   it("gates the AI goal suggestion on it", () => {
     expect(read("client/src/pages/athlete/progress.tsx")).toContain("canSuggest={isFreeAgent}");
   });

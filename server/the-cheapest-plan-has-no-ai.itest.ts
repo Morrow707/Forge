@@ -83,4 +83,21 @@ describe("the AI features that were open on the cheapest plan", () => {
     expect(digest.status).toBe(200);
     expect(digest.body).toBeNull();
   });
+
+  // "Make this easier" is an AI call, so it follows the same rule as the rest: a coached athlete
+  // is refused before anything is looked up, a Free Agent gets past the gate (and is then told
+  // the truth about a day that does not exist, which is not the gate's answer).
+  it("a coached athlete cannot ask for an easier version; a Free Agent gets past the gate", async () => {
+    const FORBIDDEN = 403;
+    const body = { assignmentId: 1, programDayId: 1, programExerciseId: 1 };
+    const coach = await makeCoach();
+    const coached = await freeAgentHolding(null);
+    await addToRoster(coach.id, coached.athlete.id);
+    const refused = await coached.client.post("/api/athlete/regress-exercise", body);
+    expect(refused.status, JSON.stringify(refused.body)).toBe(FORBIDDEN);
+
+    const free = await freeAgentHolding(null);
+    const passed = await free.client.post("/api/athlete/regress-exercise", body);
+    expect(passed.status, JSON.stringify(passed.body)).not.toBe(FORBIDDEN);
+  });
 });
