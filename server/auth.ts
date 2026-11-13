@@ -1509,7 +1509,7 @@ export function setupAuth(app: Express) {
 
   type DeviceGate =
     | { kind: "trusted"; recognized: boolean }
-    | { kind: "approval"; pollToken: string }
+    | { kind: "approval"; pollToken: string; emailSent: boolean }
     | { kind: "unavailable" };
 
   /**
@@ -1633,8 +1633,12 @@ export function setupAuth(app: Express) {
     const location = await resolveLocation(meta.ipAddress);
     if (location) await setApprovalLocation(approval.id, location).catch(() => {});
     const sent = await sendDeviceApprovalEmail(req, user, { ...approval, location }, actionToken);
-    if (!sent) return { kind: "unavailable" };
-    return { kind: "approval", pollToken };
+    // An account with an authenticator app has a second way to approve this device (see
+    // /api/auth/device-approval/authenticator), so a failed email is not a dead end for it:
+    // the step is still drawn and says the email did not go. Without one, there is nothing
+    // the waiting device could do, and the 503 says so.
+    if (!sent && !user.mfaEnabled) return { kind: "unavailable" };
+    return { kind: "approval", pollToken, emailSent: sent };
   }
 
   function completeLogin(req: any, res: any, next: any, user: any) {
@@ -1670,7 +1674,15 @@ export function setupAuth(app: Express) {
           });
         }
         if (gate.kind === "approval") {
-          return res.json({ deviceApprovalRequired: true, pollToken: gate.pollToken, emailHint: maskEmail(user.email) });
+          return res.json({
+            deviceApprovalRequired: true,
+            pollToken: gate.pollToken,
+            emailHint: maskEmail(user.email),
+            emailSent: gate.emailSent,
+            // The person already proved the password; whether this account has an authenticator
+            // is what decides whether the step offers it. Nothing about the code is revealed.
+            authenticatorAvailable: !!user.mfaEnabled,
+          });
         }
         if (user.mfaEnabled && !isMfaEnforcementDisabled() && !mayShortCircuitMfa(gate)) {
           return res.json({ mfaRequired: true, mfaToken: signMfaPendingToken(user.id) });
@@ -1755,6 +1767,55 @@ export function setupAuth(app: Express) {
       // is not remembered, so it has no second factor and still owes the code.
       if (user.mfaEnabled && !isMfaEnforcementDisabled() && !becameTrusted) {
         return res.json({ mfaRequired: true, mfaToken: signMfaPendingToken(user.id) });
+      }
+      completeLogin(req, res, next, user);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * THE AUTHENTICATOR APP APPROVES A NEW DEVICE AS WELL AS THE INBOX DOES.
+   *
+   * Scott, 2026-11-13, with Outlook down and every approval email stuck: "if I could use
+   * Authenticator, have email be the default but have there be a button that switches to
+   * Authenticator." The email exists so a stolen password meets something only the owner holds.
+   * An authenticator code is exactly that -- the secret was scanned from a session the owner
+   * was already signed in to -- so password + code on a new device is the same two factors
+   * password + inbox is. Email stays the default; this is the second door, and only for an
+   * account that has set one up (coach and admin today, `/api/auth/mfa/setup`).
+   *
+   * It decides the SAME approval row the email would have, through the same two atomic calls
+   * (decideApproval, consumeApproval), so the waiting device's poll and any email link both see
+   * an attempt that is already spent and cannot be approved a second time. The device becomes
+   * trusted on the same condition as the email path: only when it identifies itself as the
+   * device that started the attempt. No further code is asked for -- one was just given.
+   * Brute force is held by mfaCodeLimiter, the limiter on the code step itself.
+   */
+  app.post("/api/auth/device-approval/authenticator", mfaCodeLimiter, async (req, res, next) => {
+    try {
+      const pollToken = typeof req.body?.pollToken === "string" ? req.body.pollToken : "";
+      const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
+      const row = pollToken ? await findApprovalByPollToken(pollToken) : null;
+      if (!row) return res.status(404).json({ message: "That sign-in attempt was not found." });
+      const state = approvalState(row);
+      if (state !== "pending") {
+        return res.status(state === "denied" ? 403 : 409).json({ message: `This sign-in was ${state}.`, status: state });
+      }
+      const user = await storage.getUser(row.userId);
+      if (!user) return res.status(401).json({ message: "Account not found" });
+      if (!user.mfaEnabled) {
+        return res.status(400).json({ message: "This account doesn't have an authenticator app set up. Use the email instead." });
+      }
+      if (!code || !(await storage.verifyMfaLogin(user.id, code))) {
+        return res.status(401).json({ message: "Invalid code" });
+      }
+      const decided = await decideApproval(row.id, "approved");
+      const consumed = decided ? await consumeApproval(row.id) : null;
+      if (!consumed) return res.status(409).json({ message: "This sign-in was already decided." });
+      const deviceId = requestDeviceId(req);
+      if (deviceId && hashDeviceId(deviceId) === row.deviceIdHash) {
+        await trustDevice(user.id, deviceId, { deviceLabel: row.deviceLabel, ipAddress: row.ipAddress, location: row.location });
       }
       completeLogin(req, res, next, user);
     } catch (err) {

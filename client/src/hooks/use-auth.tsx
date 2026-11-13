@@ -40,7 +40,16 @@ type SignupPayload = {
 
 type LoginPayload = { email: string; password: string };
 export type MfaPending = { mfaRequired: true; mfaToken: string };
-export type DeviceApprovalPending = { deviceApprovalRequired: true; pollToken: string; emailHint: string };
+export type DeviceApprovalPending = {
+  deviceApprovalRequired: true;
+  pollToken: string;
+  emailHint: string;
+  /** False when the approval email could not be sent; only an account with an authenticator
+   *  app ever gets this far without it. Absent from an older server, which means sent. */
+  emailSent?: boolean;
+  /** This account has an authenticator app, so the step offers it beside the email. */
+  authenticatorAvailable?: boolean;
+};
 type LoginResult = MfaPending | DeviceApprovalPending | (PublicUser & { nativeToken?: string });
 
 type AuthContextValue = {
@@ -61,6 +70,7 @@ type AuthContextValue = {
   loginMutation: ReturnType<typeof useLoginMutation>;
   mfaVerifyMutation: ReturnType<typeof useMfaVerifyMutation>;
   deviceApprovalCompleteMutation: ReturnType<typeof useDeviceApprovalCompleteMutation>;
+  deviceAuthenticatorMutation: ReturnType<typeof useDeviceAuthenticatorMutation>;
   signupMutation: ReturnType<typeof useSignupMutation>;
   logoutMutation: ReturnType<typeof useLogoutMutation>;
 };
@@ -147,6 +157,29 @@ function useDeviceApprovalCompleteMutation(clearSpentLoginAttempt: () => void) {
       clearSpentLoginAttempt();
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't finish signing in"),
+  });
+}
+
+// The other way to approve a new device: a code from the account's authenticator app, typed
+// on the waiting device itself, in place of the email (server/auth.ts,
+// /api/auth/device-approval/authenticator). It ends the attempt exactly as a successful claim
+// does -- a session, then the spent attempt cleared so the step stops being drawable -- and it
+// never hands off to a further code step, because the code was just given.
+function useDeviceAuthenticatorMutation(clearSpentLoginAttempt: () => void) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { pollToken: string; code: string; email: string; password: string }) => {
+      const res = await apiRequest("POST", "/api/auth/device-approval/authenticator", {
+        pollToken: payload.pollToken,
+        code: payload.code,
+      });
+      return (await res.json()) as PublicUser & { nativeToken?: string };
+    },
+    onSuccess: ({ nativeToken, ...user }, variables) => {
+      applyLoginSuccess(qc, nativeToken, user, variables);
+      clearSpentLoginAttempt();
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Invalid code"),
   });
 }
 
@@ -265,6 +298,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const mfaVerifyMutation = useMfaVerifyMutation();
   // reset is stable for the life of the mutation, so this is not a new callback per render.
   const deviceApprovalCompleteMutation = useDeviceApprovalCompleteMutation(loginMutation.reset);
+  const deviceAuthenticatorMutation = useDeviceAuthenticatorMutation(loginMutation.reset);
   const signupMutation = useSignupMutation();
   const logoutMutation = useLogoutMutation();
 
@@ -355,6 +389,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginMutation,
         mfaVerifyMutation,
         deviceApprovalCompleteMutation,
+        deviceAuthenticatorMutation,
         signupMutation,
         logoutMutation,
       }}

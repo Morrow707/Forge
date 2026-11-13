@@ -139,6 +139,8 @@ export default function LoginPage() {
             password={password}
             pollToken={devicePending.pollToken}
             emailHint={devicePending.emailHint}
+            emailSent={devicePending.emailSent !== false}
+            authenticatorAvailable={devicePending.authenticatorAvailable === true}
             onBack={() => {
               loginMutation.reset();
               deviceApprovalCompleteMutation.reset();

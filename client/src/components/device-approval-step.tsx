@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { beginDeviceApprovalClaim } from "@/lib/device-approval-claim";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { MailCheck, ShieldAlert } from "lucide-react";
+import { MailCheck, ShieldAlert, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 type Status = "pending" | "approved" | "denied" | "expired";
@@ -20,23 +22,40 @@ type Status = "pending" | "approved" | "denied" | "expired";
  * new password on the other device, and this one has nothing left to do.
  *
  * email/password ride along only for applyLoginSuccess's keychain save, exactly as
- * MfaLoginStep does -- never sent with the poll or the claim. */
+ * MfaLoginStep does -- never sent with the poll or the claim.
+ *
+ * AN ACCOUNT WITH AN AUTHENTICATOR APP GETS A SECOND DOOR (Scott, 2026-11-13, Outlook down and
+ * the email stuck): the email stays the default, and one button switches the step to a code from
+ * the authenticator, which approves this device on the server in place of the email. See
+ * /api/auth/device-approval/authenticator in server/auth.ts for why that is as strong. */
 export function DeviceApprovalStep({
   email,
   password,
   pollToken: initialPollToken,
   emailHint,
+  emailSent = true,
+  authenticatorAvailable = false,
   onBack,
 }: {
   email: string;
   password: string;
   pollToken: string;
   emailHint: string;
+  emailSent?: boolean;
+  authenticatorAvailable?: boolean;
   onBack: () => void;
 }) {
-  const { deviceApprovalCompleteMutation } = useAuth();
+  const { deviceApprovalCompleteMutation, deviceAuthenticatorMutation } = useAuth();
   const [pollToken, setPollToken] = useState(initialPollToken);
   const [resending, setResending] = useState(false);
+  // Whether an approval email is actually out there to be approved. It starts from the login
+  // answer and turns true the moment a resend succeeds; until then, "waiting for you to approve
+  // it from your email" would describe an email that does not exist.
+  const [emailOut, setEmailOut] = useState(emailSent);
+  // The email did not go, so the code is the only way forward: open on it.
+  const [usingAuthenticator, setUsingAuthenticator] = useState(authenticatorAvailable && !emailSent);
+  const [code, setCode] = useState("");
+  const [useBackupCode, setUseBackupCode] = useState(false);
 
   const { data, isError } = useQuery<{ status: Status }>({
     queryKey: ["/api/auth/device-approval/status", pollToken],
@@ -53,9 +72,17 @@ export function DeviceApprovalStep({
   // that a component-state guard allowed.
   useEffect(() => {
     if (status !== "approved") return;
+    // Approved BY the authenticator code, which already signed this device in: there is
+    // nothing left to claim, and a claim now would only meet a 409.
+    if (deviceAuthenticatorMutation.isPending || deviceAuthenticatorMutation.isSuccess) return;
     if (!beginDeviceApprovalClaim(pollToken)) return;
     deviceApprovalCompleteMutation.mutate({ pollToken, email, password });
-  }, [status, pollToken, email, password, deviceApprovalCompleteMutation]);
+  }, [status, pollToken, email, password, deviceApprovalCompleteMutation, deviceAuthenticatorMutation.isPending, deviceAuthenticatorMutation.isSuccess]);
+
+  function submitCode(e: FormEvent) {
+    e.preventDefault();
+    deviceAuthenticatorMutation.mutate({ pollToken, code: code.trim(), email, password });
+  }
 
   async function resend() {
     setResending(true);
@@ -66,6 +93,7 @@ export function DeviceApprovalStep({
       // ever in the clear at creation), so the fresh token has never been claimed
       // and nothing has to forget the old one.
       setPollToken(body.pollToken);
+      setEmailOut(true);
       deviceApprovalCompleteMutation.reset();
       toast.success("Sent another email");
     } catch (err) {
@@ -77,6 +105,71 @@ export function DeviceApprovalStep({
 
   const denied = status === "denied";
   const expired = status === "expired";
+
+  if (usingAuthenticator && !denied && !expired) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5" />
+            We don't recognize this device
+          </CardTitle>
+          <CardDescription>
+            {useBackupCode
+              ? "Enter one of your saved backup codes to approve this device."
+              : "Enter the 6-digit code from your authenticator app to approve this device."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={submitCode} noValidate className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="device-authenticator-code">{useBackupCode ? "Backup code" : "Code"}</Label>
+              <Input
+                id="device-authenticator-code"
+                autoComplete="one-time-code"
+                autoFocus
+                inputMode={useBackupCode ? "text" : "numeric"}
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder={useBackupCode ? "XXXX-XXXX" : "123456"}
+                maxLength={useBackupCode ? 9 : 6}
+              />
+            </div>
+            <Button type="submit" size="lg" className="w-full" disabled={!code.trim() || deviceAuthenticatorMutation.isPending}>
+              {deviceAuthenticatorMutation.isPending ? "Verifying…" : "Verify"}
+            </Button>
+          </form>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
+            <button
+              type="button"
+              onClick={() => {
+                setUsingAuthenticator(false);
+                setCode("");
+              }}
+              className="font-semibold text-primary hover:underline"
+            >
+              Use the email instead
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setUseBackupCode((v) => !v);
+                setCode("");
+              }}
+              className="text-muted-foreground hover:underline"
+            >
+              {useBackupCode ? "Use authenticator code instead" : "Use a backup code instead"}
+            </button>
+          </div>
+          <div className="mt-3 text-sm">
+            <button type="button" onClick={onBack} className="text-muted-foreground hover:underline">
+              Back
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -90,11 +183,13 @@ export function DeviceApprovalStep({
             ? "The owner of this account said this wasn't them. Every device has been signed out and they are choosing a new password."
             : expired
               ? "That email link has expired. Send a new one to try again."
-              : `We sent an email to ${emailHint}. Open it and approve this device, and this screen will sign you in on its own.`}
+              : emailOut
+                ? `We sent an email to ${emailHint}. Open it and approve this device, and this screen will sign you in on its own.`
+                : `We couldn't send the email to ${emailHint}. Send it again, or use your authenticator app.`}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {!denied && !expired && (
+        {!denied && !expired && (emailOut || status === "approved" || deviceApprovalCompleteMutation.isPending || deviceApprovalCompleteMutation.isError) && (
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted border-t-primary" />
             {deviceApprovalCompleteMutation.isError
@@ -108,6 +203,19 @@ export function DeviceApprovalStep({
                   ? "Still waiting. Having trouble reaching the server, retrying…"
                   : "Waiting for you to approve it from your email…"}
           </div>
+        )}
+        {!denied && !expired && authenticatorAvailable && (
+          <Button
+            type="button"
+            className="w-full"
+            onClick={() => {
+              setUsingAuthenticator(true);
+              setCode("");
+            }}
+          >
+            <ShieldCheck className="mr-2 h-4 w-4" />
+            Use my authenticator app instead
+          </Button>
         )}
         {!denied && (
           <Button type="button" variant="outline" className="w-full" onClick={resend} disabled={resending}>

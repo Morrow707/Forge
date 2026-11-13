@@ -341,3 +341,81 @@ describe("a new device waits on the email", () => {
     expect(list.body.some((d: any) => d.isCurrent)).toBe(true);
   });
 });
+
+/** THE AUTHENTICATOR APP IS THE SECOND DOOR WHEN THE EMAIL DOES NOT ARRIVE (2026-11-13).
+ *
+ * Scott, with Outlook down and the approval email stuck: email stays the default, and a button
+ * switches the waiting device to a code from the authenticator app. These drive the real login
+ * route and the real approval row, because what has to hold is between them: a wrong code does
+ * not open the door, a right one signs the waiting device in and spends the attempt so the
+ * emailed link can no longer decide it, and an account with no authenticator is never offered
+ * the button and is refused if it asks anyway. */
+describe("the authenticator approves a new device in place of the email", () => {
+  // The login limiter is per IP and this file spends its budget early; trust proxy is 1.
+  const ip = { "x-forwarded-for": "203.0.113.91" };
+
+  it("offers the authenticator only to an account that has one", async () => {
+    const plain = await makeLoginableUser({ role: "athlete" });
+    const res = await new TestClient(server.baseUrl).post("/api/auth/login", { email: plain.email, password: TEST_PASSWORD }, ip);
+    expect(res.body.deviceApprovalRequired).toBe(true);
+    expect(res.body.authenticatorAvailable).toBe(false);
+    expect(res.body.emailSent).toBe(true);
+    const refused = await new TestClient(server.baseUrl).post(
+      "/api/auth/device-approval/authenticator",
+      { pollToken: res.body.pollToken, code: "123456" },
+      ip,
+    );
+    expect(refused.status).toBe(400);
+  });
+
+  it("refuses a wrong code, signs in on the right one, trusts the device, and spends the attempt", async () => {
+    const secret = generateSecret();
+    const user = await makeLoginableUser({ role: "admin", mfaEnabled: true, mfaSecret: secret });
+    const phone = new TestClient(server.baseUrl);
+    const first = await phone.post("/api/auth/login", { email: user.email, password: TEST_PASSWORD }, ip);
+    expect(first.body.deviceApprovalRequired).toBe(true);
+    expect(first.body.authenticatorAvailable).toBe(true);
+    const { token } = lastApprovalLink();
+
+    const wrong = await phone.post("/api/auth/device-approval/authenticator", { pollToken: first.body.pollToken, code: "000000" }, ip);
+    expect(wrong.status).toBe(401);
+    expect(phone.hasSessionCookie()).toBe(false);
+
+    const code = await generate({ secret });
+    const right = await phone.post("/api/auth/device-approval/authenticator", { pollToken: first.body.pollToken, code }, ip);
+    expect(right.status).toBe(200);
+    expect(right.body.email).toBe(user.email);
+    expect(right.body.mfaRequired).toBeUndefined();
+    expect(phone.hasSessionCookie()).toBe(true);
+    const me = await phone.get("/api/auth/me");
+    expect(me.status).toBe(200);
+
+    // The device is remembered, exactly as an emailed approval would have left it.
+    const list = await db.select().from(trustedDevices).where(eq(trustedDevices.userId, user.id));
+    expect(list.length).toBe(1);
+
+    // The attempt is spent: the emailed link can no longer decide it, and it cannot be used twice.
+    const decide = await new TestClient(server.baseUrl).post("/api/auth/device-approval/decide", { token, decision: "approve" });
+    expect(decide.status).toBe(409);
+    const again = await new TestClient(server.baseUrl).post(
+      "/api/auth/device-approval/authenticator",
+      { pollToken: first.body.pollToken, code },
+      ip,
+    );
+    expect(again.status).toBe(409);
+  });
+
+  it("a denied attempt cannot be rescued with a code", async () => {
+    const secret = generateSecret();
+    const user = await makeLoginableUser({ role: "coach", mfaEnabled: true, mfaSecret: secret });
+    const phone = new TestClient(server.baseUrl);
+    const first = await phone.post("/api/auth/login", { email: user.email, password: TEST_PASSWORD }, ip);
+    const { token } = lastApprovalLink();
+    const deny = await new TestClient(server.baseUrl).post("/api/auth/device-approval/decide", { token, decision: "deny" });
+    expect(deny.status).toBe(200);
+    const code = await generate({ secret });
+    const late = await phone.post("/api/auth/device-approval/authenticator", { pollToken: first.body.pollToken, code }, ip);
+    expect(late.status).toBe(403);
+    expect(phone.hasSessionCookie()).toBe(false);
+  });
+});
