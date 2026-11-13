@@ -52,7 +52,8 @@ import {
 } from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
 import { storage, CohortQueryBudgetExceeded, CohortQueryDifferencingRefused, leaderboardDisplayName } from "./storage";
-import { redeemPromoCode } from "./promo-codes";
+import { redeemPromoCode, checkoutCodeFor } from "./promo-codes";
+import { checkoutReceipt } from "@shared/checkout-receipt";
 import { promoDiscountMonths, promoPercentOff } from "@shared/promo-codes";
 import { formatTrackingReport, buildTrackingReportEntries } from "./tracking-report";
 import { PRICING_CATALOG_KEYS } from "./pricing-catalog";
@@ -3587,7 +3588,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const program = await storage.createProgramWithStructure(user.id, parsed.data);
-    res.status(201).json(program);
+    // An admin's new program starts UNPOSTED: it is theirs until they post it. Before this
+    // switch every program an admin saved was shown to every coach and Free Agent at once.
+    await storage.setProgramPublished(program.id, false);
+    res.status(201).json({ ...program, isPublished: false });
+  });
+
+  // Post or unpost one of the admin's own programs. Posted, every coach and Free Agent sees it
+  // as a Forge program; unposted, only the admin does.
+  app.post("/api/admin/programs/:id/published", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const owned = await assertCoachOwnsProgram(user.id, id);
+    if (!owned) return res.status(404).json({ message: "Program not found" });
+    const parsed = z.object({ published: z.boolean() }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Say whether it is posted." });
+    const row = await storage.setProgramPublished(id, parsed.data.published);
+    if (!row) return res.status(404).json({ message: "Program not found" });
+    res.json(row);
   });
 
   // Same one-shot draft-then-review flow as /api/coach/programs/ai-draft --
@@ -13908,7 +13926,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const program = await storage.getProgramFull(id);
     if (!program) return res.status(404).json({ message: "Program not found" });
     const { ownerIds } = await storage.getCoachAndAdminOwnerIds(user.id);
-    if (!ownerIds.includes(program.coachId)) {
+    // A Free Agent's readable owners are themselves and the admins, so anything not their own
+    // here is an admin's program, and an admin's program is theirs to read only while posted.
+    if (!ownerIds.includes(program.coachId) || (program.coachId !== user.id && !program.isPublished)) {
       return res.status(404).json({ message: "Program not found" });
     }
     const isOwn = program.coachId === user.id;
@@ -15129,10 +15149,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // shared/free-agent-tiers.ts on why those are two different questions.
       const schema = z.object({
         tier: z.enum(FREE_AGENT_TIER_ORDER as [FreeAgentTierId, ...FreeAgentTierId[]]),
+        promoCode: z.string().trim().max(40).optional(),
       });
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Pick a plan first." });
+      }
+      // A code typed on the receipt is checked AGAIN here, never trusted from the preview: the
+      // preview is a picture, this is the charge.
+      let discount: { couponId: string; codeId: number } | null = null;
+      if (parsed.data.promoCode) {
+        const verdict = await checkoutCodeFor(user.id, parsed.data.promoCode);
+        if (!verdict.ok) return res.status(400).json({ message: verdict.message });
+        discount = { couponId: verdict.couponId, codeId: verdict.codeId };
       }
       const { successUrl, cancelUrl } = checkoutReturnUrls(req, "/athlete/upgrade");
       const result = await createFreeAgentTierCheckout(
@@ -15141,9 +15170,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         parsed.data.tier as FreeAgentTierId,
         successUrl,
         cancelUrl,
+        discount,
       );
       if ("error" in result) return res.status(503).json({ message: result.error });
       res.json(result);
+    },
+  );
+
+  // THE RECEIPT BEFORE THE CHECKOUT (shared/checkout-receipt.ts): the plan's price, and what a
+  // code does to it. It charges nothing and spends nothing; the checkout route above checks the
+  // code again. Web only, like the checkout it previews.
+  app.post(
+    "/api/billing/checkout/free-agent-tier/preview",
+    requireRole("athlete"),
+    requireFreeAgent,
+    requireWebCheckout,
+    async (req, res) => {
+      const user = currentUser(req);
+      const parsed = z
+        .object({
+          tier: z.enum(FREE_AGENT_TIER_ORDER as [FreeAgentTierId, ...FreeAgentTierId[]]),
+          promoCode: z.string().trim().max(40).optional(),
+        })
+        .safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Pick a plan first." });
+      const tier = FREE_AGENT_TIERS[parsed.data.tier as FreeAgentTierId];
+      let codeMessage: string | null = null;
+      let discount: { code: string; percentOff: number; months: number } | null = null;
+      if (parsed.data.promoCode) {
+        const verdict = await checkoutCodeFor(user.id, parsed.data.promoCode);
+        if (verdict.ok) discount = { code: verdict.code, percentOff: verdict.percentOff, months: verdict.months };
+        else codeMessage = verdict.message;
+      }
+      res.json({
+        tier: parsed.data.tier,
+        label: tier.label,
+        codeAccepted: discount != null,
+        codeMessage,
+        receipt: checkoutReceipt(tier.monthlyPriceCents, discount),
+      });
     },
   );
 

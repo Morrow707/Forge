@@ -171,3 +171,48 @@ export async function redeemPromoCode(userId: number, code: string, now: Date = 
     message: `Code applied: full access is free through ${dateWord(inForce)}.`,
   };
 }
+
+/**
+ * A CODE TYPED ON THE CHECKOUT RECEIPT (2026-11-13). Scott: "After profile signup have it show
+ * the plans we offer, and a space to put a coupon code ... We need the credit card info still,
+ * but you get 30 days free."
+ *
+ * This decides nothing by itself and spends nothing: it answers whether THIS account may use
+ * THIS code on a plan it is about to buy by card, and with which Stripe coupon. The checkout
+ * route attaches that coupon to the Stripe session, so Stripe charges what the receipt showed,
+ * and the redemption is recorded when Stripe says the checkout completed (billing.ts), never
+ * before -- a checkout somebody abandons must not spend a limited code.
+ */
+export type CheckoutCodeVerdict =
+  | { ok: true; codeId: number; code: string; couponId: string; percentOff: number; months: number }
+  | { ok: false; message: string };
+
+export async function checkoutCodeFor(userId: number, code: string, now: Date = new Date()): Promise<CheckoutCodeVerdict> {
+  const found = await storage.findRedeemableCode(code);
+  if (!found.ok) return found;
+  const record = found.record;
+  if (await storage.hasRedeemedCode(userId, record.id)) {
+    return { ok: false, message: "You've already used this code" };
+  }
+  const user = await storage.getUser(userId);
+  if (!user) return { ok: false, message: "That code isn't valid" };
+  if (promoAudienceOf(record) === "new_accounts") {
+    // A new-account code is good for its own free days after signup, and never less than the
+    // default window, so a 30-day code typed on day 12 still works at checkout.
+    const windowDays = Math.max(NEW_ACCOUNT_WINDOW_DAYS, promoKindOf(record) === "free_time" ? record.trialDays : 0);
+    if (now.getTime() - user.createdAt.getTime() > windowDays * DAY_MS) {
+      return { ok: false, message: `This code is for accounts in their first ${windowDays} days, and yours is older than that.` };
+    }
+  }
+  if (!record.stripeCouponId) {
+    return { ok: false, message: "This code isn't set up for card checkout yet. Ask Forge support." };
+  }
+  return {
+    ok: true,
+    codeId: record.id,
+    code: record.code,
+    couponId: record.stripeCouponId,
+    percentOff: promoPercentOff(record),
+    months: promoDiscountMonths(record),
+  };
+}

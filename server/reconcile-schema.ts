@@ -3316,6 +3316,23 @@ BEGIN
   END IF;
 END $$;
 
+-- 2026-11-13: an admin posts and unposts their own programs (programs.is_published). Existing
+-- programs stay posted, except the three Scott named as his own the day he asked for the switch
+-- ("Kim's workout, lower body camera, upper body camera"), which are unposted ONCE here so they
+-- stop showing to the public on the deploy rather than on the next app build. After this he
+-- flips the switch himself and a deploy never undoes it.
+ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "is_published" boolean NOT NULL DEFAULT true;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM "applied_backfills" WHERE "key" = 'unpost_admins_own_programs_2026_11_13') THEN
+    UPDATE "programs" p SET "is_published" = false
+      FROM "users" u
+     WHERE u."id" = p."coach_id" AND u."role" = 'admin'
+       AND (p."name" ILIKE '%kim%' OR p."name" ILIKE '%lower body camera%' OR p."name" ILIKE '%upper body camera%');
+    INSERT INTO "applied_backfills" ("key") VALUES ('unpost_admins_own_programs_2026_11_13');
+  END IF;
+END $$;
+
 -- A parent/guardian's own consent for an under-13 athlete, logged when they
 -- claim their linked account (see storage.claimGuardianInvite). Under-13
 -- athletes can self-register now, so the only consent behind such an account

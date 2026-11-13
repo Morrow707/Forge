@@ -48,6 +48,7 @@ import { ApiError, apiRequest } from "@/lib/queryClient";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
 import { forgeCodeEntryIsAllowed } from "@/lib/forge-code-entry";
+import { checkoutReceipt, type CheckoutReceipt } from "@shared/checkout-receipt";
 import { formatCents } from "@shared/billing-tiers";
 
 /** The add-on half of GET /api/athlete/entitlements -- see sport-coaches.tsx for
@@ -225,10 +226,48 @@ export default function AthleteUpgrade() {
 
   /** Web only. Hands off to Stripe's hosted checkout rather than collecting
    * a card here -- no card detail ever touches this app. */
+  // THE ORDER, BEFORE THE CARD (web only). Picking a plan opens a receipt: the price, a place
+  // for a code, and what the code does to today's total. The numbers come from the server
+  // (shared/checkout-receipt.ts), which attaches the same code's coupon to the Stripe checkout,
+  // so the receipt and the charge cannot disagree.
+  const [orderTier, setOrderTier] = useState<FreeAgentTierId | null>(null);
+  // Arriving straight from signup (?welcome=1), with any code typed there (?code=CODE). The
+  // code box only exists where a Forge code may be typed, so the carried code is dropped in the
+  // native app along with it.
+  const arrivedFromSignup = new URLSearchParams(window.location.search).get("welcome") === "1";
+  const carriedCode = forgeCodeEntryIsAllowed()
+    ? (new URLSearchParams(window.location.search).get("code")?.trim().toUpperCase() ?? "")
+    : "";
+  const [orderCode, setOrderCode] = useState(carriedCode);
+  const [appliedCode, setAppliedCode] = useState(carriedCode);
+  const { data: orderPreview, isFetching: orderPreviewLoading } = useQuery<{
+    codeAccepted: boolean;
+    codeMessage: string | null;
+    receipt: CheckoutReceipt;
+  }>({
+    queryKey: ["/api/billing/checkout/free-agent-tier/preview", orderTier, appliedCode],
+    queryFn: async () => {
+      const res = await apiRequest("POST", "/api/billing/checkout/free-agent-tier/preview", {
+        tier: orderTier,
+        promoCode: appliedCode || undefined,
+      });
+      return res.json();
+    },
+    enabled: orderTier !== null,
+  });
+  const orderReceipt: CheckoutReceipt | null =
+    orderTier === null
+      ? null
+      : (orderPreview?.receipt ?? checkoutReceipt(FREE_AGENT_TIERS[orderTier].monthlyPriceCents, null));
+
   async function startWebCheckout(tier: FreeAgentTierId) {
     setCheckoutTier(tier);
     try {
-      const res = await apiRequest("POST", "/api/billing/checkout/free-agent-tier", { tier });
+      const res = await apiRequest("POST", "/api/billing/checkout/free-agent-tier", {
+        tier,
+        // Only a code the receipt accepted rides the checkout; a refused one would fail it.
+        promoCode: orderPreview?.codeAccepted ? appliedCode : undefined,
+      });
       const { url } = await res.json();
       window.location.href = url;
     } catch (err) {
@@ -371,6 +410,18 @@ export default function AthleteUpgrade() {
           ) : undefined
         }
       >
+        {arrivedFromSignup && !planRequired && !currentTier && (
+          <Card className="mb-6 border-primary/40" data-testid="welcome-pick-a-plan">
+            <CardContent className="p-5">
+              <p className="font-display text-base font-bold uppercase tracking-wide">
+                Welcome to Forge. Pick your plan
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                These are the plans. Choose one to see your total before anything is charged.
+              </p>
+            </CardContent>
+          </Card>
+        )}
         {planRequired && (
           <Card className="mb-6 border-primary/40" data-testid="plan-required-banner">
             <CardContent className="p-5">
@@ -402,7 +453,9 @@ export default function AthleteUpgrade() {
             the paid features is a purchase mechanism outside In-App Purchase, whoever wrote the
             row. The native app draws the App Store code button above instead -- Apple's own
             offer-code sheet -- and nothing here. See lib/forge-code-entry.ts. */}
-        {forgeCodeEntryIsAllowed() && (
+        {/* With no plan yet, a code goes on the order receipt below, where the card is taken. This
+            box is for an account that already has a plan and is given a discount on it. */}
+        {forgeCodeEntryIsAllowed() && currentTier && (
         <Card className="mt-6" data-testid="forge-promo-code">
           <CardContent className="space-y-3 p-5">
             {trialEndsAt ? (
@@ -494,8 +547,13 @@ export default function AthleteUpgrade() {
                         Your current plan
                       </p>
                     ) : webBillingOpen ? (
-                      <Button onClick={() => startWebCheckout(id)} disabled={checkoutTier !== null}>
-                        {checkoutTier === id ? "Opening checkout..." : currentTier ? "Switch to this plan" : "Subscribe"}
+                      <Button
+                        variant={orderTier === id ? "secondary" : "default"}
+                        onClick={() => setOrderTier(id)}
+                        disabled={checkoutTier !== null}
+                        data-testid={`button-choose-plan-${id}`}
+                      >
+                        {orderTier === id ? "Selected" : currentTier ? "Switch to this plan" : "Choose this plan"}
                       </Button>
                     ) : (
                       <p className="rounded-md border border-border px-3 py-2 text-center text-xs text-muted-foreground">
@@ -507,6 +565,80 @@ export default function AthleteUpgrade() {
               );
             })}
           </div>
+        )}
+        {!supported && !androidNative && webBillingOpen && orderTier && orderReceipt && (
+          <Card className="mt-6 border-primary/50" data-testid="order-receipt">
+            <CardContent className="space-y-4 p-5">
+              <p className="font-display text-lg font-bold uppercase tracking-wide">Your order</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span>{FREE_AGENT_TIERS[orderTier].label}, monthly</span>
+                  <span data-testid="receipt-price">{formatCents(orderReceipt.monthlyPriceCents)}</span>
+                </div>
+                {orderReceipt.discount && (
+                  <div className="flex items-center justify-between gap-3 text-success">
+                    <span data-testid="receipt-discount-label">
+                      Code {orderReceipt.discount.code}:{" "}
+                      {orderReceipt.discount.percentOff === 100
+                        ? `free for ${orderReceipt.discount.months} month${orderReceipt.discount.months === 1 ? "" : "s"}`
+                        : `${orderReceipt.discount.percentOff}% off for ${orderReceipt.discount.months} month${orderReceipt.discount.months === 1 ? "" : "s"}`}
+                    </span>
+                    <span data-testid="receipt-discount">-{formatCents(orderReceipt.discountCentsPerMonth)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-3 border-t border-border pt-2 text-base font-bold">
+                  <span>Due today</span>
+                  <span data-testid="receipt-due-today">{formatCents(orderReceipt.dueTodayCents)}</span>
+                </div>
+                <p className="text-xs text-muted-foreground" data-testid="receipt-summary">
+                  {orderReceipt.summary}
+                </p>
+              </div>
+              {forgeCodeEntryIsAllowed() && (
+                <div className="space-y-1.5">
+                  <p className="text-sm font-semibold">Have a coupon code?</p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={orderCode}
+                      onChange={(e) => setOrderCode(e.target.value.toUpperCase())}
+                      placeholder="CODE"
+                      autoCapitalize="characters"
+                      autoComplete="off"
+                      maxLength={30}
+                      className="font-mono uppercase"
+                      aria-label="Coupon code"
+                      data-testid="input-order-code"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setAppliedCode(orderCode.trim())}
+                      disabled={orderPreviewLoading || orderCode.trim() === appliedCode}
+                      data-testid="button-apply-order-code"
+                    >
+                      {orderPreviewLoading ? "Checking…" : "Apply"}
+                    </Button>
+                  </div>
+                  {appliedCode && orderPreview && !orderPreview.codeAccepted && (
+                    <p className="text-xs text-destructive" data-testid="order-code-refused">
+                      {orderPreview.codeMessage ?? "That code isn't valid"}
+                    </p>
+                  )}
+                </div>
+              )}
+              <Button
+                className="w-full"
+                onClick={() => startWebCheckout(orderTier)}
+                disabled={checkoutTier !== null || orderPreviewLoading}
+                data-testid="button-checkout"
+              >
+                {checkoutTier ? "Opening checkout..." : "Checkout"}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Your card is entered on the next page, with Stripe. Forge never sees the card number.
+              </p>
+            </CardContent>
+          </Card>
         )}
         {!supported && !androidNative && <SubscriptionLegalLinks className="mt-4" />}
         {/* All Classes (2026-10-04): the one add-on on sale, on top of any tier. */}

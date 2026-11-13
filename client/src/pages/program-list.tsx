@@ -52,6 +52,8 @@ type ProgramSummary = {
   isForgeOfficial?: boolean;
   ownerLabel?: string;
   editable?: boolean;
+  /** Admin library only: whether this program is posted for everybody or kept to the admin. */
+  isPublished?: boolean;
 };
 
 type RosterEntry = { id: number; name: string; email: string };
@@ -144,6 +146,20 @@ export function ProgramListPage({
       navigate(`${routeBase}/${program.id}`);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not create program"),
+  });
+
+  // Admin only: post a program for everybody, or take it back so only the admin sees it.
+  const canPost = apiBase === "/api/admin";
+  const publishMutation = useMutation({
+    mutationFn: async (vars: { id: number; published: boolean }) => {
+      await apiRequest("POST", `${apiBase}/programs/${vars.id}/published`, { published: vars.published });
+      return vars;
+    },
+    onSuccess: (vars) => {
+      qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
+      toast.success(vars.published ? "Posted. Everyone can see it now." : "Unposted. Only you can see it now.");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not change who sees this program"),
   });
 
   const deleteMutation = useMutation({
@@ -371,6 +387,21 @@ export function ProgramListPage({
                     )}
                   </div>
                 </div>
+                {canPost && p.editable !== false && typeof p.isPublished === "boolean" && (
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
+                    <span className="text-xs text-muted-foreground" data-testid={`program-posted-state-${p.id}`}>
+                      {p.isPublished ? "Posted: everyone can see it" : "Not posted: only you can see it"}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant={p.isPublished ? "outline" : "default"}
+                      disabled={publishMutation.isPending}
+                      onClick={() => publishMutation.mutate({ id: p.id, published: !p.isPublished })}
+                    >
+                      {p.isPublished ? "Unpost" : "Post"}
+                    </Button>
+                  </div>
+                )}
                 {showAssign && (
                   <Button
                     size="sm"

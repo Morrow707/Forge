@@ -3788,6 +3788,19 @@ function cameraCaptureEvidence() {
   );
 }
 
+/**
+ * Who may see a program besides the people who own it. A program belongs to its owner's staff;
+ * an ADMIN's program is also everybody's (a "Forge" program) while it is posted. Unposted, it
+ * is the admin's alone. The ONE rule for the list, the detail, assigning and the Free Agent's
+ * read, so a program hidden from the list cannot still be opened by its id.
+ */
+export function programIsVisibleTo(
+  program: { coachId: number; isPublished: boolean; coach: { role: string } },
+  viewerStaffIds: number[],
+): boolean {
+  return viewerStaffIds.includes(program.coachId) || (program.coach.role === "admin" && program.isPublished);
+}
+
 export const storage = {
   // ---------- Users ----------
   // Memoised for the life of one request (server/request-cache.ts): the auth layer loads this
@@ -17070,6 +17083,7 @@ Hard rules, no exceptions:
       name: p.name,
       description: p.description,
       createdAt: p.createdAt,
+      isPublished: p.isPublished,
       weekCount: p.weeks.length,
       dayCount: p.weeks.reduce((acc, w) => acc + w.days.length, 0),
       assignedAthleteCount: new Set(p.assignments.map((a) => a.athleteId)).size,
@@ -17089,7 +17103,9 @@ Hard rules, no exceptions:
       },
       orderBy: desc(programs.createdAt),
     });
-    return progs.map((p) => {
+    // An admin's program is everybody's only while it is posted; the viewer's own staff's
+    // programs are theirs either way.
+    return progs.filter((p) => programIsVisibleTo(p, coachIds)).map((p) => {
       const { weeks, assignments, ...ownership } = this.withOwnership(p, coachId, coachIds);
       return {
         ...ownership,
@@ -17150,9 +17166,8 @@ Hard rules, no exceptions:
       },
     });
     if (!program) return null;
-    const isForgeOfficial = program.coach.role === "admin";
     const coachIds = await this.getEffectiveCoachIds(requestingUserId);
-    if (!coachIds.includes(program.coachId) && !isForgeOfficial) return null;
+    if (!programIsVisibleTo(program, coachIds)) return null;
     return this.withOwnership(program, requestingUserId, coachIds);
   },
 
@@ -17166,10 +17181,20 @@ Hard rules, no exceptions:
       with: { coach: true },
     });
     if (!program) return null;
-    const isForgeOfficial = program.coach.role === "admin";
     const coachIds = await this.getEffectiveCoachIds(coachId);
-    if (!coachIds.includes(program.coachId) && !isForgeOfficial) return null;
+    if (!programIsVisibleTo(program, coachIds)) return null;
     return program;
+  },
+
+  // Post or unpost an admin's program (programs.isPublished). The caller has already checked
+  // the program is the admin's own.
+  async setProgramPublished(programId: number, published: boolean) {
+    const [row] = await db
+      .update(programs)
+      .set({ isPublished: published })
+      .where(eq(programs.id, programId))
+      .returning({ id: programs.id, isPublished: programs.isPublished });
+    return row ?? null;
   },
 
   async createProgramWithStructure(

@@ -2123,6 +2123,13 @@ export const programs = pgTable("programs", {
   // when it's already the program's author, not when it would be silently
   // rewriting a coach's program for an athlete.
   aiAuthored: boolean("ai_authored").notNull().default(false),
+  // Whether an ADMIN's program is posted for everybody (coaches and Free Agents see it as a
+  // Forge program) or kept to its author. Scott, 2026-11-13: "I need a way as an admin to post
+  // and unpost workouts so only the admin can see." It means nothing on a program a coach or an
+  // athlete owns, which was never shared outside its own staff. A program an admin creates
+  // starts unposted (the admin routes write false); the column default is true only so every
+  // program that existed before the switch stays exactly as visible as it was.
+  isPublished: boolean("is_published").notNull().default(true),
 });
 
 // A named, phase-tagged span of one or more weeks within a program (e.g.

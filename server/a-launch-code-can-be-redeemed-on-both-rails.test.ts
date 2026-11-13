@@ -33,7 +33,13 @@ describe("the web rail: every sale checkout accepts a Stripe promotion code", ()
         // the record it produces mean something else.
         expect(head).not.toContain("allow_promotion_codes");
       } else {
+        // The Free Agent tier checkout takes one or the other since 2026-11-13: a Forge code the
+        // receipt already accepted goes on as the session's discount, and Stripe refuses a
+        // session carrying both. With no code it still offers Stripe's own box.
         expect(head).toContain("allow_promotion_codes: true");
+        if (head.includes("discounts:")) {
+          expect(head).toMatch(/discount \? \{ discounts: \[\{ coupon: discount\.couponId \}\] \} : \{ allow_promotion_codes: true \}/);
+        }
       }
     }
     expect(sessions.filter((s) => s.slice(0, 400).includes("baseSessionParams(guardianId"))).toHaveLength(1);

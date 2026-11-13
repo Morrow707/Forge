@@ -3837,6 +3837,29 @@ halves before splitting anything else:
   closed, so every new build needs a higher `MARKETING_VERSION` (project.pbxproj, both
   configurations). It is 1.0.1 now; the build number stays the run number. Bump it again after
   each App Store approval. 754 carries the authenticator door and the 12 commits since 741.
+- **2026-11-13: FOUR MORE FIRST-WEEK FIXES, SHIPPED TOGETHER** (Scott: "Queue them all and ship them all
+  together"). (1) **An admin posts and unposts their own programs** (`programs.is_published`,
+  `programIsVisibleTo` in storage.ts is the ONE rule for the list, the detail, assigning and the Free
+  Agent's read; `POST /api/admin/programs/:id/published`; a Post / Unpost row on the admin program
+  card). A program an admin creates starts UNPOSTED; existing ones stayed posted except the three
+  Scott named, unposted once by the `unpost_admins_own_programs_2026_11_13` one-shot (name match on
+  kim / lower body camera / upper body camera). Skill programs have no such switch yet. (2) **A Forge
+  program is editable on screen and a save makes the reader's own copy** (program-builder.tsx:
+  `ownsProgram`, "Save as my copy", POST not PUT, day ids dropped, the original never written; a
+  program only looked at is not copied when added to the calendar). (3) **Signup asks first and last
+  name** and stores them as one "First Last" name. (4) **A new Free Agent lands on the plans**
+  (`/athlete/upgrade?welcome=1`), and on the WEB picking a plan opens a receipt with a coupon box
+  (`shared/checkout-receipt.ts`, `checkoutCodeFor` in promo-codes.ts,
+  `POST /api/billing/checkout/free-agent-tier/preview`). The accepted code's Stripe coupon goes on
+  the checkout session (`discounts`, never beside `allow_promotion_codes`; `payment_method_collection:
+  "always"` so a card is taken at $0), and the redemption is recorded when Stripe confirms. Free time
+  is whole monthly bills: 30 days one, 60 two, 90 three; a 45-day code rounds to two. A Free Agent's
+  code typed at signup is no longer redeemed there (that gave free time with no card); it rides to
+  the receipt. A coach's signup code is unchanged. **The coupon box is never in the iPhone app**
+  (Guideline 3.1.1, the third rejection): there the plans screen sells through the App Store and a
+  discount is an App Store offer code. **NOT checked against real Stripe**: the session arguments are
+  pinned by `checkout-session.test.ts`, no live checkout was run. `the-first-week-live-fixes.itest.ts`
+  (8 cases, three mutations caught); all five screens watched in a real browser.
 - **2026-11-13: THE MEDICAL CLEARANCE IS OPTIONAL FOR EVERY ATHLETE, SO A FREE AGENT NEEDS NO DOCUMENT
   TO TRAIN.** Scott, the week 1.0 went live, after a coworker signed up and could not open a workout:
   "free agents, don't need a medical waiver ... that was more just a coaches could upload to see it

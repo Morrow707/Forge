@@ -227,3 +227,29 @@ describe("when Stripe answers without a URL", () => {
     expect(result).toHaveProperty("error");
   });
 });
+
+describe("a Forge code on the Free Agent tier checkout (2026-11-13)", () => {
+  it("with no code, Stripe's own code box is offered and a card is always collected", async () => {
+    const billing = await loadBilling(true);
+    vi.stubEnv("STRIPE_PRICE_FREE_AGENT_BASIC", "price_basic");
+    await billing.createFreeAgentTierCheckout(1, "a@b.test", "basic", "s", "c");
+    const args = sessionsCreate.mock.calls[0][0];
+    expect(args.allow_promotion_codes).toBe(true);
+    expect(args.discounts).toBeUndefined();
+    expect(args.payment_method_collection).toBe("always");
+    expect(args.metadata.promoCodeId).toBeUndefined();
+  });
+
+  it("with a code, its coupon is the session's discount, the card is still collected, and the code is named for the webhook", async () => {
+    const billing = await loadBilling(true);
+    vi.stubEnv("STRIPE_PRICE_FREE_AGENT_BASIC", "price_basic");
+    await billing.createFreeAgentTierCheckout(1, "a@b.test", "basic", "s", "c", { couponId: "coupon_30", codeId: 7 });
+    const args = sessionsCreate.mock.calls[0][0];
+    // Stripe refuses a session carrying both, so the box must be absent, not false.
+    expect("allow_promotion_codes" in args).toBe(false);
+    expect(args.discounts).toEqual([{ coupon: "coupon_30" }]);
+    expect(args.payment_method_collection).toBe("always");
+    expect(args.metadata.promoCodeId).toBe("7");
+    expect(args.line_items).toEqual([{ price: "price_basic", quantity: 1 }]);
+  });
+});

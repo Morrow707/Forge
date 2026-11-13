@@ -326,7 +326,13 @@ export function ProgramBuilderPage({
     queryKey: ["/api/coach/roster"],
     enabled: showAssign,
   });
-  const editable = program?.editable !== false;
+  // A program the reader does not own (a Forge program) is still EDITABLE on screen; what
+  // changes is where a save goes. Scott, 2026-11-13: "have the athlete be able to edit them,
+  // but rather than editing the master copy, it creates an actual copy for them ... sometimes
+  // certain equipment won't be available so they need to be able to adjust." So a save here
+  // creates the reader's own program and opens it; the original is never written.
+  const ownsProgram = program?.editable !== false;
+  const editable = true;
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -475,6 +481,18 @@ export function ProgramBuilderPage({
 
   const weekChunks = chunkIntoWeeks(days);
 
+  // What the screen held when it first loaded, so a Forge program that was only LOOKED at is
+  // not copied the moment somebody adds it to their calendar. Only a real change makes a copy.
+  const currentShape = JSON.stringify({ name, description, days, weekNames, blocks, weekBlockKeys });
+  const [loadedShape, setLoadedShape] = useState<string | null>(null);
+  useEffect(() => {
+    if (hydrated && loadedShape === null) setLoadedShape(currentShape);
+  }, [hydrated, loadedShape, currentShape]);
+  const changedSinceLoad = loadedShape !== null && loadedShape !== currentShape;
+  // Saving is needed before assigning when it is the reader's own program (as before), or when
+  // they changed somebody else's and so need their own copy to assign.
+  const needsSaveFirst = ownsProgram || changedSinceLoad;
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const payload = {
@@ -493,7 +511,8 @@ export function ProgramBuilderPage({
               ? blocks.findIndex((b) => b.key === weekBlockKeys[wi])
               : null,
           days: chunk.map((d, di) => ({
-            ...(d.serverId != null ? { id: d.serverId } : {}),
+            // A copy is a new program: it must not carry the original's day ids.
+            ...(ownsProgram && d.serverId != null ? { id: d.serverId } : {}),
             dayNumber: di + 1,
             title: d.title,
             isRestDay: d.isRestDay,
@@ -513,12 +532,22 @@ export function ProgramBuilderPage({
           })),
         })),
       };
+      if (!ownsProgram) {
+        const copyName = name.trim() === (program?.name ?? "").trim() ? `${name.trim()} (My copy)` : name;
+        const res = await apiRequest("POST", `${apiBase}/programs`, { ...payload, name: copyName });
+        return { ...(await res.json()), savedAsCopy: true as const };
+      }
       const res = await apiRequest("PUT", `${apiBase}/programs/${programId}`, payload);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (saved: any) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
       clearProgramDraft(apiBase, programId);
+      if (saved?.savedAsCopy && saved.id) {
+        toast.success("Saved as your own copy. The Forge original is unchanged.");
+        navigate(`${routeBase}/${saved.id}`);
+        return;
+      }
       toast.success("Program saved");
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not save program"),
@@ -531,7 +560,8 @@ export function ProgramBuilderPage({
   // unsaved on screen would otherwise silently ship the old version.
   const selfAssignMutation = useMutation({
     mutationFn: async () => {
-      if (editable) await saveMutation.mutateAsync();
+      const saved = needsSaveFirst ? await saveMutation.mutateAsync() : null;
+      const assignId = saved?.savedAsCopy && saved.id ? saved.id : programId;
       // Every day is chosen on screen now, so every day is sent. No pattern is left for
       // the server to re-derive the untouched days from, and a partial map would
       // silently fall back to a back-to-back grid for whatever was not edited.
@@ -542,7 +572,7 @@ export function ProgramBuilderPage({
         ]),
       );
       const res = await apiRequest("POST", `${apiBase}/my/assignments`, {
-        programId,
+        programId: assignId,
         startDate: selfAssignDate,
         dateOverrides:
           effectiveOverrides.size > 0 ? Object.fromEntries(effectiveOverrides) : undefined,
@@ -610,7 +640,7 @@ export function ProgramBuilderPage({
                   // by side) would silently hand the athlete a stale or even
                   // empty program while the coach's screen shows the days
                   // they just built.
-                  if (editable) {
+                  if (needsSaveFirst) {
                     try {
                       await saveMutation.mutateAsync();
                     } catch {
@@ -632,7 +662,7 @@ export function ProgramBuilderPage({
                   // Same reasoning as "Assign Program" above -- save first
                   // so this can't land a stale (or empty) version on the
                   // calendar.
-                  if (editable) {
+                  if (needsSaveFirst) {
                     try {
                       await saveMutation.mutateAsync();
                     } catch {
@@ -648,14 +678,15 @@ export function ProgramBuilderPage({
               </Button>
             )}
           </div>
-          {editable && (
+          {(ownsProgram || changedSinceLoad) && (
             <Button
               className="w-full sm:w-auto"
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
+              data-testid="button-save-program"
             >
               <Save className="h-4 w-4" />
-              {saveMutation.isPending ? "Saving…" : "Save Program"}
+              {saveMutation.isPending ? "Saving…" : ownsProgram ? "Save Program" : "Save as my copy"}
             </Button>
           )}
         </div>
@@ -667,10 +698,10 @@ export function ProgramBuilderPage({
             isForgeOfficial={!!program.isForgeOfficial}
             ownerLabel={program.ownerLabel}
           />
-          {!editable && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+          {!ownsProgram && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground" data-testid="text-forge-copy-note">
               <Lock className="h-3 w-3" />
-              Forge official — read-only
+              Forge program. Change anything you need; saving makes your own copy and leaves the original as it is.
             </span>
           )}
         </div>

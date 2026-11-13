@@ -72,7 +72,12 @@ export default function SignupPage() {
   // code already filled in -- just enter name/email/password and go.
   const prefilledCode = new URLSearchParams(window.location.search).get("code") ?? "";
   const [role, setRole] = useState<"coach" | "athlete">("athlete");
-  const [name, setName] = useState("");
+  // First and last name are asked for separately (Scott, 2026-11-13: two Taylors are told apart
+  // by last name, two Wilsons by first) and stored as one "First Last" name, which is what every
+  // roster, search and email already reads.
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const name = `${firstName.trim()} ${lastName.trim()}`.trim();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [coachCode, setCoachCode] = useState(prefilledCode.toUpperCase());
@@ -176,6 +181,12 @@ export default function SignupPage() {
     if (isFreeAgentAttemptRef.current && !welcomeDismissed) {
       return <FreeAgentWelcomeDialog onContinue={() => setWelcomeDismissed(true)} />;
     }
+    // A new Free Agent lands on the plans, not the dashboard: Scott's coworker signed up and
+    // "forge never asked which plan he wanted". Any code typed above rides along.
+    if (isFreeAgentAttemptRef.current && user.role === "athlete") {
+      const carried = forgeCodeEntryIsAllowed() && promoCode.trim() ? `&code=${encodeURIComponent(promoCode.trim().toUpperCase())}` : "";
+      return <Redirect to={`/athlete/upgrade?welcome=1${carried}`} />;
+    }
     return (
       <Redirect
         to={
@@ -223,6 +234,10 @@ export default function SignupPage() {
       );
       return;
     }
+    if (!firstName.trim() || !lastName.trim()) {
+      setFormError("Enter both your first name and your last name.");
+      return;
+    }
     setFormError("");
     isFreeAgentAttemptRef.current = role === "athlete" && !coachCode.trim();
     signupMutation.mutate({
@@ -243,7 +258,12 @@ export default function SignupPage() {
       expectedAthletes: role === "coach" && !joiningStaff ? expectedAthletesNum : undefined,
       agreedToTerms: true,
       researchDataConsent: researchConsent,
-      promoCode: promoCodeApplies && promoCode.trim() ? promoCode.trim().toUpperCase() : undefined,
+      // A COACH's code is redeemed with the signup, as before (it moves the program's trial).
+      // A FREE AGENT's is NOT: Scott, 2026-11-13, "We need the credit card info still, but you
+      // get 30 days free." So it is carried to the plans screen that follows signup, where the
+      // receipt shows nothing due today and the card checkout applies it.
+      promoCode:
+        promoCodeApplies && role === "coach" && promoCode.trim() ? promoCode.trim().toUpperCase() : undefined,
     });
   }
 
@@ -366,16 +386,31 @@ export default function SignupPage() {
             </div>
 
             <form onSubmit={handleSubmit} noValidate className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="name">Full name</Label>
-                <Input
-                  id="name"
-                  autoComplete="name"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Jordan Smith"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="firstName">First name</Label>
+                  <Input
+                    id="firstName"
+                    autoComplete="given-name"
+                    required
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Jordan"
+                    data-testid="input-first-name"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="lastName">Last name</Label>
+                  <Input
+                    id="lastName"
+                    autoComplete="family-name"
+                    required
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Smith"
+                    data-testid="input-last-name"
+                  />
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>
@@ -731,8 +766,8 @@ function FreeAgentWelcomeDialog({ onContinue }: { onContinue: () => void }) {
             </p>
             <p className="text-muted-foreground">
               The full AI coach is available as a paid upgrade: conversational AI program
-              building, an AI form-check review of your lifts, and the AI chat coach. You can see the
-              plans any time under Upgrade in the app.
+              building, an AI form-check review of your lifts, and the AI chat coach. The plans
+              are on the next screen.
             </p>
           </div>
         </div>

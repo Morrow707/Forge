@@ -462,6 +462,10 @@ export async function createFreeAgentTierCheckout(
   tier: FreeAgentTierId,
   successUrl: string,
   cancelUrl: string,
+  // A Forge code already checked for this account (promo-codes.ts checkoutCodeFor). Its coupon
+  // goes on the session, so Stripe's page shows and charges what Forge's receipt showed. Stripe
+  // refuses a session carrying both a discount and the type-a-code box, so it is one or the other.
+  discount?: { couponId: string; codeId: number } | null,
 ): Promise<CheckoutResult> {
   const closed = chargingClosed();
   if (closed) return closed;
@@ -471,10 +475,17 @@ export async function createFreeAgentTierCheckout(
   if (!priceId) return { error: `No Stripe price configured for the ${tier} tier yet.` };
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
-    allow_promotion_codes: true,
+    ...(discount ? { discounts: [{ coupon: discount.couponId }] } : { allow_promotion_codes: true }),
+    // A card is collected even when today's total is $0, so the plan continues after free time.
+    payment_method_collection: "always",
     ...(await baseSessionParams(userId, userEmail)),
     line_items: [{ price: priceId, quantity: 1 }],
-    metadata: { kind: "free_agent_tier", userId: String(userId), tier },
+    metadata: {
+      kind: "free_agent_tier",
+      userId: String(userId),
+      tier,
+      ...(discount ? { promoCodeId: String(discount.codeId) } : {}),
+    },
     subscription_data: { metadata: { kind: "free_agent_tier", userId: String(userId), tier } },
     success_url: successUrl,
     cancel_url: cancelUrl,
@@ -1688,6 +1699,19 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
           ...(supersededAppleTransactionId ? { appleOriginalTransactionId: null } : {}),
         });
         await storage.updateFreeAgentBilling(userId, { freeAgentTier: purchasedFreeAgentTier });
+        // A Forge code that rode this checkout is spent NOW, when Stripe says the checkout
+        // completed, so an abandoned checkout never uses up a limited code. Best-effort: the
+        // purchase has succeeded and a bookkeeping failure must not undo it.
+        const promoCodeId = Number(session.metadata?.promoCodeId);
+        if (Number.isInteger(promoCodeId) && promoCodeId > 0) {
+          try {
+            if (!(await storage.hasRedeemedCode(userId, promoCodeId))) {
+              await storage.recordCodeRedemption(userId, promoCodeId);
+            }
+          } catch (err) {
+            console.warn(`Promo code ${promoCodeId} redemption not recorded for user ${userId}: ${(err as Error).message}`);
+          }
+        }
         if (supersededAppleTransactionId) {
           // LOUD, because this is money leaving and nothing else in the system will notice: the
           // App Store subscription carries on charging until the person stops it in iOS
