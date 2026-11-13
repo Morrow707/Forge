@@ -6518,6 +6518,16 @@ writer to any of them, say which other place the same fact lives in.
   keeps `callAnthropic`'s discard-on-truncation rule from eating a prose answer.
   `DEVICE_VERIFICATION_DISABLED=true` is the kill switch for an email-provider outage. With no
   email provider configured at all (a dev box) the gate stands down and says so once.
+- **THE AUTHENTICATOR APP IS THE SECOND DOOR** (2026-11-13, Scott, with Outlook delivering the
+  approval emails an hour late: "have email be the default but have there be a button that
+  switches to Authenticator"). An account with an authenticator app set up (coach and admin) sees
+  "Use my authenticator app instead" on the new-device step; the code approves the SAME approval
+  row through `decideApproval` + `consumeApproval` (`POST /api/auth/device-approval/authenticator`,
+  `mfaCodeLimiter`), so the emailed link can no longer decide it and the device is trusted on the
+  same condition as the email path. Password + code is the same two factors as password + inbox.
+  If the email cannot be sent at all and the account has an authenticator, the step opens on the
+  code instead of the old 503. An account with no authenticator is never offered it and is
+  refused 400. Three cases in `new-device-approval.itest.ts`; accepting a wrong code reds one.
 - **The test harness pre-trusts its client.** `loginAs` calls `trustClientDevice` first, so the
   sixty-odd HTTP tests that are not about this gate never meet it. Under vitest `sendEmail`
   captures to `testOutbox` instead of returning not_configured, which is how the approval test
