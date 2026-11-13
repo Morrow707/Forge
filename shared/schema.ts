@@ -10960,6 +10960,9 @@ export type PublicUser = Omit<
   // because a linked guardian's card has not yet been charged once (counsel, 2026-10-03: the
   // emailed claim alone is not verifiable parental consent under COPPA for Forge's data).
   guardianVerificationRequired?: boolean;
+  // Athletes only: a Free Agent whose trial has ended and who holds no plan. The client sends
+  // them to the plans screen; server/free-agent-plan.ts is the rule and the wall.
+  planRequired?: boolean;
   // Athletes only, and the OTHER reason the same gate holds someone: no date of birth on file, so
   // their tier cannot be derived and nobody can say whether they need a guardian at all. Separate
   // from guardianLinkRequired because the two need different screens -- waiting on a parent is

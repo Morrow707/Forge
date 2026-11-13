@@ -100,6 +100,20 @@ export interface BillingAccount {
   trialExpiresAt: Date | null;
 }
 
+/** Whether a program's plan is paid for right now, read off the PRIMARY coach's row.
+ *
+ * Added 2026-11-13 (Scott: "fix 1, 2 and 3"). Until then nothing asked this: the camera, the
+ * skills side and every coach AI tool opened for any coach account, and for any athlete on any
+ * coach's roster, whether or not anybody was paying. `billingTier` is the record of what was
+ * bought (written by the Stripe webhook or an admin, cleared by clearCoachBand when the
+ * subscription ends), so it is the one column that says a plan is live. The comp, the promo
+ * trial and the enforcement switch open it exactly as they open every other entitlement. */
+export function coachPlanIsPaidFor(account: BillingAccount): boolean {
+  const trialActive = account.trialExpiresAt != null && account.trialExpiresAt.getTime() > Date.now();
+  if (!ENFORCEMENT_ENABLED || account.isBetaAccount || trialActive) return true;
+  return Boolean(account.billingTier && BILLING_TIERS[account.billingTier as BillingTierId]);
+}
+
 /** Resolves what a primary coach's org is actually entitled to. Fully
  * unlocked whenever enforcement is globally off, the account is still
  * marked beta, or an active redeemed-code trial hasn't expired yet (see

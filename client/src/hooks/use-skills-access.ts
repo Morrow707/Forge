@@ -7,6 +7,7 @@ export type SkillsAccessReason =
   | "coached_athlete"
   | "entitled"
   | "held_seat_history_only"
+  | "coach_plan_inactive"
   | "tier_excludes_skills";
 
 /** Mirrors the server's SkillsAccess (server/routes.ts, skillsAccessFor). TWO booleans rather

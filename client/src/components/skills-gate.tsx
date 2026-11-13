@@ -67,6 +67,26 @@ export function SkillsGate({ children, title = "Skills" }: { children: ReactNode
     // their coach -- so "See plans" as the primary action would be answering a question they did
     // not ask. It names where their numbers still are, because they are still there and the
     // whole point of a hold rather than a removal is that nothing was lost.
+    if (access.reason === "coach_plan_inactive") {
+      // The program's plan is not live. No "See plans": the plan is the program's, so neither a
+      // coached athlete nor a coach can fix it from the Free Agent plans screen.
+      return (
+        <AppShell title={title}>
+          <Card className="mt-6">
+            <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+              <PauseCircle className="h-10 w-10 text-muted-foreground" />
+              <p className="max-w-sm text-muted-foreground">
+                Skill sessions are paused because your program's Forge plan isn't active. Every
+                drill already recorded is still on file.
+              </p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                This opens again as soon as the program's plan does.
+              </p>
+            </CardContent>
+          </Card>
+        </AppShell>
+      );
+    }
     if (access.reason === "held_seat_history_only") {
       return (
         <AppShell title={title}>

@@ -72,8 +72,16 @@ describe("self-training video uploads are not athlete-only", () => {
     // exemption has to be found wherever the decision actually lives.
     const at = routes.indexOf("async function cameraAccessFor");
     expect(at).toBeGreaterThan(-1);
-    const block = routes.slice(at, at + 1600);
-    expect(block).toContain('user.role === "coach" || user.role === "admin"');
+    // Restated 2026-11-13, when a coach's camera started following the PROGRAM's plan: an admin
+    // is always allowed, a coach is decided by coachPlanIsActive, and neither ever reaches the
+    // Free Agent tier check -- which is the property this case exists for. Bounded by the
+    // function's own closing brace at column zero, never a character count.
+    const block = routes.slice(at, routes.indexOf("\n}\n", at));
+    expect(block).toContain('if (user.role === "admin") return { allowed: true');
+    const coachBranch = block.slice(block.indexOf('if (user.role === "coach") {'), block.indexOf("athleteHasCoach"));
+    expect(coachBranch).toContain("coachPlanIsActive(user.id)");
+    expect(coachBranch).not.toContain("hasAthletePaidForAiAccess");
+    expect(block.indexOf('user.role === "coach"')).toBeLessThan(block.indexOf("hasAthletePaidForAiAccess"));
   });
 
   it("makes the route gate and the client ask the SAME function", () => {

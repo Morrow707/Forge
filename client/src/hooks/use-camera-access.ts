@@ -6,7 +6,9 @@ export type CameraAccessReason =
   | "coach_or_admin"
   | "coached_athlete"
   | "entitled"
-  | "tier_excludes_camera";
+  | "tier_excludes_camera"
+  // The program this account films on has no live plan (a coach with none, or their athlete).
+  | "coach_plan_inactive";
 
 export type CameraAccess = { allowed: boolean; reason: CameraAccessReason };
 

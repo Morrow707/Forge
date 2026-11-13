@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
+import { useAuth } from "@/hooks/use-auth";
 import { FreeAgentGate } from "@/components/free-agent-gate";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -180,6 +181,7 @@ export default function AthleteUpgrade() {
   const googleLive = googleSupported && !!googleLiveConfig?.enabled;
 
   const qc = useQueryClient();
+  const planRequired = useAuth().user?.planRequired === true;
   const { data: entitlements } = useQuery<AddOnEntitlements>({
     queryKey: ["/api/athlete/entitlements"],
     queryFn: () => getJson("/api/athlete/entitlements"),
@@ -267,6 +269,9 @@ export default function AthleteUpgrade() {
       }
       refetch();
       void qc.invalidateQueries({ queryKey: ["/api/athlete/entitlements"] });
+      // The plan wall follows the account's own flag, so a purchase has to refresh it or the
+      // athlete stays parked on this screen with a plan they just bought.
+      void qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
     } catch (err) {
       if (err instanceof ApplePurchaseCancelledError || err instanceof GooglePlayPurchaseCancelledError) {
         // Athlete backed out of the store's purchase sheet -- not an error.
@@ -365,6 +370,18 @@ export default function AthleteUpgrade() {
           ) : undefined
         }
       >
+        {planRequired && (
+          <Card className="mb-6 border-primary/40" data-testid="plan-required-banner">
+            <CardContent className="p-5">
+              <p className="font-display text-base font-bold uppercase tracking-wide">
+                Your free trial has ended
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Pick a plan to keep training. Everything you have logged is still here.
+              </p>
+            </CardContent>
+          </Card>
+        )}
         {/* A FORGE CODE, ON THE WEB ONLY. This card used to say Apple's rules did not reach it
             because it writes Forge's own trial row rather than buying a store product; App
             Review read it the other way on 2026-11-06 (Guideline 3.1.1, "the app uses promo

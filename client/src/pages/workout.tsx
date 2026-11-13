@@ -3795,6 +3795,15 @@ function ExerciseLogContent({
       {item.trackingLevel !== "none" && cameraAllowed && <CameraMetricCaveat dismissible />}
       {/* The access read failed, so no tracker control is drawn -- and that has to be SAID, or a
           coach with every right to film sees the button missing and has nothing to act on. */}
+      {/* The program's plan is not live, so the record button is not drawn. Say why: a button
+          that quietly disappears reads as a bug to somebody who filmed here last week. */}
+      {item.trackingLevel !== "none" && cameraAccess.reason === "coach_plan_inactive" && (
+        <p className="py-2 text-sm text-muted-foreground" data-testid="camera-paused-plan-inactive">
+          {user?.role === "athlete"
+            ? "The camera is paused because your coach's Forge plan isn't active. You can still log this set by hand."
+            : "The camera is paused because your program's Forge plan isn't active. You can still log this set by hand."}
+        </p>
+      )}
       {item.trackingLevel !== "none" && cameraAccess.failed && (
         <ReadFailed what="whether the camera is available to you" onRetry={cameraAccess.retry} className="flex flex-col items-start gap-2 py-2" />
       )}

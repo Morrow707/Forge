@@ -42,6 +42,7 @@ import { mountFeatureUsageCounter, registerFeatureUsage } from "./feature-usage"
 import { hashPassword, comparePasswords } from "./auth-utils";
 import {
   getEntitlements,
+  coachPlanIsPaidFor,
   type Entitlements,
   getFreeAgentEntitlements,
   syncCoachSubscriptionBand,
@@ -95,6 +96,7 @@ import { coreAgreementText } from "./seed-data/signup-agreement";
 import { addOnIsActive, withinRefundWindow, ADD_ON_CANCELLATION_POLICY } from "@shared/add-on-terms";
 import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier, ageFromDateOfBirth } from "@shared/privacy-tiers";
 import { BILLING_LIVE, ENFORCEMENT_ENABLED } from "./billing";
+import { freeAgentPlanRequired, planWallCovers, FREE_AGENT_PLAN_REQUIRED_MESSAGE } from "./free-agent-plan";
 import {
   createBillingPortalSession,
   createCoachAddOnCheckout,
@@ -888,6 +890,61 @@ async function getEntitlementsForCoach(coachId: number): Promise<Entitlements> {
   return getEntitlements(primary!);
 }
 
+/* IS ANYBODY PAYING FOR THIS PROGRAM. Added 2026-11-13 (Scott: "fix 1, 2 and 3").
+ *
+ * The camera, the skills side and the coach AI tools used to open on `role === "coach"` alone,
+ * and for an athlete on "has a coach" alone -- so a coach account that never bought a plan was a
+ * free AI Coach + Video, and (there being no roster cap) could hand the camera to any number of
+ * athletes for nothing. Resolved off the PRIMARY coach like every other program entitlement, so
+ * an assistant reads the program's answer. A new coach's 14-day sign-up trial counts, the same
+ * way a Free Agent's does. An admin is never a customer. */
+async function coachPlanIsActive(coachId: number): Promise<boolean> {
+  if (testingUnlockAllPaywalls) return true;
+  const coachIds = await storage.getEffectiveCoachIds(coachId);
+  const primary = await storage.getUser(coachIds[0]);
+  if (!primary) return false;
+  if (primary.role === "admin") return true;
+  if (coachPlanIsPaidFor(primary)) return true;
+  const sub = await storage.getSubscriptionForUser(primary.id);
+  return (
+    sub?.accountType === "coach" &&
+    sub.status === "trialing" &&
+    sub.trialEndsAt != null &&
+    sub.trialEndsAt.getTime() > Date.now()
+  );
+}
+
+/** True when at least one coach this athlete is ACTIVELY on the roster of has a live plan. */
+async function athleteHasPayingCoach(athleteId: number): Promise<boolean> {
+  const coaches = await storage.getCoachesForAthlete(athleteId);
+  for (const coach of coaches) {
+    if (await coachPlanIsActive(coach.id)) return true;
+  }
+  return false;
+}
+
+export const COACH_PLAN_INACTIVE_FOR_COACH =
+  "Your program's Forge plan isn't active, so the camera, skill sessions and AI tools are paused. Everything you have saved is still here.";
+export const COACH_PLAN_INACTIVE_FOR_ATHLETE =
+  "Your coach's Forge plan isn't active, so the camera and skill sessions are paused. Everything you have recorded is still here, and they open again when your coach's plan does.";
+
+function coachPlanInactiveRefusal(res: any, role: string) {
+  // 403, never 402 with freeAgentPaywall: the client draws "See plans" off that, and neither of
+  // these people can buy their way out on that screen -- the plan is the program's.
+  return res.status(403).json({
+    message: role === "athlete" ? COACH_PLAN_INACTIVE_FOR_ATHLETE : COACH_PLAN_INACTIVE_FOR_COACH,
+    coachPlanInactive: true,
+  });
+}
+
+/** On every coach route that spends on AI. An admin passes; a coach needs a live plan. */
+async function requireActiveCoachPlan(req: any, res: any, next: any) {
+  const user = currentUser(req);
+  if (user.role !== "coach") return next();
+  if (await coachPlanIsActive(user.id)) return next();
+  return coachPlanInactiveRefusal(res, "coach");
+}
+
 // The single gate for every Free Agent AI route below (program building AND
 // the general AI chat coach) -- true iff this athlete currently has zero
 // coaches. Once they join a team, the coach is their guidance now, not the
@@ -1129,7 +1186,7 @@ function requirePaidAiAccess(entitlement: AiEntitlement) {
 export type CameraAccess = {
   allowed: boolean;
   /** Why, in a form the client can branch on without re-deriving the rule. */
-  reason: "coach_or_admin" | "coached_athlete" | "entitled" | "tier_excludes_camera";
+  reason: "coach_or_admin" | "coached_athlete" | "entitled" | "tier_excludes_camera" | "coach_plan_inactive";
 };
 
 /**
@@ -1152,16 +1209,21 @@ async function cameraAccessFor(user: { id: number; email: string; role: string }
   // /coach/my and /admin/my render the very same workout page with the very same
   // tracker dialogs. Without this they reached the tracker, recorded, analysed,
   // and then got "And the video didn't save either: Forbidden".
-  if (user.role === "coach" || user.role === "admin") {
-    return { allowed: true, reason: "coach_or_admin" };
+  if (user.role === "admin") return { allowed: true, reason: "coach_or_admin" };
+  if (user.role === "coach") {
+    return (await coachPlanIsActive(user.id))
+      ? { allowed: true, reason: "coach_or_admin" }
+      : { allowed: false, reason: "coach_plan_inactive" };
   }
   // A coached athlete's video is bounded by their team's retention cap rather than by a Free
   // Agent tier, so the tier question never arises for them.
-  if (await athleteHasCoach(user.id)) return { allowed: true, reason: "coached_athlete" };
+  // A coached athlete films on the PROGRAM's plan, so the program has to have one. A tier the
+  // athlete holds themselves (bought before they joined) is still honoured below.
+  const coached = await athleteHasCoach(user.id);
+  if (coached && (await athleteHasPayingCoach(user.id))) return { allowed: true, reason: "coached_athlete" };
   const hasPaid = await hasAthletePaidForAiAccess(user.id, user.email, "video");
-  return hasPaid
-    ? { allowed: true, reason: "entitled" }
-    : { allowed: false, reason: "tier_excludes_camera" };
+  if (hasPaid) return { allowed: true, reason: "entitled" };
+  return { allowed: false, reason: coached ? "coach_plan_inactive" : "tier_excludes_camera" };
 }
 
 export type SkillsAccess = {
@@ -1174,6 +1236,7 @@ export type SkillsAccess = {
     | "coached_athlete"
     | "entitled"
     | "held_seat_history_only"
+    | "coach_plan_inactive"
     | "tier_excludes_skills";
 };
 
@@ -1191,8 +1254,13 @@ export type SkillsAccess = {
  * FreeAgentTierDef.hasSkills.
  */
 async function skillsAccessFor(user: { id: number; email: string; role: string }): Promise<SkillsAccess> {
-  if (user.role === "coach" || user.role === "admin") {
-    return { allowed: true, canRecord: true, reason: "coach_or_admin" };
+  if (user.role === "admin") return { allowed: true, canRecord: true, reason: "coach_or_admin" };
+  if (user.role === "coach") {
+    // The library and the history stay open (a coach builds skill programs for a roster with
+    // them); what a plan buys is RECORDING, which is the camera.
+    return (await coachPlanIsActive(user.id))
+      ? { allowed: true, canRecord: true, reason: "coach_or_admin" }
+      : { allowed: true, canRecord: false, reason: "coach_plan_inactive" };
   }
   // THE SEATS, NOT athleteHasCoach(), AND THAT IS THE WHOLE OF THE OFF-SEASON CARVE-OUT.
   // getCoachSeatsForAthlete is the raw relationship -- every seat, parked or not -- so it is the
@@ -1200,7 +1268,8 @@ async function skillsAccessFor(user: { id: number; email: string; role: string }
   // (it resolves through getCoachesForAthlete, where isNull(heldAt) has already dropped the
   // parked ones). Same read classGateFor uses, for the same reason.
   const seats = await storage.getCoachSeatsForAthlete(user.id);
-  if (seats.some((seat) => seat.heldAt == null)) {
+  const activelyCoached = seats.some((seat) => seat.heldAt == null);
+  if (activelyCoached && (await athleteHasPayingCoach(user.id))) {
     return { allowed: true, canRecord: true, reason: "coached_athlete" };
   }
   // PAID IS ASKED BEFORE PARKED, deliberately: a parked athlete who holds AI Coach + Video is
@@ -1214,6 +1283,9 @@ async function skillsAccessFor(user: { id: number; email: string; role: string }
   // mechanics drills already on file, so the off season is not the moment those stop opening --
   // and unlike a Free Agent who never held a tier, this athlete HAS recorded sessions, which is
   // exactly the distinction. New recording is a capability and is bought; history is theirs.
+  // Coached, and nobody is paying for the program: what they recorded stays readable, the
+  // same shape as a parked seat, and for the same reason -- it is theirs.
+  if (activelyCoached) return { allowed: true, canRecord: false, reason: "coach_plan_inactive" };
   if (seats.length > 0) {
     return { allowed: true, canRecord: false, reason: "held_seat_history_only" };
   }
@@ -1257,6 +1329,7 @@ async function requireSkillsRecording(req: any, res: any, next: any) {
   const user = currentUser(req);
   const access = await skillsAccessFor(user);
   if (!access.canRecord) {
+    if (access.reason === "coach_plan_inactive") return coachPlanInactiveRefusal(res, user.role);
     if (access.reason === "held_seat_history_only") {
       return res.status(403).json({
         message:
@@ -1280,6 +1353,7 @@ async function requireVideoTrackingAccess(req: any, res: any, next: any) {
   const user = currentUser(req);
   const access = await cameraAccessFor(user);
   if (!access.allowed) {
+    if (access.reason === "coach_plan_inactive") return coachPlanInactiveRefusal(res, user.role);
     return res.status(402).json({
       message: "Camera-tracking video is part of AI Coach + Video. Upgrade to unlock it.",
       freeAgentPaywall: true,
@@ -1773,6 +1847,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // THE PLAN WALL (2026-11-13). A Free Agent whose trial has ended and who holds no plan cannot
+  // write new training. See server/free-agent-plan.ts for who is asked and who never is. It sits
+  // after the guardian gate on purpose: a held minor is told about their guardian first. 402
+  // with freeAgentPaywall, because this is the one refusal the plans screen really does answer.
+  app.use(async (req, res, next) => {
+    if (!planWallCovers(req.method, req.path)) return next();
+    const user = req.isAuthenticated?.() ? (req.user as any) : null;
+    if (!user || user.role !== "athlete") return next();
+    if (!(await freeAgentPlanRequired(user))) return next();
+    return res.status(402).json({
+      message: FREE_AGENT_PLAN_REQUIRED_MESSAGE,
+      freeAgentPaywall: true,
+      planRequired: true,
+    });
+  });
+
   // Apple's Shared Web Credentials verification -- fetched by iOS itself
   // (not the app) over HTTPS on install/first launch, cached on-device, and
   // never re-fetched from inside a request the app makes, so this has to be
@@ -2114,7 +2204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // criteria for the client to apply, never exercise rows directly, so a
   // failed/unconfigured AI call just means the button does nothing rather
   // than something the caller has to specially handle.
-  app.post("/api/coach/exercises/ai-search", requireRole("coach"), async (req, res) => {
+  app.post("/api/coach/exercises/ai-search", requireRole("coach"), requireActiveCoachPlan, async (req, res) => {
     const parsed = z.object({ query: z.string().trim().min(1).max(200) }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
     const result = await storage.interpretExerciseSearchQuery(parsed.data.query);
@@ -2703,7 +2793,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Shared by both a coach (their own class) and an admin (a Forge class);
   // ownership of the class itself is still enforced by the classes PUT
   // route that actually persists this URL onto a content page.
-  app.post("/api/classes/lesson-quiz/draft", requireRole(["coach", "admin"]), async (req, res) => {
+  app.post("/api/classes/lesson-quiz/draft", requireRole(["coach", "admin"]), requireActiveCoachPlan, async (req, res) => {
     const parsed = z
       .object({
         pages: z.array(z.object({ title: z.string().trim().max(200).optional(), body: z.string().trim().min(1).max(20000) })).min(1).max(30),
@@ -2719,7 +2809,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Flashcards drafted from a lesson's pages, for the class builder (coach or admin). The
   // pages are sent as typed, saved or not, so an unsaved lesson can be drafted too.
-  app.post("/api/classes/lesson-flashcards/draft", requireRole(["coach", "admin"]), async (req, res) => {
+  app.post("/api/classes/lesson-flashcards/draft", requireRole(["coach", "admin"]), requireActiveCoachPlan, async (req, res) => {
     const parsed = z
       .object({
         pages: z.array(z.object({ title: z.string().trim().max(200).optional(), body: z.string().trim().min(1).max(20000) })).min(1).max(30),
@@ -3204,6 +3294,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: BILLING_ADD_ONS[id].description,
         monthlyPriceCents: BILLING_ADD_ONS[id].monthlyPriceCents,
       })),
+      // Whether the program's plan is live: the camera, skill recording and the coach AI tools
+      // follow it (coachPlanIsActive). The client says so instead of drawing dead buttons.
+      planActive: await coachPlanIsActive(user.id),
       billingOpen: BILLING_LIVE,
     });
   });
@@ -3590,7 +3683,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // knowledge library is not a source a coach's class may draw on (docs/legal-open-questions.md,
   // question 12). The result is a draft the coach reviews in their own builder; nothing is
   // created here.
-  app.post("/api/coach/classes/ai-draft", requireRole("coach"), async (req, res) => {
+  app.post("/api/coach/classes/ai-draft", requireRole("coach"), requireActiveCoachPlan, async (req, res) => {
     const schema = z
       .object({
         documentText: z.string().trim().min(1).max(60000).optional(),
@@ -5771,7 +5864,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // draft to /api/coach/programs itself (same as "Create & Build" or
   // "Duplicate"), landing the coach in the full builder to review and edit
   // before it's ever assigned to an athlete.
-  app.post("/api/coach/programs/ai-draft", requireRole("coach"), async (req, res) => {
+  app.post("/api/coach/programs/ai-draft", requireRole("coach"), requireActiveCoachPlan, async (req, res) => {
     const user = currentUser(req);
     const parsed = generateProgramDraftSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -5797,7 +5890,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // review), just transcribed verbatim from a photo instead of generated
   // from a prompt. See generateProgramDraftFromPhoto's own comment for why
   // this doesn't share ai-draft's exercise-catalog-enum constraint.
-  app.post("/api/coach/programs/photo-draft", requireRole("coach"), async (req, res) => {
+  app.post("/api/coach/programs/photo-draft", requireRole("coach"), requireActiveCoachPlan, async (req, res) => {
     const user = currentUser(req);
     const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
     if (!parsed.success) {
@@ -5840,7 +5933,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(messages);
   });
 
-  app.post("/api/coach/programs/:id/chat", requireRole("coach"), async (req, res) => {
+  app.post("/api/coach/programs/:id/chat", requireRole("coach"), requireActiveCoachPlan, async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
     const owned = await assertCoachOwnsProgram(user.id, id);
@@ -7584,7 +7677,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // athlete's rehab work is not something software should change unattended.
   app.post(
     "/api/coach/roster/:athleteId/suggest-correctives",
-    requireRole("coach"),
+    requireRole("coach"), requireActiveCoachPlan,
     async (req, res) => {
       // currentUser + user.id rather than req.user!.id, matching every other
       // coach roster route in this file. cross-tenant-scoping.test.ts reads
@@ -8448,7 +8541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.send(pdf);
   });
 
-  app.post("/api/coach/movement-screens/batteries/:id/analyze-photo", requireRole("coach"), async (req, res) => {
+  app.post("/api/coach/movement-screens/batteries/:id/analyze-photo", requireRole("coach"), requireActiveCoachPlan, async (req, res) => {
     const user = currentUser(req);
     const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
@@ -8556,7 +8649,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // that isn't actually on it -- the client's row data is never trusted for
   // authorization, only for content.
 
-  app.post("/api/coach/roster/testing-day/analyze-photo", requireRole("coach"), async (req, res) => {
+  app.post("/api/coach/roster/testing-day/analyze-photo", requireRole("coach"), requireActiveCoachPlan, async (req, res) => {
     const user = currentUser(req);
     const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
@@ -8599,7 +8692,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ applied });
   });
 
-  app.post("/api/coach/roster/weigh-in/analyze-photo", requireRole("coach"), async (req, res) => {
+  app.post("/api/coach/roster/weigh-in/analyze-photo", requireRole("coach"), requireActiveCoachPlan, async (req, res) => {
     const user = currentUser(req);
     const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
@@ -8637,7 +8730,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ applied });
   });
 
-  app.post("/api/coach/roster/nutrition/analyze-photo", requireRole("coach"), async (req, res) => {
+  app.post("/api/coach/roster/nutrition/analyze-photo", requireRole("coach"), requireActiveCoachPlan, async (req, res) => {
     const user = currentUser(req);
     const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
@@ -8674,7 +8767,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ applied });
   });
 
-  app.post("/api/coach/roster/injury-intake/analyze-photo", requireRole("coach"), async (req, res) => {
+  app.post("/api/coach/roster/injury-intake/analyze-photo", requireRole("coach"), requireActiveCoachPlan, async (req, res) => {
     const user = currentUser(req);
     const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
@@ -8715,7 +8808,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // OVR/Perch (velocity-based training device) printout/screen import --
   // see importedTestingData's schema comment for why this lands as its own
   // reviewable log instead of being wired into a program's tracked sets.
-  app.post("/api/coach/roster/testing-data-import/analyze-photo", requireRole("coach"), async (req, res) => {
+  app.post("/api/coach/roster/testing-data-import/analyze-photo", requireRole("coach"), requireActiveCoachPlan, async (req, res) => {
     const user = currentUser(req);
     const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
@@ -8769,7 +8862,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // this creates provisional slots instead of live accounts. No roster to
   // match against (these are new people), so analyze-photo just returns
   // raw candidates for the coach to review before any slot is created.
-  app.post("/api/coach/roster/player-intake/analyze-photo", requireRole("coach"), async (req, res) => {
+  app.post("/api/coach/roster/player-intake/analyze-photo", requireRole("coach"), requireActiveCoachPlan, async (req, res) => {
     const parsed = z.object({ images: photoImagesSchema }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
     const result = await storage.analyzePlayerIntakePhoto(parsed.data.images);
@@ -8830,7 +8923,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // read route below is shared with the athlete's own view of it.
   app.post(
     "/api/coach/roster/:athleteId/weakness-report",
-    requireRole("coach"),
+    requireRole("coach"), requireActiveCoachPlan,
     async (req, res) => {
       const user = currentUser(req);
       const athleteId = Number(req.params.athleteId);
@@ -9003,7 +9096,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // yet or AI isn't configured, so the form just shows no suggestion.
   app.post(
     "/api/coach/roster/:athleteId/goals/suggest",
-    requireRole("coach"),
+    requireRole("coach"), requireActiveCoachPlan,
     async (req, res) => {
       const user = currentUser(req);
       const athleteId = Number(req.params.athleteId);
@@ -10319,6 +10412,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // per week.
   app.get("/api/coach/digest", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
+    // Fired by the dashboard on its own, so an unpaid program gets null (what it already gets
+    // with no AI configured) and never a rendered error.
+    if (!(await coachPlanIsActive(user.id))) return res.json(null);
     const { digest, isNew } = await storage.getOrCreateCoachDigest(user.id);
     if (isNew && digest) {
       await notifyUser(
@@ -11379,7 +11475,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // load -- same "coach clicks a button" cost-consciousness as
   // /api/coach/roster/:athleteId/weakness-report's own generate action,
   // since this calls Claude.
-  app.get("/api/coach/roster/:athleteId/exercises/:exerciseId/form-overwatch", requireRole("coach"), async (req, res) => {
+  app.get("/api/coach/roster/:athleteId/exercises/:exerciseId/form-overwatch", requireRole("coach"), requireActiveCoachPlan, async (req, res) => {
     const user = currentUser(req);
     const athleteId = Number(req.params.athleteId);
     const exerciseId = Number(req.params.exerciseId);

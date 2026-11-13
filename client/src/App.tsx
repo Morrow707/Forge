@@ -258,6 +258,7 @@ function ProtectedRoute({
   component: ComponentType;
 }) {
   const { user, isLoading, isError } = useAuth();
+  const [routeLocation] = useLocation();
 
   // A StoreKit transaction replayed before the session was known is held in apple-iap.ts;
   // the moment this route sees a signed-in user it is sent again. No-op off iOS and when
@@ -294,6 +295,13 @@ function ProtectedRoute({
   }
   if (user.role === "athlete" && (user.guardianLinkRequired || user.guardianVerificationRequired)) {
     return <GuardianPendingPage />;
+  }
+  // A Free Agent whose trial has ended and who holds no plan gets the plans screen, whichever
+  // athlete page they asked for. The server refuses their training writes regardless (the plan
+  // wall in server/routes.ts); this is what turns a screen of failed saves into one clear choice.
+  // The plans screen itself has to stay reachable, or the redirect would loop.
+  if (user.role === "athlete" && user.planRequired && !routeLocation.startsWith("/athlete/upgrade")) {
+    return <Redirect to="/athlete/upgrade" />;
   }
   return <Component />;
 }

@@ -9,6 +9,7 @@ import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import { z } from "zod";
 import type { Express, RequestHandler } from "express";
+import { freeAgentPlanRequired } from "./free-agent-plan";
 import { storage } from "./storage";
 import { redeemPromoCode } from "./promo-codes";
 import { cancelSubscriptionsForDeletedAccount, rebillCoachBandAfterJoin } from "./billing";
@@ -366,6 +367,9 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
     publicUser.guardianLinkRequired = gate === "needs_guardian";
     publicUser.guardianVerificationRequired = gate === "needs_guardian_verification";
     publicUser.dateOfBirthRequired = gate === "needs_date_of_birth";
+    // A Free Agent past their trial with no plan: the client sends them to the plans screen
+    // rather than drawing an app whose every save answers 402. The wall in routes.ts enforces.
+    publicUser.planRequired = await freeAgentPlanRequired(user);
   }
   // Not gated on role, deliberately. Guardianship is a relationship, so any
   // account can hold links -- a parent training as a Free Agent, a coach who

@@ -3857,6 +3857,30 @@ halves before splitting anything else:
   comment files no foreign key does). `the-cost-audit-fixes-2026-11-13.test.ts` (22 cases, 13
   mutations each caught) and `the-cheapest-plan-has-no-ai.itest.ts`. One client file:
   `verify_build`, batches.
+- **2026-11-13: A PLAN IS WHAT OPENS THE PAID THINGS (three fixes off the plan audit).** Scott:
+  "delete the detailed tabs and fix 1, 2 and 3." (1) **A Free Agent needs a plan once the 14-day
+  trial ends.** Nothing ever checked for Basic, so an unpaid account kept everything Basic sells.
+  `server/free-agent-plan.ts` is the one rule: the plan wall in `routes.ts` answers 402
+  `planRequired` to training writes (non-GET under `/api/athlete/` and Anvil checks, bar buying,
+  codes, joining a coach, consents and settings), `/api/auth/me` carries `planRequired`, and
+  `ProtectedRoute` sends the athlete to `/athlete/upgrade`, which says the trial ended. Nothing is
+  deleted. **Never asked:** an athlete with ANY roster seat (parked included, so the off-season
+  hold is unchanged), a comped account, a trial, any tier, and everybody while enforcement is off.
+  (2) **A coach account needs a live plan** (`coachPlanIsActive`: `billingTier` on the PRIMARY's
+  row, the 14-day coach trial, a comp or promo trial; an admin always) for the camera, skill
+  RECORDING and the 18 coach AI routes (`requireActiveCoachPlan`); `/api/coach/digest` answers
+  null. Building programs, the roster and the skill library stay open. (3) **A coached athlete's
+  camera and skill recording follow the coach's plan** (`athleteHasPayingCoach`); history stays
+  readable and a tier the athlete holds themselves still counts. There is NO roster cap (2026-10-11),
+  so before this an unpaid coach could hand the camera to any number of athletes; an older line in
+  this file saying an unpaid coach has "an athlete cap of zero" is wrong. Refusals are 403
+  `coachPlanInactive` with a sentence, never 402 `freeAgentPaywall` (neither person can buy the
+  program's plan on that screen, and the app may not point a coach at the web).
+  **On deploy:** the beta coaches and Free Agents with no plan and no comp meet these, and the App
+  Review coach account (no plan, on purpose) loses the camera and AI tools unless Scott ticks Beta
+  account on it under More -> Users. `a-plan-is-what-opens-the-paid-things.itest.ts` (14 cases,
+  three mutations caught); the wall and redirect were watched in a real browser. Client half:
+  `verify_build`, batches.
 - **2026-11-12: THE FREE AGENT'S EXERCISE LIBRARY TAB OPENS A LIBRARY, AND HARDY'S 50 A DAY IS
   ENFORCED.** Both found by the cost audit. (1) Scott gave every Free Agent the Exercise Library on
   2026-10-02 and the tab went back on the strip; `athlete/exercises.tsx` and `exercise-detail.tsx`
