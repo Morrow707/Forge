@@ -17,7 +17,7 @@ import {
 import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER } from "@shared/free-agent-tiers";
 import { ReadFailed } from "@/components/read-failed";
 import { toast } from "sonner";
-import { Ticket, DollarSign, GraduationCap } from "lucide-react";
+import { Ticket, DollarSign, GraduationCap, ShieldCheck } from "lucide-react";
 
 type RedeemCode = {
   id: number;
@@ -53,6 +53,129 @@ type ClassLessonPrice = {
   lessonTitle: string;
   priceCents: number | null;
 };
+
+type ExemptEntry = {
+  id: number;
+  email: string;
+  createdAt: string;
+  accountRole: string | null;
+  accountExempt: boolean | null;
+};
+
+/** THE EXEMPT LIST (2026-11-14). Scott: "can we put that email on an exempt list? Give them full
+ * access to the app, no subscription necessary, never need to pay." An address typed here is
+ * comped: its account never meets a paywall, and an address with no account yet is comped the
+ * moment it signs up. The addresses live in the database, never in the code. */
+function ExemptListCard() {
+  const qc = useQueryClient();
+  const [email, setEmail] = useState("");
+  const { data: entries = [], isError, refetch } = useQuery<ExemptEntry[]>({
+    queryKey: ["/api/admin/exempt-emails"],
+    queryFn: () => getJson("/api/admin/exempt-emails"),
+  });
+  const add = useMutation({
+    mutationFn: async (address: string) => {
+      const res = await apiRequest("POST", "/api/admin/exempt-emails", { email: address });
+      return (await res.json()) as { email: string; accountFound: boolean; accountRole: string | null };
+    },
+    onSuccess: (added) => {
+      toast.success(
+        added.accountFound
+          ? `${added.email} now has full access and never pays.`
+          : `${added.email} is on the list. No account uses that address yet; it gets full access the moment it signs up.`,
+        { duration: 10000 },
+      );
+      setEmail("");
+      qc.invalidateQueries({ queryKey: ["/api/admin/exempt-emails"] });
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't add that address"),
+  });
+  const remove = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/admin/exempt-emails/${id}`);
+      return (await res.json()) as { email: string; accountFound: boolean };
+    },
+    onSuccess: (gone) => {
+      toast.success(`${gone.email} is off the list and needs a plan like anybody else.`);
+      qc.invalidateQueries({ queryKey: ["/api/admin/exempt-emails"] });
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't remove that address"),
+  });
+  return (
+    <Card data-testid="exempt-list">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ShieldCheck className="h-4 w-4" />
+          Exempt list
+        </CardTitle>
+        <CardDescription>
+          Accounts that never pay. Type the email an account uses and it gets everything, with no
+          plan and no subscription: the camera, skills, the AI coach, every class and add-on. Works
+          for an athlete or a coach. An address with no account yet gets full access when it signs
+          up. Removing an address puts its account back to needing a plan.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <form
+          className="flex flex-col gap-2 sm:flex-row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (email.trim()) add.mutate(email.trim());
+          }}
+        >
+          <Input
+            type="email"
+            inputMode="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            placeholder="name@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            data-testid="input-exempt-email"
+          />
+          <Button type="submit" disabled={add.isPending || !email.trim()} data-testid="button-add-exempt">
+            Add to exempt list
+          </Button>
+        </form>
+        {isError && <ReadFailed what="the exempt list" onRetry={() => void refetch()} />}
+        {!isError && entries.length === 0 && (
+          <p className="text-sm text-muted-foreground">Nobody is on the list yet.</p>
+        )}
+        {!isError && entries.length > 0 && (
+          <div className="divide-y divide-border rounded-md border border-border">
+            {entries.map((entry) => (
+              <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{entry.email}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {entry.accountRole == null
+                      ? "No account yet. Full access starts when this address signs up."
+                      : entry.accountExempt
+                        ? `${entry.accountRole === "coach" ? "Coach" : entry.accountRole === "athlete" ? "Athlete" : entry.accountRole} account, full access, never pays.`
+                        : "Has an account, but its Beta account switch was turned off under More, Users. Remove and add it again to restore full access."}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={remove.isPending}
+                  data-testid={`button-remove-exempt-${entry.id}`}
+                  onClick={() => {
+                    if (window.confirm(`Take ${entry.email} off the exempt list? Its account will need a plan again.`)) {
+                      remove.mutate(entry.id);
+                    }
+                  }}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function centsToInput(cents: number | null): string {
   return cents == null ? "" : (cents / 100).toFixed(2);
@@ -229,6 +352,7 @@ export default function AdminBilling() {
   return (
     <AppShell title="Billing">
       <div className="mx-auto max-w-3xl space-y-4">
+        <ExemptListCard />
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">

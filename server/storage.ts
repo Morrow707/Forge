@@ -139,6 +139,7 @@ import {
   foodLogEntries,
   waterLogEntries,
   redeemCodes,
+  exemptEmails,
   redeemCodeRedemptions,
   movementKnowledgeMessages,
   movementProfiles,
@@ -4465,8 +4466,64 @@ export const storage = {
       }
       values.staffInviteCode = staffCode;
     }
+    // AN ADDRESS ON THE EXEMPT LIST IS COMPED FROM ITS FIRST REQUEST. The list may name an
+    // address before its account exists, so this is where the two meet: every way an account is
+    // created comes through here.
+    const [listed] = await db
+      .select({ id: exemptEmails.id })
+      .from(exemptEmails)
+      .where(eq(exemptEmails.email, values.email))
+      .limit(1);
+    if (listed) values.isBetaAccount = true;
     const [user] = await db.insert(users).values(values).returning();
     return user;
+  },
+
+  // ---------- The exempt list (shared/schema.ts, exemptEmails) ----------
+  // Each entry with what an admin needs to act on it: whether an account exists for the address
+  // yet, and what kind. The address is one the admin typed, so showing it back is not the
+  // name-search the Users page refuses.
+  async listExemptEmails() {
+    return db
+      .select({
+        id: exemptEmails.id,
+        email: exemptEmails.email,
+        createdAt: exemptEmails.createdAt,
+        accountRole: users.role,
+        accountExempt: users.isBetaAccount,
+      })
+      .from(exemptEmails)
+      .leftJoin(users, eq(users.email, exemptEmails.email))
+      .orderBy(desc(exemptEmails.createdAt));
+  },
+
+  /** Lists the address and comps its account if there is one. Listing it twice is not an error. */
+  async addExemptEmail(rawEmail: string, adminId: number) {
+    const email = rawEmail.trim().toLowerCase();
+    await db
+      .insert(exemptEmails)
+      .values({ email, addedByAdminId: adminId })
+      .onConflictDoNothing({ target: exemptEmails.email });
+    const [account] = await db
+      .update(users)
+      .set({ isBetaAccount: true })
+      .where(eq(users.email, email))
+      .returning({ id: users.id, role: users.role });
+    if (account) await this.logBillingEvent(account.id, "admin.exempt_list_added", { adminId });
+    return { email, accountFound: !!account, accountRole: account?.role ?? null };
+  },
+
+  /** Takes the address off the list and its account goes back to paying like anybody else. */
+  async removeExemptEmail(id: number, adminId: number) {
+    const [gone] = await db.delete(exemptEmails).where(eq(exemptEmails.id, id)).returning();
+    if (!gone) return null;
+    const [account] = await db
+      .update(users)
+      .set({ isBetaAccount: false })
+      .where(eq(users.email, gone.email))
+      .returning({ id: users.id });
+    if (account) await this.logBillingEvent(account.id, "admin.exempt_list_removed", { adminId });
+    return { email: gone.email, accountFound: !!account };
   },
 
   // ---------- Account self-service (name/email/password) ----------

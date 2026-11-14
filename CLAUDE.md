@@ -3837,6 +3837,22 @@ halves before splitting anything else:
   closed, so every new build needs a higher `MARKETING_VERSION` (project.pbxproj, both
   configurations). It is 1.0.1 now; the build number stays the run number. Bump it again after
   each App Store approval. 754 carries the authenticator door and the 12 commits since 741.
+- **2026-11-14: FIVE THINGS OFF SCOTT'S PHONE.** (1) **Exercise search knows nicknames and typos**
+  (`shared/exercise-search.ts`, used by the picker and the library page): `NICKNAMES` (rdl, ohp,
+  pullup, bss, db, kb ...), one letter off at four letters and two at seven, best answer first,
+  `FIRST_CHOICE` puts the plain lift on top ("shoulder press" -> Barbell Shoulder Press, "squat" ->
+  Back Squat). The test reads the real names out of seed.ts, so a nickname naming nothing fails.
+  Add a nickname by adding a line to `NICKNAMES`. (2) **The Add Exercise list scrolls with the
+  keyboard up**: dragging the results puts the keyboard away (what was typed stays), and the sheet
+  is `100dvh`. Seen working in Chromium with touch; NOT confirmed on an iPhone. (3) **Hardy's button
+  is drawn on the body** (a portal), because Scott did not see it as admin on the phone; the cause
+  was not reproduced, so this is the likeliest fix, not a proven one. (4) **The plans screen's
+  All Classes card no longer touches Basic** in the iPhone app (`mt-6` on the store grid).
+  (5) **The exempt list** (More -> Billing, top card; `exempt_emails`, `/api/admin/exempt-emails`):
+  an admin types an email and that account never pays (it sets `isBetaAccount`, which every
+  paywall and the plan wall read); an address with no account yet is comped at signup
+  (`storage.createUser`); Remove puts the account back to needing a plan. Addresses live in the
+  database, never in this repo. `the-exempt-list.itest.ts`. New table, proven on a fresh database.
 - **2026-11-14: NO NEW ACCOUNT GETS FREE TIME BY SIGNING UP.** Scott: "no new account gets 14 days
   free, we have a 30 day coupon." `createTrialSubscription` still writes the signup row (every
   purchase path and code looks for it) with a trial that is already over, for Free Agents and

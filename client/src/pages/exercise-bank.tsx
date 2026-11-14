@@ -45,6 +45,7 @@ import {
 import { toast } from "sonner";
 import { ApiError } from "@/lib/queryClient";
 import { ReadFailed } from "@/components/read-failed";
+import { exerciseMatchScore, searchExercises } from "@shared/exercise-search";
 
 const CATEGORIES = [
   "strength",
@@ -175,11 +176,7 @@ export function ExerciseBankPage({
 
   const filtered = useMemo(() => {
     return exercises.filter((ex) => {
-      const matchesSearch =
-        !search ||
-        ex.name.toLowerCase().includes(search.toLowerCase()) ||
-        ex.muscleGroup.toLowerCase().includes(search.toLowerCase()) ||
-        (ex.sports ?? []).some((s) => s.toLowerCase().includes(search.toLowerCase()));
+      const matchesSearch = exerciseMatchScore(ex, search) != null;
       const matchesFamily = !activeFamily || getExerciseFamily(ex) === activeFamily;
       const matchesEquipment = equipmentFilter.size === 0 || equipmentFilter.has(ex.equipment);
       const matchesCategory = categoryFilter.size === 0 || categoryFilter.has(ex.category);
@@ -242,13 +239,13 @@ export function ExerciseBankPage({
   // instead of leaving them to scan the whole (still favorites-first)
   // default order for the ones with a real lastUsedAt.
   const displayed = useMemo(() => {
-    if (!recentlyUsedOnly) return filtered;
+    if (!recentlyUsedOnly) return search.trim() ? searchExercises(filtered, search) : filtered;
     return [...filtered].sort((a, b) => {
       const at = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
       const bt = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
       return bt - at;
     });
-  }, [filtered, recentlyUsedOnly]);
+  }, [filtered, recentlyUsedOnly, search]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {

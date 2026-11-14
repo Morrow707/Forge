@@ -4680,6 +4680,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ...ended, stripeEnded: stripe.ended, stripe: stripe.reason ?? null });
   });
 
+  // THE EXEMPT LIST (2026-11-14): addresses whose accounts never pay. Scott: "Give them full
+  // access to the app, no subscription necessary, never need to pay." An entry sets the account's
+  // comp switch (isBetaAccount), which every paywall and the plan wall already read; an address
+  // with no account yet is comped when it signs up.
+  app.get("/api/admin/exempt-emails", requireRole("admin"), async (_req, res) => {
+    res.json(await storage.listExemptEmails());
+  });
+
+  app.post("/api/admin/exempt-emails", requireRole("admin"), async (req, res) => {
+    const parsed = z
+      .object({ email: z.string().trim().toLowerCase().email({ message: "Enter an email address." }) })
+      .safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    }
+    res.status(201).json(await storage.addExemptEmail(parsed.data.email, currentUser(req).id));
+  });
+
+  app.delete("/api/admin/exempt-emails/:id", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Not an entry" });
+    const removed = await storage.removeExemptEmail(id, currentUser(req).id);
+    if (!removed) return res.status(404).json({ message: "Entry not found" });
+    res.json(removed);
+  });
+
   // Every priced thing on the platform, read-only -- see pricing-catalog.ts.
   app.get("/api/admin/pricing", requireRole("admin"), async (_req, res) => {
     const catalog = await storage.getPricingCatalog();

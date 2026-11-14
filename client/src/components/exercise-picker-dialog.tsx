@@ -31,6 +31,7 @@ import {
 } from "@shared/exercise-family";
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 import { ReadFailed } from "@/components/read-failed";
+import { exerciseMatchScore, searchExercises } from "@shared/exercise-search";
 import {
   CATEGORY_FILTER_ACTIVE_CLASS,
   MOVEMENT_FILTER_ACTIVE_CLASS,
@@ -160,12 +161,7 @@ export function ExercisePickerDialog({
   const filtered = useMemo(
     () =>
       exercises.filter((ex) => {
-        const matchesSearch =
-          !search ||
-          ex.name.toLowerCase().includes(search.toLowerCase()) ||
-          ex.muscleGroup.toLowerCase().includes(search.toLowerCase()) ||
-          ex.equipment.toLowerCase().includes(search.toLowerCase()) ||
-          (ex.sports ?? []).some((s) => s.toLowerCase().includes(search.toLowerCase()));
+        const matchesSearch = exerciseMatchScore(ex, search) != null;
         const matchesFamily = !activeFamily || getExerciseFamily(ex) === activeFamily;
         const matchesEquipment = equipmentFilter.size === 0 || equipmentFilter.has(ex.equipment);
         const matchesCategory = categoryFilter.size === 0 || categoryFilter.has(ex.category);
@@ -232,13 +228,15 @@ export function ExercisePickerDialog({
   // Only reorders (never re-filters) -- see exercise-bank.tsx's identical
   // comment on its own displayed useMemo.
   const displayed = useMemo(() => {
-    if (!recentlyUsedOnly) return filtered;
+    // While somebody is typing, the best answer goes first: the lift named outright, then the
+    // names that start with it, then near-misses (shared/exercise-search.ts).
+    if (!recentlyUsedOnly) return search.trim() ? searchExercises(filtered, search) : filtered;
     return [...filtered].sort((a, b) => {
       const at = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
       const bt = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
       return bt - at;
     });
-  }, [filtered, recentlyUsedOnly]);
+  }, [filtered, recentlyUsedOnly, search]);
 
   // Natural-language front door to the same accordion filters -- see
   // storage.interpretExerciseSearchQuery's own comment server-side. Applies
@@ -277,7 +275,7 @@ export function ExercisePickerDialog({
           packs a search box, five filter groups, and a scrollable results
           list, which felt cramped at the default max-w-lg/85vh size,
           especially on a desktop with plenty of unused space around it. */}
-      <DialogContent className="inset-0 top-0 left-0 flex h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0">
+      <DialogContent className="inset-0 top-0 left-0 flex h-[100dvh] w-screen max-w-none max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0">
         <div className="shrink-0 space-y-4 border-b border-border p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>{title ?? (correctivesOnly ? "Add Corrective" : "Add Exercise")}</DialogTitle>
@@ -308,7 +306,15 @@ export function ExercisePickerDialog({
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 autoFocus
-                placeholder="Search your exercise bank…"
+                enterKeyHint="search"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                onKeyDown={(e) => {
+                  // The keyboard's Search key puts the keyboard away so the results can be read.
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+                placeholder="Search your exercise bank (try rdl)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
@@ -377,7 +383,21 @@ export function ExercisePickerDialog({
             here is exactly what the PREVIOUS mobile-scroll fix (see git
             blame) had to undo -- two nested/stacked scroll containers make
             it ambiguous which one a touch-scroll gesture should hit. */}
-        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+        {/* DRAGGING THE LIST PUTS THE KEYBOARD AWAY (2026-11-14). Scott, on the phone: "hit add
+            exercise, type barbell can't scroll." With the keyboard up the list is a strip between
+            the search box and the keys, and on iOS the drag went to the page behind the keyboard
+            and not to the list. Every native search list drops the keyboard the moment the
+            results are dragged; this does the same, so the list has the whole screen back and
+            scrolls as it does before anything is typed. What was typed stays in the box. */}
+        <div
+          className="min-h-0 flex-1 touch-pan-y space-y-4 overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6"
+          style={{ WebkitOverflowScrolling: "touch" }}
+          onTouchMove={() => {
+            const focused = document.activeElement;
+            if (focused instanceof HTMLInputElement) focused.blur();
+          }}
+          data-testid="exercise-picker-results"
+        >
           {/* isBrowsing hides the accordion/equipment/more-filters buttons
               once the coach is typing a direct search -- see the AI-search
               comment above for why this is purely a display decision: every

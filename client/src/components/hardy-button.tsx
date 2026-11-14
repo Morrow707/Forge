@@ -1,4 +1,5 @@
 import { Suspense, lazy, useState } from "react";
+import { createPortal } from "react-dom";
 import { countInteraction } from "@/lib/feature-usage";
 import { useLocation } from "wouter";
 import { HardyMark } from "@/components/hardy-mark";
@@ -19,8 +20,16 @@ export function HardyButton() {
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   if (location.includes(WORKOUT_DAY)) return null;
-  return (
-    <>
+  // DRAWN ON THE BODY, NOT INSIDE THE PAGE (2026-11-14). Scott, as the admin on his phone: "no
+  // hardy on the phone?" The button is `fixed`, and a fixed element is only pinned to the screen
+  // while nothing above it in the page changes what "fixed" is measured from; the shell and the
+  // page wrapper around it both can (an animated wrapper, a clipped root), and where one does the
+  // button sits at the bottom of the PAGE instead, below everything on a long dashboard. The
+  // debug button beside it was always visible on the same screen, and it is mounted outside the
+  // page. So is this now. index.css hides it while a camera dialog is open, as the page is.
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div data-hardy-root>
       <button
         type="button"
         aria-label={open ? "Close Hardy" : "Open Hardy, search your logs"}
@@ -40,6 +49,7 @@ export function HardyButton() {
           <HardyPanel open={open} onClose={() => setOpen(false)} />
         </Suspense>
       )}
-    </>
+    </div>,
+    document.body,
   );
 }

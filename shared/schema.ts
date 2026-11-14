@@ -801,6 +801,28 @@ export const redeemCodes = pgTable(
   }),
 );
 
+// THE EXEMPT LIST (2026-11-14). Scott: "can we put that email on an exempt list? Give them full
+// access to the app, no subscription necessary, never need to pay, I'm going to have multiple
+// accounts that I need to put on this exempt list."
+//
+// An address an admin typed on More -> Billing. The account behind it is comped
+// (users.isBetaAccount, the one switch every paywall already reads), and an address with no
+// account yet is comped the moment it signs up (storage.createUser). The list lives in the
+// database and never in this public repository. No reference to users on purpose: an address may
+// be listed before its account exists, and deleting an account must not take the entry with it.
+export const exemptEmails = pgTable(
+  "exempt_emails",
+  {
+    id: serial("id").primaryKey(),
+    email: text("email").notNull(),
+    addedByAdminId: integer("added_by_admin_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    emailUnique: uniqueIndex("exempt_emails_email_idx").on(table.email),
+  }),
+);
+
 // One row per successful redemption -- the unique (codeId, coachId) pair
 // is what stops the same org redeeming the same code twice, and counting
 // rows here (rather than a hand-maintained counter column) is what

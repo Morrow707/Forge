@@ -1559,6 +1559,15 @@ CREATE TABLE IF NOT EXISTS "redeem_codes" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "redeem_codes_code_idx" ON "redeem_codes" ("code");
+-- 2026-11-14: the exempt list (shared/schema.ts, exemptEmails). An address an admin typed; its
+-- account pays for nothing.
+CREATE TABLE IF NOT EXISTS "exempt_emails" (
+  "id" serial PRIMARY KEY,
+  "email" text NOT NULL,
+  "added_by_admin_id" integer,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "exempt_emails_email_idx" ON "exempt_emails" ("email");
 -- 2026-10-16: who a code is for and what it gives (shared/promo-codes.ts). Existing rows read
 -- as the only kind that existed: free time for a new account.
 ALTER TABLE "redeem_codes" ADD COLUMN IF NOT EXISTS "audience" text NOT NULL DEFAULT 'new_accounts';

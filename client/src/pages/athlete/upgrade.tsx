@@ -721,7 +721,7 @@ export default function AthleteUpgrade() {
           </Card>
         )}
         {live && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {productsFailed && !isLoading && (
               <ReadFailed what={`the plans from ${storeName}`} onRetry={() => void refetch()} />
             )}

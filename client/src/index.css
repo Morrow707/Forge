@@ -250,7 +250,8 @@ html.av-camera-active,
 html.av-camera-active body {
   background: transparent !important;
 }
-html.av-camera-active .app-shell-root {
+html.av-camera-active .app-shell-root,
+html.av-camera-active [data-hardy-root] {
   visibility: hidden !important;
 }
 
