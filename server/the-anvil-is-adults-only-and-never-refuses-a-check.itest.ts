@@ -120,7 +120,10 @@ beforeEach(async () => {
 
 const IN_WINDOW = ANVIL_WINDOW_OPENS_MINUTES + 30;
 const AFTER_WINDOW = ANVIL_WINDOW_CLOSES_MINUTES + 120;
-const TODAY = "2026-11-07";
+// The real day, never a typed one: /api/anvil/week reads the last seven days from the server's
+// own clock, so a date written here falls out of that window a week after it is written. That
+// is what turned CI red on 2026-11-14 with nothing wrong in the product.
+const TODAY = new Date().toISOString().slice(0, 10);
 
 /** An ISO date `years` ago, which is how the fixtures make somebody a given age today. */
 function bornYearsAgo(years: number): string {
