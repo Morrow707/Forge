@@ -1567,6 +1567,8 @@ ALTER TABLE "redeem_codes" ADD COLUMN IF NOT EXISTS "percent_off" integer;
 ALTER TABLE "redeem_codes" ADD COLUMN IF NOT EXISTS "discount_months" integer;
 ALTER TABLE "redeem_codes" ADD COLUMN IF NOT EXISTS "stripe_coupon_id" text;
 ALTER TABLE "redeem_codes" ADD COLUMN IF NOT EXISTS "stripe_promotion_code_id" text;
+-- 2026-11-13: a code can be locked to one plan (a Free Agent tier id or 'coach'); null is any.
+ALTER TABLE "redeem_codes" ADD COLUMN IF NOT EXISTS "applies_to" text;
 
 CREATE TABLE IF NOT EXISTS "redeem_code_redemptions" (
   "id" serial PRIMARY KEY,

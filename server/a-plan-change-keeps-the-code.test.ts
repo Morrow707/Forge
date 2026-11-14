@@ -12,6 +12,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const retrieve = vi.fn();
 const update = vi.fn();
 const couponsRetrieve = vi.fn();
+const couponsCreate = vi.fn();
+const promotionCodesCreate = vi.fn();
+const pricesRetrieve = vi.fn();
 const sessionsCreate = vi.fn();
 const getSubscriptionForUser = vi.fn();
 const upsertSubscriptionByUserId = vi.fn();
@@ -22,7 +25,9 @@ vi.mock("stripe", () => ({
   default: class {
     checkout = { sessions: { create: sessionsCreate } };
     subscriptions = { retrieve, update };
-    coupons = { retrieve: couponsRetrieve };
+    coupons = { retrieve: couponsRetrieve, create: couponsCreate };
+    promotionCodes = { create: promotionCodesCreate };
+    prices = { retrieve: pricesRetrieve };
   },
 }));
 vi.mock("./storage", () => ({
@@ -109,5 +114,41 @@ describe("how long a code has left on the current plan", () => {
     expect(await billing.currentPlanDiscount(9)).toBeNull();
     retrieve.mockRejectedValueOnce(new Error("down"));
     expect(await billing.currentPlanDiscount(9)).toBeNull();
+  });
+});
+
+describe("a code locked to a plan is locked at Stripe too", () => {
+  beforeEach(() => {
+    couponsCreate.mockResolvedValue({ id: "co_new" });
+    promotionCodesCreate.mockResolvedValue({ id: "promo_new" });
+    pricesRetrieve.mockResolvedValue({ product: "prod_ai" });
+  });
+
+  it("restricts the coupon to that plan's product, so Stripe's own code box takes nothing off another plan", async () => {
+    const billing = await loadBilling();
+    const made = await billing.createStripePromoForCode({ code: "AIONLY30", percentOff: 100, months: 1, appliesTo: "ai_coach" });
+    expect(made.couponId).toBe("co_new");
+    expect(pricesRetrieve).toHaveBeenCalledWith("price_ai");
+    expect(couponsCreate.mock.calls[0][0].applies_to).toEqual({ products: ["prod_ai"] });
+  });
+
+  it("an unlocked code's coupon carries no restriction", async () => {
+    const billing = await loadBilling();
+    await billing.createStripePromoForCode({ code: "ANY30", percentOff: 100, months: 1 });
+    expect("applies_to" in couponsCreate.mock.calls[0][0]).toBe(false);
+    expect(pricesRetrieve).not.toHaveBeenCalled();
+  });
+
+  it("with no Stripe price for the plan, no unrestricted coupon is created in its place", async () => {
+    const billing = await loadBilling();
+    const made = await billing.createStripePromoForCode({ code: "BASIC30", percentOff: 100, months: 1, appliesTo: "basic" });
+    expect(made).toMatchObject({ couponId: null, reason: "no_stripe_price_for_that_plan" });
+    expect(couponsCreate).not.toHaveBeenCalled();
+  });
+
+  it("three free months is a repeating coupon for three bills", async () => {
+    const billing = await loadBilling();
+    await billing.createStripePromoForCode({ code: "FREE90", percentOff: 100, months: 3 });
+    expect(couponsCreate.mock.calls[0][0]).toMatchObject({ percent_off: 100, duration: "repeating", duration_in_months: 3 });
   });
 });

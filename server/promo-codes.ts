@@ -29,7 +29,11 @@ import {
   promoDiscountMonths,
   promoKindOf,
   promoPercentOff,
+  promoTargetName,
+  promoTargetOf,
+  PROMO_COACH_TARGET,
 } from "@shared/promo-codes";
+import type { FreeAgentTierId } from "@shared/free-agent-tiers";
 
 export type RedeemOutcome =
   | {
@@ -72,6 +76,29 @@ export async function redeemPromoCode(userId: number, code: string, now: Date = 
     }
   } else {
     return { ok: false, message: "That code isn't valid for this account" };
+  }
+
+  // WHICH PLAN THE CODE IS FOR (shared/promo-codes.ts). A code locked to a plan is refused
+  // everywhere that plan is not the one in hand, with the plan named.
+  const target = promoTargetOf(record);
+  if (target === PROMO_COACH_TARGET && user.role !== "coach") {
+    return { ok: false, message: "This code is for coach accounts." };
+  }
+  if (target && target !== PROMO_COACH_TARGET) {
+    if (user.role !== "athlete") {
+      return { ok: false, message: `This code is for ${promoTargetName(target)}, which is an athlete's plan.` };
+    }
+    if (user.freeAgentTier !== target) {
+      // No plan yet, or a different one. A locked code is used where the plan is chosen (the
+      // order receipt applies it), never as free time with no plan behind it. No rail is
+      // named: see the percent-off refusal below for why.
+      return {
+        ok: false,
+        message: user.freeAgentTier
+          ? `This code is for ${promoTargetName(target)}, and your plan is a different one.`
+          : `This code is for ${promoTargetName(target)}. It applies when that plan is chosen.`,
+      };
+    }
   }
 
   // WHICH RAIL BILLS THIS ACCOUNT. A card subscription Forge can discount; an App Store one
@@ -187,10 +214,26 @@ export type CheckoutCodeVerdict =
   | { ok: true; codeId: number; code: string; couponId: string; percentOff: number; months: number }
   | { ok: false; message: string };
 
-export async function checkoutCodeFor(userId: number, code: string, now: Date = new Date()): Promise<CheckoutCodeVerdict> {
+export async function checkoutCodeFor(
+  userId: number,
+  code: string,
+  /** The plan being bought. A code locked to another plan is refused, with its plan named. */
+  tier: FreeAgentTierId,
+  now: Date = new Date(),
+): Promise<CheckoutCodeVerdict> {
   const found = await storage.findRedeemableCode(code);
   if (!found.ok) return found;
   const record = found.record;
+  const target = promoTargetOf(record);
+  if (target && target !== tier) {
+    return {
+      ok: false,
+      message:
+        target === PROMO_COACH_TARGET
+          ? "This code is for coach accounts."
+          : `This code is for ${promoTargetName(target)}. Choose that plan to use it.`,
+    };
+  }
   if (await storage.hasRedeemedCode(userId, record.id)) {
     return { ok: false, message: "You've already used this code" };
   }

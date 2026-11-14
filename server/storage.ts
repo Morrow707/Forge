@@ -4051,6 +4051,7 @@ export const storage = {
         discountMonths: input.kind === "percent_off" ? (input.discountMonths ?? 1) : null,
         stripeCouponId: stripe?.couponId ?? null,
         stripePromotionCodeId: stripe?.promotionCodeId ?? null,
+        appliesTo: input.appliesTo ? input.appliesTo : null,
         maxRedemptions: input.maxRedemptions ?? null,
         expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
       })

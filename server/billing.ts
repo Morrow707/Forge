@@ -1,3 +1,4 @@
+import { PROMO_COACH_TARGET, type PromoTarget } from "@shared/promo-codes";
 import Stripe from "stripe";
 import { storage } from "./storage";
 import {
@@ -2066,12 +2067,27 @@ export async function createStripePromoForCode(input: {
   months: number;
   maxRedemptions?: number | null;
   expiresAt?: Date | null;
+  /** The plan the code is locked to (shared/promo-codes.ts), or null for any plan. A locked
+   *  code's coupon is restricted AT STRIPE to that plan's product, so the code typed into
+   *  Stripe's own box on some other plan's checkout takes nothing off. */
+  appliesTo?: PromoTarget | null;
 }): Promise<{ couponId: string | null; promotionCodeId: string | null; reason?: string }> {
   const stripe = getStripeClient();
   if (!stripe) return { couponId: null, promotionCodeId: null, reason: "stripe_not_configured" };
   try {
+    let productId: string | null = null;
+    if (input.appliesTo) {
+      const priceId =
+        input.appliesTo === PROMO_COACH_TARGET ? coachPerAthletePriceId() : freeAgentPriceId(input.appliesTo);
+      // A lock that cannot be put on the coupon is not created unlocked: the Forge code would
+      // say one plan and the Stripe promotion code of the same name would work on all of them.
+      if (!priceId) return { couponId: null, promotionCodeId: null, reason: "no_stripe_price_for_that_plan" };
+      const price = await stripe.prices.retrieve(priceId);
+      productId = typeof price.product === "string" ? price.product : price.product.id;
+    }
     const coupon = await stripe.coupons.create({
       name: input.code,
+      ...(productId ? { applies_to: { products: [productId] } } : {}),
       percent_off: input.percentOff,
       ...(input.months > 1 ? { duration: "repeating", duration_in_months: input.months } : { duration: "once" }),
       ...(input.maxRedemptions ? { max_redemptions: input.maxRedemptions } : {}),

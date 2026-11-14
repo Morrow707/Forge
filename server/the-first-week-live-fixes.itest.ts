@@ -155,6 +155,76 @@ describe("the receipt before checkout", () => {
     expect(body.codeMessage).toMatch(/first 30 days/);
   });
 
+  it("a code locked to a plan works on that plan and is refused on the others, with the plan named", async () => {
+    await storage.createRedeemCode({ code: "BASICONLY", trialDays: 30, appliesTo: "basic" }, { couponId: "c_basic", promotionCodeId: null });
+    await storage.createRedeemCode({ code: "COACHONLY", trialDays: 90, appliesTo: "coach" }, { couponId: "c_coach", promotionCodeId: null });
+    await storage.createRedeemCode({ code: "ANYPLAN", trialDays: 30 }, { couponId: "c_any", promotionCodeId: null });
+    const { client } = await freeAgentClient();
+    const p = (tier: string, promoCode: string) =>
+      client.post("/api/billing/checkout/free-agent-tier/preview", { tier, promoCode });
+
+    const right = (await p("basic", "BASICONLY")).body;
+    expect(right.codeAccepted).toBe(true);
+    expect(right.receipt.dueTodayCents).toBe(0);
+
+    for (const tier of ["ai_coach", "ai_coach_video"]) {
+      const wrong = (await p(tier, "BASICONLY")).body;
+      expect(wrong.codeAccepted).toBe(false);
+      expect(wrong.codeMessage).toMatch(/Basic plan/);
+      expect(wrong.receipt.dueTodayCents).toBe(wrong.receipt.monthlyPriceCents);
+      // The charge route refuses it too: the preview is a picture, this is the money.
+      expect((await client.post("/api/billing/checkout/free-agent-tier", { tier, promoCode: "BASICONLY" })).status).toBe(400);
+    }
+
+    // A coach code gives a Free Agent nothing on any plan.
+    for (const tier of ["basic", "ai_coach", "ai_coach_video"]) {
+      const coachCode = (await p(tier, "COACHONLY")).body;
+      expect(coachCode.codeAccepted).toBe(false);
+      expect(coachCode.codeMessage).toMatch(/coach accounts/);
+    }
+
+    // An unlocked code still works everywhere.
+    for (const tier of ["basic", "ai_coach", "ai_coach_video"]) {
+      expect((await p(tier, "ANYPLAN")).body.codeAccepted).toBe(true);
+    }
+  });
+
+  it("a plan-locked code is never turned into free time with no plan behind it, and a coach code is the coach's alone", async () => {
+    await storage.createRedeemCode({ code: "BASICONLY", trialDays: 30, appliesTo: "basic" }, { couponId: "c_basic", promotionCodeId: null });
+    await storage.createRedeemCode({ code: "COACHONLY", trialDays: 90, appliesTo: "coach" });
+    const { fa, client } = await freeAgentClient();
+
+    const locked = await client.post("/api/athlete/redeem-code", { code: "BASICONLY" });
+    expect(locked.status).toBeGreaterThanOrEqual(400);
+    expect(locked.body.message).toMatch(/Basic plan/);
+    const coachs = await client.post("/api/athlete/redeem-code", { code: "COACHONLY" });
+    expect(coachs.body.message).toMatch(/coach accounts/);
+    // Nothing was spent by either refusal.
+    const basic = await storage.findRedeemableCode("BASICONLY");
+    if (basic.ok) expect(await storage.hasRedeemedCode(fa.id, basic.record.id)).toBe(false);
+
+    // The coach it is for gets its three months.
+    const { redeemPromoCode } = await import("./promo-codes");
+    const coach = await makeLoginableUser({ role: "coach", isBetaAccount: false });
+    const given = await redeemPromoCode(coach.id, "COACHONLY");
+    expect(given.ok).toBe(true);
+    // And a coach cannot take an athlete plan's code.
+    const taken = await redeemPromoCode(coach.id, "BASICONLY");
+    expect(taken.ok).toBe(false);
+  });
+
+  it("the admin form's plan must be a real one", async () => {
+    const admin = await makeLoginableUser({ role: "admin" });
+    const adminClient = await loginAs(server.baseUrl, admin);
+    const bad = await adminClient.post("/api/admin/redeem-codes", { code: "NOPE30", trialDays: 30, appliesTo: "platinum" });
+    expect(bad.status).toBe(400);
+    const good = await adminClient.post("/api/admin/redeem-codes", { code: "AIONLY30", trialDays: 30, appliesTo: "ai_coach" });
+    expect(good.status).toBe(201);
+    expect(good.body.appliesTo).toBe("ai_coach");
+    const listed = (await adminClient.get("/api/admin/redeem-codes")).body.find((c: { code: string }) => c.code === "AIONLY30");
+    expect(listed.appliesTo).toBe("ai_coach");
+  });
+
   it("a coached athlete has no receipt: their plan is the program's", async () => {
     const coach = await makeLoginableUser({ role: "coach" });
     const { fa, client } = await freeAgentClient();

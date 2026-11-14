@@ -7,7 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { describePromoCode, type PromoAudience, type PromoKind } from "@shared/promo-codes";
+import {
+  describePromoCodeWithPlan,
+  PROMO_COACH_TARGET,
+  type PromoAudience,
+  type PromoKind,
+  type PromoTarget,
+} from "@shared/promo-codes";
+import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER } from "@shared/free-agent-tiers";
 import { ReadFailed } from "@/components/read-failed";
 import { toast } from "sonner";
 import { Ticket, DollarSign, GraduationCap } from "lucide-react";
@@ -18,6 +25,7 @@ type RedeemCode = {
   trialDays: number;
   audience: string;
   kind: string;
+  appliesTo: string | null;
   percentOff: number | null;
   discountMonths: number | null;
   stripeCouponId: string | null;
@@ -136,6 +144,8 @@ export default function AdminBilling() {
   const [newKind, setNewKind] = useState<PromoKind>("free_time");
   const [newPercentOff, setNewPercentOff] = useState("50");
   const [newDiscountMonths, setNewDiscountMonths] = useState("1");
+  // Which plan the code is locked to; "any" is a code that works on every plan.
+  const [newAppliesTo, setNewAppliesTo] = useState<PromoTarget | "any">("any");
 
   const { data: codes = [], isError: codesFailed, refetch: refetchCodes } = useQuery<RedeemCode[]>({
     queryKey: ["/api/admin/redeem-codes"],
@@ -162,6 +172,7 @@ export default function AdminBilling() {
         percentOff: newKind === "percent_off" ? Number(newPercentOff) : null,
         discountMonths: newKind === "percent_off" ? Number(newDiscountMonths) : null,
         maxRedemptions: newMaxRedemptions.trim() ? Number(newMaxRedemptions) : null,
+        appliesTo: newAppliesTo === "any" ? null : newAppliesTo,
       });
       return (await res.json()) as RedeemCode & { stripe: string | null };
     },
@@ -170,10 +181,13 @@ export default function AdminBilling() {
       // checkout accepts the same code. When it could not be, say so now rather than at the
       // first redemption that needs it.
       if (created.stripeCouponId) toast.success("Code created, and set up at Stripe");
+      else if (created.stripe === "no_stripe_price_for_that_plan")
+        toast.success("Code created and locked to its plan here. Stripe has no price set for that plan yet, so the card checkout will not take this code until it does.", { duration: 15000 });
       else toast.success(`Code created. Stripe wasn't reachable (${created.stripe ?? "not configured"}): free time on unbilled accounts works, card discounts won't until it is.`, { duration: 12000 });
       setNewCode("");
       setNewTrialDays("30");
       setNewMaxRedemptions("");
+      setNewAppliesTo("any");
       qc.invalidateQueries({ queryKey: ["/api/admin/redeem-codes"] });
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't create code"),
@@ -251,6 +265,20 @@ export default function AdminBilling() {
                   <SelectItem value="percent_off">Percent off</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={newAppliesTo} onValueChange={(v) => setNewAppliesTo(v as PromoTarget | "any")}>
+                <SelectTrigger aria-label="Which plan it works on" className="col-span-2" data-testid="select-code-plan">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Works on any plan</SelectItem>
+                  {FREE_AGENT_TIER_ORDER.map((id) => (
+                    <SelectItem key={id} value={id}>
+                      {FREE_AGENT_TIERS[id].label} plan only
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={PROMO_COACH_TARGET}>Coach plan only</SelectItem>
+                </SelectContent>
+              </Select>
               {newKind === "free_time" ? (
                 <Input
                   type="number"
@@ -286,7 +314,8 @@ export default function AdminBilling() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {describePromoCode({
+              {describePromoCodeWithPlan({
+                appliesTo: newAppliesTo === "any" ? null : newAppliesTo,
                 audience: newAudience,
                 kind: newKind,
                 trialDays: Number(newTrialDays) || 0,
@@ -326,7 +355,7 @@ export default function AdminBilling() {
                   >
                     <span className="font-mono font-semibold">{c.code}</span>
                     <span className="text-xs text-muted-foreground">
-                      {describePromoCode(c)} ·{" "}
+                      {describePromoCodeWithPlan(c)} ·{" "}
                       {c.stripeCouponId ? "" : "no Stripe coupon · "}
                       {c.maxRedemptions
                         ? `${c.redemptionCount ?? 0} of ${c.maxRedemptions} used`

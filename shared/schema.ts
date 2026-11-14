@@ -1,3 +1,4 @@
+import { PROMO_TARGETS } from "./promo-codes";
 import { BRAND_HEADING_FONT_IDS, BRAND_SLUG_PATTERN } from "./branding-options";
 import { profileKeysFor } from "./movement-profile-key";
 import {
@@ -786,6 +787,9 @@ export const redeemCodes = pgTable(
     // for everything that is not a card subscription.
     stripeCouponId: text("stripe_coupon_id"),
     stripePromotionCodeId: text("stripe_promotion_code_id"),
+    // WHICH PLAN THE CODE IS FOR (shared/promo-codes.ts PROMO_TARGETS): a Free Agent tier id,
+    // "coach", or null for any plan. Null is every code created before 2026-11-13.
+    appliesTo: text("applies_to"),
     // null = unlimited redemptions.
     maxRedemptions: integer("max_redemptions"),
     // null = never expires.
@@ -8983,8 +8987,15 @@ export const createRedeemCodeSchema = z
     discountMonths: z.number().int().min(1).max(24).optional().nullable(),
     maxRedemptions: z.number().int().min(1).optional().nullable(),
     expiresAt: z.string().datetime().optional().nullable(),
+    // Which plan the code is locked to; null or absent is any plan. The values are
+    // PROMO_TARGETS in shared/promo-codes.ts, checked in the refine below so the list is read
+    // from one place.
+    appliesTo: z.string().trim().max(40).optional().nullable(),
   })
   .superRefine((v, ctx) => {
+    if (v.appliesTo != null && v.appliesTo !== "" && !(PROMO_TARGETS as readonly string[]).includes(v.appliesTo)) {
+      ctx.addIssue({ code: "custom", path: ["appliesTo"], message: "Pick a plan this code is for, or any plan" });
+    }
     if (v.kind === "free_time" && !v.trialDays) {
       ctx.addIssue({ code: "custom", path: ["trialDays"], message: "Say how many free days the code gives" });
     }

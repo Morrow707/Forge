@@ -54,7 +54,7 @@ import { uploadsLimiter } from "./rate-limiters";
 import { storage, CohortQueryBudgetExceeded, CohortQueryDifferencingRefused, leaderboardDisplayName } from "./storage";
 import { redeemPromoCode, checkoutCodeFor } from "./promo-codes";
 import { checkoutReceipt } from "@shared/checkout-receipt";
-import { promoDiscountMonths, promoPercentOff } from "@shared/promo-codes";
+import { promoDiscountMonths, promoPercentOff, promoTargetOf } from "@shared/promo-codes";
 import { formatTrackingReport, buildTrackingReportEntries } from "./tracking-report";
 import { PRICING_CATALOG_KEYS } from "./pricing-catalog";
 import { buildIcsFeed } from "./ics";
@@ -4662,6 +4662,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       months: promoDiscountMonths({ ...parsed.data, trialDays: parsed.data.trialDays ?? 0, percentOff: parsed.data.percentOff ?? null, discountMonths: parsed.data.discountMonths ?? null }),
       maxRedemptions: parsed.data.maxRedemptions ?? null,
       expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
+      appliesTo: promoTargetOf(parsed.data),
     });
     const code = await storage.createRedeemCode(parsed.data, stripe);
     res.status(201).json({ ...code, stripe: stripe.reason ?? null });
@@ -15161,7 +15162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // preview is a picture, this is the charge.
       let discount: { couponId: string; codeId: number } | null = null;
       if (parsed.data.promoCode) {
-        const verdict = await checkoutCodeFor(user.id, parsed.data.promoCode);
+        const verdict = await checkoutCodeFor(user.id, parsed.data.promoCode, parsed.data.tier as FreeAgentTierId);
         if (!verdict.ok) return res.status(400).json({ message: verdict.message });
         discount = { couponId: verdict.couponId, codeId: verdict.codeId };
       }
@@ -15200,7 +15201,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let codeMessage: string | null = null;
       let discount: { code: string; percentOff: number; months: number } | null = null;
       if (parsed.data.promoCode) {
-        const verdict = await checkoutCodeFor(user.id, parsed.data.promoCode);
+        const verdict = await checkoutCodeFor(user.id, parsed.data.promoCode, parsed.data.tier as FreeAgentTierId);
         if (verdict.ok) discount = { code: verdict.code, percentOff: verdict.percentOff, months: verdict.months };
         else codeMessage = verdict.message;
       }

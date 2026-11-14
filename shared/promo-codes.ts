@@ -30,6 +30,31 @@
  * says to use the sheet in the app.
  */
 
+import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER, type FreeAgentTierId } from "./free-agent-tiers";
+
+/**
+ * WHICH PLAN A CODE IS FOR (2026-11-13). Scott named a code per plan (one for Basic, one for AI
+ * Coach, one for AI Coach + Video, one for coaches) and asked: "lock each code to its plan on
+ * the website." Apple already ties an offer code to one plan; Forge's own codes worked on any.
+ *
+ * null is a code for any plan, which is what every code created before this is. "coach" is the
+ * coach plan; a Free Agent tier id is that tier and no other. A locked free-time code is used
+ * where the plan is CHOSEN (the order receipt), never as free time with no plan behind it.
+ */
+export const PROMO_COACH_TARGET = "coach" as const;
+export type PromoTarget = FreeAgentTierId | typeof PROMO_COACH_TARGET;
+export const PROMO_TARGETS: readonly PromoTarget[] = [...FREE_AGENT_TIER_ORDER, PROMO_COACH_TARGET];
+
+export function promoTargetOf(record: { appliesTo?: string | null }): PromoTarget | null {
+  const v = record.appliesTo ?? null;
+  return v != null && (PROMO_TARGETS as readonly string[]).includes(v) ? (v as PromoTarget) : null;
+}
+
+/** "the Basic plan", "the coach plan": how a locked code's plan is named to a person. */
+export function promoTargetName(target: PromoTarget): string {
+  return target === PROMO_COACH_TARGET ? "the coach plan" : `the ${FREE_AGENT_TIERS[target].label} plan`;
+}
+
 export const PROMO_AUDIENCES = ["new_accounts", "everyone"] as const;
 export type PromoAudience = (typeof PROMO_AUDIENCES)[number];
 
@@ -42,6 +67,8 @@ export type PromoKind = (typeof PROMO_KINDS)[number];
 export const NEW_ACCOUNT_WINDOW_DAYS = 30;
 
 export interface PromoCodeShape {
+  /** Which plan the code is locked to; absent or null is any plan. */
+  appliesTo?: string | null;
   audience: string;
   kind: string;
   trialDays: number;
@@ -81,4 +108,11 @@ export function describePromoCode(record: PromoCodeShape): string {
   return promoAudienceOf(record) === "everyone"
     ? `${span} free from the day it is redeemed, ${who}`
     : `${span} free from the signup date, ${who}`;
+}
+
+/** The same sentence with the plan lock said, for the admin list: "..., Basic plan only". */
+export function describePromoCodeWithPlan(record: PromoCodeShape): string {
+  const target = promoTargetOf(record);
+  const base = describePromoCode(record);
+  return target ? `${base}, ${promoTargetName(target).replace(/^the /, "")} only` : `${base}, any plan`;
 }

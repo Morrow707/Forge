@@ -3837,6 +3837,19 @@ halves before splitting anything else:
   closed, so every new build needs a higher `MARKETING_VERSION` (project.pbxproj, both
   configurations). It is 1.0.1 now; the build number stays the run number. Bump it again after
   each App Store approval. 754 carries the authenticator door and the 12 commits since 741.
+- **2026-11-13: A FORGE CODE CAN BE LOCKED TO ONE PLAN.** Scott named a code per plan and asked to
+  "lock each code to its plan on the website." `redeem_codes.applies_to` (a Free Agent tier id,
+  `coach`, or null for any plan; `PROMO_TARGETS` in `shared/promo-codes.ts`), chosen on the admin
+  form ("Works on any plan" is the default, and every older code). `checkoutCodeFor` takes the
+  plan being bought and refuses a code for another plan with its plan named; `redeemPromoCode`
+  refuses a coach code to an athlete, an athlete plan's code to a coach, and a plan-locked code
+  to an account not on that plan (so it is never turned into free time with no plan behind it).
+  The Stripe coupon is created restricted to that plan's product (`applies_to.products`), so the
+  same word typed into Stripe's own box on another plan's checkout takes nothing off; with no
+  Stripe price for the plan no unrestricted coupon is made in its place. A code cannot be edited
+  after it is created (the coupon's restriction is fixed at Stripe), so a code made before this
+  stays "any plan". Four cases in `the-first-week-live-fixes.itest.ts` (three mutations caught)
+  and four in `a-plan-change-keeps-the-code.test.ts`. One admin client file: `verify_build`.
 - **2026-11-13: A PLAN CHANGE KEEPS THE CODE, AND THE WEBSITE STOPPED TALKING PRE-LAUNCH.** (1) A Free
   Agent already paying by CARD who picks another plan has the price changed on the subscription they
   have (`switchFreeAgentTierInPlace`, `POST /api/billing/switch/free-agent-tier`), not a second
