@@ -59,3 +59,21 @@ describe("shared/consent-catalog.ts", () => {
     }
   });
 });
+
+describe("signing the Service Agreement refreshes the agreed-to list", () => {
+  // Whole-line comments dropped so the explanation in the component cannot satisfy the check.
+  const signing = read("client", "src", "components", "institutional-agreement-signing.tsx")
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("//"))
+    .join("\n");
+
+  it("names the same key the documents page reads its own consents under", () => {
+    expect(documents).toContain('"/api/account/consents"');
+    expect(signing).toContain('OWN_CONSENTS_QUERY_KEY = ["/api/account/consents"]');
+  });
+
+  it("invalidates it when a signature lands, beside the agreement card", () => {
+    const onSuccess = signing.slice(signing.indexOf("onSuccess:"), signing.indexOf("onError:"));
+    expect(onSuccess).toContain("queryKey: OWN_CONSENTS_QUERY_KEY");
+  });
+});

@@ -58,6 +58,8 @@ export type InstitutionalAgreementStatus = {
   primaryCoachName?: string | null;
 };
 
+/** The "What you've agreed to" list on /documents for the signer's own account (documents.tsx). */
+const OWN_CONSENTS_QUERY_KEY = ["/api/account/consents"];
 const AGREEMENT_QUERY_KEY = ["/api/coach/institutional-agreement"];
 
 const AGREEMENT_FIELDS: {
@@ -304,6 +306,7 @@ export function InstitutionalAgreementSigning() {
         // Already signed somewhere else (another device, another tab). Not an error to show as
         // one: refetch and let the signed state replace the form.
         await qc.invalidateQueries({ queryKey: AGREEMENT_QUERY_KEY });
+        qc.invalidateQueries({ queryKey: OWN_CONSENTS_QUERY_KEY });
         return null;
       }
       if (!res.ok) {
@@ -316,6 +319,10 @@ export function InstitutionalAgreementSigning() {
     onSuccess: (result) => {
       if (result) toast.success("Signed. Your agreement is on file.");
       qc.invalidateQueries({ queryKey: AGREEMENT_QUERY_KEY });
+      // The signature also writes a consent record, which "What you've agreed to" on the same
+      // page lists. That list is cached (30s, and the cache outlives a reload), so without this
+      // it went on reading "Nothing recorded yet" right under the "signed" card (2026-11-14).
+      qc.invalidateQueries({ queryKey: OWN_CONSENTS_QUERY_KEY });
     },
     onError: (err: Error) => {
       if (err.message === "invalid") return;
