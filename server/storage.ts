@@ -396,6 +396,7 @@ import {
 import { heldSeatRefusalMessage, seatIsInSeason } from "@shared/roster-hold";
 import { readingLevelInstruction, type ClassReadingLevel } from "@shared/class-reading-level";
 import { learningStreakFromDays } from "@shared/learning-streak";
+import { PROGRAM_CHAT_MAX_TOKENS } from "./program-chat-limits";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
 import { recentForAi } from "./ai-chat-history";
 import { rememberedAiAnswer } from "./ai-answer-cache";
@@ -17847,7 +17848,9 @@ ${historyText}
 Respond to the user's latest message by calling ask_question or update_program.`;
 
     const result = await askClaudeWithTools(system, userPrompt, [askQuestionTool, updateProgramTool], { feature: "skill-program-chat",
-      maxTokens: 8192,
+      // 16000, not 8192: see requestTimeoutMs in ai.ts. A whole multi-day program ran past 8192
+      // on three of four real requests (2026-11-14) and a truncated turn is discarded whole.
+      maxTokens: PROGRAM_CHAT_MAX_TOKENS,
     });
     if (!result) {
       return fail("Sorry, I couldn't come up with a response just now -- try again in a bit.");
@@ -18444,12 +18447,14 @@ Respond to the user's latest message by calling ask_question or update_program.`
     // No web_search here, deliberately -- see the system prompt's own note above. It was the
     // single largest source of both slowness and outright request failures: any turn where the
     // model chose to search added real, unpredictable latency on top of an already-heavy
-    // request (full exercise catalog + program structure + history, up to 8192 output tokens),
+    // request (full exercise catalog + program structure + history, up to PROGRAM_CHAT_MAX_TOKENS output tokens),
     // and this platform's whole "teach the AI" system (getAiKnowledgeGuidelines,
     // getCoachesCornerPrinciplesForAi) exists specifically so this assistant's knowledge comes
     // from curated, vetted guidelines and the fixed exercise library -- not the open web.
     const result = await askClaudeWithTools(system, userPrompt, [askQuestionTool, updateProgramTool], { feature: "program-chat",
-      maxTokens: 8192,
+      // 16000, not 8192: see requestTimeoutMs in ai.ts. A whole multi-day program ran past 8192
+      // on three of four real requests (2026-11-14) and a truncated turn is discarded whole.
+      maxTokens: PROGRAM_CHAT_MAX_TOKENS,
     });
     if (!result) {
       return fail("Sorry, I couldn't come up with a response just now -- try again in a bit.");

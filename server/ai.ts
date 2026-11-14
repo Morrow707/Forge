@@ -92,9 +92,22 @@ type CallOptions = {
 // There was no timeout here at all, so a connection that hung rather than
 // erroring left the Express handler awaiting forever and the athlete or
 // coach watching a spinner that would never resolve -- on a device with
-// perfectly good internet. Two minutes is generous for the largest call in
-// the app (a 8192-token program draft) and still bounded.
-const REQUEST_TIMEOUT_MS = 120_000;
+// perfectly good internet.
+//
+// THE BOUND SCALES WITH THE OUTPUT IT HAS TO WAIT FOR (2026-11-14). A flat two minutes was
+// "generous for the largest call in the app" while that call was capped at 8192 tokens -- and
+// the cap was the bug: a 4-day program from the AI Program Builder ran past 8192 tokens on three
+// of four real requests, so `callAnthropic` discarded it and the Free Agent read "Sorry, I
+// couldn't come up with a response". Those truncated turns took 71-95s for 8192 tokens, about
+// 11ms a token, so the 16000-token cap that fixes it needs ~180s, and a flat 120s would have
+// turned the truncation into a timeout. 15ms a token, floored at two minutes and capped at five.
+const REQUEST_TIMEOUT_FLOOR_MS = 120_000;
+const REQUEST_TIMEOUT_CEILING_MS = 300_000;
+const TIMEOUT_MS_PER_OUTPUT_TOKEN = 15;
+export function requestTimeoutMs(maxTokens: unknown): number {
+  const tokens = typeof maxTokens === "number" && maxTokens > 0 ? maxTokens : 0;
+  return Math.min(REQUEST_TIMEOUT_CEILING_MS, Math.max(REQUEST_TIMEOUT_FLOOR_MS, tokens * TIMEOUT_MS_PER_OUTPUT_TOKEN));
+}
 
 async function callAnthropic(
   body: Record<string, unknown>,
@@ -106,6 +119,7 @@ async function callAnthropic(
     console.warn(`AI daily limit reached for an account; ${feature} call not sent`);
     return null;
   }
+  const timeoutMs = requestTimeoutMs(body.max_tokens);
   for (let attempt = 0; attempt <= 1; attempt++) {
     try {
       const res = await fetch(API_URL, {
@@ -116,9 +130,10 @@ async function callAnthropic(
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
-        // AbortSignal.timeout throws a TimeoutError, caught below and
-        // treated exactly like a network failure: one retry, then null.
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        // AbortSignal.timeout throws a TimeoutError, caught below. A network failure gets one
+        // retry; a TIMEOUT does not, because after minutes of waiting a second identical request
+        // doubles both the wait and the bill for something that is not a blip.
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (!res.ok) {
         const text = await res.text();
@@ -170,14 +185,14 @@ async function callAnthropic(
         `Claude request ${timedOut ? "timed out" : "failed"} (attempt ${attempt + 1}):`,
         err?.message || err,
       );
-      if (attempt === 0) {
+      if (attempt === 0 && !timedOut) {
         await new Promise((r) => setTimeout(r, 600));
         continue;
       }
       recordSystemFailure(
         "ai",
         timedOut
-          ? `Claude did not respond within ${REQUEST_TIMEOUT_MS / 1000}s`
+          ? `Claude did not respond within ${timeoutMs / 1000}s`
           : "Could not reach the Claude API",
         { detail: err },
       );

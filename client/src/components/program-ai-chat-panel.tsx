@@ -108,10 +108,38 @@ export function ProgramAiChatPanel({
     setTimeout(() => setCopiedId((current) => (current === message.id ? null : current)), 1500);
   }
 
+  // When the answer has not come back but the server may still be writing it: the time the
+  // turn was sent (the server's own clock stamps the reply, so this is only used to tell an
+  // older assistant message from the one being waited for -- with a minute of slack for clock
+  // skew, which a turn that takes one to three minutes can afford).
+  const [awaitingSince, setAwaitingSince] = useState<number | null>(null);
+  const AWAIT_LIMIT_MS = 6 * 60_000;
+
   const { data: messages, isLoading, error } = useQuery<ProgramChatMessage[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
+    refetchInterval: awaitingSince != null ? 5000 : false,
   });
+
+  // The reply landed while we were waiting on it: show the rewritten program, clear the box.
+  useEffect(() => {
+    if (awaitingSince == null || !messages) return;
+    const last = messages[messages.length - 1];
+    const landed =
+      last?.role === "assistant" && parseISO(last.createdAt).getTime() >= awaitingSince - 60_000;
+    if (landed) {
+      setAwaitingSince(null);
+      setContent("");
+      getJson(`${apiBase}/${resourcePath}/${programId}`)
+        .then((program) => onApplied(program))
+        .catch(() => {});
+      return;
+    }
+    if (Date.now() - awaitingSince > AWAIT_LIMIT_MS) {
+      setAwaitingSince(null);
+      toast.error("That's taking far longer than it should. Try sending it again.");
+    }
+  }, [messages, awaitingSince, apiBase, resourcePath, programId, onApplied, AWAIT_LIMIT_MS]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -121,8 +149,10 @@ export function ProgramAiChatPanel({
     if (messages && messages.length > 0) setOpen(true);
   }, [messages]);
 
+  const sendStartedRef = useRef<number | null>(null);
   const send = useMutation({
     mutationFn: async (overrideContent?: string) => {
+      sendStartedRef.current = Date.now();
       const res = await apiRequest("POST", fetchUrl, { content: overrideContent ?? content });
       return res.json();
     },
@@ -131,15 +161,23 @@ export function ProgramAiChatPanel({
       setContent("");
       if (result.program) onApplied(result.program);
     },
-    // A slow/failed turn (a heavy request -- full exercise catalog, program structure, chat
-    // history, up to 8192 output tokens -- occasionally taking long enough to trip a proxy or
-    // network timeout) previously just failed outright with nothing but a toast, no second
-    // attempt. 2 retries with a real backoff (not React Query's default near-instant retry,
-    // which would just resend into the same still-busy request) gives a transient failure a real
-    // chance to succeed before the athlete has to notice and resend by hand.
-    retry: 2,
-    retryDelay: (attempt) => 1000 * 2 ** attempt,
-    onError: () => toast.error("Couldn't send that, try again"),
+    // NEVER RETRIED AUTOMATICALLY (2026-11-14). A turn takes one to three minutes, so a proxy
+    // or a phone's network can give up on the connection while the server is still writing the
+    // program -- and the server finishes it anyway. The two automatic retries this used to have
+    // sent the SAME request again into that, which wrote the athlete's message three times and
+    // paid for three full model calls, one of which then applied a program the screen never
+    // showed. A refusal the server actually sent (a 4xx) is final and says so; anything else
+    // means "no answer yet", so the panel keeps waiting and reads the conversation every few
+    // seconds until the reply is there.
+    retry: false,
+    onMutate: () => setAwaitingSince(null),
+    onError: (err) => {
+      if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+        toast.error(err.message || "Couldn't send that, try again");
+        return;
+      }
+      setAwaitingSince(sendStartedRef.current ?? Date.now());
+    },
   });
 
   const [thinkingStep, setThinkingStep] = useState(0);
@@ -291,6 +329,16 @@ export function ProgramAiChatPanel({
               </div>
             </div>
           ))}
+          {awaitingSince != null && !send.isPending && (
+            <div className="flex justify-start">
+              <div className="max-w-[85%] rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm" data-testid="text-ai-still-working">
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                  Still working on it. Your program will appear here when it's ready.
+                </span>
+              </div>
+            </div>
+          )}
           {send.isPending && (
             <div className="flex justify-start">
               <div className="w-56 max-w-[85%] rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
@@ -321,7 +369,7 @@ export function ProgramAiChatPanel({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (!content.trim() || send.isPending) return;
+            if (!content.trim() || send.isPending || awaitingSince != null) return;
             send.mutate(undefined);
           }}
           className="flex shrink-0 items-end gap-2 border-t border-border pt-3"
@@ -338,11 +386,11 @@ export function ProgramAiChatPanel({
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                if (content.trim() && !send.isPending) send.mutate(undefined);
+                if (content.trim() && !send.isPending && awaitingSince == null) send.mutate(undefined);
               }
             }}
           />
-          <Button type="submit" disabled={send.isPending || !content.trim()}>
+          <Button type="submit" disabled={send.isPending || awaitingSince != null || !content.trim()}>
             <Send className="h-4 w-4" />
           </Button>
         </form>
