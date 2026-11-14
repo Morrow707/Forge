@@ -3837,6 +3837,13 @@ halves before splitting anything else:
   closed, so every new build needs a higher `MARKETING_VERSION` (project.pbxproj, both
   configurations). It is 1.0.1 now; the build number stays the run number. Bump it again after
   each App Store approval. 754 carries the authenticator door and the 12 commits since 741.
+- **2026-11-14: THE SCREEN AFTER SIGNUP ASKS FOR THE PLAN IN WORDS.** Scott signed up on the website
+  and landed on the plans (Render log: signup, then the plans screen, no plan tapped): "it didnt ask
+  me what i wanted my subscription to be ... i couldn't select it". The screen was titled Upgrade
+  and the order was drawn three cards below the button that opened it. With `?welcome=1` it is
+  titled "Choose your plan", says "Last step: which plan do you want?", offers "Decide later" (the
+  trial is unchanged), choosing a plan scrolls the order into view, and the two first-run camera
+  pop-ups wait for the next screen. Walked through the real signup form at 390px and 1280px.
 - **2026-11-13: A FORGE CODE CAN BE LOCKED TO ONE PLAN.** Scott named a code per plan and asked to
   "lock each code to its plan on the website." `redeem_codes.applies_to` (a Free Agent tier id,
   `coach`, or null for any plan; `PROMO_TARGETS` in `shared/promo-codes.ts`), chosen on the admin

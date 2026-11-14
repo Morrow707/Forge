@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "wouter";
 import { Capacitor } from "@capacitor/core";
 import {
   isGooglePlayBillingSupported,
@@ -238,6 +239,13 @@ export default function AthleteUpgrade() {
   const carriedCode = forgeCodeEntryIsAllowed()
     ? (new URLSearchParams(window.location.search).get("code")?.trim().toUpperCase() ?? "")
     : "";
+  // The order is drawn under the plans, which on a phone is three cards below the button that
+  // opened it. Scott, 2026-11-14, straight after signing up: "it didnt ask me what i wanted my
+  // subscription to be ... i couldn't select it". Choosing a plan brings the order into view.
+  const orderRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (orderTier) orderRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [orderTier]);
   const [orderCode, setOrderCode] = useState(carriedCode);
   const [appliedCode, setAppliedCode] = useState(carriedCode);
   const { data: orderPreview, isFetching: orderPreviewLoading } = useQuery<{
@@ -407,7 +415,7 @@ export default function AthleteUpgrade() {
   return (
     <FreeAgentGate title="Upgrade">
       <AppShell
-        title="Upgrade"
+        title={arrivedFromSignup && !currentTier ? "Choose your plan" : "Upgrade"}
         actions={
           live ? (
             <div className="flex items-center gap-2">
@@ -433,11 +441,20 @@ export default function AthleteUpgrade() {
           <Card className="mb-6 border-primary/40" data-testid="welcome-pick-a-plan">
             <CardContent className="p-5">
               <p className="font-display text-base font-bold uppercase tracking-wide">
-                Welcome to Forge. Pick your plan
+                Last step: which plan do you want?
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                These are the plans. Choose one to see your total before anything is charged.
+                Tap Choose this plan on the one you want. You will see your order and confirm it before
+                anything is charged.
               </p>
+              {trialEndsAt && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Your free trial runs through {trialEndsAt.toLocaleDateString()} either way.{" "}
+                  <Link href="/athlete" className="underline" data-testid="link-choose-plan-later">
+                    Decide later
+                  </Link>
+                </p>
+              )}
             </CardContent>
           </Card>
         )}
@@ -453,7 +470,7 @@ export default function AthleteUpgrade() {
             </CardContent>
           </Card>
         )}
-        {!planRequired && trialEndsAt && !entitlements?.freeAgentTier && (
+        {!planRequired && trialEndsAt && !entitlements?.freeAgentTier && !arrivedFromSignup && (
           <Card className="mb-6" data-testid="trial-running-banner">
             <CardContent className="p-5">
               <p className="text-sm font-semibold">
@@ -586,7 +603,7 @@ export default function AthleteUpgrade() {
           </div>
         )}
         {!supported && !androidNative && webBillingOpen && orderTier && orderReceipt && (
-          <Card className="mt-6 border-primary/50" data-testid="order-receipt">
+          <Card ref={orderRef} className="mt-6 scroll-mt-24 border-primary/50" data-testid="order-receipt">
             <CardContent className="space-y-4 p-5">
               <p className="font-display text-lg font-bold uppercase tracking-wide">Your order</p>
               <div className="space-y-2 text-sm">
