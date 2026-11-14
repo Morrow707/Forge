@@ -2057,6 +2057,23 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
 // row says what was not done, so an operator can finish it in the dashboard.
 // ---------------------------------------------------------------------------
 
+/** Stops Stripe's own code box taking an ended code. Best-effort, like its creation: the Forge
+ *  side is already closed by the expiry, and the coupon itself is left alone because it is what
+ *  keeps a discount running on a subscription that already has it. */
+export async function endStripePromoForCode(
+  promotionCodeId: string | null,
+): Promise<{ ended: boolean; reason?: string }> {
+  if (!promotionCodeId) return { ended: false, reason: "no_stripe_code" };
+  const stripe = getStripeClient();
+  if (!stripe) return { ended: false, reason: "stripe_not_configured" };
+  try {
+    await stripe.promotionCodes.update(promotionCodeId, { active: false });
+    return { ended: true };
+  } catch (err) {
+    return { ended: false, reason: (err as Error).message };
+  }
+}
+
 /** Creates the Stripe coupon a redemption applies to a card subscription, and a promotion
  *  code of the same name so the web checkout honours the code typed there. Returns null ids
  *  with a reason when Stripe is not configured or refuses; the Forge code is created either

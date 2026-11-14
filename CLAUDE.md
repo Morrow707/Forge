@@ -3837,6 +3837,12 @@ halves before splitting anything else:
   closed, so every new build needs a higher `MARKETING_VERSION` (project.pbxproj, both
   configurations). It is 1.0.1 now; the build number stays the run number. Bump it again after
   each App Store approval. 754 carries the authenticator door and the 12 commits since 741.
+- **2026-11-14: AN ADMIN CAN END A CODE.** Scott: "how do i delete or expire coupon codes through my
+  admin page?" There was no way. More -> Billing -> Redeem codes has an End code button per row
+  (`POST /api/admin/redeem-codes/:id/end`, `storage.endRedeemCode`): the row is kept and its expiry
+  set to now, so every place a code is typed refuses it, and Stripe's promotion code is switched off
+  (`endStripePromoForCode`, best-effort; the coupon is left so a discount already running keeps
+  running). Not undoable. A case in `the-first-week-live-fixes.itest.ts`; watched in a browser.
 - **2026-11-14: THE SCREEN AFTER SIGNUP ASKS FOR THE PLAN IN WORDS.** Scott signed up on the website
   and landed on the plans (Render log: signup, then the plans screen, no plan tapped): "it didnt ask
   me what i wanted my subscription to be ... i couldn't select it". The screen was titled Upgrade

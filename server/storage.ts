@@ -4075,6 +4075,22 @@ export const storage = {
     return rows.map((row) => ({ ...row, redemptionCount: byCode.get(row.id) ?? 0 }));
   },
 
+  /** ENDING A CODE (2026-11-14, Scott: "how do i delete or expire coupon codes through my admin
+   *  page?"). The row is kept and its expiry set to now: the redemptions that hang off it are
+   *  the record of who was given what, and findRedeemableCode already refuses an expired code
+   *  everywhere a code is typed. Free time or a discount somebody already has is not touched. */
+  async endRedeemCode(id: number): Promise<typeof redeemCodes.$inferSelect | null> {
+    const existing = await db.query.redeemCodes.findFirst({ where: eq(redeemCodes.id, id) });
+    if (!existing) return null;
+    if (existing.expiresAt && existing.expiresAt.getTime() <= Date.now()) return existing;
+    const [updated] = await db
+      .update(redeemCodes)
+      .set({ expiresAt: new Date() })
+      .where(eq(redeemCodes.id, id))
+      .returning();
+    return updated ?? existing;
+  },
+
   // ---------- Pricing catalog (admin Billing page) ----------
   /**
    * Every priced thing on the platform, read-only, straight from the coded

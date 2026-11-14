@@ -193,6 +193,21 @@ export default function AdminBilling() {
     onError: (err: ApiError) => toast.error(err.message || "Couldn't create code"),
   });
 
+  const endCodeMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("POST", `/api/admin/redeem-codes/${id}/end`, {});
+      return (await res.json()) as RedeemCode & { stripeEnded: boolean; stripe: string | null };
+    },
+    onSuccess: (ended) => {
+      if (ended.stripeEnded || ended.stripe === "no_stripe_code")
+        toast.success(`${ended.code} is ended. Nobody new can use it; anyone who already did keeps what it gave them.`);
+      else
+        toast.success(`${ended.code} is ended on Forge. Stripe could not be told (${ended.stripe ?? "unknown"}), so turn the promotion code off in the Stripe dashboard too.`, { duration: 15000 });
+      qc.invalidateQueries({ queryKey: ["/api/admin/redeem-codes"] });
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't end that code"),
+  });
+
   const saveLessonPriceMutation = useMutation({
     mutationFn: async ({ lessonId, priceCents }: { lessonId: number; priceCents: number | null }) => {
       await apiRequest("PATCH", `/api/admin/pricing/class-lessons/${lessonId}`, { priceCents });
@@ -361,6 +376,27 @@ export default function AdminBilling() {
                         ? `${c.redemptionCount ?? 0} of ${c.maxRedemptions} used`
                         : `${c.redemptionCount ?? 0} redeemed`}
                     </span>
+                    {c.expiresAt && new Date(c.expiresAt).getTime() <= Date.now() ? (
+                      <span className="ml-3 shrink-0 text-xs font-semibold text-muted-foreground" data-testid={`code-ended-${c.id}`}>
+                        Ended {new Date(c.expiresAt).toLocaleDateString()}
+                      </span>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="ml-3 shrink-0"
+                        disabled={endCodeMutation.isPending}
+                        data-testid={`button-end-code-${c.id}`}
+                        onClick={() => {
+                          if (window.confirm(`End ${c.code}? Nobody new will be able to use it. This can't be undone.`)) {
+                            endCodeMutation.mutate(c.id);
+                          }
+                        }}
+                      >
+                        End code
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>

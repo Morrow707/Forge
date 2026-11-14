@@ -48,6 +48,7 @@ import {
   getFreeAgentEntitlements,
   syncCoachSubscriptionBand,
   createStripePromoForCode,
+  endStripePromoForCode,
   cancelSubscriptionsForDeletedAccount,
 } from "./billing";
 import { uploadsLimiter } from "./rate-limiters";
@@ -4666,6 +4667,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     const code = await storage.createRedeemCode(parsed.data, stripe);
     res.status(201).json({ ...code, stripe: stripe.reason ?? null });
+  });
+
+  // End a code now: nobody new can use it, here or in Stripe's own code box. Anyone who already
+  // used it keeps what it gave them.
+  app.post("/api/admin/redeem-codes/:id/end", requireRole("admin"), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Not a code" });
+    const ended = await storage.endRedeemCode(id);
+    if (!ended) return res.status(404).json({ message: "Code not found" });
+    const stripe = await endStripePromoForCode(ended.stripePromotionCodeId);
+    res.json({ ...ended, stripeEnded: stripe.ended, stripe: stripe.reason ?? null });
   });
 
   // Every priced thing on the platform, read-only -- see pricing-catalog.ts.

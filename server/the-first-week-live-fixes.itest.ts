@@ -223,6 +223,23 @@ describe("the receipt before checkout", () => {
     expect(good.body.appliesTo).toBe("ai_coach");
     const listed = (await adminClient.get("/api/admin/redeem-codes")).body.find((c: { code: string }) => c.code === "AIONLY30");
     expect(listed.appliesTo).toBe("ai_coach");
+
+    // AN ADMIN ENDS A CODE (in this case so the file stays inside the login limiter's budget):
+    // nobody new can use it, the row stays listed, and ending it twice changes nothing.
+    const live = await storage.createRedeemCode({ code: "ENDME30", trialDays: 30 }, { couponId: "coupon_end", promotionCodeId: null });
+    const { checkoutCodeFor } = await import("./promo-codes");
+    const fa = await makeLoginableUser({ role: "athlete", dateOfBirth: "1990-01-01" });
+    expect((await checkoutCodeFor(fa.id, "ENDME30", "basic", new Date())).ok).toBe(true);
+    const ended = await adminClient.post(`/api/admin/redeem-codes/${live.id}/end`, {});
+    expect(ended.status).toBe(200);
+    expect(new Date(ended.body.expiresAt).getTime()).toBeLessThanOrEqual(Date.now());
+    const refused = await checkoutCodeFor(fa.id, "ENDME30", "basic", new Date());
+    expect(refused.ok).toBe(false);
+    expect(JSON.stringify(refused)).toMatch(/expired/i);
+    const again = await adminClient.post(`/api/admin/redeem-codes/${live.id}/end`, {});
+    expect(again.body.expiresAt).toBe(ended.body.expiresAt);
+    expect((await adminClient.get("/api/admin/redeem-codes")).body.some((c: { code: string }) => c.code === "ENDME30")).toBe(true);
+    expect((await adminClient.post("/api/admin/redeem-codes/999999/end", {})).status).toBe(404);
   });
 
   it("a coached athlete has no receipt: their plan is the program's", async () => {
