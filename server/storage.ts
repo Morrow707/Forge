@@ -5730,7 +5730,12 @@ export const storage = {
   },
 
   async createTrialSubscription(userId: number, accountType: "free_agent" | "coach") {
-    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    // NO NEW ACCOUNT GETS FREE TIME BY SIGNING UP (Scott, 2026-11-14: "no new account gets 14
+    // days free, we have a 30 day coupon"). This was fourteen days out. The row is still written,
+    // because every purchase path and every code looks for it, but its trial is already over the
+    // moment it exists: free time comes from a code (which moves this date) or not at all.
+    // Accounts created before this keep whatever trial they were given.
+    const trialEndsAt = new Date();
     const [row] = await db
       .insert(subscriptions)
       .values({

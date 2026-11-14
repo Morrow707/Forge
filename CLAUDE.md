@@ -3837,6 +3837,16 @@ halves before splitting anything else:
   closed, so every new build needs a higher `MARKETING_VERSION` (project.pbxproj, both
   configurations). It is 1.0.1 now; the build number stays the run number. Bump it again after
   each App Store approval. 754 carries the authenticator door and the 12 commits since 741.
+- **2026-11-14: NO NEW ACCOUNT GETS FREE TIME BY SIGNING UP.** Scott: "no new account gets 14 days
+  free, we have a 30 day coupon." `createTrialSubscription` still writes the signup row (every
+  purchase path and code looks for it) with a trial that is already over, for Free Agents and
+  coaches alike. So a new Free Agent is `planRequired` from the first request: the plans screen
+  after signup, sent back there from any other page, training writes 402 until a plan is bought.
+  Free time comes only from a code, which on the website takes a card on the order ($0 today). A new
+  coach has no camera or AI tools until a plan or a code. Accounts created earlier keep the trial
+  they were given. The landing page, the welcome pop-up and the plans screen no longer promise a
+  trial; "Decide later" is gone. This reverses the 14-day trial lines in the 2026-11-13 entries.
+  Walked through the real signup form in a browser; `a-plan-is-what-opens-the-paid-things.itest.ts`.
 - **2026-11-14: AN ADMIN CAN END A CODE.** Scott: "how do i delete or expire coupon codes through my
   admin page?" There was no way. More -> Billing -> Redeem codes has an End code button per row
   (`POST /api/admin/redeem-codes/:id/end`, `storage.endRedeemCode`): the row is kept and its expiry

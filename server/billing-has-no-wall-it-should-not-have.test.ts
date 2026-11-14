@@ -97,8 +97,12 @@ describe("a trial ends", () => {
     expect(paid).not.toMatch(/trialEndsAt\s*==\s*null\s*\|\|/);
   });
 
-  it("still writes an end date when it opens one", () => {
+  // Scott, 2026-11-14: "no new account gets 14 days free, we have a 30 day coupon". The signup
+  // row still carries an end date (a missing one reads as expired anyway), and that date is the
+  // moment of signup: free time comes from a code or not at all.
+  it("writes an end date at signup, and it gives no free time", () => {
     const storage = stripComments(read("storage.ts"));
-    expect(storage).toMatch(/trialEndsAt\s*=\s*new Date\(Date\.now\(\) \+ 14/);
+    expect(storage).toMatch(/const trialEndsAt = new Date\(\);/);
+    expect(storage).not.toMatch(/trialEndsAt\s*=\s*new Date\(Date\.now\(\) \+/);
   });
 });

@@ -29,7 +29,7 @@ import { ENFORCEMENT_ENABLED } from "./billing";
 import { storage } from "./storage";
 
 export const FREE_AGENT_PLAN_REQUIRED_MESSAGE =
-  "Your free trial has ended. Pick a plan to keep training. Everything you have logged is still here.";
+  "Training on Forge needs a plan. Pick one to continue. Everything you have logged is still here.";
 
 export async function freeAgentPlanRequired(user: { id: number; role: string }): Promise<boolean> {
   if (user.role !== "athlete") return false;

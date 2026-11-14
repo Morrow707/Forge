@@ -25,9 +25,10 @@ const SEEN_KEY = "forge:camera-accuracy-notice-seen";
  * this is closer to a required acknowledgment than an FYI. */
 export function CameraAccuracyNotice() {
   const [open, setOpen] = useState(() => {
-    // Not over the plan choice a new account lands on straight after signup: it would cover the
-    // one question that screen asks. It is still due, and shows on the next screen.
-    if (typeof window !== "undefined" && window.location.search.includes("welcome=1")) return false;
+    // Not over the plans screen: a new account lands there and is sent back there until it has
+    // a plan, and a notice about the camera would cover the one question that screen asks. It is
+    // still due, and shows on the next screen.
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/athlete/upgrade")) return false;
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(SEEN_KEY) !== "1";
   });

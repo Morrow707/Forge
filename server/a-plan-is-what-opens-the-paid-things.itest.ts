@@ -13,7 +13,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "./db";
-import { coachAthletes, users } from "@shared/schema";
+import { coachAthletes, subscriptions, users } from "@shared/schema";
 import { BILLING_TIER_ORDER } from "@shared/billing-tiers";
 import { storage } from "./storage";
 import { resetDatabase } from "./test-support/fixtures";
@@ -72,9 +72,17 @@ describe("fix 1: a Free Agent needs a plan to keep training", () => {
     expect((await client.get("/api/auth/me")).body.planRequired).toBe(false);
   });
 
-  it("the 14-day sign-up trial is not walled", async () => {
+  // Scott, 2026-11-14: "no new account gets 14 days free, we have a 30 day coupon".
+  it("signing up gives no free time: the row it writes is walled; free time from a code is not", async () => {
     const { user, client } = await unpaid("athlete");
     await storage.createTrialSubscription(user.id, "free_agent");
+    expect((await logWater(client)).status).toBe(PLAN_NEEDED);
+    expect((await client.get("/api/auth/me")).body.planRequired).toBe(true);
+    // What a code does: it moves the end date out.
+    await db
+      .update(subscriptions)
+      .set({ trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) })
+      .where(eq(subscriptions.userId, user.id));
     expect((await logWater(client)).status).not.toBe(PLAN_NEEDED);
   });
 
@@ -125,9 +133,14 @@ describe("fix 2: a coach account is not a free AI Coach + Video", () => {
     expect((await client.get("/api/coach/entitlements")).body.planActive).toBe(true);
   });
 
-  it("a new coach's 14-day trial counts as a plan", async () => {
+  it("a new coach gets no free time by signing up; free time from a code counts as a plan", async () => {
     const { user, client } = await unpaid("coach");
     await storage.createTrialSubscription(user.id, "coach");
+    expect((await client.get("/api/athlete/camera-access")).body.allowed).toBe(false);
+    await db
+      .update(subscriptions)
+      .set({ trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) })
+      .where(eq(subscriptions.userId, user.id));
     expect((await client.get("/api/athlete/camera-access")).body.allowed).toBe(true);
   });
 });

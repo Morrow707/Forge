@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "wouter";
 import { Capacitor } from "@capacitor/core";
 import {
   isGooglePlayBillingSupported,
@@ -437,7 +436,7 @@ export default function AthleteUpgrade() {
           ) : undefined
         }
       >
-        {arrivedFromSignup && !planRequired && !currentTier && (
+        {arrivedFromSignup && !currentTier && (
           <Card className="mb-6 border-primary/40" data-testid="welcome-pick-a-plan">
             <CardContent className="p-5">
               <p className="font-display text-base font-bold uppercase tracking-wide">
@@ -447,25 +446,20 @@ export default function AthleteUpgrade() {
                 Tap Choose this plan on the one you want. You will see your order and confirm it before
                 anything is charged.
               </p>
-              {trialEndsAt && (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  Your free trial runs through {trialEndsAt.toLocaleDateString()} either way.{" "}
-                  <Link href="/athlete" className="underline" data-testid="link-choose-plan-later">
-                    Decide later
-                  </Link>
-                </p>
-              )}
+              <p className="mt-3 text-xs text-muted-foreground">
+                Training on Forge needs a plan.{forgeCodeEntryIsAllowed() ? " If you have a code, enter it on your order." : ""}
+              </p>
             </CardContent>
           </Card>
         )}
-        {planRequired && (
+        {planRequired && !arrivedFromSignup && (
           <Card className="mb-6 border-primary/40" data-testid="plan-required-banner">
             <CardContent className="p-5">
               <p className="font-display text-base font-bold uppercase tracking-wide">
-                Your free trial has ended
+                Pick a plan to train
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Pick a plan to keep training. Everything you have logged is still here.
+                Training on Forge needs a plan. Everything you have logged is still here.
               </p>
             </CardContent>
           </Card>

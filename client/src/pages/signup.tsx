@@ -751,7 +751,7 @@ function FreeAgentWelcomeDialog({ onContinue }: { onContinue: () => void }) {
           <div className="space-y-2 rounded-md border border-border p-3">
             <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <Check className="h-3.5 w-3.5 text-primary" />
-              Available now
+              On every plan
             </p>
             <p className="text-muted-foreground">
               Build your own programs by hand, duplicate a Forge template, log workouts, track
@@ -762,12 +762,11 @@ function FreeAgentWelcomeDialog({ onContinue }: { onContinue: () => void }) {
           <div className="space-y-2 rounded-md border border-border p-3">
             <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <Lock className="h-3.5 w-3.5" />
-              On a paid plan
+              On the AI plans
             </p>
             <p className="text-muted-foreground">
-              The full AI coach is available as a paid upgrade: conversational AI program
-              building, an AI form-check review of your lifts, and the AI chat coach. The plans
-              are on the next screen.
+              Conversational AI program building, an AI form-check review of your lifts, and the
+              AI chat coach. You choose your plan on the next screen.
             </p>
           </div>
         </div>
