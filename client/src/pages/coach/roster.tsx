@@ -944,19 +944,15 @@ export default function CoachRoster() {
                 // phone -- the table itself has a min-width so columns don't
                 // crush down to unreadable slivers.
                 //
-                // The header row's `<th>` cells are individually sticky
-                // (matching the sticky-left-column idiom already used in
-                // game-days-panel.tsx) rather than the `<tr>` itself, for the
-                // same cross-browser-safe reason. Their `top` reads the
-                // --app-shell-sticky-height custom property AppShell publishes
-                // for exactly this purpose (see app-shell.tsx) -- the page
-                // itself scrolls here (roster doesn't opt into AppShell's
-                // fitScreen), and that variable tracks AppShell's own sticky
-                // brand/title/tabs bar's *real* rendered height live, so this
-                // header always lands directly below it instead of overlapping
-                // it or leaving a gap, however tall that bar happens to be at
-                // the moment (title/actions wrapped on mobile, the mobile nav
-                // panel open, a coach's branding logo, etc.).
+                // THE HEADER CELLS STICK TO THE TABLE'S OWN TOP, NOT THE APP BAR'S
+                // (2026-11-14). overflow-x-auto on the wrapper makes it the sticky
+                // container in BOTH axes (a box that clips one axis clips both), and
+                // the wrapper never scrolls vertically, so a `top` of the app bar's
+                // height (313px on a phone) was measured inside the table and drew
+                // the header row 313px down, floating across the athlete rows. With
+                // top 0 the header sits where it belongs; it does not follow the
+                // page scroll, which no value of `top` could make it do from inside
+                // a horizontally scrolling box.
                 <div className="overflow-x-auto rounded-lg border border-border">
                   <table className="w-full min-w-[760px] text-left text-sm">
                     <thead>
@@ -965,7 +961,7 @@ export default function CoachRoster() {
                           <th
                             scope="col"
                             className="sticky z-10 w-10 border-b border-white/10 bg-card/85 px-3 py-2 shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
-                            style={{ top: "var(--app-shell-sticky-height, 0px)" }}
+                            style={{ top: 0 }}
                           />
                         )}
                         {ROSTER_SORT_COLUMNS.map(({ column, label }) => {
@@ -975,7 +971,7 @@ export default function CoachRoster() {
                               key={column}
                               scope="col"
                               className="sticky z-10 border-b border-white/10 bg-card/85 px-3 py-2 shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
-                              style={{ top: "var(--app-shell-sticky-height, 0px)" }}
+                              style={{ top: 0 }}
                             >
                               <button
                                 type="button"
@@ -1003,21 +999,21 @@ export default function CoachRoster() {
                         <th
                           scope="col"
                           className="sticky z-10 border-b border-white/10 bg-card/85 px-3 py-2 shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
-                          style={{ top: "var(--app-shell-sticky-height, 0px)" }}
+                          style={{ top: 0 }}
                         >
                           <span className="label-xs">Group</span>
                         </th>
                         <th
                           scope="col"
                           className="sticky z-10 border-b border-white/10 bg-card/85 px-3 py-2 shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
-                          style={{ top: "var(--app-shell-sticky-height, 0px)" }}
+                          style={{ top: 0 }}
                         >
                           <span className="label-xs">7-Day Load</span>
                         </th>
                         <th
                           scope="col"
                           className="sticky z-10 border-b border-white/10 bg-card/85 px-3 py-2 text-right shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
-                          style={{ top: "var(--app-shell-sticky-height, 0px)" }}
+                          style={{ top: 0 }}
                         >
                           <span className="label-xs">Actions</span>
                         </th>
