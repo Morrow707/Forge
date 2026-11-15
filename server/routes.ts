@@ -921,6 +921,18 @@ async function coachPlanIsActive(coachId: number): Promise<boolean> {
   );
 }
 
+/** MAY THIS COACH USE THEIR OWN PAID TOOLS -- the camera, skill recording, the coach AI routes,
+ * the digest. The program's live plan, OR this coach's own comp switch (isBetaAccount, which the
+ * exempt list on More -> Billing sets). Added 2026-11-15: an assistant coach on the exempt list
+ * was refused all four whenever the head coach had no plan, because coachPlanIsActive reads the
+ * PRIMARY's row only. Deliberately NOT used by athleteHasPayingCoach: an athlete's camera follows
+ * the PROGRAM's plan, so comping one assistant comps that assistant and nobody on the roster. */
+async function coachMayUseOwnTools(coachId: number): Promise<boolean> {
+  if (await coachPlanIsActive(coachId)) return true;
+  const self = await storage.getUser(coachId);
+  return self?.isBetaAccount === true;
+}
+
 /** True when at least one coach this athlete is ACTIVELY on the roster of has a live plan. */
 async function athleteHasPayingCoach(athleteId: number): Promise<boolean> {
   const coaches = await storage.getCoachesForAthlete(athleteId);
@@ -948,7 +960,7 @@ function coachPlanInactiveRefusal(res: any, role: string) {
 async function requireActiveCoachPlan(req: any, res: any, next: any) {
   const user = currentUser(req);
   if (user.role !== "coach") return next();
-  if (await coachPlanIsActive(user.id)) return next();
+  if (await coachMayUseOwnTools(user.id)) return next();
   return coachPlanInactiveRefusal(res, "coach");
 }
 
@@ -1218,7 +1230,7 @@ async function cameraAccessFor(user: { id: number; email: string; role: string }
   // and then got "And the video didn't save either: Forbidden".
   if (user.role === "admin") return { allowed: true, reason: "coach_or_admin" };
   if (user.role === "coach") {
-    return (await coachPlanIsActive(user.id))
+    return (await coachMayUseOwnTools(user.id))
       ? { allowed: true, reason: "coach_or_admin" }
       : { allowed: false, reason: "coach_plan_inactive" };
   }
@@ -1265,7 +1277,7 @@ async function skillsAccessFor(user: { id: number; email: string; role: string }
   if (user.role === "coach") {
     // The library and the history stay open (a coach builds skill programs for a roster with
     // them); what a plan buys is RECORDING, which is the camera.
-    return (await coachPlanIsActive(user.id))
+    return (await coachMayUseOwnTools(user.id))
       ? { allowed: true, canRecord: true, reason: "coach_or_admin" }
       : { allowed: true, canRecord: false, reason: "coach_plan_inactive" };
   }
@@ -1541,6 +1553,9 @@ async function hasCoachesCornerAccess(user: { id: number; role: string; email: s
     const rosterSize = await storage.getRosterSeatCountForCoach(user.id);
     if (coachesCornerCompedForRoster(rosterSize)) return true;
     if ((await getEntitlementsForCoach(user.id)).hasCoachesCorner) return true;
+    // A coach on the exempt list (their OWN comp switch) reads Coaches Corner even when the
+    // program's head coach holds no add-on; getEntitlementsForCoach reads the primary's row only.
+    if ((await storage.getUser(user.id))?.isBetaAccount === true) return true;
   }
   return COMPED_COACHES_CORNER_COACHES.has(user.email);
 }
@@ -3341,7 +3356,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })),
       // Whether the program's plan is live: the camera, skill recording and the coach AI tools
       // follow it (coachPlanIsActive). The client says so instead of drawing dead buttons.
-      planActive: await coachPlanIsActive(user.id),
+      planActive: await coachMayUseOwnTools(user.id),
       billingOpen: BILLING_LIVE,
     });
   });
@@ -10514,7 +10529,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     // Fired by the dashboard on its own, so an unpaid program gets null (what it already gets
     // with no AI configured) and never a rendered error.
-    if (!(await coachPlanIsActive(user.id))) return res.json(null);
+    if (!(await coachMayUseOwnTools(user.id))) return res.json(null);
     const { digest, isNew } = await storage.getOrCreateCoachDigest(user.id);
     if (isNew && digest) {
       await notifyUser(

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
-import { users } from "@shared/schema";
+import { coachAthletes, coachStaff, users } from "@shared/schema";
 import { makeAthlete, resetDatabase } from "./test-support/fixtures";
 import { loginAs, makeLoginableUser, startTestServer, type TestServer } from "./test-support/http-app";
 import { storage } from "./storage";
@@ -69,6 +69,44 @@ describe("the exempt list", () => {
       passwordHash: "x.y",
     } as Parameters<typeof storage.createUser>[0]);
     expect(other.isBetaAccount).toBe(false);
+  });
+
+  // 2026-11-15: an assistant coach on the list was refused the camera, skill recording, the coach
+  // AI tools and Coaches Corner whenever the head coach had no plan, because those read the
+  // PRIMARY's row only. The comp opens the assistant's OWN tools; the roster's camera still
+  // follows the program's plan, so it reaches no athlete.
+  it("an assistant coach on the list gets their own tools, and their athletes do not", async () => {
+    const head = await makeLoginableUser({ role: "coach", isBetaAccount: false });
+    const assistant = await makeLoginableUser({ role: "coach", isBetaAccount: false });
+    await db.insert(coachStaff).values({ primaryCoachId: head.id, staffCoachId: assistant.id });
+    const athlete = await makeLoginableUser({ role: "athlete", isBetaAccount: false });
+    await db.insert(coachAthletes).values({ coachId: assistant.id, athleteId: athlete.id });
+    const asAssistant = await loginAs(server.baseUrl, assistant);
+    const asAthlete = await loginAs(server.baseUrl, athlete);
+
+    // The premise: unpaid program, nothing open for either of them.
+    expect((await asAssistant.get("/api/athlete/camera-access")).body.allowed).toBe(false);
+    expect((await asAssistant.get("/api/coach/entitlements")).body.planActive).toBe(false);
+    expect((await asAthlete.get("/api/athlete/camera-access")).body.allowed).toBe(false);
+
+    const [row] = await db.select().from(users).where(eq(users.id, assistant.id));
+    const admin = await makeLoginableUser({ role: "admin" });
+    const asAdmin = await loginAs(server.baseUrl, admin);
+    expect((await asAdmin.post("/api/admin/exempt-emails", { email: row.email })).status).toBe(201);
+
+    expect((await asAssistant.get("/api/athlete/camera-access")).body.allowed).toBe(true);
+    expect((await asAssistant.get("/api/athlete/skills-access")).body.canRecord).toBe(true);
+    const ent = (await asAssistant.get("/api/coach/entitlements")).body;
+    expect(ent.planActive).toBe(true);
+    expect(ent.coachesCorner.unlocked).toBe(true);
+    const draft = await asAssistant.post("/api/coach/programs/ai-draft", { prompt: "three day strength" });
+    expect(draft.status, JSON.stringify(draft.body)).not.toBe(403);
+
+    // The athlete's camera follows the program's plan, and the program still has none.
+    expect((await asAthlete.get("/api/athlete/camera-access")).body.allowed).toBe(false);
+    // And the head coach is not comped by the assistant's entry.
+    const asHead = await loginAs(server.baseUrl, head);
+    expect((await asHead.get("/api/coach/entitlements")).body.planActive).toBe(false);
   });
 
   it("only an admin can read or change the list, and a non-address is refused", async () => {

@@ -3853,6 +3853,11 @@ halves before splitting anything else:
   paywall and the plan wall read); an address with no account yet is comped at signup
   (`storage.createUser`); Remove puts the account back to needing a plan. Addresses live in the
   database, never in this repo. `the-exempt-list.itest.ts`. New table, proven on a fresh database.
+  **An assistant coach on the list gets their own tools too** (2026-11-15, `coachMayUseOwnTools`
+  in routes.ts): the camera, skill recording, the coach AI routes, the digest and Coaches Corner
+  read the program's plan OR the coach's own comp. Athletes still follow the PROGRAM's plan
+  (`athleteHasPayingCoach` keeps `coachPlanIsActive`), so comping one assistant comps nobody on
+  the roster, and the head coach is untouched. A HEAD coach on the list still covers the roster.
 - **2026-11-14: NO NEW ACCOUNT GETS FREE TIME BY SIGNING UP.** Scott: "no new account gets 14 days
   free, we have a 30 day coupon." `createTrialSubscription` still writes the signup row (every
   purchase path and code looks for it) with a trial that is already over, for Free Agents and
