@@ -98,9 +98,14 @@ jobs:
       - name: Use Xcode 26 or newer
         run: |
           set -euo pipefail
-          major=$(xcodebuild -version | head -1 | awk '{print $2}' | cut -d. -f1)
+          # Captured whole, never piped into head: under pipefail head closes the pipe early and
+          # xcodebuild aborts writing to it (exit 134, run 770) -- CLAUDE.md's pipefail lesson.
+          version_text="$(xcodebuild -version)"
+          major="$(printf '%s\n' "$version_text" | awk 'NR==1 {split($2, v, "."); print v[1]}')"
+          echo "Default: ${version_text%%$'\n'*}"
           if [ "$major" -lt 26 ]; then
-            newest=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+            candidates="$(ls -d /Applications/Xcode_26*.app 2>/dev/null || true)"
+            newest="$(printf '%s\n' "$candidates" | sort -V | awk 'END {print}')"
             if [ -z "$newest" ]; then
               echo "::error::This runner image has no Xcode 26, and App Store Connect rejects builds made with an older SDK. Use macos-latest."
               exit 1
