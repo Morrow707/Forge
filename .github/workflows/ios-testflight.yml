@@ -19,13 +19,21 @@ on:
           - verify_build
           - download_metadata
           - upload_metadata
+      runner:
+        description: "Which GitHub Mac to build on. macos-latest is Apple silicon and the default. macos-15-intel is a separate pool, for when GitHub reports its Apple-silicon Macs are at capacity and a job sits queued (2026-11-16: run 768 was dropped after 15 minutes unassigned). The step below picks Xcode 26 either way, because App Store Connect rejects an older SDK."
+        required: false
+        default: macos-latest
+        type: choice
+        options:
+          - macos-latest
+          - macos-15-intel
 
 # A superseded build has no value and holds a macOS runner while it proves
 # it. Grouped by lane so a verify_build pre-flight and a real beta upload
 # never cancel each other -- only a newer run of the SAME lane supersedes an
 # older one.
 concurrency:
-  group: ios-testflight-${{ github.event.inputs.lane }}
+  group: ios-testflight-${{ github.event.inputs.lane }}-${{ github.event.inputs.runner || 'macos-latest' }}
   cancel-in-progress: true
 
 jobs:
@@ -38,7 +46,7 @@ jobs:
     # Xcode 16.4 / iOS 18.5 SDK) -- Apple now rejects App Store uploads not
     # built with the iOS 26 SDK (Xcode 26+), and a pinned runner label never
     # gets its Xcode bumped, so it'll only get further out of date over time.
-    runs-on: macos-latest
+    runs-on: ${{ github.event.inputs.runner || 'macos-latest' }}
     timeout-minutes: 60
     steps:
       - name: Check required secrets are configured
@@ -86,6 +94,20 @@ jobs:
           ruby-version: "3.3"
           bundler-cache: true
           working-directory: ios
+
+      - name: Use Xcode 26 or newer
+        run: |
+          set -euo pipefail
+          major=$(xcodebuild -version | head -1 | awk '{print $2}' | cut -d. -f1)
+          if [ "$major" -lt 26 ]; then
+            newest=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+            if [ -z "$newest" ]; then
+              echo "::error::This runner image has no Xcode 26, and App Store Connect rejects builds made with an older SDK. Use macos-latest."
+              exit 1
+            fi
+            sudo xcode-select -s "$newest"
+          fi
+          xcodebuild -version
 
       - name: Sync Capacitor iOS platform
         run: npx cap sync ios
