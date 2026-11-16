@@ -4077,6 +4077,35 @@ halves before splitting anything else:
   gets its own peak cap 1.75 (peak +19.9 -> +6.6%). **OVR's "Jump Squat" is the Box Jump; skip its
   rep 1.** iOS will not analyse video while Forge is off screen: the numbers finish when the app is
   reopened. See docs/camera-tracking-notes.md, STATUS BOARD.
+- **2026-11-16: HOW ANY LIFT MOVES TOWARD THE SENSOR FROM HERE (Scott: "so we can further advance
+  into the positive no matter the lift"). Read this before the next camera round.**
+  1. **A bad take is a bug before it is a calibration.** Today two of three were: a file read
+     cut off by leaving the app (squat, 2 of 5), and a landing gate that only arms when the box
+     detector agrees with the typed height (box jump, 2 of 5). Check `recording.readerStatus`,
+     the rep count and `jumpEvents` before reading any percentage.
+  2. **Counts are locked by replaying real takes.** `every-paired-take-still-counts-its-reps.test.ts`
+     replays every paired box jump with the landing gate on AND off; `count-trim-never-empties-a-set`
+     replays every bar fixture. Each round adds its export to `client/src/lib/__fixtures__/`
+     (with `setId` and `trackingLevel`) so its count can never regress unseen.
+  3. **Scale settings move only by the all-sets rule** (`shared/lift-standing.ts`,
+     `scripts/sweep-lift-setting.ts`): 5+ sets, and only a step that lowers the lift's average.
+  4. **The body memory is the tool for steadiness, and it is scored before it votes.** Every bar
+     take writes `calibration.bodyModel` (what the remembered bones read) beside the blend. To
+     switch a lift on: take its sensor-paired takes, compare `bodyModel.scale` and the shipped
+     scale against the scale the sensor requires (shipped x sensorRom / reportedRom), and add the
+     lift to `LIFTS_WHERE_THE_BODY_MODEL_VOTES` only if the model is closer on average across
+     5+ takes. Measured ceiling with a perfect teacher: Pendlay 8.1 -> 4.0%, dumbbell press
+     15.3 -> 6.7%, squat/RDL level, barbell press worse. A bone's pixel reading is 3-5% noisy per
+     take; that is the floor the model cannot go under.
+  5. **Bad teachers are repeated.** A take 25% off teaches a bone 25% off (the 11-09 RDL did).
+     Next piece of work: refuse to teach from a take that fails its own checks (rep count short
+     of the logged count, `cadenceHeld` low, a reader interrupted) and seed the calibration
+     account's bones from its sensor-paired takes.
+  6. **Not built:** the jump tracker neither teaches nor reads the body memory; the plate and
+     barbell cannot teach until the detector's boxes are right (2.2x too big on the 11-16 RDL);
+     bones learned today reach the phone when the app next reloads the account.
+  7. **The marketing version is 1.0.2** (Apple approved 1.0.1 and closed it; error 90186/90062
+     on `--validate-app` means bump `MARKETING_VERSION` again, not a code fault).
 - **2026-11-16: THE ATHLETE'S BONES ARE REMEMBERED PER LIFT, AND THE MODEL RECORDS BUT DOES NOT
   VOTE YET.** `users.bodyModel` had never learned anything (its teachers were plate-only, gravity
   or tape scales; none ever happened). Any take whose other rulers agreed now teaches every visible

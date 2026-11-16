@@ -50,6 +50,31 @@ repeated. A lift is added to the voting list when its recorded `calibration.body
 sits closer to the sensor than the blend across its sets. Bones are the 2D 95th-percentile span,
 so the per-take pixel reading (3-5%) is the floor. Not run on a phone or against Postgres here.
 
+**SESSION LOG, 2026-11-16, in order (what was done, so nothing is re-derived):**
+1. Read the export: squat `readerStatus failed / Operation Interrupted`, 512 frames of a 33s clip;
+   box jump `jumpEvents` four `flight_too_long` behind `floating_above_box`; RDL clean.
+2. Box jump: landing-gate slack as a share of the box. 0.5 fixed today's take and still lost jumps
+   on 11-05 x2 and 11-09 replayed gate-on (3/5, 0/5, 2/6); 1.0 counts all four the same both ways.
+3. Squat: `runPoseAnalysis` resumes a failed reader at the last frame once the app is active
+   (compiled in run 765; not yet run on a phone).
+4. RDL: `maxPeakToMeanRatio` 1.75 (sensor peak/mean 1.62-1.73 on four paired sets). Smoothing
+   250/330ms swept, inconsistent, not used.
+5. Ledger rows `2026-11-16-back-squat` (as filmed -7.2%, live replay -1.5% because a sealed row
+   knows the shoulder ruler only at its floor) and `2026-11-16-romanian-deadlift` (+2.0%); ground
+   truth for all three; fixture `ovr-2026-11-16-export.json`; standing squat 9 sets 2.09%, RDL 9
+   sets 6.58%.
+6. Why takes differ: within one take the rulers disagree 20-40% and the mix changes (plate absent,
+   then 74% of the blend, then 0% across three RDLs). Bones per lift are steady (squat upper arm
+   0.289-0.295m, shin 0.42-0.46m across squat and RDL); across lifts they are not (bench shin
+   0.55-0.74m).
+7. Body memory built per lift, all bones, recording only (see above and CLAUDE.md for how a lift
+   is switched on). Shin-only was built first and dropped on Scott's word and on the data.
+8. `self-training-video-upload.test.ts` followed the other session's rename to
+   `coachMayUseOwnTools`. Version 1.0.2.
+Open after today: RDL rep 8 (1.52 against 0.95 on a 0.45s window); the squat's height ruler 14%
+low at 71% of the blend; the stray sixth "jump" at the end of the 11-16 clip (10.5cm, drawn as a
+chip); no ledger rows for 11-09; the body memory's save path not run against Postgres.
+
 Fixed this round, one per lift:
 - **Squat: an interrupted file read is resumed** (`AvBodyTrackingPlugin.swift`, `runPoseAnalysis`).
   iOS takes the decoder from an app that is not on screen; the reader failed 15.6s into a 33s clip
