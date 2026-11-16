@@ -4077,6 +4077,15 @@ halves before splitting anything else:
   gets its own peak cap 1.75 (peak +19.9 -> +6.6%). **OVR's "Jump Squat" is the Box Jump; skip its
   rep 1.** iOS will not analyse video while Forge is off screen: the numbers finish when the app is
   reopened. See docs/camera-tracking-notes.md, STATUS BOARD.
+- **2026-11-16: THE ATHLETE'S BONES ARE REMEMBERED PER LIFT, AND THE MODEL RECORDS BUT DOES NOT
+  VOTE YET.** `users.bodyModel` had never learned anything (its teachers were plate-only, gravity
+  or tape scales; none ever happened). Any take whose other rulers agreed now teaches every visible
+  bone into `bodyModel.byLift[exercise]` (median of up to 25 takes, source "consensus"); each later
+  take of that lift writes what the remembered bones read to `calibration.bodyModel`. It joins the
+  blend only for lifts in `LIFTS_WHERE_THE_BODY_MODEL_VOTES` (empty): replayed on 22 paired takes it
+  helped some lifts and hurt others (the 11-16 RDL +2.0 -> +7.0% when taught by the 11-09 takes), so
+  the all-sets rule holds it until a lift's recorded readings beat the blend. Do not switch a lift
+  on from one take. See `shared/athlete-body-model.ts` and the STATUS BOARD.
 - **ROUND SIXTEEN, 2026-11-10 EVENING: SET 3 ON BUILD 732, AND WHY THE LEFT ROW FOUND 4 OF 8.** Four
   reasons: the pickup swallowed pull 1, the working wrist was unseen for 1.36s (one pull lost in the
   hole; the live gate measures BODY gaps, not the wrist, so the take was not re-read from the file --

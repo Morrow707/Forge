@@ -41,7 +41,77 @@ export const MIN_LIMB_SAMPLES = 30;
 /** Which rulers are trusted enough to teach a bone. Both are independent of the body: a plate is
  *  an object of known size, and gravity is gravity. A body-derived scale is deliberately absent
  *  -- learning a limb from a scale that was itself derived from a limb is circular. */
-export const RULERS_THAT_MAY_TEACH_A_LIMB = ["plate", "gravity", "grip_width"] as const;
+export const RULERS_THAT_MAY_TEACH_A_LIMB = ["plate", "gravity", "grip_width", "consensus"] as const;
+
+/* THE FOURTH TEACHER, "consensus", AND A MODEL PER LIFT (2026-11-16). Scott: "it should learn my
+ * height and my limb length and continue to get more accurate not starting over each week" and
+ * "Don't do shin only, do them all, what if a shin is hidden? ... what happens when we're doing a
+ * bench? Or a row?"
+ *
+ * The three teachers above had never taught anything: no take in the corpus was scaled by a plate
+ * alone, so users.bodyModel was empty on every account and every take worked its scale out cold.
+ * "consensus" is a take on which two or more of the OTHER rulers agreed (the stored model itself
+ * never among them, so a bone is never learned from its own echo).
+ *
+ * PER LIFT, EVERY BONE. A bone's apparent length is steady within one lift and different between
+ * lifts (this athlete's upper arm reads 0.289-0.295m on every squat and 0.34-0.37m on every RDL;
+ * the shin 0.42-0.46m standing and 0.55-0.74m lying on a bench), because what is measured is the
+ * bone as that lift shows it to the camera. So the model is kept per exercise
+ * (bodyModel.byLift[name]), every bone the take can see is learned, and on a later take of that
+ * lift every remembered bone that is visible gives a scale and the MIDDLE of them is the model's
+ * reading -- a hidden shin leaves the forearms and the torso to answer.
+ *
+ * IT RECORDS ON EVERY TAKE AND VOTES ONLY WHERE IT HAS EARNED IT. Measured before shipping on the
+ * 22 sensor-paired takes that carry bone spans:
+ *  - taught by the phone's own scales in the order it met the takes, it made the 11-16 RDL worse
+ *    (+2.0 -> +7.0%: its teachers were the 11-09 takes, one of them 25% off) and a dumbbell press
+ *    worse (+10 -> +20%), and one bench better (-4.8 -> -0.1%);
+ *  - taught by the scale the SENSOR requires (the best a teacher can be), it reads Pendlay row
+ *    8.1 -> 4.0% and dumbbell press 15.3 -> 6.7% on average, squat and RDL about level
+ *    (2.0 -> 2.4, 3.1 -> 3.2), barbell press worse (4.1 -> 5.9).
+ * So a remembered body caps the bad takes and does not by itself reach the sensor, and a model
+ * taught by bad takes repeats them. The all-sets rule (shared/lift-standing.ts) therefore applies:
+ * the model's reading is written into every take's diagnostics (calibration.bodyModel) with what
+ * it would have read, and it joins the blend only on a lift named in
+ * LIFTS_WHERE_THE_BODY_MODEL_VOTES, which a lift enters when its recorded readings sit closer to
+ * the sensor than the blend did across that lift's sets. */
+export const LIFTS_WHERE_THE_BODY_MODEL_VOTES: readonly string[] = [];
+
+/** The model's stated uncertainty never goes under this. The stored bone may be steady to 2%,
+ *  but the take still has to MEASURE the same bone in pixels, and that reading is the noisy half. */
+export const BODY_MODEL_UNCERTAINTY_FLOOR = 0.08;
+
+export type BodyModelReading = {
+  scale: number;
+  uncertaintyFraction: number;
+  /** Each remembered, visible bone's own scale on this take. */
+  limbs: Partial<Record<LimbKey, number>>;
+  limbsVoting: number;
+};
+
+/** What the athlete's remembered bones say this take's scale is: the middle of every converged,
+ *  visible bone's scale, with their own disagreement as the uncertainty. Null with none. */
+export function readBodyModel(
+  model: AthleteBodyModel | null | undefined,
+  spansUnits: Partial<Record<LimbKey, number>>,
+): BodyModelReading | null {
+  if (!model) return null;
+  const limbs: Partial<Record<LimbKey, number>> = {};
+  for (const [key, span] of Object.entries(spansUnits) as [LimbKey, number][]) {
+    const one = scaleFromKnownLimb(model[key], span);
+    if (one) limbs[key] = one.scale;
+  }
+  const scales = Object.values(limbs).sort((a, b) => a - b);
+  if (scales.length === 0) return null;
+  const mid = scales[Math.floor(scales.length / 2)];
+  const mad = scales.map((v) => Math.abs(v - mid)).sort((a, b) => a - b)[Math.floor(scales.length / 2)];
+  return {
+    scale: mid,
+    uncertaintyFraction: Math.max(BODY_MODEL_UNCERTAINTY_FLOOR, mid > 0 ? mad / mid : 1),
+    limbs,
+    limbsVoting: scales.length,
+  };
+}
 
 export type LimbKey =
   | "upperArm"
@@ -64,6 +134,8 @@ export type LimbEstimate = {
 };
 
 export type AthleteBodyModel = Partial<Record<LimbKey, LimbEstimate>>;
+/** The stored column: the bones per lift (see byLift above), beside the older flat estimates. */
+export type StoredBodyModel = AthleteBodyModel & { byLift?: Record<string, AthleteBodyModel> };
 
 /** A limb whose estimates disagree by more than this across takes has not converged, and using
  *  it as a ruler would launder that disagreement into a confident-looking number. */
@@ -113,6 +185,6 @@ export function scaleFromKnownLimb(
     scale: estimate!.metres / measuredSpanUnits,
     // The limb's own spread IS the uncertainty -- there is no separate number to invent, and
     // pretending to one would be the population-average mistake again in new clothes.
-    uncertaintyFraction: Math.max(0.02, estimate!.spreadFraction),
+    uncertaintyFraction: Math.max(BODY_MODEL_UNCERTAINTY_FLOOR, estimate!.spreadFraction),
   };
 }

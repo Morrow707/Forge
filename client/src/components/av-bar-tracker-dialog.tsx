@@ -13,8 +13,10 @@ import {
 } from "@/lib/video-offline-store";
 import { repConsistency } from "@shared/rep-consistency";
 import {
+  LIFTS_WHERE_THE_BODY_MODEL_VOTES,
   RULERS_THAT_MAY_TEACH_A_LIMB,
-  scaleFromKnownLimb,
+  readBodyModel,
+  type StoredBodyModel,
   type AthleteBodyModel,
   type LimbKey,
 } from "@shared/athlete-body-model";
@@ -1389,21 +1391,18 @@ export function AvBarTrackerDialog({
     // rulers that divide a known length by it (the learned limb model and the 3D skeleton), so the
     // two cannot measure the same bone two different ways.
     const limbSpansUnits = measureLimbSpansInUnits(calibrationInput);
-    const bodyModelScale = (() => {
-      if (!bodyModel) return null;
-      const spans = limbSpansUnits;
-      let best: { scale: number; uncertaintyFraction: number } | null = null;
-      let bestMetres = 0;
-      for (const [key, spanUnits] of Object.entries(spans) as [LimbKey, number][]) {
-        const estimate = bodyModel[key];
-        const candidate = scaleFromKnownLimb(estimate, spanUnits);
-        if (candidate && estimate && estimate.metres > bestMetres) {
-          best = candidate;
-          bestMetres = estimate.metres;
-        }
-      }
-      return best ? { source: "body_model" as const, ...best } : null;
-    })();
+    // THE ATHLETE'S OWN REMEMBERED BONES FOR THIS LIFT (2026-11-16) -- see
+    // shared/athlete-body-model.ts. Read on every take and written into the diagnostics; it joins
+    // the blend only on a lift that has earned it (LIFTS_WHERE_THE_BODY_MODEL_VOTES).
+    const bodyModelReading = readBodyModel(
+      (bodyModel as StoredBodyModel | null | undefined)?.byLift?.[exerciseName] ?? null,
+      limbSpansUnits,
+    );
+    const bodyModelVotes = LIFTS_WHERE_THE_BODY_MODEL_VOTES.includes(exerciseName);
+    const bodyModelScale =
+      bodyModelReading && bodyModelVotes
+        ? { source: "body_model" as const, scale: bodyModelReading.scale, uncertaintyFraction: bodyModelReading.uncertaintyFraction }
+        : null;
     const shoulderScaleValue = shoulderScale.scale;
     // THE 3D SKELETON, IN METRES, ON THIS TAKE -- see body-3d-ruler.ts. A peer under overwatch
     // like every other candidate below; it decides nothing on its own.
@@ -1510,6 +1509,14 @@ export function AvBarTrackerDialog({
     );
 
     const scaleFactor = scaleVerdict.scale;
+    // WHAT THE OTHER RULERS SAID WITHOUT THE REMEMBERED BONE, for teaching it: a bone learned
+    // from a scale it voted in is its own echo. Null unless two or more of them agreed.
+    const consensusWithoutBodyModel = (() => {
+      const others = plausibleScales.filter((c) => c.source !== "body_model");
+      if (others.length < 2) return null;
+      const verdict = reconcileScaleEstimates(others, scaleTunables.maxScaleAgreementTolerance);
+      return verdict.corroborated && verdict.scale != null ? verdict.scale : null;
+    })();
 
     const calibrationFrames = calibrationMethodBreakdown(calibrationInput);
     // Which mechanism actually produced the scale, recorded alongside it. Plate-derived scale is
@@ -1604,6 +1611,7 @@ export function AvBarTrackerDialog({
       gripAxisFromVerticalDeg?: number | null;
       movementAxis?: { x: number; y: number } | null;
       positionScaleCorrection?: number | null;
+      bodyModel?: { scale: number; uncertaintyFraction: number; limbsVoting: number; limbs: Record<string, number>; voted: boolean } | null;
       body3DRuler?: {
         limbs: { limb: string; metres: number; spanUnits: number; scale: number; samples?: number }[];
         heightSource: string | null;
@@ -2142,11 +2150,21 @@ export function AvBarTrackerDialog({
     //
     // Gated here and AGAIN on the server. Two gates on purpose -- this is the one path that can
     // write a wrong number into an athlete's permanent record.
-    const limbMeasurementsM = RULERS_THAT_MAY_TEACH_A_LIMB.includes(
+    // AND FROM A TAKE WHOSE OTHER RULERS AGREED ("consensus", 2026-11-16), on the lifts the
+    // remembered bone votes on. See RULERS_THAT_MAY_TEACH_A_LIMB for why and for what it measured.
+    const independentTeacher = RULERS_THAT_MAY_TEACH_A_LIMB.includes(
       scaleSource as (typeof RULERS_THAT_MAY_TEACH_A_LIMB)[number],
-    )
+    );
+    const limbMeasurementSource: string | null = independentTeacher
+      ? scaleSource
+      : consensusWithoutBodyModel != null
+        ? "consensus"
+        : null;
+    const limbMeasurementsM = independentTeacher
       ? measureLimbsInMetres(frames, scaleFactor)
-      : null;
+      : consensusWithoutBodyModel != null
+        ? measureLimbsInMetres(frames, consensusWithoutBodyModel)
+        : null;
 
     // NOW DECIDE WHETHER THIS TAKE'S TORSO STILLNESS MEANS ANYTHING, AND ACT ON IT.
     //
@@ -2343,6 +2361,17 @@ export function AvBarTrackerDialog({
         : null;
       calibrationDiagnostics.positionScaleCorrection = positionScaleCorrection ?? null;
       calibrationDiagnostics.body3DRuler = body3DRulerDiagnostics;
+      // What the athlete's remembered bones read on this take, whether or not they voted, so
+      // every take scores the model against the blend (and the sensor, when one is beside it).
+      calibrationDiagnostics.bodyModel = bodyModelReading
+        ? {
+            scale: bodyModelReading.scale,
+            uncertaintyFraction: bodyModelReading.uncertaintyFraction,
+            limbsVoting: bodyModelReading.limbsVoting,
+            limbs: bodyModelReading.limbs as Record<string, number>,
+            voted: bodyModelVotes,
+          }
+        : null;
       // THE SHOULDER RULER, REFUSED OR NOT. Three takes across 2026-10-05/06 had this ruler
       // silently absent from scaleCandidates, body_3d alone at 100% of the weight, and all three
       // read 34-43% LOW while every corroborated take landed inside 8%. The export could not say
@@ -2666,6 +2695,8 @@ export function AvBarTrackerDialog({
           // measures the tracker's own noise, free, on every set. A rep at half the others is a
           // segmentation error (two fused, or one split) rather than a short rep.
           limbMeasurementsM,
+          limbMeasurementSource,
+          limbMeasurementLift: limbMeasurementsM ? exerciseName : null,
       repConsistency: repConsistency(
             metrics.repBreakdown.map((r) => ({ repNumber: r.repNumber, romCm: r.romCm })),
           ),
@@ -2812,6 +2843,8 @@ export function AvBarTrackerDialog({
       calibration: { scaleFactor, ...calibrationDiagnostics, ...calibrationFrames },
       trace: traceDiagnostics(metrics.repBreakdown.length, metrics),
       limbMeasurementsM,
+          limbMeasurementSource,
+          limbMeasurementLift: limbMeasurementsM ? exerciseName : null,
       // WHY EVERY FAULT RULE DECIDED WHAT IT DID, the ones that fired and the ones that were
       // held back. See FormFaultEvidence.
       faultEvidence,

@@ -32,6 +32,24 @@ depth 0.6 / window 0). Nothing was lost between updates. What the three takes re
 | Box jump | 2 jumps of 5 | 5 | - | every landing refused as "floating above the box" |
 | Box jump net rise (replayed) | 66.8cm | 67.3 | -0.8% | once the five landings are counted |
 
+**THE BODY IS REMEMBERED PER ATHLETE, PER LIFT (same day; `shared/athlete-body-model.ts`).**
+Scott: "it should learn my height and my limb length and continue to get more accurate not
+starting over each week" / "do them all, what if a shin is hidden?" `users.bodyModel` existed and
+was EMPTY on every account: its only teachers were a plate-only, gravity or tape scale, and no
+take was ever scaled that way. Now any take whose other rulers agreed ("consensus", the model
+itself never among them) teaches every bone it can see into `bodyModel.byLift[exercise]`, a
+median over up to 25 takes. On a later take of that lift every remembered, visible bone gives a
+scale and the middle one is the model's reading (`calibration.bodyModel` in every export).
+**It records on every take and votes on none yet** (`LIFTS_WHERE_THE_BODY_MODEL_VOTES` is
+empty), because measured on the 22 paired takes with bone spans: taught by the phone's own
+scales it made the 11-16 RDL worse (+2.0 -> +7.0%, its teachers the 11-09 takes) and a dumbbell
+press worse, one bench better; taught by the sensor's scale (the ceiling) it reads Pendlay 8.1 ->
+4.0%, dumbbell press 15.3 -> 6.7%, squat and RDL level, barbell press worse (4.1 -> 5.9). A
+remembered body caps the bad takes; it does not reach the sensor alone, and bad teachers are
+repeated. A lift is added to the voting list when its recorded `calibration.bodyModel.scale`
+sits closer to the sensor than the blend across its sets. Bones are the 2D 95th-percentile span,
+so the per-take pixel reading (3-5%) is the floor. Not run on a phone or against Postgres here.
+
 Fixed this round, one per lift:
 - **Squat: an interrupted file read is resumed** (`AvBodyTrackingPlugin.swift`, `runPoseAnalysis`).
   iOS takes the decoder from an app that is not on screen; the reader failed 15.6s into a 33s clip

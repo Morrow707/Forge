@@ -10179,6 +10179,10 @@ export const trackingDiagnosticsSchema = z.object({
   // Values only -- the keys are limb names from shared/athlete-body-model.ts and a record is the
   // honest shape, since a take measures whichever limbs it could see.
   limbMeasurementsM: z.record(z.string(), z.number()).nullable().optional(),
+  // Which teacher measured them: a ruler the body had no hand in, or "consensus".
+  limbMeasurementSource: z.string().nullable().optional(),
+  // The lift the bones were measured on; the model is kept per lift.
+  limbMeasurementLift: z.string().nullable().optional(),
   // What the jump state machine decided, in take order -- see jump-tracking.ts.
   jumpEvents: z
     .array(z.object({ t: z.number(), kind: z.string(), value: z.number().optional() }))
@@ -10362,6 +10366,17 @@ export const trackingDiagnosticsSchema = z.object({
         .max(8)
         .optional(),
       scaleCorroborated: z.boolean().optional(),
+      // The athlete's remembered bones for this lift, read on this take (2026-11-16).
+      bodyModel: z
+        .object({
+          scale: z.number(),
+          uncertaintyFraction: z.number(),
+          limbsVoting: z.number(),
+          limbs: z.record(z.string(), z.number()),
+          voted: z.boolean(),
+        })
+        .nullable()
+        .optional(),
       body3DRuler: z
         .object({
           limbs: z

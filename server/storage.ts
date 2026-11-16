@@ -410,7 +410,7 @@ import {
   deleteSetTraceFile,
   deleteAthleteTraceDir,
 } from "./set-trace-files";
-import { learnFromTake, type BodyModelWithHistory } from "./body-model-learning";
+import { learnFromTake, learnFromTakeForLift, type BodyModelWithHistory } from "./body-model-learning";
 import { scaleSourceIsAnchored, type AnchoredScaleSource } from "@shared/load-velocity-profile";
 import { LBS_PER_KG } from "@shared/weight-units";
 import { isGatedUploadPath } from "./media-url-signing";
@@ -24703,7 +24703,7 @@ ${catalog}`;
           // ledger stamp follows.
           for (const s of entry.sets ?? []) {
             const d = s.trackingDiagnostics as
-              | { limbMeasurementsM?: Record<string, number> | null; calibration?: { scaleSource?: string | null } }
+              | { limbMeasurementsM?: Record<string, number> | null; limbMeasurementSource?: string | null; limbMeasurementLift?: string | null; calibration?: { scaleSource?: string | null } }
               | null
               | undefined;
             if (!d?.limbMeasurementsM) continue;
@@ -24712,11 +24712,22 @@ ${catalog}`;
                 .select({ bodyModel: users.bodyModel })
                 .from(users)
                 .where(eq(users.id, athleteId));
-              const next = learnFromTake(
-                (current?.bodyModel ?? null) as BodyModelWithHistory | null,
-                d.limbMeasurementsM,
-                d.calibration?.scaleSource ?? null,
-              );
+              // "consensus" (2026-11-16) is named by the client when the take's other rulers
+              // agreed; the older teachers are named by the scale source itself. A take that
+              // names its lift is folded into that lift's own bones (bodyModel.byLift).
+              const teacher = d.limbMeasurementSource ?? d.calibration?.scaleSource ?? null;
+              const next = d.limbMeasurementLift
+                ? learnFromTakeForLift(
+                    (current?.bodyModel ?? null) as BodyModelWithHistory | null,
+                    d.limbMeasurementLift.slice(0, 120),
+                    d.limbMeasurementsM,
+                    teacher,
+                  )
+                : learnFromTake(
+                    (current?.bodyModel ?? null) as BodyModelWithHistory | null,
+                    d.limbMeasurementsM,
+                    teacher,
+                  );
               if (next) {
                 await tx.update(users).set({ bodyModel: next }).where(eq(users.id, athleteId));
               }

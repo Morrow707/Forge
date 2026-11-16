@@ -99,7 +99,10 @@ describe("the no-sensor learning signals actually reach a saved take", () => {
    *  So every learned thing is pinned at the point of USE. */
   it("the body model is READ BACK as a ruler, not just written", () => {
     const dialog = read("client/src/components/av-bar-tracker-dialog.tsx");
-    expect(dialog).toContain("scaleFromKnownLimb(");
+    // 2026-11-16: the dialog reads every remembered bone for THIS lift through readBodyModel,
+    // which is where scaleFromKnownLimb is called now.
+    expect(dialog).toContain("readBodyModel(");
+    expect(read("shared/athlete-body-model.ts")).toContain("scaleFromKnownLimb(model[key], span)");
     expect(dialog).toContain("measureLimbSpansInUnits(");
     // ...and it has to actually reach the reconciliation, not sit in a variable.
     expect(dialog).toContain("bodyModelScale != null ? [bodyModelScale]");

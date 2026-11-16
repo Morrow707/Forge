@@ -387,6 +387,9 @@ export type TrackingDiagnostics = {
     scaleCorroborated?: boolean;
     // THE 3D SKELETON RULER, BONE BY BONE -- see body-3d-ruler.ts. Its first real take scaled
     // a set 1.8x too small off one bone whose 2D read was wrong, and nothing said which bone.
+    /** The athlete's remembered bones for this lift, read on this take -- see
+     *  shared/athlete-body-model.ts. `voted` says whether it joined the blend. */
+    bodyModel?: { scale: number; uncertaintyFraction: number; limbsVoting: number; limbs: Record<string, number>; voted: boolean } | null;
     body3DRuler?: {
       limbs: { limb: string; metres: number; spanUnits: number; scale: number; samples?: number }[];
       heightSource: string | null;
@@ -716,6 +719,9 @@ export type TrackingDiagnostics = {
    *  body-derived scale is circular and would then propagate wearing the authority of a
    *  measurement. See client/src/lib/measure-limbs.ts. */
   limbMeasurementsM?: Record<string, number> | null;
+  /** Which teacher measured them -- see RULERS_THAT_MAY_TEACH_A_LIMB. */
+  limbMeasurementSource?: string | null;
+  limbMeasurementLift?: string | null;
   /** HOW MUCH THE SET DISAGREED WITH ITSELF -- see rep-consistency.ts. An athlete's range of
    *  motion does not change mid-set, so the spread is a measurement of the tracker's own noise
    *  and an outlier rep is a segmentation error rather than a short rep. */
@@ -925,6 +931,8 @@ export function samplingOnlyDiagnostics(
     ankle3D: null,
     rotation3D: null,
     limbMeasurementsM: null,
+    limbMeasurementSource: null,
+    limbMeasurementLift: null,
     faultEvidence: null,
     setRangeOfMotion: null,
     repConsistency: null,
@@ -1058,6 +1066,8 @@ export function buildTrackingDiagnostics(args: {
   ankle3D?: TrackingDiagnostics["ankle3D"];
   rotation3D?: TrackingDiagnostics["rotation3D"];
   limbMeasurementsM?: TrackingDiagnostics["limbMeasurementsM"];
+  limbMeasurementSource?: string | null;
+  limbMeasurementLift?: string | null;
   faultEvidence?: TrackingDiagnostics["faultEvidence"];
   setRangeOfMotion?: TrackingDiagnostics["setRangeOfMotion"];
   repConsistency?: TrackingDiagnostics["repConsistency"];
@@ -1081,6 +1091,8 @@ export function buildTrackingDiagnostics(args: {
     ankle3D: args.ankle3D ?? null,
     rotation3D: args.rotation3D ?? null,
     limbMeasurementsM: args.limbMeasurementsM ?? null,
+    limbMeasurementSource: args.limbMeasurementSource ?? null,
+    limbMeasurementLift: args.limbMeasurementLift ?? null,
     faultEvidence: args.faultEvidence,
     setRangeOfMotion: args.setRangeOfMotion,
     repConsistency: args.repConsistency ?? null,

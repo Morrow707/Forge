@@ -52,3 +52,17 @@ export function learnFromTake(
   next.history = history;
   return next;
 }
+
+/** The same fold, into the athlete's model FOR ONE LIFT (bodyModel.byLift[lift]) -- see
+ *  shared/athlete-body-model.ts for why a bone is remembered per lift. The flat model beside it
+ *  is left exactly as it was. */
+export function learnFromTakeForLift(
+  existing: (BodyModelWithHistory & { byLift?: Record<string, BodyModelWithHistory> }) | null | undefined,
+  lift: string,
+  measurements: Partial<Record<LimbKey, number>>,
+  source: string | null | undefined,
+): (BodyModelWithHistory & { byLift?: Record<string, BodyModelWithHistory> }) | null {
+  const forLift = learnFromTake(existing?.byLift?.[lift] ?? null, measurements, source);
+  if (!forLift) return null;
+  return { ...(existing ?? {}), byLift: { ...(existing?.byLift ?? {}), [lift]: forLift } };
+}
