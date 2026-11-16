@@ -2904,6 +2904,20 @@ export function AvBarTrackerDialog({
       return;
     }
 
+    // THE NUMBERS GO ON THE SET NOW, NOT AFTER THE UPLOAD (2026-11-16).
+    //
+    // This used to await the clip's upload -- ten to thirty seconds of a phone pushing a video --
+    // before handing the measured take up at all, so for that whole window the set's numbers
+    // existed only in this component's memory. Leave the app or have it killed in that window and
+    // the take was gone, numbers and all, though the analysis had already finished. Scott: "we
+    // should be saving regardless of phone status. If the athlete exits out ... if it crashes, it
+    // should still be there." Handing them up here puts them through the workout screen's
+    // immediate save (and its on-device queue) straight away; the clip follows when it lands,
+    // as a second call with the SAME metrics object, which the screen attaches only while this
+    // take is still the set's latest (a retake in between keeps the retake).
+    onCapture(metrics, undefined, forSetNumber, skeletonFrames);
+    onOpenChange(false);
+
     // uploadPromise is always set here -- onBlobReady (stopTracking above) unconditionally
     // starts it whenever recordVideo is true, and the early return above already covers
     // !recordVideo. Falls back to a fresh upload rather than silently dropping the video if
@@ -2926,15 +2940,13 @@ export function AvBarTrackerDialog({
             { duration: 10000 },
           );
         }
-        onCapture(metrics, undefined, forSetNumber, skeletonFrames);
       } else {
         onCapture(metrics, result.url, forSetNumber, skeletonFrames);
       }
-      onOpenChange(false);
     } catch (err) {
+      // diagnostics-exempt: the take was already handed up above, before this upload was awaited,
+      // so the numbers and the diagnostics are on the set whatever happens to the clip.
       toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
-      onCapture(metrics, undefined, forSetNumber, skeletonFrames);
-      onOpenChange(false);
     } finally {
       setSaving(false);
     }

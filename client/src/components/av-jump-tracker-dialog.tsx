@@ -914,6 +914,14 @@ export function AvJumpTrackerDialog({
       return;
     }
 
+    // THE NUMBERS GO ON THE SET NOW, NOT AFTER THE UPLOAD (2026-11-16) -- the same change as the
+    // bar tracker's finishWithRecording, for the same reason: awaiting the clip first left the
+    // take in memory alone for the length of an upload, and leaving the app lost it. The clip
+    // follows as a second call with the SAME metrics object, which the workout screen attaches
+    // only while this take is still the set's latest.
+    onCapture(metrics, undefined, forSetNumber, skeletonFrames);
+    onOpenChange(false);
+
     // uploadPromise is always set by now -- onBlobReady (stopTracking above) unconditionally
     // starts it whenever recordVideo is true, and recordVideo is true on every path that
     // reaches here (the early return above already covers the other case). The fallback still
@@ -937,15 +945,13 @@ export function AvJumpTrackerDialog({
             { duration: 10000 },
           );
         }
-        onCapture(metrics, undefined, forSetNumber, skeletonFrames);
       } else {
         onCapture(metrics, result.url, forSetNumber, skeletonFrames);
       }
-      onOpenChange(false);
     } catch (err) {
+      // diagnostics-exempt: the take was already handed up above, before this upload was awaited,
+      // so the numbers and the diagnostics are on the set whatever happens to the clip.
       toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
-      onCapture(metrics, undefined, forSetNumber, skeletonFrames);
-      onOpenChange(false);
     } finally {
       setSaving(false);
     }

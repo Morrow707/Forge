@@ -3213,6 +3213,12 @@ function ExerciseLogContent({
   // not yet solved and could lose that set's numbers -- worth a follow-up if that turns out to
   // happen in practice.
   const [processingSets, setProcessingSets] = useState<Set<number>>(new Set());
+  // The metrics object of the latest take handed up for each set. The bar tracker hands a take up
+  // twice since 2026-11-16 -- the numbers the moment analysis ends, the clip when its upload lands
+  // -- and a retake can land between the two. The clip's call attaches only to the take it came
+  // from (same object), so it can never put take one's video and numbers back over take two.
+  const latestTakeBySetRef = useRef(new Map<number, object>());
+  const appliedTakesRef = useRef(new WeakSet<object>());
   // Upload percentage for whichever set(s) are in processingSets above -- AvBarTrackerDialog's
   // own uploadProgress state becomes invisible to the athlete the moment it closes early (see
   // that dialog's onUploadProgress prop comment), so this is the only way the inline
@@ -4414,6 +4420,22 @@ function ExerciseLogContent({
             // value here, unchanged from before.
             const targetSetNumber = explicitSetNumber ?? trackingSet;
             if (targetSetNumber == null) return;
+            // THE CLIP'S FOLLOW-UP CALL. Same metrics object as a take already applied: attach the
+            // video to it, and only while it is still this set's latest take. Nothing else is
+            // re-applied, so the follow-up never re-sends the take's frames or re-runs a form check
+            // on numbers that already landed.
+            const latestTake = latestTakeBySetRef.current.get(targetSetNumber);
+            if (videoUrl && latestTake === metrics) {
+              onUpdateSet(targetSetNumber, { formCheckVideoUrl: videoUrl }, { immediate: true });
+              if (videoRequired) submitFormCheck(targetSetNumber, videoUrl);
+              return;
+            }
+            if (videoUrl && latestTake !== undefined && latestTake !== metrics && appliedTakesRef.current.has(metrics)) {
+              // A retake replaced this take while its clip was uploading. The retake stays.
+              return;
+            }
+            latestTakeBySetRef.current.set(targetSetNumber, metrics);
+            appliedTakesRef.current.add(metrics);
             const videoPatch = videoUrl ? { formCheckVideoUrl: videoUrl } : {};
 
             // A re-take whose numbers were WITHHELD must not erase a previous take's good ones.
