@@ -53,6 +53,24 @@ describe("a landing on the box is a landing", () => {
     for (const r of m.repBreakdown) expect(r.flightSeconds).toBeLessThan(0.8);
   });
 
+  // Scott, 2026-11-16, looking at two chips under a five-jump set: "why didn't box jump give my
+  // m/s every rep? Used to ... Lock that in place." The row draws one chip per counted jump, so
+  // the m/s went missing with the jumps. Every counted jump carries its own takeoff speed, and
+  // the workout screen prints it on that jump's chip.
+  it("every one of the five jumps carries its own m/s, and the screen prints it per jump", () => {
+    for (const landing of [BOX_M, BOX_M * 1.1, BOX_M * 1.4]) {
+      const m = run(landing)!;
+      expect(m.repBreakdown.length).toBe(5);
+      for (const r of m.repBreakdown) {
+        expect(r.takeoffVelocityMps).not.toBeNull();
+        expect(r.takeoffVelocityMps!).toBeGreaterThan(2);
+        expect(r.takeoffVelocityMps!).toBeLessThan(5);
+      }
+    }
+    const screen = readFileSync(join(__dirname, "../pages/workout.tsx"), "utf8");
+    expect(screen).toContain("j.takeoffVelocityMps != null ? ` · ${j.takeoffVelocityMps} m/s takeoff` : \"\"");
+  });
+
   it("counts all five at the 1.40x the box ruler has measured on a paired take", () => {
     expect(run(BOX_M * 1.4)!.repBreakdown.length).toBe(5);
   });
