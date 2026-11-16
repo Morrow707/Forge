@@ -121,6 +121,10 @@ describe("the count-trim removes surplus and never a set", () => {
     // the rep beside the hole. See docs/camera-tracking-notes.md "Round sixteen".
     "ovr-2026-11-10-set3-export.json:2026-11-10 Dumbbell Shoulder Press set 3": 7,
     "ovr-2026-11-10-set3-export.json:2026-11-10 Single-Arm Dumbbell Row set 5": 5,
+    // Round seventeen (2026-11-16, build 764): the squat's TRACE is 15.6s of a 33s clip -- the
+    // file read was interrupted when the app left the screen -- so two reps are all it holds.
+    // Not the segmenter: the three missing reps were never read. The reader resumes now.
+    "ovr-2026-11-16-export.json:2026-11-16 Back Squat set 1": 2,
   };
 
   it.each(
