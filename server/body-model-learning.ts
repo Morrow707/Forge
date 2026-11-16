@@ -1,5 +1,5 @@
 import type { AthleteBodyModel, LimbKey } from "@shared/athlete-body-model";
-import { foldLimbMeasurement, RULERS_THAT_MAY_TEACH_A_LIMB } from "@shared/athlete-body-model";
+import { foldLimbMeasurement, limbLengthIsPlausible, RULERS_THAT_MAY_TEACH_A_LIMB } from "@shared/athlete-body-model";
 
 /**
  * FOLDING ONE TAKE'S MEASUREMENTS INTO WHAT THIS ATHLETE'S SKELETON IS KNOWN TO BE.
@@ -41,8 +41,10 @@ export function learnFromTake(
   let learnedAnything = false;
 
   for (const [key, metres] of Object.entries(measurements) as [LimbKey, number][]) {
-    if (!Number.isFinite(metres) || metres <= 0) continue;
-    const prior = history[key] ?? [];
+    if (!limbLengthIsPlausible(metres)) continue;
+    // A reading already stored outside the plausible band is a unit error (2026-11-16), not a
+    // bone: it leaves the history here rather than outvoting the first real take.
+    const prior = (history[key] ?? []).filter(limbLengthIsPlausible);
     next[key] = foldLimbMeasurement(existing?.[key], metres, scaleSource, prior);
     history[key] = [...prior, metres].slice(-MAX_LIMB_HISTORY);
     learnedAnything = true;

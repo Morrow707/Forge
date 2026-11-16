@@ -2160,10 +2160,15 @@ export function AvBarTrackerDialog({
       : consensusWithoutBodyModel != null
         ? "consensus"
         : null;
+    // Measured on calibrationInput -- the SAME raw-unit landmarks limbSpansUnits is read from --
+    // never on `frames`, whose landmarks are already multiplied by the scale. Teaching from
+    // `frames` applied the scale twice and stored every bone about 250x too short (an upper arm
+    // of 3mm, 2026-11-16), so the remembered bones could never give back a scale. A bone learned
+    // and a bone read have to be the same measurement, or the difference lands in every distance.
     const limbMeasurementsM = independentTeacher
-      ? measureLimbsInMetres(frames, scaleFactor)
+      ? measureLimbsInMetres(calibrationInput, scaleFactor)
       : consensusWithoutBodyModel != null
-        ? measureLimbsInMetres(frames, consensusWithoutBodyModel)
+        ? measureLimbsInMetres(calibrationInput, consensusWithoutBodyModel)
         : null;
 
     // NOW DECIDE WHETHER THIS TAKE'S TORSO STILLNESS MEANS ANYTHING, AND ACT ON IT.

@@ -141,6 +141,15 @@ export type StoredBodyModel = AthleteBodyModel & { byLift?: Record<string, Athle
  *  it as a ruler would launder that disagreement into a confident-looking number. */
 export const LIMB_CONVERGED_MAX_SPREAD = 0.08;
 
+/** The lengths a human bone, grip or shoulder span can actually have, in metres. A reading
+ *  outside this is a unit error, not a skeleton (the 2026-11-16 teaching bug stored 0.002-0.006m),
+ *  so it is never learned, and one already stored is dropped from the history at the next fold. */
+export const LIMB_METRES_PLAUSIBLE = { min: 0.08, max: 1.3 } as const;
+
+export function limbLengthIsPlausible(metres: number): boolean {
+  return Number.isFinite(metres) && metres >= LIMB_METRES_PLAUSIBLE.min && metres <= LIMB_METRES_PLAUSIBLE.max;
+}
+
 export function limbHasConverged(estimate: LimbEstimate | undefined): boolean {
   // Two takes cannot establish a spread -- either one is equally the outlier.
   return (
@@ -159,7 +168,7 @@ export function foldLimbMeasurement(
   source: string,
   history: number[],
 ): LimbEstimate {
-  const all = [...history, metresThisTake].filter((m) => Number.isFinite(m) && m > 0);
+  const all = [...history, metresThisTake].filter(limbLengthIsPlausible);
   const sorted = [...all].sort((a, b) => a - b);
   const median = sorted[Math.floor(sorted.length / 2)];
   const mad = [...all.map((m) => Math.abs(m - median))].sort((a, b) => a - b)[
