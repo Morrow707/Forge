@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { App } from "@capacitor/app";
+import { readLastSignedInUser, rememberSignedInUser } from "@/lib/last-signed-in-user";
 import { useMutation, useQuery, useQueryClient, useIsRestoring } from "@tanstack/react-query";
 import { hasSessionHint, rememberSessionState } from "@/lib/session-hint";
 import { apiRequest, ApiError, getQueryFn, setNativeToken } from "@/lib/queryClient";
@@ -270,9 +271,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: isFetching,
     isError,
     error,
+    isPlaceholderData,
   } = useQuery<PublicUser | null>({
     queryKey: ["/api/auth/me"],
     queryFn: getQueryFn({ on401: "returnNull" }),
+    // The phone draws at once from who was signed in last time, while this check runs
+    // (lib/last-signed-in-user.ts). Undefined on the web and whenever the token names nobody.
+    placeholderData: () => readLastSignedInUser<PublicUser>(),
     retry: 3,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
   });
@@ -310,6 +315,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isLoading || isError || user === undefined) return;
     rememberSessionState(user !== null);
   }, [isLoading, isError, user]);
+
+  // Only a real answer from the server is remembered, never the placeholder echoing itself.
+  useEffect(() => {
+    if (isPlaceholderData || isLoading || isError || user === undefined) return;
+    rememberSignedInUser(user);
+  }, [isPlaceholderData, isLoading, isError, user]);
 
   // Who the offline queues may flush for right now. Set from the resolved
   // session rather than at login, so it is also correct on a cold start with

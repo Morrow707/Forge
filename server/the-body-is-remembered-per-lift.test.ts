@@ -85,7 +85,9 @@ describe("the body is remembered per lift", () => {
   it("a bone is never learned from a scale it voted in", () => {
     const dialog = strip(readFileSync(join(__dirname, "../client/src/components/av-bar-tracker-dialog.tsx"), "utf8"));
     expect(dialog).toMatch(/plausibleScales\.filter\(\(c\) => c\.source !== "body_model"\)/);
-    expect(dialog).toMatch(/measureLimbsInMetres\(frames, consensusWithoutBodyModel\)/);
+    // Taught on calibrationInput, the raw-unit landmarks the read uses (2026-11-16: on `frames`
+    // the scale was applied twice and every bone stored ~250x short).
+    expect(dialog).toMatch(/measureLimbsInMetres\(calibrationInput, consensusWithoutBodyModel\)/);
   });
 
   it("the server folds a take that names its lift into that lift", () => {

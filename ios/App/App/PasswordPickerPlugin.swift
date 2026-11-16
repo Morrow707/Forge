@@ -341,6 +341,7 @@ final class NativeLoginViewController: UIViewController {
         passwordField.isSecureTextEntry = true
         passwordField.returnKeyType = .go
         passwordField.delegate = self
+        passwordField.addTarget(self, action: #selector(passwordChanged), for: .editingChanged)
         addRevealToggle(to: passwordField)
 
         signInButton.setTitle("Log In", for: .normal)
@@ -637,6 +638,27 @@ final class NativeLoginViewController: UIViewController {
         let password = passwordField.text ?? ""
         guard !username.isEmpty, !password.isEmpty, !finished else { return }
         finish(.signIn(username: username, password: password))
+    }
+
+    // A SAVED PASSWORD SIGNS IN BY ITSELF (2026-11-16, Scott: "speed up apples auto populate for
+    // remembered credentials"). Apple's Passwords fill puts the whole password into an empty field
+    // in one edit; typing grows it a character at a time. So an empty field that jumps to a full
+    // password while the email is already there is a fill, and the sheet signs in a third of a
+    // second later -- long enough to see the fields fill, and cancelled if the text changed again
+    // in between. Typing is untouched: it still ends with the Log In button or the Go key.
+    private var passwordLengthBefore = 0
+    static let autoSubmitMinimumPasswordLength = 6
+
+    @objc private func passwordChanged() {
+        let now = passwordField.text?.count ?? 0
+        let arrivedWhole = passwordLengthBefore == 0 && now >= Self.autoSubmitMinimumPasswordLength
+        passwordLengthBefore = now
+        let username = usernameField.text?.trimmingCharacters(in: .whitespaces) ?? ""
+        guard arrivedWhole, !username.isEmpty else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, (self.passwordField.text?.count ?? 0) == now else { return }
+            self.submit()
+        }
     }
 
     @objc private func forgotTapped() { finish(.navigate(path: "/forgot-password")) }

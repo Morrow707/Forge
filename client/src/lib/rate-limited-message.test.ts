@@ -65,7 +65,7 @@ describe("a 429 says it is a rate limit, not a connection fault", () => {
   it("the auth context actually hands the error down, or the branch is dead code", () => {
     const auth = read("hooks/use-auth.tsx");
     expect(auth).toContain("error: unknown;");
-    expect(auth).toMatch(/isError,\s*\n\s*error,\s*\n\s*\} = useQuery</);
+    expect(auth).toMatch(/isError,\s*\n\s*error,[\s\S]*?\} = useQuery</);
   });
 
   it("ReadFailed says the same thing when it is given the error", () => {

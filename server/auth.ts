@@ -1991,6 +1991,21 @@ export function setupAuth(app: Express) {
   // checks revokedAt on every request. Awaited before the response, for the
   // same reason the reset flow awaits its revoke -- this is the security
   // effect being asked for, not a courtesy afterward.
+  // A SIGNED-IN PHONE RENEWS ITS OWN TOKEN, SO ITS 30 DAYS RUN FROM THE LAST USE, NOT FROM SIGN-IN
+  // (2026-11-16, Scott: "speed up logging in"). The cookie session has rolled since it was written
+  // (`rolling: true` below); the native token never did, so an athlete who opened Forge every day
+  // was still sent back to the login screen 30 days after signing in. Only a request that already
+  // authenticated WITH a native token can renew one, and the new token names the SAME session
+  // record, so "sign out other devices" and a password reset revoke it exactly as before.
+  app.post("/api/auth/native-token/renew", (req, res) => {
+    const user = req.user as { id: number } | undefined;
+    const sessionRecordId = (req as any).nativeSessionRecordId as number | undefined;
+    if (!user || !Number.isInteger(sessionRecordId)) {
+      return res.status(401).json({ message: "Sign in again to continue." });
+    }
+    res.json({ nativeToken: signNativeToken(user.id, sessionRecordId!) });
+  });
+
   app.post("/api/auth/logout", async (req, res, next) => {
     try {
       const user = req.user as { id: number } | undefined;
