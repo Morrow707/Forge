@@ -85,7 +85,6 @@ type ProgramSummary = {
 };
 
 type RosterEntry = { id: number; name: string; email: string };
-type ExerciseSummary = { id: number };
 type TeamSummary = { id: number; name: string; code: string | null };
 
 export default function CoachDashboard() {
@@ -97,8 +96,13 @@ export default function CoachDashboard() {
   const { data: roster = [], isError: rosterFailed, refetch: refetchRoster } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
   });
-  const { data: exercises = [], isError: exercisesFailed, refetch: refetchExercises } = useQuery<ExerciseSummary[]>({
-    queryKey: ["/api/coach/exercises"],
+  // The count, not the library -- see storage.summarizeExercisesForOwners. Keyed under
+  // "/api/coach/exercises" so every invalidation of the list refreshes this number too.
+  const { data: exerciseSummary, isError: exercisesFailed, refetch: refetchExercises } = useQuery<{
+    total: number;
+    categories: number;
+  }>({
+    queryKey: ["/api/coach/exercises", "summary"],
   });
   const { data: teams = [], refetch: refetchTeams } = useQuery<TeamSummary[]>({
     queryKey: ["/api/coach/teams"],
@@ -323,7 +327,7 @@ export default function CoachDashboard() {
           <StatTile
             icon={Dumbbell}
             label="Exercises in bank"
-            value={exercises.length}
+            value={exerciseSummary?.total ?? 0}
             unavailable={exercisesFailed}
             href="/coach/exercises"
           />

@@ -2234,6 +2234,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(result);
   });
 
+  // Registered before /:id, which would otherwise read "summary" as an id. See
+  // storage.summarizeExercisesForOwners for why the dashboards ask for this, not the list.
+  app.get("/api/coach/exercises/summary", requireRole("coach"), async (req, res) => {
+    res.json(await storage.summarizeVisibleExercisesForCoach(currentUser(req).id));
+  });
+
   app.get("/api/coach/exercises/:id", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
@@ -3370,6 +3376,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const list = await storage.getExercisesByCoach(user.id, { includeAllAdmins: true });
     res.json(list);
+  });
+
+  app.get("/api/admin/exercises/summary", requireRole("admin"), async (req, res) => {
+    res.json(await storage.summarizeExercisesForAdmin(currentUser(req).id));
   });
 
   app.get("/api/admin/exercises/:id", requireRole("admin"), async (req, res) => {

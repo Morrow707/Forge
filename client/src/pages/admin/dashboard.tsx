@@ -25,7 +25,6 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { addDays, format, formatISO, isToday } from "date-fns";
-import type { ExerciseWithOwnership } from "@/lib/exercise-types";
 
 type PendingSubmissionsResponse = { total: number };
 type OpenReportsResponse = { total: number };
@@ -94,8 +93,10 @@ type JobHealth = {
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
-  const { data: exercises = [], isError: exercisesFailed } = useQuery<ExerciseWithOwnership[]>({
-    queryKey: ["/api/admin/exercises"],
+  // The count, not the library -- see storage.summarizeExercisesForOwners. Keyed under
+  // "/api/admin/exercises" so every invalidation of the list refreshes these numbers too.
+  const { data: exerciseSummary, isError: exercisesFailed } = useQuery<{ total: number; categories: number }>({
+    queryKey: ["/api/admin/exercises", "summary"],
   });
   // limit=1: this widget only needs the total count, not the rows
   // themselves -- see getPendingSubmissionsForAdmin/getOpenReportsForAdmin's
@@ -131,10 +132,6 @@ export default function AdminDashboard() {
     onError: (err: ApiError) => toast.error(err.message || "Couldn't clear that event"),
   });
 
-  const categoryCounts = exercises.reduce<Record<string, number>>((acc, ex) => {
-    acc[ex.category] = (acc[ex.category] ?? 0) + 1;
-    return acc;
-  }, {});
   const pendingCount = (submissions?.total ?? 0) + (reports?.total ?? 0);
   // Same rule as the StatTile `unavailable` prop beside it: a failed read must not
   // render as a confident "0 awaiting review", because the one thing that number is
@@ -262,7 +259,7 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <p className="font-display text-3xl font-bold">
-                    {exercisesFailed ? "--" : exercises.length}
+                    {exercisesFailed ? "--" : (exerciseSummary?.total ?? 0)}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {exercisesFailed ? "Forge exercises, couldn't load" : "Forge exercises"}
@@ -278,7 +275,7 @@ export default function AdminDashboard() {
                   <ArrowRight className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="font-display text-3xl font-bold">{Object.keys(categoryCounts).length}</p>
+                  <p className="font-display text-3xl font-bold">{exerciseSummary?.categories ?? 0}</p>
                   <p className="text-sm text-muted-foreground">Categories covered</p>
                 </div>
               </CardContent>

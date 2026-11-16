@@ -12794,6 +12794,31 @@ Hard rules, no exceptions:
     };
   },
 
+  // A HOME-SCREEN TILE NEEDS A NUMBER, NOT THE LIBRARY (2026-11-16). The coach and admin
+  // dashboards each downloaded every exercise -- 410 rows, 335KB of JSON with the owner joined on
+  // every one -- to print how many there are. On the live server that one request held the
+  // dashboard's twenty-request burst open 0.5-1s longer than everything else together. Same owner
+  // set as the list it summarises, so the number on the tile is the length of the list behind it.
+  async summarizeExercisesForOwners(ownerIds: number[]): Promise<{ total: number; categories: number }> {
+    if (ownerIds.length === 0) return { total: 0, categories: 0 };
+    const rows = await db
+      .select({ category: exercises.category, n: count() })
+      .from(exercises)
+      .where(inArray(exercises.coachId, ownerIds))
+      .groupBy(exercises.category);
+    return { total: rows.reduce((sum, r) => sum + Number(r.n), 0), categories: rows.length };
+  },
+
+  async summarizeVisibleExercisesForCoach(coachId: number) {
+    const { ownerIds } = await this.getCoachAndAdminOwnerIds(coachId);
+    return this.summarizeExercisesForOwners(ownerIds);
+  },
+
+  async summarizeExercisesForAdmin(adminId: number) {
+    const { readableIds } = await this.libraryOwnerIds(adminId, { includeAllAdmins: true });
+    return this.summarizeExercisesForOwners(readableIds);
+  },
+
   async getExercisesByCoach(coachId: number, opts?: { includeAllAdmins?: boolean }) {
     const { readableIds, editableIds } = await this.libraryOwnerIds(coachId, opts);
     const rows = await db.query.exercises.findMany({
