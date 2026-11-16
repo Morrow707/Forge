@@ -2167,61 +2167,12 @@ export function WorkoutPage({
   // closes. Registered once (not re-attached per keystroke) and always
   // reads itemsRef.current for the freshest snapshot at the moment it fires.
   useEffect(() => {
-    function flush() {
+    // THE DURABLE COPY. A request sent while the app is leaving the screen is a hope, not a save:
+    // iOS suspends a backgrounded app within seconds and kills it whenever it wants the memory,
+    // and an in-flight request dies with it. The queue (offline-queue.ts, a file on the phone)
+    // survives that and is replayed on resume or the next launch.
+    function rescueToQueue() {
       // Never save a day this screen never loaded -- see hydratedRef.
-      if (!hydratedRef.current) return;
-      const payload = buildLogPayload(itemsRef.current, dayCompletedRef.current);
-      const body = JSON.stringify(payload);
-      if (typeof navigator.sendBeacon === "function") {
-        const blob = new Blob([body], { type: "application/json" });
-        if (navigator.sendBeacon(resolveApiUrl(`${apiBase}/log`), blob)) return;
-        // Declined -- most likely the browser's own per-beacon size quota
-        // (commonly ~64KB), plausibly exceeded by a day with several
-        // camera-tracked sets' full path/rep-breakdown JSON already saved
-        // alongside whatever just changed. Fall through to the fetch
-        // fallback below rather than losing the save silently.
-      }
-      // fetch with keepalive survives the page tearing down the same way
-      // sendBeacon does, and is the standard fallback for a browser with no
-      // sendBeacon support at all, or one that declined this specific
-      // payload -- though in some browsers keepalive requests share the
-      // exact same total-quota pool sendBeacon draws from, so this is a
-      // real second attempt, not a guaranteed one for a payload that's
-      // already large enough to hit that shared limit. Fire-and-forget:
-      // there's nothing left to do with a rejection once the page is
-      // already tearing down.
-      const token = getNativeToken();
-      fetch(resolveApiUrl(`${apiBase}/log`), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body,
-        credentials: "include",
-        keepalive: true,
-      }).catch(() => {});
-    }
-    function handleVisibilityChange() {
-      if (document.visibilityState === "hidden") flush();
-    }
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", flush);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("pagehide", flush);
-      // The tab/app-close cases above don't cover an *in-app* navigation
-      // away from this page -- most importantly ProtectedRoute swapping
-      // this component out for a login redirect when an auth check fails.
-      // That's a normal React unmount, not a page teardown, so sendBeacon
-      // isn't needed and a plain synchronous write to the same durable
-      // queue startOfflineLogSync drains is enough: it guarantees the
-      // latest snapshot is captured the moment this page goes away for any
-      // reason, not just a closed tab. Redundant if the last save already
-      // synced -- queueLog just gets replayed against an already-saved
-      // state -- but never redundant with data loss.
-      // Same guard as flush() above, for the same reason: an unmount from a failed read would
-      // otherwise queue an empty day and delete the athlete's workout on the next flush.
       if (!hydratedRef.current) return;
       // Nothing changed since a save landed: there is nothing to rescue, and queueing a day the
       // server already has only costs storage and a stale replay. A save still in flight or
@@ -2241,6 +2192,62 @@ export function WorkoutPage({
       // left alone -- the athlete already saw the error and can re-enter the day.
       const trimmed = rejectedStatus === 413 ? dropHeavyFields(payload) : null;
       if (trimmed) queueLog(dayKey, `${apiBase}/log`, trimmed);
+    }
+
+    // Leaving the screen.
+    function flush() {
+      // Never save a day this screen never loaded -- see hydratedRef.
+      if (!hydratedRef.current) return;
+      // IN THE APP, LEAVING WRITES THE DAY TO THE PHONE AND SENDS NOTHING (2026-11-16).
+      // The native app signs in with a bearer token and a beacon cannot carry a header, so every
+      // beacon from the phone was refused 401 (the Render log shows one on every background) --
+      // while sendBeacon returned TRUE, because "queued for sending" is all it reports, so nothing
+      // else ran and leaving the app saved nothing at all. If iOS then killed the suspended app,
+      // the unsaved edits were gone. The queue is a file on the phone; this screen replays it on
+      // resume and the global flush on the next launch. It does not ALSO send now: a direct save
+      // landing would make the queued copy stale, and a stale copy replayed later is refused
+      // with a 409 and a toast telling the athlete the day changed somewhere else -- true and
+      // alarming about their own save.
+      if (getNativeToken()) {
+        rescueToQueue();
+        return;
+      }
+      const payload = buildLogPayload(itemsRef.current, dayCompletedRef.current);
+      const body = JSON.stringify(payload);
+      // In a browser the cookie authenticates the beacon. sendBeacon fires-and-forgets a request
+      // that survives the page tearing down, unlike a normal fetch which can get cancelled the
+      // instant the tab closes.
+      if (typeof navigator.sendBeacon === "function") {
+        const blob = new Blob([body], { type: "application/json" });
+        if (navigator.sendBeacon(resolveApiUrl(`${apiBase}/log`), blob)) return;
+        // Declined -- most likely the browser's own per-beacon size quota (commonly ~64KB). Fall
+        // through to the fetch below rather than losing the save silently.
+      }
+      fetch(resolveApiUrl(`${apiBase}/log`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        credentials: "include",
+        keepalive: true,
+      }).catch(() => {});
+    }
+    function handleVisibilityChange() {
+      if (document.visibilityState === "hidden") flush();
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", flush);
+    // Capacitor's own background event as well: on iOS it fires reliably when the athlete leaves
+    // the app, which is the moment the queued copy matters.
+    const pauseHandle = CapacitorApp.addListener("pause", () => flush());
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", flush);
+      void pauseHandle.then((h) => h.remove()).catch(() => {});
+      // The tab/app-close cases above don't cover an *in-app* navigation away from this page --
+      // most importantly ProtectedRoute swapping this component out for a login redirect when an
+      // auth check fails. That's a normal React unmount, not a page teardown, so a write to the
+      // same durable queue startOfflineLogSync drains is enough.
+      rescueToQueue();
     };
     // apiBase/dayKey are static for the life of this page; only needs to run once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
