@@ -400,8 +400,12 @@ const LANDING_ABOVE_BOX_TOLERANCE_M = 0.05;
 // take), so a real landing sits above that line on every take and by more than a few
 // centimetres. What the gate exists to refuse is the dismount's own apex, which is a hop above
 // the box. So the slack is a share of the box's own height when it is known: a settle within
-// half a box height above the top is a landing.
-const LANDING_ABOVE_BOX_FRACTION_OF_BOX = 0.5;
+// ONE box height above the top is a landing. Half a box was tried first and still lost jumps on
+// the three older paired takes replayed with the gate armed (3 of 5, 0 of 5, 2 of 6: their
+// landings read 1.4x the box before the box ruler corrects them); at one box height every
+// paired take counts the same with the gate on and off
+// (every-paired-take-still-counts-its-reps.test.ts), and the synthetic dismount cases still hold.
+const LANDING_ABOVE_BOX_FRACTION_OF_BOX = 1.0;
 
 // See the netRiseM rejection below. A few centimetres of slack for ordinary landing-height
 // measurement noise (medianRawY over a handful of frames), so a genuinely flat jump with a

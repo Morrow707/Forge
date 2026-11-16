@@ -41,7 +41,7 @@ Fixed this round, one per lift:
   appear while the app is away: iOS does not let the decoder run then. They finish when Forge is
   reopened.
 - **Box jump: a landing on the box is a landing** (`jump-tracking.ts`,
-  `LANDING_ABOVE_BOX_FRACTION_OF_BOX` 0.5). The gate allowed 5cm above the typed box; real
+  `LANDING_ABOVE_BOX_FRACTION_OF_BOX` 1.0, one box height; every paired box jump on file is replayed gate-on and gate-off by `every-paired-take-still-counts-its-reps.test.ts` and must count the same). The gate allowed 5cm above the typed box; real
   landings read 3-8cm above it (nearer the lens), stayed "airborne" until the step-down and were
   thrown out as too long a flight. Replayed: 5 of 5, net rise 66.8 against 67.3.
 - **RDL: its own peak cap, 1.75** (`FITTED_OVERRIDES`). The sensor's peak over mean on an RDL is

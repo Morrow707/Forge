@@ -4072,7 +4072,7 @@ halves before splitting anything else:
   video ended and iOS interrupted the file read 15.6s into a 33s clip; `runPoseAnalysis` now waits
   for the app to return, reopens at the last frame and finishes (`recording.readerResumes`; not
   tested on a phone). The box jump showed 2 of 5 because every landing read 3-8cm above the typed
-  box and was refused as floating; the gate's slack is half the box height now
+  box and was refused as floating; the gate's slack is one box height now (half still lost jumps on the three older takes replayed with the gate armed; `every-paired-take-still-counts-its-reps.test.ts` replays every paired box jump both ways)
   (`LANDING_ABOVE_BOX_FRACTION_OF_BOX`), replayed 5 of 5 at 66.8cm against the sensor's 67.3. RDL
   gets its own peak cap 1.75 (peak +19.9 -> +6.6%). **OVR's "Jump Squat" is the Box Jump; skip its
   rep 1.** iOS will not analyse video while Forge is off screen: the numbers finish when the app is

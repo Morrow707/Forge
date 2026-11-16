@@ -81,6 +81,6 @@ describe("a landing on the box is a landing", () => {
       .split("\n").map((l) => l.replace(/^\s*\/\/.*$/, "")).join("\n");
     expect(src).not.toMatch(/boxTopWorldY\s*-\s*LANDING_ABOVE_BOX_TOLERANCE_M/);
     expect(src).toMatch(/boxTopWorldY\s*-\s*landingAboveBoxToleranceM/);
-    expect(src).toMatch(/LANDING_ABOVE_BOX_FRACTION_OF_BOX\s*=\s*0\.5/);
+    expect(src).toMatch(/LANDING_ABOVE_BOX_FRACTION_OF_BOX\s*=\s*1\.0/);
   });
 });
