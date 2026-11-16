@@ -185,7 +185,7 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     expect(own.values.driveOnsetFraction).toBe(0);
     expect(own.sources.driveOnsetFraction).toBe("fitted");
     expect(own.values.velocitySmoothingMs).toBe(VELOCITY_SMOOTHING_MS);
-    expect(Object.keys(FITTED_OVERRIDES["Romanian Deadlift"]).sort()).toEqual(["depthRulerUncertainty", "driveOnsetFraction", "maxPeakToMeanRatio"]);
+    expect(Object.keys(FITTED_OVERRIDES["Romanian Deadlift"]).sort()).toEqual(["biacromialToleranceFraction", "depthRulerUncertainty", "driveOnsetFraction", "maxPeakToMeanRatio"]);
     const s = OVR_ROMANIAN_DEADLIFT_2026_11_05.sensor.reported;
     const m = replay(byId(RDL));
     expect(m.meanVelocityMps! / s.meanVelocityMps - 1).toBeCloseTo(0.161, 2);
@@ -217,11 +217,12 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     });
   });
 
-  it("the RDL's scale is +3.6% over its eight pulls, and the shoulder-floor step that would take two points off does not ship", () => {
+  it("the RDL's scale was +3.6% over its eight pulls; the shoulder floor step (0.3, round eighteen, RULE #6) reads it -0.4%", () => {
     const row = ledgerRow("2026-11-05-romanian-deadlift");
     expect(row.reportedRomCm).toBe(63.4);
-    expect(row.liveErrorPct).toBeCloseTo(3.58, 1);
-    expect(cameraTunablesFor("Romanian Deadlift", "deadlift").sources.biacromialToleranceFraction).not.toBe("fitted");
+    expect(row.liveErrorPct).toBeCloseTo(-0.39, 1);
+    expect(cameraTunablesFor("Romanian Deadlift", "deadlift").values.biacromialToleranceFraction).toBe(0.3);
+    expect(cameraTunablesFor("Romanian Deadlift", "deadlift").sources.biacromialToleranceFraction).toBe("fitted");
   });
 
   it("the jump: the hip's drive peak is the sensor's within 2% and its drive mean is a different window", () => {
@@ -277,9 +278,9 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
       // and NOT the reported range: see the romCm comment in bar-tracking.ts for why
       expect(Math.abs(r.windows.driveRomCm / sensorRomCm(s.reps[i].romIn) - 1), `rep ${i + 1} drive distance`).toBeLessThan(0.02);
     });
-    // the scale step: 0.11 -> 0.12 on the squat's record, worth about one point on this take, the
-    // same step round two took, and it reaches no other lift
-    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.12);
+    // the scale step: 0.11 -> 0.12 on the squat's record (round ten), then 0.13 (round eighteen,
+    // RULE #6), one point each on this take, and it reaches no other lift
+    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.13);
     expect(cameraTunablesFor("Front Squat", "squat").values.heightRulerUncertainty).toBe(HEIGHT_RULER_UNCERTAINTY);
     const voters = f.trackingDiagnostics.calibration.scaleBlend.voters;
     const at = (u: number) => reconcileScaleEstimates(voters.map((c: any) => ({ source: c.source, scale: c.scale, uncertaintyFraction: c.source === "height" ? u : c.uncertaintyFraction }))).scale!;

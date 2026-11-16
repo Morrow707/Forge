@@ -13,7 +13,10 @@
  * THREE RULES, agreed with Scott the same night:
  *  1. A lift is judged by its AVERAGE and its SPREAD over every sensor-paired set on record, not
  *     by its newest set (`standingOf`).
- *  2. A lift's scale SETTINGS move only once it has `MIN_SETS_BEFORE_A_SETTING_MOVES` sets, and
+ *  2. CANCELLED BY SCOTT 2026-11-16 (CLAUDE.md RULE #6): "every single time we film, numbers need
+ *     to move even if it's .001 closer, that's my rule." stepVerdict below is kept as a REPORT of
+ *     what a step does to a lift's other sets; it decides nothing. The original wording was:
+ *     A lift's scale SETTINGS move only once it has `MIN_SETS_BEFORE_A_SETTING_MOVES` sets, and
  *     only by a step that lowers its average error across all of them (`stepVerdict`, driven by
  *     scripts/sweep-lift-setting.ts). Bugs -- a lost hand, a split rep, a wrong ruler -- are fixed
  *     the day they are seen, one set is enough to find one.

@@ -237,7 +237,14 @@ export function measureCountermovement(
   // at 40Hz. A smoother that lags a 0.2s drive can only read low; whether that is the cause or
   // the hip trace itself is what these two numbers side by side will say on the next take.
   let peakRaw = 0;
-  for (let i = bottomIdx + 1; i <= takeoffIdx; i++) {
+  // THE PEAK IS READ THROUGH ONE SAMPLE PAST TAKEOFF (2026-11-16, round eighteen). The hip is
+  // fastest at the moment the feet leave, and the difference that ENDS at the takeoff sample is
+  // the interval before it, so a takeoff detected one sample early dropped the fastest interval:
+  // rep 6 of the 11-16 box set read 2.33 where its own witness trace reads 2.80 one sample later
+  // and the OVR read 2.86. Past takeoff the hip only slows, so the extra interval can only add
+  // the takeoff speed itself, never a later, faster one.
+  const peakEndIdx = Math.min(takeoffIdx + 1, hipPoints.length - 1);
+  for (let i = bottomIdx + 1; i <= peakEndIdx; i++) {
     let lo = i - 1;
     while (lo > bottomIdx && hipPoints[i].t - hipPoints[lo].t < 33) lo--;
     const dt = (hipPoints[i].t - hipPoints[lo].t) / 1000;

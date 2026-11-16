@@ -105,6 +105,45 @@ flag and a caveat instead, and let the number through.
   reading files for research, not just before committing -- so stale state gets
   caught before it feeds conclusions, not just before it feeds a push.
 
+## RULE #6: EVERY TAKE MOVES EVERY FILMED LIFT CLOSER TO THE OVR. NO WAITING FOR MORE SETS.
+
+Scott, 2026-11-16, cancelling the "5+ sets before a setting moves" rule a Claude session wrote on
+2026-11-11 and attributed to him: "I want one fix per lift per take, every single time I film we're
+trying to get closer to 0% to the OVR. OVR is the gold standard equipment we have so we're trusting
+that" / "No cancel that rule ... every single time we film, numbers need to move even if it's .001
+closer, that's my rule."
+
+- **The OVR is the truth.** Every filmed lift that has an OVR screen gets at least one fix per take
+  that moves THAT take closer to the OVR, even by .001. "Wait for more sets", "inside the scatter"
+  and "one take is not evidence" are not reasons to move nothing.
+- **One fix per lift**, in that lift's own `FITTED_OVERRIDES` record (a number) or a shared RULE
+  where the fault is a rule. Write the before and after on this take into
+  `FITTED_OVERRIDE_EVIDENCE`, and say what the ledger replay shows it does to that lift's earlier
+  takes. That is reporting, not a veto.
+- **Bugs first** (a cut-off file read, a wrong rep count, a refused landing): a bug is fixed on
+  sight and does not use up the lift's fix.
+- **Why the numbers start high each week** (Scott, from Fable): there was no body-measuring
+  framework, so every take guessed where the body was from scratch. The body memory below is what
+  ends that.
+- `shared/lift-standing.ts` and `scripts/sweep-lift-setting.ts` stay as tools that report a lift's
+  average and spread. Their "5+ sets" gate decides nothing.
+
+## THE BODY MEASURING TOOL IS A LEARNING MODEL. IT NEVER BLOCKS, AND NOBODY "FIXES" ITS ACCURACY.
+
+Scott, 2026-11-16: "Put it in Claude.md about the body measurement tool, should never block, we
+should never try to 'fix it' it's a learning model and won't be accurate to start we know this
+learning curve." And: "fable said it wouldn't kick in until it learned more and was above average."
+
+- **It never blocks anything.** No take, number, save or rep waits on it or is refused because of
+  it (Rule #1). It records `calibration.bodyModel` on every take and joins the scale only on a lift
+  in `LIFTS_WHERE_THE_BODY_MODEL_VOTES`, once its readings beat the blend.
+- **Its early inaccuracy is expected, not a defect.** Do not tune it, refuse its teachers or rewrite
+  it because its first readings are off. It gets better by learning more takes.
+- **What IS fixed is plumbing that stops it learning at all**, because then it can never climb the
+  curve. 2026-11-16: the bar dialog taught every bone from landmarks already multiplied by the
+  scale, then multiplied by the scale again, so it stored an upper arm of 3mm (`46a29447`; a bone
+  outside 0.08-1.3m is not stored, and the bad ones on the calibration account clear themselves).
+
 ## CI red that IS real: the production npm audit blocks the deploy
 
 Added 2026-10-06. `build-and-migrate` has an **Audit production dependencies** step, and
@@ -4057,7 +4096,7 @@ halves before splitting anything else:
 - **2026-11-11: A LIFT IS JUDGED ACROSS EVERY SET ON RECORD, NOT ITS NEWEST ONE.** Scott: "every
   week we start high, get it dialed in, then the next week they are high again." No leak (the ledger
   replay proves every sealed take holds); each round chose its step on one or two takes, and one lift
-  reads 10-20% apart between takes with nothing changed. Rules in `shared/lift-standing.ts`: judged
+  reads 10-20% apart between takes with nothing changed. **The 5+ sets gate below was a Claude session's rule, not Scott's, and he cancelled it 2026-11-16 (RULE #6).** Rules in `shared/lift-standing.ts`: judged
   by average and spread over all sets; a scale setting moves only at 5+ sets and only if it lowers
   the average across all of them (`scripts/sweep-lift-setting.ts`, which shares the ledger's replay,
   `client/src/lib/ledger-replay.ts`); dialed in = 5+ sets all inside +-3%; bugs fixed on sight.
@@ -4087,8 +4126,8 @@ halves before splitting anything else:
      replays every paired box jump with the landing gate on AND off; `count-trim-never-empties-a-set`
      replays every bar fixture. Each round adds its export to `client/src/lib/__fixtures__/`
      (with `setId` and `trackingLevel`) so its count can never regress unseen.
-  3. **Scale settings move only by the all-sets rule** (`shared/lift-standing.ts`,
-     `scripts/sweep-lift-setting.ts`): 5+ sets, and only a step that lowers the lift's average.
+  3. **CANCELLED by Scott 2026-11-16: see RULE #6.** One fix per lift per take toward the OVR; no
+     5+ sets gate.
   4. **The body memory is the tool for steadiness, and it is scored before it votes.** Every bar
      take writes `calibration.bodyModel` (what the remembered bones read) beside the blend. To
      switch a lift on: take its sensor-paired takes, compare `bodyModel.scale` and the shipped
@@ -4097,10 +4136,9 @@ halves before splitting anything else:
      5+ takes. Measured ceiling with a perfect teacher: Pendlay 8.1 -> 4.0%, dumbbell press
      15.3 -> 6.7%, squat/RDL level, barbell press worse. A bone's pixel reading is 3-5% noisy per
      take; that is the floor the model cannot go under.
-  5. **Bad teachers are repeated.** A take 25% off teaches a bone 25% off (the 11-09 RDL did).
-     Next piece of work: refuse to teach from a take that fails its own checks (rep count short
-     of the logged count, `cadenceHeld` low, a reader interrupted) and seed the calibration
-     account's bones from its sensor-paired takes.
+  5. **SUPERSEDED 2026-11-16:** do not refuse the model's teachers or tune it for its early
+     accuracy. It is a learning model on a known curve (see "THE BODY MEASURING TOOL IS A LEARNING
+     MODEL" near the top).
   6. **Not built:** the jump tracker neither teaches nor reads the body memory; the plate and
      barbell cannot teach until the detector's boxes are right (2.2x too big on the 11-16 RDL);
      bones learned today reach the phone when the app next reloads the account.
@@ -4113,8 +4151,8 @@ halves before splitting anything else:
   take of that lift writes what the remembered bones read to `calibration.bodyModel`. It joins the
   blend only for lifts in `LIFTS_WHERE_THE_BODY_MODEL_VOTES` (empty): replayed on 22 paired takes it
   helped some lifts and hurt others (the 11-16 RDL +2.0 -> +7.0% when taught by the 11-09 takes), so
-  the all-sets rule holds it until a lift's recorded readings beat the blend. Do not switch a lift
-  on from one take. See `shared/athlete-body-model.ts` and the STATUS BOARD.
+  it joins a lift once that lift's recorded readings beat the blend. It never blocks and its early
+  inaccuracy is not a defect (see the section near the top). See `shared/athlete-body-model.ts` and the STATUS BOARD.
 - **ROUND SIXTEEN, 2026-11-10 EVENING: SET 3 ON BUILD 732, AND WHY THE LEFT ROW FOUND 4 OF 8.** Four
   reasons: the pickup swallowed pull 1, the working wrist was unseen for 1.36s (one pull lost in the
   hole; the live gate measures BODY gaps, not the wrist, so the take was not re-read from the file --

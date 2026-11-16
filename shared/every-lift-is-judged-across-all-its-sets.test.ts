@@ -33,7 +33,7 @@ describe("every lift is judged across all its sets", () => {
     expect(now.sets, `${lift}: a set was added or removed; re-record its standing with it`).toBe(was.sets);
     const moved = now.meanAbsPct - was.meanAbsPct;
     const direction = moved > 0
-      ? `WORSE: ${was.meanAbsPct}% -> ${now.meanAbsPct}% across ${now.sets} sets. That change does not ship.`
+      ? `WORSE: ${was.meanAbsPct}% -> ${now.meanAbsPct}% across ${now.sets} sets. Re-record it here and say so in the override's evidence (RULE #6: a report, not a veto).`
       : `better: ${was.meanAbsPct}% -> ${now.meanAbsPct}% across ${now.sets} sets. Lock it in on record.`;
     expect(Math.abs(moved), `${lift} ${direction}`).toBeLessThanOrEqual(PINNED_TO_PCT);
   });
