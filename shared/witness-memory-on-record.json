@@ -1,30 +1,30 @@
 {
   "Back Squat": {
-    "takes": 9,
+    "takes": 10,
     "rulers": {
       "body_3d": {
-        "takes": 9,
-        "leanPct": 8,
-        "rmsPct": 7.9,
+        "takes": 10,
+        "leanPct": 6.8,
+        "rmsPct": 7.7,
         "timesWorst": 0
       },
       "depth": {
-        "takes": 9,
-        "leanPct": 21.1,
-        "rmsPct": 26.1,
+        "takes": 10,
+        "leanPct": 19,
+        "rmsPct": 24.9,
         "timesWorst": 5
       },
       "height": {
-        "takes": 9,
-        "leanPct": -10.8,
-        "rmsPct": 11.7,
+        "takes": 10,
+        "leanPct": -10.5,
+        "rmsPct": 11.3,
         "timesWorst": 0
       },
       "shoulder_width": {
-        "takes": 9,
-        "leanPct": 19.3,
-        "rmsPct": 19.7,
-        "timesWorst": 4
+        "takes": 10,
+        "leanPct": 17.5,
+        "rmsPct": 19.4,
+        "timesWorst": 5
       }
     },
     "bones": {
@@ -387,19 +387,19 @@
     }
   },
   "Romanian Deadlift": {
-    "takes": 9,
+    "takes": 10,
     "rulers": {
       "body_3d": {
-        "takes": 9,
-        "leanPct": -8.8,
-        "rmsPct": 10.3,
+        "takes": 10,
+        "leanPct": -8.6,
+        "rmsPct": 10.1,
         "timesWorst": 1
       },
       "depth": {
-        "takes": 9,
-        "leanPct": 20.9,
-        "rmsPct": 25,
-        "timesWorst": 3
+        "takes": 10,
+        "leanPct": 21.4,
+        "rmsPct": 28.4,
+        "timesWorst": 4
       },
       "height": {
         "takes": 2,
@@ -414,9 +414,9 @@
         "timesWorst": 4
       },
       "shoulder_width": {
-        "takes": 9,
-        "leanPct": 11.9,
-        "rmsPct": 14.9,
+        "takes": 10,
+        "leanPct": 12.5,
+        "rmsPct": 17.5,
         "timesWorst": 0
       }
     },

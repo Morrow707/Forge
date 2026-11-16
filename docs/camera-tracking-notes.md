@@ -14,7 +14,41 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-16, round seventeen)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-16, round eighteen)
+
+**ROUND EIGHTEEN, 2026-11-16 EVENING (build 769; squat, RDL, box jump). SET 1 OF EACH WAS ON 764,
+SET 2 ON 769, AND SCOTT'S RULE IS NOW WRITTEN DOWN.** Read `calibration.liftRecord` to tell the
+builds apart: the set-1 takes carry the RDL's old 2.0 cap, the squat's uninterrupted-read field is
+absent and the box jump refuses landings as floating, all three fixed in 769. Compare set 2 only.
+
+| lift (set 2, build 769) | Forge | OVR | error as filmed | after this round's fix |
+|---|---|---|---|---|
+| Back squat range | 72.9cm | 29.6in (75.2) | -3.1% | -2.5% (height ruler 0.12 -> 0.13) |
+| Back squat mean / peak | 0.82 / 1.16 | 0.81 / 1.21 | +1.2% / -4.1% | +1.8% / -3.6% |
+| RDL range (7 pulls) | 75.7cm | 24.3in (61.7) | +22.7% | +18.8% (shoulder floor 0.2 -> 0.3) |
+| Box jump mean / peak / rise (5 jumps) | 1.51 / 2.73 / 69.5cm | 1.46 / 2.87 / 68.8 | +3.4% / -4.6% / +1.0% | peak about -1.3%, estimated (peak through takeoff) |
+
+- **RULE #6 (CLAUDE.md): one fix per lift per take, every take, toward the OVR, even .001.** The
+  5+ sets gate of 2026-11-11 was a session's rule, not Scott's, and is cancelled; the ledger replay
+  of earlier takes is reported in each override's evidence, never a veto.
+- **RDL 7 vs 8: Scott did 7 and logged 8.** Forge's rep 1 is the pickup off the floor (1.5s at
+  0.55 m/s, already marked sample-starved and out of the range). The count-trim keeps what is
+  logged; replayed with 7 logged it reads the 7 pulls. Log the reps actually done.
+- **RDL set 2 is a scale fault on every rep (1.24-1.31x the sensor)**, both voters high, filmed
+  head-on with `axisForeshortening` 1.528 against set 1's 1.003 and the hands travelling 13% further
+  than the shoulders in the image. One take; the next RDL says whether it repeats.
+- **Box jump: Forge saw the setup jump and did not count it**, like the OVR; its one extra "jump"
+  (1.6s after a landing, flagged as a glitch) is the step down. The fix reads the peak through one
+  sample past takeoff, where the hip is fastest (rep 6 read 2.33 against its own trace's 2.80 and
+  the OVR's 2.86). Not replayable from an export; the next take is the test.
+- **The body memory had never learned anything usable** (`46a29447`): the bar dialog taught each
+  bone from landmarks already multiplied by the scale and multiplied again, so it stored an upper
+  arm of 3mm and could never give a scale back. Fixed; a bone outside 0.08-1.3m is not stored and
+  the bad ones clear themselves. Per Scott it is a learning model: it never blocks and is not tuned
+  for its early accuracy.
+- Ledger rows `2026-11-16-back-squat-set-2` and `2026-11-16-romanian-deadlift-set-2`; the earlier
+  squat and RDL rows re-pinned at the new settings (squat average 2.1% -> 2.5% over 9 sets, RDL
+  6.6% -> 5.8%). Witness memory re-recorded.
 
 **ROUND SEVENTEEN, 2026-11-16 (build 764; squat, RDL, box jump only). TWO OF THE THREE "FAR OFF"
 READS WERE NOT CALIBRATION, THEY WERE TAKES CUT SHORT.** Scott: "Why are we so far off again? ...

@@ -1373,6 +1373,60 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "exactly 2.0x their mean; at the RDL's own cap of 1.75 (this round) it reads +6.6%. Rep 8 reads " +
       "1.52 against the sensor's 0.95 on a 0.45s window, the one rep off.",
   },
+  {
+    id: "2026-11-16-back-squat-set-2",
+    date: "2026-11-16",
+    build: 769,
+    exercise: "Back Squat",
+    filmedOnCommit: "dd4c3da7",
+    candidates: [
+      { source: "body_3d", scaleX1000: 4.05568 },
+      { source: "depth", scaleX1000: 4.1621 },
+      { source: "height", scaleX1000: 3.5357 },
+      { source: "shoulder_width", scaleX1000: 4.44808 },
+    ],
+    // The shoulder ruler at the grip floor (0.436) on the phone, as on the set 1 row.
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, height: 0.12, shoulder_width: 0.4357421824825143 },
+    heightRulerVotedAsFilmed: true,
+    shippedScaleX1000: 3.7275184083452287,
+    reportedRomCm: 72.9,
+    sensorRomCm: 75.18,
+        // The sealed replay knows the shoulder ruler only at its 0.2 floor, not the 0.436 the grip
+    // loosened it to on the phone, so it reads +0.82% where the phone (at 0.13) reads -2.5%.
+liveErrorPct: 0.82,
+    notes:
+      "135x5 beside the OVR on build 769, file path, readerStatus completed with no interruption, " +
+      "5 of 5 reps. Range 72.9cm against the sensor's 29.6in (75.2cm): -3.1%; mean 0.82 against " +
+      "0.81 (+1.2%); peak 1.16 against 1.21 (-4.1%). Per rep the range reads -1.6 to -5.6%. The " +
+      "height ruler sat under the scale the sensor requires again (3.536e-3 against 3.845e-3). " +
+      "Round eighteen moved the squat's heightRulerUncertainty 0.12 -> 0.13 on this take (RULE #6).",
+  },
+  {
+    id: "2026-11-16-romanian-deadlift-set-2",
+    date: "2026-11-16",
+    build: 769,
+    exercise: "Romanian Deadlift",
+    filmedOnCommit: "dd4c3da7",
+    candidates: [
+      { source: "body_3d", scaleX1000: 4.01425 },
+      { source: "depth", scaleX1000: 5.51112 },
+      { source: "shoulder_width", scaleX1000: 4.89591 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.6, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: false,
+    shippedScaleX1000: 4.519706691956185,
+    reportedRomCm: 75.7,
+    sensorRomCm: 61.72,
+    liveErrorPct: 18.72,
+    notes:
+      "135x7 beside the OVR on build 769, file path. Scott did 7 and logged 8, so the count-trim " +
+      "kept the pickup off the floor as rep 1 (1.5s at 0.55 m/s, already sample-starved and out of " +
+      "the set's range); replayed with 7 logged it reads the 7 pulls. Range 75.7cm against the " +
+      "sensor's 24.3in (61.7cm): +22.7%, every pull 1.24-1.31x the sensor's, so this is scale: the " +
+      "shoulder span and the collapsed 3D pair both read high (4.896e-3 and 4.144e-3 against " +
+      "~3.53e-3 required). Filmed head-on with axisForeshortening 1.528 (set 1: 1.003). Round " +
+      "eighteen moved the RDL's biacromialToleranceFraction 0.2 -> 0.3 on this take (RULE #6).",
+  },
 ];
 
 /* THE ROUND-EIGHT MOVE, 2026-11-05: a RULE, and it touches NO scale number on any row.
