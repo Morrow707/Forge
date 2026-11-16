@@ -389,6 +389,19 @@ const BASE_MIN_FLIGHT_AMPLITUDE_CM = 15;
 
 // See the settle-window check inside the airborne branch below.
 const LANDING_ABOVE_BOX_TOLERANCE_M = 0.05;
+// A LANDING ON THE BOX READS ABOVE THE BOX, AND THE 5CM SLACK REFUSED EVERY ONE OF THEM.
+// 2026-11-16, Box Jump set 1 beside the OVR: five clean jumps onto a 24in box settled 64-69cm
+// above the takeoff floor against a typed 61cm, so each landing was "floating above the box" by
+// 3-8cm, stayed airborne until the step-down, and four of five were then thrown away as
+// flight_too_long. The set came back as two jumps. Replayed with the gate off the same trace
+// gives five landings averaging 66.8cm against the sensor's 67.3.
+// The box top is the floor line plus the typed height at the FLOOR's scale, and the landing is
+// measured on the box, nearer the lens (round three, 2026-10-30: 1.20-1.40x on every paired
+// take), so a real landing sits above that line on every take and by more than a few
+// centimetres. What the gate exists to refuse is the dismount's own apex, which is a hop above
+// the box. So the slack is a share of the box's own height when it is known: a settle within
+// half a box height above the top is a landing.
+const LANDING_ABOVE_BOX_FRACTION_OF_BOX = 0.5;
 
 // See the netRiseM rejection below. A few centimetres of slack for ordinary landing-height
 // measurement noise (medianRawY over a handful of frames), so a genuinely flat jump with a
@@ -560,6 +573,10 @@ export function summarizeJumpSet(
   // ground-contact time.
   const SETTLE_FRAMES = framesForDuration(rawPoints, TARGET_SETTLE_MS);
   const settleToleranceM = triggerM;
+  const landingAboveBoxToleranceM = Math.max(
+    LANDING_ABOVE_BOX_TOLERANCE_M,
+    options?.boxHeightCm != null && options.boxHeightCm > 0 ? (options.boxHeightCm / 100) * LANDING_ABOVE_BOX_FRACTION_OF_BOX : 0,
+  );
 
   const reps: JumpRep[] = [];
   // Mean TrackedPoint.confidence over each pushed rep's own window, in the
@@ -667,7 +684,7 @@ export function summarizeJumpSet(
         // measurement noise, not a calibrated bound.
         const floatingAboveBox =
           boxTopWorldY != null &&
-          window.reduce((a, b) => a + b, 0) / window.length < boxTopWorldY - LANDING_ABOVE_BOX_TOLERANCE_M;
+          window.reduce((a, b) => a + b, 0) / window.length < boxTopWorldY - landingAboveBoxToleranceM;
         if (settled && floatingAboveBox) {
           events?.push({ t: rawPoints[i].t, kind: "floating_above_box" });
         }

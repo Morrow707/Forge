@@ -9946,6 +9946,9 @@ export const trackingDiagnosticsSchema = z.object({
       assetDurationSeconds: z.number().optional(),
       readerStatus: z.string().optional(),
       readerErrorMessage: z.string().optional(),
+      // The file read was interrupted (the app left the screen mid-analysis) and resumed.
+      readerResumes: z.number().optional(),
+      readerSecondsWaitingForForeground: z.number().optional(),
       // WHICH IMPLEMENTATION PRODUCED THIS TAKE. "live" means the trace was built from the
       // capture buffers while the athlete was still lifting; "file" is the post-capture
       // re-read, which is also the fallback whenever the live trace cannot be shown to be

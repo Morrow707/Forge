@@ -95,6 +95,8 @@ type TrackingDiagnostics = {
     assetDurationSeconds?: number;
     readerStatus?: string;
     readerErrorMessage?: string;
+    readerResumes?: number;
+    readerSecondsWaitingForForeground?: number;
     visionFailureCount?: number;
     thermalState?: string;
     lowPowerModeEnabled?: boolean;

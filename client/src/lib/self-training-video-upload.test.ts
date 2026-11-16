@@ -79,7 +79,8 @@ describe("self-training video uploads are not athlete-only", () => {
     const block = routes.slice(at, routes.indexOf("\n}\n", at));
     expect(block).toContain('if (user.role === "admin") return { allowed: true');
     const coachBranch = block.slice(block.indexOf('if (user.role === "coach") {'), block.indexOf("athleteHasCoach"));
-    expect(coachBranch).toContain("coachPlanIsActive(user.id)");
+    // 2026-11-15: coachMayUseOwnTools is the program's plan OR the coach's own comp.
+    expect(coachBranch).toContain("coachMayUseOwnTools(user.id)");
     expect(coachBranch).not.toContain("hasAthletePaidForAiAccess");
     expect(block.indexOf('user.role === "coach"')).toBeLessThan(block.indexOf("hasAthletePaidForAiAccess"));
   });

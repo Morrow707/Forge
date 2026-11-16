@@ -185,11 +185,11 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     expect(own.values.driveOnsetFraction).toBe(0);
     expect(own.sources.driveOnsetFraction).toBe("fitted");
     expect(own.values.velocitySmoothingMs).toBe(VELOCITY_SMOOTHING_MS);
-    expect(Object.keys(FITTED_OVERRIDES["Romanian Deadlift"]).sort()).toEqual(["depthRulerUncertainty", "driveOnsetFraction"]);
+    expect(Object.keys(FITTED_OVERRIDES["Romanian Deadlift"]).sort()).toEqual(["depthRulerUncertainty", "driveOnsetFraction", "maxPeakToMeanRatio"]);
     const s = OVR_ROMANIAN_DEADLIFT_2026_11_05.sensor.reported;
     const m = replay(byId(RDL));
     expect(m.meanVelocityMps! / s.meanVelocityMps - 1).toBeCloseTo(0.161, 2);
-    expect(m.peakVelocityMps! / s.peakVelocityMps - 1).toBeCloseTo(0.298, 2);
+    expect(m.peakVelocityMps! / s.peakVelocityMps - 1).toBeCloseTo(0.186, 2); // +29.8% at the shared cap of 2; the RDL caps at 1.75 since 2026-11-16
     const step = replay(byId(RDL), { driveOnsetFraction: 0.02 });
     expect(step.meanVelocityMps! / s.meanVelocityMps - 1).toBeCloseTo(0.258, 2);
     const shared = replay(byId(RDL), { driveOnsetFraction: DRIVE_ONSET_FRACTION });
@@ -205,11 +205,15 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     const ratios = m.repBreakdown.map((r: any, i: number) => sensorSeconds[i] / r.windows.phaseSeconds);
     expect(ratios.filter((x) => Math.abs(x - 1) < 0.15).length).toBeGreaterThanOrEqual(5);
     expect(Math.max(...ratios)).toBeLessThan(1.4);
-    // and the peak on every pull reads 20-50% over the sensor's
+    // and the peak on every pull reads over the sensor's: 20-50% at the shared cap of 2, and
+    // still over on every pull at the RDL's own 1.75 (2026-11-16), by less
     m.repBreakdown.forEach((r: any, i: number) => {
       const err = r.peakVelocityMps / OVR_ROMANIAN_DEADLIFT_2026_11_05.sensor.reps[i].peakVelocityMps - 1;
-      expect(err, `rep ${i + 1}`).toBeGreaterThan(0.15);
+      expect(err, `rep ${i + 1}`).toBeGreaterThan(0);
       expect(err, `rep ${i + 1}`).toBeLessThan(0.55);
+    });
+    replay(byId(RDL), { maxPeakToMeanRatio: 2 }).repBreakdown.forEach((r: any, i: number) => {
+      expect(r.peakVelocityMps / OVR_ROMANIAN_DEADLIFT_2026_11_05.sensor.reps[i].peakVelocityMps - 1, `rep ${i + 1} at 2`).toBeGreaterThan(0.15);
     });
   });
 
@@ -299,11 +303,12 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     expect(r8.romCm).toBe(57.7);
     expect(r8.romCm / sensorRomCm(s.reps[7].romIn) - 1).toBeCloseTo(-0.08, 2);
     expect(r8.windows!.phaseSeconds).toBeCloseTo(0.592, 2);
-    // set numbers at the RDL's record (window 0): range +3.6%, mean +15.8%, peak +19.0%
+    // set numbers at the RDL's record (window 0, peak cap 1.75 since 2026-11-16): range +3.6%,
+    // mean +15.8%, peak +13.9% (+19.0% at the shared cap of 2)
     expect(m.romCm).toBe(66.6);
     expect(m.romCm! / sensorRomCm(s.reported.romIn) - 1).toBeCloseTo(0.036, 2);
     expect(m.meanVelocityMps! / s.reported.meanVelocityMps - 1).toBeCloseTo(0.158, 2);
-    expect(m.peakVelocityMps! / s.reported.peakVelocityMps - 1).toBeCloseTo(0.19, 2);
+    expect(m.peakVelocityMps! / s.reported.peakVelocityMps - 1).toBeCloseTo(0.139, 2);
     expect(replay(f, { driveOnsetFraction: 0.02 }).meanVelocityMps! / s.reported.meanVelocityMps - 1).toBeCloseTo(0.2, 2);
     // the set-up phase (89cm from the floor, 0.9s of travel, a 1.6s stand) is cut at its rest
     // too and the athlete's count trims it; with no count it is a ninth rep, not the eighth lost

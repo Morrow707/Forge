@@ -4065,6 +4065,18 @@ halves before splitting anything else:
   choice). And a one-arm lift's live take is re-read from the file when its working wrist was unseen
   past 1.0s (`wristGaps`, `maxLiveWorkingWristGapSeconds`); the hook also stopped dropping
   `arbiterTunables` at Record (inert: every lift holds the defaults). Native: `verify_build`, beta.
+- **ROUND SEVENTEEN, 2026-11-16: SQUAT, RDL AND BOX JUMP ON BUILD 764. TWO OF THREE WERE TAKES CUT
+  SHORT, NOT CALIBRATION.** Scott: "Why are we so far off again? ... we start at square 1." Every
+  per-lift number was in the build (`calibration.liftRecord`). The RDL read +2.0% range / +4.1% mean
+  (last Monday's read -25%). The squat showed 2 of 5 reps because he left the app the moment the
+  video ended and iOS interrupted the file read 15.6s into a 33s clip; `runPoseAnalysis` now waits
+  for the app to return, reopens at the last frame and finishes (`recording.readerResumes`; not
+  tested on a phone). The box jump showed 2 of 5 because every landing read 3-8cm above the typed
+  box and was refused as floating; the gate's slack is half the box height now
+  (`LANDING_ABOVE_BOX_FRACTION_OF_BOX`), replayed 5 of 5 at 66.8cm against the sensor's 67.3. RDL
+  gets its own peak cap 1.75 (peak +19.9 -> +6.6%). **OVR's "Jump Squat" is the Box Jump; skip its
+  rep 1.** iOS will not analyse video while Forge is off screen: the numbers finish when the app is
+  reopened. See docs/camera-tracking-notes.md, STATUS BOARD.
 - **ROUND SIXTEEN, 2026-11-10 EVENING: SET 3 ON BUILD 732, AND WHY THE LEFT ROW FOUND 4 OF 8.** Four
   reasons: the pickup swallowed pull 1, the working wrist was unseen for 1.36s (one pull lost in the
   hole; the live gate measures BODY gaps, not the wrist, so the take was not re-read from the file --

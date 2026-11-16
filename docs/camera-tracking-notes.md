@@ -14,7 +14,47 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-11, the all-sets rule)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-16, round seventeen)
+
+**ROUND SEVENTEEN, 2026-11-16 (build 764; squat, RDL, box jump only). TWO OF THE THREE "FAR OFF"
+READS WERE NOT CALIBRATION, THEY WERE TAKES CUT SHORT.** Scott: "Why are we so far off again? ...
+the next Monday we start at square 1." Checked first: every per-lift number is in the build
+(`calibration.liftRecord` on each capture: squat height 0.12 / window 0.02 / smoothing 130; RDL
+depth 0.6 / window 0). Nothing was lost between updates. What the three takes read:
+
+| lift | Forge | OVR | error | cause |
+|---|---|---|---|---|
+| RDL range | 64.0cm | 24.7in (62.7) | +2.0% | the best RDL on record |
+| RDL mean | 1.01 | 0.97 | +4.1% | |
+| RDL peak | 1.99 | 1.66 | +19.9% | 7 of 8 reps capped at 2.0x their mean |
+| Squat | 2 reps of 5 | 5 | - | file read interrupted when the app left the screen |
+| Squat range (2 reps) | 71.1cm | 76.6 | -7.2% | height ruler 14% low at 71% of the blend |
+| Box jump | 2 jumps of 5 | 5 | - | every landing refused as "floating above the box" |
+| Box jump net rise (replayed) | 66.8cm | 67.3 | -0.8% | once the five landings are counted |
+
+Fixed this round, one per lift:
+- **Squat: an interrupted file read is resumed** (`AvBodyTrackingPlugin.swift`, `runPoseAnalysis`).
+  iOS takes the decoder from an app that is not on screen; the reader failed 15.6s into a 33s clip
+  and the partial read was reported as the take. It now waits for the app to return, reopens at
+  the last frame read and finishes the clip. `recording.readerResumes` counts it. **Not tested on
+  a phone** (no Swift test target here; `verify_build` compiles it). The numbers still cannot
+  appear while the app is away: iOS does not let the decoder run then. They finish when Forge is
+  reopened.
+- **Box jump: a landing on the box is a landing** (`jump-tracking.ts`,
+  `LANDING_ABOVE_BOX_FRACTION_OF_BOX` 0.5). The gate allowed 5cm above the typed box; real
+  landings read 3-8cm above it (nearer the lens), stayed "airborne" until the step-down and were
+  thrown out as too long a flight. Replayed: 5 of 5, net rise 66.8 against 67.3.
+- **RDL: its own peak cap, 1.75** (`FITTED_OVERRIDES`). The sensor's peak over mean on an RDL is
+  1.62-1.73 on all four paired sets; Forge was reporting the 2.0 cap. Peak +19.9 -> +6.6% today,
+  +29.8 -> +18.6 and +19.0 -> +13.9 on the two 11-05 sets; 11-09 set 1 goes -11 -> -20 (its mean
+  is 26% low on a scale fault).
+
+Standing after this round (range of motion, all sets): squat 9 sets avg 2.09%, RDL 9 sets avg
+6.58%. **Last Monday's RDL (11-09 set 1) read -25%; today's read +2%.** Not changed and why: no
+scale setting moved (the all-sets rule; the sweep finds no step that lowers either lift's
+average). Open: RDL rep 8 read 1.52 against 0.95 on a 0.45s window; the squat's height ruler low
+on every take; `11-09` takes still have no ledger rows.
+
 
 **HOW A ROUND CHOOSES A SETTINGS STEP NOW (2026-11-11, agreed with Scott; read before touching any
 number).** Scott: "every week we start high, get it dialed in, then the next week they are high

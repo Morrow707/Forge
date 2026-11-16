@@ -189,6 +189,8 @@ export type AvAnalysisResult = {
   // The upload copy's own telemetry -- see tracking-diagnostics.ts's videoAsset.
   videoAsset?: Record<string, number>;
   readerErrorMessage?: string;
+  readerResumes?: number;
+  readerSecondsWaitingForForeground?: number;
   // Analysis-time device/pipeline conditions, read once at the end of the Vision loop -- see
   // AvBodyTrackingPlugin.swift's own comments on thermalStateDescription/
   // availableDiskSpaceBytes and the visionFailureCount/maxInterFrameGapSeconds counters for why

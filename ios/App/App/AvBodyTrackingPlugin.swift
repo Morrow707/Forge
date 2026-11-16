@@ -2193,7 +2193,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // "short recording" apart from "analysis loop stopped early").
         let assetDurationSeconds = CMTimeGetSeconds(asset.duration)
 
-        guard let reader = try? AVAssetReader(asset: asset) else {
+        guard var reader = try? AVAssetReader(asset: asset) else {
             logDiag("analyzeRecording FAILED: could not create AVAssetReader")
             settle { DispatchQueue.main.async { call.reject("Could not read recording") } }
             return
@@ -2226,7 +2226,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             outputSettings[kCVPixelBufferWidthKey as String] = Int((naturalSize.width * scale).rounded())
             outputSettings[kCVPixelBufferHeightKey as String] = Int((naturalSize.height * scale).rounded())
         }
-        let trackOutput = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
+        var trackOutput = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
         guard reader.canAdd(trackOutput) else {
             logDiag("analyzeRecording FAILED: cannot add track output")
             settle { DispatchQueue.main.async { call.reject("Could not set up frame reader") } }
@@ -2257,19 +2257,70 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         let state = AvFrameRunState()
         let startTime = Date()
 
-        while reader.status == .reading {
-            if analysisCancelled {
-                reader.cancelReading()
-                logDiag("analyzeRecording cancelled after \(state.processedCount) frames")
-                settle { DispatchQueue.main.async { call.reject("Analysis cancelled") } }
-                return
+        // A READ THE PHONE INTERRUPTED IS RESUMED, NEVER REPORTED AS THE TAKE.
+        //
+        // 2026-11-16, Back Squat beside the OVR: Scott stopped the video and left the app at once
+        // to screenshot the sensor. iOS takes the hardware decoder away from an app that is not
+        // on screen, the reader failed with "Operation Interrupted" 15.6s into a 33s clip, and the
+        // 512 frames it had got through were handed up as the whole take: two reps of five. The
+        // background task above keeps the process alive; it does not keep the decoder.
+        // So a reader that FAILS with the clip unfinished is not the end of the read. This waits
+        // until the app is on screen again, opens a new reader at the last frame it got, and
+        // carries on into the same run state, so the result is the whole clip however long the
+        // athlete was away. Bounded, and every resume is counted into the result.
+        var lastReadTime = CMTime.invalid
+        var readerResumes = 0
+        var secondsWaitingForForeground: Double = 0
+        let maxReaderResumes = 8
+        readLoop: while true {
+            while reader.status == .reading {
+                if analysisCancelled {
+                    reader.cancelReading()
+                    logDiag("analyzeRecording cancelled after \(state.processedCount) frames")
+                    settle { DispatchQueue.main.async { call.reject("Analysis cancelled") } }
+                    return
+                }
+                guard let sampleBuffer = trackOutput.copyNextSampleBuffer() else { break }
+                let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                // A resumed reader may hand back the frame it was opened on (or the frames
+                // before it that the decoder needed); those were already processed.
+                if lastReadTime.isValid, pts.isValid, CMTimeCompare(pts, lastReadTime) <= 0 { continue }
+                if pts.isValid { lastReadTime = pts }
+                processFrame(sampleBuffer: sampleBuffer, ctx: ctx, state: state, progress: progress) { [weak self] data in
+                    var tagged = data
+                    tagged["source"] = "file"
+                    self?.notifyListeners("poseFrame", data: tagged)
+                }
             }
-            guard let sampleBuffer = trackOutput.copyNextSampleBuffer() else { break }
-            processFrame(sampleBuffer: sampleBuffer, ctx: ctx, state: state, progress: progress) { [weak self] data in
-                var tagged = data
-                tagged["source"] = "file"
-                self?.notifyListeners("poseFrame", data: tagged)
+            let readSeconds = lastReadTime.isValid ? CMTimeGetSeconds(lastReadTime) : 0
+            let unfinished = assetDurationSeconds.isFinite && readSeconds < assetDurationSeconds - 0.5
+            guard reader.status == .failed, unfinished, !analysisCancelled, readerResumes < maxReaderResumes else { break readLoop }
+            logDiag(
+                "analyzeRecording reader interrupted at \(String(format: "%.2f", readSeconds))s of "
+                    + "\(String(format: "%.2f", assetDurationSeconds))s (\(reader.error?.localizedDescription ?? "no error")); resuming"
+            )
+            // Wait for the app to be on screen. While it is suspended this thread is frozen with
+            // it and simply continues here when the athlete comes back.
+            let waitStart = Date()
+            while !analysisCancelled {
+                var active = false
+                DispatchQueue.main.sync { active = UIApplication.shared.applicationState == .active }
+                if active { break }
+                Thread.sleep(forTimeInterval: 0.25)
             }
+            secondsWaitingForForeground += Date().timeIntervalSince(waitStart)
+            if analysisCancelled { break readLoop }
+            guard let resumed = try? AVAssetReader(asset: asset) else { break readLoop }
+            let resumedOutput = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
+            guard resumed.canAdd(resumedOutput) else { break readLoop }
+            resumed.add(resumedOutput)
+            if lastReadTime.isValid {
+                resumed.timeRange = CMTimeRange(start: lastReadTime, duration: .positiveInfinity)
+            }
+            guard resumed.startReading() else { break readLoop }
+            reader = resumed
+            trackOutput = resumedOutput
+            readerResumes += 1
         }
 
         let elapsed = Date().timeIntervalSince(startTime)
@@ -2406,6 +2457,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     // 2026-09-28 export were, and the report could not say why.
                     "liveAttempted": self.lastLiveAttempted,
                 ]
+                // How many times the read was interrupted and picked up again, and how long it
+                // waited for the app to come back on screen. Zero on an ordinary take.
+                result["readerResumes"] = readerResumes
+                result["readerSecondsWaitingForForeground"] = secondsWaitingForForeground
                 if let reason = self.lastLiveFallbackReason {
                     result["liveFallbackReason"] = reason
                 }

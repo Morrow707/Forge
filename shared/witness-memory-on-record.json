@@ -1,30 +1,30 @@
 {
   "Back Squat": {
-    "takes": 8,
+    "takes": 9,
     "rulers": {
       "body_3d": {
-        "takes": 8,
-        "leanPct": 8.2,
-        "rmsPct": 8.3,
+        "takes": 9,
+        "leanPct": 8,
+        "rmsPct": 7.9,
         "timesWorst": 0
       },
       "depth": {
-        "takes": 8,
-        "leanPct": 21.6,
-        "rmsPct": 27.3,
+        "takes": 9,
+        "leanPct": 21.1,
+        "rmsPct": 26.1,
         "timesWorst": 5
       },
       "height": {
-        "takes": 8,
-        "leanPct": -10.5,
-        "rmsPct": 11.3,
+        "takes": 9,
+        "leanPct": -10.8,
+        "rmsPct": 11.7,
         "timesWorst": 0
       },
       "shoulder_width": {
-        "takes": 8,
-        "leanPct": 17.4,
-        "rmsPct": 19.2,
-        "timesWorst": 3
+        "takes": 9,
+        "leanPct": 19.3,
+        "rmsPct": 19.7,
+        "timesWorst": 4
       }
     },
     "bones": {
@@ -387,18 +387,18 @@
     }
   },
   "Romanian Deadlift": {
-    "takes": 8,
+    "takes": 9,
     "rulers": {
       "body_3d": {
-        "takes": 8,
-        "leanPct": -8.7,
-        "rmsPct": 10.4,
+        "takes": 9,
+        "leanPct": -8.8,
+        "rmsPct": 10.3,
         "timesWorst": 1
       },
       "depth": {
-        "takes": 8,
-        "leanPct": 21.4,
-        "rmsPct": 25.7,
+        "takes": 9,
+        "leanPct": 20.9,
+        "rmsPct": 25,
         "timesWorst": 3
       },
       "height": {
@@ -408,15 +408,15 @@
         "timesWorst": 1
       },
       "plate": {
-        "takes": 3,
-        "leanPct": -42.9,
-        "rmsPct": 45.1,
-        "timesWorst": 3
+        "takes": 4,
+        "leanPct": -47.4,
+        "rmsPct": 47.6,
+        "timesWorst": 4
       },
       "shoulder_width": {
-        "takes": 8,
-        "leanPct": 12.5,
-        "rmsPct": 15.4,
+        "takes": 9,
+        "leanPct": 11.9,
+        "rmsPct": 14.9,
         "timesWorst": 0
       }
     },
@@ -465,7 +465,7 @@
       ],
       "takesSeen": 1,
       "takesLocked": 1,
-      "takesVoted": 3,
+      "takesVoted": 4,
       "medianLockShare": 0.33
     }
   },

@@ -200,6 +200,9 @@ export type TrackingDiagnostics = {
     assetDurationSeconds?: number;
     readerStatus?: string;
     readerErrorMessage?: string;
+    /** The file read was interrupted (the app left the screen) and picked up again this many times. */
+    readerResumes?: number;
+    readerSecondsWaitingForForeground?: number;
     // See shared/schema.ts's trackingDiagnosticsSchema comment on this pair -- which of the
     // two feeders produced the trace, and what the live one dropped to stay out of the
     // recording's way.
@@ -966,6 +969,9 @@ export function buildTrackingDiagnostics(args: {
     assetDurationSeconds?: number;
     readerStatus?: string;
     readerErrorMessage?: string;
+    /** The file read was interrupted (the app left the screen) and picked up again this many times. */
+    readerResumes?: number;
+    readerSecondsWaitingForForeground?: number;
     // See shared/schema.ts's trackingDiagnosticsSchema comment on this pair -- which of the
     // two feeders produced the trace, and what the live one dropped to stay out of the
     // recording's way.

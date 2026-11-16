@@ -1309,6 +1309,70 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "Range -31% as filmed: the shoulder ruler voted at a spread of 0.62 (2x the sensor's scale) and " +
       "the 3D pair read -39%. The row's body rulers read -20% to -39% on every take.",
   },
+  /* ROUND SEVENTEEN, 2026-11-16, build 764: Back Squat 135x5, Romanian Deadlift 135x8 and a Box
+   * Jump x5 beside the OVR. The squat's file read was interrupted when the app left the screen
+   * (two reps of five analysed), so its row is the SCALE over the two reps it read, against the
+   * sensor's first two. The jump has no row: its scale is the box ruler's and its fault was the
+   * landing gate (jump-tracking.ts, LANDING_ABOVE_BOX_FRACTION_OF_BOX). */
+  {
+    id: "2026-11-16-back-squat",
+    date: "2026-11-16",
+    build: 764,
+    exercise: "Back Squat",
+    filmedOnCommit: "6416d52c",
+    candidates: [
+      { source: "body_3d", scaleX1000: 4.294180201554777 },
+      { source: "depth", scaleX1000: 4.738740533871935 },
+      { source: "height", scaleX1000: 3.585248363406062 },
+      { source: "shoulder_width", scaleX1000: 5.1674342179212525 },
+    ],
+    // The shoulder ruler at the grip floor: grip over shoulder span 2.888 on a low-bar squat.
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, height: 0.12, shoulder_width: 0.5620798738269628 },
+    heightRulerVotedAsFilmed: true,
+    shoulderSpanSpreadFraction: 0.027,
+    shippedScaleX1000: 3.8736566719927575,
+    reportedRomCm: 71.1,
+    sensorRomCm: 76.58,
+    // The sealed replay knows the shoulder ruler only at its 0.2 floor, not the 0.562 the grip
+    // loosened it to on the phone, so it reads this take -1.49% where the phone shipped -7.16%.
+    liveErrorPct: -1.49,
+    notes:
+      "135x5 beside the OVR; the phone analysed 15.6s of a 33.0s clip (readerStatus failed, " +
+      "'Operation Interrupted', 512 frames) because the app was left for the sensor's screen the " +
+      "moment the video ended, and reported two reps. Range 71.1cm over those two against the " +
+      "sensor's first two (29.9, 30.4in): -7.2%. The height ruler read 14% under the scale the " +
+      "sensor requires at 71% of the blend; the 3D shin read +2.9%, the shoulder +24% at 3% (grip " +
+      "floor), depth +13.5% at 0. The same signature as every low squat on record. Velocities over " +
+      "the two reps: mean 0.77 against 0.79 (-2.5%), peak 1.08 against 1.15 (-6.1%).",
+  },
+  {
+    id: "2026-11-16-romanian-deadlift",
+    date: "2026-11-16",
+    build: 764,
+    exercise: "Romanian Deadlift",
+    filmedOnCommit: "6416d52c",
+    candidates: [
+      { source: "plate", scaleX1000: 1.9008542151837976 },
+      { source: "body_3d", scaleX1000: 3.8129773804751257 },
+      { source: "depth", scaleX1000: 4.950350493520137 },
+      { source: "shoulder_width", scaleX1000: 4.616045767014146 },
+    ],
+    uncertaintiesAsFilmed: { plate: 0.08408828195392086, body_3d: 0.2, depth: 0.6, shoulder_width: 0.2 },
+    heightRulerVotedAsFilmed: false,
+    shoulderSpanSpreadFraction: 0.132,
+    plateMeanCoreMlConfidence: 0.74,
+    shippedScaleX1000: 4.26493537408294,
+    reportedRomCm: 64,
+    sensorRomCm: 62.74,
+    liveErrorPct: 2.01,
+    notes:
+      "135x8 beside the OVR, live path (cadence 0.978, 5 dropouts), 8 of 8. Range 64.0cm against " +
+      "24.7in: +2.0%. The plate was boxed 2.24x too big and carried nothing; the 3D torso and the " +
+      "shoulder ruler split the blend 50/50 (-8.7% and +10.5% against the scale the sensor requires). " +
+      "Mean 1.01 against 0.97 (+4.1%). Peak 1.99 against 1.66 (+19.9%) with 7 of 8 reps capped at " +
+      "exactly 2.0x their mean; at the RDL's own cap of 1.75 (this round) it reads +6.6%. Rep 8 reads " +
+      "1.52 against the sensor's 0.95 on a 0.45s window, the one rep off.",
+  },
 ];
 
 /* THE ROUND-EIGHT MOVE, 2026-11-05: a RULE, and it touches NO scale number on any row.

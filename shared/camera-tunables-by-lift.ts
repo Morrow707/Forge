@@ -378,7 +378,7 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // SCALE numbers (ruler uncertainties) survive 2026-11-05; every VELOCITY number fitted before
   // it was fitted on the lowering and is gone -- see VELOCITY_OVERRIDES_REMOVED_2026_11_05 and
   // the-concentric-is-the-way-up.test.ts.
-  "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0 },
+  "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0, maxPeakToMeanRatio: 1.75 },
   "Back Squat": { heightRulerUncertainty: 0.12, driveOnsetFraction: 0.02, velocitySmoothingMs: 130 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
   "Dumbbell Shoulder Press": {
@@ -484,6 +484,17 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "high ones, about +0.8% on the blend, replayed on all six squat ledger rows and no other lift's. " +
     "Not a refit of HEIGHT_RULER_UNCERTAINTY, which is shared and was fitted on a squat AND an RDL.",
   "Romanian Deadlift":
+    "2026-11-16, round seventeen. maxPeakToMeanRatio 2 -> 1.75 on this lift only, fitted on the " +
+    "DRIVES (the 2.5 it once carried was fitted on the lowering and stays removed). The sensor's own " +
+    "peak over its own mean on an RDL is 1.73 / 1.66 / 1.62 / 1.71 on the four paired sets with a " +
+    "trace (11-05 x2, 11-09, 11-16) and 1.67-1.76 on every rep of the 11-16 set, while Forge capped " +
+    "7 of 8 reps at exactly 2.0 on 11-16 (trace.repPeaksCappedToMeanRatio 7): the raw peak is sample " +
+    "noise and the cap is the number being reported. At 1.75 the set peak reads +29.8 -> +18.6% " +
+    "(11-05 set 1), +19.0 -> +13.9% (11-05 set 2), +19.9 -> +6.6% (11-16), and -11.4 -> -20.3% on " +
+    "11-09 set 1, whose mean is 26% low on a scale fault, so its peak was near the sensor only by " +
+    "cancellation; with each take's mean error divided out the peak sits within 2.4% on three of " +
+    "four. Rep counts, means and ranges unchanged (the cap touches peaks only). Smoothing was swept " +
+    "(250, 330ms) and does not do this consistently. " +
     "2026-11-05, round ten. driveOnsetFraction 0.02 -> 0 (the whole travel window), the step round " +
     "nine named as next, costed after the rest-at-top rule (bar-tracking.ts, restArrivalAfterPeak) " +
     "gave both 11-05 sets and the 10-19 take their eighth pull: at 0.02 -> 0 the mean reads " +

@@ -2104,3 +2104,73 @@ export const OVR_SINGLE_ARM_DUMBBELL_ROW_SET3_2026_11_10 = {
     reportedRight: { meanVelocityMps: 0.831, peakVelocityMps: 1.3225, romIn: 16.25 },
   },
 } as const;
+
+/* ROUND SEVENTEEN, 2026-11-16, build 764. Back Squat 135x5, Romanian Deadlift 135x8 and a Box Jump
+ * x5 onto a 24in box, beside the OVR. Forge's numbers are what the phone shipped. */
+export const OVR_BACK_SQUAT_2026_11_16 = {
+  build: 764,
+  loadLb: 135,
+  repsPerSet: 5,
+  sensor: {
+    reps: [
+      { meanVelocityMps: 0.77, peakVelocityMps: 1.13, romIn: 29.9, meanW: 465, peakW: 677, tpvS: 0.69, eai: 1.63 },
+      { meanVelocityMps: 0.81, peakVelocityMps: 1.17, romIn: 30.4, meanW: 487, peakW: 702, tpvS: 0.67, eai: 1.73 },
+      { meanVelocityMps: 0.86, peakVelocityMps: 1.32, romIn: 31.5, meanW: 514, peakW: 793, tpvS: 0.68, eai: 1.93 },
+      { meanVelocityMps: 0.77, peakVelocityMps: 1.05, romIn: 32.3, meanW: 460, peakW: 628, tpvS: 0.76, eai: 1.37 },
+      { meanVelocityMps: 0.75, peakVelocityMps: 1.11, romIn: 32.0, meanW: 453, peakW: 669, tpvS: 0.87, eai: 1.27 },
+    ],
+    set: { meanVelocityMps: 0.79, peakVelocityMps: 1.15, romIn: 31.2, meanW: 475, peakW: 693, tpvS: 0.73, eai: 1.58 },
+  },
+  /** TWO REPS OF FIVE: the file read was interrupted at 15.6s of 33.0s when the app left the
+   *  screen (readerStatus failed, "Operation Interrupted"). Compare with the sensor's first two. */
+  forgeOnDevice: { repCount: 2, meanVelocityMps: 0.77, peakVelocityMps: 1.08, romCm: 71.1, repMeans: [0.76, 0.79], repPeaks: [1.08, 1.09], repRoms: [69.8, 72.4] },
+};
+
+export const OVR_ROMANIAN_DEADLIFT_2026_11_16 = {
+  build: 764,
+  loadLb: 135,
+  repsPerSet: 8,
+  sensor: {
+    reps: [
+      { meanVelocityMps: 1.01, peakVelocityMps: 1.72, romIn: 25.0, meanW: 606, peakW: 1032, tpvS: 0.33, eai: 5.16 },
+      { meanVelocityMps: 1.02, peakVelocityMps: 1.76, romIn: 25.9, meanW: 610, peakW: 1057, tpvS: 0.31, eai: 5.62 },
+      { meanVelocityMps: 1.00, peakVelocityMps: 1.72, romIn: 25.0, meanW: 598, peakW: 1032, tpvS: 0.30, eai: 5.65 },
+      { meanVelocityMps: 0.94, peakVelocityMps: 1.57, romIn: 24.0, meanW: 566, peakW: 942, tpvS: 0.31, eai: 5.01 },
+      { meanVelocityMps: 0.99, peakVelocityMps: 1.65, romIn: 24.4, meanW: 593, peakW: 991, tpvS: 0.36, eai: 4.50 },
+      { meanVelocityMps: 0.92, peakVelocityMps: 1.57, romIn: 24.7, meanW: 552, peakW: 942, tpvS: 0.33, eai: 4.74 },
+      { meanVelocityMps: 0.95, peakVelocityMps: 1.67, romIn: 24.3, meanW: 572, peakW: 1000, tpvS: 0.30, eai: 5.47 },
+      { meanVelocityMps: 0.95, peakVelocityMps: 1.62, romIn: 24.9, meanW: 570, peakW: 975, tpvS: 0.35, eai: 4.53 },
+    ],
+    set: { meanVelocityMps: 0.97, peakVelocityMps: 1.66, romIn: 24.7, meanW: 583, peakW: 996, tpvS: 0.32, eai: 5.08 },
+  },
+  forgeOnDevice: {
+    repCount: 8, meanVelocityMps: 1.01, peakVelocityMps: 1.99, romCm: 64,
+    repMeans: [1.13, 1.08, 1.06, 0.96, 0.89, 0.85, 0.85, 1.52],
+    repPeaks: [2.26, 2.15, 2.12, 1.91, 1.78, 1.7, 1.7, 2.27],
+    repRoms: [65.9, 69.1, 66.6, 64.4, 60.7, 58.4, 59.6, 67.2],
+  },
+};
+
+/** The OVR screen is headed "JUMP SQUAT" x6 and ITS REP 1 IS SKIPPED (Scott, 2026-11-16). */
+export const OVR_BOX_JUMP_HIP_2026_11_16 = {
+  build: 764,
+  boxHeightIn: 24,
+  repsPerSet: 5,
+  sensor: {
+    ignoredRep1: { meanVelocityMps: 0.94, peakVelocityMps: 2.31, romIn: 30.7, tpvS: 0.30, eai: 7.55 },
+    reps: [
+      { meanVelocityMps: 1.44, peakVelocityMps: 2.66, romIn: 26.3, tpvS: 0.19, eai: 13.54 },
+      { meanVelocityMps: 1.39, peakVelocityMps: 2.49, romIn: 26.5, tpvS: 0.18, eai: 13.83 },
+      { meanVelocityMps: 1.42, peakVelocityMps: 2.71, romIn: 26.5, tpvS: 0.18, eai: 15.05 },
+      { meanVelocityMps: 1.46, peakVelocityMps: 2.59, romIn: 26.8, tpvS: 0.18, eai: 14.37 },
+      { meanVelocityMps: 1.39, peakVelocityMps: 2.39, romIn: 26.4, tpvS: 0.19, eai: 12.09 },
+    ],
+    reportedOverOurReps: { meanVelocityMps: 1.42, peakVelocityMps: 2.568, romIn: 26.5 },
+  },
+  /** Two "jumps" of five: every landing read 64-69cm on a 61cm box and was refused as floating
+   *  above it (LANDING_ABOVE_BOX_TOLERANCE_M alone). Replayed with the gate's slack as a share of
+   *  the box, the stored trace gives five landings: net rise 66.5, 67.2, 64.4, 67.0, 68.7cm
+   *  (mean 66.8 against the sensor's 67.3). */
+  forgeOnDevice: { repCount: 2, bestJumpHeightCm: 72.9, meanVelocityMps: 1.38, peakVelocityMps: 2.04 },
+  replayedNetRisesCm: [66.5, 67.2, 64.4, 67.0, 68.7],
+};

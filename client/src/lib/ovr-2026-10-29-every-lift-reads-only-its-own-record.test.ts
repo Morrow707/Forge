@@ -43,7 +43,7 @@ const replayAt = (f: Fixture, patch: Partial<Record<string, number>>) => {
   return summarizeTrackedSet(points, f.loadKg ?? undefined, f.heightIn ?? undefined, firstMoveForExercise(f.exerciseName), [],
     f.trackingDiagnostics?.calibration?.positionScaleCorrection ?? 1, false, romKind, { x: 0, y: 1 }, f.loggedReps ?? null, tune)!;
 };
-const CAPPED_10_19_AT_WHOLE_WINDOW = 6; // at the whole window the mean is lower and the 2.0 cap binds on six of eight 10-19 drives
+const CAPPED_10_19_AT_WHOLE_WINDOW = 7; // at the RDL's own 1.75 cap (2026-11-16) it binds on seven of eight 10-19 drives; six at the shared 2.0
 const byId = (id: string) => fixtures.find((x) => x.id === id)!;
 
 /** OVR, set level, from docs/camera-tracking-notes.md: 10-29 squat 0.80 / 1.20; 10-19 squat set 2
@@ -69,8 +69,9 @@ const CORRECTED: Record<string, { reps: number; romCm: number; mean: number; pea
   "2026-10-19 Back Squat set 2": { reps: 5, romCm: 71.8, mean: 0.86, peak: 1.19 },
   // Round ten (2026-11-05): the RDL's window is 0 and the rest-at-top rule gives the 10-19 take
   // its eighth rep (the last drive, merged with the stand-and-hold before the bar went down).
-  "2026-10-29 Romanian Deadlift set 1": { reps: 8, romCm: 84.1, mean: 0.97, peak: 1.55 },
-  "2026-10-19 Romanian Deadlift set 2": { reps: 8, romCm: 63.9, mean: 1.09, peak: 2.12 },
+  // Round seventeen (2026-11-16): the RDL's own peak cap is 1.75, so both peaks come down.
+  "2026-10-29 Romanian Deadlift set 1": { reps: 8, romCm: 84.1, mean: 0.97, peak: 1.46 },
+  "2026-10-19 Romanian Deadlift set 2": { reps: 8, romCm: 63.9, mean: 1.09, peak: 1.88 },
 };
 
 describe("the 2026-10-29 export replays through each lift's own record", () => {
@@ -152,8 +153,11 @@ describe("the 2026-10-29 export replays through each lift's own record", () => {
 
   it("the RDL reads the shared cap again: the 2.5 it carried released the lowering's peaks, and its drives are open", () => {
     expect(VELOCITY_OVERRIDES_REMOVED_2026_11_05["Romanian Deadlift"]).toEqual(["maxPeakToMeanRatio"]);
-    expect("maxPeakToMeanRatio" in FITTED_OVERRIDES["Romanian Deadlift"]).toBe(false);
-    expect(cameraTunablesFor("Romanian Deadlift", romBucketForExercise("Romanian Deadlift")).values.maxPeakToMeanRatio).toBe(MAX_PEAK_TO_MEAN_RATIO);
+    // Round seventeen (2026-11-16) gave the RDL a cap of its own again, fitted on the DRIVES this
+    // time: 1.75, the sensor's own peak-over-mean on this lift. It is tighter than the shared 2,
+    // never the 2.5 that released the lowering's peaks.
+    expect(FITTED_OVERRIDES["Romanian Deadlift"].maxPeakToMeanRatio).toBe(1.75);
+    expect(cameraTunablesFor("Romanian Deadlift", romBucketForExercise("Romanian Deadlift")).values.maxPeakToMeanRatio).toBeLessThan(MAX_PEAK_TO_MEAN_RATIO);
     // On the drives the RDL reads HIGH on both takes -- +8% / +22% on the mean at its own whole
     // window (round ten; +32% / +26% at 0.02, +46% / +30% at the shared 0.04), +1% / +33% on the
     // peak against the sensor -- with its range of motion +35% (10-29, filmed oblique) and +15%
@@ -170,7 +174,7 @@ describe("the 2026-10-29 export replays through each lift's own record", () => {
     expect(replayAt(byId("2026-10-29 Romanian Deadlift set 1"), { driveOnsetFraction: 0.02 }).meanVelocityMps! / SENSOR["2026-10-29 Romanian Deadlift set 1"].mean).toBeGreaterThan(1.25);
     expect(s2.repBreakdown.filter((r: any) => r.windows?.peakCapped).length).toBe(CAPPED_10_19_AT_WHOLE_WINDOW);
     // at the whole window the 10-29 take's mean is lower too, and the cap binds on three of its drives
-    expect(s1.repBreakdown.filter((r: any) => r.windows?.peakCapped).length).toBe(3);
+    expect(s1.repBreakdown.filter((r: any) => r.windows?.peakCapped).length).toBe(4); // three at the shared 2.0
     // the eighth rep of the 10-19 take is the one the rest rule returned: a 2.0s stand at lockout
     // ran on behind it (the recording was stopped with the bar still up), and no other rep on
     // either take came to a rest the rule cut
