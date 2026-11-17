@@ -111,15 +111,33 @@ describe("filling the long tail by search", () => {
     expect(remaining).toEqual(["Plank"]);
   });
 
-  it("keeps going when one lookup throws", async () => {
-    // Quota exhaustion and a transient error look identical here, and one failed lookup is not
-    // worth losing the exercises already filled.
+  it("keeps going when one lookup fails for a reason that is not the quota", async () => {
     const result = await searchForUnmatched(LIBRARY, ["Plank", "Couch Stretch"], VOCAB, 180, 10,
       async (q) => {
-        if (q === "Plank") throw new Error("quotaExceeded");
+        if (q === "Plank") throw new Error("YouTube search failed: 500");
         return [vid({ title: "Couch Stretch", viewCount: 5 })];
       });
     expect(result.filled.get("Couch Stretch")).toBeTruthy();
-    expect(result.stillEmpty).toContain("Plank");
+    expect(result.stillEmpty).not.toContain("Plank");
+    expect(result.remaining).toEqual(["Plank"]);
+  });
+});
+
+describe("a re-run reaches the exercises the last run could not", () => {
+  it("a cached search does not spend the budget, so the next uncached name is searched", async () => {
+    const cached = new Set(["Lizard Stretch"]);
+    const asked: string[] = [];
+    const result = await searchForUnmatched(LIBRARY, ["Lizard Stretch", "Couch Stretch", "Plank"], VOCAB, 180, 1,
+      async (q) => { asked.push(q); return []; }, undefined, (q) => cached.has(q));
+    expect(asked).toEqual(["Lizard Stretch", "Couch Stretch"]);
+    expect(result.searched).toBe(1);
+    expect(result.remaining).toEqual(["Plank"]);
+  });
+
+  it("a search that throws (quota gone) waits for the next run and is not reported as found nothing", async () => {
+    const result = await searchForUnmatched(LIBRARY, ["Lizard Stretch", "Couch Stretch"], VOCAB, 180, 10,
+      async () => { throw new Error("YouTube search failed: 403 (quotaExceeded)"); });
+    expect(result.stillEmpty).toEqual([]);
+    expect(result.remaining).toEqual(["Lizard Stretch", "Couch Stretch"]);
   });
 });

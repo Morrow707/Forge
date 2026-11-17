@@ -420,6 +420,8 @@ export async function planExerciseVideoBackfill(options?: {
           writeYouTubeCache("search", query, found);
           return found;
         },
+        undefined,
+        (query) => readYouTubeCache("search", query, SEARCH_CACHE_HOURS) != null,
       )
     : null;
 

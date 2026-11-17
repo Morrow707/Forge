@@ -273,28 +273,42 @@ export async function searchForUnmatched(
   maxSearches: number,
   search: (query: string) => Promise<SearchedVideo[]>,
   allowlist: readonly string[] = AUTO_APPLY_CHANNELS,
+  /* A search answered from the cache costs no quota, so it must not spend the run's budget.
+   * Counting it did, and that is why a second run re-read the same names from the cache and
+   * never reached the rest: the "run again to continue" the report promised could not continue. */
+  isCached: (query: string) => boolean = () => false,
 ): Promise<SearchFillResult> {
   const byName = new Map(library.map((e) => [e.name, e]));
   const filled = new Map<string, SignatureMatch>();
   const stillEmpty: string[] = [];
+  const remaining: string[] = [];
   let searched = 0;
+  let quotaGone = false;
 
   for (const name of unmatchedNames) {
-    if (searched >= maxSearches) break;
     const exercise = byName.get(name);
     if (!exercise) continue;
     const exSig = exerciseSignature(exercise, vocabulary);
     if (!exSig.head) continue;
 
-    searched += 1;
+    const cached = isCached(name);
+    if (!cached && (quotaGone || searched >= maxSearches)) {
+      remaining.push(name);
+      continue;
+    }
+    if (!cached) searched += 1;
+
     let candidates: SearchedVideo[] = [];
     try {
       candidates = await search(name);
-    } catch {
-      // Quota exhaustion and a transient API error look the same here. Either way this
-      // exercise keeps its search link and the run continues -- one failed lookup is not
-      // worth losing the ones already found.
-      candidates = [];
+    } catch (err) {
+      // A failed lookup is NOT "searched and found nothing": filing it under stillEmpty told the
+      // admin YouTube had no such video. It waits for the next run. When the reason is the day's
+      // quota (youtube-catalog puts YouTube's reason in the message) every uncached search after
+      // it would fail the same way, so they wait too; a one-off error lets the run carry on.
+      if (/quotaExceeded|dailyLimitExceeded|rateLimitExceeded/.test(String((err as Error)?.message ?? err))) quotaGone = true;
+      remaining.push(name);
+      continue;
     }
 
     const passing: SignatureMatch[] = [];
@@ -336,7 +350,7 @@ export async function searchForUnmatched(
   return {
     filled,
     searched,
-    remaining: unmatchedNames.slice(searched),
+    remaining,
     stillEmpty,
   };
 }
