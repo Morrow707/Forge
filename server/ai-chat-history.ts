@@ -10,6 +10,16 @@
 // untouched; this is only what rides along to the model.
 export const AI_CHAT_HISTORY_MESSAGES = 30;
 
+/** THE ATHLETE-FACING CHATS SEND LESS (2026-11-17, the cost audit at 10,000 athletes). The program and
+ * skills builders are where a Free Agent's bill was largest, and every message there already carries
+ * the CURRENT program in full, which is where everything earlier turns decided lives -- so twelve
+ * recent messages keep the thread of the conversation and the program keeps the rest. The coach chat
+ * answers questions rather than building something, so ten messages of it keep a session's context.
+ * The four admin teaching chats keep thirty: a handful of people use them and they are where a long
+ * correction is worked out. */
+export const BUILDER_CHAT_HISTORY_MESSAGES = 12;
+export const COACH_CHAT_HISTORY_MESSAGES = 10;
+
 /** The most recent messages of a stored conversation, oldest first, as they were given. */
 export function recentForAi<T>(history: readonly T[], keep: number = AI_CHAT_HISTORY_MESSAGES): T[] {
   return history.length <= keep ? [...history] : history.slice(history.length - keep);

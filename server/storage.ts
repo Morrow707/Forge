@@ -399,7 +399,8 @@ import { readingLevelInstruction, type ClassReadingLevel } from "@shared/class-r
 import { learningStreakFromDays } from "@shared/learning-streak";
 import { PROGRAM_CHAT_MAX_TOKENS } from "./program-chat-limits";
 import { askClaude, askClaudeStructured, askClaudeWithTools, askClaudeVision, askClaudeVisionStructured, aiEnabled, fastModel, type SystemPrompt } from "./ai";
-import { recentForAi } from "./ai-chat-history";
+import { BUILDER_CHAT_HISTORY_MESSAGES, COACH_CHAT_HISTORY_MESSAGES, recentForAi } from "./ai-chat-history";
+import { cachedBuilderSystem, sharedGuidelinesText } from "./ai-cache-layout";
 import { rememberedAiAnswer } from "./ai-answer-cache";
 import { deleteUploadedFile, statUploadedFile, getUploadsDiskFreeBytes } from "./uploaded-files";
 import { deriveBodyWitnessTrace } from "./body-witness-trace";
@@ -11122,7 +11123,10 @@ Write ONE short note (1-2 sentences, plain language, talking directly to the ath
     const text = await askClaude(
       "You are a concise, expert strength and conditioning coach's assistant. You write short, direct, athlete-facing readiness notes grounded only in the data you're given -- never invent data, never give medical advice, never diagnose. If soreness or stress data suggests something concerning, tell the athlete to flag it with their coach rather than offering a workaround. Some of the athlete's profile is coach-only analytics (health status, joint ROM flags, leg-drive asymmetry, training-load/ACWR risk, camera-tracked bar speed trend) they don't see on their own dashboard -- use it to shape the note's tone and advice, but never name those specific coach-only labels/numbers in the note itself (e.g. never write \"your ACWR is red\" or \"your bar speed dropped 22%\" or \"you're flagged as hurt\"); phrase any influence from it generally instead.",
       [{ role: "user", content: prompt }],
-      { maxTokens: 350, feature: "readiness-briefing" },
+      // On the fast model (2026-11-17, cost audit). Free text on Haiku 5.5 can open with
+      // thinking that counts against max_tokens, and a truncated answer is discarded, so the cap is
+      // headroom, not length: the prompt asks for 1-2 sentences, and output here costs $0.50 per MTok.
+      { maxTokens: 2000, feature: "readiness-briefing", model: fastModel },
     );
     if (!text) return null;
 
@@ -11206,7 +11210,8 @@ Write a short (2-4 sentence) plain-language weekly training summary for this ath
     const text = await askClaude(
       "You are a concise, encouraging strength and conditioning coach's assistant writing a weekly training summary. Ground everything strictly in the data given -- never invent numbers, exercises, or events you weren't told about. Some of the athlete's profile is coach-only analytics (health status, joint ROM flags, leg-drive asymmetry, training-load/ACWR risk) they don't see on their own dashboard -- use it to shape the summary's tone and emphasis, but never name those specific coach-only labels/numbers directly.",
       [{ role: "user", content: prompt }],
-      { maxTokens: 450, feature: "athlete-digest" },
+      // On the fast model (2026-11-17); same headroom reasoning as the readiness note.
+      { maxTokens: 2000, feature: "athlete-digest", model: fastModel },
     );
     if (!text) return null;
 
@@ -11650,7 +11655,7 @@ Write a short (3-5 sentence) plain-language weekly summary for the coach, highli
         this.getAthleteProgressSummary(athleteId),
         this.getStreakForAthlete(athleteId),
         this.getWellnessCheckin(athleteId, today),
-        this.getChatMessagesForAthlete(athleteId, 20),
+        this.getChatMessagesForAthlete(athleteId, COACH_CHAT_HISTORY_MESSAGES),
         this.getAthleteAiContext(athleteId),
         this.getAiKnowledgeGuidelines(),
         this.getCoachesCornerPrinciplesForAi(),
@@ -11700,10 +11705,14 @@ ${athleteContext}
 - Total workouts completed all-time: ${summary.totalWorkoutsCompleted}
 - Current streak: ${streak.currentStreak} days
 - Recent PRs: ${prSummary}
-- Today's wellness check-in: ${wellnessSummary}${adminGuidelines ? `\n\nAdditional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}` : ""}${coachesCornerPrinciples ? `\n\nForge Coaches Corner principles -- this platform's coach-education curriculum; apply these too:\n${coachesCornerPrinciples}` : ""}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}`;
+- Today's wellness check-in: ${wellnessSummary}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}`;
 
+    // The admin's guidelines and the Coaches Corner principles are the same for every athlete:
+    // cached between the rules and this athlete's data (2026-11-17, the cost audit).
+    const sharedChat = sharedGuidelinesText({ adminGuidelines, coachesCornerPrinciples });
     const system: SystemPrompt = [
       { text: staticSystem, cache: true },
+      ...(sharedChat ? [{ text: `\n\n${sharedChat}`, cache: true }] : []),
       { text: dynamicSystem },
     ];
 
@@ -11923,7 +11932,7 @@ ${athleteContext}
     const profileLine = `Athlete: ${athlete?.name ?? "this athlete"}${ageLine}${athlete?.sport ? `, sport: ${athlete.sport}` : ""}${athlete?.position ? `, position: ${athlete.position}` : ""}`;
 
     const [history, sportContext] = await Promise.all([
-      this.getSportCoachChatMessages(athleteId, addOn, 20),
+      this.getSportCoachChatMessages(athleteId, addOn, COACH_CHAT_HISTORY_MESSAGES),
       this.buildSportCoachContext(athleteId, addOn),
     ]);
 
@@ -17521,25 +17530,12 @@ ${SEASON_PHASE_TRAINING_PRINCIPLES}
 Compound/isolation/combination exercise rules -- apply whenever the request signals a time-crunched general-fitness goal (a "weekend warrior," a busy parent or professional, wanting to keep the heart rate up, wanting a circuit) rather than a specific strength number or physique split, or whenever the athlete's stated training-style preference below says so:
 ${COMBINATION_EXERCISE_TRAINING_PRINCIPLES}`;
 
-    const extraGuidelines = [
-      adminGuidelines
-        ? `Additional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}`
-        : null,
-      coachesCornerPrinciples
-        ? `Forge Coaches Corner principles -- this platform's coach-education curriculum; apply these too:\n${coachesCornerPrinciples}`
-        : null,
-      forgeAiContext || null,
-      renderPassagesForPrompt(referencePassages) || null,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-
-    const system: SystemPrompt = extraGuidelines
-      ? [
-          { text: staticSystem, cache: true },
-          { text: `\n\n${extraGuidelines}` },
-        ]
-      : [{ text: staticSystem, cache: true }];
+    const system = cachedBuilderSystem(staticSystem, {
+      adminGuidelines,
+      coachesCornerPrinciples,
+      catalog: `Available exercises (id: name (category, muscle group, movement type)) -- you may ONLY use exercise IDs from this list:\n${catalog}`,
+      perRequest: [forgeAiContext || null, renderPassagesForPrompt(referencePassages) || null].filter(Boolean).join("\n\n") || null,
+    });
 
     const userPrompt = `Coach's request: "${prompt}"
 
@@ -17549,10 +17545,7 @@ ${
     : "No athlete profile is linked to this request -- this program may be reused for multiple roster athletes. Infer sport/position/age/season from the coach's prompt where you can, and use the `note` field to ask if something is genuinely missing and would meaningfully change the program."
 }
 
-Available exercises (id: name (category, muscle group, movement type)) -- you may ONLY use exercise IDs from this list:
-${catalog}
-
-Design a complete draft program matching the coach's request.`;
+Design a complete draft program matching the coach's request, using only exercise IDs from the list in the system prompt.`;
 
     const rawDraft = await askClaudeStructured(system, userPrompt, tool, { maxTokens: 4096, feature: "program-draft" });
     const parsedDraft = programDraftSchema.safeParse(rawDraft);
@@ -17678,17 +17671,11 @@ ${SKILL_PROGRAM_DESIGN_PRINCIPLES}
 Age-appropriate skill rules -- apply whenever the athlete profile gives an age under 18, or the request gives any other signal the athlete isn't a physically mature adult. The profile's age line comes from a real birthdate and says so explicitly when the athlete is a minor; when it does, these rules are mandatory, not a judgement call:
 ${AGE_APPROPRIATE_SKILL_PRINCIPLES}`;
 
-    const skillExtraGuidelines = [
-      coachesCornerPrinciples
-        ? `Forge Coaches Corner principles -- this platform's coach-education curriculum; apply these too:\n${coachesCornerPrinciples}`
-        : null,
-      forgeAiContext || null,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-    const system: SystemPrompt = skillExtraGuidelines
-      ? [{ text: staticSystem, cache: true }, { text: `\n\n${skillExtraGuidelines}` }]
-      : [{ text: staticSystem, cache: true }];
+    const system = cachedBuilderSystem(staticSystem, {
+      coachesCornerPrinciples,
+      catalog: `Available drills (id: name (skill type, equipment, sports)) -- you may ONLY use skill exercise IDs from this list:\n${catalog}`,
+      perRequest: forgeAiContext || null,
+    });
 
     const userPrompt = `Athlete's request: "${prompt}"
 
@@ -17698,10 +17685,7 @@ ${
     : "No athlete profile is linked to this request. Infer sport/position from the athlete's prompt where you can, and use the `note` field to ask if something is genuinely missing and would meaningfully change the program."
 }
 
-Available drills (id: name (skill type, equipment, sports)) -- you may ONLY use skill exercise IDs from this list:
-${catalog}
-
-Design a complete draft skills program matching the athlete's request.`;
+Design a complete draft skills program matching the athlete's request, using only skill exercise IDs from the list in the system prompt.`;
 
     const rawDraft = await askClaudeStructured(system, userPrompt, tool, { feature: "skill-program-draft", maxTokens: 4096 });
     const parsedDraft = skillProgramDraftSchema.safeParse(rawDraft);
@@ -17917,19 +17901,13 @@ ${SKILL_PROGRAM_DESIGN_PRINCIPLES}
 Age-appropriate skill rules -- apply whenever the athlete profile gives an age under 18, or the request gives any other signal the athlete isn't a physically mature adult. The profile's age line comes from a real birthdate and says so explicitly when the athlete is a minor; when it does, these rules are mandatory, not a judgement call:
 ${AGE_APPROPRIATE_SKILL_PRINCIPLES}`;
 
-    const skillChatExtraGuidelines = [
-      coachesCornerPrinciples
-        ? `Forge Coaches Corner principles -- this platform's coach-education curriculum; apply these too:\n${coachesCornerPrinciples}`
-        : null,
-      forgeAiContext || null,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-    const system: SystemPrompt = skillChatExtraGuidelines
-      ? [{ text: staticSystem, cache: true }, { text: `\n\n${skillChatExtraGuidelines}` }]
-      : [{ text: staticSystem, cache: true }];
+    const system = cachedBuilderSystem(staticSystem, {
+      coachesCornerPrinciples,
+      catalog: `Available drills (id: name (skill type, equipment, sports)) -- you may ONLY use skill exercise IDs from this list:\n${catalog}`,
+      perRequest: forgeAiContext || null,
+    });
 
-    const historyText = recentForAi(history)
+    const historyText = recentForAi(history, BUILDER_CHAT_HISTORY_MESSAGES)
       .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
       .join("\n");
 
@@ -17940,10 +17918,7 @@ ${athleteContext}
 `
       : "";
 
-    const userPrompt = `${athleteProfileBlock}Available drills (id: name (skill type, equipment, sports)) -- you may ONLY use skill exercise IDs from this list:
-${catalog}
-
-Current program structure:
+    const userPrompt = `${athleteProfileBlock}Current program structure:
 ${JSON.stringify(currentStructure)}
 
 Conversation so far:
@@ -18507,26 +18482,14 @@ ${SEASON_PHASE_TRAINING_PRINCIPLES}
 Compound/isolation/combination exercise rules -- apply whenever the conversation signals a time-crunched general-fitness goal (a "weekend warrior," a busy parent or professional, wanting to keep the heart rate up, wanting a circuit) rather than a specific strength number or physique split, or whenever the athlete's stated training-style preference below says so:
 ${COMBINATION_EXERCISE_TRAINING_PRINCIPLES}`;
 
-    const extraGuidelines = [
-      adminGuidelines
-        ? `Additional guidelines this platform's admin has taught you -- follow these too:\n${adminGuidelines}`
-        : null,
-      coachesCornerPrinciples
-        ? `Forge Coaches Corner principles -- this platform's coach-education curriculum; apply these too:\n${coachesCornerPrinciples}`
-        : null,
-      forgeAiContext || null,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
+    const system = cachedBuilderSystem(staticSystem, {
+      adminGuidelines,
+      coachesCornerPrinciples,
+      catalog: `Available exercises (id: name (category, muscle group, movement type)) -- you may ONLY use exercise IDs from this list:\n${catalog}`,
+      perRequest: forgeAiContext || null,
+    });
 
-    const system: SystemPrompt = extraGuidelines
-      ? [
-          { text: staticSystem, cache: true },
-          { text: `\n\n${extraGuidelines}` },
-        ]
-      : [{ text: staticSystem, cache: true }];
-
-    const historyText = recentForAi(history)
+    const historyText = recentForAi(history, BUILDER_CHAT_HISTORY_MESSAGES)
       .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
       .join("\n");
 
@@ -18537,10 +18500,7 @@ ${athleteContext}
 `
       : "";
 
-    const userPrompt = `${athleteProfileBlock}Available exercises (id: name (category, muscle group, movement type)) -- you may ONLY use exercise IDs from this list:
-${catalog}
-
-Current program structure:
+    const userPrompt = `${athleteProfileBlock}Current program structure:
 ${JSON.stringify(currentStructure)}
 
 Conversation so far:
@@ -18703,7 +18663,9 @@ ${catalog}
 
 Swap out "${pe.exercise.name}" (${pe.exercise.category}, ${pe.exercise.muscleGroup}, ${pe.exercise.movementType || "unclassified"} movement${pe.exercise.movementComplexity ? `, ${pe.exercise.movementComplexity}` : ""}${pe.exercise.bodyRegion ? `, ${pe.exercise.bodyRegion}` : ""}${pe.exercise.plane ? `, ${pe.exercise.plane}` : ""}) for a suitable alternative. Reason: ${reason}${notes.trim() ? ` -- ${notes.trim()}` : ""}.${forgeAiContext ? `\n\n${forgeAiContext}` : ""}`;
 
-    const rawResult = await askClaudeStructured(system, userPrompt, tool, { maxTokens: 400, feature: "exercise-swap" });
+    // On the fast model (2026-11-17, cost audit): a forced tool call picking one id from a list, which
+    // returns no thinking block, so the cap stays small.
+    const rawResult = await askClaudeStructured(system, userPrompt, tool, { maxTokens: 400, feature: "exercise-swap", model: fastModel });
     const parsed = exerciseSubstitutionSchema.safeParse(rawResult);
     if (!parsed.success || !validIds.includes(parsed.data.exerciseId)) {
       return fail("Sorry, I couldn't find a good swap just now -- try again in a bit.");
@@ -18914,10 +18876,22 @@ Athlete context:
 ${athleteContext}
 - Nutrition targets already on file (set by a coach/nutritionist, or by the athlete themselves): ${targetsSummary || "none set yet"}
 
-${foodLogBlock}${taughtGuidelines ? `\n\nAdditional guidance this platform's admin has taught you -- apply it alongside everything above:\n${taughtGuidelines}` : ""}${coachesCornerPrinciples ? `\n\nForge Coaches Corner principles -- this platform's coach-education curriculum; apply these too, subject to rule 1 above:\n${coachesCornerPrinciples}` : ""}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}${nutritionReference ? `\n\n${nutritionReference}` : ""}${nutritionNormBlock ? `\n\n${nutritionNormBlock}` : ""}${styleInstruction ? `\n\n${styleInstruction}` : ""}`;
+${foodLogBlock}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}${nutritionReference ? `\n\n${nutritionReference}` : ""}${nutritionNormBlock ? `\n\n${nutritionNormBlock}` : ""}${styleInstruction ? `\n\n${styleInstruction}` : ""}`;
 
+    // The admin's guidance and the Coaches Corner principles are the same for every athlete, so
+    // they sit in a cached block between the rules and this athlete's data (2026-11-17, the cost
+    // audit at 10,000 athletes); they used to ride in the per-athlete part at full price.
+    const sharedNutrition = [
+      taughtGuidelines ? `Additional guidance this platform's admin has taught you -- apply it alongside everything above:\n${taughtGuidelines}` : null,
+      coachesCornerPrinciples
+        ? `Forge Coaches Corner principles -- this platform's coach-education curriculum; apply these too, subject to rule 1 above:\n${coachesCornerPrinciples}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
     const system: SystemPrompt = [
       { text: staticSystem, cache: true },
+      ...(sharedNutrition ? [{ text: `\n\n${sharedNutrition}`, cache: true }] : []),
       { text: dynamicSystem },
     ];
 
@@ -21454,7 +21428,8 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
           required: ["summary", "sets", "reps", "loadHint"],
         },
       },
-      { maxTokens: 400, feature: "difficulty-regression" },
+      // On the fast model (2026-11-17, cost audit): a forced tool call, one step easier on one lift.
+      { maxTokens: 400, feature: "difficulty-regression", model: fastModel },
     );
     if (!result?.summary) return null;
 

@@ -20,8 +20,15 @@ import { reportJobFailure } from "./job-errors";
 export async function runVideoRetentionSweep(): Promise<Record<string, number>> {
   try {
     const { warned, purged } = await storage.sweepVideoRetentionCap();
+    // ONE MESSAGE PER ATHLETE PER SWEEP, NOT ONE PER VIDEO (2026-11-17, the cost audit at 10,000
+    // athletes). An athlete past the cap on a lift gets a warning for every clip over it, so a
+    // morning's filming used to arrive as a stack of near-identical emails -- most of Forge's
+    // projected email volume, and an inbox nobody reads by the fourth one. The videos still each
+    // get their own grace clock; only the telling is grouped.
+    const byAthlete = new Map<number, typeof warned>();
+    for (const w of warned) byAthlete.set(w.athleteId, [...(byAthlete.get(w.athleteId) ?? []), w]);
     let notified = 0;
-    for (const w of warned) {
+    for (const [athleteId, videos] of Array.from(byAthlete)) {
       // Each warning is independent -- one athlete's bad/expired push
       // token shouldn't stop everyone after them in this list from being
       // notified. And the grace clock (markVideoPendingDeletion) only
@@ -29,12 +36,17 @@ export async function runVideoRetentionSweep(): Promise<Record<string, number>> 
       // failure here just means it's retried on tomorrow's sweep instead
       // of the video silently sliding toward deletion unwarned.
       try {
+        const first = videos[0];
+        const names = Array.from(new Set(videos.map((v) => v.exerciseName)));
+        const nameList = names.length <= 3 ? names.join(", ") : `${names.slice(0, 3).join(", ")} and ${names.length - 3} more`;
         const { delivered, attempted } = await notifyUser(
-          w.athleteId,
+          athleteId,
           "video_cap_warning",
-          `A ${w.exerciseName} video is about to be removed`,
-          `You've got more saved for this ${w.source === "skill" ? "drill" : "exercise"} than your plan keeps -- tap the heart on this one within 7 days to keep it, or it'll be automatically removed to save space.`,
-          w.link,
+          videos.length === 1 ? `A ${first.exerciseName} video is about to be removed` : `${videos.length} videos are about to be removed`,
+          videos.length === 1
+            ? `You've got more saved for this ${first.source === "skill" ? "drill" : "exercise"} than your plan keeps -- tap the heart on this one within 7 days to keep it, or it'll be automatically removed to save space.`
+            : `You've got more saved than your plan keeps for ${nameList}. Tap the heart on any you want to keep within 7 days, or they'll be automatically removed to save space.`,
+          first.link,
         );
         // The clock starts on delivery, not on the call returning. This
         // used to start it either way: notifyUser could not fail, so a
@@ -51,16 +63,18 @@ export async function runVideoRetentionSweep(): Promise<Record<string, number>> 
         // and, because the in-app row is written before any send is
         // attempted, re-warned the same video every single night forever.
         if (!delivered && attempted) {
-          console.warn(`Video retention: every configured channel failed for athlete ${w.athleteId}; not starting the grace clock for ${w.source} ${w.id}.`);
+          console.warn(`Video retention: every configured channel failed for athlete ${athleteId}; not starting the grace clock for ${videos.length} video(s).`);
           continue;
         }
         if (!delivered) {
-          console.warn(`Video retention: no delivery channel available for athlete ${w.athleteId}; the in-app notification is the only warning for ${w.source} ${w.id}.`);
+          console.warn(`Video retention: no delivery channel available for athlete ${athleteId}; the in-app notification is the only warning for ${videos.length} video(s).`);
         }
-        await storage.markVideoPendingDeletion(w.source, w.id);
-        notified++;
+        for (const w of videos) {
+          await storage.markVideoPendingDeletion(w.source, w.id);
+          notified++;
+        }
       } catch (err) {
-        console.error(`Video retention: failed to notify athlete ${w.athleteId} about set ${w.id}:`, err);
+        console.error(`Video retention: failed to notify athlete ${athleteId} about ${videos.length} video(s):`, err);
       }
     }
     if (notified > 0 || purged > 0) {

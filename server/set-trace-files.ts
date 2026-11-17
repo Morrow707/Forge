@@ -31,6 +31,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
+import { promisify } from "node:util";
+import { gunzip, gzip } from "node:zlib";
 import { UPLOADS_ROOT, deleteUploadedFile, readUploadedFile, uploadedFileDiskPath } from "./uploaded-files";
 
 export const SET_TRACES_DIR = "set-traces";
@@ -52,11 +54,24 @@ export function isSetTracePath(url: string | null | undefined): boolean {
   return typeof url === "string" && url.startsWith(`/uploads/${SET_TRACES_DIR}/`);
 }
 
+const gzipAsync = promisify(gzip);
+const gunzipAsync = promisify(gunzip);
+
+/** A gzip stream starts with these two bytes; plain JSON never does (it starts with "["). */
+function isGzipped(buf: Buffer): boolean {
+  return buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b;
+}
+
+/** COMPRESSED ON WRITE (2026-11-17, the cost audit at 10,000 athletes). A trace is plain JSON of
+ * repeated landmark keys and decimals, ~2 MB a filmed set, kept as long as the set's row -- the one
+ * storage line with no cap. Gzip takes it to a fraction of that. The name stays `.json` and the
+ * READER decides by the first two bytes, so every file written before this keeps reading as it was
+ * and nothing has to be rewritten or renamed. */
 export async function writeSetTraceFile(url: string, frames: unknown[]): Promise<void> {
   const disk = uploadedFileDiskPath(url);
   if (!disk || !isSetTracePath(url)) throw new Error(`Not a set-trace path: ${url}`);
   await fs.mkdir(path.dirname(disk), { recursive: true });
-  await fs.writeFile(disk, JSON.stringify(frames));
+  await fs.writeFile(disk, await gzipAsync(Buffer.from(JSON.stringify(frames), "utf8")));
 }
 
 /** The frames in a trace file, or null when there is no file (purged disk, a path from a lost
@@ -67,7 +82,8 @@ export async function readSetTraceFile(url: string | null | undefined): Promise<
   const buf = await readUploadedFile(url);
   if (!buf) return null;
   try {
-    const parsed = JSON.parse(buf.toString("utf8"));
+    const text = (isGzipped(buf) ? await gunzipAsync(buf) : buf).toString("utf8");
+    const parsed = JSON.parse(text);
     return Array.isArray(parsed) ? parsed : null;
   } catch {
     return null;

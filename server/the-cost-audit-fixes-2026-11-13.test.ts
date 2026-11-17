@@ -124,7 +124,9 @@ describe("a long chat does not send its whole history with every message", () =>
 
   it("no chat in storage builds its transcript from the unbounded history", () => {
     expect(storage).not.toMatch(/historyText = history\b/);
-    expect(storage.match(/historyText = recentForAi\(history\)/g)?.length).toBe(6);
+    expect(storage.match(/historyText = recentForAi\(history[,)]/g)?.length).toBe(6);
+    // The two athlete-facing builders send fewer (BUILDER_CHAT_HISTORY_MESSAGES, 2026-11-17).
+    expect(storage.match(/historyText = recentForAi\(history, BUILDER_CHAT_HISTORY_MESSAGES\)/g)?.length).toBe(2);
   });
 });
 
