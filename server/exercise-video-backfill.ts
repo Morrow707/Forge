@@ -75,6 +75,16 @@ export const DEMO_VIDEO_CHANNELS = [
   "ThePrehabGuys", // mobility and rehab: the CARs, stretches and holds nothing else carries
   "FunctionalBodybuilding", // Marcus Filly: dumbbell / kettlebell / tempo demos, name-titled
   "kettlebellkings", // kettlebell library, name-titled
+  // Added 2026-11-17 for the lifts no channel above films. The "Different equipment" misses on
+  // the 11-17 dry run were sled, sandbag, tire, yoke-style carries, assault bike and Ski Erg.
+  // Rogue's "Movement Demo" series covers the strongman implements (sandbag, stone, sled, log)
+  // and CrossFit's "The <movement>" demos cover the conditioning work (sled, rower, bike,
+  // battle rope, wall ball). Neither title prefix is a word the library knows, so it is learned
+  // as that channel's boilerplate like every other house style. Both start as Tier B. Unverified
+  // from the sandbox: the next dry run's catalogue column is the check, and a channel that wins
+  // nothing or runs long goes into CHANNELS_CUT_ON_EVIDENCE like the rest.
+  "roguefitness", // strongman: sandbag, stone, sled, log, carries
+  "CrossFit", // conditioning: sled, rower, assault bike, battle rope, wall ball
 ];
 
 /**
