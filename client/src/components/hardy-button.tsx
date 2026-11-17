@@ -39,7 +39,7 @@ export function HardyButton() {
           if (!open) countInteraction("Hardy: opened");
           setOpen((o) => !o);
         }}
-        className="fixed z-40 grid h-14 w-14 place-items-center rounded-full border-2 border-[#c8102e] bg-[#fbf6f2] shadow-lg transition-transform hover:-rotate-12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        className="fixed z-40 grid h-14 w-14 place-items-center rounded-full border-2 border-[#0EB4FF] bg-[#fbf6f2] shadow-lg transition-transform hover:-rotate-12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
         style={{ right: "calc(16px + env(safe-area-inset-right, 0px))", bottom: "calc(16px + env(safe-area-inset-bottom, 0px))" }}
       >
         <HardyMark className="h-11 w-11" id="hardy-button-mark" />

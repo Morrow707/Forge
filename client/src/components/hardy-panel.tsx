@@ -19,6 +19,17 @@ type Hit = { date: string; athleteId: number; athleteName: string; kind: "workou
 type Turn = { who: "me" | "hardy"; text: string; link?: string | null; date?: string | null };
 
 const PANEL_WIDTH = 380;
+
+/* HARDY IS BLUE FLAME (2026-11-17). Scott: his window "was hard to see" once open -- a card on a
+ * card, the same surface and a hairline border, under a crimson header that sat beside Forge's own
+ * orange. His colours are now the two colours of a hot, fully mixed gas flame, measured rather than
+ * picked: #4800B5 is the CH emission at 431 nm (the violet-blue of the cone), #0EB4FF the whole
+ * flame's spectrum rendered to sRGB (colorSpec's "blueflame" vignette, BlueFlame.txt). A two-pixel
+ * edge and a blue glow are what lift the window off the page. Text on the bright blue is dark,
+ * because white on #0EB4FF is too faint to read. The window turns off index.css's app-wide stable
+ * scrollbar gutter: it never scrolls itself, and the reserved strip left a dark band down the
+ * right of the header. */
+export const HARDY_FLAME = { core: "#4800B5", flame: "#0EB4FF", onFlame: "#06122B" } as const;
 const KIND_LABEL: Record<Hit["kind"], string> = { workout: "Training", food: "Food", checkin: "Check-in" };
 const niceDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 
@@ -59,16 +70,16 @@ export function HardyPanel({ open, onClose }: { open: boolean; onClose: () => vo
   return (
     <section
       aria-label="Hardy"
-      className="fixed z-40 flex max-h-[min(640px,calc(100dvh-110px))] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
-      style={{ right: "calc(16px + env(safe-area-inset-right, 0px))", bottom: "calc(84px + env(safe-area-inset-bottom, 0px))", width: `min(${PANEL_WIDTH}px, calc(100vw - 32px))` }}
+      className="fixed z-40 flex max-h-[min(640px,calc(100dvh-110px))] flex-col overflow-hidden rounded-2xl border-2 bg-card"
+      style={{ scrollbarGutter: "auto", borderColor: HARDY_FLAME.flame, boxShadow: "0 0 0 1px rgba(14,180,255,0.25), 0 0 28px rgba(14,180,255,0.35), 0 18px 40px rgba(0,0,0,0.55)", right: "calc(16px + env(safe-area-inset-right, 0px))", bottom: "calc(84px + env(safe-area-inset-bottom, 0px))", width: `min(${PANEL_WIDTH}px, calc(100vw - 32px))` }}
     >
-      <header className="flex items-center gap-2.5 bg-gradient-to-r from-[#1a1414] to-[#c8102e] px-3 py-2.5 text-white">
+      <header className="flex items-center gap-2.5 px-3 py-2.5 text-white" style={{ background: `linear-gradient(90deg, ${HARDY_FLAME.core}, ${HARDY_FLAME.flame})` }}>
         <HardyMark className="h-8 w-8 shrink-0" id="hardy-panel-mark" />
         <div className="min-w-0 flex-1">
           <p className="font-display text-lg font-bold uppercase leading-tight tracking-wide">Hardy</p>
           <p className="text-[11px] opacity-85">{access?.ask ? "Ask in a sentence, or search your logs" : "Search anything you've logged"}</p>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close Hardy" className="rounded-md p-1.5 hover:bg-white/15">
+        <button type="button" onClick={onClose} aria-label="Close Hardy" className="rounded-md bg-black/30 p-1.5 hover:bg-black/45">
           <X className="h-4 w-4" />
         </button>
       </header>
@@ -76,7 +87,7 @@ export function HardyPanel({ open, onClose }: { open: boolean; onClose: () => vo
       {access?.ask && (
         <div className="grid grid-cols-2 border-b text-sm font-semibold" role="tablist">
           {(["ask", "search"] as const).map((t) => (
-            <button key={t} type="button" role="tab" aria-selected={current === t} onClick={() => setTab(t)} className={cn("py-2", current === t ? "border-b-2 border-primary text-foreground" : "text-muted-foreground")}>
+            <button key={t} type="button" role="tab" aria-selected={current === t} onClick={() => setTab(t)} className={cn("py-2", current === t ? "border-b-2 border-[#0EB4FF] text-foreground" : "text-muted-foreground")}>
               {t === "ask" ? "Ask Hardy" : "Search"}
             </button>
           ))}
@@ -92,7 +103,7 @@ export function HardyPanel({ open, onClose }: { open: boolean; onClose: () => vo
               </div>
             )}
             {turns.map((t, i) => (
-              <div key={i} className={cn("max-w-[88%] rounded-xl px-3 py-2", t.who === "me" ? "ml-auto bg-primary text-primary-foreground" : "bg-secondary")}>
+              <div key={i} className={cn("max-w-[88%] rounded-xl px-3 py-2", t.who === "me" ? "ml-auto bg-[#0EB4FF] text-[#06122B]" : "bg-secondary")}>
                 <p className="whitespace-pre-wrap">{t.text}</p>
                 {t.link && (
                   <button type="button" onClick={() => go(t.link!)} className="mt-1.5 rounded-md border bg-card px-2.5 py-1 text-xs font-semibold text-foreground">
@@ -121,7 +132,7 @@ export function HardyPanel({ open, onClose }: { open: boolean; onClose: () => vo
               className="h-10 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm"
               maxLength={400}
             />
-            <button type="submit" disabled={ask.isPending || !question.trim()} className="rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">
+            <button type="submit" disabled={ask.isPending || !question.trim()} className="rounded-lg bg-[#0EB4FF] px-4 text-sm font-semibold text-[#06122B] disabled:opacity-50">
               Ask
             </button>
           </form>
@@ -154,7 +165,7 @@ export function HardyPanel({ open, onClose }: { open: boolean; onClose: () => vo
                 maxLength={400}
               />
             </div>
-            <button type="submit" disabled={search.isPending || !q.trim()} className="rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">
+            <button type="submit" disabled={search.isPending || !q.trim()} className="rounded-lg bg-[#0EB4FF] px-4 text-sm font-semibold text-[#06122B] disabled:opacity-50">
               Search
             </button>
           </form>
