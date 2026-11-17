@@ -52,3 +52,24 @@ describe("a channel whose load fails once", () => {
     expect(channelCatalogue).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("a channel named by search", () => {
+  it("skips the handle and finds the channel by name", async () => {
+    const { resolveChannel } = await vi.importActual<typeof import("./youtube-catalog")>("./youtube-catalog");
+    const calls: string[] = [];
+    vi.stubEnv("YOUTUBE_API_KEY", "test-key");
+    vi.stubGlobal("fetch", async (url: URL) => {
+      calls.push(`${url.pathname.split("/").pop()}?${[...url.searchParams].filter(([k]) => k !== "key").map(([k, v]) => `${k}=${v}`).join("&")}`);
+      const body = url.pathname.endsWith("/search")
+        ? { items: [{ id: { channelId: "UCaaaaaaaaaaaaaaaaaaaaaa" } }] }
+        : { items: [{ id: "UCaaaaaaaaaaaaaaaaaaaaaa", snippet: { title: "elitefts" }, contentDetails: { relatedPlaylists: { uploads: "UU1" } } }] };
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    const ch = await resolveChannel("search:EliteFTS", { units: 0, calls: 0 });
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    expect(ch?.uploadsPlaylistId).toBe("UU1");
+    expect(calls.some((c) => c.includes("forHandle"))).toBe(false);
+    expect(calls[0]).toContain("q=EliteFTS");
+  });
+});

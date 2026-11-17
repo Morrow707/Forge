@@ -101,6 +101,11 @@ export const DEMO_VIDEO_CHANNELS = [
   // resolver's search fallback is what finds it if the handle has changed. Unverified from the
   // sandbox: a catalogue of 0 on the next dry run means it needs its UC... channel ID instead.
   "SandbagFitness", // sandbag: cleans, carries, get-ups, lunges
+  // Added 2026-11-17 for the bench variations nothing else films (Paused Bench, Pin Press, Larsen
+  // Press, Spoto Press, Swiss Bar Bench). EliteFTS is a powerlifting site with a filmed exercise
+  // index. It was cut on 2026-09-28 for a LOOKUP failure, never a content verdict: the handle
+  // "elitefts" resolved to somebody else's 8-video channel. "search:" finds it by name instead.
+  "search:EliteFTS", // powerlifting: pin, board, Larsen and Spoto presses, specialty bars
 ];
 
 /**
@@ -108,7 +113,7 @@ export const DEMO_VIDEO_CHANNELS = [
  *
  * - `GarageStrength` (2026-09-28, second run): 4,000 videos loaded, ONE match at 0:37. Content
  *   verdict -- athlete features and long-form coaching, not a demo library.
- * - `elitefts` and `TNationTV` (same run): catalogues of 8 and 13. Those are not the channels;
+ * - `elitefts` (re-added 2026-11-17 as "search:EliteFTS", see above) and `TNationTV` (same run): catalogues of 8 and 13. Those are not the channels;
  *   the handles resolved to something else and the search fallback did not correct them. Like
  *   Westside below: a lookup failure, fixable with a UC... channel ID, not a verdict.
  * - `athleanx`, `jeffnippard`, `musclestrengthcom`, `BaseballRebellion` (2026-09-28): full
@@ -127,7 +132,6 @@ export const DEMO_VIDEO_CHANNELS = [
  */
 export const CHANNELS_CUT_ON_EVIDENCE = [
   "GarageStrength",
-  "elitefts",
   "TNationTV",
   "athleanx",
   "jeffnippard",

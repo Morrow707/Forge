@@ -71,12 +71,16 @@ export async function resolveChannel(
 ): Promise<{ channelId: string; title: string; uploadsPlaylistId: string } | null> {
   const raw = handleOrId.trim().replace(/^@/, "");
   const params: Record<string, string> = { part: "snippet,contentDetails" };
+  /* "search:<name>" skips the handle and goes straight to the name search below. For a channel
+   * whose handle resolves to the WRONG channel: elitefts did (8 videos, someone else's), and a
+   * wrong channel never reaches the fallback, which only fires when a handle finds nothing. */
+  const byName = /^search:/i.test(raw);
+  const query = byName ? raw.replace(/^search:\s*/i, "") : raw;
   // A UC-prefixed 24-character string is an id; anything else is a handle. Guessing wrong costs
   // one unit and returns nothing, so the cheap test is worth more than a lookup table.
   if (/^UC[A-Za-z0-9_-]{22}$/.test(raw)) params.id = raw;
   else params.forHandle = raw;
-  const data = await get("channels", params, ledger, 1);
-  let item = data.items?.[0];
+  let item = byName ? undefined : (await get("channels", params, ledger, 1)).items?.[0];
 
   /* A HANDLE THAT DOES NOT RESOLVE FALLS BACK TO ONE SEARCH.
    *
@@ -93,7 +97,7 @@ export async function resolveChannel(
   if (!item && !params.id) {
     const found: any = await get(
       "search",
-      { part: "snippet", type: "channel", q: raw, maxResults: "1" },
+      { part: "snippet", type: "channel", q: query, maxResults: "1" },
       ledger,
       100,
     );
@@ -111,7 +115,7 @@ export async function resolveChannel(
   if (!item) return null;
   const uploads = item.contentDetails?.relatedPlaylists?.uploads;
   if (!uploads) return null;
-  return { channelId: item.id, title: item.snippet?.title ?? raw, uploadsPlaylistId: uploads };
+  return { channelId: item.id, title: item.snippet?.title ?? query, uploadsPlaylistId: uploads };
 }
 
 /**
