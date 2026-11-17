@@ -83,6 +83,11 @@ export const DEMO_VIDEO_CHANNELS = [
   // as that channel's boilerplate like every other house style. Both start as Tier B. Unverified
   // from the sandbox: the next dry run's catalogue column is the check, and a channel that wins
   // nothing or runs long goes into CHANNELS_CUT_ON_EVIDENCE like the rest.
+  // First run, 2026-11-17 (catalogue / matches won / median): Rogue 3,493 / 3 / 0:47, CrossFit
+  // 7,955 / 3 / 0:35. Small, but each win is a lift nothing else in the pool had (Board Press,
+  // Reverse-Grip Bench, Zercher Carry, Kettlebell Snatch), so both stay for now. Rogue's third
+  // win, Jump Rope -> "Rogue Jump Ropes", is a product video and is the reject the review queue
+  // exists for.
   "roguefitness", // strongman: sandbag, stone, sled, log, carries
   "CrossFit", // conditioning: sled, rower, assault bike, battle rope, wall ball
 ];
@@ -167,6 +172,9 @@ export type ChannelSummary = {
    * cannot be shown to have fired applies just as well to a channel that cannot be shown to
    * have loaded. */
   status: "ok" | "handle_not_found" | "error";
+  /** YouTube's own reason when status is "error" (e.g. "403 (quotaExceeded)", "500"), so a
+   *  one-off failure and a spent quota are not the same two words on the report. */
+  errorDetail?: string;
   /** How many exercises this channel ended up supplying the WINNING video for. */
   matchesWon: number;
   medianWinningDurationSeconds: number | null;
@@ -314,6 +322,8 @@ export function watchUrlFor(videoId: string): string {
  * (startOfTodaysSlice). Anything unreadable is a miss, never an error.
  */
 export const CATALOGUE_CACHE_HOURS = 24;
+/** YouTube's reasons for "the day's allowance is spent"; retrying those only spends calls. */
+const QUOTA_GONE = /quotaExceeded|dailyLimitExceeded|rateLimitExceeded/;
 export const SEARCH_CACHE_HOURS = 24 * 7;
 const CACHE_DIR = join(tmpdir(), "forge-youtube-cache");
 
@@ -338,6 +348,53 @@ export function writeYouTubeCache(kind: string, key: string, value: unknown, now
   } catch {
     // a cache that cannot be written costs quota next time, nothing else
   }
+}
+
+/**
+ * ONE CHANNEL'S CATALOGUE: from the day's cache, else from YouTube with one retry.
+ *
+ * An API error is reported as itself rather than as a dead handle, and the run continues with
+ * what it has. One retry first, unless the quota is gone: on 2026-11-17 Kettlebell Kings (1,475
+ * videos the run before) came back "API error" between two channels that loaded, so a one-off
+ * failure was costing a whole channel for the day. YouTube's reason rides on the report.
+ */
+export async function loadChannel(
+  handle: string,
+  quota: QuotaLedger,
+  maxVideosPerChannel?: number,
+  retryDelayMs = 2000,
+): Promise<{
+  result: Awaited<ReturnType<typeof channelCatalogue>>;
+  status: ChannelSummary["status"];
+  errorDetail?: string;
+  fromCache: boolean;
+}> {
+  const cacheKey = `${handle}:${maxVideosPerChannel ?? "default"}`;
+  const cached = readYouTubeCache<NonNullable<Awaited<ReturnType<typeof channelCatalogue>>>>(
+    "catalogue", cacheKey, CATALOGUE_CACHE_HOURS);
+  if (cached) return { result: cached, status: "ok", fromCache: true };
+
+  let lastMessage = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) {
+      if (QUOTA_GONE.test(lastMessage)) break;
+      await new Promise((r) => setTimeout(r, retryDelayMs));
+    }
+    try {
+      const result = await channelCatalogue(handle, quota, maxVideosPerChannel);
+      if (!result) return { result: null, status: "handle_not_found", fromCache: false };
+      writeYouTubeCache("catalogue", cacheKey, result);
+      return { result, status: "ok", fromCache: false };
+    } catch (err) {
+      lastMessage = String((err as Error)?.message ?? err);
+    }
+  }
+  return {
+    result: null,
+    status: "error",
+    errorDetail: lastMessage.replace(/^YouTube \S+ failed: /, ""),
+    fromCache: false,
+  };
 }
 
 /**
@@ -377,26 +434,13 @@ export async function planExerciseVideoBackfill(options?: {
   const catalogueSizes = new Map<string, number>();
   const truncatedChannels = new Set<string>();
   const statuses = new Map<string, ChannelSummary["status"]>();
+  const errorDetails = new Map<string, string>();
   for (const handle of channels) {
-    let result: Awaited<ReturnType<typeof channelCatalogue>> = null;
-    let status: ChannelSummary["status"] = "ok";
-    try {
-      const cacheKey = `${handle}:${options?.maxVideosPerChannel ?? "default"}`;
-      const cached = readYouTubeCache<NonNullable<typeof result>>("catalogue", cacheKey, CATALOGUE_CACHE_HOURS);
-      if (cached) {
-        result = cached;
-        cacheHits += 1;
-      } else {
-        result = await channelCatalogue(handle, quota, options?.maxVideosPerChannel);
-        if (result) writeYouTubeCache("catalogue", cacheKey, result);
-      }
-      if (!result) status = "handle_not_found";
-    } catch {
-      // An API error -- most often quota -- is reported as itself rather than as a dead handle.
-      // The run continues with what it has; one bad channel is not worth losing the rest.
-      status = "error";
-      result = null;
-    }
+    const loaded = await loadChannel(handle, quota, options?.maxVideosPerChannel);
+    const result = loaded.result;
+    if (loaded.fromCache) cacheHits += 1;
+    if (loaded.errorDetail) errorDetails.set(handle, loaded.errorDetail);
+    const status = loaded.status;
     if (!result) {
       catalogueSizes.set(handle, 0);
       statuses.set(handle, status);
@@ -479,6 +523,7 @@ export async function planExerciseVideoBackfill(options?: {
       catalogueSize,
       truncated: truncatedChannels.has(channel),
       status: statuses.get(channel) ?? "ok",
+      ...(errorDetails.has(channel) ? { errorDetail: errorDetails.get(channel) } : {}),
       matchesWon: won.length,
       medianWinningDurationSeconds: median(won.map((p) => p.match.durationSeconds)),
     };

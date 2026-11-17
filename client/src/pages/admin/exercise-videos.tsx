@@ -50,6 +50,7 @@ type ChannelSummary = {
   catalogueSize: number;
   truncated?: boolean;
   status?: "ok" | "handle_not_found" | "error";
+  errorDetail?: string;
   matchesWon: number;
   medianWinningDurationSeconds: number | null;
 };
@@ -217,7 +218,7 @@ function summaryText(report: Report): string {
     "CHANNEL | CATALOGUE | MATCHES WON | MEDIAN LENGTH",
     ...report.channels.map(
       (c) =>
-        `${c.channel} | ${c.catalogueSize}${c.truncated ? "+ (capped)" : ""}${c.status === "handle_not_found" ? " (handle did not resolve)" : ""}${c.status === "error" ? " (API error)" : ""} | ${c.matchesWon} | ${mmss(c.medianWinningDurationSeconds)}`,
+        `${c.channel} | ${c.catalogueSize}${c.truncated ? "+ (capped)" : ""}${c.status === "handle_not_found" ? " (handle did not resolve)" : ""}${c.status === "error" ? ` (API error${c.errorDetail ? `: ${c.errorDetail}` : ""})` : ""} | ${c.matchesWon} | ${mmss(c.medianWinningDurationSeconds)}`,
     ),
   ];
   return lines.join("\n");
@@ -535,7 +536,10 @@ export default function AdminExerciseVideos() {
                           )}
                           {c.status === "error" && (
                             <span className="ml-2 text-xs text-destructive">
-                              API error (most likely quota), nothing was read
+                              API error{c.errorDetail ? ` (${c.errorDetail})` : ""}, nothing was read
+                              {c.errorDetail && /quota/i.test(c.errorDetail)
+                                ? "; the day's YouTube allowance is spent"
+                                : "; a one-off failure, it loads next run"}
                             </span>
                           )}
                         </td>
