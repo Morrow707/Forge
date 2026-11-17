@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Play } from "lucide-react";
 import { extractYouTubeId } from "@/components/exercise-video";
+import { clipWindowFromUrl } from "@shared/exercise-video-match";
 import { externalLinkClick } from "@/lib/open-external";
 
 /**
@@ -49,6 +50,9 @@ export function ExerciseVideoPlayer({
   if (!url) return null;
 
   const videoId = extractYouTubeId(url);
+  // A demo cut from a chapter of a routine plays only its own chapter (see parseChapters).
+  const clip = clipWindowFromUrl(url);
+  const clipParams = `${clip.start != null ? `&start=${clip.start}` : ""}${clip.end != null ? `&end=${clip.end}` : ""}`;
 
   // No id means a search link (every seeded URL today) or a non-YouTube host. Nothing to embed,
   // so this behaves exactly as it did before -- see the file comment.
@@ -76,7 +80,7 @@ export function ExerciseVideoPlayer({
             // nocookie, and playsinline so iOS plays it in the card rather than throwing it
             // into the system fullscreen player, which is the same "don't leave our app"
             // problem in a different costume.
-            src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`}
+            src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1${clipParams}`}
             title={`${name} demo video`}
             className="h-full w-full"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

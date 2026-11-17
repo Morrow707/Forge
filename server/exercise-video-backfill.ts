@@ -169,6 +169,11 @@ export type BackfillProposal = BackfillTarget & {
     durationSeconds: number;
     tier: Tier;
     corroboration: "single" | "multi";
+    /** A chapter of a longer video: it plays from start to end, and videoTitle is the whole
+     *  video's title for the reviewer. */
+    startSeconds?: number;
+    endSeconds?: number;
+    videoTitle?: string;
   };
 };
 
@@ -318,10 +323,13 @@ function median(values: number[]): number | null {
   return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
 }
 
-export function watchUrlFor(videoId: string): string {
+export function watchUrlFor(videoId: string, startSeconds?: number, endSeconds?: number): string {
   // The canonical watch URL, not an /embed/ one. extractYouTubeId reads both, and a watch URL is
-  // what a human pasting this into a browser expects to find.
-  return `https://www.youtube.com/watch?v=${videoId}`;
+  // what a human pasting this into a browser expects to find. A chapter carries its window:
+  // t= is YouTube's own start (a browser honours it), end= is read by Forge's player.
+  const base = `https://www.youtube.com/watch?v=${videoId}`;
+  if (startSeconds == null) return base;
+  return `${base}&t=${startSeconds}${endSeconds != null ? `&end=${endSeconds}` : ""}`;
 }
 
 /**
@@ -528,7 +536,7 @@ export async function planExerciseVideoBackfill(options?: {
       });
       continue;
     }
-    proposals.push({ ...target, match, url: watchUrlFor(match.videoId) });
+    proposals.push({ ...target, match, url: watchUrlFor(match.videoId, match.startSeconds, match.endSeconds) });
   }
 
   const summaries: ChannelSummary[] = [...catalogueSizes.entries()].map(([channel, catalogueSize]) => {

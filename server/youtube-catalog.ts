@@ -24,7 +24,7 @@
  * THE KEY IS READ FROM THE ENVIRONMENT AND NEVER LOGGED. It is a Render env var
  * (YOUTUBE_API_KEY); nothing in this module puts it in a message, an error or a response body.
  */
-import { parseIsoDuration, type VideoCandidate } from "@shared/exercise-video-match";
+import { parseChapters, parseIsoDuration, type VideoCandidate } from "@shared/exercise-video-match";
 
 const API = "https://www.googleapis.com/youtube/v3";
 
@@ -151,6 +151,7 @@ export async function channelCatalogue(
 
   const ids: string[] = [];
   const titles = new Map<string, string>();
+  const descriptions = new Map<string, string>();
   let pageToken: string | undefined;
   while (ids.length < maxVideos) {
     const page: any = await get(
@@ -169,6 +170,9 @@ export async function channelCatalogue(
       if (!id) continue;
       ids.push(id);
       titles.set(id, item.snippet?.title ?? "");
+      // The description rides on the same playlistItems call at no extra quota; it is where a
+      // routine video lists its chapters. See parseChapters.
+      descriptions.set(id, item.snippet?.description ?? "");
     }
     pageToken = page.nextPageToken;
     if (!pageToken) break;
@@ -185,15 +189,27 @@ export async function channelCatalogue(
       1,
     );
     for (const item of page.items ?? []) {
-      videos.push({
-        videoId: item.id,
-        title: titles.get(item.id) ?? "",
-        channel: channel.title,
-        durationSeconds: parseIsoDuration(item.contentDetails?.duration ?? ""),
-        // status.embeddable is the only authority on this. A video the owner has disabled
-        // embedding on plays nowhere inside Forge, whatever its title says.
-        embeddable: item.status?.embeddable !== false,
-      });
+      const title = titles.get(item.id) ?? "";
+      const durationSeconds = parseIsoDuration(item.contentDetails?.duration ?? "");
+      // status.embeddable is the only authority on this. A video the owner has disabled
+      // embedding on plays nowhere inside Forge, whatever its title says.
+      const embeddable = item.status?.embeddable !== false;
+      videos.push({ videoId: item.id, title, channel: channel.title, durationSeconds, embeddable });
+      // Each chapter of a routine is its own candidate, titled by its own label and as long as
+      // its own chapter, so every gate (the length cap included) judges the chapter, not the
+      // routine around it.
+      for (const chapter of parseChapters(descriptions.get(item.id) ?? "", durationSeconds)) {
+        videos.push({
+          videoId: item.id,
+          title: chapter.label,
+          channel: channel.title,
+          durationSeconds: chapter.endSeconds - chapter.startSeconds,
+          embeddable,
+          startSeconds: chapter.startSeconds,
+          endSeconds: chapter.endSeconds,
+          videoTitle: title,
+        });
+      }
     }
   }
   return { channel: channel.title, videos, truncated };

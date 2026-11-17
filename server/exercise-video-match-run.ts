@@ -47,6 +47,10 @@ export type SignatureMatch = {
   /** Two or more allowlisted channels agreeing. Changes nothing about the choice; it is the
    *  cheapest signal available for which matches are safest, so it is shown. */
   corroboration: "single" | "multi";
+  /** A chapter of a longer video (see parseChapters): it plays from start to end. */
+  startSeconds?: number;
+  endSeconds?: number;
+  videoTitle?: string;
 };
 
 export type SignatureRejection = {
@@ -98,7 +102,11 @@ export function runSignatureMatch(
   }
   const boilerplateByChannel: Record<string, string[]> = {};
   for (const [channel, videos] of byChannel) {
-    boilerplateByChannel[channel] = learnBoilerplate(videos.map((v) => v.title), vocabulary);
+    // Learned from whole-video titles: a chapter label is not the channel's house style.
+    boilerplateByChannel[channel] = learnBoilerplate(
+      videos.filter((v) => v.startSeconds == null).map((v) => v.title),
+      vocabulary,
+    );
   }
 
   // Parse every title once. See the header.
@@ -181,19 +189,31 @@ export function runSignatureMatch(
         }
         continue;
       }
+      const isChapter = candidate.video.startSeconds != null;
       accepted.push({
         videoId: candidate.video.videoId,
         title: candidate.video.title,
         channel: candidate.video.channel,
         durationSeconds: candidate.video.durationSeconds,
-        tier: tierFor(
-          verdict,
-          candidate.video.durationSeconds,
-          candidate.video.channel,
-          allowlist,
-          candidate.prepared.laterTokens.length,
-        ),
+        // A chapter is always Tier B: a timestamp in a description is the uploader's claim about
+        // where the stretch starts, and a person checks it before an athlete is shown it.
+        tier: isChapter
+          ? "B"
+          : tierFor(
+              verdict,
+              candidate.video.durationSeconds,
+              candidate.video.channel,
+              allowlist,
+              candidate.prepared.laterTokens.length,
+            ),
         corroboration: "single",
+        ...(isChapter
+          ? {
+              startSeconds: candidate.video.startSeconds,
+              endSeconds: candidate.video.endSeconds,
+              videoTitle: candidate.video.videoTitle,
+            }
+          : {}),
       });
     }
 
@@ -212,6 +232,9 @@ export function runSignatureMatch(
     accepted.sort(
       (a, b) =>
         (a.tier === b.tier ? 0 : a.tier === "A" ? -1 : 1) ||
+        // A whole video made to demonstrate this exercise beats a chapter of a routine, however
+        // short the chapter: chapters are for what no channel films on its own.
+        Number(a.startSeconds != null) - Number(b.startSeconds != null) ||
         a.durationSeconds - b.durationSeconds ||
         a.title.localeCompare(b.title),
     );

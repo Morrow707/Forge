@@ -42,8 +42,18 @@ type Proposal = Target & {
     durationSeconds: number;
     tier: "A" | "B";
     corroboration: "single" | "multi";
+    startSeconds?: number;
+    endSeconds?: number;
+    videoTitle?: string;
   };
 };
+
+/** "Lizard Stretch (chapter 2:15 of "20 Min Hip Routine")" -- a reviewer must see that a match
+ *  is a slice of a routine, and of which one, before approving it. */
+const matchLabel = (m: Proposal["match"]) =>
+  m.startSeconds != null
+    ? `${m.title} (chapter ${mmss(m.startSeconds)} of "${m.videoTitle ?? "a longer video"}")`
+    : m.title;
 
 type ChannelSummary = {
   channel: string;
@@ -228,7 +238,7 @@ function matchesText(report: Report): string {
   return [
     "MATCHES",
     ...report.proposals.map(
-      (p) => `${p.match.tier} | ${p.name} -> ${p.match.title} | ${p.match.channel} | ${mmss(p.match.durationSeconds)} | ${p.url}`,
+      (p) => `${p.match.tier} | ${p.name} -> ${matchLabel(p.match)} | ${p.match.channel} | ${mmss(p.match.durationSeconds)} | ${p.url}`,
     ),
   ].join("\n");
 }
@@ -601,7 +611,7 @@ export default function AdminExerciseVideos() {
                         rel="noopener noreferrer"
                         className="text-primary underline"
                       >
-                        {p.match.title}
+                        {matchLabel(p.match)}
                       </a>
                       <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">
                         {p.match.channel} &middot; {mmss(p.match.durationSeconds)}
