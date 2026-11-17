@@ -28,7 +28,9 @@ const PANEL_WIDTH = 380;
  * edge and a blue glow are what lift the window off the page. Text on the bright blue is dark,
  * because white on #0EB4FF is too faint to read. The window turns off index.css's app-wide stable
  * scrollbar gutter: it never scrolls itself, and the reserved strip left a dark band down the
- * right of the header. */
+ * right of the header. The chat area carries a faint wash of Forge's own red-orange (--primary,
+ * 3% at the top to 10% at the bottom), Scott's pick of three strengths, so the window reads as
+ * Forge's and not as a blue card dropped on the page. */
 export const HARDY_FLAME = { core: "#4800B5", flame: "#0EB4FF", onFlame: "#06122B" } as const;
 const KIND_LABEL: Record<Hit["kind"], string> = { workout: "Training", food: "Food", checkin: "Check-in" };
 const niceDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
@@ -71,7 +73,7 @@ export function HardyPanel({ open, onClose }: { open: boolean; onClose: () => vo
     <section
       aria-label="Hardy"
       className="fixed z-40 flex max-h-[min(640px,calc(100dvh-110px))] flex-col overflow-hidden rounded-2xl border-2 bg-card"
-      style={{ scrollbarGutter: "auto", borderColor: HARDY_FLAME.flame, boxShadow: "0 0 0 1px rgba(14,180,255,0.25), 0 0 28px rgba(14,180,255,0.35), 0 18px 40px rgba(0,0,0,0.55)", right: "calc(16px + env(safe-area-inset-right, 0px))", bottom: "calc(84px + env(safe-area-inset-bottom, 0px))", width: `min(${PANEL_WIDTH}px, calc(100vw - 32px))` }}
+      style={{ scrollbarGutter: "auto", borderColor: HARDY_FLAME.flame, backgroundImage: "linear-gradient(to bottom, hsl(var(--primary) / 0.03), hsl(var(--primary) / 0.1))", boxShadow: "0 0 0 1px rgba(14,180,255,0.25), 0 0 28px rgba(14,180,255,0.35), 0 18px 40px rgba(0,0,0,0.55)", right: "calc(16px + env(safe-area-inset-right, 0px))", bottom: "calc(84px + env(safe-area-inset-bottom, 0px))", width: `min(${PANEL_WIDTH}px, calc(100vw - 32px))` }}
     >
       <header className="flex items-center gap-2.5 px-3 py-2.5 text-white" style={{ background: `linear-gradient(90deg, ${HARDY_FLAME.core}, ${HARDY_FLAME.flame})` }}>
         <HardyMark className="h-8 w-8 shrink-0" id="hardy-panel-mark" />
