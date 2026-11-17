@@ -612,11 +612,16 @@ export function AppShell({
   return (
     <div
       className={cn(
-        // overflow-x-hidden here is a page-wide safety net, not a fix for
+        // overflow-x-CLIP here is a page-wide safety net, not a fix for
         // one spot -- individual wide content (tables, long code blocks)
         // should scroll inside its own overflow-x-auto container instead of
         // ever growing the page itself past the viewport width.
-        "app-shell-root min-h-screen overflow-x-hidden bg-background",
+        //
+        // CLIP, NEVER HIDDEN (2026-11-17, on the phone: the program builder scrolled its nav bar
+        // away, leaving no way to navigate and the page under the clock). overflow-x:hidden makes
+        // this div a scroll container, so the sticky bar below sticks to a box that never
+        // scrolls and leaves with the page. clip stops the same sideways spill without that.
+        "app-shell-root min-h-screen overflow-x-clip bg-background",
         fitScreen && "flex flex-col md:h-screen md:overflow-hidden",
       )}
       style={brandingStyle}

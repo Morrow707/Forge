@@ -107,7 +107,7 @@ export function MarketingFooter() {
 /** Wraps a marketing page in the shared chrome. */
 export function MarketingShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
+    <div className="min-h-screen overflow-x-clip bg-background text-foreground">
       <MarketingNav />
       {children}
       <MarketingFooter />

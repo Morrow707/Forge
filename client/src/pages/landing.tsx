@@ -230,7 +230,7 @@ const PRICING_SECTION_LIVE = false;
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
+    <div className="min-h-screen overflow-x-clip bg-background text-foreground">
       {/* Nav and footer are shared with the audience and validation pages -- see
           components/marketing-shell.tsx. They were inline here until those pages existed, at
           which point three hand-kept copies of one nav became three places a new link gets
