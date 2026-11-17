@@ -300,7 +300,8 @@ export function watchUrlFor(videoId: string): string {
  * a search's results for a week: the catalogue is what grows, a search's top results barely move.
  *
  * In the OS temp directory, not under STORAGE_PATH: everything under /uploads is served, and a
- * deploy clearing a cache is harmless. Anything unreadable is a miss, never an error.
+ * deploy clearing a cache is harmless -- the order searches are made in does not depend on it
+ * (startOfTodaysSlice). Anything unreadable is a miss, never an error.
  */
 export const CATALOGUE_CACHE_HOURS = 24;
 export const SEARCH_CACHE_HOURS = 24 * 7;
@@ -327,6 +328,19 @@ export function writeYouTubeCache(kind: string, key: string, value: unknown, now
   } catch {
     // a cache that cannot be written costs quota next time, nothing else
   }
+}
+
+/**
+ * WHICH UNMATCHED EXERCISES TODAY'S SEARCHES START AT. A day's quota covers about 90 searches and
+ * the long tail is longer, so the list is rotated by the date: each day starts one budget further
+ * on. Without it every run began with the same 90 names, so the rest were only ever reached while
+ * the server's temp-folder cache survived -- and a deploy empties it.
+ */
+export function startOfTodaysSlice<T>(names: T[], perDay: number, now = Date.now()): T[] {
+  if (names.length === 0 || perDay <= 0) return names;
+  const day = Math.floor(now / 86_400_000);
+  const start = (day * perDay) % names.length;
+  return [...names.slice(start), ...names.slice(0, start)];
 }
 
 /**
@@ -404,9 +418,12 @@ export async function planExerciseVideoBackfill(options?: {
   const searchFill = options?.searchUnmatched
     ? await searchForUnmatched(
         library,
-        targets
-          .filter((t) => t.kind === "exercise" && !run.chosen.has(t.name))
-          .map((t) => t.name),
+        startOfTodaysSlice(
+          targets
+            .filter((t) => t.kind === "exercise" && !run.chosen.has(t.name))
+            .map((t) => t.name),
+          options.maxSearches ?? DEFAULT_MAX_SEARCHES,
+        ),
         run.vocabulary,
         maxDurationSeconds,
         options.maxSearches ?? DEFAULT_MAX_SEARCHES,

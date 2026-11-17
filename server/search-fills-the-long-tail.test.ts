@@ -141,3 +141,16 @@ describe("a re-run reaches the exercises the last run could not", () => {
     expect(result.remaining).toEqual(["Lizard Stretch", "Couch Stretch"]);
   });
 });
+
+describe("each day's searches start further down the list", () => {
+  it("rotates by one budget a day and keeps every name", async () => {
+    const { startOfTodaysSlice } = await import("./exercise-video-backfill");
+    const names = ["a", "b", "c", "d", "e"];
+    const day = 86_400_000;
+    const today = startOfTodaysSlice(names, 2, 10 * day);
+    const tomorrow = startOfTodaysSlice(names, 2, 11 * day);
+    expect([...today].sort()).toEqual(names);
+    expect(tomorrow[0]).not.toBe(today[0]);
+    expect(tomorrow.slice(0, 2)).toEqual(today.slice(2, 4));
+  });
+});
