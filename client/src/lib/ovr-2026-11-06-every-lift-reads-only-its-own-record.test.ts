@@ -101,12 +101,13 @@ describe("the 2026-11-06 export: three systems on three lifts", () => {
     expect(withoutSpan.rejected).toEqual([]);
     const blend = reconcileScaleEstimates(withoutSpan.kept, own.values.maxScaleAgreementTolerance).scale!;
     expect((blend / required - 1) * 100).toBeCloseTo(2.53, 1);
-    // And at the bench's own record since round fourteen (3D pose at 0.25): +2.14%.
+    // And at the bench's own 3D-pose uncertainty: +2.14% at round fourteen's 0.25, +1.64% at round
+    // nineteen's 0.35 (2026-11-17). (Depth is not a candidate here.)
     const atOwn = reconcileScaleEstimates(
       withoutSpan.kept.map((c: any) => (c.source === "body_3d" ? { ...c, uncertaintyFraction: own.values.body3DCorrectedUncertainty } : c)),
       own.values.maxScaleAgreementTolerance,
     ).scale!;
-    expect((atOwn / required - 1) * 100).toBeCloseTo(2.14, 1);
+    expect((atOwn / required - 1) * 100).toBeCloseTo(1.64, 1);
     expect((cal.scaleFactor / required - 1) * 100).toBeCloseTo(-12.61, 1);
     // The ledger row carries the same take.
     expect(ledgerRow("2026-11-06-bench-press-set-1").shippedScaleX1000).toBeCloseTo(cal.scaleFactor * 1000, 9);

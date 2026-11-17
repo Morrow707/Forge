@@ -385,11 +385,12 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
     biacromialToleranceFraction: 0.4,
     heightRulerUncertainty: 0.4,
     depthRulerUncertainty: 0.6,
-    body3DCorrectedUncertainty: 0.12,
+    body3DCorrectedUncertainty: 0.08,
     driveOnsetFraction: 0,
+    maxPeakToMeanRatio: 1.6,
   },
-  "Bench Press": { body3DCorrectedUncertainty: 0.25, depthRulerUncertainty: 0.15, driveOnsetFraction: 0.03 },
-  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0.01 },
+  "Bench Press": { body3DCorrectedUncertainty: 0.35, depthRulerUncertainty: 0.1, driveOnsetFraction: 0.03 },
+  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0.01, biacromialToleranceFraction: 0.22 },
 };
 
 /** THE VELOCITY OVERRIDES REMOVED ON 2026-11-05, AND WHY -- kept as data so the next reader does
@@ -550,6 +551,13 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
     "moves, since each reads its own record.",
   "Dumbbell Shoulder Press":
+    "2026-11-17, round nineteen, build 772 (35lb x8 on the OVR, its first three reps set-up on Scott's " +
+    "word): body3DCorrectedUncertainty 0.12 -> 0.08 and maxPeakToMeanRatio 2.0 -> 1.6 (the sensor's own " +
+    "peak over mean is 1.56). Range of motion through the blend: today +9.11 -> +6.87, 11-06 +21.6 -> " +
+    "+17.4, 11-10 set 1 +25.1 -> +22.36, set 2 +4.32 -> +1.78, set 3 +10.25 -> +7.25 -- all five closer, " +
+    "average 14.08 -> 11.13. Peak on today's take (as filmed) 2.00 -> 1.83 against the sensor's 1.59. " +
+    "Also: the first press is no longer lost to the clean (trimOversizedLeadIn), 8 of 8. 0.06 is the " +
+    "next 3D step. EARLIER: " +
     "2026-11-10, round sixteen, set 3 on build 732 (30lb x11 on the OVR, the first three set-up on " +
     "Scott's word, eight read): body3DCorrectedUncertainty 0.15 -> 0.12 and driveOnsetFraction 0.01 -> 0. " +
     "Range of motion through the blend: 11-06 +25.2 -> +21.6, set 1 +27.4 -> +25.1, set 2 +6.5 -> +4.3, " +
@@ -598,6 +606,12 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
   // ROUND FOURTEEN, 2026-11-10, build 728 beside the OVR. Costed by
   // client/src/lib/ovr-2026-11-10-every-lift-reads-only-its-own-record.test.ts.
   "Bench Press":
+    "2026-11-17, round nineteen, build 772 (135 x8 on the OVR): depthRulerUncertainty 0.15 -> 0.10 and " +
+    "body3DCorrectedUncertainty 0.25 -> 0.35, on this lift only. Today's take read -23.5% (all three " +
+    "rulers low and no plate candidate at all) -> -15.26. Ledger: 10-30 +0.13 -> -4.06, 10-30 set 3 " +
+    "+3.56 -> +3.80, 11-06 -2.77 -> -8.92, 11-10 set 1 -4.84 -> +2.19, set 2 -13.12 -> -9.97; average " +
+    "over the six sets 7.98 -> 7.37 (three move away, three closer -- Rule #6's one fix on this take). " +
+    "No rep count moves. EARLIER: " +
     "2026-11-10, round sixteen: depthRulerUncertainty 0.18 -> 0.15 on this lift only, round fifteen's " +
     "named next step. Ledger: 10-30 +1.58 -> +0.13, 10-30 set 3 +3.77 -> +3.56, 11-06 +0.32 -> -2.77 " +
     "(the one that moves away), 11-10 set 1 -7.28 -> -4.84, set 2 -14.20 -> -13.12; mean absolute 5.43 " +
@@ -626,6 +640,15 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "0.04, and +33.1% and +4.6% at 0.03; both takes move toward the sensor, no rep count moves, and " +
     "the peak does not move. 0.02 is the next step.",
   "Single-Arm Dumbbell Row":
+    "2026-11-17, round nineteen, build 772 (70lb x8 a side, right arm first: the OVR's reps 1-8 right, " +
+    "10-17 left, rep 9 set-up): biacromialToleranceFraction 0.2 -> 0.22 on this lift only. The bigger " +
+    "move is a BUG, not a setting: the dialog judged the shoulder ruler against a wrist-to-wrist grip a " +
+    "one-arm lift does not have (gripForRulers, av-bar-tracker-dialog.tsx), which loosened it to 0.44-0.46 " +
+    "and shipped -20.7% / -12.1% (against the sensor's reps 2-8, the seven Forge counted). At the floor " +
+    "the two read +4.3 / +10.0; at 0.22, +0.8 / +6.8. 11-10 set 1 left -2.65 -> -6.08 (the one that moves " +
+    "away), right +11.0 -> +7.98; set 3 unchanged (its shoulder ruler was refused on spread). Average over " +
+    "six sets 15.28 -> 14.23; 0.25 is the next step. Both sides now count 8 of 8 (trimOversizedLeadIn). " +
+    "EARLIER: " +
     "2026-11-10, round sixteen, Set 3 Left and Right on build 732 (the OVR's 17: reps 1-8 left, " +
     "9-16 right, 17 the set-down): depthRulerUncertainty 0.4 -> 0.6 on this lift only, the statement " +
     "the Pendlay Row's record makes about the same instrument. Set 1 left -4.4 -> -2.7, right +10.5 " +

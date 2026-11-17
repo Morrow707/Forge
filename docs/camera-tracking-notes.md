@@ -14,7 +14,48 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-16, round eighteen)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-17, round nineteen)
+
+**ROUND NINETEEN, 2026-11-17 (build 772; bench, dumbbell shoulder press, single-arm dumbbell row
+both sides). TWO BUGS FIRST, THEN ONE CHANGE PER LIFT.** OVR reading for this round (standing,
+Scott): the press's first three OVR reps are set-up; the row's OVR rep 9 is set-up; the OVR labels
+our Single-Arm Dumbbell Row "Pendlay Row"; **right arm is always first from now on: OVR reps 1-8 are
+the right arm, 10-17 the left.**
+
+| lift | as filmed (build 772) | after round nineteen | what moved it |
+|---|---|---|---|
+| Row right range (vs OVR reps 2-8) | -20.7% | +0.8% | grip bug fixed, shoulder floor 0.22 |
+| Row left range (vs OVR reps 11-17) | -12.1% | +6.8% | same |
+| Dumbbell press range | +9.1% | +6.9% | 3D-pose uncertainty 0.12 -> 0.08 |
+| Dumbbell press peak | 2.00 vs 1.59 | 1.83 | peak cap 2.0 -> 1.6 (the sensor's peak/mean is 1.56) |
+| Bench range | -23.5% | -15.3% | depth 0.15 -> 0.10, 3D pose 0.25 -> 0.35 |
+| Reps (row R / row L / press) | 7 / 7 / 7 of 8 | 8 / 8 / 8 | `trimOversizedLeadIn` |
+
+- **BUG 1, 7 OF 8 ON ALL THREE: the first rep was glued to the lead-in.** The row's first pull
+  starts from a dead hang lower than every later bottom; the press's first press runs out of the
+  clean. One upward phase 2-3.5x the median, and the oversized-edge test (`isEdgeRackArtifact`,
+  `edgeOversizedAmplitudeRatio` 1.6) deleted it. `trimOversizedLeadIn` (bar-tracking.ts) keeps
+  the phase's last rep of travel from its slowest point, only when every gate counts BELOW the
+  logged reps -- the 10-02 Pendlay pickup (one too many) still goes. The trimmed rep is counted,
+  keeps its row, and leaves the set's aggregates (`windows.leadInTrimmed`): on the row it starts
+  mid-pull and would read 1.57 m/s. Also recovered: the 10-30 press set 3 (8 of 8) and the 11-10
+  left row (6 of 8). NOT recovered: the 10-30 press sets 1 and 2.
+- **BUG 2, the row's scale: a one-arm lift was judged by a two-hand grip.** `gripWidthPxFromFrames`
+  measured the working wrist to the braced wrist and the shoulder ruler read that as a grip far
+  too wide, loosening itself to 0.44-0.46 (`gripForeshorteningFloor`) and handing the blend to the
+  low 3D bones. `gripForRulers` is null on a unilateral lift, in the shoulder ruler and the
+  plausibility yardstick (av-bar-tracker-dialog.tsx).
+- **The row's ledger truth is OVR reps 2-8 / 11-17**, because the phone's reported range was over
+  pulls 2-8 (pull 1 was the deleted one). From the next take the count includes pull 1, but its
+  range is the trimmed one and leaves the set's number, so reps 2-8 stays the comparison.
+- **Bench found no plate candidate at all today** (all rulers low, -23.5%). Not investigated;
+  the next bench should be read for `objectDetection.candidatesSeenOfClass` first.
+- **Body memory stored bones 1.4-2.6x too long on bench and press** (`calibration.bodyModel`).
+  Recorded, not tuned (it is a learning model and does not vote).
+- Averages over every set on record: bench 7.98 -> 7.37 (6 sets), press 14.08 -> 11.13 (5), row
+  15.28 -> 14.23 (6). Next steps if the next take reads the same way: press 3D 0.06, row shoulder
+  floor 0.25.
+
 
 **ROUND EIGHTEEN, 2026-11-16 EVENING (build 769; squat, RDL, box jump). SET 1 OF EACH WAS ON 764,
 SET 2 ON 769, AND SCOTT'S RULE IS NOW WRITTEN DOWN.** Read `calibration.liftRecord` to tell the

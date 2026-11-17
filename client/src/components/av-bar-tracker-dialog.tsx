@@ -1204,6 +1204,9 @@ export function AvBarTrackerDialog({
     // rejectImplausibleScales, which needs a measured body and therefore cannot help on the one
     // take shape where the plate is the only source.
     const gripWidthPx = gripWidthPxFromFrames(rawFrames);
+    // A one-arm lift has no grip: one hand works, the other is braced. Its wrist-to-wrist span
+    // judges no ruler (round nineteen, 2026-11-17; see the shoulder ruler's call below).
+    const gripForRulers = laterality === "unilateral" ? null : gripWidthPx;
     // A DISC THAT READS AS A DISC NEEDS NO SECOND OPINION FROM THE HANDS.
     //
     // The grip check divides the plate's pixel size by the span between the wrists. That span is
@@ -1363,7 +1366,11 @@ export function AvBarTrackerDialog({
       // The grip from the same frames, so this ruler can state the one noise term it cannot see
       // from its own span -- see the foreshortening floor in shoulderWidthScaleFromFrames. It
       // only ever loosens the ruler, and a take with no grip behaves exactly as before.
-      gripWidthPx,
+      // NOT ON A UNILATERAL LIFT (round nineteen, 2026-11-17): there the wrists are a braced hand
+      // and a working one, so their span is not a grip and the floor it implies is noise. It
+      // loosened the single-arm row's shoulder ruler to 0.44-0.46 on both sides and the rows
+      // shipped -25.8% / -16.9%; at the plain floor they read -2.4% / +4.0%.
+      gripForRulers,
       scaleTunables.biacromialToleranceFraction,
     );
     // A measured grip needs no detector, no full body in frame and no population average, so it
@@ -1501,7 +1508,8 @@ export function AvBarTrackerDialog({
       heightIn,
       // The grip as the second yardstick: the height check has nothing to read on a lying
       // athlete (0 of 914 frames on the 09-29 bench), and the grip is measured on every frame.
-      gripWidthPx,
+      // Not on a unilateral lift, which has no grip (see gripForRulers).
+      gripForRulers,
     );
     const scaleVerdict = reconcileScaleEstimates(
       plausibleScales,

@@ -58,7 +58,8 @@ const PRESS_SHOULDER_TOLERANCE = 0.4;
 const PRESS_HEIGHT_UNCERTAINTY = 0.4;
 const PRESS_DEPTH_UNCERTAINTY = 0.6;
 const PRESS_DRIVE_ONSET = 0.02;
-const BENCH_OWN = { body3DCorrectedUncertainty: BENCH_3D_POSE_UNCERTAINTY, driveOnsetFraction: BENCH_DRIVE_ONSET };
+// Round nineteen (2026-11-17) moved the bench's 3D-pose uncertainty 0.25 -> 0.35; only its window stands.
+const BENCH_OWN = { driveOnsetFraction: BENCH_DRIVE_ONSET };
 /** Round fourteen's drive onsets for the two lifts round fifteen moved on, kept as the history. */
 const ROUND_FOURTEEN_DRIVE_ONSETS = { press: PRESS_DRIVE_ONSET, row: ROW_DRIVE_ONSET };
 // Round fifteen (same day, set 2 on build 730) moved the row's and the press's drive onset and added the
@@ -71,11 +72,11 @@ const PRESS_OWN = {
   depthRulerUncertainty: PRESS_DEPTH_UNCERTAINTY,
 };
 /** liveErrorPct on each ledger row at the lift's own record (as filmed in the comment). */
-const BENCH_11_10_LIVE = -4.84; // -10.2 as filmed; -8.57 after round fourteen, -7.28 after fifteen, -4.84 after sixteen
-const PRESS_11_10_LIVE = 25.1; // +46.5; +31.3 after round fourteen, +27.42 after fifteen
-const PRESS_11_06_LIVE = 21.6; // +41.8; +31.22 after round fourteen, +25.17 after fifteen
-const ROW_LEFT_11_10_LIVE = -2.65; // -9.0; -4.38 after round fourteen
-const ROW_RIGHT_11_10_LIVE = 11.0; // +9.2; +10.53 after round fourteen
+const BENCH_11_10_LIVE = 2.19; // -10.2 as filmed; -8.57 after round fourteen, -7.28 after fifteen, -4.84 after sixteen, +2.19 after nineteen
+const PRESS_11_10_LIVE = 22.36; // +46.5; +31.3 after round fourteen, +27.42 after fifteen, +25.1 after sixteen
+const PRESS_11_06_LIVE = 17.4; // +41.8; +31.22 after round fourteen, +25.17 after fifteen, +21.6 after sixteen
+const ROW_LEFT_11_10_LIVE = -6.08; // -9.0; -4.38 after round fourteen, -2.65 after sixteen, -6.08 after nineteen's shoulder floor 0.22
+const ROW_RIGHT_11_10_LIVE = 7.98; // +9.2; +10.53 after round fourteen, +11.0 after sixteen, +7.98 after nineteen
 const LIVE_ERROR_PCT: Record<string, number> = {
   "2026-11-10-bench-press-set-1": BENCH_11_10_LIVE,
   "2026-11-10-dumbbell-shoulder-press-set-1": PRESS_11_10_LIVE,

@@ -4104,6 +4104,30 @@ halves before splitting anything else:
   choice). And a one-arm lift's live take is re-read from the file when its working wrist was unseen
   past 1.0s (`wristGaps`, `maxLiveWorkingWristGapSeconds`); the hook also stopped dropping
   `arbiterTunables` at Record (inert: every lift holds the defaults). Native: `verify_build`, beta.
+- **ROUND NINETEEN, 2026-11-17: BENCH, DUMBBELL SHOULDER PRESS, SINGLE-ARM ROW BOTH SIDES ON BUILD
+  772. WHAT WAS DONE TO EACH LIFT, SO THE NEXT ROUND DOES NOT REDO IT.** OVR rules from Scott: the
+  press's first 3 OVR reps are set-up, the row's rep 9 is set-up, OVR "Pendlay Row" = our Single-Arm
+  Dumbbell Row, **right arm always first: OVR reps 1-8 right, 10-17 left.**
+  - **All three counted 7 of 8 -- a BUG, fixed (shared rule).** The first rep was glued to the
+    lead-in (the row's pull from a dead hang, the press's clean) and the oversized-edge test deleted
+    it. `trimOversizedLeadIn` keeps that phase's last rep of travel, only when the logged count says
+    a rep is missing; the trimmed rep is counted but left out of the set's numbers
+    (`windows.leadInTrimmed`). Now 8/8/8. Also recovered the 10-30 press set 3 and one rep of the
+    11-10 left row. Without a logged count nothing changes.
+  - **Single-Arm Dumbbell Row: a BUG, fixed, plus shoulder floor 0.2 -> 0.22.** The dialog judged
+    the shoulder ruler against a "grip" from the working wrist to the braced one, which loosened it
+    to 0.45 (`gripForRulers` is null on a unilateral lift now). Right -20.7% -> +0.8%, left -12.1% ->
+    +6.8% (truth = OVR reps 2-8 / 11-17, the reps the phone measured). Do NOT re-try: depth 0.7/0.8
+    (mixed), shoulder 0.3+ (overshoots low), 3D-pose 0.25+ (worse). Next step: shoulder 0.25.
+  - **Dumbbell Shoulder Press: 3D pose 0.12 -> 0.08 and peak cap 2.0 -> 1.6.** Range +9.1% ->
+    +6.9%, every earlier press take closer too (average 14.1% -> 11.1%); peak 2.00 -> 1.83 against
+    the sensor's 1.59. Next step: 3D 0.06.
+  - **Bench Press: depth 0.15 -> 0.10 and 3D pose 0.25 -> 0.35.** Today -23.5% -> -15.3% (no plate
+    candidate was found on this take, every ruler low -- read `objectDetection` on the next bench
+    before another ruler step). Six-set average 8.0% -> 7.4%; the 10-30 and 11-06 benches move away.
+  - Body memory stored bench and press bones 1.4-2.6x too long; recorded, not tuned (Rule: learning
+    model). Ledger rows `2026-11-17-*`, fixture `ovr-2026-11-17-export.json`, tests
+    `round-nineteen-first-rep-and-one-arm-grip.test.ts`. See docs/camera-tracking-notes.md, STATUS BOARD.
 - **ROUND SEVENTEEN, 2026-11-16: SQUAT, RDL AND BOX JUMP ON BUILD 764. TWO OF THREE WERE TAKES CUT
   SHORT, NOT CALIBRATION.** Scott: "Why are we so far off again? ... we start at square 1." Every
   per-lift number was in the build (`calibration.liftRecord`). The RDL read +2.0% range / +4.1% mean

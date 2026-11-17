@@ -215,6 +215,11 @@ export type RepBreakdown = {
     /** How much of the phase's own distance fell inside that gap, 0-1. */
     distanceInLargestGapShare?: number;
     sampleStarved?: boolean;
+    /** The rep was cut out of an oversized lead-in by trimOversizedLeadIn (the first rep glued to
+     *  a pickup or a clean). It is counted and keeps its row; its window starts where the trim
+     *  put it, which on a lift with no pause is mid-drive, so it leaves the set's aggregates the
+     *  way a sample-starved rep does. */
+    leadInTrimmed?: boolean;
     /** Seconds the segmenter's phase ran on past the rep's rest at the top (restArrivalAfterPeak).
      *  0 on every rep that reversed out of its top. The 2026-11-05 Romanian deadlift set 2's eighth
      *  rep held 2.1s at lockout with the recording running and was deleted as a re-rack for it. */
@@ -1535,6 +1540,88 @@ export const MERGED_PHASE_MIN_SPAN_RATIO = 1.5;
  *  The default is what every caller got before the registry existed. */
 export const EDGE_OVERSIZED_AMPLITUDE_RATIO = 1.6;
 
+/**
+ * THE FIRST REP CAN ARRIVE GLUED TO WHAT BROUGHT THE IMPLEMENT TO THE START.
+ *
+ * Round nineteen, 2026-11-17, build 772: a Single-Arm Dumbbell Row filmed one side at a time, 8
+ * pulls a side, and a Dumbbell Shoulder Press of 8 -- all three counted 7. On the row the first
+ * pull starts from a dead hang with the dumbbell lower than every later bottom, so its upward
+ * phase runs 2.0-2.2x the set's median; on the press the clean to the shoulders runs straight into
+ * press 1 and the one upward phase is 3.5x. The oversized-edge test in `isEdgeRackArtifact` then
+ * deletes the whole phase -- correct for the 2026-10-02 Pendlay pickup, which was NOT a rep, and
+ * wrong here, where the last part of the phase is the first rep.
+ *
+ * The athlete's own count is what tells the two apart, so this runs only when the count says a
+ * rep is missing (the caller's choice, never by default): an oversized LEADING phase keeps its
+ * last median-amplitude of travel -- from the last sample still a whole rep's distance from where
+ * the phase ends -- and drops the lead-in before it. The rep that remains measures about the
+ * set's median, which is a known bias on rep 1's range and better than no rep 1 at all (Rule #1).
+ * Only a phase among the first few, directly before the run of rep-sized phases, is looked at: a
+ * lead-in can only be at the start.
+ */
+export function trimOversizedLeadIn(
+  phases: { startIdx: number; endIdx: number }[],
+  positions: number[],
+  ratio: number,
+): { startIdx: number; endIdx: number }[] {
+  if (phases.length < 4) return phases;
+  const amplitude = (p: { startIdx: number; endIdx: number }) => Math.abs(positions[p.endIdx] - positions[p.startIdx]);
+  const sorted = phases.map(amplitude).sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  if (!(median > 0)) return phases;
+  // The glued phase is an oversized one among the first few that is followed directly by a run of
+  // rep-sized phases -- the set itself. Everything before it is the lead-in (the pickup's own
+  // wobbles, the walk to the bench, the clean's first pull) and is dropped.
+  const repSized = (p: { startIdx: number; endIdx: number }) => {
+    const a = amplitude(p);
+    return a >= median * EDGE_LEAD_IN_REP_SIZED_LOW && a <= median * ratio;
+  };
+  const runAfter = (k: number) => {
+    let n = 0;
+    while (k + 1 + n < phases.length && repSized(phases[k + 1 + n])) n++;
+    return n;
+  };
+  let k = -1;
+  for (let i = 0; i <= Math.min(MAX_LEAD_IN_PHASES, phases.length - 1); i++) {
+    if (amplitude(phases[i]) > median * ratio && runAfter(i) >= MIN_SET_RUN_AFTER_LEAD_IN) k = i;
+  }
+  if (k < 0) return phases;
+  const p = phases[k];
+  // The rep starts where the implement was SLOWEST between one rep's distance and the deepest
+  // genuine edge rep's distance (DEEPEST_EDGE_REP_RATIO) from where the phase ends: the clean's stop at the shoulders on the press, the
+  // bottom of the hang on the row. A start chosen at exactly one rep's distance would sit mid-drive
+  // and hand rep 1 a velocity no rep had.
+  const endY = positions[p.endIdx];
+  let start = p.startIdx;
+  let slowest = Infinity;
+  for (let i = p.endIdx - 1; i > p.startIdx; i--) {
+    const remaining = Math.abs(positions[i] - endY);
+    if (remaining < median) continue;
+    if (remaining > median * DEEPEST_EDGE_REP_RATIO) break;
+    const speed = Math.abs(positions[i + 1] - positions[i - 1]);
+    if (speed < slowest) {
+      slowest = speed;
+      start = i;
+    }
+  }
+  if (start === p.startIdx) return phases;
+  // Whatever came before the trimmed rep (the lead-in) is dropped, not left as phases of its own:
+  // it is neither a rep nor the descent of one.
+  return [{ startIdx: start, endIdx: p.endIdx, leadInTrimmed: true } as { startIdx: number; endIdx: number }, ...phases.slice(k + 1)];
+}
+
+/** A phase counts as rep-sized for the lead-in search above from half the median up to the
+ *  oversized-edge ratio -- the same half the edge-phantom test uses. */
+const EDGE_LEAD_IN_REP_SIZED_LOW = 0.5;
+/** How many phases of lead-in may precede the glued first rep. The 2026-11-17 row had two before
+ *  it and the press five (the dumbbells lifted, held, brought to the hips). */
+const MAX_LEAD_IN_PHASES = 6;
+/** The deepest genuine edge rep across fourteen sensor-paired sets read 1.3x its set's median (see
+ *  EDGE_OVERSIZED_AMPLITUDE_RATIO); a trimmed first rep is given no more room than that. */
+const DEEPEST_EDGE_REP_RATIO = 1.3;
+/** The run of rep-sized phases that has to follow it: the set, as phases (two per rep). */
+const MIN_SET_RUN_AFTER_LEAD_IN = 4;
+
 export function splitMergedPhases(
   phases: { startIdx: number; endIdx: number }[],
   positions: number[],
@@ -1714,13 +1801,13 @@ export type SetRangeOfMotionProvenance = {
 /** A REP WITH A HOLE IN IT IS NOT THE SET'S NUMBER. The reps a set is summarised over: the ones
  *  whose phase had no sample gap past the starvation line, falling back to every rep when none is
  *  whole (Rule #1: the set always has a number; every rep always keeps its row). */
-export function repsWithoutStarvation<T extends { windows?: { sampleStarved?: boolean } | null }>(reps: T[]): T[] {
-  const whole = reps.filter((r) => !r.windows?.sampleStarved);
+export function repsWithoutStarvation<T extends { windows?: { sampleStarved?: boolean; leadInTrimmed?: boolean } | null }>(reps: T[]): T[] {
+  const whole = reps.filter((r) => !r.windows?.sampleStarved && !r.windows?.leadInTrimmed);
   return whole.length > 0 ? whole : reps;
 }
 
 export function setRangeOfMotionProvenance(
-  reps: { repNumber: number; romCm: number; windows?: { sampleStarved?: boolean } | null }[],
+  reps: { repNumber: number; romCm: number; windows?: { sampleStarved?: boolean; leadInTrimmed?: boolean } | null }[],
 ): SetRangeOfMotionProvenance {
   const forSet = repsWithoutStarvation(reps);
   const starved = reps.filter((r) => !forSet.includes(r)).map((r) => r.repNumber);
@@ -2180,6 +2267,7 @@ export function summarizeTrackedSet(
         largestGapSeconds: Math.round(largestGapInPhaseSeconds * 1000) / 1000,
         distanceInLargestGapShare: Math.round(distanceInLargestGapShare * 1000) / 1000,
         sampleStarved,
+        ...((phase as { leadInTrimmed?: boolean }).leadInTrimmed ? { leadInTrimmed: true } : {}),
       },
     };
   });
@@ -2997,6 +3085,19 @@ export function summarizeTrackedSet(
       });
       if (!best || error < best.error) best = { metrics, error };
       if (error === 0) break;
+    }
+    // EVERY GATE CAME UP SHORT: the first rep may be glued to the lead-in -- see
+    // trimOversizedLeadIn. Only when the count is BELOW the athlete's, so the 2026-10-02 pickup
+    // (one too many) still goes, and only adopted when it lands strictly nearer the count.
+    if (best && best.metrics && best.metrics.repBreakdown.length < expectedReps) {
+      for (const gate of relativeGateCandidates(ySmoothed, MIN_REP_AMPLITUDE_FLOOR_CM / 100)) {
+        const metrics = summarizePhases(
+          trimOversizedLeadIn(segmentPhases(ySmoothed, gate), ySmoothed, tune.edgeOversizedAmplitudeRatio),
+        );
+        const error = metrics ? Math.abs(metrics.repBreakdown.length - expectedReps) : Infinity;
+        if (error < best.error) best = { metrics, error };
+        if (error === 0) break;
+      }
     }
     if (best && best.metrics) return best.metrics;
   }

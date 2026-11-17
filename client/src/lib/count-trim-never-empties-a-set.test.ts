@@ -96,7 +96,9 @@ describe("the count-trim removes surplus and never a set", () => {
     // the row's set 2, the lone-hand take (280 of 579 points carried): the phone's eight were
     // lowerings; the pulls count seven, one lost to the same trace fault
     "ovr-2026-10-30-export.json:2026-10-30 Pendlay Row set 2": 7,
-    "ovr-2026-10-30-export.json:2026-10-30 Barbell Shoulder Press set 3": 7,
+    // set 3 of the press counts 8 since round nineteen's trimOversizedLeadIn (2026-11-17) keeps
+    // the first press out of the clean when the count says one is missing; sets 1 and 2 still
+    // lose theirs (their clean and first press do not split the same way) and stay listed.
     // ROUND TWELVE (2026-11-09): the RDL finds 7 of 8, with rep 1 reading 51.5cm against 35.6-41.1
     // for the other six -- so the missing pull is merged into rep 1 rather than lost, which is the
     // same shape the 10-29 RDL had before the rest-at-top rule and is NOT what that rule cures (no
@@ -120,7 +122,9 @@ describe("the count-trim removes surplus and never a set", () => {
     // and the last merged with the set-down. It found 4 on the phone; the trace-hole rule returned
     // the rep beside the hole. See docs/camera-tracking-notes.md "Round sixteen".
     "ovr-2026-11-10-set3-export.json:2026-11-10 Dumbbell Shoulder Press set 3": 7,
-    "ovr-2026-11-10-set3-export.json:2026-11-10 Single-Arm Dumbbell Row set 5": 5,
+    // The left row counts 6 since round nineteen: trimOversizedLeadIn returns the first pull from
+    // the pickup. The pull lost in the hole and the last merged with the set-down are still out.
+    "ovr-2026-11-10-set3-export.json:2026-11-10 Single-Arm Dumbbell Row set 5": 6,
     // Round seventeen (2026-11-16, build 764): the squat's TRACE is 15.6s of a 33s clip -- the
     // file read was interrupted when the app left the screen -- so two reps are all it holds.
     // Not the segmenter: the three missing reps were never read. The reader resumes now.

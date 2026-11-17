@@ -62,7 +62,7 @@ const CORRECTED: Record<string, { reps: number; romCm: number; mean: number; pea
   "2026-10-30 Pendlay Row set 2": { reps: 7, romCm: 78.4, mean: 1.18, peak: 1.91, sensor: S(OVR_PENDLAY_ROW_SET2_2026_10_30) },
   "2026-10-30 Barbell Shoulder Press set 2": { reps: 7, romCm: 56.2, mean: 0.71, peak: 1.29, sensor: S(OVR_BARBELL_SHOULDER_PRESS_SET2_2026_10_30) },
   "2026-10-30 Pendlay Row set 3": { reps: 8, romCm: 67.6, mean: 0.90, peak: 1.62, sensor: S(OVR_PENDLAY_ROW_SET3_2026_10_30) },
-  "2026-10-30 Barbell Shoulder Press set 3": { reps: 7, romCm: 62.2, mean: 0.84, peak: 1.59, sensor: S(OVR_BARBELL_SHOULDER_PRESS_SET3_2026_10_30) },
+  "2026-10-30 Barbell Shoulder Press set 3": { reps: 8, romCm: 62.2, mean: 0.84, peak: 1.59, sensor: S(OVR_BARBELL_SHOULDER_PRESS_SET3_2026_10_30) },
   "2026-10-30 Bench Press set 3": { reps: 7, romCm: 42.0, mean: 0.95, peak: 1.51, sensor: S(OVR_BENCH_SET3_2026_10_30) },
 };
 
@@ -94,8 +94,8 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     expect(VELOCITY_OVERRIDES_REMOVED_2026_11_05["Barbell Shoulder Press"]).toEqual(["driveOnsetFraction"]);
     // Round fourteen (2026-11-10) gave the bench a window again, fitted on the corrected labels and
     // dated after the fix; the smoothing and the cap stay gone.
-    expect(FITTED_OVERRIDES["Bench Press"]).toEqual({ body3DCorrectedUncertainty: 0.25, depthRulerUncertainty: 0.15, driveOnsetFraction: 0.03 });
-    expect(FITTED_OVERRIDE_EVIDENCE["Bench Press"]).toMatch(/^2026-11-10, round sixteen[\s\S]*2026-11-10, round fifteen[\s\S]*2026-11-10, round fourteen/);
+    expect(FITTED_OVERRIDES["Bench Press"]).toEqual({ body3DCorrectedUncertainty: 0.35, depthRulerUncertainty: 0.1, driveOnsetFraction: 0.03 });
+    expect(FITTED_OVERRIDE_EVIDENCE["Bench Press"]).toMatch(/^2026-11-17, round nineteen[\s\S]*2026-11-10, round sixteen[\s\S]*2026-11-10, round fifteen[\s\S]*2026-11-10, round fourteen/);
     expect(FITTED_OVERRIDES["Barbell Shoulder Press"]).toBeUndefined();
     expect(Object.keys(FITTED_OVERRIDES["Pendlay Row"])).toEqual(["depthRulerUncertainty"]);
     for (const [name, bucket] of [["Pendlay Row", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"]]) {
@@ -125,9 +125,10 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
       return { mean: m.meanVelocityMps! / CORRECTED[id].sensor.mean - 1, peak: m.peakVelocityMps! / CORRECTED[id].sensor.peak - 1, capped: m.repBreakdown.filter((r: any) => r.windows?.peakCapped).length, reps: m.repBreakdown.length };
     });
     for (const e of errs) expect(Math.abs(e.mean)).toBeLessThan(0.05);
-    expect(errs.map((e) => e.reps)).toEqual([7, 7, 7]);
+    // set 3 counts its first press since round nineteen (trimOversizedLeadIn, 2026-11-17)
+    expect(errs.map((e) => e.reps)).toEqual([7, 7, 8]);
     expect(errs[0].capped).toBe(5);
-    expect(errs[2].capped).toBe(4);
+    expect(errs[2].capped).toBe(5);
     for (const e of errs) { expect(e.peak).toBeGreaterThan(0.08); expect(e.peak).toBeLessThan(0.3); }
     // at the removed 0.08 every set reads higher than at 0.04, and two of three past +15%
     const at08 = ["set 1", "set 2", "set 3"].map((s) => {
@@ -251,22 +252,26 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     expect(m.meanVelocityMps! / CORRECTED[f.id].sensor.mean - 1).toBeLessThan(0.2);
   });
 
-  it("set 3 of the press: the third press inside 3.2% on range of motion, 7 of 8 because the FIRST press is merged with the clean", () => {
+  it("set 3 of the press: the third press inside 3.2% on range of motion, and 8 of 8 since the first press is trimmed out of the clean", () => {
     const f = byId("2026-10-30 Barbell Shoulder Press set 3");
     const row = ledgerRow("2026-10-30-barbell-shoulder-press-set-3");
     expect(row.liveErrorPct).toBeCloseTo(3.1, 1);
     expect(row.heightRulerVotedAsFilmed).toBe(true);
-    const m = replay(f);
-    expect(m.repBreakdown.length).toBe(7);
-    expect(f.loggedReps).toBe(8);
     // Rounds four and five read the missing press as the eighth, folded into the re-rack; on the
-    // drives it is the first: one upward phase from the floor to overhead (the clean, a pause at
-    // the shoulders, the press) with no reversal between, 2.6m long. The first counted drive
-    // starts after it.
+    // drives it was the first: one upward phase from the floor to overhead (the clean, a pause at
+    // the shoulders, the press), 2.6m long, deleted as oversized. Round nineteen (2026-11-17)
+    // keeps that phase's last rep of travel, from the stop at the shoulders, when the athlete's
+    // count says a rep is missing (trimOversizedLeadIn) -- 8 of 8.
+    const m = replay(f);
+    expect(f.loggedReps).toBe(8);
+    expect(m.repBreakdown.length).toBe(8);
     const firstRep = m.repBreakdown[0];
     const beforeIt = f.barPathTrace.filter((p: any) => p.t < firstRep.startT).map((p: any) => p.y);
-    expect(Math.max(...beforeIt) - Math.min(...beforeIt)).toBeGreaterThan(200);
-    expect(firstRep.startT).toBeGreaterThan(5_000);
+    // the clean before it (floor to shoulders) is still in the trace, uncounted
+    expect(Math.max(...beforeIt) - Math.min(...beforeIt)).toBeGreaterThan(150);
+    // and without the athlete's count the clean is still deleted whole -- the trim never runs
+    const m0 = replay({ ...f, loggedReps: null });
+    expect(m0.repBreakdown.length).toBeLessThan(8);
   });
 
   it("set 3 of the bench: the plate was the ruler again (0.849 of expected) and the take reads +5.5%; the phone's eight were lowerings, the drives count seven", () => {
@@ -276,8 +281,9 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     // +5.5% as filmed; +3.58% through the live constants after round six's MAD-to-sigma correction,
     // and +3.91% since round fourteen's bench 3D-pose uncertainty 0.25 (2026-11-10), which moves the
     // two plate-led bench rows 0.1-0.3 points the wrong way and the two without a plate 0.4-1.6 the right way;
-    // +3.77% after round fifteen's bench depth uncertainty 0.18 and +3.56% after round sixteen's 0.15 (same day)
-    expect(row.liveErrorPct).toBeCloseTo(3.56, 1);
+    // +3.77% after round fifteen's bench depth uncertainty 0.18 and +3.56% after round sixteen's 0.15 (same day);
+    // +3.80% after round nineteen's depth 0.10 and 3D pose 0.35 (2026-11-17)
+    expect(row.liveErrorPct).toBeCloseTo(3.8, 1);
     expect(f.shipped.reps).toBe(8);
     const m = replay(f);
     expect(m.repBreakdown.length).toBe(7);
