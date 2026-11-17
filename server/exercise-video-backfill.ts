@@ -90,6 +90,11 @@ export const DEMO_VIDEO_CHANNELS = [
   // exists for.
   "roguefitness", // strongman: sandbag, stone, sled, log, carries
   "CrossFit", // conditioning: sled, rower, assault bike, battle rope, wall ball
+  // Added 2026-11-17 for what CrossFit did not reach: the sled lifts (Sled Row, Sled Backward
+  // Drag, Prowler Push) and the machines (assault bike, SkiErg, rower). HYROX races exactly those
+  // stations and films how each is done. Unverified from the sandbox like every addition: its
+  // risk is Rogue's, a catalogue that is mostly race footage, and the next dry run says which.
+  "HYROX", // conditioning: sled push and pull, SkiErg, rower, sandbag lunges, carries
 ];
 
 /**
