@@ -85,3 +85,10 @@ describe("the player's window", () => {
     expect(clipWindowFromUrl("https://www.youtube.com/watch?v=abc")).toEqual({ start: null, end: null });
   });
 });
+
+describe("the channel list", () => {
+  it("carries a chaptered mobility channel, found by name", async () => {
+    const { DEMO_VIDEO_CHANNELS } = await import("./exercise-video-backfill");
+    expect(DEMO_VIDEO_CHANNELS).toContain("search:Tom Merrick");
+  });
+});

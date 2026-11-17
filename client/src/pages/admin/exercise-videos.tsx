@@ -61,6 +61,7 @@ type ChannelSummary = {
   truncated?: boolean;
   status?: "ok" | "handle_not_found" | "error";
   errorDetail?: string;
+  chaptersRead?: number;
   matchesWon: number;
   medianWinningDurationSeconds: number | null;
 };
@@ -228,7 +229,7 @@ function summaryText(report: Report): string {
     "CHANNEL | CATALOGUE | MATCHES WON | MEDIAN LENGTH",
     ...report.channels.map(
       (c) =>
-        `${c.channel} | ${c.catalogueSize}${c.truncated ? "+ (capped)" : ""}${c.status === "handle_not_found" ? " (handle did not resolve)" : ""}${c.status === "error" ? ` (API error${c.errorDetail ? `: ${c.errorDetail}` : ""})` : ""} | ${c.matchesWon} | ${mmss(c.medianWinningDurationSeconds)}`,
+        `${c.channel} | ${c.catalogueSize}${c.truncated ? "+ (capped)" : ""}${c.status === "handle_not_found" ? " (handle did not resolve)" : ""}${c.status === "error" ? ` (API error${c.errorDetail ? `: ${c.errorDetail}` : ""})` : ""}${c.chaptersRead ? ` (+${c.chaptersRead} chapters)` : ""} | ${c.matchesWon} | ${mmss(c.medianWinningDurationSeconds)}`,
     ),
   ];
   return lines.join("\n");
@@ -560,6 +561,11 @@ export default function AdminExerciseVideos() {
                               + (capped)
                             </span>
                           )}
+                          {c.chaptersRead ? (
+                            <span className="ml-1 text-xs text-muted-foreground" title="Chapters read from video descriptions; each one is a Tier B candidate.">
+                              +{c.chaptersRead} chapters
+                            </span>
+                          ) : null}
                         </td>
                         <td className="py-1 pr-3 text-right tabular-nums">{c.matchesWon}</td>
                         <td className="py-1 text-right tabular-nums">

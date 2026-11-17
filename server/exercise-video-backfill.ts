@@ -106,6 +106,12 @@ export const DEMO_VIDEO_CHANNELS = [
   // index. It was cut on 2026-09-28 for a LOOKUP failure, never a content verdict: the handle
   // "elitefts" resolved to somebody else's 8-video channel. "search:" finds it by name instead.
   "search:EliteFTS", // powerlifting: pin, board, Larsen and Spoto presses, specialty bars
+  // Added 2026-11-17 for the stretches, the first channel added FOR its chapters (see
+  // parseChapters): Tom Merrick posts follow-along mobility routines, never one stretch per
+  // video, so every match it can make is a chapter -- Tier B, played from its own timestamp.
+  // Found by name ("search:") because his handle has changed over the years. Unverified from the
+  // sandbox; the dry run's chapters column says whether his descriptions carry chapters at all.
+  "search:Tom Merrick", // mobility: hips, hamstrings, shoulders, spine, as chaptered routines
 ];
 
 /**
@@ -195,6 +201,9 @@ export type ChannelSummary = {
   /** YouTube's own reason when status is "error" (e.g. "403 (quotaExceeded)", "500"), so a
    *  one-off failure and a spent quota are not the same two words on the report. */
   errorDetail?: string;
+  /** How many chapters (see parseChapters) the channel's descriptions yielded. 0 on a routine
+   *  channel means its descriptions carry no chapters and it can never win a stretch. */
+  chaptersRead?: number;
   /** How many exercises this channel ended up supplying the WINNING video for. */
   matchesWon: number;
   medianWinningDurationSeconds: number | null;
@@ -458,6 +467,7 @@ export async function planExerciseVideoBackfill(options?: {
   const truncatedChannels = new Set<string>();
   const statuses = new Map<string, ChannelSummary["status"]>();
   const errorDetails = new Map<string, string>();
+  const chapterCounts = new Map<string, number>();
   for (const handle of channels) {
     const loaded = await loadChannel(handle, quota, options?.maxVideosPerChannel);
     const result = loaded.result;
@@ -469,7 +479,9 @@ export async function planExerciseVideoBackfill(options?: {
       statuses.set(handle, status);
       continue;
     }
-    catalogueSizes.set(result.channel, result.videos.length);
+    // The catalogue is the channel's videos; its chapters are counted on their own.
+    catalogueSizes.set(result.channel, result.videos.filter((v) => v.startSeconds == null).length);
+    chapterCounts.set(result.channel, result.videos.filter((v) => v.startSeconds != null).length);
     if (result.truncated) truncatedChannels.add(result.channel);
     statuses.set(result.channel, "ok");
     pool.push(...result.videos);
@@ -547,6 +559,7 @@ export async function planExerciseVideoBackfill(options?: {
       truncated: truncatedChannels.has(channel),
       status: statuses.get(channel) ?? "ok",
       ...(errorDetails.has(channel) ? { errorDetail: errorDetails.get(channel) } : {}),
+      chaptersRead: chapterCounts.get(channel) ?? 0,
       matchesWon: won.length,
       medianWinningDurationSeconds: median(won.map((p) => p.match.durationSeconds)),
     };
