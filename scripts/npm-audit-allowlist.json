@@ -5,5 +5,12 @@
     "reason": "Stack exhaustion on a deeply nested brace pattern. Reaches Forge only through tailwindcss 3 (chokidar, micromatch, fast-glob), which runs at build time over Forge's own source globs; no untrusted pattern ever reaches it. braces 3.0.3 is the newest release and npm reports no fixed version. See docs/dependency-overrides.md.",
     "added": "2026-10-03",
     "expires": "2026-12-31"
+  },
+  {
+    "advisory": "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
+    "package": "picomatch",
+    "reason": "ReDoS on a single-branch repeated extglob pattern. Reaches Forge only through build tooling (vite, vitest, tailwindcss, rollup plugins, workbox-build via fast-glob, tinyglobby, micromatch, chokidar), which runs over Forge's own source globs at build and test time; no untrusted pattern ever reaches it, and the production audit is clean. The advisory covers every release up to 4.0.7, which is the newest, so npm reports no fixed version (2026-11-17, CI #2197).",
+    "added": "2026-11-17",
+    "expires": "2027-01-31"
   }
 ]
