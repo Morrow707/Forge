@@ -313,12 +313,16 @@ export function wristConfidence(worldLandmarks: Landmark[], side: "left" | "righ
 export const LOW_VISIBILITY_WRIST_FLOOR = 0.2;
 
 /** The wrist's raw visibility when it is under MIN_VISIBILITY but over the low floor, else 0. */
-export function lowVisibilityWristConfidence(worldLandmarks: Landmark[], side: "left" | "right"): number {
+export function lowVisibilityWristConfidence(
+  worldLandmarks: Landmark[],
+  side: "left" | "right",
+  floor: number = LOW_VISIBILITY_WRIST_FLOOR,
+): number {
   const lm = worldLandmarks[side === "left" ? POSE_LANDMARKS.LEFT_WRIST : POSE_LANDMARKS.RIGHT_WRIST];
   if (!lm) return 0;
   const visibility = lm.visibility;
   if (visibility >= MIN_VISIBILITY) return 0;
-  return visibility >= LOW_VISIBILITY_WRIST_FLOOR ? visibility : 0;
+  return visibility >= floor ? visibility : 0;
 }
 
 // Same {score, label, notes} shape bar-tracking.ts's own per-rep RepTrustScore already uses, for

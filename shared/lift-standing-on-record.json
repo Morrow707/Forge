@@ -12,8 +12,8 @@
     "meanAbsPct": 7.37
   },
   "Dumbbell Shoulder Press": {
-    "sets": 6,
-    "meanAbsPct": 9.82
+    "sets": 7,
+    "meanAbsPct": 8.53
   },
   "Pendlay Row": {
     "sets": 3,
@@ -24,7 +24,7 @@
     "meanAbsPct": 7.09
   },
   "Single-Arm Dumbbell Row": {
-    "sets": 8,
-    "meanAbsPct": 12.6
+    "sets": 10,
+    "meanAbsPct": 12.48
   }
 }

@@ -235,30 +235,30 @@
     }
   },
   "Dumbbell Shoulder Press": {
-    "takes": 6,
+    "takes": 7,
     "rulers": {
       "body_3d": {
-        "takes": 6,
-        "leanPct": 6.6,
-        "rmsPct": 10.7,
+        "takes": 7,
+        "leanPct": 4.7,
+        "rmsPct": 9.9,
         "timesWorst": 0
       },
       "depth": {
-        "takes": 6,
-        "leanPct": 44.9,
-        "rmsPct": 44.9,
-        "timesWorst": 5
+        "takes": 7,
+        "leanPct": 43.8,
+        "rmsPct": 44.3,
+        "timesWorst": 6
       },
       "height": {
-        "takes": 6,
-        "leanPct": 31.8,
-        "rmsPct": 34.2,
+        "takes": 7,
+        "leanPct": 29.1,
+        "rmsPct": 31.7,
         "timesWorst": 0
       },
       "shoulder_width": {
-        "takes": 6,
-        "leanPct": 32.9,
-        "rmsPct": 45.5,
+        "takes": 7,
+        "leanPct": 30.7,
+        "rmsPct": 43.3,
         "timesWorst": 1
       }
     },
@@ -470,25 +470,25 @@
     }
   },
   "Single-Arm Dumbbell Row": {
-    "takes": 8,
+    "takes": 10,
     "rulers": {
       "body_3d": {
-        "takes": 8,
+        "takes": 10,
         "leanPct": -30.7,
-        "rmsPct": 28.7,
+        "rmsPct": 27.8,
         "timesWorst": 0
       },
       "depth": {
-        "takes": 8,
-        "leanPct": -56.5,
-        "rmsPct": 55.4,
-        "timesWorst": 6
+        "takes": 10,
+        "leanPct": -56.1,
+        "rmsPct": 52.1,
+        "timesWorst": 7
       },
       "shoulder_width": {
-        "takes": 7,
-        "leanPct": 42.8,
-        "rmsPct": 54.5,
-        "timesWorst": 2
+        "takes": 9,
+        "leanPct": 41,
+        "rmsPct": 49.5,
+        "timesWorst": 3
       }
     },
     "bones": {

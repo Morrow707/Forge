@@ -185,6 +185,10 @@ export type CameraTunables = {
   maxPlausibleVelocityChangePct: number;
   /** How confident a landmark or an object box must be before its position is used. */
   minTrackingConfidence: number;
+  /** The visibility under which a wrist is not used at all (pose-tracking.ts's
+   *  LOW_VISIBILITY_WRIST_FLOOR). Between it and MIN_VISIBILITY a wrist is used at its own low
+   *  confidence. Per lift because a bench filmed from the side hides the hands at the chest. */
+  lowVisibilityWristFloor: number;
   /** The gap either side of which an occlusion is NOT interpolated across, ms. */
   occlusionMinGapMs: number;
   occlusionMaxGapMs: number;
@@ -231,6 +235,7 @@ export const SHARED_CAMERA_TUNABLES: Readonly<CameraTunables> = Object.freeze({
   maxPlausibleAccelG: 6, // MAX_PLAUSIBLE_ACCEL_G
   maxPlausibleVelocityChangePct: 100, // MAX_PLAUSIBLE_VELOCITY_CHANGE_PCT
   minTrackingConfidence: 0.5, // MIN_TRACKING_CONFIDENCE
+  lowVisibilityWristFloor: 0.2, // LOW_VISIBILITY_WRIST_FLOOR
   occlusionMinGapMs: 70, // OCCLUSION_MIN_GAP_MS
   occlusionMaxGapMs: 200, // OCCLUSION_MAX_GAP_MS
   maxLockDistanceInYardsticks: 2.5, // MAX_LOCK_DISTANCE_IN_YARDSTICKS
@@ -387,10 +392,10 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
     depthRulerUncertainty: 0.6,
     body3DCorrectedUncertainty: 0.06,
     driveOnsetFraction: 0,
-    maxPeakToMeanRatio: 1.6,
+    maxPeakToMeanRatio: 1.5,
   },
-  "Bench Press": { body3DCorrectedUncertainty: 0.35, depthRulerUncertainty: 0.1, driveOnsetFraction: 0.03 },
-  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0.01, biacromialToleranceFraction: 0.23 },
+  "Bench Press": { body3DCorrectedUncertainty: 0.35, depthRulerUncertainty: 0.1, driveOnsetFraction: 0.03, lowVisibilityWristFloor: 0.1 },
+  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0.01, biacromialToleranceFraction: 0.24 },
 };
 
 /** THE VELOCITY OVERRIDES REMOVED ON 2026-11-05, AND WHY -- kept as data so the next reader does
@@ -551,6 +556,10 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
     "moves, since each reads its own record.",
   "Dumbbell Shoulder Press":
+    "2026-11-17, round twenty-one, set 3 on build 781 (30lb x8, OVR reps 4-11 after 3 warm-ups: 51.16cm, mean 0.94, " +
+    "peak 1.40): range of motion -0.8% through the live record, so this round's fix is the peak: maxPeakToMeanRatio " +
+    "1.6 -> 1.5, the sensor's own peak over mean on set 3 (1.49) and set 2 (1.50). Peak set 3 +10.0 -> +7.9%, set 2 " +
+    "+28.1 -> +20.9%, 8 of 8 kept on both. The mean's +6.4% is the window, not fitted. PRIOR: " +
     "2026-11-17, round twenty, set 2 on build 781 (30lb x8, OVR reps 4-11: 54.04cm, mean 1.0075, peak 1.514): " +
     "body3DCorrectedUncertainty 0.08 -> 0.06, round nineteen's named next step. Range of motion through the " +
     "blend: today +9.55 -> +9.10, set 1 +6.87 -> +5.98, 11-10 sets 1/2/3 +22.36/+1.78/+7.25 -> " +
@@ -611,6 +620,12 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
   // ROUND FOURTEEN, 2026-11-10, build 728 beside the OVR. Costed by
   // client/src/lib/ovr-2026-11-10-every-lift-reads-only-its-own-record.test.ts.
   "Bench Press":
+    "2026-11-17, round twenty-one, set 3 on build 781: 6 of 8 reps, range 20.8cm against the sensor's 36.3, mean 0.29 " +
+    "-- a tracking hole, not a scale. 32 dropouts, 7.6s missing, a 0.4-0.6s gap at the bottom of every press: the " +
+    "wrists at the chest read 0.12-0.20 visibility from the side and the shared LOW_VISIBILITY_WRIST_FLOOR (0.2) threw " +
+    "them out (round sixteen's set 3 the same). lowVisibilityWristFloor 0.2 -> 0.1 on this lift only; the plausibility " +
+    "gate still filters every sample. Not replayable (the stored trace lost the frames), so no ledger row; the next " +
+    "bench is its test. Bench set 2 never reached the server (a dropped 409 replay on 781, fixed in 783). PRIOR: " +
     "2026-11-17, round nineteen, build 772 (135 x8 on the OVR): depthRulerUncertainty 0.15 -> 0.10 and " +
     "body3DCorrectedUncertainty 0.25 -> 0.35, on this lift only. Today's take read -23.5% (all three " +
     "rulers low and no plate candidate at all) -> -15.26. Ledger: 10-30 +0.13 -> -4.06, 10-30 set 3 " +
@@ -645,6 +660,11 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "0.04, and +33.1% and +4.6% at 0.03; both takes move toward the sensor, no rep count moves, and " +
     "the peak does not move. 0.02 is the next step.",
   "Single-Arm Dumbbell Row":
+    "2026-11-17, round twenty-one, set 3 on build 781 (no setup rep: OVR reps 1-8 right, 9-16 left; truth reps 2-8 " +
+    "46.55cm and 10-16 46.04cm): biacromialToleranceFraction 0.23 -> 0.24. Right -15.02 -> -15.92, left +8.70 -> +7.77, " +
+    "this take's mean error 11.86 -> 11.85; ten-set average 12.45 -> 12.48. Third take running where the left arm reads " +
+    "6-24 points above the right in one set: a per-side depth fault (the near arm travels more pixels), which no " +
+    "shared setting can close; the next row work is a per-side scale from the working wrist's 3D depth. PRIOR: " +
     "2026-11-17, round twenty, set 2 on build 781 (OVR reps 2-8 right 45.90cm, reps 11-17 left 41.95cm): " +
     "biacromialToleranceFraction 0.22 -> 0.23. Left +15.38 -> +13.77, right -1.31 -> -2.95; across all eight " +
     "row sets average 12.76 -> 12.60, wobble 17.89 -> 17.23. The two sides of one take need scales about 1.9x " +

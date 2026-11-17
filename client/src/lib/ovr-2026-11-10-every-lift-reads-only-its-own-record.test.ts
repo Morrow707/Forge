@@ -75,8 +75,8 @@ const PRESS_OWN = {
 const BENCH_11_10_LIVE = 2.19; // -10.2 as filmed; -8.57 after round fourteen, -7.28 after fifteen, -4.84 after sixteen, +2.19 after nineteen
 const PRESS_11_10_LIVE = 21.27; // +46.5; +31.3 after round fourteen, +27.42 after fifteen, +25.1 after sixteen, +22.36 after nineteen
 const PRESS_11_06_LIVE = 15.74; // +41.8; +31.22 after round fourteen, +25.17 after fifteen, +21.6 after sixteen, +17.4 after nineteen
-const ROW_LEFT_11_10_LIVE = -7.66; // -9.0; -4.38 after round fourteen, -2.65 after sixteen, -6.08 after nineteen's shoulder floor 0.22, -7.66 after twenty's 0.23
-const ROW_RIGHT_11_10_LIVE = 6.59; // +9.2; +10.53 after round fourteen, +11.0 after sixteen, +7.98 after nineteen, +6.59 after twenty
+const ROW_LEFT_11_10_LIVE = -9.15; // -9.0; -4.38 after round fourteen, -2.65 after sixteen, -6.08 after nineteen's shoulder floor 0.22, -7.66 after twenty's 0.23, -9.15 after twenty-one's 0.24
+const ROW_RIGHT_11_10_LIVE = 5.27; // +9.2; +10.53 after round fourteen, +11.0 after sixteen, +7.98 after nineteen, +6.59 after twenty, +5.27 after twenty-one
 const LIVE_ERROR_PCT: Record<string, number> = {
   "2026-11-10-bench-press-set-1": BENCH_11_10_LIVE,
   "2026-11-10-dumbbell-shoulder-press-set-1": PRESS_11_10_LIVE,

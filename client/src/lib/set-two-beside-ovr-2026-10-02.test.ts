@@ -80,7 +80,10 @@ describe("the bench whose wrists Vision lost for half the take", () => {
     expect(lowVisibilityWristConfidence(lm(0.1), "left")).toBe(0);
     expect(lowVisibilityWristConfidence(lm(0.9), "left")).toBe(0);
     const dialog = read("client/src/components/av-bar-tracker-dialog.tsx");
-    expect(dialog).toMatch(/lowVisibilityWristConfidence\(worldLm, side\)/);
+    // Since round twenty-one the floor is the lift's own (lowVisibilityWristFloor), still the shared
+    // 0.2 for every lift but the bench.
+    expect(dialog).toMatch(/lowVisibilityWristConfidence\(worldLm, side, wristFloor\)/);
+    expect(lowVisibilityWristConfidence(lm(0.15), "left", 0.1)).toBe(0.15);
     expect(dialog).toMatch(/wristsBelowVisibilityFloor\+\+/);
   });
 });

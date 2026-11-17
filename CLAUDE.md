@@ -4104,6 +4104,20 @@ halves before splitting anything else:
   choice). And a one-arm lift's live take is re-read from the file when its working wrist was unseen
   past 1.0s (`wristGaps`, `maxLiveWorkingWristGapSeconds`); the hook also stopped dropping
   `arbiterTunables` at Record (inert: every lift holds the defaults). Native: `verify_build`, beta.
+- **ROUND TWENTY-ONE, 2026-11-17: SET 3 ON BUILD 781.** Bench set 2 is NOT on the server (the
+  dropped 409 replay round twenty fixed; the clip exists, the numbers do not). One fix per lift:
+  - **Bench Press: a tracking hole, fixed per lift.** Set 3 read 6 of 8, 20.8cm against 36.3, mean
+    0.29: 32 dropouts and a 0.4-0.6s gap at the bottom of every press, because the wrists at the
+    chest read 0.12-0.20 visibility from the side and `LOW_VISIBILITY_WRIST_FLOOR` (0.2) dropped
+    them (round sixteen's set 3 the same). New per-lift field `lowVisibilityWristFloor` (shared 0.2,
+    bench 0.1), read by the bar dialog. Not replayable (the stored trace lost the frames), so no
+    ledger row; the next bench is its test.
+  - **Dumbbell Shoulder Press: peak cap 1.6 -> 1.5** (the sensor's own peak/mean, 1.49 and 1.50).
+    Range was already -0.8%; peak set 3 +10.0 -> +7.9%, set 2 +28.1 -> +20.9%.
+  - **Single-Arm Dumbbell Row: shoulder floor 0.23 -> 0.24.** No setup rep this set: OVR 1-8 right,
+    9-16 left (truth reps 2-8 / 10-16). Right -15.0 -> -15.9, left +8.7 -> +7.8. Third take where
+    the left reads 6-24 points above the right: a per-side depth fault no shared setting closes.
+    Next row work: a per-side scale from the working wrist's 3D depth.
 - **ROUND TWENTY, 2026-11-17: SET 2 ON BUILD 781, AND A QUEUED SAVE IS NEVER DROPPED AGAIN.**
   Bench set 2's clip uploaded (19:18:59) but its numbers are not in the export. Off Scott's debug
   console: the save after it landed (200) and its response was lost ("Load failed"), so the phone

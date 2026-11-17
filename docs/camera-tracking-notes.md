@@ -16,6 +16,10 @@ See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
 ## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-17, round nineteen)
 
+**Round twenty-one, 2026-11-17 (set 3 on 781):** bench's low-visibility wrist floor 0.1 (its own; the hands
+at the chest read 0.12-0.20 and every bottom was dropped), press peak cap 1.5, row shoulder floor 0.24. The
+row's left reads high and the right low on all three sets: per-side depth, next.
+
 **Round twenty, 2026-11-17 (set 2 on 781):** press 3D 0.06 (every press set closer); row shoulder floor
 0.23 (left closer, right one point further; the sides need ~1.9x different scales, which is perspective,
 not a constant -- do not chase it with the shoulder floor past 0.25). Bench set 2 lost to a dropped 409

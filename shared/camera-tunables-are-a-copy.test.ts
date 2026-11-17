@@ -42,7 +42,7 @@ import {
   DEPTH_RULER_UNCERTAINTY,
   BODY_3D_CORRECTED_UNCERTAINTY,
 } from "../client/src/lib/body-3d-ruler";
-import { HEIGHT_RULER_UNCERTAINTY,
+import { HEIGHT_RULER_UNCERTAINTY, LOW_VISIBILITY_WRIST_FLOOR,
   MAX_SHOULDER_SPAN_SPREAD,
   BIACROMIAL_TOLERANCE_FRACTION,
   MAX_SCALE_AGREEMENT_TOLERANCE,
@@ -145,6 +145,7 @@ describe("the per-lift numbers are a copy of today's numbers", () => {
     expect(SHARED_CAMERA_TUNABLES.maxPlausibleSpeedMps).toBe(MAX_PLAUSIBLE_LIFT_VELOCITY_MPS);
     expect(SHARED_CAMERA_TUNABLES.maxPlausibleVelocityChangePct).toBe(MAX_PLAUSIBLE_VELOCITY_CHANGE_PCT);
     expect(SHARED_CAMERA_TUNABLES.minTrackingConfidence).toBe(MIN_TRACKING_CONFIDENCE);
+    expect(SHARED_CAMERA_TUNABLES.lowVisibilityWristFloor).toBe(LOW_VISIBILITY_WRIST_FLOOR);
     expect(SHARED_CAMERA_TUNABLES.maxLockDistanceInYardsticks).toBe(MAX_LOCK_DISTANCE_IN_YARDSTICKS);
     expect(SHARED_CAMERA_TUNABLES.maxPlateAspectRatio).toBe(MAX_PLATE_ASPECT_RATIO);
     expect(SHARED_CAMERA_TUNABLES.maxPlateSizeInYardsticks).toBe(MAX_PLATE_SIZE_IN_YARDSTICKS);

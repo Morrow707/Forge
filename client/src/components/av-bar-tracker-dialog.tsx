@@ -1793,6 +1793,9 @@ export function AvBarTrackerDialog({
     let framesNoWristOrImplement = 0;
     // Hand readings (one per side) that came from a wrist under MIN_VISIBILITY.
     let wristsBelowVisibilityFloor = 0;
+    // This lift's own floor (camera-tunables-by-lift.ts): a side-on bench reads the hands at the
+    // chest at 0.12-0.2, and the shared 0.2 dropped the bottom of every press (round twenty-one).
+    const wristFloor = cameraTunablesFor(exerciseName, romBucketForExercise(exerciseName)).values.lowVisibilityWristFloor;
     let framesVelocityRejected = 0;
     let framesUsable = 0;
     let lastHalfSpan: { x: number; y: number } | null = null;
@@ -1831,7 +1834,7 @@ export function AvBarTrackerDialog({
       // low confidence rather than dropped, and counted so the take says how often it happened.
       let lowVisibilityWrist = false;
       if (rawWristConf === 0) {
-        const lowVis = lowVisibilityWristConfidence(worldLm, side);
+        const lowVis = lowVisibilityWristConfidence(worldLm, side, wristFloor);
         if (lowVis > 0) {
           rawWristConf = lowVis;
           lowVisibilityWrist = true;
