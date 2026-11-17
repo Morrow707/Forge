@@ -333,6 +333,7 @@ export function BodyMap({
    *  never has to know what a set count is. */
   leaders,
   captionFor,
+  gutterShare,
 }: {
   view?: BodyMapView;
   selected?: string | null;
@@ -342,6 +343,10 @@ export function BodyMap({
   compact?: boolean;
   leaders?: BodyMapLeader[];
   captionFor?: (group: string) => string | null;
+  /** Each label column's width as a share of the figure's width. Defaults to LAYOUT's, which
+   *  suits a half-width cell; a full-width phone picker narrows it so the figure, the thing
+   *  being tapped, gets the width instead (2026-11-17). */
+  gutterShare?: number;
 }) {
   // React's ids contain colons ("r:1:"), which are not safe inside a key used as an element id;
   // this drops every ":" -- ":r1:" becomes "r1", "r1" is left alone.
@@ -352,7 +357,7 @@ export function BodyMap({
   const tile = MAN.tiles[key];
   const interactive = typeof onSelect === "function";
   const labelled = !!leaders?.length;
-  const gutter = labelled ? LAYOUT.gutterShare : 0;
+  const gutter = labelled ? (gutterShare ?? LAYOUT.gutterShare) : 0;
 
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, PersonStanding, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BodyMap, type BodyMapView } from "@/components/body-map";
+import { BodyMap, BODY_MAP_LEADERS, type BodyMapView } from "@/components/body-map";
 import { cn } from "@/lib/utils";
 
 /**
@@ -67,11 +67,22 @@ export function MuscleFilterMap({
           {/* MUCH BIGGER, because it was unusable small -- "it's wayyyyyyyy too freaking
               small". A figure this is meant to be TAPPED on cannot be the size of an icon, and
               the regions it is built from are the thinnest things on the screen. */}
-          <div className="h-80 flex-1 text-primary sm:h-96">
+          {/* And bigger again on a phone (2026-11-17, Scott: "hard to select the muscle with fat
+              human thumbs"): the figure takes the full width it can, its height following from
+              that, capped so the Front/Back switch still fits; the labels get narrower columns
+              (gutterShare) and are themselves big tap targets. The list is a scroll below. */}
+          <div className="max-h-[68dvh] flex-1 text-primary sm:h-96 sm:max-h-none">
+            {/* Labelled, as the review artifact was: a name beside each muscle with a line to it,
+                and the name is a button too (Scott, 2026-11-17: "on purpose artifact we had
+                labels we could click on ... Where did the labels go?"). The picker is where a
+                beginner who does not know the muscle's name meets the figure, so it needs them
+                most; only the Muscle Load Map had been given them. */}
             <BodyMap
               view={view}
               selected={chosen[chosen.length - 1] ?? null}
               onSelect={onToggle}
+              leaders={BODY_MAP_LEADERS[view]}
+              gutterShare={0.36}
               compact
             />
           </div>
@@ -80,6 +91,7 @@ export function MuscleFilterMap({
               view="back"
               selected={chosen[chosen.length - 1] ?? null}
               onSelect={onToggle}
+              leaders={BODY_MAP_LEADERS.back}
             />
           </div>
         </div>
