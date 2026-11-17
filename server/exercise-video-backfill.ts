@@ -122,6 +122,11 @@ export const DEMO_VIDEO_CHANNELS = [
   // Yoga With Adriene's longer classes are routines. "pose" folds to "stretch" in ALIASES so
   // "Lizard Pose" reaches Lizard Stretch. Same terms: found by name, every win a Tier B chapter.
   "search:Yoga With Adriene", // yoga poses that are the library's stretches, as chaptered classes
+  // Added 2026-11-17, the fourth chaptered mobility channel: GMB Fitness (Gold Medal Bodies)
+  // posts mobility and flexibility routines and tutorials -- hips, shoulders, wrists, the wrist
+  // flexor and extensor stretches nothing else in the pool has. Same terms: found by name,
+  // every win a Tier B chapter, the chapters column on the next dry run is the check.
+  "search:GMB Fitness", // mobility: wrists, hips, shoulders, as chaptered routines
 ];
 
 /**

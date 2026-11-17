@@ -92,6 +92,7 @@ describe("the channel list", () => {
     expect(DEMO_VIDEO_CHANNELS).toContain("search:Tom Merrick");
     expect(DEMO_VIDEO_CHANNELS).toContain("search:Tom Morrison");
     expect(DEMO_VIDEO_CHANNELS).toContain("search:Yoga With Adriene");
+    expect(DEMO_VIDEO_CHANNELS).toContain("search:GMB Fitness");
   });
 });
 
