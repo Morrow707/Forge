@@ -231,6 +231,20 @@ sets"). Every round fixes something on every lift filmed that round.**
 Both of these have been settled take by take in six different comment blocks; they are standing
 rules now so no session asks again.
 
+- **SHOULDER PRESS: THE OVR'S FIRST THREE REPS ARE SETUP REPS. SINGLE-ARM ROW: THE OVR'S REP 9 IS
+  A SETUP REP.** Scott, 2026-11-17: "For shoulder press skip the first 3 reps on OVR as those are
+  setup reps, I did do 8 though for pendlay row, which is our single arm row, skip rep 9 that was a
+  setup rep too." So a press screen's reps 4 onward are the set, and a row screen's reps 1-8 are
+  the set (8 done). **The OVR's "Pendlay Row" label is the sensor's vocabulary for our Single-Arm
+  Dumbbell Row** on these takes -- the same rule as "Jump Squat" for the box jump: pair by date,
+  load, rep count and the Forge export, never by the OVR's label. Recorded in ground truth as the
+  ignored reps, never deleted.
+- **2026-11-17 BUG REPORT, NOT A CALIBRATION: both row sides counted 7 when 8 were done.** Scott:
+  "rows both sides counted 7 reps when I did 8". A wrong rep count is fixed before any settings
+  step (Rule #6, bugs first), and every number on the take is suspect until the count is right.
+  Read the export's segmenter fields for both sides (pickup merged into rep 1, the set-down merged
+  into the last pull, a rep deleted as a rack move, `wristGaps` on the working wrist) -- round
+  sixteen found all four on the left row.
 - **ON A JUMP, THE OVR'S REP 1 IS THE SETUP REP AND IS NOT ONE OF OURS.** Scott, 2026-11-09:
   "For box jump or 'jump squat' on the OVR, skip rep one that is a setup rep." **"JUMP SQUAT" is
   the OVR's own name for the profile he selects when he films a BOX JUMP** -- he confirmed the
