@@ -4104,6 +4104,22 @@ halves before splitting anything else:
   choice). And a one-arm lift's live take is re-read from the file when its working wrist was unseen
   past 1.0s (`wristGaps`, `maxLiveWorkingWristGapSeconds`); the hook also stopped dropping
   `arbiterTunables` at Record (inert: every lift holds the defaults). Native: `verify_build`, beta.
+- **ROUND TWENTY, 2026-11-17: SET 2 ON BUILD 781, AND A QUEUED SAVE IS NEVER DROPPED AGAIN.**
+  Bench set 2's clip uploaded (19:18:59) but its numbers are not in the export. Off Scott's debug
+  console: the save after it landed (200) and its response was lost ("Load failed"), so the phone
+  queued it with the old revision; every replay met 409, the lost-response catch-up only ran on a
+  first send, and the queue DROPPED it at the next open. Scott: "NOTHING SHOULD BE REJECTED ITS
+  THE FIRST FUCKING RULE" / "The server should have kept trying until it was successful,
+  periodic end of story." Fixed: `client/src/lib/queued-save-rebase.ts` -- on ANY 409 (screen or
+  queue, replay or not) re-read the day and re-send at the server's revision whenever the save
+  still carries every set the server holds; otherwise HOLD. Nothing in the workout queue or the
+  video queue is ever dropped for a refusal now; everything is held and retried on the slowing
+  clock (`a-400-does-not-delete-a-set.test.ts`, mutation caught). Calibration, one step each:
+  press `body3DCorrectedUncertainty` 0.08 -> 0.06 (all six press sets closer, average 10.87 ->
+  9.82, set 2 +9.55 -> +9.10); row `biacromialToleranceFraction` 0.22 -> 0.23 (left +15.38 ->
+  +13.77, right -1.31 -> -2.95, eight-set average 12.76 -> 12.60; the two sides need scales ~1.9x
+  apart, Rule #5). All three counted 8 of 8. Bench: no capture, nothing to fit. OVR truths: row
+  reps 2-8 / 11-17 (45.90 / 41.95cm), press reps 4-11 (54.04cm, mean 1.0075, peak 1.514).
 - **ROUND NINETEEN, 2026-11-17: BENCH, DUMBBELL SHOULDER PRESS, SINGLE-ARM ROW BOTH SIDES ON BUILD
   772. WHAT WAS DONE TO EACH LIFT, SO THE NEXT ROUND DOES NOT REDO IT.** OVR rules from Scott: the
   press's first 3 OVR reps are set-up, the row's rep 9 is set-up, OVR "Pendlay Row" = our Single-Arm

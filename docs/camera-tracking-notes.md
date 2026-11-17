@@ -16,6 +16,11 @@ See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
 ## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-17, round nineteen)
 
+**Round twenty, 2026-11-17 (set 2 on 781):** press 3D 0.06 (every press set closer); row shoulder floor
+0.23 (left closer, right one point further; the sides need ~1.9x different scales, which is perspective,
+not a constant -- do not chase it with the shoulder floor past 0.25). Bench set 2 lost to a dropped 409
+replay -- fixed in the queue (queued-save-rebase.ts), never dropped again.
+
 **ROUND NINETEEN, 2026-11-17 (build 772; bench, dumbbell shoulder press, single-arm dumbbell row
 both sides). TWO BUGS FIRST, THEN ONE CHANGE PER LIFT.** OVR reading for this round (standing,
 Scott): the press's first three OVR reps are set-up; the row's OVR rep 9 is set-up; the OVR labels

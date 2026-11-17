@@ -42,9 +42,9 @@ describe("a fetch that never reached the server", () => {
     // 413 joined the exclusions 2026-10-05: express.json answers an oversized body before any
     // route runs, and calling that permanent destroyed a filmed set outright (the Medicine Ball
     // Rotational Throw of 2026-10-04). See shared/a-filmed-set-is-never-too-big-to-save.test.ts.
-    expect(workout).toMatch(
-      /err instanceof ApiError\s*\n?\s*&& err\.status !== 400\s*\n?\s*&& err\.status !== 401\s*\n?\s*&& err\.status !== 409\s*\n?\s*&& err\.status !== 413\s*\n?\s*&& err\.status < 500/,
-    );
+    // 2026-11-17: there is no permanent class any more -- every refusal is queued and held
+    // (Scott: "The server should have kept trying until it was successful, periodic end of story").
+    expect(workout).toContain("const isPermanentRejection = false as boolean;");
   });
 
   // THE THREE ASSERTIONS ABOVE READ THE FILE; THESE ONES CALL IT.

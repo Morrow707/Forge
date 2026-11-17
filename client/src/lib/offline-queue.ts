@@ -1,4 +1,4 @@
-import { isPermanentUploadRejection } from "@/lib/upload-rejection";
+import { dayUrlFor, rebaseDecision, type QueuedSavePayload } from "@/lib/queued-save-rebase";
 import { logDebug } from "@/lib/debug-console";
 import { apiRequest, queryClient, ApiError } from "@/lib/queryClient";
 import { shedTracesToFit, describeShed } from "@shared/shed-traces-to-fit";
@@ -475,6 +475,7 @@ async function runFlush() {
       logDebug("SAVE", `flush SKIPPED (${entry.dayKey}): the open workout screen has claimed this day`);
       continue;
     }
+    let payload: unknown = null;
     try {
       // An inline body is read synchronously on purpose: the first flush after a reconnect
       // has to reach apiRequest before the second one is scheduled, and an await here would
@@ -502,7 +503,7 @@ async function runFlush() {
           continue;
         }
       }
-      const payload = entry.payloadFile ? await loadPayload(entry) : entry.payload;
+      payload = entry.payloadFile ? await loadPayload(entry) : entry.payload;
       if (payload == null) {
         // The body file is gone (a reinstall, a cleared data directory). The index entry is
         // all that is left and it describes nothing; keeping it would retry forever.
@@ -553,7 +554,26 @@ async function runFlush() {
       // was deleted off the phone with a toast telling the athlete to re-enter a set they
       // cannot re-film. shedTracesToFit above means a 413 should now be unreachable; if one
       // still arrives, the payload is the device's own record and nothing else has it.
-      if (status === 400 || status === 413) {
+      // A 409 IS CAUGHT UP, NEVER DROPPED (2026-11-17, round twenty's bench set 2 -- see
+      // queued-save-rebase.ts). Re-read the day; if this save still carries every set the server
+      // holds, re-send it at the server's revision. Otherwise it is held like any other refusal.
+      if (status === 409) {
+        const caughtUp = await catchUpQueuedSave(entry.url, payload as QueuedSavePayload);
+        if (caughtUp) {
+          logDebug("SAVE", `flush ok after catch-up (${entry.dayKey})`);
+          if (entry.payloadFile) void deletePendingLogFile(entry.payloadFile);
+          writeQueue(readQueue().filter((p) => p.id !== entry.id));
+          clearDayFailure(entry.dayKey);
+          syncedAny = true;
+          continue;
+        }
+      }
+      // NOTHING IS DROPPED. Scott, 2026-11-17: "The server should have kept trying until it was
+      // successful, periodic end of story." Every refusal that is not a dropped connection or an
+      // expired session -- a 400, a 404, a 409 that could not catch up, a 413, a 422 -- is HELD:
+      // kept on this phone and retried on the slowing clock (heldRetryIntervalMs), for as long as
+      // it takes. A server fix or a later catch-up is what lands it.
+      if (status !== null && status !== 401 && status !== 403 && status !== 408 && status !== 429 && status < 500) {
         const now = new Date().toISOString();
         logDebug("SAVE", `flush HELD (${entry.dayKey}): ${status}, kept on this phone, retried on a slowing clock, never dropped`);
         writeQueue(
@@ -563,30 +583,7 @@ async function runFlush() {
         );
         continue;
       }
-      const permanentlyRejected = status !== 403 && isPermanentUploadRejection(status, code);
-      logDebug(
-        "SAVE",
-        `flush ${permanentlyRejected ? "DROPPED" : "retry"} (${entry.dayKey}): ${status ?? "no response"}`,
-      );
-      if (permanentlyRejected) {
-        if (entry.payloadFile) void deletePendingLogFile(entry.payloadFile);
-        writeQueue(readQueue().filter((p) => p.id !== entry.id));
-        clearDayFailure(entry.dayKey);
-        // 409 is its own thing and deserves its own words. It does not mean the payload
-        // was malformed; it means the stored day moved on while this one sat in the
-        // queue, and a workout save replaces the day rather than merging into it (see
-        // workoutLogs.revision). Applying it would overwrite the newer sets, their
-        // tracked metrics and their videos, so it is dropped -- but what is on the
-        // server is real data, not a rejection, and telling the athlete to re-enter the
-        // day would have them type over it.
-        toast.error(
-          status === 409
-            ? "A workout you logged offline couldn't sync because that day was updated somewhere else, open it and check what's there before re-entering anything."
-            : "A workout you logged offline was rejected by the server and can't be synced, open that day and re-enter it.",
-          { duration: 20000 },
-        );
-        continue;
-      }
+      logDebug("SAVE", `flush retry (${entry.dayKey}): ${status ?? "no response"}`);
       // Still offline, or the server rejected it -- leave it queued and try
       // again on the next flush rather than losing the athlete's data (an
       // outright drop here risks discarding a real set over what might just
@@ -650,4 +647,25 @@ export function startOfflineLogSync() {
     if (status.connectionType !== "none") void flushPendingLogs();
   });
   App.addListener("resume", () => void flushPendingLogs());
+}
+
+/** Re-read the day and re-send a 409'd save at the server's revision when it still carries every
+ * set the server holds. True when the re-send landed. Never throws, never drops. */
+export async function catchUpQueuedSave(url: string, payload: QueuedSavePayload): Promise<boolean> {
+  const dayUrl = dayUrlFor(url, payload);
+  if (!dayUrl) return false;
+  try {
+    const fresh = (await (await apiRequest("GET", dayUrl)).json()) as { log?: { revision?: number; entries?: [] } | null };
+    const decision = rebaseDecision(payload, fresh.log);
+    if (decision.kind === "hold") {
+      logDebug("SAVE", `409 held: ${decision.why}`);
+      return false;
+    }
+    logDebug("SAVE", `409 caught up: re-sending at revision ${decision.serverRevision}`);
+    await apiRequest("POST", url, decision.payload);
+    return true;
+  } catch (err) {
+    logDebug("SAVE", `409 catch-up failed, kept: ${String(err)}`);
+    return false;
+  }
 }

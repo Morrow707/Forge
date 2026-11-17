@@ -169,13 +169,13 @@ describe("the workout screen hydrates from a fetch, never from a cached picture 
     expect(WORKOUT).toMatch(/if \(isLoading \|\| !data \|\| !hydrated\)/);
   });
 
-  it("the lost-response catch-up treats no revision as one before the first", () => {
-    const marker = WORKOUT.indexOf("&& lostResponsePossibleRef.current");
+  it("ANY 409 catches up, replay or not, with no lost-response gate (2026-11-17)", () => {
+    const marker = WORKOUT.indexOf("const decision = rebaseDecision(payload as QueuedSavePayload, fresh.log);");
     expect(marker).toBeGreaterThan(-1);
-    const condition = conditionBefore(WORKOUT, marker);
+    const condition = conditionBefore(WORKOUT, WORKOUT.lastIndexOf("err.status === 409", marker));
     expect(condition).toContain("err.status === 409");
-    expect(condition).not.toContain("baseRevisionRef.current != null");
-    expect(WORKOUT).toContain("(baseRevisionRef.current ?? -1) + 1");
+    expect(condition).not.toContain("!replay");
+    expect(condition).not.toContain("lostResponsePossibleRef");
   });
 
   it("a synced save that carried a capture refreshes the cached day", () => {

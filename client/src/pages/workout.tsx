@@ -20,6 +20,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { apiRequest, ApiError, NetworkError, resolveApiUrl, getNativeToken, getJson } from "@/lib/queryClient";
+import { rebaseDecision, type QueuedSavePayload } from "@/lib/queued-save-rebase";
 import { resolveTrackingMode } from "@/lib/resolve-tracking-mode";
 import type { EffectiveBranding } from "@/lib/branding-style";
 import { cn } from "@/lib/utils";
@@ -1610,33 +1611,29 @@ export function WorkoutPage({
         // claim-less save (it has to -- a claim-less save over an existing log is otherwise
         // the stale screen that deleted three sets on 2026-11-05). The arithmetic below
         // treats "no revision" as one before the first.
-        if (
-          err instanceof ApiError
-          && err.status === 409
-          && !replay
-          && lostResponsePossibleRef.current
-        ) {
+        // ANY 409, REPLAY OR NOT, CATCHES UP (2026-11-17, round twenty's bench set 2). The catch-up
+        // used to run only on a first send after a lost response, so the queued replay of a save
+        // whose response was lost met 409 every time and the queue dropped it. Now: re-read the
+        // day and re-send at the server's revision whenever this save still carries every set the
+        // server holds (queued-save-rebase.ts); otherwise it is queued and held, never dropped.
+        if (err instanceof ApiError && err.status === 409) {
+          const dayUrl = `${apiBase}/day?assignmentId=${assignmentId}&programDayId=${programDayId}&date=${date}`;
           try {
-            const freshRes = await apiRequest(
-              "GET",
-              `${apiBase}/day?assignmentId=${assignmentId}&programDayId=${programDayId}&date=${date}`,
-            );
-            const fresh = (await freshRes.json()) as { log?: { revision?: number } | null };
-            const serverRevision = fresh.log?.revision;
-            if (typeof serverRevision === "number" && serverRevision === (baseRevisionRef.current ?? -1) + 1) {
-              logDebug("SAVE", `409 after a lost response: adopting revision ${serverRevision} and resending`);
-              baseRevisionRef.current = serverRevision;
+            const fresh = (await (await apiRequest("GET", dayUrl)).json()) as {
+              log?: { revision?: number; entries?: [] } | null;
+            };
+            const decision = rebaseDecision(payload as QueuedSavePayload, fresh.log);
+            if (decision.kind === "resend") {
+              logDebug("SAVE", `409 caught up: re-sending at revision ${decision.serverRevision}`);
+              baseRevisionRef.current = decision.serverRevision;
               lostResponsePossibleRef.current = false;
-              const resent = await apiRequest("POST", `${apiBase}/log`, { ...payload, baseRevision: serverRevision });
+              const resent = await apiRequest("POST", `${apiBase}/log`, decision.payload);
               logDebug("SAVE", `log POST ok after catch-up (${payload.entries?.length ?? 0} exercises)`);
               return { synced: true as const, data: await resent.json(), silent };
             }
-            logDebug(
-              "SAVE",
-              `409 not recoverable: server revision ${serverRevision ?? "unknown"}, ours ${baseRevisionRef.current}`,
-            );
+            logDebug("SAVE", `409 held: ${decision.why}`);
           } catch (recoverErr) {
-            logDebug("SAVE", `409 catch-up failed: ${String(recoverErr)}`);
+            logDebug("SAVE", `409 catch-up failed, kept: ${String(recoverErr)}`);
           }
         }
         // A genuine rejection of the payload itself (bad data, forbidden,
@@ -1683,13 +1680,10 @@ export function WorkoutPage({
         // limit. Thrown, it destroys a filmed set outright -- which is exactly what it did to
         // the 2026-10-04 med ball throw. Queued and held, the replay runs through
         // shedTracesToFit again (runQueuedSave) and lands the numbers.
-        const isPermanentRejection =
-          err instanceof ApiError
-          && err.status !== 400
-          && err.status !== 401
-          && err.status !== 409
-          && err.status !== 413
-          && err.status < 500;
+        // NOTHING IS PERMANENT ANY MORE (Scott, 2026-11-17: "The server should have kept trying
+        // until it was successful, periodic end of story"). Every refusal is queued and held on
+        // this phone; the flush retries it on a slowing clock until it lands.
+        const isPermanentRejection = false as boolean;
         // Remembered for the unmount handler below, which used to re-queue this exact
         // payload unconditionally. That turned a visible error into silent data loss: the
         // queue replays it, gets the same 4xx, and DELETES the entry as unsyncable. The

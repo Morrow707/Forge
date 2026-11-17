@@ -450,7 +450,11 @@ export async function uploadOrQueueVideo(
     // server will keep rejecting is worth throwing; everything else is queued.
     const status = err instanceof ApiError ? err.status : null;
     const code = err instanceof ApiError ? err.code : undefined;
-    if (err instanceof ApiError && isPermanentUploadRejection(status, code)) throw err;
+    // NOTHING IS THROWN AWAY (2026-11-17, Scott: "The server should have kept trying until it was
+    // successful, periodic end of story"). Every refusal is queued and retried; the recording is
+    // the only copy there is.
+    void status;
+    void code;
     // `endpoint`, NOT the form-check literal. This was hardcoded, so the two queue paths in
     // this one function disagreed: the Wi-Fi gate above queues to `endpoint` (correct), and
     // this catch queued to /api/athlete/form-video whatever the caller asked for. A sprint or
@@ -611,12 +615,9 @@ async function runVideoFlush() {
       const status = err instanceof ApiError ? err.status : null;
       const code = err instanceof ApiError ? err.code : undefined;
       if (isPermanentUploadRejection(status, code)) {
-        await clearPersistedVideo(entry.id);
-        logDebug("VIDEO", `flush DROPPED (${entry.label}): ${status ?? "?"}${code ? ` ${code}` : ""}, the server will keep refusing it, ${queuedAgeLabel(entry.queuedAt)}`);
-        toast.error(
-          `${entry.label}: couldn't be uploaded and was not saved, you'll need to re-record it.`,
-          { duration: 15000 },
-        );
+        // HELD, NEVER DROPPED (2026-11-17). The server's refusal can change -- a fix ships, the set
+        // row it names is re-created -- and this file is the only copy of the recording.
+        logDebug("VIDEO", `flush HELD (${entry.label}): ${status ?? "?"}${code ? ` ${code}` : ""}, kept on this phone and retried, never deleted, ${queuedAgeLabel(entry.queuedAt)}`);
       } else {
         // Still offline, the server is having a moment, or the file read itself failed
         // transiently -- leave it queued and try again on the next flush. This branch WAS the

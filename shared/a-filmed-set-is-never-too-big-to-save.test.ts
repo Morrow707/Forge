@@ -87,12 +87,15 @@ describe("a filmed set is never too big to save", () => {
     const start = src.indexOf("const isPermanentRejection =");
     expect(start).toBeGreaterThan(-1);
     const condition = src.slice(start, src.indexOf(";", start));
-    expect(condition).toContain("err.status !== 413");
+    // 2026-11-17: no refusal is permanent at all now, 413 included.
+    expect(condition).toContain("false as boolean");
   });
 
   it("holds a 413 in the offline queue instead of dropping the day", () => {
     const src = readFileSync(join(process.cwd(), "client/src/lib/offline-queue.ts"), "utf8");
-    expect(src).toContain("if (status === 400 || status === 413)");
+    // 2026-11-17: every refusal that is not a dropped connection or expired session is held.
+    expect(src).toContain("flush HELD");
+    expect(src).not.toMatch(/permanentlyRejected/);
     // And the replay sheds too, or a held 413 would be re-sent at the same size forever.
     expect(src).toContain("shedTracesToFit(payload");
   });

@@ -1066,7 +1066,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 2.979875841056815,
     reportedRomCm: 85.6,
     sensorRomCm: 58.24,
-    liveErrorPct: 17.4,
+    liveErrorPct: 15.74,
     notes:
       "35lb x8 beside the OVR (its \"Push Press\" x10, reps 1-2 the set-up and ignored on Scott's word), " +
       "live path, 7 of 8, the first dumbbell press ever paired. Range of motion +47.0% as filmed and " +
@@ -1129,7 +1129,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.011823293512697,
     reportedRomCm: 80,
     sensorRomCm: 54.61,
-    liveErrorPct: 22.36,
+    liveErrorPct: 21.27,
     notes:
       "30lb beside the OVR (its \"Push Press\" x12, reps 1-4 the set-up and ignored on Scott's word: \"the .91 " +
       "seems like the start\"), live path, 8 of 8. Range of motion +46.5% as filmed -- the same +47% as 11-06, " +
@@ -1156,7 +1156,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 2.8297104554308476,
     reportedRomCm: 42.6,
     sensorRomCm: 46.81,
-    liveErrorPct: -6.08,
+    liveErrorPct: -7.66,
     notes:
       "70lb, the LEFT arm filmed on its own row (Set 1 · Left), ten reps on purpose (logged 8); the OVR's reps " +
       "1-10. Live path, 9 of 10, the working-hand rule on the left wrist as declared. The first single-arm row " +
@@ -1180,7 +1180,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 2.3401943129134663,
     reportedRomCm: 47.5,
     sensorRomCm: 43.51,
-    liveErrorPct: 7.98,
+    liveErrorPct: 6.59,
     notes:
       "70lb, the RIGHT arm on its own row (Set 1 · Right), ten reps (logged 8); the OVR's reps 11-20. Live path, " +
       "9 of 10, the working hand the right wrist as declared. Range of motion +9.2% as filmed: shoulder +42.8%, " +
@@ -1230,7 +1230,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.5634683803538096,
     reportedRomCm: 59.1,
     sensorRomCm: 53.7,
-    liveErrorPct: 1.78,
+    liveErrorPct: 0.77,
     notes:
       "30lb beside the OVR (its \"Push Press\" x11; the first rows are set-up and the set starts at the 0.92 rep " +
       "on Scott's word, which leaves eight, the eight logged), the first press on round fourteen's record " +
@@ -1256,7 +1256,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 2.92842384910565,
     reportedRomCm: 60.8,
     sensorRomCm: 53.91,
-    liveErrorPct: 7.25,
+    liveErrorPct: 6.06,
     notes:
       "30lb beside the OVR (its \"Push Press\" x11; the first three set-up on Scott's word, the eight from the 1.07 rep " +
       "read), build 732, live path, 7 of 8. Range of motion +12.8% as filmed. The 3D pair again the lowest " +
@@ -1443,7 +1443,7 @@ liveErrorPct: 0.82,
     shippedScaleX1000: 2.481573930706279,
     reportedRomCm: 33.8,
     sensorRomCm: 42.6,
-    liveErrorPct: 0.83,
+    liveErrorPct: -0.78,
     notes:
       "70lb x 8, right arm first; OVR (labelled Pendlay Row) reps 1-8 (rep 9 a setup rep, Scott): range 17.93in, mean 0.925, peak 1.57. Forge found 7 of 8 reps, pulls 2-8 (pull 1 merged with the pickup and deleted; " +
       "round nineteen's trimOversizedLeadIn returns it), so the truth here is OVR reps 2-8, 42.60cm; range 33.8cm (-20.7% as filmed), " +
@@ -1465,7 +1465,7 @@ liveErrorPct: 0.82,
     shippedScaleX1000: 2.6109328489138814,
     reportedRomCm: 38,
     sensorRomCm: 43.25,
-    liveErrorPct: 6.81,
+    liveErrorPct: 5.33,
     notes:
       "70lb x 8, left arm second; OVR reps 10-17: range 18.01in, mean 0.95, peak 1.48. Forge found 7 of 8 reps, pulls 2-8, so the truth here is OVR reps 11-17, " +
       "43.25cm; range 38cm (-12.1% as filmed), " +
@@ -1488,7 +1488,7 @@ liveErrorPct: 0.82,
     shippedScaleX1000: 3.078943028685303,
     reportedRomCm: 62.5,
     sensorRomCm: 57.28,
-    liveErrorPct: 6.87,
+    liveErrorPct: 5.98,
     notes:
       "30lb x 8; the OVR (labelled Push Press) counted 11 and its first 3 are setup reps (Scott), so reps 4-11: range 22.55in, mean 1.02, peak 1.59. Forge found 7 of 8 reps; range 62.5cm against 57.28cm (+9.1% as filmed), " +
       "mean 1.11, peak 2. Round nineteen.",
@@ -1513,6 +1513,71 @@ liveErrorPct: 0.82,
     notes:
       "135x8, OVR all 8 reps: range 14.2in, mean 0.72, peak 1.04. Forge found 8 of 8 reps; range 27.6cm against 36.07cm (-23.5% as filmed), " +
       "mean 0.66, peak 0.99. Round nineteen.",
+  },
+  {
+    id: "2026-11-17-single-arm-dumbbell-row-right-set-2",
+    date: "2026-11-17",
+    build: 781,
+    exercise: "Single-Arm Dumbbell Row",
+    filmedOnCommit: "a54d93ef",
+    candidates: [
+      { source: "body_3d", scaleX1000: 2.71585 },
+      { source: "depth", scaleX1000: 1.76165 },
+      { source: "shoulder_width", scaleX1000: 5.62203 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.6, shoulder_width: 0.22 },
+    heightRulerVotedAsFilmed: false,
+    shippedScaleX1000: 3.967872017564373,
+    reportedRomCm: 45.3,
+    sensorRomCm: 45.9,
+    liveErrorPct: -2.95,
+    notes:
+      "70lb x 8, right arm first, set 2, the first row filmed on round nineteen's rules; OVR reps 1-8 (rep 9 a setup rep). Forge counted 8 of 8 " +
+      "(pull 1 returned out of the pickup and left out of the set's numbers), so the truth is OVR reps 2-8, 45.90cm; range 45.3cm (-1.3% as filmed), " +
+      "mean 1.02 against ~0.947, peak 1.88. Round twenty.",
+  },
+  {
+    id: "2026-11-17-single-arm-dumbbell-row-left-set-2",
+    date: "2026-11-17",
+    build: 781,
+    exercise: "Single-Arm Dumbbell Row",
+    filmedOnCommit: "a54d93ef",
+    candidates: [
+      { source: "body_3d", scaleX1000: 1.90141 },
+      { source: "depth", scaleX1000: 0.8266 },
+      { source: "shoulder_width", scaleX1000: 3.31286 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.6, shoulder_width: 0.22 },
+    heightRulerVotedAsFilmed: false,
+    shippedScaleX1000: 2.4568681716118203,
+    reportedRomCm: 48.4,
+    sensorRomCm: 41.95,
+    liveErrorPct: 13.77,
+    notes:
+      "70lb x 8, left arm second, set 2; OVR reps 10-17. Forge counted 8 of 8, so the truth is OVR reps 11-17, 41.95cm; range 48.4cm " +
+      "(+15.4% as filmed), mean 1.11 against ~0.909, peak 1.48. The dumbbell was seen on 56 of ~1072 frames. Round twenty.",
+  },
+  {
+    id: "2026-11-17-dumbbell-shoulder-press-set-2",
+    date: "2026-11-17",
+    build: 781,
+    exercise: "Dumbbell Shoulder Press",
+    filmedOnCommit: "a54d93ef",
+    candidates: [
+      { source: "body_3d", scaleX1000: 2.94995 },
+      { source: "depth", scaleX1000: 3.91082 },
+      { source: "height", scaleX1000: 2.77676 },
+      { source: "shoulder_width", scaleX1000: 3.55581 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.08, depth: 0.6, height: 0.4, shoulder_width: 0.4 },
+    heightRulerVotedAsFilmed: true,
+    shippedScaleX1000: 2.9794615836207343,
+    reportedRomCm: 59.2,
+    sensorRomCm: 54.04,
+    liveErrorPct: 9.1,
+    notes:
+      "30lb x 8, set 2; the OVR (labelled Push Press) counted its first 3 as setup reps (Scott), so reps 4-11: range 54.04cm, mean 1.0075, peak 1.514. " +
+      "Forge counted 8 of 8 (the press out of the clean returned and left out of the set's numbers); range 59.2cm (+9.5% as filmed), mean 1.2, peak 1.92. Round twenty.",
   },
 ];
 

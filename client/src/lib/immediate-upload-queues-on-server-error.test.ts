@@ -9,10 +9,11 @@ import { isPermanentUploadRejection } from "./upload-rejection";
 const src = readFileSync(join(process.cwd(), "client/src/lib/video-offline-store.ts"), "utf8");
 
 describe("an immediate upload that meets a server error is queued, not thrown away", () => {
-  it("classifies with isPermanentUploadRejection before rethrowing", () => {
+  it("queues every refusal and rethrows none (2026-11-17: nothing is thrown away)", () => {
     const fn = src.slice(src.indexOf("export async function uploadOrQueueVideo"), src.indexOf("async function uploadPendingEntry"));
-    expect(fn).toContain("isPermanentUploadRejection(status, code)");
-    expect(fn).not.toMatch(/if \(err instanceof ApiError\) throw err;/);
+    const catchAt = fn.indexOf("upload FAILED");
+    expect(catchAt).toBeGreaterThan(-1);
+    expect(fn.slice(catchAt)).not.toMatch(/throw err;/);
   });
   it("treats 500, 502, 503, 429 and 401 as retryable and a plain 400 as permanent", () => {
     for (const s of [500, 502, 503, 429, 401, 408]) expect(isPermanentUploadRejection(s)).toBe(false);

@@ -67,9 +67,9 @@ describe("the code survives the trip from the server", () => {
     expect(src).toContain("new ApiError(res.status, message, code)");
   });
 
-  it("is passed into the classifier by both queues", async () => {
+  it("is passed into the classifier by the video queue (the workout queue drops nothing since 2026-11-17)", async () => {
     const fs = await import("node:fs");
-    for (const f of ["offline-queue.ts", "video-offline-store.ts"]) {
+    for (const f of ["video-offline-store.ts"]) {
       const src = fs.readFileSync(new URL("./" + f, import.meta.url), "utf8");
       expect(src, f).toContain("err instanceof ApiError ? err.code : undefined");
       expect(src, f).toMatch(/isPermanentUploadRejection\(status, code\)/);

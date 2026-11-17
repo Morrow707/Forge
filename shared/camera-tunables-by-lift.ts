@@ -385,12 +385,12 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
     biacromialToleranceFraction: 0.4,
     heightRulerUncertainty: 0.4,
     depthRulerUncertainty: 0.6,
-    body3DCorrectedUncertainty: 0.08,
+    body3DCorrectedUncertainty: 0.06,
     driveOnsetFraction: 0,
     maxPeakToMeanRatio: 1.6,
   },
   "Bench Press": { body3DCorrectedUncertainty: 0.35, depthRulerUncertainty: 0.1, driveOnsetFraction: 0.03 },
-  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0.01, biacromialToleranceFraction: 0.22 },
+  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0.01, biacromialToleranceFraction: 0.23 },
 };
 
 /** THE VELOCITY OVERRIDES REMOVED ON 2026-11-05, AND WHY -- kept as data so the next reader does
@@ -551,7 +551,12 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
     "moves, since each reads its own record.",
   "Dumbbell Shoulder Press":
-    "2026-11-17, round nineteen, build 772 (35lb x8 on the OVR, its first three reps set-up on Scott's " +
+    "2026-11-17, round twenty, set 2 on build 781 (30lb x8, OVR reps 4-11: 54.04cm, mean 1.0075, peak 1.514): " +
+    "body3DCorrectedUncertainty 0.08 -> 0.06, round nineteen's named next step. Range of motion through the " +
+    "blend: today +9.55 -> +9.10, set 1 +6.87 -> +5.98, 11-10 sets 1/2/3 +22.36/+1.78/+7.25 -> " +
+    "+21.27/+0.77/+6.06, 11-06 +17.40 -> +15.74 -- all six closer, average 10.87 -> 9.82. Counted 8 of 8. " +
+    "Mean +19% and peak +27% on this take are about +9.5 points of scale and the rest window; not fitted. " +
+    "PRIOR: 2026-11-17, round nineteen, build 772 (35lb x8 on the OVR, its first three reps set-up on Scott's " +
     "word): body3DCorrectedUncertainty 0.12 -> 0.08 and maxPeakToMeanRatio 2.0 -> 1.6 (the sensor's own " +
     "peak over mean is 1.56). Range of motion through the blend: today +9.11 -> +6.87, 11-06 +21.6 -> " +
     "+17.4, 11-10 set 1 +25.1 -> +22.36, set 2 +4.32 -> +1.78, set 3 +10.25 -> +7.25 -- all five closer, " +
@@ -640,7 +645,12 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "0.04, and +33.1% and +4.6% at 0.03; both takes move toward the sensor, no rep count moves, and " +
     "the peak does not move. 0.02 is the next step.",
   "Single-Arm Dumbbell Row":
-    "2026-11-17, round nineteen, build 772 (70lb x8 a side, right arm first: the OVR's reps 1-8 right, " +
+    "2026-11-17, round twenty, set 2 on build 781 (OVR reps 2-8 right 45.90cm, reps 11-17 left 41.95cm): " +
+    "biacromialToleranceFraction 0.22 -> 0.23. Left +15.38 -> +13.77, right -1.31 -> -2.95; across all eight " +
+    "row sets average 12.76 -> 12.60, wobble 17.89 -> 17.23. The two sides of one take need scales about 1.9x " +
+    "apart (right 4.02e-3, left 2.13e-3), which no shared constant can serve (Rule #5); 0.25 and 0.3 cost more " +
+    "than they gave. Both sides counted 8 of 8. " +
+    "PRIOR: 2026-11-17, round nineteen, build 772 (70lb x8 a side, right arm first: the OVR's reps 1-8 right, " +
     "10-17 left, rep 9 set-up): biacromialToleranceFraction 0.2 -> 0.22 on this lift only. The bigger " +
     "move is a BUG, not a setting: the dialog judged the shoulder ruler against a wrist-to-wrist grip a " +
     "one-arm lift does not have (gripForRulers, av-bar-tracker-dialog.tsx), which loosened it to 0.44-0.46 " +

@@ -76,7 +76,7 @@ describe("every exit of the video flush writes a line", () => {
 
   it("logs the count, every skip, every success, every drop and every retry", () => {
     const fn = flush();
-    for (const line of ["flush: ", "flush SKIPPED", "flush ok", "flush DROPPED", "flush retry"]) {
+    for (const line of ["flush: ", "flush SKIPPED", "flush ok", "flush HELD", "flush retry"]) {
       expect(fn, `the flush has no "${line}" line`).toContain(line);
     }
   });
@@ -120,19 +120,21 @@ describe("every exit of the video flush writes a line", () => {
     // offline-queue.ts settled these four words in build 620. Two queues on one phone using
     // different manners for the same four outcomes is a console nobody can skim.
     const logQueue = read("client/src/lib/offline-queue.ts");
-    for (const word of ["flush ok", "flush DROPPED", "flush SKIPPED", "flush retry"]) {
+    for (const word of ["flush ok", "flush HELD", "flush SKIPPED", "flush retry"]) {
       expect(logQueue, `the log queue lost "${word}"`).toContain(word);
       expect(flush(), `the video queue lost "${word}"`).toContain(word);
     }
   });
 
-  it("changes nothing about which entries are attempted, dropped or kept", () => {
-    // Rule #1's reading for the save path applies to the clip: this commit is an instrument,
-    // not a policy. The drop is still gated on the one shared classifier and nothing else.
+  it("a refused clip is HELD and never deleted off the phone (2026-11-17)", () => {
+    // Reversed on Scott's word after round twenty's bench set 2: "The server should have kept
+    // trying until it was successful, periodic end of story". The classifier only decides which
+    // word the console prints; no refusal reaches clearPersistedVideo.
     const fn = flush();
-    expect(fn).toContain("isPermanentUploadRejection(status, code)");
-    expect(fn).toContain("clearPersistedVideo(entry.id)");
-    // Exactly one place a clip is deleted, and it is behind that classifier.
-    expect(fn.match(/clearPersistedVideo/g) ?? []).toHaveLength(1);
+    const at = fn.indexOf("isPermanentUploadRejection(status, code)");
+    expect(at).toBeGreaterThan(-1);
+    const branch = fn.slice(at, fn.indexOf("} else {", at));
+    expect(branch).toContain("flush HELD");
+    expect(branch).not.toContain("clearPersistedVideo");
   });
 });

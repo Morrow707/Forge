@@ -117,11 +117,51 @@ describe("a 400 holds the set instead of deleting it", () => {
     expect(q.heldRetryIntervalMs(8 * 86_400_000)).toBe(q.HELD_RETRY_INTERVAL_AFTER_A_WEEK_MS);
   });
 
-  it("still drops a 404 or 422 the way it always did", async () => {
+  // REVERSED 2026-11-17 (round twenty's bench set 2, Scott: "The server should have kept trying
+  // until it was successful, periodic end of story"): nothing is dropped any more.
+  it.each([404, 409, 422])("a %i is held on this phone too, never dropped", async (status) => {
     const q = await import("@/lib/offline-queue");
     q.queueLog(DAY, URL, { entries: [{ reps: 10 }] });
-    apiRequest.mockRejectedValueOnce(new ApiError(404, "gone"));
+    apiRequest.mockRejectedValueOnce(new ApiError(status, "no"));
     await q.flushPendingLogs();
+    const left = q.getPendingLogs();
+    expect(left).toHaveLength(1);
+    expect(left[0].heldSince).toBeTruthy();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  const SAVE = {
+    assignmentId: 235,
+    programDayId: 295,
+    date: "2026-11-17",
+    baseRevision: 4,
+    entries: [{ programExerciseId: 7, sets: [{ setNumber: 1 }, { setNumber: 2 }] }],
+  };
+  const respond = (body: unknown) => ({ json: async () => body });
+
+  it("a 409 whose save still carries every set the server holds is re-sent at the server's revision and lands", async () => {
+    const q = await import("@/lib/offline-queue");
+    q.queueLog("235:295:2026-11-17", "/api/admin/my/log", SAVE);
+    apiRequest
+      .mockRejectedValueOnce(new ApiError(409, "stale"))
+      .mockResolvedValueOnce(respond({ log: { revision: 5, entries: [{ programExerciseId: 7, sets: [{ setNumber: 1 }] }] } }))
+      .mockResolvedValueOnce(respond({ ok: true }));
+    await q.flushPendingLogs();
+    expect(apiRequest.mock.calls[1][0]).toBe("GET");
+    expect(apiRequest.mock.calls[1][1]).toBe("/api/admin/my/day?assignmentId=235&programDayId=295&date=2026-11-17");
+    expect(apiRequest.mock.calls[2][2]).toMatchObject({ baseRevision: 5 });
     expect(q.getPendingLogs()).toHaveLength(0);
+  });
+
+  it("a 409 against a day holding a set the save does not is held, not sent over it and not dropped", async () => {
+    const q = await import("@/lib/offline-queue");
+    q.queueLog("235:295:2026-11-17", "/api/admin/my/log", SAVE);
+    apiRequest
+      .mockRejectedValueOnce(new ApiError(409, "stale"))
+      .mockResolvedValueOnce(respond({ log: { revision: 5, entries: [{ programExerciseId: 7, sets: [{ setNumber: 3 }] }] } }));
+    await q.flushPendingLogs();
+    expect(apiRequest).toHaveBeenCalledTimes(2);
+    expect(q.getPendingLogs()).toHaveLength(1);
+    expect(q.getPendingLogs()[0].heldSince).toBeTruthy();
   });
 });
