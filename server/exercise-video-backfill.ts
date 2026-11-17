@@ -95,6 +95,12 @@ export const DEMO_VIDEO_CHANNELS = [
   // stations and films how each is done. Unverified from the sandbox like every addition: its
   // risk is Rogue's, a catalogue that is mostly race footage, and the next dry run says which.
   "HYROX", // conditioning: sled push and pull, SkiErg, rower, sandbag lunges, carries
+  // Added 2026-11-17 for the sandbag lifts (Sandbag Carry, Sandbag Clean, Sandbag Get-Up): Rogue's
+  // sandbag videos were competition streams. Josh Henkin's Ultimate Sandbag Training channel has
+  // 400+ free videos (Breaking Muscle, 2021); "SandbagFitness" is its older name, and the
+  // resolver's search fallback is what finds it if the handle has changed. Unverified from the
+  // sandbox: a catalogue of 0 on the next dry run means it needs its UC... channel ID instead.
+  "SandbagFitness", // sandbag: cleans, carries, get-ups, lunges
 ];
 
 /**
