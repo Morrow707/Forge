@@ -85,6 +85,11 @@ export const ALIASES: Record<string, string> = {
   glute: "glutes",
   forearm: "forearms",
   med: "medicine",
+  // A yoga channel names a stretch a pose: "Lizard Pose" is the library's Lizard Stretch and
+  // "Pigeon Pose" its Pigeon Stretch (2026-11-17, for the chaptered mobility routines). Both
+  // sides fold, so the library's own Child's Pose still matches a "Child's Pose" title.
+  pose: "stretch",
+  poses: "stretch",
 };
 
 /**

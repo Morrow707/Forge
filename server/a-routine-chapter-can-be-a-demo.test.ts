@@ -91,5 +91,20 @@ describe("the channel list", () => {
     const { DEMO_VIDEO_CHANNELS } = await import("./exercise-video-backfill");
     expect(DEMO_VIDEO_CHANNELS).toContain("search:Tom Merrick");
     expect(DEMO_VIDEO_CHANNELS).toContain("search:Tom Morrison");
+    expect(DEMO_VIDEO_CHANNELS).toContain("search:Yoga With Adriene");
+  });
+});
+
+describe("a yoga pose is the library's stretch", () => {
+  it("Lizard Pose and Pigeon Pose reach Lizard Stretch and Pigeon Stretch, and Child's Pose still matches itself", () => {
+    const lib2 = [...LIBRARY, lib("Pigeon Stretch", "Bodyweight", ["Glutes"]), lib("Child's Pose", "Bodyweight", ["Back"])];
+    const run = runSignatureMatch(
+      lib2,
+      [chapter("Lizard Pose", 10, 50), chapter("Pigeon Pose", 60, 100), chapter("Child's Pose", 120, 160)],
+      200,
+    );
+    expect(run.chosen.get("Lizard Stretch")?.title).toBe("Lizard Pose");
+    expect(run.chosen.get("Pigeon Stretch")?.title).toBe("Pigeon Pose");
+    expect(run.chosen.get("Child's Pose")?.title).toBe("Child's Pose");
   });
 });

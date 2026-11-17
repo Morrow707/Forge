@@ -117,6 +117,11 @@ export const DEMO_VIDEO_CHANNELS = [
   // mobility routines and drills. Same terms as Tom Merrick: found by name, every win a Tier B
   // chapter, and the chapters column on the next dry run says whether he labels them.
   "search:Tom Morrison", // mobility: hip, shoulder and spine drills, as chaptered routines
+  // Added 2026-11-17, the third chaptered mobility channel: several missing stretches are yoga
+  // poses by another name (Lizard, Pigeon, Child's Pose, Thread the Needle, Downward Dog), and
+  // Yoga With Adriene's longer classes are routines. "pose" folds to "stretch" in ALIASES so
+  // "Lizard Pose" reaches Lizard Stretch. Same terms: found by name, every win a Tier B chapter.
+  "search:Yoga With Adriene", // yoga poses that are the library's stretches, as chaptered classes
 ];
 
 /**
