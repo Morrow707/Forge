@@ -6846,6 +6846,27 @@ export const aiUsageDaily = pgTable(
 );
 export type AiUsageDaily = typeof aiUsageDaily.$inferSelect;
 
+// What each account's AI calls cost this calendar month (UTC), for the monthly ceiling in
+// server/ai-monthly-cap.ts. Dollars rather than tokens, unlike ai_usage_daily above, because this
+// is a budget and a budget has to be one number it can be compared against; it is priced at the
+// rates in server/ai-usage.ts when each call returns, and a rate change only moves the months after.
+export const aiAccountSpendMonthly = pgTable(
+  "ai_account_spend_monthly",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // "2026-11"
+    month: text("month").notNull(),
+    // Millionths of a dollar, so a Haiku call worth a tenth of a cent still adds up.
+    usdMicro: bigint("usd_micro", { mode: "number" }).notNull().default(0),
+    calls: integer("calls").notNull().default(0),
+  },
+  (table) => ({
+    userMonthUnique: uniqueIndex("ai_account_spend_monthly_user_month_unique").on(table.userId, table.month),
+  }),
+);
+
 // ---------- Cohort norms ----------
 //
 // Distributions per sport, position, age band and sex, recomputed nightly

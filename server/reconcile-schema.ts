@@ -3971,6 +3971,15 @@ CREATE TABLE IF NOT EXISTS "feature_first_seen" (
   "first_seen" date NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "feature_first_seen_unique" ON "feature_first_seen" ("kind", "feature");
+
+-- What each account's AI calls cost this month, for the monthly ceiling (server/ai-monthly-cap.ts).
+CREATE TABLE IF NOT EXISTS "ai_account_spend_monthly" (
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "month" text NOT NULL,
+  "usd_micro" bigint NOT NULL DEFAULT 0,
+  "calls" integer NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "ai_account_spend_monthly_user_month_unique" ON "ai_account_spend_monthly" ("user_id", "month");
 `;
 
 async function main() {

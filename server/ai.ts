@@ -1,5 +1,6 @@
-import { takeAiCall } from "./ai-daily-limit";
-import { recordAiUsage } from "./ai-usage";
+import { currentAiActor, markMonthlyCapReached, takeAiCall } from "./ai-daily-limit";
+import { addMonthSpend, monthlyCapUsdFor, monthSpendUsd } from "./ai-monthly-cap";
+import { estimateUsd, recordAiUsage } from "./ai-usage";
 import type { AiProvider, NeutralRequest, NeutralResponse } from "./ai-provider";
 import { recordSystemFailure, recordSystemSuccess } from "./system-events";
 
@@ -115,10 +116,33 @@ async function callAnthropic(
 ): Promise<any | null> {
   // The per-account daily ceiling -- see server/ai-daily-limit.ts for why it lives here and why
   // it answers empty instead of throwing.
+  // The monthly dollar ceiling -- see server/ai-monthly-cap.ts. Read before the daily count so a
+  // call it turns away is not also counted against the day.
+  const actor = currentAiActor();
+  const monthlyCap = actor ? monthlyCapUsdFor(actor) : null;
+  if (actor && monthlyCap != null && (await monthSpendUsd(actor.id)) >= monthlyCap) {
+    console.warn(`AI monthly cap reached for account ${actor.id}; ${feature} call not sent`);
+    markMonthlyCapReached();
+    return null;
+  }
   if (!takeAiCall()) {
     console.warn(`AI daily limit reached for an account; ${feature} call not sent`);
     return null;
   }
+  // Every answer is billed, including one cut off at max_tokens that the app then discards, so the
+  // month's spend is added for both.
+  const chargeAccount = (data: any) => {
+    if (!actor || monthlyCap == null) return;
+    const u = data?.usage ?? {};
+    const usd = estimateUsd({
+      model: String(body.model ?? "unknown"),
+      inputTokens: Number(u.input_tokens ?? 0),
+      outputTokens: Number(u.output_tokens ?? 0),
+      cacheReadTokens: Number(u.cache_read_input_tokens ?? 0),
+      cacheWriteTokens: Number(u.cache_creation_input_tokens ?? 0),
+    });
+    if (usd != null) void addMonthSpend(actor.id, usd);
+  };
   const timeoutMs = requestTimeoutMs(body.max_tokens);
   for (let attempt = 0; attempt <= 1; attempt++) {
     try {
@@ -154,6 +178,7 @@ async function callAnthropic(
         return null;
       }
       const data = await res.json();
+      chargeAccount(data);
       // A response cut off mid-generation means the text/tool `input` is
       // incomplete or truncated-garbage JSON -- treating that as a real
       // result is how a truncated "emit the complete structure" response

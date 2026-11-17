@@ -181,6 +181,10 @@ export const ANVIL_SIGNAL_TABLES: Record<string, string> = {
  * than an omission nobody can see.
  */
 export const NOT_A_SIGNAL_TABLE: Record<string, string> = {
+  // A BUDGET, NOT A MEASUREMENT (2026-11-17). What one account's AI calls cost Forge this month,
+  // kept so no subscriber can cost more than the plan pays (server/ai-monthly-cap.ts).
+  ai_account_spend_monthly:
+    "What an account's AI calls cost Forge this month, for the monthly spending ceiling (server/ai-monthly-cap.ts). A billing figure about Forge's costs, not anything the athlete did or measured.",
   // A TARGET, NOT A MEASUREMENT (2026-11-11). A velocity zone is the bar speed somebody chose to
   // train at; the camera speeds it is read against are already the Anvil's through
   // workout_set_entries. The zone says what a coach or athlete wanted, which describes no morning.

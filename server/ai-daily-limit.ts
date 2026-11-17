@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { RequestHandler } from "express";
+import { AI_MONTHLY_CAP_MESSAGE } from "./ai-monthly-cap";
 
 // A DAILY CEILING ON MODEL CALLS PER ACCOUNT, AT THE ONE POINT EVERY CALL PASSES THROUGH.
 //
@@ -30,8 +31,10 @@ export const AI_DAILY_LIMIT_STATUS = 429;
 export const AI_DAILY_LIMIT_MESSAGE =
   "You've reached today's limit for AI requests. It resets at midnight UTC, and everything else in Forge still works.";
 
-type Actor = { id: number; role: string };
-type RequestState = { actor: () => Actor | null; refused: boolean };
+type Actor = { id: number; role: string; freeAgentTier?: string | null };
+// Which ceiling turned a call away, so the 429 names the right one (the monthly ceiling lives in
+// ai-monthly-cap.ts and refuses through markMonthlyCapReached below).
+type RequestState = { actor: () => Actor | null; refused: boolean; refusedFor?: "daily" | "monthly" };
 
 const scope = new AsyncLocalStorage<RequestState>();
 const counts = new Map<number, { day: string; calls: number }>();
@@ -50,10 +53,24 @@ export function takeAiCall(now: Date = new Date()): boolean {
   const calls = held && held.day === day ? held.calls : 0;
   if (calls >= AI_CALLS_PER_ACCOUNT_PER_DAY) {
     state.refused = true;
+    state.refusedFor = "daily";
     return false;
   }
   counts.set(actor.id, { day, calls: calls + 1 });
   return true;
+}
+
+/** The account this request is for, or null outside a request. Read by the monthly ceiling. */
+export function currentAiActor(): Actor | null {
+  return scope.getStore()?.actor() ?? null;
+}
+
+/** The monthly ceiling turned this request's call away: answer it with that sentence. */
+export function markMonthlyCapReached(): void {
+  const state = scope.getStore();
+  if (!state) return;
+  state.refused = true;
+  state.refusedFor = "monthly";
 }
 
 /** Runs `fn` as a request by this account would. For tests and for nothing else. */
@@ -77,8 +94,8 @@ const FIRST_FAILURE_STATUS = 400;
 export const aiDailyLimitScope: RequestHandler = (req, res, next) => {
   const state: RequestState = {
     actor: () => {
-      const user = (req as { user?: { id?: number; role?: string } }).user;
-      return user?.id && user.role ? { id: user.id, role: user.role } : null;
+      const user = (req as { user?: { id?: number; role?: string; freeAgentTier?: string | null } }).user;
+      return user?.id && user.role ? { id: user.id, role: user.role, freeAgentTier: user.freeAgentTier ?? null } : null;
     },
     refused: false,
   };
@@ -86,6 +103,7 @@ export const aiDailyLimitScope: RequestHandler = (req, res, next) => {
   res.json = ((body?: unknown) => {
     if (state.refused && res.statusCode >= FIRST_FAILURE_STATUS) {
       res.status(AI_DAILY_LIMIT_STATUS);
+      if (state.refusedFor === "monthly") return send({ message: AI_MONTHLY_CAP_MESSAGE, aiMonthlyCap: true });
       return send({ message: AI_DAILY_LIMIT_MESSAGE, aiDailyLimit: true });
     }
     return send(body);
