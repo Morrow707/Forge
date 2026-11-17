@@ -112,6 +112,11 @@ export const DEMO_VIDEO_CHANNELS = [
   // Found by name ("search:") because his handle has changed over the years. Unverified from the
   // sandbox; the dry run's chapters column says whether his descriptions carry chapters at all.
   "search:Tom Merrick", // mobility: hips, hamstrings, shoulders, spine, as chaptered routines
+  // Added 2026-11-17, the second chaptered mobility channel, so the stretches do not rest on one
+  // uploader's habits: Tom Morrison (the Simplistic Mobility Method, tommorrison.uk) posts
+  // mobility routines and drills. Same terms as Tom Merrick: found by name, every win a Tier B
+  // chapter, and the chapters column on the next dry run says whether he labels them.
+  "search:Tom Morrison", // mobility: hip, shoulder and spine drills, as chaptered routines
 ];
 
 /**

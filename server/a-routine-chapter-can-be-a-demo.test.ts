@@ -90,5 +90,6 @@ describe("the channel list", () => {
   it("carries a chaptered mobility channel, found by name", async () => {
     const { DEMO_VIDEO_CHANNELS } = await import("./exercise-video-backfill");
     expect(DEMO_VIDEO_CHANNELS).toContain("search:Tom Merrick");
+    expect(DEMO_VIDEO_CHANNELS).toContain("search:Tom Morrison");
   });
 });
