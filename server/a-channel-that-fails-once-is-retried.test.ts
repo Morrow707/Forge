@@ -73,3 +73,32 @@ describe("a channel named by search", () => {
     expect(calls[0]).toContain("q=EliteFTS");
   });
 });
+
+describe("YouTube's per-minute throttle", () => {
+  it("a 429 is waited out and retried, not reported as a spent day", async () => {
+    const real = await vi.importActual<typeof import("./youtube-catalog")>("./youtube-catalog");
+    real.setRateLimitWaitForTests(0);
+    vi.stubEnv("YOUTUBE_API_KEY", "test-key");
+    let n = 0;
+    vi.stubGlobal("fetch", async () => {
+      n += 1;
+      if (n === 1) return new Response('{"error":{"errors":[{"reason":"rateLimitExceeded"}]}}', { status: 429 });
+      return new Response(JSON.stringify({ items: [{ id: "UCbbbbbbbbbbbbbbbbbbbbbb", snippet: { title: "GMB Fitness" }, contentDetails: { relatedPlaylists: { uploads: "UU2" } } }] }), { status: 200 });
+    });
+    const ch = await real.resolveChannel("GMBFitness", { units: 0, calls: 0 });
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    expect(ch?.uploadsPlaylistId).toBe("UU2");
+    expect(n).toBe(2);
+  });
+});
+
+describe("whose chapters are read", () => {
+  it("only the routine and technique channels, never a commentary channel's", async () => {
+    const { CHAPTER_CHANNELS, DEMO_VIDEO_CHANNELS, CHANNELS_CUT_ON_EVIDENCE } = await import("./exercise-video-backfill");
+    for (const h of CHAPTER_CHANNELS) expect(DEMO_VIDEO_CHANNELS, h).toContain(h);
+    expect(CHAPTER_CHANNELS.has("RenaissancePeriodization")).toBe(false);
+    expect(CHAPTER_CHANNELS.has("bodybuildingcom")).toBe(false);
+    expect(CHANNELS_CUT_ON_EVIDENCE).toContain("HYROX");
+  });
+});

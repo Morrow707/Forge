@@ -329,7 +329,7 @@ export async function searchForUnmatched(
       // admin YouTube had no such video. It waits for the next run. When the reason is the day's
       // quota (youtube-catalog puts YouTube's reason in the message) every uncached search after
       // it would fail the same way, so they wait too; a one-off error lets the run carry on.
-      if (/quotaExceeded|dailyLimitExceeded|rateLimitExceeded/.test(String((err as Error)?.message ?? err))) quotaGone = true;
+      if (/quotaExceeded|dailyLimitExceeded/.test(String((err as Error)?.message ?? err))) quotaGone = true;
       remaining.push(name);
       continue;
     }

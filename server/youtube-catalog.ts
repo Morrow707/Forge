@@ -43,6 +43,13 @@ function apiKey(): string {
   return key;
 }
 
+const RATE_LIMIT_RETRIES = 2;
+let rateLimitWaitMs = 10_000;
+/** Tests only: how long a 429 is waited out before the retry. */
+export function setRateLimitWaitForTests(ms: number): void {
+  rateLimitWaitMs = ms;
+}
+
 async function get(
   path: string,
   params: Record<string, string>,
@@ -52,7 +59,15 @@ async function get(
   const url = new URL(`${API}/${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   url.searchParams.set("key", apiKey());
-  const res = await fetch(url);
+  /* A 429 "rateLimitExceeded" is YouTube's per-minute throttle, NOT the daily quota
+   * (quotaExceeded / dailyLimitExceeded). On 2026-11-17 two channel lookups in a row got it and
+   * the run gave up on both as if the day were spent. It is waited out here, twice at most. */
+  let res = await fetch(url);
+  for (let attempt = 0; res.status === 429 && attempt < RATE_LIMIT_RETRIES; attempt++) {
+    ledger.calls += 1;
+    await new Promise((r) => setTimeout(r, rateLimitWaitMs * (attempt + 1)));
+    res = await fetch(url);
+  }
   ledger.units += cost;
   ledger.calls += 1;
   if (!res.ok) {

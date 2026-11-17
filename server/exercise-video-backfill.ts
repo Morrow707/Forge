@@ -90,17 +90,14 @@ export const DEMO_VIDEO_CHANNELS = [
   // exists for.
   "roguefitness", // strongman: sandbag, stone, sled, log, carries
   "CrossFit", // conditioning: sled, rower, assault bike, battle rope, wall ball
-  // Added 2026-11-17 for what CrossFit did not reach: the sled lifts (Sled Row, Sled Backward
-  // Drag, Prowler Push) and the machines (assault bike, SkiErg, rower). HYROX races exactly those
-  // stations and films how each is done. Unverified from the sandbox like every addition: its
-  // risk is Rogue's, a catalogue that is mostly race footage, and the next dry run says which.
-  "HYROX", // conditioning: sled push and pull, SkiErg, rower, sandbag lunges, carries
   // Added 2026-11-17 for the sandbag lifts (Sandbag Carry, Sandbag Clean, Sandbag Get-Up): Rogue's
   // sandbag videos were competition streams. Josh Henkin's Ultimate Sandbag Training channel has
   // 400+ free videos (Breaking Muscle, 2021); "SandbagFitness" is its older name, and the
   // resolver's search fallback is what finds it if the handle has changed. Unverified from the
   // sandbox: a catalogue of 0 on the next dry run means it needs its UC... channel ID instead.
-  "SandbagFitness", // sandbag: cleans, carries, get-ups, lunges
+  // 2026-11-17 dry run: "SandbagFitness" resolved to a 9-video channel, the old one, so it is
+  // found by its current name instead.
+  "search:Ultimate Sandbag Training", // sandbag: cleans, carries, get-ups, lunges
   // Added 2026-11-17 for the bench variations nothing else films (Paused Bench, Pin Press, Larsen
   // Press, Spoto Press, Swiss Bar Bench). EliteFTS is a powerlifting site with a filmed exercise
   // index. It was cut on 2026-09-28 for a LOOKUP failure, never a content verdict: the handle
@@ -130,6 +127,26 @@ export const DEMO_VIDEO_CHANNELS = [
 ];
 
 /**
+ * WHICH CHANNELS' CHAPTERS ARE READ. Not all of them, on the first chaptered dry run's evidence
+ * (2026-11-17): Renaissance Periodization's chapters won five lifts and every one was a slice of a
+ * critique or gym vlog -- "The Worst Shoulder Exercises People Still Do" for Barbell Shoulder
+ * Press, "Exercise Scientist Critiques Eddie Hall" for Med Ball Slam, "Training At The CRAZIEST
+ * GYM" for Machine Row and Assisted Pull-Up. A chapter there is a lift being TALKED ABOUT, often
+ * as a bad example. Bodybuilding.com's were workout vlogs. The channels below post routines,
+ * technique breakdowns and rehab sequences, where a chapter is the movement demonstrated:
+ * elitefts' won Paused Bench, Spoto Press and Pin Squat, [P]rehab's the wrist extensor stretch.
+ * Every other channel's chapters are dropped before matching. A handle, exactly as listed above.
+ */
+export const CHAPTER_CHANNELS: ReadonlySet<string> = new Set([
+  "ThePrehabGuys",
+  "search:EliteFTS",
+  "search:Tom Merrick",
+  "search:Tom Morrison",
+  "search:Yoga With Adriene",
+  "search:GMB Fitness",
+]);
+
+/**
  * CUT, AND WHY -- so nobody re-adds them on the strength of the brand.
  *
  * - `GarageStrength` (2026-09-28, second run): 4,000 videos loaded, ONE match at 0:37. Content
@@ -152,6 +169,9 @@ export const DEMO_VIDEO_CHANNELS = [
  *   podcasts and interviews rather than demonstrations. The same test Squat University failed.
  */
 export const CHANNELS_CUT_ON_EVIDENCE = [
+  // 2026-11-17: 614 videos, 0 wins, 0 chapters -- race footage and athlete features, the same
+  // content verdict as Rogue's streams, without Rogue's three demos to keep it.
+  "HYROX",
   "GarageStrength",
   "TNationTV",
   "athleanx",
@@ -370,7 +390,7 @@ export function watchUrlFor(videoId: string, startSeconds?: number, endSeconds?:
  */
 export const CATALOGUE_CACHE_HOURS = 24;
 /** YouTube's reasons for "the day's allowance is spent"; retrying those only spends calls. */
-const QUOTA_GONE = /quotaExceeded|dailyLimitExceeded|rateLimitExceeded/;
+const QUOTA_GONE = /quotaExceeded|dailyLimitExceeded/;
 export const SEARCH_CACHE_HOURS = 24 * 7;
 const CACHE_DIR = join(tmpdir(), "forge-youtube-cache");
 
@@ -495,6 +515,9 @@ export async function planExerciseVideoBackfill(options?: {
       continue;
     }
     // The catalogue is the channel's videos; its chapters are counted on their own.
+    if (!CHAPTER_CHANNELS.has(handle)) {
+      result.videos = result.videos.filter((v) => v.startSeconds == null);
+    }
     catalogueSizes.set(result.channel, result.videos.filter((v) => v.startSeconds == null).length);
     chapterCounts.set(result.channel, result.videos.filter((v) => v.startSeconds != null).length);
     if (result.truncated) truncatedChannels.add(result.channel);
