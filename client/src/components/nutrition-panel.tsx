@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioChipGroup } from "@/components/filter-chip-group";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 import { Sparkles, Apple, Target } from "lucide-react";
 import { FoodLogPanel } from "@/components/food-log-panel";
 import { NutritionTrendPanel } from "@/components/nutrition-trend-panel";
@@ -202,6 +203,7 @@ export function NutritionPanel({
     onError: (err: ApiError) => toast.error(err.message || "Couldn't save"),
   });
 
+  const [, navigate] = useLocation();
   const askMutation = useMutation({
     // Takes the text as an argument rather than reading `question` from
     // state. Clicking a clarifying-question option called setQuestion() and
@@ -226,7 +228,10 @@ export function NutritionPanel({
     // app broke"; the server's own message explains what it actually is.
     onError: (err: ApiError) =>
       err.status === 402
-        ? toast.info(err.message || "This one's a paid upgrade, coming soon.")
+        ? // It is on sale now, so the answer names the plan and offers the way to it (2026-11-17).
+          toast.info(err.message || "The nutrition assistant is included in AI Coach.", {
+            action: { label: "See plans", onClick: () => navigate("/athlete/upgrade") },
+          })
         : toast.error(err.message || "Couldn't get an answer"),
   });
 

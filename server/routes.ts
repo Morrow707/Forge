@@ -169,6 +169,7 @@ import {
   FREE_AGENT_ADD_ONS,
   BUILT_FREE_AGENT_ADD_ONS,
   ALL_CLASSES_ADD_ON_ID,
+  VIDEO_STORAGE_ADD_ON_ID,
   SPORT_COACH_ADD_ON_IDS,
   FREE_AGENT_ADD_ON_ORDER,
   type FreeAgentAddOnId,
@@ -5257,7 +5258,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // "Full function" AI form check -- see storage.submitFormCheck for why
   // this is the one place the AI critiques technique with no human review
-  // step, and why that's gated on the program already being AI-authored.
+  // step. Any program since 2026-11-17 (it was AI-built programs only, which
+  // refused every Forge template and hand-built program).
   app.post("/api/admin/programs/:id/form-check", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
@@ -5306,7 +5308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       parsed.data.images,
       parsed.data.trackedMetrics,
     );
-    if (!result) return res.status(400).json({ message: "This program isn't AI-authored yet" });
+    if (!result) return res.status(404).json({ message: "Program not found" });
     res.status(201).json(result);
   });
 
@@ -12835,7 +12837,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const coaches = await storage.getCoachesForAthlete(user.id);
     const coach = coaches[0];
-    if (!coach) return res.json([]);
+    // A Free Agent has no coach: their lifts are on their own days (2026-11-17).
+    if (!coach) return res.json(await storage.getOwnExercisesWithHistory(user.id));
     const list = await storage.getExercisesWithHistoryForAthlete(coach.id, user.id);
     res.json(list);
   });
@@ -14139,7 +14142,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // "Full function" AI form check -- see storage.submitFormCheck for why
   // this is the one place the AI critiques technique with no human review
-  // step, and why that's gated on the program already being AI-authored.
+  // step. Any program since 2026-11-17 (it was AI-built programs only, which
+  // refused every Forge template and hand-built program).
   app.post(
     "/api/athlete/programs/:id/form-check",
     requireRole("athlete"),
@@ -14148,8 +14152,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       const user = currentUser(req);
       const id = Number(req.params.id);
+      // Any program the athlete trains from: their own (the answer is kept in its chat) or one
+      // on their calendar, such as a Forge program (the answer is returned to them alone).
       const owned = await assertCoachOwnsProgram(user.id, id);
-      if (!owned) return res.status(404).json({ message: "Program not found" });
+      if (!owned && !(await storage.athleteHasProgramAssigned(user.id, id))) {
+        return res.status(404).json({ message: "Program not found" });
+      }
       const schema = z.object({
         exerciseName: z.string().trim().min(1).max(200),
         images: z
@@ -14198,8 +14206,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         parsed.data.exerciseName,
         parsed.data.images,
         parsed.data.trackedMetrics,
+        !!owned,
       );
-      if (!result) return res.status(400).json({ message: "This program isn't AI-authored yet" });
+      if (!result) return res.status(404).json({ message: "Program not found" });
       res.status(201).json(result);
     },
   );
@@ -15329,9 +15338,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!parsed.success) {
         return res.status(400).json({ message: "Pick an add-on first." });
       }
+      // Storage for video only sells to somebody who can film (2026-11-17).
+      if (parsed.data.addOnId === VIDEO_STORAGE_ADD_ON_ID && !(await cameraAccessFor(user)).allowed) {
+        return res.status(403).json({ message: "Extra Video Storage goes with the AI Coach + Video plan, which is the one that films." });
+      }
+      // Extra Video Storage comes back to the plans screen it was bought from. It used to come
+      // back to /athlete/sport-coaches, a page that has never existed (the sport coaches live at
+      // /athlete/coaches), so a successful purchase landed on "not found" (2026-11-17).
       const { successUrl, cancelUrl } = checkoutReturnUrls(
         req,
-        parsed.data.addOnId === ALL_CLASSES_ADD_ON_ID ? "/athlete/classes" : "/athlete/sport-coaches",
+        parsed.data.addOnId === ALL_CLASSES_ADD_ON_ID ? "/athlete/classes" : "/athlete/upgrade",
       );
       const result = await createFreeAgentAddOnCheckout(
         user.id,

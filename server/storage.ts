@@ -20953,21 +20953,33 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       velocityLossPercent?: number | null;
       trustScores?: { repNumber: number; score: number; label: "high" | "medium" | "low"; notes: string[] }[] | null;
     },
+    // ANY PROGRAM ON THE VIDEO PLAN (2026-11-17). Form check is the reason the $19.99 plan exists,
+    // and it used to refuse every program that was not AI-built -- a Forge template, or one the
+    // athlete built by hand -- with "This program isn't AI-authored yet". The check runs on any
+    // program now. The question and answer are kept in the program's chat only when the athlete
+    // OWNS the program (their own builds); on a Forge program other athletes also train from,
+    // nothing is written there and the answer is returned to the athlete alone.
+    keepInProgramChat = true,
   ) {
     const program = await this.getProgramFull(programId);
-    if (!program || !program.aiAuthored) return null;
+    if (!program) return null;
 
-    const [userMessage] = await db
-      .insert(programChatMessages)
-      .values({
-        programId,
-        authorId,
-        role: "user",
-        content: `[Form check requested: ${exerciseName}]`,
-      })
-      .returning();
+    const userMessage = keepInProgramChat
+      ? (
+          await db
+            .insert(programChatMessages)
+            .values({
+              programId,
+              authorId,
+              role: "user",
+              content: `[Form check requested: ${exerciseName}]`,
+            })
+            .returning()
+        )[0]
+      : null;
 
     const reply = async (text: string) => {
+      if (!keepInProgramChat) return { userMessage, assistantMessage: { content: text } };
       const [assistantMessage] = await db
         .insert(programChatMessages)
         .values({ programId, authorId, role: "assistant", content: text })
@@ -27714,6 +27726,31 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
   // Every distinct exercise this athlete has ever logged at least one set
   // for, scoped to this coach -- not just CV-tracked ones, so the coach can
   // drill into plain weight/PR history too.
+  /** Whether this athlete has this program on their calendar (any assignment of it to them). */
+  async athleteHasProgramAssigned(athleteId: number, programId: number): Promise<boolean> {
+    const [row] = await db
+      .select({ id: assignments.id })
+      .from(assignments)
+      .where(and(eq(assignments.athleteId, athleteId), eq(assignments.programId, programId)))
+      .limit(1);
+    return !!row;
+  },
+
+  /** The lifts an athlete has logged on their OWN days (assignments they made themselves), for a
+   * Free Agent's goal picker. The coach version below reads through a coach's programs, which a
+   * Free Agent has none of, so their picker was always empty (2026-11-17). */
+  async getOwnExercisesWithHistory(athleteId: number) {
+    const rows = await db
+      .selectDistinct({ id: exercises.id, name: exercises.name })
+      .from(workoutSetEntries)
+      .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+      .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+      .innerJoin(assignments, eq(workoutLogs.assignmentId, assignments.id))
+      .innerJoin(exercises, eq(workoutLogEntries.exerciseId, exercises.id))
+      .where(eq(assignments.athleteId, athleteId));
+    return rows.sort((a, b) => a.name.localeCompare(b.name));
+  },
+
   async getExercisesWithHistoryForAthlete(coachId: number, athleteId: number) {
     // Team narrowing: see athleteIsInCoachScope. A narrowed staff coach reads nothing
     // about an athlete who is not on one of their teams.

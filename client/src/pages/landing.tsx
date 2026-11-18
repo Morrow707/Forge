@@ -111,12 +111,12 @@ const AI_CARDS = [
   {
     icon: Video,
     title: "AI Form Check",
-    body: "Film a set on the phone that's already recording it and get feedback on bar path, depth, and rep quality, the same kind of notes a coach standing right there would give.",
+    body: "On AI Coach + Video, film a set on the phone that's already recording it and get feedback on bar path, depth, and rep quality, the same kind of notes a coach standing right there would give.",
   },
   {
     icon: Bot,
     title: "AI Chat Coach",
-    body: "Free Agents get a training partner built into the app, ask a question about today's session and get an answer that already knows the program, the numbers, and the history.",
+    body: "Free Agents on an AI Coach plan get a training partner built into the app, ask a question about today's session and get an answer that already knows the program, the numbers, and the history.",
   },
   {
     icon: Activity,
@@ -126,7 +126,7 @@ const AI_CARDS = [
   {
     icon: Mail,
     title: "Smart Goals & Digests",
-    body: "Ask for a target and get one grounded in actual numbers, then get a plain-language recap of the week without opening a single chart.",
+    body: "Ask for a target and get one grounded in actual numbers, then, on an AI Coach plan, get a plain-language recap of the week without opening a single chart.",
   },
 ];
 
@@ -199,6 +199,9 @@ const FREE_AGENT_CARDS = FREE_AGENT_TIER_ORDER.map((id) => {
     features: [
       "Training and nutrition logging",
       "Exercise library",
+      // Every plan, Basic included: the swap, "make this easier" and the pain substitution are
+      // small model calls kept on Basic on purpose (2026-11-17).
+      "Smart exercise swaps and easier options",
       ...(tier.hasAiChat ? ["AI chat coach", "AI program builder"] : []),
       ...(tier.hasSkills ? ["Skill programs and the Skill Bank", "Timed skill sessions"] : []),
       ...(tier.hasVideoFormCheck
@@ -254,7 +257,7 @@ export default function LandingPage() {
             Perform better.
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
-            Forge is the training platform that builds programs with you, watches every rep
+            Forge is the training platform that builds programs with you, can film your reps
             through the camera already in your pocket, and turns raw sets and reps into
             answers a coach can actually act on.
           </p>
@@ -436,7 +439,7 @@ export default function LandingPage() {
               in seconds.
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Snap a photo, scan a barcode, or type it in, Forge fills in the macros (and the
+              Scan a barcode or type it in (or, on an AI Coach plan, snap a photo), Forge fills in the macros (and the
               micros) automatically and rolls them up against whatever targets the coach set.
               No spreadsheets, no manual math, just a running total that updates the moment
               food gets logged.

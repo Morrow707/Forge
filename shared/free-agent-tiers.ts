@@ -36,7 +36,7 @@ export const FREE_AGENT_TIERS: Record<FreeAgentTierId, FreeAgentTierDef> = {
     label: "Basic",
     monthlyPriceCents: 499,
     description:
-      "Log your training and your nutrition, and browse the exercise library. No AI coach, no skills, no camera.",
+      "Log your training and your nutrition, browse the exercise library, and get smart exercise swaps and easier options when you need them. No AI coach chat, no skills, no camera.",
     hasAiChat: false,
     hasVideoFormCheck: false,
     hasSkills: false,

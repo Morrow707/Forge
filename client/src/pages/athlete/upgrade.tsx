@@ -704,10 +704,15 @@ export default function AthleteUpgrade() {
           </Card>
         )}
         {!supported && !androidNative && <SubscriptionLegalLinks className="mt-4" />}
-        {/* All Classes (2026-10-04): the one add-on on sale, on top of any tier. */}
+        {/* All Classes on any plan. Extra Video Storage only where there is video to store: the
+            Video plan, or somebody who already holds it (so they can still see and manage it).
+            Basic and AI Coach cannot film, so storage was something they could pay for and never
+            use (2026-11-17). */}
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <AllClassesCard />
-          <VideoStorageCard />
+          {(currentTier && FREE_AGENT_TIERS[currentTier].hasVideoFormCheck) || entitlements?.ownedAddOns?.video_storage ? (
+            <VideoStorageCard />
+          ) : null}
         </div>
         <SportCoachAddOns webCheckout={!supported && !androidNative} />
         {supported && !live && (

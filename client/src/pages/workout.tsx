@@ -2550,9 +2550,15 @@ export function WorkoutPage({
   // of this page (an admin's own training) is not an athlete account at all
   // and its AI routes were never gated, so it keeps what it had.
   const athleteAiAllowed = apiBase === "/api/athlete" ? isFreeAgent === true : true;
+  // ANY PROGRAM, NOT ONLY AN AI-BUILT ONE (2026-11-17). With no coach on this day, a Free Agent's
+  // form-check video goes to the AI whatever built the program; the server checks the Video plan
+  // and keeps the answer in the program's chat only when the athlete owns the program.
+  // A coach's own training has no AI form-check route (programsApiBase "/api/coach"), so their
+  // clip stays on the set rather than going to a route that would refuse it.
+  const aiFormCheckRouteExists = programsApiBase !== "/api/coach";
   const videoCheckMode: "comment" | "ai" | "off" = hasCoachForThisProgram
     ? "comment"
-    : data.programAiAuthored && athleteAiAllowed
+    : athleteAiAllowed && aiFormCheckRouteExists
       ? "ai"
       : "off";
   // Exercise substitution is its own always-free feature (see

@@ -219,7 +219,7 @@ export default function PricingPage() {
         <div className="mt-16">
           <h2 className="mb-1 text-center text-xl font-bold">Training on your own?</h2>
           <p className="mb-6 text-center text-sm text-muted-foreground">
-            No coach yet? Get your own AI coach, these tiers are per athlete, not per team.
+            No coach yet? Train on your own: Basic to log, AI Coach for an AI coach, AI Coach + Video to film. Per athlete, not per team.
           </p>
           <div className={cn("grid gap-4", FREE_AGENT_TIER_GRID_COLS)}>
             {FREE_AGENT_TIER_ORDER.map((id) => {
@@ -320,7 +320,8 @@ export default function PricingPage() {
               <span className="font-semibold text-foreground">Video storage is included</span>:{" "}
               every athlete keeps {VIDEO_RETENTION.favoritedCap} favorited clips per exercise or
               skill drill, {VIDEO_RETENTION.totalCap} total on a rolling basis, for both
-              form-check videos and skill clips. The same on every plan, Free Agent or coached.
+              form-check videos and skill clips, on AI Coach + Video and for every coached
+              athlete. Extra Video Storage raises it on the plan that films.
             </p>
           </div>
         </div>

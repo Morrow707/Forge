@@ -98,7 +98,7 @@ export default function ForAthletesPage() {
                 <Apple className="h-6 w-6 text-primary" />
                 <h3 className="mt-4 font-display text-lg font-bold">Fuelling, without the lecture</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Log food by barcode or by photo. Guidance for athletes comes from published
+                  Log food by barcode, or by photo on an AI Coach plan. Guidance for athletes comes from published
                   standards for your age and sport, not from averaging what other people on the
                   app happened to eat, which mostly measures who is under-eating.
                 </p>

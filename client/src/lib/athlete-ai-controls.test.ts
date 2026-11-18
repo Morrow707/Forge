@@ -24,7 +24,9 @@ describe("athlete AI controls follow the account, not the program", () => {
     const workout = read("client/src/pages/workout.tsx");
     expect(workout).toContain("useIsFreeAgent");
     expect(workout).toContain("const canSubstituteExercise = athleteAiAllowed");
-    expect(workout).toContain("data.programAiAuthored && athleteAiAllowed");
+    // Any program since 2026-11-17, not only an AI-built one; still only a Free Agent.
+    expect(workout).toContain(": athleteAiAllowed && aiFormCheckRouteExists");
+    expect(workout).not.toContain("data.programAiAuthored && athleteAiAllowed");
     // isSelfAssigned still decides comment-vs-AI routing, which is what it
     // is actually for. It must no longer be the only thing gating an AI
     // control.
