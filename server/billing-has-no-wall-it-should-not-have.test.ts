@@ -51,10 +51,10 @@ describe("a coach's roster has no cap", () => {
   });
 
   it("carries no athlete cap on the entitlement object", () => {
-    // athleteCapIncluded is the BAND's ceiling and must survive -- it is the Stripe quantity and
-    // the price. What must not come back is a cap anybody enforces.
+    // No cap anybody enforces, and since 2026-11-18 not even a band's ceiling in the bill: the
+    // Stripe quantity is the athletes, exactly ($4 each).
     expect(billing).not.toMatch(/\bathleteCap\b(?!Included)/);
-    expect(billing).toContain("athleteCapIncluded");
+    expect(billing).not.toContain("athleteCapIncluded");
   });
 
   it("tells no coach that their roster is full", () => {

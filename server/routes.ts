@@ -27,6 +27,7 @@ import {
   type AddOnId,
   ALL_ADD_ON_IDS,
   FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES,
+  coachMonthlyCents,
 } from "@shared/billing-tiers";
 import { createServer, type Server } from "http";
 import path from "path";
@@ -43,6 +44,7 @@ import { mountFeatureUsageCounter, registerFeatureUsage } from "./feature-usage"
 import { hashPassword, comparePasswords } from "./auth-utils";
 import {
   getEntitlements,
+  rebillCoachPlanAfterRosterChange,
   coachPlanIsPaidFor,
   getVideoRetentionLimits,
   type Entitlements,
@@ -164,7 +166,7 @@ import { COACH_SECTIONS } from "@shared/coach-sections";
 import { widgetLayoutSchema } from "@shared/dashboard-widgets";
 import { resolveRosterGroups, updateRosterGroupsSchema, setAthleteGroupSchema } from "@shared/roster-groups";
 import { notifyUser } from "./notify";
-import { announcePersonalizationChange } from "./personalization-included-notice";
+import { syncPersonalizationNotice } from "./personalization-included-notice";
 import { findGoniometerMovement } from "@shared/goniometer";
 import { NOTIFICATION_CATEGORIES } from "@shared/notification-categories";
 import {
@@ -896,8 +898,11 @@ const requirePrimaryCoachForBilling = primaryCoachOnly(HEAD_COACH_OWNS_THE_MONEY
 // call from any staff member's request, not just the primary's.
 async function getEntitlementsForCoach(coachId: number): Promise<Entitlements> {
   const coachIds = await storage.getEffectiveCoachIds(coachId);
-  const primary = await storage.getUser(coachIds[0]);
-  return getEntitlements(primary!);
+  const [primary, activeSeats] = await Promise.all([
+    storage.getUser(coachIds[0]),
+    storage.getRosterSeatCountForCoach(coachIds[0]),
+  ]);
+  return getEntitlements(primary!, activeSeats);
 }
 
 /* IS ANYBODY PAYING FOR THIS PROGRAM. Added 2026-11-13 (Scott: "fix 1, 2 and 3").
@@ -4669,9 +4674,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateCoachBilling(coachId, parsed.data);
-    if (parsed.data.billingTier !== undefined) {
-      announcePersonalizationChange(coachId, target.billingTier, parsed.data.billingTier);
-    }
+    if (parsed.data.billingTier !== undefined) syncPersonalizationNotice(coachId);
     res.json(updated);
   });
 
@@ -6368,6 +6371,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ok = await storage.holdAthlete(user.id, athleteId, parsed.data.heldUntil ?? null);
       (ok ? held : skipped).push(athleteId);
     }
+    // $4 an athlete exactly: a parked seat comes off the bill now, not at the next join.
+    if (held.length) await rebillCoachPlanAfterRosterChange(user.id);
     res.json({ held: held.length, skipped: skipped.length, skippedAthleteIds: skipped });
   });
 
@@ -6386,6 +6391,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ok = await storage.unholdAthlete(user.id, athleteId);
       (ok ? broughtBack : skipped).push(athleteId);
     }
+    if (broughtBack.length) await rebillCoachPlanAfterRosterChange(user.id);
     res.json({
       broughtBack: broughtBack.length,
       skipped: skipped.length,
@@ -7124,6 +7130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const athleteId = Number(req.params.athleteId);
     const removed = await storage.removeAthleteFromCoach(user.id, athleteId);
     if (!removed) return res.status(404).json({ message: "Athlete not found" });
+    await rebillCoachPlanAfterRosterChange(user.id);
     res.status(204).end();
   });
 
@@ -7147,6 +7154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const ok = await storage.holdAthlete(user.id, athleteId, parsed.data.heldUntil ?? null);
     if (!ok) return res.status(404).json({ message: "Athlete not found" });
+    await rebillCoachPlanAfterRosterChange(user.id);
     res.status(204).end();
   });
 
@@ -7157,6 +7165,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const athleteId = Number(req.params.athleteId);
     const ok = await storage.unholdAthlete(user.id, athleteId);
     if (!ok) return res.status(404).json({ message: "Athlete not on hold" });
+    await rebillCoachPlanAfterRosterChange(user.id);
     res.status(204).end();
   });
 
@@ -15619,7 +15628,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? {
             id: band.id,
             label: band.label,
-            monthlyPriceCents: band.monthlyPriceCents,
+            // $4 for each billed athlete, exactly (2026-11-18); the band is only a label now.
+            monthlyPriceCents: coachMonthlyCents(billedCount),
             athleteCapIncluded: band.athleteCapIncluded,
             athleteFloor: band.athleteFloor,
           }

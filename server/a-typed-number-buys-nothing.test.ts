@@ -32,15 +32,11 @@ const stripComments = (src: string) =>
   src.replace(/^[ \t]*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 
 describe("what the typed number would have bought", () => {
-  it("multi-team starts one athlete past the block size, personalization at the band holding 50", () => {
-    // Multi-team: 20 buys nothing, 21 does. Full Personalization moved to the band holding 50
-    // athletes on 2026-11-18 (41-60, billed as 60), so 40 does not include it and 41 does.
+  it("multi-team starts one athlete past the block size; personalization is earned by 50 real athletes", () => {
     expect(BILLING_TIERS[bandForAthleteCount(ORG_BLOCK_SIZE).id].includesMultiTeam).toBe(false);
     expect(BILLING_TIERS[bandForAthleteCount(ORG_BLOCK_SIZE + 1).id].includesMultiTeam).toBe(true);
-    expect(BILLING_TIERS[bandForAthleteCount(ORG_BLOCK_SIZE + 1).id].includesFullPersonalization).toBe(false);
-    expect(BILLING_TIERS[bandForAthleteCount(40).id].includesFullPersonalization).toBe(false);
-    expect(BILLING_TIERS[bandForAthleteCount(FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES).id].includesFullPersonalization).toBe(true);
-    expect(BILLING_TIERS[bandForAthleteCount(41).id].includesFullPersonalization).toBe(true);
+    // The roster earns Full Personalization, never the band or the typed number (2026-11-18).
+    expect(FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES).toBe(50);
   });
 });
 

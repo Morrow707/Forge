@@ -39,26 +39,28 @@ afterEach(() => {
 });
 
 describe("syncCoachSubscriptionBand", () => {
-  it("raises the per-athlete quantity to the new band's cap, prorated", async () => {
+  it("raises the quantity to exactly the athletes, prorated", async () => {
     const { syncCoachSubscriptionBand } = await loadBilling();
-    const band = bandForAthleteCount(23);
     const result = await syncCoachSubscriptionBand(7, 23);
-    expect(result).toEqual({ synced: true, previousQuantity: 20, quantity: band.athleteCapIncluded, prorated: true });
-    expect(subscriptionItemsUpdate).toHaveBeenCalledWith("si_1", { quantity: band.athleteCapIncluded, proration_behavior: "create_prorations" });
-    expect(applyCoachSubscriptionBand).toHaveBeenCalledWith(7, band.id, band.athleteCapIncluded);
+    // 23 athletes are 23 x $4, never the 40 of the band's ceiling (2026-11-18).
+    expect(result).toEqual({ synced: true, previousQuantity: 20, quantity: 23, prorated: true });
+    expect(subscriptionItemsUpdate).toHaveBeenCalledWith("si_1", { quantity: 23, proration_behavior: "create_prorations" });
+    expect(applyCoachSubscriptionBand).toHaveBeenCalledWith(7, bandForAthleteCount(23).id);
   });
 
   it("lowers it without a credit", async () => {
     const { syncCoachSubscriptionBand } = await loadBilling();
-    const band = bandForAthleteCount(3);
     const result = await syncCoachSubscriptionBand(7, 3);
-    expect(result).toMatchObject({ synced: true, prorated: false, quantity: band.athleteCapIncluded });
-    expect(subscriptionItemsUpdate).toHaveBeenCalledWith("si_1", { quantity: band.athleteCapIncluded, proration_behavior: "none" });
+    expect(result).toMatchObject({ synced: true, prorated: false, quantity: 3 });
+    expect(subscriptionItemsUpdate).toHaveBeenCalledWith("si_1", { quantity: 3, proration_behavior: "none" });
   });
 
-  it("does nothing within the same band, and nothing without a live subscription", async () => {
+  it("moves for one athlete inside a band, does nothing when it already matches, and nothing without a live subscription", async () => {
     const { syncCoachSubscriptionBand } = await loadBilling();
-    expect(await syncCoachSubscriptionBand(7, 18)).toMatchObject({ synced: true, previousQuantity: 20, quantity: 20 });
+    expect(await syncCoachSubscriptionBand(7, 18)).toMatchObject({ synced: true, previousQuantity: 20, quantity: 18 });
+    expect(subscriptionItemsUpdate).toHaveBeenCalledWith("si_1", { quantity: 18, proration_behavior: "none" });
+    subscriptionItemsUpdate.mockClear();
+    expect(await syncCoachSubscriptionBand(7, 20)).toMatchObject({ synced: true, previousQuantity: 20, quantity: 20 });
     expect(subscriptionItemsUpdate).not.toHaveBeenCalled();
     getSubscriptionForUser.mockResolvedValue(null);
     expect(await syncCoachSubscriptionBand(7, 50)).toEqual({ synced: false, reason: "no_stripe_subscription" });

@@ -3503,6 +3503,9 @@ CREATE INDEX IF NOT EXISTS "external_waiver_view_grants_admin_idx"
 -- and billing uses the larger of the two (storage.getBilledAthleteCountForCoach). Null means
 -- never stated. See shared/schema.ts.
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "planned_athlete_count" integer;
+-- Last known answer to "has this program's roster earned Full Personalization" (2026-11-18), so a
+-- crossing of the 50-athlete line is announced once. Null until first checked.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "full_personalization_earned" boolean;
 
 -- The evidentiary record of an Institutional Service Agreement signed IN THE APP: who signed,
 -- the sha256 of the exact text they were shown, when, and from where. Insert-only, like

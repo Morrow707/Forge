@@ -2,7 +2,8 @@ import { eq, and, isNotNull, inArray } from "drizzle-orm";
 import { db } from "./db";
 import { subscriptions } from "@shared/schema";
 import { storage } from "./storage";
-import { bandForAthleteCount } from "@shared/billing-tiers";
+import { bandForAthleteCount, coachMonthlyCents } from "@shared/billing-tiers";
+import { syncPersonalizationNotice } from "./personalization-included-notice";
 import { scheduleDailyJob } from "./job-lock";
 import { reportJobFailure } from "./job-errors";
 
@@ -64,14 +65,19 @@ export async function runCoachBandDriftSweep(): Promise<Record<string, number>> 
       const billed = await storage.getBilledAthleteCountForCoach(row.userId);
       const shouldBe = bandForAthleteCount(billed);
       const onFile = (await storage.getUser(row.userId))?.billingTier ?? null;
-      if (onFile === shouldBe.id) continue;
+      // The roster may have crossed 50 by a path nothing else heard about (2026-11-18).
+      syncPersonalizationNotice(row.userId);
+      // Armed, every live subscription is re-synced: at $4 an athlete exactly, a count that moves
+      // inside one band still changes the bill, so comparing bands would miss it. The sync no-ops
+      // when Stripe's quantity already matches.
+      if (onFile === shouldBe.id && !rebillArmed) continue;
 
       drifted++;
       // The log is the product while the switch is off. It names the program by id -- never an
       // email or a school name, which is the admin anonymity rule in this repo -- plus what it
       // is paying for and what it has.
       console.log(
-        `Coach band drift: coach ${row.userId} is on band ${onFile ?? "none"} and bills ${billed} athletes (band ${shouldBe.id}, ${shouldBe.monthlyPriceCents / 100}/mo)` +
+        `Coach band drift: coach ${row.userId} is on band ${onFile ?? "none"} and bills ${billed} athletes (${coachMonthlyCents(billed) / 100}/mo)` +
           (rebillArmed ? " -- re-billing" : " -- reporting only, COACH_BAND_DRIFT_REBILL is not set"),
       );
 

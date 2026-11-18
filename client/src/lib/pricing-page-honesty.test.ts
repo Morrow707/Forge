@@ -20,9 +20,8 @@ const page = readFileSync("client/src/pages/pricing.tsx", "utf8");
 const bands = BILLING_TIER_ORDER.map((id) => BILLING_TIERS[id]);
 
 describe("the pricing page states one personalization threshold", () => {
-  it("derives it from the bands instead of writing a number in prose", () => {
-    expect(page).toContain("PERSONALIZATION_FROM");
-    expect(page).toContain("includesFullPersonalization");
+  it("states the shared threshold instead of writing a number in prose", () => {
+    expect(page).toContain("FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES");
   });
 
   it("has no hand-typed roster threshold left in the copy", () => {
@@ -39,25 +38,18 @@ describe("the pricing page states one personalization threshold", () => {
   });
 
   it("agrees with the price list on where personalization starts", () => {
-    const firstIncluded = bands.find((b) => b.includesFullPersonalization);
-    // The band holding FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES (50) is 41-60 (2026-11-18).
-    expect(firstIncluded?.athleteFloor).toBeLessThanOrEqual(FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES);
-    expect(firstIncluded?.athleteCapIncluded).toBeGreaterThanOrEqual(FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES);
+    // 50 real athletes earn it (2026-11-18); the page states the shared constant, never a band.
+    expect(FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES).toBe(50);
+    expect(page).toContain("FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES");
   });
 });
 
 describe("every roster size can find its price", () => {
-  it("shows all the starter bands, not just the cheapest two", () => {
-    const starters = bands.filter((b) => b.athleteCapIncluded <= ORG_BLOCK_SIZE);
-    expect(starters.length).toBeGreaterThan(2);
-    expect(page).toContain("STARTER_BANDS");
-    expect(page).not.toContain("BILLING_TIER_ORDER.slice(0, 2)");
-  });
-
-  it("lists block bands by their real range rather than round-number samples", () => {
-    expect(page).toContain("BLOCK_BANDS");
-    expect(page).toContain("band.label");
-    expect(page).not.toContain("[50, 100, 250, 500, 900]");
+  it("prices every sample roster at $4 an athlete, never a band's ceiling (2026-11-18)", () => {
+    expect(page).toContain("coachMonthlyCents(n)");
+    expect(page).not.toContain("monthlyPriceCents)}/mo\n");
+    expect(page).not.toContain("STARTER_BANDS");
+    expect(page).not.toContain("BLOCK_BANDS");
   });
 
   it("covers the common program sizes the old sample grid skipped", () => {

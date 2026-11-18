@@ -17,7 +17,7 @@
  */
 import { PUBLIC_ROUTES, type PublicRoute } from "./public-routes";
 import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER } from "./free-agent-tiers";
-import { BILLING_TIERS, ORG_PER_ATHLETE_CENTS } from "./billing-tiers";
+import { ORG_PER_ATHLETE_CENTS } from "./billing-tiers";
 import { FORGE_CONTACT_EMAIL, FORGE_LEGAL_ENTITY, FORGE_POSTAL_ADDRESS } from "./contact";
 import { MOVEMENTS } from "./movement-library";
 import { highSchoolsFaqJsonLd } from "./high-schools-faq";
@@ -56,7 +56,6 @@ export function organizationJsonLd(origin: string) {
 
 export function softwareApplicationJsonLd(origin: string) {
   const base = origin.replace(/\/$/, "");
-  const smallest = BILLING_TIERS[Object.keys(BILLING_TIERS)[0] as keyof typeof BILLING_TIERS];
   const offers = [
     ...FREE_AGENT_TIER_ORDER.map((id) => {
       const t = FREE_AGENT_TIERS[id];
@@ -80,7 +79,7 @@ export function softwareApplicationJsonLd(origin: string) {
     {
       "@type": "Offer",
       name: "School or club program (per athlete)",
-      description: `$${dollars(ORG_PER_ATHLETE_CENTS)} per athlete per month, in roster bands. The smallest band, ${smallest.label}, is $${dollars(smallest.monthlyPriceCents)} a month.`,
+      description: `$${dollars(ORG_PER_ATHLETE_CENTS)} per athlete per month, for exactly the athletes on the roster.`,
       price: dollars(ORG_PER_ATHLETE_CENTS),
       priceCurrency: "USD",
       priceSpecification: {

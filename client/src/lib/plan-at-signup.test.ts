@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { bandForAthleteCount } from "@shared/billing-tiers";
+import { bandForAthleteCount, coachMonthlyCents } from "@shared/billing-tiers";
 
 /**
  * A SCHOOL PICKS ITS PLAN AT SIGNUP, AND THE PRICE IT IS SHOWN IS THE PRICE IT IS BILLED.
@@ -63,7 +63,8 @@ describe("the live band text is computed, not typed", () => {
       /import \{[^}]*bandForAthleteCount[^}]*\} from "@shared\/billing-tiers"/,
     );
     expect(signupSrc).toContain("bandForAthleteCount(expectedAthletesNum)");
-    expect(signupSrc).toContain("formatCents(expectedBand.monthlyPriceCents)");
+    // $4 an athlete, exactly (2026-11-18), never the band's ceiling.
+    expect(signupSrc).toContain("formatCents(coachMonthlyCents(expectedAthletesNum))");
     expect(signupSrc).toContain("formatCents(ORG_PER_ATHLETE_CENTS)");
   });
 
@@ -81,10 +82,11 @@ describe("the UI copy and the pricing table cannot disagree", () => {
     expect(bandForAthleteCount(120).id).toBe("101-120");
   });
 
-  it("prices every checkpoint at the band ceiling times $4.00", () => {
-    expect(bandForAthleteCount(5).monthlyPriceCents).toBe(5 * 400);
-    expect(bandForAthleteCount(34).monthlyPriceCents).toBe(40 * 400);
-    expect(bandForAthleteCount(120).monthlyPriceCents).toBe(120 * 400);
+  it("prices every checkpoint at exactly $4.00 an athlete, never the band ceiling", () => {
+    expect(coachMonthlyCents(5)).toBe(5 * 400);
+    expect(coachMonthlyCents(34)).toBe(34 * 400);
+    expect(coachMonthlyCents(41)).toBe(41 * 400);
+    expect(coachMonthlyCents(120)).toBe(120 * 400);
   });
 
   it("labels a band as a range of athletes, which is what the signup copy renders", () => {

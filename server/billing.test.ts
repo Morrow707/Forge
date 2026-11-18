@@ -113,16 +113,17 @@ describe("a completed coach subscription checkout", () => {
   // The school paid for a band and the account used to keep saying "no plan assigned": no
   // entitlements once enforcement is on, and no Institutional Service Agreement asked for,
   // since getInstitutionalAgreementStatus keys off billingTier.
-  it("writes the band it was bought on, and the band's ceiling as the expected count", async () => {
+  it("writes the band it was bought on, and leaves the typed headcount alone", async () => {
     const event = fakeEvent("evt_band", "checkout.session.completed", {
       id: "cs_band",
       client_reference_id: "7",
       subscription: "sub_band",
       customer: "cus_band",
-      metadata: { kind: "coach_subscription", userId: "7", band: "21-40", bandAthleteCap: "40" },
+      metadata: { kind: "coach_subscription", userId: "7", band: "21-40", athleteCount: "34" },
     });
     await handleStripeWebhookEvent(event);
-    expect(applyCoachSubscriptionBand).toHaveBeenCalledWith(7, "21-40", 40);
+    // No ceiling written into the typed number (2026-11-18): a 34-athlete program pays for 34.
+    expect(applyCoachSubscriptionBand).toHaveBeenCalledWith(7, "21-40");
   });
 
   it("refuses a band id that is not a real band", async () => {

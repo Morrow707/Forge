@@ -131,7 +131,7 @@ describe("web checkout never runs inside the native app", () => {
 });
 
 describe("prices and quantities come from the server, never the request", () => {
-  it("charges the coach the band its roster falls into", () => {
+  it("charges the coach for exactly the athletes it bills, counted on the server", () => {
     const idx = routes.indexOf('"/api/billing/checkout/coach"');
     const route = routes.slice(idx, idx + 900);
     // The count comes from storage, never from the request body: a
@@ -141,9 +141,9 @@ describe("prices and quantities come from the server, never the request", () => 
     // there is. See storage.getBilledAthleteCountForCoach.
     expect(route).toContain("getBilledAthleteCountForCoach");
     expect(route).not.toMatch(/req\.body/);
-    expect(billing).toContain("quantity: band.athleteCapIncluded");
-    // And the band itself is derived server-side from that count.
-    expect(billing).toContain("bandForAthleteCount(rosterAthleteCount)");
+    // $4 an athlete, exactly (2026-11-18): the quantity is the count, never a band's ceiling.
+    expect(billing).toContain("quantity: athleteCount");
+    expect(billing).not.toContain("quantity: band.athleteCapIncluded");
   });
 
   it("reads the lesson price from the lesson row", () => {

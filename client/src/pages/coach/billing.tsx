@@ -18,7 +18,7 @@ import { ReadFailed } from "@/components/read-failed";
 import { ApiError, apiRequest, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { CreditCard, Users } from "lucide-react";
-import { bandForAthleteCount, formatCents, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
+import { bandForAthleteCount, coachMonthlyCents, formatCents, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
 import { useAuth } from "@/hooks/use-auth";
 import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
 
@@ -213,7 +213,8 @@ export default function CoachBilling() {
   // "Your plan $20.00/mo · 0-5 athletes" on the same screen for a coach who
   // planned for 34 and had not added anyone yet (audit row B2, 2026-10-10).
   const band = bandForAthleteCount(plan?.billedCount ?? roster.length);
-  const monthlyCents = band.monthlyPriceCents;
+  // $4 for each billed athlete, exactly (2026-11-18); the band is only a size label.
+  const monthlyCents = coachMonthlyCents(plan?.billedCount ?? roster.length);
 
   async function subscribe() {
     setStarting(true);
@@ -305,7 +306,7 @@ export default function CoachBilling() {
                     {plan.band
                       ? isNative
                         ? plan.band.label
-                        : `${plan.band.label} · ${formatCents(plan.band.monthlyPriceCents)}/month`
+                        : `${plan.billedCount} athletes · ${formatCents(plan.band.monthlyPriceCents)}/month`
                       : `${plan.billedCount} athletes`}
                   </span>
                 </div>
@@ -363,8 +364,8 @@ export default function CoachBilling() {
                   </div>
                   {planDraft.trim() !== "" && Number.isInteger(Number(planDraft)) && Number(planDraft) > 0 && (
                     <p className="text-xs text-muted-foreground">
-                      {bandForAthleteCount(Number(planDraft)).label} ·{" "}
-                      {formatCents(bandForAthleteCount(Number(planDraft)).monthlyPriceCents)}/month
+                      {Number(planDraft)} athletes ·{" "}
+                      {formatCents(coachMonthlyCents(Number(planDraft)))}/month
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground">
@@ -479,13 +480,7 @@ export default function CoachBilling() {
                 <Users className="h-3.5 w-3.5" />
                 {roster.length} {roster.length === 1 ? "athlete" : "athletes"}
               </span>
-              <span>{band.label}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Band covers up to</span>
-              <span className="text-muted-foreground">
-                {band.athleteCapIncluded} athletes
-              </span>
+              <span>{formatCents(ORG_PER_ATHLETE_CENTS)} each</span>
             </div>
           </div>
 
@@ -495,9 +490,10 @@ export default function CoachBilling() {
               ceiling does change what you pay, and saying otherwise set up exactly
               the surprise this sentence was meant to prevent. */}
           <p className="text-xs text-muted-foreground">
-            ${(ORG_PER_ATHLETE_CENTS / 100).toFixed(2)} per athlete, the same rate at every roster
-            size. You pay for the band, so adding an athlete inside it doesn't change your bill,
-            going past {band.athleteCapIncluded} moves you to the next band.
+            ${(ORG_PER_ATHLETE_CENTS / 100).toFixed(2)} for every athlete, the same rate at every
+            roster size and no limit. Adding an athlete adds{" "}
+            ${(ORG_PER_ATHLETE_CENTS / 100).toFixed(2)}; removing one or putting them on hold takes
+            it off.
           </p>
 
           {isNative ? (

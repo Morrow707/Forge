@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { ForgeMark } from "@/components/forge-mark";
 import { MarketingNav, MarketingFooter } from "@/components/marketing-shell";
-import { bandForAthleteCount, formatCents } from "@shared/billing-tiers";
+import { bandForAthleteCount, coachMonthlyCents, formatCents } from "@shared/billing-tiers";
 import {
   FREE_AGENT_TIERS,
   FREE_AGENT_TIER_ORDER,
@@ -221,7 +221,7 @@ const FREE_AGENT_CARDS = FREE_AGENT_TIER_ORDER.map((id) => {
 // points on it, priced by the same function /pricing uses.
 const COACH_SAMPLE_ROSTERS = [15, 50, 100, 250].map((n) => ({
   seats: `Up to ${n}`,
-  price: formatCents(bandForAthleteCount(n).monthlyPriceCents),
+  price: formatCents(coachMonthlyCents(n)),
 }));
 
 // Off by default -- the app is still in testing, so the pricing section

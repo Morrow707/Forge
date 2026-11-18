@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, it, expect } from "vitest";
-import { bandForAthleteCount, BILLING_TIER_ORDER, BILLING_TIERS, MAX_BANDED_ATHLETES } from "@shared/billing-tiers";
+import { bandForAthleteCount, coachMonthlyCents, BILLING_TIER_ORDER, BILLING_TIERS, MAX_BANDED_ATHLETES } from "@shared/billing-tiers";
 import { MAX_EXPECTED_ATHLETES } from "@shared/schema";
 
 /* THE TAIL OF THE 2026-10-14 AUDIT PANEL: six findings, each verified against HEAD first. */
@@ -14,7 +14,7 @@ describe("every roster the form accepts has a band of its own", () => {
     // bandForAthleteCount clamped to the last enumerated band, so a school that typed 2,000 --
     // which signup accepts -- was billed the 981-1,000 price: $4,000 a month of roster charged
     // as a quarter of it.
-    expect(bandForAthleteCount(2000).monthlyPriceCents).toBe(2000 * 400);
+    expect(coachMonthlyCents(2000)).toBe(2000 * 400);
     expect(bandForAthleteCount(1001).athleteCapIncluded).toBe(1020);
   });
 
@@ -29,8 +29,8 @@ describe("every roster the form accepts has a band of its own", () => {
     for (const n of [1, 5, 21, 120, 999, 1000, 1001, 2500, MAX_EXPECTED_ATHLETES]) {
       const band = bandForAthleteCount(n);
       expect(band.athleteCapIncluded, `roster ${n}`).toBeGreaterThanOrEqual(n);
-      // $4.00 x the band ceiling, which is what the pricing page tells a reader to expect.
-      expect(band.monthlyPriceCents, `roster ${n}`).toBe(band.athleteCapIncluded * 400);
+      // $4.00 x the athletes, exactly, which is what the pricing page tells a reader to expect.
+      expect(coachMonthlyCents(n), `roster ${n}`).toBe(n * 400);
     }
   });
 

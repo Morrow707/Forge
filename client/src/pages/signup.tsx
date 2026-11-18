@@ -39,7 +39,7 @@ import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
 import { derivePrivacyTier } from "@shared/privacy-tiers";
 import { SPORTS } from "@shared/exercise-taxonomy";
 import { todayIso } from "@/lib/local-date";
-import { bandForAthleteCount, formatCents, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
+import { bandForAthleteCount, coachMonthlyCents, formatCents, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
 import { Capacitor } from "@capacitor/core";
 import { forgeCodeEntryIsAllowed } from "@/lib/forge-code-entry";
 
@@ -506,7 +506,7 @@ export default function SignupPage() {
                     <p className="rounded-md bg-surface-elevated p-3 text-sm font-semibold">
                       {Capacitor.isNativePlatform()
                         ? expectedBand.label
-                        : `${expectedBand.label} · ${formatCents(expectedBand.monthlyPriceCents)}/month · ${formatCents(ORG_PER_ATHLETE_CENTS)} per athlete`}
+                        : `${expectedAthletesNum} athletes · ${formatCents(coachMonthlyCents(expectedAthletesNum))}/month · ${formatCents(ORG_PER_ATHLETE_CENTS)} per athlete`}
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground">

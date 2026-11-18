@@ -324,7 +324,7 @@ function CoachBillingForm({ userId, email }: { userId: number; email: string }) 
                 <SelectItem value={NONE}>No plan (beta / unbilled)</SelectItem>
                 {BILLING_TIER_ORDER.map((id) => (
                   <SelectItem key={id} value={id}>
-                    {BILLING_TIERS[id].label} — {formatCents(BILLING_TIERS[id].monthlyPriceCents)}/mo
+                    {BILLING_TIERS[id].label}
                   </SelectItem>
                 ))}
               </SelectContent>

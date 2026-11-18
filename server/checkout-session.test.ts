@@ -138,22 +138,19 @@ describe("a Free Agent's own tier", () => {
 });
 
 describe("a coach organisation's roster", () => {
-  it("bills the band's ceiling as the quantity, not one seat", async () => {
-    // THE EXPENSIVE ONE TO GET WRONG. One $4.00 Price expresses every band; the band is carried
-    // entirely by the quantity. A quantity of 1 here would charge a fifty-athlete school $4.00 a
-    // month and look perfectly successful doing it.
+  it("bills every athlete as the quantity, exactly -- not one seat and not a band's ceiling", async () => {
+    // THE EXPENSIVE ONE TO GET WRONG. One $4.00 Price, and the quantity is the athletes (2026-11-18:
+    // "Stripe is only charged per athlete"). A quantity of 1 would charge a fifty-athlete school
+    // $4.00; the band's ceiling (40 here) charged a 37-athlete school for 40.
     const billing = await loadBilling(true);
     vi.stubEnv("STRIPE_PRICE_COACH_PER_ATHLETE", "price_per_athlete");
 
     await billing.createCoachSubscriptionCheckout(9, "coach@b.test", 37, "s", "c");
 
     const args = sessionsCreate.mock.calls[0][0];
-    const band = bandForAthleteCount(37);
     expect(args.mode).toBe("subscription");
-    expect(args.line_items).toEqual([
-      { price: "price_per_athlete", quantity: band.athleteCapIncluded },
-    ]);
-    expect(band.athleteCapIncluded).toBeGreaterThan(1);
+    expect(args.line_items).toEqual([{ price: "price_per_athlete", quantity: 37 }]);
+    expect(bandForAthleteCount(37).athleteCapIncluded).not.toBe(37);
   });
 
   it("does not line-item the account fee while that fee is zero", async () => {

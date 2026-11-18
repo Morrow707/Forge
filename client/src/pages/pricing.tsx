@@ -6,11 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
-  BILLING_TIERS,
-  BILLING_TIER_ORDER,
   BILLING_ADD_ONS,
   BILLING_ADD_ON_ORDER,
-  bandForAthleteCount,
+  coachMonthlyCents,
+  FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES,
   formatCents,
   ORG_PER_ATHLETE_CENTS,
   ORG_BLOCK_SIZE,
@@ -30,26 +29,8 @@ import { CAMERA_ACCURACY_LONG } from "@shared/camera-accuracy-copy";
 import { CLASS_PRICING_LINE } from "@shared/class-pricing-rule";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 
-const ALL_BANDS = BILLING_TIER_ORDER.map((id) => BILLING_TIERS[id]);
-
-/** The fives, up to the first block -- the sizes a single team actually is. */
-const STARTER_BANDS = BILLING_TIER_ORDER.filter(
-  (id) => BILLING_TIERS[id].athleteCapIncluded <= ORG_BLOCK_SIZE,
-);
-
-/** The block bands up to a full football roster (120), which is as far as a
- * reader needs before the arithmetic is obvious. */
-const BLOCK_BANDS = ALL_BANDS.filter(
-  (b) => b.athleteFloor > ORG_BLOCK_SIZE && b.athleteCapIncluded <= 120,
-);
-
-const LARGE_EXAMPLE = bandForAthleteCount(500);
-
-/** The roster size at which personalization stops costing extra, read from the
- * bands rather than written down in prose -- the page used to state it as two
- * different numbers. */
-const PERSONALIZATION_FROM =
-  ALL_BANDS.find((b) => b.includesFullPersonalization)?.athleteFloor ?? ORG_BLOCK_SIZE + 1;
+/** Example roster sizes, each priced by the one rule: $4 an athlete. */
+const SAMPLE_ROSTERS = [5, 12, 20, 35, 50, 75, 120, 500];
 
 /** Public, unauthenticated -- renders straight from shared/billing-tiers.ts
  * so this page can never drift from what server/billing.ts actually
@@ -94,93 +75,39 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* All four starter bands, not the first two. The band table is cut in
-            fives up to 20 precisely because that is where real small rosters land,
-            and showing only 0-5 and 6-10 meant an 11- to 20-athlete team -- a full
-            youth squad -- could not find its own price anywhere on the page. */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {STARTER_BANDS.map((id) => {
-            const tier = BILLING_TIERS[id];
-            return (
-              <Card key={id} className="flex flex-col">
-                <CardHeader>
-                  <CardTitle className="text-lg">{tier.label}</CardTitle>
-                  <CardDescription>
-                    <span className="text-2xl font-extrabold text-foreground">
-                      {formatCents(tier.monthlyPriceCents)}
-                    </span>
-                    <span className="text-sm text-muted-foreground">/mo</span>
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-1 flex-col justify-between gap-4">
-                  <ul className="space-y-2 text-sm">
-                    <li className="flex items-start gap-2">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                      {`Up to ${tier.athleteCapIncluded} athletes`}
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                      Logo + primary color, free
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                      Single team branding
-                    </li>
-                  </ul>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        <div className="mt-8">
-          <Card>
-            <CardHeader>
-              <Badge className="mb-1 w-fit gap-1 bg-primary/15 text-primary hover:bg-primary/15">
-                Growing programs &amp; schools
-              </Badge>
-              {/* Derived, not typed out. This headline was the one place on
-                  the page carrying hand-written numbers, so a rate change in
-                  billing-tiers.ts moved every band below it and left the
-                  sentence above them advertising the old price. */}
-              <CardTitle className="text-lg">
-                {formatCents(ORG_PER_ATHLETE_CENTS)}/athlete
-              </CardTitle>
-              <CardDescription>
-                One flat per-athlete rate, no account fee, no volume discount, no roster-size
-                ceiling, you pay for your roster and nothing else. Sold in blocks of{" "}
-                {ORG_BLOCK_SIZE} above the starter bands. Full branding, personalization, and
-                multi-team support are included from {PERSONALIZATION_FROM} athletes up.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {/* Every block band up to a full football roster, by its actual range
-                  rather than a handful of round numbers. "~50 athletes" left a
-                  42-athlete program guessing which side of a boundary it was on,
-                  and the most common roster sizes the band table was built around
-                  (a 20-40 athlete program) were not shown at all. */}
-              <div className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                {BLOCK_BANDS.map((band) => (
-                  <div
-                    key={band.id}
-                    className="flex items-center justify-between gap-2 rounded-md border border-border p-2"
-                  >
-                    <span className="text-muted-foreground">{band.label}</span>
-                    <span className="font-semibold text-foreground">
-                      {formatCents(band.monthlyPriceCents)}/mo
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Bigger than that, same arithmetic: {formatCents(ORG_PER_ATHLETE_CENTS)} x your
-                band's ceiling, in {ORG_BLOCK_SIZE}-athlete steps. A{" "}
-                {LARGE_EXAMPLE.athleteCapIncluded}-athlete program is{" "}
-                {formatCents(LARGE_EXAMPLE.monthlyPriceCents)}/mo.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+        {/* $4 AN ATHLETE, EXACTLY (2026-11-18). This section used to list roster bands priced
+            at their ceiling, so a 41-athlete program read $240 and was charged for 60. Scott:
+            "Stripe is only charged per athlete ... $4 per athlete". The sample sizes below are
+            examples of that one multiplication, not steps. */}
+        <Card>
+          <CardHeader>
+            <Badge className="mb-1 w-fit gap-1 bg-primary/15 text-primary hover:bg-primary/15">
+              Teams, programs &amp; schools
+            </Badge>
+            <CardTitle className="text-lg">{formatCents(ORG_PER_ATHLETE_CENTS)}/athlete a month</CardTitle>
+            <CardDescription>
+              You pay for exactly the athletes on your roster, at one rate, with no account fee, no
+              minimum block and no roster limit. Add an athlete and the bill goes up{" "}
+              {formatCents(ORG_PER_ATHLETE_CENTS)}; remove one or put them on hold and it comes down.
+              Logo and main color are free on every plan; full branding and personalization are
+              included once your roster reaches {FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES} athletes,
+              and more than one team from {ORG_BLOCK_SIZE + 1}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+              {SAMPLE_ROSTERS.map((n) => (
+                <div
+                  key={n}
+                  className="flex items-center justify-between gap-2 rounded-md border border-border p-2"
+                >
+                  <span className="text-muted-foreground">{n} athletes</span>
+                  <span className="font-semibold text-foreground">{formatCents(coachMonthlyCents(n))}/mo</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="mt-12">
           <h2 className="mb-1 text-center text-xl font-bold">Add-ons</h2>
@@ -189,9 +116,9 @@ export default function PricingPage() {
               to, contradicted on the same page. includesFullPersonalization is the
               only real answer, so both now read it. */}
           <p className="mb-6 text-center text-sm text-muted-foreground">
-            Add-ons for any band. The starter bands can add Full Personalization as one bundle,
-            programs from {PERSONALIZATION_FROM} athletes up already include it, and Coaches
-            Corner, the coach education library, is a separate add-on at every size.
+            Add-ons for any program. Below {FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES} athletes,
+            Full Personalization is one bundle; from {FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES} it is
+            included. Coaches Corner, the coach education library, is a separate add-on at every size.
           </p>
           <div className="mx-auto grid max-w-3xl gap-4 sm:grid-cols-2">
             {BILLING_ADD_ON_ORDER.map((id) => {

@@ -62,7 +62,6 @@ export type AddOnId =
 export interface BillingTierDef {
   id: BillingTierId;
   label: string;
-  monthlyPriceCents: number;
   /** Upper end of this band's roster range -- never null here (unlike the
    * old Enterprise tier's unlimited cap, which was the single biggest
    * source of the negative-margin problem this model replaces). A roster
@@ -75,13 +74,7 @@ export interface BillingTierDef {
    * stay on the cheapest old tier long past when they should have
    * upgraded). */
   perAthleteOverageCents: 0;
-  /** Bundled in for every band above the two starter bands (16 athletes and
-   * up is "coached program," not "one team"), matching the old tier
-   * structure's qualitative shape (small/individual tiers = basic, bigger
-   * orgs = full features) even though the discrete Growth/Program/
-   * Enterprise names are gone. Solo/Coach-equivalent starter bands can
-   * still buy personalization a la carte via the add-ons below. */
-  includesFullPersonalization: boolean;
+  /** Bundled in for every band past the first block (21 athletes and up). */
   includesMultiTeam: boolean;
   /** Roster floor for this band -- not part of BillingTierDef's original
    * shape, but every caller that needs to show a range (the pricing page,
@@ -91,19 +84,22 @@ export interface BillingTierDef {
   athleteFloor: number;
 }
 
-function bandPriceCents(athleteCapIncluded: number): number {
-  return ORG_BASE_CENTS + athleteCapIncluded * ORG_PER_ATHLETE_CENTS;
-}
-
 /** Athletes per block above the starter bands -- $80 a block at $4.00 each. */
 export const ORG_BLOCK_SIZE = 20;
 
-/** FULL PERSONALIZATION IS FREE ON THE BAND THAT HOLDS THIS MANY ATHLETES, AND EVERY BAND ABOVE.
- * Scott, 2026-11-18: "make that 50 athletes, so they are spending $200 a month they get it for
- * free, not $80". Bands are billed to their ceiling, so the band holding 50 is 41-60 at $240 a
- * month; a program of 41 is on that band and pays for 60, so it is included there too. Until this
- * it was every band past the first block (21-40, $160). Multi-team stays at 21 and up. */
+/** FULL PERSONALIZATION IS FREE ONCE A PAYING PROGRAM HAS THIS MANY ATHLETES ON ITS ROSTER.
+ * Scott, 2026-11-18: "50 earns an unlock" -- 50 athletes is $200 a month. Counted off the real
+ * roster (athletes on hold do not count), never off the number a coach typed at signup, so typing
+ * 50 unlocks nothing. Multi-team stays at 21 and up. */
 export const FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES = 50;
+
+/** WHAT A COACH PLAN COSTS: $4 for every athlete, exactly. Scott, 2026-11-18: "Stripe is only
+ * charged per athlete ... athletes that are coaches are $4 per athlete", with no limit. The bands
+ * below are labels for a roster size (and decide multi-team); they never round the bill up. Until
+ * this the bill was the band's CEILING, so 41 athletes paid for 60. */
+export function coachMonthlyCents(athletes: number): number {
+  return ORG_BASE_CENTS + Math.max(0, Math.floor(athletes)) * ORG_PER_ATHLETE_CENTS;
+}
 
 // Band boundaries: fives up to 20 (0-5, 6-10, 11-15, 16-20), then whole
 // 20-athlete blocks from 21 up through 1,000.
@@ -147,13 +143,11 @@ function buildBands(): BillingTierDef[] {
   return ranges.map(([lo, hi]) => ({
     id: `${lo}-${hi}`,
     label: `${lo}-${hi} athletes`,
-    monthlyPriceCents: bandPriceCents(hi),
     athleteCapIncluded: hi,
     athleteFloor: lo,
     perAthleteOverageCents: 0,
     // Everything past the first block is a coached program rather than one small team, which is
     // where multi-team starts. Full personalization starts at the band holding 50 athletes.
-    includesFullPersonalization: hi >= FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES,
     includesMultiTeam: lo > ORG_BLOCK_SIZE,
   }));
 }
@@ -192,9 +186,9 @@ export interface AddOnDef {
   description: string;
 }
 
-// Full Personalization only needs buying below FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES -- the
-// band holding that many athletes, and every band above it, includes it via
-// includesFullPersonalization (see getEntitlements in server/billing.ts).
+// Full Personalization only needs buying until a paying program has
+// FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES athletes on its roster (getEntitlements in
+// server/billing.ts).
 /** Coaches Corner's monthly price, as a standalone coach add-on.
  *
  * THE REAL PRICE. Scott, 2026-10-03 ("keep them"): $19.99, the same as the top

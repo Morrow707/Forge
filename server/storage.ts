@@ -6996,18 +6996,18 @@ export const storage = {
     return row ?? null;
   },
 
-  async applyCoachSubscriptionBand(userId: number, bandId: string, bandAthleteCap: number) {
-    const current = await this.getUser(userId);
-    if (!current) return null;
-    const planned = Math.max(current.plannedAthleteCount ?? 0, bandAthleteCap);
+  /** Records that a coach plan is paid for, and the size band it was paid at.
+   *  It no longer raises plannedAthleteCount to the band's ceiling (2026-11-18): the bill is $4 an
+   *  athlete exactly, and the billed count is the larger of the typed number and the roster, so
+   *  writing the ceiling into the typed number would have kept a program paying for athletes it
+   *  never had. */
+  async applyCoachSubscriptionBand(userId: number, bandId: string) {
     const [row] = await db
       .update(users)
-      .set({ billingTier: bandId, plannedAthleteCount: planned })
+      .set({ billingTier: bandId })
       .where(eq(users.id, userId))
       .returning({ plannedAthleteCount: users.plannedAthleteCount, billingTier: users.billingTier });
-    // The band it replaced, so the caller can tell the coach when Full Personalization starts or
-    // stops being included (server/personalization-included-notice.ts).
-    return row ? { ...row, previousBillingTier: current.billingTier ?? null } : null;
+    return row ?? null;
   },
 
   // THE ONE PLACE AN ATHLETE JOINS A ROSTER, and the reason it is a transaction with a lock.
@@ -22340,7 +22340,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     if (!primary || primary.role === "admin") {
       return { hasCustomColors: true, hasTeamIdentity: true, hasWorkflowCustomization: true, hasPersonalPage: true };
     }
-    return getEntitlements(primary);
+    return getEntitlements(primary, await this.getRosterSeatCountForCoach(primaryCoachId));
   },
 
   async getEffectiveBrandingForUser(userId: number) {

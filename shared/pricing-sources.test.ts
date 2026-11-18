@@ -7,6 +7,7 @@ import {
   COACHES_CORNER_MONTHLY_PRICE_CENTS,
   COACHES_CORNER_FREE_AT_ATHLETE_COUNT,
   coachesCornerCompedForRoster,
+  coachMonthlyCents,
 } from "./billing-tiers";
 import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER } from "./free-agent-tiers";
 import { FORGE_CLASS_LESSON_DEFAULT_PRICE_CENTS } from "./class-pricing";
@@ -39,12 +40,9 @@ describe("one pricing source", () => {
     expect(billing).not.toMatch(/^export const PRICING\b/m);
   });
 
-  it("prices a coach band from the base fee plus the flat per-athlete rate", () => {
+  it("prices a coach plan from the base fee plus the flat per-athlete rate, exactly", () => {
     for (const n of [15, 50, 100, 250]) {
-      const band = bandForAthleteCount(n);
-      expect(band.monthlyPriceCents).toBe(
-        ORG_BASE_CENTS + band.athleteCapIncluded * ORG_PER_ATHLETE_CENTS,
-      );
+      expect(coachMonthlyCents(n)).toBe(ORG_BASE_CENTS + n * ORG_PER_ATHLETE_CENTS);
     }
   });
 });
@@ -68,7 +66,7 @@ describe("pricing catalog completeness", () => {
   });
 
   it("comps Coaches Corner only where the org fee already dwarfs it", () => {
-    const orgFee = bandForAthleteCount(COACHES_CORNER_FREE_AT_ATHLETE_COUNT).monthlyPriceCents;
+    const orgFee = coachMonthlyCents(COACHES_CORNER_FREE_AT_ATHLETE_COUNT);
     expect(orgFee).toBeGreaterThan(COACHES_CORNER_MONTHLY_PRICE_CENTS * 10);
   });
 

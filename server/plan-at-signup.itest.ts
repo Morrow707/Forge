@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { coachStaff, users, MAX_EXPECTED_ATHLETES } from "@shared/schema";
-import { bandForAthleteCount, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
+import { bandForAthleteCount, coachMonthlyCents, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
 import { storage } from "./storage";
 import { resetDatabase } from "./test-support/fixtures";
 import {
@@ -192,7 +192,7 @@ describe("the plan a school picks at signup", () => {
     expect(res.body.band).toEqual({
       id: "21-40",
       label: bandForAthleteCount(34).label,
-      monthlyPriceCents: bandForAthleteCount(34).monthlyPriceCents,
+      monthlyPriceCents: coachMonthlyCents(34),
       athleteCapIncluded: 40,
       athleteFloor: 21,
     });

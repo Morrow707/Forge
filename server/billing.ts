@@ -13,7 +13,9 @@ import {
   BILLING_TIERS,
   COACH_PURCHASABLE_ADD_ON_ORDER,
   ORG_BASE_CENTS,
+  FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES,
   bandForAthleteCount,
+  coachMonthlyCents,
   type AddOnId,
   type BillingTierId,
 } from "@shared/billing-tiers";
@@ -45,7 +47,7 @@ import { resolveVideoRetentionLimits, type VideoRetentionLimits } from "@shared/
 // unless someone goes and sets this env var by hand. Combined with
 // isBetaAccount below, nothing is ever restricted by accident.
 import { notifyCoachPlanEnded } from "./plan-ended-email";
-import { announcePersonalizationChange } from "./personalization-included-notice";
+import { syncPersonalizationNotice } from "./personalization-included-notice";
 import { activeAddOns, addOnIsActive, type AddOnTerms } from "@shared/add-on-terms";
 
 export const ENFORCEMENT_ENABLED = process.env.BILLING_ENFORCEMENT_ENABLED === "true";
@@ -126,7 +128,16 @@ export function coachPlanIsPaidFor(account: BillingAccount): boolean {
  * no trial is active, AND BILLING_ENFORCEMENT_ENABLED is set does a real
  * tier/add-on lookup happen. See shared/billing-tiers.ts for what each
  * tier/add-on id actually includes. */
-export function getEntitlements(account: BillingAccount): Entitlements {
+/** A PAYING program with FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES athletes on its roster has
+ * Full Personalization included (2026-11-18). `activeSeats` is the real roster, holds excluded
+ * (storage.getRosterSeatCountForCoach), never the typed headcount. A comp, a trial or enforcement
+ * off already open everything before this is asked. */
+export function personalizationEarnedByRoster(account: Pick<BillingAccount, "billingTier">, activeSeats: number): boolean {
+  return Boolean(account.billingTier && BILLING_TIERS[account.billingTier as BillingTierId]) &&
+    activeSeats >= FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES;
+}
+
+export function getEntitlements(account: BillingAccount, activeSeats = 0): Entitlements {
   const trialActive = account.trialExpiresAt != null && account.trialExpiresAt.getTime() > Date.now();
   if (!ENFORCEMENT_ENABLED || account.isBetaAccount || trialActive) {
     return UNLIMITED_ENTITLEMENTS;
@@ -139,15 +150,14 @@ export function getEntitlements(account: BillingAccount): Entitlements {
   const addOns = new Set<AddOnId>(
     activeAddOns(account.billingAddOns, account.addOnTerms) as AddOnId[],
   );
-  const hasFullBundle = addOns.has("full_bundle");
+  const hasFullBundle = addOns.has("full_bundle") || personalizationEarnedByRoster(account, activeSeats);
 
   return {
-    hasCustomColors: Boolean(tier?.includesFullPersonalization) || hasFullBundle || addOns.has("custom_colors"),
-    hasTeamIdentity: Boolean(tier?.includesFullPersonalization) || hasFullBundle || addOns.has("team_identity"),
-    hasWorkflowCustomization:
-      Boolean(tier?.includesFullPersonalization) || hasFullBundle || addOns.has("workflow"),
+    hasCustomColors: hasFullBundle || addOns.has("custom_colors"),
+    hasTeamIdentity: hasFullBundle || addOns.has("team_identity"),
+    hasWorkflowCustomization: hasFullBundle || addOns.has("workflow"),
     hasMultiTeam: Boolean(tier?.includesMultiTeam),
-    hasPersonalPage: Boolean(tier?.includesFullPersonalization) || hasFullBundle || addOns.has("personal_page"),
+    hasPersonalPage: hasFullBundle || addOns.has("personal_page"),
     // Deliberately NOT part of full_bundle and not included in any band: the
     // Corner is coach education sold on its own, and full_bundle is the
     // personalization three at a discount. A band's own comp for a big roster is
@@ -702,6 +712,9 @@ export async function rebillCoachBandAfterJoin(coachId: number): Promise<void> {
     // `synced` is the one that moved money; every `reason` is an ordinary no-op (no plan, no
     // Stripe subscription, the join stayed inside the band) and is not worth an audit row each
     // time an athlete joins.
+    // The roster just changed, so Full Personalization may have just started or stopped being
+    // included (50 athletes, 2026-11-18).
+    syncPersonalizationNotice(primaryId);
     if (result.synced) {
       await storage.logBillingEvent(primaryId, "coach.plan.rebilled_on_join", {
         ...result,
@@ -720,6 +733,10 @@ export async function rebillCoachBandAfterJoin(coachId: number): Promise<void> {
   }
 }
 
+/** The same re-bill, for every roster change that is not a join: a removal, a hold, a return.
+ *  At $4 an athlete exactly, each of them changes the bill (2026-11-18). */
+export const rebillCoachPlanAfterRosterChange = rebillCoachBandAfterJoin;
+
 export async function syncCoachSubscriptionBand(
   userId: number,
   athleteCount: number,
@@ -736,7 +753,9 @@ export async function syncCoachSubscriptionBand(
   const item = stripeSub.items.data.find((i) => i.price.id === perAthletePrice);
   if (!item) return { synced: false, reason: "no_per_athlete_item" };
   const previousQuantity = item.quantity ?? 0;
-  const quantity = band.athleteCapIncluded;
+  // EXACTLY THE ATHLETES, never the band's ceiling (2026-11-18): $4 for each one. At least one,
+  // because Stripe refuses a subscription line of zero.
+  const quantity = Math.max(1, Math.floor(athleteCount));
   if (quantity === previousQuantity) return { synced: true, previousQuantity, quantity, prorated: false };
   const up = quantity > previousQuantity;
   await stripe.subscriptionItems.update(item.id, {
@@ -744,10 +763,9 @@ export async function syncCoachSubscriptionBand(
     proration_behavior: up ? "create_prorations" : "none",
   });
   await stripe.subscriptions.update(sub.stripeSubscriptionId, {
-    metadata: { band: band.id, bandAthleteCap: String(band.athleteCapIncluded), quotedMonthlyCents: String(band.monthlyPriceCents) },
+    metadata: { band: band.id, athleteCount: String(quantity), quotedMonthlyCents: String(coachMonthlyCents(quantity)) },
   });
-  const applied = await storage.applyCoachSubscriptionBand(userId, band.id, band.athleteCapIncluded);
-  if (applied && "previousBillingTier" in applied) announcePersonalizationChange(userId, applied.previousBillingTier, band.id);
+  await storage.applyCoachSubscriptionBand(userId, band.id);
   await storage.logBillingEvent(userId, "coach.plan.band_synced", { previousQuantity, quantity, band: band.id, prorated: up });
   return { synced: true, previousQuantity, quantity, prorated: up };
 }
@@ -1022,9 +1040,12 @@ export async function createCoachSubscriptionCheckout(
   const perAthletePrice = coachPerAthletePriceId();
   if (!perAthletePrice) return { error: "No Stripe price configured for coach plans yet." };
   const band = bandForAthleteCount(rosterAthleteCount);
+  // $4 for every athlete, exactly (2026-11-18). A program with no athletes yet is charged for one,
+  // because Stripe refuses a subscription line of zero.
+  const athleteCount = Math.max(1, Math.floor(rosterAthleteCount));
 
   const lineItems: { price: string; quantity: number }[] = [
-    { price: perAthletePrice, quantity: band.athleteCapIncluded },
+    { price: perAthletePrice, quantity: athleteCount },
   ];
   // Only while there is a fee to charge. Line-iteming a $0 price is how the old
   // behaviour managed to look configured while billing nothing.
@@ -1040,8 +1061,8 @@ export async function createCoachSubscriptionCheckout(
     // What they were quoted, recorded on the subscription: a roster that grows past
     // the band later is a different bill, and this is what says which one this was.
     band: band.id,
-    bandAthleteCap: String(band.athleteCapIncluded),
-    quotedMonthlyCents: String(band.monthlyPriceCents),
+    athleteCount: String(athleteCount),
+    quotedMonthlyCents: String(coachMonthlyCents(athleteCount)),
   };
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
@@ -1892,10 +1913,8 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
         const bandId = session.metadata?.band;
         const band = bandId && bandId in BILLING_TIERS ? BILLING_TIERS[bandId] : null;
         if (band) {
-          const applied = await storage.applyCoachSubscriptionBand(userId, band.id, band.athleteCapIncluded);
-          if (applied && "previousBillingTier" in applied) {
-            announcePersonalizationChange(userId, applied.previousBillingTier, band.id);
-          }
+          await storage.applyCoachSubscriptionBand(userId, band.id);
+          syncPersonalizationNotice(userId);
         }
       }
       await storage.logBillingEvent(userId, event.type, { sessionId: session.id, kind }, event.id);
