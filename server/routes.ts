@@ -26,6 +26,7 @@ import {
   ORG_PER_ATHLETE_CENTS,
   type AddOnId,
   ALL_ADD_ON_IDS,
+  FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES,
 } from "@shared/billing-tiers";
 import { createServer, type Server } from "http";
 import path from "path";
@@ -163,6 +164,7 @@ import { COACH_SECTIONS } from "@shared/coach-sections";
 import { widgetLayoutSchema } from "@shared/dashboard-widgets";
 import { resolveRosterGroups, updateRosterGroupsSchema, setAthleteGroupSchema } from "@shared/roster-groups";
 import { notifyUser } from "./notify";
+import { announcePersonalizationChange } from "./personalization-included-notice";
 import { findGoniometerMovement } from "@shared/goniometer";
 import { NOTIFICATION_CATEGORIES } from "@shared/notification-categories";
 import {
@@ -4667,6 +4669,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
     const updated = await storage.updateCoachBilling(coachId, parsed.data);
+    if (parsed.data.billingTier !== undefined) {
+      announcePersonalizationChange(coachId, target.billingTier, parsed.data.billingTier);
+    }
     res.json(updated);
   });
 
@@ -6093,13 +6098,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // the athlete-scoped pair of routes below so the two can't drift.
   app.get("/api/coach/widget-prefs", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
+    // A chosen dashboard layout is Full Personalization (2026-11-18): without it the default
+    // layout applies, and the saved one comes back with it.
+    if (!(await getEntitlementsForCoach(user.id)).hasWorkflowCustomization) return res.json({ layout: [] });
     const layout = await storage.getWidgetLayoutForUser(user.id);
     res.json({ layout });
   });
   app.patch("/api/coach/widget-prefs", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
     if (!(await getEntitlementsForCoach(user.id)).hasWorkflowCustomization) {
-      return res.status(402).json({ message: "Dashboard customization comes with Full Personalization, or with any plan above 20 athletes." });
+      return res.status(402).json({ message: `Dashboard customization comes with Full Personalization, or free on any plan of ${FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES} athletes or more.` });
     }
     const parsed = widgetLayoutSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -15074,13 +15082,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const coachIds = await storage.getEffectiveCoachIds(user.id);
     const prefs = await storage.getNavPrefsForCoach(coachIds[0]);
+    // What applies NOW (2026-11-18): hidden and renamed tabs are Full Personalization, so a
+    // program without it sees Forge's own nav. The saved choices are kept and come back with it.
+    if (!(await getEntitlementsForCoach(user.id)).hasWorkflowCustomization) {
+      return res.json({ hiddenNavSections: [], navLabelOverrides: {} });
+    }
     res.json(prefs);
   });
 
   app.patch("/api/coach/nav-prefs", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
     const user = currentUser(req);
     if (!(await getEntitlementsForCoach(user.id)).hasWorkflowCustomization) {
-      return res.status(402).json({ message: "Nav customization comes with Full Personalization, or with any plan above 20 athletes." });
+      return res.status(402).json({ message: `Nav customization comes with Full Personalization, or free on any plan of ${FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES} athletes or more.` });
     }
     const parsed = updateNavPrefsSchema.safeParse(req.body);
     if (!parsed.success) {

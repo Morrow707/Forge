@@ -360,6 +360,7 @@ import { classAiDraftSchema, createRedeemCodeSchema } from "@shared/schema";
 import { nutritionTargetNumberShape } from "@shared/schema";
 import { NUTRITION_TARGET_FIELDS } from "@shared/nutrition-target-fields";
 import { getEntitlements, getVideoRetentionLimits } from "./billing";
+import { brandingWithinEntitlements, type BrandingEntitlements } from "@shared/branding-within-entitlements";
 import type { VideoRetentionLimits } from "@shared/video-retention";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
@@ -7004,7 +7005,9 @@ export const storage = {
       .set({ billingTier: bandId, plannedAthleteCount: planned })
       .where(eq(users.id, userId))
       .returning({ plannedAthleteCount: users.plannedAthleteCount, billingTier: users.billingTier });
-    return row ?? null;
+    // The band it replaced, so the caller can tell the coach when Full Personalization starts or
+    // stops being included (server/personalization-included-notice.ts).
+    return row ? { ...row, previousBillingTier: current.billingTier ?? null } : null;
   },
 
   // THE ONE PLACE AN ATHLETE JOINS A ROSTER, and the reason it is a transaction with a lock.
@@ -22328,18 +22331,31 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
   // they're on more than one -- uncommon today, but possible). Falls back
   // to null fields throughout when nothing's been branded, which the
   // client treats as "stay on the default Forge look."
+  /** What a program may show of its own look RIGHT NOW (2026-11-18): the saved branding is
+   *  served through shared/branding-within-entitlements.ts, so a program that no longer has Full
+   *  Personalization shows its free name, logo and primary color, and nothing it set while it
+   *  had it. An admin's own row is never a customer and is never narrowed. */
+  async brandingEntitlementsForProgram(primaryCoachId: number): Promise<BrandingEntitlements> {
+    const primary = await this.getUser(primaryCoachId);
+    if (!primary || primary.role === "admin") {
+      return { hasCustomColors: true, hasTeamIdentity: true, hasWorkflowCustomization: true, hasPersonalPage: true };
+    }
+    return getEntitlements(primary);
+  },
+
   async getEffectiveBrandingForUser(userId: number) {
     const user = await this.getUser(userId);
     if (!user) return null;
 
     if (user.role === "coach" || user.role === "admin") {
       const coachIds = await this.getEffectiveCoachIds(userId);
-      const [branding, features, exercisePageTheme] = await Promise.all([
+      const [branding, features, exercisePageTheme, entitlements] = await Promise.all([
         this.getCoachBranding(coachIds[0]),
         this.getCoachFeatures(coachIds[0]),
         this.getExercisePageTheme(coachIds[0]),
+        this.brandingEntitlementsForProgram(coachIds[0]),
       ]);
-      return { ...branding, features, exercisePageTheme };
+      return brandingWithinEntitlements({ ...branding, features, exercisePageTheme }, entitlements);
     }
 
     // Athlete: base branding comes from their coach's org.
@@ -22371,7 +22387,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       if (childCoaches.length === 0) return emptyBranding;
       const ids = await this.getEffectiveCoachIds(childCoaches[0].id);
       const org = await this.getCoachBranding(ids[0]);
-      return { ...emptyBranding, ...org };
+      return brandingWithinEntitlements({ ...emptyBranding, ...org }, await this.brandingEntitlementsForProgram(ids[0]));
     }
     const coaches = await this.getCoachesForAthlete(userId);
     if (coaches.length === 0) {
@@ -22385,11 +22401,12 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     // athlete can never write it; only /api/coach/nav-prefs, gated to the
     // primary coach, can. exercisePageTheme rides along the same way --
     // read-only from here, /api/coach/exercise-page-theme is the only PATCH.
-    const [orgBranding, features, navPrefs, exercisePageTheme] = await Promise.all([
+    const [orgBranding, features, navPrefs, exercisePageTheme, entitlements] = await Promise.all([
       this.getCoachBranding(coachIds[0]),
       this.getCoachFeatures(coachIds[0]),
       this.getNavPrefsForCoach(coachIds[0]),
       this.getExercisePageTheme(coachIds[0]),
+      this.brandingEntitlementsForProgram(coachIds[0]),
     ]);
 
     const athleteTeams = await this.getTeamsForAthlete(userId);
@@ -22400,7 +22417,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     // Motto/mission/contact/welcome are org-only -- no team-level field
     // exists for them (see updateTeamBrandingSchema), so they always come
     // straight from orgBranding with no team fallback needed.
-    return {
+    return brandingWithinEntitlements({
       brandTeamName: orgBranding?.brandTeamName ?? null,
       brandLogoUrl: brandedTeam?.brandLogoUrl ?? orgBranding?.brandLogoUrl ?? null,
       brandPrimaryColor: brandedTeam?.brandPrimaryColor ?? orgBranding?.brandPrimaryColor ?? null,
@@ -22419,7 +22436,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       navLabelOverrides: navPrefs.navLabelOverrides,
       features,
       exercisePageTheme,
-    };
+    }, entitlements);
   },
 
   // Unauthenticated lookup for the signup page -- a coach or team invite
@@ -22437,17 +22454,18 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     if (team) {
       const coachIds = await this.getEffectiveCoachIds(team.coachId);
       const orgBranding = await this.getCoachBranding(coachIds[0]);
-      return {
+      return brandingWithinEntitlements({
         brandTeamName: orgBranding?.brandTeamName ?? null,
         brandLogoUrl: team.brandLogoUrl ?? orgBranding?.brandLogoUrl ?? null,
         brandPrimaryColor: team.brandPrimaryColor ?? orgBranding?.brandPrimaryColor ?? null,
         brandSecondaryColor: team.brandSecondaryColor ?? orgBranding?.brandSecondaryColor ?? null,
-      };
+      }, await this.brandingEntitlementsForProgram(coachIds[0]));
     }
     const coach = (await this.getUserByCoachCode(code)) ?? (await this.getCoachByBrandSlug(code));
     if (coach && coach.role === "coach") {
       const coachIds = await this.getEffectiveCoachIds(coach.id);
-      return this.getCoachBranding(coachIds[0]);
+      const org = await this.getCoachBranding(coachIds[0]);
+      return org ? brandingWithinEntitlements(org, await this.brandingEntitlementsForProgram(coachIds[0])) : org;
     }
     return null;
   },

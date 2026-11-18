@@ -4,6 +4,7 @@ import {
   BILLING_TIERS,
   BILLING_TIER_ORDER,
   ORG_BLOCK_SIZE,
+  FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES,
   bandForAthleteCount,
 } from "@shared/billing-tiers";
 
@@ -39,7 +40,9 @@ describe("the pricing page states one personalization threshold", () => {
 
   it("agrees with the price list on where personalization starts", () => {
     const firstIncluded = bands.find((b) => b.includesFullPersonalization);
-    expect(firstIncluded?.athleteFloor).toBe(ORG_BLOCK_SIZE + 1);
+    // The band holding FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES (50) is 41-60 (2026-11-18).
+    expect(firstIncluded?.athleteFloor).toBeLessThanOrEqual(FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES);
+    expect(firstIncluded?.athleteCapIncluded).toBeGreaterThanOrEqual(FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES);
   });
 });
 

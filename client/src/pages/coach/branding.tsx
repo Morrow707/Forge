@@ -20,6 +20,7 @@ import { contrastForegroundHsl, meetsWcagAA } from "@/lib/color";
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
 import { BRAND_HEADING_FONTS, BRAND_BACKGROUND_STRENGTHS } from "@shared/branding-options";
 import { COACH_FEATURE_FIELDS, type CoachFeature } from "@shared/team-features";
+import { FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES } from "@shared/billing-tiers";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ImagePlus, Trash2, Copy, Mail, Palette, Lock } from "lucide-react";
@@ -251,8 +252,8 @@ export default function CoachBranding() {
       <div className={cn("space-y-3", !unlocked && "rounded-md border border-dashed border-amber-500/40 p-3")}>
         {!unlocked && (
           <p className="flex items-center gap-1.5 text-xs text-amber-500">
-            <Lock className="h-3 w-3" /> Part of Full Personalization. Included for rosters above 20
-            athletes; smaller programs add it from Billing. Saving leaves these fields as they are.
+            <Lock className="h-3 w-3" /> Part of Full Personalization. Free on any plan of{" "}
+            {FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES} athletes or more; smaller programs add it from Billing. Saving leaves these fields as they are.
           </p>
         )}
         {children}

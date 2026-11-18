@@ -98,6 +98,13 @@ function bandPriceCents(athleteCapIncluded: number): number {
 /** Athletes per block above the starter bands -- $80 a block at $4.00 each. */
 export const ORG_BLOCK_SIZE = 20;
 
+/** FULL PERSONALIZATION IS FREE ON THE BAND THAT HOLDS THIS MANY ATHLETES, AND EVERY BAND ABOVE.
+ * Scott, 2026-11-18: "make that 50 athletes, so they are spending $200 a month they get it for
+ * free, not $80". Bands are billed to their ceiling, so the band holding 50 is 41-60 at $240 a
+ * month; a program of 41 is on that band and pays for 60, so it is included there too. Until this
+ * it was every band past the first block (21-40, $160). Multi-team stays at 21 and up. */
+export const FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES = 50;
+
 // Band boundaries: fives up to 20 (0-5, 6-10, 11-15, 16-20), then whole
 // 20-athlete blocks from 21 up through 1,000.
 //
@@ -144,9 +151,9 @@ function buildBands(): BillingTierDef[] {
     athleteCapIncluded: hi,
     athleteFloor: lo,
     perAthleteOverageCents: 0,
-    // Everything past the first block is a coached program rather than one
-    // small team, which is where full personalization and multi-team start.
-    includesFullPersonalization: lo > ORG_BLOCK_SIZE,
+    // Everything past the first block is a coached program rather than one small team, which is
+    // where multi-team starts. Full personalization starts at the band holding 50 athletes.
+    includesFullPersonalization: hi >= FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES,
     includesMultiTeam: lo > ORG_BLOCK_SIZE,
   }));
 }
@@ -185,10 +192,9 @@ export interface AddOnDef {
   description: string;
 }
 
-// Add-ons only matter on the two starter bands (0-15, 16-30) -- every band
-// above 30 athletes already includes full personalization via
-// includesFullPersonalization, so there's nothing for them to buy here (see
-// getEntitlements in server/billing.ts).
+// Full Personalization only needs buying below FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES -- the
+// band holding that many athletes, and every band above it, includes it via
+// includesFullPersonalization (see getEntitlements in server/billing.ts).
 /** Coaches Corner's monthly price, as a standalone coach add-on.
  *
  * THE REAL PRICE. Scott, 2026-10-03 ("keep them"): $19.99, the same as the top

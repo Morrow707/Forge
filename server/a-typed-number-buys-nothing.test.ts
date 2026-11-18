@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { bandForAthleteCount, BILLING_TIERS, ORG_BLOCK_SIZE } from "@shared/billing-tiers";
+import { bandForAthleteCount, BILLING_TIERS, FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES, ORG_BLOCK_SIZE } from "@shared/billing-tiers";
 
 /**
  * A NUMBER SOMEBODY TYPES INTO A FORM CANNOT GRANT A PAID ENTITLEMENT.
@@ -32,11 +32,15 @@ const stripComments = (src: string) =>
   src.replace(/^[ \t]*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 
 describe("what the typed number would have bought", () => {
-  it("crosses into the personalization bands one athlete past the block size", () => {
-    // The exact edge the hole turned on: 20 buys nothing, 21 used to buy a $24.99 add-on.
-    expect(BILLING_TIERS[bandForAthleteCount(ORG_BLOCK_SIZE).id].includesFullPersonalization).toBe(false);
-    expect(BILLING_TIERS[bandForAthleteCount(ORG_BLOCK_SIZE + 1).id].includesFullPersonalization).toBe(true);
+  it("multi-team starts one athlete past the block size, personalization at the band holding 50", () => {
+    // Multi-team: 20 buys nothing, 21 does. Full Personalization moved to the band holding 50
+    // athletes on 2026-11-18 (41-60, billed as 60), so 40 does not include it and 41 does.
+    expect(BILLING_TIERS[bandForAthleteCount(ORG_BLOCK_SIZE).id].includesMultiTeam).toBe(false);
     expect(BILLING_TIERS[bandForAthleteCount(ORG_BLOCK_SIZE + 1).id].includesMultiTeam).toBe(true);
+    expect(BILLING_TIERS[bandForAthleteCount(ORG_BLOCK_SIZE + 1).id].includesFullPersonalization).toBe(false);
+    expect(BILLING_TIERS[bandForAthleteCount(40).id].includesFullPersonalization).toBe(false);
+    expect(BILLING_TIERS[bandForAthleteCount(FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES).id].includesFullPersonalization).toBe(true);
+    expect(BILLING_TIERS[bandForAthleteCount(41).id].includesFullPersonalization).toBe(true);
   });
 });
 

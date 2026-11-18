@@ -45,6 +45,7 @@ import { resolveVideoRetentionLimits, type VideoRetentionLimits } from "@shared/
 // unless someone goes and sets this env var by hand. Combined with
 // isBetaAccount below, nothing is ever restricted by accident.
 import { notifyCoachPlanEnded } from "./plan-ended-email";
+import { announcePersonalizationChange } from "./personalization-included-notice";
 import { activeAddOns, addOnIsActive, type AddOnTerms } from "@shared/add-on-terms";
 
 export const ENFORCEMENT_ENABLED = process.env.BILLING_ENFORCEMENT_ENABLED === "true";
@@ -745,7 +746,8 @@ export async function syncCoachSubscriptionBand(
   await stripe.subscriptions.update(sub.stripeSubscriptionId, {
     metadata: { band: band.id, bandAthleteCap: String(band.athleteCapIncluded), quotedMonthlyCents: String(band.monthlyPriceCents) },
   });
-  await storage.applyCoachSubscriptionBand(userId, band.id, band.athleteCapIncluded);
+  const applied = await storage.applyCoachSubscriptionBand(userId, band.id, band.athleteCapIncluded);
+  if (applied && "previousBillingTier" in applied) announcePersonalizationChange(userId, applied.previousBillingTier, band.id);
   await storage.logBillingEvent(userId, "coach.plan.band_synced", { previousQuantity, quantity, band: band.id, prorated: up });
   return { synced: true, previousQuantity, quantity, prorated: up };
 }
@@ -1889,7 +1891,12 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<voi
       if (kind === "coach_subscription") {
         const bandId = session.metadata?.band;
         const band = bandId && bandId in BILLING_TIERS ? BILLING_TIERS[bandId] : null;
-        if (band) await storage.applyCoachSubscriptionBand(userId, band.id, band.athleteCapIncluded);
+        if (band) {
+          const applied = await storage.applyCoachSubscriptionBand(userId, band.id, band.athleteCapIncluded);
+          if (applied && "previousBillingTier" in applied) {
+            announcePersonalizationChange(userId, applied.previousBillingTier, band.id);
+          }
+        }
       }
       await storage.logBillingEvent(userId, event.type, { sessionId: session.id, kind }, event.id);
       // A card was charged on an account that may belong to, or be responsible for, a minor.
