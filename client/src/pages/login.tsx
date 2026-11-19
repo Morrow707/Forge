@@ -78,6 +78,9 @@ export default function LoginPage() {
   }, [nativeShowing, loginMutation.isError, present]);
 
   const brand = useRememberedBrand();
+  // A login screen wearing a program's look is that school's door, so Forge's own admin entrance
+  // is not drawn on it (Scott, 2026-11-19). /admin/login still works when typed.
+  const wearsAProgramsBrand = Boolean(brand?.brandTeamName || brand?.brandLogoUrl || brand?.brandPrimaryColor);
   useEffect(() => ensureBrandFontLoaded(brand?.brandHeadingFont), [brand?.brandHeadingFont]);
 
   if (!isLoading && user) {
@@ -248,12 +251,14 @@ export default function LoginPage() {
                 Don't have an account?{" "}
                 <SignupLink className="font-semibold text-primary hover:underline">Sign up</SignupLink>
               </p>
-              <p className="mt-2 text-center text-sm text-muted-foreground">
-                Are you an admin?{" "}
-                <Link href="/admin/login" className="font-semibold text-primary hover:underline">
-                  Log in here
-                </Link>
-              </p>
+              {!wearsAProgramsBrand && (
+                <p className="mt-2 text-center text-sm text-muted-foreground">
+                  Are you an admin?{" "}
+                  <Link href="/admin/login" className="font-semibold text-primary hover:underline">
+                    Log in here
+                  </Link>
+                </p>
+              )}
               {/* The pricing page lists the coach plan, which is sold on the web and never in
                   the app, so the native app does not link to it (App Store guideline 3.1.1). */}
               {!Capacitor.isNativePlatform() && (
