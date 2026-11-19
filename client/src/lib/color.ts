@@ -169,3 +169,29 @@ export function nearestAccessibleColor(hex: string): string | null {
   }
   return null;
 }
+
+/** The DARK and LIGHT app backgrounds a brand color's text has to read against (index.css:
+ *  `--background` is lightness 5% in the dark theme, white in the light one). */
+export const APP_DARK_BACKGROUND_HEX = "#0b0c0f";
+export const APP_LIGHT_BACKGROUND_HEX = "#ffffff";
+/** WCAG AA for body text. */
+const READABLE_TEXT_RATIO = 4.5;
+const LIGHTNESS_STEPS = 100;
+
+/** The same hue and saturation as `hex`, moved in lightness only as far as it takes for TEXT in
+ *  that color to read against `backgroundHex` (2026-11-19). A program's navy is a fine button and
+ *  an unreadable link on a near-black page; this is the link's shade. Returns the color unchanged
+ *  when it already reads, and null for an invalid hex. */
+export function readableTextShade(hex: string, backgroundHex: string): string | null {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return null;
+  if ((contrastRatio(hex, backgroundHex) ?? 0) >= READABLE_TEXT_RATIO) return hex;
+  const [h, s, l] = rgbToHsl(...rgb);
+  const lighten = (relativeLuminance(backgroundHex) ?? 0) < 0.5;
+  const candidates = Array.from({ length: LIGHTNESS_STEPS }, (_, i) => {
+    const step = (i + 1) / LIGHTNESS_STEPS;
+    const next = lighten ? l + (1 - l) * step : l * (1 - step);
+    return rgbToHex(...hslToRgb(h, s, next));
+  });
+  return candidates.find((c) => (contrastRatio(c, backgroundHex) ?? 0) >= READABLE_TEXT_RATIO) ?? candidates[candidates.length - 1];
+}

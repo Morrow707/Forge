@@ -446,3 +446,25 @@ html [data-sonner-toaster][data-theme="dark"] {
 html.had-session [data-prerendered] {
   visibility: hidden;
 }
+
+/* TEXT IN A PROGRAM'S COLOR READS ON THE PAGE IT IS ON (2026-11-19). A brand color is set as the
+   fill (--primary) and, by computeBrandingStyle, as the shade text in that color needs on each
+   theme's background (--primary-text-dark / -light). A navy program's links were navy on a
+   near-black page. Unbranded Forge sets neither shade, so these fall back to --primary and
+   nothing changes. Outside @layer so they win over the generated utilities. */
+.text-primary,
+.hover\:text-primary:hover {
+  color: hsl(var(--primary-text-dark, var(--primary)));
+}
+:root.light .text-primary,
+:root.light .hover\:text-primary:hover {
+  color: hsl(var(--primary-text-light, var(--primary)));
+}
+.text-secondary,
+.hover\:text-secondary:hover {
+  color: hsl(var(--secondary-text-dark, var(--secondary)));
+}
+:root.light .text-secondary,
+:root.light .hover\:text-secondary:hover {
+  color: hsl(var(--secondary-text-light, var(--secondary)));
+}

@@ -1,4 +1,27 @@
-import { hexToHslTriplet } from "@/lib/color";
+import {
+  APP_DARK_BACKGROUND_HEX,
+  APP_LIGHT_BACKGROUND_HEX,
+  contrastForegroundHsl,
+  hexToHslTriplet,
+  readableTextShade,
+} from "@/lib/color";
+
+/** A brand color as everything that draws with it needs it (2026-11-19): the fill, the text ON
+ *  the fill (black or white, whichever reads -- this was never set, so a gold program's buttons
+ *  had white text on gold), and the shade TEXT in that color takes on each theme's background
+ *  (a navy program's links were navy on near-black). index.css reads the two text shades. */
+function brandColorVars(hex: string, name: "primary" | "secondary"): Record<string, string> {
+  const hsl = hexToHslTriplet(hex);
+  if (!hsl) return {};
+  const onDark = readableTextShade(hex, APP_DARK_BACKGROUND_HEX);
+  const onLight = readableTextShade(hex, APP_LIGHT_BACKGROUND_HEX);
+  return {
+    [`--${name}`]: hsl,
+    [`--${name}-foreground`]: contrastForegroundHsl(hex),
+    ...(onDark ? { [`--${name}-text-dark`]: hexToHslTriplet(onDark) ?? hsl } : {}),
+    ...(onLight ? { [`--${name}-text-light`]: hexToHslTriplet(onLight) ?? hsl } : {}),
+  };
+}
 import { BRAND_HEADING_FONTS } from "@shared/branding-options";
 import type { ExercisePageTheme } from "@shared/schema";
 
@@ -70,7 +93,7 @@ export function computeBrandingStyle(
   if (branding?.brandPrimaryColor) {
     const hsl = hexToHslTriplet(branding.brandPrimaryColor);
     if (hsl) {
-      vars["--primary"] = hsl;
+      Object.assign(vars, brandColorVars(branding.brandPrimaryColor, "primary"));
       vars["--ring"] = hsl;
       vars["--accent"] = hsl;
       // The ambient glow follows the program's color, the same way a coach's own accent
@@ -82,7 +105,7 @@ export function computeBrandingStyle(
   if (branding?.brandSecondaryColor) {
     const hsl = hexToHslTriplet(branding.brandSecondaryColor);
     if (hsl) {
-      vars["--secondary"] = hsl;
+      Object.assign(vars, brandColorVars(branding.brandSecondaryColor, "secondary"));
       // The second series on every chart. Blue by default (index.css); the program's
       // second colour when it has one, so a Cal chart is blue and gold, not blue and blue.
       vars["--chart-2"] = hsl;
@@ -101,7 +124,7 @@ export function computeBrandingStyle(
   if (personal?.accentColor) {
     const hsl = hexToHslTriplet(personal.accentColor);
     if (hsl) {
-      vars["--primary"] = hsl;
+      Object.assign(vars, brandColorVars(personal.accentColor, "primary"));
       vars["--ring"] = hsl;
       vars["--accent"] = hsl;
       vars["--rim"] = hsl;
@@ -112,7 +135,7 @@ export function computeBrandingStyle(
   if (personal?.secondaryColor) {
     const hsl = hexToHslTriplet(personal.secondaryColor);
     if (hsl) {
-      vars["--secondary"] = hsl;
+      Object.assign(vars, brandColorVars(personal.secondaryColor, "secondary"));
       vars["--chart-2"] = hsl;
     }
   }

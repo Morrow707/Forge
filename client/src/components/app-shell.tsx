@@ -395,6 +395,22 @@ export function AppShell({
       : null,
   );
 
+  // THE SAME LOOK ON THE PAGE ROOT, so pop-ups wear it too (2026-11-19). Dialogs, sheets, menus,
+  // popovers and toasts render in a portal on <body>, outside the shell's own root, so the inline
+  // style below never reached them: a navy-and-gold program's "Got it" button, delete
+  // confirmation and set editor stayed Forge orange. The variables are copied onto <html> while
+  // the shell is mounted and taken off again when it leaves, so a public page drawn after it does
+  // not inherit somebody's colors.
+  const brandingKey = JSON.stringify(brandingStyle ?? {});
+  useEffect(() => {
+    const vars = (brandingStyle ?? {}) as Record<string, string>;
+    const root = document.documentElement;
+    const names = Object.keys(vars).filter((name) => name.startsWith("--"));
+    names.forEach((name) => root.style.setProperty(name, String(vars[name])));
+    return () => names.forEach((name) => root.style.removeProperty(name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandingKey]);
+
   // Best-effort branded icon: swaps the browser tab favicon and (in
   // practice) iOS's "Add to Home Screen" icon, since Safari reads these
   // <link> tags from the live DOM at the moment someone saves the page --

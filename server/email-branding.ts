@@ -66,6 +66,25 @@ export function emailAssetOrigin(): string {
   return PUBLIC_ORIGIN;
 }
 
+/** Black or white, whichever reads on `hex` (WCAG contrast), for text drawn ON a brand color.
+ *  Added 2026-11-19: the band and the buttons were always white text, so a gold program's email
+ *  read white on gold. */
+export function emailTextOn(hex: string): { solid: string; soft: string } {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return { solid: "#fff", soft: "rgba(255,255,255,0.75)" };
+  const lin = (i: number) => {
+    const c = parseInt(m[1].slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const l = 0.2126 * lin(0) + 0.7152 * lin(2) + 0.0722 * lin(4);
+  // Contrast against white is 1.05 / (l + 0.05); against black (l + 0.05) / 0.05. Dark text wins
+  // when the second is larger.
+  const darkText = (l + 0.05) / 0.05 > 1.05 / (l + 0.05);
+  return darkText
+    ? { solid: "#0a0a0a", soft: "rgba(10,10,10,0.7)" }
+    : { solid: "#fff", soft: "rgba(255,255,255,0.75)" };
+}
+
 /** The band at the top of a branded email. Exported so the Branding page's "send me a test"
  * and the unit test both see the same markup. */
 export function brandedEmailHeader(brand: EmailBrand): string {
@@ -76,8 +95,8 @@ export function brandedEmailHeader(brand: EmailBrand): string {
     : "";
   return (
     `<div style="background:${escapeHtml(color)};padding:20px 24px;">` +
-    `${logo}<span style="color:#fff;font-size:20px;font-weight:bold;letter-spacing:0.5px;vertical-align:middle;">${name}</span>` +
-    `<div style="color:rgba(255,255,255,0.75);font-size:11px;margin-top:6px;letter-spacing:0.3px;">Powered by Forge</div>` +
+    `${logo}<span style="color:${emailTextOn(color).solid};font-size:20px;font-weight:bold;letter-spacing:0.5px;vertical-align:middle;">${name}</span>` +
+    `<div style="color:${emailTextOn(color).soft};font-size:11px;margin-top:6px;letter-spacing:0.3px;">Powered by Forge</div>` +
     `</div>`
   );
 }
@@ -96,7 +115,9 @@ export function applyEmailBranding(html: string, brand: EmailBrand | null | unde
   let out = html.replace(FORGE_EMAIL_HEADER_RE, brandedEmailHeader(brand));
   if (color.toLowerCase() !== FORGE_EMAIL_ORANGE.toLowerCase()) {
     // Buttons and links that were orange follow the band. The header has already been
-    // replaced, so this touches only the body.
+    // replaced, so this touches only the body. A button's white text follows too, to whichever
+    // of black or white reads on the program's color.
+    out = out.replace(/background:#F65B23;color:#fff/gi, `background:${color};color:${emailTextOn(color).solid}`);
     out = out.replace(/#F65B23/gi, color);
   }
   if (brand.brandTeamName) {
