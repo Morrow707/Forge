@@ -13,6 +13,7 @@ import { BrandedMark } from "@/components/branded-mark";
 import { ForgeMark } from "@/components/forge-mark";
 import { ExercisePageThemeDialog } from "@/components/exercise-page-theme-dialog";
 import { BrandExtrasEditor } from "@/components/brand-extras-editor";
+import { ProgramExperienceEditor } from "@/components/program-experience-editor";
 import { apiRequest, getJson, resolveApiUrl, ApiError } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { computeBrandingStyle, ensureBrandFontLoaded, type EffectiveBranding } from "@/lib/branding-style";
@@ -613,12 +614,13 @@ export default function CoachBranding() {
 
           {/* 6. YOUR WORDS, LOOK, DASHBOARD, BANNER, CELEBRATION AND ICON (2026-11-19) */}
           <BrandExtrasEditor canEdit={canEdit} />
+          <ProgramExperienceEditor canEdit={canEdit} />
 
           {/* 7. EVERYWHERE */}
           <Card className="mt-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <span className="rounded-md bg-primary/15 px-2 py-0.5 font-mono text-xs text-primary">7</span>
+                <span className="rounded-md bg-primary/15 px-2 py-0.5 font-mono text-xs text-primary">8</span>
                 Everywhere else
               </CardTitle>
               <CardDescription>Follows the colors above with nothing to set.</CardDescription>

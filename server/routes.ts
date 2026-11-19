@@ -79,7 +79,28 @@ import { usdaFoodLookupEnabled } from "./food-lookup";
 import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { pdfBrandForAthlete } from "./pdf-brand";
-import { brandExtrasSchema, brandExtrasWithinEntitlements, publicBrandExtras } from "@shared/brand-extras";
+import { buildRecruitingFlyerPdf } from "./recruiting-flyer";
+import {
+  brandExtrasSchema,
+  brandExtrasWithinEntitlements,
+  publicBrandExtras,
+  programAnswerFits,
+  MAX_CHECKIN_QUESTIONS,
+  MAX_CHECKIN_TEXT_ANSWER,
+} from "@shared/brand-extras";
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+/** How far back a coach sees a program check-in answer on an athlete's page. */
+const PROGRAM_ANSWER_HISTORY_DAYS = 14;
+// A calendar day, "2026-11-19"; anything else is not a date.
+// https://regex101.com/?regex=%5E%5Cd%7B4%7D-%5Cd%7B2%7D-%5Cd%7B2%7D%24
+const PROGRAM_CHECKIN_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const programCheckinSubmitSchema = z.object({
+  date: z.string().regex(PROGRAM_CHECKIN_DATE).optional(),
+  answers: z
+    .array(z.object({ questionId: z.string().max(32), value: z.string().max(MAX_CHECKIN_TEXT_ANSWER) }))
+    .max(MAX_CHECKIN_QUESTIONS),
+});
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
 import { summariseCalibrationEvidence } from "./calibration-evidence";
 import { fitLoadVelocityProfile, compareTakeToProfile } from "@shared/load-velocity-profile";
@@ -9654,6 +9675,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // for a test landing in their own inbox; the body is now the one a rostered athlete gets,
   // naming them as the coach. A Free Agent's copy is not previewable here on purpose: this
   // route exists to show a PROGRAM its own branded mail, and a Free Agent has no program.
+  // A printable recruiting flyer in the program's look with a QR code to sign up under this
+  // coach's join code (server/recruiting-flyer.ts). Any coach on the staff; their own code joins
+  // the same program.
+  app.get("/api/coach/flyer.pdf", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const coach = await storage.getUser(user.id);
+    if (!coach?.coachCode) return res.status(404).json({ message: "No join code on this account yet." });
+    const branding = await storage.getEffectiveBrandingForUser(user.id);
+    const joinUrl = `${publicOrigin(req)}/signup?code=${encodeURIComponent(coach.coachCode)}`;
+    const pdf = await buildRecruitingFlyerPdf({
+      teamName: branding?.brandTeamName ?? null,
+      motto: branding?.brandMotto ?? null,
+      primaryColor: branding?.brandPrimaryColor ?? null,
+      secondaryColor: branding?.brandSecondaryColor ?? null,
+      logoBuffer: await readUploadedFile(branding?.brandLogoUrl),
+      joinUrl,
+      code: coach.coachCode,
+    });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", 'attachment; filename="recruiting-flyer.pdf"');
+    res.send(pdf);
+  });
+
   app.post("/api/coach/branding/test-email", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
     const user = currentUser(req);
     if (!isEmailConfigured()) {
@@ -10507,6 +10551,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
       const trophies = await storage.getTrophiesForAthlete(athleteId);
       res.json(trophies);
+    },
+  );
+
+  // The athlete's answers to the program's own check-in questions, last two weeks.
+  app.get(
+    "/api/coach/roster/:athleteId/program-checkin-answers",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      const to = todayIso();
+      const from = new Date(Date.now() - PROGRAM_ANSWER_HISTORY_DAYS * MS_PER_DAY).toISOString().slice(0, 10);
+      res.json(await storage.getProgramCheckinAnswers(athleteId, from, to));
+    },
+  );
+
+  app.get(
+    "/api/coach/roster/:athleteId/program-trophies",
+    requireRole("coach"),
+    async (req, res) => {
+      const user = currentUser(req);
+      const athleteId = Number(req.params.athleteId);
+      const onRoster = await storage.getRosterAthleteForCoach(user.id, athleteId);
+      if (!onRoster) return res.status(404).json({ message: "Athlete not found" });
+      res.json(await storage.programTrophyDefinitionsForAthlete(athleteId));
     },
   );
 
@@ -12768,6 +12839,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(trophies);
   });
 
+  // The program's own trophies, earned or not (shared/brand-extras.ts).
+  app.get("/api/athlete/program-trophies", requireRole("athlete"), async (req, res) => {
+    res.json(await storage.programTrophyDefinitionsForAthlete(currentUser(req).id));
+  });
+
   // Backs the "see the trend" click on an exercise in the athlete's own
   // Recent PRs list -- scoped to their own id, no athleteId to validate.
   app.get("/api/athlete/exercise-history", requireRole("athlete"), async (req, res) => {
@@ -13056,6 +13132,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.startCaraTrainingSession(user.id);
     }
     res.status(201).json(checkin);
+  });
+
+  // The athlete has seen their program's welcome screens (brandExtras.welcomeScreens); shown once.
+  app.post("/api/athlete/program-welcome-seen", requireRole("athlete"), async (req, res) => {
+    await storage.markProgramWelcomeSeen(currentUser(req).id);
+    res.status(204).end();
+  });
+
+  // The program's own check-in questions and today's answers (brandExtras.checkinQuestions).
+  // Answers live in their own table and never change the readiness score.
+  app.get("/api/athlete/program-checkin", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const requested = typeof req.query.date === "string" ? req.query.date : null;
+    const date = requested && wellnessDateWithinWindow(requested) ? requested : todayIso();
+    const branding = await storage.getEffectiveBrandingForUser(user.id);
+    const questions = branding?.brandExtras?.checkinQuestions ?? [];
+    const answers = questions.length ? await storage.getProgramCheckinAnswers(user.id, date, date) : [];
+    res.json({ date, questions, answers: Object.fromEntries(answers.map((a) => [a.questionId, a.value])) });
+  });
+
+  app.post("/api/athlete/program-checkin", requireRole("athlete"), async (req, res) => {
+    const user = currentUser(req);
+    const parsed = programCheckinSubmitSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const date = parsed.data.date ?? todayIso();
+    if (!wellnessDateWithinWindow(date)) {
+      return res.status(400).json({ message: "That check-in is for a day that's already passed, it can't be filled in now." });
+    }
+    const branding = await storage.getEffectiveBrandingForUser(user.id);
+    const byId = new Map((branding?.brandExtras?.checkinQuestions ?? []).map((q) => [q.id, q]));
+    // An answer to a question the coach has since removed is set aside, never refused.
+    const answers = parsed.data.answers.flatMap((a) => {
+      const q = byId.get(a.questionId);
+      return q && programAnswerFits(q.kind, a.value) ? [{ questionId: q.id, questionText: q.text, value: a.value.trim() }] : [];
+    });
+    const saved = await storage.upsertProgramCheckinAnswers(user.id, date, answers);
+    res.status(201).json({ saved: saved.length });
   });
 
   app.get("/api/athlete/wellness/history", requireRole("athlete"), async (req, res) => {

@@ -68,9 +68,14 @@ describe("text on a brand color", () => {
 
 describe("pop-ups wear the program's colors", () => {
   it("the shell copies its brand variables onto <html>, where portalled dialogs inherit them, and takes them off", () => {
-    const shell = stripComments(readFileSync(new URL("../components/app-shell.tsx", import.meta.url), "utf8"));
-    expect(shell).toContain("const root = document.documentElement;");
-    expect(shell).toContain("root.style.setProperty(name, String(vars[name]))");
-    expect(shell).toContain("root.style.removeProperty(name)");
+    const hook = stripComments(readFileSync(new URL("../hooks/use-brand-vars-on-root.ts", import.meta.url), "utf8"));
+    expect(hook).toContain("const root = document.documentElement;");
+    expect(hook).toContain("root.style.setProperty(name, String(vars[name]))");
+    expect(hook).toContain("root.style.removeProperty(name)");
+    // Every page that draws its own frame instead of the shell wears the brand the same way.
+    ["../components/app-shell.tsx", "../pages/guardian-dashboard.tsx"].forEach((page) => {
+      const src = stripComments(readFileSync(new URL(page, import.meta.url), "utf8"));
+      expect(src, page).toMatch(/useBrandVarsOnRoot\(brandingStyle\)/);
+    });
   });
 });

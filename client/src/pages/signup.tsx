@@ -269,7 +269,7 @@ export default function SignupPage() {
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center bg-background px-4 py-10"
+      className="brand-photo flex min-h-screen items-center justify-center bg-background px-4 py-10"
       style={{
         paddingTop: "max(env(safe-area-inset-top), 2.5rem)",
         paddingBottom: "max(env(safe-area-inset-bottom), 2.5rem)",
@@ -278,18 +278,29 @@ export default function SignupPage() {
     >
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center gap-3">
-          {inviteBranding?.brandLogoUrl ? (
+          {/* A program's wide wordmark stands in for its logo and name, as on its login page. */}
+          {inviteBranding?.brandExtras?.wordmarkUrl ? (
             <img
-              src={resolveApiUrl(inviteBranding.brandLogoUrl)}
-              alt={inviteBranding.brandTeamName || "Team logo"}
-              className="h-14 w-14 rounded-xl object-contain"
+              src={resolveApiUrl(inviteBranding.brandExtras.wordmarkUrl)}
+              alt={inviteBranding.brandTeamName || "Team"}
+              className="h-16 max-w-[18rem] object-contain"
             />
           ) : (
-            <ForgeMark className="h-14 w-14 rounded-xl" />
+            <>
+              {inviteBranding?.brandLogoUrl ? (
+                <img
+                  src={resolveApiUrl(inviteBranding.brandLogoUrl)}
+                  alt={inviteBranding.brandTeamName || "Team logo"}
+                  className="h-14 w-14 rounded-xl object-contain"
+                />
+              ) : (
+                <ForgeMark className="h-14 w-14 rounded-xl" />
+              )}
+              <h1 className="font-display text-4xl font-extrabold uppercase tracking-wider">
+                {inviteBranding?.brandTeamName || "Forge"}
+              </h1>
+            </>
           )}
-          <h1 className="font-display text-4xl font-extrabold uppercase tracking-wider">
-            {inviteBranding?.brandTeamName || "Forge"}
-          </h1>
           {inviteBranding?.brandTeamName ? (
             <p className="text-sm text-muted-foreground">You're joining {inviteBranding.brandTeamName}</p>
           ) : inviteBranding?.brandLogoUrl ? (

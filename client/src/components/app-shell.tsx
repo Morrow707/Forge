@@ -98,7 +98,10 @@ import { applyTheme, hasStoredThemeChoice } from "@/lib/theme";
 import { applyProgramAppIcon } from "@/lib/app-icon";
 
 const ANNOUNCEMENT_DISMISSED_KEY = "forge:dismissed-announcement";
+const SEASON_DISMISSED_KEY = "forge:dismissed-season";
 import { computeBrandingStyle, ensureBrandFontLoaded, type EffectiveBranding } from "@/lib/branding-style";
+import { ProgramWelcomeScreens } from "@/components/program-welcome-screens";
+import { useBrandVarsOnRoot } from "@/hooks/use-brand-vars-on-root";
 import { rememberBrand } from "@/lib/remembered-brand";
 import { COACH_FEATURE_FIELDS, type CoachFeature } from "@shared/team-features";
 import { COACH_SECTION_NAV_HREFS } from "@shared/coach-sections";
@@ -413,6 +416,20 @@ export function AppShell({
       ? announcementRaw
       : null;
   const [announcementDismissed, setAnnouncementDismissed] = useState(false);
+  // The season or rivalry week running today (shared/brand-extras.ts withActiveSeason): its colors
+  // are already on the branding; its banner shows until this person dismisses that season.
+  const season = branding?.activeSeason?.banner ? branding.activeSeason : null;
+  const seasonKey = season ? `${season.name}\n${season.banner}` : null;
+  const [seasonDismissed, setSeasonDismissed] = useState(false);
+  useEffect(() => {
+    let seen: string | null = null;
+    try {
+      seen = localStorage.getItem(SEASON_DISMISSED_KEY);
+    } catch {
+      // Private browsing: shown every visit.
+    }
+    setSeasonDismissed(!!seasonKey && seen === seasonKey);
+  }, [seasonKey]);
   useEffect(() => {
     let seen: string | null = null;
     try {
@@ -435,15 +452,7 @@ export function AppShell({
   useEffect(() => {
     if (programAppIcon !== undefined) void applyProgramAppIcon(programAppIcon);
   }, [programAppIcon]);
-  const brandingKey = JSON.stringify(brandingStyle ?? {});
-  useEffect(() => {
-    const vars = (brandingStyle ?? {}) as Record<string, string>;
-    const root = document.documentElement;
-    const names = Object.keys(vars).filter((name) => name.startsWith("--"));
-    names.forEach((name) => root.style.setProperty(name, String(vars[name])));
-    return () => names.forEach((name) => root.style.removeProperty(name));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandingKey]);
+  useBrandVarsOnRoot(brandingStyle);
 
   // Best-effort branded icon: swaps the browser tab favicon and (in
   // practice) iOS's "Add to Home Screen" icon, since Safari reads these
@@ -1540,6 +1549,34 @@ export function AppShell({
             </button>
           </div>
         )}
+        {season && seasonKey && !seasonDismissed && (
+          <div
+            className="flex items-start gap-3 border-t border-secondary/30 bg-secondary/15 px-4 py-2 text-sm md:px-8"
+            data-testid="program-season-banner"
+            role="status"
+          >
+            <p className="min-w-0 flex-1 whitespace-pre-line">
+              <span className="font-semibold">{season.name}</span> {season.banner}
+            </p>
+            <button
+              type="button"
+              className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                try {
+                  localStorage.setItem(SEASON_DISMISSED_KEY, seasonKey);
+                } catch {
+                  // Private browsing: it hides for this visit only.
+                }
+                setSeasonDismissed(true);
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+        {user?.role === "athlete" && branding?.brandExtras?.welcomeScreens?.length && !user.programWelcomeSeenAt ? (
+          <ProgramWelcomeScreens screens={branding.brandExtras.welcomeScreens} programName={branding.brandTeamName ?? null} />
+        ) : null}
         {subheader && (
           <div className="border-t border-border bg-background px-4 py-2 md:px-8">{subheader}</div>
         )}

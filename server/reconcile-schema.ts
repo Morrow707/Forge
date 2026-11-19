@@ -3508,6 +3508,21 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "planned_athlete_count" integer;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "full_personalization_earned" boolean;
 -- The rest of a program's personalization, one record (shared/brand-extras.ts, 2026-11-19).
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_extras" json;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "program_welcome_seen_at" timestamp;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "recap_last_sent_on" date;
+-- Answers to a program's own check-in questions, kept apart from wellness_checkins so the
+-- readiness score never reads them (shared/schema.ts, 2026-11-19).
+CREATE TABLE IF NOT EXISTS "program_checkin_answers" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "question_id" text NOT NULL,
+  "question_text" text NOT NULL,
+  "value" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "program_checkin_answers_athlete_date_question_idx"
+  ON "program_checkin_answers" ("athlete_id", "date", "question_id");
 
 -- The evidentiary record of an Institutional Service Agreement signed IN THE APP: who signed,
 -- the sha256 of the exact text they were shown, when, and from where. Insert-only, like

@@ -12,6 +12,7 @@
  * login page, a sign-up page or the public team page may see.
  */
 import { z } from "zod";
+import type { TrophyCategory, TrophyTier } from "./achievements";
 
 /** The words a program can swap for Forge's own (singular and plural, exactly as typed). */
 export const BRAND_TERM_KEYS = ["program", "workout", "set", "coach", "athlete"] as const;
@@ -67,6 +68,30 @@ const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a color like #003262.");
 // https://regex101.com/?regex=%5E%5Cd%7B4%7D-%5Cd%7B2%7D-%5Cd%7B2%7D%24
 const isoDate = /^\d{4}-\d{2}-\d{2}$/;
 const line = (max: number) => z.string().trim().max(max).nullable().optional();
+// A short id a coach's own list item is known by: "q1", "first-100", not "a b" or "".
+// https://regex101.com/?regex=%5E%5Ba-z0-9-%5D%7B1%2C32%7D%24
+const itemId = z.string().regex(/^[a-z0-9-]{1,32}$/, "Use letters, numbers and dashes.");
+
+/** The program's own daily check-in questions (2026-11-19). Answers are stored on their own and
+ *  never change the readiness score, which stays computed from Forge's five. */
+export const CHECKIN_QUESTION_KINDS = ["scale", "yesno", "text"] as const;
+export type CheckinQuestionKind = (typeof CHECKIN_QUESTION_KINDS)[number];
+export const MAX_CHECKIN_QUESTIONS = 5;
+export const MAX_CHECKIN_TEXT_ANSWER = 280;
+const MAX_QUESTION = 120;
+
+/** The program's own trophies, counted with the same numbers Forge's trophies use. */
+export const PROGRAM_TROPHY_CATEGORIES = ["workout_count", "streak", "pr_count", "speed", "nutrition_streak"] as const satisfies readonly TrophyCategory[];
+export const PROGRAM_TROPHY_TIERS = ["bronze", "silver", "gold"] as const satisfies readonly TrophyTier[];
+export const MAX_PROGRAM_TROPHIES = 20;
+const MAX_THRESHOLD = 10_000;
+
+/** A season or rivalry week: different colors and a banner between two dates. */
+export const MAX_SEASONS = 12;
+
+/** Up to three screens a new athlete sees once. */
+export const MAX_WELCOME_SCREENS = 3;
+const MAX_WELCOME_BODY = 400;
 
 export const brandExtrasSchema = z.object({
   terms: z
@@ -101,14 +126,63 @@ export const brandExtrasSchema = z.object({
     .optional(),
   celebration: z.object({ message: line(MAX_LINE), color: hex.nullable().optional() }).nullable().optional(),
   appIcon: z.enum(APP_ICON_IDS).nullable().optional(),
+  checkinQuestions: z
+    .array(z.object({ id: itemId, text: z.string().trim().min(1).max(MAX_QUESTION), kind: z.enum(CHECKIN_QUESTION_KINDS) }))
+    .max(MAX_CHECKIN_QUESTIONS)
+    .nullable()
+    .optional(),
+  trophies: z
+    .array(
+      z.object({
+        id: itemId,
+        label: z.string().trim().min(1).max(MAX_TERM * 2),
+        category: z.enum(PROGRAM_TROPHY_CATEGORIES),
+        threshold: z.number().int().min(1).max(MAX_THRESHOLD),
+        tier: z.enum(PROGRAM_TROPHY_TIERS),
+      }),
+    )
+    .max(MAX_PROGRAM_TROPHIES)
+    .nullable()
+    .optional(),
+  seasons: z
+    .array(
+      z.object({
+        id: itemId,
+        name: z.string().trim().min(1).max(MAX_TERM * 2),
+        start: z.string().regex(isoDate),
+        end: z.string().regex(isoDate),
+        primaryColor: hex.nullable().optional(),
+        secondaryColor: hex.nullable().optional(),
+        banner: line(MAX_BANNER),
+      }),
+    )
+    .max(MAX_SEASONS)
+    .nullable()
+    .optional(),
+  recap: z
+    .object({
+      enabled: z.boolean(),
+      weekday: z.number().int().min(0).max(6),
+      includeTotals: z.boolean(),
+      includeTopPerformers: z.boolean(),
+      note: line(MAX_NOTE),
+      sendToGuardians: z.boolean(),
+    })
+    .nullable()
+    .optional(),
+  welcomeScreens: z
+    .array(z.object({ title: z.string().trim().min(1).max(MAX_LINE), body: z.string().trim().max(MAX_WELCOME_BODY) }))
+    .max(MAX_WELCOME_SCREENS)
+    .nullable()
+    .optional(),
 });
 export type BrandExtras = z.infer<typeof brandExtrasSchema>;
 
 /** Which entitlement each option sits under, read off the same four the older branding uses. */
 export const BRAND_EXTRAS_GATES = {
-  hasTeamIdentity: ["terms", "wording", "coachNote", "announcement", "celebration"],
-  hasCustomColors: ["defaultTheme", "corners", "pillButtons", "bodyFont", "wordmarkUrl", "backgroundImageUrl", "appIcon"],
-  hasWorkflowCustomization: ["athleteDashboard"],
+  hasTeamIdentity: ["terms", "wording", "coachNote", "announcement", "celebration", "trophies", "recap", "welcomeScreens"],
+  hasCustomColors: ["defaultTheme", "corners", "pillButtons", "bodyFont", "wordmarkUrl", "backgroundImageUrl", "appIcon", "seasons"],
+  hasWorkflowCustomization: ["athleteDashboard", "checkinQuestions"],
 } as const satisfies Record<string, readonly (keyof BrandExtras)[]>;
 
 type Gates = Record<keyof typeof BRAND_EXTRAS_GATES, boolean>;
@@ -156,4 +230,41 @@ export function applyBrandTerms(text: string, extras: BrandExtras | null | undef
     if (!custom) return acc;
     return swapWord(swapWord(acc, FORGE_TERMS[key].many, custom.many), FORGE_TERMS[key].one, custom.one);
   }, text);
+}
+
+/** The season running on `today` (YYYY-MM-DD), inclusive at both ends; the first listed wins
+ *  when two overlap. */
+export function activeSeason(extras: BrandExtras | null | undefined, today: string) {
+  return extras?.seasons?.find((s) => s.start <= today && today <= s.end) ?? null;
+}
+
+/** A program trophy's key in athlete_trophies: scoped to the program so two programs' "first-100"
+ *  are two trophies. */
+export function programTrophyKey(programId: number, trophyId: string): string {
+  return `program:${programId}:${trophyId}`;
+}
+
+type Seasonable = { brandPrimaryColor?: string | null; brandSecondaryColor?: string | null; brandExtras?: BrandExtras | null };
+
+/** The program's look with today's season laid over it: the season's colors where it set them,
+ *  and its name and banner under `activeSeason` for the app to show. Nothing stored changes. */
+export function withActiveSeason<T extends Seasonable>(branding: T, today: string): T & { activeSeason: { name: string; banner: string | null } | null } {
+  const season = activeSeason(branding.brandExtras, today);
+  if (!season) return { ...branding, activeSeason: null };
+  return {
+    ...branding,
+    brandPrimaryColor: season.primaryColor || branding.brandPrimaryColor,
+    brandSecondaryColor: season.secondaryColor || branding.brandSecondaryColor,
+    activeSeason: { name: season.name, banner: season.banner || null },
+  };
+}
+
+const SCALE_ANSWERS = ["1", "2", "3", "4", "5"];
+const YES_NO_ANSWERS = ["yes", "no"];
+
+/** Whether `value` is an answer the question's kind accepts: 1-5, yes or no, or short text. */
+export function programAnswerFits(kind: CheckinQuestionKind, value: string): boolean {
+  if (kind === "scale") return SCALE_ANSWERS.includes(value);
+  if (kind === "yesno") return YES_NO_ANSWERS.includes(value);
+  return value.trim().length > 0 && value.length <= MAX_CHECKIN_TEXT_ANSWER;
 }

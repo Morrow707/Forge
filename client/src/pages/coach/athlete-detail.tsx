@@ -33,6 +33,7 @@ import { SkillSessionsPanel } from "@/components/skill-sessions-panel";
 import { AnvilAthletePanel } from "@/components/anvil-athlete-panel";
 import { NutritionPanel } from "@/components/nutrition-panel";
 import { AiChatPanel } from "@/components/ai-chat-panel";
+import type { TrophyDefinition } from "@shared/achievements";
 import { TrophyCase, type AthleteTrophyView } from "@/components/trophy-case";
 import { WellnessHistoryDialog } from "@/components/wellness-history-dialog";
 import { AcwrHistoryDialog } from "@/components/acwr-history-dialog";
@@ -115,9 +116,15 @@ function AthleteTrophiesTab({ fetchUrl }: { fetchUrl: string }) {
     queryFn: () => getJson(fetchUrl),
   });
 
+  // The program's own trophies: ".../roster/7/trophies" becomes ".../roster/7/program-trophies".
+  const programUrl = fetchUrl.replace(/\/trophies$/, "/program-trophies");
+  const { data: programTrophies = [] } = useQuery<TrophyDefinition[]>({
+    queryKey: [programUrl],
+    queryFn: () => getJson(programUrl),
+  });
   if (isLoading) return <div className="h-24 animate-pulse rounded-lg bg-surface" />;
   if (isError) return <ReadFailed what="this athlete's trophies" onRetry={() => void refetch()} />;
-  return <TrophyCase trophies={data} emptyHint="No trophies unlocked yet." />;
+  return <TrophyCase trophies={data} programTrophies={programTrophies} emptyHint="No trophies unlocked yet." />;
 }
 
 /** A single athlete's full profile -- everything the roster card used to

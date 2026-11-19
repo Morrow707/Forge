@@ -82,6 +82,7 @@ import {
   nutritionTargets,
   goals,
   wellnessCheckins,
+  programCheckinAnswers,
   injuryHistory,
   researchExports,
   knowledgeSources,
@@ -361,7 +362,9 @@ import { nutritionTargetNumberShape } from "@shared/schema";
 import { NUTRITION_TARGET_FIELDS } from "@shared/nutrition-target-fields";
 import { getEntitlements, getVideoRetentionLimits } from "./billing";
 import { brandingWithinEntitlements, type BrandingEntitlements } from "@shared/branding-within-entitlements";
-import { publicBrandExtras, type BrandExtras } from "@shared/brand-extras";
+import { publicBrandExtras, withActiveSeason, programTrophyKey, type BrandExtras } from "@shared/brand-extras";
+/** The UTC calendar day a season is judged on. */
+const seasonDay = () => new Date().toISOString().slice(0, 10);
 import type { VideoRetentionLimits } from "@shared/video-retention";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
@@ -10145,6 +10148,45 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
   },
 
   // ---------- Wellness check-ins ----------
+  async markProgramWelcomeSeen(athleteId: number) {
+    await db
+      .update(users)
+      .set({ programWelcomeSeenAt: new Date() })
+      .where(and(eq(users.id, athleteId), isNull(users.programWelcomeSeenAt)));
+  },
+
+  /** One athlete's answers to their program's own check-in questions for a day. A question
+   *  answered again replaces the earlier answer; the question's wording is kept with it. */
+  async upsertProgramCheckinAnswers(
+    athleteId: number,
+    date: string,
+    answers: { questionId: string; questionText: string; value: string }[],
+  ) {
+    if (answers.length === 0) return [];
+    return db
+      .insert(programCheckinAnswers)
+      .values(answers.map((a) => ({ athleteId, date, ...a })))
+      .onConflictDoUpdate({
+        target: [programCheckinAnswers.athleteId, programCheckinAnswers.date, programCheckinAnswers.questionId],
+        set: { value: sql`excluded.value`, questionText: sql`excluded.question_text` },
+      })
+      .returning();
+  },
+
+  async getProgramCheckinAnswers(athleteId: number, fromDate: string, toDate: string) {
+    return db
+      .select()
+      .from(programCheckinAnswers)
+      .where(
+        and(
+          eq(programCheckinAnswers.athleteId, athleteId),
+          gte(programCheckinAnswers.date, fromDate),
+          lte(programCheckinAnswers.date, toDate),
+        ),
+      )
+      .orderBy(desc(programCheckinAnswers.date));
+  },
+
   async upsertWellnessCheckin(
     athleteId: number,
     date: string,
@@ -10288,6 +10330,70 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
   // getRosterWellnessToday just above -- both resolve to the same roster,
   // this just follows whichever join the sibling query for that table
   // already established.
+  /** The numbers a program's weekly recap email reads (brandExtras.recap, 2026-11-19): who it
+   *  goes to, and the last seven days of training across the in-season roster. Top performers
+   *  are by workouts completed, named first name and last initial as the leaderboards are. */
+  async getProgramWeeklyRecap(primaryCoachId: number) {
+    const today = new Date();
+    const todayStr = formatISO(today, { representation: "date" });
+    const weekStart = formatISO(subDays(today, 6), { representation: "date" });
+    const roster = await this.getRosterForCoach(primaryCoachId);
+    const ids = roster.map((a) => a.id);
+    if (ids.length === 0) return { athletes: [], guardians: [], workoutsCompleted: 0, prs: 0, perAthlete: new Map<number, number>() };
+    const [completed, prRows, guardianRows] = await Promise.all([
+      db
+        .select({ athleteId: workoutLogs.athleteId, count: sql<number>`count(*)::int` })
+        .from(workoutLogs)
+        .where(
+          and(
+            inArray(workoutLogs.athleteId, ids),
+            eq(workoutLogs.completed, true),
+            gte(workoutLogs.date, weekStart),
+            lte(workoutLogs.date, todayStr),
+          ),
+        )
+        .groupBy(workoutLogs.athleteId),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(workoutSetEntries)
+        .innerJoin(workoutLogEntries, eq(workoutSetEntries.logEntryId, workoutLogEntries.id))
+        .innerJoin(workoutLogs, eq(workoutLogEntries.workoutLogId, workoutLogs.id))
+        .where(
+          and(
+            inArray(workoutLogs.athleteId, ids),
+            eq(workoutSetEntries.isPr, true),
+            gte(workoutLogs.date, weekStart),
+            lte(workoutLogs.date, todayStr),
+          ),
+        ),
+      db
+        .select({ athleteId: guardianLinks.athleteId, guardianId: users.id, email: users.email })
+        .from(guardianLinks)
+        .innerJoin(users, eq(users.id, guardianLinks.guardianId))
+        .where(inArray(guardianLinks.athleteId, ids)),
+    ]);
+    const perAthlete = new Map(completed.map((r) => [r.athleteId, r.count]));
+    return {
+      athletes: roster.map((a) => ({ id: a.id, name: a.name, email: a.email })),
+      guardians: guardianRows,
+      workoutsCompleted: completed.reduce((sum, r) => sum + r.count, 0),
+      prs: prRows[0]?.count ?? 0,
+      perAthlete,
+    };
+  },
+
+  /** Coaches whose stored settings turn the weekly recap on (narrowed again by the job). */
+  async getCoachesWithRecapOn() {
+    return db
+      .select({ id: users.id, recapLastSentOn: users.recapLastSentOn })
+      .from(users)
+      .where(and(eq(users.role, "coach"), sql`(${users.brandExtras}->'recap'->>'enabled') = 'true'`));
+  },
+
+  async markRecapSent(coachId: number, day: string) {
+    await db.update(users).set({ recapLastSentOn: day }).where(eq(users.id, coachId));
+  },
+
   async getCoachWeeklyDigest(
     coachId: number,
   ): Promise<{ newPRs: number; missedWorkouts: number; wellnessFlags: number }> {
@@ -22375,7 +22481,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
         this.getExercisePageTheme(coachIds[0]),
         this.brandingEntitlementsForProgram(coachIds[0]),
       ]);
-      return brandingWithinEntitlements({ ...branding, features, exercisePageTheme }, entitlements);
+      return withActiveSeason(brandingWithinEntitlements({ ...branding, features, exercisePageTheme }, entitlements), seasonDay());
     }
 
     // Athlete: base branding comes from their coach's org.
@@ -22408,7 +22514,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       if (childCoaches.length === 0) return emptyBranding;
       const ids = await this.getEffectiveCoachIds(childCoaches[0].id);
       const org = await this.getCoachBranding(ids[0]);
-      return brandingWithinEntitlements({ ...emptyBranding, ...org }, await this.brandingEntitlementsForProgram(ids[0]));
+      return withActiveSeason(brandingWithinEntitlements({ ...emptyBranding, ...org }, await this.brandingEntitlementsForProgram(ids[0])), seasonDay());
     }
     const coaches = await this.getCoachesForAthlete(userId);
     if (coaches.length === 0) {
@@ -22438,7 +22544,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     // Motto/mission/contact/welcome are org-only -- no team-level field
     // exists for them (see updateTeamBrandingSchema), so they always come
     // straight from orgBranding with no team fallback needed.
-    return brandingWithinEntitlements({
+    return withActiveSeason(brandingWithinEntitlements({
       brandTeamName: orgBranding?.brandTeamName ?? null,
       brandLogoUrl: brandedTeam?.brandLogoUrl ?? orgBranding?.brandLogoUrl ?? null,
       brandPrimaryColor: brandedTeam?.brandPrimaryColor ?? orgBranding?.brandPrimaryColor ?? null,
@@ -22458,7 +22564,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       navLabelOverrides: navPrefs.navLabelOverrides,
       features,
       exercisePageTheme,
-    }, entitlements);
+    }, entitlements), seasonDay());
   },
 
   // Unauthenticated lookup for the signup page -- a coach or team invite
@@ -22481,6 +22587,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
         brandLogoUrl: team.brandLogoUrl ?? orgBranding?.brandLogoUrl ?? null,
         brandPrimaryColor: team.brandPrimaryColor ?? orgBranding?.brandPrimaryColor ?? null,
         brandSecondaryColor: team.brandSecondaryColor ?? orgBranding?.brandSecondaryColor ?? null,
+        brandExtras: publicBrandExtras(orgBranding?.brandExtras ?? null),
       }, await this.brandingEntitlementsForProgram(coachIds[0]));
     }
     const coach = (await this.getUserByCoachCode(code)) ?? (await this.getCoachByBrandSlug(code));
@@ -29298,7 +29405,10 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       nutrition_streak: longestNutritionStreak,
     };
 
-    const toInsert = ALL_TROPHY_DEFINITIONS.filter(
+    // The program's own trophies count the same numbers (shared/brand-extras.ts); a program
+    // without Full Personalization has none on read.
+    const programTrophies = await this.programTrophyDefinitionsForAthlete(athleteId);
+    const toInsert = [...ALL_TROPHY_DEFINITIONS, ...programTrophies].filter(
       (def) => !existingKeys.has(def.key) && currentByCategory[def.category] >= def.threshold,
     );
     if (toInsert.length === 0) return { newlyUnlocked: [], all: existing };
@@ -29327,6 +29437,21 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
       .onConflictDoNothing({ target: [athleteTrophies.athleteId, athleteTrophies.key] })
       .returning();
     return { newlyUnlocked: inserted, all: [...existing, ...inserted] };
+  },
+
+  /** The athlete's program's own trophies as Forge trophy definitions, keyed to that program. */
+  async programTrophyDefinitionsForAthlete(athleteId: number) {
+    const coaches = await this.getCoachesForAthlete(athleteId);
+    if (coaches.length === 0) return [];
+    const [programId] = await this.getEffectiveCoachIds(coaches[0].id);
+    const branding = await this.getEffectiveBrandingForUser(athleteId);
+    return (branding?.brandExtras?.trophies ?? []).map((t) => ({
+      key: programTrophyKey(programId, t.id),
+      category: t.category,
+      tier: t.tier,
+      threshold: t.threshold,
+      label: t.label,
+    }));
   },
 
   async getTrophiesForAthlete(athleteId: number) {

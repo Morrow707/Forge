@@ -62,6 +62,15 @@ export function WellnessHistoryDialog({
     enabled: open,
   });
 
+  // The program's own check-in questions, answered beside Forge's five (coach view only):
+  // "/api/coach/roster/7/wellness-history" becomes "/api/coach/roster/7/program-checkin-answers".
+  const answersUrl = fetchUrl.endsWith("/wellness-history") ? fetchUrl.replace(/\/wellness-history$/, "/program-checkin-answers") : null;
+  const { data: programAnswers = [] } = useQuery<{ id: number; date: string; questionText: string; value: string }[]>({
+    queryKey: [answersUrl],
+    queryFn: () => getJson(answersUrl!),
+    enabled: open && answersUrl != null && answersUrl.startsWith("/api/coach/"),
+  });
+
   const chartData = [...data].reverse().map((e) => ({
     label: format(parseISO(e.date), "MMM d"),
     value: e.score,
@@ -148,6 +157,19 @@ export function WellnessHistoryDialog({
                 </div>
               ))}
             </div>
+          </div>
+        )}
+        {programAnswers.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your questions</p>
+            {programAnswers.map((a) => (
+              <div key={a.id} className="flex items-start justify-between gap-2 rounded-md border border-border/60 px-2.5 py-1.5 text-xs">
+                <span>
+                  <span className="text-muted-foreground">{a.questionText}</span> <span className="font-semibold">{a.value}</span>
+                </span>
+                <span className="shrink-0 text-muted-foreground">{format(parseISO(a.date), "MMM d")}</span>
+              </div>
+            ))}
           </div>
         )}
       </DialogContent>

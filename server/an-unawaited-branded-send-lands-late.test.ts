@@ -110,6 +110,8 @@ function sendsThatLandLate(): { file: string; line: number }[] {
  *  read exists, and adding one costs a sentence that turns up in a grep. The primary mechanism
  *  is the helper; this list is the proven-safe exceptions, not the rule. */
 const READS_A_SEND_THAT_CANNOT_LAND_LATE: Record<string, string> = {
+  "a-program-makes-the-app-its-own.itest.ts":
+    "The test calls runWeeklyRecaps() itself and awaits it, and that job awaits Promise.all over every `sendEmail(...)` before it returns or marks the program sent. The branding lookup each send does is inside that await; no route and no fire-and-forget send is involved.",
   "a-price-has-a-checkout-and-a-trial-has-a-warning.itest.ts":
     "The test calls runTrialEndingNotices() itself and awaits it, and that job does `const result = await sendEmail(...)` for each account before marking the row; the send passes no brandForUserId, so the push is synchronous anyway. No route and no fire-and-forget send is involved.",
   "branding-page.itest.ts":

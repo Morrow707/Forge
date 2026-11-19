@@ -56,6 +56,8 @@ export type EffectiveBranding = {
   exercisePageTheme?: ExercisePageTheme | null;
   /** The rest of the program's personalization (shared/brand-extras.ts), narrowed to its plan. */
   brandExtras?: BrandExtras | null;
+  /** The season running today, already laid over the colors by the server (withActiveSeason). */
+  activeSeason?: { name: string; banner: string | null } | null;
 };
 
 // Mirrors users.personalAccentColor/personalSecondaryColor/

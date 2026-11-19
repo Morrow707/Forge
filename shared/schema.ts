@@ -678,6 +678,12 @@ export const users = pgTable(
     // Everything else a program personalizes (terms, wording, look options, the athletes'
     // dashboard, the coach's note, the banner, the celebration, the app icon): shared/brand-extras.ts.
     brandExtras: json("brand_extras").$type<import("./brand-extras").BrandExtras>(),
+    // When this athlete was shown their program's welcome screens (brandExtras.welcomeScreens);
+    // null until then, so they are shown once.
+    programWelcomeSeenAt: timestamp("program_welcome_seen_at"),
+    // The day a primary coach's weekly recap last went out (brandExtras.recap), so a redeploy
+    // or a second instance never sends it twice in one day.
+    recapLastSentOn: date("recap_last_sent_on"),
     // THE BETA IS OVER (Scott, 2026-10-11: "Set all billing as live, everything true, the beta
     // is over"). Defaulted true from 2026-09 to 2026-10-11 so every row and every signup was
     // exempt from billing enforcement; it defaults FALSE now, and the one-shot backfill
@@ -4147,6 +4153,32 @@ export const goals = pgTable(
 // longer silently depends on this ever having run. Re-submitting the same
 // date updates that day's answers in place rather than creating a second
 // row.
+/** Answers to a program's own check-in questions (brandExtras.checkinQuestions, 2026-11-19).
+ *  The question's text is kept with the answer, because the coach can reword or remove a
+ *  question and an answer must still say what it answered. Never part of the readiness score. */
+export const programCheckinAnswers = pgTable(
+  "program_checkin_answers",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    questionId: text("question_id").notNull(),
+    questionText: text("question_text").notNull(),
+    value: text("value").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteDateQuestionIdx: uniqueIndex("program_checkin_answers_athlete_date_question_idx").on(
+      table.athleteId,
+      table.date,
+      table.questionId,
+    ),
+  }),
+);
+export type ProgramCheckinAnswer = typeof programCheckinAnswers.$inferSelect;
+
 export const wellnessCheckins = pgTable(
   "wellness_checkins",
   {

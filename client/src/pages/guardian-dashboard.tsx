@@ -5,7 +5,10 @@ import { Link } from "wouter";
 import type { ConsentSummaryRow } from "@shared/consent-catalog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import { getJson, apiRequest, ApiError } from "@/lib/queryClient";
+import { getJson, apiRequest, ApiError, resolveApiUrl } from "@/lib/queryClient";
+import { computeBrandingStyle, ensureBrandFontLoaded, type EffectiveBranding } from "@/lib/branding-style";
+import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
+import { useBrandVarsOnRoot } from "@/hooks/use-brand-vars-on-root";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -165,6 +168,18 @@ export default function GuardianDashboardPage() {
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<number | null>(null);
+  // A parent wears the colors of their child's program (storage.getEffectiveBrandingForUser's
+  // guardian branch), on this page and its pop-ups, with the program's mark in the header.
+  const { data: branding } = useQuery<EffectiveBranding | null>({
+    queryKey: ["/api/branding/me"],
+    queryFn: () => getJson("/api/branding/me"),
+  });
+  const brandingStyle = computeBrandingStyle(branding ?? null);
+  useBrandVarsOnRoot(brandingStyle);
+  useEffect(() => ensureBrandFontLoaded(branding?.brandExtras?.bodyFont), [branding?.brandExtras?.bodyFont]);
+  const programWordmark = branding?.brandExtras?.wordmarkUrl ?? null;
+  const programLogo = branding?.brandLogoUrl ?? null;
+  const programName = branding?.brandTeamName ?? null;
 
   const {
     data: athletes,
@@ -287,7 +302,7 @@ export default function GuardianDashboardPage() {
   const recent = (entries ?? []).filter((e) => !e.isRestDay).slice().reverse();
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" style={brandingStyle}>
       {/* capacitor.config.ts sets ios.contentInset: "never", so every page root
           has to push itself below the notch in CSS -- AppShell and the login/
           signup pages all do. This page renders its own header instead of
@@ -297,9 +312,24 @@ export default function GuardianDashboardPage() {
         className="flex items-center justify-between border-b border-border px-4 py-3"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
       >
-        <div className="flex items-center gap-2">
-          <ForgeMark className="h-7 w-7" />
-          <span className="font-display text-lg font-extrabold uppercase tracking-wider">Forge</span>
+        <div className="flex min-w-0 items-center gap-2">
+          {programWordmark ? (
+            <img src={resolveApiUrl(programWordmark)} alt={programName || "Team"} className="h-8 max-w-[12rem] object-contain" />
+          ) : (
+            <>
+              {programLogo ? (
+                <img src={resolveApiUrl(programLogo)} alt="" className="h-7 w-7 rounded object-contain" />
+              ) : (
+                <ForgeMark className="h-7 w-7" />
+              )}
+              <span className="truncate font-display text-lg font-extrabold uppercase tracking-wider">{programName || "Forge"}</span>
+            </>
+          )}
+          {(programName || programWordmark) && (
+            <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:inline">
+              {POWERED_BY_FORGE_LABEL}
+            </span>
+          )}
         </div>
         {/* A guardian only ever renders this page -- every other ProtectedRoute
             redirects them here -- and it does not use AppShell, which is where

@@ -185,6 +185,11 @@ export const NOT_A_SIGNAL_TABLE: Record<string, string> = {
   // kept so no subscriber can cost more than the plan pays (server/ai-monthly-cap.ts).
   ai_account_spend_monthly:
     "What an account's AI calls cost Forge this month, for the monthly spending ceiling (server/ai-monthly-cap.ts). A billing figure about Forge's costs, not anything the athlete did or measured.",
+  // A COACH'S OWN QUESTIONS (2026-11-19). Free-form answers to questions each program writes for
+  // itself, worded differently on every roster and reworded at will; nothing compares across
+  // athletes or across time, so there is no signal to read.
+  program_checkin_answers:
+    "Answers to a program's own check-in questions (shared/brand-extras.ts checkinQuestions), worded by each coach and changeable at any time, so no answer means the same thing across programs or across weeks. Deliberately kept out of the readiness score for the same reason.",
   // A TARGET, NOT A MEASUREMENT (2026-11-11). A velocity zone is the bar speed somebody chose to
   // train at; the camera speeds it is read against are already the Anvil's through
   // workout_set_entries. The zone says what a coach or athlete wanted, which describes no morning.

@@ -55,6 +55,7 @@ import { WeaknessReportPanel } from "@/components/weakness-report-panel";
 import { StreakBadges } from "@/components/streak-badge";
 import { DigestBanner } from "@/components/digest-banner";
 import { TrophyCase, type AthleteTrophyView } from "@/components/trophy-case";
+import type { TrophyDefinition } from "@shared/achievements";
 import { TrainingHistoryExportDialog } from "@/components/training-history-export-dialog";
 import { ExerciseTrendDialog } from "@/components/exercise-trend-dialog";
 import { MuscleHeatMap } from "@/components/muscle-heat-map";
@@ -172,6 +173,10 @@ export default function AthleteProgress() {
   const { data: trophies } = useQuery<AthleteTrophyView[]>({
     queryKey: ["/api/athlete/trophies"],
     queryFn: () => getJson("/api/athlete/trophies"),
+  });
+  const { data: programTrophies } = useQuery<TrophyDefinition[]>({
+    queryKey: ["/api/athlete/program-trophies"],
+    queryFn: () => getJson("/api/athlete/program-trophies"),
   });
 
   const {
@@ -755,7 +760,7 @@ export default function AthleteProgress() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <TrophyCase trophies={trophies ?? []} />
+              <TrophyCase trophies={trophies ?? []} programTrophies={programTrophies ?? []} />
             </CardContent>
           </Card>
         </div>

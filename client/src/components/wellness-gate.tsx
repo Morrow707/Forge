@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
+import { ProgramCheckinFields, useProgramCheckin } from "@/components/program-checkin-questions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -276,6 +277,7 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, isLoading, editable, healthUserId]);
 
+  const program = useProgramCheckin(date, editable);
   const submitMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/athlete/wellness", {
@@ -293,7 +295,11 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
         bodyMass,
         heartRateRecovery,
       });
-      return res.json();
+      const saved = await res.json();
+      // The program's own questions are saved after Forge's five; a failure there never loses
+      // the check-in that already landed.
+      await program.save().catch(() => toast.error("Your coach's questions didn't save, try again"));
+      return saved;
     },
     onSuccess: (checkin) => {
       qc.setQueryData(checkinQueryKey, checkin);
@@ -541,6 +547,7 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
           )}
         </div>
       )}
+      <ProgramCheckinFields program={program} />
       <div className="space-y-1.5">
         <Label className="text-xs">Anything hurting today? (optional)</Label>
         <div className="flex flex-wrap gap-1.5">

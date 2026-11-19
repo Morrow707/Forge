@@ -123,11 +123,70 @@ function criteriaText(def: TrophyDefinition): string {
 export function TrophyCase({
   trophies,
   emptyHint,
+  programTrophies = [],
+  programName,
 }: {
   trophies: AthleteTrophyView[];
   emptyHint?: string;
+  /** The athlete's program's own trophies (keys from the server), earned or not. */
+  programTrophies?: TrophyDefinition[];
+  programName?: string | null;
 }) {
   const earnedByKey = new Map(trophies.map((t) => [t.key, t]));
+  // A program trophy the coach has since removed stays in the case once earned.
+  const programKeys = new Set(programTrophies.map((d) => d.key));
+  const programList: TrophyDefinition[] = [
+    ...programTrophies,
+    ...trophies.filter((t) => t.key.startsWith("program:") && !programKeys.has(t.key)),
+  ].sort((a, b) => a.threshold - b.threshold);
+
+  function renderBadge(def: TrophyDefinition) {
+    const earned = earnedByKey.get(def.key);
+    const Icon = TROPHY_ICON_BY_KEY[def.key] ?? Award;
+    const style = TIER_STYLES[def.tier];
+    return (
+      <div
+        key={def.key}
+        title={
+          earned
+            ? `Unlocked ${format(parseISO(earned.unlockedAt), "MMM d, yyyy")}`
+            : criteriaText(def)
+        }
+        className={cn(
+          "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-center transition-opacity",
+          earned ? cn(style.border, style.bg) : "border-border bg-surface opacity-45",
+        )}
+      >
+        <div
+          className={cn(
+            "flex h-10 w-10 items-center justify-center rounded-full",
+            earned ? style.bg : "bg-muted",
+          )}
+        >
+          <Icon className={cn("h-5 w-5", earned ? style.icon : "text-muted-foreground")} />
+        </div>
+        <p
+          className={cn(
+            "text-xs font-semibold leading-tight",
+            earned ? style.text : "text-muted-foreground",
+          )}
+        >
+          {def.label}
+        </p>
+        <span
+          className={cn(
+            "text-[9px] font-bold uppercase",
+            earned ? cn(style.text, "opacity-80") : "text-muted-foreground",
+          )}
+        >
+          {def.tier}
+        </span>
+        {!earned && (
+          <p className="text-[9px] leading-tight text-muted-foreground">{criteriaText(def)}</p>
+        )}
+      </div>
+    );
+  }
 
   const byCategory = new Map<TrophyCategory, TrophyDefinition[]>();
   for (const def of ALL_TROPHY_DEFINITIONS) {
@@ -146,59 +205,21 @@ export function TrophyCase({
           {emptyHint ?? "No trophies unlocked yet, log workouts to start earning them."}
         </p>
       )}
+      {programList.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {programName ? `${programName} trophies` : "Your program's trophies"}
+          </p>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7">{programList.map(renderBadge)}</div>
+        </div>
+      )}
       {CATEGORY_ORDER.map((category) => (
         <div key={category}>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {TROPHY_CATEGORY_LABEL[category]}
           </p>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7">
-            {byCategory.get(category)!.map((def) => {
-              const earned = earnedByKey.get(def.key);
-              const Icon = TROPHY_ICON_BY_KEY[def.key] ?? Award;
-              const style = TIER_STYLES[def.tier];
-              return (
-                <div
-                  key={def.key}
-                  title={
-                    earned
-                      ? `Unlocked ${format(parseISO(earned.unlockedAt), "MMM d, yyyy")}`
-                      : criteriaText(def)
-                  }
-                  className={cn(
-                    "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-center transition-opacity",
-                    earned ? cn(style.border, style.bg) : "border-border bg-surface opacity-45",
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-full",
-                      earned ? style.bg : "bg-muted",
-                    )}
-                  >
-                    <Icon className={cn("h-5 w-5", earned ? style.icon : "text-muted-foreground")} />
-                  </div>
-                  <p
-                    className={cn(
-                      "text-xs font-semibold leading-tight",
-                      earned ? style.text : "text-muted-foreground",
-                    )}
-                  >
-                    {def.label}
-                  </p>
-                  <span
-                    className={cn(
-                      "text-[9px] font-bold uppercase",
-                      earned ? cn(style.text, "opacity-80") : "text-muted-foreground",
-                    )}
-                  >
-                    {def.tier}
-                  </span>
-                  {!earned && (
-                    <p className="text-[9px] leading-tight text-muted-foreground">{criteriaText(def)}</p>
-                  )}
-                </div>
-              );
-            })}
+            {byCategory.get(category)!.map(renderBadge)}
           </div>
         </div>
       ))}

@@ -69,6 +69,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { addDays, formatISO } from "date-fns";
+import { brandGreeting, useBrandExtras } from "@/hooks/use-brand-extras";
 
 // Kept in sync with the hook call below -- shared so the indicator's own
 // "have we crossed the threshold yet" styling matches what actually
@@ -89,6 +90,7 @@ type TeamSummary = { id: number; name: string; code: string | null };
 
 export default function CoachDashboard() {
   const { user } = useAuth();
+  const { extras: brandExtras } = useBrandExtras();
   const widgetVisibility = useWidgetVisibility("coach");
   const { data: programs = [], isError: programsFailed, refetch: refetchPrograms } = useQuery<ProgramSummary[]>({
     queryKey: ["/api/coach/programs"],
@@ -420,7 +422,7 @@ export default function CoachDashboard() {
 
   return (
     <AppShell
-      title={`Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`}
+      title={brandGreeting(brandExtras, user?.name?.split(" ")[0] ?? "Coach", `Welcome, ${user?.name?.split(" ")[0] ?? "Coach"}`)}
       actions={
         <Button
           size="sm"

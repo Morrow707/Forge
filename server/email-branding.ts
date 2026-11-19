@@ -25,6 +25,9 @@ export interface EmailBrand {
   brandLogoUrl: string | null;
   brandPrimaryColor: string | null;
   brandSenderName: string | null;
+  /** A program's wide wordmark (shared/brand-extras.ts), stored in the public team-logos folder
+   *  like the logo, so it can be shown in a mail client. */
+  brandExtras?: { wordmarkUrl?: string | null } | null;
 }
 
 /** The shared orange band every Forge email body carries. Exported because it is the one
@@ -51,7 +54,7 @@ export const FORGE_EMAIL_HEADER =
 /** Does this brand change anything an email shows? A logo or a name is enough; a colour alone
  * still recolours the band but keeps FORGE as the wordmark, since there is nothing to put there. */
 export function isBrandedForEmail(brand: EmailBrand | null | undefined): brand is EmailBrand {
-  return Boolean(brand && (brand.brandTeamName || brand.brandLogoUrl || brand.brandPrimaryColor));
+  return Boolean(brand && (brand.brandTeamName || brand.brandLogoUrl || brand.brandPrimaryColor || brand.brandExtras?.wordmarkUrl));
 }
 
 /** Where an emailed image lives. Logos are stored as /uploads/team-logos/<file> and that
@@ -93,6 +96,15 @@ export function brandedEmailHeader(brand: EmailBrand): string {
   const logo = brand.brandLogoUrl
     ? `<img src="${escapeHtml(absoluteAssetUrl(brand.brandLogoUrl))}" alt="" height="36" style="height:36px;max-width:160px;vertical-align:middle;margin-right:12px;border:0;" />`
     : "";
+  const wordmark = brand.brandExtras?.wordmarkUrl;
+  if (wordmark) {
+    return (
+      `<div style="background:${escapeHtml(color)};padding:20px 24px;">` +
+      `<img src="${escapeHtml(absoluteAssetUrl(wordmark))}" alt="${name}" height="40" style="height:40px;max-width:240px;border:0;" />` +
+      `<div style="color:${emailTextOn(color).soft};font-size:11px;margin-top:6px;letter-spacing:0.3px;">Powered by Forge</div>` +
+      `</div>`
+    );
+  }
   return (
     `<div style="background:${escapeHtml(color)};padding:20px 24px;">` +
     `${logo}<span style="color:${emailTextOn(color).solid};font-size:20px;font-weight:bold;letter-spacing:0.5px;vertical-align:middle;">${name}</span>` +
