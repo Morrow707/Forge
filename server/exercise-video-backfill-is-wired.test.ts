@@ -74,7 +74,10 @@ describe("the report has somewhere to be read", () => {
   it("asks the server for all three routes", () => {
     const page = read("client/src/pages/admin/exercise-videos.tsx");
     expect(page).toContain("/api/admin/exercise-videos/pending");
-    expect(page).toContain("exercise-videos/${which}");
+    // The dry run (lifts or skill drills) and Apply share one call: "exercise-videos/${which ..."
+    // https://regex101.com/?regex=exercise-videos%5C%2F%5C%24%5C%7Bwhich
+    expect(page).toMatch(/exercise-videos\/\$\{which/);
+    expect(page).toContain('body.kind = "skill"');
     expect(page).toContain("/api/admin/exercise-videos/latest");
     expect(page).toContain("/api/admin/exercise-videos/decide");
     // The per-channel median is the evidence for cutting a talky channel. A page that dropped it

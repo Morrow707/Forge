@@ -3549,6 +3549,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
      * exercises are still waiting so a pass can be continued tomorrow. */
     searchUnmatched: z.boolean().optional(),
     maxSearches: z.number().int().min(1).max(95).optional(),
+    /** The skill drills instead of the lifts (2026-11-19). One library per run. */
+    kind: z.enum(["exercise", "skill"]).optional(),
   });
 
   // The dry run is the only route that talks to YouTube. It is SAVED (exercise_video_runs) and

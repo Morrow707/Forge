@@ -314,16 +314,18 @@ export default function AdminExerciseVideos() {
   });
 
   const run = useMutation({
-    mutationFn: async (which: "dry-run" | "apply") => {
-      setMode(which);
+    mutationFn: async (which: "dry-run" | "dry-run-skills" | "apply") => {
+      setMode(which === "dry-run-skills" ? "dry-run" : which);
       const seconds = Number(cap);
       let body: Record<string, unknown> =
         Number.isFinite(seconds) && seconds >= 10 ? { maxDurationSeconds: seconds } : {};
       // Opt-in, because it is the only expensive path here -- see the checkbox's own copy.
       if (searchUnmatched) body.searchUnmatched = true;
+      // The skill drills are their own run: one library at a time.
+      if (which === "dry-run-skills") body.kind = "skill";
       // Apply writes the SAVED run, so all it sends is which one.
       if (which === "apply") body = { runId: shown?.runId };
-      const res = await apiRequest("POST", `/api/admin/exercise-videos/${which}`, body);
+      const res = await apiRequest("POST", `/api/admin/exercise-videos/${which === "apply" ? "apply" : "dry-run"}`, body);
       return (await res.json()) as Report;
     },
     onSuccess: (data, which) => {
@@ -443,6 +445,10 @@ export default function AdminExerciseVideos() {
                 <Play className="mr-2 h-4 w-4" />
               )}
               Dry run
+            </Button>
+            <Button variant="outline" onClick={() => run.mutate("dry-run-skills")} disabled={busy}>
+              <Play className="mr-2 h-4 w-4" />
+              Dry run skill drills
             </Button>
             <Button
               variant="secondary"

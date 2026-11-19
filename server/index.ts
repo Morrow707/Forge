@@ -96,6 +96,7 @@ import { startWeeklyRecapJob } from "./weekly-recap-job";
 import { startSetTraceOffloadJob } from "./set-trace-offload-job";
 import { startSetEntriesVacuumFull } from "./set-entries-vacuum-full";
 import { startExerciseVideoApplyOnce } from "./exercise-video-apply-once";
+import { startSkillVideoDryRunOnce } from "./skill-video-dry-run-once";
 import { startFkDriftJob } from "./fk-drift-job";
 import { startOrphanSetRowsCleanup } from "./orphan-set-rows-cleanup";
 import { startResearchMirrorJob } from "./research-mirror-job";
@@ -589,6 +590,8 @@ app.get("/healthz", async (_req, res) => {
     startSetEntriesVacuumFull();
     // Scott's 2026-11-19 call on the exercise-video dry run, once (exercise-video-apply-once.ts).
     startExerciseVideoApplyOnce();
+    // The first skill-drill video dry run, once, saved for review (skill-video-dry-run-once.ts).
+    startSkillVideoDryRunOnce();
     // TWO BOOT TASKS WERE REMOVED HERE 2026-11-13. A one-time video cleanup aimed at
     // athlete@forge.app with a cutoff of 2026-08-31 matched nothing on the day it was written,
     // and that address is now the reinstated demo athlete, created after the cutoff, so it could

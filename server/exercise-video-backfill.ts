@@ -338,6 +338,24 @@ export async function libraryForMatching(): Promise<LibraryExercise[]> {
   }));
 }
 
+/** The skill-drill library in the matcher's shape (2026-11-19). A drill has no muscle groups and
+ *  its equipment is a list; the first item stands for it, and none reads as bodyweight. Its
+ *  skill type rides as the movement pattern, which is what the search query adds for context. */
+export async function skillLibraryForMatching(): Promise<LibraryExercise[]> {
+  const { db } = await import("./db");
+  const rows = await db
+    .select({ id: skillExercises.id, name: skillExercises.name, equipment: skillExercises.equipment, skillType: skillExercises.skillType })
+    .from(skillExercises);
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    equipment: r.equipment?.[0] ?? "Bodyweight",
+    muscleGroups: [],
+    movementPattern: r.skillType,
+    kind: "skill" as const,
+  }));
+}
+
 /** Everything still carrying a placeholder URL (or none at all), both libraries. */
 export async function targetsNeedingVideo(): Promise<BackfillTarget[]> {
   const { db } = await import("./db");
@@ -498,7 +516,11 @@ export async function planExerciseVideoBackfill(options?: {
    *  comment on searchForUnmatched: 100 units a search against 10,000 a day. */
   searchUnmatched?: boolean;
   maxSearches?: number;
+  /** Which library this run matches: the lifts (the default) or the skill drills. One at a time,
+   *  so a drill and a lift that share a name never compete for one video. */
+  kind?: "exercise" | "skill";
 }): Promise<BackfillReport> {
+  const kind = options?.kind ?? "exercise";
   const channels = options?.channels ?? DEMO_VIDEO_CHANNELS;
   const maxDurationSeconds = options?.maxDurationSeconds ?? DEFAULT_MAX_DURATION_SECONDS;
   const quota = newQuotaLedger();
@@ -532,8 +554,12 @@ export async function planExerciseVideoBackfill(options?: {
     pool.push(...result.videos);
   }
 
-  const targets = await targetsNeedingVideo();
-  const library = await libraryForMatching();
+  const targets = (await targetsNeedingVideo()).filter((t) => t.kind === kind);
+  const library = kind === "skill" ? await skillLibraryForMatching() : await libraryForMatching();
+  // A drill's name alone ("Face-Off Counter") finds nothing useful; its skill type says what
+  // sport it is. The title still has to pass every rule against the name itself.
+  const skillTypeByName = new Map(library.map((e) => [e.name, e.movementPattern ?? ""]));
+  const searchQuery = (name: string) => (kind === "skill" ? `${name} ${skillTypeByName.get(name) ?? ""} drill`.trim() : name);
 
   /* SLOT-BY-SLOT MATCHING over the whole library at once (Fable's v2 spec, 2026-09-27). The word
    * -set matcher it replaces could not tell a harmless extra title word from one that changes the
@@ -554,14 +580,15 @@ export async function planExerciseVideoBackfill(options?: {
         library,
         startOfTodaysSlice(
           targets
-            .filter((t) => t.kind === "exercise" && !run.chosen.has(t.name))
+            .filter((t) => !run.chosen.has(t.name))
             .map((t) => t.name),
           options.maxSearches ?? DEFAULT_MAX_SEARCHES,
         ),
         run.vocabulary,
         maxDurationSeconds,
         options.maxSearches ?? DEFAULT_MAX_SEARCHES,
-        async (query) => {
+        async (name) => {
+          const query = searchQuery(name);
           const cached = readYouTubeCache<Awaited<ReturnType<typeof searchVideosFor>>>("search", query, SEARCH_CACHE_HOURS);
           if (cached) {
             cacheHits += 1;
@@ -573,25 +600,16 @@ export async function planExerciseVideoBackfill(options?: {
           return found;
         },
         undefined,
-        (query) => readYouTubeCache("search", query, SEARCH_CACHE_HOURS) != null,
+        (name) => readYouTubeCache("search", searchQuery(name), SEARCH_CACHE_HOURS) != null,
       )
     : null;
 
   const proposals: BackfillProposal[] = [];
   const unmatched: UnmatchedTarget[] = [];
   for (const target of targets) {
-    const match =
-      target.kind === "exercise"
-        ? (run.chosen.get(target.name) ?? searchFill?.filled.get(target.name))
-        : undefined;
+    const match = run.chosen.get(target.name) ?? searchFill?.filled.get(target.name);
     if (!match) {
-      unmatched.push({
-        ...target,
-        rejection:
-          target.kind === "skill"
-            ? { reason: "head", detail: "skill drills are not matched -- see the note above" }
-            : run.rejections.get(target.name),
-      });
+      unmatched.push({ ...target, rejection: run.rejections.get(target.name) });
       continue;
     }
     proposals.push({ ...target, match, url: watchUrlFor(match.videoId, match.startSeconds, match.endSeconds) });

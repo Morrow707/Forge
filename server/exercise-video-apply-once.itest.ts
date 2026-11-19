@@ -59,7 +59,7 @@ describe("the reviewed dry run, applied once", () => {
     const [saved] = await db.select().from(exerciseVideoRuns).where(eq(exerciseVideoRuns.id, run.id));
     expect(saved.appliedAt).not.toBeNull();
     const marker = await db.execute(sql`SELECT count(*)::int AS n FROM applied_backfills WHERE key = ${EXERCISE_VIDEO_APPLY_MARKER}`);
-    expect(Number(((marker as { rows?: { n: number }[] }).rows ?? (marker as unknown as { n: number }[]))[0].n)).toBe(1);
+    expect(Number(((marker as unknown as { rows?: { n: number }[] }).rows ?? (marker as unknown as { n: number }[]))[0].n)).toBe(1);
     expect(await applyReviewedExerciseVideosOnce()).toContain("already applied");
   });
 
