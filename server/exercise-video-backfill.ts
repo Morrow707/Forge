@@ -722,7 +722,8 @@ async function planSkillVideoBackfill(options?: {
           },
         );
     if (cached) state.cacheHits += 1;
-    else state.searched += 1;
+    // Only a search YouTube answered counts: a refused one spent nothing and found nothing.
+    else if (found) state.searched += 1;
     if (!found) {
       outcomes.push({ searched: false, waiting: true });
       return;
