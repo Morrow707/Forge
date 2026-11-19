@@ -4153,6 +4153,29 @@ export const goals = pgTable(
 // longer silently depends on this ever having run. Re-submitting the same
 // date updates that day's answers in place rather than creating a second
 // row.
+/** A program's own demonstration video on a Forge exercise (Scott, 2026-11-19, item 10). It
+ *  shows in place of Forge's video for that program's athletes only, and the exercise itself is
+ *  untouched, so lifts logged on it still count toward the strength percentile. One per program
+ *  per exercise, keyed to the primary coach. `videoUrl` is a pasted link or an upload in the gated
+ *  program-demo-videos folder. */
+export const programExerciseVideos = pgTable(
+  "program_exercise_videos",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    exerciseId: integer("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    videoUrl: text("video_url").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachExerciseIdx: uniqueIndex("program_exercise_videos_coach_exercise_idx").on(table.coachId, table.exerciseId),
+  }),
+);
+
 /** Answers to a program's own check-in questions (brandExtras.checkinQuestions, 2026-11-19).
  *  The question's text is kept with the answer, because the coach can reword or remove a
  *  question and an answer must still say what it answered. Never part of the readiness score. */

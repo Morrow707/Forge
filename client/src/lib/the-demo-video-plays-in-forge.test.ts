@@ -16,9 +16,17 @@ describe("the demo video plays inside Forge", () => {
       "client/src/pages/skill-detail.tsx",
       "client/src/components/exercise-video.tsx",
     ]) {
-      expect(read(page), page).toContain("ExerciseVideoPlayer");
+      expect(read(page), page).toMatch(/ExerciseVideoPlayer|DemoVideo/);
       expect(read(page), page).not.toContain("youtube.com/embed/");
     }
+  });
+
+  it("plays a program's own upload itself and sends every other link through the one player", () => {
+    // A program's demo uploaded to Forge (2026-11-19) is the program's own file, so playing it
+    // from Forge re-hosts nobody. Everything that is not an upload still goes through the embed.
+    const demo = read("client/src/components/demo-video.tsx");
+    expect(demo).toContain("isUploadedVideo(url)");
+    expect(demo).toContain("<ExerciseVideoPlayer url={url} name={name} />");
   });
 
   it("embeds rather than re-hosting, which is what makes showing it legitimate", () => {

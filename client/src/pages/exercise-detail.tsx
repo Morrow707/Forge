@@ -61,6 +61,7 @@ import {
   MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS,
 } from "@/lib/exercise-colors";
 import { FilterChipGroup, RadioChipGroup } from "@/components/filter-chip-group";
+import { ProgramDemoVideoCard } from "@/components/program-demo-video-card";
 
 const ISSUE_TYPES = [
   { value: "broken_video", label: "Broken video link" },
@@ -324,6 +325,10 @@ export function ExerciseDetailPage({
               </span>
             )}
           </div>
+        )}
+
+        {!isNew && exercise && apiBase === "/api/coach" && exercise.isForgeOfficial && (
+          <ProgramDemoVideoCard exerciseId={exercise.id} exerciseName={exercise.name} />
         )}
 
         {!isNew && exercise && apiBase === "/api/coach" && exercise.isForgeOfficial && (

@@ -83,6 +83,7 @@ import {
   goals,
   wellnessCheckins,
   programCheckinAnswers,
+  programExerciseVideos,
   injuryHistory,
   researchExports,
   knowledgeSources,
@@ -5215,7 +5216,13 @@ export const storage = {
         .select({ logo: teams.brandLogoUrl })
         .from(teams)
         .where(eq(teams.coachId, userId));
+      // A program's own demo videos on Forge exercises: the rows cascade, the files would not.
+      const programDemos = await db
+        .select({ url: programExerciseVideos.videoUrl })
+        .from(programExerciseVideos)
+        .where(eq(programExerciseVideos.coachId, userId));
       await Promise.all([
+        ...programDemos.map((d) => deleteUploadedFile(d.url)),
         ...authoredComments.flatMap((c) => [deleteUploadedFile(c.url), deleteUploadedFile(c.image)]),
         ...authoredSkillComments.flatMap((c) => [deleteUploadedFile(c.url), deleteUploadedFile(c.image)]),
         deleteUploadedFile(user.brandLogoUrl),
@@ -10148,6 +10155,47 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
   },
 
   // ---------- Wellness check-ins ----------
+  /** A program's own demo videos on Forge exercises (shared/schema.ts programExerciseVideos). */
+  async getProgramExerciseVideos(programId: number) {
+    return db.select().from(programExerciseVideos).where(eq(programExerciseVideos.coachId, programId));
+  },
+
+  /** Sets this program's video for one exercise; returns the one it replaced, so an uploaded file
+   *  can be removed from disk. */
+  async setProgramExerciseVideo(programId: number, exerciseId: number, videoUrl: string) {
+    const [previous] = await db
+      .select({ videoUrl: programExerciseVideos.videoUrl })
+      .from(programExerciseVideos)
+      .where(and(eq(programExerciseVideos.coachId, programId), eq(programExerciseVideos.exerciseId, exerciseId)));
+    await db
+      .insert(programExerciseVideos)
+      .values({ coachId: programId, exerciseId, videoUrl })
+      .onConflictDoUpdate({
+        target: [programExerciseVideos.coachId, programExerciseVideos.exerciseId],
+        set: { videoUrl, createdAt: new Date() },
+      });
+    return previous?.videoUrl ?? null;
+  },
+
+  async removeProgramExerciseVideo(programId: number, exerciseId: number) {
+    const [removed] = await db
+      .delete(programExerciseVideos)
+      .where(and(eq(programExerciseVideos.coachId, programId), eq(programExerciseVideos.exerciseId, exerciseId)))
+      .returning({ videoUrl: programExerciseVideos.videoUrl });
+    return removed?.videoUrl ?? null;
+  },
+
+  /** The demo videos an athlete's program has set, by exercise id. Empty for a Free Agent, and for
+   *  a program whose plan no longer includes it (they come back when it does). */
+  async programDemoVideosForAthlete(athleteId: number): Promise<Map<number, string>> {
+    const coaches = await this.getCoachesForAthlete(athleteId);
+    if (coaches.length === 0) return new Map();
+    const [programId] = await this.getEffectiveCoachIds(coaches[0].id);
+    if (!(await this.brandingEntitlementsForProgram(programId)).hasWorkflowCustomization) return new Map();
+    const rows = await this.getProgramExerciseVideos(programId);
+    return new Map(rows.map((r) => [r.exerciseId, r.videoUrl]));
+  },
+
   async markProgramWelcomeSeen(athleteId: number) {
     await db
       .update(users)
@@ -23906,6 +23954,15 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       exercisesWithHistory.some((e) => isExerciseRiskyForPainParts(e.exercise, todayPainParts));
 
     const { week, ...dayFields } = day;
+    // The program's own demo video shows in place of Forge's (item 10, 2026-11-19); the exercise
+    // row is untouched, so a lift logged on it still counts as a Forge exercise.
+    const programDemos = await this.programDemoVideosForAthlete(athleteId);
+    const withProgramDemos = <T extends { exercise: { id: number; videoUrl: string | null } }>(rows: T[]): T[] =>
+      rows.map((row) =>
+        programDemos.has(row.exercise.id)
+          ? { ...row, exercise: { ...row.exercise, videoUrl: programDemos.get(row.exercise.id)!, programVideo: true } }
+          : row,
+      );
     return {
       programId: assignment.program.id,
       programName: assignment.program.name,
@@ -23916,8 +23973,8 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       // which is the real signal for whether to show a coach comment thread.
       isSelfAssigned: assignment.coachId === athleteId,
       correctivesEnabled: assignment.correctivesEnabled,
-      day: { ...dayFields, weekNumber: week.weekNumber, exercises: exercisesWithHistory },
-      correctives: correctivesWithHistory,
+      day: { ...dayFields, weekNumber: week.weekNumber, exercises: withProgramDemos(exercisesWithHistory) },
+      correctives: withProgramDemos(correctivesWithHistory),
       log: log ?? null,
       todayPainParts,
       hasModifiableRisk,
@@ -32650,6 +32707,8 @@ These are heuristic biomechanics flags (knee angle, valgus knee-vs-ankle ratio, 
         to: t.email,
         subject: t.athleteName ? `Documents needed for ${t.athleteName}` : "Documents needed",
         brandForUserId: input.athleteId,
+        // Names the required documents by their own titles.
+        programWords: false,
         html: buildDocumentsRequestEmail({
           recipientName: t.name,
           athleteName: t.athleteName,

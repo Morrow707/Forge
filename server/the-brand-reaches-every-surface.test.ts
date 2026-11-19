@@ -39,7 +39,8 @@ describe("push titles", () => {
   it("lead with the program's name for an athlete on a branded program", () => {
     const src = raw("./push.ts");
     expect(src).toContain(".getEffectiveBrandingForUser(userId)");
-    expect(src).toContain("title: `${programName} · ${payload.title}`");
+    expect(src).toContain("title: `${programName} · ${worded.title}`");
+    expect(src).toContain("applyBrandTerms(payload.title, words)");
     expect(src).toContain("sendWebPushToUser(userId, branded)");
     expect(src).toContain("sendApnsToUser(userId, branded)");
   });

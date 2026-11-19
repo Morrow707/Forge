@@ -222,14 +222,36 @@ function swapWord(text: string, word: string, to: string): string {
   return text.replace(new RegExp(`\\b${word}\\b`, "gi"), (m) => (m[0] === m[0].toLowerCase() ? to.toLowerCase() : to));
 }
 
+/** Names of Forge products, never renamed by a program's words: "Coaches Corner" stays itself
+ *  for a program that calls its coaches Trainers. */
+export const PROTECTED_PHRASES = ["Coaches Corner", "Forge Coach"] as const;
+// A stand-in no label contains, so a protected phrase rides through the swap untouched.
+const PROTECTED_MARK = "\u0000";
+
 export function applyBrandTerms(text: string, extras: BrandExtras | null | undefined): string {
   const terms = extras?.terms;
-  if (!terms) return text;
-  return BRAND_TERM_KEYS.reduce((acc, key) => {
+  if (!terms || !text) return text;
+  const hidden = PROTECTED_PHRASES.reduce((acc, phrase, i) => acc.split(phrase).join(`${PROTECTED_MARK}${i}${PROTECTED_MARK}`), text);
+  const swapped = BRAND_TERM_KEYS.reduce((acc, key) => {
     const custom = terms[key];
     if (!custom) return acc;
     return swapWord(swapWord(acc, FORGE_TERMS[key].many, custom.many), FORGE_TERMS[key].one, custom.one);
-  }, text);
+  }, hidden);
+  return PROTECTED_PHRASES.reduce((acc, phrase, i) => acc.split(`${PROTECTED_MARK}${i}${PROTECTED_MARK}`).join(phrase), swapped);
+}
+
+// One HTML tag, so only the words between tags are swapped and a link, an attribute or a style
+// never is: '<a href="/athlete/programs">' matches whole; 'Your programs' does not.
+// https://regex101.com/?regex=(%3C%5B%5E%3E%5D*%3E)
+const HTML_TAG = /(<[^>]*>)/;
+
+/** The program's words inside an email body: text between tags only. */
+export function applyBrandTermsToHtml(html: string, extras: BrandExtras | null | undefined): string {
+  if (!extras?.terms) return html;
+  return html
+    .split(HTML_TAG)
+    .map((part) => (part.startsWith("<") ? part : applyBrandTerms(part, extras)))
+    .join("");
 }
 
 /** The season running on `today` (YYYY-MM-DD), inclusive at both ends; the first listed wins

@@ -1,5 +1,6 @@
 import { recordSystemFailure, recordSystemSuccess } from "./system-events";
 import { applyEmailBranding, brandedFromAddress, type EmailBrand } from "./email-branding";
+import { applyBrandTerms, applyBrandTermsToHtml } from "@shared/brand-extras";
 
 // The HTML email builders (welcome-email.ts, progress-report.ts, etc)
 // interpolate free-text fields a coach or athlete entered themselves --
@@ -55,10 +56,11 @@ export function isEmailConfigured(): boolean {
 
 export async function sendEmail({
   to,
-  subject,
+  subject: rawSubject,
   html: rawHtml,
   brandForUserId,
   brand: brandOverride,
+  programWords = true,
 }: {
   to: string;
   subject: string;
@@ -69,6 +71,10 @@ export async function sendEmail({
   brandForUserId?: number | null;
   /** The brand itself, for a caller that already has it (the Branding page's test send). */
   brand?: EmailBrand | null;
+  /** Swap Forge's words for the program's ("program" -> "block") in the subject and the text.
+   *  False for a notice whose wording is a reviewed legal document: a guardian's notice, a
+   *  consent confirmation, a change to the Terms. */
+  programWords?: boolean;
 }): Promise<{ sent: boolean; error?: string }> {
   let brand: EmailBrand | null = brandOverride ?? null;
   if (!brand && brandForUserId != null) {
@@ -80,7 +86,9 @@ export async function sendEmail({
       console.warn("Email branding lookup failed; sending unbranded:", (err as Error)?.message);
     }
   }
-  const html = applyEmailBranding(rawHtml, brand);
+  const words = programWords ? (brand?.brandExtras ?? null) : null;
+  const html = applyBrandTermsToHtml(applyEmailBranding(rawHtml, brand), words);
+  const subject = applyBrandTerms(rawSubject, words);
   const from = brandedFromAddress(fromAddress, brand);
   if (!emailEnabled) {
     // Under vitest nothing is configured and nothing should leave the

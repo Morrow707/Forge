@@ -217,6 +217,12 @@ describe("every parameterised route resolves its ids against the requester", () 
  */
 const RESOLVED_ANOTHER_WAY = new Map<string, string>([
   [
+    "DELETE /api/coach/exercises/:id/program-video::removeProgramExerciseVideo",
+    "Both arguments come from programDemoTarget, never the URL: the program is the caller's own " +
+      "(getEffectiveCoachIds(user.id)) and the exercise is the row getExerciseDetail(exerciseId, user.id) " +
+      "returned for this caller, so the delete can only ever remove the caller's own program's video.",
+  ],
+  [
     "GET /api/calendar/:token.ics::getUserByCalendarToken",
     "The parameter IS the credential, not an id to check against a session -- there is no " +
       "session, because a calendar client cannot hold one. 192 random bits under a unique " +

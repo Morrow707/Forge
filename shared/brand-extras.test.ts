@@ -5,6 +5,7 @@ import {
   programTrophyKey,
   withActiveSeason,
   applyBrandTerms,
+  applyBrandTermsToHtml,
   brandExtrasSchema,
   brandExtrasWithinEntitlements,
   brandTerm,
@@ -115,5 +116,19 @@ describe("a program trophy", () => {
   it("refuses more than the limits", () => {
     const many = Array.from({ length: 6 }, (_, i) => ({ id: `q${i}`, text: "Q?", kind: "yesno" as const }));
     expect(brandExtrasSchema.safeParse({ checkinQuestions: many }).success).toBe(false);
+  });
+});
+
+describe("the program's words outside the app", () => {
+  it("never rename a Forge product", () => {
+    expect(applyBrandTerms("Open Coaches Corner, coach", FULL)).toBe("Open Coaches Corner, trainer");
+  });
+
+  it("swap the words in an email's text and never in a link or attribute", () => {
+    const html = '<p>Your new program is ready.</p><a href="https://x.test/athlete/programs" title="Programs">Open programs</a>';
+    expect(applyBrandTermsToHtml(html, FULL)).toBe(
+      '<p>Your new block is ready.</p><a href="https://x.test/athlete/programs" title="Programs">Open blocks</a>',
+    );
+    expect(applyBrandTermsToHtml(html, null)).toBe(html);
   });
 });

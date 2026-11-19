@@ -11,6 +11,7 @@
  */
 import type PDFDocument from "pdfkit";
 import { pickReadableTextHex } from "@shared/color-contrast";
+import { applyBrandTerms, type BrandExtras } from "@shared/brand-extras";
 import { storage } from "./storage";
 import { readUploadedFile } from "./uploaded-files";
 
@@ -30,19 +31,38 @@ const PDF = {
   powered: { size: 7, y: 70 },
 } as const;
 
-export type PdfBrand = { teamName: string | null; primaryColor: string | null; logoBuffer: Buffer | null };
+export type PdfBrand = {
+  teamName: string | null;
+  primaryColor: string | null;
+  logoBuffer: Buffer | null;
+  /** The program's own words ("program" -> "block"), used for every line of the document. */
+  words?: BrandExtras | null;
+};
 
 export async function pdfBrandForAthlete(athleteId: number): Promise<PdfBrand | null> {
   const brand = await storage.getEffectiveBrandingForUser(athleteId);
-  if (!brand || !(brand.brandTeamName || brand.brandPrimaryColor || brand.brandLogoUrl)) return null;
+  if (!brand || !(brand.brandTeamName || brand.brandPrimaryColor || brand.brandLogoUrl || brand.brandExtras?.terms)) return null;
   return {
+    words: brand.brandExtras ?? null,
     teamName: brand.brandTeamName ?? null,
     primaryColor: brand.brandPrimaryColor ?? null,
     logoBuffer: await readUploadedFile(brand.brandLogoUrl),
   };
 }
 
+const worded = new WeakSet<object>();
+
+/** Every line this document writes from here on is in the program's words. Once per document. */
+function speakProgramWords(doc: InstanceType<typeof PDFDocument>, words: BrandExtras | null | undefined): void {
+  if (!words?.terms || worded.has(doc)) return;
+  worded.add(doc);
+  const write = doc.text.bind(doc) as (...args: unknown[]) => typeof doc;
+  doc.text = ((text: unknown, ...rest: unknown[]) =>
+    write(typeof text === "string" ? applyBrandTerms(text, words) : text, ...rest)) as typeof doc.text;
+}
+
 export function drawPdfBrandBand(doc: InstanceType<typeof PDFDocument>, brand: PdfBrand | null, subtitle: string): void {
+  speakProgramWords(doc, brand?.words);
   const band = brand?.primaryColor || FORGE_PDF_ORANGE;
   const ink = pickReadableTextHex(band);
   const name = brand?.teamName || "FORGE";

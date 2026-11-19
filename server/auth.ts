@@ -1279,6 +1279,8 @@ export function setupAuth(app: Express) {
           to: guardian.email,
           subject: `You approved ${athleteName}'s Forge account`,
           brandForUserId: athleteId,
+          // A guardian notice and consent confirmation: the reviewed wording is sent as written.
+          programWords: false,
           html: buildGuardianConsentConfirmationEmail(
             athleteName,
             guardian.email,
@@ -1376,6 +1378,8 @@ export function setupAuth(app: Express) {
           subject: `You've been listed as ${athlete.name}'s guardian on Forge`,
           html: buildGuardianInviteEmail(athlete.name, claimLink, parentalNotice?.content ?? ""),
           brandForUserId: athlete.id,
+          // A guardian notice and consent confirmation: the reviewed wording is sent as written.
+          programWords: false,
         });
         // sendEmail reports a refusal by returning, not by throwing, so the
         // .catch below never saw one -- an unconfigured key, a provider

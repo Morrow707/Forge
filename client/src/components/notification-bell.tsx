@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { ReadFailed } from "@/components/read-failed";
+import { useBrandExtras } from "@/hooks/use-brand-extras";
 
 type NotificationItem = {
   id: number;
@@ -36,6 +37,8 @@ type NotificationItem = {
  * to hear about -- a comment/video reply, or a team announcement. Never
  * fires for program completions or routine team-wide activity. */
 export function NotificationBell() {
+  // The program's own words on Forge's notifications ("program" -> "block").
+  const { words } = useBrandExtras();
   const { user } = useAuth();
   const qc = useQueryClient();
   const [, navigate] = useLocation();
@@ -162,8 +165,8 @@ export function NotificationBell() {
                 <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
               )}
               <div className="min-w-0 flex-1">
-                <p className="font-semibold">{n.title}</p>
-                <p className="truncate text-xs text-muted-foreground">{n.body}</p>
+                <p className="font-semibold">{words(n.title)}</p>
+                <p className="truncate text-xs text-muted-foreground">{words(n.body)}</p>
                 <p className="mt-0.5 text-[10px] text-muted-foreground">
                   {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
                 </p>

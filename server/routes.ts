@@ -90,6 +90,13 @@ import {
 } from "@shared/brand-extras";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+// A pasted demo link must be a web address: "https://youtu.be/abc" passes, "javascript:x" does not.
+// https://regex101.com/?regex=%5Ehttps%3F%3A%5C%2F%5C%2F
+const WEB_ADDRESS = /^https?:\/\//;
+const MAX_DEMO_LINK = 500;
+const programDemoLinkSchema = z.object({
+  videoUrl: z.string().trim().max(MAX_DEMO_LINK).regex(WEB_ADDRESS, "Paste a full link starting with https://"),
+});
 /** How far back a coach sees a program check-in answer on an athlete's page. */
 const PROGRAM_ANSWER_HISTORY_DAYS = 14;
 // A calendar day, "2026-11-19"; anything else is not a date.
@@ -620,6 +627,26 @@ const uploadLessonVideo = multer({
     },
   }),
   limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!videoExtensionForMimetype(file.mimetype)) {
+      return cb(new Error("Unsupported video format"));
+    }
+    cb(null, true);
+  },
+});
+
+// A program's own demonstration video on a Forge exercise (shared/schema.ts
+// programExerciseVideos). Gated like every other video of a person: it may show an athlete.
+const PROGRAM_DEMO_VIDEOS_DIR = path.join(UPLOADS_ROOT, "program-demo-videos");
+fs.mkdirSync(PROGRAM_DEMO_VIDEOS_DIR, { recursive: true });
+const uploadProgramDemoVideo = multer({
+  storage: multer.diskStorage({
+    destination: PROGRAM_DEMO_VIDEOS_DIR,
+    filename: (_req, file, cb) => {
+      cb(null, `${crypto.randomUUID()}${videoExtensionForMimetype(file.mimetype) ?? ""}`);
+    },
+  }),
+  limits: { fileSize: MAX_TRACKED_VIDEO_BYTES },
   fileFilter: (_req, file, cb) => {
     if (!videoExtensionForMimetype(file.mimetype)) {
       return cb(new Error("Unsupported video format"));
@@ -2283,6 +2310,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Exercise not found" });
     }
     res.json(exercise);
+  });
+
+  // A PROGRAM'S OWN DEMO VIDEO ON A FORGE EXERCISE (Scott, 2026-11-19, item 10). Shown to the
+  // program's athletes in place of Forge's video; the exercise is untouched, so lifts logged on it
+  // still count toward the strength percentile. A pasted link or an upload; one per exercise.
+  // The exercise is read as the caller sees it (storage.getExerciseDetail(id, user.id)) at each
+  // route, so the id in the URL is always resolved against the requester.
+  async function programDemoTarget(
+    res: ExpressResponse,
+    userId: number,
+    exercise: Awaited<ReturnType<typeof storage.getExerciseDetail>>,
+  ) {
+    if (!exercise || !exercise.isForgeOfficial) {
+      res.status(404).json({ message: "Only a Forge exercise takes a program video; edit your own exercise's video directly." });
+      return null;
+    }
+    const [programId] = await storage.getEffectiveCoachIds(userId);
+    return { programId, exerciseId: exercise.id };
+  }
+  const programDemoEntitled = async (req: Request, res: ExpressResponse) => {
+    if ((await getEntitlementsForCoach(currentUser(req).id)).hasWorkflowCustomization) return true;
+    res.status(402).json({
+      message: `This comes with Full Personalization, or free on any plan of ${FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES} athletes or more.`,
+    });
+    return false;
+  };
+  const replaceProgramDemo = async (target: { programId: number; exerciseId: number }, videoUrl: string) => {
+    const previous = await storage.setProgramExerciseVideo(target.programId, target.exerciseId, videoUrl);
+    if (previous && previous !== videoUrl) await deleteUploadedFile(previous);
+  };
+
+  app.get("/api/coach/exercises/:id/program-video", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const exerciseId = Number(req.params.id);
+    const target = await programDemoTarget(res, user.id, await storage.getExerciseDetail(exerciseId, user.id));
+    if (!target) return;
+    const rows = await storage.getProgramExerciseVideos(target.programId);
+    res.json({ videoUrl: rows.find((r) => r.exerciseId === target.exerciseId)?.videoUrl ?? null });
+  });
+
+  app.put("/api/coach/exercises/:id/program-video", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
+    const parsed = programDemoLinkSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    if (!(await programDemoEntitled(req, res))) return;
+    const user = currentUser(req);
+    const exerciseId = Number(req.params.id);
+    const target = await programDemoTarget(res, user.id, await storage.getExerciseDetail(exerciseId, user.id));
+    if (!target) return;
+    await replaceProgramDemo(target, parsed.data.videoUrl);
+    res.json({ videoUrl: parsed.data.videoUrl });
+  });
+
+  app.post("/api/coach/exercises/:id/program-video/upload", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
+    // The plan and the exercise are asked BEFORE the file is accepted, so a refusal leaves nothing on disk.
+    if (!(await programDemoEntitled(req, res))) return;
+    const user = currentUser(req);
+    const exerciseId = Number(req.params.id);
+    const target = await programDemoTarget(res, user.id, await storage.getExerciseDetail(exerciseId, user.id));
+    if (!target) return;
+    uploadProgramDemoVideo.single("video")(req, res, async (err: unknown) => {
+      if (err) return res.status(400).json({ message: err instanceof Error ? err.message : "Upload failed" });
+      if (!req.file) return res.status(400).json({ message: "No video file provided" });
+      const url = `/uploads/program-demo-videos/${req.file.filename}`;
+      await replaceProgramDemo(target, url);
+      res.status(201).json({ videoUrl: url });
+    });
+  });
+
+  app.delete("/api/coach/exercises/:id/program-video", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
+    const user = currentUser(req);
+    const exerciseId = Number(req.params.id);
+    const target = await programDemoTarget(res, user.id, await storage.getExerciseDetail(exerciseId, user.id));
+    if (!target) return;
+    await deleteUploadedFile(await storage.removeProgramExerciseVideo(target.programId, target.exerciseId));
+    res.status(204).end();
   });
 
   // Per-coach, not shared with staff-mates -- see favoriteExercise's own
@@ -10113,6 +10215,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             to: email,
             subject: `Forge ${title}${who.athleteName ? ` for ${who.athleteName}` : ""}`,
             brandForUserId: user.id,
+            // Names a reviewed legal document by its own title.
+            programWords: false,
             html: buildRosterDocumentEmail({
               recipientName: who.name,
               athleteName: who.athleteName,

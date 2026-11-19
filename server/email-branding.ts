@@ -27,7 +27,7 @@ export interface EmailBrand {
   brandSenderName: string | null;
   /** A program's wide wordmark (shared/brand-extras.ts), stored in the public team-logos folder
    *  like the logo, so it can be shown in a mail client. */
-  brandExtras?: { wordmarkUrl?: string | null } | null;
+  brandExtras?: import("@shared/brand-extras").BrandExtras | null;
 }
 
 /** The shared orange band every Forge email body carries. Exported because it is the one

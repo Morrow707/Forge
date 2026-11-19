@@ -128,6 +128,9 @@ const GATED_UPLOAD_DIRS = new Set([
   // this directory, and a scheme that has to consult a database row to decide whether to check
   // a signature is one that fails open the day the lookup errors.
   "reference-clips",
+  // program-demo-videos: a program's own demonstration video on a Forge exercise (2026-11-19).
+  // Often a coach or one of their athletes on camera, so it is gated like any video of a person.
+  "program-demo-videos",
   // knowledge-sources: the uploaded source PDFs for the AI knowledge library -- among them the
   // purchased textbook. Only an admin is ever shown one of these paths, which is why this is
   // the lower-severity half, but "only an admin knows the URL" is not an access control: the

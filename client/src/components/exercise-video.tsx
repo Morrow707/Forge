@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Play } from "lucide-react";
 import { externalLinkClick } from "@/lib/open-external";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ExerciseVideoPlayer } from "@/components/exercise-video-player";
+import { DemoVideo } from "@/components/demo-video";
 
 export function extractYouTubeId(url: string): string | null {
   try {
@@ -91,7 +91,7 @@ export function ExerciseVideoThumb({
           <DialogHeader>
             <DialogTitle>{name}</DialogTitle>
           </DialogHeader>
-          <ExerciseVideoPlayer url={url} name={name} />
+          <DemoVideo url={url} name={name} />
         </DialogContent>
       </Dialog>
     </>

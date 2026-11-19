@@ -1,3 +1,4 @@
+import { applyBrandTerms } from "@shared/brand-extras";
 import webpush from "web-push";
 import { storage } from "./storage";
 import { sendApnsToUser, apnsEnabled } from "./apns";
@@ -43,13 +44,14 @@ export async function sendPushToUser(
   // THE PROGRAM'S NAME LEADS THE TITLE (2026-11-19): the phone always labels a notification with
   // the app's own name, so "Cal Strength · New comment" is how an athlete on a branded program sees
   // whose message it is. The team name is free on every plan; a lookup failure sends it plain.
-  const programName = await storage
-    .getEffectiveBrandingForUser(userId)
-    .then((b) => b?.brandTeamName?.trim() || null)
-    .catch(() => null);
-  const branded = programName && !payload.title.startsWith(programName)
-    ? { ...payload, title: `${programName} · ${payload.title}` }
-    : payload;
+  // The program's own words ride along too ("program" -> "block"), in the title and the text.
+  const brand = await storage.getEffectiveBrandingForUser(userId).catch(() => null);
+  const programName = brand?.brandTeamName?.trim() || null;
+  const words = brand?.brandExtras ?? null;
+  const worded = { ...payload, title: applyBrandTerms(payload.title, words), body: applyBrandTerms(payload.body, words) };
+  const branded = programName && !worded.title.startsWith(programName)
+    ? { ...worded, title: `${programName} · ${worded.title}` }
+    : worded;
   const [web, apns] = await Promise.all([
     sendWebPushToUser(userId, branded),
     sendApnsToUser(userId, branded),

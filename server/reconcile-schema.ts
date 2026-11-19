@@ -3523,6 +3523,16 @@ CREATE TABLE IF NOT EXISTS "program_checkin_answers" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "program_checkin_answers_athlete_date_question_idx"
   ON "program_checkin_answers" ("athlete_id", "date", "question_id");
+-- A program's own demonstration video on a Forge exercise (shared/schema.ts, 2026-11-19).
+CREATE TABLE IF NOT EXISTS "program_exercise_videos" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "exercise_id" integer NOT NULL REFERENCES "exercises"("id") ON DELETE CASCADE,
+  "video_url" text NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "program_exercise_videos_coach_exercise_idx"
+  ON "program_exercise_videos" ("coach_id", "exercise_id");
 
 -- The evidentiary record of an Institutional Service Agreement signed IN THE APP: who signed,
 -- the sha256 of the exact text they were shown, when, and from where. Insert-only, like

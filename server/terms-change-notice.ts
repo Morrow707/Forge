@@ -75,6 +75,8 @@ export async function notifyGuardiansOfTermsChange(): Promise<{
         to: guardian.email,
         subject: "Forge's terms have changed, please review",
         brandForUserId: guardianId,
+        // A change to the Terms is told in the Terms' own words, never the program's.
+        programWords: false,
         html: buildTermsChangeEmail(
           guardian.name,
           athletes.map((a) => a.athleteName),
