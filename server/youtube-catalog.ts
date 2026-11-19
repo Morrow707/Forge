@@ -28,6 +28,25 @@ import { parseChapters, parseIsoDuration, type VideoCandidate } from "@shared/ex
 
 const API = "https://www.googleapis.com/youtube/v3";
 
+const NAMED_ENTITIES: Record<string, string> = { amp: "&", quot: '"', apos: "'", lt: "<", gt: ">", nbsp: " " };
+// One HTML entity: "&amp;" "&#39;" "&#x27;" match; "AT&T" and "& more" do not.
+// https://regex101.com/?regex=%26(%23x%5B0-9a-f%5D%2B%7C%23%5B0-9%5D%2B%7C%5Ba-z%5D%2B)%3B&flags=gi
+const ENTITY = /&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi;
+const HEX = 16;
+const DECIMAL = 10;
+
+/** YouTube's search API returns titles HTML-escaped ("Hip Health &amp; Mobility",
+ *  "Farmer&#39;s Carry"), and a title is matched word by word and shown to an admin, so every
+ *  title and channel name is decoded once, where it enters Forge. An unknown entity is kept. */
+export function decodeYouTubeText(text: string): string {
+  return text.replace(ENTITY, (whole, body: string) => {
+    const lower = body.toLowerCase();
+    if (lower.startsWith("#x")) return String.fromCodePoint(parseInt(lower.slice(2), HEX));
+    if (lower.startsWith("#")) return String.fromCodePoint(parseInt(lower.slice(1), DECIMAL));
+    return NAMED_ENTITIES[lower] ?? whole;
+  });
+}
+
 export type QuotaLedger = { units: number; calls: number };
 
 export class YouTubeNotConfigured extends Error {
@@ -130,7 +149,7 @@ export async function resolveChannel(
   if (!item) return null;
   const uploads = item.contentDetails?.relatedPlaylists?.uploads;
   if (!uploads) return null;
-  return { channelId: item.id, title: item.snippet?.title ?? query, uploadsPlaylistId: uploads };
+  return { channelId: item.id, title: decodeYouTubeText(item.snippet?.title ?? query), uploadsPlaylistId: uploads };
 }
 
 /**
@@ -184,10 +203,10 @@ export async function channelCatalogue(
       const id = item.contentDetails?.videoId;
       if (!id) continue;
       ids.push(id);
-      titles.set(id, item.snippet?.title ?? "");
+      titles.set(id, decodeYouTubeText(item.snippet?.title ?? ""));
       // The description rides on the same playlistItems call at no extra quota; it is where a
       // routine video lists its chapters. See parseChapters.
-      descriptions.set(id, item.snippet?.description ?? "");
+      descriptions.set(id, decodeYouTubeText(item.snippet?.description ?? ""));
     }
     pageToken = page.nextPageToken;
     if (!pageToken) break;
@@ -297,8 +316,8 @@ export async function searchVideosFor(
     const id = item.id?.videoId;
     if (!id) continue;
     ids.push(id);
-    titles.set(id, item.snippet?.title ?? "");
-    channels.set(id, item.snippet?.channelTitle ?? "YouTube");
+    titles.set(id, decodeYouTubeText(item.snippet?.title ?? ""));
+    channels.set(id, decodeYouTubeText(item.snippet?.channelTitle ?? "YouTube"));
   }
   if (ids.length === 0) return [];
 

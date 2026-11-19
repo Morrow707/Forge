@@ -46,7 +46,7 @@ import {
   type SignatureRejection,
 } from "./exercise-video-match-run";
 import {
-  searchVideosFor, channelCatalogue, newQuotaLedger, type QuotaLedger } from "./youtube-catalog";
+  searchVideosFor, channelCatalogue, decodeYouTubeText, newQuotaLedger, type QuotaLedger } from "./youtube-catalog";
 
 /**
  * The channels, chosen for SHORT demonstration clips.
@@ -439,7 +439,14 @@ export async function loadChannel(
   const cacheKey = `${handle}:${maxVideosPerChannel ?? "default"}`;
   const cached = readYouTubeCache<NonNullable<Awaited<ReturnType<typeof channelCatalogue>>>>(
     "catalogue", cacheKey, CATALOGUE_CACHE_HOURS);
-  if (cached) return { result: cached, status: "ok", fromCache: true };
+  if (cached) {
+    const videos = cached.videos.map((v) => ({
+      ...v,
+      title: decodeYouTubeText(v.title),
+      ...(v.videoTitle ? { videoTitle: decodeYouTubeText(v.videoTitle) } : {}),
+    }));
+    return { result: { ...cached, videos }, status: "ok", fromCache: true };
+  }
 
   let lastMessage = "";
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -558,7 +565,8 @@ export async function planExerciseVideoBackfill(options?: {
           const cached = readYouTubeCache<Awaited<ReturnType<typeof searchVideosFor>>>("search", query, SEARCH_CACHE_HOURS);
           if (cached) {
             cacheHits += 1;
-            return cached;
+            // A week-old cache can hold titles saved before they were decoded on the way in.
+            return cached.map((v) => ({ ...v, title: decodeYouTubeText(v.title), channel: decodeYouTubeText(v.channel) }));
           }
           const found = await searchVideosFor(query, quota);
           writeYouTubeCache("search", query, found);
