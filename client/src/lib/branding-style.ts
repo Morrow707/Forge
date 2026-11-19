@@ -24,6 +24,8 @@ function brandColorVars(hex: string, name: "primary" | "secondary"): Record<stri
 }
 import { BRAND_HEADING_FONTS } from "@shared/branding-options";
 import type { ExercisePageTheme } from "@shared/schema";
+import { BRAND_BODY_FONTS, BRAND_CORNERS, type BrandExtras } from "@shared/brand-extras";
+import { resolveApiUrl } from "@/lib/queryClient";
 
 export type EffectiveBranding = {
   brandTeamName?: string | null;
@@ -52,6 +54,8 @@ export type EffectiveBranding = {
   // /api/coach/exercise-page-theme (primary-coach-gated) writes it.
   // client/src/pages/workout.tsx is the only consumer.
   exercisePageTheme?: ExercisePageTheme | null;
+  /** The rest of the program's personalization (shared/brand-extras.ts), narrowed to its plan. */
+  brandExtras?: BrandExtras | null;
 };
 
 // Mirrors users.personalAccentColor/personalSecondaryColor/
@@ -121,6 +125,19 @@ export function computeBrandingStyle(
     const font = BRAND_HEADING_FONTS.find((f) => f.id === branding.brandHeadingFont);
     if (font) vars["--font-display"] = font.stack;
   }
+  // THE REST OF THE LOOK (shared/brand-extras.ts, 2026-11-19): corners, pill buttons, the body
+  // font and the login background photo. Variables like the colors, so every screen that wears
+  // the brand -- the app, its pop-ups, the login and the public page -- takes them together.
+  const extras = branding?.brandExtras;
+  if (extras?.corners) vars["--radius"] = BRAND_CORNERS[extras.corners];
+  if (extras?.pillButtons) vars["--button-radius"] = "9999px";
+  const bodyFont = BRAND_BODY_FONTS.find((f) => f.id === extras?.bodyFont);
+  if (bodyFont) vars["--font-sans"] = bodyFont.stack;
+  if (extras?.backgroundImageUrl) {
+    // Darkened so the cards and text on top of it keep their contrast.
+    vars["--brand-photo"] =
+      `linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.8)), url("${resolveApiUrl(extras.backgroundImageUrl)}")`;
+  }
   if (personal?.accentColor) {
     const hsl = hexToHslTriplet(personal.accentColor);
     if (hsl) {
@@ -149,7 +166,7 @@ export function computeBrandingStyle(
  *  app does not already carry. Call it from wherever a branding record is applied. */
 export function ensureBrandFontLoaded(fontId: string | null | undefined): void {
   if (!fontId || typeof document === "undefined") return;
-  const font = BRAND_HEADING_FONTS.find((f) => f.id === fontId);
+  const font = [...BRAND_HEADING_FONTS, ...BRAND_BODY_FONTS].find((f) => f.id === fontId);
   if (!font?.googleFontsUrl) return;
   const id = `brand-font-${font.id}`;
   if (document.getElementById(id)) return;

@@ -3,6 +3,7 @@ import { Link, useParams } from "wouter";
 import { getJson } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { ForgeMark } from "@/components/forge-mark";
+import { ProgramCertificateMark, useProgramBranding } from "@/components/program-certificate-mark";
 import { ReadFailed } from "@/components/read-failed";
 import { ArrowLeft, Printer } from "lucide-react";
 import { format } from "date-fns";
@@ -20,6 +21,7 @@ type Certificate = {
  * Coaches Corner certificate. Every fact comes from the server, which refuses to issue one
  * until the enrollment is marked complete. It names Forge as the issuer and nothing else. */
 export default function AthleteClassCertificate() {
+  const programBranding = useProgramBranding();
   const { id } = useParams<{ id: string }>();
   const url = `/api/athlete/classes/${id}/certificate`;
   const { data, isLoading, isError, error, refetch } = useQuery<Certificate>({
@@ -49,7 +51,7 @@ export default function AthleteClassCertificate() {
   }
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8 print:bg-white print:px-0 print:py-0">
+    <div className="min-h-screen bg-background px-4 py-8 print:bg-white print:px-0 print:py-0" style={programBranding.style}>
       <div className="mx-auto mb-4 flex max-w-2xl items-center justify-between print:hidden">
         <Button asChild variant="outline" size="sm">
           <Link href={`/athlete/classes/${id}`}>
@@ -63,7 +65,7 @@ export default function AthleteClassCertificate() {
         </Button>
       </div>
       <div className="mx-auto max-w-2xl rounded-xl border-2 border-primary/40 bg-card p-10 text-center print:border-black print:text-black">
-        <ForgeMark className="mx-auto h-10 w-10" />
+        <ProgramCertificateMark branding={programBranding.branding} />
         <p className="mt-4 text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
           Certificate of completion
         </p>

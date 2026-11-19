@@ -12,6 +12,7 @@ import { ColorField } from "@/components/color-field";
 import { BrandedMark } from "@/components/branded-mark";
 import { ForgeMark } from "@/components/forge-mark";
 import { ExercisePageThemeDialog } from "@/components/exercise-page-theme-dialog";
+import { BrandExtrasEditor } from "@/components/brand-extras-editor";
 import { apiRequest, getJson, resolveApiUrl, ApiError } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { computeBrandingStyle, ensureBrandFontLoaded, type EffectiveBranding } from "@/lib/branding-style";
@@ -610,18 +611,22 @@ export default function CoachBranding() {
             </Gate>
           </Section>
 
-          {/* 6. EVERYWHERE */}
+          {/* 6. YOUR WORDS, LOOK, DASHBOARD, BANNER, CELEBRATION AND ICON (2026-11-19) */}
+          <BrandExtrasEditor canEdit={canEdit} />
+
+          {/* 7. EVERYWHERE */}
           <Card className="mt-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <span className="rounded-md bg-primary/15 px-2 py-0.5 font-mono text-xs text-primary">6</span>
+                <span className="rounded-md bg-primary/15 px-2 py-0.5 font-mono text-xs text-primary">7</span>
                 Everywhere else
               </CardTitle>
               <CardDescription>Follows the colors above with nothing to set.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-muted-foreground">
               <p>Charts, toasts, the loading spinner, the glow behind buttons, and the screens an athlete sees while waiting on a parent all take the primary color.</p>
-              <p>The native app icon, the app's name on the phone and the splash screen stay Forge. One app, one icon, Apple's rule. On the web, your logo is the home-screen icon.</p>
+              <p>Training-history and recruiting PDFs, the subscribed calendar, push notifications, share images and certificates carry your name and colors too.</p>
+              <p>The app's name on the phone and the splash screen stay Forge: Apple allows one app name. The icon's color is yours to pick above. On the web, your logo is the home-screen icon.</p>
               <p className="flex items-center gap-2 pt-2 text-xs font-semibold uppercase tracking-wide opacity-60">{POWERED_BY_FORGE_LABEL} <span className="font-normal normal-case tracking-normal">appears under your name and at the foot of every page.</span></p>
             </CardContent>
           </Card>

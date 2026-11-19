@@ -20,6 +20,16 @@ export function BrandedMark({
 }) {
   const logo = brand?.brandLogoUrl ? resolveApiUrl(brand.brandLogoUrl) : null;
   const name = brand?.brandTeamName || null;
+  // A program's wide wordmark stands in for the logo and the name (2026-11-19).
+  const wordmark = brand?.brandExtras?.wordmarkUrl ? resolveApiUrl(brand.brandExtras.wordmarkUrl) : null;
+  if (wordmark) {
+    return (
+      <div className={cn("flex flex-col items-center gap-3 text-center", className)}>
+        <img src={wordmark} alt={name || "Team"} className={size === "lg" ? "h-16 max-w-[18rem] object-contain" : "h-12 max-w-[14rem] object-contain"} />
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{POWERED_BY_FORGE_LABEL}</p>
+      </div>
+    );
+  }
   const box = size === "lg" ? "h-14 w-14 rounded-xl" : "h-12 w-12 rounded-xl";
   const title = size === "lg" ? "text-4xl" : "text-2xl";
   return (

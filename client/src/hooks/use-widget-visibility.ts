@@ -13,7 +13,9 @@ import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
  * un-persisted toggle so a stray tap on a card in normal view never hides
  * anything by accident -- hiding only ever happens once they've
  * deliberately turned editing on. */
-export function useWidgetVisibility(scope: "coach" | "athlete") {
+/** `programDefault` is the layout an athlete's coach chose for the program (shared/brand-extras.ts,
+ *  2026-11-19): it applies until the athlete arranges their own dashboard, which then wins. */
+export function useWidgetVisibility(scope: "coach" | "athlete", programDefault?: WidgetLayoutEntry[] | null) {
   const qc = useQueryClient();
   const [editMode, setEditMode] = useState(false);
   const queryKey = [`/api/${scope}/widget-prefs`];
@@ -22,7 +24,7 @@ export function useWidgetVisibility(scope: "coach" | "athlete") {
     queryKey,
     queryFn: () => getJson(queryKey[0]),
   });
-  const layout = data?.layout ?? [];
+  const layout = data?.layout?.length ? data.layout : (programDefault ?? []);
   const hidden = new Set(layout.filter((w) => w.hidden).map((w) => w.id));
 
   const mutation = useMutation({

@@ -60,6 +60,7 @@ import {
   Scale,
   MessageSquare,
   type LucideIcon,
+  Megaphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ForgeMark } from "@/components/forge-mark";
@@ -92,6 +93,10 @@ const AccountSettingsDialog = lazyDialog(() => import("@/components/account-sett
 import { CameraAccuracyNotice } from "@/components/camera-accuracy-notice";
 import { PoweredByFooter } from "@/components/powered-by-footer";
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
+import { applyBrandTerms } from "@shared/brand-extras";
+import { applyTheme, hasStoredThemeChoice } from "@/lib/theme";
+
+const ANNOUNCEMENT_DISMISSED_KEY = "forge:dismissed-announcement";
 import { computeBrandingStyle, ensureBrandFontLoaded, type EffectiveBranding } from "@/lib/branding-style";
 import { rememberBrand } from "@/lib/remembered-brand";
 import { COACH_FEATURE_FIELDS, type CoachFeature } from "@shared/team-features";
@@ -401,6 +406,28 @@ export function AppShell({
   // confirmation and set editor stayed Forge orange. The variables are copied onto <html> while
   // the shell is mounted and taken off again when it leaves, so a public page drawn after it does
   // not inherit somebody's colors.
+  const announcementRaw = branding?.brandExtras?.announcement ?? null;
+  const announcement =
+    announcementRaw && (!announcementRaw.until || announcementRaw.until >= new Date().toISOString().slice(0, 10))
+      ? announcementRaw
+      : null;
+  const [announcementDismissed, setAnnouncementDismissed] = useState(false);
+  useEffect(() => {
+    let seen: string | null = null;
+    try {
+      seen = localStorage.getItem(ANNOUNCEMENT_DISMISSED_KEY);
+    } catch {
+      seen = null;
+    }
+    setAnnouncementDismissed(!!announcement && seen === announcement.text);
+  }, [announcement?.text]);
+
+  // The program's default light or dark, for somebody who has not chosen one (2026-11-19).
+  const programTheme = branding?.brandExtras?.defaultTheme;
+  useEffect(() => {
+    if (programTheme && !hasStoredThemeChoice()) applyTheme(programTheme);
+  }, [programTheme]);
+  useEffect(() => ensureBrandFontLoaded(branding?.brandExtras?.bodyFont), [branding?.brandExtras?.bodyFont]);
   const brandingKey = JSON.stringify(brandingStyle ?? {});
   useEffect(() => {
     const vars = (brandingStyle ?? {}) as Record<string, string>;
@@ -486,10 +513,14 @@ export function AppShell({
   // for them ("/athlete/programs"), so it takes the same word. Read off /api/branding/me, which
   // carries only what the program's plan allows (shared/branding-within-entitlements.ts).
   const programNavLabels = (branding?.navLabelOverrides ?? {}) as Record<string, string>;
+  // THE PROGRAM'S OWN WORDS (2026-11-19): a program that calls a Program a "Block" and a Coach a
+  // "Trainer" sees those words in every tab and every page title (shared/brand-extras.ts). A tab
+  // the coach renamed by hand keeps the exact name they typed.
+  const programWords = (text: string) => applyBrandTerms(text, branding?.brandExtras ?? null);
   function navLabel(item: NavItem) {
-    if (user?.role === "coach") return navLabelOverrides[item.href] || item.label;
+    if (user?.role === "coach") return navLabelOverrides[item.href] || programWords(item.label);
     if (user?.role === "athlete" && item.href.startsWith("/athlete/")) {
-      return programNavLabels[item.href.replace(/^\/athlete\//, "/coach/")] || item.label;
+      return programNavLabels[item.href.replace(/^\/athlete\//, "/coach/")] || programWords(item.label);
     }
     return item.label;
   }
@@ -686,7 +717,14 @@ export function AppShell({
             aria-label="Go to your dashboard"
             className="flex items-center gap-2 rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {branding?.brandLogoUrl ? (
+            {branding?.brandExtras?.wordmarkUrl ? (
+              // The program's wide wordmark replaces the square logo and the name (2026-11-19).
+              <img
+                src={resolveApiUrl(branding.brandExtras.wordmarkUrl)}
+                alt={branding.brandTeamName || "Team"}
+                className="h-8 max-w-[11rem] shrink-0 object-contain"
+              />
+            ) : branding?.brandLogoUrl ? (
               <img
                 src={resolveApiUrl(branding.brandLogoUrl)}
                 alt={branding.brandTeamName || "Team logo"}
@@ -696,9 +734,11 @@ export function AppShell({
               <ForgeMark className="h-8 w-8 shrink-0 rounded-md" />
             )}
             <div className="flex flex-col leading-none">
-              <span className="font-display text-xl font-extrabold uppercase tracking-wider">
-                {branding?.brandTeamName || "Forge"}
-              </span>
+              {!branding?.brandExtras?.wordmarkUrl && (
+                <span className="font-display text-xl font-extrabold uppercase tracking-wider">
+                  {branding?.brandTeamName || "Forge"}
+                </span>
+              )}
               {(branding?.brandTeamName || branding?.brandLogoUrl) && (
                 <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
                   {POWERED_BY_FORGE_LABEL}
@@ -1462,10 +1502,37 @@ export function AppShell({
             their own line under the title instead of crushing it. */}
         <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-white/10 bg-background/60 px-4 py-3 backdrop-blur-xl backdrop-saturate-150 md:flex-nowrap md:px-8 md:py-4">
           <h1 className="min-w-0 font-display text-xl font-bold uppercase tracking-wide md:truncate md:text-3xl">
-            {title}
+            {typeof title === "string" ? programWords(title) : title}
           </h1>
           <div className="flex min-w-0 items-center gap-2 overflow-x-auto">{actions}</div>
         </header>
+        {/* THE PROGRAM'S ANNOUNCEMENT across the top of every screen for its athletes and staff
+            (shared/brand-extras.ts, 2026-11-19), until the date it ends or until this person
+            dismisses that exact message. A new message shows again. */}
+        {announcement && !announcementDismissed && (
+          <div
+            className="flex items-start gap-3 border-t border-primary/30 bg-primary/15 px-4 py-2 text-sm md:px-8"
+            data-testid="program-announcement"
+            role="status"
+          >
+            <Megaphone className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <p className="min-w-0 flex-1 whitespace-pre-line">{announcement.text}</p>
+            <button
+              type="button"
+              className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                try {
+                  localStorage.setItem(ANNOUNCEMENT_DISMISSED_KEY, announcement.text);
+                } catch {
+                  // Private browsing: it hides for this visit only.
+                }
+                setAnnouncementDismissed(true);
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         {subheader && (
           <div className="border-t border-border bg-background px-4 py-2 md:px-8">{subheader}</div>
         )}

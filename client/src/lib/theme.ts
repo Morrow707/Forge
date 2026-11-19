@@ -25,6 +25,17 @@ export function applyTheme(theme: Theme) {
   document.documentElement.classList.toggle("light", theme === "light");
 }
 
+/** Whether this person has picked light or dark themselves. A program's default theme
+ *  (shared/brand-extras.ts) applies only until they do. */
+export function hasStoredThemeChoice(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(THEME_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
 export function setTheme(theme: Theme) {
   try {
     window.localStorage.setItem(THEME_KEY, theme);

@@ -83,6 +83,7 @@ import {
   type VideoRecordContext,
 } from "@/lib/video-offline-store";
 import { renderWorkoutShareCard } from "@/lib/share-card";
+import { useBrandExtras } from "@/hooks/use-brand-extras";
 import { shareCardBrandFromCache } from "@/lib/share-card";
 import { shareOrDownloadBlob } from "@/lib/share-file";
 import {
@@ -1794,8 +1795,13 @@ export function WorkoutPage({
         for (const pr of data?.newPRs ?? []) {
           hapticSuccess();
           playSuccessChime();
-          toast.success(`New PR — ${pr.exerciseName}`, {
+          // The program's own celebration (shared/brand-extras.ts, 2026-11-19): its line leads
+          // the toast and its color edges it. Forge's when none is set.
+          const celebration = brandExtras?.celebration;
+          const cheer = celebration?.message?.trim();
+          toast.success(cheer ? `${cheer} New PR — ${pr.exerciseName}` : `New PR — ${pr.exerciseName}`, {
             description: `${pr.weight} ${pr.unit} × ${pr.reps}`,
+            ...(celebration?.color ? { style: { borderLeft: `6px solid ${celebration.color}` } } : {}),
           });
         }
       } else {
@@ -1945,6 +1951,8 @@ export function WorkoutPage({
   // server value once known (mount, or any later refetch) so reopening an
   // already-completed day shows it correctly without needing a tap first.
   const [justCompleted, setJustCompleted] = useState(false);
+  // The program's own words and sign-off (shared/brand-extras.ts, 2026-11-19).
+  const { extras: brandExtras, words: programWords } = useBrandExtras();
   useEffect(() => {
     if (data?.log?.completed) setJustCompleted(true);
   }, [data?.log?.completed]);
@@ -3060,12 +3068,15 @@ export function WorkoutPage({
                       const missing = incompleteExerciseNames(pages);
                       if (missing.length > 0) {
                         toast.warning(`Marked complete, but not fully logged: ${missing.join(", ")}.`);
+                      } else if (brandExtras?.wording?.workoutDone?.trim()) {
+                        // The program's own sign-off (shared/brand-extras.ts, 2026-11-19).
+                        toast.success(brandExtras.wording.workoutDone.trim());
                       }
                     }}
                     disabled={justCompleted}
                   >
                     <CheckCircle2 className="h-4 w-4" />
-                    {justCompleted ? "Workout Complete" : "Mark Workout Complete"}
+                    {programWords(justCompleted ? "Workout Complete" : "Mark Workout Complete")}
                   </Button>
                 </div>
               </>

@@ -118,7 +118,7 @@ export default function LoginPage() {
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center bg-background px-4"
+      className="brand-photo flex min-h-screen items-center justify-center bg-background px-4"
       style={{
         ...computeBrandingStyle(brand),
         paddingTop: "env(safe-area-inset-top)",

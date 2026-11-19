@@ -17,6 +17,8 @@ type PublicTeam = {
   backgroundHue: number | null;
   backgroundStrength: number | null;
   headingFont: string | null;
+  /** The look options only (shared/brand-extras.ts publicBrandExtras). */
+  brandExtras?: import("@shared/brand-extras").BrandExtras | null;
   motto: string | null;
   mission: string | null;
   contactEmail: string | null;
@@ -80,6 +82,7 @@ export default function PublicTeamPage() {
           brandBackgroundHue: data.backgroundHue,
           brandBackgroundStrength: data.backgroundStrength,
           brandHeadingFont: data.headingFont,
+          brandExtras: data.brandExtras ?? null,
         }
       : null,
   );
@@ -114,7 +117,7 @@ export default function PublicTeamPage() {
 
   return (
     <div
-      className="min-h-screen bg-background px-4 py-10"
+      className="brand-photo min-h-screen bg-background px-4 py-10"
       // The program's own look, when it has one -- the whole point of the add-on.
       style={{ ...brandStyle, ...(data.primaryColor ? { borderTop: `4px solid ${data.primaryColor}` } : {}) }}
     >

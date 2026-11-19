@@ -3,6 +3,7 @@ import { Link, useParams } from "wouter";
 import { getJson } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { ForgeMark } from "@/components/forge-mark";
+import { ProgramCertificateMark, useProgramBranding } from "@/components/program-certificate-mark";
 import { ReadFailed } from "@/components/read-failed";
 import { ArrowLeft, Printer } from "lucide-react";
 import { format } from "date-fns";
@@ -23,6 +24,7 @@ type Certificate = {
  * never names a certification body or claims continuing-education credit: whether a director
  * accepts it is their call (docs/legal-open-questions.md, question 13). */
 export default function CoachesCornerCertificate({ kind = "track" }: { kind?: "track" | "path" }) {
+  const programBranding = useProgramBranding();
   const { trackId, pathId } = useParams<{ trackId?: string; pathId?: string }>();
   const url = kind === "path" ? `/api/coach/academy/paths/${pathId}/certificate` : `/api/coach/academy/tracks/${trackId}/certificate`;
   const { data, isLoading, isError, error, refetch } = useQuery<Certificate>({
@@ -52,7 +54,7 @@ export default function CoachesCornerCertificate({ kind = "track" }: { kind?: "t
   }
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8 print:bg-white print:px-0 print:py-0">
+    <div className="min-h-screen bg-background px-4 py-8 print:bg-white print:px-0 print:py-0" style={programBranding.style}>
       <div className="mx-auto mb-4 flex max-w-2xl items-center justify-between print:hidden">
         <Button asChild variant="outline" size="sm">
           <Link href="/coach/coaches-corner">
@@ -66,7 +68,7 @@ export default function CoachesCornerCertificate({ kind = "track" }: { kind?: "t
         </Button>
       </div>
       <div className="mx-auto max-w-2xl rounded-xl border-2 border-primary/40 bg-card p-10 text-center print:border-black print:text-black">
-        <ForgeMark className="mx-auto h-10 w-10" />
+        <ProgramCertificateMark branding={programBranding.branding} />
         <p className="mt-4 text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
           Certificate of completion
         </p>

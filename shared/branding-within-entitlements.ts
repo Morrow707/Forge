@@ -11,6 +11,8 @@
  *
  * Free on every plan, never touched here: the team name, the logo and the primary color. */
 
+import { brandExtrasWithinEntitlements, type BrandExtras } from "./brand-extras";
+
 export type BrandingEntitlements = {
   hasCustomColors: boolean;
   hasTeamIdentity: boolean;
@@ -46,5 +48,7 @@ export function brandingWithinEntitlements<T extends Record<string, unknown>>(
     });
   if (!ent.hasWorkflowCustomization && "navLabelOverrides" in out) out.navLabelOverrides = {};
   if (!ent.hasPersonalPage && "exercisePageTheme" in out) out.exercisePageTheme = null;
+  // The newer options, each under the entitlement it belongs to (shared/brand-extras.ts).
+  if ("brandExtras" in out) out.brandExtras = brandExtrasWithinEntitlements(out.brandExtras as BrandExtras | null, ent);
   return out as T;
 }

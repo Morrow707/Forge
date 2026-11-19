@@ -468,3 +468,11 @@ html.had-session [data-prerendered] {
 :root.light .hover\:text-secondary:hover {
   color: hsl(var(--secondary-text-light, var(--secondary)));
 }
+
+/* A PROGRAM'S BACKGROUND PHOTO behind its login and public page (2026-11-19). --brand-photo is set
+   by computeBrandingStyle only when the program has one, already darkened for contrast. */
+.brand-photo {
+  background-image: var(--brand-photo, none);
+  background-size: cover;
+  background-position: center;
+}

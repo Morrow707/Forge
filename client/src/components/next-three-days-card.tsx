@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { EntryPill, type CalendarEntry } from "@/components/calendar-view";
 import { cn } from "@/lib/utils";
+import { useBrandExtras } from "@/hooks/use-brand-extras";
 import { CalendarDays } from "lucide-react";
 import { format, formatISO, isToday } from "date-fns";
 
@@ -36,6 +37,8 @@ export function NextThreeDaysCard({
   compact?: boolean;
   onEntryClick: (entry: CalendarEntry) => void;
 }) {
+  // The program's own words for a day with nothing on it (shared/brand-extras.ts, 2026-11-19).
+  const { extras: brandExtras } = useBrandExtras();
   return (
     <Card className={compact ? "shrink-0" : undefined}>
       <CardHeader
@@ -90,7 +93,7 @@ export function NextThreeDaysCard({
                   {shown.length === 0 && (
                     <p className="flex items-center justify-center gap-1.5 py-2 text-center text-xs text-muted-foreground">
                       <CalendarDays className="h-3.5 w-3.5" />
-                      {unavailable ? "Couldn't load" : "Nothing scheduled"}
+                      {unavailable ? "Couldn't load" : brandExtras?.wording?.restDay?.trim() || "Nothing scheduled"}
                     </p>
                   )}
                   {shown.map((e) => (

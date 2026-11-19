@@ -6,7 +6,7 @@ import { DocumentsOutstandingBanner } from "@/components/documents-outstanding-b
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { CalendarEntry } from "@/components/calendar-view";
 import { NutritionQuickSummary } from "@/components/nutrition-quick-summary";
 import { TeamChatQuickSummary } from "@/components/team-chat-quick-summary";
@@ -32,6 +32,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { useAuth } from "@/hooks/use-auth";
+import { brandGreeting, useBrandExtras } from "@/hooks/use-brand-extras";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { addDays, formatISO } from "date-fns";
@@ -69,8 +70,18 @@ type ProgressSummary = {
 
 export default function AthleteDashboard() {
   const { user } = useAuth();
+  const { extras: brandExtras, term } = useBrandExtras();
+  // The coach's layout for the program's athletes, until this athlete arranges their own.
+  const programLayout = brandExtras?.athleteDashboard
+    ? [
+        ...brandExtras.athleteDashboard.order.map((id) => ({ id, hidden: brandExtras.athleteDashboard!.hidden.includes(id) })),
+        ...brandExtras.athleteDashboard.hidden
+          .filter((id) => !brandExtras.athleteDashboard!.order.includes(id))
+          .map((id) => ({ id, hidden: true })),
+      ]
+    : null;
   const [, navigate] = useLocation();
-  const widgetVisibility = useWidgetVisibility("athlete");
+  const widgetVisibility = useWidgetVisibility("athlete", programLayout);
 
   // Same query AppShell already makes for its own CSS-var re-skin --
   // React Query dedupes the identical in-flight request, so reading it
@@ -251,7 +262,7 @@ export default function AthleteDashboard() {
       onOpenChange={() => {}}
     />
     <AppShell
-      title={`Welcome, ${user?.name?.split(" ")[0] ?? "Athlete"}`}
+      title={brandGreeting(brandExtras, user?.name?.split(" ")[0] ?? "Athlete", `Welcome, ${user?.name?.split(" ")[0] ?? "Athlete"}`)}
       actions={
         <Button
           size="sm"
@@ -307,6 +318,19 @@ export default function AthleteDashboard() {
         <PendingCoachRequests />
         <PendingVideosBanner />
         <DigestBanner />
+
+        {/* THE COACH'S NOTE, pinned above everything else on the program's dashboards
+            (shared/brand-extras.ts, 2026-11-19). Shown as the coach wrote it. */}
+        {brandExtras?.coachNote?.trim() && (
+          <Card className="border-primary/40" data-testid="coach-note-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">From your {term("coach").toLowerCase()}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="whitespace-pre-line text-sm">{brandExtras.coachNote.trim()}</p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Today's nutrition sits right under the calendar in default order
             -- it's the one thing on this page an athlete plausibly checks/

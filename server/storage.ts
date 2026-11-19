@@ -361,6 +361,7 @@ import { nutritionTargetNumberShape } from "@shared/schema";
 import { NUTRITION_TARGET_FIELDS } from "@shared/nutrition-target-fields";
 import { getEntitlements, getVideoRetentionLimits } from "./billing";
 import { brandingWithinEntitlements, type BrandingEntitlements } from "@shared/branding-within-entitlements";
+import { publicBrandExtras, type BrandExtras } from "@shared/brand-extras";
 import type { VideoRetentionLimits } from "@shared/video-retention";
 import { lookupBarcode, searchFoodsByName, type FoodCandidate } from "./food-lookup";
 import { TESTING_METRICS, testingMetricLowerIsBetter } from "@shared/testing-metrics";
@@ -1103,6 +1104,7 @@ const BRANDING_COLUMNS = {
   brandHeadingFont: true,
   brandSlug: true,
   brandSenderName: true,
+  brandExtras: true,
 } as const;
 
 const BRANDING_COLUMNS_SQL = {
@@ -1119,6 +1121,7 @@ const BRANDING_COLUMNS_SQL = {
   brandHeadingFont: users.brandHeadingFont,
   brandSlug: users.brandSlug,
   brandSenderName: users.brandSenderName,
+  brandExtras: users.brandExtras,
 };
 
 // Shared by every AI program-generation prompt (generateProgramDraft and
@@ -7456,10 +7459,12 @@ export const storage = {
   // cosmetic branding fields, never anything else about the coach account.
   async getCoachBrandingByCode(code: string) {
     const coach = await this.getUserByCoachCode(code);
-    if (coach) return this.getCoachBranding(coach.id);
-    const team = await this.getTeamByCode(code);
-    if (team) return this.getCoachBranding(team.coachId);
-    return null;
+    const team = coach ? null : await this.getTeamByCode(code);
+    const ownerId = coach?.id ?? team?.coachId;
+    if (!ownerId) return null;
+    const branding = await this.getCoachBranding(ownerId);
+    // Reached with no session: the look only, never the program's notes (shared/brand-extras.ts).
+    return branding ? { ...branding, brandExtras: publicBrandExtras(branding.brandExtras) } : null;
   },
 
   // Scoped to the whole staff (not just the exact coachId passed in) so an
@@ -22233,6 +22238,21 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
   // the full users row -- update(...).returning() with no column list
   // would otherwise hand the response straight back to the client
   // including passwordHash.
+  /** Merges a patch into the program's personalization record (shared/brand-extras.ts). A key
+   *  set to null clears that option; a key left out is kept. */
+  async updateCoachBrandExtras(primaryCoachId: number, patch: BrandExtras) {
+    const current = (await this.getCoachBranding(primaryCoachId))?.brandExtras ?? {};
+    const merged = Object.fromEntries(
+      Object.entries({ ...current, ...patch }).filter(([, v]) => v !== null && v !== undefined),
+    ) as BrandExtras;
+    const [row] = await db
+      .update(users)
+      .set({ brandExtras: merged })
+      .where(eq(users.id, primaryCoachId))
+      .returning({ brandExtras: users.brandExtras });
+    return row?.brandExtras ?? null;
+  },
+
   async updateCoachBranding(primaryCoachId: number, values: UpdateBrandingInput) {
     const patch = {
         ...(values.teamName !== undefined && { brandTeamName: values.teamName }),
@@ -22373,6 +22393,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       brandHeadingFont: null,
       brandSlug: null,
       brandSenderName: null,
+      brandExtras: null,
       navLabelOverrides: {},
       features: resolveCoachFeatures(null),
       exercisePageTheme: null,
@@ -22433,6 +22454,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       brandHeadingFont: orgBranding?.brandHeadingFont ?? null,
       brandSlug: orgBranding?.brandSlug ?? null,
       brandSenderName: orgBranding?.brandSenderName ?? null,
+      brandExtras: orgBranding?.brandExtras ?? null,
       navLabelOverrides: navPrefs.navLabelOverrides,
       features,
       exercisePageTheme,
@@ -22465,7 +22487,10 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     if (coach && coach.role === "coach") {
       const coachIds = await this.getEffectiveCoachIds(coach.id);
       const org = await this.getCoachBranding(coachIds[0]);
-      return org ? brandingWithinEntitlements(org, await this.brandingEntitlementsForProgram(coachIds[0])) : org;
+      if (!org) return org;
+      // No session here either: the look only, never the program's notes (shared/brand-extras.ts).
+      const narrowed = brandingWithinEntitlements(org, await this.brandingEntitlementsForProgram(coachIds[0]));
+      return { ...narrowed, brandExtras: publicBrandExtras(narrowed.brandExtras) };
     }
     return null;
   },

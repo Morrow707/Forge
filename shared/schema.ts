@@ -675,6 +675,9 @@ export const users = pgTable(
     // the last time it was checked, so the coach is told once when the line is crossed either way
     // (server/personalization-included-notice.ts). Null until first checked; nothing is sent then.
     fullPersonalizationEarned: boolean("full_personalization_earned"),
+    // Everything else a program personalizes (terms, wording, look options, the athletes'
+    // dashboard, the coach's note, the banner, the celebration, the app icon): shared/brand-extras.ts.
+    brandExtras: json("brand_extras").$type<import("./brand-extras").BrandExtras>(),
     // THE BETA IS OVER (Scott, 2026-10-11: "Set all billing as live, everything true, the beta
     // is over"). Defaulted true from 2026-09 to 2026-10-11 so every row and every signup was
     // exempt from billing enforcement; it defaults FALSE now, and the one-shot backfill

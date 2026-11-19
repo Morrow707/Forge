@@ -1,4 +1,4 @@
-import express, { type Express, type Request } from "express";
+import express, { type Express, type Request, type Response as ExpressResponse } from "express";
 import { findSimilar } from "@shared/exercise-similarity";
 import { summarizeCaptureRepeatability } from "@shared/capture-repeatability";
 import witnessMemoryOnRecord from "@shared/witness-memory-on-record.json";
@@ -79,6 +79,7 @@ import { usdaFoodLookupEnabled } from "./food-lookup";
 import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { pdfBrandForAthlete } from "./pdf-brand";
+import { brandExtrasSchema, brandExtrasWithinEntitlements, publicBrandExtras } from "@shared/brand-extras";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
 import { summariseCalibrationEvidence } from "./calibration-evidence";
 import { fitLoadVelocityProfile, compareTakeToProfile } from "@shared/load-velocity-profile";
@@ -9491,6 +9492,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       motto: entitlements.hasTeamIdentity ? (branding?.brandMotto ?? null) : null,
       mission: entitlements.hasTeamIdentity ? (branding?.brandMission ?? null) : null,
       contactEmail: entitlements.hasTeamIdentity ? (branding?.brandContactEmail ?? null) : null,
+      // The look options only (wordmark, background photo, corners, fonts), never the program's
+      // notes, banner or athlete layout (shared/brand-extras.ts).
+      brandExtras: publicBrandExtras(brandExtrasWithinEntitlements(branding?.brandExtras, entitlements)),
     });
   });
 
@@ -9598,6 +9602,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(branding);
     });
   });
+
+  // THE REST OF A PROGRAM'S PERSONALIZATION (shared/brand-extras.ts, 2026-11-19): terms,
+  // wording, look options, the athletes' dashboard, the coach's note, the banner, the celebration
+  // and the app icon. Primary coach only, like the rest of the branding. Options the program's
+  // plan does not include are left out of the save rather than refused, so one request saving a
+  // mix still saves what it may -- the same rule the branding PATCH follows.
+  app.patch("/api/coach/branding/extras", requireRole("coach"), requirePrimaryCoach, async (req, res) => {
+    const user = currentUser(req);
+    const parsed = brandExtrasSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+    const entitlements = await getEntitlementsForCoach(user.id);
+    const allowed = brandExtrasWithinEntitlements(parsed.data, entitlements);
+    const coachIds = await storage.getEffectiveCoachIds(user.id);
+    const saved = await storage.updateCoachBrandExtras(coachIds[0], allowed);
+    res.json({ brandExtras: saved, skipped: Object.keys(parsed.data).filter((k) => !(k in allowed)) });
+  });
+
+  // The wide wordmark and the login background photo (2026-11-19). Same public directory and
+  // rules as the logo: both are drawn before sign-in, so they cannot sit behind a session.
+  const brandImageUpload = (field: "wordmarkUrl" | "backgroundImageUrl") =>
+    async (req: Request, res: ExpressResponse) => {
+      // The plan is asked BEFORE the file is accepted, so a refused upload leaves nothing on disk.
+      if (!(await getEntitlementsForCoach(currentUser(req).id)).hasCustomColors) {
+        return res.status(402).json({
+          message: `This comes with Full Personalization, or free on any plan of ${FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES} athletes or more.`,
+        });
+      }
+      uploadTeamLogo.single("image")(req, res, async (err: unknown) => {
+        if (err) return res.status(400).json({ message: err instanceof Error ? err.message : "Upload failed" });
+        if (!req.file) return res.status(400).json({ message: "No image file provided" });
+        const user = currentUser(req);
+        const coachIds = await storage.getEffectiveCoachIds(user.id);
+        const saved = await storage.updateCoachBrandExtras(coachIds[0], { [field]: `/uploads/team-logos/${req.file.filename}` });
+        res.status(201).json({ brandExtras: saved });
+      });
+    };
+  app.post("/api/coach/branding/wordmark", requireRole("coach"), requirePrimaryCoach, requireDiskSpace, brandImageUpload("wordmarkUrl"));
+  app.post("/api/coach/branding/background", requireRole("coach"), requirePrimaryCoach, requireDiskSpace, brandImageUpload("backgroundImageUrl"));
 
   // "Send me a test": the welcome email, dressed in the program's current brand, to the
   // coach's own inbox. The one way to see what an athlete's inbox will show without inviting

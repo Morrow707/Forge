@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearch } from "wouter";
 import { getJson } from "@/lib/queryClient";
 import type { EffectiveBranding } from "@/lib/branding-style";
+import { publicBrandExtras } from "@shared/brand-extras";
 
 /** THE LOGIN SCREEN WEARS THE LAST PROGRAM THIS DEVICE SIGNED INTO.
  *
@@ -24,6 +25,7 @@ export type RememberedBrand = Pick<
   | "brandBackgroundHue"
   | "brandBackgroundStrength"
   | "brandHeadingFont"
+  | "brandExtras"
 > & { slug?: string | null };
 
 export function readRememberedBrand(): RememberedBrand | null {
@@ -49,6 +51,8 @@ export function rememberBrand(branding: EffectiveBranding | null | undefined): v
       brandBackgroundHue: branding.brandBackgroundHue ?? null,
       brandBackgroundStrength: branding.brandBackgroundStrength ?? null,
       brandHeadingFont: branding.brandHeadingFont ?? null,
+      // The look only: never the program's notes, which this device keeps in plain storage.
+      brandExtras: publicBrandExtras(branding.brandExtras),
       slug: branding.brandSlug ?? null,
     };
     localStorage.setItem(KEY, JSON.stringify(snapshot));

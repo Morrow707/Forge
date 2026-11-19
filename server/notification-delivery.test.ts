@@ -87,8 +87,9 @@ describe("a guardian invite records whether it was delivered", () => {
 
 describe("every route that writes to the uploads disk checks free space", () => {
   it("guards all of them, not just the video ones", () => {
-    // One definition plus one per writing route.
-    expect(routes.match(/requireDiskSpace/g)?.length).toBe(8);
+    // One definition plus one per writing route. 10 since 2026-11-19: the program wordmark and
+    // background photo uploads (POST /api/coach/branding/wordmark and /background).
+    expect(routes.match(/requireDiskSpace/g)?.length).toBe(10);
   });
 });
 

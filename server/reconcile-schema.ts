@@ -3506,6 +3506,8 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "planned_athlete_count" integer;
 -- Last known answer to "has this program's roster earned Full Personalization" (2026-11-18), so a
 -- crossing of the 50-athlete line is announced once. Null until first checked.
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "full_personalization_earned" boolean;
+-- The rest of a program's personalization, one record (shared/brand-extras.ts, 2026-11-19).
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_extras" json;
 
 -- The evidentiary record of an Institutional Service Agreement signed IN THE APP: who signed,
 -- the sha256 of the exact text they were shown, when, and from where. Insert-only, like
