@@ -8334,3 +8334,10 @@ that goes red with the fix reverted:
 **Two for counsel, not code:** the research text says no linking key exists and
 `users.researchSubjectId` is one; the privacy policy says the AI provider receives request text and
 `waiver-reader.ts` also sends it uploaded medical documents.
+
+- **2026-11-19: ITMS-90725 IS A WARNING, NOT A REJECTION.** Apple's email on build 797 (1.0.2): from
+  April 2027 uploads must be built with the iOS 27 SDK (Xcode 27). Builds made with Xcode 26 are
+  accepted until then. Nothing changed. The workflow step "Use Xcode 26 or newer" keeps the runner's
+  default Xcode when it is 26+, so it moves to 27 when GitHub makes Xcode 27 the `macos-latest`
+  default. Before April 2027: read `xcodebuild -version` in a `verify_build` log; if it still says
+  26, make that step select `/Applications/Xcode_27*.app` (never a beta), and run `verify_build`.
