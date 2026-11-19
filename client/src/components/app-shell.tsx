@@ -481,8 +481,17 @@ export function AppShell({
   });
   const hiddenNavSections = new Set(navPrefs?.hiddenNavSections ?? []);
   const navLabelOverrides = navPrefs?.navLabelOverrides ?? {};
+  // AN ATHLETE SEES THEIR PROGRAM'S TAB NAMES TOO (2026-11-19). A coach renames a tab by its coach
+  // address ("/coach/programs" -> "Blocks"); the athlete's tab of the same name is the same page
+  // for them ("/athlete/programs"), so it takes the same word. Read off /api/branding/me, which
+  // carries only what the program's plan allows (shared/branding-within-entitlements.ts).
+  const programNavLabels = (branding?.navLabelOverrides ?? {}) as Record<string, string>;
   function navLabel(item: NavItem) {
-    return navLabelOverrides[item.href] || item.label;
+    if (user?.role === "coach") return navLabelOverrides[item.href] || item.label;
+    if (user?.role === "athlete" && item.href.startsWith("/athlete/")) {
+      return programNavLabels[item.href.replace(/^\/athlete\//, "/coach/")] || item.label;
+    }
+    return item.label;
   }
 
   // Same /api/coach/roster query (and cache) AthleteSwitcher and the roster

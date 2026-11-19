@@ -16,6 +16,7 @@ import { apiRequest, getJson } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { shareOrDownloadFile, shareOrDownloadBlob } from "@/lib/share-file";
 import { renderPrShareCard } from "@/lib/share-card";
+import { shareCardBrandFromCache } from "@/lib/share-card";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import {
@@ -132,6 +133,7 @@ export default function AthleteProgress() {
     setSharingPrIndex(index);
     try {
       const blob = await renderPrShareCard({
+        brand: shareCardBrandFromCache(),
         athleteName: user?.name ?? "Athlete",
         exerciseName: pr.exerciseName,
         weight: pr.weight,

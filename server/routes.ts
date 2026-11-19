@@ -78,6 +78,7 @@ import { aiEnabled } from "./ai";
 import { usdaFoodLookupEnabled } from "./food-lookup";
 import { buildProgressReportEmail } from "./progress-report";
 import { buildRecruitingProfilePdf } from "./recruiting-profile";
+import { pdfBrandForAthlete } from "./pdf-brand";
 import { buildTrainingHistoryCsv, buildTrainingHistoryPdf, csvField } from "./training-history-export";
 import { summariseCalibrationEvidence } from "./calibration-evidence";
 import { fitLoadVelocityProfile, compareTakeToProfile } from "@shared/load-velocity-profile";
@@ -2196,8 +2197,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     end.setDate(end.getDate() + 180);
     const toIso = (d: Date) => d.toISOString().slice(0, 10);
     const entries = await storage.getCalendarForAthlete(user.id, toIso(start), toIso(end));
+    // The program's name on the calendar a phone subscribes to (2026-11-19): "Cal Strength
+    // Training", not "Forge Training", for an athlete on a branded program. The team name is free
+    // on every plan.
+    const programName = (await storage.getEffectiveBrandingForUser(user.id))?.brandTeamName?.trim();
     const feed = buildIcsFeed(
-      `Forge Training — ${user.name}`,
+      `${programName || "Forge"} Training — ${user.name}`,
       entries
         .filter((e) => !e.isRestDay)
         .map((e) => ({
@@ -9163,7 +9168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!athlete) return res.status(404).json({ message: "Athlete not found" });
 
       const summary = await storage.getAthleteProgressSummary(athleteId);
-      const pdf = await buildRecruitingProfilePdf(athlete, summary);
+      const pdf = await buildRecruitingProfilePdf(athlete, summary, await pdfBrandForAthlete(athleteId));
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
@@ -9203,7 +9208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!athlete) return res.status(404).json({ message: "Athlete not found" });
 
       const rows = await storage.getFullTrainingHistoryForAthlete(athleteId);
-      const pdf = await buildTrainingHistoryPdf(athlete.name, rows);
+      const pdf = await buildTrainingHistoryPdf(athlete.name, rows, await pdfBrandForAthlete(athlete.id));
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
@@ -12764,7 +12769,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       storage.getUser(user.id),
       storage.getAthleteProgressSummary(user.id),
     ]);
-    const pdf = await buildRecruitingProfilePdf(profile!, summary);
+    const pdf = await buildRecruitingProfilePdf(profile!, summary, await pdfBrandForAthlete(user.id));
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
@@ -12788,7 +12793,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/athlete/training-history.pdf", requireRole("athlete"), async (req, res) => {
     const user = currentUser(req);
     const rows = await storage.getFullTrainingHistoryForAthlete(user.id);
-    const pdf = await buildTrainingHistoryPdf(user.name, rows);
+    const pdf = await buildTrainingHistoryPdf(user.name, rows, await pdfBrandForAthlete(user.id));
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",

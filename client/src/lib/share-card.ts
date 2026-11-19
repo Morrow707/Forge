@@ -1,3 +1,4 @@
+import { queryClient } from "@/lib/queryClient";
 // Client-side canvas rendering for shareable PR/workout image cards --
 // deliberately drawn entirely in the browser (no server round-trip, no
 // server-side rendering dependency) since a Canvas 2D context is all this
@@ -33,6 +34,25 @@ function drawBackground(ctx: CanvasRenderingContext2D) {
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 }
 
+/** A program's name and main color, for an athlete on a branded program (2026-11-19). The card
+ *  was Forge orange and "FORGE" for everybody. Read off the same /api/branding/me the app wears,
+ *  so it carries only what the program's plan allows (the name and main color are free). */
+export type ShareCardBrand = { teamName?: string | null; primaryColor?: string | null } | null | undefined;
+const FORGE_PRIMARY = "#f65b23";
+
+/** The brand the app is already wearing, from its own cached /api/branding/me. */
+export function shareCardBrandFromCache(): ShareCardBrand {
+  const b = queryClient.getQueryData<{ brandTeamName?: string | null; brandPrimaryColor?: string | null }>(["/api/branding/me"]);
+  return b ? { teamName: b.brandTeamName, primaryColor: b.brandPrimaryColor } : null;
+}
+// The card being drawn. One card at a time is drawn on a page, so this is set at the top of each
+// render and every draw below reads it.
+let cardBrand: ShareCardBrand = null;
+function useCardBrand(brand: ShareCardBrand) {
+  cardBrand = brand;
+  COLOR.primary = brand?.primaryColor || FORGE_PRIMARY;
+}
+
 function drawHeader(ctx: CanvasRenderingContext2D) {
   const size = 56;
   const x = 64;
@@ -51,12 +71,18 @@ function drawHeader(ctx: CanvasRenderingContext2D) {
   ctx.font = "bold 36px system-ui, -apple-system, Segoe UI, Arial, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("F", x + size / 2, y + size / 2 + 2);
+  const teamName = cardBrand?.teamName?.trim();
+  ctx.fillText(teamName ? teamName.charAt(0).toUpperCase() : "F", x + size / 2, y + size / 2 + 2);
 
   ctx.fillStyle = COLOR.foreground;
   ctx.font = "800 40px system-ui, -apple-system, Segoe UI, Arial, sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText("FORGE", x + size + 20, y + size / 2 + 2);
+  ctx.fillText(teamName ? teamName.toUpperCase() : "FORGE", x + size + 20, y + size / 2 + 2);
+  if (teamName) {
+    ctx.fillStyle = COLOR.muted;
+    ctx.font = "500 24px system-ui, -apple-system, Segoe UI, Arial, sans-serif";
+    ctx.fillText("via Forge", x + size + 20, y + size + 24);
+  }
 }
 
 function drawFooter(ctx: CanvasRenderingContext2D, dateLabel: string) {
@@ -103,6 +129,7 @@ async function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
 }
 
 export async function renderPrShareCard(data: {
+  brand?: ShareCardBrand;
   athleteName: string;
   exerciseName: string;
   weight: number;
@@ -116,6 +143,7 @@ export async function renderPrShareCard(data: {
   const ctx = canvas.getContext("2d")!;
 
   drawBackground(ctx);
+  useCardBrand(data.brand);
   drawHeader(ctx);
 
   ctx.textAlign = "center";
@@ -147,6 +175,7 @@ export async function renderPrShareCard(data: {
 }
 
 export async function renderWorkoutShareCard(data: {
+  brand?: ShareCardBrand;
   athleteName: string;
   workoutTitle: string;
   totalReps: number;
@@ -161,6 +190,7 @@ export async function renderWorkoutShareCard(data: {
   const ctx = canvas.getContext("2d")!;
 
   drawBackground(ctx);
+  useCardBrand(data.brand);
   drawHeader(ctx);
 
   ctx.textAlign = "center";

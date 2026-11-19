@@ -83,6 +83,7 @@ import {
   type VideoRecordContext,
 } from "@/lib/video-offline-store";
 import { renderWorkoutShareCard } from "@/lib/share-card";
+import { shareCardBrandFromCache } from "@/lib/share-card";
 import { shareOrDownloadBlob } from "@/lib/share-file";
 import {
   dayCacheKey,
@@ -2516,6 +2517,7 @@ export function WorkoutPage({
     setSharingWorkout(true);
     try {
       const blob = await renderWorkoutShareCard({
+        brand: shareCardBrandFromCache(),
         athleteName: user?.name ?? "Athlete",
         workoutTitle: data.day.title,
         totalReps: stats.totalReps,

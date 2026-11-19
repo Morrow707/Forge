@@ -23,9 +23,10 @@ type NavPrefs = { hiddenNavSections: string[]; navLabelOverrides: Record<string,
 /** Lets the primary coach trim whole nav tabs their program doesn't use
  * (e.g. no Nutrition tracking), and rename the ones they keep (e.g. "Team
  * Board" -> "Locker Room") -- applies org-wide, to the primary coach and the
- * whole staff, not per staff-member. It does NOT reach athletes: the nav-prefs
- * query in AppShell is enabled for role "coach" only, and an athlete of two
- * different coaches would otherwise see whichever one's renames won. Dashboard is
+ * whole staff, not per staff-member. A RENAME reaches the program's athletes too
+ * (2026-11-19): their tab of the same page takes the same word, read off
+ * /api/branding/me. A HIDE does not -- hiding a coach tab is about the coach's
+ * own screen, and what athletes can use is decided by the program's features. Dashboard is
  * never offered here since hiding your own home tab would leave no way
  * back in, and renaming it would be confusing since every page's header
  * already shows its own title regardless of the nav label. */
@@ -90,8 +91,8 @@ export function NavCustomizeDialog({
         <DialogHeader>
           <DialogTitle>Customize navigation</DialogTitle>
           <DialogDescription>
-            Hide tabs your program doesn't use, or rename the ones you keep, applies to you
-            and your whole staff. Your athletes' own navigation is unchanged.
+            Hide tabs your program doesn't use, or rename the ones you keep. Hiding applies to
+            you and your whole staff; a new name also shows on your athletes' matching tab.
           </DialogDescription>
         </DialogHeader>
         {/* HYDRATE-IN-AN-EFFECT, SAVE-THE-WHOLE-STATE -- see CLAUDE.md. On a failed read the

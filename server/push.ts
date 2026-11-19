@@ -40,9 +40,19 @@ export async function sendPushToUser(
   userId: number,
   payload: { title: string; body: string; url?: string; badge?: number },
 ): Promise<{ web: boolean; apns: boolean }> {
+  // THE PROGRAM'S NAME LEADS THE TITLE (2026-11-19): the phone always labels a notification with
+  // the app's own name, so "Cal Strength · New comment" is how an athlete on a branded program sees
+  // whose message it is. The team name is free on every plan; a lookup failure sends it plain.
+  const programName = await storage
+    .getEffectiveBrandingForUser(userId)
+    .then((b) => b?.brandTeamName?.trim() || null)
+    .catch(() => null);
+  const branded = programName && !payload.title.startsWith(programName)
+    ? { ...payload, title: `${programName} · ${payload.title}` }
+    : payload;
   const [web, apns] = await Promise.all([
-    sendWebPushToUser(userId, payload),
-    sendApnsToUser(userId, payload),
+    sendWebPushToUser(userId, branded),
+    sendApnsToUser(userId, branded),
   ]);
   return { web, apns };
 }
