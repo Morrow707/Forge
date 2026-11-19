@@ -95,6 +95,7 @@ import { startTrialEndingJob } from "./trial-ending-job";
 import { startWeeklyRecapJob } from "./weekly-recap-job";
 import { startSetTraceOffloadJob } from "./set-trace-offload-job";
 import { startSetEntriesVacuumFull } from "./set-entries-vacuum-full";
+import { startExerciseVideoApplyOnce } from "./exercise-video-apply-once";
 import { startFkDriftJob } from "./fk-drift-job";
 import { startOrphanSetRowsCleanup } from "./orphan-set-rows-cleanup";
 import { startResearchMirrorJob } from "./research-mirror-job";
@@ -586,6 +587,8 @@ app.get("/healthz", async (_req, res) => {
     // applied_backfills marker, and only when no row still holds frames inline and the live
     // rows are small enough to rewrite in seconds -- see set-entries-vacuum-full.ts.
     startSetEntriesVacuumFull();
+    // Scott's 2026-11-19 call on the exercise-video dry run, once (exercise-video-apply-once.ts).
+    startExerciseVideoApplyOnce();
     // TWO BOOT TASKS WERE REMOVED HERE 2026-11-13. A one-time video cleanup aimed at
     // athlete@forge.app with a cutoff of 2026-08-31 matched nothing on the day it was written,
     // and that address is now the reinstated demo athlete, created after the cutoff, so it could
