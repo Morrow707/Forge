@@ -34,6 +34,7 @@
  */
 import { eq, isNull, or, sql } from "drizzle-orm";
 import { exercises, exerciseVideoRuns, skillExercises } from "@shared/schema";
+import { skillSearchQuery, skillTitleVerdict } from "@shared/skill-video-match";
 import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -521,6 +522,7 @@ export async function planExerciseVideoBackfill(options?: {
   kind?: "exercise" | "skill";
 }): Promise<BackfillReport> {
   const kind = options?.kind ?? "exercise";
+  if (kind === "skill") return planSkillVideoBackfill(options);
   const channels = options?.channels ?? DEMO_VIDEO_CHANNELS;
   const maxDurationSeconds = options?.maxDurationSeconds ?? DEFAULT_MAX_DURATION_SECONDS;
   const quota = newQuotaLedger();
@@ -554,12 +556,10 @@ export async function planExerciseVideoBackfill(options?: {
     pool.push(...result.videos);
   }
 
-  const targets = (await targetsNeedingVideo()).filter((t) => t.kind === kind);
-  const library = kind === "skill" ? await skillLibraryForMatching() : await libraryForMatching();
-  // A drill's name alone ("Face-Off Counter") finds nothing useful; its skill type says what
-  // sport it is. The title still has to pass every rule against the name itself.
-  const skillTypeByName = new Map(library.map((e) => [e.name, e.movementPattern ?? ""]));
-  const searchQuery = (name: string) => (kind === "skill" ? `${name} ${skillTypeByName.get(name) ?? ""} drill`.trim() : name);
+  // The lifts only: the skill drills have their own path (planSkillVideoBackfill).
+  const targets = (await targetsNeedingVideo()).filter((t) => t.kind === "exercise");
+  const library = await libraryForMatching();
+  const searchQuery = (name: string) => name;
 
   /* SLOT-BY-SLOT MATCHING over the whole library at once (Fable's v2 spec, 2026-09-27). The word
    * -set matcher it replaces could not tell a harmless extra title word from one that changes the
@@ -660,6 +660,115 @@ export async function planExerciseVideoBackfill(options?: {
     duplicateSignatures: run.duplicateSignatures,
     boilerplateByChannel: run.boilerplateByChannel,
     cacheHits,
+  };
+}
+
+/**
+ * THE SKILL DRILLS, BY SEARCH ALONE (2026-11-19). The lift grammar finds no movement word in a
+ * drill name, so the first skill dry run skipped all 398; no strength channel films a tee drill
+ * either, so the channel pass is skipped too and spends nothing. Each drill is searched with its
+ * skill type for context, a title must pass skillTitleVerdict against the drill's own name and
+ * fit the length cap, and the most-watched passing video is proposed -- always tier B, so a
+ * person approves every one. Capped per run like the lift search; a second run continues.
+ */
+async function planSkillVideoBackfill(options?: {
+  maxDurationSeconds?: number;
+  maxSearches?: number;
+}): Promise<BackfillReport> {
+  const maxDurationSeconds = options?.maxDurationSeconds ?? DEFAULT_MAX_DURATION_SECONDS;
+  const maxSearches = options?.maxSearches ?? DEFAULT_MAX_SEARCHES;
+  const quota = newQuotaLedger();
+  const targets = (await targetsNeedingVideo()).filter((t) => t.kind === "skill");
+  const library = await skillLibraryForMatching();
+  const skillTypeById = new Map(library.map((e) => [e.id, e.movementPattern ?? null]));
+  const order = startOfTodaysSlice(targets, maxSearches);
+
+  type Outcome = { proposal?: BackfillProposal; unmatched?: UnmatchedTarget; searched: boolean; waiting: boolean };
+  const state = { searched: 0, cacheHits: 0, quotaGone: false };
+  const outcomes: Outcome[] = [];
+  // One drill at a time, in order: the search budget and the quota are shared state.
+  await order.reduce(async (prev, target) => {
+    await prev;
+    const query = skillSearchQuery(target.name, skillTypeById.get(target.id));
+    const cached = readYouTubeCache<Awaited<ReturnType<typeof searchVideosFor>>>("search", query, SEARCH_CACHE_HOURS);
+    if (!cached && (state.quotaGone || state.searched >= maxSearches)) {
+      outcomes.push({ searched: false, waiting: true });
+      return;
+    }
+    const found = cached
+      ? cached.map((v) => ({ ...v, title: decodeYouTubeText(v.title), channel: decodeYouTubeText(v.channel) }))
+      : await searchVideosFor(query, quota).then(
+          (r) => {
+            writeYouTubeCache("search", query, r);
+            return r;
+          },
+          (err: unknown) => {
+            if (QUOTA_GONE.test(String((err as Error)?.message ?? err))) state.quotaGone = true;
+            return null;
+          },
+        );
+    if (cached) state.cacheHits += 1;
+    else state.searched += 1;
+    if (!found) {
+      outcomes.push({ searched: false, waiting: true });
+      return;
+    }
+    const verdicts = found
+      .filter((v) => v.embeddable && v.durationSeconds > 0)
+      .map((v) => ({ v, verdict: v.durationSeconds > maxDurationSeconds ? null : skillTitleVerdict(target.name, v.title) }));
+    const passing = verdicts.filter((x) => x.verdict?.ok).map((x) => x.v).sort((a, b) => b.viewCount - a.viewCount);
+    const best = passing[0];
+    if (best) {
+      const match = {
+        videoId: best.videoId,
+        title: best.title,
+        channel: best.channel,
+        durationSeconds: best.durationSeconds,
+        tier: "B" as const,
+        corroboration: "single" as const,
+      };
+      outcomes.push({ searched: true, waiting: false, proposal: { ...target, match, url: watchUrlFor(best.videoId) } });
+      return;
+    }
+    const first = verdicts.find((x) => x.verdict && !x.verdict.ok);
+    const why = first?.verdict && !first.verdict.ok ? first.verdict : null;
+    outcomes.push({
+      searched: true,
+      waiting: false,
+      unmatched: {
+        ...target,
+        rejection: why
+          ? { reason: why.reason === "red_flag" ? "red-flag" : "head", detail: why.detail, title: first?.v.title, channel: first?.v.channel }
+          : { reason: "duration", detail: "no result short enough that plays inside Forge" },
+      },
+    });
+  }, Promise.resolve());
+
+  const proposals = outcomes.flatMap((o) => (o.proposal ? [o.proposal] : []));
+  const matchedIds = new Set(proposals.map((p) => p.id));
+  const waitingCount = outcomes.filter((o) => o.waiting).length;
+  const unmatched: UnmatchedTarget[] = targets
+    .filter((t) => !matchedIds.has(t.id))
+    .map((t) => outcomes.find((o) => o.unmatched?.id === t.id)?.unmatched ?? { ...t });
+  return {
+    targetsConsidered: targets.length,
+    byKind: { exercise: { considered: 0, matched: 0 }, skill: { considered: targets.length, matched: proposals.length } },
+    proposals,
+    unmatched,
+    channels: [],
+    quota,
+    maxDurationSeconds,
+    tierCounts: { A: 0, B: proposals.length },
+    searchFill: {
+      searched: state.searched,
+      filled: proposals.length,
+      stillEmpty: outcomes.filter((o) => o.searched && !o.proposal).length,
+      remaining: waitingCount,
+    },
+    unknownWords: [],
+    duplicateSignatures: [],
+    boilerplateByChannel: {},
+    cacheHits: state.cacheHits,
   };
 }
 

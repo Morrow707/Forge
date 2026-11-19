@@ -14,7 +14,9 @@ import { youTubeConfigured } from "./youtube-catalog";
 import { runWithJobLock } from "./job-lock";
 import { reportJobFailure } from "./job-errors";
 
-export const SKILL_VIDEO_DRY_RUN_MARKER = "skill_video_dry_run_2026_11_19";
+// "_b": the first run (marker without it) matched nothing because drill names went through the
+// lift grammar; this is the run on the drill rule (shared/skill-video-match.ts).
+export const SKILL_VIDEO_DRY_RUN_MARKER = "skill_video_dry_run_2026_11_19_b";
 const JOB = "skill-video-dry-run-once";
 
 function readRows<T>(result: unknown): T[] {
@@ -29,7 +31,14 @@ export async function skillVideoDryRunOnce(log: (line: string) => void): Promise
   if (!youTubeConfigured()) return log("YOUTUBE_API_KEY is not set; nothing run, will try next boot");
 
   const run = await saveDryRun({ kind: "skill", searchUnmatched: true });
+  const fill = run.searchFill;
+  // A run that could not search at all (the day's YouTube quota already spent) is not the run
+  // Scott asked for: it is not marked, so the next boot tries again, and the page's button works.
+  if (fill && fill.searched === 0 && (run.cacheHits ?? 0) === 0 && fill.remaining > 0) {
+    return log(`run ${run.runId}: no search could go out (YouTube quota spent for today); not marked, will try next boot`);
+  }
   await db.execute(sql`INSERT INTO applied_backfills (key) VALUES (${SKILL_VIDEO_DRY_RUN_MARKER}) ON CONFLICT DO NOTHING`);
+  log(`searched ${fill?.searched ?? 0}, from cache ${run.cacheHits ?? 0}, still waiting for a later run ${fill?.remaining ?? 0}`);
   const tally = run.byKind.skill;
   const tierA = run.proposals.filter((p) => p.match.tier === "A").length;
   log(`run ${run.runId}: skill drills ${tally.matched} of ${tally.considered}; tier A ${tierA}, tier B ${run.proposals.length - tierA}`);
