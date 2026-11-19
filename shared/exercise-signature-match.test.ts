@@ -95,6 +95,8 @@ const LIBRARY: LibraryExercise[] = [
   lib("Split Jerk", "Barbell", ["Shoulders"]),
   lib("Push Press", "Barbell", ["Shoulders"]),
   lib("Squat with Woodchopper", "Medicine Ball", ["Quads", "Abs"]),
+  lib("Plate Front Raise", "Plate", ["Shoulders"]),
+  lib("Kneeling Hip Flexor Stretch", "Bodyweight", ["Hip Flexors"]),
 ];
 
 const VOCAB = buildVocabulary(LIBRARY);
@@ -197,6 +199,9 @@ describe("fixtures: must ACCEPT", () => {
     ["Romanian Deadlift", "Romanian Deadlift Coach Breakdown", "a channel's house suffix inside the first segment is filler"],
     ["Pendlay Row", "Pendlay Row | How to Row Correctly", "the same movement again later is commentary, not a combo"],
     ["Goblet Squat", "Dual DB Goblet Squat", "dual says nothing a dumbbell exercise does not already say"],
+    ["Plate Front Raise", "Weight Plate Front Raise", "a weight plate is a plate (2026-11-19)"],
+    ["Kneeling Hip Flexor Stretch", "Half Kneeling Hip Flexor Stretch", "half kneeling is how it is done (2026-11-19)"],
+    ["Kneeling Hip Flexor Stretch", "Half-Kneeling Hip Flexor Stretch", "the hyphenated spelling too"],
   ];
 
   it.each(rows)("%s <- %s (%s)", (exercise, title) => {
@@ -212,6 +217,8 @@ describe("fixtures: must REJECT", () => {
     ["Sumo Deadlift", "How To: Kettlebell Sumo Deadlift", "equipment"],
     ["Decline Bench Press", "How To: Dumbbell Decline Bench Press", "equipment"],
     ["Back Squat", "Back Squat with Chains | Exercise Guide", "unknown-count"],
+    // "half" on its own is a depth, not the half-kneeling fold: a half squat is not a squat.
+    ["Back Squat", "Half Back Squat", "unknown-count"],
     ["Medicine Ball Slam", "Catcher Med Ball Slam - Baseball Rebellion", "unknown-count"],
     // Auto-applied as Tier A on 2026-09-28. Only the first segment was ever read.
     ["Back Squat", "Back Squat - Jerk Behind the Neck | Olympic Weightlifting Exercise Library", "combo"],

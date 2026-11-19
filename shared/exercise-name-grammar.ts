@@ -43,7 +43,20 @@ export const FILLER = new Set([
   "breakdown", "coach", "coaches", "presents", "workout", "workouts",
   // "Dual DB Sumo Deadlift" is a dumbbell sumo deadlift: two dumbbells is what one is.
   "dual",
+  // "Weight Plate Front Raise" is the library's Plate Front Raise (Scott, 2026-11-19). "weight"
+  // never names a movement here; "weighted" (Weighted Plank) is its own word and stays one.
+  "weight",
 ]);
+
+/** Naming variants that are more than one word, folded on the raw text before anything else.
+ *  "Half Kneeling Hip Flexor Stretch" is the library's Kneeling Hip Flexor Stretch: half
+ *  kneeling is the standard way it is done (Scott, 2026-11-19). Folded on both sides, so a
+ *  library name that says "Half-Kneeling" still matches a title that says it. "half" on its own
+ *  is NOT folded: a half squat is a different depth from a squat. */
+export const PHRASE_ALIASES: Record<string, string> = {
+  "half kneeling": "kneeling",
+  "half-kneeling": "kneeling",
+};
 
 /**
  * Abbreviations and naming variants, expanded during normalisation.
@@ -211,6 +224,8 @@ export function normalize(text: string, options: NormalizeOptions = {}): string[
     .toLowerCase()
     .replace(/&/g, " and ")
     .replace(/['‘’"“”]/g, "");
+
+  working = Object.entries(PHRASE_ALIASES).reduce((acc, [phrase, to]) => acc.split(phrase).join(to), working);
 
   // Aliases are expanded on the raw text too, so a compound can fold across one: "Med Ball
   // Slam" reads "medicine ball slam" and folds to the same token as the library's name. Before
