@@ -271,6 +271,8 @@ export type BackfillReport = {
     stillEmpty: number;
     /** Not searched because the run hit its cap -- run again to continue. */
     remaining: number;
+    /** The last search failure, when searching stopped on one (a throttle, a timeout). */
+    lastError?: string;
   };
   /** Unrecognised words that cost a match, most frequent first -- what the vocabulary is
    *  missing, in the order worth fixing. */
@@ -410,6 +412,11 @@ export function watchUrlFor(videoId: string, startSeconds?: number, endSeconds?:
 export const CATALOGUE_CACHE_HOURS = 24;
 /** YouTube's reasons for "the day's allowance is spent"; retrying those only spends calls. */
 const QUOTA_GONE = /quotaExceeded|dailyLimitExceeded/;
+/** Searches that fail one after another before a run stops searching and leaves the rest waiting. */
+const MAX_SEARCH_FAILURES_IN_A_ROW = 3;
+/** How far a dry run has got, for the admin page while it runs. */
+export type SearchProgress = { done: number; total: number; searched: number };
+const noProgress = (_p: SearchProgress) => undefined;
 export const SEARCH_CACHE_HOURS = 24 * 7;
 const CACHE_DIR = join(tmpdir(), "forge-youtube-cache");
 
@@ -520,9 +527,9 @@ export async function planExerciseVideoBackfill(options?: {
   /** Which library this run matches: the lifts (the default) or the skill drills. One at a time,
    *  so a drill and a lift that share a name never compete for one video. */
   kind?: "exercise" | "skill";
-}): Promise<BackfillReport> {
+}, reportProgress: (p: SearchProgress) => void = noProgress): Promise<BackfillReport> {
   const kind = options?.kind ?? "exercise";
-  if (kind === "skill") return planSkillVideoBackfill(options);
+  if (kind === "skill") return planSkillVideoBackfill(options, reportProgress);
   const channels = options?.channels ?? DEMO_VIDEO_CHANNELS;
   const maxDurationSeconds = options?.maxDurationSeconds ?? DEFAULT_MAX_DURATION_SECONDS;
   const quota = newQuotaLedger();
@@ -674,7 +681,7 @@ export async function planExerciseVideoBackfill(options?: {
 async function planSkillVideoBackfill(options?: {
   maxDurationSeconds?: number;
   maxSearches?: number;
-}): Promise<BackfillReport> {
+}, reportProgress: (p: SearchProgress) => void = noProgress): Promise<BackfillReport> {
   const maxDurationSeconds = options?.maxDurationSeconds ?? DEFAULT_MAX_DURATION_SECONDS;
   const maxSearches = options?.maxSearches ?? DEFAULT_MAX_SEARCHES;
   const quota = newQuotaLedger();
@@ -684,14 +691,15 @@ async function planSkillVideoBackfill(options?: {
   const order = startOfTodaysSlice(targets, maxSearches);
 
   type Outcome = { proposal?: BackfillProposal; unmatched?: UnmatchedTarget; searched: boolean; waiting: boolean };
-  const state = { searched: 0, cacheHits: 0, quotaGone: false };
+  const state = { searched: 0, cacheHits: 0, quotaGone: false, failedInARow: 0, lastError: null as string | null };
   const outcomes: Outcome[] = [];
   // One drill at a time, in order: the search budget and the quota are shared state.
   await order.reduce(async (prev, target) => {
     await prev;
     const query = skillSearchQuery(target.name, skillTypeById.get(target.id));
     const cached = readYouTubeCache<Awaited<ReturnType<typeof searchVideosFor>>>("search", query, SEARCH_CACHE_HOURS);
-    if (!cached && (state.quotaGone || state.searched >= maxSearches)) {
+    reportProgress({ done: outcomes.length, total: order.length, searched: state.searched });
+    if (!cached && (state.quotaGone || state.failedInARow >= MAX_SEARCH_FAILURES_IN_A_ROW || state.searched >= maxSearches)) {
       outcomes.push({ searched: false, waiting: true });
       return;
     }
@@ -700,10 +708,16 @@ async function planSkillVideoBackfill(options?: {
       : await searchVideosFor(query, quota).then(
           (r) => {
             writeYouTubeCache("search", query, r);
+            state.failedInARow = 0;
             return r;
           },
           (err: unknown) => {
-            if (QUOTA_GONE.test(String((err as Error)?.message ?? err))) state.quotaGone = true;
+            const message = String((err as Error)?.message ?? err);
+            if (QUOTA_GONE.test(message)) state.quotaGone = true;
+            // Several failures in a row (a throttle, a timeout, YouTube down) stop the searching:
+            // the rest wait for the next run instead of each spending its own wait first.
+            state.failedInARow += 1;
+            state.lastError = message;
             return null;
           },
         );
@@ -764,6 +778,7 @@ async function planSkillVideoBackfill(options?: {
       filled: proposals.length,
       stillEmpty: outcomes.filter((o) => o.searched && !o.proposal).length,
       remaining: waitingCount,
+      ...(state.lastError ? { lastError: state.lastError } : {}),
     },
     unknownWords: [],
     duplicateSignatures: [],
@@ -783,15 +798,57 @@ function toSaved(row: typeof exerciseVideoRuns.$inferSelect): SavedRun {
   };
 }
 
-/** Run the plan and keep it. Writes nothing to the library. */
-export async function saveDryRun(options?: Parameters<typeof planExerciseVideoBackfill>[0]): Promise<SavedRun> {
-  const { db } = await import("./db");
-  const report = await planExerciseVideoBackfill(options);
-  const [row] = await db
-    .insert(exerciseVideoRuns)
-    .values({ report: report as unknown as Record<string, unknown>, decisions: {} })
-    .returning();
-  return toSaved(row);
+/* ONE DRY RUN AT A TIME, AND IT SAYS HOW FAR IT HAS GOT (2026-11-19). A run talks to YouTube for
+ * minutes; Scott pressed the button while the boot run was going, both hung, and the page showed a
+ * spinner with nothing behind it. A second request now joins the run already going, and the page
+ * reads dryRunStatus() to show progress instead of waiting on one long request. */
+type DryRunStatus = {
+  running: boolean;
+  kind: "exercise" | "skill" | null;
+  startedAt: string | null;
+  progress: SearchProgress | null;
+  lastError: string | null;
+};
+const inFlight: { run: Promise<SavedRun> | null; status: DryRunStatus } = {
+  run: null,
+  status: { running: false, kind: null, startedAt: null, progress: null, lastError: null },
+};
+
+export function dryRunStatus(): DryRunStatus {
+  return { ...inFlight.status };
+}
+
+/** Run the plan and keep it. Writes nothing to the library. A call while one is running joins it. */
+export function saveDryRun(options?: Parameters<typeof planExerciseVideoBackfill>[0]): Promise<SavedRun> {
+  if (inFlight.run) return inFlight.run;
+  inFlight.status = {
+    running: true,
+    kind: options?.kind ?? "exercise",
+    startedAt: new Date().toISOString(),
+    progress: null,
+    lastError: null,
+  };
+  const run = (async () => {
+    try {
+      const { db } = await import("./db");
+      const report = await planExerciseVideoBackfill(options, (p) => {
+        inFlight.status = { ...inFlight.status, progress: p };
+      });
+      const [row] = await db
+        .insert(exerciseVideoRuns)
+        .values({ report: report as unknown as Record<string, unknown>, decisions: {} })
+        .returning();
+      inFlight.status = { ...inFlight.status, running: false, lastError: report.searchFill?.lastError ?? null };
+      return toSaved(row);
+    } catch (err) {
+      inFlight.status = { ...inFlight.status, running: false, lastError: String((err as Error)?.message ?? err) };
+      throw err;
+    } finally {
+      inFlight.run = null;
+    }
+  })();
+  inFlight.run = run;
+  return run;
 }
 
 /** The newest saved dry run, or null. Spends no quota. */

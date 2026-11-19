@@ -41,7 +41,7 @@ describe("the demo-video backfill is reachable", () => {
     // Counted per REGISTRATION: every app.get/app.post in the block carries the gate.
     const block = routes.slice(routes.indexOf("videoBackfillBody"), routes.indexOf("ExercisePickerDialog"));
     const registrations = block.match(/app\.(get|post)\(([^\n]*)/g) ?? [];
-    expect(registrations).toHaveLength(5);
+    expect(registrations).toHaveLength(6);
     for (const line of registrations) expect(line).toContain('requireRole("admin")');
   });
 

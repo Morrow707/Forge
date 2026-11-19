@@ -9,7 +9,7 @@
  */
 import { sql } from "drizzle-orm";
 import { db } from "./db";
-import { saveDryRun } from "./exercise-video-backfill";
+import { dryRunStatus, saveDryRun } from "./exercise-video-backfill";
 import { youTubeConfigured } from "./youtube-catalog";
 import { runWithJobLock } from "./job-lock";
 import { reportJobFailure } from "./job-errors";
@@ -18,6 +18,8 @@ import { reportJobFailure } from "./job-errors";
 // lift grammar; this is the run on the drill rule (shared/skill-video-match.ts).
 export const SKILL_VIDEO_DRY_RUN_MARKER = "skill_video_dry_run_2026_11_19_b";
 const JOB = "skill-video-dry-run-once";
+/** How often the run's progress is written to the log while it goes. */
+const PROGRESS_LOG_MS = 30_000;
 
 function readRows<T>(result: unknown): T[] {
   return ((result as { rows?: T[] }).rows ?? (result as T[])) as T[];
@@ -30,7 +32,17 @@ export async function skillVideoDryRunOnce(log: (line: string) => void): Promise
   if (Number(done[0]?.n ?? 0) > 0) return log("already run; nothing to do");
   if (!youTubeConfigured()) return log("YOUTUBE_API_KEY is not set; nothing run, will try next boot");
 
-  const run = await saveDryRun({ kind: "skill", searchUnmatched: true });
+  const ticker = setInterval(() => {
+    const p = dryRunStatus().progress;
+    if (p) log(`progress: ${p.done} of ${p.total} checked, ${p.searched} searched`);
+  }, PROGRESS_LOG_MS);
+  const run = await (async () => {
+    try {
+      return await saveDryRun({ kind: "skill", searchUnmatched: true });
+    } finally {
+      clearInterval(ticker);
+    }
+  })();
   const fill = run.searchFill;
   // A run that could not search at all (the day's YouTube quota already spent) is not the run
   // Scott asked for: it is not marked, so the next boot tries again, and the page's button works.
@@ -50,6 +62,7 @@ export async function skillVideoDryRunOnce(log: (line: string) => void): Promise
     return { ...acc, [key]: (acc[key] ?? 0) + 1 };
   }, {});
   log(`unmatched ${run.unmatched.length}: ${JSON.stringify(reasons)}`);
+  if (fill?.lastError) log(`searching stopped on: ${fill.lastError}`);
 }
 
 export function startSkillVideoDryRunOnce(): void {

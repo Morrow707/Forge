@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,6 +91,16 @@ type Report = {
 };
 
 type Decision = "approve" | "reject";
+
+type DryRunStatus = {
+  running: boolean;
+  kind: "exercise" | "skill" | null;
+  startedAt: string | null;
+  progress: { done: number; total: number; searched: number } | null;
+  lastError: string | null;
+};
+/** How often the page asks how far a running dry run has got. */
+const STATUS_POLL_MS = 3000;
 const keyOf = (p: { kind: string; id: number }) => `${p.kind}:${p.id}`;
 
 /** Mirrors shouldWrite() on the server: tier A unless rejected, tier B only when approved. The
@@ -313,6 +323,26 @@ export default function AdminExerciseVideos() {
     onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "Could not save that decision."),
   });
 
+  // A dry run talks to YouTube for minutes, so the button starts it and this reads how far it has
+  // got. While one is running (from this page, another tab, or the server's own boot run) the page
+  // says so and refreshes; when it stops, the saved run is fetched.
+  const status = useQuery<DryRunStatus>({
+    queryKey: ["/api/admin/exercise-videos/status"],
+    queryFn: () => getJson("/api/admin/exercise-videos/status"),
+    refetchInterval: (q) => (q.state.data?.running ? STATUS_POLL_MS : false),
+  });
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    const running = status.data?.running === true;
+    if (wasRunning.current && !running) {
+      setReport(null);
+      latest.refetch();
+      if (status.data?.lastError) toast.error(`The run stopped early: ${status.data.lastError}`);
+      else toast.success("Dry run finished and saved.");
+    }
+    wasRunning.current = running;
+  }, [status.data?.running]);
+
   const run = useMutation({
     mutationFn: async (which: "dry-run" | "dry-run-skills" | "apply") => {
       setMode(which === "dry-run-skills" ? "dry-run" : which);
@@ -329,6 +359,11 @@ export default function AdminExerciseVideos() {
       return (await res.json()) as Report;
     },
     onSuccess: (data, which) => {
+      // A dry run answers at once with its status; the saved report arrives when it finishes.
+      if (which !== "apply") {
+        status.refetch();
+        return;
+      }
       setReport(data);
       latest.refetch();
       if (which === "apply") {
@@ -346,7 +381,8 @@ export default function AdminExerciseVideos() {
     onSettled: () => setMode(null),
   });
 
-  const busy = run.isPending;
+  const dryRunGoing = status.data?.running === true;
+  const busy = run.isPending || dryRunGoing;
 
   return (
     <AppShell title="Demo Videos">
@@ -461,10 +497,17 @@ export default function AdminExerciseVideos() {
                 ? `Apply ${shown.proposals.filter((p) => willWrite(p, shown.decisions)).length}`
                 : "Apply"}
             </Button>
-            {busy && (
+            {dryRunGoing && (
               <span className="text-xs text-muted-foreground">
-                Pulling channel catalogues, a full run takes a minute or two.
+                {status.data?.kind === "skill" ? "Searching YouTube for the skill drills" : "Running the lift dry run"}
+                {status.data?.progress
+                  ? `: ${status.data.progress.done} of ${status.data.progress.total} checked, ${status.data.progress.searched} searched.`
+                  : ", starting."}{" "}
+                You can leave this page; the run keeps going and is saved when it finishes.
               </span>
+            )}
+            {!dryRunGoing && run.isPending && (
+              <span className="text-xs text-muted-foreground">Working…</span>
             )}
           </CardContent>
         </Card>

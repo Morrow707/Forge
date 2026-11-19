@@ -10,6 +10,7 @@ import {
   DEMO_VIDEO_CHANNELS,
   latestDryRun,
   saveDryRun,
+  dryRunStatus,
   targetsNeedingVideo,
 } from "./exercise-video-backfill";
 import { youTubeConfigured } from "./youtube-catalog";
@@ -3566,7 +3567,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "YOUTUBE_API_KEY is not set on this server, so no catalogue can be read.",
       });
     }
-    res.json(await saveDryRun(parsed.data));
+    // Started, not awaited: a run takes minutes and the page reads its progress from /status.
+    // A press while one is already running joins that run.
+    void (async () => {
+      try {
+        await saveDryRun(parsed.data);
+      } catch (err) {
+        console.error("[exercise-videos] dry run failed:", err);
+      }
+    })();
+    const ACCEPTED = 202;
+    res.status(ACCEPTED).json(dryRunStatus());
+  });
+
+  /** Whether a dry run is going, how far it has got, and the last error. No YouTube call. */
+  app.get("/api/admin/exercise-videos/status", requireRole("admin"), (_req, res) => {
+    res.json(dryRunStatus());
   });
 
   /** The newest saved dry run with its decisions, or null. No YouTube call. */

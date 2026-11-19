@@ -63,6 +63,8 @@ function apiKey(): string {
 }
 
 const RATE_LIMIT_RETRIES = 2;
+/** The longest one YouTube call may take before it is given up as failed. */
+const YOUTUBE_CALL_TIMEOUT_MS = 20_000;
 let rateLimitWaitMs = 10_000;
 /** Tests only: how long a 429 is waited out before the retry. */
 export function setRateLimitWaitForTests(ms: number): void {
@@ -81,11 +83,15 @@ async function get(
   /* A 429 "rateLimitExceeded" is YouTube's per-minute throttle, NOT the daily quota
    * (quotaExceeded / dailyLimitExceeded). On 2026-11-17 two channel lookups in a row got it and
    * the run gave up on both as if the day were spent. It is waited out here, twice at most. */
-  let res = await fetch(url);
+  /* Every call is bounded (2026-11-19): a fetch with no timeout that never answers held the first
+   * skill-drill dry run, and Scott's button run beside it, for over fifteen minutes with nothing to
+   * show. A timed-out call throws like any other failure, and the run carries on or stops. */
+  const call = () => fetch(url, { signal: AbortSignal.timeout(YOUTUBE_CALL_TIMEOUT_MS) });
+  let res = await call();
   for (let attempt = 0; res.status === 429 && attempt < RATE_LIMIT_RETRIES; attempt++) {
     ledger.calls += 1;
     await new Promise((r) => setTimeout(r, rateLimitWaitMs * (attempt + 1)));
-    res = await fetch(url);
+    res = await call();
   }
   ledger.units += cost;
   ledger.calls += 1;

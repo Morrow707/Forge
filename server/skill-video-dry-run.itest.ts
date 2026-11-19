@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { rmSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import { skillExercises } from "@shared/schema";
 import { db, makeCoach, resetDatabase } from "./test-support/fixtures";
 
@@ -50,6 +53,9 @@ const { planExerciseVideoBackfill } = await import("./exercise-video-backfill");
 beforeEach(async () => {
   await resetDatabase();
   searches.length = 0;
+  // The run keeps a week-long search cache on disk; a previous run of this file would answer
+  // every query from it and no search would go out.
+  rmSync(join(tmpdir(), "forge-youtube-cache"), { recursive: true, force: true });
 });
 
 describe("the skill-drill dry run", () => {
