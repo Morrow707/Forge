@@ -30,5 +30,6 @@ class ForgeBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(AvBodyTrackingPlugin())
         bridge?.registerPluginInstance(AppleIapPlugin())
         bridge?.registerPluginInstance(AvSessionRecorderPlugin())
+        bridge?.registerPluginInstance(AppIconPlugin())
     }
 }

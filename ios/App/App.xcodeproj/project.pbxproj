@@ -10,6 +10,7 @@
 		23398077B8EF4DEF3E49C1E9 /* MedBallDetector.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = 10029F68B5F718C03F820F91 /* MedBallDetector.mlpackage */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4A7AFEECA4CC21CADA48F9FE /* PasswordPickerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9833D72362FC8476DFEDACF6 /* PasswordPickerPlugin.swift */; };
+		AB1E1A99AB1E1A99AB1E1AB0 /* AppIconPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1E1A99AB1E1A99AB1E1AB1 /* AppIconPlugin.swift */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		4D3875D14B7ECDFF4FC02731 /* ForgeBridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0C916CC5DB6FD72D7964BB0 /* ForgeBridgeViewController.swift */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
@@ -44,6 +45,7 @@
 		958DCC812DB07C7200EA8C71 /* ArMeasurePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArMeasurePlugin.swift; sourceTree = "<group>"; };
 		958DCC832DB07C7200EA8C73 /* ArMeasureViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArMeasureViewController.swift; sourceTree = "<group>"; };
 		9833D72362FC8476DFEDACF6 /* PasswordPickerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordPickerPlugin.swift; sourceTree = "<group>"; };
+		AB1E1A99AB1E1A99AB1E1AB1 /* AppIconPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconPlugin.swift; sourceTree = "<group>"; };
 		AB0DCE10AB0DCE10AB0DCE11 /* AvBodyTrackingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvBodyTrackingPlugin.swift; sourceTree = "<group>"; };
 		AB1E1A99AB1E1A99AB1E1A91 /* AppleIapPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIapPlugin.swift; sourceTree = "<group>"; };
 		AB1E1A99AB1E1A99AB1E1AA1 /* AvSessionRecorderPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvSessionRecorderPlugin.swift; sourceTree = "<group>"; };
@@ -88,6 +90,7 @@
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				F0C916CC5DB6FD72D7964BB0 /* ForgeBridgeViewController.swift */,
 				9833D72362FC8476DFEDACF6 /* PasswordPickerPlugin.swift */,
+				AB1E1A99AB1E1A99AB1E1AB1 /* AppIconPlugin.swift */,
 				AB0DCE10AB0DCE10AB0DCE11 /* AvBodyTrackingPlugin.swift */,
 				AB1E1A99AB1E1A99AB1E1A91 /* AppleIapPlugin.swift */,
 				AB1E1A99AB1E1A99AB1E1AA1 /* AvSessionRecorderPlugin.swift */,
@@ -195,6 +198,7 @@
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				4D3875D14B7ECDFF4FC02731 /* ForgeBridgeViewController.swift in Sources */,
 				4A7AFEECA4CC21CADA48F9FE /* PasswordPickerPlugin.swift in Sources */,
+				AB1E1A99AB1E1A99AB1E1AB0 /* AppIconPlugin.swift in Sources */,
 				AB0DCE10AB0DCE10AB0DCE10 /* AvBodyTrackingPlugin.swift in Sources */,
 				AB1E1A99AB1E1A99AB1E1A90 /* AppleIapPlugin.swift in Sources */,
 				AB1E1A99AB1E1A99AB1E1AA0 /* AvSessionRecorderPlugin.swift in Sources */,
@@ -336,7 +340,9 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-navy AppIcon-royal AppIcon-red AppIcon-green AppIcon-purple AppIcon-black AppIcon-gold";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -359,7 +365,9 @@
 		504EC3181FED79650016851F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-navy AppIcon-royal AppIcon-red AppIcon-green AppIcon-purple AppIcon-black AppIcon-gold";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;

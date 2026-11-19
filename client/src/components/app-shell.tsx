@@ -95,6 +95,7 @@ import { PoweredByFooter } from "@/components/powered-by-footer";
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
 import { applyBrandTerms } from "@shared/brand-extras";
 import { applyTheme, hasStoredThemeChoice } from "@/lib/theme";
+import { applyProgramAppIcon } from "@/lib/app-icon";
 
 const ANNOUNCEMENT_DISMISSED_KEY = "forge:dismissed-announcement";
 import { computeBrandingStyle, ensureBrandFontLoaded, type EffectiveBranding } from "@/lib/branding-style";
@@ -428,6 +429,12 @@ export function AppShell({
     if (programTheme && !hasStoredThemeChoice()) applyTheme(programTheme);
   }, [programTheme]);
   useEffect(() => ensureBrandFontLoaded(branding?.brandExtras?.bodyFont), [branding?.brandExtras?.bodyFont]);
+  // The program's app icon color on iPhone, once the program's branding has actually arrived:
+  // switching on an empty answer would put a branded athlete back on Forge's icon for a moment.
+  const programAppIcon = branding ? (branding.brandExtras?.appIcon ?? null) : undefined;
+  useEffect(() => {
+    if (programAppIcon !== undefined) void applyProgramAppIcon(programAppIcon);
+  }, [programAppIcon]);
   const brandingKey = JSON.stringify(brandingStyle ?? {});
   useEffect(() => {
     const vars = (brandingStyle ?? {}) as Record<string, string>;
