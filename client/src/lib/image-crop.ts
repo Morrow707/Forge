@@ -42,15 +42,27 @@ function baseBox(imgW: number, imgH: number, aspect: number): { w: number; h: nu
   return imgW / imgH > aspect ? { w: imgH * aspect, h: imgH } : { w: imgW, h: imgW / aspect };
 }
 
-/** The source rectangle a view crops out, kept inside the image. */
+/** How far the frame's middle may travel along one axis of the picture (in source pixels), for a
+ *  frame `span` long on a picture `size` long. Either the frame stays inside the picture, or --
+ *  so a picture that already fills the frame one way can still be moved that way (Scott,
+ *  2026-11-20: "it won't let me go up and down") -- the picture slides until its own middle
+ *  reaches the frame's edge. Whichever allows more. Uncovered space is see-through (dark on a
+ *  photo). */
+function travel(size: number, span: number): { min: number; max: number } {
+  return { min: Math.min(span / HALF, size / HALF - span / HALF), max: Math.max(size - span / HALF, size / HALF + span / HALF) };
+}
+
+/** The source rectangle a view crops out. It may reach past the picture's edge (see travel). */
 export function cropRect(imgW: number, imgH: number, aspect: number, view: CropView): { x: number; y: number; w: number; h: number } {
   const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.zoom));
   const base = baseBox(imgW, imgH, aspect);
   const w = base.w / zoom;
   const h = base.h / zoom;
-  const x = Math.min(imgW - w, Math.max(0, view.centerX * imgW - w / HALF));
-  const y = Math.min(imgH - h, Math.max(0, view.centerY * imgH - h / HALF));
-  return { x, y, w, h };
+  const tx = travel(imgW, w);
+  const ty = travel(imgH, h);
+  const cx = Math.min(tx.max, Math.max(tx.min, view.centerX * imgW));
+  const cy = Math.min(ty.max, Math.max(ty.min, view.centerY * imgH));
+  return { x: cx - w / HALF, y: cy - h / HALF, w, h };
 }
 
 /** The view after dragging the picture by (dx, dy) screen pixels inside a frame frameW wide. */
@@ -71,8 +83,7 @@ export const SNAP_DISTANCE_PX = 10;
 /** Within half a source pixel counts as centered: no visible difference is left. */
 const CENTERED_TOLERANCE_SOURCE_PX = 0.5;
 
-/** Which directions the picture's middle sits exactly in the frame's middle. An axis with no room
- *  to move (a square logo is always centered top to bottom at zoom 1) reads as centered. */
+/** Which directions the picture's middle sits exactly in the frame's middle. */
 export function centeredAxes(imgW: number, imgH: number, aspect: number, view: CropView): { x: boolean; y: boolean } {
   const r = cropRect(imgW, imgH, aspect, view);
   return {
@@ -121,8 +132,12 @@ export function drawCrop(ctx: CanvasRenderingContext2D, img: HTMLImageElement, k
     ctx.drawImage(img, r.x, r.y, r.w, r.h);
     return;
   }
+  // Draw the whole picture scaled and shifted so the crop fills the canvas. A source rectangle
+  // reaching past the picture's edge is drawn differently by different browsers; a destination
+  // reaching past the canvas is simply clipped everywhere.
   const r = cropRect(img.naturalWidth, img.naturalHeight, shape.aspect, view);
-  ctx.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, outW, outH);
+  const scale = outW / r.w;
+  ctx.drawImage(img, -r.x * scale, -r.y * scale, img.naturalWidth * scale, img.naturalHeight * scale);
 }
 
 /** The cropped picture as a file ready to upload, at the size CROP_SHAPES names. */

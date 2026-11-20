@@ -195,8 +195,23 @@ describe("snap to center (Scott, 2026-11-20)", () => {
     expect(centeredAxes(S, S, square, snapToCenter(S, S, square, raw, FRAME)).x).toBe(false);
   });
 
-  it("counts a direction with no room to move as centered", () => {
-    expect(centeredAxes(S, H_WIDE, square, middle).y).toBe(true);
+  it("moves a wide logo up and down at normal zoom, and snaps it back to center vertically", () => {
+    // Scott: "it won't let me go up and down". A 400 x 300 logo in a square frame fills it top to
+    // bottom at zoom 1, which used to leave no vertical travel at all.
+    const WIDE_H = 300;
+    const FRAME_PX = 300; // one screen pixel is one source pixel
+    const DOWN = 80;
+    const moved = panView(S, WIDE_H, square, middle, 0, DOWN, FRAME_PX);
+    expect(cropRect(S, WIDE_H, square, moved).y).toBe(-DOWN);
+    expect(centeredAxes(S, WIDE_H, square, moved).y).toBe(false);
+    const back = panView(S, WIDE_H, square, moved, 0, -(DOWN - NEAR), FRAME_PX);
+    expect(centeredAxes(S, WIDE_H, square, snapToCenter(S, WIDE_H, square, back, FRAME_PX))).toEqual({ x: true, y: true });
+  });
+
+  it("stops when the picture's middle reaches the frame's edge, so it is never lost", () => {
+    const WIDE_H = 300;
+    const FRAME_PX = 300;
+    const far = panView(S, WIDE_H, square, middle, 0, FRAME_PX * 4, FRAME_PX);
+    expect(cropRect(S, WIDE_H, square, far).y).toBe(-WIDE_H / 2);
   });
 });
-const H_WIDE = 300;
