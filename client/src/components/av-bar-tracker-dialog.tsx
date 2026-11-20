@@ -20,7 +20,7 @@ import {
   type AthleteBodyModel,
   type LimbKey,
 } from "@shared/athlete-body-model";
-import { measureLimbsInMetres, measureLimbSpansInUnits } from "@/lib/measure-limbs";
+import { measureLegVisibility, measureLimbsInMetres, measureLimbSpansInUnits, type LegVisibility } from "@/lib/measure-limbs";
 import { DEPTH_RULER_BIAS, DEPTH_RULER_UNCERTAINTY, body3DScaleFromFrames, depthRulerScale, fovDegFromActiveFormat } from "@/lib/body-3d-ruler";
 import { measureAxisForeshortening } from "@/lib/axis-foreshortening";
 import { body3DCandidate } from "@/lib/body-scale-fallback";
@@ -1644,6 +1644,7 @@ export function AvBarTrackerDialog({
       tracePointsDroppedOffAxis?: number;
       posture?: string;
       measuredPosture?: { torsoFromVerticalDeg: number | null; heightToShoulderRatio: number | null; framesUsed: number };
+      legVisibility?: LegVisibility;
       referenceObject?: ReferenceObjectRead | null;
       gripWidthPx?: number | null;
       plateRejectedAgainstGrip?: boolean;
@@ -1656,6 +1657,8 @@ export function AvBarTrackerDialog({
       // A take where these disagree is a take whose rulers were chosen on the wrong premise.
       posture,
       measuredPosture,
+      // Whether the legs were really seen (sweatpants hide knees and ankles): see measureLegVisibility.
+      legVisibility: measureLegVisibility(calibrationInput),
       scaleCandidates: scaleCandidatesWithWeights,
       scaleOutliers: scaleVerdict.outliers.map((o) => ({
         source: o.source,

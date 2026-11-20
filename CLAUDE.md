@@ -4104,6 +4104,17 @@ halves before splitting anything else:
   choice). And a one-arm lift's live take is re-read from the file when its working wrist was unseen
   past 1.0s (`wristGaps`, `maxLiveWorkingWristGapSeconds`); the hook also stopped dropping
   `arbiterTunables` at Record (inert: every lift holds the defaults). Native: `verify_build`, beta.
+- **ROUND TWENTY-TWO, 2026-11-20: SQUAT, RDL, BOX JUMP ON BUILD 797, IN SWEATPANTS.** The OVR calls
+  the box jump "Jump Squat" and its rep 1 is the set-up jump: compare reps 2-6 (Scott). One fix per
+  lift: RDL peak cap 1.75 -> 1.66 (the OVR's own peak/mean; peak +7.4% -> +1.3%, range already
+  -0.3%); squat height ruler 0.13 -> 0.14 (range -2.14% -> -1.55% as filmed). Box jump: no constant,
+  because its whole error is jump 1's early takeoff split and no setting reaches it (the docs say
+  why). Bugs fixed on sight: "The operation is insecure." was the AI form check reading a
+  cross-origin clip into a canvas (crossOrigin on the three code-made videos); the body memory read
+  back the 3mm bones of 11-16 (a stored bone outside 0.08-1.3m is never read now). New:
+  `calibration.legVisibility` per take, so sweatpants and shorts can be told apart. Taught bones
+  read 1.2-1.9x long from the 95th-percentile span; self-consistent, a learning model, not tuned.
+  See docs/camera-tracking-notes.md, STATUS BOARD.
 - **ROUND TWENTY-ONE, 2026-11-17: SET 3 ON BUILD 781.** Bench set 2 is NOT on the server (the
   dropped 409 replay round twenty fixed; the clip exists, the numbers do not). One fix per lift:
   - **Bench Press: a tracking hole, fixed per lift.** Set 3 read 6 of 8, 20.8cm against 36.3, mean

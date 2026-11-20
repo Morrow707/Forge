@@ -46,6 +46,12 @@ export async function watermarkVideo(
 
   return new Promise((resolve, reject) => {
     const src = document.createElement("video");
+    // CROSS-ORIGIN ON THE PHONE (2026-11-20, "The operation is insecure." after a set): an uploaded
+    // clip is served from the API host, and in the native app's capacitor:// page that is another
+    // origin, so drawing it into a canvas taints the canvas and reading it back throws. Signed media
+    // URLs carry no cookie, so asking for CORS withholds nothing. A phone-local blob or data URL is
+    // same-origin and is left alone.
+    if (!/^(blob|data):/.test(sourceUrl)) src.crossOrigin = "anonymous";
     src.src = sourceUrl;
     // Muted so this doesn't suddenly play the clip's audio out loud while
     // it re-encodes in the background -- captureStream's audio track below

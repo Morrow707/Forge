@@ -32,6 +32,12 @@ export async function extractFramesFromVideo(
   onProgress?: (done: number, total: number) => void,
 ): Promise<ExtractedFrame[]> {
   const video = document.createElement("video");
+  // CROSS-ORIGIN ON THE PHONE (2026-11-20, "The operation is insecure." after a set): an uploaded
+  // clip is served from the API host, and in the native app's capacitor:// page that is another
+  // origin, so drawing it into a canvas taints the canvas and reading it back throws. Signed media
+  // URLs carry no cookie, so asking for CORS withholds nothing. A phone-local blob or data URL is
+  // same-origin and is left alone.
+  if (!/^(blob|data):/.test(sourceUrl)) video.crossOrigin = "anonymous";
   video.src = sourceUrl;
   video.muted = true;
   video.playsInline = true;

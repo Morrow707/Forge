@@ -189,6 +189,10 @@ export function scaleFromKnownLimb(
   measuredSpanUnits: number | null,
 ): { scale: number; uncertaintyFraction: number } | null {
   if (!limbHasConverged(estimate)) return null;
+  // A stored bone outside human size is the 2026-11-16 unit error (bones of 0.002-0.006m), not a
+  // skeleton. The next take that teaches drops it from the history, but until then it must not be
+  // read back as a ruler: on 2026-11-20 the squat's reading was 250x off the take's own scale.
+  if (!limbLengthIsPlausible(estimate!.metres)) return null;
   if (!measuredSpanUnits || !(measuredSpanUnits > 0)) return null;
   return {
     scale: estimate!.metres / measuredSpanUnits,

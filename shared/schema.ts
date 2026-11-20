@@ -10404,6 +10404,17 @@ export const trackingDiagnosticsSchema = z.object({
        * which is standing. Recorded so a mismatch is readable in the export rather than guessed
        * at from a screenshot. Measures only; nothing reads these back to choose a ruler. */
       posture: z.string().max(40).optional().nullable(),
+      /* How well each leg joint was seen (2026-11-20, sweatpants): frames it cleared the limb
+       * measurement's visibility bar, and Vision's median confidence. Measures only. */
+      legVisibility: z
+        .object({
+          framesTotal: z.number(),
+          hips: z.object({ framesSeen: z.number(), medianConfidence: z.number().nullable() }),
+          knees: z.object({ framesSeen: z.number(), medianConfidence: z.number().nullable() }),
+          ankles: z.object({ framesSeen: z.number(), medianConfidence: z.number().nullable() }),
+        })
+        .optional()
+        .nullable(),
       measuredPosture: z
         .object({
           torsoFromVerticalDeg: z.number().optional().nullable(),

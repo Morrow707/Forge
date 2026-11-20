@@ -1,7 +1,7 @@
 {
   "Back Squat": {
-    "sets": 10,
-    "meanAbsPct": 2.33
+    "sets": 11,
+    "meanAbsPct": 3.07
   },
   "Barbell Shoulder Press": {
     "sets": 3,
@@ -20,8 +20,8 @@
     "meanAbsPct": 8.07
   },
   "Romanian Deadlift": {
-    "sets": 10,
-    "meanAbsPct": 7.09
+    "sets": 11,
+    "meanAbsPct": 6.48
   },
   "Single-Arm Dumbbell Row": {
     "sets": 10,

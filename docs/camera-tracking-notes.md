@@ -14,7 +14,55 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-17, round nineteen)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-20, round twenty-two)
+
+**ROUND TWENTY-TWO, 2026-11-20 (build 797, `4ea0fa5d`; Back Squat 135x5, Romanian Deadlift 135x8,
+Box Jump x5 onto 24in). Filmed in sweatpants: Scott, "it couldn't see my legs unless they were
+bent, and no ankle". OVR reading rule (Scott): the OVR calls the box jump "Jump Squat" and its rep
+1 is the set-up jump -- compare its reps 2-6. Forge skipped the same jump and counted 5.**
+
+| lift | Forge as filmed | OVR | error | after this round |
+|---|---|---|---|---|
+| Squat range / mean / peak | 77.8cm / 0.95 / 1.41 | 31.3in (79.5) / 0.92 / 1.43 | -2.1% / +3.3% / -1.4% | -1.55% / +3.9% / -0.8% (height ruler 0.13 -> 0.14) |
+| RDL range / mean / peak | 59.5cm / 0.91 / 1.60 | 23.5in (59.7) / 0.90 / 1.49 | -0.3% / +1.1% / +7.4% | peak 1.51, +1.3% (peak cap 1.75 -> 1.66) |
+| Box jump rise / mean / peak | 70.4cm / 1.42 / 2.92 | 72.0cm / 1.47 / 2.89 | -2.1% / -3.3% / +1.0% | no constant (see below) |
+
+- **RDL: the best range on record (-0.3%).** Every rep's peak sat at the 1.75 cap; the OVR's own
+  peak/mean on this set is 1.60-1.74, average 1.66. The replay reproduces the phone at 1.75 exactly
+  and reads 1.51 at 1.66; the 11-16 set 1 RDL goes +6.6% -> +2.4%.
+- **Squat: the height ruler sat lowest again** (3.489e-3 against ~3.80e-3 required) and carries
+  most weight. 0.14 is one notch. The mean is high from a push window ~3% short, not scale -- the
+  next squat lever is the window, not another ruler step. The sealed ledger replay reads the
+  squats about a point HIGHER at 0.14 because it knows the shoulder ruler only at its 0.2 floor; as
+  filmed (grip-loosened to 0.44-0.47) they read LOW. Read the as-filmed blend, not the sealed one,
+  on a wide-grip squat.
+- **Box jump: no constant moved, and why.** Four of five jumps read mean and rise within +-3.5%;
+  without jump 1 the set reads mean +0.3%, rise -0.3%. Jump 1 (OVR rep 2, right after the set-up
+  jump) placed its takeoff early (push 28.3cm against 33-39), and the box correction shrinks only
+  the part after takeoff, so more of its rise was shrunk (uncorrected, all five rise 77.7-82.1cm).
+  That is a rule in jump-tracking.ts, no box-jump setting reaches it, and the harness cannot replay
+  the jump's push (no countermovement in a replay). The height-ruler step was costed and REFUSED:
+  the box ratio grows with the scale, so only the ~28cm push moves and the take's total error does
+  not drop. Next jump: read `concentricRiseCm` per rep -- a short one next to a long rise is this.
+- **Body memory: plumbing found and fixed; accuracy left alone.** The squat's reading was 1.47e-5
+  against a scale of 3.7e-3 (250x): its stored bones were still the 3mm unit-error ones of 11-16,
+  which clear only when a take teaches. `scaleFromKnownLimb` now ignores a stored bone outside
+  0.08-1.3m. Today's taught bones read 1.2-1.9x long (shoulders 0.69m where the shoulder ruler
+  reads the same span as 0.39m): the 95th-percentile span picks up landmark jumps. Self-consistent
+  (taught and read the same way), so the scale it gives back is not biased by it, and it is a
+  learning model -- recorded, not tuned.
+- **Sweatpants: `calibration.legVisibility` on every bar take from this round** -- per hip, knee
+  and ankle, the frames it cleared the limb measurement's visibility bar and Vision's median
+  confidence. Measures only. Today: ankles seen on 154 of 885 squat frames and 42 of 565 RDL
+  frames (`noseToAnkleFrames`). Compare a take in shorts against one in sweatpants before letting
+  it gate anything.
+- **"The operation is insecure."** after the RDL: the AI form check loads the uploaded clip into
+  an offscreen video and reads frames back, and with no `crossOrigin` the phone's canvas is
+  tainted. Fixed in video-frames.ts, video-watermark.ts and extract-video-frames.ts;
+  a-video-made-in-code-is-cross-origin.test.ts.
+- Ledger rows `2026-11-20-back-squat` and `2026-11-20-romanian-deadlift`; fixture
+  `ovr-2026-11-20-export.json`; test `round-twenty-two-squat-rdl-box-jump.test.ts`.
+
 
 **Round twenty-one, 2026-11-17 (set 3 on 781):** bench's low-visibility wrist floor 0.1 (its own; the hands
 at the chest read 0.12-0.20 and every bottom was dropped), press peak cap 1.5, row shoulder floor 0.24. The

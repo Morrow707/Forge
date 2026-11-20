@@ -20,6 +20,12 @@ export async function extractVideoFrames(
   // Never hand this off to an external display; it is an offscreen frame-grab, and an AirPlay
   // route change is another way to disturb audio routing for no benefit here.
   video.disableRemotePlayback = true;
+  // CROSS-ORIGIN ON THE PHONE (2026-11-20, "The operation is insecure." after a set): an uploaded
+  // clip is served from the API host, and in the native app's capacitor:// page that is another
+  // origin, so drawing it into a canvas taints the canvas and reading it back throws. Signed media
+  // URLs carry no cookie, so asking for CORS withholds nothing. A phone-local blob or data URL is
+  // same-origin and is left alone.
+  if (!/^(blob|data):/.test(url)) video.crossOrigin = "anonymous";
   video.src = url;
 
   try {

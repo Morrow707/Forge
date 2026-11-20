@@ -383,8 +383,8 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // SCALE numbers (ruler uncertainties) survive 2026-11-05; every VELOCITY number fitted before
   // it was fitted on the lowering and is gone -- see VELOCITY_OVERRIDES_REMOVED_2026_11_05 and
   // the-concentric-is-the-way-up.test.ts.
-  "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0, maxPeakToMeanRatio: 1.75, biacromialToleranceFraction: 0.3 },
-  "Back Squat": { heightRulerUncertainty: 0.13, driveOnsetFraction: 0.02, velocitySmoothingMs: 130 },
+  "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0, maxPeakToMeanRatio: 1.66, biacromialToleranceFraction: 0.3 },
+  "Back Squat": { heightRulerUncertainty: 0.14, driveOnsetFraction: 0.02, velocitySmoothingMs: 130 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
   "Dumbbell Shoulder Press": {
     biacromialToleranceFraction: 0.4,
@@ -428,6 +428,15 @@ export const VELOCITY_OVERRIDES_REMOVED_2026_11_05: Record<string, string[]> = {
  *  an override with no evidence here is a number somebody guessed, and the test refuses it. */
 export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
   "Back Squat":
+    "2026-11-20, round twenty-two (RULE #6). heightRulerUncertainty 0.13 -> 0.14. 135x5 on build " +
+    "797 in sweatpants read range -2.1% (77.8cm vs the OVR's 31.3in), mean +3.3%, peak -1.4%; the " +
+    "height ruler (3.489e-3) again sat lowest. The blend run with the uncertainties the phone stated " +
+    "(the shoulder ruler grip-loosened to 0.469) reads range -2.14 -> -1.55%, peak -1.40 -> -0.80%, " +
+    "mean +3.26 -> +3.89% (the mean is high from a push window ~3% short, not scale): total off " +
+    "6.8 -> 6.2 points. The sealed ledger replay reads the earlier squats about 1 point higher " +
+    "(average 2.33% -> 3.07%), but it knows the shoulder ruler only at its 0.2 floor, not the " +
+    "grip-loosened value the phone used, and as filmed those squats read LOW (11-16 set 2 -3.1%). " +
+    "Reported, not a veto. " +
     "2026-11-16, round eighteen, Scott's rule (one fix per lift per take toward the OVR, RULE #6). " +
     "heightRulerUncertainty 0.12 -> 0.13. Set 2 on build 769 (135x5, file path, 5 of 5) read range " +
     "-3.1%, mean +1.2%, peak -4.1% against the OVR (29.6in / 0.81 / 1.21); its height ruler (3.536e-3) " +
@@ -497,6 +506,14 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "high ones, about +0.8% on the blend, replayed on all six squat ledger rows and no other lift's. " +
     "Not a refit of HEIGHT_RULER_UNCERTAINTY, which is shared and was fitted on a squat AND an RDL.",
   "Romanian Deadlift":
+    "2026-11-20, round twenty-two (RULE #6). maxPeakToMeanRatio 1.75 -> 1.66, the OVR's own " +
+    "peak/mean on this set (1.60 to 1.74 per rep, 1.66 average). 135x8 on build 797: range -0.3% " +
+    "(59.5cm vs 23.5in), mean +1.1%, peak 1.60 vs 1.49 (+7.4%), every rep's peak at or near the cap. " +
+    "Replayed through the real pipeline: 1.75 reproduces the phone exactly (1.60); 1.66 reads 1.51 " +
+    "(+1.3%); range and mean do not move. The 11-16 set 1 RDL (OVR peak 1.66) goes 1.77 -> 1.70 " +
+    "(+6.6% -> +2.4%); set 2 (1.19) is unchanged. Older replays: 11-05 set 1 +18.6% -> +13.0%, " +
+    "11-05 set 2 +13.9% -> +10.1%, 10-19 set 2 +18% -> +13%; the 10-29 set 1, already low, goes " +
+    "-5.2% -> -8.4% (1.46 -> 1.41 against 1.54). " +
     "2026-11-16, round eighteen, Scott's rule (one fix per lift per take toward the OVR, RULE #6). " +
     "biacromialToleranceFraction 0.2 -> 0.3. Set 2 on build 769 (135x7; logged 8, the extra rep is " +
     "the pickup off the floor) read range of motion +22.7% on every rep (1.24-1.31x the OVR's 24.3in) " +

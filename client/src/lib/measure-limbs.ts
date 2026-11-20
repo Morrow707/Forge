@@ -135,3 +135,40 @@ export function measureLimbsInMetres(
   }
   return out;
 }
+
+/** HOW WELL THE LEGS WERE SEEN ON THIS TAKE (2026-11-20). Scott, filming in sweatpants: "it
+ *  couldn't see my legs unless they were bent, and no ankle, make sure it can tell the
+ *  difference". Under loose fabric Vision still places a knee and an ankle, but with lower
+ *  confidence and on fewer frames, and those joints are what the height ruler (nose to ankle) and
+ *  the femur and shin the body model learns are measured from. So every take says, per joint, on
+ *  how many frames it cleared the same visibility bar the limb measurement uses and how sure
+ *  Vision was on a typical frame. Measures only; nothing reads it back to choose a ruler (Rule #1),
+ *  until takes in shorts and in sweatpants can be compared through it. */
+export type LegVisibility = {
+  framesTotal: number;
+  hips: JointVisibility;
+  knees: JointVisibility;
+  ankles: JointVisibility;
+};
+export type JointVisibility = { framesSeen: number; medianConfidence: number | null };
+
+const LEG_JOINTS = {
+  hips: [POSE_LANDMARKS.LEFT_HIP, POSE_LANDMARKS.RIGHT_HIP],
+  knees: [POSE_LANDMARKS.LEFT_KNEE, POSE_LANDMARKS.RIGHT_KNEE],
+  ankles: [POSE_LANDMARKS.LEFT_ANKLE, POSE_LANDMARKS.RIGHT_ANKLE],
+} as const;
+const HALF = 2;
+const PRECISION = 100;
+
+export function measureLegVisibility(frames: { worldLandmarks: Landmark[] }[]): LegVisibility {
+  const joint = (indices: readonly number[]): JointVisibility => {
+    // The better-seen side on each frame, as the limb measurement takes the longer side.
+    const best = frames.map((f) => Math.max(...indices.map((i) => f.worldLandmarks[i]?.visibility ?? 0)));
+    const sorted = [...best].sort((a, b) => a - b);
+    return {
+      framesSeen: frames.filter((f) => indices.some((i) => visible(f.worldLandmarks[i]))).length,
+      medianConfidence: sorted.length ? Math.round(sorted[Math.floor(sorted.length / HALF)] * PRECISION) / PRECISION : null,
+    };
+  };
+  return { framesTotal: frames.length, hips: joint(LEG_JOINTS.hips), knees: joint(LEG_JOINTS.knees), ankles: joint(LEG_JOINTS.ankles) };
+}

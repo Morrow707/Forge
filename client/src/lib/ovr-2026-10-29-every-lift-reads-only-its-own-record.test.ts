@@ -70,8 +70,8 @@ const CORRECTED: Record<string, { reps: number; romCm: number; mean: number; pea
   // Round ten (2026-11-05): the RDL's window is 0 and the rest-at-top rule gives the 10-19 take
   // its eighth rep (the last drive, merged with the stand-and-hold before the bar went down).
   // Round seventeen (2026-11-16): the RDL's own peak cap is 1.75, so both peaks come down.
-  "2026-10-29 Romanian Deadlift set 1": { reps: 8, romCm: 84.1, mean: 0.97, peak: 1.46 },
-  "2026-10-19 Romanian Deadlift set 2": { reps: 8, romCm: 63.9, mean: 1.09, peak: 1.88 },
+  "2026-10-29 Romanian Deadlift set 1": { reps: 8, romCm: 84.1, mean: 0.97, peak: 1.41 }, // 1.46 at cap 1.75; 1.66 since round twenty-two
+  "2026-10-19 Romanian Deadlift set 2": { reps: 8, romCm: 63.9, mean: 1.09, peak: 1.8 }, // 1.88 at cap 1.75; 1.66 since round twenty-two
 };
 
 describe("the 2026-10-29 export replays through each lift's own record", () => {
@@ -156,7 +156,8 @@ describe("the 2026-10-29 export replays through each lift's own record", () => {
     // Round seventeen (2026-11-16) gave the RDL a cap of its own again, fitted on the DRIVES this
     // time: 1.75, the sensor's own peak-over-mean on this lift. It is tighter than the shared 2,
     // never the 2.5 that released the lowering's peaks.
-    expect(FITTED_OVERRIDES["Romanian Deadlift"].maxPeakToMeanRatio).toBe(1.75);
+    // Round twenty-two (2026-11-20) stepped it to 1.66, the OVR's own peak/mean on that day's set.
+    expect(FITTED_OVERRIDES["Romanian Deadlift"].maxPeakToMeanRatio).toBe(1.66);
     expect(cameraTunablesFor("Romanian Deadlift", romBucketForExercise("Romanian Deadlift")).values.maxPeakToMeanRatio).toBeLessThan(MAX_PEAK_TO_MEAN_RATIO);
     // On the drives the RDL reads HIGH on both takes -- +8% / +22% on the mean at its own whole
     // window (round ten; +32% / +26% at 0.02, +46% / +30% at the shared 0.04), +1% / +33% on the
