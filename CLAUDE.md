@@ -4104,6 +4104,10 @@ halves before splitting anything else:
   choice). And a one-arm lift's live take is re-read from the file when its working wrist was unseen
   past 1.0s (`wristGaps`, `maxLiveWorkingWristGapSeconds`); the hook also stopped dropping
   `arbiterTunables` at Record (inert: every lift holds the defaults). Native: `verify_build`, beta.
+- **ROUND TWENTY-FOUR, 2026-11-20: SET 3 ON BUILD 809, IN SHORTS.** Squat height ruler 0.14 ->
+  0.13 (range +4.0% -> ~+3.2%); a squat window under 0.01 was refused because it brings back the
+  11-09 lockout-stand bug. Box jump height ruler 0.1 -> 0.08 (mean +10.0% -> ~+7.9%). RDL set 3
+  (first take at 0.5x) saved after the export was taken; it waits on the next export.
 - **ROUND TWENTY-THREE, 2026-11-20: SET 2 OF SQUAT, RDL, BOX JUMP ON BUILD 807.** One fix per lift:
   squat window 0.02 -> 0.01 (range -0.2% already, mean +5.8% -> about +2.3%); RDL shoulder floor
   0.3 -> 0.28 (range -6.2% -> -5.8%; most of the gap is four short pulls, a tracking fault left

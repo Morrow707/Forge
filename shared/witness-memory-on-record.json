@@ -1,72 +1,72 @@
 {
   "Back Squat": {
-    "takes": 12,
+    "takes": 13,
     "rulers": {
       "body_3d": {
-        "takes": 12,
-        "leanPct": 6.8,
+        "takes": 13,
+        "leanPct": 8,
         "rmsPct": 7.6,
         "timesWorst": 0
       },
       "depth": {
-        "takes": 12,
-        "leanPct": 19,
-        "rmsPct": 24.4,
-        "timesWorst": 6
+        "takes": 13,
+        "leanPct": 21.1,
+        "rmsPct": 24.7,
+        "timesWorst": 7
       },
       "height": {
-        "takes": 12,
-        "leanPct": -10.5,
-        "rmsPct": 11.1,
+        "takes": 13,
+        "leanPct": -10.1,
+        "rmsPct": 10.8,
         "timesWorst": 0
       },
       "shoulder_width": {
-        "takes": 12,
-        "leanPct": 17.8,
-        "rmsPct": 19.4,
+        "takes": 13,
+        "leanPct": 18.1,
+        "rmsPct": 19.3,
         "timesWorst": 6
       }
     },
     "bones": {
       "femur": {
-        "takes": 4,
+        "takes": 5,
         "leanPct": 9.1,
-        "rmsPct": 9.9,
+        "rmsPct": 10.7,
         "timesWorst": 0
       },
       "forearm": {
-        "takes": 4,
-        "leanPct": 9.6,
-        "rmsPct": 9.8,
+        "takes": 5,
+        "leanPct": 8.7,
+        "rmsPct": 9.2,
         "timesWorst": 0
       },
       "shin": {
-        "takes": 4,
-        "leanPct": 13.9,
-        "rmsPct": 13.7,
-        "timesWorst": 4
+        "takes": 5,
+        "leanPct": 14,
+        "rmsPct": 14.2,
+        "timesWorst": 5
       },
       "shoulderWidth": {
-        "takes": 4,
-        "leanPct": -6.3,
-        "rmsPct": 6.4,
+        "takes": 5,
+        "leanPct": -7.6,
+        "rmsPct": 7.8,
         "timesWorst": 0
       },
       "torso": {
-        "takes": 4,
-        "leanPct": -6.6,
-        "rmsPct": 6.8,
+        "takes": 5,
+        "leanPct": -8.6,
+        "rmsPct": 7.4,
         "timesWorst": 0
       },
       "upperArm": {
-        "takes": 4,
-        "leanPct": 7.5,
-        "rmsPct": 7.2,
+        "takes": 5,
+        "leanPct": 8,
+        "rmsPct": 8.1,
         "timesWorst": 0
       }
     },
     "object": {
-      "takesWithTelemetry": 4,
+      "takesWithTelemetry": 5,
       "asked": [
         "plate"
       ],

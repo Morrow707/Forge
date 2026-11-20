@@ -281,7 +281,7 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     });
     // the scale step: 0.11 -> 0.12 on the squat's record (round ten), then 0.13 (round eighteen,
     // RULE #6), one point each on this take, and it reaches no other lift
-    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.14); // 0.14 since round twenty-two
+    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.13); // 0.14 in round twenty-two, 0.13 since round twenty-four
     expect(cameraTunablesFor("Front Squat", "squat").values.heightRulerUncertainty).toBe(HEIGHT_RULER_UNCERTAINTY);
     const voters = f.trackingDiagnostics.calibration.scaleBlend.voters;
     const at = (u: number) => reconcileScaleEstimates(voters.map((c: any) => ({ source: c.source, scale: c.scale, uncertaintyFraction: c.source === "height" ? u : c.uncertaintyFraction }))).scale!;

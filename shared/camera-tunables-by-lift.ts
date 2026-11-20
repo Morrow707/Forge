@@ -384,8 +384,8 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // it was fitted on the lowering and is gone -- see VELOCITY_OVERRIDES_REMOVED_2026_11_05 and
   // the-concentric-is-the-way-up.test.ts.
   "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0, maxPeakToMeanRatio: 1.66, biacromialToleranceFraction: 0.28 },
-  "Back Squat": { heightRulerUncertainty: 0.14, driveOnsetFraction: 0.01, velocitySmoothingMs: 130 },
-  "Box Jump": { boxRulerUncertainty: 0.07 },
+  "Back Squat": { heightRulerUncertainty: 0.13, driveOnsetFraction: 0.01, velocitySmoothingMs: 130 },
+  "Box Jump": { boxRulerUncertainty: 0.07, heightRulerUncertainty: 0.08 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
   "Dumbbell Shoulder Press": {
     biacromialToleranceFraction: 0.4,
@@ -429,6 +429,12 @@ export const VELOCITY_OVERRIDES_REMOVED_2026_11_05: Record<string, string[]> = {
  *  an override with no evidence here is a number somebody guessed, and the test refuses it. */
 export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
   "Box Jump":
+    "2026-11-20, round twenty-four (RULE #6), set 3 on build 809 against OVR \"Jump Squat\" reps " +
+    "2-6. heightRulerUncertainty 0.1 -> 0.08. Set 3 read mean +10.0% (1.47 vs 1.34), peak +2.0%, " +
+    "rise +6.6%: scale high; its box ruler (2.39e-3) stepped out and the height ruler (3.65e-3) " +
+    "was the lowest voter left. Re-blended at 0.08: set 3 peak +2.0 -> +0.1%, mean +10.0 -> " +
+    "+7.9%; set 2 peak -7.3 -> -6.6%, mean -2.1 -> -1.4%; set 1 peak +1.0 -> -0.8%, mean -3.3 -> " +
+    "-5.1% (the one set it costs). Summed error over the three sets 25.8 -> 21.9 points. " +
     "2026-11-20, round twenty-three (RULE #6), set 2 on build 807 against the OVR's \"Jump Squat\" " +
     "reps 2-6 (rep 1 the set-up jump, skipped). boxRulerUncertainty 0.05 -> 0.07. Set 2 read mean " +
     "-5.2%, peak -10.3%, height -3.3% because the box ruler (3.131e-3) was corroborated by the " +
@@ -438,6 +444,14 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "about -0.1%, peak -7.3%. Set 1 is unchanged (its box ruler stepped out of the cluster). 0.08 is " +
     "the next step. No box-jump ledger row exists yet; the next filmed box jump is its test.",
   "Back Squat":
+    "2026-11-20, round twenty-four (RULE #6), set 3 on build 809, in shorts. heightRulerUncertainty " +
+    "0.14 -> 0.13 (back to round eighteen's value). Set 3 read range +4.0% (81.6 vs 30.9in), mean " +
+    "+8.8%, peak +8.1%: scale high, and the height ruler (3.571e-3) was the lowest voter. Re-blended " +
+    "with the uncertainties the phone stated: set 3 range +3.96 -> +3.20% (mean and peak 0.7 point " +
+    "closer); set 2 range -0.23 -> -1.25% (mean +2.3 -> +1.3%, peak +5.1 -> +4.0%); set 1 range " +
+    "-1.55 -> -2.14%. The window was tried first and REFUSED: any driveOnsetFraction under 0.01 " +
+    "brings the 11-09 squat's lockout stand back into rep 5 (0.27 against a flat sensor, set " +
+    "spread 0.29 -> 0.52), re-opening round twelve's fake-fatigue bug. " +
     "2026-11-20, round twenty-three (RULE #6), set 2 on build 807. driveOnsetFraction 0.02 -> 0.01. " +
     "Set 2 read range -0.2% (77.8 vs 30.7in), mean +5.8%, peak +5.1%; set 1 mean +3.3%. The range " +
     "is right, so the mean's error is the window. Replayed: set 2 mean +4.7% -> +2.3%, set 1 " +

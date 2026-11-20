@@ -36,10 +36,10 @@ describe("round twenty-two", () => {
 
   it("each lift's number is its own: the squat's and RDL's steps reach no other lift", () => {
     expect(cameraTunablesFor("Romanian Deadlift", "deadlift").values.maxPeakToMeanRatio).toBe(1.66);
-    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.14);
+    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.13); // 0.14 in round twenty-two, 0.13 since round twenty-four
     expect(cameraTunablesFor("Back Squat", "squat").values.maxPeakToMeanRatio).not.toBe(1.66);
     expect(cameraTunablesFor("Conventional Deadlift", "deadlift").values.maxPeakToMeanRatio).not.toBe(1.66);
-    expect(cameraTunablesFor("Front Squat", "squat").values.heightRulerUncertainty).not.toBe(0.14);
+    expect(cameraTunablesFor("Front Squat", "squat").values.heightRulerUncertainty).not.toBe(0.13);
   });
 
   it("the box jump counted the same five jumps as the OVR's 2-6 (its set-up jump skipped)", () => {

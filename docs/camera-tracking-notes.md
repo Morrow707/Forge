@@ -14,7 +14,32 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-20, round twenty-three)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-20, round twenty-four)
+
+**ROUND TWENTY-FOUR, 2026-11-20 (set 3, build 809, in shorts).** OVR reps 2-6 on the box jump.
+
+| lift | Forge as filmed | OVR | error | after this round |
+|---|---|---|---|---|
+| Squat range / mean / peak | 81.6cm / 0.87 / 1.33 | 30.9in (78.49) / 0.80 / 1.23 | +4.0% / +8.8% / +8.1% | about +3.2% / +8.0% / +7.3% (height ruler 0.14 -> 0.13) |
+| Box jump rise / mean / peak | 70.6 / 1.47 / 2.73 | 26.1in (66.19) / 1.34 / 2.68 | +6.6% / +10.0% / +2.0% | mean about +7.9%, peak +0.1% (height ruler 0.1 -> 0.08) |
+| RDL (filmed at 0.5x) | not in the export | 24.1in / 0.91 / 1.58 | -- | waits on the next export |
+
+- **Squat: the window was tried first and REFUSED.** Any `driveOnsetFraction` under 0.01 puts the
+  11-09 squat's lockout stand back into rep 5 (0.27 against a flat sensor, spread 0.29 -> 0.52):
+  round twelve's fake-fatigue bug. The window cannot go lower until the rest-at-top rule catches
+  that stand on its own. So the squat's step is the height ruler, back to 0.13. Sealed ledger:
+  squat average 3.31% -> 2.54% over 13 sets.
+- **Box jump: its height ruler, 0.1 -> 0.08.** Set 3's box ruler stepped out (box top read 1.00m
+  against 0.61m typed) and the height ruler was the lowest voter left. Sums over the three sets
+  25.8 -> 21.9 points; set 1's mean pays 1.8.
+- **RDL set 3 saved at 20:03:56, four seconds after the export (20:03:52).** It is on the server;
+  download the export again. It is the first take at 0.5x: read `captureDeviceInfo.lens`
+  (`ultraWide`), the per-rep ranges, and the `ey` plate column beside `y` at each pull's bottom.
+- Ledger row `2026-11-20-back-squat-set-3`; fixture `ovr-2026-11-20-set-3-export.json`; test
+  `round-twenty-four-set-three.test.ts`.
+- Noted, not a defect: at sign-in the phone re-sent ten old App Store transactions and the server
+  answered 403 to each ("nothing is sold to this account"; the account is an admin). They stay
+  unfinished on purpose, so the account that bought them can still claim them.
 
 **ROUND TWENTY-THREE, 2026-11-20 (set 2 of the same three lifts, build 807, `b0fca605`, round
 twenty-two's changes in). The OVR's "Jump Squat" is the box jump; its rep 1 is the set-up jump, so
