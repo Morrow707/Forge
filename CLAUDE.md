@@ -4104,6 +4104,12 @@ halves before splitting anything else:
   choice). And a one-arm lift's live take is re-read from the file when its working wrist was unseen
   past 1.0s (`wristGaps`, `maxLiveWorkingWristGapSeconds`); the hook also stopped dropping
   `arbiterTunables` at Record (inert: every lift holds the defaults). Native: `verify_build`, beta.
+- **ROUND TWENTY-THREE, 2026-11-20: SET 2 OF SQUAT, RDL, BOX JUMP ON BUILD 807.** One fix per lift:
+  squat window 0.02 -> 0.01 (range -0.2% already, mean +5.8% -> about +2.3%); RDL shoulder floor
+  0.3 -> 0.28 (range -6.2% -> -5.8%; most of the gap is four short pulls, a tracking fault left
+  open); Box Jump's first record, `boxRulerUncertainty` 0.05 -> 0.07 (a corroborated box ruler
+  stated at 0.05 pulled the scale ~24% under set 1's; mean -5.2% -> about -2.1%). Body memory read
+  a plausible scale on the squat (-4.5%), leg visibility recorded. See docs/camera-tracking-notes.md.
 - **ROUND TWENTY-TWO, 2026-11-20: SQUAT, RDL, BOX JUMP ON BUILD 797, IN SWEATPANTS.** The OVR calls
   the box jump "Jump Squat" and its rep 1 is the set-up jump: compare reps 2-6 (Scott). One fix per
   lift: RDL peak cap 1.75 -> 1.66 (the OVR's own peak/mean; peak +7.4% -> +1.3%, range already

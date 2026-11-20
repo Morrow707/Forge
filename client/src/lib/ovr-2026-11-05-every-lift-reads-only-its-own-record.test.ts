@@ -81,7 +81,7 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
    * rep (-40.3% on the 11-09 squat). See FITTED_OVERRIDE_EVIDENCE["Back Squat"] for the sweep. */
   it("the squat: a 0.02 window and a 130ms smoothing, +4.6% / -3.9% against the sensor, rep for rep", () => {
     const own = cameraTunablesFor("Back Squat", "squat");
-    expect(own.values.driveOnsetFraction).toBe(0.02);
+    expect(own.values.driveOnsetFraction).toBe(0.01); // 0.02 until round twenty-three (2026-11-20)
     expect(own.values.velocitySmoothingMs).toBe(130);
     expect(own.sources.velocitySmoothingMs).toBe("fitted");
     const m = replay(byId(SQUAT));
@@ -221,8 +221,8 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
   it("the RDL's scale was +3.6% over its eight pulls; the shoulder floor step (0.3, round eighteen, RULE #6) reads it -0.4%", () => {
     const row = ledgerRow("2026-11-05-romanian-deadlift");
     expect(row.reportedRomCm).toBe(63.4);
-    expect(row.liveErrorPct).toBeCloseTo(-0.39, 1);
-    expect(cameraTunablesFor("Romanian Deadlift", "deadlift").values.biacromialToleranceFraction).toBe(0.3);
+    expect(row.liveErrorPct).toBeCloseTo(0.23, 1); // -0.39 at 0.3; +0.23 at the 0.28 floor (round twenty-three)
+    expect(cameraTunablesFor("Romanian Deadlift", "deadlift").values.biacromialToleranceFraction).toBe(0.28); // 0.3 until round twenty-three
     expect(cameraTunablesFor("Romanian Deadlift", "deadlift").sources.biacromialToleranceFraction).toBe("fitted");
   });
 

@@ -75,9 +75,9 @@ describe("the 2026-11-09 export replays through each lift's own record", () => {
     expect(s.shipped.repMeans).toEqual([0.59, 0.54, 0.48, 0.44, 0.27]);
   });
 
-  it("the squat: the stand at lockout is out of the window, and the set goes -40.3% -> -15.3%", () => {
+  it("the squat: the stand at lockout is out of the window, and the set goes -40.3% -> -15.3% (-20.8% at the 0.01 window)", () => {
     const own = cameraTunablesFor("Back Squat", "squat");
-    expect(own.values.driveOnsetFraction).toBe(0.02);
+    expect(own.values.driveOnsetFraction).toBe(0.01); // 0.02 until round twenty-three (2026-11-20)
     expect(own.sources.driveOnsetFraction).toBe("fitted");
     const m = replay(byId(SQUAT));
     const s = OVR_BACK_SQUAT_2026_11_09.sensor;
@@ -85,8 +85,10 @@ describe("the 2026-11-09 export replays through each lift's own record", () => {
     // THE RANGE OF MOTION DOES NOT MOVE. It was never the fault and the fix must not touch it.
     expect(m.romCm).toBe(73.4);
     expect(m.romCm! / sensorCm(s.set.romIn) - 1).toBeCloseTo(-0.083, 2);
-    expect(m.meanVelocityMps).toBe(0.61);
-    expect(m.meanVelocityMps! / s.set.meanVelocityMps - 1).toBeCloseTo(-0.153, 2);
+    // 0.61 (-15.3%) at the 0.02 window; round twenty-three's 0.01 widens it and this take, which
+    // already read low, goes to 0.57 -- the cost of that step on this take, recorded.
+    expect(m.meanVelocityMps).toBe(0.57);
+    expect(m.meanVelocityMps! / s.set.meanVelocityMps - 1).toBeCloseTo(-0.208, 2);
     // and the fake fatigue is gone: the phone read 0.59 / 0.54 / 0.48 / 0.44 / 0.27 against a
     // sensor that was flat. Nothing is fitted to make this true -- it falls out of the windows.
     const means = m.repBreakdown.map((r) => r.meanVelocityMps!);
@@ -122,7 +124,7 @@ describe("the 2026-11-09 export replays through each lift's own record", () => {
   });
 
   it("the squat's own numbers reach the squat and nothing else", () => {
-    expect(FITTED_OVERRIDES["Back Squat"].driveOnsetFraction).toBe(0.02);
+    expect(FITTED_OVERRIDES["Back Squat"].driveOnsetFraction).toBe(0.01); // 0.02 until round twenty-three (2026-11-20)
     for (const name of ["Romanian Deadlift", "Bench Press", "Pendlay Row", "Barbell Shoulder Press"]) {
       expect(cameraTunablesFor(name, romBucketForExercise(name)).values.driveOnsetFraction, name)
         .not.toBe(FITTED_OVERRIDES["Back Squat"].driveOnsetFraction);

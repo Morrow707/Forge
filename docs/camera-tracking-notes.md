@@ -14,7 +14,40 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-20, round twenty-two)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-20, round twenty-three)
+
+**ROUND TWENTY-THREE, 2026-11-20 (set 2 of the same three lifts, build 807, `b0fca605`, round
+twenty-two's changes in). The OVR's "Jump Squat" is the box jump; its rep 1 is the set-up jump, so
+compare reps 2-6.**
+
+| lift | Forge as filmed | OVR | error | after this round |
+|---|---|---|---|---|
+| Squat range / mean / peak | 77.8cm / 0.91 / 1.43 | 30.7in (77.98) / 0.86 / 1.36 | -0.2% / +5.8% / +5.1% | mean +2.3% on replay (window 0.02 -> 0.01) |
+| RDL range / mean / peak | 57.2cm / 0.89 / 1.49 | 24.0in (60.96) / 0.89 / 1.52 | -6.2% / 0.0% / -2.0% | range -5.8%, peak -1.6%, mean +0.4% (shoulder floor 0.3 -> 0.28) |
+| Box jump height / mean / peak | 68.8cm / 1.37 / 2.51 | 71.1cm / 1.45 / 2.80 | -3.3% / -5.2% / -10.3% | about -0.1% / -2.1% / -7.3% (box ruler 0.05 -> 0.07) |
+
+- **Squat (`FITTED_OVERRIDES["Back Squat"].driveOnsetFraction` 0.02 -> 0.01).** The range was right
+  and the mean high on both sets (+3.3%, +5.8%): the push window. Replayed: set 2 +4.7 -> +2.3%,
+  set 1 +3.3 -> +2.2%, reps and range unmoved. Cost: the 11-09 take (already low from its lockout
+  stand) goes -15.3 -> -20.8%. 0 is the next step. Peak +5.1% left for the next take.
+- **RDL (`biacromialToleranceFraction` 0.3 -> 0.28).** The scale is a weak lever here: most of
+  set 2's short range is reps 1, 3, 6 and 8 reading 7-12cm short (rep 6 48.8 against 60.5cm) while
+  reps 2, 4, 5, 7 sit inside 2%. That is tracking on those pulls, open. Ledger: the RDL rows that
+  read low move up about 0.5 (10-04 -2.92 -> -2.49, 10-05 -9.72 -> -9.24, 11-16 -1.22 -> -0.72);
+  the high ones move up too (10-29 22.50 -> 22.91, 11-16 set 2 18.72 -> 19.34).
+- **Box jump (`FITTED_OVERRIDES["Box Jump"].boxRulerUncertainty` 0.05 -> 0.07, its first entry).**
+  The box ruler (typed box height over the box top) was corroborated by the detector on set 2
+  (0.648m against 0.61m typed), joined the height ruler's cluster and, stated at 0.05, pulled the
+  scale to 3.33e-3 where set 1 shipped 4.35e-3 from the same spot. Re-blended at 0.07: 3.44e-3. Set
+  1 is unchanged (its box ruler stepped out). Estimated by re-blending, not replayed; the next box
+  jump is its test.
+- **Body memory is learning.** Squat set 2 (build 807) read 3.54e-3 from the remembered bones
+  against the 3.70e-3 the blend shipped (-4.5%); on set 1 the stale 3mm bones read 1.47e-5. RDL
+  wrote no reading this set. Not tuned (a learning model).
+- **Leg visibility.** Set 2 recorded it: squat knees 1047 of 1066 frames at 0.85, ankles 1043;
+  RDL knees 775 of 819, ankles 765. Set 1 (build 797) had no field.
+- Ledger rows `2026-11-20-back-squat-set-2`, `2026-11-20-romanian-deadlift-set-2`; fixture
+  `ovr-2026-11-20-set-2-export.json`; test `round-twenty-three-set-two.test.ts`.
 
 **ROUND TWENTY-TWO, 2026-11-20 (build 797, `4ea0fa5d`; Back Squat 135x5, Romanian Deadlift 135x8,
 Box Jump x5 onto 24in). Filmed in sweatpants: Scott, "it couldn't see my legs unless they were

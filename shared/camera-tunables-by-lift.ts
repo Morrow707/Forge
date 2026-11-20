@@ -383,8 +383,9 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // SCALE numbers (ruler uncertainties) survive 2026-11-05; every VELOCITY number fitted before
   // it was fitted on the lowering and is gone -- see VELOCITY_OVERRIDES_REMOVED_2026_11_05 and
   // the-concentric-is-the-way-up.test.ts.
-  "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0, maxPeakToMeanRatio: 1.66, biacromialToleranceFraction: 0.3 },
-  "Back Squat": { heightRulerUncertainty: 0.14, driveOnsetFraction: 0.02, velocitySmoothingMs: 130 },
+  "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0, maxPeakToMeanRatio: 1.66, biacromialToleranceFraction: 0.28 },
+  "Back Squat": { heightRulerUncertainty: 0.14, driveOnsetFraction: 0.01, velocitySmoothingMs: 130 },
+  "Box Jump": { boxRulerUncertainty: 0.07 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
   "Dumbbell Shoulder Press": {
     biacromialToleranceFraction: 0.4,
@@ -427,7 +428,21 @@ export const VELOCITY_OVERRIDES_REMOVED_2026_11_05: Record<string, string[]> = {
  *  One entry per identity in FITTED_OVERRIDES, held equal by camera-tunables-are-a-copy.test.ts;
  *  an override with no evidence here is a number somebody guessed, and the test refuses it. */
 export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
+  "Box Jump":
+    "2026-11-20, round twenty-three (RULE #6), set 2 on build 807 against the OVR's \"Jump Squat\" " +
+    "reps 2-6 (rep 1 the set-up jump, skipped). boxRulerUncertainty 0.05 -> 0.07. Set 2 read mean " +
+    "-5.2%, peak -10.3%, height -3.3% because the box ruler (3.131e-3) was corroborated by the " +
+    "detector this time (box top 0.648m vs 0.61m typed), joined the height ruler's cluster and, " +
+    "stated at 0.05, the tightest number in the blend, pulled the scale to 3.329e-3 where set 1 " +
+    "shipped 4.354e-3 from the same spot. Re-blended at 0.07: scale 3.439e-3, mean -2.1%, height " +
+    "about -0.1%, peak -7.3%. Set 1 is unchanged (its box ruler stepped out of the cluster). 0.08 is " +
+    "the next step. No box-jump ledger row exists yet; the next filmed box jump is its test.",
   "Back Squat":
+    "2026-11-20, round twenty-three (RULE #6), set 2 on build 807. driveOnsetFraction 0.02 -> 0.01. " +
+    "Set 2 read range -0.2% (77.8 vs 30.7in), mean +5.8%, peak +5.1%; set 1 mean +3.3%. The range " +
+    "is right, so the mean's error is the window. Replayed: set 2 mean +4.7% -> +2.3%, set 1 " +
+    "+3.3% -> +2.2%, peak and range unmoved, every rep count unchanged. 0 is the next step " +
+    "(+1.2% / +1.1%). The peak (+5.1% on set 2, -0.7% on set 1) is left for the next take. " +
     "2026-11-20, round twenty-two (RULE #6). heightRulerUncertainty 0.13 -> 0.14. 135x5 on build " +
     "797 in sweatpants read range -2.1% (77.8cm vs the OVR's 31.3in), mean +3.3%, peak -1.4%; the " +
     "height ruler (3.489e-3) again sat lowest. The blend run with the uncertainties the phone stated " +
@@ -506,6 +521,11 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "high ones, about +0.8% on the blend, replayed on all six squat ledger rows and no other lift's. " +
     "Not a refit of HEIGHT_RULER_UNCERTAINTY, which is shared and was fitted on a squat AND an RDL.",
   "Romanian Deadlift":
+    "2026-11-20, round twenty-three (RULE #6), set 2 on build 807. biacromialToleranceFraction " +
+    "0.3 -> 0.28. Set 2 read range -6.2% (57.2cm vs 24.0in), mean 0.0%, peak -2.0%. Re-blended: " +
+    "range -5.8%, peak -1.6%, mean +0.4% (total off 8.2 -> 7.8 points). Set 1 moves +0.6% on all " +
+    "three (range -0.3 -> +0.3%). Most of set 2's short range is reps 1, 3, 6 and 8 reading 7-12cm " +
+    "under the sensor while the other four sit inside 2%: tracking on those pulls, not scale. " +
     "2026-11-20, round twenty-two (RULE #6). maxPeakToMeanRatio 1.75 -> 1.66, the OVR's own " +
     "peak/mean on this set (1.60 to 1.74 per rep, 1.66 average). 135x8 on build 797: range -0.3% " +
     "(59.5cm vs 23.5in), mean +1.1%, peak 1.60 vs 1.49 (+7.4%), every rep's peak at or near the cap. " +
