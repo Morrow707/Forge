@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
+import { cn } from "@/lib/utils";
 import {
   CROP_SHAPES,
   MAX_ZOOM,
@@ -114,8 +115,15 @@ export function ImageCropDialog({
               <div
                 ref={frameRef}
                 data-testid="crop-frame"
-                className="relative w-full touch-none select-none overflow-hidden rounded-md border border-border bg-[repeating-conic-gradient(#8882_0%_25%,transparent_0%_50%)] [background-size:16px_16px]"
-                style={{ aspectRatio: String(shape.aspect), cursor: view.fitWhole ? "default" : "grab" }}
+                className={cn(
+                  "relative w-full touch-none select-none overflow-hidden rounded-md border border-border bg-[repeating-conic-gradient(#8882_0%_25%,transparent_0%_50%)] [background-size:16px_16px]",
+                  // A phone-shaped frame at full width is taller than most screens, which hid Save.
+                  kind === "background" && "mx-auto max-w-[15rem]",
+                )}
+                // scrollbarGutter "auto": index.css reserves a 10px scrollbar strip on every
+                // overflow box, which here would narrow the frame, push the center guides 5px left
+                // and stretch the picture against what is uploaded.
+                style={{ aspectRatio: String(shape.aspect), cursor: view.fitWhole ? "default" : "grab", scrollbarGutter: "auto" }}
                 onPointerDown={(e) => {
                   if (view.fitWhole) return;
                   drag.current = { x: e.clientX, y: e.clientY };
@@ -151,7 +159,20 @@ export function ImageCropDialog({
                     }}
                   />
                 )}
+                {/* Center guides (Scott, 2026-11-20: "show me where center is vertical and
+                    horizontal"). Drawn over the frame only; never part of the uploaded picture. */}
+                {img && (
+                  <div aria-hidden="true" data-testid="crop-center-guides" className="pointer-events-none absolute inset-0">
+                    <div className="absolute inset-y-0 w-px bg-white/80 shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" style={{ left: "calc(50% - 0.5px)" }} />
+                    <div className="absolute inset-x-0 h-px bg-white/80 shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" style={{ top: "calc(50% - 0.5px)" }} />
+                    <div
+                      className="absolute h-2.5 w-2.5 rounded-full border border-black/40 bg-white"
+                      style={{ left: "calc(50% - 5px)", top: "calc(50% - 5px)" }}
+                    />
+                  </div>
+                )}
               </div>
+              <p className="text-xs text-muted-foreground">The lines cross at the center of the frame. They are not part of the picture.</p>
               <div className="space-y-1.5">
                 <Label htmlFor="crop-zoom">Zoom</Label>
                 <input
@@ -196,7 +217,7 @@ function CropPreview({ kind, src, programName, primaryColor }: { kind: CropKind;
   const button = { backgroundColor: primaryColor || "hsl(var(--primary))" };
   if (kind === "background") {
     return (
-      <div className="mx-auto aspect-[9/16] w-48 overflow-hidden rounded-2xl border border-border">
+      <div className="mx-auto aspect-[9/16] w-48 overflow-hidden rounded-2xl border border-border" style={{ scrollbarGutter: "auto" }}>
         <div
           className="flex h-full flex-col items-center justify-center gap-2 bg-cover bg-center px-3 text-center text-white"
           style={{ backgroundImage: `linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.8)), url("${src}")` }}
