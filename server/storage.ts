@@ -10196,6 +10196,10 @@ Based on this athlete's actual rate of improvement, suggest a realistic target v
     return new Map(rows.map((r) => [r.exerciseId, r.videoUrl]));
   },
 
+  async setUseStandardLook(athleteId: number, on: boolean) {
+    await db.update(users).set({ useStandardLook: on }).where(eq(users.id, athleteId));
+  },
+
   async markProgramWelcomeSeen(athleteId: number) {
     await db
       .update(users)

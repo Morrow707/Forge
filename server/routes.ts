@@ -86,6 +86,7 @@ import {
   brandExtrasWithinEntitlements,
   publicBrandExtras,
   programAnswerFits,
+  withoutProgramLook,
   MAX_CHECKIN_QUESTIONS,
   MAX_CHECKIN_TEXT_ANSWER,
 } from "@shared/brand-extras";
@@ -9676,7 +9677,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/branding/me", requireAuth, async (req, res) => {
     const user = currentUser(req);
     const branding = await storage.getEffectiveBrandingForUser(user.id);
-    res.json(branding);
+    // An athlete who chose Forge's standard look gets the program's words without its look. Only
+    // this route: the emails and PDFs the server makes are the program's own documents and keep its look.
+    const self = user.role === "athlete" ? await storage.getUser(user.id) : null;
+    res.json(branding && self?.useStandardLook ? withoutProgramLook(branding) : branding);
+  });
+
+  /** An athlete's own choice: their program's look, or Forge's standard one (2026-11-20). */
+  app.post("/api/athlete/standard-look", requireRole("athlete"), async (req, res) => {
+    const parsed = z.object({ on: z.boolean() }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "on must be true or false" });
+    await storage.setUseStandardLook(currentUser(req).id, parsed.data.on);
+    res.json({ useStandardLook: parsed.data.on });
   });
 
   // Org-wide white-label identity (name/logo/colors/motto/mission/contact/

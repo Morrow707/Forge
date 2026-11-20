@@ -3509,6 +3509,8 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "full_personalization_earned" boole
 -- The rest of a program's personalization, one record (shared/brand-extras.ts, 2026-11-19).
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "brand_extras" json;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "program_welcome_seen_at" timestamp;
+-- An athlete's choice of Forge's standard look over their program's (2026-11-20).
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "use_standard_look" boolean NOT NULL DEFAULT false;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "recap_last_sent_on" date;
 -- Answers to a program's own check-in questions, kept apart from wellness_checkins so the
 -- readiness score never reads them (shared/schema.ts, 2026-11-19).

@@ -681,6 +681,9 @@ export const users = pgTable(
     // When this athlete was shown their program's welcome screens (brandExtras.welcomeScreens);
     // null until then, so they are shown once.
     programWelcomeSeenAt: timestamp("program_welcome_seen_at"),
+    // An athlete who chose Forge's standard look over their program's colors, fonts, corners,
+    // background and app icon (2026-11-20). Their program's words, notes and banners still show.
+    useStandardLook: boolean("use_standard_look").notNull().default(false),
     // The day a primary coach's weekly recap last went out (brandExtras.recap), so a redeploy
     // or a second instance never sends it twice in one day.
     recapLastSentOn: date("recap_last_sent_on"),

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ColorField } from "@/components/color-field";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { ANSWER_REGISTERS, ANSWER_LENGTHS } from "@shared/answer-style";
@@ -90,6 +91,20 @@ export function AccountSettingsDialog({
       toast.success("Camera tracking is off and your consent is withdrawn");
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't turn camera tracking off"),
+  });
+
+  // An athlete may wear Forge's standard look instead of their program's (2026-11-20).
+  const standardLookMutation = useMutation({
+    mutationFn: async (on: boolean) => {
+      await apiRequest("POST", "/api/athlete/standard-look", { on });
+      return on;
+    },
+    onSuccess: (on) => {
+      qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      qc.invalidateQueries({ queryKey: ["/api/branding/me"] });
+      toast.success(on ? "Using Forge's standard look" : "Using your program's look");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't change your look"),
   });
 
   const [name, setName] = useState(user.name);
@@ -314,6 +329,26 @@ export function AccountSettingsDialog({
               </button>
             </div>
           </div>
+
+          {user.role === "athlete" && (
+            <div className="space-y-1.5 border-t border-border pt-4" data-testid="standard-look-switch">
+              <Label htmlFor="standard-look">Program colors</Label>
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  id="standard-look"
+                  checked={user.useStandardLook === true}
+                  disabled={standardLookMutation.isPending}
+                  onCheckedChange={(c) => standardLookMutation.mutate(c === true)}
+                />
+                <span>Use Forge's standard look</span>
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Shows the app in Forge's colors, fonts and icon instead of your program's. Your
+                program's name, logo, notes and announcements still show. Saved to your account, so
+                it follows you to every device.
+              </p>
+            </div>
+          )}
 
           <AnswerStyleSection />
 

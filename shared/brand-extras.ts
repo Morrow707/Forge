@@ -290,3 +290,37 @@ export function programAnswerFits(kind: CheckinQuestionKind, value: string): boo
   if (kind === "yesno") return YES_NO_ANSWERS.includes(value);
   return value.trim().length > 0 && value.length <= MAX_CHECKIN_TEXT_ANSWER;
 }
+
+/** The parts of a program's personalization that are its LOOK, not its words (2026-11-20). */
+const LOOK_EXTRAS = ["defaultTheme", "corners", "pillButtons", "bodyFont", "backgroundImageUrl", "appIcon"] as const;
+
+/** An athlete's branding with the program's look taken out, for an athlete who chose Forge's
+ *  standard look. Colors, background tint, fonts, corners, the login photo, the exercise screen's
+ *  colors and the app icon go; the program's name, logo, wordmark, words, notes, banner, season
+ *  banner and celebration message stay, because those are information, not appearance. */
+export function withoutProgramLook<
+  T extends {
+    brandPrimaryColor?: string | null;
+    brandSecondaryColor?: string | null;
+    brandBackgroundHue?: number | null;
+    brandBackgroundStrength?: number | null;
+    brandHeadingFont?: string | null;
+    exercisePageTheme?: unknown;
+    brandExtras?: BrandExtras | null;
+  },
+>(branding: T): T {
+  const extras = branding.brandExtras
+    ? Object.fromEntries(Object.entries(branding.brandExtras).filter(([k]) => !(LOOK_EXTRAS as readonly string[]).includes(k)))
+    : branding.brandExtras;
+  const celebration = (extras as BrandExtras | null | undefined)?.celebration;
+  return {
+    ...branding,
+    brandPrimaryColor: null,
+    brandSecondaryColor: null,
+    brandBackgroundHue: null,
+    brandBackgroundStrength: null,
+    brandHeadingFont: null,
+    exercisePageTheme: null,
+    brandExtras: extras && celebration ? { ...extras, celebration: { ...celebration, color: null } } : extras,
+  };
+}

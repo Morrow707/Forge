@@ -12,12 +12,13 @@ import { ColorField } from "@/components/color-field";
 import { BrandedMark } from "@/components/branded-mark";
 import { ForgeMark } from "@/components/forge-mark";
 import { ExercisePageThemeDialog } from "@/components/exercise-page-theme-dialog";
+import { ImageCropDialog } from "@/components/image-crop-dialog";
 import { BrandExtrasEditor } from "@/components/brand-extras-editor";
 import { ProgramExperienceEditor } from "@/components/program-experience-editor";
 import { apiRequest, getJson, resolveApiUrl, ApiError } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { computeBrandingStyle, ensureBrandFontLoaded, type EffectiveBranding } from "@/lib/branding-style";
-import { extractDominantColors, extractColorsFromFile } from "@/lib/image-colors";
+import { extractDominantColors, extractColorsFromFile, suggestBrandPair } from "@/lib/image-colors";
 import { contrastForegroundHsl, meetsWcagAA } from "@/lib/color";
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
 import { BRAND_HEADING_FONTS, BRAND_BACKGROUND_STRENGTHS } from "@shared/branding-options";
@@ -80,6 +81,11 @@ export default function CoachBranding() {
   const [senderName, setSenderName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [swatches, setSwatches] = useState<string[]>([]);
+  // A picked logo waits here, in the crop dialog, until the coach presses Save (2026-11-20).
+  const [pendingLogo, setPendingLogo] = useState<File | null>(null);
+  // "Use these" fills both colors from the logo's suggestion; the login section's Save then saves
+  // the secondary with the primary, so one Save is enough (2026-11-20).
+  const [pairApplied, setPairApplied] = useState(false);
   const [palette, setPalette] = useState<string[]>([]);
   const [themeOpen, setThemeOpen] = useState(false);
   const seeded = useRef(false);
@@ -168,6 +174,7 @@ export default function CoachBranding() {
       return res.json() as Promise<{ logoUrl?: string; brandLogoUrl?: string }>;
     },
     onSuccess: (result) => {
+      setPendingLogo(null);
       setLogoUrl(result.logoUrl ?? result.brandLogoUrl ?? null);
       invalidate();
       toast.success("Logo updated");
@@ -246,6 +253,27 @@ export default function CoachBranding() {
             />
           ))}
         </div>
+      </div>
+    );
+  }
+  function SuggestedPair({ colors, withSecondary, onUse }: { colors: string[]; withSecondary: boolean; onUse: (pair: { primary: string; secondary: string | null }) => void }) {
+    const pair = suggestBrandPair(colors);
+    if (!pair) return null;
+    const secondary = withSecondary ? pair.secondary : null;
+    const chip = (hex: string, role: string) => (
+      <span className="flex items-center gap-1.5 text-xs">
+        <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: hex }} />
+        {role} <span className="font-mono uppercase text-muted-foreground">{hex}</span>
+      </span>
+    );
+    return (
+      <div className="flex flex-wrap items-center gap-3 rounded-md border border-border px-3 py-2">
+        <span className="text-[11px] text-muted-foreground">Suggested from your logo</span>
+        {chip(pair.primary, "Primary")}
+        {secondary && chip(secondary, "Secondary")}
+        <Button type="button" variant="outline" size="sm" onClick={() => onUse({ primary: pair.primary, secondary })}>
+          Use {secondary ? "these" : "this"}
+        </Button>
       </div>
     );
   }
@@ -348,7 +376,14 @@ export default function CoachBranding() {
                 </div>
               </div>
             }
-            onSave={() => save.mutate({ teamName: teamName.trim() || null, primaryColor: primaryColor || null })}
+            onSave={() => {
+              save.mutate({
+                teamName: teamName.trim() || null,
+                primaryColor: primaryColor || null,
+                ...(pairApplied ? { secondaryColor: secondaryColor || null } : {}),
+              });
+              setPairApplied(false);
+            }}
           >
             <div className="space-y-1.5">
               <Label htmlFor="brand-name">Program name</Label>
@@ -362,7 +397,7 @@ export default function CoachBranding() {
                   {logoUrl ? <img src={resolveApiUrl(logoUrl)} alt="Current logo" className="h-full w-full object-contain" /> : <ImagePlus className="h-6 w-6 text-muted-foreground" />}
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <input ref={logoInput} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo.mutate(f); e.target.value = ""; }} />
+                  <input ref={logoInput} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setPendingLogo(f); e.target.value = ""; }} />
                   <Button type="button" variant="outline" size="sm" onClick={() => logoInput.current?.click()} disabled={!canEdit || uploadLogo.isPending}>
                     {uploadLogo.isPending ? "Uploading…" : logoUrl ? "Replace" : "Upload"}
                   </Button>
@@ -378,6 +413,17 @@ export default function CoachBranding() {
             <ColorField label="Primary color" value={primaryColor} onChange={setPrimaryColor} />
             {!primaryOk && <p className="text-xs text-amber-500">Too light or dark to read as button text. The save will still go through, but pick a stronger shade.</p>}
             <Swatches colors={swatches} onPick={setPrimaryColor} label="From your logo, tap to use" />
+            <SuggestedPair
+              colors={swatches}
+              withSecondary={colorsUnlocked}
+              onUse={(pair) => {
+                setPrimaryColor(pair.primary);
+                if (colorsUnlocked && pair.secondary) {
+                  setSecondaryColor(pair.secondary);
+                  setPairApplied(true);
+                }
+              }}
+            />
             <Swatches colors={palette} onPick={setPrimaryColor} label="Your saved palette" />
             <div className="flex flex-wrap items-center gap-2">
               <input ref={imageInput} type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; const colors = await extractColorsFromFile(f); if (colors.length === 0) { toast.error("Couldn't read colors from that image"); return; } savePalette([...new Set([...colors, ...palette])].slice(0, 12)); toast.success(`${colors.length} colors added to your palette`); }} />
@@ -633,6 +679,15 @@ export default function CoachBranding() {
             </CardContent>
           </Card>
           <ExercisePageThemeDialog open={themeOpen} onOpenChange={setThemeOpen} />
+          <ImageCropDialog
+            file={pendingLogo}
+            kind="logo"
+            programName={teamName || null}
+            primaryColor={primaryColor || null}
+            saving={uploadLogo.isPending}
+            onCancel={() => setPendingLogo(null)}
+            onSave={(cropped) => uploadLogo.mutate(cropped)}
+          />
         </>
       )}
     </AppShell>

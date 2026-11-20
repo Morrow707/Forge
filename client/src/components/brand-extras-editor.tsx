@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ApiError, apiRequest, getJson, resolveApiUrl } from "@/lib/queryClient";
 import { ArrowDown, ArrowUp, ImagePlus, Trash2 } from "lucide-react";
+import { ImageCropDialog } from "@/components/image-crop-dialog";
 import {
   BRAND_APP_ICONS,
   BRAND_BODY_FONTS,
@@ -35,11 +36,14 @@ const blank = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null
  *  the server and named in the toast. */
 export function BrandExtrasEditor({ canEdit }: { canEdit: boolean }) {
   const qc = useQueryClient();
-  const { data } = useQuery<{ brandExtras?: BrandExtras | null }>({
+  const { data } = useQuery<{ brandExtras?: BrandExtras | null; brandTeamName?: string | null; brandPrimaryColor?: string | null }>({
     queryKey: ["/api/coach/branding"],
     queryFn: () => getJson("/api/coach/branding"),
   });
   const saved = data?.brandExtras ?? null;
+  // A picked wordmark or background waits in the crop dialog until the coach presses Save.
+  const [pendingImage, setPendingImage] = useState<{ kind: "wordmark" | "background"; file: File } | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const [terms, setTerms] = useState<Terms>({});
   const [greeting, setGreeting] = useState("");
@@ -123,13 +127,17 @@ export function BrandExtrasEditor({ canEdit }: { canEdit: boolean }) {
   async function upload(kind: "wordmark" | "background", file: File) {
     const form = new FormData();
     form.append("image", file);
+    setUploading(true);
     try {
       await apiRequest("POST", `/api/coach/branding/${kind}`, form);
+      setPendingImage(null);
       qc.invalidateQueries({ queryKey: ["/api/coach/branding"] });
       qc.invalidateQueries({ queryKey: ["/api/branding/me"] });
       toast.success(kind === "wordmark" ? "Wordmark uploaded" : "Background uploaded");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
     }
   }
   async function removeImage(field: "wordmarkUrl" | "backgroundImageUrl") {
@@ -260,7 +268,7 @@ export function BrandExtrasEditor({ canEdit }: { canEdit: boolean }) {
                   <Button type="button" variant="outline" size="sm" disabled={!canEdit} asChild>
                     <label className="cursor-pointer">
                       <ImagePlus className="h-4 w-4" /> Upload
-                      <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => e.target.files?.[0] && upload(kind, e.target.files[0])} />
+                      <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setPendingImage({ kind, file: f }); }} />
                     </label>
                   </Button>
                   {saved?.[field] && (
@@ -360,6 +368,15 @@ export function BrandExtrasEditor({ canEdit }: { canEdit: boolean }) {
             {save.isPending ? "Saving…" : "Save all"}
           </Button>
         )}
+        <ImageCropDialog
+          file={pendingImage?.file ?? null}
+          kind={pendingImage?.kind ?? "wordmark"}
+          programName={data?.brandTeamName ?? null}
+          primaryColor={data?.brandPrimaryColor ?? null}
+          saving={uploading}
+          onCancel={() => setPendingImage(null)}
+          onSave={(cropped) => pendingImage && void upload(pendingImage.kind, cropped)}
+        />
       </CardContent>
     </Card>
   );

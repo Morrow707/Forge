@@ -20,56 +20,14 @@ import { COACH_FEATURE_FIELDS, type CoachFeature } from "@shared/team-features";
 import { contrastForegroundHsl, meetsWcagAA, nearestAccessibleColor } from "@/lib/color";
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
 import { ColorField } from "@/components/color-field";
+import { ImageCropDialog } from "@/components/image-crop-dialog";
+import { extractDominantColors, suggestBrandPair } from "@/lib/image-colors";
 import { cn } from "@/lib/utils";
 
 const ORG_QUERY_KEY = ["/api/coach/branding"];
 
-// Samples the uploaded logo's actual pixels for one-click "exact color"
-// swatches -- downscales to a small canvas first since only the color mix
-// matters, not per-pixel precision, then buckets by a coarse quantization
-// so near-identical anti-aliased pixels collapse into one swatch instead of
-// dozens. Filters out near-white/near-black/near-transparent, which are
-// almost always background fill on a logo file, not a color anyone wants a
-// one-click swatch for.
-function extractDominantColors(img: HTMLImageElement, max = 5): string[] {
-  const canvas = document.createElement("canvas");
-  const size = 48;
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return [];
-  ctx.drawImage(img, 0, 0, size, size);
-  let data: Uint8ClampedArray;
-  try {
-    data = ctx.getImageData(0, 0, size, size).data;
-  } catch {
-    return []; // tainted canvas (shouldn't happen for a same-origin upload, but never crash the dialog over it)
-  }
-  const buckets = new Map<string, { count: number; r: number; g: number; b: number }>();
-  const QUANT = 24; // bucket width -- collapses anti-aliasing noise into one swatch per real color
-  for (let i = 0; i < data.length; i += 4) {
-    const [r, g, b, a] = [data[i], data[i + 1], data[i + 2], data[i + 3]];
-    if (a < 200) continue; // mostly-transparent pixel
-    const maxc = Math.max(r, g, b);
-    const minc = Math.min(r, g, b);
-    if (maxc > 240 && minc > 225) continue; // near-white
-    if (maxc < 20) continue; // near-black
-    const key = `${Math.round(r / QUANT)}-${Math.round(g / QUANT)}-${Math.round(b / QUANT)}`;
-    const bucket = buckets.get(key) ?? { count: 0, r: 0, g: 0, b: 0 };
-    bucket.count += 1;
-    bucket.r += r;
-    bucket.g += g;
-    bucket.b += b;
-    buckets.set(key, bucket);
-  }
-  return [...buckets.values()]
-    .sort((a, b) => b.count - a.count)
-    .slice(0, max)
-    .map(({ count, r, g, b }) => {
-      const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n / count)));
-      return `#${[clamp(r), clamp(g), clamp(b)].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
-    });
-}
+// The logo's colors come from the one shared reader (lib/image-colors.ts), the same one the
+// Branding page uses, so a team's swatches and the program's are worked out the same way.
 
 // Only the visible swatch's fallback -- shown in the header-preview mockup
 // below when nothing's set yet, since the preview always needs a value to
@@ -149,6 +107,8 @@ export function TeamBrandingDialog({
 
   const [teamName, setTeamName] = useState("");
   const [primaryColor, setPrimaryColor] = useState("");
+  // A picked logo waits in the crop dialog until Save (2026-11-20).
+  const [pendingLogo, setPendingLogo] = useState<File | null>(null);
   const [secondaryColor, setSecondaryColor] = useState("");
   const [motto, setMotto] = useState("");
   const [mission, setMission] = useState("");
@@ -250,6 +210,7 @@ export function TeamBrandingDialog({
       return res.json() as Promise<{ logoUrl?: string; brandLogoUrl?: string }>;
     },
     onSuccess: (result) => {
+      setPendingLogo(null);
       setLogoUrl(result.logoUrl ?? result.brandLogoUrl ?? null);
       invalidateBranding();
       toast.success("Logo updated");
@@ -311,7 +272,8 @@ export function TeamBrandingDialog({
       toast.error("Use a PNG, JPEG, or WebP image");
       return;
     }
-    uploadLogoMutation.mutate(file);
+    // Cropped and previewed first; nothing uploads until Save (2026-11-20).
+    setPendingLogo(file);
   }
 
   // contrastForegroundHsl returns an "H S% L%" triplet (for the CSS custom
@@ -434,6 +396,36 @@ export function TeamBrandingDialog({
                       />
                     ))}
                   </div>
+                  {(() => {
+                    const pair = suggestBrandPair(logoSwatches);
+                    if (!pair) return null;
+                    return (
+                      <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
+                        <span className="text-muted-foreground">Suggested:</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: pair.primary }} />
+                          Primary
+                        </span>
+                        {pair.secondary && (
+                          <span className="flex items-center gap-1.5">
+                            <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: pair.secondary }} />
+                            Secondary
+                          </span>
+                        )}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setPrimaryColor(pair.primary);
+                            if (pair.secondary) setSecondaryColor(pair.secondary);
+                          }}
+                        >
+                          Use {pair.secondary ? "these" : "this"}
+                        </Button>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -605,6 +597,15 @@ export function TeamBrandingDialog({
             {saveMutation.isPending ? "Saving…" : "Save Branding"}
           </Button>
         </DialogFooter>
+        <ImageCropDialog
+          file={pendingLogo}
+          kind="logo"
+          programName={isTeamScope ? scope.teamName : teamName || null}
+          primaryColor={primaryColor || null}
+          saving={uploadLogoMutation.isPending}
+          onCancel={() => setPendingLogo(null)}
+          onSave={(cropped) => uploadLogoMutation.mutate(cropped)}
+        />
       </DialogContent>
     </Dialog>
   );
