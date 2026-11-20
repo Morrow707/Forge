@@ -171,11 +171,13 @@ export function computeBrandingStyle(
 
 /** Loads the Google Fonts stylesheet a brand heading font needs, once, and only for a face the
  *  app does not already carry. Call it from wherever a branding record is applied. */
-export function ensureBrandFontLoaded(fontId: string | null | undefined): void {
+export function ensureBrandFontLoaded(fontId: string | null | undefined, kind: "heading" | "body" = "heading"): void {
   if (!fontId || typeof document === "undefined") return;
-  const font = [...BRAND_HEADING_FONTS, ...BRAND_BODY_FONTS].find((f) => f.id === fontId);
+  // Heading and body lists are looked up apart: Roboto, Lato and others are on both at different
+  // weights, and a body font loaded with only its heading weights draws every paragraph bold.
+  const font = (kind === "heading" ? BRAND_HEADING_FONTS : BRAND_BODY_FONTS).find((f) => f.id === fontId);
   if (!font?.googleFontsUrl) return;
-  const id = `brand-font-${font.id}`;
+  const id = `brand-font-${kind}-${font.id}`;
   if (document.getElementById(id)) return;
   const link = document.createElement("link");
   link.id = id;

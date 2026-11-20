@@ -12,6 +12,7 @@
  * login page, a sign-up page or the public team page may see.
  */
 import type { TrophyCategory, TrophyTier } from "./achievements";
+import { BODY_FONTS, type BrandFont } from "./brand-font-catalog";
 
 /** The words a program can swap for Forge's own (singular and plural, exactly as typed). */
 export const BRAND_TERM_KEYS = ["program", "workout", "set", "coach", "athlete"] as const;
@@ -24,15 +25,9 @@ export const FORGE_TERMS: Record<BrandTermKey, { one: string; many: string }> = 
   athlete: { one: "Athlete", many: "Athletes" },
 };
 
-export const BRAND_BODY_FONTS = [
-  { id: "inter", label: "Inter (Forge)", stack: '"Inter", ui-sans-serif, system-ui, sans-serif', googleFontsUrl: null },
-  { id: "roboto", label: "Roboto", stack: '"Roboto", "Inter", ui-sans-serif, system-ui, sans-serif', googleFontsUrl: "https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" },
-  { id: "lato", label: "Lato", stack: '"Lato", "Inter", ui-sans-serif, system-ui, sans-serif', googleFontsUrl: "https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" },
-  { id: "open-sans", label: "Open Sans", stack: '"Open Sans", "Inter", ui-sans-serif, system-ui, sans-serif', googleFontsUrl: "https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" },
-  { id: "nunito", label: "Nunito (rounded)", stack: '"Nunito", "Inter", ui-sans-serif, system-ui, sans-serif', googleFontsUrl: "https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" },
-  { id: "source-serif", label: "Source Serif (classic)", stack: '"Source Serif 4", Georgia, serif', googleFontsUrl: "https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&display=swap" },
-] as const;
-export type BrandBodyFontId = (typeof BRAND_BODY_FONTS)[number]["id"];
+/** Body text fonts; the list is brand-font-catalog.ts. */
+export const BRAND_BODY_FONTS: BrandFont[] = BODY_FONTS;
+export type BrandBodyFontId = string;
 
 /** Corner rounding, as the app's --radius. */
 export const BRAND_CORNERS = { square: "0.25rem", standard: "0.75rem", round: "1.25rem" } as const;

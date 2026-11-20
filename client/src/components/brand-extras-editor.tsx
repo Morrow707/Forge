@@ -11,6 +11,7 @@ import { ApiError, apiRequest, getJson, resolveApiUrl } from "@/lib/queryClient"
 import { ArrowDown, ArrowUp, ImagePlus, Trash2 } from "lucide-react";
 import { ImageCropDialog } from "@/components/image-crop-dialog";
 import { ColorField } from "@/components/color-field";
+import { FontPicker } from "@/components/font-picker";
 import {
   BRAND_APP_ICONS,
   BRAND_BODY_FONTS,
@@ -241,14 +242,16 @@ export function BrandExtrasEditor({ canEdit }: { canEdit: boolean }) {
                 <option value="round">Round</option>
               </select>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="bx-font">Body text font</Label>
-              <select id="bx-font" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={bodyFont} disabled={!canEdit} onChange={(e) => setBodyFont(e.target.value)}>
-                <option value="">Inter (Forge's)</option>
-                {BRAND_BODY_FONTS.filter((f) => f.id !== "inter").map((f) => (
-                  <option key={f.id} value={f.id}>{f.label}</option>
-                ))}
-              </select>
+            <div className="space-y-1.5 sm:col-span-full">
+              <Label>Body text font</Label>
+              <FontPicker
+                fonts={BRAND_BODY_FONTS}
+                kind="body"
+                value={bodyFont || "inter"}
+                onChange={(id) => setBodyFont(id === "inter" ? "" : id)}
+                sample="The quick athlete jumps"
+                disabled={!canEdit}
+              />
             </div>
             <label className="flex items-center gap-2 pt-7 text-sm">
               <Checkbox checked={pillButtons} disabled={!canEdit} onCheckedChange={(v) => setPillButtons(v === true)} />

@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Pipette } from "lucide-react";
+import { ChevronDown, Pipette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ImageColorPicker, type ColorSource } from "@/components/image-color-picker";
 import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import type { EffectiveBranding } from "@/lib/branding-style";
-import { normalizeHex, readRecentColors, rememberColor } from "@/lib/color-input";
+import { TEAM_COLORS, normalizeHex, readRecentColors, rememberColor, shadesOf } from "@/lib/color-input";
 import { cn } from "@/lib/utils";
 
 /** EVERY COLOR IN THE APP IS SET HERE (Scott, 2026-11-20: "wherever there is a place to add color
@@ -28,6 +28,7 @@ export function ColorField({
   extraSources,
   hideLabel = false,
   disabled = false,
+  suggested = [],
 }: {
   label: string;
   value: string;
@@ -39,11 +40,14 @@ export function ColorField({
   extraSources?: () => ColorSource[];
   hideLabel?: boolean;
   disabled?: boolean;
+  /** Named rows of colors to offer, e.g. "From your logo" and "Your saved palette". */
+  suggested?: { label: string; colors: string[] }[];
 }) {
   const [draft, setDraft] = useState(value);
   const [picking, setPicking] = useState(false);
   const [recent, setRecent] = useState<string[]>([]);
   const [sources, setSources] = useState<ColorSource[]>([]);
+  const [more, setMore] = useState(false);
   useEffect(() => setDraft(value), [value]);
   useEffect(() => setRecent(readRecentColors()), []);
 
@@ -84,9 +88,11 @@ export function ColorField({
     setPicking(true);
   }
 
+  // A color already shown in a named row below is not shown again here.
+  const inRows = new Set(suggested.flatMap((row) => row.colors.map((c) => normalizeHex(c))));
   const quick = [branding?.brandPrimaryColor, branding?.brandSecondaryColor, ...recent]
     .map((c) => (c ? normalizeHex(c) : null))
-    .filter((c, i, all): c is string => !!c && all.indexOf(c) === i);
+    .filter((c, i, all): c is string => !!c && all.indexOf(c) === i && !inRows.has(c));
 
   return (
     <div className="space-y-1.5">
@@ -162,7 +168,77 @@ export function ColorField({
           )}
         </div>
       )}
+      {suggested
+        .map((row) => ({ ...row, colors: row.colors.map((c) => normalizeHex(c)).filter((c): c is string => !!c) }))
+        .filter((row) => row.colors.length > 0)
+        .map((row) => (
+          <div key={row.label} className="space-y-1">
+            <p className="text-[11px] text-muted-foreground">{row.label}</p>
+            <SwatchRow colors={row.colors.map((hex) => ({ hex, name: hex }))} current={current} disabled={disabled} onPick={choose} />
+          </div>
+        ))}
+      <button
+        type="button"
+        onClick={() => setMore((m) => !m)}
+        aria-expanded={more}
+        data-testid="color-field-more"
+        className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+      >
+        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", more && "rotate-180")} />
+        {more ? "Fewer colors" : `More colors (${TEAM_COLORS.length} team colors and shades)`}
+      </button>
+      {more && (
+        <div className="space-y-2 rounded-md border border-border p-2.5" data-testid="color-field-more-panel">
+          <div className="space-y-1">
+            <p className="text-[11px] text-muted-foreground">Team colors</p>
+            <SwatchRow colors={TEAM_COLORS} current={current} disabled={disabled} onPick={choose} />
+          </div>
+          {current && (
+            <div className="space-y-1">
+              <p className="text-[11px] text-muted-foreground">Lighter and darker {current}</p>
+              <SwatchRow colors={shadesOf(current).map((hex) => ({ hex, name: hex }))} current={current} disabled={disabled} onPick={choose} />
+            </div>
+          )}
+        </div>
+      )}
       <ImageColorPicker open={picking} onOpenChange={setPicking} sources={sources} label={label} onPick={choose} />
+    </div>
+  );
+}
+
+/** A row of round swatches; the color in use is ringed. Each says its name on hover and to a
+ *  screen reader. */
+function SwatchRow({
+  colors,
+  current,
+  disabled,
+  onPick,
+}: {
+  colors: readonly { hex: string; name: string }[];
+  current: string | null;
+  disabled: boolean;
+  onPick: (hex: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {colors.map((c) => {
+        const hex = normalizeHex(c.hex) ?? c.hex;
+        return (
+          <button
+            key={hex}
+            type="button"
+            disabled={disabled}
+            aria-label={c.name === hex ? `Use ${hex}` : `Use ${c.name}, ${hex}`}
+            title={c.name === hex ? hex : `${c.name} ${hex}`}
+            onClick={() => onPick(hex)}
+            className={cn(
+              "h-6 w-6 rounded-full border shadow-sm transition-transform hover:scale-110",
+              hex === current ? "border-foreground ring-2 ring-foreground/30" : "border-border",
+            )}
+            style={{ backgroundColor: hex }}
+          />
+        );
+      })}
     </div>
   );
 }

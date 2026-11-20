@@ -98,3 +98,31 @@ describe("recent colors", () => {
     expect(withRecent(["#111111", "#222222"], "#222222")).toEqual(["#222222", "#111111"]);
   });
 });
+
+describe("more colors", () => {
+  it("offers dozens of named team colors, every one a real color code and named once", async () => {
+    const { TEAM_COLORS } = await import("./color-input");
+    expect(TEAM_COLORS.length).toBeGreaterThanOrEqual(40);
+    TEAM_COLORS.forEach((c) => expect(normalizeHex(c.hex), c.name).toBe(c.hex));
+    expect(new Set(TEAM_COLORS.map((c) => c.name)).size).toBe(TEAM_COLORS.length);
+  });
+
+  it("turns one color into a row of lighter and darker shades of the same hue", async () => {
+    const { shadesOf, hueOf } = await import("./color-input");
+    const navy = "#0B2A5B";
+    const shades = shadesOf(navy);
+    expect(shades.length).toBeGreaterThanOrEqual(6);
+    shades.forEach((s) => expect(Math.abs(hueOf(s) - hueOf(navy))).toBeLessThanOrEqual(2));
+    // Lightest first: each shade is darker than the one before.
+    const lum = (h: string) => [1, 3, 5].reduce((n, i) => n + Number.parseInt(h.slice(i, i + 2), 16), 0);
+    shades.slice(1).forEach((s, i) => expect(lum(s)).toBeLessThan(lum(shades[i])));
+  });
+
+  it("reads the hue of a color for the background tint's Match buttons", async () => {
+    const { hueOf } = await import("./color-input");
+    expect(hueOf("#FF0000")).toBe(0);
+    expect(hueOf("#00FF00")).toBe(120);
+    expect(hueOf("#0000FF")).toBe(240);
+    expect(hueOf("#808080")).toBe(0);
+  });
+});

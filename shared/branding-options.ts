@@ -4,24 +4,14 @@
  *  Added 2026-10-03 when Scott asked for the app to be "fully customizable, for example if cal
  *  berkley used us, can they change everything to blue and gold? every single thing". */
 
-export type BrandHeadingFontId = "forge" | "oswald" | "bebas" | "montserrat" | "inter";
+import { HEADING_FONTS, type BrandFont } from "./brand-font-catalog";
 
-export const BRAND_HEADING_FONTS: {
-  id: BrandHeadingFontId;
-  label: string;
-  /** The CSS font-family stack set on --font-display. */
-  stack: string;
-  /** Google Fonts stylesheet to load, or null for a face the app already has. */
-  googleFontsUrl: string | null;
-}[] = [
-  { id: "forge", label: "Forge (condensed)", stack: '"Barlow Condensed", "Inter", ui-sans-serif, system-ui, sans-serif', googleFontsUrl: null },
-  { id: "oswald", label: "Oswald", stack: '"Oswald", "Barlow Condensed", ui-sans-serif, system-ui, sans-serif', googleFontsUrl: "https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&display=swap" },
-  { id: "bebas", label: "Bebas Neue", stack: '"Bebas Neue", "Barlow Condensed", ui-sans-serif, system-ui, sans-serif', googleFontsUrl: "https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" },
-  { id: "montserrat", label: "Montserrat", stack: '"Montserrat", "Inter", ui-sans-serif, system-ui, sans-serif', googleFontsUrl: "https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&display=swap" },
-  { id: "inter", label: "Inter (clean)", stack: '"Inter", ui-sans-serif, system-ui, sans-serif', googleFontsUrl: null },
-];
+/** A heading font's id, as stored on users.brandHeadingFont. The list is brand-font-catalog.ts. */
+export type BrandHeadingFontId = string;
 
-export const BRAND_HEADING_FONT_IDS = BRAND_HEADING_FONTS.map((f) => f.id) as [BrandHeadingFontId, ...BrandHeadingFontId[]];
+export const BRAND_HEADING_FONTS: BrandFont[] = HEADING_FONTS;
+
+export const BRAND_HEADING_FONT_IDS = BRAND_HEADING_FONTS.map((f) => f.id) as [string, ...string[]];
 
 /** Background tint strength: 1 is the subtle tint Forge ships with, 3 is unmistakably the
  *  team's color. Multiplies the saturation of every neutral surface token; lightness never

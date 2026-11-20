@@ -65,3 +65,98 @@ export function rememberColor(hex: string): void {
     // Private browsing or storage blocked: the field still works, it just remembers nothing.
   }
 }
+
+/** Ready-made team colors (2026-11-20, Scott: "more colors for the primary and secondary"). Plain
+ *  color names an athletic program uses, never a school's name. Grouped so the grid reads blues,
+ *  greens, golds, reds, purples, then neutrals. */
+export const TEAM_COLORS: readonly { name: string; hex: string }[] = [
+  { name: "Navy", hex: "#0B2A5B" },
+  { name: "Midnight", hex: "#14213D" },
+  { name: "Royal", hex: "#1D4ED8" },
+  { name: "Cobalt", hex: "#0047AB" },
+  { name: "Columbia blue", hex: "#9BCBEB" },
+  { name: "Powder blue", hex: "#B0D0E8" },
+  { name: "Sky", hex: "#38BDF8" },
+  { name: "Carolina blue", hex: "#4B9CD3" },
+  { name: "Teal", hex: "#00827F" },
+  { name: "Aqua", hex: "#00B5AD" },
+  { name: "Kelly green", hex: "#138A36" },
+  { name: "Forest", hex: "#1B4D3E" },
+  { name: "Hunter", hex: "#355E3B" },
+  { name: "Lime", hex: "#84CC16" },
+  { name: "Olive", hex: "#5B6B2F" },
+  { name: "Athletic gold", hex: "#FFB81C" },
+  { name: "Vegas gold", hex: "#C5B358" },
+  { name: "Old gold", hex: "#CFB87C" },
+  { name: "Yellow", hex: "#FFD100" },
+  { name: "Orange", hex: "#FF6A13" },
+  { name: "Burnt orange", hex: "#BF5700" },
+  { name: "Copper", hex: "#B87333" },
+  { name: "Scarlet", hex: "#BB0000" },
+  { name: "Red", hex: "#C8102E" },
+  { name: "Cardinal", hex: "#8C1515" },
+  { name: "Crimson", hex: "#9E1B32" },
+  { name: "Maroon", hex: "#6B1F2A" },
+  { name: "Pink", hex: "#EC4899" },
+  { name: "Magenta", hex: "#C2185B" },
+  { name: "Purple", hex: "#4B2E83" },
+  { name: "Violet", hex: "#7C3AED" },
+  { name: "Lavender", hex: "#B9A3E3" },
+  { name: "Brown", hex: "#4E3629" },
+  { name: "Tan", hex: "#C8A97E" },
+  { name: "Cream", hex: "#F3E5C0" },
+  { name: "Black", hex: "#111111" },
+  { name: "Charcoal", hex: "#36454F" },
+  { name: "Steel", hex: "#71797E" },
+  { name: "Silver", hex: "#A2AAAD" },
+  { name: "White", hex: "#FFFFFF" },
+];
+
+const PERCENT = 100;
+const HUE_DEGREES = 360;
+const HUE_SEXTANT = 60;
+const HALF = 2;
+// Where a shade row's lightness steps sit, light to dark (percent).
+const SHADE_LIGHTNESS = [92, 80, 66, 52, 40, 28, 18] as const;
+
+function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  const n = normalizeHex(hex) ?? "#000000";
+  const [r, g, b] = [n.slice(1, 3), n.slice(3, 5), n.slice(5, 7)].map((c) => Number.parseInt(c, HEX_BASE) / BYTE);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / HALF;
+  const d = max - min;
+  if (d === 0) return { h: 0, s: 0, l };
+  const s = d / (1 - Math.abs(HALF * l - 1));
+  const h =
+    max === r ? HUE_SEXTANT * (((g - b) / d) % (HUE_DEGREES / HUE_SEXTANT)) : max === g ? HUE_SEXTANT * ((b - r) / d + HALF) : HUE_SEXTANT * ((r - g) / d + HALF * HALF);
+  return { h: (h + HUE_DEGREES) % HUE_DEGREES, s, l };
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const c = (1 - Math.abs(HALF * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / HUE_SEXTANT) % HALF) - 1));
+  const m = l - c / HALF;
+  const sextant = Math.floor(h / HUE_SEXTANT) % (HUE_DEGREES / HUE_SEXTANT);
+  const [r, g, b] = [
+    [c, x, 0],
+    [x, c, 0],
+    [0, c, x],
+    [0, x, c],
+    [x, 0, c],
+    [c, 0, x],
+  ][sextant];
+  return hexFromRgb((r + m) * BYTE, (g + m) * BYTE, (b + m) * BYTE);
+}
+
+/** Lighter and darker versions of a color, lightest first, keeping its hue and saturation: one
+ *  team color becomes a whole row to pick from. */
+export function shadesOf(hex: string): string[] {
+  const { h, s } = hexToHsl(hex);
+  return SHADE_LIGHTNESS.map((l) => hslToHex(h, s, l / PERCENT)).filter((c, i, all) => all.indexOf(c) === i);
+}
+
+/** A color's hue, 0-359, for "match primary" on the background tint. */
+export function hueOf(hex: string): number {
+  return Math.round(hexToHsl(hex).h) % HUE_DEGREES;
+}

@@ -176,7 +176,7 @@ export default function GuardianDashboardPage() {
   });
   const brandingStyle = computeBrandingStyle(branding ?? null);
   useBrandVarsOnRoot(brandingStyle);
-  useEffect(() => ensureBrandFontLoaded(branding?.brandExtras?.bodyFont), [branding?.brandExtras?.bodyFont]);
+  useEffect(() => ensureBrandFontLoaded(branding?.brandExtras?.bodyFont, "body"), [branding?.brandExtras?.bodyFont]);
   const programWordmark = branding?.brandExtras?.wordmarkUrl ?? null;
   const programLogo = branding?.brandLogoUrl ?? null;
   const programName = branding?.brandTeamName ?? null;

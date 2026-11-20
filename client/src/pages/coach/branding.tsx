@@ -9,6 +9,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReadFailed } from "@/components/read-failed";
 import { ColorField } from "@/components/color-field";
+import { FontPicker } from "@/components/font-picker";
+import { hueOf } from "@/lib/color-input";
 import { BrandedMark } from "@/components/branded-mark";
 import { ForgeMark } from "@/components/forge-mark";
 import { ExercisePageThemeDialog } from "@/components/exercise-page-theme-dialog";
@@ -40,14 +42,25 @@ const ORG_QUERY_KEY = ["/api/coach/branding"];
 const BACKGROUND_HUE_PRESETS = [
   { label: "Ink", hue: 222 },
   { label: "Navy", hue: 215 },
+  { label: "Royal", hue: 225 },
+  { label: "Sky", hue: 200 },
+  { label: "Teal", hue: 178 },
   { label: "Forest", hue: 150 },
-  { label: "Wine", hue: 350 },
+  { label: "Olive", hue: 80 },
+  { label: "Gold", hue: 45 },
+  { label: "Rust", hue: 20 },
+  { label: "Crimson", hue: 355 },
+  { label: "Wine", hue: 340 },
   { label: "Plum", hue: 280 },
   // A preset is a hue, and hue 0 is red, so "Charcoal" used to tint the app red. It is no color at
   // all instead: strength 0, every surface a neutral grey. Its hue is a cool one so that tapping a
   // strength afterwards gives a blue-grey, never pink.
   { label: "Charcoal", hue: 220, strength: 0 },
 ] as { label: string; hue: number; strength?: number }[];
+
+/** The background hue slider's track: every hue, left to right. */
+const HUE_RAINBOW = `linear-gradient(to right, ${[0, 60, 120, 180, 240, 300, 360].map((h) => `hsl(${h} 70% 50%)`).join(", ")})`;
+const STRENGTH_LABEL: Record<number, string> = { 1: "Subtle", 2: "Clear", 3: "Bold" };
 
 type OrgBranding = EffectiveBranding & { features: Record<CoachFeature, boolean> };
 type CoachEntitlements = { hasCustomColors?: boolean; hasTeamIdentity?: boolean; coachesCorner?: unknown };
@@ -57,26 +70,6 @@ type CoachEntitlements = { hasCustomColors?: boolean; hasTeamIdentity?: boolean;
 // color, tint or font was picked: the page jumped back toward the top (Scott: "when im on 2, and i
 // click on a color it brings me to the top") and a text box lost its cursor after every letter.
 // branding-sections-stay-mounted.test.ts holds the rule.
-function Swatches({ colors, onPick, label }: { colors: string[]; onPick: (hex: string) => void; label: string }) {
-  if (colors.length === 0) return null;
-  return (
-    <div className="space-y-1">
-      <p className="text-[11px] text-muted-foreground">{label}</p>
-      <div className="flex flex-wrap gap-1.5">
-        {colors.map((hex) => (
-          <button
-            key={hex}
-            type="button"
-            title={hex}
-            onClick={() => onPick(hex)}
-            className="h-7 w-7 rounded-full border-2 border-background shadow-[0_0_0_1px_hsl(var(--border))] transition-transform hover:scale-110"
-            style={{ backgroundColor: hex }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
 function SuggestedPair({ colors, withSecondary, onUse }: { colors: string[]; withSecondary: boolean; onUse: (pair: { primary: string; secondary: string | null }) => void }) {
   const pair = suggestBrandPair(colors);
   if (!pair) return null;
@@ -143,7 +136,8 @@ function Section({
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className="min-w-0">
+        {/* The preview stays on screen while the controls beside it scroll, so every pick shows. */}
+        <div className="min-w-0 lg:sticky lg:top-[calc(var(--app-shell-sticky-height,5rem)+1rem)] lg:self-start">
           <p className="label-xs mb-2">Preview</p>
           <div className="brand-scope overflow-hidden rounded-lg border border-border bg-background" style={draftStyle}>
             {preview}
@@ -265,7 +259,7 @@ export default function CoachBranding() {
   }, [logoUrl]);
   // Every heading font is loaded here, not just the chosen one: each choice is drawn in its own
   // face, and an unloaded one falls back to Barlow or Inter and looks like another button.
-  useEffect(() => BRAND_HEADING_FONTS.forEach((f) => ensureBrandFontLoaded(f.id)), []);
+  useEffect(() => ensureBrandFontLoaded(headingFont), [headingFont]);
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ORG_QUERY_KEY });
@@ -436,9 +430,16 @@ export default function CoachBranding() {
               </div>
               <p className="text-xs text-muted-foreground">PNG with a transparent background works best. Also becomes the home-screen icon on the web.</p>
             </div>
-            <ColorField label="Primary color" value={primaryColor} onChange={setPrimaryColor} />
+            <ColorField
+              label="Primary color"
+              value={primaryColor}
+              onChange={setPrimaryColor}
+              suggested={[
+                { label: "From your logo, tap to use", colors: swatches },
+                { label: "Your saved palette", colors: palette },
+              ]}
+            />
             {!primaryOk && <p className="text-xs text-amber-500">Too light or dark to read as button text. The save will still go through, but pick a stronger shade.</p>}
-            <Swatches colors={swatches} onPick={setPrimaryColor} label="From your logo, tap to use" />
             <SuggestedPair
               colors={swatches}
               withSecondary={colorsUnlocked}
@@ -450,7 +451,6 @@ export default function CoachBranding() {
                 }
               }}
             />
-            <Swatches colors={palette} onPick={setPrimaryColor} label="Your saved palette" />
             <div className="flex flex-wrap items-center gap-2">
               <input ref={imageInput} type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; const colors = await extractColorsFromFile(f); if (colors.length === 0) { toast.error("Couldn't read colors from that image"); return; } savePalette([...new Set([...colors, ...palette])].slice(0, 12)); toast.success(`${colors.length} colors added to your palette`); }} />
               <Button type="button" variant="outline" size="sm" onClick={() => imageInput.current?.click()}>
@@ -513,6 +513,7 @@ export default function CoachBranding() {
             }
             onSave={() =>
               save.mutate({
+                primaryColor: primaryColor || null,
                 secondaryColor: secondaryColor || null,
                 backgroundHue,
                 backgroundStrength,
@@ -520,12 +521,38 @@ export default function CoachBranding() {
               })
             }
           >
+            {/* Redesigned 2026-11-20 (Scott: "make this section sexier, more colors for the primary
+                and secondary, i can't even select a primary ... why are there only 6 fonts?"). */}
+            <div className="space-y-3">
+              <p className="label-xs">Team colors</p>
+              <ColorField
+                label="Primary color"
+                value={primaryColor}
+                onChange={setPrimaryColor}
+                suggested={[
+                  { label: "From your logo", colors: swatches },
+                  { label: "Your saved palette", colors: palette },
+                ]}
+              />
+              {!primaryOk && <p className="text-xs text-amber-500">Too light or dark to read as button text. Pick a stronger shade.</p>}
+            </div>
             <Gate unlocked={colorsUnlocked}>
-              <ColorField label="Secondary color" value={secondaryColor} onChange={setSecondaryColor} />
+              <ColorField
+                label="Secondary color"
+                value={secondaryColor}
+                onChange={setSecondaryColor}
+                suggested={[
+                  { label: "From your logo", colors: swatches },
+                  { label: "Your saved palette", colors: palette },
+                ]}
+              />
               {!secondaryOk && <p className="text-xs text-amber-500">Hard to read against text. Pick a stronger shade.</p>}
-              <Swatches colors={[...swatches, ...palette]} onPick={setSecondaryColor} label="Tap to use as the secondary" />
-              <div className="space-y-1.5">
-                <Label>Background tint</Label>
+              {primaryColor && secondaryColor && primaryColor.toUpperCase() === secondaryColor.toUpperCase() && (
+                <p className="text-xs text-amber-500">Your secondary is the same color as your primary, so the two will not stand apart.</p>
+              )}
+
+              <div className="space-y-2 border-t border-border pt-4">
+                <p className="label-xs">Background</p>
                 <p className="text-xs text-muted-foreground">Shifts every surface toward a hue. A navy-and-gold school picks navy, a forest-green program picks forest.</p>
                 <div className="flex flex-wrap gap-1.5">
                   {BACKGROUND_HUE_PRESETS.map((p) => (
@@ -539,40 +566,91 @@ export default function CoachBranding() {
                         else if (backgroundStrength === 0) setBackgroundStrength(1);
                       }}
                       className={cn(
-                        "rounded-md border px-2.5 py-1.5 text-xs font-medium",
+                        "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
                         backgroundHue === p.hue && (p.strength === undefined ? backgroundStrength !== 0 : backgroundStrength === p.strength)
                           ? "border-primary bg-primary/10"
                           : "border-border text-muted-foreground",
                       )}
                     >
+                      <span className="h-3 w-3 rounded-full border border-border" style={{ backgroundColor: p.strength === 0 ? "#555" : `hsl(${p.hue} 55% 45%)` }} />
                       {p.label}
                     </button>
                   ))}
-                  <Input type="number" min={0} max={359} value={backgroundHue ?? ""} placeholder="hue" onChange={(e) => setBackgroundHue(e.target.value === "" ? null : Math.min(359, Math.max(0, Number(e.target.value) || 0)))} className="h-auto w-20 py-1.5 text-xs" aria-label="Exact hue, 0 to 359" disabled={!canEdit} />
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={0}
+                    max={359}
+                    value={backgroundHue ?? 222}
+                    disabled={!canEdit}
+                    aria-label="Background hue, any color"
+                    data-testid="tint-hue-slider"
+                    onChange={(e) => {
+                      setBackgroundHue(Number(e.target.value));
+                      if (backgroundStrength === 0) setBackgroundStrength(1);
+                    }}
+                    className="h-3 w-full cursor-pointer appearance-none rounded-full"
+                    style={{ background: HUE_RAINBOW }}
+                  />
+                  <Input
+                    type="number"
+                    min={0}
+                    max={359}
+                    value={backgroundHue ?? ""}
+                    placeholder="hue"
+                    onChange={(e) => setBackgroundHue(e.target.value === "" ? null : Math.min(359, Math.max(0, Number(e.target.value) || 0)))}
+                    className="h-8 w-20 text-xs"
+                    aria-label="Exact hue, 0 to 359"
+                    disabled={!canEdit}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-1.5">
                   {primaryColor && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => { const hsl = computeBrandingStyle({ brandLogoUrl: null, brandPrimaryColor: primaryColor, brandSecondaryColor: null }) as Record<string, string> | undefined; const h = hsl?.["--primary"]?.split(" ")[0]; if (h) setBackgroundHue(Number(h)); }}>Match primary</Button>
+                    <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => { setBackgroundHue(hueOf(primaryColor)); if (backgroundStrength === 0) setBackgroundStrength(1); }}>
+                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: primaryColor }} /> Match primary
+                    </Button>
+                  )}
+                  {secondaryColor && (
+                    <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => { setBackgroundHue(hueOf(secondaryColor)); if (backgroundStrength === 0) setBackgroundStrength(1); }}>
+                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: secondaryColor }} /> Match secondary
+                    </Button>
+                  )}
+                  {backgroundHue !== null && (
+                    <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => setBackgroundHue(null)}>
+                      No tint
+                    </Button>
                   )}
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Tint strength</Label>
-                <div className="flex gap-1.5">
-                  {BRAND_BACKGROUND_STRENGTHS.map((s) => (
-                    <button key={s} type="button" disabled={!canEdit} onClick={() => setBackgroundStrength(s)} className={cn("rounded-md border px-3 py-1.5 text-xs font-medium", backgroundStrength === s ? "border-primary bg-primary/10" : "border-border text-muted-foreground")}>
-                      {s === 1 ? "Subtle" : s === 2 ? "Clear" : "Bold"}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Strength</span>
+                  <div className="inline-flex overflow-hidden rounded-full border border-border">
+                    {BRAND_BACKGROUND_STRENGTHS.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        disabled={!canEdit}
+                        onClick={() => setBackgroundStrength(s)}
+                        className={cn("px-3 py-1 text-xs font-medium", backgroundStrength === s ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+                      >
+                        {STRENGTH_LABEL[s]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label>Heading font</Label>
-                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                  {BRAND_HEADING_FONTS.map((f) => (
-                    <button key={f.id} type="button" disabled={!canEdit} onClick={() => setHeadingFont(f.id)} className={cn("rounded-md border px-2.5 py-2 text-left text-sm uppercase", headingFont === f.id ? "border-primary bg-primary/10" : "border-border")} style={{ fontFamily: f.stack }}>
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
+
+              <div className="space-y-2 border-t border-border pt-4">
+                <p className="label-xs">Heading font</p>
+                <FontPicker
+                  fonts={BRAND_HEADING_FONTS}
+                  kind="heading"
+                  value={headingFont}
+                  onChange={setHeadingFont}
+                  sample={teamName || "Upper Body Strength"}
+                  disabled={!canEdit}
+                  uppercase
+                />
               </div>
             </Gate>
             <div className="space-y-2 border-t border-border pt-4">

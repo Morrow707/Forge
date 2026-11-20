@@ -445,7 +445,7 @@ export function AppShell({
   useEffect(() => {
     if (programTheme && !hasStoredThemeChoice()) applyTheme(programTheme);
   }, [programTheme]);
-  useEffect(() => ensureBrandFontLoaded(branding?.brandExtras?.bodyFont), [branding?.brandExtras?.bodyFont]);
+  useEffect(() => ensureBrandFontLoaded(branding?.brandExtras?.bodyFont, "body"), [branding?.brandExtras?.bodyFont]);
   // The program's app icon color on iPhone, once the program's branding has actually arrived:
   // switching on an empty answer would put a branded athlete back on Forge's icon for a moment.
   const programAppIcon = branding ? (branding.brandExtras?.appIcon ?? null) : undefined;
