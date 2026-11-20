@@ -82,7 +82,7 @@ import { buildRecruitingProfilePdf } from "./recruiting-profile";
 import { pdfBrandForAthlete } from "./pdf-brand";
 import { buildRecruitingFlyerPdf } from "./recruiting-flyer";
 import {
-  brandExtrasSchema,
+
   brandExtrasWithinEntitlements,
   publicBrandExtras,
   programAnswerFits,
@@ -90,6 +90,7 @@ import {
   MAX_CHECKIN_QUESTIONS,
   MAX_CHECKIN_TEXT_ANSWER,
 } from "@shared/brand-extras";
+import { brandExtrasSchema } from "@shared/brand-extras-schema";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 // A pasted demo link must be a web address: "https://youtu.be/abc" passes, "javascript:x" does not.

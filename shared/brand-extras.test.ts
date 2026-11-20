@@ -6,13 +6,13 @@ import {
   withActiveSeason,
   applyBrandTerms,
   applyBrandTermsToHtml,
-  brandExtrasSchema,
   brandExtrasWithinEntitlements,
   brandTerm,
   publicBrandExtras,
   type BrandExtras,
 } from "./brand-extras";
 import { brandingWithinEntitlements } from "./branding-within-entitlements";
+import { brandExtrasSchema } from "./brand-extras-schema";
 
 // A PROGRAM'S OWN WORDS, LOOK, DASHBOARD, NOTE, BANNER, CELEBRATION AND ICON (2026-11-19).
 

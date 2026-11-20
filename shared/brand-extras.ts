@@ -11,7 +11,6 @@
  * the athletes' dashboard layout) and never leaves a signed-in screen: publicBrandExtras is what a
  * login page, a sign-up page or the public team page may see.
  */
-import { z } from "zod";
 import type { TrophyCategory, TrophyTier } from "./achievements";
 
 /** The words a program can swap for Forge's own (singular and plural, exactly as typed). */
@@ -34,7 +33,6 @@ export const BRAND_BODY_FONTS = [
   { id: "source-serif", label: "Source Serif (classic)", stack: '"Source Serif 4", Georgia, serif', googleFontsUrl: "https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&display=swap" },
 ] as const;
 export type BrandBodyFontId = (typeof BRAND_BODY_FONTS)[number]["id"];
-const BODY_FONT_IDS = BRAND_BODY_FONTS.map((f) => f.id) as [BrandBodyFontId, ...BrandBodyFontId[]];
 
 /** Corner rounding, as the app's --radius. */
 export const BRAND_CORNERS = { square: "0.25rem", standard: "0.75rem", round: "1.25rem" } as const;
@@ -52,25 +50,7 @@ export const BRAND_APP_ICONS = [
   { id: "gold", label: "Gold", color: "#D4A017" },
 ] as const;
 export type BrandAppIconId = (typeof BRAND_APP_ICONS)[number]["id"];
-const APP_ICON_IDS = BRAND_APP_ICONS.map((i) => i.id) as [BrandAppIconId, ...BrandAppIconId[]];
 
-const MAX_TERM = 24;
-const MAX_LINE = 140;
-const MAX_NOTE = 600;
-const MAX_BANNER = 200;
-const MAX_WIDGETS = 40;
-const MAX_WIDGET_ID = 60;
-const MAX_URL = 500;
-// A six-digit hex color: "#003262" passes, "#036" and "navy" do not.
-// https://regex101.com/?regex=%5E%23%5B0-9a-fA-F%5D%7B6%7D%24
-const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a color like #003262.");
-// A calendar date: "2026-12-01" passes, "12/01/2026" does not.
-// https://regex101.com/?regex=%5E%5Cd%7B4%7D-%5Cd%7B2%7D-%5Cd%7B2%7D%24
-const isoDate = /^\d{4}-\d{2}-\d{2}$/;
-const line = (max: number) => z.string().trim().max(max).nullable().optional();
-// A short id a coach's own list item is known by: "q1", "first-100", not "a b" or "".
-// https://regex101.com/?regex=%5E%5Ba-z0-9-%5D%7B1%2C32%7D%24
-const itemId = z.string().regex(/^[a-z0-9-]{1,32}$/, "Use letters, numbers and dashes.");
 
 /** The program's own daily check-in questions (2026-11-19). Answers are stored on their own and
  *  never change the readiness score, which stays computed from Forge's five. */
@@ -78,105 +58,23 @@ export const CHECKIN_QUESTION_KINDS = ["scale", "yesno", "text"] as const;
 export type CheckinQuestionKind = (typeof CHECKIN_QUESTION_KINDS)[number];
 export const MAX_CHECKIN_QUESTIONS = 5;
 export const MAX_CHECKIN_TEXT_ANSWER = 280;
-const MAX_QUESTION = 120;
 
 /** The program's own trophies, counted with the same numbers Forge's trophies use. */
 export const PROGRAM_TROPHY_CATEGORIES = ["workout_count", "streak", "pr_count", "speed", "nutrition_streak"] as const satisfies readonly TrophyCategory[];
 export const PROGRAM_TROPHY_TIERS = ["bronze", "silver", "gold"] as const satisfies readonly TrophyTier[];
 export const MAX_PROGRAM_TROPHIES = 20;
-const MAX_THRESHOLD = 10_000;
 
 /** A season or rivalry week: different colors and a banner between two dates. */
 export const MAX_SEASONS = 12;
 
 /** Up to three screens a new athlete sees once. */
 export const MAX_WELCOME_SCREENS = 3;
-const MAX_WELCOME_BODY = 400;
 
-export const brandExtrasSchema = z.object({
-  terms: z
-    .partialRecord(z.enum(BRAND_TERM_KEYS), z.object({ one: z.string().trim().min(1).max(MAX_TERM), many: z.string().trim().min(1).max(MAX_TERM) }))
-    .nullable()
-    .optional(),
-  wording: z
-    .object({
-      greeting: line(MAX_LINE),
-      restDay: line(MAX_LINE),
-      workoutDone: line(MAX_LINE),
-    })
-    .nullable()
-    .optional(),
-  defaultTheme: z.enum(["dark", "light"]).nullable().optional(),
-  corners: z.enum(["square", "standard", "round"]).nullable().optional(),
-  pillButtons: z.boolean().nullable().optional(),
-  bodyFont: z.enum(BODY_FONT_IDS).nullable().optional(),
-  wordmarkUrl: z.string().max(MAX_URL).nullable().optional(),
-  backgroundImageUrl: z.string().max(MAX_URL).nullable().optional(),
-  athleteDashboard: z
-    .object({
-      order: z.array(z.string().max(MAX_WIDGET_ID)).max(MAX_WIDGETS),
-      hidden: z.array(z.string().max(MAX_WIDGET_ID)).max(MAX_WIDGETS),
-    })
-    .nullable()
-    .optional(),
-  coachNote: line(MAX_NOTE),
-  announcement: z
-    .object({ text: z.string().trim().min(1).max(MAX_BANNER), until: z.string().regex(isoDate).nullable().optional() })
-    .nullable()
-    .optional(),
-  celebration: z.object({ message: line(MAX_LINE), color: hex.nullable().optional() }).nullable().optional(),
-  appIcon: z.enum(APP_ICON_IDS).nullable().optional(),
-  checkinQuestions: z
-    .array(z.object({ id: itemId, text: z.string().trim().min(1).max(MAX_QUESTION), kind: z.enum(CHECKIN_QUESTION_KINDS) }))
-    .max(MAX_CHECKIN_QUESTIONS)
-    .nullable()
-    .optional(),
-  trophies: z
-    .array(
-      z.object({
-        id: itemId,
-        label: z.string().trim().min(1).max(MAX_TERM * 2),
-        category: z.enum(PROGRAM_TROPHY_CATEGORIES),
-        threshold: z.number().int().min(1).max(MAX_THRESHOLD),
-        tier: z.enum(PROGRAM_TROPHY_TIERS),
-      }),
-    )
-    .max(MAX_PROGRAM_TROPHIES)
-    .nullable()
-    .optional(),
-  seasons: z
-    .array(
-      z.object({
-        id: itemId,
-        name: z.string().trim().min(1).max(MAX_TERM * 2),
-        start: z.string().regex(isoDate),
-        end: z.string().regex(isoDate),
-        primaryColor: hex.nullable().optional(),
-        secondaryColor: hex.nullable().optional(),
-        banner: line(MAX_BANNER),
-      }),
-    )
-    .max(MAX_SEASONS)
-    .nullable()
-    .optional(),
-  recap: z
-    .object({
-      enabled: z.boolean(),
-      weekday: z.number().int().min(0).max(6),
-      includeTotals: z.boolean(),
-      includeTopPerformers: z.boolean(),
-      note: line(MAX_NOTE),
-      sendToGuardians: z.boolean(),
-    })
-    .nullable()
-    .optional(),
-  welcomeScreens: z
-    .array(z.object({ title: z.string().trim().min(1).max(MAX_LINE), body: z.string().trim().max(MAX_WELCOME_BODY) }))
-    .max(MAX_WELCOME_SCREENS)
-    .nullable()
-    .optional(),
-});
-export type BrandExtras = z.infer<typeof brandExtrasSchema>;
+
+/** The validator lives in ./brand-extras-schema so zod stays off the first paint: the eager
+ *  branding code imports this module (bundle-budget.test.ts). The type is erased at build. */
+export type { BrandExtras } from "./brand-extras-schema";
+import type { BrandExtras } from "./brand-extras-schema";
 
 /** Which entitlement each option sits under, read off the same four the older branding uses. */
 export const BRAND_EXTRAS_GATES = {
