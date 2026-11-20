@@ -49,6 +49,116 @@ const BACKGROUND_HUE_PRESETS = [
 type OrgBranding = EffectiveBranding & { features: Record<CoachFeature, boolean> };
 type CoachEntitlements = { hasCustomColors?: boolean; hasTeamIdentity?: boolean; coachesCorner?: unknown };
 
+// THESE LIVE OUTSIDE CoachBranding ON PURPOSE (2026-11-20). Declared inside it, each was a new
+// component type on every render, so React tore down and rebuilt all five sections whenever a
+// color, tint or font was picked: the page jumped back toward the top (Scott: "when im on 2, and i
+// click on a color it brings me to the top") and a text box lost its cursor after every letter.
+// branding-sections-stay-mounted.test.ts holds the rule.
+function Swatches({ colors, onPick, label }: { colors: string[]; onPick: (hex: string) => void; label: string }) {
+  if (colors.length === 0) return null;
+  return (
+    <div className="space-y-1">
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {colors.map((hex) => (
+          <button
+            key={hex}
+            type="button"
+            title={hex}
+            onClick={() => onPick(hex)}
+            className="h-7 w-7 rounded-full border-2 border-background shadow-[0_0_0_1px_hsl(var(--border))] transition-transform hover:scale-110"
+            style={{ backgroundColor: hex }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+function SuggestedPair({ colors, withSecondary, onUse }: { colors: string[]; withSecondary: boolean; onUse: (pair: { primary: string; secondary: string | null }) => void }) {
+  const pair = suggestBrandPair(colors);
+  if (!pair) return null;
+  const secondary = withSecondary ? pair.secondary : null;
+  const chip = (hex: string, role: string) => (
+    <span className="flex items-center gap-1.5 text-xs">
+      <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: hex }} />
+      {role} <span className="font-mono uppercase text-muted-foreground">{hex}</span>
+    </span>
+  );
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-md border border-border px-3 py-2">
+      <span className="text-[11px] text-muted-foreground">Suggested from your logo</span>
+      {chip(pair.primary, "Primary")}
+      {secondary && chip(secondary, "Secondary")}
+      <Button type="button" variant="outline" size="sm" onClick={() => onUse({ primary: pair.primary, secondary })}>
+        Use {secondary ? "these" : "this"}
+      </Button>
+    </div>
+  );
+}
+function Gate({ unlocked, children }: { unlocked: boolean; children: React.ReactNode }) {
+  return (
+    <div className={cn("space-y-3", !unlocked && "rounded-md border border-dashed border-amber-500/40 p-3")}>
+      {!unlocked && (
+        <p className="flex items-center gap-1.5 text-xs text-amber-500">
+          <Lock className="h-3 w-3" /> Part of Full Personalization. Free on any plan of{" "}
+          {FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES} athletes or more; smaller programs add it from Billing. Saving leaves these fields as they are.
+        </p>
+      )}
+      {children}
+    </div>
+  );
+}
+function Section({
+  step,
+  title,
+  description,
+  preview,
+  children,
+  onSave,
+  draftStyle,
+  canEdit,
+  saving,
+}: {
+  step: number;
+  title: string;
+  description: string;
+  preview: React.ReactNode;
+  children: React.ReactNode;
+  onSave?: () => void;
+  /** The coach's unsaved look, so each preview shows what Save would give. */
+  draftStyle: React.CSSProperties | undefined;
+  canEdit: boolean;
+  saving: boolean;
+}) {
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <span className="rounded-md bg-primary/15 px-2 py-0.5 font-mono text-xs text-primary">{step}</span>
+          {title}
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="min-w-0">
+          <p className="label-xs mb-2">Preview</p>
+          <div className="overflow-hidden rounded-lg border border-border" style={draftStyle}>
+            {preview}
+          </div>
+        </div>
+        <div className="min-w-0 space-y-4">
+          {children}
+          {onSave && canEdit && (
+            <Button type="button" onClick={onSave} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function CoachBranding() {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -236,103 +346,6 @@ export default function CoachBranding() {
     }
   }
 
-  function Swatches({ colors, onPick, label }: { colors: string[]; onPick: (hex: string) => void; label: string }) {
-    if (colors.length === 0) return null;
-    return (
-      <div className="space-y-1">
-        <p className="text-[11px] text-muted-foreground">{label}</p>
-        <div className="flex flex-wrap gap-1.5">
-          {colors.map((hex) => (
-            <button
-              key={hex}
-              type="button"
-              title={hex}
-              onClick={() => onPick(hex)}
-              className="h-7 w-7 rounded-full border-2 border-background shadow-[0_0_0_1px_hsl(var(--border))] transition-transform hover:scale-110"
-              style={{ backgroundColor: hex }}
-            />
-          ))}
-        </div>
-      </div>
-    );
-  }
-  function SuggestedPair({ colors, withSecondary, onUse }: { colors: string[]; withSecondary: boolean; onUse: (pair: { primary: string; secondary: string | null }) => void }) {
-    const pair = suggestBrandPair(colors);
-    if (!pair) return null;
-    const secondary = withSecondary ? pair.secondary : null;
-    const chip = (hex: string, role: string) => (
-      <span className="flex items-center gap-1.5 text-xs">
-        <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: hex }} />
-        {role} <span className="font-mono uppercase text-muted-foreground">{hex}</span>
-      </span>
-    );
-    return (
-      <div className="flex flex-wrap items-center gap-3 rounded-md border border-border px-3 py-2">
-        <span className="text-[11px] text-muted-foreground">Suggested from your logo</span>
-        {chip(pair.primary, "Primary")}
-        {secondary && chip(secondary, "Secondary")}
-        <Button type="button" variant="outline" size="sm" onClick={() => onUse({ primary: pair.primary, secondary })}>
-          Use {secondary ? "these" : "this"}
-        </Button>
-      </div>
-    );
-  }
-  function Gate({ unlocked, children }: { unlocked: boolean; children: React.ReactNode }) {
-    return (
-      <div className={cn("space-y-3", !unlocked && "rounded-md border border-dashed border-amber-500/40 p-3")}>
-        {!unlocked && (
-          <p className="flex items-center gap-1.5 text-xs text-amber-500">
-            <Lock className="h-3 w-3" /> Part of Full Personalization. Free on any plan of{" "}
-            {FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES} athletes or more; smaller programs add it from Billing. Saving leaves these fields as they are.
-          </p>
-        )}
-        {children}
-      </div>
-    );
-  }
-  function Section({
-    step,
-    title,
-    description,
-    preview,
-    children,
-    onSave,
-  }: {
-    step: number;
-    title: string;
-    description: string;
-    preview: React.ReactNode;
-    children: React.ReactNode;
-    onSave?: () => void;
-  }) {
-    return (
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <span className="rounded-md bg-primary/15 px-2 py-0.5 font-mono text-xs text-primary">{step}</span>
-            {title}
-          </CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="min-w-0">
-            <p className="label-xs mb-2">Preview</p>
-            <div className="overflow-hidden rounded-lg border border-border" style={draftStyle}>
-              {preview}
-            </div>
-          </div>
-          <div className="min-w-0 space-y-4">
-            {children}
-            {onSave && canEdit && (
-              <Button type="button" onClick={onSave} disabled={save.isPending}>
-                {save.isPending ? "Saving…" : "Save"}
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <AppShell title="Branding">
@@ -355,6 +368,9 @@ export default function CoachBranding() {
         <>
           {/* 1. LOGIN */}
           <Section
+            draftStyle={draftStyle}
+            canEdit={canEdit}
+            saving={save.isPending}
             step={1}
             title="Login screen"
             description="The first thing an athlete sees. Logo, program name and primary color are free at every size."
@@ -451,6 +467,9 @@ export default function CoachBranding() {
 
           {/* 2. HOME */}
           <Section
+            draftStyle={draftStyle}
+            canEdit={canEdit}
+            saving={save.isPending}
             step={2}
             title="Home"
             description="The header, the background and the feel of every screen once they are in."
@@ -543,6 +562,9 @@ export default function CoachBranding() {
 
           {/* 3. EMAILS */}
           <Section
+            draftStyle={draftStyle}
+            canEdit={canEdit}
+            saving={save.isPending}
             step={3}
             title="Emails"
             description="Every email an athlete or a parent on your program receives: welcome, guardian claim, password reset, new device."
@@ -577,6 +599,9 @@ export default function CoachBranding() {
 
           {/* 4. ATHLETE SCREENS */}
           <Section
+            draftStyle={draftStyle}
+            canEdit={canEdit}
+            saving={save.isPending}
             step={4}
             title="Athlete screens"
             description="The welcome note on their dashboard and the colors of the screen they log every set on."
@@ -612,6 +637,9 @@ export default function CoachBranding() {
 
           {/* 5. PUBLIC PAGE */}
           <Section
+            draftStyle={draftStyle}
+            canEdit={canEdit}
+            saving={save.isPending}
             step={5}
             title="Public page"
             description="What anyone sees at your team address before they have an account."
