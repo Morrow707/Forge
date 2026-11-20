@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { colorDistance, dominantColorsFromPixels, suggestBrandPair } from "./image-colors";
-import { CROP_SHAPES, cropRect, fitRect, initialCropView, panView } from "./image-crop";
+import { CROP_SHAPES, SNAP_DISTANCE_PX, centeredAxes, cropRect, fitRect, initialCropView, panView, snapToCenter } from "./image-crop";
 
 // THE LOGO SWATCHES AND THE CROP (Scott, 2026-11-20): six swatches that were really two colors,
 // a white or black logo that could never offer its own white or black, and an upload with no
@@ -163,3 +163,40 @@ describe("the crop", () => {
     expect(CROP_SHAPES.logo.type).toBe("image/png");
   });
 });
+
+describe("snap to center (Scott, 2026-11-20)", () => {
+  // A 400 x 400 picture in a square frame 200 screen pixels wide, zoomed 2x: the crop box is 200
+  // source pixels, so one screen pixel is one source pixel and the picture can move 100 each way.
+  const S = 400;
+  const FRAME = 200;
+  const ZOOM = 2;
+  const square = CROP_SHAPES.logo.aspect;
+  const middle = initialCropView();
+  const zoomed = { ...middle, zoom: ZOOM };
+  const NEAR = SNAP_DISTANCE_PX - 1;
+  const FAR = SNAP_DISTANCE_PX + 5;
+  const shifted = (dx: number, dy: number) => panView(S, S, square, zoomed, dx, dy, FRAME);
+
+  it("pulls a drag that ends near the middle exactly to center, in each direction on its own", () => {
+    const snapped = snapToCenter(S, S, square, shifted(NEAR, -FAR), FRAME);
+    expect(centeredAxes(S, S, square, snapped)).toEqual({ x: true, y: false });
+    expect(snapped.centerX).toBe(middle.centerX);
+  });
+
+  it("leaves a picture alone once it is dragged clearly away", () => {
+    expect(centeredAxes(S, S, square, snapToCenter(S, S, square, shifted(FAR, FAR), FRAME))).toEqual({ x: false, y: false });
+  });
+
+  it("can always be dragged out of the snap, because the drag keeps its own unsnapped position", () => {
+    // Each small move would land back inside the snap if the snapped view were fed back in; from
+    // the raw position, three moves of a few pixels clear it.
+    const STEP = 4;
+    const raw = [1, 2, 3, 4].reduce((v) => panView(S, S, square, v, STEP, 0, FRAME), zoomed);
+    expect(centeredAxes(S, S, square, snapToCenter(S, S, square, raw, FRAME)).x).toBe(false);
+  });
+
+  it("counts a direction with no room to move as centered", () => {
+    expect(centeredAxes(S, H_WIDE, square, middle).y).toBe(true);
+  });
+});
+const H_WIDE = 300;

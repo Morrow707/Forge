@@ -9,11 +9,13 @@ import {
   CROP_SHAPES,
   MAX_ZOOM,
   MIN_ZOOM,
+  centeredAxes,
   cropRect,
   drawCrop,
   initialCropView,
   panView,
   renderCrop,
+  snapToCenter,
   type CropKind,
   type CropView,
 } from "@/lib/image-crop";
@@ -59,7 +61,9 @@ export function ImageCropDialog({
   const [view, setView] = useState<CropView>(initialCropView);
   const [preview, setPreview] = useState<string | null>(null);
   const frameRef = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ x: number; y: number } | null>(null);
+  // The drag follows the finger in `raw`; what is shown is raw snapped to center. Snapping the
+  // stored position instead would trap the picture at center for good.
+  const drag = useRef<{ x: number; y: number; raw: CropView } | null>(null);
 
   // Read the picked file into an image. A new file starts centred and unzoomed.
   useEffect(() => {
@@ -97,6 +101,9 @@ export function ImageCropDialog({
 
   // Where the full picture sits behind the frame, so the coach can see what is cut away.
   const rect = img ? cropRect(img.naturalWidth, img.naturalHeight, shape.aspect, view) : null;
+  // Which guide lights up (magenta, the snap color design tools use, so it shows on any brand and any picture): the directions the picture's middle sits exactly on the frame's.
+  const centered = img && !view.fitWhole ? centeredAxes(img.naturalWidth, img.naturalHeight, shape.aspect, view) : { x: true, y: true };
+  const guide = (on: boolean) => (on ? "bg-[#ff2bd6] shadow-[0_0_0_1px_rgba(255,255,255,0.85)]" : "bg-white/80 shadow-[0_0_0_1px_rgba(0,0,0,0.35)]");
 
   return (
     <Dialog open={!!file} onOpenChange={(open) => !open && !saving && onCancel()}>
@@ -126,7 +133,7 @@ export function ImageCropDialog({
                 style={{ aspectRatio: String(shape.aspect), cursor: view.fitWhole ? "default" : "grab", scrollbarGutter: "auto" }}
                 onPointerDown={(e) => {
                   if (view.fitWhole) return;
-                  drag.current = { x: e.clientX, y: e.clientY };
+                  drag.current = { x: e.clientX, y: e.clientY, raw: view };
                   (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
                 }}
                 onPointerMove={(e) => {
@@ -134,8 +141,9 @@ export function ImageCropDialog({
                   if (!drag.current || !img || !frameW) return;
                   const dx = e.clientX - drag.current.x;
                   const dy = e.clientY - drag.current.y;
-                  drag.current = { x: e.clientX, y: e.clientY };
-                  setView((v) => panView(img.naturalWidth, img.naturalHeight, shape.aspect, v, dx, dy, frameW));
+                  const raw = panView(img.naturalWidth, img.naturalHeight, shape.aspect, drag.current.raw, dx, dy, frameW);
+                  drag.current = { x: e.clientX, y: e.clientY, raw };
+                  setView(snapToCenter(img.naturalWidth, img.naturalHeight, shape.aspect, raw, frameW));
                 }}
                 onPointerUp={() => {
                   drag.current = null;
@@ -163,16 +171,54 @@ export function ImageCropDialog({
                     horizontal"). Drawn over the frame only; never part of the uploaded picture. */}
                 {img && (
                   <div aria-hidden="true" data-testid="crop-center-guides" className="pointer-events-none absolute inset-0">
-                    <div className="absolute inset-y-0 w-px bg-white/80 shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" style={{ left: "calc(50% - 0.5px)" }} />
-                    <div className="absolute inset-x-0 h-px bg-white/80 shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" style={{ top: "calc(50% - 0.5px)" }} />
+                    {/* The vertical line marks left-to-right center; it lights up when the picture is centered that way. */}
                     <div
-                      className="absolute h-2.5 w-2.5 rounded-full border border-black/40 bg-white"
+                      data-testid="crop-guide-vertical"
+                      data-centered={centered.x}
+                      className={cn("absolute inset-y-0", centered.x ? "w-0.5" : "w-px", guide(centered.x))}
+                      style={{ left: centered.x ? "calc(50% - 1px)" : "calc(50% - 0.5px)" }}
+                    />
+                    <div
+                      data-testid="crop-guide-horizontal"
+                      data-centered={centered.y}
+                      className={cn("absolute inset-x-0", centered.y ? "h-0.5" : "h-px", guide(centered.y))}
+                      style={{ top: centered.y ? "calc(50% - 1px)" : "calc(50% - 0.5px)" }}
+                    />
+                    <div
+                      className={cn(
+                        "absolute h-2.5 w-2.5 rounded-full border",
+                        centered.x && centered.y ? "border-white bg-[#ff2bd6]" : "border-black/40 bg-white",
+                      )}
                       style={{ left: "calc(50% - 5px)", top: "calc(50% - 5px)" }}
                     />
                   </div>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">The lines cross at the center of the frame. They are not part of the picture.</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs text-muted-foreground" data-testid="crop-centered-status">
+                  {view.fitWhole
+                    ? "The whole picture is centered."
+                    : centered.x && centered.y
+                      ? "Centered both ways."
+                      : centered.x
+                        ? "Centered left to right."
+                        : centered.y
+                          ? "Centered top to bottom."
+                          : "Drag near the middle and it snaps to center. A line lights up when it is centered."}{" "}
+                  The lines are not part of the picture.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  data-testid="crop-center-button"
+                  disabled={!img || view.fitWhole || (centered.x && centered.y)}
+                  onClick={() => setView((v) => { const middle = initialCropView(); return { ...v, centerX: middle.centerX, centerY: middle.centerY }; })}
+                >
+                  Center
+                </Button>
+              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="crop-zoom">Zoom</Label>
                 <input

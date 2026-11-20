@@ -65,6 +65,37 @@ export function panView(imgW: number, imgH: number, aspect: number, view: CropVi
   return { ...view, centerX: (clamped.x + clamped.w / HALF) / imgW, centerY: (clamped.y + clamped.h / HALF) / imgH };
 }
 
+/** How close, in screen pixels, the picture's middle has to come to the frame's middle to snap
+ *  there (Scott, 2026-11-20: "a snap to center so i know exactly where center is both directions"). */
+export const SNAP_DISTANCE_PX = 10;
+/** Within half a source pixel counts as centered: no visible difference is left. */
+const CENTERED_TOLERANCE_SOURCE_PX = 0.5;
+
+/** Which directions the picture's middle sits exactly in the frame's middle. An axis with no room
+ *  to move (a square logo is always centered top to bottom at zoom 1) reads as centered. */
+export function centeredAxes(imgW: number, imgH: number, aspect: number, view: CropView): { x: boolean; y: boolean } {
+  const r = cropRect(imgW, imgH, aspect, view);
+  return {
+    x: Math.abs(r.x + r.w / HALF - imgW / HALF) <= CENTERED_TOLERANCE_SOURCE_PX,
+    y: Math.abs(r.y + r.h / HALF - imgH / HALF) <= CENTERED_TOLERANCE_SOURCE_PX,
+  };
+}
+
+/** The view to SHOW for a drag position: each direction whose middle is within SNAP_DISTANCE_PX of
+ *  center on screen is pulled exactly to center. Apply it to the raw drag position every move,
+ *  never feed the result back in, or a snapped picture could never be dragged away again. */
+export function snapToCenter(imgW: number, imgH: number, aspect: number, view: CropView, frameW: number): CropView {
+  const r = cropRect(imgW, imgH, aspect, view);
+  const sourcePerPixel = r.w / frameW;
+  const offX = Math.abs(r.x + r.w / HALF - imgW / HALF) / sourcePerPixel;
+  const offY = Math.abs(r.y + r.h / HALF - imgH / HALF) / sourcePerPixel;
+  return {
+    ...view,
+    centerX: offX <= SNAP_DISTANCE_PX ? MIDDLE : view.centerX,
+    centerY: offY <= SNAP_DISTANCE_PX ? MIDDLE : view.centerY,
+  };
+}
+
 /** Where the whole image lands inside the output when "Fit whole image" is on: scaled to fit,
  *  centred, the rest left transparent (or dark, for a photo). */
 export function fitRect(imgW: number, imgH: number, outW: number, outH: number): { x: number; y: number; w: number; h: number } {
