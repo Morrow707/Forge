@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { apiRequest, ApiError, resolveApiUrl } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { CustomPenColor } from "@/components/custom-pen-color";
 import { Pencil, Undo2, Trash2, Video } from "lucide-react";
 
 type Point = { x: number; y: number };
@@ -254,6 +255,7 @@ export function VideoAnnotationDialog({
                   style={{ backgroundColor: c }}
                 />
               ))}
+              <CustomPenColor color={color} presets={COLORS} onChange={setColor} video={() => videoRef.current} />
               <Button type="button" size="sm" variant="outline" onClick={undo} disabled={!strokes.length}>
                 <Undo2 className="h-3.5 w-3.5" />
                 Undo

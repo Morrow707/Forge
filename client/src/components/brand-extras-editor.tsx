@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ApiError, apiRequest, getJson, resolveApiUrl } from "@/lib/queryClient";
 import { ArrowDown, ArrowUp, ImagePlus, Trash2 } from "lucide-react";
 import { ImageCropDialog } from "@/components/image-crop-dialog";
+import { ColorField } from "@/components/color-field";
 import {
   BRAND_APP_ICONS,
   BRAND_BODY_FONTS,
@@ -328,15 +329,19 @@ export function BrandExtrasEditor({ canEdit }: { canEdit: boolean }) {
             <Label htmlFor="bx-until">Show until (optional)</Label>
             <Input id="bx-until" type="date" value={announcementUntil} disabled={!canEdit} onChange={(e) => setAnnouncementUntil(e.target.value)} className="max-w-48" />
           </div>
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="bx-cheer">Personal-best cheer</Label>
               <Input id="bx-cheer" value={cheer} maxLength={140} disabled={!canEdit} placeholder="e.g. Bear down!" onChange={(e) => setCheer(e.target.value)} />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="bx-cheer-color">Color</Label>
-              <input id="bx-cheer-color" type="color" value={cheerColor || "#f65b23"} disabled={!canEdit} onChange={(e) => setCheerColor(e.target.value.toUpperCase())} className="h-10 w-16 cursor-pointer rounded-md border border-input bg-background" />
-            </div>
+            <ColorField
+              label="Cheer color"
+              value={cheerColor}
+              allowEmpty
+              emptyLabel="your main color"
+              disabled={!canEdit}
+              onChange={(hex) => setCheerColor(hex)}
+            />
           </div>
         </section>
 

@@ -148,10 +148,10 @@ export function ExercisePageThemeDialog({
         ) : (
           <div className="space-y-1.5">
             <div className="grid grid-cols-2 gap-3">
-              <ColorField label="Bottom bar backdrop" value={backdropColor} onChange={setBackdropColor} />
-              <ColorField label="Watch Demo button" value={watchDemoColor} onChange={setWatchDemoColor} />
-              <ColorField label="Completed set" value={completedSetColor} onChange={setCompletedSetColor} />
-              <ColorField label="Set-paging arrows" value={navArrowColor} onChange={setNavArrowColor} />
+              <ColorField label="Bottom bar backdrop" value={backdropColor} allowEmpty onChange={setBackdropColor} />
+              <ColorField label="Watch Demo button" value={watchDemoColor} allowEmpty onChange={setWatchDemoColor} />
+              <ColorField label="Completed set" value={completedSetColor} allowEmpty onChange={setCompletedSetColor} />
+              <ColorField label="Set-paging arrows" value={navArrowColor} allowEmpty onChange={setNavArrowColor} />
             </div>
             <p className="pt-1 text-xs text-muted-foreground">
               Leave any field blank to keep Forge's own color for that piece.

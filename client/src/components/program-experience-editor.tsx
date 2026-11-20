@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ColorField } from "@/components/color-field";
 import { ApiError, apiRequest, getJson } from "@/lib/queryClient";
 import { shareOrDownloadFile } from "@/lib/share-file";
 import { TROPHY_CATEGORY_LABEL } from "@shared/achievements";
@@ -216,17 +217,27 @@ export function ProgramExperienceEditor({ canEdit }: { canEdit: boolean }) {
                   <Label>To</Label>
                   <Input type="date" value={s.end} disabled={!canEdit} onChange={(e) => edit(setSeasons, i, { end: e.target.value })} />
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Main</Label>
-                  <input type="color" aria-label="Main color" value={s.primaryColor || "#f65b23"} disabled={!canEdit} onChange={(e) => edit(setSeasons, i, { primaryColor: e.target.value.toUpperCase() })} className="h-10 w-14 cursor-pointer rounded-md border border-input bg-background" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Second</Label>
-                  <input type="color" aria-label="Second color" value={s.secondaryColor || "#3b82f6"} disabled={!canEdit} onChange={(e) => edit(setSeasons, i, { secondaryColor: e.target.value.toUpperCase() })} className="h-10 w-14 cursor-pointer rounded-md border border-input bg-background" />
-                </div>
                 <Button type="button" variant="ghost" size="icon" disabled={!canEdit} aria-label="Remove season" onClick={() => drop(setSeasons, i)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ColorField
+                  label="Main color"
+                  value={s.primaryColor ?? ""}
+                  allowEmpty
+                  emptyLabel="your usual main color"
+                  disabled={!canEdit}
+                  onChange={(hex) => edit(setSeasons, i, { primaryColor: hex || null })}
+                />
+                <ColorField
+                  label="Second color"
+                  value={s.secondaryColor ?? ""}
+                  allowEmpty
+                  emptyLabel="your usual second color"
+                  disabled={!canEdit}
+                  onChange={(hex) => edit(setSeasons, i, { secondaryColor: hex || null })}
+                />
               </div>
               <Input value={s.banner ?? ""} maxLength={200} disabled={!canEdit} placeholder="Banner (optional), e.g. Beat Central!" onChange={(e) => edit(setSeasons, i, { banner: e.target.value })} />
             </div>

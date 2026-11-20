@@ -30,6 +30,7 @@ import { drawEvents } from "@/lib/review-draw";
 import { visibleAt, type ReviewEvent, type ReviewEventPayload } from "@shared/video-review";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { CustomPenColor } from "@/components/custom-pen-color";
 
 /**
  * The coach's side: draw on a clip, and every mark is an event at the moment it was made.
@@ -405,6 +406,9 @@ export function VideoReviewEditorDialog({
           <video
             ref={videoRef}
             src={resolveApiUrl(clipUrl)}
+            // The eyedropper reads this video's frame into a canvas, which needs CORS on the
+            // native app's cross-origin uploads (signed URLs, so no credential is withheld).
+            crossOrigin="anonymous"
             className="block w-full"
             playsInline
             preload="metadata"
@@ -468,6 +472,7 @@ export function VideoReviewEditorDialog({
               style={{ backgroundColor: c }}
             />
           ))}
+          <CustomPenColor color={color} presets={COLORS} onChange={setColor} video={() => videoRef.current} />
         </div>
 
         <div className="flex items-center gap-3">

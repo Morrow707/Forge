@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogTitle, DialogClose } from "@/components/ui
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { CustomPenColor } from "@/components/custom-pen-color";
 import { PoseLandmarker, type NormalizedLandmark } from "@mediapipe/tasks-vision";
 import { angleAtVertex, MIN_VISIBILITY, type PoseFrame } from "@/lib/pose-tracking";
 import { analyzeVideoPose } from "@/lib/video-pose-analysis";
@@ -726,7 +727,7 @@ export function VideoAnalysisDialog({
           {analyzeMessage && <p className="text-xs text-amber-400">{analyzeMessage}</p>}
 
           {activeTool === "draw" && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {DRAW_COLORS.map((c) => (
                 <button
                   key={c}
@@ -740,6 +741,7 @@ export function VideoAnalysisDialog({
                   aria-label={`Draw color ${c}`}
                 />
               ))}
+              <CustomPenColor color={drawColor} presets={DRAW_COLORS} onChange={setDrawColor} video={() => videoRef.current} />
               <Button size="sm" variant="ghost" onClick={undoStroke}>
                 <Undo2 className="h-3.5 w-3.5" />
                 Undo
