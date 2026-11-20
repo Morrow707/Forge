@@ -25,9 +25,9 @@ const MAX_BANNER = 200;
 const MAX_WIDGETS = 40;
 const MAX_WIDGET_ID = 60;
 const MAX_URL = 500;
-// A six-digit hex color: "#003262" passes, "#036" and "navy" do not.
+// A six-digit hex color: "#0B3D91" passes, "#036" and "navy" do not.
 // https://regex101.com/?regex=%5E%23%5B0-9a-fA-F%5D%7B6%7D%24
-const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a color like #003262.");
+const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a color like #0B3D91.");
 // A calendar date: "2026-12-01" passes, "12/01/2026" does not.
 // https://regex101.com/?regex=%5E%5Cd%7B4%7D-%5Cd%7B2%7D-%5Cd%7B2%7D%24
 const isoDate = /^\d{4}-\d{2}-\d{2}$/;

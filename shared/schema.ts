@@ -8976,7 +8976,7 @@ export const updatePushCategoryPrefsSchema = z.object({
 const hexColor = z
   .string()
   .trim()
-  .regex(/^#[0-9a-fA-F]{6}$/, "Enter a hex color like #003262");
+  .regex(/^#[0-9a-fA-F]{6}$/, "Enter a hex color like #0B3D91");
 
 export const updateBrandingSchema = z.object({
   teamName: z.string().trim().max(60).optional().nullable(),

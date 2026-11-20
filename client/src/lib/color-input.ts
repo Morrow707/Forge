@@ -14,12 +14,12 @@ const RECENT_KEY = "forge:recent-colors";
 export const MAX_RECENT_COLORS = 8;
 
 /** A color as a person might type or paste it, as "#RRGGBB", or null when it is not one.
- *  Takes "#003262", "003262", "#036", "036", any case, with spaces around it. */
+ *  Takes "#0B3D91", "0B3D91", "#036", "036", any case, with spaces around it. */
 export function normalizeHex(input: string): string | null {
-  // A leading "#", if any: "#003262" loses it, "003262" is left alone.
-  // https://regex101.com/?regex=%5E%23&testString=%23003262%0A003262
+  // A leading "#", if any: "#0B3D91" loses it, "0B3D91" is left alone.
+  // https://regex101.com/?regex=%5E%23&testString=%230B3D91%0A0B3D91
   const raw = input.trim().replace(/^#/, "");
-  // Three or six hex digits and nothing else: "036" and "003262" pass, "navy" and "0326" do not.
+  // Three or six hex digits and nothing else: "036" and "0B3D91" pass, "navy" and "0326" do not.
   // https://regex101.com/?regex=%5E(%5B0-9a-fA-F%5D%7B3%7D%7C%5B0-9a-fA-F%5D%7B6%7D)%24
   if (!/^([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(raw)) return null;
   const full = raw.length === SHORT_HEX_LENGTH ? [...raw].map((c) => c + c).join("") : raw;

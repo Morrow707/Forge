@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
  *  ... make there be a space to add colors, to change colors or to input colors, and the little
  *  inkblot thing where i can click on an image and capture that color").
  *
- *  A box to type or paste a color ("#003262", "003262", "#036"), the color wheel, the eyedropper
+ *  A box to type or paste a color ("#0B3D91", "0B3D91", "#036"), the color wheel, the eyedropper
  *  (ImageColorPicker: the program's logo, a picture the coach chooses, the video frame where there
  *  is one, and the browser's own screen eyedropper where it exists), and a row of quick colors: the
  *  program's own and the ones used lately on this device. `color-fields-everywhere.test.ts` holds
@@ -99,7 +99,7 @@ export function ColorField({
           onKeyDown={(e) => {
             if (e.key === "Enter") commitDraft();
           }}
-          placeholder={allowEmpty ? emptyLabel : "#003262"}
+          placeholder={allowEmpty ? emptyLabel : "#0B3D91"}
           aria-label={`${label} color code`}
           aria-invalid={draft.trim() !== "" && !valid}
           className={cn("min-w-0 font-mono uppercase", draft.trim() !== "" && !valid && "border-destructive")}
@@ -128,7 +128,7 @@ export function ColorField({
         </Button>
       </div>
       {draft.trim() !== "" && !valid && (
-        <p className="text-xs text-destructive">Type a color code like #003262 or 036.</p>
+        <p className="text-xs text-destructive">Type a color code like #0B3D91 or 036.</p>
       )}
       {(quick.length > 0 || (allowEmpty && current)) && (
         <div className="flex flex-wrap items-center gap-1.5" data-testid="color-field-quick">

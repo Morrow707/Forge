@@ -323,7 +323,7 @@ export function TeamBrandingDialog({
                   id="brand-team-name"
                   value={teamName}
                   onChange={(e) => setTeamName(e.target.value)}
-                  placeholder="e.g. Cal Strength & Conditioning"
+                  placeholder="e.g. Ridgeview Strength & Conditioning"
                   maxLength={60}
                 />
               </div>

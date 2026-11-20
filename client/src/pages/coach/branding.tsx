@@ -403,7 +403,7 @@ export default function CoachBranding() {
           >
             <div className="space-y-1.5">
               <Label htmlFor="brand-name">Program name</Label>
-              <Input id="brand-name" value={teamName} onChange={(e) => setTeamName(e.target.value)} maxLength={60} placeholder="e.g. Cal Strength & Conditioning" disabled={!canEdit} />
+              <Input id="brand-name" value={teamName} onChange={(e) => setTeamName(e.target.value)} maxLength={60} placeholder="e.g. Ridgeview Strength & Conditioning" disabled={!canEdit} />
               <p className="text-xs text-muted-foreground">Replaces the word Forge inside the app. The app's name on the phone stays Forge.</p>
             </div>
             <div className="space-y-1.5">
@@ -516,7 +516,7 @@ export default function CoachBranding() {
               <Swatches colors={[...swatches, ...palette]} onPick={setSecondaryColor} label="Tap to use as the secondary" />
               <div className="space-y-1.5">
                 <Label>Background tint</Label>
-                <p className="text-xs text-muted-foreground">Shifts every surface toward a hue. Cal picks navy, a forest-green program picks forest.</p>
+                <p className="text-xs text-muted-foreground">Shifts every surface toward a hue. A navy-and-gold school picks navy, a forest-green program picks forest.</p>
                 <div className="flex flex-wrap gap-1.5">
                   {BACKGROUND_HUE_PRESETS.map((p) => (
                     <button key={p.label} type="button" disabled={!canEdit} onClick={() => setBackgroundHue(p.hue)} className={cn("rounded-md border px-2.5 py-1.5 text-xs font-medium", backgroundHue === p.hue ? "border-primary bg-primary/10" : "border-border text-muted-foreground")}>{p.label}</button>
@@ -666,7 +666,7 @@ export default function CoachBranding() {
                 <Label htmlFor="brand-slug">Team address</Label>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">{origin}/team/</span>
-                  <Input id="brand-slug" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} maxLength={30} placeholder="cal-strength" disabled={!canEdit} className="max-w-[12rem]" />
+                  <Input id="brand-slug" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} maxLength={30} placeholder="ridgeview-strength" disabled={!canEdit} className="max-w-[12rem]" />
                 </div>
                 <p className="text-xs text-muted-foreground">Letters, numbers and hyphens. Your invite code keeps working too.</p>
                 <Button type="button" variant="ghost" size="sm" onClick={() => void copy(publicLink, "Team address")}><Copy className="h-3.5 w-3.5" /> Copy address</Button>

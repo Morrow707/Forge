@@ -7,7 +7,7 @@ import { publicBrandExtras } from "@shared/brand-extras";
 /** THE LOGIN SCREEN WEARS THE LAST PROGRAM THIS DEVICE SIGNED INTO.
  *
  * Nobody is signed in on the login, forgot-password and holding screens, so the server cannot
- * say whose colors to draw. Two answers, in order: a team address in the URL (/login?team=cal,
+ * say whose colors to draw. Two answers, in order: a team address in the URL (/login?team=ridgeview-strength,
  * the link a coach sends), else what this device remembered from its last signed-in session.
  * AppShell writes the memory whenever a signed-in user's branding carries a logo or a name,
  * and clears it when a signed-in user has none, so a Free Agent's phone goes back to Forge.

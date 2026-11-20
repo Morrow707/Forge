@@ -168,7 +168,7 @@ export function ProgramExperienceEditor({ canEdit }: { canEdit: boolean }) {
             <div key={t.id} className="flex flex-wrap items-end gap-2">
               <div className="min-w-40 flex-1 space-y-1.5">
                 <Label>Name</Label>
-                <Input value={t.label} maxLength={48} disabled={!canEdit} placeholder="e.g. Iron Bear" onChange={(e) => edit(setTrophies, i, { label: e.target.value })} />
+                <Input value={t.label} maxLength={48} disabled={!canEdit} placeholder="e.g. Iron Falcon" onChange={(e) => edit(setTrophies, i, { label: e.target.value })} />
               </div>
               <select className={SELECT} value={t.category} disabled={!canEdit} aria-label="Earned for" onChange={(e) => edit(setTrophies, i, { category: e.target.value as Trophy["category"] })}>
                 {PROGRAM_TROPHY_CATEGORIES.map((c) => (
@@ -294,7 +294,7 @@ export function ProgramExperienceEditor({ canEdit }: { canEdit: boolean }) {
               <div className="flex items-end gap-2">
                 <div className="flex-1 space-y-1.5">
                   <Label>Screen {i + 1} title</Label>
-                  <Input value={w.title} maxLength={140} disabled={!canEdit} placeholder="e.g. Welcome to Bears Strength" onChange={(e) => edit(setWelcome, i, { title: e.target.value })} />
+                  <Input value={w.title} maxLength={140} disabled={!canEdit} placeholder="e.g. Welcome to Falcons Strength" onChange={(e) => edit(setWelcome, i, { title: e.target.value })} />
                 </div>
                 <Button type="button" variant="ghost" size="icon" disabled={!canEdit} aria-label="Remove screen" onClick={() => drop(setWelcome, i)}>
                   <Trash2 className="h-4 w-4" />

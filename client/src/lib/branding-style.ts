@@ -113,7 +113,7 @@ export function computeBrandingStyle(
     if (hsl) {
       Object.assign(vars, brandColorVars(branding.brandSecondaryColor, "secondary"));
       // The second series on every chart. Blue by default (index.css); the program's
-      // second colour when it has one, so a Cal chart is blue and gold, not blue and blue.
+      // second colour when it has one, so a navy-and-gold program's chart is navy and gold, not navy and navy.
       vars["--chart-2"] = hsl;
     }
   }

@@ -232,7 +232,7 @@ function CohortQueryCard() {
           <Input
             value={requestedFor}
             onChange={(e) => setRequestedFor(e.target.value)}
-            placeholder="Who asked for it? e.g. Cal Berkeley"
+            placeholder="Who asked for it? e.g. a university research lab"
             className="sm:w-64"
           />
         </div>

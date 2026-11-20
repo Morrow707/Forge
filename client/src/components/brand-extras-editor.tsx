@@ -215,7 +215,7 @@ export function BrandExtrasEditor({ canEdit }: { canEdit: boolean }) {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="bx-done">When a workout is finished</Label>
-              <Input id="bx-done" value={workoutDone} maxLength={140} disabled={!canEdit} placeholder="e.g. Go Bears. Recover well tonight." onChange={(e) => setWorkoutDone(e.target.value)} />
+              <Input id="bx-done" value={workoutDone} maxLength={140} disabled={!canEdit} placeholder="e.g. Go Falcons. Recover well tonight." onChange={(e) => setWorkoutDone(e.target.value)} />
             </div>
           </div>
         </section>
@@ -332,7 +332,7 @@ export function BrandExtrasEditor({ canEdit }: { canEdit: boolean }) {
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="bx-cheer">Personal-best cheer</Label>
-              <Input id="bx-cheer" value={cheer} maxLength={140} disabled={!canEdit} placeholder="e.g. Bear down!" onChange={(e) => setCheer(e.target.value)} />
+              <Input id="bx-cheer" value={cheer} maxLength={140} disabled={!canEdit} placeholder="e.g. Fly high, Falcons!" onChange={(e) => setCheer(e.target.value)} />
             </div>
             <ColorField
               label="Cheer color"
