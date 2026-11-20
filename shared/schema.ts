@@ -8990,7 +8990,8 @@ export const updateBrandingSchema = z.object({
   contactEmail: z.string().trim().toLowerCase().email().max(255).optional().nullable(),
   welcomeMessage: z.string().trim().max(300).optional().nullable(),
   backgroundHue: z.number().int().min(0).max(359).optional().nullable(),
-  backgroundStrength: z.number().int().min(1).max(3).optional().nullable(),
+  // 0 is "Charcoal": no color, every neutral surface grey. 1-3 are Subtle, Clear and Bold.
+  backgroundStrength: z.number().int().min(0).max(3).optional().nullable(),
   headingFont: z.enum(BRAND_HEADING_FONT_IDS).optional().nullable(),
   // Lowercased before the pattern so a coach typing "CalStrength" gets "calstrength", not a 400.
   slug: z

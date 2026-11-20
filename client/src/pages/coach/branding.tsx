@@ -43,8 +43,11 @@ const BACKGROUND_HUE_PRESETS = [
   { label: "Forest", hue: 150 },
   { label: "Wine", hue: 350 },
   { label: "Plum", hue: 280 },
-  { label: "Charcoal", hue: 0 },
-];
+  // A preset is a hue, and hue 0 is red, so "Charcoal" used to tint the app red. It is no color at
+  // all instead: strength 0, every surface a neutral grey. Its hue is a cool one so that tapping a
+  // strength afterwards gives a blue-grey, never pink.
+  { label: "Charcoal", hue: 220, strength: 0 },
+] as { label: string; hue: number; strength?: number }[];
 
 type OrgBranding = EffectiveBranding & { features: Record<CoachFeature, boolean> };
 type CoachEntitlements = { hasCustomColors?: boolean; hasTeamIdentity?: boolean; coachesCorner?: unknown };
@@ -142,7 +145,7 @@ function Section({
       <CardContent className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="min-w-0">
           <p className="label-xs mb-2">Preview</p>
-          <div className="overflow-hidden rounded-lg border border-border" style={draftStyle}>
+          <div className="brand-scope overflow-hidden rounded-lg border border-border bg-background" style={draftStyle}>
             {preview}
           </div>
         </div>
@@ -260,7 +263,9 @@ export default function CoachBranding() {
       cancelled = true;
     };
   }, [logoUrl]);
-  useEffect(() => ensureBrandFontLoaded(headingFont), [headingFont]);
+  // Every heading font is loaded here, not just the chosen one: each choice is drawn in its own
+  // face, and an unloaded one falls back to Barlow or Inter and looks like another button.
+  useEffect(() => BRAND_HEADING_FONTS.forEach((f) => ensureBrandFontLoaded(f.id)), []);
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ORG_QUERY_KEY });
@@ -328,7 +333,12 @@ export default function CoachBranding() {
     brandSlug: slug || null,
     brandSenderName: senderName || null,
   };
-  const draftStyle = computeBrandingStyle(draft);
+  // With no tint chosen the preview shows Forge's untinted surfaces, not whatever tint the page
+  // around it happens to wear.
+  const draftStyle = {
+    ...(backgroundHue === null ? { "--neutral-hue": "222", "--neutral-sat": "1", "--light-tint": "0" } : {}),
+    ...computeBrandingStyle(draft),
+  } as React.CSSProperties;
   const readable = (hex: string) =>
     !hex || meetsWcagAA(hex, contrastForegroundHsl(hex).endsWith("100%") ? "#ffffff" : "#000000");
   const primaryOk = readable(primaryColor);
@@ -519,7 +529,24 @@ export default function CoachBranding() {
                 <p className="text-xs text-muted-foreground">Shifts every surface toward a hue. A navy-and-gold school picks navy, a forest-green program picks forest.</p>
                 <div className="flex flex-wrap gap-1.5">
                   {BACKGROUND_HUE_PRESETS.map((p) => (
-                    <button key={p.label} type="button" disabled={!canEdit} onClick={() => setBackgroundHue(p.hue)} className={cn("rounded-md border px-2.5 py-1.5 text-xs font-medium", backgroundHue === p.hue ? "border-primary bg-primary/10" : "border-border text-muted-foreground")}>{p.label}</button>
+                    <button
+                      key={p.label}
+                      type="button"
+                      disabled={!canEdit}
+                      onClick={() => {
+                        setBackgroundHue(p.hue);
+                        if (p.strength !== undefined) setBackgroundStrength(p.strength);
+                        else if (backgroundStrength === 0) setBackgroundStrength(1);
+                      }}
+                      className={cn(
+                        "rounded-md border px-2.5 py-1.5 text-xs font-medium",
+                        backgroundHue === p.hue && (p.strength === undefined ? backgroundStrength !== 0 : backgroundStrength === p.strength)
+                          ? "border-primary bg-primary/10"
+                          : "border-border text-muted-foreground",
+                      )}
+                    >
+                      {p.label}
+                    </button>
                   ))}
                   <Input type="number" min={0} max={359} value={backgroundHue ?? ""} placeholder="hue" onChange={(e) => setBackgroundHue(e.target.value === "" ? null : Math.min(359, Math.max(0, Number(e.target.value) || 0)))} className="h-auto w-20 py-1.5 text-xs" aria-label="Exact hue, 0 to 359" disabled={!canEdit} />
                   {primaryColor && (

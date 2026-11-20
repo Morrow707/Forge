@@ -119,8 +119,12 @@ export function computeBrandingStyle(
   }
   if (typeof branding?.brandBackgroundHue === "number") {
     vars["--neutral-hue"] = String(branding.brandBackgroundHue);
+    // The light theme shows a tint only through --light-tint (index.css), at the chosen strength.
+    vars["--light-tint"] = String(branding.brandBackgroundStrength ?? 1);
   }
-  if (typeof branding?.brandBackgroundStrength === "number" && branding.brandBackgroundStrength > 1) {
+  // Written at every strength, Subtle (1) included: a preview inside a page that already wears a
+  // stronger tint would otherwise inherit it and Subtle would change nothing.
+  if (typeof branding?.brandBackgroundStrength === "number") {
     vars["--neutral-sat"] = String(branding.brandBackgroundStrength);
   }
   if (branding?.brandHeadingFont) {
@@ -160,6 +164,7 @@ export function computeBrandingStyle(
   }
   if (typeof personal?.backgroundHue === "number") {
     vars["--neutral-hue"] = String(personal.backgroundHue);
+    vars["--light-tint"] = "1";
   }
   return Object.keys(vars).length > 0 ? (vars as React.CSSProperties) : undefined;
 }
