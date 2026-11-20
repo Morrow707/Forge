@@ -2118,10 +2118,15 @@ export function AvBarTrackerDialog({
       // agreed with the hands long enough supplies the point instead -- through the same speed
       // gate, so a jumped detection is dropped the way a jumped wrist is. Both counted.
       let combinedFromEquipment = false;
+      let equipmentImpliedY: number | undefined;
       if (equipmentBox && equipmentPoint) {
         const gripSpan = medianHalfSpan(halfSpanHistory);
         const gripWidthUnits = gripSpan ? Math.hypot(gripSpan.x, gripSpan.y) * 2 : null;
         if (combined) {
+          // What the earned equipment says about this frame, beside what the hands said. Read
+          // BEFORE this frame teaches the offset, so a disagreement is not averaged into itself.
+          const implied = equipmentOffsets.implied(equipmentPoint, gripWidthUnits);
+          if (implied) equipmentImpliedY = implied.y;
           equipmentOffsets.observe(equipmentPoint, combined, equipmentBox.label);
         } else {
           const substitute = equipmentOffsets.substitute(equipmentPoint, gripWidthUnits);
@@ -2145,7 +2150,15 @@ export function AvBarTrackerDialog({
       else if (rejectedThisFrame) framesVelocityRejected++;
       else framesNoWristOrImplement++;
       if (combined) {
-        const point: TrackedPoint = { t, x: combined.x, y: verticalSign * combined.y, z: 0, confidence: combined.confidence, source: pointSource };
+        const point: TrackedPoint = {
+          t,
+          x: combined.x,
+          y: verticalSign * combined.y,
+          z: 0,
+          confidence: combined.confidence,
+          source: pointSource,
+          ...(equipmentImpliedY != null ? { equipmentY: verticalSign * equipmentImpliedY } : {}),
+        };
         const prevPoint = trace[trace.length - 1];
         if (prevPoint) {
           for (const gapPoint of interpolateOcclusionGap(prevPoint, point, 300)) trace.push({ ...gapPoint, source: "i" });

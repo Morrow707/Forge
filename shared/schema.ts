@@ -9384,6 +9384,11 @@ export const barPathPointSchema = z.object({
   t: z.number(),
   x: z.number(),
   y: z.number(),
+  // Where the equipment (plate or bar, once it has earned the vote) put the bar on this frame,
+  // same units as y, on frames the hands also answered. Recorded, never used: it is how a take
+  // shows whether the hands read a pull's bottom short (2026-11-20 RDL set 2, four pulls 7-12cm
+  // short with the plate locked on 677 frames). Older traces have none.
+  ey: z.number().optional(),
   // Tracking confidence, so the replay harness can apply the same per-point filtering the
   // device did -- see PathTracePoint in client/src/lib/bar-tracking.ts.
   c: z.number().optional(),

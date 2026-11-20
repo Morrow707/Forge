@@ -46,6 +46,12 @@ compare reps 2-6.**
   wrote no reading this set. Not tuned (a learning model).
 - **Leg visibility.** Set 2 recorded it: squat knees 1047 of 1066 frames at 0.85, ankles 1043;
   RDL knees 775 of 819, ankles 765. Set 1 (build 797) had no field.
+- **RDL short pulls: the export now carries the witness to settle them.** On reps 1, 3, 6 and 8
+  the hands' bar point (and the body witness's wrist) bottomed 7-12cm short; the plate was locked
+  on 677 frames but no per-frame plate position reached the export. Every trace point now carries
+  `ey`, where the earned plate put the bar on that frame (`EquipmentOffsetLearner.implied`,
+  recorded, never used). Next RDL: compare `ey` with `y` at each pull's bottom. If the plate
+  reaches the depth the hands miss, the fix is a disagreement rule under overwatch, not a constant.
 - Ledger rows `2026-11-20-back-squat-set-2`, `2026-11-20-romanian-deadlift-set-2`; fixture
   `ovr-2026-11-20-set-2-export.json`; test `round-twenty-three-set-two.test.ts`.
 

@@ -132,6 +132,13 @@ export class EquipmentOffsetLearner {
     return spread != null && spread <= MAX_EQUIPMENT_OFFSET_SPREAD_GRIPS;
   }
 
+  /** Where this box puts the bar, without counting it as a substitution: for recording beside a
+   *  frame the hands answered. Null until the equipment has earned the vote. */
+  implied(equipment: EquipmentPoint, gripWidthUnits: number | null): { x: number; y: number } | null {
+    if (!this.ready(gripWidthUnits)) return null;
+    return { x: equipment.x + median(this.dx), y: equipment.y + median(this.dy) };
+  }
+
   /** The bar point this box implies, or null when the equipment has not earned the vote.
    *  The caller still runs it through the speed gate. */
   substitute(equipment: EquipmentPoint, gripWidthUnits: number | null): EquipmentPoint | null {

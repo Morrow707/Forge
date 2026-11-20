@@ -85,7 +85,7 @@ export function workingHandForUnilateral(
   if (r == null) return "left";
   return l >= r ? "left" : "right";
 }
-export type TrackedPoint = { t: number; x: number; y: number; z: number; confidence?: number; source?: BarPointSource };
+export type TrackedPoint = { t: number; x: number; y: number; z: number; confidence?: number; source?: BarPointSource; equipmentY?: number };
 
 // One entry per rep that had enough clean per-side pose data to trust a
 // left/right comparison -- see pose-tracking.ts's computeLegDriveAsymmetry.
@@ -235,7 +235,9 @@ export type RepBreakdown = {
  *  none. The per-rep spread on the 09-29 benches (device reps up to a third off the sensor
  *  either way, set average within a twentieth) is suspected to be the lone-hand carry, and
  *  nothing in the export could say which points were carried -- this is that number. */
-export type PathTracePoint = { t: number; x: number; y: number; c?: number; s?: BarPointSource };
+/** `ey`: where the earned equipment put the bar on a frame the hands also answered (round
+ *  twenty-three, 2026-11-20). Recorded, never used; see barPathPointSchema. */
+export type PathTracePoint = { t: number; x: number; y: number; c?: number; s?: BarPointSource; ey?: number };
 
 export type RepMetrics = {
   // Nullable because a lift can have a rep whose peak velocity is genuinely not measurable
@@ -410,6 +412,7 @@ export function buildPathTrace(
       y: Math.round((p.y - origin.y) * 1000) / 10,
       c: Math.round((p.confidence ?? 1) * 100) / 100,
       ...(p.source ? { s: p.source } : {}),
+      ...(p.equipmentY != null ? { ey: Math.round((p.equipmentY - origin.y) * 1000) / 10 } : {}),
     }));
 }
 

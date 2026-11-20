@@ -88,7 +88,9 @@ describe("the dialog only lets the equipment fill a hole", () => {
   const block = dialog.slice(dialog.indexOf("let combinedFromEquipment = false"), dialog.indexOf("if (combinedFromEquipment) barPointFromEquipment++"));
 
   it("teaches on a frame the hands answered and substitutes only when they did not", () => {
-    expect(block).toMatch(/if \(combined\) \{\s*equipmentOffsets\.observe\(/);
+    // Round twenty-three reads what the box implies first (recorded, never used), then teaches.
+    expect(block).toMatch(/if \(combined\) \{[^{}]*?equipmentOffsets\.implied\([^{}]*?equipmentOffsets\.observe\(/);
+    expect(block).not.toMatch(/if \(combined\) \{[^{}]*?equipmentOffsets\.substitute\(/);
     expect(block).toMatch(/\} else \{\s*const substitute = equipmentOffsets\.substitute\(/);
   });
 
