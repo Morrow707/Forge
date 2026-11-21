@@ -25,7 +25,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { ForgeMark } from "@/components/forge-mark";
-import { MarketingNav, MarketingFooter } from "@/components/marketing-shell";
+import { AppStoreButton, MarketingNav, MarketingFooter } from "@/components/marketing-shell";
 import { bandForAthleteCount, coachMonthlyCents, formatCents } from "@shared/billing-tiers";
 import {
   FREE_AGENT_TIERS,
@@ -263,7 +263,7 @@ export default function LandingPage() {
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <SignupCta size="lg" className="w-full sm:w-auto">
-              Get Started Free
+              Get Started
               <ArrowRight className="h-4 w-4" />
             </SignupCta>
             <Link href="/login">
@@ -272,8 +272,15 @@ export default function LandingPage() {
               </Button>
             </Link>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Free to get started, no credit card required.
+          <div className="mt-4 flex justify-center">
+            <AppStoreButton />
+          </div>
+          {/* WHAT IT COSTS, SAID TRUTHFULLY (2026-11-21). This line read "Free to get started, no
+              credit card required" after a new Free Agent started needing a plan at signup. The
+              price is read from the plan table so it cannot drift from what is charged. */}
+          <p className="mt-3 text-xs text-muted-foreground" data-testid="hero-what-it-costs">
+            Coaches start free. Athletes training on their own pick a plan from{" "}
+            {formatCents(FREE_AGENT_TIERS.basic.monthlyPriceCents)} a month.
           </p>
         </div>
 
@@ -617,11 +624,11 @@ export default function LandingPage() {
             Ready to forge better athletes?
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Create a free account and build your first program in the next five minutes.
+            Create your account and build your first program in the next five minutes.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <SignupCta size="lg" className="w-full sm:w-auto">
-              Get Started Free
+              Get Started
               <ArrowRight className="h-4 w-4" />
             </SignupCta>
             <Link href="/login">

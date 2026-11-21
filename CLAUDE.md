@@ -8398,3 +8398,12 @@ that goes red with the fix reverted:
   email. (6) **`planCoveredByForge` is set for a coach too** and the coach billing page says so.
   `the-exempt-list.itest.ts` (5 cases), `exempt-list-email.test.ts`. Not mutation-tested and not
   watched in a browser. Client: `verify_build`.
+
+- **2026-11-21: THE HOME PAGE STOPPED SAYING "FREE", AND THE APP STORE BUTTON IS IN THE HERO.**
+  The hero read "Get Started Free" / "Free to get started, no credit card required" a week after
+  a new Free Agent started needing a plan at signup. Buttons read "Get Started"; the line under
+  them reads "Coaches start free. Athletes training on their own pick a plan from $4.99 a month."
+  with the price read from `FREE_AGENT_TIERS.basic`. `AppStoreButton` (marketing-shell.tsx) is
+  drawn under the hero buttons from `VITE_APP_STORE_ID`; it is a plain button, not Apple's badge
+  artwork. Checked on the built prerendered page at 1280px and 390px. Web only (the native app
+  never shows the landing page), so no build is needed for it.
