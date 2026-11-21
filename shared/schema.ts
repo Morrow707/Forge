@@ -11471,3 +11471,64 @@ export const featureFirstSeen = pgTable(
     featureUnique: uniqueIndex("feature_first_seen_unique").on(table.kind, table.feature),
   }),
 );
+
+// ---- COACH MESSAGING (2026-11-21) ----
+// Private coach <-> athlete messages, and ONLY inside a coaching relationship (Scott: "i want 0,
+// absolute 0 communication between users when they aren't being coached"). One row per message;
+// a "thread" is the (coachId, athleteId) pair, and the sender is always one of those two people
+// (CHECK in reconcile-schema.ts). There is no route by which an athlete addresses another athlete
+// or a Free Agent addresses anyone: every write goes through `insertCoachMessage` in
+// server/coach-messages.ts, which takes a SendPermit only `sendPermitFor` can mint, after the
+// coaching-relationship guard. server/no-athlete-to-athlete-communication.test.ts holds that.
+//
+// No edit and no hard delete by users: `removedAt` hides the body from the OTHER party and keeps
+// it for an admin audit and for a minor's guardian. A thread whose relationship ended stays
+// readable to its two parties and takes no new message. A user's own account deletion still
+// cascades -- how long messages with a minor should outlive an account is with counsel
+// (docs/legal-open-questions.md).
+export const coachAthleteMessages = pgTable(
+  "coach_athlete_messages",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    senderId: integer("sender_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    // A private reply to a coach's Team Board post: the post it answers, so the thread can quote it.
+    teamPostId: integer("team_post_id").references(() => teamPosts.id, { onDelete: "set null" }),
+    removedAt: timestamp("removed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    threadIdx: index("coach_athlete_messages_thread_idx").on(table.coachId, table.athleteId, table.createdAt),
+    athleteIdx: index("coach_athlete_messages_athlete_idx").on(table.athleteId),
+  }),
+);
+export type CoachAthleteMessage = typeof coachAthleteMessages.$inferSelect;
+
+/** When each party last opened a thread, for the unread counts. One row per reader per thread. */
+export const coachAthleteMessageReads = pgTable(
+  "coach_athlete_message_reads",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    lastReadAt: timestamp("last_read_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    readerThreadUnique: uniqueIndex("coach_athlete_message_reads_unique").on(table.userId, table.coachId, table.athleteId),
+  }),
+);

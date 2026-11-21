@@ -24,9 +24,9 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   {
     key: "comments_video",
     label: "Comments & Video",
-    description: "A reply, a video upload, or feedback on a set.",
+    description: "A reply, a message, a video upload, or feedback on a set.",
     roles: ["coach", "athlete"],
-    types: ["comment", "video"],
+    types: ["comment", "video", "message"],
   },
   {
     key: "training_flags",

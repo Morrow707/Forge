@@ -185,6 +185,13 @@ export const NOT_A_SIGNAL_TABLE: Record<string, string> = {
   // kept so no subscriber can cost more than the plan pays (server/ai-monthly-cap.ts).
   ai_account_spend_monthly:
     "What an account's AI calls cost Forge this month, for the monthly spending ceiling (server/ai-monthly-cap.ts). A billing figure about Forge's costs, not anything the athlete did or measured.",
+  // PRIVATE WORDS BETWEEN A COACH AND AN ATHLETE (2026-11-21). Free text, read by nobody but its
+  // two parties, a minor's guardian and an admin audit; mining it for a signal would turn a
+  // private conversation into a measurement nobody agreed to.
+  coach_athlete_messages:
+    "Private text messages between a coach and one athlete they coach (server/coach-messages.ts). A conversation, not a measurement, and reading it for a signal would use private words for something neither party was told about.",
+  coach_athlete_message_reads:
+    "When each party last opened a coach-athlete message thread, for unread counts. A read marker about an inbox, not anything the athlete did or measured.",
   // A COACH'S OWN QUESTIONS (2026-11-19). Free-form answers to questions each program writes for
   // itself, worded differently on every roster and reworded at will; nothing compares across
   // athletes or across time, so there is no signal to read.

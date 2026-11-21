@@ -4012,6 +4012,31 @@ CREATE TABLE IF NOT EXISTS "ai_account_spend_monthly" (
   "calls" integer NOT NULL DEFAULT 0
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "ai_account_spend_monthly_user_month_unique" ON "ai_account_spend_monthly" ("user_id", "month");
+
+-- ---- COACH MESSAGING (2026-11-21) ----
+-- Private coach <-> athlete messages, only inside a coaching relationship. See server/coach-messages.ts.
+CREATE TABLE IF NOT EXISTS "coach_athlete_messages" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "sender_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "body" text NOT NULL,
+  "team_post_id" integer REFERENCES "team_posts"("id") ON DELETE SET NULL,
+  "removed_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  CONSTRAINT "coach_athlete_messages_sender_is_a_party" CHECK ("sender_id" = "coach_id" OR "sender_id" = "athlete_id"),
+  CONSTRAINT "coach_athlete_messages_two_people" CHECK ("coach_id" <> "athlete_id")
+);
+CREATE INDEX IF NOT EXISTS "coach_athlete_messages_thread_idx" ON "coach_athlete_messages" ("coach_id", "athlete_id", "created_at");
+CREATE INDEX IF NOT EXISTS "coach_athlete_messages_athlete_idx" ON "coach_athlete_messages" ("athlete_id");
+CREATE TABLE IF NOT EXISTS "coach_athlete_message_reads" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "last_read_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "coach_athlete_message_reads_unique" ON "coach_athlete_message_reads" ("user_id", "coach_id", "athlete_id");
 `;
 
 async function main() {

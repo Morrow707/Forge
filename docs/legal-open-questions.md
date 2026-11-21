@@ -464,6 +464,43 @@ recovery, load tolerance, reaction time?** The last is the only one that is lite
 measured. We would rather use a plainer word that is accurate than a better-sounding one that is a
 claim, and a short list of permitted and forbidden words is something we can enforce in the code.
 
+## 25. Private coach-to-athlete messages with minors: who must see them, and how long we keep them
+
+Added 2026-11-21. Forge now has private text messages between a coach and one athlete that coach
+currently coaches, and nobody else: no athlete can message another athlete, a Free Agent (an athlete
+with no coach) cannot message anyone, and a thread closes to new messages the moment the athlete
+leaves the roster or is put on an off-season hold. For an athlete under 18 with a linked guardian,
+the guardian reads every thread, read-only, and both the coach and the athlete are told on the
+thread that a parent can see it. Messages cannot be edited; a sender can "remove" one, which hides
+its text from the other party but keeps it, and the guardian and a Forge admin audit still see it.
+The guardian is not notified per message. When a user deletes their own account, their messages are
+deleted with it, as everything else they hold is today.
+
+We would like counsel's view on these, in this order:
+
+**(a) Is guardian read access the right safeguard for coach-to-minor private messages, or is more
+required?** Youth-sport safeguarding guidance commonly asks that an adult not communicate one-to-one
+with a minor and that a second adult (a parent or another coach) be included. Does a guardian being
+able to read every message, with both parties told so, satisfy that, or should a second adult be
+copied in real time, or should private messages with minors not exist at all? A minor athlete
+cannot use Forge at all until a guardian claims the linked account, so a minor who can read a
+message always has a guardian who can too; but a coach can write to a minor before that claim, and
+the guardian sees those messages when they claim. Is that acceptable, or should a coach be unable
+to write to a minor until a guardian is linked?
+
+**(b) How long should these messages be kept, and should a user's own account deletion remove
+them?** Today deletion removes them. A safeguarding concern raised after an account is deleted would
+then have no record. Is there a retention period we should hold coach-to-minor messages for, even
+past a deletion, and how would that sit beside our deletion promise and our minimisation posture for
+minors (we delete their training video at 30 or 90 days)?
+
+**(c) What, if anything, do we owe when a guardian or admin sees something concerning in a thread?**
+Forge is never present at a session. Do we need a reporting path, and to whom, and does reading the
+audit create a duty?
+
+**(d) Does anything need adding to the Terms of Use, the Privacy Policy or the Notice to Parent or
+Guardian** to describe messaging, the guardian's read access and the admin audit?
+
 ---
 
 ## FORGE'S WORKING POSITION ON 15 TO 24, 2026-11-06 -- NOT COUNSEL'S ANSWER
