@@ -21,6 +21,8 @@ import { StreakBadges } from "@/components/streak-badge";
 import { AthleteAvatar } from "@/components/athlete-avatar";
 import { Skeleton } from "@/components/skeleton";
 import { cn } from "@/lib/utils";
+import { CsvExportButton } from "@/components/csv-export-button";
+import { CAMERA_ACCURACY_INLINE } from "@shared/camera-accuracy-copy";
 
 type LeaderboardExercise = { id: number; name: string };
 type LeaderboardEntry = {
@@ -188,6 +190,17 @@ function StrengthLeaderboard() {
           </SelectContent>
         </Select>
       </div>
+
+      {exerciseId && entries.length > 0 && (
+        <div className="mb-4 flex justify-end">
+          <CsvExportButton
+            filename={`strength-leaderboard-${(selectedName ?? "lift").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.csv`}
+            testId="button-export-strength-leaderboard"
+            header={["Rank", "Athlete", "Sport", "Position", "Est. 1RM", "Weight", "Unit", "Reps", "Date"]}
+            rows={entries.map((e) => [e.rank, e.name, e.sport, e.position, e.estimatedOneRm, e.weight, e.weightUnit, e.reps, e.date])}
+          />
+        </div>
+      )}
 
       {!exerciseId && (
         <Card>
@@ -363,6 +376,17 @@ function SpeedLeaderboard() {
           cleared it once on their own workout screen weeks ago would never see it here, on the
           surface that needed it most. */}
       <CameraMetricCaveat className="mb-4" />
+      {entries.length > 0 && (
+        <div className="mb-4 flex justify-end">
+          <CsvExportButton
+            filename={`speed-leaderboard-${distanceYards}yd.csv`}
+            testId="button-export-speed-leaderboard"
+            note={`Times are camera-timed. ${CAMERA_ACCURACY_INLINE}`}
+            header={["Rank", "Athlete", "Sport", "Position", "Seconds", "Yards", "Date"]}
+            rows={entries.map((e, i) => [i + 1, e.name, e.sport, e.position, e.elapsedSeconds, e.distanceYards, e.date])}
+          />
+        </div>
+      )}
 
       {!skillExerciseId && (
         <Card>

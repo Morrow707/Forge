@@ -89,6 +89,8 @@ import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { GoalsPanel } from "@/components/goals-panel";
 import { Skeleton } from "@/components/skeleton";
 import { ReadFailed } from "@/components/read-failed";
+import { CsvExportButton } from "@/components/csv-export-button";
+import { CAMERA_ACCURACY_INLINE } from "@shared/camera-accuracy-copy";
 import { convertWeight } from "@/lib/progression";
 
 type RosterEntry = { id: number; name: string; email: string };
@@ -1072,7 +1074,15 @@ export default function CoachAnalytics() {
 
           <Card>
             <CardHeader>
+              <div className="flex items-start justify-between gap-3">
               <CardTitle>Recent Sessions</CardTitle>
+              <CsvExportButton
+                filename="recent-sessions.csv"
+                testId="button-export-recent-sessions"
+                header={["Date", "Day", "Completed", "Exercises", "Total reps", "Total volume"]}
+                rows={overview.map((s) => [s.date, s.dayTitle, s.completed ? "yes" : "no", s.exercises.join("; "), s.totalReps, s.totalVolume])}
+              />
+              </div>
               <CardDescription>
                 Every exercise this athlete has logged. Pick one above for full history, PRs, and
                 (if tracked) bar speed and path.
@@ -2269,7 +2279,16 @@ export default function CoachAnalytics() {
           {viewMode === "trends" && (
           <Card>
             <CardHeader>
+              <div className="flex items-start justify-between gap-3">
               <CardTitle>Every Data Point</CardTitle>
+              <CsvExportButton
+                filename="every-data-point.csv"
+                testId="button-export-data-points"
+                note={`Bar speed, power and range of motion are camera numbers. ${CAMERA_ACCURACY_INLINE}`}
+                header={["Date", "Set", "Reps", "Weight", "Unit", "Est. 1RM", "RPE", "PR", "Peak m/s", "Mean m/s", "Peak W", "Mean W", "ROM cm", "Bar path dev cm"]}
+                rows={points.map((p) => [p.date, p.setNumber, p.reps, p.weight, p.weightUnit, p.estimatedOneRm, p.rpe, p.isPR ? "yes" : "", p.peakVelocityMps, p.meanVelocityMps, p.peakPowerWatts, p.meanPowerWatts, p.romCm, p.barPathDeviationCm])}
+              />
+              </div>
               <CardDescription>The complete raw history across every logged date.</CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
@@ -2990,6 +3009,12 @@ function AcwrTrendCard({ athleteId }: { athleteId: string }) {
               <Activity className="h-5 w-5" />
               Training Load (ACWR)
             </CardTitle>
+            <CsvExportButton
+              filename="training-load-acwr.csv"
+              testId="button-export-acwr"
+              header={["Date", "Acute load", "Chronic load", "Ratio", "Level"]}
+              rows={history.map((h) => [h.date, h.acuteLoad, h.chronicLoad, h.ratio, h.level])}
+            />
             <CardDescription>
               Acute (7-day) vs. chronic (28-day average) load, from logged volume. A general
               load-management guideline, not a medical diagnosis.
@@ -3146,6 +3171,12 @@ function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
               <Weight className="h-5 w-5" />
               Volume & Intensity
             </CardTitle>
+            <CsvExportButton
+              filename="volume-intensity.csv"
+              testId="button-export-weekly-load"
+              header={["Week starting", "Total volume", "Total sets", "Average load per rep"]}
+              rows={series.map((w) => [w.weekStart, w.totalVolume, w.totalSets, w.avgIntensity])}
+            />
             <CardDescription>
               Weekly training load, total volume lifted (bars) vs. average weight per rep
               (line). Only counts sets logged with a numeric weight.
@@ -3300,7 +3331,15 @@ function TeamTrends() {
       ) : (
         <Card>
           <CardHeader>
+            <div className="flex items-start justify-between gap-3">
             <CardTitle>{activeMetric.label} — Team Trend</CardTitle>
+            <CsvExportButton
+              filename="team-trend.csv"
+              testId="button-export-team-trend"
+              header={["Athlete", "Date", `${activeMetric.label} (${activeMetric.unit})`]}
+              rows={points.map((p) => [p.athleteName, p.date, p.value])}
+            />
+            </div>
             <CardDescription>
               Every athlete with a recorded {activeMetric.label.toLowerCase()} ({activeMetric.unit}
               ), over time.
