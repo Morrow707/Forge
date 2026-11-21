@@ -145,6 +145,8 @@ const coachNav: NavItem[] = [
   { href: "/coach/nutrition", label: "Nutrition", icon: Apple, overflow: true },
   { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy, overflow: true },
   { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare, overflow: true },
+  // Private coach <-> athlete messages, only with athletes this coach coaches (2026-11-21).
+  { href: "/coach/messages", label: "Messages", icon: Mail, overflow: true },
   { href: "/coach/my", label: "My Training", icon: UserCircle, overflow: true },
   { href: "/coach/anvil", label: "The Anvil", icon: Activity, overflow: true },
   { href: "/coach/video-bank", label: "My Video Bank", icon: Video, overflow: true },
@@ -188,6 +190,8 @@ const athleteNav: NavItem[] = [
   { href: "/athlete/progress", label: "Progress", icon: LineChart },
   { href: "/athlete/nutrition", label: "Nutrition", icon: Apple },
   { href: "/athlete/team-board", label: "Team Board", icon: MessagesSquare },
+  // Private messages with their coaches only; a Free Agent has none, so it is filtered out below.
+  { href: "/athlete/messages", label: "Messages", icon: Mail },
   { href: "/athlete/chat", label: "AI Chat", icon: Sparkles },
   // Golf Swing/Hitting/Pitching -- separate paid add-ons from the general AI
   // Chat above (see requireFreeAgentAddOn in routes.ts), so this is its own
@@ -609,7 +613,8 @@ export function AppShell({
                 item.href !== "/athlete/chat" &&
                 item.href !== "/athlete/coaches" &&
                 item.href !== "/athlete/upgrade" &&
-                item.href !== "/athlete/team-board",
+                item.href !== "/athlete/team-board" &&
+                item.href !== "/athlete/messages",
             )
           : isFreeAgent
             // A Free Agent has no team, so Team Board (a coach's roster-wide
@@ -626,7 +631,9 @@ export function AppShell({
             // better answer anyway: it names nobody.
             ? athleteNav.filter(
                 (item) =>
-                  item.href !== "/athlete/team-board" && item.href !== "/athlete/leaderboard",
+                  item.href !== "/athlete/team-board" &&
+                  item.href !== "/athlete/leaderboard" &&
+                  item.href !== "/athlete/messages",
               )
             : athleteNav.filter(
                 (item) =>

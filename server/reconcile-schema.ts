@@ -4058,6 +4058,31 @@ CREATE TABLE IF NOT EXISTS "device_readings" (
 CREATE UNIQUE INDEX IF NOT EXISTS "device_readings_coach_vendor_reading_unique" ON "device_readings" ("coach_id", "vendor", "vendor_reading_id");
 CREATE INDEX IF NOT EXISTS "device_readings_athlete_recorded_idx" ON "device_readings" ("athlete_id", "recorded_at");
 CREATE INDEX IF NOT EXISTS "device_readings_connection_id_idx" ON "device_readings" ("connection_id");
+
+-- ---- COACH MESSAGING (2026-11-21) ----
+-- Private coach <-> athlete messages, only inside a coaching relationship. See server/coach-messages.ts.
+CREATE TABLE IF NOT EXISTS "coach_athlete_messages" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "sender_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "body" text NOT NULL,
+  "team_post_id" integer REFERENCES "team_posts"("id") ON DELETE SET NULL,
+  "removed_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  CONSTRAINT "coach_athlete_messages_sender_is_a_party" CHECK ("sender_id" = "coach_id" OR "sender_id" = "athlete_id"),
+  CONSTRAINT "coach_athlete_messages_two_people" CHECK ("coach_id" <> "athlete_id")
+);
+CREATE INDEX IF NOT EXISTS "coach_athlete_messages_thread_idx" ON "coach_athlete_messages" ("coach_id", "athlete_id", "created_at");
+CREATE INDEX IF NOT EXISTS "coach_athlete_messages_athlete_idx" ON "coach_athlete_messages" ("athlete_id");
+CREATE TABLE IF NOT EXISTS "coach_athlete_message_reads" (
+  "id" serial PRIMARY KEY,
+  "user_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "last_read_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "coach_athlete_message_reads_unique" ON "coach_athlete_message_reads" ("user_id", "coach_id", "athlete_id");
 `;
 
 async function main() {

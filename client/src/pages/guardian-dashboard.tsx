@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/notification-bell";
+import { GuardianCoachMessagesCard } from "@/components/guardian-coach-messages-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -467,6 +468,7 @@ export default function GuardianDashboardPage() {
                 <GuardianParentalVerificationCard athleteId={athlete.id} athleteName={athlete.name} />
                 <GuardianAgreementsCard athleteId={athlete.id} athleteName={athlete.name} />
                 <GuardianCoachConversationsCard athleteId={athlete.id} athleteName={athlete.name} />
+                <GuardianCoachMessagesCard athleteId={athlete.id} athleteName={athlete.name} />
                 <GuardianBiometricConsentCard athleteId={athlete.id} athleteName={athlete.name} />
 
                 <Card>
@@ -1249,7 +1251,7 @@ function GuardianCoachConversationsCard({ athleteId, athleteName }: { athleteId:
         </CardTitle>
         <CardDescription>
           Every comment between {athleteName} and their coaches on a workout or skill day, newest
-          first. Coaches never message a minor one-to-one in Forge; you can read all of it here.
+          first. You can read all of it here, and the private messages below too.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

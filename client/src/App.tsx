@@ -110,6 +110,7 @@ const CoachMyWorkout = lazy(withLoadTimeout(() => import("@/pages/coach/my-worko
 const CoachAnalytics = lazy(withLoadTimeout(() => import("@/pages/coach/analytics")));
 const CoachLeaderboard = lazy(withLoadTimeout(() => import("@/pages/coach/leaderboard")));
 const CoachTeamBoard = lazy(withLoadTimeout(() => import("@/pages/coach/team-board")));
+const CoachMessages = lazy(withLoadTimeout(() => import("@/pages/coach/messages")));
 const CoachMyCalendar = lazy(withLoadTimeout(() => import("@/pages/coach/my-calendar")));
 const TeamAboutPage = lazy(withLoadTimeout(() => import("@/pages/team-about")));
 const AthleteDashboard = lazy(withLoadTimeout(() => import("@/pages/athlete/dashboard")));
@@ -126,6 +127,7 @@ const AthleteVideoBank = lazy(withLoadTimeout(() => import("@/pages/athlete/vide
 const AnvilPage = lazy(withLoadTimeout(() => import("@/pages/anvil")));
 const CoachAnvilWeek = lazy(withLoadTimeout(() => import("@/pages/coach/anvil-week")));
 const AthleteTeamBoard = lazy(withLoadTimeout(() => import("@/pages/athlete/team-board")));
+const AthleteMessages = lazy(withLoadTimeout(() => import("@/pages/athlete/messages")));
 const AthleteWorkout = lazy(withLoadTimeout(() => import("@/pages/athlete/workout")));
 const AthleteSkillWorkout = lazy(withLoadTimeout(() => import("@/pages/skill-workout")));
 const AthleteChat = lazy(withLoadTimeout(() => import("@/pages/athlete/chat")));
@@ -591,6 +593,9 @@ function Router() {
         <Route path="/coach/team-board">
           <ProtectedRoute role="coach" component={CoachTeamBoard} />
         </Route>
+        <Route path="/coach/messages">
+          <ProtectedRoute role="coach" component={CoachMessages} />
+        </Route>
         <Route path="/coach/anvil">
           <ProtectedRoute role="coach" component={CoachAnvilWeek} />
         </Route>
@@ -653,6 +658,9 @@ function Router() {
         </Route>
         <Route path="/athlete/team-board">
           <ProtectedRoute role="athlete" component={AthleteTeamBoard} />
+        </Route>
+        <Route path="/athlete/messages">
+          <ProtectedRoute role="athlete" component={AthleteMessages} />
         </Route>
         <Route path="/athlete/chat">
           <ProtectedRoute role="athlete" component={AthleteChat} />

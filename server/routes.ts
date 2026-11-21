@@ -42,6 +42,7 @@ import { registerEmailListRoutes } from "./email-list";
 import { registerVelocityZoneRoutes } from "./velocity-zones";
 import { registerProgramImportRoutes } from "./program-import-routes";
 import { registerDeviceIntegrationRoutes } from "./device-integrations";
+import { registerCoachMessageRoutes } from "./coach-messages";
 import { registerHardyRoutes, isKnownAdult } from "./hardy";
 import { mountFeatureUsageCounter, registerFeatureUsage } from "./feature-usage";
 import { hashPassword, comparePasswords } from "./auth-utils";
@@ -1833,6 +1834,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerVelocityZoneRoutes(app);
   registerProgramImportRoutes(app, { requireActiveCoachPlan, requireFreeAgent, requirePaidAiAccess });
   registerDeviceIntegrationRoutes(app);
+  registerCoachMessageRoutes(app);
   // Hardy: search for everyone signed in; answers in a sentence only where Forge already allows AI
   // help (a coach or admin, or a Free Agent on an AI plan), and only for an adult. See server/hardy.ts.
   registerHardyRoutes(app, {

@@ -11,6 +11,10 @@ import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Send, MessagesSquare, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Link } from "wouter";
+
+/** How much of a coach's post rides along to the private reply as a quote. */
+const QUOTE_LENGTH = 200;
 
 type TeamPost = {
   id: number;
@@ -27,6 +31,7 @@ type TeamPost = {
  * off by default on every new post so it's never left on by accident. */
 export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; canAnnounce?: boolean }) {
   const qc = useQueryClient();
+  const canReplyPrivately = baseUrl.startsWith("/api/athlete/");
   const [body, setBody] = useState("");
   const [isAnnouncement, setIsAnnouncement] = useState(false);
 
@@ -153,6 +158,17 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
                 </span>
               </div>
               <p className="whitespace-pre-wrap text-sm">{p.body}</p>
+              {/* An athlete answers a coach's post PRIVATELY: the reply lands in their own
+                  thread with the coach (server/coach-messages.ts) and never on this board. */}
+              {canReplyPrivately && p.author.role === "coach" && (
+                <Link
+                  href={`/athlete/messages?coach=${p.author.id}&post=${p.id}&quote=${encodeURIComponent(p.body.slice(0, QUOTE_LENGTH))}`}
+                  className="mt-2 inline-block text-xs text-primary underline"
+                  data-testid={`link-reply-privately-${p.id}`}
+                >
+                  Reply privately to {p.author.name}
+                </Link>
+              )}
             </div>
           ))}
         </div>

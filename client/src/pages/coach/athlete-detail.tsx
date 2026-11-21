@@ -440,10 +440,17 @@ export default function AthleteDetailPage() {
                     {athlete.position && <Badge variant="outline">{athlete.position}</Badge>}
                   </div>
                 )}
-                <Button size="sm" variant="ghost" className="self-start" onClick={() => setEditOpen(true)}>
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit Profile
-                </Button>
+                <div className="flex flex-wrap gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => setEditOpen(true)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit Profile
+                  </Button>
+                  {/* A private thread with this athlete; the server decides whether it is open. */}
+                  <Button size="sm" variant="ghost" onClick={() => navigate(`/coach/messages?athlete=${athlete.id}`)} data-testid="button-message-athlete">
+                    <Mail className="h-3.5 w-3.5" />
+                    Message
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 

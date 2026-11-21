@@ -107,6 +107,12 @@ const OWNERSHIP_CHECKS = [
   // (eq(trustedDevices.userId, userId)). Its sibling POST /api/auth/sessions/:id/revoke passes
   // the same way through storage.revokeSession(user.id, ...) and needs no entry.
   "forgetDeviceById",
+  // Coach messaging (server/coach-messages.ts). The caller is always one of the relationship's two
+  // parties -- coachingRelationship(user.id, athleteId) or coachingRelationship(coachId, user.id) --
+  // and it answers "none" (404) unless the caller coaches, or is coached by, the URL's person.
+  // removeOwnMessage filters on the caller as the sender, so another person's id is a miss.
+  "coachingRelationship(",
+  "removeOwnMessage(",
 ];
 
 // Routes whose path parameter names global Forge content or a deliberately
