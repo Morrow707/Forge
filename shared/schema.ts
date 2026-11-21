@@ -11128,6 +11128,8 @@ export type PublicUser = Omit<
   // Athletes only: a Free Agent whose trial has ended and who holds no plan. The client sends
   // them to the plans screen; server/free-agent-plan.ts is the rule and the wall.
   planRequired?: boolean;
+  /** An athlete account an admin has exempted from paying (users.isBetaAccount). */
+  planCoveredByForge?: boolean;
   // Athletes only, and the OTHER reason the same gate holds someone: no date of birth on file, so
   // their tier cannot be derived and nobody can say whether they need a guardian at all. Separate
   // from guardianLinkRequired because the two need different screens -- waiting on a parent is

@@ -183,7 +183,8 @@ export default function AthleteUpgrade() {
   const googleLive = googleSupported && !!googleLiveConfig?.enabled;
 
   const qc = useQueryClient();
-  const planRequired = useAuth().user?.planRequired === true;
+  const { user } = useAuth();
+  const planRequired = user?.planRequired === true;
   const { data: entitlements } = useQuery<AddOnEntitlements>({
     queryKey: ["/api/athlete/entitlements"],
     queryFn: () => getJson("/api/athlete/entitlements"),
@@ -436,7 +437,16 @@ export default function AthleteUpgrade() {
           ) : undefined
         }
       >
-        {arrivedFromSignup && !currentTier && (
+        {user?.planCoveredByForge === true && (
+          <Card className="mb-6 border-primary/40" data-testid="covered-by-forge-banner">
+            <CardContent className="p-5">
+              <p className="text-sm font-semibold">
+                Your account is covered by Forge. You do not need to pick a plan or pay.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+        {arrivedFromSignup && !currentTier && user?.planCoveredByForge !== true && (
           <Card className="mb-6 border-primary/40" data-testid="welcome-pick-a-plan">
             <CardContent className="p-5">
               <p className="font-display text-base font-bold uppercase tracking-wide">

@@ -179,11 +179,17 @@ export default function SignupPage() {
 
   if (!isLoading && user) {
     if (isFreeAgentAttemptRef.current && !welcomeDismissed) {
-      return <FreeAgentWelcomeDialog onContinue={() => setWelcomeDismissed(true)} />;
+      return (
+        <FreeAgentWelcomeDialog
+          covered={user.planCoveredByForge === true}
+          onContinue={() => setWelcomeDismissed(true)}
+        />
+      );
     }
     // A new Free Agent lands on the plans, not the dashboard: Scott's coworker signed up and
     // "forge never asked which plan he wanted". Any code typed above rides along.
-    if (isFreeAgentAttemptRef.current && user.role === "athlete") {
+    // An exempt account has no plan to pick, so it goes straight to its dashboard.
+    if (isFreeAgentAttemptRef.current && user.role === "athlete" && user.planCoveredByForge !== true) {
       const carried = forgeCodeEntryIsAllowed() && promoCode.trim() ? `&code=${encodeURIComponent(promoCode.trim().toUpperCase())}` : "";
       return <Redirect to={`/athlete/upgrade?welcome=1${carried}`} />;
     }
@@ -740,7 +746,7 @@ export default function SignupPage() {
  * an AI feature that assumes they already know why. Not dismissable except
  * via the button: there's nothing else on screen underneath it to interact
  * with, so an accidental outside-click closing it would just be confusing. */
-function FreeAgentWelcomeDialog({ onContinue }: { onContinue: () => void }) {
+function FreeAgentWelcomeDialog({ onContinue, covered = false }: { onContinue: () => void; covered?: boolean }) {
   return (
     <Dialog open onOpenChange={() => {}}>
       <DialogContent hideClose onEscapeKeyDown={(e) => e.preventDefault()}>
@@ -753,6 +759,11 @@ function FreeAgentWelcomeDialog({ onContinue }: { onContinue: () => void }) {
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 text-sm">
+          {covered && (
+            <p className="rounded-md border border-primary/40 p-3 font-semibold" data-testid="welcome-covered-by-forge">
+              Your account is covered by Forge. You do not need to pick a plan or pay.
+            </p>
+          )}
           <p className="text-muted-foreground">
             You signed up without a coach's invite code, so you're training as a{" "}
             <strong className="text-foreground">Free Agent</strong>, which just means no coach
@@ -777,7 +788,7 @@ function FreeAgentWelcomeDialog({ onContinue }: { onContinue: () => void }) {
             </p>
             <p className="text-muted-foreground">
               Conversational AI program building, an AI form-check review of your lifts, and the
-              AI chat coach. You choose your plan on the next screen.
+              AI chat coach.{covered ? "" : " You choose your plan on the next screen."}
             </p>
           </div>
         </div>

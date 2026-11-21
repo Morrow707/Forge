@@ -370,6 +370,10 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
     // A Free Agent past their trial with no plan: the client sends them to the plans screen
     // rather than drawing an app whose every save answers 402. The wall in routes.ts enforces.
     publicUser.planRequired = await freeAgentPlanRequired(user);
+    // On the admin's exempt list (or ticked Beta account): the client says so in words and
+    // does not send a new signup to the plans screen, which told them training needs a plan.
+    publicUser.planCoveredByForge =
+      (await storage.getFreeAgentBillingAccount(user.id))?.isBetaAccount === true;
   }
   // Not gated on role, deliberately. Guardianship is a relationship, so any
   // account can hold links -- a parent training as a Free Agent, a coach who

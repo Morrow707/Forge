@@ -8362,3 +8362,13 @@ that goes red with the fix reverted:
   default Xcode when it is 26+, so it moves to 27 when GitHub makes Xcode 27 the `macos-latest`
   default. Before April 2027: read `xcodebuild -version` in a `verify_build` log; if it still says
   26, make that step select `/Applications/Xcode_27*.app` (never a beta), and run `verify_build`.
+
+- **2026-11-21: AN EXEMPT ACCOUNT IS TOLD SO, AND IS NOT ASKED FOR A PLAN.** The exempt list worked
+  (either order: listed first is comped at signup, listed after is comped at once; emails are
+  matched lower-case), but a new exempt Free Agent was still sent to the plans screen and read
+  "Training on Forge needs a plan". `/api/auth/me` carries `planCoveredByForge` (the athlete's
+  `isBetaAccount`); signup skips the plans screen for it, and the welcome pop-up and the plans
+  screen say "Your account is covered by Forge. You do not need to pick a plan or pay." Listing
+  an account does NOT cancel a plan it already pays for (Stripe or App Store keeps charging).
+  `an-exempt-account-is-not-asked-for-a-plan.test.ts`. Not watched in a browser. Client:
+  `verify_build`, batches.
