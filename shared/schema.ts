@@ -11471,3 +11471,62 @@ export const featureFirstSeen = pgTable(
     featureUnique: uniqueIndex("feature_first_seen_unique").on(table.kind, table.feature),
   }),
 );
+
+// ---- WEIGHT ROOM MODE (2026-11-21) ----
+// A coach runs one shared tablet in the weight room (a "station") and the athletes on a team log
+// their own assigned sets on it, each by tapping their tile; and a gym TV shows the team's boards
+// through a read-only display link. See server/weight-room.ts.
+
+/** One row per save made at a station: which coach's session made it, for which athlete, on which
+ * day, and the revision it produced. The set rows themselves are the athlete's ordinary
+ * workout_set_entries (the station goes through submitWorkoutLog), so this table is the only way
+ * to tell later that a day was typed on the coach's tablet rather than the athlete's phone. */
+export const weightRoomStationEntries = pgTable(
+  "weight_room_station_entries",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    teamId: integer("team_id").references(() => teams.id, { onDelete: "set null" }),
+    workoutLogId: integer("workout_log_id").references(() => workoutLogs.id, { onDelete: "set null" }),
+    assignmentId: integer("assignment_id").notNull(),
+    programDayId: integer("program_day_id").notNull(),
+    date: date("date").notNull(),
+    revision: integer("revision"),
+    setsWritten: integer("sets_written").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    athleteDateIdx: index("weight_room_station_entries_athlete_date_idx").on(table.athleteId, table.date),
+  }),
+);
+export type WeightRoomStationEntry = typeof weightRoomStationEntries.$inferSelect;
+
+/** A gym TV's read-only link to one team's boards. Only the token's SHA-256 is stored: the link is
+ * shown once, when it is made, and a lost one is revoked and replaced rather than recovered. */
+export const weightRoomDisplayTokens = pgTable(
+  "weight_room_display_tokens",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    teamId: integer("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    label: text("label"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at"),
+    lastSeenAt: timestamp("last_seen_at"),
+  },
+  (table) => ({
+    tokenHashUnique: uniqueIndex("weight_room_display_tokens_hash_unique").on(table.tokenHash),
+    coachIdx: index("weight_room_display_tokens_coach_idx").on(table.coachId),
+  }),
+);
+export type WeightRoomDisplayToken = typeof weightRoomDisplayTokens.$inferSelect;

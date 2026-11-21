@@ -248,6 +248,8 @@ export const NOINDEX_PREFIXES = [
   "/device-approval",
   "/verify-email",
   "/dev",
+  // A gym TV's display link (2026-11-21): a team's names behind a token, never a search result.
+  "/tv",
 ];
 
 /** Every route that needs a session, by prefix. Not in NOINDEX_PREFIXES because those are the

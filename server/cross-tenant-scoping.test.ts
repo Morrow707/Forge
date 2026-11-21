@@ -107,6 +107,9 @@ const OWNERSHIP_CHECKS = [
   // (eq(trustedDevices.userId, userId)). Its sibling POST /api/auth/sessions/:id/revoke passes
   // the same way through storage.revokeSession(user.id, ...) and needs no entry.
   "forgetDeviceById",
+  // Same shape, server/weight-room.ts: takes the caller's id first and updates only a display
+  // link whose coach_id is that id, so another coach's link id matches nothing.
+  "revokeDisplayLink",
 ];
 
 // Routes whose path parameter names global Forge content or a deliberately
@@ -114,6 +117,10 @@ const OWNERSHIP_CHECKS = [
 // was read and judged, not because it was hard to classify -- adding to this
 // list is the thing to be suspicious of in review.
 const GLOBAL_BY_DESIGN = new Set([
+  // A gym TV's display link (server/weight-room.ts): the token IS the credential, there is no
+  // caller to scope against. It is looked up by its hash, revocable, read-only, and the boards it
+  // serves are bounded to the one team the coach who made it chose.
+  "/api/public/weight-room-tv/:token",
   // The signed-in person's OWN velocity zone for a lift (server/velocity-zones.ts): the URL id is
   // an exercise, which is platform-wide, and the row read or written is keyed on user.id in
   // saveZone / the delete's where clause. A coached athlete is refused before either.

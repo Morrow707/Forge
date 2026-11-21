@@ -143,6 +143,8 @@ const coachNav: NavItem[] = [
   { href: "/coach/movement-screens", label: "Movement Screens", icon: ClipboardCheck, overflow: true },
   { href: "/coach/nutrition", label: "Nutrition", icon: Apple, overflow: true },
   { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy, overflow: true },
+  // The shared-tablet station and the gym TV link (2026-11-21).
+  { href: "/coach/weight-room", label: "Weight Room", icon: Dumbbell, overflow: true },
   { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare, overflow: true },
   { href: "/coach/my", label: "My Training", icon: UserCircle, overflow: true },
   { href: "/coach/anvil", label: "The Anvil", icon: Activity, overflow: true },
