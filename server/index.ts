@@ -91,6 +91,7 @@ import { assertFieldEncryptionConfigured } from "./field-encryption";
 import { startDataRetentionJob } from "./data-retention-job";
 import { startVideoRetentionJob } from "./video-retention-job";
 import { startDatabaseSizeJob } from "./database-size-job";
+import { startDeviceSyncJob } from "./device-sync-job";
 import { startTrialEndingJob } from "./trial-ending-job";
 import { startWeeklyRecapJob } from "./weekly-recap-job";
 import { startSetTraceOffloadJob } from "./set-trace-offload-job";
@@ -564,6 +565,8 @@ app.get("/healthz", async (_req, res) => {
     // One line a day (and now) saying how full the database is and which tables fill it --
     // see database-size-job.ts for the 61%-full disk that made it worth writing down.
     startDatabaseSizeJob();
+    // Pulls every connected force plate / velocity device every ten minutes (device-sync-job.ts).
+    startDeviceSyncJob();
     // One email a few days before a trial ends, to the accounts the plan wall would then stop.
     startTrialEndingJob();
     startWeeklyRecapJob();

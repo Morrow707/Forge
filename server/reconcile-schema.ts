@@ -4012,6 +4012,52 @@ CREATE TABLE IF NOT EXISTS "ai_account_spend_monthly" (
   "calls" integer NOT NULL DEFAULT 0
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "ai_account_spend_monthly_user_month_unique" ON "ai_account_spend_monthly" ("user_id", "month");
+
+-- ---- DEVICE INTEGRATIONS (2026-11-21) ----
+-- Force plates and velocity devices a coach connects, and a CSV upload for the rest. See
+-- server/device-integrations.ts. Credentials are encrypted by the app (field-encryption.ts);
+-- every number on a reading is derived from "raw" on read and never stored.
+CREATE TABLE IF NOT EXISTS "device_connections" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "vendor" text NOT NULL,
+  "credentials" text NOT NULL,
+  "status" text NOT NULL DEFAULT 'active',
+  "sync_cursor" text,
+  "last_synced_at" timestamp,
+  "last_error" text,
+  "created_by_user_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "device_connections_coach_vendor_unique" ON "device_connections" ("coach_id", "vendor");
+CREATE TABLE IF NOT EXISTS "device_athlete_links" (
+  "id" serial PRIMARY KEY,
+  "connection_id" integer NOT NULL REFERENCES "device_connections"("id") ON DELETE CASCADE,
+  "vendor_athlete_id" text NOT NULL,
+  "vendor_athlete_name" text,
+  "athlete_id" integer REFERENCES "users"("id") ON DELETE CASCADE,
+  "matched_by" text,
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "device_athlete_links_connection_vendor_athlete_unique" ON "device_athlete_links" ("connection_id", "vendor_athlete_id");
+CREATE INDEX IF NOT EXISTS "device_athlete_links_athlete_id_idx" ON "device_athlete_links" ("athlete_id");
+CREATE TABLE IF NOT EXISTS "device_readings" (
+  "id" serial PRIMARY KEY,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "connection_id" integer REFERENCES "device_connections"("id") ON DELETE SET NULL,
+  "vendor" text NOT NULL,
+  "vendor_reading_id" text NOT NULL,
+  "recorded_at" timestamp NOT NULL,
+  "metric_kind" text NOT NULL,
+  "exercise_name" text,
+  "raw" json NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "device_readings_coach_vendor_reading_unique" ON "device_readings" ("coach_id", "vendor", "vendor_reading_id");
+CREATE INDEX IF NOT EXISTS "device_readings_athlete_recorded_idx" ON "device_readings" ("athlete_id", "recorded_at");
+CREATE INDEX IF NOT EXISTS "device_readings_connection_id_idx" ON "device_readings" ("connection_id");
 `;
 
 async function main() {

@@ -22,6 +22,7 @@ import { AthleteProfileDialog } from "@/components/athlete-profile-dialog";
 import { AthleteSwitcher } from "@/components/athlete-switcher";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { BodyMetricsPanel } from "@/components/body-metrics-panel";
+import { AthleteDeviceData } from "@/components/athlete-device-data";
 import { StandingHeightPanel } from "@/components/standing-height-panel";
 import { ImportedTestingDataPanel } from "@/components/imported-testing-data-panel";
 import { TestingHistoryPanel } from "@/components/testing-history-panel";
@@ -676,6 +677,9 @@ export default function AthleteDetailPage() {
                   </CardContent>
                 </Card>
                 <ImportedTestingDataPanel athleteId={athlete.id} />
+                <div className="mt-4">
+                  <AthleteDeviceData athleteId={athlete.id} />
+                </div>
               </TabsContent>
 
               <TabsContent value="bar-speed">
