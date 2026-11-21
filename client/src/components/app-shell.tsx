@@ -28,6 +28,7 @@ import {
   BarChart3,
   ChevronDown,
   Palette,
+  Cable,
   SlidersHorizontal,
   UserCog,
   Info,
@@ -150,6 +151,8 @@ const coachNav: NavItem[] = [
   { href: "/coach/billing", label: "Billing", icon: CreditCard, overflow: true },
   // The whole look of the app for this program, in the order an athlete meets it (2026-10-03).
   { href: "/coach/branding", label: "Branding", icon: Palette, overflow: true },
+  // Force plates and velocity devices, and a CSV upload for the rest (2026-11-21).
+  { href: "/coach/devices", label: "Devices", icon: Cable, overflow: true },
   // Same page for every role, different checklist -- see shared/required-documents.ts. A coach
   // is asked for credentials (background check, certification, CPR), not for a waiver.
   { href: "/documents", label: "Documents", icon: FileCheck2, overflow: true },

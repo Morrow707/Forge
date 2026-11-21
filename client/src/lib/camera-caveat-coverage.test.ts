@@ -62,6 +62,10 @@ const CAMERA_METRIC_TERMS = [
  * this list is the exact failure the file exists to prevent.
  */
 const NOT_A_READING_SURFACE: Record<string, string> = {
+  "devices.tsx":
+    "the coach's connected-device page: every velocity on it is a force plate's or velocity device's own " +
+    "number (GymAware, an uploaded OVR or Vitruve CSV), labelled with that device's name. No camera " +
+    "number is shown here, so the camera caveat would describe the wrong instrument.",
   "workout.tsx":
     "shows numbers AND carries the caveat -- listed only because the check below finds it anyway",
   "pricing.tsx": "a price list describing what the tier buys; carries the permanent caveat",

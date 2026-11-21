@@ -11471,3 +11471,99 @@ export const featureFirstSeen = pgTable(
     featureUnique: uniqueIndex("feature_first_seen_unique").on(table.kind, table.feature),
   }),
 );
+
+// ---- DEVICE INTEGRATIONS (2026-11-21) ----
+// Force plates and velocity devices a coach connects, so their readings land in Forge on their
+// own, plus a CSV upload for a device with no API. See shared/device-integrations.ts for the
+// rules and server/device-integrations.ts for the reads and writes.
+
+/** One connected device account per program and vendor. `coachId` is the PRIMARY coach: a
+ *  program has one Hawkin account, whichever assistant clicked Connect. `credentials` is a JSON
+ *  object encrypted with server/field-encryption.ts (AES-256-GCM, key outside the database); it
+ *  is never sent to a client. `vendor` is text, not a pgEnum, so a new vendor is not a migration. */
+export const deviceConnections = pgTable(
+  "device_connections",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    vendor: text("vendor").notNull(),
+    credentials: text("credentials").notNull(),
+    /** "active" | "error" | "awaiting_partner_access". */
+    status: text("status").notNull().default("active"),
+    /** Where the next pull starts, in the vendor's own terms (Hawkin's lastSyncTime, GymAware's
+     *  epoch seconds). Null means "from the lookback window", which is what a newly linked athlete
+     *  needs. */
+    syncCursor: text("sync_cursor"),
+    lastSyncedAt: timestamp("last_synced_at"),
+    lastError: text("last_error"),
+    createdByUserId: integer("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachVendorUnique: uniqueIndex("device_connections_coach_vendor_unique").on(table.coachId, table.vendor),
+  }),
+);
+export type DeviceConnection = typeof deviceConnections.$inferSelect;
+
+/** A device's athlete and the Forge athlete they are. Matched by email, then an exact name; a
+ *  null `athleteId` is UNMATCHED and listed for the coach to resolve -- never guessed. The
+ *  vendor's email is not stored: it is used to match at sync time and dropped. */
+export const deviceAthleteLinks = pgTable(
+  "device_athlete_links",
+  {
+    id: serial("id").primaryKey(),
+    connectionId: integer("connection_id")
+      .notNull()
+      .references(() => deviceConnections.id, { onDelete: "cascade" }),
+    vendorAthleteId: text("vendor_athlete_id").notNull(),
+    vendorAthleteName: text("vendor_athlete_name"),
+    athleteId: integer("athlete_id").references(() => users.id, { onDelete: "cascade" }),
+    /** "email" | "name" | "coach". */
+    matchedBy: text("matched_by"),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    connectionVendorAthleteUnique: uniqueIndex("device_athlete_links_connection_vendor_athlete_unique").on(
+      table.connectionId,
+      table.vendorAthleteId,
+    ),
+  }),
+);
+export type DeviceAthleteLink = typeof deviceAthleteLinks.$inferSelect;
+
+/** One reading as the device sent it. `raw` is the vendor's payload untouched (for a CSV, the row
+ *  and the mapping the coach chose); every number shown is DERIVED from it on read
+ *  (shared/device-integrations.ts readingNumbers), never stored. Unique per program, vendor and
+ *  the vendor's own id, so a second sync or a second upload of the same file writes nothing. */
+export const deviceReadings = pgTable(
+  "device_readings",
+  {
+    id: serial("id").primaryKey(),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    connectionId: integer("connection_id").references(() => deviceConnections.id, { onDelete: "set null" }),
+    vendor: text("vendor").notNull(),
+    vendorReadingId: text("vendor_reading_id").notNull(),
+    recordedAt: timestamp("recorded_at").notNull(),
+    metricKind: text("metric_kind").notNull(),
+    exerciseName: text("exercise_name"),
+    raw: json("raw").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    vendorReadingUnique: uniqueIndex("device_readings_coach_vendor_reading_unique").on(
+      table.coachId,
+      table.vendor,
+      table.vendorReadingId,
+    ),
+    athleteRecordedIdx: index("device_readings_athlete_recorded_idx").on(table.athleteId, table.recordedAt),
+  }),
+);
+export type DeviceReading = typeof deviceReadings.$inferSelect;

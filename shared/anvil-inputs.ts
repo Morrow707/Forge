@@ -181,6 +181,15 @@ export const ANVIL_SIGNAL_TABLES: Record<string, string> = {
  * than an omission nobody can see.
  */
 export const NOT_A_SIGNAL_TABLE: Record<string, string> = {
+  // ---- DEVICE INTEGRATIONS (2026-11-21) ----
+  // A LOOKUP, NOT A MEASUREMENT. Which vendor athlete id is which Forge athlete (server/device-integrations.ts).
+  device_athlete_links:
+    "Which athlete on a connected device (Hawkin, GymAware) is which Forge athlete. A matching table the coach resolves, not anything the athlete did or measured.",
+  // NOT READ BY THE ANVIL YET, SAID RATHER THAN IMPLIED. A force plate's jump or a velocity
+  // device's set is a real measurement and a candidate signal; wiring it in is the Anvil's own
+  // decision (which device, which metric, comparable across devices or not), not this table's.
+  device_readings:
+    "A connected device's own readings (server/device-integrations.ts), stored raw and read only by the coach's Device data section and the admin calibration pairing. Not yet an Anvil signal: which vendor metrics are comparable morning to morning, and across devices, is undecided, so none is read until that is decided on purpose.",
   // A BUDGET, NOT A MEASUREMENT (2026-11-17). What one account's AI calls cost Forge this month,
   // kept so no subscriber can cost more than the plan pays (server/ai-monthly-cap.ts).
   ai_account_spend_monthly:
