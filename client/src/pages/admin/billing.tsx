@@ -76,9 +76,44 @@ function ExemptListCard() {
   const add = useMutation({
     mutationFn: async (address: string) => {
       const res = await apiRequest("POST", "/api/admin/exempt-emails", { email: address });
-      return (await res.json()) as { email: string; accountFound: boolean; accountRole: string | null };
+      return (await res.json()) as {
+        email: string;
+        accountFound: boolean;
+        accountRole: string | null;
+        billing: {
+          cancelled: string[];
+          refunds: { subscriptionId: string; amountCents: number; currency: string }[];
+          failed: { subscriptionId: string; step: "read" | "cancel" | "refund"; error: string }[];
+          appStoreSubscription: boolean;
+        } | null;
+      };
     },
     onSuccess: (added) => {
+      // What happened to a plan the account was already paying for. Kept on screen for a long
+      // time: a refund or a failure is money, and a four-second toast is not a record of it.
+      const b = added.billing;
+      if (b && b.cancelled.length > 0) {
+        const back = b.refunds.reduce((sum, r) => sum + r.amountCents, 0);
+        toast.success(
+          back > 0
+            ? `Their card plan is cancelled and $${(back / 100).toFixed(2)} (the most recent payment) is refunded.`
+            : "Their card plan is cancelled. There was no paid invoice to refund.",
+          { duration: 30000 },
+        );
+      }
+      if (b && b.failed.length > 0) {
+        const what = { refund: "cancelled, refund failed", cancel: "not cancelled", read: "could not be read" };
+        toast.error(
+          `Finish this in the Stripe dashboard: ${b.failed.map((f) => `${f.subscriptionId} (${what[f.step]})`).join(", ")}.`,
+          { duration: 60000 },
+        );
+      }
+      if (b?.appStoreSubscription) {
+        toast.error(
+          "This account pays through the App Store. Forge cannot stop or refund that: they cancel it in their iPhone settings and ask Apple for the refund.",
+          { duration: 60000 },
+        );
+      }
       toast.success(
         added.accountFound
           ? `${added.email} now has full access and never pays.`

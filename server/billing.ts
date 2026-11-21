@@ -2215,3 +2215,118 @@ export async function applyStripeCouponToSubscriptions(
   });
   return { applied, failed };
 }
+
+/** WHAT ADDING AN ACCOUNT TO THE EXEMPT LIST DOES TO A PLAN IT ALREADY PAYS FOR (2026-11-21).
+ *
+ * Scott: "if they signup first, put their card in and pay, when i add them to the exempt list
+ * ... can we auto push a refund?" and then "most recent payment only, build it out." Listing an
+ * address used to set the comp switch and nothing else, so a card subscription went on charging
+ * an account that no longer needed a plan.
+ *
+ * For every subscription Forge bills this account by CARD (the plan and each live add-on): the
+ * subscription is cancelled at Stripe with no proration, and the latest PAID invoice is refunded
+ * in full. Only that one payment; earlier months stay. An App Store subscription cannot be
+ * cancelled or refunded from here (only the buyer and Apple can), so it is reported instead.
+ *
+ * NEVER THROWS. The account is already exempt when this runs; a Stripe failure is returned by
+ * name and written to the audit log so an admin can finish it in the Stripe dashboard. The
+ * invoice is read BEFORE the cancel, so a cancel that fails leaves nothing refunded and a
+ * refund that fails leaves a cancelled subscription and a named amount still owed. */
+export type ExemptBillingResult = {
+  cancelled: string[];
+  refunds: { subscriptionId: string; amountCents: number; currency: string }[];
+  failed: { subscriptionId: string; step: "read" | "cancel" | "refund"; error: string }[];
+  /** A live App Store subscription exists. Forge cannot stop or refund it. */
+  appStoreSubscription: boolean;
+  stripeConfigured: boolean;
+};
+
+export async function stopBillingForExemptAccount(
+  userId: number,
+  stripe: Stripe | null = getStripeClient(),
+): Promise<ExemptBillingResult> {
+  const result: ExemptBillingResult = {
+    cancelled: [],
+    refunds: [],
+    failed: [],
+    appStoreSubscription: false,
+    stripeConfigured: stripe != null,
+  };
+  const sub = await storage.getSubscriptionForUser(userId);
+  const user = await storage.getUser(userId);
+  const live = (s: string | null | undefined) => s === "active" || s === "past_due" || s === "trialing";
+  if (sub?.appleOriginalTransactionId && live(sub.status)) result.appStoreSubscription = true;
+  if (user) {
+    const owned = [...(user.freeAgentAddOns ?? []), ...(user.billingAddOns ?? [])];
+    for (const id of activeAddOns(owned, user.addOnTerms)) {
+      if (user.addOnTerms?.[id]?.appleOriginalTransactionId) result.appStoreSubscription = true;
+    }
+  }
+  const subscriptionIds = await liveStripeSubscriptionIdsFor(userId);
+  if (subscriptionIds.length === 0) return result;
+  if (!stripe) {
+    for (const subscriptionId of subscriptionIds) {
+      result.failed.push({ subscriptionId, step: "read", error: "stripe_not_configured" });
+    }
+    await storage.logBillingEvent(userId, "exempt.billing_not_stopped", { subscriptionIds, reason: "stripe_not_configured" });
+    return result;
+  }
+  const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
+  for (const subscriptionId of subscriptionIds) {
+    // 1. The latest paid invoice and the payment behind it, read before anything changes.
+    let paymentIntent: string | null = null;
+    let amountCents = 0;
+    let currency = "usd";
+    try {
+      const current = await stripe.subscriptions.retrieve(subscriptionId, { expand: ["latest_invoice"] });
+      const invoice = typeof current.latest_invoice === "object" ? current.latest_invoice : null;
+      if (invoice?.id && invoice.status === "paid" && (invoice.amount_paid ?? 0) > 0) {
+        const payments = await stripe.invoicePayments.list({ invoice: invoice.id, limit: 10 });
+        for (const p of payments.data) {
+          const intent = p.payment?.payment_intent;
+          if (p.status === "paid" && intent) {
+            paymentIntent = typeof intent === "string" ? intent : intent.id;
+            break;
+          }
+        }
+        amountCents = invoice.amount_paid ?? 0;
+        currency = invoice.currency ?? "usd";
+      }
+    } catch (err) {
+      result.failed.push({ subscriptionId, step: "read", error: message(err) });
+      await storage.logBillingEvent(userId, "exempt.billing_read_failed", { subscriptionId, error: message(err) });
+      continue;
+    }
+    // 2. Stop future charges.
+    try {
+      await stripe.subscriptions.cancel(subscriptionId);
+      result.cancelled.push(subscriptionId);
+    } catch (err) {
+      result.failed.push({ subscriptionId, step: "cancel", error: message(err) });
+      await storage.logBillingEvent(userId, "exempt.cancel_failed", { subscriptionId, error: message(err) });
+      continue;
+    }
+    // 3. Give the most recent payment back.
+    if (paymentIntent) {
+      try {
+        const refund = await stripe.refunds.create({ payment_intent: paymentIntent });
+        result.refunds.push({ subscriptionId, amountCents: refund.amount ?? amountCents, currency });
+      } catch (err) {
+        result.failed.push({ subscriptionId, step: "refund", error: message(err) });
+        await storage.logBillingEvent(userId, "exempt.refund_failed", {
+          subscriptionId,
+          paymentIntent,
+          amountCents,
+          error: message(err),
+        });
+        continue;
+      }
+    }
+    await storage.logBillingEvent(userId, "exempt.subscription_stopped", {
+      subscriptionId,
+      refundedCents: paymentIntent ? amountCents : 0,
+      paymentIntent,
+    });
+  }
+  return result;
+}

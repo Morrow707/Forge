@@ -4519,7 +4519,7 @@ export const storage = {
       .where(eq(users.email, email))
       .returning({ id: users.id, role: users.role });
     if (account) await this.logBillingEvent(account.id, "admin.exempt_list_added", { adminId });
-    return { email, accountFound: !!account, accountRole: account?.role ?? null };
+    return { email, accountFound: !!account, accountId: account?.id ?? null, accountRole: account?.role ?? null };
   },
 
   /** Takes the address off the list and its account goes back to paying like anybody else. */

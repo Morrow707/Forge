@@ -134,7 +134,7 @@ import { notifyGuardiansOfTermsChange } from "./terms-change-notice";
 import { coreAgreementText } from "./seed-data/signup-agreement";
 import { addOnIsActive, withinRefundWindow, ADD_ON_CANCELLATION_POLICY } from "@shared/add-on-terms";
 import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier, ageFromDateOfBirth } from "@shared/privacy-tiers";
-import { BILLING_LIVE, ENFORCEMENT_ENABLED } from "./billing";
+import { BILLING_LIVE, ENFORCEMENT_ENABLED, stopBillingForExemptAccount } from "./billing";
 import { activeAddOns, type AddOnTerms } from "@shared/add-on-terms";
 import { VIDEO_RETENTION } from "@shared/video-retention";
 import { freeAgentPlanRequired, planWallCovers, FREE_AGENT_PLAN_REQUIRED_MESSAGE } from "./free-agent-plan";
@@ -4878,7 +4878,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message });
     }
-    res.status(201).json(await storage.addExemptEmail(parsed.data.email, currentUser(req).id));
+    const { accountId, ...added } = await storage.addExemptEmail(parsed.data.email, currentUser(req).id);
+    // A plan the account already pays for by card is cancelled and its most recent payment
+    // refunded (server/billing.ts, stopBillingForExemptAccount). It never throws.
+    const billing = accountId != null ? await stopBillingForExemptAccount(accountId) : null;
+    res.status(201).json({ ...added, billing });
   });
 
   app.delete("/api/admin/exempt-emails/:id", requireRole("admin"), async (req, res) => {

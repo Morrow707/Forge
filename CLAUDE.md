@@ -8372,3 +8372,14 @@ that goes red with the fix reverted:
   an account does NOT cancel a plan it already pays for (Stripe or App Store keeps charging).
   `an-exempt-account-is-not-asked-for-a-plan.test.ts`. Not watched in a browser. Client:
   `verify_build`, batches.
+
+- **2026-11-21: ADDING A PAYING ACCOUNT TO THE EXEMPT LIST CANCELS ITS CARD PLAN AND REFUNDS THE MOST
+  RECENT PAYMENT.** Scott: "most recent payment only, build it out." `stopBillingForExemptAccount`
+  (server/billing.ts), called from `POST /api/admin/exempt-emails`: for every live Stripe
+  subscription on the account (plan and add-ons) it reads the latest paid invoice, cancels the
+  subscription with no proration, then refunds that one payment. Never throws; a failure is named
+  in the response and the audit log (`exempt.*`) for the Stripe dashboard. An App Store plan cannot
+  be stopped or refunded by Forge: the admin screen says so, the buyer cancels in iPhone settings
+  and asks Apple. The admin toast states what was cancelled and the amount.
+  `an-exempt-account-stops-being-charged.test.ts` (7 cases, fake Stripe). NOT run against real
+  Stripe: watch the first one in the dashboard. One admin client file: `verify_build`, batches.
