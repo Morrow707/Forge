@@ -134,7 +134,8 @@ import { notifyGuardiansOfTermsChange } from "./terms-change-notice";
 import { coreAgreementText } from "./seed-data/signup-agreement";
 import { addOnIsActive, withinRefundWindow, ADD_ON_CANCELLATION_POLICY } from "@shared/add-on-terms";
 import { GUARDIAN_NOTICE_LIVE, derivePrivacyTier, ageFromDateOfBirth } from "@shared/privacy-tiers";
-import { BILLING_LIVE, ENFORCEMENT_ENABLED, stopBillingForExemptAccount } from "./billing";
+import { BILLING_LIVE, ENFORCEMENT_ENABLED, livePaidPlansFor, stopBillingForExemptAccount } from "./billing";
+import { notifyAccountCoveredByForge, notifyAccountNoLongerCovered } from "./exempt-list-email";
 import { activeAddOns, type AddOnTerms } from "@shared/add-on-terms";
 import { VIDEO_RETENTION } from "@shared/video-retention";
 import { freeAgentPlanRequired, planWallCovers, FREE_AGENT_PLAN_REQUIRED_MESSAGE } from "./free-agent-plan";
@@ -4868,7 +4869,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // comp switch (isBetaAccount), which every paywall and the plan wall already read; an address
   // with no account yet is comped when it signs up.
   app.get("/api/admin/exempt-emails", requireRole("admin"), async (_req, res) => {
-    res.json(await storage.listExemptEmails());
+    const entries = await storage.listExemptEmails();
+    // Whether each listed account still pays for something. An App Store plan is the one Forge
+    // cannot stop, so it stays flagged on the row until the buyer cancels it with Apple.
+    res.json(
+      await Promise.all(
+        entries.map(async ({ accountId, ...entry }) => ({
+          ...entry,
+          paying: accountId != null ? await livePaidPlansFor(accountId) : null,
+        })),
+      ),
+    );
   });
 
   app.post("/api/admin/exempt-emails", requireRole("admin"), async (req, res) => {
@@ -4882,7 +4893,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // A plan the account already pays for by card is cancelled and its most recent payment
     // refunded (server/billing.ts, stopBillingForExemptAccount). It never throws.
     const billing = accountId != null ? await stopBillingForExemptAccount(accountId) : null;
-    res.status(201).json({ ...added, billing });
+    const emailed = accountId != null ? await notifyAccountCoveredByForge(accountId, billing) : false;
+    res.status(201).json({ ...added, billing, emailed });
   });
 
   app.delete("/api/admin/exempt-emails/:id", requireRole("admin"), async (req, res) => {
@@ -4890,7 +4902,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!Number.isInteger(id)) return res.status(400).json({ message: "Not an entry" });
     const removed = await storage.removeExemptEmail(id, currentUser(req).id);
     if (!removed) return res.status(404).json({ message: "Entry not found" });
-    res.json(removed);
+    const { accountId, ...gone } = removed;
+    const emailed = accountId != null ? await notifyAccountNoLongerCovered(accountId) : false;
+    res.json({ ...gone, emailed });
   });
 
   // Every priced thing on the platform, read-only -- see pricing-catalog.ts.
@@ -15475,6 +15489,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   }
 
+  // AN EXEMPT ACCOUNT BUYS NOTHING (2026-11-21). An account on the admin's exempt list already
+  // has everything open, so a card checkout from it is a mistake that would have to be refunded.
+  // On the five sale checkouts and the plan switch only: the guardian's card check and the
+  // billing portal are not purchases and stay open. An App Store purchase cannot be refused here
+  // (Apple has taken the money before the server is asked); the app hides its buy buttons instead.
+  async function refuseExemptBuyer(req: any, res: any, next: any) {
+    const buyer = await storage.getUser(currentUser(req).id);
+    if (buyer?.isBetaAccount === true) {
+      return res.status(409).json({
+        message: "This account is covered by Forge. There is nothing to buy.",
+        coveredByForge: true,
+      });
+    }
+    next();
+  }
+
   // Where Stripe sends the customer back to. Derived from the request rather
   // than a hardcoded host so it works in local dev, on Render, and behind a
   // custom domain without a fourth environment variable to keep in sync.
@@ -15532,6 +15562,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // standing rule in this repo, and a checkout route is the last place to rely on one.
     requireFreeAgent,
     requireWebCheckout,
+    refuseExemptBuyer,
     async (req, res) => {
       const user = currentUser(req);
       // THE ENUM IS DERIVED, NOT TYPED OUT, AND THAT IS THE POINT.
@@ -15581,6 +15612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireRole("athlete"),
     requireFreeAgent,
     requireWebCheckout,
+    refuseExemptBuyer,
     async (req, res) => {
       const user = currentUser(req);
       const parsed = z
@@ -15628,6 +15660,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireRole("athlete"),
     requireFreeAgent,
     requireWebCheckout,
+    refuseExemptBuyer,
     async (req, res) => {
       const user = currentUser(req);
       const parsed = z
@@ -15646,6 +15679,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireRole("athlete"),
     requireFreeAgent,
     requireWebCheckout,
+    refuseExemptBuyer,
     async (req, res) => {
       const user = currentUser(req);
       // DERIVED FROM THE SHARED LIST, never typed out -- same reason the tier
@@ -15839,6 +15873,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireRole("coach"),
     requirePrimaryCoachForBilling,
     requireWebCheckout,
+    refuseExemptBuyer,
     async (req, res) => {
       const user = currentUser(req);
       const schema = z.object({
@@ -15866,6 +15901,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireRole("coach"),
     requirePrimaryCoachForBilling,
     requireWebCheckout,
+    refuseExemptBuyer,
     async (req, res) => {
       const user = currentUser(req);
       // The roster band, which is what /coach/billing quotes. The BILLED count, not the raw
@@ -15997,6 +16033,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/billing/checkout/class-lesson",
     requireRole("athlete"),
     requireWebCheckout,
+    refuseExemptBuyer,
     async (req, res) => {
       const user = currentUser(req);
       const schema = z.object({ classId: z.coerce.number(), lessonId: z.coerce.number() });

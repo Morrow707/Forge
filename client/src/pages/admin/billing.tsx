@@ -60,6 +60,8 @@ type ExemptEntry = {
   createdAt: string;
   accountRole: string | null;
   accountExempt: boolean | null;
+  /** What the account still pays for, or null when no account uses the address yet. */
+  paying: { card: boolean; appStore: boolean } | null;
 };
 
 /** THE EXEMPT LIST (2026-11-14). Scott: "can we put that email on an exempt list? Give them full
@@ -80,6 +82,7 @@ function ExemptListCard() {
         email: string;
         accountFound: boolean;
         accountRole: string | null;
+        emailed: boolean;
         billing: {
           cancelled: string[];
           refunds: { subscriptionId: string; amountCents: number; currency: string }[];
@@ -116,7 +119,7 @@ function ExemptListCard() {
       }
       toast.success(
         added.accountFound
-          ? `${added.email} now has full access and never pays.`
+          ? `${added.email} now has full access and never pays. ${added.emailed ? "They have been emailed." : "The email telling them could not be sent."}`
           : `${added.email} is on the list. No account uses that address yet; it gets full access the moment it signs up.`,
         { duration: 10000 },
       );
@@ -128,10 +131,15 @@ function ExemptListCard() {
   const remove = useMutation({
     mutationFn: async (id: number) => {
       const res = await apiRequest("DELETE", `/api/admin/exempt-emails/${id}`);
-      return (await res.json()) as { email: string; accountFound: boolean };
+      return (await res.json()) as { email: string; accountFound: boolean; emailed: boolean };
     },
     onSuccess: (gone) => {
-      toast.success(`${gone.email} is off the list and needs a plan like anybody else.`);
+      const told = !gone.accountFound
+        ? ""
+        : gone.emailed
+          ? " They have been emailed."
+          : " The email telling them could not be sent.";
+      toast.success(`${gone.email} is off the list and needs a plan like anybody else.${told}`, { duration: 10000 });
       qc.invalidateQueries({ queryKey: ["/api/admin/exempt-emails"] });
     },
     onError: (err: ApiError) => toast.error(err.message || "Couldn't remove that address"),
@@ -189,6 +197,16 @@ function ExemptListCard() {
                         ? `${entry.accountRole === "coach" ? "Coach" : entry.accountRole === "athlete" ? "Athlete" : entry.accountRole} account, full access, never pays.`
                         : "Has an account, but its Beta account switch was turned off under More, Users. Remove and add it again to restore full access."}
                   </p>
+                  {entry.paying?.appStore && (
+                    <p className="text-xs font-semibold text-destructive" data-testid={`exempt-app-store-${entry.id}`}>
+                      Still paying through the App Store. Forge cannot stop it: they cancel it in their iPhone settings.
+                    </p>
+                  )}
+                  {entry.paying?.card && (
+                    <p className="text-xs font-semibold text-destructive" data-testid={`exempt-card-${entry.id}`}>
+                      Still has a card plan. Add this address again to cancel and refund it.
+                    </p>
+                  )}
                 </div>
                 <Button
                   size="sm"
@@ -196,7 +214,7 @@ function ExemptListCard() {
                   disabled={remove.isPending}
                   data-testid={`button-remove-exempt-${entry.id}`}
                   onClick={() => {
-                    if (window.confirm(`Take ${entry.email} off the exempt list? Its account will need a plan again.`)) {
+                    if (window.confirm(`Take ${entry.email} off the exempt list? Its account will need a plan straight away, and they will be emailed to say so.`)) {
                       remove.mutate(entry.id);
                     }
                   }}

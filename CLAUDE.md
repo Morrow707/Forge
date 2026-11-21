@@ -8383,3 +8383,18 @@ that goes red with the fix reverted:
   and asks Apple. The admin toast states what was cancelled and the amount.
   `an-exempt-account-stops-being-charged.test.ts` (7 cases, fake Stripe). NOT run against real
   Stripe: watch the first one in the dashboard. One admin client file: `verify_build`, batches.
+
+- **2026-11-21: FIVE MORE ON THE EXEMPT LIST** (Scott: "lets do 1, 2, 5, 6, and 7").
+  (1) **An exempt account is offered nothing to buy.** `refuseExemptBuyer` (routes.ts) answers 409
+  `coveredByForge` on the six sale checkouts and the plan switch; the guardian card check and the
+  billing portal are not purchases and stay open. The athlete plans screen draws only the covered
+  line for it, and the coach billing page hides its buy buttons. An App Store purchase cannot be
+  refused by the server, which is why the buttons are hidden. (2) **Each list row says what the
+  account still pays for** (`livePaidPlansFor`, `paying: { card, appStore }`): an App Store plan
+  stays flagged until the buyer cancels with Apple; a card plan is cleared by adding the address
+  again. (5)(7) **The person is emailed when added and when removed** (`server/exempt-list-email.ts`,
+  awaited, `emailed` in the response and the admin toast; the add email states a refund amount or
+  an App Store plan to cancel). No link, no website named. An address with no account yet gets no
+  email. (6) **`planCoveredByForge` is set for a coach too** and the coach billing page says so.
+  `the-exempt-list.itest.ts` (5 cases), `exempt-list-email.test.ts`. Not mutation-tested and not
+  watched in a browser. Client: `verify_build`.

@@ -2241,6 +2241,22 @@ export type ExemptBillingResult = {
   stripeConfigured: boolean;
 };
 
+/** What an account still pays for, by rail. The exempt list shows it on each row: a card plan
+ *  is one Forge stops by itself, an App Store plan is one only the buyer can cancel. */
+export async function livePaidPlansFor(userId: number): Promise<{ card: boolean; appStore: boolean }> {
+  const sub = await storage.getSubscriptionForUser(userId);
+  const user = await storage.getUser(userId);
+  const live = sub?.status === "active" || sub?.status === "past_due" || sub?.status === "trialing";
+  let appStore = !!sub?.appleOriginalTransactionId && live;
+  if (user) {
+    const owned = [...(user.freeAgentAddOns ?? []), ...(user.billingAddOns ?? [])];
+    for (const id of activeAddOns(owned, user.addOnTerms)) {
+      if (user.addOnTerms?.[id]?.appleOriginalTransactionId) appStore = true;
+    }
+  }
+  return { card: (await liveStripeSubscriptionIdsFor(userId)).length > 0, appStore };
+}
+
 export async function stopBillingForExemptAccount(
   userId: number,
   stripe: Stripe | null = getStripeClient(),

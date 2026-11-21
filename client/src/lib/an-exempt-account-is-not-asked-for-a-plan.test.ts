@@ -24,6 +24,6 @@ describe("an exempt account is not asked for a plan", () => {
   it("the plans screen says the account is covered and drops the pick-a-plan card", () => {
     const src = read("client/src/pages/athlete/upgrade.tsx");
     expect(src).toContain("covered-by-forge-banner");
-    expect(src).toMatch(/arrivedFromSignup && !currentTier && user\?\.planCoveredByForge !== true/);
+    expect(src).toMatch(/if \(user\?\.planCoveredByForge === true\) \{\s*return \(/);
   });
 });

@@ -86,6 +86,8 @@ export default function CoachBilling() {
   // assistant's sentence in a flash. Same pattern, same reason, as coach/branding.tsx.
   const { user } = useAuth();
   const isPrimaryCoach = user?.isPrimaryCoach === true;
+  // On the admin's exempt list: this coach is told so and is offered nothing to buy.
+  const covered = user?.planCoveredByForge === true;
   const [starting, setStarting] = useState(false);
   const [openingPortal, setOpeningPortal] = useState(false);
 
@@ -267,6 +269,15 @@ export default function CoachBilling() {
 
   return (
     <AppShell title="Billing">
+      {covered && (
+        <Card className="mt-6 max-w-xl border-primary/40" data-testid="covered-by-forge-banner">
+          <CardContent className="p-5">
+            <p className="text-sm font-semibold">
+              Your account is covered by Forge. You do not need a plan and there is nothing to buy.
+            </p>
+          </CardContent>
+        </Card>
+      )}
       <Card className="mt-6 max-w-xl">
         <CardContent className="flex flex-col gap-4 p-6">
           <p className="label-xs">Your plan size</p>
@@ -422,7 +433,7 @@ export default function CoachBilling() {
                     Your head coach looks after the program's add-ons.
                   </p>
                 ) : null}
-                {!unlocked && isPrimaryCoach && entitlements.billingOpen && !isNative && (
+                {!unlocked && isPrimaryCoach && entitlements.billingOpen && !covered && !isNative && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -433,7 +444,7 @@ export default function CoachBilling() {
                     {buyingAddOn === addOn.id ? "Opening checkout..." : `Get ${addOn.label}`}
                   </Button>
                 )}
-                {!unlocked && isPrimaryCoach && appleSupported && applePrices[addOn.id] && (
+                {!unlocked && !covered && isPrimaryCoach && appleSupported && applePrices[addOn.id] && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -508,6 +519,10 @@ export default function CoachBilling() {
             <p className="rounded-md bg-surface-elevated p-3 text-sm text-muted-foreground">
               Your head coach looks after the program's plan. The band above is what this roster
               costs.
+            </p>
+          ) : covered ? (
+            <p className="rounded-md bg-surface-elevated p-3 text-sm text-muted-foreground">
+              Your account is covered by Forge, so there is no plan to buy.
             </p>
           ) : !billingOpen ? (
             <p className="rounded-md bg-surface-elevated p-3 text-sm text-muted-foreground">

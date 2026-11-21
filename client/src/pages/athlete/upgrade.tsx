@@ -412,6 +412,26 @@ export default function AthleteUpgrade() {
   }
   const trialEndsAt = entitlements?.trialEndsAt ? new Date(entitlements.trialEndsAt) : null;
 
+  // AN EXEMPT ACCOUNT IS OFFERED NOTHING TO BUY (2026-11-21). Everything is already open, so a
+  // plan bought here would be a mistake somebody has to refund. The server refuses the card
+  // checkout too; an App Store purchase cannot be refused there, so the buttons are not drawn.
+  if (user?.planCoveredByForge === true) {
+    return (
+      <FreeAgentGate title="Upgrade">
+        <AppShell title="Your plan">
+          <Card className="mb-6 border-primary/40" data-testid="covered-by-forge-banner">
+            <CardContent className="p-5">
+              <p className="text-sm font-semibold">
+                Your account is covered by Forge. You do not need to pick a plan or pay.
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">Everything is open. There is nothing to buy here.</p>
+            </CardContent>
+          </Card>
+        </AppShell>
+      </FreeAgentGate>
+    );
+  }
+
   return (
     <FreeAgentGate title="Upgrade">
       <AppShell
@@ -437,16 +457,7 @@ export default function AthleteUpgrade() {
           ) : undefined
         }
       >
-        {user?.planCoveredByForge === true && (
-          <Card className="mb-6 border-primary/40" data-testid="covered-by-forge-banner">
-            <CardContent className="p-5">
-              <p className="text-sm font-semibold">
-                Your account is covered by Forge. You do not need to pick a plan or pay.
-              </p>
-            </CardContent>
-          </Card>
-        )}
-        {arrivedFromSignup && !currentTier && user?.planCoveredByForge !== true && (
+        {arrivedFromSignup && !currentTier && (
           <Card className="mb-6 border-primary/40" data-testid="welcome-pick-a-plan">
             <CardContent className="p-5">
               <p className="font-display text-base font-bold uppercase tracking-wide">

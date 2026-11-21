@@ -388,6 +388,8 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
   publicUser.needsTermsAcceptance = (await storage.getTermsAcceptanceStatus(user.id))
     .needsAcceptance;
   if (user.role === "coach") {
+    // On the admin's exempt list: the billing screen says so and offers nothing to buy.
+    publicUser.planCoveredByForge = user.isBetaAccount === true;
     (publicUser as any).hiddenSections = await storage.getHiddenSectionsForCoach(user.id);
     publicUser.staffTitle = await storage.getStaffTitleForCoach(user.id);
     const coachIds = await storage.getEffectiveCoachIds(user.id);

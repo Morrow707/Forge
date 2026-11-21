@@ -4498,6 +4498,7 @@ export const storage = {
         id: exemptEmails.id,
         email: exemptEmails.email,
         createdAt: exemptEmails.createdAt,
+        accountId: users.id,
         accountRole: users.role,
         accountExempt: users.isBetaAccount,
       })
@@ -4532,7 +4533,7 @@ export const storage = {
       .where(eq(users.email, gone.email))
       .returning({ id: users.id });
     if (account) await this.logBillingEvent(account.id, "admin.exempt_list_removed", { adminId });
-    return { email: gone.email, accountFound: !!account };
+    return { email: gone.email, accountFound: !!account, accountId: account?.id ?? null };
   },
 
   // ---------- Account self-service (name/email/password) ----------
