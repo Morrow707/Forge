@@ -7713,6 +7713,52 @@ and his answer to each, so none is re-opened:
   same fastlane lane, verified by `verify_build`, tested only on Scott's phone.
 - **Camera calibration: coming, slowly.** Demo clips: in progress. Mobility library: in progress.
 
+## Closing the TeamBuildr gaps, 2026-11-21
+
+Scott, after a comparison with TeamBuildr: "for everything we lose in, how do we upgrade them to
+wins?" then "build everything except for the android portion". Five things shipped together:
+
+- **Device data** (`server/device-integrations.ts`, `server/device-adapters.ts`, the coach's
+  Devices page, "Device data" on the athlete Testing tab). Hawkin Dynamics and GymAware sync for
+  real every 10 minutes from a key the school pastes in (stored encrypted, never sent back).
+  VALD, Perch and Catapult are wired and say "awaiting partner access": **Forge has to apply to
+  each, and that is Scott's** (VALD: support@vald.com; Perch/Catapult: their customer success).
+  OVR, Vitruve and any other device come in by CSV upload with column mapping. Device athletes
+  match by email then exact name; the unmatched are listed for the coach, never guessed. Nothing
+  is stored for an athlete with tracking off or no biometric consent on file (the camera's gate;
+  loosen only on Scott's word). Readings keep the raw payload and derive every number on read.
+  **The admin calibration export pairs camera sets with the device's reading of the same set**
+  (same athlete, within 20 minutes): a sensor school's every filmed set becomes a calibration
+  take with no screenshots. It records only; nothing reads it into a camera number. Counsel
+  question 26. Nothing has run against a real Hawkin or GymAware account yet: the first
+  connection is the test of the field parsing.
+- **Weight-room station and TV board** (`server/weight-room.ts`, `/coach/weight-room`). One
+  tablet under the coach's session; athletes tap a first-name tile and log today's sets through
+  the same `submitWorkoutLog` and revision rule as the phone (a phone-filmed set is never
+  overwritten). Leaving needs the coach's password; it is an app lock, so the setup page points
+  at iOS Guided Access for the device. The TV is a revocable, hashed, read-only, team-scoped
+  display link with hand-logged boards only and every field named explicitly.
+- **Program import** (`server/program-import.ts`, `server/spreadsheet-reader.ts`). .xlsx (read
+  by hand, no library), CSV, PDF and photos become a DRAFT in a review dialog; unmatched rows are
+  flagged, never mapped silently; the builder's own Save is the only write. **The real model has
+  never run on it** (no AI key in the sandbox): the first real whiteboard photo is its test.
+- **Coach messaging** (`server/coach-messages.ts`, Messages for coach and athlete, read-only on
+  the guardian dashboard). One thread per coach and athlete, only inside a live coaching
+  relationship; held and ended threads are read-only; a minor's guardian reads every thread and
+  both parties are told; no edit, a "remove" that hides the text from the other party only.
+  `no-athlete-to-athlete-communication.test.ts` states the new rule: a two-person message table
+  must be keyed on a coach and an athlete and every insert needs a permit only the relationship
+  guard mints. Counsel question 25.
+- **CSV export** on the coach's report cards and both leaderboards; a file carrying camera
+  numbers carries the accuracy caveat on its first line. And **"One app instead of four"** on
+  `/for-high-schools`, a list of what a coach's plan does today, naming no competitor.
+
+**ANDROID IS FLAGGED FOR LATER, NOT BUILT.** It needs a phone bought and tested (Scott: "obviously
+needs to be purchased and tested"). When one is in hand: run the existing Android shell, Health
+Connect, Google Play Billing (`GOOGLE_PLAY_BILLING_LIVE`), and check the four features above on it
+-- the station on an Android tablet, the TV link, messaging push, and the program import's photo
+path. Until then nothing here is claimed for Android, and the high-schools list says "iPhone".
+
 ## Launch-checklist decisions, 2026-10-08 (Scott, working the next ten)
 
 Recorded here because every one of them is a question somebody will otherwise re-open, and two

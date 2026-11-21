@@ -501,6 +501,32 @@ audit create a duty?
 **(d) Does anything need adding to the Terms of Use, the Privacy Policy or the Notice to Parent or
 Guardian** to describe messaging, the guardian's read access and the admin audit?
 
+## 26. Data from connected force plates and velocity devices
+
+Added 2026-11-21. A school's head coach can now connect the program's own force plate or bar-speed
+device account (Hawkin Dynamics and GymAware today; VALD, Perch and Catapult once those companies
+grant Forge access) by pasting a key the device company issued to the school, or upload a CSV the
+device exported. Forge then copies that athlete's readings (jump heights, forces, bar speeds, power)
+into the athlete's Forge record and shows them to the coach. To match a device's athlete to a Forge
+athlete, Forge reads the name and, where the device provides it, the email the school entered in the
+device's own system. Nothing is stored for an athlete who has turned camera tracking off or who has
+no video and biometric consent on file. An admin export lines those readings up beside Forge's camera
+measurements of the same sets, with athletes shown as "Athlete 1", "Athlete 2", to calibrate the
+camera. The keys are stored encrypted and never shown back.
+
+We would like counsel's view on these, in this order:
+
+**(a) Does the Privacy Policy need a line describing this source of data**, and does the Video and
+Biometric Consent reach force and velocity readings from another company's device, or is a separate
+consent (or a guardian's for a minor) required?
+
+**(b) Is the school's own key enough authority for Forge to pull a minor's readings**, given the
+school already holds that data with the device company, or does Forge need its own agreement with
+each device company or each school (for example a line in the Institutional Service Agreement)?
+
+**(c) May those readings be used in the admin calibration export**, which compares them with
+Forge's own camera numbers to improve the camera, under the consents as they stand?
+
 ---
 
 ## FORGE'S WORKING POSITION ON 15 TO 24, 2026-11-06 -- NOT COUNSEL'S ANSWER

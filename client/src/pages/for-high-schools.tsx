@@ -25,6 +25,19 @@ import { HIGH_SCHOOLS_FAQ } from "@shared/high-schools-faq";
  *
  * 2. Anything about camera accuracy. See CAMERA_ACCURACY_SHORT, carried below.
  */
+/** What a coach's plan includes, as facts about the app. Kept here rather than spread through JSX so
+ * the list can be read and checked in one place. */
+export const ONE_APP_INCLUDES = [
+  "Program builder with an AI assistant, and import of an existing program from a spreadsheet, PDF or photo",
+  "Athlete app on iPhone, plus a shared weight-room tablet view and a TV leaderboard",
+  "Messages between a coach and each athlete, which a parent can read for an athlete under 18",
+  "Testing, maxes and PR tracking, with reports you can export to a spreadsheet",
+  "Force plate and bar-speed device data brought in by connection or file upload",
+  "Video recorded on the athlete's own phone, kept beside the set it belongs to",
+  "Nutrition targets and food logging",
+  "Waivers, medical clearances and guardian consent, tracked per athlete",
+];
+
 export default function ForHighSchoolsPage() {
   usePageMeta({
     title: "Forge for high schools and clubs",
@@ -127,6 +140,30 @@ export default function ForHighSchoolsPage() {
               </CardContent>
             </Card>
           </div>
+        </div>
+      </section>
+
+      {/* ONE APP INSTEAD OF FOUR (2026-11-21). Each line names something the coach's plan already
+          does today, in this app; nothing on it is an add-on, a roadmap item or a camera-accuracy
+          claim (the camera line says it records, and the caveat below says what it is not yet).
+          No competitor is named: the page describes Forge, it does not grade anyone else. */}
+      <section className="border-t border-border px-4 py-14 md:px-8">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="font-display text-2xl font-bold uppercase tracking-wide">
+            One app instead of four
+          </h2>
+          <p className="mt-2 max-w-3xl text-muted-foreground">
+            A strength program usually runs on a programming app, a spreadsheet of testing numbers,
+            a group text and a folder of paper forms. On a coach's plan, Forge is all of them.
+          </p>
+          <ul className="mt-6 grid gap-x-8 gap-y-3 text-sm md:grid-cols-2" data-testid="list-one-app">
+            {ONE_APP_INCLUDES.map((line) => (
+              <li key={line} className="flex gap-2">
+                <FileCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span>{line}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
