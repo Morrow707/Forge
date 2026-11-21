@@ -27,6 +27,7 @@ import { ExercisePickerDialog } from "@/components/exercise-picker-dialog";
 import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { RadioChipGroup } from "@/components/filter-chip-group";
 import { ProgramAiChatPanel } from "@/components/program-ai-chat-panel";
+import { ProgramImportDialog } from "@/components/program-import-dialog";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { ProgressionButton } from "@/components/progression-button";
 import { VideoTrackingToggle } from "@/components/video-tracking-toggle";
@@ -66,6 +67,7 @@ import {
   Lock,
   Layers,
   CalendarPlus,
+  FileUp,
 } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 import {
@@ -343,6 +345,7 @@ export function ProgramBuilderPage({
   const [pickerForDay, setPickerForDay] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [selfAssignOpen, setSelfAssignOpen] = useState(false);
   const [selfAssignDate, setSelfAssignDate] = useState(() => todayIso());
   // 0=Sun..6=Sat -- which weekdays this program's non-rest days land on.
@@ -444,6 +447,17 @@ export function ProgramBuilderPage({
 
   function addDay() {
     setDays((prev) => [...prev, makeDay()]);
+  }
+
+  // "Import a program": the reviewed draft's days go onto the END of what is on screen, the same
+  // local state a hand-added day lands in. Nothing is saved here; Save Program does that, through
+  // the same payload as every other edit (see program-import-dialog.tsx).
+  function handleImported(imported: LocalDay[], importedName: string | null) {
+    setDays((prev) => [...prev, ...imported]);
+    if (importedName) setName(importedName);
+    toast.success(
+      `Added ${imported.length} ${imported.length === 1 ? "day" : "days"} from your file. Check them, then Save Program.`,
+    );
   }
 
   function removeDay(dayKey: string) {
@@ -803,10 +817,19 @@ export function ProgramBuilderPage({
             {days.length === 0 ? (
               <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
                 <p>No days yet. Add training days one at a time, no need to plan whole weeks.</p>
-                <Button onClick={addDay}>
-                  <Plus className="h-4 w-4" />
-                  Add Day
-                </Button>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button onClick={addDay}>
+                    <Plus className="h-4 w-4" />
+                    Add Day
+                  </Button>
+                  <Button variant="outline" onClick={() => setImportOpen(true)} data-testid="button-import-program">
+                    <FileUp className="h-4 w-4" />
+                    Import a program
+                  </Button>
+                </div>
+                <p className="max-w-md text-xs">
+                  Already have it in Excel, a PDF or on a whiteboard? Import the file or a photo and check it before saving.
+                </p>
               </div>
             ) : (
               <div className="space-y-8">
@@ -863,10 +886,16 @@ export function ProgramBuilderPage({
             )}
 
             {days.length > 0 && (
-              <Button variant="outline" className="mt-4" onClick={addDay}>
-                <Plus className="h-4 w-4" />
-                Add Day
-              </Button>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button variant="outline" onClick={addDay}>
+                  <Plus className="h-4 w-4" />
+                  Add Day
+                </Button>
+                <Button variant="outline" onClick={() => setImportOpen(true)} data-testid="button-import-program-more">
+                  <FileUp className="h-4 w-4" />
+                  Import a program
+                </Button>
+              </div>
             )}
           </div>
         </fieldset>
@@ -884,6 +913,13 @@ export function ProgramBuilderPage({
           </div>
         )}
       </div>
+
+      <ProgramImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        apiBase={apiBase}
+        onApply={handleImported}
+      />
 
       <ExercisePickerDialog
         apiBase={apiBase}
