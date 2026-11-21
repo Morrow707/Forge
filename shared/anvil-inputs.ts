@@ -211,6 +211,11 @@ export const NOT_A_SIGNAL_TABLE: Record<string, string> = {
   // workout_set_entries. The zone says what a coach or athlete wanted, which describes no morning.
   velocity_zones:
     "A target bar speed a coach or athlete chose (server/velocity-zones.ts), not a measurement of the athlete. The speeds it is read against reach the Anvil through workout_set_entries.",
+  // WHERE A DAY WAS TYPED, NOT WHAT WAS DONE (2026-11-21). The key is quoted because the
+  // threshold-key scan in the-anvil-reads-everything-forge-collects.test.ts reads a bare key
+  // starting with "weight" as a fitted number; this is a table name.
+  "weight_room_station_entries":
+    "An audit row saying a day was saved from a coach's shared weight-room tablet (server/weight-room.ts): which coach, which day, which revision. The sets themselves are ordinary workout_set_entries, which the Anvil already reads; this row records the device, not the athlete.",
   // ---- the Anvil's own output, which is the one table here it WRITES ----
   anvil_checks:
     "THE ANVIL'S OWN TABLE, and the only one in this file it writes rather than reads. Its rows " +

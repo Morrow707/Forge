@@ -1,4 +1,5 @@
 import { Switch, Route, Redirect, useLocation } from "wouter";
+import { lockedRedirectFor, readStationLock } from "@/lib/weight-room-lock";
 import { DocumentsGate } from "@/components/document-gate";
 import { useQueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
@@ -109,6 +110,10 @@ const CoachCalendar = lazy(withLoadTimeout(() => import("@/pages/coach/calendar"
 const CoachMyWorkout = lazy(withLoadTimeout(() => import("@/pages/coach/my-workout")));
 const CoachAnalytics = lazy(withLoadTimeout(() => import("@/pages/coach/analytics")));
 const CoachLeaderboard = lazy(withLoadTimeout(() => import("@/pages/coach/leaderboard")));
+// Weight room mode (2026-11-21): the setup page, the shared-tablet station and the gym TV.
+const CoachWeightRoom = lazy(withLoadTimeout(() => import("@/pages/coach/weight-room")));
+const CoachWeightRoomStation = lazy(withLoadTimeout(() => import("@/pages/coach/weight-room-station")));
+const WeightRoomTvPage = lazy(withLoadTimeout(() => import("@/pages/weight-room-tv")));
 const CoachTeamBoard = lazy(withLoadTimeout(() => import("@/pages/coach/team-board")));
 const CoachMessages = lazy(withLoadTimeout(() => import("@/pages/coach/messages")));
 const CoachMyCalendar = lazy(withLoadTimeout(() => import("@/pages/coach/my-calendar")));
@@ -408,6 +413,14 @@ function PrefetchLikelyNextPages() {
   return null;
 }
 
+/** While a weight-room station is open on this device, every signed-in page goes back to it; the
+ * station's own Leave button (the coach's password) is the way out. See lib/weight-room-lock.ts. */
+function WeightRoomLockGuard() {
+  const [location] = useLocation();
+  const target = lockedRedirectFor(location, readStationLock());
+  return target ? <Redirect to={target} /> : null;
+}
+
 function Router() {
   const [location] = useLocation();
   // The page transition below replays on every navigation. On the FIRST mount of a page that
@@ -454,6 +467,7 @@ function Router() {
           navigation -- it reads the location itself and rewrites the head in place. */}
       <RouteMeta />
       <PrefetchLikelyNextPages />
+      <WeightRoomLockGuard />
       {/* Keyed on location so React remounts this wrapper -- not the routes
           inside it -- on every navigation, replaying the fade/slide-in each
           time. motion-safe: (rather than a plain class) makes the animation
@@ -587,6 +601,15 @@ function Router() {
         <Route path="/coach/analytics">
           <ProtectedRoute role="coach" component={CoachAnalytics} />
         </Route>
+        <Route path="/coach/weight-room/station/:teamId">
+          <ProtectedRoute role="coach" component={CoachWeightRoomStation} />
+        </Route>
+        <Route path="/coach/weight-room">
+          <ProtectedRoute role="coach" component={CoachWeightRoom} />
+        </Route>
+        {/* The gym TV: no session, the display link's token is the credential. noindex (see
+            NOINDEX_PREFIXES and the page's own robots meta). */}
+        <Route path="/tv/:token" component={WeightRoomTvPage} />
         <Route path="/coach/leaderboard">
           <ProtectedRoute role="coach" component={CoachLeaderboard} />
         </Route>

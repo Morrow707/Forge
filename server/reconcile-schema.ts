@@ -4083,6 +4083,37 @@ CREATE TABLE IF NOT EXISTS "coach_athlete_message_reads" (
   "last_read_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "coach_athlete_message_reads_unique" ON "coach_athlete_message_reads" ("user_id", "coach_id", "athlete_id");
+
+-- ---- WEIGHT ROOM MODE (2026-11-21) ----
+-- A save made at a coach's shared tablet, and a gym TV's read-only display link. See
+-- server/weight-room.ts.
+CREATE TABLE IF NOT EXISTS "weight_room_station_entries" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "team_id" integer REFERENCES "teams"("id") ON DELETE SET NULL,
+  "workout_log_id" integer REFERENCES "workout_logs"("id") ON DELETE SET NULL,
+  "assignment_id" integer NOT NULL,
+  "program_day_id" integer NOT NULL,
+  "date" date NOT NULL,
+  "revision" integer,
+  "sets_written" integer NOT NULL DEFAULT 0,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "weight_room_station_entries_athlete_date_idx"
+  ON "weight_room_station_entries" ("athlete_id", "date");
+CREATE TABLE IF NOT EXISTS "weight_room_display_tokens" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "team_id" integer NOT NULL REFERENCES "teams"("id") ON DELETE CASCADE,
+  "token_hash" text NOT NULL,
+  "label" text,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "revoked_at" timestamp,
+  "last_seen_at" timestamp
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "weight_room_display_tokens_hash_unique" ON "weight_room_display_tokens" ("token_hash");
+CREATE INDEX IF NOT EXISTS "weight_room_display_tokens_coach_idx" ON "weight_room_display_tokens" ("coach_id");
 `;
 
 async function main() {
