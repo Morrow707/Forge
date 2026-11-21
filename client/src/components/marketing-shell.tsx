@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { SignupCta, SignupLink } from "@/components/signup-cta";
 import { EmailListSignup } from "@/components/email-list-signup";
 import { ForgeMark } from "@/components/forge-mark";
+import { Smartphone } from "lucide-react";
 
 /** The nav and footer every public marketing page shares.
  *
@@ -19,6 +20,24 @@ import { ForgeMark } from "@/components/forge-mark";
 // a link to a store page that does not exist is worse than none.
 const APP_STORE_ID = String(import.meta.env.VITE_APP_STORE_ID ?? "").trim();
 const APP_STORE_URL = /^\d{6,}$/.test(APP_STORE_ID) ? `https://apps.apple.com/app/id${APP_STORE_ID}` : null;
+
+/** THE APP STORE BUTTON, DRAWN WHERE A VISITOR SEES IT FIRST (2026-11-21). The only link to the
+ *  app used to sit in the footer, which most phone visitors never reach. Nothing is drawn when
+ *  no App Store id is configured: a link to a store page that does not exist is worse than none.
+ *  It is a plain button, not Apple's badge artwork, which has to come from Apple's own files. */
+export function AppStoreButton({ className }: { className?: string }) {
+  if (!APP_STORE_URL) return null;
+  return (
+    <a
+      href={APP_STORE_URL}
+      className={`inline-flex items-center justify-center gap-2 rounded-md border border-border bg-black px-5 py-2.5 text-sm font-semibold text-white hover:border-primary ${className ?? ""}`}
+      data-testid="link-app-store-top"
+    >
+      <Smartphone className="h-4 w-4" />
+      Download on the App Store
+    </a>
+  );
+}
 
 export function MarketingNav() {
   return (
