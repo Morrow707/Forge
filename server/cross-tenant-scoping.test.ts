@@ -102,6 +102,10 @@ const OWNERSHIP_CHECKS = [
   // admin, who reviews these rather than uploading them, so the waiver routes gate on it plus
   // an explicit admin branch where reading is allowed.
   "canManageWaiversFor",
+  // calendar-events.ts (2026-11-22): an event is changed only by its creator or its team's primary
+  // coach, and an imported calendar is read only with owner_id = the caller.
+  "mayEditCalendarEvent",
+  "getCalendarImportForOwner",
   // Not on `storage.`, so the scopes-in-query regex below cannot see it: a module function in
   // trusted-devices.ts that takes the caller's id first and filters on it
   // (eq(trustedDevices.userId, userId)). Its sibling POST /api/auth/sessions/:id/revoke passes

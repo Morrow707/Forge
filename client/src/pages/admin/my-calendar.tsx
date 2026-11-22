@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
+import { useCalendarEventsLayer } from "@/components/calendar-event-dialog";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { ReadFailed } from "@/components/read-failed";
@@ -13,6 +14,7 @@ import { Dumbbell, CalendarDays } from "lucide-react";
 export default function AdminMyCalendar() {
   const [, navigate] = useLocation();
   const [range, setRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
+  const eventsLayer = useCalendarEventsLayer(range);
   const [syncOpen, setSyncOpen] = useState(false);
 
   const { data: entries = [], isError, refetch } = useQuery<CalendarEntry[]>({
@@ -33,14 +35,19 @@ export default function AdminMyCalendar() {
     <AppShell
       title="My Calendar"
       actions={
-        <Button variant="outline" size="sm" onClick={() => setSyncOpen(true)}>
-          <CalendarDays className="h-4 w-4" />
-          Sync to Phone
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {eventsLayer.addButton}
+          <Button variant="outline" size="sm" onClick={() => setSyncOpen(true)}>
+            <CalendarDays className="h-4 w-4" />
+            Calendar Sync
+          </Button>
+        </div>
       }
     >
       <CalendarView
         entries={entries}
+        events={eventsLayer.events}
+        onEventClick={eventsLayer.onEventClick}
         onRangeChange={(start, end) => setRange({ start, end })}
         onEntryClick={(e) => {
           // Admins have no roster to assign skill programs to yet, so this
@@ -59,7 +66,7 @@ export default function AdminMyCalendar() {
         </Card>
       )}
 
-      {!isError && entries.length === 0 && (
+      {!isError && entries.length === 0 && eventsLayer.events.length === 0 && (
         <Card className="mt-6">
           <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
             <Dumbbell className="h-8 w-8 text-muted-foreground" />
@@ -79,6 +86,7 @@ export default function AdminMyCalendar() {
         title="Sync Your Calendar"
         fetchUrl="/api/admin/my/calendar-link"
       />
+      {eventsLayer.dialog}
     </AppShell>
   );
 }

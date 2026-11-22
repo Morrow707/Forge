@@ -518,3 +518,18 @@ html.had-session [data-prerendered] {
   background-size: cover;
   background-position: center;
 }
+
+/* Calendar events (2026-11-22). One fixed palette (shared/calendar-events.ts) whose colours are
+   handed in as variables, so a pill reads on both themes: the lighter text on the dark theme, the
+   darker text on the light one, over the same translucent tint, with a solid edge. */
+.cal-ev {
+  background-color: var(--ev-tint);
+  color: var(--ev-fg-dark);
+  border-left: 3px solid var(--ev-solid);
+}
+:root.light .cal-ev {
+  color: var(--ev-fg-light);
+}
+.cal-ev-dot {
+  background-color: var(--ev-solid);
+}

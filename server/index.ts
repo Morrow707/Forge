@@ -92,6 +92,7 @@ import { startDataRetentionJob } from "./data-retention-job";
 import { startVideoRetentionJob } from "./video-retention-job";
 import { startDatabaseSizeJob } from "./database-size-job";
 import { startDeviceSyncJob } from "./device-sync-job";
+import { startCalendarImportJob } from "./calendar-import-job";
 import { startTrialEndingJob } from "./trial-ending-job";
 import { startWeeklyRecapJob } from "./weekly-recap-job";
 import { startParentWeeklySummaryJob } from "./parent-weekly-summary-job";
@@ -568,6 +569,8 @@ app.get("/healthz", async (_req, res) => {
     startDatabaseSizeJob();
     // Pulls every connected force plate / velocity device every ten minutes (device-sync-job.ts).
     startDeviceSyncJob();
+    // Re-reads every calendar pasted into Forge every three hours (calendar-import-job.ts).
+    startCalendarImportJob();
     // One email a few days before a trial ends, to the accounts the plan wall would then stop.
     startTrialEndingJob();
     startWeeklyRecapJob();

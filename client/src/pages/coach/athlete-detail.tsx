@@ -830,6 +830,7 @@ export default function AthleteDetailPage() {
         onOpenChange={setCalendarOpen}
         title={`${athlete.name}'s Calendar`}
         fetchUrl={`/api/coach/roster/${athlete.id}/calendar-link`}
+        showImport={false}
       />
 
       <WellnessHistoryDialog

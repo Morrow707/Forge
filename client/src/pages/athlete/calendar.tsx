@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
+import { useCalendarEventsLayer } from "@/components/calendar-event-dialog";
 import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -22,6 +23,7 @@ const PULL_REFRESH_THRESHOLD = 60;
 export default function AthleteCalendar() {
   const [, navigate] = useLocation();
   const [range, setRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
+  const eventsLayer = useCalendarEventsLayer(range);
   const [syncOpen, setSyncOpen] = useState(false);
 
   const { data: entries = [], refetch } = useQuery<CalendarEntry[]>({
@@ -51,10 +53,13 @@ export default function AthleteCalendar() {
     <AppShell
       title="My Calendar"
       actions={
-        <Button variant="outline" size="sm" onClick={() => setSyncOpen(true)}>
-          <CalendarDays className="h-4 w-4" />
-          Sync to Phone
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {eventsLayer.addButton}
+          <Button variant="outline" size="sm" onClick={() => setSyncOpen(true)}>
+            <CalendarDays className="h-4 w-4" />
+            Calendar Sync
+          </Button>
+        </div>
       }
     >
       <div ref={containerRef} className="relative">
@@ -84,6 +89,8 @@ export default function AthleteCalendar() {
 
         <CalendarView
           entries={entries}
+          events={eventsLayer.events}
+          onEventClick={eventsLayer.onEventClick}
           initialView="day"
           onRangeChange={(start, end) => setRange({ start, end })}
           onEntryClick={(e) =>
@@ -108,6 +115,7 @@ export default function AthleteCalendar() {
         title="Sync Your Calendar"
         fetchUrl="/api/athlete/calendar-link"
       />
+      {eventsLayer.dialog}
     </AppShell>
   );
 }
