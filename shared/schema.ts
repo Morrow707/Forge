@@ -11947,3 +11947,95 @@ export const weightRoomSheetUploads = pgTable(
   }),
 );
 export type WeightRoomSheetUpload = typeof weightRoomSheetUploads.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// CALENDAR EVENTS AND CALENDAR SYNC (2026-11-22)
+// ---------------------------------------------------------------------------
+// An event a person adds to their Forge calendar (a game, a practice, a meeting), and calendars
+// pasted in from Google, Apple or Outlook. Never training: no assignment, no completion, no
+// attendance reads these. The rules live in shared/calendar-events.ts and server/calendar-events.ts.
+
+/** A Forge event. `teamId` null is the creator's own event; set, it shows on every athlete on that
+ * team and on the team's coaches. Times are wall-clock "HH:MM" text, null for an all-day event. */
+export const calendarEvents = pgTable(
+  "calendar_events",
+  {
+    id: serial("id").primaryKey(),
+    createdBy: integer("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    teamId: integer("team_id").references(() => teams.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    label: text("label").notNull(),
+    customLabel: text("custom_label"),
+    color: text("color").notNull(),
+    date: date("date").notNull(),
+    startTime: text("start_time"),
+    endTime: text("end_time"),
+    location: text("location"),
+    note: text("note"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    creatorDateIdx: index("calendar_events_creator_date_idx").on(table.createdBy, table.date),
+    teamDateIdx: index("calendar_events_team_date_idx").on(table.teamId, table.date),
+  }),
+);
+export type CalendarEventRow = typeof calendarEvents.$inferSelect;
+
+/** A calendar a person pasted in. The address is ENCRYPTED (server/field-encryption.ts) and never
+ * returned to the client after it is saved; `urlHost` is what the screen shows. `teamId` set means
+ * a coach shared it to that team. */
+export const calendarImports = pgTable(
+  "calendar_imports",
+  {
+    id: serial("id").primaryKey(),
+    ownerId: integer("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    teamId: integer("team_id").references(() => teams.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    color: text("color").notNull(),
+    urlEncrypted: text("url_encrypted").notNull(),
+    urlHost: text("url_host").notNull(),
+    lastFetchedAt: timestamp("last_fetched_at"),
+    lastError: text("last_error"),
+    eventCount: integer("event_count").notNull().default(0),
+    /** What the last read could not show (a monthly rule, a truncated file), as a sentence. */
+    lastNote: text("last_note"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    ownerIdx: index("calendar_imports_owner_idx").on(table.ownerId),
+    teamIdx: index("calendar_imports_team_idx").on(table.teamId),
+  }),
+);
+export type CalendarImportRow = typeof calendarImports.$inferSelect;
+
+/** The events read off an imported calendar, replaced whole on every refresh. A timed event that
+ * named a zone or UTC carries `startsAt`; a floating one carries wall-clock times; `date` is the
+ * day used to filter by range. */
+export const calendarImportEvents = pgTable(
+  "calendar_import_events",
+  {
+    id: serial("id").primaryKey(),
+    importId: integer("import_id")
+      .notNull()
+      .references(() => calendarImports.id, { onDelete: "cascade" }),
+    instanceKey: text("instance_key").notNull(),
+    title: text("title").notNull(),
+    date: date("date").notNull(),
+    allDay: boolean("all_day").notNull().default(false),
+    startTime: text("start_time"),
+    endTime: text("end_time"),
+    startsAt: timestamp("starts_at"),
+    endsAt: timestamp("ends_at"),
+    location: text("location"),
+    note: text("note"),
+  },
+  (table) => ({
+    importInstanceUnique: uniqueIndex("calendar_import_events_instance_unique").on(table.importId, table.instanceKey),
+    importDateIdx: index("calendar_import_events_import_date_idx").on(table.importId, table.date),
+  }),
+);

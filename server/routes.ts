@@ -40,6 +40,7 @@ import { setupAuth, requireAuth, requireRole, toPublicUser, toPublicUserWithSect
 import { registerInstitutionalAgreementRoutes } from "./institutional-agreement-routes";
 import { registerEmailListRoutes } from "./email-list";
 import { registerVelocityZoneRoutes } from "./velocity-zones";
+import { forgeEventsForFeed, registerCalendarEventRoutes } from "./calendar-events";
 import { registerAttendanceRoutes } from "./attendance";
 import { registerParentWeeklySummaryRoutes } from "./parent-weekly-summary";
 import { registerEquipmentProfileRoutes } from "./equipment-profile-routes";
@@ -1838,6 +1839,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerInstitutionalAgreementRoutes(app);
   registerEmailListRoutes(app);
   registerVelocityZoneRoutes(app);
+  registerCalendarEventRoutes(app);
   registerAttendanceRoutes(app);
   registerParentWeeklySummaryRoutes(app);
   registerEquipmentProfileRoutes(app);
@@ -2271,9 +2273,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Training", not "Forge Training", for an athlete on a branded program. The team name is free
     // on every plan.
     const programName = (await storage.getEffectiveBrandingForUser(user.id))?.brandTeamName?.trim();
+    // The person's own calendar events and their teams' ride along (2026-11-22). Imported
+    // calendars never do: a calendar pasted in from elsewhere is not Forge's to send back out.
+    const events = await forgeEventsForFeed(user, toIso(start), toIso(end));
     const feed = buildIcsFeed(
       `${programName || "Forge"} Training — ${user.name}`,
-      entries
+      [
+        ...entries
         .filter((e) => !e.isRestDay)
         .map((e) => ({
           // e.kind in the uid: getCalendarForAthlete merges strength rows
@@ -2288,6 +2294,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           summary: e.title,
           description: e.programName,
         })),
+        ...events,
+      ],
     );
     res.setHeader("Content-Type", "text/calendar; charset=utf-8");
     res.send(feed);

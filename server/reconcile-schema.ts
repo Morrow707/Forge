@@ -4232,6 +4232,61 @@ CREATE TABLE IF NOT EXISTS "weight_room_sheet_uploads" (
 );
 CREATE INDEX IF NOT EXISTS "weight_room_sheet_uploads_team_date_idx"
   ON "weight_room_sheet_uploads" ("team_id", "date");
+-- ---- CALENDAR EVENTS AND CALENDAR SYNC (2026-11-22) ----
+-- Events a person adds to their calendar, and calendars pasted in from Google/Apple/Outlook (the
+-- address encrypted). Never training. See server/calendar-events.ts.
+CREATE TABLE IF NOT EXISTS "calendar_events" (
+  "id" serial PRIMARY KEY,
+  "created_by" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "team_id" integer REFERENCES "teams"("id") ON DELETE CASCADE,
+  "title" text NOT NULL,
+  "label" text NOT NULL,
+  "custom_label" text,
+  "color" text NOT NULL,
+  "date" date NOT NULL,
+  "start_time" text,
+  "end_time" text,
+  "location" text,
+  "note" text,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "calendar_events_creator_date_idx" ON "calendar_events" ("created_by", "date");
+CREATE INDEX IF NOT EXISTS "calendar_events_team_date_idx" ON "calendar_events" ("team_id", "date");
+CREATE TABLE IF NOT EXISTS "calendar_imports" (
+  "id" serial PRIMARY KEY,
+  "owner_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "team_id" integer REFERENCES "teams"("id") ON DELETE CASCADE,
+  "name" text NOT NULL,
+  "color" text NOT NULL,
+  "url_encrypted" text NOT NULL,
+  "url_host" text NOT NULL,
+  "last_fetched_at" timestamp,
+  "last_error" text,
+  "event_count" integer NOT NULL DEFAULT 0,
+  "last_note" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "calendar_imports_owner_idx" ON "calendar_imports" ("owner_id");
+CREATE INDEX IF NOT EXISTS "calendar_imports_team_idx" ON "calendar_imports" ("team_id");
+CREATE TABLE IF NOT EXISTS "calendar_import_events" (
+  "id" serial PRIMARY KEY,
+  "import_id" integer NOT NULL REFERENCES "calendar_imports"("id") ON DELETE CASCADE,
+  "instance_key" text NOT NULL,
+  "title" text NOT NULL,
+  "date" date NOT NULL,
+  "all_day" boolean NOT NULL DEFAULT false,
+  "start_time" text,
+  "end_time" text,
+  "starts_at" timestamp,
+  "ends_at" timestamp,
+  "location" text,
+  "note" text
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "calendar_import_events_instance_unique"
+  ON "calendar_import_events" ("import_id", "instance_key");
+CREATE INDEX IF NOT EXISTS "calendar_import_events_import_date_idx"
+  ON "calendar_import_events" ("import_id", "date");
 `;
 
 async function main() {

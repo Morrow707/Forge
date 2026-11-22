@@ -3,6 +3,9 @@ import { useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { CalendarView, type CalendarEntry } from "@/components/calendar-view";
+import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
+import { Button } from "@/components/ui/button";
+import { useCalendarEventsLayer } from "@/components/calendar-event-dialog";
 import { CoachDayEditDialog } from "@/components/coach-day-edit-dialog";
 import { SkillDayViewDialog } from "@/components/skill-day-view-dialog";
 import { CoachDayDetailDialog } from "@/components/coach-day-detail-dialog";
@@ -29,6 +32,8 @@ export default function CoachCalendar() {
 
   const [athleteId, setAthleteId] = useState<string>("all");
   const [range, setRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
+  const eventsLayer = useCalendarEventsLayer(range);
+  const [syncOpen, setSyncOpen] = useState(false);
   const [editing, setEditing] = useState<{
     programDayId: number;
     assignmentId: number;
@@ -119,6 +124,12 @@ export default function CoachCalendar() {
     <AppShell
       title="Calendar"
       actions={
+        <div className="flex flex-wrap items-center gap-2">
+        {eventsLayer.addButton}
+        <Button variant="outline" size="sm" onClick={() => setSyncOpen(true)}>
+          <CalendarDays className="h-4 w-4" />
+          Calendar Sync
+        </Button>
         <Select value={athleteId} onValueChange={setAthleteId}>
           <SelectTrigger className="w-48">
             <SelectValue placeholder="All athletes" />
@@ -132,10 +143,13 @@ export default function CoachCalendar() {
             ))}
           </SelectContent>
         </Select>
+        </div>
       }
     >
       <CalendarView
         entries={entries}
+        events={eventsLayer.events}
+        onEventClick={eventsLayer.onEventClick}
         onRangeChange={(start, end) => setRange({ start, end })}
         onEntryClick={openEntry}
         onDayClick={(date, dayEntries) => setViewingDay({ date, entries: dayEntries })}
@@ -164,7 +178,7 @@ export default function CoachCalendar() {
         </Card>
       )}
 
-      {!isError && !isLoading && entries.length === 0 && (
+      {!isError && !isLoading && entries.length === 0 && eventsLayer.events.length === 0 && (
         <Card className="mt-6">
           <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
             <CalendarDays className="h-8 w-8 text-muted-foreground" />
@@ -209,6 +223,8 @@ export default function CoachCalendar() {
         onOpenChange={(open) => !open && setViewingDay(null)}
         onEntryClick={openEntry}
       />
+      {eventsLayer.dialog}
+      <CalendarLinkDialog open={syncOpen} onOpenChange={setSyncOpen} title="Calendar Sync" fetchUrl="/api/coach/my/calendar-link" />
     </AppShell>
   );
 }

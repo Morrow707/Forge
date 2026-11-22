@@ -23,6 +23,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
+import { eventColorStyle, eventTimeText } from "@/lib/calendar-event-display";
+import { labelText, type CalendarEventItem } from "@shared/calendar-events";
 import {
   ChevronLeft,
   ChevronRight,
@@ -134,6 +136,57 @@ export function EntryPill({
   );
 }
 
+/** A calendar event (a game, a practice, a pasted-in calendar's entry) as a pill in its own
+ * colour. Never styled as training and never counted as one (2026-11-22). */
+function EventPill({ event, onClick, compact = true }: { event: CalendarEventItem; onClick?: () => void; compact?: boolean }) {
+  const time = event.startTime ? eventTimeText(event).split(" – ")[0] : null;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`${event.title} · ${eventTimeText(event)}`}
+      className={cn("cal-ev flex w-full items-center gap-1 truncate rounded px-1.5 py-1 text-left font-semibold", compact ? "text-[11px] sm:text-xs" : "text-sm")}
+      style={eventColorStyle(event.color)}
+    >
+      <span className="truncate">
+        {time ? `${time} ` : ""}
+        {event.title}
+      </span>
+    </button>
+  );
+}
+
+/** A day's events as full-width rows, for the agenda, the 3-day and the single-day views. */
+function EventRows({ events, onEventClick }: { events: CalendarEventItem[]; onEventClick?: (ev: CalendarEventItem) => void }) {
+  if (events.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      {events.map((ev) => (
+        <button
+          key={ev.key}
+          type="button"
+          onClick={() => onEventClick?.(ev)}
+          className="cal-ev flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left"
+          style={eventColorStyle(ev.color)}
+        >
+          <div className="min-w-0">
+            <p className="truncate font-semibold">{ev.title}</p>
+            <p className="truncate text-xs opacity-80">
+              {eventTimeText(ev)}
+              {ev.location ? ` · ${ev.location}` : ""}
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full bg-background/40 px-2 py-0.5 text-[10px] font-semibold uppercase">
+            {ev.source === "imported" ? ev.calendarName ?? "Calendar" : labelText(ev.label, ev.customLabel)}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const NO_EVENTS: CalendarEventItem[] = [];
+
 export function CalendarView({
   entries,
   onRangeChange,
@@ -142,8 +195,14 @@ export function CalendarView({
   initialView = "month",
   singleDayContent,
   dayPreviewFetchUrl,
+  events = NO_EVENTS,
+  onEventClick,
 }: {
   entries: CalendarEntry[];
+  /** Calendar events beside the training days (2026-11-22): drawn in their own colour, never
+   * counted as a workout. useCalendarEventsLayer reads them. */
+  events?: CalendarEventItem[];
+  onEventClick?: (event: CalendarEventItem) => void;
   onRangeChange: (startISO: string, endISO: string, view: CalendarViewMode) => void;
   onEntryClick: (entry: CalendarEntry) => void;
   /** Opt-in: when provided, the month view combines same-program-same-day
@@ -205,6 +264,9 @@ export function CalendarView({
     entriesByDate.set(e.date, list);
   }
 
+  const eventsByDate = new Map<string, CalendarEventItem[]>();
+  events.forEach((ev) => eventsByDate.set(ev.date, [...(eventsByDate.get(ev.date) ?? []), ev]));
+
   const label =
     view === "month"
       ? format(cursor, "MMMM yyyy")
@@ -257,10 +319,12 @@ export function CalendarView({
           entriesByDate={entriesByDate}
           onEntryClick={onEntryClick}
           onDayClick={onDayClick}
+          eventsByDate={eventsByDate}
+          onEventClick={onEventClick}
         />
       )}
       {view === "week" && (
-        <WeekRow start={start} end={end} entriesByDate={entriesByDate} onEntryClick={onEntryClick} />
+        <WeekRow start={start} end={end} entriesByDate={entriesByDate} onEntryClick={onEntryClick} eventsByDate={eventsByDate} onEventClick={onEventClick} />
       )}
       {view === "day" && (
         <ThreeDayAgenda
@@ -268,7 +332,14 @@ export function CalendarView({
           entriesByDate={entriesByDate}
           onEntryClick={onEntryClick}
           dayPreviewFetchUrl={dayPreviewFetchUrl}
+          eventsByDate={eventsByDate}
+          onEventClick={onEventClick}
         />
+      )}
+      {view === "single-day" && (eventsByDate.get(startISO)?.length ?? 0) > 0 && (
+        <div className="mb-4">
+          <EventRows events={eventsByDate.get(startISO) ?? []} onEventClick={onEventClick} />
+        </div>
       )}
       {view === "single-day" &&
         (singleDayContent ? (
@@ -583,6 +654,8 @@ function MonthGrid({
   entriesByDate,
   onEntryClick,
   onDayClick,
+  eventsByDate,
+  onEventClick,
 }: {
   start: Date;
   end: Date;
@@ -590,6 +663,8 @@ function MonthGrid({
   entriesByDate: Map<string, CalendarEntry[]>;
   onEntryClick: (entry: CalendarEntry) => void;
   onDayClick?: (dateISO: string, dayEntries: CalendarEntry[]) => void;
+  eventsByDate: Map<string, CalendarEventItem[]>;
+  onEventClick?: (event: CalendarEventItem) => void;
 }) {
   const days = eachDayOfInterval({ start, end });
   return (
@@ -605,6 +680,7 @@ function MonthGrid({
         {days.map((day) => {
           const dateStr = formatISO(day, { representation: "date" });
           const dayEntries = entriesByDate.get(dateStr) ?? [];
+          const dayEvents = eventsByDate.get(dateStr) ?? [];
           const dayGroups = onDayClick ? groupDayEntries(dayEntries) : dayEntries.map((e) => [e]);
           const inMonth = isSameMonth(day, cursor);
           return (
@@ -653,6 +729,21 @@ function MonthGrid({
                   so a day with multiple entries grows the cell taller
                   instead of shrinking the target back down. */}
               <div className="flex flex-1 flex-wrap items-end gap-1 sm:hidden">
+                {/* An event on a phone is a coloured dot with its label's first letter; tapping
+                    it opens the event. */}
+                {dayEvents.slice(0, 2).map((ev) => (
+                  <button
+                    key={ev.key}
+                    type="button"
+                    onClick={() => onEventClick?.(ev)}
+                    aria-label={ev.title}
+                    title={ev.title}
+                    className="cal-ev-dot flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                    style={eventColorStyle(ev.color)}
+                  >
+                    {labelText(ev.label, ev.customLabel).slice(0, 1)}
+                  </button>
+                ))}
                 {dayGroups.slice(0, 3).map((group) => {
                   const e = group[0];
                   return (
@@ -687,6 +778,9 @@ function MonthGrid({
               {/* Desktop/tablet: full text pills -- combined into one pill
                   per shared program-day when onDayClick is wired up. */}
               <div className="hidden flex-1 flex-col gap-1 sm:flex">
+                {dayEvents.map((ev) => (
+                  <EventPill key={ev.key} event={ev} onClick={() => onEventClick?.(ev)} />
+                ))}
                 {dayGroups.map((group) =>
                   group.length > 1 ? (
                     <GroupedEntryPill
@@ -721,12 +815,16 @@ function DayAgendaRow({
   onEntryClick,
   label,
   dayPreviewFetchUrl,
+  dayEvents = NO_EVENTS,
+  onEventClick,
 }: {
   day: Date;
   dayEntries: CalendarEntry[];
   onEntryClick: (entry: CalendarEntry) => void;
   label: string;
   dayPreviewFetchUrl?: (entry: CalendarEntry) => string;
+  dayEvents?: CalendarEventItem[];
+  onEventClick?: (event: CalendarEventItem) => void;
 }) {
   return (
     <div>
@@ -738,7 +836,12 @@ function DayAgendaRow({
         </span>
         <span className="text-xs text-muted-foreground">{format(day, "MMM d")}</span>
       </div>
-      {dayEntries.length === 0 ? (
+      {dayEvents.length > 0 && (
+        <div className={cn(dayEntries.length > 0 && "mb-2")}>
+          <EventRows events={dayEvents} onEventClick={onEventClick} />
+        </div>
+      )}
+      {dayEntries.length === 0 && dayEvents.length > 0 ? null : dayEntries.length === 0 ? (
         <div className="flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border py-6 text-xs text-muted-foreground">
           <MoonStar className="h-3.5 w-3.5" />
           Nothing scheduled
@@ -813,11 +916,15 @@ function WeekRow({
   end,
   entriesByDate,
   onEntryClick,
+  eventsByDate,
+  onEventClick,
 }: {
   start: Date;
   end: Date;
   entriesByDate: Map<string, CalendarEntry[]>;
   onEntryClick: (entry: CalendarEntry) => void;
+  eventsByDate: Map<string, CalendarEventItem[]>;
+  onEventClick?: (event: CalendarEventItem) => void;
 }) {
   const days = eachDayOfInterval({ start, end });
   const weekEntries = days.flatMap((d) => entriesByDate.get(formatISO(d, { representation: "date" })) ?? []);
@@ -863,6 +970,8 @@ function WeekRow({
               dayEntries={entriesByDate.get(dateStr) ?? []}
               onEntryClick={onEntryClick}
               label={isToday(day) ? "Today" : format(day, "EEEE")}
+              dayEvents={eventsByDate.get(dateStr) ?? []}
+              onEventClick={onEventClick}
             />
           );
         })}
@@ -904,7 +1013,10 @@ function WeekRow({
                 </span>
               </div>
               <div className="flex flex-1 flex-col gap-1.5">
-                {dayEntries.length === 0 && (
+                {(eventsByDate.get(dateStr) ?? []).map((ev) => (
+                  <EventPill key={ev.key} event={ev} onClick={() => onEventClick?.(ev)} compact={false} />
+                ))}
+                {dayEntries.length === 0 && (eventsByDate.get(dateStr) ?? []).length === 0 && (
                   <span className="text-xs text-muted-foreground">—</span>
                 )}
                 {dayEntries.map((e) => (
@@ -941,11 +1053,15 @@ function ThreeDayAgenda({
   entriesByDate,
   onEntryClick,
   dayPreviewFetchUrl,
+  eventsByDate,
+  onEventClick,
 }: {
   centerDate: Date;
   entriesByDate: Map<string, CalendarEntry[]>;
   onEntryClick: (entry: CalendarEntry) => void;
   dayPreviewFetchUrl?: (entry: CalendarEntry) => string;
+  eventsByDate: Map<string, CalendarEventItem[]>;
+  onEventClick?: (event: CalendarEventItem) => void;
 }) {
   const days = [centerDate, addDays(centerDate, 1), addDays(centerDate, 2)];
   return (
@@ -967,6 +1083,8 @@ function ThreeDayAgenda({
             onEntryClick={onEntryClick}
             label={label}
             dayPreviewFetchUrl={dayPreviewFetchUrl}
+            dayEvents={eventsByDate.get(dateStr) ?? []}
+            onEventClick={onEventClick}
           />
         );
       })}
