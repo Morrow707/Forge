@@ -40,6 +40,7 @@ import { comparePasswords } from "./auth-utils";
 import { ENFORCEMENT_ENABLED } from "./billing";
 import { weightRoomDisplayTokens, weightRoomStationEntries } from "@shared/schema";
 import { documentAudienceFor, missingRequiredDocuments, type DocumentStatus } from "@shared/required-documents";
+import { shiftIsoDate } from "@shared/athlete-day";
 import { hashDisplayToken, mergeStationSets, setWasFilmed, weekWindow, type StoredEntry } from "./weight-room-merge";
 
 const STATUS_CREATED = 201;
@@ -59,8 +60,12 @@ const HTTP = {
   conflict: STATUS_CONFLICT,
 } as const;
 const SECOND_MS = 1000;
-const MINUTE_MS = 60 * SECOND_MS;
+const SECONDS_PER_MINUTE = 60;
+const MINUTE_MS = SECONDS_PER_MINUTE * SECOND_MS;
 const ISO_DATE_LENGTH = 10;
+// An ISO calendar day: "2026-11-21" matches, "2026-11-21T09:00" and "11/21/2026" do not.
+// https://regex101.com/?regex=%5E%5Cd%7B4%7D-%5Cd%7B2%7D-%5Cd%7B2%7D%24&testString=2026-11-21
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const PASSWORD_MAX_LENGTH = 500;
 const TOKEN_BYTES = 24;
 const LABEL_MAX = 60;
@@ -114,13 +119,32 @@ export async function documentGate(athleteId: number) {
   return { blocked: ENFORCEMENT_ENABLED && missing.length > 0, missing: missing.map((d) => d.label) };
 }
 
-/** Today's scheduled (not rest) program days for an athlete, on their own calendar day. */
-async function todaysDays(athleteId: number) {
+/** How many days back a station may still write a day. A save queued on the tablet when the
+ * Wi-Fi dropped is sent when the connection returns, which can be after midnight or the next
+ * school day; refusing it then would throw away sets an athlete really did (Rule #1). */
+export const STATION_REPLAY_DAYS = 7;
+
+/** Whether a station may write `date`, given the athlete's own today: today, or a day inside the
+ * replay window. A future day never. Pure. */
+export function stationDateAllowed(today: string, date: string): boolean {
+  return date <= today && date >= shiftIsoDate(today, -STATION_REPLAY_DAYS);
+}
+
+/** Scheduled (not rest) program days for an athlete on one calendar day: their own today, unless
+ * a day inside the replay window is asked for. */
+async function scheduledDays(athleteId: number, date?: string) {
   const today = await storage.todayForAthlete(athleteId);
-  const calendar = await storage.getCalendarForAthlete(athleteId, today, today);
+  const on = date ?? today;
+  const calendar = await storage.getCalendarForAthlete(athleteId, on, on);
   const days = calendar.filter(
     (e): e is Extract<typeof e, { kind: "exercise" }> => e.kind === "exercise" && !(e as { isRestDay?: boolean }).isRestDay,
   );
+  return { today, on, days };
+}
+
+/** Today's scheduled (not rest) program days for an athlete, on their own calendar day. */
+async function todaysDays(athleteId: number) {
+  const { today, days } = await scheduledDays(athleteId);
   return { today, days };
 }
 
@@ -357,16 +381,22 @@ export function registerWeightRoomRoutes(app: Express) {
       if (!roster || !athlete || !(await storage.athleteIsInCoachScope(user.id, athleteId))) {
         return res.status(HTTP.notFound).json({ message: "Athlete not found on this team" });
       }
-      const [gate, { today, days }] = await Promise.all([documentGate(athleteId), todaysDays(athleteId)]);
+      // ?date= reads a day inside the replay window: the tablet's queued-save catch-up re-reads the
+      // day it queued for, which may no longer be today when the connection comes back.
+      const asked = typeof req.query.date === "string" && ISO_DATE_RE.test(req.query.date) ? req.query.date : undefined;
+      if (asked && !stationDateAllowed(await storage.todayForAthlete(athleteId), asked)) {
+        return res.status(HTTP.badRequest).json({ message: "A station reads today or the last few days only." });
+      }
+      const [gate, { on, days }] = await Promise.all([documentGate(athleteId), scheduledDays(athleteId, asked)]);
       const details = await Promise.all(
         days.map(async (d) => {
-          const detail = await storage.getWorkoutDayDetail(athleteId, d.assignmentId, d.programDayId, today);
-          return detail ? projectDay(detail, d.assignmentId, d.programDayId, today) : null;
+          const detail = await storage.getWorkoutDayDetail(athleteId, d.assignmentId, d.programDayId, on);
+          return detail ? projectDay(detail, d.assignmentId, d.programDayId, on) : null;
         }),
       );
       res.json({
         displayName: leaderboardDisplayName(athlete.name),
-        date: today,
+        date: on,
         blocked: gate.blocked ? { missing: gate.missing } : null,
         workouts: details.filter((d) => d != null),
       });
@@ -398,10 +428,13 @@ export function registerWeightRoomRoutes(app: Express) {
           missing: gate.missing,
         });
       }
-      const { today, days } = await todaysDays(athleteId);
-      if (input.date !== today) {
-        return res.status(HTTP.badRequest).json({ message: "A station logs today's workout only." });
+      // TODAY, OR A DAY INSIDE THE REPLAY WINDOW. A save the tablet queued while the Wi-Fi was down
+      // carries the day it was typed on and may arrive after midnight; it still writes that day.
+      // A future day, or one older than the window, is still refused.
+      if (!stationDateAllowed(await storage.todayForAthlete(athleteId), input.date)) {
+        return res.status(HTTP.badRequest).json({ message: "A station logs today's workout, or one from the last few days." });
       }
+      const { on: today, days } = await scheduledDays(athleteId, input.date);
       const scheduled = days.some((d) => d.assignmentId === input.assignmentId && d.programDayId === input.programDayId);
       if (!scheduled) return res.status(HTTP.notFound).json({ message: "That workout is not on this athlete's day" });
 
