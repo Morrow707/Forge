@@ -32,7 +32,7 @@ describe("recording a tracked set", () => {
   });
 
   it("says what to do rather than just going grey", () => {
-    expect(workout).toContain("Enter ${unit} to record");
+    expect(workout).toContain('t("Enter {unit} to record", { unit })');
   });
 });
 

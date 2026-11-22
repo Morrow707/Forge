@@ -28,6 +28,7 @@ import {
   TARGET_BADGE_CLASS,
 } from "@/lib/exercise-colors";
 import { FilterChipGroup, RadioChipGroup } from "@/components/filter-chip-group";
+import { useT } from "@/i18n";
 
 type SkillForm = {
   name: string;
@@ -73,6 +74,7 @@ function formFrom(sk: SkillExerciseWithOwnership): SkillForm {
  * table/API and with the trimmed field set a drill actually needs (no
  * category/muscle/laterality/logging-type, none of which apply). */
 export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; routeBase: string }) {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const isNew = id === "new";
   const qc = useQueryClient();
@@ -111,11 +113,11 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
     },
     onSuccess: (saved: SkillExerciseWithOwnership) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/skill-exercises`] });
-      toast.success(isNew ? "Drill added to Skill Bank" : "Skill drill updated");
+      toast.success(isNew ? t("Drill added to Skill Bank") : t("Skill drill updated"));
       setEditing(false);
       if (isNew) navigate(`${routeBase}/${saved.id}`, { replace: true });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Something went wrong"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Something went wrong")),
   });
 
   const deleteMutation = useMutation({
@@ -124,15 +126,15 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/skill-exercises`] });
-      toast.success("Skill drill deleted");
+      toast.success(t("Skill drill deleted"));
       navigate(routeBase);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not delete skill drill"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not delete skill drill")),
   });
 
   if (!isNew && isLoading) {
     return (
-      <AppShell title="Loading Drill…">
+      <AppShell title={t("Loading Drill…")}>
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       </AppShell>
     );
@@ -143,10 +145,10 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
   // strength of a request that never landed.
   if (!isNew && isError) {
     return (
-      <AppShell title="Skill Drill">
+      <AppShell title={t("Skill Drill")}>
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="this skill drill" onRetry={() => void refetch()} />
+            <ReadFailed what={t("this skill drill")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       </AppShell>
@@ -155,13 +157,13 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
 
   if (!isNew && !skill) {
     return (
-      <AppShell title="Drill Not Found">
+      <AppShell title={t("Drill Not Found")}>
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-            <p className="text-muted-foreground">This skill drill doesn't exist or isn't visible to you.</p>
+            <p className="text-muted-foreground">{t("This skill drill doesn't exist or isn't visible to you.")}</p>
             <Button onClick={() => navigate(routeBase)}>
               <ArrowLeft className="h-4 w-4" />
-              Back to Skill Bank
+              {t("Back to Skill Bank")}
             </Button>
           </CardContent>
         </Card>
@@ -172,11 +174,11 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
 
   return (
     <AppShell
-      title={isNew ? "New Skill Drill" : skill!.name}
+      title={isNew ? t("New Skill Drill") : skill!.name}
       actions={
         <Button variant="outline" onClick={() => navigate(routeBase)}>
           <ArrowLeft className="h-4 w-4" />
-          Skill Bank
+          {t("Skill Bank")}
         </Button>
       }
     >
@@ -200,8 +202,8 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Lock className="h-3 w-3" />
                 {skill.isForgeOfficial
-                  ? "Created by Forge — read-only"
-                  : "Created by another coach — read-only"}
+                  ? t("Created by Forge — read-only")
+                  : t("Created by another coach — read-only")}
               </span>
             )}
           </div>
@@ -211,15 +213,15 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
           <Card>
             <CardContent className="space-y-4 p-5">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                <Field label="Skill type" value={skill.skillType} />
+                <Field label={t("Skill type")} value={skill.skillType} />
                 <Field
-                  label="Equipment"
+                  label={t("Equipment")}
                   value={skill.equipment && skill.equipment.length > 0 ? skill.equipment.join(", ") : "—"}
                 />
               </div>
               {skill.targets && skill.targets.length > 0 && (
                 <div>
-                  <p className="label-xs">Targets</p>
+                  <p className="label-xs">{t("Targets")}</p>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {skill.targets.map((t) => (
                       <span
@@ -234,7 +236,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
               )}
               {skill.sports && skill.sports.length > 0 && (
                 <div>
-                  <p className="label-xs">Sports</p>
+                  <p className="label-xs">{t("Sports")}</p>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {skill.sports.map((s) => (
                       <span
@@ -249,7 +251,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
               )}
               {skill.instructions && (
                 <div>
-                  <p className="label-xs">Instructions</p>
+                  <p className="label-xs">{t("Instructions")}</p>
                   <p className="mt-1 text-sm">{skill.instructions}</p>
                 </div>
               )}
@@ -261,11 +263,11 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                     onClick={() => setDeleteConfirmOpen(true)}
                   >
                     <Trash2 className="h-4 w-4" />
-                    Delete
+                    {t("Delete")}
                   </Button>
                   <Button onClick={() => setEditing(true)}>
                     <Pencil className="h-4 w-4" />
-                    Edit
+                    {t("Edit")}
                   </Button>
                 </div>
               )}
@@ -284,17 +286,17 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                 className="space-y-4"
               >
                 <div className="space-y-1.5">
-                  <Label htmlFor="sk-name">Name</Label>
+                  <Label htmlFor="sk-name">{t("Name")}</Label>
                   <Input
                     id="sk-name"
                     required
                     value={form.name}
                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                    placeholder="e.g. Front Toss"
+                    placeholder={t("e.g. Front Toss")}
                   />
                 </div>
                 <RadioChipGroup
-                  label="Skill type"
+                  label={t("Skill type")}
                   options={
                     form.skillType && !SKILL_TYPES.includes(form.skillType)
                       ? [form.skillType, ...SKILL_TYPES]
@@ -306,7 +308,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                 />
                 <div className="space-y-1.5">
                   <FilterChipGroup
-                    label="Sports"
+                    label={t("Sports")}
                     options={SPORTS}
                     selected={form.sports}
                     onToggle={(v) =>
@@ -315,7 +317,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                         if (next.has(v)) {
                           next.delete(v);
                         } else if (next.size >= 8) {
-                          toast.error("You can select up to 8 sports");
+                          toast.error(t("You can select up to 8 sports"));
                           return f;
                         } else {
                           next.add(v);
@@ -326,14 +328,12 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                     colorClass={SPORT_FILTER_ACTIVE_CLASS}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Which sports' coaches should be able to find this drill, a generic arm-care
-                    drill might be tagged Baseball, Softball, Volleyball, and Football even though
-                    its skill type is Throwing.
+                    {t("Which sports' coaches should be able to find this drill, a generic arm-care drill might be tagged Baseball, Softball, Volleyball, and Football even though its skill type is Throwing.")}
                   </p>
                 </div>
                 <div className="space-y-1.5">
                   <FilterChipGroup
-                    label="Equipment"
+                    label={t("Equipment")}
                     options={
                       Array.from(form.equipment).some((e) => !SKILL_EQUIPMENT.includes(e))
                         ? [...Array.from(form.equipment).filter((e) => !SKILL_EQUIPMENT.includes(e)), ...SKILL_EQUIPMENT]
@@ -346,7 +346,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                         if (next.has(v)) {
                           next.delete(v);
                         } else if (next.size >= 8) {
-                          toast.error("You can select up to 8 pieces of equipment");
+                          toast.error(t("You can select up to 8 pieces of equipment"));
                           return f;
                         } else {
                           next.add(v);
@@ -359,7 +359,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                 </div>
                 <div className="space-y-1.5">
                   <FilterChipGroup
-                    label="Targets"
+                    label={t("Targets")}
                     options={
                       Array.from(form.targets).some((t) => !SKILL_TARGETS.includes(t))
                         ? [...Array.from(form.targets).filter((t) => !SKILL_TARGETS.includes(t)), ...SKILL_TARGETS]
@@ -372,7 +372,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                         if (next.has(v)) {
                           next.delete(v);
                         } else if (next.size >= 6) {
-                          toast.error("You can select up to 6 targets");
+                          toast.error(t("You can select up to 6 targets"));
                           return f;
                         } else {
                           next.add(v);
@@ -383,32 +383,29 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                     colorClass={TARGET_FILTER_ACTIVE_CLASS}
                   />
                   <p className="text-xs text-muted-foreground">
-                    What this drill actually trains, accuracy, power, reaction time, mental
-                    focus. Not a muscle group; a drill can carry more than one (a throwing drill is
-                    usually both Accuracy and Arm Strength).
+                    {t("What this drill actually trains, accuracy, power, reaction time, mental focus. Not a muscle group; a drill can carry more than one (a throwing drill is usually both Accuracy and Arm Strength).")}
                   </p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="sk-video">YouTube video URL</Label>
+                  <Label htmlFor="sk-video">{t("YouTube video URL")}</Label>
                   <Input
                     id="sk-video"
                     type="url"
                     value={form.videoUrl}
                     onChange={(e) => setForm((f) => ({ ...f, videoUrl: e.target.value }))}
-                    placeholder="https://www.youtube.com/watch?v=…"
+                    placeholder={t("https://www.youtube.com/watch?v=…")}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Paste a direct video link and it'll play inline at the top of this page; leave
-                    it blank if there isn't one yet.
+                    {t("Paste a direct video link and it'll play inline at the top of this page; leave it blank if there isn't one yet.")}
                   </p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="sk-instructions">Instructions (optional)</Label>
+                  <Label htmlFor="sk-instructions">{t("Instructions (optional)")}</Label>
                   <Textarea
                     id="sk-instructions"
                     value={form.instructions}
                     onChange={(e) => setForm((f) => ({ ...f, instructions: e.target.value }))}
-                    placeholder="Setup, reps/rounds, coaching cues…"
+                    placeholder={t("Setup, reps/rounds, coaching cues…")}
                   />
                 </div>
                 {/* Admin-only -- restricts whether a coach can turn Sprint
@@ -423,7 +420,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                       checked={form.videoEligible !== false}
                       onCheckedChange={(c) => setForm((f) => ({ ...f, videoEligible: c === true }))}
                     />
-                    Video check eligible (coaches can turn Sprint Timing/Mechanics tracking on for this drill)
+                    {t("Video check eligible (coaches can turn Sprint Timing/Mechanics tracking on for this drill)")}
                   </label>
                 )}
                 <div className="flex justify-end gap-2 border-t border-border pt-4">
@@ -436,11 +433,11 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                         setEditing(false);
                       }}
                     >
-                      Cancel
+                      {t("Cancel")}
                     </Button>
                   )}
                   <Button type="submit" disabled={saveMutation.isPending}>
-                    {saveMutation.isPending ? "Saving…" : "Save Drill"}
+                    {saveMutation.isPending ? t("Saving…") : t("Save Drill")}
                   </Button>
                 </div>
               </form>
@@ -453,9 +450,9 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
         <ConfirmDialog
           open={deleteConfirmOpen}
           onOpenChange={setDeleteConfirmOpen}
-          title="Delete skill drill?"
-          description={`Delete "${skill.name}"?`}
-          confirmLabel="Delete"
+          title={t("Delete skill drill?")}
+          description={t("Delete \"{name}\"?", { name: t.exercise(skill.name) })}
+          confirmLabel={t("Delete")}
           isPending={deleteMutation.isPending}
           onConfirm={() => deleteMutation.mutate()}
         />

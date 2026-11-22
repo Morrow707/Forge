@@ -7,6 +7,7 @@ import { MarketingShell } from "@/components/marketing-shell";
 import { usePageMeta } from "@/lib/page-meta";
 import { CAMERA_ACCURACY_SHORT } from "@shared/camera-accuracy-copy";
 import { HIGH_SCHOOLS_FAQ } from "@shared/high-schools-faq";
+import { msg, useT } from "@/i18n";
 
 /** THE SCHOOLS AND CLUBS PAGE.
  *
@@ -28,17 +29,18 @@ import { HIGH_SCHOOLS_FAQ } from "@shared/high-schools-faq";
 /** What a coach's plan includes, as facts about the app. Kept here rather than spread through JSX so
  * the list can be read and checked in one place. */
 export const ONE_APP_INCLUDES = [
-  "Program builder with an AI assistant, and import of an existing program from a spreadsheet, PDF or photo",
-  "Athlete app on iPhone, plus a shared weight-room tablet view and a TV leaderboard",
-  "Messages between a coach and each athlete, which a parent can read for an athlete under 18",
-  "Testing, maxes and PR tracking, with reports you can export to a spreadsheet",
-  "Force plate and bar-speed device data brought in by connection or file upload",
-  "Video recorded on the athlete's own phone, kept beside the set it belongs to",
-  "Nutrition targets and food logging",
-  "Waivers, medical clearances and guardian consent, tracked per athlete",
+  msg("Program builder with an AI assistant, and import of an existing program from a spreadsheet, PDF or photo"),
+  msg("Athlete app on iPhone, plus a shared weight-room tablet view and a TV leaderboard"),
+  msg("Messages between a coach and each athlete, which a parent can read for an athlete under 18"),
+  msg("Testing, maxes and PR tracking, with reports you can export to a spreadsheet"),
+  msg("Force plate and bar-speed device data brought in by connection or file upload"),
+  msg("Video recorded on the athlete's own phone, kept beside the set it belongs to"),
+  msg("Nutrition targets and food logging"),
+  msg("Waivers, medical clearances and guardian consent, tracked per athlete"),
 ];
 
 export default function ForHighSchoolsPage() {
+  const t = useT();
   usePageMeta({
     title: "Forge for high schools and clubs",
     description:
@@ -53,23 +55,20 @@ export default function ForHighSchoolsPage() {
         <div className="mx-auto max-w-3xl">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
             <School className="h-3.5 w-3.5" />
-            For schools and clubs
+            {t("For schools and clubs")}
           </span>
           <h1 className="mt-6 font-display text-4xl font-extrabold uppercase leading-tight tracking-wide md:text-5xl">
-            Built for rosters of minors, from the first line of code
+            {t("Built for rosters of minors, from the first line of code")}
           </h1>
           <p className="mt-6 text-lg text-muted-foreground">
-            Most training software is built for adults and has consent bolted on afterwards. If
-            your roster is fourteen-year-olds, that difference is yours to answer for. Forge
-            treats an athlete's age as the thing that decides what the platform may do, not as a
-            field on a form.
+            {t("Most training software is built for adults and has consent bolted on afterwards. If your roster is fourteen-year-olds, that difference is yours to answer for. Forge treats an athlete's age as the thing that decides what the platform may do, not as a field on a form.")}
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <SignupCta>
-              Get started <ArrowRight className="ml-1.5 h-4 w-4" />
+              {t("Get started")} <ArrowRight className="ml-1.5 h-4 w-4" />
             </SignupCta>
             <Link href="/pricing">
-              <Button variant="outline">See pricing</Button>
+              <Button variant="outline">{t("See pricing")}</Button>
             </Link>
           </div>
         </div>
@@ -78,20 +77,17 @@ export default function ForHighSchoolsPage() {
       <section className="border-t border-border px-4 py-14 md:px-8">
         <div className="mx-auto max-w-4xl">
           <h2 className="font-display text-2xl font-bold uppercase tracking-wide">
-            What that actually means
+            {t("What that actually means")}
           </h2>
           <div className="mt-8 grid gap-5 md:grid-cols-2">
             <Card>
               <CardContent className="p-6">
                 <Lock className="h-6 w-6 text-primary" />
                 <h3 className="mt-4 font-display text-lg font-bold">
-                  An under-18 account does not work until a guardian claims it
+                  {t("An under-18 account does not work until a guardian claims it")}
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Not a checkbox the athlete ticks, and not a warning a coach can click past. The
-                  athlete signs in to a screen telling them to wait. A parent or legal guardian
-                  claims their own linked account, and the moment they do, Forge records what they
-                  agreed to and the exact text they were shown.
+                  {t("Not a checkbox the athlete ticks, and not a warning a coach can click past. The athlete signs in to a screen telling them to wait. A parent or legal guardian claims their own linked account, and the moment they do, Forge records what they agreed to and the exact text they were shown.")}
                 </p>
               </CardContent>
             </Card>
@@ -100,12 +96,10 @@ export default function ForHighSchoolsPage() {
               <CardContent className="p-6">
                 <ShieldCheck className="h-6 w-6 text-primary" />
                 <h3 className="mt-4 font-display text-lg font-bold">
-                  Three age tiers, with different rules
+                  {t("Three age tiers, with different rules")}
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Under 13, 13 to 17, and adult are separate tiers with separate handling, because
-                  the obligations genuinely differ. An under-13 gets the strictest treatment
-                  automatically, on their date of birth, with no one having to remember.
+                  {t("Under 13, 13 to 17, and adult are separate tiers with separate handling, because the obligations genuinely differ. An under-13 gets the strictest treatment automatically, on their date of birth, with no one having to remember.")}
                 </p>
               </CardContent>
             </Card>
@@ -114,13 +108,10 @@ export default function ForHighSchoolsPage() {
               <CardContent className="p-6">
                 <FileCheck className="h-6 w-6 text-primary" />
                 <h3 className="mt-4 font-display text-lg font-bold">
-                  Consent is a dated record, not a flag
+                  {t("Consent is a dated record, not a flag")}
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Every agreement stores the document text as it stood at the moment it was
-                  accepted. If a policy changes later, what someone actually agreed to is still
-                  retrievable, and they are asked again rather than being silently moved onto new
-                  terms. Withdrawal writes its own dated record.
+                  {t("Every agreement stores the document text as it stood at the moment it was accepted. If a policy changes later, what someone actually agreed to is still retrievable, and they are asked again rather than being silently moved onto new terms. Withdrawal writes its own dated record.")}
                 </p>
               </CardContent>
             </Card>
@@ -129,13 +120,10 @@ export default function ForHighSchoolsPage() {
               <CardContent className="p-6">
                 <Users className="h-6 w-6 text-primary" />
                 <h3 className="mt-4 font-display text-lg font-bold">
-                  Coaches see their athletes. Nobody else does.
+                  {t("Coaches see their athletes. Nobody else does.")}
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  A coach sees their own roster by name, because that is what coaching is. Every
-                  platform-wide screen on the operator side shows group numbers with the names
-                  removed and a per-report code that maps back to nobody. Small groups are
-                  suppressed rather than shown.
+                  {t("A coach sees their own roster by name, because that is what coaching is. Every platform-wide screen on the operator side shows group numbers with the names removed and a per-report code that maps back to nobody. Small groups are suppressed rather than shown.")}
                 </p>
               </CardContent>
             </Card>
@@ -150,17 +138,16 @@ export default function ForHighSchoolsPage() {
       <section className="border-t border-border px-4 py-14 md:px-8">
         <div className="mx-auto max-w-4xl">
           <h2 className="font-display text-2xl font-bold uppercase tracking-wide">
-            One app instead of four
+            {t("One app instead of four")}
           </h2>
           <p className="mt-2 max-w-3xl text-muted-foreground">
-            A strength program usually runs on a programming app, a spreadsheet of testing numbers,
-            a group text and a folder of paper forms. On a coach's plan, Forge is all of them.
+            {t("A strength program usually runs on a programming app, a spreadsheet of testing numbers, a group text and a folder of paper forms. On a coach's plan, Forge is all of them.")}
           </p>
           <ul className="mt-6 grid gap-x-8 gap-y-3 text-sm md:grid-cols-2" data-testid="list-one-app">
             {ONE_APP_INCLUDES.map((line) => (
               <li key={line} className="flex gap-2">
                 <FileCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <span>{line}</span>
+                <span>{t(line)}</span>
               </li>
             ))}
           </ul>
@@ -170,44 +157,34 @@ export default function ForHighSchoolsPage() {
       <section className="border-t border-border px-4 py-14 md:px-8">
         <div className="mx-auto max-w-3xl space-y-8">
           <h2 className="font-display text-2xl font-bold uppercase tracking-wide">
-            Questions an athletic director should ask any vendor
+            {t("Questions an athletic director should ask any vendor")}
           </h2>
 
           <div>
-            <h3 className="font-display text-lg font-bold">Where does the data physically live?</h3>
+            <h3 className="font-display text-lg font-bold">{t("Where does the data physically live?")}</h3>
             <p className="mt-2 text-muted-foreground">
-              One provider, in the United States: the database and every uploaded video and
-              document. Payment details go to Stripe and never touch Forge's servers. Our AI
-              features send the text of a request to the model at the moment it is asked and it is
-              not stored there.
+              {t("One provider, in the United States: the database and every uploaded video and document. Payment details go to Stripe and never touch Forge's servers. Our AI features send the text of a request to the model at the moment it is asked and it is not stored there.")}
             </p>
           </div>
 
           <div>
-            <h3 className="font-display text-lg font-bold">What happens to video?</h3>
+            <h3 className="font-display text-lg font-bold">{t("What happens to video?")}</h3>
             <p className="mt-2 text-muted-foreground">
-              Form-check clips are kept to a per-athlete limit and then aged out. When a video is
-              removed, the measurements taken from it survive, an athlete does not lose their
-              training history because a file was cleaned up.
+              {t("Form-check clips are kept to a per-athlete limit and then aged out. When a video is removed, the measurements taken from it survive, an athlete does not lose their training history because a file was cleaned up.")}
             </p>
           </div>
 
           <div>
-            <h3 className="font-display text-lg font-bold">Can a parent get their child out?</h3>
+            <h3 className="font-display text-lg font-bold">{t("Can a parent get their child out?")}</h3>
             <p className="mt-2 text-muted-foreground">
-              Yes, and in two separate ways, because they are separate questions. Camera
-              collection can be switched off for an athlete at a guardian's request while they
-              keep using everything else. Account deletion is its own action and removes the
-              account outright.
+              {t("Yes, and in two separate ways, because they are separate questions. Camera collection can be switched off for an athlete at a guardian's request while they keep using everything else. Account deletion is its own action and removes the account outright.")}
             </p>
           </div>
 
           <div>
-            <h3 className="font-display text-lg font-bold">Is this a student record?</h3>
+            <h3 className="font-display text-lg font-bold">{t("Is this a student record?")}</h3>
             <p className="mt-2 text-muted-foreground">
-              Forge receives a name, age, gender, sport and position. No grades, no transcripts,
-              nothing from a student information system. If your district's procurement needs an
-              addendum, send it to us.
+              {t("Forge receives a name, age, gender, sport and position. No grades, no transcripts, nothing from a student information system. If your district's procurement needs an addendum, send it to us.")}
             </p>
           </div>
         </div>
@@ -219,20 +196,19 @@ export default function ForHighSchoolsPage() {
       <section className="border-t border-border px-4 py-14 md:px-8">
         <div className="mx-auto max-w-3xl">
           <h2 className="font-display text-2xl font-bold uppercase tracking-wide">
-            Questions athletic directors ask
+            {t("Questions athletic directors ask")}
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Short answers, each one a fact about what the software does. The documents behind them
-            are on the site to read before anyone signs.
+            {t("Short answers, each one a fact about what the software does. The documents behind them are on the site to read before anyone signs.")}
           </p>
           <div className="mt-6 divide-y divide-border border-y border-border">
             {HIGH_SCHOOLS_FAQ.map((f) => (
               <details key={f.question} className="group py-4">
                 <summary className="flex cursor-pointer list-none items-start justify-between gap-4 font-semibold">
-                  <span>{f.question}</span>
+                  <span>{t(f.question)}</span>
                   <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
                 </summary>
-                <p className="mt-3 text-sm text-muted-foreground">{f.answer}</p>
+                <p className="mt-3 text-sm text-muted-foreground">{t(f.answer)}</p>
               </details>
             ))}
           </div>
@@ -246,16 +222,15 @@ export default function ForHighSchoolsPage() {
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
               <div>
                 <p className="font-semibold text-foreground">
-                  If you are buying this for the camera tracking, read this first.
+                  {t("If you are buying this for the camera tracking, read this first.")}
                 </p>
-                <p className="mt-2 text-sm text-muted-foreground">{CAMERA_ACCURACY_SHORT}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{t(CAMERA_ACCURACY_SHORT)}</p>
                 <p className="mt-3 text-sm text-muted-foreground">
-                  Four movements have been validated against real lifts. We publish the full list,
-                  including what has not been tested.
+                  {t("Four movements have been validated against real lifts. We publish the full list, including what has not been tested.")}
                 </p>
                 <Link href="/camera-validation">
                   <Button variant="outline" size="sm" className="mt-4">
-                    See what has been tested <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                    {t("See what has been tested")} <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                   </Button>
                 </Link>
               </div>

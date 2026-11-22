@@ -49,6 +49,8 @@ import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
+import { TranslatableText } from "@/components/translatable-text";
 
 type SkillSet = {
   setNumber: number;
@@ -101,6 +103,7 @@ function isSetFilled(set: SkillSet): boolean {
  * currently showing, exactly like "Record & Analyze" sits alongside
  * REPS/WEIGHT on the strength side rather than replacing them. */
 function SkillWorkoutPageInner() {
+  const t = useT();
   const { skillAssignmentId, skillProgramDayId, date } = useParams<{
     skillAssignmentId: string;
     skillProgramDayId: string;
@@ -190,7 +193,7 @@ function SkillWorkoutPageInner() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", assignmentId, dayId, date] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save that"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not save that")),
   });
 
   const completeMutation = useMutation({
@@ -205,9 +208,9 @@ function SkillWorkoutPageInner() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day"] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/calendar"] });
-      toast.success(day?.completed ? "Marked not done" : "Nice work, marked done");
+      toast.success(day?.completed ? t("Marked not done") : t("Nice work, marked done"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update that"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Couldn't update that")),
   });
 
   const [sprintExercise, setSprintExercise] = useState<SkillExercise | null>(null);
@@ -228,9 +231,9 @@ function SkillWorkoutPageInner() {
       qc.invalidateQueries({
         queryKey: [`/api/athlete/skill-assignments/${assignmentId}/days/${dayId}/comments`],
       });
-      toast.success("Video sent to your coach");
+      toast.success(t("Video sent to your coach"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not attach video"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not attach video")),
   });
 
   const aiFormCheckMutation = useMutation({
@@ -243,7 +246,7 @@ function SkillWorkoutPageInner() {
       return res.json();
     },
     onSuccess: (data) => setAiFeedback(data.assistantMessage.content),
-    onError: (err: ApiError) => toast.error(err.message || "Could not get AI feedback"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not get AI feedback")),
   });
 
   // `!day` covered a failed read too, so a dropped request left an athlete on a
@@ -251,15 +254,15 @@ function SkillWorkoutPageInner() {
   // retry it short of restarting the app.
   if (isError) {
     return (
-      <AppShell title="Skill Session">
-        <ReadFailed what="this session" onRetry={() => void refetch()} />
+      <AppShell title={t("Skill Session")}>
+        <ReadFailed what={t("this session")} onRetry={() => void refetch()} />
       </AppShell>
     );
   }
 
   if (isLoading || !day) {
     return (
-      <AppShell title="Loading Skill Session…">
+      <AppShell title={t("Loading Skill Session…")}>
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       </AppShell>
     );
@@ -273,7 +276,7 @@ function SkillWorkoutPageInner() {
             <button
               type="button"
               onClick={() => navigate("/athlete/calendar")}
-              aria-label="Back to calendar"
+              aria-label={t("Back to calendar")}
               className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
             >
               <ArrowLeft className="h-6 w-6 md:h-7 md:w-7" />
@@ -290,7 +293,7 @@ function SkillWorkoutPageInner() {
           {day.completed && (
             <Badge variant="success" className="ml-auto">
               <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-              Completed
+              {t("Completed")}
             </Badge>
           )}
         </div>
@@ -298,14 +301,14 @@ function SkillWorkoutPageInner() {
         {day.isRestDay ? (
           <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-surface py-16 text-center">
             <MoonStar className="h-10 w-10 text-muted-foreground" />
-            <p className="text-muted-foreground">Recovery day. Take it easy, hydrate, and stretch.</p>
+            <p className="text-muted-foreground">{t("Recovery day. Take it easy, hydrate, and stretch.")}</p>
           </div>
         ) : day.exercises.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">Nothing prescribed for this day yet.</p>
+          <p className="py-10 text-center text-sm text-muted-foreground">{t("Nothing prescribed for this day yet.")}</p>
         ) : (
           <div className="space-y-4">
             <p className="text-xs text-muted-foreground">
-              Everything for today, A to Z — tap a drill to expand it and log your sets.
+              {t("Everything for today, A to Z — tap a drill to expand it and log your sets.")}
             </p>
 
             <div className="space-y-2.5">
@@ -332,14 +335,14 @@ function SkillWorkoutPageInner() {
                           onClick={() => toggleExercise(ex.id)}
                           className="flex w-full items-center gap-1.5 text-left text-sm font-semibold"
                         >
-                          <span className="truncate">{ex.name}</span>
+                          <span className="truncate">{t.exercise(ex.name)}</span>
                           <span className="shrink-0 rounded bg-teal-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-teal-400">
                             {ex.skillType}
                           </span>
                         </button>
                         <p className="text-xs font-semibold text-muted-foreground">
-                          {ex.prescribedSets} sets &times; {ex.reps}
-                          {ex.restSeconds ? ` · ${ex.restSeconds}s rest` : ""}
+                          {t("{sets} sets × {reps}", { sets: ex.prescribedSets, reps: ex.reps })}
+                          {ex.restSeconds ? t(" · {seconds}s rest", { seconds: ex.restSeconds }) : ""}
                         </p>
                         {ex.sets.length > 0 && (
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -347,7 +350,7 @@ function SkillWorkoutPageInner() {
                               <button
                                 key={set.setNumber}
                                 type="button"
-                                aria-label={`Show set ${set.setNumber}`}
+                                aria-label={t("Show set {number}", { number: set.setNumber })}
                                 aria-pressed={i === visibleSetIndex}
                                 onClick={() => jumpToSet(ex.id, i)}
                                 className={cn(
@@ -357,7 +360,7 @@ function SkillWorkoutPageInner() {
                                     "ring-2 ring-orange-400 ring-offset-1 ring-offset-background",
                                 )}
                               >
-                                Set {set.setNumber}
+                                {t("Set {number}", { number: set.setNumber })}
                               </button>
                             ))}
                           </div>
@@ -365,7 +368,7 @@ function SkillWorkoutPageInner() {
                       </div>
                       <button
                         type="button"
-                        aria-label={expanded ? "Collapse drill" : "Expand drill"}
+                        aria-label={expanded ? t("Collapse drill") : t("Expand drill")}
                         onClick={() => toggleExercise(ex.id)}
                         className="shrink-0"
                       >
@@ -388,8 +391,8 @@ function SkillWorkoutPageInner() {
                             to do, how much of it, and what you need to hand. A drill arriving as
                             a title and an empty box is not something an athlete can execute. */}
                         <p className="text-xs text-muted-foreground">
-                          Prescribed: {ex.prescribedSets} x {ex.reps}
-                          {ex.restSeconds != null && `, rest ${ex.restSeconds}s`}
+                          {t("Prescribed: {sets} x {reps}", { sets: ex.prescribedSets, reps: ex.reps })}
+                          {ex.restSeconds != null && t(", rest {seconds}s", { seconds: ex.restSeconds })}
                         </p>
                         {ex.targets && ex.targets.length > 0 && (
                           <div className="flex flex-wrap gap-1.5">
@@ -405,7 +408,7 @@ function SkillWorkoutPageInner() {
                         )}
                         {ex.equipment && ex.equipment.length > 0 && (
                           <p className="text-xs text-muted-foreground">
-                            You need: {ex.equipment.join(", ")}
+                            {t("You need: {equipment}", { equipment: ex.equipment.map((e) => t(e)).join(", ") })}
                           </p>
                         )}
                         {ex.instructions && (
@@ -413,7 +416,7 @@ function SkillWorkoutPageInner() {
                         )}
                         {ex.notes && (
                           <p className="rounded-md bg-surface-elevated px-2.5 py-2 text-xs text-muted-foreground">
-                            Coach note: {ex.notes}
+                            {t("Coach note:")} <TranslatableText as="span" text={ex.notes} />
                           </p>
                         )}
                         {/* The drill's demo plays here on the drill day (2026-10-04): an
@@ -432,7 +435,7 @@ function SkillWorkoutPageInner() {
                             <div className="aspect-video w-full overflow-hidden rounded-md border border-border bg-black">
                               <iframe
                                 src={getEmbedUrl(ex.videoUrl)!}
-                                title={`${ex.name} demo`}
+                                title={t("{name} demo", { name: t.exercise(ex.name) })}
                                 className="h-full w-full"
                                 allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                 allowFullScreen
@@ -446,12 +449,12 @@ function SkillWorkoutPageInner() {
                               onClick={externalLinkClick(ex.videoUrl)}
                               className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                             >
-                              <Film className="h-3 w-3" /> Watch demo
+                              <Film className="h-3 w-3" /> {t("Watch demo")}
                             </a>
                           ))}
 
                         {ex.trackingLevel !== "none" && cameraAccess.failed && (
-                          <ReadFailed what="whether the camera is available to you" onRetry={cameraAccess.retry} className="flex flex-col items-start gap-2 py-2" />
+                          <ReadFailed what={t("whether the camera is available to you")} onRetry={cameraAccess.retry} className="flex flex-col items-start gap-2 py-2" />
                         )}
                         {ex.trackingLevel !== "none" && cameraAllowed && (
                           // Sprint times and mechanics scores come off the same uncalibrated
@@ -463,12 +466,12 @@ function SkillWorkoutPageInner() {
                         {visibleSet && (
                           <div className="space-y-2 rounded-md bg-surface-elevated p-2.5">
                             <p className="text-xs font-semibold text-muted-foreground">
-                              SET {visibleSet.setNumber}
+                              {t("SET {number}", { number: visibleSet.setNumber })}
                             </p>
                             {ex.trackingLevel === "sprint" ? (
                               <div>
                                 <label className="mb-1 block text-[10px] uppercase text-muted-foreground">
-                                  Time (sec)
+                                  {t("Time (sec)")}
                                 </label>
                                 <Input
                                   type="number"
@@ -493,10 +496,10 @@ function SkillWorkoutPageInner() {
                             ) : (
                               <div>
                                 <label className="mb-1 flex items-center gap-1.5 text-[10px] uppercase text-muted-foreground">
-                                  Result
+                                  {t("Result")}
                                   {ex.perSetReps?.[visibleSet.setNumber - 1] != null && (
                                     <span className="normal-case text-foreground">
-                                      &middot; target {ex.perSetReps[visibleSet.setNumber - 1]} reps
+                                      {t("· target {count} reps", { count: ex.perSetReps[visibleSet.setNumber - 1] })}
                                     </span>
                                   )}
                                 </label>
@@ -505,7 +508,7 @@ function SkillWorkoutPageInner() {
                                   placeholder={
                                     ex.perSetReps?.[visibleSet.setNumber - 1] != null
                                       ? `e.g. ${ex.perSetReps[visibleSet.setNumber - 1]}`
-                                      : "e.g. 18/20 makes"
+                                      : t("e.g. 18/20 makes")
                                   }
                                   defaultValue={visibleSet.manualResult ?? ""}
                                   key={`${ex.id}-${visibleSet.setNumber}-result`}
@@ -532,7 +535,7 @@ function SkillWorkoutPageInner() {
                                 onClick={externalLinkClick(visibleSet.videoUrl)}
                                 className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                               >
-                                <Film className="h-3 w-3" /> Watch this set's clip
+                                <Film className="h-3 w-3" /> {t("Watch this set's clip")}
                               </a>
                             )}
 
@@ -544,7 +547,7 @@ function SkillWorkoutPageInner() {
                                 onClick={() => setSprintExercise(ex)}
                               >
                                 <Timer className="h-3.5 w-3.5" />
-                                Record Sprint for Set {visibleSet.setNumber}
+                                {t("Record Sprint for Set {number}", { number: visibleSet.setNumber })}
                               </Button>
                             )}
                             {ex.trackingLevel === "mechanics" && cameraAllowed && !user?.trackingOptOut && (
@@ -555,7 +558,7 @@ function SkillWorkoutPageInner() {
                                 onClick={() => setMechanicsExercise(ex)}
                               >
                                 <Activity className="h-3.5 w-3.5" />
-                                Record {mechanicsActionLabelFor(ex.skillType)} for Set {visibleSet.setNumber}
+                                {t("Record {action} for Set {number}", { action: t(mechanicsActionLabelFor(ex.skillType)), number: visibleSet.setNumber })}
                               </Button>
                             )}
                             {ex.trackingLevel === "none" && videoCheckMode !== "off" && (
@@ -570,7 +573,7 @@ function SkillWorkoutPageInner() {
                                 ) : (
                                   <Video className="h-3.5 w-3.5" />
                                 )}
-                                {videoCheckMode === "ai" ? "Record & Get AI Feedback" : "Record a Video"}
+                                {videoCheckMode === "ai" ? t("Record & Get AI Feedback") : t("Record a Video")}
                               </Button>
                             )}
                           </div>
@@ -589,7 +592,7 @@ function SkillWorkoutPageInner() {
               onClick={() => completeMutation.mutate(!day.completed)}
             >
               <CheckCircle2 className="h-4 w-4" />
-              {day.completed ? "Marked Done" : "Mark Done"}
+              {day.completed ? t("Marked Done") : t("Mark Done")}
             </Button>
 
             {hasCoach && (
@@ -598,9 +601,9 @@ function SkillWorkoutPageInner() {
 
             {videoCheckMode === "ai" && day.skillProgramId && (
               <p className="text-center text-xs text-muted-foreground">
-                Have a question about this session?{" "}
+                {t("Have a question about this session?")}{" "}
                 <Link href={`/athlete/skill-programs/${day.skillProgramId}`} className="text-primary hover:underline">
-                  Chat with your AI coach
+                  {t("Chat with your AI coach")}
                 </Link>
                 .
               </p>
@@ -686,15 +689,15 @@ function SkillWorkoutPageInner() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              AI Feedback
+              {t("AI Feedback")}
             </DialogTitle>
           </DialogHeader>
           <p className="whitespace-pre-wrap text-sm">{aiFeedback}</p>
           {day.skillProgramId && (
-            <p className="text-xs text-muted-foreground">Saved to your AI Coach chat for {day.programName} too.</p>
+            <p className="text-xs text-muted-foreground">{t("Saved to your AI Coach chat for {program} too.", { program: day.programName })}</p>
           )}
           <DialogFooter>
-            <Button onClick={() => setAiFeedback(null)}>Got it</Button>
+            <Button onClick={() => setAiFeedback(null)}>{t("Got it")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -708,8 +711,9 @@ function SkillWorkoutPageInner() {
 // through -- their skill day was assigned by a coach, not bought -- so this only turns away a
 // Free Agent on Basic or AI Coach, whose skill-day route answers 402 regardless.
 export default function SkillWorkoutPage() {
+  const t = useT();
   return (
-    <SkillsGate title="Skill Session">
+    <SkillsGate title={t("Skill Session")}>
       <SkillWorkoutPageInner />
     </SkillsGate>
   );

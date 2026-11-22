@@ -31,14 +31,18 @@ import { join } from "node:path";
  * are NOT: es.json and exercise-es.json are their own chunks, fetched only when Spanish is on
  * screen, and an English reader never downloads them.
  *
+ * RAISED again the same day, 568 -> 572 kB (172 -> 174 kB gzipped), for the t() calls in the eager public
+ * pages (landing, pricing, for-high-schools, for-athletes, camera-validation, movement, the legal
+ * index): +0.7 kB on the entry, +1.1 kB gzipped. The words are the same English; only how they are produced moved.
+ *
  * Runs only when dist/public exists (CI builds after `npm test`; a developer who has not built
  * sees it skipped, not failed). scripts/check-first-paint.mjs is the build-time twin that always
  * runs; this one carries the byte budget. */
 const DIST = join(__dirname, "..", "..", "..", "dist", "public");
 const built = existsSync(join(DIST, "index.html"));
 
-const EAGER_BUDGET_BYTES = 568 * 1024;
-const EAGER_BUDGET_GZIP_BYTES = 172 * 1024;
+const EAGER_BUDGET_BYTES = 572 * 1024;
+const EAGER_BUDGET_GZIP_BYTES = 174 * 1024;
 
 /** Chunks that must never be on the first paint, and what each one is. */
 const MUST_BE_LAZY: Array<[string, string]> = [

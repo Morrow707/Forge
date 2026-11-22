@@ -33,6 +33,7 @@ import {
   FREE_AGENT_TIER_GRID_COLS,
 } from "@shared/free-agent-tiers";
 import { CAMERA_ACCURACY_LONG } from "@shared/camera-accuracy-copy";
+import { msg, useT } from "@/i18n";
 
 /** A screenshot dressed up as a little browser window -- same treatment on
  * every feature screenshot so the marketing page reads as one coherent
@@ -101,73 +102,73 @@ function GlowBlob({ className }: { className: string }) {
 }
 
 const STATS = [
-  { value: "150+", label: "Exercises in the library" },
-  { value: "20+", label: "Sports with tailored programming" },
-  { value: "5+", label: "AI features built in" },
-  { value: "0", label: "Extra hardware required" },
+  { value: "150+", label: msg("Exercises in the library") },
+  { value: "20+", label: msg("Sports with tailored programming") },
+  { value: "5+", label: msg("AI features built in") },
+  { value: "0", label: msg("Extra hardware required") },
 ];
 
 const AI_CARDS = [
   {
     icon: Video,
-    title: "AI Form Check",
-    body: "On AI Coach + Video, film a set on the phone that's already recording it and get feedback on bar path, depth, and rep quality, the same kind of notes a coach standing right there would give.",
+    title: msg("AI Form Check"),
+    body: msg("On AI Coach + Video, film a set on the phone that's already recording it and get feedback on bar path, depth, and rep quality, the same kind of notes a coach standing right there would give."),
   },
   {
     icon: Bot,
-    title: "AI Chat Coach",
-    body: "Free Agents on an AI Coach plan get a training partner built into the app, ask a question about today's session and get an answer that already knows the program, the numbers, and the history.",
+    title: msg("AI Chat Coach"),
+    body: msg("Free Agents on an AI Coach plan get a training partner built into the app, ask a question about today's session and get an answer that already knows the program, the numbers, and the history."),
   },
   {
     icon: Activity,
-    title: "Smart Autoregulation",
-    body: "When a wellness check-in comes back rough, Forge adjusts what it recommends instead of pretending nothing changed.",
+    title: msg("Smart Autoregulation"),
+    body: msg("When a wellness check-in comes back rough, Forge adjusts what it recommends instead of pretending nothing changed."),
   },
   {
     icon: Mail,
-    title: "Smart Goals & Digests",
-    body: "Ask for a target and get one grounded in actual numbers, then, on an AI Coach plan, get a plain-language recap of the week without opening a single chart.",
+    title: msg("Smart Goals & Digests"),
+    body: msg("Ask for a target and get one grounded in actual numbers, then, on an AI Coach plan, get a plain-language recap of the week without opening a single chart."),
   },
 ];
 
 const FEATURE_CARDS = [
   {
     icon: ShieldCheck,
-    title: "Injury-risk aware",
-    body: "Acute:chronic workload ratios and leg-drive asymmetry are calculated automatically from logged sets, flagging risk before it becomes an injury report.",
+    title: msg("Injury-risk aware"),
+    body: msg("Acute:chronic workload ratios and leg-drive asymmetry are calculated automatically from logged sets, flagging risk before it becomes an injury report."),
   },
   {
     icon: CalendarCheck,
-    title: "Compliance, handled",
-    body: "NCAA/CARA time-log tracking runs quietly in the background, so a coach never has to reconstruct hours after the fact.",
+    title: msg("Compliance, handled"),
+    body: msg("NCAA/CARA time-log tracking runs quietly in the background, so a coach never has to reconstruct hours after the fact."),
   },
   {
     icon: MessagesSquare,
-    title: "One team board",
-    body: "Announcements, Q&A, and coach-to-athlete feedback live in one place instead of scattered across texts and group chats.",
+    title: msg("One team board"),
+    body: msg("Announcements, Q&A, and coach-to-athlete feedback live in one place instead of scattered across texts and group chats."),
   },
   {
     icon: Users,
-    title: "Built for whole programs",
-    body: "Assistant coaches share a roster, teams get their own invite codes, and every athlete's history stays intact as they move between them.",
+    title: msg("Built for whole programs"),
+    body: msg("Assistant coaches share a roster, teams get their own invite codes, and every athlete's history stays intact as they move between them."),
   },
 ];
 
 const AUDIENCES = [
   {
     icon: Dumbbell,
-    title: "Coaches",
-    body: "Build programs in minutes with an AI that understands periodization, assign them to a whole roster, and see exactly how every athlete is responding, not just whether they showed up.",
+    title: msg("Coaches"),
+    body: msg("Build programs in minutes with an AI that understands periodization, assign them to a whole roster, and see exactly how every athlete is responding, not just whether they showed up."),
   },
   {
     icon: Target,
-    title: "Athletes",
-    body: "Open today's workout and everything is already there: sets, video, last time's numbers, and a rest timer that knows the difference between a superset and a straight set.",
+    title: msg("Athletes"),
+    body: msg("Open today's workout and everything is already there: sets, video, last time's numbers, and a rest timer that knows the difference between a superset and a straight set."),
   },
   {
     icon: Sparkles,
-    title: "Free Agents",
-    body: "Training on your own? Forge's AI becomes your coach, building programs, answering questions, and adjusting based on how you're actually recovering.",
+    title: msg("Free Agents"),
+    body: msg("Training on your own? Forge's AI becomes your coach, building programs, answering questions, and adjusting based on how you're actually recovering."),
   },
 ];
 
@@ -197,18 +198,18 @@ const FREE_AGENT_CARDS = FREE_AGENT_TIER_ORDER.map((id) => {
     // rather than the general caveat.
     warnsAboutCamera: tier.hasVideoFormCheck,
     features: [
-      "Training and nutrition logging",
-      "Exercise library",
+      msg("Training and nutrition logging"),
+      msg("Exercise library"),
       // Every plan, Basic included: the swap, "make this easier" and the pain substitution are
       // small model calls kept on Basic on purpose (2026-11-17).
-      "Smart exercise swaps and easier options",
-      ...(tier.hasAiChat ? ["AI chat coach", "AI program builder"] : []),
-      ...(tier.hasSkills ? ["Skill programs and the Skill Bank", "Timed skill sessions"] : []),
+      msg("Smart exercise swaps and easier options"),
+      ...(tier.hasAiChat ? [msg("AI chat coach"), msg("AI program builder")] : []),
+      ...(tier.hasSkills ? [msg("Skill programs and the Skill Bank"), msg("Timed skill sessions")] : []),
       ...(tier.hasVideoFormCheck
         ? [
-            "Camera bar-velocity, sprint and jump tracking",
-            "AI form-check on your lifts",
-            "Form-check video logging",
+            msg("Camera bar-velocity, sprint and jump tracking"),
+            msg("AI form-check on your lifts"),
+            msg("Form-check video logging"),
           ]
         : []),
     ],
@@ -220,7 +221,7 @@ const FREE_AGENT_CARDS = FREE_AGENT_TIER_ORDER.map((id) => {
 // presentation of that formula. These four roster sizes are just sample
 // points on it, priced by the same function /pricing uses.
 const COACH_SAMPLE_ROSTERS = [15, 50, 100, 250].map((n) => ({
-  seats: `Up to ${n}`,
+  seats: n,
   price: formatCents(coachMonthlyCents(n)),
 }));
 
@@ -232,6 +233,7 @@ const COACH_SAMPLE_ROSTERS = [15, 50, 100, 250].map((n) => ({
 const PRICING_SECTION_LIVE = false;
 
 export default function LandingPage() {
+  const t = useT();
   return (
     <div className="min-h-screen overflow-x-clip bg-background text-foreground">
       {/* Nav and footer are shared with the audience and validation pages -- see
@@ -247,28 +249,26 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-4xl text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
             <Sparkles className="h-3.5 w-3.5" />
-            AI-powered strength &amp; conditioning
+            {t("AI-powered strength & conditioning")}
           </span>
           <h1 className="mt-6 font-display text-5xl font-extrabold uppercase leading-[1.05] tracking-wide md:text-7xl">
-            Coach smarter.
+            {t("Coach smarter.")}
             <br />
-            <span className="text-primary">Train harder.</span>
+            <span className="text-primary">{t("Train harder.")}</span>
             <br />
-            Perform better.
+            {t("Perform better.")}
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
-            Forge is the training platform that builds programs with you, can film your reps
-            through the camera already in your pocket, and turns raw sets and reps into
-            answers a coach can actually act on.
+            {t("Forge is the training platform that builds programs with you, can film your reps through the camera already in your pocket, and turns raw sets and reps into answers a coach can actually act on.")}
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <SignupCta size="lg" className="w-full sm:w-auto">
-              Get Started
+              {t("Get Started")}
               <ArrowRight className="h-4 w-4" />
             </SignupCta>
             <Link href="/login">
               <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                Log In
+                {t("Log In")}
               </Button>
             </Link>
           </div>
@@ -279,13 +279,14 @@ export default function LandingPage() {
               credit card required" after a new Free Agent started needing a plan at signup. The
               price is read from the plan table so it cannot drift from what is charged. */}
           <p className="mt-3 text-xs text-muted-foreground" data-testid="hero-what-it-costs">
-            Coaches start free. Athletes training on their own pick a plan from{" "}
-            {formatCents(FREE_AGENT_TIERS.basic.monthlyPriceCents)} a month.
+            {t("Coaches start free. Athletes training on their own pick a plan from {price} a month.", {
+              price: formatCents(FREE_AGENT_TIERS.basic.monthlyPriceCents),
+            })}
           </p>
         </div>
 
         <div className="relative mx-auto mt-16 max-w-5xl">
-          <BrowserFrame src="/marketing/shot-dashboard.png" alt="Forge coach dashboard" eager />
+          <BrowserFrame src="/marketing/shot-dashboard.png" alt={t("Forge coach dashboard")} eager />
         </div>
       </section>
 
@@ -295,7 +296,7 @@ export default function LandingPage() {
           {STATS.map((s) => (
             <div key={s.label}>
               <p className="font-display text-4xl font-extrabold text-primary">{s.value}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{s.label}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{t(s.label)}</p>
             </div>
           ))}
         </div>
@@ -307,24 +308,20 @@ export default function LandingPage() {
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
               <Sparkles className="h-3.5 w-3.5" />
-              AI program builder
+              {t("AI program builder")}
             </span>
             <h2 className="mt-4 font-display text-4xl font-bold uppercase tracking-wide md:text-5xl">
-              Describe the program.
+              {t("Describe the program.")}
               <br />
-              Watch it get built.
+              {t("Watch it get built.")}
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Tell Forge's AI what you're training for, a 5-day collegiate baseball split, a
-              return-to-play block, a 4-week peaking cycle, and it drafts the whole thing:
-              exercises, sets, reps, supersets, and rest, pulled from your own exercise library.
-              Keep chatting with it right inside the builder to adjust anything, on any program,
-              at any time.
+              {t("Tell Forge's AI what you're training for, a 5-day collegiate baseball split, a return-to-play block, a 4-week peaking cycle, and it drafts the whole thing: exercises, sets, reps, supersets, and rest, pulled from your own exercise library. Keep chatting with it right inside the builder to adjust anything, on any program, at any time.")}
             </p>
           </div>
           <BrowserFrame
             src="/marketing/shot-program-builder.png"
-            alt="AI program builder building a training week"
+            alt={t("AI program builder building a training week")}
           />
         </div>
       </section>
@@ -336,15 +333,13 @@ export default function LandingPage() {
           <div className="mx-auto max-w-2xl text-center">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
               <Bot className="h-3.5 w-3.5" />
-              AI, everywhere that matters
+              {t("AI, everywhere that matters")}
             </span>
             <h2 className="mt-4 font-display text-4xl font-bold uppercase tracking-wide md:text-5xl">
-              Not a chatbot bolted on the side
+              {t("Not a chatbot bolted on the side")}
             </h2>
             <p className="mt-4 text-muted-foreground">
-              The AI program builder is just the start. The same intelligence shows up
-              everywhere training actually takes time, reading form, reading recovery, and
-              turning raw numbers into plain answers.
+              {t("The AI program builder is just the start. The same intelligence shows up everywhere training actually takes time, reading form, reading recovery, and turning raw numbers into plain answers.")}
             </p>
           </div>
           <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -356,8 +351,8 @@ export default function LandingPage() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
                   <f.icon className="h-5 w-5" />
                 </div>
-                <h3 className="mt-4 font-semibold">{f.title}</h3>
-                <p className="mt-2 text-sm text-muted-foreground">{f.body}</p>
+                <h3 className="mt-4 font-semibold">{t(f.title)}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{t(f.body)}</p>
               </div>
             ))}
           </div>
@@ -368,27 +363,24 @@ export default function LandingPage() {
       <section className="bg-surface px-4 py-20 md:px-8 md:py-28">
         <div className="mx-auto grid max-w-6xl items-center gap-12 md:grid-cols-2">
           <div className="order-2 md:order-1">
-            <BrowserFrame src="/marketing/shot-analytics.png" alt="Muscle load map analytics" />
+            <BrowserFrame src="/marketing/shot-analytics.png" alt={t("Muscle load map analytics")} />
           </div>
           <div className="order-1 md:order-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
               <LineChart className="h-3.5 w-3.5" />
-              Real analytics
+              {t("Real analytics")}
             </span>
             <h2 className="mt-4 font-display text-4xl font-bold uppercase tracking-wide md:text-5xl">
-              Know exactly where
+              {t("Know exactly where")}
               <br />
-              the load is going.
+              {t("the load is going.")}
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Every logged set rolls up into a muscle load map, weekly volume and intensity
-              trends, and an acute:chronic workload ratio, automatically, with zero extra
-              data entry. Bar speed, jump height, and rep-by-rep velocity decay come straight
-              from the camera your athletes are already using.
+              {t("Every logged set rolls up into a muscle load map, weekly volume and intensity trends, and an acute:chronic workload ratio, automatically, with zero extra data entry. Bar speed, jump height, and rep-by-rep velocity decay come straight from the camera your athletes are already using.")}
             </p>
             <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
               <Video className="h-4 w-4 shrink-0 text-primary" />
-              No wearables, no extra hardware, just a phone camera.
+              {t("No wearables, no extra hardware, just a phone camera.")}
             </div>
             {/* Directly under the claim it qualifies. It first went in the pricing
                 section below, which reads like the right place and is not: that whole
@@ -398,7 +390,7 @@ export default function LandingPage() {
                 went out unqualified to every visitor. Keep these together. */}
             <div className="mt-4 flex items-start gap-2 rounded-md border-2 border-destructive bg-destructive/10 p-3">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-              <p className="text-sm font-bold text-destructive">{CAMERA_ACCURACY_LONG}</p>
+              <p className="text-sm font-bold text-destructive">{t(CAMERA_ACCURACY_LONG)}</p>
             </div>
           </div>
         </div>
@@ -410,22 +402,18 @@ export default function LandingPage() {
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
               <Trophy className="h-3.5 w-3.5" />
-              Gamification
+              {t("Gamification")}
             </span>
             <h2 className="mt-4 font-display text-4xl font-bold uppercase tracking-wide md:text-5xl">
-              Every milestone.
+              {t("Every milestone.")}
               <br />
-              Earned and saved.
+              {t("Earned and saved.")}
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Trophies stack like a real collection, every threshold an athlete ever crosses
-              stays unlocked, even after a streak breaks. Locked ones stay visible too, greyed
-              out with exactly what it takes to earn them, so the next goal is never a mystery.
-              Team leaderboards and daily streaks turn consistency into something everyone can
-              see, not just a number sitting in the coach's spreadsheet.
+              {t("Trophies stack like a real collection, every threshold an athlete ever crosses stays unlocked, even after a streak breaks. Locked ones stay visible too, greyed out with exactly what it takes to earn them, so the next goal is never a mystery. Team leaderboards and daily streaks turn consistency into something everyone can see, not just a number sitting in the coach's spreadsheet.")}
             </p>
           </div>
-          <BrowserFrame src="/marketing/shot-trophies.png" alt="Athlete trophy case" />
+          <BrowserFrame src="/marketing/shot-trophies.png" alt={t("Athlete trophy case")} />
         </div>
       </section>
 
@@ -433,23 +421,20 @@ export default function LandingPage() {
       <section className="bg-surface px-4 py-20 md:px-8 md:py-28">
         <div className="mx-auto grid max-w-6xl items-center gap-12 md:grid-cols-2">
           <div className="order-2 md:order-1">
-            <BrowserFrame src="/marketing/shot-nutrition.png" alt="Food log with macro tracking" />
+            <BrowserFrame src="/marketing/shot-nutrition.png" alt={t("Food log with macro tracking")} />
           </div>
           <div className="order-1 md:order-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
               <Apple className="h-3.5 w-3.5" />
-              Nutrition
+              {t("Nutrition")}
             </span>
             <h2 className="mt-4 font-display text-4xl font-bold uppercase tracking-wide md:text-5xl">
-              Log a meal
+              {t("Log a meal")}
               <br />
-              in seconds.
+              {t("in seconds.")}
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Scan a barcode or type it in (or, on an AI Coach plan, snap a photo), Forge fills in the macros (and the
-              micros) automatically and rolls them up against whatever targets the coach set.
-              No spreadsheets, no manual math, just a running total that updates the moment
-              food gets logged.
+              {t("Scan a barcode or type it in (or, on an AI Coach plan, snap a photo), Forge fills in the macros (and the micros) automatically and rolls them up against whatever targets the coach set. No spreadsheets, no manual math, just a running total that updates the moment food gets logged.")}
             </p>
           </div>
         </div>
@@ -460,11 +445,10 @@ export default function LandingPage() {
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="font-display text-4xl font-bold uppercase tracking-wide md:text-5xl">
-              Everything else a program needs
+              {t("Everything else a program needs")}
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Forge isn't just a program builder, it's the whole operation, from injury-risk
-              flagging to the compliance report.
+              {t("Forge isn't just a program builder, it's the whole operation, from injury-risk flagging to the compliance report.")}
             </p>
           </div>
           <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -473,8 +457,8 @@ export default function LandingPage() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
                   <f.icon className="h-5 w-5" />
                 </div>
-                <h3 className="mt-4 font-semibold">{f.title}</h3>
-                <p className="mt-2 text-sm text-muted-foreground">{f.body}</p>
+                <h3 className="mt-4 font-semibold">{t(f.title)}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{t(f.body)}</p>
               </div>
             ))}
           </div>
@@ -486,7 +470,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="font-display text-4xl font-bold uppercase tracking-wide md:text-5xl">
-              Built for every seat on the team
+              {t("Built for every seat on the team")}
             </h2>
           </div>
           <div className="mt-12 grid gap-6 md:grid-cols-3">
@@ -499,9 +483,9 @@ export default function LandingPage() {
                   <a.icon className="h-6 w-6" />
                 </div>
                 <h3 className="mt-4 font-display text-xl font-bold uppercase tracking-wide">
-                  {a.title}
+                  {t(a.title)}
                 </h3>
-                <p className="mt-2 text-sm text-muted-foreground">{a.body}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{t(a.body)}</p>
               </div>
             ))}
           </div>
@@ -515,14 +499,13 @@ export default function LandingPage() {
           <div className="mx-auto max-w-2xl text-center">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
               <DollarSign className="h-3.5 w-3.5" />
-              Pricing
+              {t("Pricing")}
             </span>
             <h2 className="mt-4 font-display text-4xl font-bold uppercase tracking-wide md:text-5xl">
-              No hidden fees. Ever.
+              {t("No hidden fees. Ever.")}
             </h2>
             <p className="mt-4 text-muted-foreground">
-              One price, shown up front, for exactly what's included, whether you're training
-              on your own or running a whole program.
+              {t("One price, shown up front, for exactly what's included, whether you're training on your own or running a whole program.")}
             </p>
           </div>
 
@@ -532,29 +515,29 @@ export default function LandingPage() {
               <div className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
                 <h3 className="font-display text-xl font-bold uppercase tracking-wide">
-                  Free Agent
+                  {t("Free Agent")}
                 </h3>
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">Training on your own.</p>
+              <p className="mt-2 text-sm text-muted-foreground">{t("Training on your own.")}</p>
               <div className={cn("mt-6 grid gap-4 sm:grid-cols-2", FREE_AGENT_TIER_GRID_COLS)}>
-                {FREE_AGENT_CARDS.map((t) => (
-                  <div key={t.name} className="rounded-lg border border-border p-5">
+                {FREE_AGENT_CARDS.map((tier) => (
+                  <div key={tier.name} className="rounded-lg border border-border p-5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-                      {t.name}
+                      {tier.name}
                     </p>
                     <p className="mt-1 font-display text-3xl font-extrabold">
-                      {t.price}
-                      <span className="text-sm font-normal text-muted-foreground">/mo</span>
+                      {tier.price}
+                      <span className="text-sm font-normal text-muted-foreground">{t("/mo")}</span>
                     </p>
                     <ul className="mt-4 space-y-2">
-                      {t.features.map((f) => (
+                      {tier.features.map((f) => (
                         <li key={f} className="flex items-start gap-2 text-sm">
                           <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                          <span className="text-muted-foreground">{f}</span>
+                          <span className="text-muted-foreground">{t(f)}</span>
                         </li>
                       ))}
                     </ul>
-                    {t.warnsAboutCamera && <CameraMetricCaveat variant="purchase" className="mt-4" />}
+                    {tier.warnsAboutCamera && <CameraMetricCaveat variant="purchase" className="mt-4" />}
                   </div>
                 ))}
               </div>
@@ -565,34 +548,32 @@ export default function LandingPage() {
               <div className="flex items-center gap-2">
                 <Dumbbell className="h-5 w-5 text-primary" />
                 <h3 className="font-display text-xl font-bold uppercase tracking-wide">
-                  Coach / Team
+                  {t("Coach / Team")}
                 </h3>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
-                Priced by roster size, pay for the athletes you actually coach.
+                {t("Priced by roster size, pay for the athletes you actually coach.")}
               </p>
               <div className="mt-6 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="pb-2 font-semibold">Roster</th>
-                      <th className="pb-2 font-semibold">Price</th>
+                      <th className="pb-2 font-semibold">{t("Roster")}</th>
+                      <th className="pb-2 font-semibold">{t("Price")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {COACH_SAMPLE_ROSTERS.map((row) => (
                       <tr key={row.seats} className="border-b border-border last:border-0">
-                        <td className="py-3 text-muted-foreground">{row.seats}</td>
-                        <td className="py-3 font-display font-bold">{row.price}<span className="text-xs font-normal text-muted-foreground">/mo</span></td>
+                        <td className="py-3 text-muted-foreground">{t("Up to {count}", { count: row.seats })}</td>
+                        <td className="py-3 font-display font-bold">{row.price}<span className="text-xs font-normal text-muted-foreground">{t("/mo")}</span></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <p className="mt-4 text-xs text-muted-foreground">
-                Every roster size gets the same thing: the AI program builder, camera tracking,
-                Health sync, recovery trends, and the full analytics suite. The rate per athlete
-                never changes, so the price only moves when your roster does.
+                {t("Every roster size gets the same thing: the AI program builder, camera tracking, Health sync, recovery trends, and the full analytics suite. The rate per athlete never changes, so the price only moves when your roster does.")}
               </p>
             </div>
           </div>
@@ -600,16 +581,12 @@ export default function LandingPage() {
           <div className="mx-auto mt-6 flex max-w-3xl items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-5">
             <Snowflake className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
             <p className="text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground">Off-season is free.</span> Pause
-              any plan and your dashboards, videos, and history stay exactly as you left them,
-              no charge while you're not actively training or coaching. Resume whenever you're
-              back.
+              <span className="font-semibold text-foreground">{t("Off-season is free.")}</span> {t("Pause any plan and your dashboards, videos, and history stay exactly as you left them, no charge while you're not actively training or coaching. Resume whenever you're back.")}
             </p>
           </div>
 
           <p className="mx-auto mt-6 max-w-3xl text-center text-xs text-muted-foreground">
-            Optional add-ons (branding, extra video storage) are listed in full on the pricing
-            page, and no charge appears that isn't shown there first.
+            {t("Optional add-ons (branding, extra video storage) are listed in full on the pricing page, and no charge appears that isn't shown there first.")}
           </p>
         </div>
       </section>
@@ -621,19 +598,19 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-2xl">
           <ForgeMark className="mx-auto h-14 w-14 rounded-xl" />
           <h2 className="mt-6 font-display text-4xl font-extrabold uppercase tracking-wide md:text-5xl">
-            Ready to forge better athletes?
+            {t("Ready to forge better athletes?")}
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Create your account and build your first program in the next five minutes.
+            {t("Create your account and build your first program in the next five minutes.")}
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <SignupCta size="lg" className="w-full sm:w-auto">
-              Get Started
+              {t("Get Started")}
               <ArrowRight className="h-4 w-4" />
             </SignupCta>
             <Link href="/login">
               <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                Log In
+                {t("Log In")}
               </Button>
             </Link>
           </div>

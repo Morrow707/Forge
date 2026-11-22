@@ -14,6 +14,7 @@ import { ANVIL_PARTS, estimatedLabel } from "@shared/anvil-tasks";
 import { localMinutesFrom, windowLabelFor } from "@shared/anvil-window";
 import type { AnvilReading } from "@shared/anvil-reading";
 import { besideLine, type AnvilDayContext } from "@shared/anvil-day-context";
+import { useT } from "@/i18n";
 
 /**
  * THE DAILY CHECK, FOR THE PERSON TAKING IT.
@@ -65,21 +66,22 @@ function localDateIso(now = new Date()): string {
 }
 
 export default function AnvilPage() {
+  const t = useT();
   const { access, loading, failed } = useAnvilAccess();
   const queryClient = useQueryClient();
 
   return (
-    <AppShell title="The Anvil">
+    <AppShell title={t("The Anvil")}>
       <div className="mx-auto w-full max-w-md space-y-5 px-4 py-6">
         <p className="text-sm text-muted-foreground">
-          Four short tasks, once a morning, compared only with your own earlier mornings.
+          {t("Four short tasks, once a morning, compared only with your own earlier mornings.")}
         </p>
 
         {loading && <Skeleton className="h-40 w-full" />}
 
         {failed && (
           <ReadFailed
-            what="whether the Anvil is open for your account"
+            what={t("whether the Anvil is open for your account")}
             onRetry={() => queryClient.invalidateQueries({ queryKey: ["/api/anvil/access"] })}
           />
         )}
@@ -90,8 +92,7 @@ export default function AnvilPage() {
               <p className="text-sm">{access.says}</p>
               {access.reason === "minor_pending_counsel" && (
                 <p className="text-xs text-muted-foreground">
-                  Nothing is being withheld from you by accident: the Anvil's paperwork for
-                  under-18s is with Forge's lawyers, and it is offered to adults in the meantime.
+                  {t("Nothing is being withheld from you by accident: the Anvil's paperwork for under-18s is with Forge's lawyers, and it is offered to adults in the meantime.")}
                 </p>
               )}
             </CardContent>
@@ -109,6 +110,7 @@ export default function AnvilPage() {
 }
 
 function AgreementCard() {
+  const t = useT();
   const queryClient = useQueryClient();
   const [ticked, setTicked] = useState(false);
   const { data, isLoading, isError, refetch } = useQuery<{ version: string; text: string }>({
@@ -125,17 +127,17 @@ function AgreementCard() {
       queryClient.invalidateQueries({ queryKey: ["/api/anvil/access"] });
     },
     onError: (err: unknown) =>
-      toast.error(err instanceof Error ? err.message : "Couldn't record that. Try again."),
+      toast.error(err instanceof Error ? err.message : t("Couldn't record that. Try again.")),
   });
 
   if (isLoading) return <Skeleton className="h-64 w-full" />;
   if (isError || !data)
-    return <ReadFailed what="the Anvil agreement" onRetry={() => void refetch()} />;
+    return <ReadFailed what={t("the Anvil agreement")} onRetry={() => void refetch()} />;
 
   return (
     <Card data-testid="anvil-agreement">
       <CardHeader>
-        <CardTitle className="text-base">Before your first check</CardTitle>
+        <CardTitle className="text-base">{t("Before your first check")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* The whole text, scrollable rather than truncated. A "read more" that hides the part
@@ -150,7 +152,7 @@ function AgreementCard() {
             data-testid="anvil-agreement-tick"
             className="mt-0.5"
           />
-          <span>I have read this and I agree to take the daily check.</span>
+          <span>{t("I have read this and I agree to take the daily check.")}</span>
         </label>
         <Button
           className="w-full"
@@ -158,9 +160,9 @@ function AgreementCard() {
           onClick={() => accept.mutate()}
           data-testid="anvil-agreement-accept"
         >
-          {accept.isPending ? "Saving…" : "Agree and continue"}
+          {accept.isPending ? t("Saving…") : t("Agree and continue")}
         </Button>
-        <p className="text-[11px] text-muted-foreground">Version {data.version}.</p>
+        <p className="text-[11px] text-muted-foreground">{t("Version {version}.", { version: data.version })}</p>
       </CardContent>
     </Card>
   );
@@ -180,6 +182,7 @@ type Flow =
   | { kind: "held"; practice: boolean; startedLocalMinutes: number; result: AnvilRunResult };
 
 function CheckFlow({ stale }: { stale: boolean }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [flow, setFlow] = useState<Flow>({ kind: "card" });
   const date = useMemo(() => localDateIso(), []);
@@ -242,11 +245,14 @@ function CheckFlow({ stale }: { stale: boolean }) {
       <Card data-testid="anvil-held">
         <CardContent className="space-y-3 pt-6">
           <p className="text-sm font-medium">
-            {submit.isPending ? "Sending your check…" : "Your check hasn't been saved yet."}
+            {submit.isPending ? t("Sending your check…") : t("Your check hasn't been saved yet.")}
           </p>
           <p className="text-xs text-muted-foreground">
-            {flow.result.trialsMs.length} trials, {flow.result.partsRun.length} of{" "}
-            {ANVIL_PARTS.length} parts. Nothing is lost while this page is open.
+            {t("{trials} trials, {done} of {total} parts. Nothing is lost while this page is open.", {
+              trials: flow.result.trialsMs.length,
+              done: flow.result.partsRun.length,
+              total: ANVIL_PARTS.length,
+            })}
           </p>
           {!submit.isPending && (
             <Button
@@ -260,7 +266,7 @@ function CheckFlow({ stale }: { stale: boolean }) {
               }
               data-testid="anvil-resend"
             >
-              Send again
+              {t("Send again")}
             </Button>
           )}
         </CardContent>
@@ -273,14 +279,14 @@ function CheckFlow({ stale }: { stale: boolean }) {
       <Card data-testid="anvil-intro">
         <CardHeader>
           <CardTitle className="text-base">
-            {flow.practice ? "Practice run" : "Today's check"}
+            {flow.practice ? t("Practice run") : t("Today's check")}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm">
-            {ANVIL_PARTS.length} parts, {estimatedLabel()}.
+            {t("{count} parts, {estimate}.", { count: ANVIL_PARTS.length, estimate: t(estimatedLabel()) })}
           </p>
-          <p className="text-sm font-medium">Same hand, same grip, sitting down.</p>
+          <p className="text-sm font-medium">{t("Same hand, same grip, sitting down.")}</p>
           <Button
             className="w-full"
             onClick={() =>
@@ -292,15 +298,15 @@ function CheckFlow({ stale }: { stale: boolean }) {
             }
             data-testid="anvil-begin"
           >
-            Begin
+            {t("Begin")}
           </Button>
           <Button variant="ghost" className="w-full" onClick={() => setFlow({ kind: "card" })}>
-            Not now
+            {t("Not now")}
           </Button>
           <p className="text-xs leading-relaxed text-muted-foreground">
             {flow.practice
-              ? "A practice run counts for nothing and is open at any hour. It exists so your first real check is not the one you spend learning the tasks."
-              : "One attempt counts — the first one inside the morning window, not the best. A check taken later in the day is kept and shown and left out of your normal: a missing day is honest, a mistimed one folded into it is not."}
+              ? t("A practice run counts for nothing and is open at any hour. It exists so your first real check is not the one you spend learning the tasks.")
+              : t("One attempt counts — the first one inside the morning window, not the best. A check taken later in the day is kept and shown and left out of your normal: a missing day is honest, a mistimed one folded into it is not.")}
           </p>
         </CardContent>
       </Card>
@@ -309,7 +315,7 @@ function CheckFlow({ stale }: { stale: boolean }) {
 
   if (today.isLoading) return <Skeleton className="h-44 w-full" />;
   if (today.isError)
-    return <ReadFailed what="today's check" onRetry={() => void today.refetch()} error={today.error} />;
+    return <ReadFailed what={t("today's check")} onRetry={() => void today.refetch()} error={today.error} />;
 
   const data = today.data!;
   const nowLabel = windowLabelFor(localMinutesFrom(new Date()));
@@ -320,8 +326,7 @@ function CheckFlow({ stale }: { stale: boolean }) {
       {stale && (
         <Card>
           <CardContent className="pt-6 text-xs text-muted-foreground">
-            The agreement has been updated since you accepted it. You can read the new version from
-            your account page.
+            {t("The agreement has been updated since you accepted it. You can read the new version from your account page.")}
           </CardContent>
         </Card>
       )}
@@ -337,11 +342,11 @@ function CheckFlow({ stale }: { stale: boolean }) {
             <>
               <p className="text-base font-medium">
                 {nowLabel === "in_window"
-                  ? "Today's check is open."
-                  : `Outside the window — it opens again ${hhmm(data.window.opensMinutes)} tomorrow.`}
+                  ? t("Today's check is open.")
+                  : t("Outside the window — it opens again {time} tomorrow.", { time: hhmm(data.window.opensMinutes) })}
               </p>
               <p className="text-sm text-muted-foreground">
-                {ANVIL_PARTS.length} parts, {estimatedLabel()}.
+                {t("{count} parts, {estimate}.", { count: ANVIL_PARTS.length, estimate: t(estimatedLabel()) })}
               </p>
             </>
           )}
@@ -356,7 +361,7 @@ function CheckFlow({ stale }: { stale: boolean }) {
               onClick={() => setFlow({ kind: "intro", practice: false })}
               data-testid="anvil-start"
             >
-              {done ? "Take another" : nowLabel === "in_window" ? "Start" : "Take it anyway"}
+              {done ? t("Take another") : nowLabel === "in_window" ? t("Start") : t("Take it anyway")}
             </Button>
             <Button
               variant="ghost"
@@ -364,11 +369,11 @@ function CheckFlow({ stale }: { stale: boolean }) {
               onClick={() => setFlow({ kind: "intro", practice: true })}
               data-testid="anvil-practice"
             >
-              Practice run
+              {t("Practice run")}
             </Button>
           </div>
           {submit.isPending && (
-            <p className="text-xs text-muted-foreground">Sending your check…</p>
+            <p className="text-xs text-muted-foreground">{t("Sending your check…")}</p>
           )}
 
           {/* WHAT FORGE HAS ABOUT TODAY BESIDE THE CHECK, and the blanks this person can close.
@@ -376,7 +381,7 @@ function CheckFlow({ stale }: { stale: boolean }) {
               actionable, and it is most useful on a morning they have NOT taken the check yet. */}
           {data.context && besideLine(data.context, 4) && (
             <p className="border-t pt-3 text-xs text-muted-foreground" data-testid="anvil-beside-today">
-              Beside it today: {besideLine(data.context, 4)}
+              {t("Beside it today: {line}", { line: besideLine(data.context, 4) })}
             </p>
           )}
           {(data.context?.fixable ?? []).map((fix) => (
@@ -401,51 +406,51 @@ function Result({
   attempts: number;
   counted: boolean;
 }) {
+  const t = useT();
   const n = reading.numbers;
   const c = reading.comparison;
   return (
     <div className="space-y-3" data-testid="anvil-result">
       <p className="text-4xl font-bold tabular-nums">
         {n.medianMs == null ? "—" : Math.round(n.medianMs)}
-        <span className="pl-1 text-base font-normal text-muted-foreground">ms</span>
+        <span className="pl-1 text-base font-normal text-muted-foreground">{t("ms")}</span>
       </p>
       {c.kind === "compared" && (
         <p className="text-sm">
-          Your normal band is {Math.round(c.bandLowMs)}–{Math.round(c.bandHighMs)} ms.
+          {t("Your normal band is {low}–{high} ms.", { low: Math.round(c.bandLowMs), high: Math.round(c.bandHighMs) })}
         </p>
       )}
       {c.kind === "learning" && (
         <p className="text-sm text-muted-foreground">
-          Learning your normal — {c.have} of {c.need} mornings.
+          {t("Learning your normal — {have} of {need} mornings.", { have: c.have, need: c.need })}
         </p>
       )}
       {c.kind === "no_spread" && (
         <p className="text-sm text-muted-foreground">
-          Your last mornings are identical to the millisecond, which is a clock problem rather
-          than a you problem. Nothing is compared until they are not.
+          {t("Your last mornings are identical to the millisecond, which is a clock problem rather than a you problem. Nothing is compared until they are not.")}
         </p>
       )}
       <dl className="divide-y rounded-md border text-sm">
-        <Row label="Drift across the check" value={n.driftMs == null ? "—" : `${n.driftMs >= 0 ? "+" : ""}${Math.round(n.driftMs)} ms`} />
+        <Row label={t("Drift across the check")} value={n.driftMs == null ? "—" : `${n.driftMs >= 0 ? "+" : ""}${Math.round(n.driftMs)} ms`} />
         {c.kind === "compared" && (
-          <Row label="Slow trials" value={`${c.lapses} of ${n.trials}`} />
+          <Row label={t("Slow trials")} value={`${c.lapses} of ${n.trials}`} />
         )}
-        {n.rulesMissed != null && <Row label="Rules missed" value={String(n.rulesMissed)} />}
-        {n.sequenceBest != null && <Row label="Longest sequence" value={String(n.sequenceBest)} />}
-        {n.tapCount != null && <Row label="Taps in ten seconds" value={String(n.tapCount)} />}
-        {n.omissions > 0 && <Row label="Missed signals" value={String(n.omissions)} />}
+        {n.rulesMissed != null && <Row label={t("Rules missed")} value={String(n.rulesMissed)} />}
+        {n.sequenceBest != null && <Row label={t("Longest sequence")} value={String(n.sequenceBest)} />}
+        {n.tapCount != null && <Row label={t("Taps in ten seconds")} value={String(n.tapCount)} />}
+        {n.omissions > 0 && <Row label={t("Missed signals")} value={String(n.omissions)} />}
       </dl>
       {reading.outsideTheWindow && (
         <p className="text-xs text-muted-foreground">
-          Taken outside the morning window, so it is kept and shown and left out of your normal.
+          {t("Taken outside the morning window, so it is kept and shown and left out of your normal.")}
         </p>
       )}
       {attempts > 1 && (
         <p className="text-xs text-muted-foreground">
-          {attempts} attempts today.{" "}
+          {t("{count} attempts today.", { count: attempts })}{" "}
           {counted
-            ? "The first one inside the window is the one that counts."
-            : "None of them landed inside the window, so none counts toward your normal."}
+            ? t("The first one inside the window is the one that counts.")
+            : t("None of them landed inside the window, so none counts toward your normal.")}
         </p>
       )}
     </div>
@@ -475,6 +480,7 @@ type WeekResponse = {
 };
 
 function WeekStrip() {
+  const t = useT();
   const { data, isLoading, isError, refetch, error } = useQuery<WeekResponse>({
     queryKey: ["/api/anvil/week"],
     queryFn: () => getJson("/api/anvil/week?days=14"),
@@ -482,14 +488,14 @@ function WeekStrip() {
 
   if (isLoading) return <Skeleton className="h-28 w-full" />;
   if (isError)
-    return <ReadFailed what="your last two weeks" onRetry={() => void refetch()} error={error} />;
+    return <ReadFailed what={t("your last two weeks")} onRetry={() => void refetch()} error={error} />;
 
   const days = data?.days ?? [];
   if (days.length === 0) {
     return (
       <Card>
         <CardContent className="pt-6 text-sm text-muted-foreground">
-          Nothing yet. Your first check is the start of your own normal.
+          {t("Nothing yet. Your first check is the start of your own normal.")}
         </CardContent>
       </Card>
     );
@@ -498,7 +504,7 @@ function WeekStrip() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm font-medium">Your last two weeks</CardTitle>
+        <CardTitle className="text-sm font-medium">{t("Your last two weeks")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-1.5">
         {days
@@ -509,15 +515,15 @@ function WeekStrip() {
               <span className="text-muted-foreground">{d.date}</span>
               <span className="tabular-nums">
                 {d.reading.numbers.medianMs == null
-                  ? "no trials"
-                  : `${Math.round(d.reading.numbers.medianMs)} ms`}
+                  ? t("no trials")
+                  : t("{ms} ms", { ms: Math.round(d.reading.numbers.medianMs) })}
                 {d.reading.comparison.kind === "compared" && (
                   <span className="pl-2 text-xs text-muted-foreground">
                     {d.reading.comparison.medianZ >= 0 ? "+" : ""}
-                    {d.reading.comparison.medianZ.toFixed(2)} SD
+                    {t("{z} SD", { z: d.reading.comparison.medianZ.toFixed(2) })}
                   </span>
                 )}
-                {!d.counts && <span className="pl-2 text-xs text-muted-foreground">not counted</span>}
+                {!d.counts && <span className="pl-2 text-xs text-muted-foreground">{t("not counted")}</span>}
               </span>
               {/* THE DAY'S OWN FACTS, under the morning. Never a cause -- the only claim the
                   Anvil makes is the week's, and it needs two channels of three to make it. */}

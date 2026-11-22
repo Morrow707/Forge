@@ -23,6 +23,7 @@ import {
   type LensInfo,
   type PoseFrame,
 } from "@/lib/native-av-preview";
+import { useT } from "@/i18n";
 
 // Admin-only verification page for Phase 1 of the AVFoundation + Vision pipeline (see
 // AvBodyTrackingPlugin.swift's own file comment) -- camera only, no Vision/body-pose/object
@@ -34,6 +35,7 @@ import {
 // this is pre-cutover scaffolding for a pipeline nothing else routes to yet, not a
 // stable dev tool. Delete once Phase 4+ dialogs make this redundant.
 export default function AvPreviewTestPage() {
+  const t = useT();
   const [, navigate] = useLocation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [supported, setSupported] = useState<boolean | null>(null);
@@ -219,17 +221,17 @@ export default function AvPreviewTestPage() {
   return (
     <div className="flex h-screen flex-col bg-background">
       <div className="flex items-center gap-3 border-b border-border p-4">
-        <Button variant="ghost" size="icon" aria-label="Back" onClick={() => navigate("/")}>
+        <Button variant="ghost" size="icon" aria-label={t("Back")} onClick={() => navigate("/")}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="font-display text-lg font-semibold">AV Preview Test (Phase 1)</h1>
+          <h1 className="font-display text-lg font-semibold">{t("AV Preview Test (Phase 1)")}</h1>
           <p className="text-xs text-muted-foreground">
             {supported === null
-              ? "Checking device support..."
+              ? t("Checking device support...")
               : supported
-                ? "Camera available on this device"
-                : "Not supported on this device/platform"}
+                ? t("Camera available on this device")
+                : t("Not supported on this device/platform")}
           </p>
         </div>
       </div>
@@ -242,12 +244,12 @@ export default function AvPreviewTestPage() {
       >
         {!running && (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Tap Start to show the native camera preview here
+            {t("Tap Start to show the native camera preview here")}
           </div>
         )}
         {running && (
           <div className="absolute inset-x-2 top-2 max-h-[40%] overflow-y-auto rounded-md bg-black/70 p-2 font-mono text-[11px] text-white backdrop-blur-sm">
-            <p className="text-white/70">Tap the preview to focus/expose at that point.</p>
+            <p className="text-white/70">{t("Tap the preview to focus/expose at that point.")}</p>
             {diagLog.map((line, i) => (
               <div key={i}>{line}</div>
             ))}
@@ -260,10 +262,10 @@ export default function AvPreviewTestPage() {
       <div className="space-y-3 border-t border-border p-4">
         <div className="flex gap-3">
           <Button className="flex-1" onClick={handleStart} disabled={!supported || running}>
-            Start
+            {t("Start")}
           </Button>
           <Button className="flex-1" variant="outline" onClick={handleStop} disabled={!running}>
-            Stop
+            {t("Stop")}
           </Button>
         </div>
 
@@ -284,7 +286,7 @@ export default function AvPreviewTestPage() {
 
         {running && lenses.length > 0 && (
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Zoom: {zoom.toFixed(1)}x</p>
+            <p className="text-xs text-muted-foreground">{t("Zoom: {zoom}x", { zoom: zoom.toFixed(1) })}</p>
             <input
               type="range"
               min={lenses.find((l) => l.id === activeLens)?.minZoom ?? 1}
@@ -305,15 +307,14 @@ export default function AvPreviewTestPage() {
             disabled={clipSaving}
           >
             {clipRecording ? <Square className="h-4 w-4" /> : <Video className="h-4 w-4" />}
-            {clipSaving ? "Saving clip…" : clipRecording ? "Stop Video Clip" : "Record Video Clip"}
+            {clipSaving ? t("Saving clip…") : clipRecording ? t("Stop Video Clip") : t("Record Video Clip")}
           </Button>
         )}
         {clipError && <p className="text-sm text-destructive">{clipError}</p>}
         {clipUrl && (
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">
-              Native AVFoundation clip, check sharpness against the ARKit preview test page,
-              and that zoom/lens switches actually changed the field of view:
+              {t("Native AVFoundation clip, check sharpness against the ARKit preview test page, and that zoom/lens switches actually changed the field of view:")}
             </p>
             <video src={clipUrl} controls playsInline className="w-full rounded-md" />
           </div>
@@ -321,20 +322,23 @@ export default function AvPreviewTestPage() {
 
         {clipPath && !clipRecording && (
           <Button className="w-full" variant="outline" onClick={analyzeClip} disabled={analyzing}>
-            {analyzing ? "Analyzing…" : "Analyze with Vision (Phase 2)"}
+            {analyzing ? t("Analyzing…") : t("Analyze with Vision (Phase 2)")}
           </Button>
         )}
         {analysisError && <p className="text-sm text-destructive">{analysisError}</p>}
         {analyzing && latestPoseFrame && (
           <p className="font-mono text-xs text-muted-foreground">
-            frame {latestPoseFrame.frameIndex} · t={latestPoseFrame.timestamp.toFixed(2)}s ·{" "}
-            {latestPoseFrame.tracked ? `${latestPoseFrame.joints.length} joints` : "no body detected"}
+            {t("frame {frame} · t={seconds}s ·", { frame: latestPoseFrame.frameIndex, seconds: latestPoseFrame.timestamp.toFixed(2) })}{" "}
+            {latestPoseFrame.tracked ? t("{count} joints", { count: latestPoseFrame.joints.length }) : t("no body detected")}
           </p>
         )}
         {analysisResult && (
           <p className="font-mono text-xs text-teal-600 dark:text-teal-400">
-            {analysisResult.frameCount} frames processed · {analysisResult.trackedFrameCount} tracked ·{" "}
-            {analysisResult.elapsedSeconds.toFixed(2)}s elapsed
+            {t("{frames} frames processed · {tracked} tracked · {seconds}s elapsed", {
+              frames: analysisResult.frameCount,
+              tracked: analysisResult.trackedFrameCount,
+              seconds: analysisResult.elapsedSeconds.toFixed(2),
+            })}
           </p>
         )}
       </div>

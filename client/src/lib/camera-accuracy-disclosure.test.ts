@@ -48,7 +48,7 @@ describe("the camera-accuracy disclosure reaches every surface that needs it", (
     // no visitor could see it while the page went on promising bar speed and
     // jump height straight from the camera. Source presence is not visibility.
     const src = read("client/src/pages/landing.tsx");
-    const banner = src.indexOf("CAMERA_ACCURACY_LONG}</p>");
+    const banner = src.indexOf("{t(CAMERA_ACCURACY_LONG)}</p>");
     const deadSectionGate = src.indexOf("{PRICING_SECTION_LIVE && (");
     expect(banner).toBeGreaterThan(-1);
     expect(deadSectionGate).toBeGreaterThan(-1);

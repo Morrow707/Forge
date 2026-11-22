@@ -70,12 +70,13 @@ import {
 } from "@/lib/exercise-colors";
 import { FilterChipGroup, RadioChipGroup } from "@/components/filter-chip-group";
 import { ProgramDemoVideoCard } from "@/components/program-demo-video-card";
+import { msg, useT } from "@/i18n";
 
 const ISSUE_TYPES = [
-  { value: "broken_video", label: "Broken video link" },
-  { value: "wrong_info", label: "Wrong movement/muscle/category" },
-  { value: "misspelling", label: "Misspelling" },
-  { value: "other", label: "Other" },
+  { value: "broken_video", label: msg("Broken video link") },
+  { value: "wrong_info", label: msg("Wrong movement/muscle/category") },
+  { value: "misspelling", label: msg("Misspelling") },
+  { value: "other", label: msg("Other") },
 ] as const;
 
 const CATEGORIES = [
@@ -178,6 +179,7 @@ export function ExerciseDetailPage({
   apiBase: string;
   routeBase: string;
 }) {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const isNew = id === "new";
   const qc = useQueryClient();
@@ -227,14 +229,14 @@ export function ExerciseDetailPage({
     },
     onSuccess: (saved: ExerciseWithOwnership) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/exercises`] });
-      toast.success(isNew ? "Exercise added to bank" : "Exercise updated");
+      toast.success(isNew ? t("Exercise added to bank") : t("Exercise updated"));
       // /exercises/new and /exercises/:id match the same route, so wouter
       // reuses this component instance across the navigation below --
       // reset editing here rather than relying on a remount to do it.
       setEditing(false);
       if (isNew) navigate(`${routeBase}/${saved.id}`, { replace: true });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Something went wrong"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Something went wrong")),
   });
 
   const deleteMutation = useMutation({
@@ -243,10 +245,10 @@ export function ExerciseDetailPage({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/exercises`] });
-      toast.success("Exercise deleted");
+      toast.success(t("Exercise deleted"));
       navigate(routeBase);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not delete exercise"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not delete exercise")),
   });
 
   const [reportOpen, setReportOpen] = useState(false);
@@ -254,7 +256,7 @@ export function ExerciseDetailPage({
 
   if (!isNew && isLoading) {
     return (
-      <AppShell title="Loading Exercise…">
+      <AppShell title={t("Loading Exercise…")}>
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       </AppShell>
     );
@@ -265,10 +267,10 @@ export function ExerciseDetailPage({
   // strength of a request that never landed.
   if (!isNew && isError) {
     return (
-      <AppShell title="Exercise">
+      <AppShell title={t("Exercise")}>
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="this exercise" onRetry={() => void refetch()} />
+            <ReadFailed what={t("this exercise")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       </AppShell>
@@ -277,15 +279,15 @@ export function ExerciseDetailPage({
 
   if (!isNew && !exercise) {
     return (
-      <AppShell title="Exercise Not Found">
+      <AppShell title={t("Exercise Not Found")}>
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <p className="text-muted-foreground">
-              This exercise doesn't exist or isn't visible to you.
+              {t("This exercise doesn't exist or isn't visible to you.")}
             </p>
             <Button onClick={() => navigate(routeBase)}>
               <ArrowLeft className="h-4 w-4" />
-              Back to Exercise Bank
+              {t("Back to Exercise Bank")}
             </Button>
           </CardContent>
         </Card>
@@ -296,11 +298,11 @@ export function ExerciseDetailPage({
 
   return (
     <AppShell
-      title={isNew ? "New Exercise" : exercise!.name}
+      title={isNew ? t("New Exercise") : exercise!.name}
       actions={
         <Button variant="outline" onClick={() => navigate(routeBase)}>
           <ArrowLeft className="h-4 w-4" />
-          Exercise Bank
+          {t("Exercise Bank")}
         </Button>
       }
     >
@@ -326,15 +328,15 @@ export function ExerciseDetailPage({
             {exercise.isCorrective && (
               <Badge variant="secondary" className="gap-1">
                 <Stethoscope className="h-3 w-3" />
-                Corrective
+                {t("Corrective")}
               </Badge>
             )}
             {!exercise.editable && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Lock className="h-3 w-3" />
                 {exercise.isForgeOfficial
-                  ? "Created by Forge — read-only"
-                  : "Created by another coach — read-only"}
+                  ? t("Created by Forge — read-only")
+                  : t("Created by another coach — read-only")}
               </span>
             )}
           </div>
@@ -349,12 +351,12 @@ export function ExerciseDetailPage({
             {exercise.hasOpenReport ? (
               <Badge variant="secondary" className="gap-1">
                 <CheckCircle2 className="h-3 w-3" />
-                Reported — thanks!
+                {t("Reported — thanks!")}
               </Badge>
             ) : (
               <Button size="sm" variant="outline" onClick={() => setReportOpen(true)}>
                 <Flag className="h-3.5 w-3.5" />
-                Report an issue
+                {t("Report an issue")}
               </Button>
             )}
           </div>
@@ -364,18 +366,18 @@ export function ExerciseDetailPage({
           <Card>
             <CardContent className="space-y-4 p-5">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <Field label="Muscle group" value={exercise.muscleGroup} />
-                <Field label="Movement" value={exercise.movementType || "—"} />
-                <Field label="Laterality" value={exercise.laterality || "—"} />
-                <Field label="Equipment" value={exercise.equipment} />
-                <Field label="Body region" value={exercise.bodyRegion || "—"} />
-                <Field label="Plane" value={exercise.plane || "—"} />
-                <Field label="Complexity" value={exercise.movementComplexity || "—"} />
+                <Field label={t("Muscle group")} value={exercise.muscleGroup} />
+                <Field label={t("Movement")} value={exercise.movementType || "—"} />
+                <Field label={t("Laterality")} value={exercise.laterality || "—"} />
+                <Field label={t("Equipment")} value={exercise.equipment} />
+                <Field label={t("Body region")} value={exercise.bodyRegion || "—"} />
+                <Field label={t("Plane")} value={exercise.plane || "—"} />
+                <Field label={t("Complexity")} value={exercise.movementComplexity || "—"} />
               </div>
               {exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0 && (
                 <div>
                   <p className="label-xs">
-                    Also works
+                    {t("Also works")}
                   </p>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {exercise.secondaryMuscles.map((m) => (
@@ -388,7 +390,7 @@ export function ExerciseDetailPage({
               )}
               {exercise.sports && exercise.sports.length > 0 && (
                 <div>
-                  <p className="label-xs">Sports</p>
+                  <p className="label-xs">{t("Sports")}</p>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {exercise.sports.map((s) => (
                       <Badge key={s} variant="secondary">
@@ -399,7 +401,7 @@ export function ExerciseDetailPage({
                 </div>
               )}
               <Field
-                label="Logged as"
+                label={t("Logged as")}
                 value={
                   [
                     exercise.usesWeight && "Weight",
@@ -414,7 +416,7 @@ export function ExerciseDetailPage({
               {exercise.instructions && (
                 <div>
                   <p className="label-xs">
-                    Instructions
+                    {t("Instructions")}
                   </p>
                   <p className="mt-1 text-sm">{exercise.instructions}</p>
                 </div>
@@ -428,11 +430,11 @@ export function ExerciseDetailPage({
                     onClick={() => setDeleteConfirmOpen(true)}
                   >
                     <Trash2 className="h-4 w-4" />
-                    Delete
+                    {t("Delete")}
                   </Button>
                   <Button onClick={() => setEditing(true)}>
                     <Pencil className="h-4 w-4" />
-                    Edit
+                    {t("Edit")}
                   </Button>
                 </div>
               )}
@@ -451,24 +453,24 @@ export function ExerciseDetailPage({
                 className="space-y-4"
               >
                 <div className="space-y-1.5">
-                  <Label htmlFor="ex-name">Name</Label>
+                  <Label htmlFor="ex-name">{t("Name")}</Label>
                   <Input
                     id="ex-name"
                     required
                     value={form.name}
                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                    placeholder="e.g. Barbell Back Squat"
+                    placeholder={t("e.g. Barbell Back Squat")}
                   />
                 </div>
                 <RadioChipGroup
-                  label="Category"
+                  label={t("Category")}
                   options={[...CATEGORIES]}
                   value={form.category}
                   onChange={(v) => setForm((f) => ({ ...f, category: v }))}
                   optionColorClass={(v) => CATEGORY_FILTER_ACTIVE_CLASS[v]}
                 />
                 <RadioChipGroup
-                  label="Body part"
+                  label={t("Body part")}
                   options={
                     form.muscleGroup && !MUSCLE_GROUPS.includes(form.muscleGroup)
                       ? [form.muscleGroup, ...MUSCLE_GROUPS]
@@ -480,7 +482,7 @@ export function ExerciseDetailPage({
                 />
                 <div className="space-y-1.5">
                   <FilterChipGroup
-                    label="Also works (optional)"
+                    label={t("Also works (optional)")}
                     options={MUSCLE_GROUPS.filter((m) => m !== form.muscleGroup)}
                     selected={form.secondaryMuscles}
                     onToggle={(v) =>
@@ -489,7 +491,7 @@ export function ExerciseDetailPage({
                         if (next.has(v)) {
                           next.delete(v);
                         } else if (next.size >= 8) {
-                          toast.error("You can select up to 8 secondary muscles");
+                          toast.error(t("You can select up to 8 secondary muscles"));
                           return f;
                         } else {
                           next.add(v);
@@ -500,13 +502,12 @@ export function ExerciseDetailPage({
                     colorClass={MUSCLE_FILTER_ACTIVE_CLASS}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Secondary muscles worked besides the main body part above, shown on this
-                    exercise's detail page only.
+                    {t("Secondary muscles worked besides the main body part above, shown on this exercise's detail page only.")}
                   </p>
                 </div>
                 <div className="space-y-1.5">
                   <FilterChipGroup
-                    label="Sports (optional)"
+                    label={t("Sports (optional)")}
                     options={SPORTS}
                     selected={form.sports}
                     onToggle={(v) =>
@@ -515,7 +516,7 @@ export function ExerciseDetailPage({
                         if (next.has(v)) {
                           next.delete(v);
                         } else if (next.size >= 8) {
-                          toast.error("You can select up to 8 sports");
+                          toast.error(t("You can select up to 8 sports"));
                           return f;
                         } else {
                           next.add(v);
@@ -526,12 +527,11 @@ export function ExerciseDetailPage({
                     colorClass={SPORT_FILTER_ACTIVE_CLASS}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Sports this exercise is worth surfacing for, lets coaches filter/search the
-                    exercise bank by sport.
+                    {t("Sports this exercise is worth surfacing for, lets coaches filter/search the exercise bank by sport.")}
                   </p>
                 </div>
                 <RadioChipGroup
-                  label="Movement type"
+                  label={t("Movement type")}
                   options={
                     form.movementType && !MOVEMENT_TYPES.includes(form.movementType)
                       ? [form.movementType, ...MOVEMENT_TYPES]
@@ -543,7 +543,7 @@ export function ExerciseDetailPage({
                   allowNone
                 />
                 <RadioChipGroup
-                  label="Laterality"
+                  label={t("Laterality")}
                   options={["bilateral", "unilateral"]}
                   value={form.laterality}
                   onChange={(v) => setForm((f) => ({ ...f, laterality: v }))}
@@ -552,7 +552,7 @@ export function ExerciseDetailPage({
                 />
                 <div className="space-y-1.5">
                   <RadioChipGroup
-                    label="Body region"
+                    label={t("Body region")}
                     options={BODY_REGIONS}
                     value={form.bodyRegion}
                     onChange={(v) => setForm((f) => ({ ...f, bodyRegion: v }))}
@@ -560,14 +560,12 @@ export function ExerciseDetailPage({
                     allowNone
                   />
                   <p className="text-xs text-muted-foreground">
-                    Which part of the body this exercise trains as a whole, lets a coach or the
-                    AI pull "today's upper body exercises" directly instead of inferring it from
-                    body part.
+                    {t("Which part of the body this exercise trains as a whole, lets a coach or the AI pull \"today's upper body exercises\" directly instead of inferring it from body part.")}
                   </p>
                 </div>
                 <div className="space-y-1.5">
                   <RadioChipGroup
-                    label="Plane (push/pull only)"
+                    label={t("Plane (push/pull only)")}
                     options={PLANES}
                     value={form.plane}
                     onChange={(v) => setForm((f) => ({ ...f, plane: v }))}
@@ -575,13 +573,12 @@ export function ExerciseDetailPage({
                     allowNone
                   />
                   <p className="text-xs text-muted-foreground">
-                    Only meaningful alongside a Push/Press/Pull movement type, e.g. bench press
-                    is horizontal, overhead press is vertical.
+                    {t("Only meaningful alongside a Push/Press/Pull movement type, e.g. bench press is horizontal, overhead press is vertical.")}
                   </p>
                 </div>
                 <div className="space-y-1.5">
                   <RadioChipGroup
-                    label="Complexity"
+                    label={t("Complexity")}
                     options={
                       form.movementComplexity && !MOVEMENT_COMPLEXITIES.includes(form.movementComplexity)
                         ? [form.movementComplexity, ...MOVEMENT_COMPLEXITIES]
@@ -593,26 +590,22 @@ export function ExerciseDetailPage({
                     allowNone
                   />
                   <p className="text-xs text-muted-foreground">
-                    Compound (multi-joint, e.g. a squat or bench press), Isolation (single-joint,
-                    one muscle, e.g. a curl), or Combination (two or more patterns chained into one
-                    rep, e.g. a step-up into a shoulder press).
+                    {t("Compound (multi-joint, e.g. a squat or bench press), Isolation (single-joint, one muscle, e.g. a curl), or Combination (two or more patterns chained into one rep, e.g. a step-up into a shoulder press).")}
                   </p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="ex-equipment">Equipment</Label>
+                  <Label htmlFor="ex-equipment">{t("Equipment")}</Label>
                   <Input
                     id="ex-equipment"
                     value={form.equipment}
                     onChange={(e) => setForm((f) => ({ ...f, equipment: e.target.value }))}
-                    placeholder="e.g. Barbell"
+                    placeholder={t("e.g. Barbell")}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>What does the athlete log?</Label>
+                  <Label>{t("What does the athlete log?")}</Label>
                   <p className="text-xs text-muted-foreground">
-                    Check every field this exercise actually needs, the athlete's logging
-                    screen only shows these, nothing else. Check more than one for a combo
-                    movement (e.g. a dumbbell box step-up needs both weight and box height).
+                    {t("Check every field this exercise actually needs, the athlete's logging screen only shows these, nothing else. Check more than one for a combo movement (e.g. a dumbbell box step-up needs both weight and box height).")}
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
@@ -620,7 +613,7 @@ export function ExerciseDetailPage({
                         checked={form.usesWeight}
                         onCheckedChange={(c) => setForm((f) => ({ ...f, usesWeight: c === true }))}
                       />
-                      Weight (lbs/kg)
+                      {t("Weight (lbs/kg)")}
                     </label>
                     <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
                       <Checkbox
@@ -629,21 +622,21 @@ export function ExerciseDetailPage({
                           setForm((f) => ({ ...f, usesBodyweight: c === true }))
                         }
                       />
-                      Bodyweight
+                      {t("Bodyweight")}
                     </label>
                     <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
                       <Checkbox
                         checked={form.usesBand}
                         onCheckedChange={(c) => setForm((f) => ({ ...f, usesBand: c === true }))}
                       />
-                      Band
+                      {t("Band")}
                     </label>
                     <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
                       <Checkbox
                         checked={form.usesBox}
                         onCheckedChange={(c) => setForm((f) => ({ ...f, usesBox: c === true }))}
                       />
-                      Box height
+                      {t("Box height")}
                     </label>
                   </div>
                 </div>
@@ -652,7 +645,7 @@ export function ExerciseDetailPage({
                     checked={form.isCorrective}
                     onCheckedChange={(c) => setForm((f) => ({ ...f, isCorrective: c === true }))}
                   />
-                  Available as a corrective
+                  {t("Available as a corrective")}
                 </label>
                 {/* Admin-only -- controls whether a coach sees a Video On/Off
                     toggle for this exercise at all (see VideoTrackingToggle's
@@ -668,31 +661,30 @@ export function ExerciseDetailPage({
                       checked={form.videoEligible !== false}
                       onCheckedChange={(c) => setForm((f) => ({ ...f, videoEligible: c === true }))}
                     />
-                    Video check eligible (coaches can turn video on for this exercise)
+                    {t("Video check eligible (coaches can turn video on for this exercise)")}
                   </label>
                 )}
                 <div className="space-y-1.5">
-                  <Label htmlFor="ex-video">YouTube video URL</Label>
+                  <Label htmlFor="ex-video">{t("YouTube video URL")}</Label>
                   <Input
                     id="ex-video"
                     type="url"
                     value={form.videoUrl}
                     onChange={(e) => setForm((f) => ({ ...f, videoUrl: e.target.value }))}
-                    placeholder="https://www.youtube.com/watch?v=…"
+                    placeholder={t("https://www.youtube.com/watch?v=…")}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Paste a direct video link and it'll play inline at the top of this page;
-                    leave it blank if there isn't one yet.
+                    {t("Paste a direct video link and it'll play inline at the top of this page; leave it blank if there isn't one yet.")}
                   </p>
                 </div>
                 <ExerciseTagsEditor value={form.tags} onChange={(tags) => setForm((f) => ({ ...f, tags }))} />
                 <div className="space-y-1.5">
-                  <Label htmlFor="ex-instructions">Instructions (optional)</Label>
+                  <Label htmlFor="ex-instructions">{t("Instructions (optional)")}</Label>
                   <Textarea
                     id="ex-instructions"
                     value={form.instructions}
                     onChange={(e) => setForm((f) => ({ ...f, instructions: e.target.value }))}
-                    placeholder="Cues, form notes, tempo…"
+                    placeholder={t("Cues, form notes, tempo…")}
                   />
                 </div>
                 <div className="flex justify-end gap-2 border-t border-border pt-4">
@@ -705,11 +697,11 @@ export function ExerciseDetailPage({
                         setEditing(false);
                       }}
                     >
-                      Cancel
+                      {t("Cancel")}
                     </Button>
                   )}
                   <Button type="submit" disabled={saveMutation.isPending}>
-                    {saveMutation.isPending ? "Saving…" : "Save Exercise"}
+                    {saveMutation.isPending ? t("Saving…") : t("Save Exercise")}
                   </Button>
                 </div>
               </form>
@@ -732,9 +724,9 @@ export function ExerciseDetailPage({
         <ConfirmDialog
           open={deleteConfirmOpen}
           onOpenChange={setDeleteConfirmOpen}
-          title="Delete exercise?"
-          description={`Delete "${exercise.name}"?`}
-          confirmLabel="Delete"
+          title={t("Delete exercise?")}
+          description={t("Delete \"{name}\"?", { name: t.exercise(exercise.name) })}
+          confirmLabel={t("Delete")}
           isPending={deleteMutation.isPending}
           onConfirm={() => deleteMutation.mutate()}
         />
@@ -756,6 +748,7 @@ function ReportIssueDialog({
   exerciseId: number;
   onReported: () => void;
 }) {
+  const t = useT();
   const [issueType, setIssueType] = useState<string>("broken_video");
   const [note, setNote] = useState("");
 
@@ -767,53 +760,53 @@ function ReportIssueDialog({
       });
     },
     onSuccess: () => {
-      toast.success("Thanks — flagged for the admin to review");
+      toast.success(t("Thanks — flagged for the admin to review"));
       onOpenChange(false);
       setNote("");
       setIssueType("broken_video");
       onReported();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not submit report"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not submit report")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Report an Issue</DialogTitle>
+          <DialogTitle>{t("Report an Issue")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label>What's wrong?</Label>
+            <Label>{t("What's wrong?")}</Label>
             <Select value={issueType} onValueChange={setIssueType}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ISSUE_TYPES.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>
-                    {t.label}
+                {ISSUE_TYPES.map((issue) => (
+                  <SelectItem key={issue.value} value={issue.value}>
+                    {t(issue.label)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="report-note">Details (optional)</Label>
+            <Label htmlFor="report-note">{t("Details (optional)")}</Label>
             <Textarea
               id="report-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Anything that'll help the admin fix it faster…"
+              placeholder={t("Anything that'll help the admin fix it faster…")}
             />
           </div>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-            {mutation.isPending ? "Submitting…" : "Submit Report"}
+            {mutation.isPending ? t("Submitting…") : t("Submit Report")}
           </Button>
         </DialogFooter>
       </DialogContent>

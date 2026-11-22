@@ -36,6 +36,7 @@ import {
   type DocumentKind,
   type DocumentStatus,
 } from "@shared/required-documents";
+import { useT } from "@/i18n";
 
 /** ONE PAGE, THREE CHECKLISTS.
  *
@@ -76,38 +77,39 @@ type Waiver = {
 };
 
 function StatusMark({ status, required }: { status: Summary["status"]; required: boolean }) {
+  const t = useT();
   if (status === "accepted") {
     return (
       <span className="flex items-center gap-1.5 text-xs font-semibold text-success">
-        <Check className="h-4 w-4" /> On file
+        <Check className="h-4 w-4" /> {t("On file")}
       </span>
     );
   }
   if (status === "pending_review") {
     return (
       <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
-        <Clock className="h-4 w-4" /> In review
+        <Clock className="h-4 w-4" /> {t("In review")}
       </span>
     );
   }
   if (status === "expiring_soon") {
     return (
       <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
-        <FileWarning className="h-4 w-4" /> Expires soon
+        <FileWarning className="h-4 w-4" /> {t("Expires soon")}
       </span>
     );
   }
   if (status === "expired") {
     return (
       <span className="flex items-center gap-1.5 text-xs font-semibold text-destructive">
-        <FileWarning className="h-4 w-4" /> Out of date
+        <FileWarning className="h-4 w-4" /> {t("Out of date")}
       </span>
     );
   }
   if (status === "rejected") {
     return (
       <span className="flex items-center gap-1.5 text-xs font-semibold text-destructive">
-        <X className="h-4 w-4" /> Rejected
+        <X className="h-4 w-4" /> {t("Rejected")}
       </span>
     );
   }
@@ -115,16 +117,17 @@ function StatusMark({ status, required }: { status: Summary["status"]; required:
   // where half the rows are permanently red teaches people to ignore all of it.
   return required ? (
     <span className="flex items-center gap-1.5 text-xs font-semibold text-destructive">
-      <X className="h-4 w-4" /> Not uploaded
+      <X className="h-4 w-4" /> {t("Not uploaded")}
     </span>
   ) : (
     <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-      <Minus className="h-4 w-4" /> Optional
+      <Minus className="h-4 w-4" /> {t("Optional")}
     </span>
   );
 }
 
 export default function DocumentsPage() {
+  const t = useT();
   const { user } = useAuth();
   // FILING SOMEBODY ELSE'S PAPERWORK IS THE SAME PAGE.
   //
@@ -230,14 +233,14 @@ export default function DocumentsPage() {
       return uploadWithProgress(`/api/waivers/${targetId}`, form);
     },
     onSuccess: () => {
-      toast.success("Uploaded. It'll show as on file once we've checked it.");
+      toast.success(t("Uploaded. It'll show as on file once we've checked it."));
       setOrg("");
       setSignedOn("");
       setExpiresOn("");
       if (fileRef.current) fileRef.current.value = "";
       qc.invalidateQueries({ queryKey: key });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't upload that"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Couldn't upload that")),
     onSettled: () => setUploading(false),
   });
 
@@ -268,44 +271,44 @@ export default function DocumentsPage() {
           : null;
 
   return (
-    <AppShell title={forSomeoneElse ? "Athlete documents" : "Documents"}>
+    <AppShell title={forSomeoneElse ? t("Athlete documents") : t("Documents")}>
       <div className="mx-auto max-w-2xl space-y-4 p-4">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
               {forSomeoneElse
-                ? `${who}'s forms`
+                ? t("{name}'s forms", { name: who })
                 : audience === "coach"
-                  ? "Your coaching credentials"
+                  ? t("Your coaching credentials")
                   : audience === "guardian"
-                    ? "Nothing on file for you"
-                    : "Your forms"}
+                    ? t("Nothing on file for you")
+                    : t("Your forms")}
             </CardTitle>
             <CardDescription>
               {forSomeoneElse
-                ? `Filing on ${who}'s behalf. Whatever their school or club already had signed, upload it here and it lands on their record, not yours.`
+                ? t("Filing on {name}'s behalf. Whatever their school or club already had signed, upload it here and it lands on their record, not yours.", { name: who })
                 : audience === "coach"
-                ? "Certifications and clearances you already hold. Upload a copy so it's on file."
+                ? t("Certifications and clearances you already hold. Upload a copy so it's on file.")
                 : audience === "guardian"
                   ? // An empty checklist with "Your forms" over it reads as a page that failed to
                     // load, so the copy says the emptiness is the answer and points at the two
                     // things a guardian DOES have here: their child's paperwork, which is filed
                     // against the child, and their own consent ledger below.
-                    "Forge asks nothing of you here -- you don't train on Forge and you don't supervise through it. Your child's paperwork is filed on their own page, which the link in any request we send you opens."
+                    t("Forge asks nothing of you here -- you don't train on Forge and you don't supervise through it. Your child's paperwork is filed on their own page, which the link in any request we send you opens.")
                   : audience === "athlete_rostered"
-                    ? "If your school or club already had these signed, upload those instead of filling in ours again."
-                    : "You train without a coach on Forge, so there's no school waiver to upload. These two still matter."}{" "}
-              Nothing here replaces the agreements {forSomeoneElse ? "they" : "you"} accepted when
-              {forSomeoneElse ? " they" : " you"} signed up, this is a copy of what was signed
-              elsewhere, so we know it exists.
+                    ? t("If your school or club already had these signed, upload those instead of filling in ours again.")
+                    : t("You train without a coach on Forge, so there's no school waiver to upload. These two still matter.")}{" "}
+              {forSomeoneElse
+                ? t("Nothing here replaces the agreements they accepted when they signed up, this is a copy of what was signed elsewhere, so we know it exists.")
+                : t("Nothing here replaces the agreements you accepted when you signed up, this is a copy of what was signed elsewhere, so we know it exists.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading…</p>
+              <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
             ) : isError ? (
               <ReadFailed
-                what={forSomeoneElse ? "these forms" : "your documents"}
+                what={forSomeoneElse ? t("these forms") : t("your documents")}
                 error={error}
                 onRetry={() => void refetch()}
               />
@@ -326,12 +329,12 @@ export default function DocumentsPage() {
                           )}
                         >
                           <span className="min-w-0">
-                            <span className="block text-sm font-medium">{doc.label}</span>
-                            <span className="block text-xs text-muted-foreground">{doc.why}</span>
+                            <span className="block text-sm font-medium">{t(doc.label)}</span>
+                            <span className="block text-xs text-muted-foreground">{t(doc.why)}</span>
                             {row?.issuingOrganization && (
                               <span className="block truncate text-xs text-muted-foreground">
                                 {row.issuingOrganization}
-                                {row.expiresOn ? ` · expires ${row.expiresOn}` : ""}
+                                {row.expiresOn ? t(" · expires {date}", { date: row.expiresOn }) : ""}
                               </span>
                             )}
                           </span>
@@ -345,8 +348,8 @@ export default function DocumentsPage() {
                 </ul>
                 <p className="mt-3 text-xs text-muted-foreground">
                   {outstanding === 0
-                    ? "Everything required is on file."
-                    : `${outstanding} still to upload. Tap a row to add it.`}
+                    ? t("Everything required is on file.")
+                    : t("{count} still to upload. Tap a row to add it.", { count: outstanding })}
                 </p>
               </>
             )}
@@ -361,7 +364,7 @@ export default function DocumentsPage() {
               key={w.id}
               className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs"
             >
-              <span className="font-semibold">{DOCUMENT_LABEL[w.kind]} was rejected:</span>{" "}
+              <span className="font-semibold">{t("{document} was rejected:", { document: t(DOCUMENT_LABEL[w.kind]) })}</span>{" "}
               {w.reviewNote}
             </p>
           ))}
@@ -374,7 +377,7 @@ export default function DocumentsPage() {
         {institutionalFailed && (
           // A failed read here silently hides the Service Agreement panel from the one coach who
           // needs it, so say so instead of showing nothing.
-          <ReadFailed what="your Service Agreement status" onRetry={() => void refetchInstitutional()} />
+          <ReadFailed what={t("your Service Agreement status")} onRetry={() => void refetchInstitutional()} />
         )}
         {showInstitutional && <InstitutionalAgreementSigning />}
 
@@ -382,12 +385,12 @@ export default function DocumentsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Upload className="h-4 w-4 text-primary" />
-              Upload a document
+              {t("Upload a document")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">What is it?</Label>
+              <Label className="text-xs">{t("What is it?")}</Label>
               <Select value={kind} onValueChange={(v) => setKindChoice(v as DocumentKind)}>
                 <SelectTrigger className="h-9 text-sm">
                   <SelectValue />
@@ -395,30 +398,30 @@ export default function DocumentsPage() {
                 <SelectContent>
                   {checklist.map((d) => (
                     <SelectItem key={d.kind} value={d.kind}>
-                      {d.label}
+                      {t(d.label)}
                     </SelectItem>
                   ))}
                   {offerInstitutional && (
                     <SelectItem value="institutional_agreement">
-                      {DOCUMENT_LABEL.institutional_agreement}
+                      {t(DOCUMENT_LABEL.institutional_agreement)}
                     </SelectItem>
                   )}
-                  <SelectItem value="other">{DOCUMENT_LABEL.other}</SelectItem>
+                  <SelectItem value="other">{t(DOCUMENT_LABEL.other)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Who issued it? (optional)</Label>
+              <Label className="text-xs">{t("Who issued it? (optional)")}</Label>
               <Input
                 value={org}
                 onChange={(e) => setOrg(e.target.value)}
-                placeholder={audience === "coach" ? "USA Weightlifting" : "Lincoln High School Athletics"}
+                placeholder={audience === "coach" ? t("USA Weightlifting") : t("Lincoln High School Athletics")}
                 className="h-9 text-sm"
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
-                <Label className="text-xs">Signed / issued</Label>
+                <Label className="text-xs">{t("Signed / issued")}</Label>
                 <Input
                   type="date"
                   value={signedOn}
@@ -427,7 +430,7 @@ export default function DocumentsPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Expires</Label>
+                <Label className="text-xs">{t("Expires")}</Label>
                 <Input
                   type="date"
                   value={expiresOn}
@@ -450,14 +453,10 @@ export default function DocumentsPage() {
                 upload.mutate(file);
               }}
             />
-            {uploading && <p className="text-xs text-muted-foreground">Uploading…</p>}
+            {uploading && <p className="text-xs text-muted-foreground">{t("Uploading…")}</p>}
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              PDF, or a photo of the signed page. It's read automatically as soon as you upload
-              it, we check it's the document you picked and that it's actually signed. Nobody at
-              Forge reads it unless that check can't clear it. The file is kept on your record so it
-              can be produced later, and you can open it below.{" "}
-              We can't confirm a form signed with someone else covers Forge, so the agreements you
-              accepted here still apply.
+              {t("PDF, or a photo of the signed page. It's read automatically as soon as you upload it, we check it's the document you picked and that it's actually signed. Nobody at Forge reads it unless that check can't clear it. The file is kept on your record so it can be produced later, and you can open it below.")}{" "}
+              {t("We can't confirm a form signed with someone else covers Forge, so the agreements you accepted here still apply.")}
             </p>
           </CardContent>
         </Card>
@@ -465,15 +464,15 @@ export default function DocumentsPage() {
         {(data?.waivers ?? []).length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Everything uploaded</CardTitle>
+              <CardTitle className="text-base">{t("Everything uploaded")}</CardTitle>
             </CardHeader>
             <CardContent>
               <ul className="space-y-1.5 text-xs">
                 {data!.waivers.map((w) => (
                   <li key={w.id} className="flex items-center justify-between gap-2">
                     <span className="min-w-0 truncate text-muted-foreground">
-                      {DOCUMENT_LABEL[w.kind]} · {new Date(w.createdAt).toLocaleDateString()} ·{" "}
-                      {w.reviewStatus.replace("_", " ")}
+                      {t(DOCUMENT_LABEL[w.kind])} · {new Date(w.createdAt).toLocaleDateString()} ·{" "}
+                      {t(w.reviewStatus.replace("_", " "))}
                     </span>
                     {/* The file is KEPT, so there is normally something to open here -- a
                         document that cannot be produced does not cover anybody. The "file
@@ -491,10 +490,10 @@ export default function DocumentsPage() {
                         onClick={externalLinkClick(resolveApiUrl(w.fileUrl))}
                         className="shrink-0 font-semibold text-primary hover:underline"
                       >
-                        Open
+                        {t("Open")}
                       </a>
                     ) : (
-                      <span className="shrink-0 text-muted-foreground">file deleted</span>
+                      <span className="shrink-0 text-muted-foreground">{t("file deleted")}</span>
                     )}
                   </li>
                 ))}
@@ -529,6 +528,7 @@ function AgreedToCard({
   forSomeoneElse: boolean;
   who: string;
 }) {
+  const t = useT();
   const { data, isLoading, isError, refetch } = useQuery<ConsentSummaryRow[]>({
     queryKey: [url],
   });
@@ -537,23 +537,24 @@ function AgreedToCard({
     <Card>
       <CardHeader>
         <CardTitle className="text-base">
-          {forSomeoneElse ? `What ${who} has agreed to` : "What you've agreed to"}
+          {forSomeoneElse ? t("What {name} has agreed to", { name: who }) : t("What you've agreed to")}
         </CardTitle>
         <CardDescription>
-          The agreements accepted inside Forge, and the version that was accepted. Each one links
-          to the current text{forSomeoneElse ? "" : ", so you can reread what you said yes to"}.
+          {forSomeoneElse
+            ? t("The agreements accepted inside Forge, and the version that was accepted. Each one links to the current text.")
+            : t("The agreements accepted inside Forge, and the version that was accepted. Each one links to the current text, so you can reread what you said yes to.")}
         </CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
         ) : isError ? (
           <ReadFailed
-            what={forSomeoneElse ? "their agreements" : "your agreements"}
+            what={forSomeoneElse ? t("their agreements") : t("your agreements")}
             onRetry={() => void refetch()}
           />
         ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing recorded yet.</p>
+          <p className="text-sm text-muted-foreground">{t("Nothing recorded yet.")}</p>
         ) : (
           <ul className="space-y-1.5">
             {rows.map((row) => (
@@ -571,14 +572,15 @@ function AgreedToCard({
                 <span className="min-w-0">
                   <span className="block text-sm font-medium">{row.label}</span>
                   <span className="block text-xs text-muted-foreground">
-                    {row.state === "withdrawn" ? "Withdrawn " : "Accepted "}
+                    {row.state === "withdrawn" ? t("Withdrawn") : t("Accepted")}{" "}
                     {new Date(row.createdAt).toLocaleDateString()}
-                    {row.givenBy ? ` by ${row.givenBy}` : ""} · version {row.documentVersion}
+                    {row.givenBy ? t(" by {who}", { who: t(row.givenBy) }) : ""}{" "}
+                    {t("· version {version}", { version: row.documentVersion })}
                   </span>
                   <span className="mt-1 flex flex-wrap gap-3 text-xs">
                     {row.page && (
                       <Link href={row.page} className="inline-flex items-center gap-1 font-semibold text-primary hover:underline">
-                        <ExternalLink className="h-3 w-3" /> Read
+                        <ExternalLink className="h-3 w-3" /> {t("Read")}
                       </Link>
                     )}
                     {row.pdfUrl && (
@@ -589,7 +591,7 @@ function AgreedToCard({
                         onClick={externalLinkClick(resolveApiUrl(row.pdfUrl))}
                         className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
                       >
-                        <FileDown className="h-3 w-3" /> PDF
+                        <FileDown className="h-3 w-3" /> {t("PDF")}
                       </a>
                     )}
                   </span>
@@ -597,15 +599,15 @@ function AgreedToCard({
                 <span className="shrink-0 pt-0.5">
                   {row.state === "withdrawn" ? (
                     <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                      <Minus className="h-4 w-4" /> Withdrawn
+                      <Minus className="h-4 w-4" /> {t("Withdrawn")}
                     </span>
                   ) : row.stale ? (
                     <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
-                      <FileWarning className="h-4 w-4" /> Needs re-accepting
+                      <FileWarning className="h-4 w-4" /> {t("Needs re-accepting")}
                     </span>
                   ) : (
                     <span className="flex items-center gap-1.5 text-xs font-semibold text-success">
-                      <Check className="h-4 w-4" /> Current
+                      <Check className="h-4 w-4" /> {t("Current")}
                     </span>
                   )}
                 </span>

@@ -40,6 +40,7 @@ import type { ClassAiDraft } from "@shared/schema";
 import { CLASS_READING_LEVELS, CLASS_READING_LEVEL_LABELS, type ClassReadingLevel } from "@shared/class-reading-level";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ReadFailed } from "@/components/read-failed";
+import { msg, useT } from "@/i18n";
 
 type ClassSummary = {
   id: number;
@@ -94,6 +95,7 @@ export function ClassListPage({
   showAiDraft?: boolean;
   libraryTabs?: ReactNode;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [, navigate] = useLocation();
   const { data: classes = [], isLoading, isError, refetch } = useQuery<ClassSummary[]>({
@@ -151,13 +153,13 @@ export function ClassListPage({
     },
     onSuccess: (cls) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/classes`] });
-      toast.success("Class created — start adding lessons");
+      toast.success(t("Class created — start adding lessons"));
       setDialogOpen(false);
       setName("");
       setDescription("");
       navigate(`${routeBase}/${cls.id}`);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not create class"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not create class")),
   });
 
   // Two real requests in one mutation on purpose -- generate, then
@@ -203,14 +205,14 @@ export function ClassListPage({
     onSuccess: ({ cls, lessonCount }) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/classes`] });
       toast.success(
-        `Generated ${lessonCount} lesson${lessonCount === 1 ? "" : "s"} — review before publishing`,
+        t.plural(lessonCount, "Generated {count} lesson — review before publishing", "Generated {count} lessons — review before publishing"),
       );
       setAiDialogOpen(false);
       setAiText("");
       setAiImages([]);
       navigate(`${routeBase}/${cls.id}`);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not generate a class from that material"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not generate a class from that material")),
   });
 
   const deleteMutation = useMutation({
@@ -219,10 +221,10 @@ export function ClassListPage({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/classes`] });
-      toast.success("Class deleted");
+      toast.success(t("Class deleted"));
       setDeleteTarget(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not delete class"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not delete class")),
   });
 
   const publishMutation = useMutation({
@@ -232,9 +234,9 @@ export function ClassListPage({
     },
     onSuccess: (_data, { isDraft }) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/classes`] });
-      toast.success(isDraft ? "Unpublished, hidden from browse and enrollment" : "Published");
+      toast.success(isDraft ? t("Unpublished, hidden from browse and enrollment") : t("Published"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not update publish state"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not update publish state")),
   });
 
   return (
@@ -246,12 +248,12 @@ export function ClassListPage({
           {showAiDraft && (
             <Button variant="outline" onClick={() => setAiDialogOpen(true)}>
               <Sparkles className="h-4 w-4" />
-              Generate with AI
+              {t("Generate with AI")}
             </Button>
           )}
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="h-4 w-4" />
-            New Class
+            {t("New Class")}
           </Button>
         </div>
       }
@@ -259,7 +261,7 @@ export function ClassListPage({
       {isError && (
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="your classes" onRetry={() => void refetch()} />
+            <ReadFailed what={t("your classes")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       )}
@@ -273,12 +275,12 @@ export function ClassListPage({
               {showAiDraft && (
                 <Button variant="outline" onClick={() => setAiDialogOpen(true)}>
                   <Sparkles className="h-4 w-4" />
-                  Generate with AI
+                  {t("Generate with AI")}
                 </Button>
               )}
               <Button onClick={() => setDialogOpen(true)}>
                 <Plus className="h-4 w-4" />
-                New Class
+                {t("New Class")}
               </Button>
             </div>
           </CardContent>
@@ -293,7 +295,7 @@ export function ClassListPage({
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search classes…"
+                placeholder={t("Search classes…")}
                 className="pl-8"
               />
             </div>
@@ -310,7 +312,7 @@ export function ClassListPage({
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  {opt.label}
+                  {t(opt.label)}
                 </button>
               ))}
             </div>
@@ -327,7 +329,7 @@ export function ClassListPage({
                     : "border-border text-muted-foreground hover:bg-surface-elevated",
                 )}
               >
-                All
+                {t("All")}
               </button>
               {categories.map((cat) => (
                 <button
@@ -350,7 +352,7 @@ export function ClassListPage({
       )}
 
       {classes.length > 0 && filteredClasses.length === 0 && (
-        <p className="py-8 text-center text-sm text-muted-foreground">No classes match your search.</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t("No classes match your search.")}</p>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -363,13 +365,13 @@ export function ClassListPage({
                   <div className="flex shrink-0 items-center gap-1.5">
                     {c.isDraft && (
                       <Badge variant="secondary" className="text-[10px]">
-                        DRAFT
+                        {t("DRAFT")}
                       </Badge>
                     )}
                     {c.unlocked && (
                       <Badge variant="success" className="gap-1 text-[10px]">
                         <Unlock className="h-2.5 w-2.5" />
-                        UNLOCKED
+                        {t("UNLOCKED")}
                       </Badge>
                     )}
                     {c.ownerLabel && (
@@ -390,7 +392,7 @@ export function ClassListPage({
                 <div className="flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <ListOrdered className="h-3.5 w-3.5" />
-                    {c.lessonCount} lesson{c.lessonCount === 1 ? "" : "s"}
+                    {t.plural(c.lessonCount, "{count} lesson", "{count} lessons")}
                   </span>
                   <span className="flex items-center gap-1">
                     <Users className="h-3.5 w-3.5" />
@@ -401,8 +403,8 @@ export function ClassListPage({
                       <Button
                         size="icon"
                         variant="ghost"
-                        aria-label={c.isDraft ? `Publish ${c.name}` : `Unpublish ${c.name}`}
-                        title={c.isDraft ? "Publish, make visible for browse/enroll" : "Unpublish, hide from new browse/enroll"}
+                        aria-label={c.isDraft ? t("Publish {name}", { name: c.name }) : t("Unpublish {name}", { name: c.name })}
+                        title={c.isDraft ? t("Publish, make visible for browse/enroll") : t("Unpublish, hide from new browse/enroll")}
                         disabled={publishMutation.isPending}
                         onClick={() => publishMutation.mutate({ id: c.id, isDraft: !c.isDraft })}
                       >
@@ -415,7 +417,7 @@ export function ClassListPage({
                       <Button
                         size="icon"
                         variant="ghost"
-                        aria-label={`Delete ${c.name}`}
+                        aria-label={t("Delete {name}", { name: c.name })}
                         onClick={() => setDeleteTarget(c)}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
@@ -431,7 +433,7 @@ export function ClassListPage({
                     onClick={() => setEnrollClassId(c.id)}
                   >
                     <UserPlus className="h-3.5 w-3.5" />
-                    Enroll Athletes
+                    {t("Enroll Athletes")}
                   </Button>
                 )}
               </div>
@@ -443,7 +445,7 @@ export function ClassListPage({
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Class</DialogTitle>
+            <DialogTitle>{t("New Class")}</DialogTitle>
           </DialogHeader>
           <form
             onSubmit={(e) => {
@@ -453,30 +455,30 @@ export function ClassListPage({
             className="space-y-4"
           >
             <div className="space-y-1.5">
-              <Label htmlFor="class-name">Class name</Label>
+              <Label htmlFor="class-name">{t("Class name")}</Label>
               <Input
                 id="class-name"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Hitting Fundamentals"
+                placeholder={t("e.g. Hitting Fundamentals")}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="class-desc">Description (optional)</Label>
+              <Label htmlFor="class-desc">{t("Description (optional)")}</Label>
               <Textarea
                 id="class-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="What will athletes work through in this Class?"
+                placeholder={t("What will athletes work through in this Class?")}
               />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancel
+                {t("Cancel")}
               </Button>
               <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? "Creating…" : "Create & Build"}
+                {createMutation.isPending ? t("Creating…") : t("Create & Build")}
               </Button>
             </DialogFooter>
           </form>
@@ -487,7 +489,7 @@ export function ClassListPage({
         <Dialog open={aiDialogOpen} onOpenChange={(open) => !generateDraftMutation.isPending && setAiDialogOpen(open)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Generate a Class with AI</DialogTitle>
+              <DialogTitle>{t("Generate a Class with AI")}</DialogTitle>
             </DialogHeader>
             <form
               onSubmit={(e) => {
@@ -497,21 +499,21 @@ export function ClassListPage({
               className="space-y-4"
             >
               <div className="space-y-1.5">
-                <Label htmlFor="ai-doc-text">Paste the source material</Label>
+                <Label htmlFor="ai-doc-text">{t("Paste the source material")}</Label>
                 <Textarea
                   id="ai-doc-text"
                   value={aiText}
                   onChange={(e) => setAiText(e.target.value)}
                   rows={8}
-                  placeholder="Paste an article, your notes, or a full document, an existing chapter structure carries straight through into lessons."
+                  placeholder={t("Paste an article, your notes, or a full document, an existing chapter structure carries straight through into lessons.")}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Or attach photos of pages</Label>
+                <Label>{t("Or attach photos of pages")}</Label>
                 <PhotoUploadField images={aiImages} onChange={setAiImages} maxImages={6} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="ai-reading-level">Written for</Label>
+                <Label htmlFor="ai-reading-level">{t("Written for")}</Label>
                 <Select value={aiReadingLevel} onValueChange={(v) => setAiReadingLevel(v as ClassReadingLevel)}>
                   <SelectTrigger id="ai-reading-level" className="w-56">
                     <SelectValue />
@@ -526,10 +528,7 @@ export function ClassListPage({
                 </Select>
               </div>
               <p className="text-xs text-muted-foreground">
-                Forge organizes this into lessons, reading pages, and a quiz per lesson, at that reading level.
-                Every fact and every quiz answer comes only from what's provided here, nothing invented and
-                nothing from anywhere else. Created as a draft, invisible to everyone else, so you can review
-                and edit everything before publishing.
+                {t("Forge organizes this into lessons, reading pages, and a quiz per lesson, at that reading level. Every fact and every quiz answer comes only from what's provided here, nothing invented and nothing from anywhere else. Created as a draft, invisible to everyone else, so you can review and edit everything before publishing.")}
               </p>
               <DialogFooter>
                 <Button
@@ -538,7 +537,7 @@ export function ClassListPage({
                   onClick={() => setAiDialogOpen(false)}
                   disabled={generateDraftMutation.isPending}
                 >
-                  Cancel
+                  {t("Cancel")}
                 </Button>
                 <Button
                   type="submit"
@@ -547,7 +546,7 @@ export function ClassListPage({
                   }
                 >
                   <Sparkles className="h-4 w-4" />
-                  {generateDraftMutation.isPending ? "Generating…" : "Generate"}
+                  {generateDraftMutation.isPending ? t("Generating…") : t("Generate")}
                 </Button>
               </DialogFooter>
             </form>
@@ -568,15 +567,20 @@ export function ClassListPage({
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title={deleteTarget && deleteTarget.enrolledAthleteCount > 0 ? "Try deleting anyway?" : "Delete class?"}
+        title={deleteTarget && deleteTarget.enrolledAthleteCount > 0 ? t("Try deleting anyway?") : t("Delete class?")}
         description={
           deleteTarget
             ? deleteTarget.enrolledAthleteCount > 0
-              ? `"${deleteTarget.name}" has ${deleteTarget.enrolledAthleteCount} enrolled athlete${deleteTarget.enrolledAthleteCount === 1 ? "" : "s"}, the server will refuse this delete to protect their progress. Unpublish it instead if you don't want new signups. Try anyway?`
-              : `Delete "${deleteTarget.name}"? This cannot be undone.`
+              ? t.plural(
+                  deleteTarget.enrolledAthleteCount,
+                  "\"{name}\" has {count} enrolled athlete, the server will refuse this delete to protect their progress. Unpublish it instead if you don't want new signups. Try anyway?",
+                  "\"{name}\" has {count} enrolled athletes, the server will refuse this delete to protect their progress. Unpublish it instead if you don't want new signups. Try anyway?",
+                  { name: deleteTarget.name },
+                )
+              : t("Delete \"{name}\"? This cannot be undone.", { name: deleteTarget.name })
             : ""
         }
-        confirmLabel="Delete"
+        confirmLabel={t("Delete")}
         isPending={deleteMutation.isPending}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
       />

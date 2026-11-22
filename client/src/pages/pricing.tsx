@@ -28,6 +28,7 @@ import { Flame, Check, Video, AlertTriangle } from "lucide-react";
 import { CAMERA_ACCURACY_LONG } from "@shared/camera-accuracy-copy";
 import { CLASS_PRICING_LINE } from "@shared/class-pricing-rule";
 import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
+import { useT } from "@/i18n";
 
 /** Example roster sizes, each priced by the one rule: $4 an athlete. */
 const SAMPLE_ROSTERS = [5, 12, 20, 35, 50, 75, 120, 500];
@@ -37,6 +38,7 @@ const SAMPLE_ROSTERS = [5, 12, 20, 35, 50, 75, 120, 500];
  * enforces (nothing yet; see ENFORCEMENT_ENABLED). Linked from login and
  * signup's footer. */
 export default function PricingPage() {
+  const t = useT();
   return (
     // THE NAV AND FOOTER, which this page was the only one of the six marketing pages without.
     //
@@ -55,11 +57,10 @@ export default function PricingPage() {
             <Flame className="h-8 w-8" />
           </div>
           <h1 className="font-display text-4xl font-extrabold uppercase tracking-wider">
-            Pricing
+            {t("Pricing")}
           </h1>
           <p className="max-w-md text-sm text-muted-foreground">
-            One roster-based plan per program. Every tier includes AI coaching, form-check video
-            analysis, programming, and nutrition, personalization scales with you.
+            {t("One roster-based plan per program. Every tier includes AI coaching, form-check video analysis, programming, and nutrition, personalization scales with you.")}
           </p>
         </div>
 
@@ -71,7 +72,7 @@ export default function PricingPage() {
         <div className="mx-auto mb-10 flex max-w-3xl items-start gap-3 rounded-md border-2 border-destructive bg-destructive/10 p-4">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
           <p className="text-sm font-bold text-destructive">
-            Camera tracking notice: {CAMERA_ACCURACY_LONG}
+            {t("Camera tracking notice: {notice}", { notice: t(CAMERA_ACCURACY_LONG) })}
           </p>
         </div>
 
@@ -82,16 +83,18 @@ export default function PricingPage() {
         <Card>
           <CardHeader>
             <Badge className="mb-1 w-fit gap-1 bg-primary/15 text-primary hover:bg-primary/15">
-              Teams, programs &amp; schools
+              {t("Teams, programs & schools")}
             </Badge>
-            <CardTitle className="text-lg">{formatCents(ORG_PER_ATHLETE_CENTS)}/athlete a month</CardTitle>
+            <CardTitle className="text-lg">{t("{price}/athlete a month", { price: formatCents(ORG_PER_ATHLETE_CENTS) })}</CardTitle>
             <CardDescription>
-              You pay for exactly the athletes on your roster, at one rate, with no account fee, no
-              minimum block and no roster limit. Add an athlete and the bill goes up{" "}
-              {formatCents(ORG_PER_ATHLETE_CENTS)}; remove one or put them on hold and it comes down.
-              Logo and main color are free on every plan; full branding and personalization are
-              included once your roster reaches {FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES} athletes,
-              and more than one team from {ORG_BLOCK_SIZE + 1}.
+              {t(
+                "You pay for exactly the athletes on your roster, at one rate, with no account fee, no minimum block and no roster limit. Add an athlete and the bill goes up {price}; remove one or put them on hold and it comes down. Logo and main color are free on every plan; full branding and personalization are included once your roster reaches {threshold} athletes, and more than one team from {teams}.",
+                {
+                  price: formatCents(ORG_PER_ATHLETE_CENTS),
+                  threshold: FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES,
+                  teams: ORG_BLOCK_SIZE + 1,
+                },
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -101,8 +104,8 @@ export default function PricingPage() {
                   key={n}
                   className="flex items-center justify-between gap-2 rounded-md border border-border p-2"
                 >
-                  <span className="text-muted-foreground">{n} athletes</span>
-                  <span className="font-semibold text-foreground">{formatCents(coachMonthlyCents(n))}/mo</span>
+                  <span className="text-muted-foreground">{t("{count} athletes", { count: n })}</span>
+                  <span className="font-semibold text-foreground">{t("{price}/mo", { price: formatCents(coachMonthlyCents(n)) })}</span>
                 </div>
               ))}
             </div>
@@ -110,15 +113,16 @@ export default function PricingPage() {
         </Card>
 
         <div className="mt-12">
-          <h2 className="mb-1 text-center text-xl font-bold">Add-ons</h2>
+          <h2 className="mb-1 text-center text-xl font-bold">{t("Add-ons")}</h2>
           {/* One threshold, derived. This said "above 30 athletes" while the band
               card above it said 20: a number a customer could reasonably hold Forge
               to, contradicted on the same page. includesFullPersonalization is the
               only real answer, so both now read it. */}
           <p className="mb-6 text-center text-sm text-muted-foreground">
-            Add-ons for any program. Below {FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES} athletes,
-            Full Personalization is one bundle; from {FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES} it is
-            included. Coaches Corner, the coach education library, is a separate add-on at every size.
+            {t(
+              "Add-ons for any program. Below {threshold} athletes, Full Personalization is one bundle; from {threshold} it is included. Coaches Corner, the coach education library, is a separate add-on at every size.",
+              { threshold: FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES },
+            )}
           </p>
           <div className="mx-auto grid max-w-3xl gap-4 sm:grid-cols-2">
             {BILLING_ADD_ON_ORDER.map((id) => {
@@ -131,11 +135,11 @@ export default function PricingPage() {
                       <span className="text-xl font-extrabold text-foreground">
                         {formatCents(addOn.monthlyPriceCents)}
                       </span>
-                      <span className="text-sm text-muted-foreground">/mo</span>
+                      <span className="text-sm text-muted-foreground">{t("/mo")}</span>
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-muted-foreground">{addOn.description}</p>
+                    <p className="text-sm text-muted-foreground">{t(addOn.description)}</p>
                   </CardContent>
                 </Card>
               );
@@ -144,9 +148,9 @@ export default function PricingPage() {
         </div>
 
         <div className="mt-16">
-          <h2 className="mb-1 text-center text-xl font-bold">Training on your own?</h2>
+          <h2 className="mb-1 text-center text-xl font-bold">{t("Training on your own?")}</h2>
           <p className="mb-6 text-center text-sm text-muted-foreground">
-            No coach yet? Train on your own: Basic to log, AI Coach for an AI coach, AI Coach + Video to film. Per athlete, not per team.
+            {t("No coach yet? Train on your own: Basic to log, AI Coach for an AI coach, AI Coach + Video to film. Per athlete, not per team.")}
           </p>
           <div className={cn("grid gap-4", FREE_AGENT_TIER_GRID_COLS)}>
             {FREE_AGENT_TIER_ORDER.map((id) => {
@@ -167,7 +171,7 @@ export default function PricingPage() {
                   <CardHeader>
                     {featured && (
                       <Badge className="mb-1 w-fit gap-1 bg-primary/15 text-primary hover:bg-primary/15">
-                        Most popular
+                        {t("Most popular")}
                       </Badge>
                     )}
                     <CardTitle className="text-lg">{tier.label}</CardTitle>
@@ -175,12 +179,12 @@ export default function PricingPage() {
                       <span className="text-2xl font-extrabold text-foreground">
                         {formatCents(tier.monthlyPriceCents)}
                       </span>
-                      <span className="text-sm text-muted-foreground">/mo</span>
+                      <span className="text-sm text-muted-foreground">{t("/mo")}</span>
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="flex flex-1 flex-col justify-between gap-4">
                     <div>
-                      <p className="text-sm text-muted-foreground">{tier.description}</p>
+                      <p className="text-sm text-muted-foreground">{t(tier.description)}</p>
                     </div>
                     {tier.hasVideoFormCheck && (
                       // The purchase variant, not the generic caveat: this card has a price on it
@@ -196,10 +200,12 @@ export default function PricingPage() {
           {/* All Classes (2026-10-04): the one add-on on sale, on top of any Free Agent tier. */}
           <div className="mx-auto mt-8 max-w-lg rounded-md border border-border p-4 text-center text-sm">
             <p className="font-semibold">
-              {FREE_AGENT_ADD_ONS[ALL_CLASSES_ADD_ON_ID].label},{" "}
-              {formatCents(FREE_AGENT_ADD_ONS[ALL_CLASSES_ADD_ON_ID].monthlyPriceCents)}/mo on any Free Agent tier
+              {t("{name}, {price}/mo on any Free Agent tier", {
+                name: FREE_AGENT_ADD_ONS[ALL_CLASSES_ADD_ON_ID].label,
+                price: formatCents(FREE_AGENT_ADD_ONS[ALL_CLASSES_ADD_ON_ID].monthlyPriceCents),
+              })}
             </p>
-            <p className="mt-1 text-muted-foreground">{CLASS_PRICING_LINE}</p>
+            <p className="mt-1 text-muted-foreground">{t(CLASS_PRICING_LINE)}</p>
           </div>
           {/* A WITHDRAWN ADD-ON IS NOT PRICED ON A PUBLIC PAGE. The heading goes with the
               cards, for the reason athlete/upgrade.tsx already spells out: with the sport
@@ -212,7 +218,7 @@ export default function PricingPage() {
           {SPORT_COACH_ADD_ON_IDS.filter(addOnIsOffered).length > 0 && (
             <>
               <p className="mb-4 mt-8 text-center text-sm text-muted-foreground">
-                Sport-specialist coaches, available as add-ons on any Free Agent tier:
+                {t("Sport-specialist coaches, available as add-ons on any Free Agent tier:")}
               </p>
               <div className="grid gap-3 sm:grid-cols-3">
                 {SPORT_COACH_ADD_ON_IDS.filter(addOnIsOffered).map((id) => {
@@ -220,7 +226,7 @@ export default function PricingPage() {
                   return (
                     <div key={id} className="rounded-md border border-border p-3 text-center text-sm">
                       <span className="font-semibold">{addOn.label}</span>
-                      <span className="text-muted-foreground">, {formatCents(addOn.monthlyPriceCents)}/mo</span>
+                      <span className="text-muted-foreground">{t(", {price}/mo", { price: formatCents(addOn.monthlyPriceCents) })}</span>
                     </div>
                   );
                 })}
@@ -244,21 +250,21 @@ export default function PricingPage() {
           <div className="mx-auto mt-6 flex max-w-lg items-start gap-3 rounded-md border border-border p-4 text-sm">
             <Video className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <p className="text-muted-foreground">
-              <span className="font-semibold text-foreground">Video storage is included</span>:{" "}
-              every athlete keeps {VIDEO_RETENTION.favoritedCap} favorited clips per exercise or
-              skill drill, {VIDEO_RETENTION.totalCap} total on a rolling basis, for both
-              form-check videos and skill clips, on AI Coach + Video and for every coached
-              athlete. Extra Video Storage raises it on the plan that films.
+              <span className="font-semibold text-foreground">{t("Video storage is included")}</span>:{" "}
+              {t(
+                "every athlete keeps {favorited} favorited clips per exercise or skill drill, {total} total on a rolling basis, for both form-check videos and skill clips, on AI Coach + Video and for every coached athlete. Extra Video Storage raises it on the plan that films.",
+                { favorited: VIDEO_RETENTION.favoritedCap, total: VIDEO_RETENTION.totalCap },
+              )}
             </p>
           </div>
         </div>
 
         <div className="mt-12 flex flex-col items-center gap-3">
-          <SignupCta size="lg">Get started</SignupCta>
+          <SignupCta size="lg">{t("Get started")}</SignupCta>
           <p className="text-sm text-muted-foreground">
-            Already have an account?{" "}
+            {t("Already have an account?")}{" "}
             <Link href="/login" className="font-semibold text-primary hover:underline">
-              Log in
+              {t("Log in")}
             </Link>
           </p>
         </div>

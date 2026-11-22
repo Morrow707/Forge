@@ -11,8 +11,10 @@ import { ForgeMark } from "@/components/forge-mark";
 import { PASSWORD_MIN_LENGTH, passwordIsAcceptable } from "@shared/password-rules";
 import { PasswordRequirements } from "@/components/password-requirements";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
 
 export default function ResetPasswordPage() {
+  const t = useT();
   const [, navigate] = useLocation();
   const token = new URLSearchParams(window.location.search).get("token") ?? "";
   const [password, setPassword] = useState("");
@@ -24,13 +26,13 @@ export default function ResetPasswordPage() {
       await apiRequest("POST", "/api/auth/reset-password", { token, password });
     },
     onSuccess: () => setDone(true),
-    onError: (err: ApiError) => toast.error(err.message || "Could not reset password"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not reset password")),
   });
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (password !== confirm) {
-      toast.error("Passwords don't match");
+      toast.error(t("Passwords don't match"));
       return;
     }
     mutation.mutate();
@@ -56,11 +58,10 @@ export default function ResetPasswordPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Choose a New Password</CardTitle>
+            <CardTitle>{t("Choose a New Password")}</CardTitle>
             {!done && !token && (
               <CardDescription>
-                This link is missing its token, request a new one from the forgot-password
-                page.
+                {t("This link is missing its token, request a new one from the forgot-password page.")}
               </CardDescription>
             )}
           </CardHeader>
@@ -68,15 +69,15 @@ export default function ResetPasswordPage() {
             {done ? (
               <div className="flex flex-col items-center gap-3 py-4 text-center">
                 <CheckCircle2 className="h-10 w-10 text-success" />
-                <p className="font-semibold">Password updated.</p>
+                <p className="font-semibold">{t("Password updated.")}</p>
                 <Button className="w-full" onClick={() => navigate("/login")}>
-                  Log In
+                  {t("Log In")}
                 </Button>
               </div>
             ) : (
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="password">New password</Label>
+                  <Label htmlFor="password">{t("New password")}</Label>
                   <PasswordInput
                     id="password"
                     autoComplete="new-password"
@@ -90,7 +91,7 @@ export default function ResetPasswordPage() {
                   <PasswordRequirements value={password} className="pt-0.5" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="confirm">Confirm new password</Label>
+                  <Label htmlFor="confirm">{t("Confirm new password")}</Label>
                   <PasswordInput
                     id="confirm"
                     autoComplete="new-password"
@@ -108,7 +109,7 @@ export default function ResetPasswordPage() {
                   className="w-full"
                   disabled={!token || mutation.isPending || !passwordIsAcceptable(password)}
                 >
-                  {mutation.isPending ? "Saving…" : "Reset Password"}
+                  {mutation.isPending ? t("Saving…") : t("Reset Password")}
                 </Button>
               </form>
             )}
@@ -116,7 +117,7 @@ export default function ResetPasswordPage() {
               href="/login"
               className="mt-5 block text-center text-sm font-semibold text-primary hover:underline"
             >
-              Back to log in
+              {t("Back to log in")}
             </Link>
           </CardContent>
         </Card>
