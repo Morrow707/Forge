@@ -68,12 +68,14 @@ export const PROGRAM_SEASON_PHASE_LABEL: Record<ProgramSeasonPhase, string> = {
 };
 
 /**
- * The age under which an exercise marked `youthSafe === false` is kept out of what Forge OFFERS an
- * athlete (the picker's order, an AI draft, a swap). It never stops a coach placing one by hand:
- * the coach sees a note and the exercise stays. 14 is the age Scott named for this build; the
- * classification of each exercise is research still to come.
+ * NO EXERCISE IS FILTERED, SORTED OR LABELLED BY AN ATHLETE'S AGE. Scott, 2026-11-22: "underage
+ * athletes can do whatever they want, as an exercise professional, age doesn't matter in the weight
+ * room, its about weight room proficiency, a 12 year old can back squat the bar if a) they are
+ * strong enough to hold 45lbs on their backs, and b) they can show that they can do a back squat
+ * correctly and safely, thats the only 2 things that matters." The `exercises.youth_safe` column
+ * stays in the database (no destructive migration) and nothing reads it;
+ * server/no-exercise-is-filtered-by-age.test.ts holds that.
  */
-export const YOUTH_SAFE_MIN_AGE = 14;
 
 /** The most positions one exercise or program carries. Enough for every real case; stops a paste. */
 export const MAX_TAGGED_POSITIONS = 12;
@@ -183,32 +185,5 @@ export type ExerciseTagFields = {
   joints?: readonly string[] | null;
   purposes?: readonly string[] | null;
   positions?: readonly string[] | null;
-  youthSafe?: boolean | null;
   cautionNote?: string | null;
 };
-
-/**
- * Whether Forge should hold this exercise back when OFFERING it to an athlete of this age.
- * Only an explicit `youthSafe === false` and a known age under YOUTH_SAFE_MIN_AGE hold it back:
- * an unclassified exercise (null) and an unknown age are never held back, because "not
- * classified" is not "unsafe" and a missing birthday is not a child.
- */
-export function heldBackForAge(exercise: { youthSafe?: boolean | null }, age: number | null | undefined): boolean {
-  return exercise.youthSafe === false && age != null && age < YOUTH_SAFE_MIN_AGE;
-}
-
-/**
- * The list with every exercise held back for this age removed. An unknown age returns the list as
- * given. Used where Forge picks for somebody (an AI draft, a swap); a coach choosing by hand never
- * goes through this.
- */
-export function keepForAge<T extends { youthSafe?: boolean | null }>(
-  list: readonly T[],
-  age: number | null | undefined,
-): T[] {
-  if (age == null || age >= YOUTH_SAFE_MIN_AGE) return [...list];
-  return list.filter((ex) => !heldBackForAge(ex, age));
-}
-
-/** The note a coach sees under an exercise that is marked not for under-14s, on a program for one. */
-export const YOUTH_HELD_BACK_NOTE = `Marked not for athletes under ${YOUTH_SAFE_MIN_AGE}. It stays if you chose it; check it suits this athlete.`;

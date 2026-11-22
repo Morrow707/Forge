@@ -11,8 +11,8 @@
  *      joints its muscle group works across (`JOINTS_BY_MUSCLE_GROUP`).
  *   2. Then the program's own tagged joints, and its sport and positions: a drill tagged for the
  *      program's sport or one of its positions ranks above an otherwise equal one.
- *   3. Only drills tagged with the purpose "care", never one already on the day, and on a program
- *      for an athlete under 14 never one marked `youthSafe === false` (shared/exercise-tags.ts).
+ *   3. Only drills tagged with the purpose "care", and never one already on the day. Never filtered
+ *      by an athlete's age (Scott, 2026-11-22: weight-room proficiency, not age).
  *
  * With no care drills tagged in the library the answer says so (`noneTagged`), so the button can
  * read "No care drills tagged yet" rather than a silent empty list.
@@ -75,15 +75,12 @@ export type CareLibraryExercise = {
   purposes?: readonly string[] | null;
   sports?: readonly string[] | null;
   positions?: readonly string[] | null;
-  youthSafe?: boolean | null;
 };
 
 export type CareProgramContext = {
   sport?: string | null;
   positions?: readonly string[] | null;
   joints?: readonly string[] | null;
-  /** True when the program is for an athlete under 14 (see `YOUTH_SAFE_MIN_AGE`). */
-  forYouth?: boolean;
 };
 
 export type CareSuggestion<T extends CareLibraryExercise> = {
@@ -142,7 +139,6 @@ export function suggestCareDrills<T extends CareLibraryExercise>(
 
   const scored = careDrills
     .filter((ex) => !onDay.has(ex.id))
-    .filter((ex) => !(program.forYouth && ex.youthSafe === false))
     .map((ex, at) => {
       const joints = (ex.joints ?? []).filter(isExerciseJoint);
       const best = joints

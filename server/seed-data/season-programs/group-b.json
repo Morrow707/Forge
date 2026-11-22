@@ -17,7 +17,7 @@
    ],
    "weeks": 8,
    "daysPerWeek": 3,
-   "audience": "For high school basketball players, boys and girls, guards and posts.",
+   "audience": "For basketball players, boys and girls, guards and posts. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Eight weeks in two 4-week blocks. Block 1 builds muscle and work capacity (moderate loads, 8-12 reps); block 2 builds basic strength (80-90% 1RM, 3-6 reps). Weeks 4 and 8 are lighter: drop one set from every exercise and use about 90% of that block's load. Ankles and knees take most of basketball's load, so every day ends with ankle balance or hamstring and groin work, and every lower day starts with landing and cutting drills.",
    "blocks": [
     {
@@ -1176,7 +1176,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 3,
-   "audience": "For high school basketball players, boys and girls, guards and posts.",
+   "audience": "For basketball players, boys and girls, guards and posts. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Four weeks of strength and power before the season: power lifts at 75-85% 1RM, core lifts at 85-90% for 2-5 reps, with full rest. Week 4 is lighter: drop one set and use about 90% of the load. Practice adds a lot of jumping now, so plyometric totals stay moderate.",
    "blocks": [
     {
@@ -1782,7 +1782,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 2,
-   "audience": "For high school basketball players, boys and girls, guards and posts.",
+   "audience": "For basketball players, boys and girls, guards and posts. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "A 4-week maintenance block that repeats all season. Two short sessions a week. Put the heavy day 48-72 hours before a game, and keep the second day at least 48 hours from the next game. Week 4 is lighter: drop one set and use about 90% of the load, then start week 1 again. Games count as the jump and sprint work. Keep the landing drills in every practice warm-up.",
    "blocks": [
     {
@@ -2187,7 +2187,7 @@
    ],
    "weeks": 3,
    "daysPerWeek": 2,
-   "audience": "For high school athletes finishing a basketball season.",
+   "audience": "For athletes finishing a basketball season.",
    "note": "Active rest, not a lifting program. Three weeks to let the body and the schedule recover. Start the Basketball Off-Season program after this.",
    "blocks": [],
    "positionLayers": {},
@@ -2484,7 +2484,7 @@
    ],
    "weeks": 8,
    "daysPerWeek": 3,
-   "audience": "For high school volleyball players: setters, attackers and liberos.",
+   "audience": "For volleyball players: setters, attackers and liberos. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Eight weeks in two 4-week blocks. Block 1 builds muscle and work capacity (moderate loads, 8-12 reps); block 2 builds basic strength (80-90% 1RM, 3-6 reps). Weeks 4 and 8 are lighter: drop one set from every exercise and use about 90% of that block's load. Pressing stays landmine and dumbbell based to keep shoulder load reasonable for players who swing and block all season. Ankle balance and shoulder external rotation close each day.",
    "blocks": [
     {
@@ -3643,7 +3643,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 3,
-   "audience": "For high school volleyball players: setters, attackers and liberos.",
+   "audience": "For volleyball players: setters, attackers and liberos. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Four weeks of strength and power before the season: power lifts at 75-85% 1RM, core lifts at 85-90% for 2-5 reps, with full rest. Week 4 is lighter: drop one set and use about 90% of the load. Practice brings a lot of jumping; plyometric totals here stay moderate.",
    "blocks": [
     {
@@ -4249,7 +4249,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 2,
-   "audience": "For high school volleyball players: setters, attackers and liberos.",
+   "audience": "For volleyball players: setters, attackers and liberos. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "A 4-week maintenance block that repeats all season. Two short sessions a week. Put the heavy day 48-72 hours before a game, and keep the second day at least 48 hours from the next game. Week 4 is lighter: drop one set and use about 90% of the load, then start week 1 again. Matches and practice carry the jumping. Day 2 has no lower-body jumps on purpose.",
    "blocks": [
     {
@@ -4648,7 +4648,7 @@
    ],
    "weeks": 3,
    "daysPerWeek": 2,
-   "audience": "For high school athletes finishing a volleyball season.",
+   "audience": "For athletes finishing a volleyball season.",
    "note": "Active rest, not a lifting program. Three weeks to let the body and the schedule recover. Start the Volleyball Off-Season program after this.",
    "blocks": [],
    "positionLayers": {},
@@ -4944,7 +4944,7 @@
    ],
    "weeks": 8,
    "daysPerWeek": 3,
-   "audience": "For high school soccer players: field players and goalkeepers, boys and girls.",
+   "audience": "For soccer players: field players and goalkeepers, boys and girls. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Eight weeks in two 4-week blocks. Block 1 builds muscle and work capacity (moderate loads, 8-12 reps); block 2 builds basic strength (80-90% 1RM, 3-6 reps). Weeks 4 and 8 are lighter: drop one set from every exercise and use about 90% of that block's load. Hamstrings and groin take soccer's sprint and kicking load, so Nordic hamstring curls and Copenhagen adduction close most days. They are done at the end of the session, not before practice.",
    "blocks": [
     {
@@ -6077,7 +6077,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 3,
-   "audience": "For high school soccer players: field players and goalkeepers, boys and girls.",
+   "audience": "For soccer players: field players and goalkeepers, boys and girls. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Four weeks of strength and power before the season: power lifts at 75-85% 1RM, core lifts at 85-90% for 2-5 reps, with full rest. Week 4 is lighter: drop one set and use about 90% of the load. Copenhagen adduction three times a week here builds toward once a week in season.",
    "blocks": [
     {
@@ -6661,7 +6661,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 2,
-   "audience": "For high school soccer players: field players and goalkeepers, boys and girls.",
+   "audience": "For soccer players: field players and goalkeepers, boys and girls. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "A 4-week maintenance block that repeats all season. Two short sessions a week. Put the heavy day 48-72 hours before a game, and keep the second day at least 48 hours from the next game. Week 4 is lighter: drop one set and use about 90% of the load, then start week 1 again. Nordics and Copenhagen work drop to a low maintenance dose. Keep the 11+ style warm-up before practices at least twice a week.",
    "blocks": [
     {
@@ -7053,7 +7053,7 @@
    ],
    "weeks": 3,
    "daysPerWeek": 2,
-   "audience": "For high school athletes finishing a soccer season.",
+   "audience": "For athletes finishing a soccer season.",
    "note": "Active rest, not a lifting program. Three weeks to let the body and the schedule recover. Start the Soccer Off-Season program after this.",
    "blocks": [],
    "positionLayers": {},
@@ -7347,7 +7347,7 @@
    ],
    "weeks": 8,
    "daysPerWeek": 3,
-   "audience": "For high school tennis players, singles and doubles.",
+   "audience": "For tennis players, singles and doubles. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Eight weeks in two 4-week blocks. Block 1 builds muscle and work capacity (moderate loads, 8-12 reps); block 2 builds basic strength (80-90% 1RM, 3-6 reps). Weeks 4 and 8 are lighter: drop one set from every exercise and use about 90% of that block's load. Pressing stays landmine and dumbbell based for the hitting shoulder. Every day ends with shoulder external rotation, wrist work for the elbow, or back endurance, the places tennis loads most.",
    "blocks": [
     {
@@ -8400,7 +8400,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 3,
-   "audience": "For high school tennis players, singles and doubles.",
+   "audience": "For tennis players, singles and doubles. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Four weeks of strength and power before the season: power lifts at 75-85% 1RM, core lifts at 85-90% for 2-5 reps, with full rest. Week 4 is lighter: drop one set and use about 90% of the load. Build court hours up over about four weeks rather than all at once.",
    "blocks": [
     {
@@ -8919,7 +8919,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 2,
-   "audience": "For high school tennis players, singles and doubles.",
+   "audience": "For tennis players, singles and doubles. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "A 4-week maintenance block that repeats all season. Two short sessions a week. Put the heavy day 48-72 hours before a game, and keep the second day at least 48 hours from the next game. Week 4 is lighter: drop one set and use about 90% of the load, then start week 1 again. Tournament weekends: lift heavy early in the week and skip Day 2 if there are matches on three or more days.",
    "blocks": [
     {
@@ -9235,7 +9235,7 @@
    ],
    "weeks": 3,
    "daysPerWeek": 2,
-   "audience": "For high school athletes finishing a tennis season.",
+   "audience": "For athletes finishing a tennis season.",
    "note": "Active rest, not a lifting program. Three weeks to let the body and the schedule recover. Start the Tennis Off-Season program after this.",
    "blocks": [],
    "positionLayers": {},
@@ -9528,7 +9528,7 @@
    ],
    "weeks": 8,
    "daysPerWeek": 3,
-   "audience": "For high school golfers.",
+   "audience": "For golfers. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Eight weeks in two 4-week blocks. Block 1 builds muscle and work capacity (moderate loads, 8-12 reps); block 2 builds basic strength (80-90% 1RM, 3-6 reps). Weeks 4 and 8 are lighter: drop one set from every exercise and use about 90% of that block's load. Golf loads the lower back, the lead hip and the wrists most, so every session ends with trunk endurance, hip rotation strength and wrist work. Med ball throws carry the power work; few jumps are needed.",
    "blocks": [
     {
@@ -10499,7 +10499,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 3,
-   "audience": "For high school golfers.",
+   "audience": "For golfers. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Four weeks of strength and power before the season: power lifts at 75-85% 1RM, core lifts at 85-90% for 2-5 reps, with full rest. Week 4 is lighter: drop one set and use about 90% of the load. Rotational throws get faster; keep them crisp and stop a set when speed drops.",
    "blocks": [
     {
@@ -10981,7 +10981,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 2,
-   "audience": "For high school golfers.",
+   "audience": "For golfers. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "A 4-week maintenance block that repeats all season. Two short sessions a week. Put the heavy day 48-72 hours before a game, and keep the second day at least 48 hours from the next game. Week 4 is lighter: drop one set and use about 90% of the load, then start week 1 again. On tournament weeks, lift heavy early in the week and keep Day 2 at least 48 hours before a round.",
    "blocks": [
     {
@@ -11297,7 +11297,7 @@
    ],
    "weeks": 3,
    "daysPerWeek": 2,
-   "audience": "For high school athletes finishing a golf season.",
+   "audience": "For athletes finishing a golf season.",
    "note": "Active rest, not a lifting program. Three weeks to let the body and the schedule recover. Start the Golf Off-Season program after this.",
    "blocks": [],
    "positionLayers": {},
@@ -11593,7 +11593,7 @@
    ],
    "weeks": 8,
    "daysPerWeek": 3,
-   "audience": "For high school baseball players: pitchers, catchers and position players.",
+   "audience": "For baseball players: pitchers, catchers and position players. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Eight weeks in two 4-week blocks. Block 1 builds muscle and work capacity (moderate loads, 8-12 reps); block 2 builds basic strength (80-90% 1RM, 3-6 reps). Weeks 4 and 8 are lighter: drop one set from every exercise and use about 90% of that block's load. Rows and pulls outnumber presses, and every day ends with shoulder external rotation or hamstring work. Throwing itself is managed by pitch counts and rest days, not by this program.",
    "blocks": [
     {
@@ -12674,7 +12674,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 3,
-   "audience": "For high school baseball players: pitchers, catchers and position players.",
+   "audience": "For baseball players: pitchers, catchers and position players. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Four weeks of strength and power before the season: power lifts at 75-85% 1RM, core lifts at 85-90% for 2-5 reps, with full rest. Week 4 is lighter: drop one set and use about 90% of the load. Throwing volume rises now; arm care after every throwing day matters more than extra lifting.",
    "blocks": [
     {
@@ -13214,7 +13214,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 2,
-   "audience": "For high school baseball players: pitchers, catchers and position players.",
+   "audience": "For baseball players: pitchers, catchers and position players. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "A 4-week maintenance block that repeats all season. Two short sessions a week. Put the heavy day 48-72 hours before a game, and keep the second day at least 48 hours from the next game. Week 4 is lighter: drop one set and use about 90% of the load, then start week 1 again. Pitchers count the day they pitch as a game: their heavy day goes 48-72 hours before their next outing, never the day after a long outing. Day 2 stays upper-light.",
    "blocks": [
     {
@@ -13562,7 +13562,7 @@
    ],
    "weeks": 3,
    "daysPerWeek": 2,
-   "audience": "For high school athletes finishing a baseball season.",
+   "audience": "For athletes finishing a baseball season.",
    "note": "Active rest, not a lifting program. Three weeks to let the body and the schedule recover. Start the Baseball Off-Season program after this.",
    "blocks": [],
    "positionLayers": {},
@@ -13861,7 +13861,7 @@
    ],
    "weeks": 8,
    "daysPerWeek": 3,
-   "audience": "For high school softball players: pitchers, catchers and position players.",
+   "audience": "For softball players: pitchers, catchers and position players. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Eight weeks in two 4-week blocks. Block 1 builds muscle and work capacity (moderate loads, 8-12 reps); block 2 builds basic strength (80-90% 1RM, 3-6 reps). Weeks 4 and 8 are lighter: drop one set from every exercise and use about 90% of that block's load. Rows and pulls outnumber presses, and every day ends with shoulder external rotation or hamstring work. Windmill pitchers have no pitch-count rule, so track pitches and games and watch for pain and fatigue.",
    "blocks": [
     {
@@ -14975,7 +14975,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 3,
-   "audience": "For high school softball players: pitchers, catchers and position players.",
+   "audience": "For softball players: pitchers, catchers and position players. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Four weeks of strength and power before the season: power lifts at 75-85% 1RM, core lifts at 85-90% for 2-5 reps, with full rest. Week 4 is lighter: drop one set and use about 90% of the load. Throwing volume rises now; arm care after every throwing day matters more than extra lifting.",
    "blocks": [
     {
@@ -15548,7 +15548,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 2,
-   "audience": "For high school softball players: pitchers, catchers and position players.",
+   "audience": "For softball players: pitchers, catchers and position players. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "A 4-week maintenance block that repeats all season. Two short sessions a week. Put the heavy day 48-72 hours before a game, and keep the second day at least 48 hours from the next game. Week 4 is lighter: drop one set and use about 90% of the load, then start week 1 again. Pitchers count the day they pitch as a game: their heavy day goes 48-72 hours before their next outing, never the day after a long outing. Day 2 stays upper-light.",
    "blocks": [
     {
@@ -15928,7 +15928,7 @@
    ],
    "weeks": 3,
    "daysPerWeek": 2,
-   "audience": "For high school athletes finishing a softball season.",
+   "audience": "For athletes finishing a softball season.",
    "note": "Active rest, not a lifting program. Three weeks to let the body and the schedule recover. Start the Softball Off-Season program after this.",
    "blocks": [],
    "positionLayers": {},

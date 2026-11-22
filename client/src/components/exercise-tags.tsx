@@ -2,8 +2,9 @@
  * The exercise and program TAGS on screen (2026-11-22, shared/exercise-tags.ts): the chips on a
  * search result, the read-only block on an exercise page, the caution note, and the editors.
  *
- * Nothing here blocks anything. A caution note and a youth classification are things a coach
- * reads; Forge never refuses a coach's choice because of either.
+ * Nothing here blocks anything. A caution note is something a coach reads; Forge never refuses a
+ * coach's choice because of it. Nothing here is about an athlete's age (Scott, 2026-11-22: "age
+ * doesn't matter in the weight room, its about weight room proficiency").
  */
 import { Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +20,6 @@ import {
   MAX_CAUTION_NOTE_LENGTH,
   PROGRAM_SEASON_PHASES,
   PROGRAM_SEASON_PHASE_LABEL,
-  YOUTH_SAFE_MIN_AGE,
   isExerciseJoint,
   isExercisePurpose,
   isProgramSeasonPhase,
@@ -33,7 +33,6 @@ type TaggedExercise = {
   joints?: readonly string[] | null;
   purposes?: readonly string[] | null;
   positions?: readonly string[] | null;
-  youthSafe?: boolean | null;
   cautionNote?: string | null;
 };
 
@@ -95,12 +94,6 @@ export function CautionNote({
   );
 }
 
-function youthLabel(youthSafe: boolean | null | undefined): string {
-  if (youthSafe === true) return `Suits under-${YOUTH_SAFE_MIN_AGE}s`;
-  if (youthSafe === false) return `Not for under-${YOUTH_SAFE_MIN_AGE}s`;
-  return "Not classified yet";
-}
-
 /** The read-only tags on an exercise's page (a Forge exercise, or one somebody else owns). */
 export function ExerciseTagsView({ exercise }: { exercise: TaggedExercise }) {
   const purposes = (exercise.purposes ?? []).filter(isExercisePurpose);
@@ -144,10 +137,6 @@ export function ExerciseTagsView({ exercise }: { exercise: TaggedExercise }) {
           </div>
         </div>
       )}
-      <div>
-        <p className="label-xs">Athletes under {YOUTH_SAFE_MIN_AGE}</p>
-        <p className="mt-1 text-sm">{youthLabel(exercise.youthSafe)}</p>
-      </div>
       <CautionNote note={exercise.cautionNote} className="text-xs" />
     </div>
   );
@@ -204,7 +193,6 @@ export type ExerciseTagForm = {
   joints: Set<ExerciseJoint>;
   purposes: Set<ExercisePurpose>;
   positionsText: string;
-  youthSafe: "unclassified" | "yes" | "no";
   cautionNote: string;
 };
 
@@ -212,35 +200,30 @@ export const EMPTY_EXERCISE_TAG_FORM: ExerciseTagForm = {
   joints: new Set(),
   purposes: new Set(),
   positionsText: "",
-  youthSafe: "unclassified",
   cautionNote: "",
 };
 
 export function exerciseTagFormFrom(ex: TaggedExercise): ExerciseTagForm {
-  const youth: Record<string, ExerciseTagForm["youthSafe"]> = { true: "yes", false: "no" };
   return {
     joints: new Set((ex.joints ?? []).filter(isExerciseJoint)),
     purposes: new Set((ex.purposes ?? []).filter(isExercisePurpose)),
     positionsText: (ex.positions ?? []).join(", "),
-    youthSafe: ex.youthSafe == null ? "unclassified" : youth[String(ex.youthSafe)],
     cautionNote: ex.cautionNote ?? "",
   };
 }
 
 /** The tag fields as the exercise routes take them. */
 export function exerciseTagPayload(form: ExerciseTagForm) {
-  const youth: Record<ExerciseTagForm["youthSafe"], boolean | null> = { unclassified: null, yes: true, no: false };
   const positions = positionsFromText(form.positionsText);
   return {
     joints: form.joints.size > 0 ? EXERCISE_JOINTS.filter((j) => form.joints.has(j)) : null,
     purposes: form.purposes.size > 0 ? EXERCISE_PURPOSES.filter((p) => form.purposes.has(p)) : null,
     positions: positions.length > 0 ? positions : null,
-    youthSafe: youth[form.youthSafe],
     cautionNote: form.cautionNote.trim() || null,
   };
 }
 
-/** The five tag fields in the exercise editor (admin's Forge library, a coach's own exercise). */
+/** The four tag fields in the exercise editor (admin's Forge library, a coach's own exercise). */
 export function ExerciseTagsEditor({
   value,
   onChange,
@@ -248,11 +231,6 @@ export function ExerciseTagsEditor({
   value: ExerciseTagForm;
   onChange: (next: ExerciseTagForm) => void;
 }) {
-  const youthOptions: { id: ExerciseTagForm["youthSafe"]; label: string }[] = [
-    { id: "unclassified", label: "Not classified" },
-    { id: "yes", label: `Suits under-${YOUTH_SAFE_MIN_AGE}s` },
-    { id: "no", label: `Not for under-${YOUTH_SAFE_MIN_AGE}s` },
-  ];
   return (
     <div className="space-y-3 rounded-md border border-border p-3" data-testid="exercise-tags-editor">
       <p className="text-sm font-medium">Warm-up, care and return-to-training tags (optional)</p>
@@ -280,29 +258,6 @@ export function ExerciseTagsEditor({
           onChange={(e) => onChange({ ...value, positionsText: e.target.value })}
           placeholder="pitcher, goalkeeper"
         />
-      </div>
-      <div className="space-y-1.5">
-        <p className="label-xs">Athletes under {YOUTH_SAFE_MIN_AGE}</p>
-        <div className="flex flex-wrap gap-1">
-          {youthOptions.map((o) => (
-            <button
-              key={o.id}
-              type="button"
-              aria-pressed={value.youthSafe === o.id}
-              onClick={() => onChange({ ...value, youthSafe: o.id })}
-              className={cn(
-                "rounded-full border px-2 py-1 text-[11px] font-medium leading-tight transition-colors",
-                value.youthSafe === o.id ? CHIP_ACTIVE : CHIP_IDLE,
-              )}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          "Not for under-{YOUTH_SAFE_MIN_AGE}s" keeps it out of what Forge suggests for a young athlete. A coach can
-          still choose it and sees a note.
-        </p>
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="ex-caution">Caution note (optional)</Label>

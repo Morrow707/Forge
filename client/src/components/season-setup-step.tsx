@@ -11,7 +11,7 @@
  *   - Position: from each athlete's profile; programs written for a position show who matches.
  *   - Girls' / boys' / mixed team: a choice, suggested from the athletes and never shown as
  *     anybody's own gender.
- *   - The under-14 loading note.
+ *   - The loading note, the same for everyone (weight-room proficiency, never an age).
  *   - The ONE requirement: a return-to-training program needs the clinician clearance ticked.
  *
  * `useSeasonSetup` owns the state and returns what the dialog needs to submit; `SeasonSetupStep`
@@ -37,8 +37,7 @@ import {
   RETURN_TO_TRAINING_SELF_CLEARANCE_SENTENCE,
   TEAM_GENDERS,
   TEAM_GENDER_LABEL,
-  UNDER_14_LOADING_NOTE,
-  UNDER_14_LOADING_NOTE_GROUP,
+  PROFICIENCY_LOADING_NOTE,
   positionMatchesProgram,
   proposeSeasonPlan,
   type TeamGender,
@@ -54,7 +53,7 @@ type ContextProgram = {
   weekCount: number;
   returnToTraining: boolean;
 };
-type ContextAthlete = { id: number; position: string | null; under14: boolean; adult: boolean };
+type ContextAthlete = { id: number; position: string | null; adult: boolean };
 type SeasonContext = {
   programs: ContextProgram[];
   athletes: ContextAthlete[];
@@ -286,7 +285,6 @@ export function SeasonSetupStep({
   if (s.context.isError) {
     return <ReadFailed what="the season setup" onRetry={() => void s.context.refetch()} className="text-left" />;
   }
-  const anyUnder14 = s.athletes.some((a) => a.under14);
   const programPositions = s.primary?.positions ?? [];
 
   return (
@@ -296,12 +294,10 @@ export function SeasonSetupStep({
         Season setup
       </p>
 
-      {anyUnder14 && (
-        <p className="flex items-start gap-1.5 rounded-md bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-400" data-testid="text-under-14-note">
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          {s.athletes.length > 1 ? UNDER_14_LOADING_NOTE_GROUP : UNDER_14_LOADING_NOTE}
-        </p>
-      )}
+      <p className="flex items-start gap-1.5 text-xs text-muted-foreground" data-testid="text-loading-note">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        {PROFICIENCY_LOADING_NOTE}
+      </p>
 
       {/* PLAN A SEASON */}
       <label className="flex items-center gap-2 text-sm">

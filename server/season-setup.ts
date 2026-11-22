@@ -2,9 +2,9 @@
  *
  * Three routes:
  *   POST /api/season-setup/context   what the step needs to draw: each program's tags and length,
- *                                    each in-scope athlete's profile position and an under-14 YES/NO
- *                                    (never an age), and the team-gender SUGGESTION (never anybody's
- *                                    own gender).
+ *                                    each in-scope athlete's profile position and whether they may
+ *                                    tick their own clearance (never an age), and the team-gender
+ *                                    SUGGESTION (never anybody's own gender).
  *   POST /api/coach/season-assignments   assign one or several programs, each with its own start
  *                                    date, and record the setup on every assignment it made.
  *   POST /api/my/season-assignments  the same for the caller's own calendar (coach, admin, Free Agent).
@@ -35,7 +35,6 @@ import {
   TEAM_GENDERS,
   isIsoDay,
   isReturnToTrainingProgram,
-  isUnderYouthAge,
   restrictionsLine,
   suggestTeamGender,
 } from "@shared/season-plan";
@@ -250,7 +249,6 @@ export function registerSeasonSetupRoutes(app: Express) {
       athletes: facts.map((f) => ({
         id: f.id,
         position: f.position,
-        under14: isUnderYouthAge(f.age),
         // Only "may tick their own clearance", never the age itself.
         adult: f.age != null && f.age >= ADULT_AGE,
       })),

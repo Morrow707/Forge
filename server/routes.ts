@@ -3821,18 +3821,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(searchProgramsFromQueryParam(list, req.query.q));
   });
 
-  // Whether the program being built is for an athlete under 14 (shared/exercise-tags.ts), so the
-  // picker can flag exercises marked not for under-14s. A yes or no, never an age.
-  app.get("/api/admin/programs/:id/youth-audience", requireRole("admin"), async (req, res) => {
-    const user = currentUser(req);
-    const id = Number(req.params.id);
-    const program = await storage.getProgramFull(id);
-    if (!program || !(await adminReadableOwnerIds(user.id)).includes(program.coachId)) {
-      return res.status(404).json({ message: "Program not found" });
-    }
-    res.json({ forYouth: await storage.programIsForYouth(id, user.id) });
-  });
-
   app.get("/api/admin/programs/:id", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
     const id = Number(req.params.id);
@@ -6187,15 +6175,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = currentUser(req);
     const list = await storage.getVisibleProgramsForCoach(user.id);
     res.json(searchProgramsFromQueryParam(list, req.query.q));
-  });
-
-  app.get("/api/coach/programs/:id/youth-audience", requireRole("coach"), async (req, res) => {
-    const user = currentUser(req);
-    const id = Number(req.params.id);
-    if (!(await storage.getProgramIfUsableByCoach(user.id, id))) {
-      return res.status(404).json({ message: "Program not found" });
-    }
-    res.json({ forYouth: await storage.programIsForYouth(id, user.id) });
   });
 
   app.get("/api/coach/programs/:id", requireRole("coach"), async (req, res) => {
@@ -14426,15 +14405,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // an athlete's own program card read "undefined wk - undefined days".
     const list = await storage.getVisibleProgramsForCoach(user.id);
     res.json(searchProgramsFromQueryParam(list, req.query.q));
-  });
-
-  app.get("/api/athlete/programs/:id/youth-audience", requireRole("athlete"), requireFreeAgent, async (req, res) => {
-    const user = currentUser(req);
-    const id = Number(req.params.id);
-    if (!(await storage.getProgramIfUsableByCoach(user.id, id))) {
-      return res.status(404).json({ message: "Program not found" });
-    }
-    res.json({ forYouth: await storage.programIsForYouth(id, user.id) });
   });
 
   app.get("/api/athlete/programs/:id", requireRole("athlete"), requireFreeAgent, async (req, res) => {

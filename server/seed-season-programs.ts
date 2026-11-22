@@ -21,7 +21,10 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "./db";
 import { exercises, programs } from "@shared/schema";
 import { storage } from "./storage";
-import { convertSeasonProgram } from "./season-program-structure";
+import { convertSeasonProgram, seasonProgramDescription, type FileProgram } from "./season-program-structure";
+import { normalizePosition } from "@shared/exercise-tags";
+import type { ProgramLayers } from "@shared/season-program-layers";
+import { SEASON_PROGRAM_TEXT_BEFORE_2026_11_22 } from "./seed-data/season-program-text-before-2026-11-22";
 import { readSeasonProgramFile, seasonProgramFiles } from "./season-program-files";
 
 /** Strict (throw on an unresolved name) under vitest; lenient (log and skip) everywhere else. */
@@ -97,4 +100,78 @@ export async function postSeasonProgramsOnce(libraryOwnerId: number, files: stri
           .returning({ id: programs.id });
   await db.execute(sql`INSERT INTO applied_backfills (key) VALUES (${POST_SEASON_PROGRAMS_MARKER}) ON CONFLICT DO NOTHING`);
   return posted.length;
+}
+
+/**
+ * THE AGE LINES COME OUT OF THE PROGRAMS ALREADY IN THE DATABASE (2026-11-22). Scott: "age doesn't
+ * matter in the weight room, its about weight room proficiency" / "yes change the line for the
+ * underage athlete." The files carry the new text; production created these programs once and never
+ * re-syncs them, so this rewrites each stored description, and the two kinds of layer note that
+ * changed, ONLY where the stored text still equals what the old file text produced. An admin's own
+ * edit is left alone and counted. Once, behind an applied_backfills marker.
+ */
+export const SEASON_PROGRAM_AGE_LINES_MARKER = "season_program_age_lines_2026_11_22";
+
+export type AgeLineBackfillResult = { descriptions: number; layerNotes: number; leftAlone: number };
+
+export async function rewriteSeasonProgramAgeLinesOnce(
+  libraryOwnerId: number,
+  files: string[] = seasonProgramFiles(),
+): Promise<AgeLineBackfillResult | null> {
+  const done = await db.execute(sql`SELECT 1 FROM applied_backfills WHERE key = ${SEASON_PROGRAM_AGE_LINES_MARKER}`);
+  if (done.rows.length > 0) return null;
+  const result: AgeLineBackfillResult = { descriptions: 0, layerNotes: 0, leftAlone: 0 };
+  const entries = files.flatMap((file) => readSeasonProgramFile(file).programs);
+  const changed = entries.filter((p) => SEASON_PROGRAM_TEXT_BEFORE_2026_11_22[p.name]);
+  const stored =
+    changed.length === 0
+      ? []
+      : await db
+          .select({ id: programs.id, name: programs.name, description: programs.description, layers: programs.layers })
+          .from(programs)
+          .where(and(eq(programs.coachId, libraryOwnerId), inArray(programs.name, changed.map((p) => p.name))));
+  const byName = new Map(stored.map((r) => [r.name, r]));
+
+  await changed.reduce(async (prev, program) => {
+    await prev;
+    const row = byName.get(program.name);
+    if (!row) return;
+    const before = SEASON_PROGRAM_TEXT_BEFORE_2026_11_22[program.name];
+    const oldProgram: FileProgram = { ...program, audience: before.audience ?? program.audience };
+    const patch: { description?: string | null; layers?: ProgramLayers | null } = {};
+
+    if (before.audience != null) {
+      const oldDescription = seasonProgramDescription(oldProgram) || null;
+      const newDescription = seasonProgramDescription(program) || null;
+      if (row.description === oldDescription) {
+        patch.description = newDescription;
+        result.descriptions += 1;
+      } else if (row.description !== newDescription) result.leftAlone += 1;
+    }
+
+    const layers = row.layers ? (JSON.parse(JSON.stringify(row.layers)) as ProgramLayers) : null;
+    let layersChanged = false;
+    if (layers && before.girlsTeamNote != null && layers.girlsTeam?.note != null) {
+      if (layers.girlsTeam.note === before.girlsTeamNote) {
+        layers.girlsTeam.note = program.girlsTeam?.note ?? null;
+        layersChanged = true;
+        result.layerNotes += 1;
+      } else if (layers.girlsTeam.note !== program.girlsTeam?.note) result.leftAlone += 1;
+    }
+    Object.entries(before.positionNotes ?? {}).forEach(([label, oldNote]) => {
+      const layer = layers?.positions[normalizePosition(label)];
+      if (!layer || layer.note == null) return;
+      if (layer.note === oldNote) {
+        layer.note = program.positionLayers?.[label]?.note ?? null;
+        layersChanged = true;
+        result.layerNotes += 1;
+      } else if (layer.note !== program.positionLayers?.[label]?.note) result.leftAlone += 1;
+    });
+    if (layersChanged) patch.layers = layers;
+
+    if (Object.keys(patch).length > 0) await db.update(programs).set(patch).where(eq(programs.id, row.id));
+  }, Promise.resolve());
+
+  await db.execute(sql`INSERT INTO applied_backfills (key) VALUES (${SEASON_PROGRAM_AGE_LINES_MARKER}) ON CONFLICT DO NOTHING`);
+  return result;
 }
