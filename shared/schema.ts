@@ -31,6 +31,15 @@ import { PASSWORD_RULES } from "./password-rules";
 import { BODY_PAIN_PARTS } from "./wellness";
 import type { WidgetLayoutEntry } from "./dashboard-widgets";
 import type { RosterGroup } from "./roster-groups";
+import {
+  EXERCISE_JOINTS,
+  EXERCISE_PURPOSES,
+  MAX_CAUTION_NOTE_LENGTH,
+  MAX_POSITION_LENGTH,
+  MAX_TAGGED_POSITIONS,
+  PROGRAM_SEASON_PHASES,
+  normalizePositions,
+} from "./exercise-tags";
 
 // Per-field hex overrides for a coach's athletes' exercise-logging screen --
 // see users.exercisePageTheme's own comment below for the gating story.
@@ -1587,6 +1596,21 @@ export const exercises = pgTable("exercises", {
   videoUrl: text("video_url"),
   instructions: text("instructions"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  /* ---- TAGS (2026-11-22): warm-up, joint-care and return-to-training drills live in this same
+   * library, and one search finds them. The vocabularies and their reasons are in
+   * shared/exercise-tags.ts. All five are optional: an untagged exercise is an ordinary lift. */
+  // Which joints the drill is about, from EXERCISE_JOINTS (shoulder ... neck).
+  joints: json("joints").$type<string[]>(),
+  // What it is for beside the main training, from EXERCISE_PURPOSES. None = an ordinary lift.
+  purposes: json("purposes").$type<string[]>(),
+  // Positions it is meant for, free text stored lower case ("pitcher", "goalkeeper").
+  positions: json("positions").$type<string[]>(),
+  // Whether it suits an athlete under YOUTH_SAFE_MIN_AGE. Null = not classified, which is NOT
+  // "unsafe": only an explicit false keeps it out of what Forge offers a young athlete, and
+  // never stops a coach choosing it by hand.
+  youthSafe: boolean("youth_safe"),
+  // One or two sentences shown under the exercise wherever it is placed. Never blocks anything.
+  cautionNote: text("caution_note"),
 });
 
 export const exerciseSubmissionStatusEnum = pgEnum("exercise_submission_status", [
@@ -2172,6 +2196,19 @@ export const programs = pgTable("programs", {
   // starts unposted (the admin routes write false); the column default is true only so every
   // program that existed before the switch stays exactly as visible as it was.
   isPublished: boolean("is_published").notNull().default(true),
+  /* ---- TAGS (2026-11-22), so the program list's search finds "soccer preseason", "pitcher",
+   * "knee return". All optional. Vocabularies in shared/exercise-tags.ts. */
+  // The sport it was written for, free text like users.sport.
+  sport: text("sport"),
+  // When in the year it is meant to run: PROGRAM_SEASON_PHASES (off_season ... post_season). Its
+  // own list, not seasonPhaseEnum, which describes where an athlete is rather than a program.
+  seasonPhase: text("season_phase"),
+  // Positions it is written for, lower case.
+  positions: json("positions").$type<string[]>(),
+  // Joints it looks after, from EXERCISE_JOINTS.
+  joints: json("joints").$type<string[]>(),
+  // What it is for, from EXERCISE_PURPOSES (a warm-up program, a return-to-training program).
+  purposes: json("purposes").$type<string[]>(),
 });
 
 // A named, phase-tagged span of one or more weeks within a program (e.g.
@@ -9141,6 +9178,14 @@ export const updateFreeAgentBillingSchema = z.object({
   unlockedSkillSports: z.array(z.string().trim().min(1).max(60)).optional(),
 });
 
+// Positions as a coach types them, stored lower case and without duplicates.
+const positionsField = z
+  .array(z.string().trim().min(1).max(MAX_POSITION_LENGTH))
+  .max(MAX_TAGGED_POSITIONS)
+  .transform((v) => normalizePositions(v))
+  .optional()
+  .nullable();
+
 export const insertExerciseSchema = createInsertSchema(exercises)
   .pick({
     name: true,
@@ -9173,6 +9218,12 @@ export const insertExerciseSchema = createInsertSchema(exercises)
     // seed's curated Forge-library backfill. See the column's own comment
     // in the exercises table above.
     videoEligible: z.boolean().optional().nullable(),
+    // Tags (2026-11-22). Vocabularies in shared/exercise-tags.ts.
+    joints: z.array(z.enum(EXERCISE_JOINTS)).max(EXERCISE_JOINTS.length).optional().nullable(),
+    purposes: z.array(z.enum(EXERCISE_PURPOSES)).max(EXERCISE_PURPOSES.length).optional().nullable(),
+    positions: positionsField,
+    youthSafe: z.boolean().optional().nullable(),
+    cautionNote: z.string().trim().max(MAX_CAUTION_NOTE_LENGTH).optional().nullable(),
   });
 
 export const insertSkillExerciseSchema = createInsertSchema(skillExercises)
@@ -9284,6 +9335,12 @@ export const programBlockInputSchema = z.object({
 export const programStructureSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional().nullable(),
+  // Tags (2026-11-22), all optional, so every older client still saves. See programs.sport.
+  sport: z.string().trim().max(MAX_POSITION_LENGTH).optional().nullable(),
+  seasonPhase: z.enum(PROGRAM_SEASON_PHASES).optional().nullable(),
+  positions: positionsField,
+  joints: z.array(z.enum(EXERCISE_JOINTS)).max(EXERCISE_JOINTS.length).optional().nullable(),
+  purposes: z.array(z.enum(EXERCISE_PURPOSES)).max(EXERCISE_PURPOSES.length).optional().nullable(),
   blocks: z.array(programBlockInputSchema).default([]),
   weeks: z.array(programWeekInputSchema).default([]),
 });

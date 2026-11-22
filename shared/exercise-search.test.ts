@@ -6,8 +6,16 @@ import {
   NICKNAMES,
   editDistance,
   normalizeSearchText,
+  queryReadings,
   searchExercises,
 } from "./exercise-search";
+import {
+  SEASON_PHASE_NICKNAMES,
+  TAG_NICKNAMES,
+  isExerciseJoint,
+  isExercisePurpose,
+  isProgramSeasonPhase,
+} from "./exercise-tags";
 
 /**
  * Scott, 2026-11-14: "rdl 4 romanian deadlift, shoulder press 4 barbell shoulder press ...
@@ -128,9 +136,89 @@ describe("exercise search", () => {
     }
   });
 
+  it("every tag nickname points at a tag that exists", () => {
+    // A nickname that names nothing fails here, the same way a library nickname does above.
+    Object.entries(TAG_NICKNAMES).forEach(([nick, tag]) => {
+      expect(isExerciseJoint(tag) || isExercisePurpose(tag), `"${nick}" -> "${tag}"`).toBe(true);
+    });
+    Object.entries(SEASON_PHASE_NICKNAMES).forEach(([nick, phase]) => {
+      expect(isProgramSeasonPhase(phase), `"${nick}" -> "${phase}"`).toBe(true);
+    });
+  });
+
   it("counts a swapped pair as one edit and stops counting past the cap", () => {
     expect(editDistance("romainan", "romanian", 2)).toBeLessThanOrEqual(2);
     expect(editDistance("squat", "squta", 1)).toBe(1);
     expect(editDistance("squat", "deadlift", 2)).toBe(3);
+  });
+});
+
+/**
+ * TAGS (2026-11-22). Warm-up, joint-care and return-to-training drills live in this same library,
+ * so the one search has to find them by what they are for, which joint, and which position. The
+ * real library has no tags yet (the drills come from research later), so a handful are tagged here
+ * on real names and two drills are added, on top of the whole real library.
+ */
+describe("exercise search over tags", () => {
+  type Tagged = (typeof LIBRARY)[number] & { joints?: string[]; purposes?: string[]; positions?: string[] };
+  const TAGS: Record<string, Pick<Tagged, "joints" | "purposes" | "positions">> = {
+    "Ankle Dorsiflexion Mobilization": { joints: ["ankle"], purposes: ["warmup"] },
+    "Band Pull-Apart": { joints: ["shoulder"], purposes: ["warmup", "care"], positions: ["pitcher"] },
+    "Copenhagen Plank": { joints: ["hip"], purposes: ["care"], positions: ["goalkeeper"] },
+  };
+  const TAGGED: Tagged[] = [
+    ...LIBRARY.map((ex) => ({ ...ex, ...(TAGS[ex.name] ?? {}) })),
+    { name: "Spanish Squat Hold", muscleGroup: "", equipment: "", sports: [], joints: ["knee"], purposes: ["return_to_training"] },
+    { name: "Wall Ankle Rocks", muscleGroup: "", equipment: "", sports: [], joints: ["ankle"], purposes: ["care"] },
+  ];
+  const found = (q: string) => searchExercises(TAGGED, q).map((e) => e.name);
+
+  it("the tagged names are real library names", () => {
+    Object.keys(TAGS).forEach((name) => expect(LIBRARY.map((e) => e.name)).toContain(name));
+  });
+
+  it.each([
+    ["warmup ankle", "Ankle Dorsiflexion Mobilization"],
+    ["warm-up ankle", "Ankle Dorsiflexion Mobilization"],
+    ["pitcher", "Band Pull-Apart"],
+    ["goalkeeper", "Copenhagen Plank"],
+    ["acl", "Spanish Squat Hold"],
+    ["meniscus rehab", "Spanish Squat Hold"],
+    ["knee return", "Spanish Squat Hold"],
+    ["rotator cuff warm up", "Band Pull-Apart"],
+    ["groin prehab", "Copenhagen Plank"],
+    ["achilles", "Wall Ankle Rocks"],
+  ])("%s finds %s", (typed, name) => {
+    expect(found(typed)).toContain(name);
+  });
+
+  it("misspellings reach a tag through the typo path: sholder, wramup", () => {
+    expect(found("sholder care")).toContain("Band Pull-Apart");
+    expect(found("wramup")).toEqual(expect.arrayContaining(["Ankle Dorsiflexion Mobilization", "Band Pull-Apart"]));
+  });
+
+  it("a nickname still narrows: every added word must be found", () => {
+    const warmups = found("warmup");
+    const ankleWarmups = found("warmup ankle");
+    expect(ankleWarmups.length).toBeGreaterThan(0);
+    expect(ankleWarmups.length).toBeLessThan(warmups.length);
+    expect(ankleWarmups).not.toContain("Band Pull-Apart");
+    expect(found("acl pitcher")).toEqual([]);
+  });
+
+  it("a four-letter typo never reaches a tag (rack is not back)", () => {
+    const backDrill = [{ name: "Cat Cow", muscleGroup: "", equipment: "", sports: [], joints: ["back"] }];
+    expect(searchExercises(backDrill, "back").map((e) => e.name)).toEqual(["Cat Cow"]);
+    expect(searchExercises(backDrill, "rack")).toEqual([]);
+  });
+
+  it("names still come first: rdl and squat are unchanged with tags present", () => {
+    expect(found("rdl")[0]).toBe("Romanian Deadlift");
+    expect(found("squat")[0]).toBe("Back Squat");
+    expect(found("shoulder press")[0]).toBe("Barbell Shoulder Press");
+  });
+
+  it("a multi-word nickname and a one-word one combine in one reading", () => {
+    expect(queryReadings("rotator cuff warm up")).toContain("shoulder warmup");
   });
 });

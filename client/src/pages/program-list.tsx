@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { searchPrograms } from "@shared/program-search";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AppShell } from "@/components/app-shell";
@@ -37,6 +38,7 @@ import {
   Sparkles,
   CalendarPlus,
   Camera,
+  Search,
 } from "lucide-react";
 import { ProgramPhotoImportDialog } from "@/components/program-photo-import-dialog";
 import { todayIso } from "@/lib/local-date";
@@ -54,6 +56,12 @@ type ProgramSummary = {
   editable?: boolean;
   /** Admin library only: whether this program is posted for everybody or kept to the admin. */
   isPublished?: boolean;
+  // Tags the search reads (shared/program-search.ts).
+  sport?: string | null;
+  seasonPhase?: string | null;
+  positions?: string[] | null;
+  joints?: string[] | null;
+  purposes?: string[] | null;
 };
 
 type RosterEntry = { id: number; name: string; email: string };
@@ -111,6 +119,10 @@ export function ProgramListPage({
     enabled: showAssign,
   });
 
+  // One search box over the whole list: name, description, sport and tags, with the nicknames and
+  // typo tolerance the exercise search has ("soccer preseason", "pitcher", "knee return").
+  const [search, setSearch] = useState("");
+  const shown = useMemo(() => searchPrograms(programs, search), [programs, search]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -184,6 +196,11 @@ export function ProgramListPage({
       const res = await apiRequest("POST", `${apiBase}/programs`, {
         name: `${source.name} (Copy)`,
         description: detail.description ?? null,
+        sport: detail.sport ?? null,
+        seasonPhase: detail.seasonPhase ?? null,
+        positions: detail.positions ?? null,
+        joints: detail.joints ?? null,
+        purposes: detail.purposes ?? null,
         weeks: detail.weeks.map((w: any) => ({
           weekNumber: w.weekNumber,
           name: w.name,
@@ -331,8 +348,26 @@ export function ProgramListPage({
         </Card>
       )}
 
+      {!isError && programs.length > 0 && (
+        <div className="relative mb-4">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search programs: soccer preseason, pitcher, knee return…"
+            className="pl-9"
+            data-testid="input-program-search"
+          />
+        </div>
+      )}
+      {!isError && programs.length > 0 && shown.length === 0 && (
+        <p className="mb-4 text-sm text-muted-foreground" data-testid="text-no-program-match">
+          No programs match "{search}".
+        </p>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {programs.map((p) => (
+        {shown.map((p) => (
           <Card key={p.id} className="flex flex-col">
             <CardContent className="flex flex-1 flex-col gap-3 p-5">
               <div className="cursor-pointer" onClick={() => navigate(`${routeBase}/${p.id}`)}>

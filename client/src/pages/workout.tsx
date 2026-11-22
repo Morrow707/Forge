@@ -151,6 +151,7 @@ import { WellnessGate } from "@/components/wellness-gate";
 import { CaraTimer } from "@/components/cara-timer";
 import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
 import { ReadFailed } from "@/components/read-failed";
+import { CautionNote } from "@/components/exercise-tags";
 
 type ExerciseInfo = {
   id: number;
@@ -158,6 +159,8 @@ type ExerciseInfo = {
   muscleGroup: string;
   equipment: string;
   instructions: string | null;
+  // One or two sentences an exercise may carry (shared/exercise-tags.ts); shown small, never blocks.
+  cautionNote?: string | null;
   videoUrl: string | null;
   movementType: string | null;
   laterality: string | null;
@@ -677,6 +680,7 @@ export type ItemState = {
   muscleGroup: string;
   equipment: string;
   instructions: string | null;
+  cautionNote: string | null;
   videoUrl: string | null;
   movementType: string | null;
   laterality: string | null;
@@ -788,6 +792,7 @@ function buildItem(
     muscleGroup: prescribed.exercise.muscleGroup,
     equipment: prescribed.exercise.equipment,
     instructions: prescribed.exercise.instructions,
+    cautionNote: prescribed.exercise.cautionNote ?? null,
     videoUrl: prescribed.exercise.videoUrl,
     movementType: prescribed.exercise.movementType,
     laterality: prescribed.exercise.laterality,
@@ -3811,6 +3816,7 @@ function ExerciseLogContent({
       {item.instructions && (
         <p className="text-xs text-muted-foreground">{item.instructions}</p>
       )}
+      <CautionNote note={item.cautionNote} />
 
       {/* Every camera-tracked exercise, whether or not a form-check video is also
           required -- the set rows below report velocity / bar path / jump height

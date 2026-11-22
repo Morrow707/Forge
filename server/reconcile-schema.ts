@@ -336,6 +336,14 @@ ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_band" boolean NOT NULL DE
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "uses_box" boolean NOT NULL DEFAULT false;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "secondary_muscles" json;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "sports" json;
+-- Exercise tags (2026-11-22): joints, purposes, positions, youth classification and a caution
+-- note, so warm-up, joint-care and return-to-training drills live in this library and one search
+-- finds them. All nullable, so every existing exercise stays an ordinary, unclassified lift.
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "joints" json;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "purposes" json;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "positions" json;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "youth_safe" boolean;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "caution_note" text;
 
 -- Fully separate from "exercises" -- see the comment on skillExercises in
 -- shared/schema.ts for why this isn't just a category on the same table.
@@ -521,6 +529,13 @@ CREATE TABLE IF NOT EXISTS "programs" (
   "ai_authored" boolean NOT NULL DEFAULT false
 );
 ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "ai_authored" boolean NOT NULL DEFAULT false;
+-- Program tags (2026-11-22) for the program search: sport, season phase, positions, joints and
+-- purposes. All nullable; an untagged program reads exactly as before.
+ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "sport" text;
+ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "season_phase" text;
+ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "positions" json;
+ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "joints" json;
+ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "purposes" json;
 
 CREATE TABLE IF NOT EXISTS "program_blocks" (
   "id" serial PRIMARY KEY,

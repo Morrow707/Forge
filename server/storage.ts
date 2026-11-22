@@ -186,6 +186,7 @@ import { anvilEligibility } from "@shared/anvil-eligibility";
 import { ANVIL_AGREEMENT, ANVIL_AGREEMENT_VERSION } from "@shared/anvil-agreement";
 import { DEMO_ACCOUNT_EMAILS_SQL_LIST } from "./demo-accounts";
 import { ageFromDateOfBirth } from "@shared/privacy-tiers";
+import { YOUTH_SAFE_MIN_AGE, keepForAge } from "@shared/exercise-tags";
 import {
   BROADEST_COHORT,
   canNarrowByGender,
@@ -1465,6 +1466,25 @@ const NUTRITION_SUPPLEMENT_PRINCIPLES = `- Creatine monohydrate is the most-rese
 // on every cycle after the first, since a dateOverride is keyed by
 // program_day_id, which repeats every cycle -- applying it on every cycle
 // would drag every repeat of that day onto the same one-off date.
+/**
+ * The program tags a save writes (2026-11-22, shared/exercise-tags.ts). A field the client did not
+ * send is left as it is (undefined is skipped by drizzle), so an older client saving a program
+ * never clears tags a newer one set; an explicit null or an empty list clears it.
+ */
+function programTagColumns(structure: ProgramStructureInput) {
+  const listOrNull = (v: readonly string[] | null | undefined) => {
+    if (v == null) return v;
+    return v.length > 0 ? [...v] : null;
+  };
+  return {
+    sport: structure.sport === undefined ? undefined : structure.sport?.trim() || null,
+    seasonPhase: structure.seasonPhase,
+    positions: listOrNull(structure.positions),
+    joints: listOrNull(structure.joints),
+    purposes: listOrNull(structure.purposes),
+  };
+}
+
 function resolveAssignmentDate(
   assignment: { startDate: string; dateOverrides?: Record<string, string> | null },
   calendarWeekNumber: number,
@@ -17370,6 +17390,11 @@ Hard rules, no exceptions:
       description: p.description,
       createdAt: p.createdAt,
       isPublished: p.isPublished,
+      sport: p.sport,
+      seasonPhase: p.seasonPhase,
+      positions: p.positions,
+      joints: p.joints,
+      purposes: p.purposes,
       weekCount: p.weeks.length,
       dayCount: p.weeks.reduce((acc, w) => acc + w.days.length, 0),
       assignedAthleteCount: new Set(p.assignments.map((a) => a.athleteId)).size,
@@ -17472,6 +17497,57 @@ Hard rules, no exceptions:
     return program;
   },
 
+  /**
+   * The youngest KNOWN age among a set of people, from a real date of birth (never users.age,
+   * which is a stale self-report). Null when nobody in the set has a birthday on file: an unknown
+   * age is not a child, and nothing is held back for it (shared/exercise-tags.ts).
+   */
+  async youngestKnownAge(userIds: readonly number[]): Promise<number | null> {
+    if (userIds.length === 0) return null;
+    const rows = await db
+      .select({ dateOfBirth: users.dateOfBirth })
+      .from(users)
+      .where(inArray(users.id, [...userIds]));
+    const ages = rows.filter((r) => r.dateOfBirth).map((r) => ageFromDateOfBirth(r.dateOfBirth as string));
+    return ages.length > 0 ? Math.min(...ages) : null;
+  },
+
+  /**
+   * Whether a program being built is for somebody under YOUTH_SAFE_MIN_AGE, as far as this viewer
+   * can know it, so the picker can flag exercises marked not for under-14s (2026-11-22).
+   *   - An athlete building their own program: their own age.
+   *   - A coach or admin: the athletes THIS staff assigned the program to; with none yet, the
+   *     staff's own in-season roster, because a coach building for a roster builds for them.
+   * Only this viewer's own assignments and roster are read, so the answer says nothing about who
+   * another coach assigned a shared Forge program to. It returns a yes or no, never an age.
+   */
+  async programIsForYouth(programId: number | null, viewerId: number): Promise<boolean> {
+    const viewer = await this.getUser(viewerId);
+    if (!viewer) return false;
+    if (viewer.role === "athlete") {
+      const own = await this.youngestKnownAge([viewerId]);
+      return own != null && own < YOUTH_SAFE_MIN_AGE;
+    }
+    const coachIds = await this.getEffectiveCoachIds(viewerId);
+    const assigned =
+      programId == null
+        ? []
+        : await db
+            .selectDistinct({ athleteId: assignments.athleteId })
+            .from(assignments)
+            .where(and(eq(assignments.programId, programId), inArray(assignments.coachId, coachIds)));
+    const rosterIds = async () =>
+      viewer.role === "coach" ? (await this.getRosterForCoach(viewerId)).map((a) => a.id) : [];
+    const athleteIds = assigned.length > 0 ? assigned.map((a) => a.athleteId) : await rosterIds();
+    const youngest = await this.youngestKnownAge(athleteIds);
+    return youngest != null && youngest < YOUTH_SAFE_MIN_AGE;
+  },
+
+  /** The age Forge holds exercises back for when it picks for one athlete (a draft, a swap). */
+  async knownAgeOf(userId: number | null | undefined): Promise<number | null> {
+    return userId == null ? null : this.youngestKnownAge([userId]);
+  },
+
   // Post or unpost an admin's program (programs.isPublished). The caller has already checked
   // the program is the admin's own.
   async setProgramPublished(programId: number, published: boolean) {
@@ -17501,6 +17577,7 @@ Hard rules, no exceptions:
           coachId,
           name: structure.name,
           description: structure.description ?? null,
+          ...programTagColumns(structure),
         })
         .returning();
 
@@ -17596,7 +17673,11 @@ Hard rules, no exceptions:
     // keepForRoom falls back to the whole library rather than leave the draft with nothing.
     const draftRoom = await roomForActor(coachId, athleteId ?? null);
     const draftRoomBlock = equipmentPromptBlock(draftRoom);
-    const roomExercises = keepForRoom(visibleExercises, draftRoom);
+    // YOUTH (2026-11-22): drafting for an athlete under 14, the model is never shown an exercise
+    // marked not for under-14s. A coach can still place one by hand afterwards and sees a note.
+    const draftAge = draftAthleteProfile?.dateOfBirth ? ageFromDateOfBirth(draftAthleteProfile.dateOfBirth) : null;
+    const roomExercises = keepForAge(keepForRoom(visibleExercises, draftRoom), draftAge);
+    if (roomExercises.length === 0) return null;
 
     // Reference material from ingested books, retrieved on the coach's own
     // words plus whatever the athlete's profile makes relevant. Deliberately
@@ -18182,6 +18263,7 @@ Respond to the user's latest message by calling ask_question or update_program.`
         .set({
           name: structure.name,
           description: structure.description ?? null,
+          ...programTagColumns(structure),
         })
         .where(eq(programs.id, programId));
 
@@ -18819,7 +18901,11 @@ Respond to the user's latest message by calling ask_question or update_program.`
     const roomOnly = options.allowedIds
       ? allVisibleExercises.filter((e) => options.allowedIds!.has(e.id))
       : allVisibleExercises.filter((e) => roomAllows(e, swapRoom));
-    const visibleExercises = roomOnly.some((e) => e.id !== pe.exerciseId) ? roomOnly : allVisibleExercises;
+    const roomOrAll = roomOnly.some((e) => e.id !== pe.exerciseId) ? roomOnly : allVisibleExercises;
+    // YOUTH (2026-11-22): a swap on a program for an athlete under 14 never suggests an exercise
+    // marked not for under-14s.
+    const swapForYouth = await this.programIsForYouth(programId, authorId);
+    const visibleExercises = swapForYouth ? roomOrAll.filter((e) => e.youthSafe !== false) : roomOrAll;
     const validIds = visibleExercises.filter((e) => e.id !== pe.exerciseId).map((e) => e.id);
     if (validIds.length === 0) {
       return fail("There isn't another exercise available to swap in yet.");
@@ -24187,7 +24273,11 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     // today, and anything else still risky for the same pain map is
     // excluded too, so it can't recommend one risky exercise for another.
     const usedExerciseIds = new Set(slots.map((s) => s.exercise.id));
-    const visibleExercises = await this.getVisibleExercisesForCoach(assignment.coachId);
+    // YOUTH (2026-11-22): nothing marked not for under-14s is offered to an athlete under 14.
+    const visibleExercises = keepForAge(
+      await this.getVisibleExercisesForCoach(assignment.coachId),
+      await this.knownAgeOf(athleteId),
+    );
     const safeCandidates = visibleExercises.filter(
       (e) => !usedExerciseIds.has(e.id) && !isExerciseRiskyForPainParts(e, painParts),
     );

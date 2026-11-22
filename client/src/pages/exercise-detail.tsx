@@ -42,6 +42,14 @@ import {
 } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
 import {
+  EMPTY_EXERCISE_TAG_FORM,
+  ExerciseTagsEditor,
+  ExerciseTagsView,
+  exerciseTagFormFrom,
+  exerciseTagPayload,
+  type ExerciseTagForm,
+} from "@/components/exercise-tags";
+import {
   MOVEMENT_TYPES,
   MUSCLE_GROUPS,
   SPORTS,
@@ -107,6 +115,8 @@ type ExerciseForm = {
   // explicit false restricts it. See the column's own comment in
   // shared/schema.ts.
   videoEligible: boolean | null;
+  // Warm-up / care / return-to-training tags (components/exercise-tags.tsx).
+  tags: ExerciseTagForm;
 };
 
 const emptyForm: ExerciseForm = {
@@ -129,6 +139,7 @@ const emptyForm: ExerciseForm = {
   usesBand: false,
   usesBox: false,
   videoEligible: null,
+  tags: EMPTY_EXERCISE_TAG_FORM,
 };
 
 function formFrom(ex: ExerciseWithOwnership): ExerciseForm {
@@ -152,6 +163,7 @@ function formFrom(ex: ExerciseWithOwnership): ExerciseForm {
     usesBand: ex.usesBand,
     usesBox: ex.usesBox,
     videoEligible: ex.videoEligible,
+    tags: exerciseTagFormFrom(ex),
   };
 }
 
@@ -204,6 +216,7 @@ export function ExerciseDetailPage({
         usesBand: form.usesBand,
         usesBox: form.usesBox,
         videoEligible: form.videoEligible,
+        ...exerciseTagPayload(form.tags),
       };
       if (isNew) {
         const res = await apiRequest("POST", `${apiBase}/exercises`, payload);
@@ -406,6 +419,7 @@ export function ExerciseDetailPage({
                   <p className="mt-1 text-sm">{exercise.instructions}</p>
                 </div>
               )}
+              <ExerciseTagsView exercise={exercise} />
               {exercise.editable && (
                 <div className="flex justify-end gap-2 border-t border-border pt-4">
                   <Button
@@ -671,6 +685,7 @@ export function ExerciseDetailPage({
                     leave it blank if there isn't one yet.
                   </p>
                 </div>
+                <ExerciseTagsEditor value={form.tags} onChange={(tags) => setForm((f) => ({ ...f, tags }))} />
                 <div className="space-y-1.5">
                   <Label htmlFor="ex-instructions">Instructions (optional)</Label>
                   <Textarea

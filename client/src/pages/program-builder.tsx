@@ -70,6 +70,7 @@ import {
   Layers,
   CalendarPlus,
   FileUp,
+  HeartPulse,
 } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 import {
@@ -79,6 +80,16 @@ import {
 } from "@shared/schema-constants";
 import { todayIso } from "@/lib/local-date";
 import { ReadFailed } from "@/components/read-failed";
+import {
+  CautionNote,
+  EMPTY_PROGRAM_TAG_FORM,
+  ProgramTagsEditor,
+  programTagFormFrom,
+  programTagPayload,
+  type ProgramTagForm,
+} from "@/components/exercise-tags";
+import { CareDrillsDialog } from "@/components/care-drills-dialog";
+import { YOUTH_HELD_BACK_NOTE } from "@shared/exercise-tags";
 
 type RosterEntry = { id: number; name: string; email: string };
 type ScheduleDay = {
@@ -137,7 +148,41 @@ type LocalExercise = {
   // shared/schema.ts. Only an explicit false hides the VideoTrackingToggle
   // button entirely (unless it's already on -- see the render site).
   videoEligible: boolean | null;
+  // Tags carried for the screen only (2026-11-22): what "Add care drills" reads to find the joints
+  // a day loads, and the caution and youth notes under the row. Never sent back on save.
+  muscleGroup?: string | null;
+  joints?: string[] | null;
+  youthSafe?: boolean | null;
+  cautionNote?: string | null;
 };
+
+/** The sets a newly added exercise starts with. */
+const DEFAULT_NEW_EXERCISE_SETS = 3;
+
+/** A picked library exercise as a new row on a day, with the builder's defaults. */
+function localExerciseFrom(exercise: Exercise): LocalExercise {
+  return {
+    key: uid(),
+    exerciseId: exercise.id,
+    exerciseName: exercise.name,
+    equipment: exercise.equipment ?? null,
+    sets: DEFAULT_NEW_EXERCISE_SETS,
+    reps: "10",
+    weight: "",
+    restSeconds: "",
+    notes: "",
+    linkedToNext: false,
+    restAfterGroupOnly: false,
+    trackingLevel: "none",
+    videoCheckEnabled: false,
+    category: exercise.category ?? null,
+    videoEligible: exercise.videoEligible ?? null,
+    muscleGroup: exercise.muscleGroup ?? null,
+    joints: exercise.joints ?? null,
+    youthSafe: exercise.youthSafe ?? null,
+    cautionNote: exercise.cautionNote ?? null,
+  };
+}
 
 type LocalDay = {
   key: string;
@@ -190,6 +235,9 @@ type ProgramDraft = {
   weekNames: string[];
   blocks: LocalBlock[];
   weekBlockKeys: (string | null)[];
+  // The program's tags as the routes take them (plain arrays, so the draft serialises). Absent on a
+  // draft saved before tags existed.
+  tags?: ReturnType<typeof programTagPayload>;
   savedAt: number;
 };
 
@@ -288,6 +336,10 @@ function stateFromProgram(program: any) {
             videoCheckEnabled: pe.videoCheckEnabled ?? false,
             category: pe.exercise.category ?? null,
             videoEligible: pe.exercise.videoEligible ?? null,
+            muscleGroup: pe.exercise.muscleGroup ?? null,
+            joints: pe.exercise.joints ?? null,
+            youthSafe: pe.exercise.youthSafe ?? null,
+            cautionNote: pe.exercise.cautionNote ?? null,
           })),
         ) as LocalExercise[],
       });
@@ -300,6 +352,7 @@ function stateFromProgram(program: any) {
     weekNames,
     blocks,
     weekBlockKeys,
+    tags: programTagFormFrom(program),
   };
 }
 
@@ -348,7 +401,16 @@ export function ProgramBuilderPage({
   const [weekNames, setWeekNames] = useState<string[]>([]);
   const [blocks, setBlocks] = useState<LocalBlock[]>([]);
   const [weekBlockKeys, setWeekBlockKeys] = useState<(string | null)[]>([]);
+  const [tags, setTags] = useState<ProgramTagForm>(EMPTY_PROGRAM_TAG_FORM);
   const [pickerForDay, setPickerForDay] = useState<string | null>(null);
+  const [careForDay, setCareForDay] = useState<string | null>(null);
+  // Whether this program is for an athlete under 14 (shared/exercise-tags.ts). Flags, never blocks.
+  const { data: youthAudience } = useQuery<{ forYouth: boolean }>({
+    queryKey: [`${apiBase}/programs`, programId, "youth-audience"],
+    queryFn: () => getJson(`${apiBase}/programs/${programId}/youth-audience`),
+    enabled: Number.isFinite(programId),
+  });
+  const forYouth = youthAudience?.forYouth === true;
   const [hydrated, setHydrated] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -396,6 +458,7 @@ export function ProgramBuilderPage({
       setWeekNames(state.weekNames);
       setBlocks(state.blocks);
       setWeekBlockKeys(state.weekBlockKeys);
+      setTags(programTagFormFrom(draft?.tags ?? program));
       setHydrated(true);
       if (draft) {
         toast.info("Restored unsaved changes from your last session here", {
@@ -412,6 +475,7 @@ export function ProgramBuilderPage({
               setWeekNames(fresh.weekNames);
               setBlocks(fresh.blocks);
               setWeekBlockKeys(fresh.weekBlockKeys);
+              setTags(fresh.tags);
             },
           },
         });
@@ -431,8 +495,16 @@ export function ProgramBuilderPage({
   // back on its own between saves).
   useEffect(() => {
     if (!hydrated) return;
-    saveProgramDraft(apiBase, programId, { name, description, days, weekNames, blocks, weekBlockKeys });
-  }, [hydrated, apiBase, programId, name, description, days, weekNames, blocks, weekBlockKeys]);
+    saveProgramDraft(apiBase, programId, {
+      name,
+      description,
+      days,
+      weekNames,
+      blocks,
+      weekBlockKeys,
+      tags: programTagPayload(tags),
+    });
+  }, [hydrated, apiBase, programId, name, description, days, weekNames, blocks, weekBlockKeys, tags]);
 
   // Called by the AI chat panel after each turn with the fresh program it
   // just wrote -- updates the builder's fields immediately, no refetch
@@ -445,6 +517,7 @@ export function ProgramBuilderPage({
     setWeekNames(state.weekNames);
     setBlocks(state.blocks);
     setWeekBlockKeys(state.weekBlockKeys);
+    setTags(state.tags);
   }
 
   function updateDay(dayKey: string, updater: (day: LocalDay) => LocalDay) {
@@ -503,7 +576,15 @@ export function ProgramBuilderPage({
 
   // What the screen held when it first loaded, so a Forge program that was only LOOKED at is
   // not copied the moment somebody adds it to their calendar. Only a real change makes a copy.
-  const currentShape = JSON.stringify({ name, description, days, weekNames, blocks, weekBlockKeys });
+  const currentShape = JSON.stringify({
+    name,
+    description,
+    days,
+    weekNames,
+    blocks,
+    weekBlockKeys,
+    tags: programTagPayload(tags),
+  });
   const [loadedShape, setLoadedShape] = useState<string | null>(null);
   useEffect(() => {
     if (hydrated && loadedShape === null) setLoadedShape(currentShape);
@@ -518,6 +599,7 @@ export function ProgramBuilderPage({
       const payload = {
         name,
         description,
+        ...programTagPayload(tags),
         blocks: blocks.map((b) => ({
           name: b.name,
           phase: b.phase,
@@ -744,6 +826,7 @@ export function ProgramBuilderPage({
                     rows={1}
                   />
                 </div>
+                <ProgramTagsEditor value={tags} onChange={setTags} />
               </CardContent>
             </Card>
 
@@ -881,7 +964,9 @@ export function ProgramBuilderPage({
                           day={day}
                           onChange={(updater) => updateDay(day.key, updater)}
                           onAddExercise={() => setPickerForDay(day.key)}
+                          onAddCareDrills={() => setCareForDay(day.key)}
                           onRemove={() => removeDay(day.key)}
+                          forYouth={forYouth}
                         />
                       ))}
                     </div>
@@ -931,30 +1016,32 @@ export function ProgramBuilderPage({
         apiBase={apiBase}
         open={pickerForDay !== null}
         onOpenChange={(open) => !open && setPickerForDay(null)}
+        forYouth={forYouth}
         onSelect={(exercise: Exercise) => {
           if (!pickerForDay) return;
           updateDay(pickerForDay, (d) => ({
             ...d,
-            exercises: [
-              ...d.exercises,
-              {
-                key: uid(),
-                exerciseId: exercise.id,
-                exerciseName: exercise.name,
-                equipment: exercise.equipment ?? null,
-                sets: 3,
-                reps: "10",
-                weight: "",
-                restSeconds: "",
-                notes: "",
-                linkedToNext: false,
-                restAfterGroupOnly: false,
-                trackingLevel: "none",
-                videoCheckEnabled: false,
-                category: exercise.category ?? null,
-                videoEligible: exercise.videoEligible ?? null,
-              },
-            ],
+            exercises: [...d.exercises, localExerciseFrom(exercise)],
+          }));
+        }}
+      />
+
+      <CareDrillsDialog
+        apiBase={apiBase}
+        open={careForDay !== null}
+        onOpenChange={(open) => !open && setCareForDay(null)}
+        day={(days.find((d) => d.key === careForDay)?.exercises ?? []).map((ex) => ({
+          exerciseId: ex.exerciseId,
+          name: ex.exerciseName,
+          muscleGroup: ex.muscleGroup ?? null,
+          joints: ex.joints ?? null,
+        }))}
+        program={{ ...programTagPayload(tags), forYouth }}
+        onAccept={(chosen: Exercise[]) => {
+          if (!careForDay) return;
+          updateDay(careForDay, (d) => ({
+            ...d,
+            exercises: [...d.exercises, ...chosen.map(localExerciseFrom)],
           }));
         }}
       />
@@ -1093,13 +1180,18 @@ function DayCard({
   dayNumber,
   onChange,
   onAddExercise,
+  onAddCareDrills,
   onRemove,
+  forYouth = false,
 }: {
   day: LocalDay;
   dayNumber: number;
   onChange: (updater: (day: LocalDay) => LocalDay) => void;
   onAddExercise: () => void;
+  /** Opens the care-drill suggestions for this day; nothing is added without the coach's tap. */
+  onAddCareDrills: () => void;
   onRemove: () => void;
+  forYouth?: boolean;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const exerciseLabels = computeExerciseLabels(day.exercises);
@@ -1176,6 +1268,7 @@ function DayCard({
                     <div key={ex.key} className="space-y-1">
                       <SortableExerciseRow
                         exercise={ex}
+                        forYouth={forYouth}
                         label={exerciseLabels[ex.key]}
                         onUpdate={(patch) =>
                           onChange((d) => ({
@@ -1236,10 +1329,23 @@ function DayCard({
                 No exercises yet
               </p>
             )}
-            <Button variant="secondary" size="sm" className="w-full" onClick={onAddExercise}>
-              <Plus className="h-3.5 w-3.5" />
-              Add Exercise
-            </Button>
+            {/* Stacked: a day card is narrow in the week grid, too narrow for two buttons abreast. */}
+            <div className="flex flex-col gap-2">
+              <Button variant="secondary" size="sm" className="w-full" onClick={onAddExercise}>
+                <Plus className="h-3.5 w-3.5" />
+                Add Exercise
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={onAddCareDrills}
+                data-testid={`button-add-care-drills-${dayNumber}`}
+              >
+                <HeartPulse className="h-3.5 w-3.5" />
+                Add care drills
+              </Button>
+            </div>
           </>
         )}
       </CardContent>
@@ -1280,11 +1386,13 @@ function SortableExerciseRow({
   label,
   onUpdate,
   onRemove,
+  forYouth = false,
 }: {
   exercise: LocalExercise;
   label: string;
   onUpdate: (patch: Partial<LocalExercise>) => void;
   onRemove: () => void;
+  forYouth?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: exercise.key });
@@ -1343,6 +1451,14 @@ function SortableExerciseRow({
           {roomMarker}
         </p>
       )}
+      {/* YOUTH (2026-11-22): placed by hand on a program for an under-14, so it stays; the coach
+          is told, never refused. */}
+      {forYouth && exercise.youthSafe === false && (
+        <p className="mb-2 text-xs text-amber-500" data-testid={`youth-note-${exercise.key}`}>
+          {YOUTH_HELD_BACK_NOTE}
+        </p>
+      )}
+      <CautionNote note={exercise.cautionNote} className="mb-2" />
       <div className={cn("grid gap-1.5", exercise.linkedToNext ? "grid-cols-3" : "grid-cols-4")}>
         <FieldInput
           label="Sets"

@@ -32,6 +32,8 @@ import {
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 import { ReadFailed } from "@/components/read-failed";
 import { exerciseMatchScore, searchExercises } from "@shared/exercise-search";
+import { YOUTH_SAFE_MIN_AGE } from "@shared/exercise-tags";
+import { ExerciseTagChips } from "@/components/exercise-tags";
 import { roomAllows } from "@shared/exercise-needs";
 import { useEquipmentRoom } from "@/hooks/use-equipment-room";
 import {
@@ -64,6 +66,7 @@ export function ExercisePickerDialog({
   correctivesOnly = false,
   title,
   apiBase = "/api/coach",
+  forYouth = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -71,6 +74,9 @@ export function ExercisePickerDialog({
   correctivesOnly?: boolean;
   title?: string;
   apiBase?: string;
+  /** The program is for an athlete under 14 (shared/exercise-tags.ts): exercises marked not for
+   * under-14s go to the bottom with a note. They stay choosable; a coach's choice is never refused. */
+  forYouth?: boolean;
 }) {
   const { data: exercises = [], isError, refetch } = useQuery<Exercise[]>({
     queryKey: [`${apiBase}/exercises`],
@@ -238,7 +244,7 @@ export function ExercisePickerDialog({
 
   // Only reorders (never re-filters) -- see exercise-bank.tsx's identical
   // comment on its own displayed useMemo.
-  const displayed = useMemo(() => {
+  const ordered = useMemo(() => {
     // While somebody is typing, the best answer goes first: the lift named outright, then the
     // names that start with it, then near-misses (shared/exercise-search.ts).
     if (!recentlyUsedOnly) return search.trim() ? searchExercises(filtered, search) : filtered;
@@ -248,6 +254,15 @@ export function ExercisePickerDialog({
       return bt - at;
     });
   }, [filtered, recentlyUsedOnly, search]);
+  // On a program for an under-14, the exercises marked not for them sink to the bottom, in the
+  // same order among themselves. Flagged, never hidden: the coach decides.
+  const displayed = useMemo(
+    () =>
+      forYouth
+        ? [...ordered.filter((ex) => ex.youthSafe !== false), ...ordered.filter((ex) => ex.youthSafe === false)]
+        : ordered,
+    [ordered, forYouth],
+  );
 
   // Natural-language front door to the same accordion filters -- see
   // storage.interpretExerciseSearchQuery's own comment server-side. Applies
@@ -640,6 +655,12 @@ export function ExercisePickerDialog({
                     {ex.muscleGroup} · {ex.equipment}
                     {ex.movementType ? ` · ${ex.movementType}` : ""}
                   </p>
+                  <ExerciseTagChips exercise={ex} className="mt-1" />
+                  {forYouth && ex.youthSafe === false && (
+                    <p className="mt-0.5 text-[11px] text-amber-500" data-testid={`text-youth-flag-${ex.id}`}>
+                      Marked not for under-{YOUTH_SAFE_MIN_AGE}s. You can still choose it.
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   {ex.isCorrective && <Stethoscope className="h-3.5 w-3.5 text-cyan-400" />}
