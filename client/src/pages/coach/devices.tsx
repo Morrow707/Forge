@@ -26,6 +26,7 @@ import {
   type VendorInfo,
 } from "@shared/device-integrations";
 import { toast } from "sonner";
+import { formatDate, msg, translate, useT } from "@/i18n";
 
 type Connection = { id: number; vendor: string; name: string; status: string; lastSyncedAt: string | null; lastError: string | null };
 type Unmatched = { linkId: number; connectionId: number; vendor: string; vendorAthleteName: string | null };
@@ -42,22 +43,23 @@ type DevicesPage = {
 const QUERY_KEY = ["/api/coach/devices"];
 
 const STATUS_LABEL: Record<string, string> = {
-  active: "Connected",
-  error: "Needs attention",
-  awaiting_partner_access: "Awaiting partner access",
+  active: msg("Connected"),
+  error: msg("Needs attention"),
+  awaiting_partner_access: msg("Awaiting partner access"),
 };
 
 const NATIVE_SELECT = "h-9 w-full rounded-md border border-input bg-background px-2 text-sm";
 
 function messageOf(err: unknown): string {
-  return err instanceof Error ? err.message : "Something went wrong.";
+  return err instanceof Error ? err.message : translate("Something went wrong.");
 }
 
 function when(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString() : "never";
+  return iso ? formatDate(iso, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : translate("never");
 }
 
 function ConnectCard({ vendor, connected }: { vendor: VendorInfo; connected: Connection | undefined }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [values, setValues] = useState<Record<string, string>>({});
   const connect = useMutation({
@@ -67,8 +69,8 @@ function ConnectCard({ vendor, connected }: { vendor: VendorInfo; connected: Con
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
       toast(
         data.sync.status === "awaiting_partner_access"
-          ? (data.sync.message ?? "Saved.")
-          : `${vendor.name} connected. ${data.sync.stored} new reading${data.sync.stored === 1 ? "" : "s"}.`,
+          ? (data.sync.message ?? t("Saved."))
+          : t.plural(data.sync.stored, "{name} connected. {count} new reading.", "{name} connected. {count} new readings.", { name: vendor.name }),
       );
     },
     onError: (err) => toast.error(messageOf(err)),
@@ -80,8 +82,8 @@ function ConnectCard({ vendor, connected }: { vendor: VendorInfo; connected: Con
           <p className="font-medium">{vendor.name}</p>
           <p className="text-xs text-muted-foreground">{vendor.measures}</p>
         </div>
-        {!vendor.syncsToday && <Badge variant="secondary">Awaiting partner access</Badge>}
-        {connected && <Badge>Connected</Badge>}
+        {!vendor.syncsToday && <Badge variant="secondary">{t("Awaiting partner access")}</Badge>}
+        {connected && <Badge>{t("Connected")}</Badge>}
       </div>
       <p className="text-xs text-muted-foreground">{vendor.whereToFindIt}</p>
       {vendor.fields.map((f) => (
@@ -97,20 +99,29 @@ function ConnectCard({ vendor, connected }: { vendor: VendorInfo; connected: Con
         </div>
       ))}
       <Button size="sm" onClick={() => connect.mutate()} disabled={connect.isPending}>
-        {connected ? "Replace key" : "Connect"}
+        {connected ? t("Replace key") : t("Connect")}
       </Button>
     </div>
   );
 }
 
 function ConnectionRow({ c, canManage }: { c: Connection; canManage: boolean }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const sync = useMutation({
     mutationFn: async () => (await apiRequest("POST", `/api/coach/devices/connections/${c.id}/sync`)).json(),
     onSuccess: (data: { status: string; stored: number; unmatchedReadings: number; message: string | null }) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
-      if (data.status === "error") toast.error(data.message ?? "The sync failed.");
-      else toast(`${data.stored} new reading${data.stored === 1 ? "" : "s"}${data.unmatchedReadings ? `, ${data.unmatchedReadings} waiting for an athlete link` : ""}.`);
+      if (data.status === "error") toast.error(data.message ?? t("The sync failed."));
+      else
+        toast(
+          data.unmatchedReadings
+            ? t("{readings}, {count} waiting for an athlete link.", {
+                readings: t.plural(data.stored, "{count} new reading", "{count} new readings"),
+                count: data.unmatchedReadings,
+              })
+            : t.plural(data.stored, "{count} new reading.", "{count} new readings."),
+        );
     },
     onError: (err) => toast.error(messageOf(err)),
   });
@@ -123,20 +134,20 @@ function ConnectionRow({ c, canManage }: { c: Connection; canManage: boolean }) 
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3" data-testid={`device-connection-${c.vendor}`}>
       <div className="min-w-0">
         <p className="font-medium">
-          {c.name} <Badge variant={c.status === "error" ? "destructive" : "secondary"}>{STATUS_LABEL[c.status] ?? c.status}</Badge>
+          {c.name} <Badge variant={c.status === "error" ? "destructive" : "secondary"}>{STATUS_LABEL[c.status] ? t(STATUS_LABEL[c.status]) : c.status}</Badge>
         </p>
-        <p className="text-xs text-muted-foreground">Last synced {when(c.lastSyncedAt)}</p>
+        <p className="text-xs text-muted-foreground">{t("Last synced {when}", { when: when(c.lastSyncedAt) })}</p>
         {c.lastError && <p className="text-xs text-muted-foreground">{c.lastError}</p>}
       </div>
       <div className="flex gap-2">
         {c.status !== "awaiting_partner_access" && (
           <Button size="sm" variant="outline" onClick={() => sync.mutate()} disabled={sync.isPending}>
-            {sync.isPending ? "Syncing…" : "Sync now"}
+            {sync.isPending ? t("Syncing…") : t("Sync now")}
           </Button>
         )}
         {canManage && (
           <Button size="sm" variant="ghost" onClick={() => disconnect.mutate()} disabled={disconnect.isPending}>
-            Disconnect
+            {t("Disconnect")}
           </Button>
         )}
       </div>
@@ -145,25 +156,26 @@ function ConnectionRow({ c, canManage }: { c: Connection; canManage: boolean }) 
 }
 
 function LinkPicker({ link, roster }: { link: Unmatched; roster: DevicesPage["roster"] }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const save = useMutation({
     mutationFn: async (athleteId: number) => apiRequest("PUT", `/api/coach/devices/links/${link.linkId}`, { athleteId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
-      toast("Linked. Their readings arrive on the next sync.");
+      toast(t("Linked. Their readings arrive on the next sync."));
     },
     onError: (err) => toast.error(messageOf(err)),
   });
   return (
     <div className="flex flex-wrap items-center gap-2 py-1" data-testid={`device-unmatched-${link.linkId}`}>
-      <span className="min-w-0 flex-1 text-sm">{link.vendorAthleteName ?? "Unnamed athlete"}</span>
+      <span className="min-w-0 flex-1 text-sm">{link.vendorAthleteName ?? t("Unnamed athlete")}</span>
       <select
         className={`${NATIVE_SELECT} max-w-[220px]`}
         defaultValue=""
         onChange={(e) => e.target.value && save.mutate(Number(e.target.value))}
-        aria-label={`Forge athlete for ${link.vendorAthleteName ?? "this device athlete"}`}
+        aria-label={t("Forge athlete for {name}", { name: link.vendorAthleteName ?? t("this device athlete") })}
       >
-        <option value="">Pick the Forge athlete…</option>
+        <option value="">{t("Pick the Forge athlete…")}</option>
         {roster.map((r) => (
           <option key={r.id} value={r.id}>
             {r.name}
@@ -199,6 +211,7 @@ const VELOCITY_DIGITS = 2;
 const fmt = (v: number | null) => (v == null ? "–" : v.toFixed(VELOCITY_DIGITS));
 
 function CsvUpload({ roster }: { roster: DevicesPage["roster"] }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [csv, setCsv] = useState("");
   const [deviceName, setDeviceName] = useState("");
@@ -221,7 +234,13 @@ function CsvUpload({ roster }: { roster: DevicesPage["roster"] }) {
     mutationFn: async () => (await apiRequest("POST", "/api/coach/devices/csv/import", body(mapping))).json(),
     onSuccess: (r: { imported: number; alreadyHad: number; notImported: { rowNumber: number }[] }) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
-      toast(`${r.imported} imported, ${r.alreadyHad} already in Forge, ${r.notImported.length} not imported (listed below).`);
+      toast(
+        t("{imported} imported, {already} already in Forge, {skipped} not imported (listed below).", {
+          imported: r.imported,
+          already: r.alreadyHad,
+          skipped: r.notImported.length,
+        }),
+      );
       runPreview.mutate(mapping);
     },
     onError: (err) => toast.error(messageOf(err)),
@@ -245,40 +264,39 @@ function CsvUpload({ roster }: { roster: DevicesPage["roster"] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Upload a CSV</CardTitle>
+        <CardTitle>{t("Upload a CSV")}</CardTitle>
         <CardDescription>
-          For OVR Velocity, Vitruve, Perch or any device that exports a spreadsheet. Map the columns, check the preview, then import. A
-          second upload of the same file adds nothing.
+          {t("For OVR Velocity, Vitruve, Perch or any device that exports a spreadsheet. Map the columns, check the preview, then import. A second upload of the same file adds nothing.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
-            <Label htmlFor="csv-file">File</Label>
+            <Label htmlFor="csv-file">{t("File")}</Label>
             <Input id="csv-file" type="file" accept=".csv,text/csv" onChange={(e) => void onFile(e.target.files?.[0])} />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="csv-device">Device name (shown on every reading)</Label>
-            <Input id="csv-device" placeholder="OVR Velocity" value={deviceName} onChange={(e) => setDeviceName(e.target.value)} />
+            <Label htmlFor="csv-device">{t("Device name (shown on every reading)")}</Label>
+            <Input id="csv-device" placeholder={t("OVR Velocity")} value={deviceName} onChange={(e) => setDeviceName(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="csv-load">Load is in</Label>
+            <Label htmlFor="csv-load">{t("Load is in")}</Label>
             <select id="csv-load" className={NATIVE_SELECT} value={loadUnit} onChange={(e) => setLoadUnit(e.target.value as LoadUnit)}>
-              <option value="lb">pounds</option>
-              <option value="kg">kilograms</option>
+              <option value="lb">{t("pounds")}</option>
+              <option value="kg">{t("kilograms")}</option>
             </select>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="csv-height">Jump height is in</Label>
+            <Label htmlFor="csv-height">{t("Jump height is in")}</Label>
             <select id="csv-height" className={NATIVE_SELECT} value={heightUnit} onChange={(e) => setHeightUnit(e.target.value as HeightUnit)}>
-              <option value="cm">centimetres</option>
-              <option value="in">inches</option>
-              <option value="m">metres</option>
+              <option value="cm">{t("centimetres")}</option>
+              <option value="in">{t("inches")}</option>
+              <option value="m">{t("metres")}</option>
             </select>
           </div>
         </div>
         <Button size="sm" variant="outline" disabled={!csv || runPreview.isPending} onClick={() => runPreview.mutate(mapping)}>
-          Preview
+          {t("Preview")}
         </Button>
 
         {preview && (
@@ -286,14 +304,14 @@ function CsvUpload({ roster }: { roster: DevicesPage["roster"] }) {
             <div className="grid gap-2 sm:grid-cols-2">
               {CSV_FIELDS.map((field) => (
                 <div key={field} className="flex items-center gap-2">
-                  <Label className="w-40 shrink-0 text-xs">{CSV_FIELD_LABELS[field]}</Label>
+                  <Label className="w-40 shrink-0 text-xs">{t(CSV_FIELD_LABELS[field])}</Label>
                   <select
                     className={NATIVE_SELECT}
                     value={preview.mapping[field] ?? ""}
                     onChange={(e) => setField(field, e.target.value)}
-                    aria-label={`Column for ${CSV_FIELD_LABELS[field]}`}
+                    aria-label={t("Column for {field}", { field: t(CSV_FIELD_LABELS[field]) })}
                   >
-                    <option value="">Not in this file</option>
+                    <option value="">{t("Not in this file")}</option>
                     {preview.headers.map((h) => (
                       <option key={h} value={h}>
                         {h}
@@ -304,25 +322,30 @@ function CsvUpload({ roster }: { roster: DevicesPage["roster"] }) {
               ))}
             </div>
             <p className="text-sm" data-testid="csv-totals">
-              {preview.totals.rows} rows: {preview.totals.ready} ready, {preview.totals.unmatched} not matched to an athlete,{" "}
-              {preview.totals.problems} with a problem, {preview.totals.consent} withheld for consent.
-              {preview.truncated ? " Only the first 5,000 rows are read." : ""}
+              {t("{rows} rows: {ready} ready, {unmatched} not matched to an athlete, {problems} with a problem, {consent} withheld for consent.", {
+                rows: preview.totals.rows,
+                ready: preview.totals.ready,
+                unmatched: preview.totals.unmatched,
+                problems: preview.totals.problems,
+                consent: preview.totals.consent,
+              })}
+              {preview.truncated ? ` ${t("Only the first 5,000 rows are read.")}` : ""}
             </p>
             {preview.unmatchedRows.length > 0 && (
               <div className="space-y-1">
-                <p className="text-sm font-medium">Rows no Forge athlete matched</p>
+                <p className="text-sm font-medium">{t("Rows no Forge athlete matched")}</p>
                 {preview.unmatchedRows.map((r) => (
                   <div key={r.rowNumber} className="flex flex-wrap items-center gap-2">
                     <span className="min-w-0 flex-1 text-sm">
-                      Line {r.rowNumber}: {r.athleteName ?? r.athleteEmail ?? "no name"}
+                      {t("Line {n}: {name}", { n: r.rowNumber, name: r.athleteName ?? r.athleteEmail ?? t("no name") })}
                     </span>
                     <select
                       className={`${NATIVE_SELECT} max-w-[220px]`}
                       value={athleteForRow[String(r.rowNumber)] ?? ""}
                       onChange={(e) => setAthleteForRow((m) => ({ ...m, [String(r.rowNumber)]: Number(e.target.value) }))}
-                      aria-label={`Forge athlete for line ${r.rowNumber}`}
+                      aria-label={t("Forge athlete for line {n}", { n: r.rowNumber })}
                     >
-                      <option value="">Pick the Forge athlete…</option>
+                      <option value="">{t("Pick the Forge athlete…")}</option>
                       {roster.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.name}
@@ -337,13 +360,13 @@ function CsvUpload({ roster }: { roster: DevicesPage["roster"] }) {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="text-muted-foreground">
-                    <th className="p-1">Line</th>
-                    <th className="p-1">Athlete</th>
-                    <th className="p-1">Date</th>
-                    <th className="p-1">Exercise</th>
-                    <th className="p-1">Mean m/s</th>
-                    <th className="p-1">Peak m/s</th>
-                    <th className="p-1">Note</th>
+                    <th className="p-1">{t("Line")}</th>
+                    <th className="p-1">{t("Athlete")}</th>
+                    <th className="p-1">{t("Date")}</th>
+                    <th className="p-1">{t("Exercise")}</th>
+                    <th className="p-1">{t("Mean m/s")}</th>
+                    <th className="p-1">{t("Peak m/s")}</th>
+                    <th className="p-1">{t("Note")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -355,14 +378,14 @@ function CsvUpload({ roster }: { roster: DevicesPage["roster"] }) {
                       <td className="p-1">{r.exerciseName ?? "–"}</td>
                       <td className="p-1">{fmt(r.numbers.meanVelocityMps)}</td>
                       <td className="p-1">{fmt(r.numbers.peakVelocityMps)}</td>
-                      <td className="p-1 text-muted-foreground">{r.consentSentence ?? r.problem ?? (r.athleteId ? "" : "No athlete matched")}</td>
+                      <td className="p-1 text-muted-foreground">{r.consentSentence ?? r.problem ?? (r.athleteId ? "" : t("No athlete matched"))}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
             <Button size="sm" disabled={runImport.isPending || !preview.mapping.date} onClick={() => runImport.mutate()}>
-              Import ready rows
+              {t("Import ready rows")}
             </Button>
           </div>
         )}
@@ -372,24 +395,24 @@ function CsvUpload({ roster }: { roster: DevicesPage["roster"] }) {
 }
 
 export default function CoachDevices() {
+  const t = useT();
   const page = useQuery<DevicesPage>({ queryKey: QUERY_KEY, queryFn: () => getJson("/api/coach/devices") });
   return (
-    <AppShell title="Devices">
+    <AppShell title={t("Devices")}>
       <div className="mx-auto max-w-3xl space-y-4 p-4">
-        {page.isError && <ReadFailed what="your connected devices" onRetry={() => void page.refetch()} error={page.error} />}
-        {!page.isError && !page.data && <p className="text-sm text-muted-foreground">Loading…</p>}
+        {page.isError && <ReadFailed what={t("your connected devices")} onRetry={() => void page.refetch()} error={page.error} />}
+        {!page.isError && !page.data && <p className="text-sm text-muted-foreground">{t("Loading…")}</p>}
         {page.data && (
           <>
             <Card>
               <CardHeader>
-                <CardTitle>Connected devices</CardTitle>
+                <CardTitle>{t("Connected devices")}</CardTitle>
                 <CardDescription>
-                  Readings sync every ten minutes. A device's numbers are its own and are shown with its name. Forge stores nothing for an
-                  athlete who has turned tracking off or has no video and biometric consent on file.
+                  {t("Readings sync every ten minutes. A device's numbers are its own and are shown with its name. Forge stores nothing for an athlete who has turned tracking off or has no video and biometric consent on file.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                {page.data.connections.length === 0 && <p className="text-sm text-muted-foreground">No device connected yet.</p>}
+                {page.data.connections.length === 0 && <p className="text-sm text-muted-foreground">{t("No device connected yet.")}</p>}
                 {page.data.connections.map((c) => (
                   <ConnectionRow key={c.id} c={c} canManage={page.data.canManage} />
                 ))}
@@ -399,10 +422,9 @@ export default function CoachDevices() {
             {(page.data.unmatched.length > 0 || page.data.linked.length > 0) && (
               <Card>
                 <CardHeader>
-                  <CardTitle>Athletes on your devices</CardTitle>
+                  <CardTitle>{t("Athletes on your devices")}</CardTitle>
                   <CardDescription>
-                    Forge matches a device's athlete by email, then by exact name. Anyone it could not match is listed here for you to
-                    link; Forge never guesses.
+                    {t("Forge matches a device's athlete by email, then by exact name. Anyone it could not match is listed here for you to link; Forge never guesses.")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -411,7 +433,8 @@ export default function CoachDevices() {
                   ))}
                   {page.data.linked.map((l) => (
                     <div key={l.linkId} className="text-sm">
-                      <span className="font-medium">{l.vendorAthleteName ?? "Unnamed"}</span> is {l.athleteName ?? "a Forge athlete"}
+                      <span className="font-medium">{l.vendorAthleteName ?? t("Unnamed")}</span>{" "}
+                      {t("is {name}", { name: l.athleteName ?? t("a Forge athlete") })}
                       {l.consentSentence && <p className="text-xs text-muted-foreground">{l.consentSentence}</p>}
                     </div>
                   ))}
@@ -422,8 +445,8 @@ export default function CoachDevices() {
             {page.data.canManage ? (
               <Card>
                 <CardHeader>
-                  <CardTitle>Connect a device</CardTitle>
-                  <CardDescription>Keys are stored encrypted and never shown again.</CardDescription>
+                  <CardTitle>{t("Connect a device")}</CardTitle>
+                  <CardDescription>{t("Keys are stored encrypted and never shown again.")}</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-3 sm:grid-cols-2">
                   {page.data.vendors
@@ -434,7 +457,7 @@ export default function CoachDevices() {
                 </CardContent>
               </Card>
             ) : (
-              <p className="text-sm text-muted-foreground">Your head coach connects devices for the program.</p>
+              <p className="text-sm text-muted-foreground">{t("Your head coach connects devices for the program.")}</p>
             )}
 
             <CsvUpload roster={page.data.roster} />

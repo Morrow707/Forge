@@ -72,6 +72,7 @@ import {
 import { toast } from "sonner";
 import { addDays, formatISO } from "date-fns";
 import { brandGreeting, useBrandExtras } from "@/hooks/use-brand-extras";
+import { useT } from "@/i18n";
 
 // Kept in sync with the hook call below -- shared so the indicator's own
 // "have we crossed the threshold yet" styling matches what actually
@@ -100,6 +101,7 @@ export default function CoachDashboard() {
 }
 
 function CoachDashboardBody() {
+  const t = useT();
   const { user } = useAuth();
   const { extras: brandExtras } = useBrandExtras();
   const widgetVisibility = useWidgetVisibility("coach");
@@ -220,7 +222,7 @@ function CoachDashboardBody() {
     "digest-banner": (
       <SortableHideableWidget
         id="digest-banner"
-        label="Digest Banner"
+        label={t("Digest Banner")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("digest-banner")}
         onToggle={widgetVisibility.setHidden}
@@ -231,7 +233,7 @@ function CoachDashboardBody() {
     "review-queue": (
       <SortableHideableWidget
         id="review-queue"
-        label="Clips Waiting For You"
+        label={t("Clips Waiting For You")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("review-queue")}
         onToggle={widgetVisibility.setHidden}
@@ -242,7 +244,7 @@ function CoachDashboardBody() {
     "today-attendance": (
       <SortableHideableWidget
         id="today-attendance"
-        label="Today"
+        label={t("Today")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("today-attendance")}
         onToggle={widgetVisibility.setHidden}
@@ -254,7 +256,7 @@ function CoachDashboardBody() {
     "weekly-digest": (
       <SortableHideableWidget
         id="weekly-digest"
-        label="This Week"
+        label={t("This Week")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("weekly-digest")}
         onToggle={widgetVisibility.setHidden}
@@ -265,7 +267,7 @@ function CoachDashboardBody() {
     "bar-speed": (
       <SortableHideableWidget
         id="bar-speed"
-        label="Bar Speed"
+        label={t("Bar Speed")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("bar-speed")}
         onToggle={widgetVisibility.setHidden}
@@ -276,7 +278,7 @@ function CoachDashboardBody() {
     "team-pr-wall": (
       <SortableHideableWidget
         id="team-pr-wall"
-        label="Team PR Wall"
+        label={t("Team PR Wall")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("team-pr-wall")}
         onToggle={widgetVisibility.setHidden}
@@ -287,7 +289,7 @@ function CoachDashboardBody() {
     "reengagement": (
       <SortableHideableWidget
         id="reengagement"
-        label="Athletes Haven't Logged"
+        label={t("Athletes Haven't Logged")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("reengagement")}
         onToggle={widgetVisibility.setHidden}
@@ -298,7 +300,7 @@ function CoachDashboardBody() {
     "next-3-days": (
       <SortableHideableWidget
         id="next-3-days"
-        label="Next 3 Days"
+        label={t("Next 3 Days")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("next-3-days")}
         onToggle={widgetVisibility.setHidden}
@@ -308,7 +310,7 @@ function CoachDashboardBody() {
           entries={upcoming}
           unavailable={upcomingFailed}
           calendarHref="/coach/calendar"
-          description="Quick look across your roster — synced with the full calendar."
+          description={t("Quick look across your roster — synced with the full calendar.")}
           compact
           onEntryClick={(e) =>
             e.kind === "skill"
@@ -331,7 +333,7 @@ function CoachDashboardBody() {
     "stat-tiles": (
       <SortableHideableWidget
         id="stat-tiles"
-        label="Stat Tiles"
+        label={t("Stat Tiles")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("stat-tiles")}
         onToggle={widgetVisibility.setHidden}
@@ -339,21 +341,21 @@ function CoachDashboardBody() {
         <div className="grid grid-cols-1 shrink-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatTile
             icon={Users}
-            label="Athletes"
+            label={t("Athletes")}
             value={roster.length}
             unavailable={rosterFailed}
             href="/coach/roster"
           />
           <StatTile
             icon={ListChecks}
-            label="Programs"
+            label={t("Programs")}
             value={programs.length}
             unavailable={programsFailed}
             href="/coach/programs"
           />
           <StatTile
             icon={Dumbbell}
-            label="Exercises in bank"
+            label={t("Exercises in bank")}
             value={exerciseSummary?.total ?? 0}
             unavailable={exercisesFailed}
             href="/coach/exercises"
@@ -364,7 +366,7 @@ function CoachDashboardBody() {
               before training. */}
           <StatTile
             icon={HeartPulse}
-            label="Flagged today"
+            label={t("Flagged today")}
             value={flaggedToday}
             unavailable={wellnessFailed}
             href="/coach/roster"
@@ -376,7 +378,7 @@ function CoachDashboardBody() {
     "recent-programs": (
       <SortableHideableWidget
         id="recent-programs"
-        label="Recent Programs"
+        label={t("Recent Programs")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("recent-programs")}
         onToggle={widgetVisibility.setHidden}
@@ -384,20 +386,20 @@ function CoachDashboardBody() {
         <Card className="flex flex-col">
           <CardHeader className="flex-row shrink-0 items-center justify-between space-y-0 p-3 md:p-4">
             <div>
-              <CardTitle className="text-base md:text-lg">Recent Programs</CardTitle>
+              <CardTitle className="text-base md:text-lg">{t("Recent Programs")}</CardTitle>
               <CardDescription className="hidden sm:block">
-                Your most recently created training blocks.
+                {t("Your most recently created training blocks.")}
               </CardDescription>
             </div>
             <Link href="/coach/programs">
               <Button variant="outline" size="sm">
-                View all
+                {t("View all")}
               </Button>
             </Link>
           </CardHeader>
           <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">
             {programsFailed && (
-              <ReadFailed what="your programs" onRetry={() => void refetchPrograms()} />
+              <ReadFailed what={t("your programs")} onRetry={() => void refetchPrograms()} />
             )}
             {!programsFailed && programs.length === 0 && (
               <div className="flex flex-col items-center gap-2 py-6 text-center">
@@ -405,7 +407,7 @@ function CoachDashboardBody() {
                   <ListChecks className="h-5 w-5" />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  No programs yet. Build your first one to start assigning workouts.
+                  {t("No programs yet. Build your first one to start assigning workouts.")}
                 </p>
               </div>
             )}
@@ -415,8 +417,9 @@ function CoachDashboardBody() {
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{p.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {p.weekCount} weeks · {p.dayCount} days · {p.assignedAthleteCount}{" "}
-                      athlete{p.assignedAthleteCount === 1 ? "" : "s"} assigned
+                      {t.plural(p.weekCount, "{count} week", "{count} weeks")} ·{" "}
+                      {t.plural(p.dayCount, "{count} day", "{count} days")} ·{" "}
+                      {t.plural(p.assignedAthleteCount, "{count} athlete assigned", "{count} athletes assigned")}
                     </p>
                   </div>
                   <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -425,7 +428,7 @@ function CoachDashboardBody() {
             ))}
             <Link href="/coach/programs">
               <Button variant="secondary" className="w-full">
-                + New Program
+                {t("+ New Program")}
               </Button>
             </Link>
           </CardContent>
@@ -435,7 +438,7 @@ function CoachDashboardBody() {
     "invite-athletes": (
       <SortableHideableWidget
         id="invite-athletes"
-        label="Invite Athletes"
+        label={t("Invite Athletes")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("invite-athletes")}
         onToggle={widgetVisibility.setHidden}
@@ -455,7 +458,7 @@ function CoachDashboardBody() {
           onClick={() => widgetVisibility.setEditMode((v) => !v)}
         >
           {widgetVisibility.editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-          {widgetVisibility.editMode ? "Done" : "Edit"}
+          {widgetVisibility.editMode ? t("Done") : t("Edit")}
         </Button>
       }
     >
@@ -534,6 +537,7 @@ function TeamInviteCard({
   teams: TeamSummary[];
   coachCode: string | null;
 }) {
+  const t = useT();
   // The invite carries the program's name and mark, not just Forge's: an athlete or a parent
   // who scans the code sees who they are joining. Same query the shell uses.
   const { data: brand } = useQuery<EffectiveBranding>({
@@ -543,7 +547,7 @@ function TeamInviteCard({
   });
   const programName = brand?.brandTeamName?.trim() || null;
   const codeOptions = [
-    ...(coachCode ? [{ label: "All teams (personal code)", code: coachCode }] : []),
+    ...(coachCode ? [{ label: t("All teams (personal code)"), code: coachCode }] : []),
     ...teams.filter((t) => t.code).map((t) => ({ label: t.name, code: t.code as string })),
   ];
   const [selectedCode, setSelectedCode] = useState("");
@@ -558,7 +562,7 @@ function TeamInviteCard({
       .map((e) => e.trim())
       .filter(Boolean);
     if (recipients.length === 0) {
-      toast.error("Add at least one email");
+      toast.error(t("Add at least one email"));
       return;
     }
     const subject = programName ? `Join ${programName} on Forge` : "Join our team on Forge";
@@ -570,9 +574,9 @@ function TeamInviteCard({
   return (
     <Card className="flex flex-col">
       <CardHeader className="shrink-0 p-3 md:p-4">
-        <CardTitle className="text-base md:text-lg">Invite Athletes</CardTitle>
+        <CardTitle className="text-base md:text-lg">{t("Invite Athletes")}</CardTitle>
         <CardDescription className="hidden sm:block">
-          Each team has its own code. Athletes who use it join that team automatically.
+          {t("Each team has its own code. Athletes who use it join that team automatically.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">
@@ -582,7 +586,7 @@ function TeamInviteCard({
               <Users className="h-4 w-4" />
             </div>
             <p className="text-sm text-muted-foreground">
-              Create a team on the Roster page to get a shareable code.
+              {t("Create a team on the Roster page to get a shareable code.")}
             </p>
           </div>
         )}
@@ -603,7 +607,7 @@ function TeamInviteCard({
               <Button
                 size="icon"
                 variant="ghost"
-                aria-label={`Show QR code for ${opt.label}`}
+                aria-label={t("Show QR code for {name}", { name: opt.label })}
                 onClick={() => setQrOption(opt)}
               >
                 <QrCode className="h-4 w-4" />
@@ -611,10 +615,10 @@ function TeamInviteCard({
               <Button
                 size="icon"
                 variant="ghost"
-                aria-label={`Copy ${opt.label} code`}
+                aria-label={t("Copy {name} code", { name: opt.label })}
                 onClick={() => {
                   navigator.clipboard.writeText(opt.code);
-                  toast.success("Code copied");
+                  toast.success(t("Code copied"));
                 }}
               >
                 <Copy className="h-4 w-4" />
@@ -626,10 +630,10 @@ function TeamInviteCard({
               <Button
                 size="icon"
                 variant="ghost"
-                aria-label={`Copy public page link for ${opt.label}`}
+                aria-label={t("Copy public page link for {name}", { name: opt.label })}
                 onClick={() => {
                   navigator.clipboard.writeText(`${window.location.origin}/team/${opt.code}`);
-                  toast.success("Public page link copied");
+                  toast.success(t("Public page link copied"));
                 }}
               >
                 <Globe className="h-4 w-4" />
@@ -642,7 +646,7 @@ function TeamInviteCard({
           <div className="space-y-2 border-t border-border pt-2">
             <Select value={effectiveCode} onValueChange={setSelectedCode}>
               <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Code to include" />
+                <SelectValue placeholder={t("Code to include")} />
               </SelectTrigger>
               <SelectContent>
                 {codeOptions.map((opt) => (
@@ -655,12 +659,12 @@ function TeamInviteCard({
             <Textarea
               value={emails}
               onChange={(e) => setEmails(e.target.value)}
-              placeholder="athlete1@email.com, athlete2@email.com"
+              placeholder={t("athlete1@email.com, athlete2@email.com")}
               className="min-h-12 text-sm"
             />
             <Button size="sm" className="w-full" onClick={sendInvite}>
               <Mail className="h-3.5 w-3.5" />
-              Email Invite
+              {t("Email Invite")}
             </Button>
           </div>
         )}
@@ -671,7 +675,7 @@ function TeamInviteCard({
           <DialogHeader>
             <DialogTitle>{qrOption?.label}</DialogTitle>
             <DialogDescription>
-              Scan to sign up as an athlete with this code pre-filled.
+              {t("Scan to sign up as an athlete with this code pre-filled.")}
             </DialogDescription>
           </DialogHeader>
           {qrOption && (

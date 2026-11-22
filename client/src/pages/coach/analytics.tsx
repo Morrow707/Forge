@@ -93,6 +93,7 @@ import { SideBalanceNote } from "@/components/side-balance-note";
 import { CsvExportButton } from "@/components/csv-export-button";
 import { CAMERA_ACCURACY_INLINE } from "@shared/camera-accuracy-copy";
 import { convertWeight } from "@/lib/progression";
+import { formatDate, msg, translate, useT } from "@/i18n";
 
 type RosterEntry = { id: number; name: string; email: string };
 type TrackedExercise = { id: number; name: string; purposes?: string[] | null };
@@ -179,18 +180,18 @@ type AnalyticsPoint = {
 };
 
 const FAULT_NAMES: Record<string, string> = {
-  shallow_depth: "Shallow depth",
-  knee_valgus: "Knee valgus",
-  forward_lean: "Forward lean",
-  bar_path_drift: "Bar path drift",
-  bar_tilt: "Bar tilt",
-  grip_shift: "Grip shift",
-  pelvic_drop: "Pelvic drop",
-  ankle_mobility_limit: "Ankle mobility limit",
-  arm_fallout: "Arm fallout",
-  thoracic_extension_loss: "Thoracic extension loss",
-  lockout_symmetry: "Lockout symmetry",
-  lockout_lean: "Lockout lean",
+  shallow_depth: msg("Shallow depth"),
+  knee_valgus: msg("Knee valgus"),
+  forward_lean: msg("Forward lean"),
+  bar_path_drift: msg("Bar path drift"),
+  bar_tilt: msg("Bar tilt"),
+  grip_shift: msg("Grip shift"),
+  pelvic_drop: msg("Pelvic drop"),
+  ankle_mobility_limit: msg("Ankle mobility limit"),
+  arm_fallout: msg("Arm fallout"),
+  thoracic_extension_loss: msg("Thoracic extension loss"),
+  lockout_symmetry: msg("Lockout symmetry"),
+  lockout_lean: msg("Lockout lean"),
 };
 type RecentSession = {
   date: string;
@@ -205,27 +206,27 @@ type RecentSession = {
 // so hidden choices persist in localStorage as a plain string[] -- a global
 // display preference, not tied to any one athlete/exercise.
 const CHART_OPTIONS = [
-  { key: "weight", label: "Weight & Est. 1RM" },
-  { key: "velocity", label: "Bar Speed" },
-  { key: "forceVelocity", label: "Force-Velocity Profile" },
-  { key: "power", label: "Power Output" },
-  { key: "velocityLoss", label: "Velocity Loss" },
-  { key: "path", label: "Bar Path Deviation" },
-  { key: "jump", label: "Jump Height & Distance" },
-  { key: "groundContact", label: "Ground Contact & RSI" },
-  { key: "swingMechanics", label: "Swing Separation & Head Sway" },
-  { key: "swingTempo", label: "Swing Tempo" },
-  { key: "medBall", label: "Med Ball Throw" },
-  { key: "kbSwing", label: "Kettlebell Swing" },
-  { key: "horizontalLoad", label: "Sled / Loaded Carry" },
-  { key: "pathShape", label: "Bar Path Shape" },
-  { key: "armSymmetry", label: "Arm Symmetry" },
-  { key: "legAsymmetry", label: "Leg Drive Asymmetry" },
-  { key: "repDecay", label: "Rep-by-Rep Velocity Decay" },
-  { key: "tempo", label: "Tempo" },
-  { key: "rom", label: "Range of Motion" },
-  { key: "faultTrend", label: "Form Fault Trend" },
-  { key: "asymmetryTrend", label: "Asymmetry Trend" },
+  { key: "weight", label: msg("Weight & Est. 1RM") },
+  { key: "velocity", label: msg("Bar Speed") },
+  { key: "forceVelocity", label: msg("Force-Velocity Profile") },
+  { key: "power", label: msg("Power Output") },
+  { key: "velocityLoss", label: msg("Velocity Loss") },
+  { key: "path", label: msg("Bar Path Deviation") },
+  { key: "jump", label: msg("Jump Height & Distance") },
+  { key: "groundContact", label: msg("Ground Contact & RSI") },
+  { key: "swingMechanics", label: msg("Swing Separation & Head Sway") },
+  { key: "swingTempo", label: msg("Swing Tempo") },
+  { key: "medBall", label: msg("Med Ball Throw") },
+  { key: "kbSwing", label: msg("Kettlebell Swing") },
+  { key: "horizontalLoad", label: msg("Sled / Loaded Carry") },
+  { key: "pathShape", label: msg("Bar Path Shape") },
+  { key: "armSymmetry", label: msg("Arm Symmetry") },
+  { key: "legAsymmetry", label: msg("Leg Drive Asymmetry") },
+  { key: "repDecay", label: msg("Rep-by-Rep Velocity Decay") },
+  { key: "tempo", label: msg("Tempo") },
+  { key: "rom", label: msg("Range of Motion") },
+  { key: "faultTrend", label: msg("Form Fault Trend") },
+  { key: "asymmetryTrend", label: msg("Asymmetry Trend") },
 ] as const;
 type ChartKey = (typeof CHART_OPTIONS)[number]["key"];
 const HIDDEN_CHARTS_STORAGE_KEY = "forge-analytics-hidden-charts";
@@ -252,6 +253,7 @@ function ChartVisibilityMenu({
   hidden: Set<ChartKey>;
   onChange: (next: Set<ChartKey>) => void;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
 
   function toggle(key: ChartKey) {
@@ -267,12 +269,12 @@ function ChartVisibilityMenu({
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" size="sm" className="gap-1.5">
           <SlidersHorizontal className="h-3.5 w-3.5" />
-          Customize charts
+          {t("Customize charts")}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-72" align="end">
         <p className="label-xs mb-2">
-          Show / hide charts
+          {t("Show / hide charts")}
         </p>
         <div className="max-h-80 space-y-2 overflow-y-auto">
           {CHART_OPTIONS.map((opt) => (
@@ -281,7 +283,7 @@ function ChartVisibilityMenu({
               className="flex items-center gap-2 text-sm hover:cursor-pointer"
             >
               <Checkbox checked={!hidden.has(opt.key)} onCheckedChange={() => toggle(opt.key)} />
-              {opt.label}
+              {t(opt.label)}
             </label>
           ))}
         </div>
@@ -341,7 +343,7 @@ function weeklyAsymmetryTrend(
     const leg = legBuckets.get(weekKey);
     const arm = armBuckets.get(weekKey);
     return {
-      label: format(parseISO(weekKey), "MMM d"),
+      label: formatDate(parseISO(weekKey), { month: "short", day: "numeric" }),
       legAsymmetryPercent: leg ? Math.round((leg.sum / leg.count) * 10) / 10 : null,
       legDominantSide: leg ? (leg.leftCount >= leg.rightCount ? "left" : "right") : null,
       armAsymmetryPercent: arm ? Math.round((arm.sum / arm.count) * 10) / 10 : null,
@@ -426,52 +428,52 @@ type RepRow = NonNullable<AnalyticsPoint["repBreakdown"]>[number];
 function bestOfSetSummary(p: AnalyticsPoint, distanceUnit: DistanceUnit): { label: string; value: string }[] {
   const items: { label: string; value: string }[] = [];
   if (p.jumpHeightCm != null) {
-    items.push({ label: "Jump height", value: `${fmtNum(cmToDisplayUnit(p.jumpHeightCm, distanceUnit), 1)} ${distanceUnit}` });
+    items.push({ label: msg("Jump height"), value: `${fmtNum(cmToDisplayUnit(p.jumpHeightCm, distanceUnit), 1)} ${distanceUnit}` });
   }
   if (p.jumpDistanceCm != null) {
-    items.push({ label: "Jump distance", value: `${fmtNum(cmToDisplayUnit(p.jumpDistanceCm, distanceUnit), 1)} ${distanceUnit}` });
+    items.push({ label: msg("Jump distance"), value: `${fmtNum(cmToDisplayUnit(p.jumpDistanceCm, distanceUnit), 1)} ${distanceUnit}` });
   }
   if (p.groundContactSeconds != null) {
-    items.push({ label: "Ground contact", value: `${fmtNum(p.groundContactSeconds, 2)} s` });
+    items.push({ label: msg("Ground contact"), value: `${fmtNum(p.groundContactSeconds, 2)} s` });
   }
   if (p.reactiveStrengthIndex != null) {
-    items.push({ label: "RSI", value: fmtNum(p.reactiveStrengthIndex, 2) });
+    items.push({ label: msg("RSI"), value: fmtNum(p.reactiveStrengthIndex, 2) });
   }
   if (p.swingSeparationDeg != null) {
-    items.push({ label: "X-Factor (separation)", value: `${fmtNum(p.swingSeparationDeg, 0)}°` });
+    items.push({ label: msg("X-Factor (separation)"), value: `${fmtNum(p.swingSeparationDeg, 0)}°` });
   }
   if (p.swingTempoRatio != null) {
-    items.push({ label: "Tempo ratio", value: `${fmtNum(p.swingTempoRatio, 1)}:1` });
+    items.push({ label: msg("Tempo ratio"), value: `${fmtNum(p.swingTempoRatio, 1)}:1` });
   }
   if (p.swingBackswingMs != null || p.swingDownswingMs != null) {
     items.push({
-      label: "Backswing / downswing",
+      label: msg("Backswing / downswing"),
       value: `${p.swingBackswingMs ?? "-"} / ${p.swingDownswingMs ?? "-"} ms`,
     });
   }
   if (p.swingHeadSwayCm != null) {
-    items.push({ label: "Head sway", value: `${fmtNum(cmToDisplayUnit(p.swingHeadSwayCm, distanceUnit), 1)} ${distanceUnit}` });
+    items.push({ label: msg("Head sway"), value: `${fmtNum(cmToDisplayUnit(p.swingHeadSwayCm, distanceUnit), 1)} ${distanceUnit}` });
   }
   if (p.medBallPeakSpeedMps != null) {
-    items.push({ label: "Peak throw speed", value: `${fmtNum(p.medBallPeakSpeedMps, 2)} m/s` });
+    items.push({ label: msg("Peak throw speed"), value: `${fmtNum(p.medBallPeakSpeedMps, 2)} m/s` });
   }
   if (p.medBallReleaseHeightCm != null) {
-    items.push({ label: "Release height", value: `${fmtNum(cmToDisplayUnit(p.medBallReleaseHeightCm, distanceUnit), 1)} ${distanceUnit}` });
+    items.push({ label: msg("Release height"), value: `${fmtNum(cmToDisplayUnit(p.medBallReleaseHeightCm, distanceUnit), 1)} ${distanceUnit}` });
   }
   if (p.kbSwingPeakSpeedMps != null) {
-    items.push({ label: "Peak swing speed", value: `${fmtNum(p.kbSwingPeakSpeedMps, 2)} m/s` });
+    items.push({ label: msg("Peak swing speed"), value: `${fmtNum(p.kbSwingPeakSpeedMps, 2)} m/s` });
   }
   if (p.kbSwingPeakHeightCm != null) {
-    items.push({ label: "Peak swing height", value: `${fmtNum(cmToDisplayUnit(p.kbSwingPeakHeightCm, distanceUnit), 1)} ${distanceUnit}` });
+    items.push({ label: msg("Peak swing height"), value: `${fmtNum(cmToDisplayUnit(p.kbSwingPeakHeightCm, distanceUnit), 1)} ${distanceUnit}` });
   }
   if (p.horizontalLoadElapsedSeconds != null) {
-    items.push({ label: "Elapsed time", value: `${fmtNum(p.horizontalLoadElapsedSeconds, 2)} s` });
+    items.push({ label: msg("Elapsed time"), value: `${fmtNum(p.horizontalLoadElapsedSeconds, 2)} s` });
   }
   if (p.horizontalLoadDistanceYards != null) {
-    items.push({ label: "Distance", value: `${fmtNum(p.horizontalLoadDistanceYards, 1)} yd` });
+    items.push({ label: msg("Distance"), value: `${fmtNum(p.horizontalLoadDistanceYards, 1)} yd` });
   }
   if (p.horizontalLoadAvgSpeedYardsPerSec != null) {
-    items.push({ label: "Avg speed", value: `${fmtNum(p.horizontalLoadAvgSpeedYardsPerSec, 2)} yd/s` });
+    items.push({ label: msg("Avg speed"), value: `${fmtNum(p.horizontalLoadAvgSpeedYardsPerSec, 2)} yd/s` });
   }
   return items;
 }
@@ -489,6 +491,7 @@ function SetRepTable({
   distanceUnit: DistanceUnit;
   onWatchVideo: (preview: { url: string; flag: "best" | "worst" | null; label: string }) => void;
 }) {
+  const t = useT();
   const reps = p.repBreakdown;
   const romInUnit = (r: RepRow) => (r.romCm != null ? cmToDisplayUnit(r.romCm, distanceUnit) : null);
   const summaryItems = bestOfSetSummary(p, distanceUnit);
@@ -498,18 +501,18 @@ function SetRepTable({
       <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
         <div>
           <CardTitle className="text-base">
-            Set {p.setNumber}
+            {t("Set {n}", { n: p.setNumber })}
             {p.isPR && (
               <Badge className="ml-2 gap-1 bg-amber-400 text-black hover:bg-amber-400">
                 <Crown className="h-3 w-3" />
-                PR
+                {t("PR")}
               </Badge>
             )}
           </CardTitle>
           <CardDescription>
             {formatSetWeight(p)}
             {p.reps ? ` × ${p.reps}` : ""}
-            {p.rpe != null ? ` · RPE ${p.rpe}` : ""}
+            {p.rpe != null ? ` · ${t("RPE {rpe}", { rpe: p.rpe })}` : ""}
           </CardDescription>
         </div>
         {p.formCheckVideoUrl && (
@@ -519,13 +522,13 @@ function SetRepTable({
               onWatchVideo({
                 url: p.formCheckVideoUrl!,
                 flag: p.formCheckFlag,
-                label: `${format(parseISO(p.date), "MMM d")} · Set ${p.setNumber}`,
+                label: `${formatDate(parseISO(p.date), { month: "short", day: "numeric" })} · ${translate("Set {n}", { n: p.setNumber })}`,
               })
             }
             className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline"
           >
             <Video className="h-3.5 w-3.5" />
-            Watch
+            {t("Watch")}
             {p.formCheckFlag === "best" && <ThumbsUp className="h-3 w-3 text-success" />}
             {p.formCheckFlag === "worst" && <ThumbsDown className="h-3 w-3 text-destructive" />}
           </button>
@@ -537,25 +540,25 @@ function SetRepTable({
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {summaryItems.map((item) => (
                 <div key={item.label} className="rounded-md border border-border p-2">
-                  <p className="text-[10px] uppercase text-muted-foreground">{item.label}</p>
+                  <p className="text-[10px] uppercase text-muted-foreground">{t(item.label)}</p>
                   <p className="font-semibold">{item.value}</p>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Not camera-tracked, no per-rep data.</p>
+            <p className="text-sm text-muted-foreground">{t("Not camera-tracked, no per-rep data.")}</p>
           )
         ) : (
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border text-[10px] uppercase text-muted-foreground">
-                <th className="py-1.5 pr-3">Rep</th>
-                <th className="py-1.5 pr-3">Avg [m/s]</th>
-                <th className="py-1.5 pr-3">Peak [m/s]</th>
-                <th className="py-1.5 pr-3">ROM [{distanceUnit}]</th>
-                <th className="py-1.5 pr-3">Avg [W]</th>
-                <th className="py-1.5 pr-3">Peak [W]</th>
-                <th className="py-1.5">TPV [s]</th>
+                <th className="py-1.5 pr-3">{t("Rep")}</th>
+                <th className="py-1.5 pr-3">{t("Avg [m/s]")}</th>
+                <th className="py-1.5 pr-3">{t("Peak [m/s]")}</th>
+                <th className="py-1.5 pr-3">{t("ROM [{unit}]", { unit: distanceUnit })}</th>
+                <th className="py-1.5 pr-3">{t("Avg [W]")}</th>
+                <th className="py-1.5 pr-3">{t("Peak [W]")}</th>
+                <th className="py-1.5">{t("TPV [s]")}</th>
               </tr>
             </thead>
             <tbody>
@@ -571,7 +574,7 @@ function SetRepTable({
                 </tr>
               ))}
               <tr className="bg-secondary/40 font-semibold">
-                <td className="py-1.5 pr-3">Avg</td>
+                <td className="py-1.5 pr-3">{t("Avg")}</td>
                 <td className="py-1.5 pr-3">{fmtNum(average(reps.map((r) => r.meanVelocityMps)), 2)}</td>
                 <td className="py-1.5 pr-3">{fmtNum(average(reps.map((r) => r.peakVelocityMps)), 2)}</td>
                 <td className="py-1.5 pr-3">{fmtNum(average(reps.map(romInUnit)), 1)}</td>
@@ -624,7 +627,7 @@ function RepBreakdownByDate({
           <SelectContent>
             {dates.map((d) => (
               <SelectItem key={d} value={d}>
-                {format(parseISO(d), "EEE, MMM d, yyyy")}
+                {formatDate(parseISO(d), { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
               </SelectItem>
             ))}
           </SelectContent>
@@ -647,6 +650,7 @@ function RepBreakdownByDate({
  * athlete-facing equivalent -- athletes only see the live number during
  * their own set, this page is where the history/coaching value lives. */
 export default function CoachAnalytics() {
+  const t = useT();
   const [distanceUnit] = useDistanceUnit();
   // A "View Analytics" link elsewhere (e.g. the day-edit dialog, or a
   // video/comment notification) can deep-link straight to a specific
@@ -804,7 +808,7 @@ export default function CoachAnalytics() {
   const unitForChart = points[points.length - 1]?.weightUnit ?? points[0]?.weightUnit ?? "lbs";
   const chartData = points.map((p) => ({
     ...p,
-    label: `${format(parseISO(p.date), "MMM d")} · Set ${p.setNumber}`,
+    label: `${formatDate(parseISO(p.date), { month: "short", day: "numeric" })} · ${translate("Set {n}", { n: p.setNumber })}`,
     jumpHeightCm:
       p.jumpHeightCm != null ? Math.round(cmToDisplayUnit(p.jumpHeightCm, distanceUnit) * 10) / 10 : p.jumpHeightCm,
     jumpDistanceCm:
@@ -914,7 +918,7 @@ export default function CoachAnalytics() {
   const faultTrendData = Array.from(faultWeekBuckets.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([weekKey, bucket]) => {
-      const row: Record<string, string | number> = { label: format(parseISO(weekKey), "MMM d") };
+      const row: Record<string, string | number> = { label: formatDate(parseISO(weekKey), { month: "short", day: "numeric" }) };
       for (const code of faultCodesSeen) {
         row[code] = Math.round(((bucket.counts[code] ?? 0) / bucket.total) * 100);
       }
@@ -940,7 +944,7 @@ export default function CoachAnalytics() {
 
   return (
     <AppShell
-      title="Analytics"
+      title={t("Analytics")}
       actions={
         <Button
           size="sm"
@@ -948,17 +952,17 @@ export default function CoachAnalytics() {
           onClick={() => widgetVisibility.setEditMode((v) => !v)}
         >
           {widgetVisibility.editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-          {widgetVisibility.editMode ? "Done" : "Edit"}
+          {widgetVisibility.editMode ? t("Done") : t("Edit")}
         </Button>
       }
     >
       <Tabs defaultValue="performance">
         <TabsList className="mb-6">
-          <TabsTrigger value="performance">Performance</TabsTrigger>
-          <TabsTrigger value="videos">Videos</TabsTrigger>
-          <TabsTrigger value="skills">Skills</TabsTrigger>
-          <TabsTrigger value="trends">Team Trends</TabsTrigger>
-          <TabsTrigger value="classes">Classes</TabsTrigger>
+          <TabsTrigger value="performance">{t("Performance")}</TabsTrigger>
+          <TabsTrigger value="videos">{t("Videos")}</TabsTrigger>
+          <TabsTrigger value="skills">{t("Skills")}</TabsTrigger>
+          <TabsTrigger value="trends">{t("Team Trends")}</TabsTrigger>
+          <TabsTrigger value="classes">{t("Classes")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="performance">
@@ -972,7 +976,7 @@ export default function CoachAnalytics() {
           onSearchChange={setAthleteSearch}
         />
         <div className="space-y-1.5">
-          <label className="label-xs">Exercise</label>
+          <label className="label-xs">{t("Exercise")}</label>
           {athleteId ? (
             <PinnedExercisePicker
               options={exercises.map((e) => e.name)}
@@ -988,7 +992,7 @@ export default function CoachAnalytics() {
               }}
             />
           ) : (
-            <p className="text-sm text-muted-foreground">Pick an athlete first</p>
+            <p className="text-sm text-muted-foreground">{t("Pick an athlete first")}</p>
           )}
         </div>
       </div>
@@ -1007,7 +1011,7 @@ export default function CoachAnalytics() {
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Users className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">
-              Pick an athlete to see their training history and PRs.
+              {t("Pick an athlete to see their training history and PRs.")}
             </p>
           </CardContent>
         </Card>
@@ -1017,7 +1021,7 @@ export default function CoachAnalytics() {
         <div className="space-y-4">
           <HideableWidget
             id="acwr-trend"
-            label="Training Load (ACWR)"
+            label={t("Training Load (ACWR)")}
             editMode={widgetVisibility.editMode}
             isHidden={widgetVisibility.hidden.has("acwr-trend")}
             onToggle={widgetVisibility.setHidden}
@@ -1032,7 +1036,7 @@ export default function CoachAnalytics() {
                   {id === "weekly-load-trend" ? (
                     <SortableHideableWidget
                       id="weekly-load-trend"
-                      label="Weekly Load Trend"
+                      label={t("Weekly Load Trend")}
                       editMode={widgetVisibility.editMode}
                       isHidden={widgetVisibility.hidden.has("weekly-load-trend")}
                       onToggle={widgetVisibility.setHidden}
@@ -1042,7 +1046,7 @@ export default function CoachAnalytics() {
                   ) : (
                     <SortableHideableWidget
                       id="muscle-heat-map"
-                      label="Muscle Heat Map"
+                      label={t("Muscle Heat Map")}
                       editMode={widgetVisibility.editMode}
                       isHidden={widgetVisibility.hidden.has("muscle-heat-map")}
                       onToggle={widgetVisibility.setHidden}
@@ -1059,11 +1063,10 @@ export default function CoachAnalytics() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Target className="h-4 w-4" />
-                Goals
+                {t("Goals")}
               </CardTitle>
               <CardDescription>
-                Set a target lift or testing metric for this athlete and track their progress
-                toward it.
+                {t("Set a target lift or testing metric for this athlete and track their progress toward it.")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1078,7 +1081,7 @@ export default function CoachAnalytics() {
           <Card>
             <CardHeader>
               <div className="flex items-start justify-between gap-3">
-              <CardTitle>Recent Sessions</CardTitle>
+              <CardTitle>{t("Recent Sessions")}</CardTitle>
               <CsvExportButton
                 filename="recent-sessions.csv"
                 testId="button-export-recent-sessions"
@@ -1087,18 +1090,17 @@ export default function CoachAnalytics() {
               />
               </div>
               <CardDescription>
-                Every exercise this athlete has logged. Pick one above for full history, PRs, and
-                (if tracked) bar speed and path.
+                {t("Every exercise this athlete has logged. Pick one above for full history, PRs, and (if tracked) bar speed and path.")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {overviewFailed && (
-                <ReadFailed what="recent sessions" onRetry={() => void refetchOverview()} />
+                <ReadFailed what={t("recent sessions")} onRetry={() => void refetchOverview()} />
               )}
               {!overviewFailed && !overviewLoading && overview.length === 0 && (
                 <div className="flex flex-col items-center gap-3 py-10 text-center">
                   <CalendarDays className="h-10 w-10 text-muted-foreground" />
-                  <p className="text-muted-foreground">No workouts logged yet.</p>
+                  <p className="text-muted-foreground">{t("No workouts logged yet.")}</p>
                 </div>
               )}
               <div className="space-y-2">
@@ -1109,17 +1111,17 @@ export default function CoachAnalytics() {
                   >
                     <div>
                       <p className="text-sm font-semibold">
-                        {format(parseISO(s.date), "EEE, MMM d")} — {s.dayTitle}
+                        {formatDate(parseISO(s.date), { weekday: "short", month: "short", day: "numeric" })} — {s.dayTitle}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {s.exercises.join(", ") || "No exercises logged"}
+                        {s.exercises.join(", ") || t("No exercises logged")}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-                      <span>{s.totalReps} reps</span>
-                      {s.totalVolume > 0 && <span>{s.totalVolume.toLocaleString()} vol.</span>}
+                      <span>{t("{count} reps", { count: s.totalReps })}</span>
+                      {s.totalVolume > 0 && <span>{t("{volume} vol.", { volume: t.number(s.totalVolume) })}</span>}
                       <Badge variant={s.completed ? "success" : "outline"}>
-                        {s.completed ? "Completed" : "In progress"}
+                        {s.completed ? t("Completed") : t("In progress")}
                       </Badge>
                     </div>
                   </div>
@@ -1131,7 +1133,7 @@ export default function CoachAnalytics() {
                   onClick={() => setShowAllSessions((v) => !v)}
                   className="mt-3 w-full text-center text-xs font-semibold text-primary hover:underline"
                 >
-                  {showAllSessions ? "Show fewer" : `Show ${overview.length - 5} more`}
+                  {showAllSessions ? t("Show fewer") : t("Show {count} more", { count: overview.length - 5 })}
                 </button>
               )}
             </CardContent>
@@ -1152,7 +1154,7 @@ export default function CoachAnalytics() {
       {athleteId && exerciseId && pointsFailed && (
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="these sets" onRetry={() => void refetchPoints()} />
+            <ReadFailed what={t("these sets")} onRetry={() => void refetchPoints()} />
           </CardContent>
         </Card>
       )}
@@ -1162,7 +1164,7 @@ export default function CoachAnalytics() {
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Gauge className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">
-              No sets logged for {selectedExerciseName ?? "this exercise"} yet.
+              {t("No sets logged for {name} yet.", { name: selectedExerciseName ? t.exercise(selectedExerciseName) : t("this exercise") })}
             </p>
           </CardContent>
         </Card>
@@ -1173,11 +1175,11 @@ export default function CoachAnalytics() {
           <SideBalanceNote points={points} exercise={allExercises.find((e) => String(e.id) === exerciseId)} />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <h2 className="font-display text-xl font-bold uppercase">{selectedExerciseName}</h2>
+              <h2 className="font-display text-xl font-bold uppercase">{selectedExerciseName ? t.exercise(selectedExerciseName) : null}</h2>
               {prCount > 0 && (
                 <Badge className="gap-1 bg-amber-400 text-black hover:bg-amber-400">
                   <Crown className="h-3.5 w-3.5" />
-                  {prCount} PR{prCount === 1 ? "" : "s"}
+                  {t.plural(prCount, "{count} PR", "{count} PRs")}
                 </Badge>
               )}
             </div>
@@ -1255,10 +1257,9 @@ export default function CoachAnalytics() {
           {hasNumericWeight && !hiddenCharts.has("weight") && (
             <Card>
               <CardHeader>
-                <CardTitle>Weight &amp; Estimated 1RM</CardTitle>
+                <CardTitle>{t("Weight & Estimated 1RM")}</CardTitle>
                 <CardDescription>
-                  Weight lifted per set ({unit}), with an Epley-estimated 1RM. Crowned points are
-                  PRs for that exact rep count.
+                  {t("Weight lifted per set ({unit}), with an Epley-estimated 1RM. Crowned points are PRs for that exact rep count.", { unit })}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-72">
@@ -1276,7 +1277,7 @@ export default function CoachAnalytics() {
                         border: "1px solid hsl(var(--border))",
                       }}
                       formatter={(value: unknown, name: unknown, item: any) => [
-                        `${value} ${unit}${item?.payload?.isPR ? " — PR!" : ""}`,
+                        `${value} ${unit}${item?.payload?.isPR ? ` — ${t("PR!")}` : ""}`,
                         String(name),
                       ]}
                     />
@@ -1286,7 +1287,7 @@ export default function CoachAnalytics() {
                         <Line
                           type="monotone"
                           dataKey="weight"
-                          name="Weight"
+                          name={t("Weight")}
                           stroke="hsl(var(--primary))"
                           strokeWidth={2}
                           connectNulls
@@ -1312,7 +1313,7 @@ export default function CoachAnalytics() {
                         <Line
                           type="monotone"
                           dataKey="estimatedOneRm"
-                          name="Est. 1RM"
+                          name={t("Est. 1RM")}
                           stroke="hsl(var(--chart-2))"
                           strokeWidth={1.5}
                           strokeDasharray="4 3"
@@ -1322,8 +1323,8 @@ export default function CoachAnalytics() {
                       </>
                     ) : (
                       <>
-                        <Bar dataKey="weight" name="Weight" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
-                        <Bar dataKey="estimatedOneRm" name="Est. 1RM" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="weight" name={t("Weight")} fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="estimatedOneRm" name={t("Est. 1RM")} fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} />
                       </>
                     )}
                   </ComposedChart>
@@ -1335,10 +1336,9 @@ export default function CoachAnalytics() {
           {hasVelocity && !hiddenCharts.has("velocity") && (
             <Card>
               <CardHeader>
-                <CardTitle>Bar Speed</CardTitle>
+                <CardTitle>{t("Bar Speed")}</CardTitle>
                 <CardDescription>
-                  Peak and mean concentric velocity, plus mean eccentric (lowering) velocity, per
-                  tracked set.
+                  {t("Peak and mean concentric velocity, plus mean eccentric (lowering) velocity, per tracked set.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-64">
@@ -1354,19 +1354,19 @@ export default function CoachAnalytics() {
                     <TrendSeries
                       chartType={chartType}
                       dataKey="peakVelocityMps"
-                      name="Peak velocity"
+                      name={t("Peak velocity")}
                       color="hsl(var(--primary))"
                     />
                     <TrendSeries
                       chartType={chartType}
                       dataKey="meanVelocityMps"
-                      name="Mean velocity"
+                      name={t("Mean velocity")}
                       color="hsl(var(--chart-2))"
                     />
                     <TrendSeries
                       chartType={chartType}
                       dataKey="eccentricMeanVelocityMps"
-                      name="Eccentric velocity"
+                      name={t("Eccentric velocity")}
                       color="#a855f7"
                     />
                   </ComposedChart>
@@ -1378,18 +1378,16 @@ export default function CoachAnalytics() {
           {!!fvData && fvData.points.length > 0 && !hiddenCharts.has("forceVelocity") && (
             <Card>
               <CardHeader>
-                <CardTitle>Force-Velocity Profile</CardTitle>
+                <CardTitle>{t("Force-Velocity Profile")}</CardTitle>
                 <CardDescription>
-                  Load vs. mean concentric velocity across every tracked set, the standard
-                  barbell proxy for a force-velocity relationship, fit from at least 3 tracked
-                  sets at different loads.
+                  {t("Load vs. mean concentric velocity across every tracked set, the standard barbell proxy for a force-velocity relationship, fit from at least 3 tracked sets at different loads.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {fvData.profile ? (
                   <div className="grid grid-cols-3 gap-3 text-sm">
                     <div className="rounded-md border border-border p-3">
-                      <p className="text-xs text-muted-foreground">Est. 1RM (velocity-based)</p>
+                      <p className="text-xs text-muted-foreground">{t("Est. 1RM (velocity-based)")}</p>
                       <p className="font-semibold">
                         {Math.round(
                           unit === "kg"
@@ -1400,18 +1398,17 @@ export default function CoachAnalytics() {
                       </p>
                     </div>
                     <div className="rounded-md border border-border p-3">
-                      <p className="text-xs text-muted-foreground">V0 (max velocity)</p>
+                      <p className="text-xs text-muted-foreground">{t("V0 (max velocity)")}</p>
                       <p className="font-semibold">{fvData.profile.v0.toFixed(2)} m/s</p>
                     </div>
                     <div className="rounded-md border border-border p-3">
-                      <p className="text-xs text-muted-foreground">Fit quality (R²)</p>
+                      <p className="text-xs text-muted-foreground">{t("Fit quality (R²)")}</p>
                       <p className="font-semibold">{Math.round(fvData.profile.rSquared * 100)}%</p>
                     </div>
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    Not enough tracked sets at different loads yet to fit a profile, keep logging
-                    velocity-tracked sets across a range of weights.
+                    {t("Not enough tracked sets at different loads yet to fit a profile, keep logging velocity-tracked sets across a range of weights.")}
                   </p>
                 )}
                 <div className="h-64">
@@ -1421,7 +1418,7 @@ export default function CoachAnalytics() {
                       <XAxis
                         type="number"
                         dataKey="meanVelocityMps"
-                        name="Velocity"
+                        name={t("Velocity")}
                         unit=" m/s"
                         tick={{ fontSize: 11 }}
                         domain={[0, "dataMax"]}
@@ -1429,7 +1426,7 @@ export default function CoachAnalytics() {
                       <YAxis
                         type="number"
                         dataKey="loadKg"
-                        name="Load"
+                        name={t("Load")}
                         unit=" kg"
                         tick={{ fontSize: 11 }}
                         width={48}
@@ -1443,14 +1440,14 @@ export default function CoachAnalytics() {
                         }}
                       />
                       <Scatter
-                        name="Tracked sets"
+                        name={t("Tracked sets")}
                         data={fvData.points}
                         dataKey="loadKg"
                         fill="hsl(var(--primary))"
                       />
                       {fvData.profile && (
                         <Line
-                          name="Fitted profile"
+                          name={t("Fitted profile")}
                           type="linear"
                           data={[
                             { meanVelocityMps: 0, loadKg: fvData.profile.intercept },
@@ -1474,12 +1471,9 @@ export default function CoachAnalytics() {
           {!!athleteId && !!exerciseId && (
             <Card>
               <CardHeader>
-                <CardTitle>AI Overwatch</CardTitle>
+                <CardTitle>{t("AI Overwatch")}</CardTitle>
                 <CardDescription>
-                  Reviews this athlete's recent camera-tracked sets of this exercise for a form
-                  fault that keeps recurring across sessions, not a single set, a real pattern.
-                  Anonymized: Claude only sees fault-code frequency counts, never video or joint
-                  coordinates.
+                  {t("Reviews this athlete's recent camera-tracked sets of this exercise for a form fault that keeps recurring across sessions, not a single set, a real pattern. Anonymized: Claude only sees fault-code frequency counts, never video or joint coordinates.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -1491,21 +1485,21 @@ export default function CoachAnalytics() {
                       const message =
                         result.error instanceof Error
                           ? result.error.message
-                          : "Not enough tracked sets of this exercise yet to look for a pattern.";
+                          : t("Not enough tracked sets of this exercise yet to look for a pattern.");
                       toast.info(message);
                     }
                   }}
                   disabled={overwatchLoading}
                 >
                   <Sparkles className="h-4 w-4" />
-                  {overwatchLoading ? "Analyzing…" : overwatchData ? "Re-check" : "Check for Chronic Flaws"}
+                  {overwatchLoading ? t("Analyzing…") : overwatchData ? t("Re-check") : t("Check for Chronic Flaws")}
                 </Button>
                 {overwatchData && (
                   <div className="space-y-3">
                     <p className="text-sm font-semibold">{overwatchData.summary}</p>
                     {overwatchData.chronicFlaws.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
-                        No concerning pattern found in this exercise's recent tracked sets.
+                        {t("No concerning pattern found in this exercise's recent tracked sets.")}
                       </p>
                     ) : (
                       overwatchData.chronicFlaws.map((f, i) => (
@@ -1519,11 +1513,11 @@ export default function CoachAnalytics() {
                           </div>
                           <div className="space-y-1.5 text-sm">
                             <p>
-                              <span className="font-semibold text-muted-foreground">Coaching cue: </span>
+                              <span className="font-semibold text-muted-foreground">{t("Coaching cue:")} </span>
                               {f.coachingCue}
                             </p>
                             <p>
-                              <span className="font-semibold text-muted-foreground">Why it matters: </span>
+                              <span className="font-semibold text-muted-foreground">{t("Why it matters:")} </span>
                               {f.physiologicalNote}
                             </p>
                           </div>
@@ -1539,11 +1533,9 @@ export default function CoachAnalytics() {
           {hasPower && !hiddenCharts.has("power") && (
             <Card>
               <CardHeader>
-                <CardTitle>Power Output</CardTitle>
+                <CardTitle>{t("Power Output")}</CardTitle>
                 <CardDescription>
-                  Estimated power (load × gravity × concentric velocity) per tracked set,
-                  requires a numeric weight to have been entered for the tracker to estimate
-                  from.
+                  {t("Estimated power (load × gravity × concentric velocity) per tracked set, requires a numeric weight to have been entered for the tracker to estimate from.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-64">
@@ -1559,13 +1551,13 @@ export default function CoachAnalytics() {
                     <TrendSeries
                       chartType={chartType}
                       dataKey="peakPowerWatts"
-                      name="Peak power"
+                      name={t("Peak power")}
                       color="hsl(var(--primary))"
                     />
                     <TrendSeries
                       chartType={chartType}
                       dataKey="meanPowerWatts"
-                      name="Mean power"
+                      name={t("Mean power")}
                       color="hsl(var(--chart-2))"
                     />
                   </ComposedChart>
@@ -1577,11 +1569,9 @@ export default function CoachAnalytics() {
           {hasVelocityLoss && !hiddenCharts.has("velocityLoss") && (
             <Card>
               <CardHeader>
-                <CardTitle>Velocity Loss (Fatigue)</CardTitle>
+                <CardTitle>{t("Velocity Loss (Fatigue)")}</CardTitle>
                 <CardDescription>
-                  How much peak concentric velocity dropped from the first rep to the last, per
-                  tracked set, the standard within-set fatigue signal in velocity-based
-                  training. Negative means the last rep was actually faster.
+                  {t("How much peak concentric velocity dropped from the first rep to the last, per tracked set, the standard within-set fatigue signal in velocity-based training. Negative means the last rep was actually faster.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-56">
@@ -1596,7 +1586,7 @@ export default function CoachAnalytics() {
                     <TrendSeries
                       chartType={chartType}
                       dataKey="velocityLossPercent"
-                      name="Velocity loss"
+                      name={t("Velocity loss")}
                       color="#ef4444"
                     />
                   </ComposedChart>
@@ -1608,9 +1598,9 @@ export default function CoachAnalytics() {
           {hasPath && !hiddenCharts.has("path") && (
             <Card>
               <CardHeader>
-                <CardTitle>Bar Path Deviation</CardTitle>
+                <CardTitle>{t("Bar Path Deviation")}</CardTitle>
                 <CardDescription>
-                  How far the bar drifted from a straight vertical line, per tracked set.
+                  {t("How far the bar drifted from a straight vertical line, per tracked set.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-64">
@@ -1625,7 +1615,7 @@ export default function CoachAnalytics() {
                     <TrendSeries
                       chartType={chartType}
                       dataKey="barPathDeviationCm"
-                      name="Deviation"
+                      name={t("Deviation")}
                       color="#f59e0b"
                     />
                   </ComposedChart>
@@ -1638,10 +1628,9 @@ export default function CoachAnalytics() {
             <Card>
               <CardHeader className="flex flex-row items-start justify-between gap-2">
                 <div>
-                  <CardTitle>Jump Height &amp; Distance</CardTitle>
+                  <CardTitle>{t("Jump Height & Distance")}</CardTitle>
                   <CardDescription>
-                    Flight-time-derived jump height, and horizontal distance for broad jumps, per
-                    tracked set.
+                    {t("Flight-time-derived jump height, and horizontal distance for broad jumps, per tracked set.")}
                   </CardDescription>
                 </div>
                 <DistanceUnitToggle />
@@ -1659,13 +1648,13 @@ export default function CoachAnalytics() {
                     <TrendSeries
                       chartType={chartType}
                       dataKey="jumpHeightCm"
-                      name="Jump height"
+                      name={t("Jump height")}
                       color="hsl(var(--primary))"
                     />
                     <TrendSeries
                       chartType={chartType}
                       dataKey="jumpDistanceCm"
-                      name="Broad jump distance"
+                      name={t("Broad jump distance")}
                       color="hsl(var(--chart-2))"
                     />
                   </ComposedChart>
@@ -1677,11 +1666,9 @@ export default function CoachAnalytics() {
           {hasGroundContact && !hiddenCharts.has("groundContact") && (
             <Card>
               <CardHeader>
-                <CardTitle>Ground Contact &amp; Reactive Strength</CardTitle>
+                <CardTitle>{t("Ground Contact & Reactive Strength")}</CardTitle>
                 <CardDescription>
-                  Time on the ground between jumps, and Reactive Strength Index (jump height ÷
-                  ground contact time), the standard power/reactivity metric for repeated
-                  jumps.
+                  {t("Time on the ground between jumps, and Reactive Strength Index (jump height ÷ ground contact time), the standard power/reactivity metric for repeated jumps.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-56">
@@ -1699,14 +1686,14 @@ export default function CoachAnalytics() {
                       chartType={chartType}
                       yAxisId="left"
                       dataKey="groundContactSeconds"
-                      name="Ground contact"
+                      name={t("Ground contact")}
                       color="#f59e0b"
                     />
                     <TrendSeries
                       chartType={chartType}
                       yAxisId="right"
                       dataKey="reactiveStrengthIndex"
-                      name="RSI"
+                      name={t("RSI")}
                       color="#a855f7"
                     />
                   </ComposedChart>
@@ -1718,10 +1705,9 @@ export default function CoachAnalytics() {
           {hasSwingMechanics && !hiddenCharts.has("swingMechanics") && (
             <Card>
               <CardHeader>
-                <CardTitle>Swing Separation &amp; Head Sway</CardTitle>
+                <CardTitle>{t("Swing Separation & Head Sway")}</CardTitle>
                 <CardDescription>
-                  Peak hip-shoulder separation ("X-Factor") and lateral head movement during the
-                  swing, per tracked set.
+                  {t("Peak hip-shoulder separation (\"X-Factor\") and lateral head movement during the swing, per tracked set.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-56">
@@ -1745,14 +1731,14 @@ export default function CoachAnalytics() {
                       chartType={chartType}
                       yAxisId="left"
                       dataKey="swingSeparationDeg"
-                      name="Separation"
+                      name={t("Separation")}
                       color="hsl(var(--primary))"
                     />
                     <TrendSeries
                       chartType={chartType}
                       yAxisId="right"
                       dataKey="swingHeadSwayCm"
-                      name="Head sway"
+                      name={t("Head sway")}
                       color="#f59e0b"
                     />
                   </ComposedChart>
@@ -1764,10 +1750,9 @@ export default function CoachAnalytics() {
           {hasSwingTempo && !hiddenCharts.has("swingTempo") && (
             <Card>
               <CardHeader>
-                <CardTitle>Swing Tempo</CardTitle>
+                <CardTitle>{t("Swing Tempo")}</CardTitle>
                 <CardDescription>
-                  Backswing and downswing duration per tracked set, the classic 3:1 tempo ratio
-                  is the usual coaching reference point.
+                  {t("Backswing and downswing duration per tracked set, the classic 3:1 tempo ratio is the usual coaching reference point.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-56">
@@ -1791,13 +1776,13 @@ export default function CoachAnalytics() {
                     <TrendSeries
                       chartType={chartType}
                       dataKey="swingBackswingMs"
-                      name="Backswing"
+                      name={t("Backswing")}
                       color="hsl(var(--primary))"
                     />
                     <TrendSeries
                       chartType={chartType}
                       dataKey="swingDownswingMs"
-                      name="Downswing"
+                      name={t("Downswing")}
                       color="#a855f7"
                     />
                   </ComposedChart>
@@ -1810,9 +1795,9 @@ export default function CoachAnalytics() {
             <Card>
               <CardHeader className="flex flex-row items-start justify-between gap-2">
                 <div>
-                  <CardTitle>Med Ball Throw</CardTitle>
+                  <CardTitle>{t("Med Ball Throw")}</CardTitle>
                   <CardDescription>
-                    Peak ball speed and release height, per tracked throw.
+                    {t("Peak ball speed and release height, per tracked throw.")}
                   </CardDescription>
                 </div>
                 <DistanceUnitToggle />
@@ -1838,14 +1823,14 @@ export default function CoachAnalytics() {
                       chartType={chartType}
                       yAxisId="left"
                       dataKey="medBallPeakSpeedMps"
-                      name="Peak speed"
+                      name={t("Peak speed")}
                       color="hsl(var(--primary))"
                     />
                     <TrendSeries
                       chartType={chartType}
                       yAxisId="right"
                       dataKey="medBallReleaseHeightCm"
-                      name="Release height"
+                      name={t("Release height")}
                       color="hsl(var(--chart-2))"
                     />
                   </ComposedChart>
@@ -1858,10 +1843,9 @@ export default function CoachAnalytics() {
             <Card>
               <CardHeader className="flex flex-row items-start justify-between gap-2">
                 <div>
-                  <CardTitle>Kettlebell Swing</CardTitle>
+                  <CardTitle>{t("Kettlebell Swing")}</CardTitle>
                   <CardDescription>
-                    Peak full-3D bell speed and peak swing height, per tracked set, the arc
-                    pattern needs true speed magnitude, not just vertical velocity.
+                    {t("Peak full-3D bell speed and peak swing height, per tracked set, the arc pattern needs true speed magnitude, not just vertical velocity.")}
                   </CardDescription>
                 </div>
                 <DistanceUnitToggle />
@@ -1887,14 +1871,14 @@ export default function CoachAnalytics() {
                       chartType={chartType}
                       yAxisId="left"
                       dataKey="kbSwingPeakSpeedMps"
-                      name="Peak speed"
+                      name={t("Peak speed")}
                       color="hsl(var(--primary))"
                     />
                     <TrendSeries
                       chartType={chartType}
                       yAxisId="right"
                       dataKey="kbSwingPeakHeightCm"
-                      name="Peak height"
+                      name={t("Peak height")}
                       color="hsl(var(--chart-2))"
                     />
                   </ComposedChart>
@@ -1906,10 +1890,9 @@ export default function CoachAnalytics() {
           {hasHorizontalLoad && !hiddenCharts.has("horizontalLoad") && (
             <Card>
               <CardHeader>
-                <CardTitle>Sled / Loaded Carry</CardTitle>
+                <CardTitle>{t("Sled / Loaded Carry")}</CardTitle>
                 <CardDescription>
-                  Average speed and elapsed time crossing a known checkpoint distance, per tracked
-                  set.
+                  {t("Average speed and elapsed time crossing a known checkpoint distance, per tracked set.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-56">
@@ -1935,14 +1918,14 @@ export default function CoachAnalytics() {
                       chartType={chartType}
                       yAxisId="left"
                       dataKey="horizontalLoadAvgSpeedYardsPerSec"
-                      name="Avg speed"
+                      name={t("Avg speed")}
                       color="hsl(var(--primary))"
                     />
                     <TrendSeries
                       chartType={chartType}
                       yAxisId="right"
                       dataKey="horizontalLoadElapsedSeconds"
-                      name="Elapsed time"
+                      name={t("Elapsed time")}
                       color="#f59e0b"
                     />
                   </ComposedChart>
@@ -1954,11 +1937,9 @@ export default function CoachAnalytics() {
           {pathTraceSets.length > 0 && !hiddenCharts.has("pathShape") && (
             <Card>
               <CardHeader>
-                <CardTitle>Bar Path Shape</CardTitle>
+                <CardTitle>{t("Bar Path Shape")}</CardTitle>
                 <CardDescription>
-                  The actual path traced during each set (not just the deviation number),
-                  horizontal drift vs. vertical position, both in cm from where tracking started.
-                  Overlaying recent sets shows whether the path is repeatable rep to rep.
+                  {t("The actual path traced during each set (not just the deviation number), horizontal drift vs. vertical position, both in cm from where tracking started. Overlaying recent sets shows whether the path is repeatable rep to rep.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-72">
@@ -1968,14 +1949,14 @@ export default function CoachAnalytics() {
                     <XAxis
                       type="number"
                       dataKey="x"
-                      name="Horizontal drift"
+                      name={t("Horizontal drift")}
                       unit="cm"
                       tick={{ fontSize: 11 }}
                     />
                     <YAxis
                       type="number"
                       dataKey="y"
-                      name="Vertical position"
+                      name={t("Vertical position")}
                       unit="cm"
                       tick={{ fontSize: 11 }}
                       width={48}
@@ -1988,7 +1969,7 @@ export default function CoachAnalytics() {
                     {pathTraceSets.map((p, i) => (
                       <Scatter
                         key={`${p.date}-${p.setNumber}`}
-                        name={`${format(parseISO(p.date), "MMM d")} · Set ${p.setNumber}`}
+                        name={`${formatDate(parseISO(p.date), { month: "short", day: "numeric" })} · ${translate("Set {n}", { n: p.setNumber })}`}
                         data={p.barPathTrace!}
                         fill={TREND_COLORS[i % TREND_COLORS.length]}
                         line={{ stroke: TREND_COLORS[i % TREND_COLORS.length] }}
@@ -2004,23 +1985,22 @@ export default function CoachAnalytics() {
           {latestArmPathSet && !hiddenCharts.has("armSymmetry") && (
             <Card>
               <CardHeader>
-                <CardTitle>Arm Symmetry</CardTitle>
+                <CardTitle>{t("Arm Symmetry")}</CardTitle>
                 <CardDescription>
-                  Left vs. right wrist path for the most recent tracked set (
-                  {format(parseISO(latestArmPathSet.date), "MMM d")} · Set {latestArmPathSet.setNumber}),
-                  the averaged bar path above can hide one side lagging or drifting differently; this
-                  can't.
+                  {t("Left vs. right wrist path for the most recent tracked set ({set}), the averaged bar path above can hide one side lagging or drifting differently; this can't.", {
+                    set: `${t.date(parseISO(latestArmPathSet.date), { month: "short", day: "numeric" })} · ${t("Set {n}", { n: latestArmPathSet.setNumber })}`,
+                  })}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <ScatterChart margin={{ left: 4, right: 12, top: 8, bottom: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis type="number" dataKey="x" name="Horizontal drift" unit="cm" tick={{ fontSize: 11 }} />
+                    <XAxis type="number" dataKey="x" name={t("Horizontal drift")} unit="cm" tick={{ fontSize: 11 }} />
                     <YAxis
                       type="number"
                       dataKey="y"
-                      name="Vertical position"
+                      name={t("Vertical position")}
                       unit="cm"
                       tick={{ fontSize: 11 }}
                       width={48}
@@ -2031,14 +2011,14 @@ export default function CoachAnalytics() {
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                     <Scatter
-                      name="Left wrist"
+                      name={t("Left wrist")}
                       data={latestArmPathSet.armPathTrace!.left}
                       fill={TREND_COLORS[0]}
                       line={{ stroke: TREND_COLORS[0] }}
                       lineType="joint"
                     />
                     <Scatter
-                      name="Right wrist"
+                      name={t("Right wrist")}
                       data={latestArmPathSet.armPathTrace!.right}
                       fill={TREND_COLORS[1]}
                       line={{ stroke: TREND_COLORS[1] }}
@@ -2053,20 +2033,18 @@ export default function CoachAnalytics() {
           {latestLegDriveSet && !hiddenCharts.has("legAsymmetry") && (
             <Card>
               <CardHeader>
-                <CardTitle>Leg Drive Asymmetry</CardTitle>
+                <CardTitle>{t("Leg Drive Asymmetry")}</CardTitle>
                 <CardDescription>
-                  Left vs. right knee extension rate during the drive phase, rep by rep, for the
-                  most recent bilateral lift with a detected asymmetry (
-                  {format(parseISO(latestLegDriveSet.date), "MMM d")} · Set{" "}
-                  {latestLegDriveSet.setNumber}), a consistent lean to one side across reps is
-                  the load-management signal, not any single rep.
+                  {t("Left vs. right knee extension rate during the drive phase, rep by rep, for the most recent bilateral lift with a detected asymmetry ({set}), a consistent lean to one side across reps is the load-management signal, not any single rep.", {
+                    set: `${t.date(parseISO(latestLegDriveSet.date), { month: "short", day: "numeric" })} · ${t("Set {n}", { n: latestLegDriveSet.setNumber })}`,
+                  })}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={latestLegDriveSet.legDriveAsymmetry!} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="repNumber" tick={{ fontSize: 11 }} tickFormatter={(v) => `Rep ${v}`} />
+                    <XAxis dataKey="repNumber" tick={{ fontSize: 11 }} tickFormatter={(v) => t("Rep {n}", { n: v })} />
                     <YAxis tick={{ fontSize: 11 }} width={48} unit="°/s" />
                     <Tooltip
                       contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
@@ -2075,13 +2053,13 @@ export default function CoachAnalytics() {
                     <TrendSeries
                       chartType={chartType}
                       dataKey="leftDriveDegPerSec"
-                      name="Left leg"
+                      name={t("Left leg")}
                       color={TREND_COLORS[0]}
                     />
                     <TrendSeries
                       chartType={chartType}
                       dataKey="rightDriveDegPerSec"
-                      name="Right leg"
+                      name={t("Right leg")}
                       color={TREND_COLORS[1]}
                     />
                   </ComposedChart>
@@ -2093,21 +2071,18 @@ export default function CoachAnalytics() {
           {latestRepDecaySet && !hiddenCharts.has("repDecay") && (
             <Card>
               <CardHeader>
-                <CardTitle>Rep-by-Rep Velocity Decay</CardTitle>
+                <CardTitle>{t("Rep-by-Rep Velocity Decay")}</CardTitle>
                 <CardDescription>
-                  Peak concentric velocity, rep by rep, for the most recent multi-rep tracked set (
-                  {format(parseISO(latestRepDecaySet.date), "MMM d")} · Set {latestRepDecaySet.setNumber}),
-                  the drop-off across a set is the actual autoregulation signal, not just the set's
-                  best rep. Time to peak velocity is how long into each rep that peak was reached,
-                  a rep still accelerating right up to lockout reads very differently from one that
-                  peaked early and decelerated the rest of the way, even at the same total duration.
+                  {t("Peak concentric velocity, rep by rep, for the most recent multi-rep tracked set ({set}), the drop-off across a set is the actual autoregulation signal, not just the set's best rep. Time to peak velocity is how long into each rep that peak was reached, a rep still accelerating right up to lockout reads very differently from one that peaked early and decelerated the rest of the way, even at the same total duration.", {
+                    set: `${t.date(parseISO(latestRepDecaySet.date), { month: "short", day: "numeric" })} · ${t("Set {n}", { n: latestRepDecaySet.setNumber })}`,
+                  })}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={latestRepDecaySet.repBreakdown!} margin={{ left: 4, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="repNumber" tick={{ fontSize: 11 }} tickFormatter={(v) => `Rep ${v}`} />
+                    <XAxis dataKey="repNumber" tick={{ fontSize: 11 }} tickFormatter={(v) => t("Rep {n}", { n: v })} />
                     <YAxis yAxisId="left" tick={{ fontSize: 11 }} width={48} unit=" m/s" />
                     <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} width={40} unit="s" />
                     <Tooltip
@@ -2118,14 +2093,14 @@ export default function CoachAnalytics() {
                       chartType={chartType}
                       yAxisId="left"
                       dataKey="peakVelocityMps"
-                      name="Peak velocity"
+                      name={t("Peak velocity")}
                       color="hsl(var(--primary))"
                     />
                     <TrendSeries
                       chartType={chartType}
                       yAxisId="right"
                       dataKey="timeToPeakVelocitySeconds"
-                      name="Time to peak velocity"
+                      name={t("Time to peak velocity")}
                       color="#f59e0b"
                     />
                   </ComposedChart>
@@ -2137,8 +2112,8 @@ export default function CoachAnalytics() {
           {hasVelocity && !hiddenCharts.has("tempo") && (
             <Card>
               <CardHeader>
-                <CardTitle>Tempo</CardTitle>
-                <CardDescription>Average concentric vs. eccentric duration per set.</CardDescription>
+                <CardTitle>{t("Tempo")}</CardTitle>
+                <CardDescription>{t("Average concentric vs. eccentric duration per set.")}</CardDescription>
               </CardHeader>
               <CardContent className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
@@ -2153,13 +2128,13 @@ export default function CoachAnalytics() {
                     <TrendSeries
                       chartType={chartType}
                       dataKey="concentricSeconds"
-                      name="Concentric"
+                      name={t("Concentric")}
                       color="hsl(var(--success))"
                     />
                     <TrendSeries
                       chartType={chartType}
                       dataKey="eccentricSeconds"
-                      name="Eccentric"
+                      name={t("Eccentric")}
                       color="#a855f7"
                     />
                   </ComposedChart>
@@ -2171,11 +2146,9 @@ export default function CoachAnalytics() {
           {hasRom && !hiddenCharts.has("rom") && (
             <Card>
               <CardHeader>
-                <CardTitle>Range of Motion</CardTitle>
+                <CardTitle>{t("Range of Motion")}</CardTitle>
                 <CardDescription>
-                  Average per-rep vertical travel during the concentric (lifting) phase, per
-                  tracked set, a shrinking number over time can mean the depth is creeping up
-                  even while the weight goes up too.
+                  {t("Average per-rep vertical travel during the concentric (lifting) phase, per tracked set, a shrinking number over time can mean the depth is creeping up even while the weight goes up too.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-56">
@@ -2190,7 +2163,7 @@ export default function CoachAnalytics() {
                     <TrendSeries
                       chartType={chartType}
                       dataKey="romCm"
-                      name="Avg. ROM"
+                      name={t("Avg. ROM")}
                       color="hsl(var(--success))"
                     />
                   </ComposedChart>
@@ -2202,10 +2175,9 @@ export default function CoachAnalytics() {
           {faultCodesSeen.length > 0 && !hiddenCharts.has("faultTrend") && (
             <Card>
               <CardHeader>
-                <CardTitle>Form Fault Trend</CardTitle>
+                <CardTitle>{t("Form Fault Trend")}</CardTitle>
                 <CardDescription>
-                  Share of tracked sets flagging each fault, by week, turns a one-off in-session
-                  flag into something to actually program around: is it improving, or is it stuck?
+                  {t("Share of tracked sets flagging each fault, by week, turns a one-off in-session flag into something to actually program around: is it improving, or is it stuck?")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-64">
@@ -2223,7 +2195,7 @@ export default function CoachAnalytics() {
                         key={code}
                         chartType={chartType}
                         dataKey={code}
-                        name={FAULT_NAMES[code] ?? code}
+                        name={FAULT_NAMES[code] ? t(FAULT_NAMES[code]) : code}
                         color={TREND_COLORS[i % TREND_COLORS.length]}
                       />
                     ))}
@@ -2236,11 +2208,9 @@ export default function CoachAnalytics() {
           {hasAsymmetryTrend && !hiddenCharts.has("asymmetryTrend") && (
             <Card>
               <CardHeader>
-                <CardTitle>Asymmetry Trend</CardTitle>
+                <CardTitle>{t("Asymmetry Trend")}</CardTitle>
                 <CardDescription>
-                  Average left/right drive imbalance by week, for sets where one side clearly
-                  dominated the reps, a single lopsided set is a data point, favoring the same
-                  side for weeks in a row is a load-management flag worth programming around.
+                  {t("Average left/right drive imbalance by week, for sets where one side clearly dominated the reps, a single lopsided set is a data point, favoring the same side for weeks in a row is a load-management flag worth programming around.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-64">
@@ -2256,20 +2226,20 @@ export default function CoachAnalytics() {
                           item.dataKey === "legAsymmetryPercent"
                             ? item.payload.legDominantSide
                             : item.payload.armDominantSide;
-                        return [`${value}% favoring ${side ?? "?"}`, name];
+                        return [t("{value}% favoring {side}", { value: String(value), side: side ?? "?" }), name];
                       }}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                     <TrendSeries
                       chartType={chartType}
                       dataKey="legAsymmetryPercent"
-                      name="Leg drive"
+                      name={t("Leg drive")}
                       color={TREND_COLORS[0]}
                     />
                     <TrendSeries
                       chartType={chartType}
                       dataKey="armAsymmetryPercent"
-                      name="Arm drive"
+                      name={t("Arm drive")}
                       color={TREND_COLORS[1]}
                     />
                   </ComposedChart>
@@ -2284,7 +2254,7 @@ export default function CoachAnalytics() {
           <Card>
             <CardHeader>
               <div className="flex items-start justify-between gap-3">
-              <CardTitle>Every Data Point</CardTitle>
+              <CardTitle>{t("Every Data Point")}</CardTitle>
               <CsvExportButton
                 filename="every-data-point.csv"
                 testId="button-export-data-points"
@@ -2293,29 +2263,29 @@ export default function CoachAnalytics() {
                 rows={points.map((p) => [p.date, p.setNumber, p.reps, p.weight, p.weightUnit, p.estimatedOneRm, p.rpe, p.isPR ? "yes" : "", p.peakVelocityMps, p.meanVelocityMps, p.peakPowerWatts, p.meanPowerWatts, p.romCm, p.barPathDeviationCm])}
               />
               </div>
-              <CardDescription>The complete raw history across every logged date.</CardDescription>
+              <CardDescription>{t("The complete raw history across every logged date.")}</CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-[10px] uppercase text-muted-foreground">
-                    <th className="py-1.5 pr-3">Date</th>
-                    <th className="py-1.5 pr-3">Set</th>
-                    <th className="py-1.5 pr-3">Reps</th>
-                    <th className="py-1.5 pr-3">Weight</th>
-                    <th className="py-1.5 pr-3">Est. 1RM</th>
-                    <th className="py-1.5 pr-3">RPE</th>
-                    <th className="py-1.5 pr-3">Peak m/s</th>
-                    <th className="py-1.5 pr-3">Power (W)</th>
-                    <th className="py-1.5 pr-3">Path (cm)</th>
-                    <th className="py-1.5 pr-3">Jump ({distanceUnit})</th>
-                    <th className="py-1.5 pr-3">Swing Sep (°)</th>
-                    <th className="py-1.5 pr-3">Med Ball (m/s)</th>
-                    <th className="py-1.5 pr-3">KB Swing (m/s)</th>
-                    <th className="py-1.5 pr-3">Sled (yd/s)</th>
-                    <th className="py-1.5 pr-3">Flags</th>
-                    <th className="py-1.5 pr-3">Video</th>
-                    <th className="py-1.5">PR</th>
+                    <th className="py-1.5 pr-3">{t("Date")}</th>
+                    <th className="py-1.5 pr-3">{t("Set")}</th>
+                    <th className="py-1.5 pr-3">{t("Reps")}</th>
+                    <th className="py-1.5 pr-3">{t("Weight")}</th>
+                    <th className="py-1.5 pr-3">{t("Est. 1RM")}</th>
+                    <th className="py-1.5 pr-3">{t("RPE")}</th>
+                    <th className="py-1.5 pr-3">{t("Peak m/s")}</th>
+                    <th className="py-1.5 pr-3">{t("Power (W)")}</th>
+                    <th className="py-1.5 pr-3">{t("Path (cm)")}</th>
+                    <th className="py-1.5 pr-3">{t("Jump ({unit})", { unit: distanceUnit })}</th>
+                    <th className="py-1.5 pr-3">{t("Swing Sep (°)")}</th>
+                    <th className="py-1.5 pr-3">{t("Med Ball (m/s)")}</th>
+                    <th className="py-1.5 pr-3">{t("KB Swing (m/s)")}</th>
+                    <th className="py-1.5 pr-3">{t("Sled (yd/s)")}</th>
+                    <th className="py-1.5 pr-3">{t("Flags")}</th>
+                    <th className="py-1.5 pr-3">{t("Video")}</th>
+                    <th className="py-1.5">{t("PR")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2328,7 +2298,7 @@ export default function CoachAnalytics() {
                       )}
                     >
                       <td className="py-1.5 pr-3 whitespace-nowrap">
-                        {format(parseISO(p.date), "MMM d")}
+                        {formatDate(parseISO(p.date), { month: "short", day: "numeric" })}
                       </td>
                       <td className="py-1.5 pr-3">{p.setNumber}</td>
                       <td className="py-1.5 pr-3">{p.reps ?? "-"}</td>
@@ -2350,7 +2320,7 @@ export default function CoachAnalytics() {
                             onClick={() =>
                               setViewingFaults({ date: p.date, setNumber: p.setNumber, faults: p.formFaults! })
                             }
-                            aria-label={`${p.formFaults.length} form flag${p.formFaults.length === 1 ? "" : "s"} on this set`}
+                            aria-label={t.plural(p.formFaults.length, "{count} form flag on this set", "{count} form flags on this set")}
                             className="flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-amber-500 hover:bg-amber-500/20"
                           >
                             <Flag className="h-3 w-3" />
@@ -2369,13 +2339,13 @@ export default function CoachAnalytics() {
                               setVideoPreview({
                                 url: p.formCheckVideoUrl!,
                                 flag: p.formCheckFlag,
-                                label: `${format(parseISO(p.date), "MMM d")} · Set ${p.setNumber}`,
+                                label: `${formatDate(parseISO(p.date), { month: "short", day: "numeric" })} · ${translate("Set {n}", { n: p.setNumber })}`,
                               });
                             }}
                             className="flex items-center gap-1 text-primary hover:underline"
                           >
                             <Video className="h-3.5 w-3.5" />
-                            Watch
+                            {t("Watch")}
                             {p.formCheckFlag === "best" && <ThumbsUp className="h-3 w-3 text-success" />}
                             {p.formCheckFlag === "worst" && <ThumbsDown className="h-3 w-3 text-destructive" />}
                           </button>
@@ -2402,20 +2372,20 @@ export default function CoachAnalytics() {
                   {videoPreview?.flag === "best" && (
                     <Badge className="gap-1 bg-success/15 text-success hover:bg-success/15">
                       <ThumbsUp className="h-3 w-3" />
-                      Best
+                      {t("Best")}
                     </Badge>
                   )}
                   {videoPreview?.flag === "worst" && (
                     <Badge className="gap-1 bg-destructive/15 text-destructive hover:bg-destructive/15">
                       <ThumbsDown className="h-3 w-3" />
-                      Worst
+                      {t("Worst")}
                     </Badge>
                   )}
                 </DialogTitle>
               </DialogHeader>
               {videoPreview && videoPreviewError && (
                 <div className="rounded-md border border-border bg-secondary/30 p-4 text-center text-sm text-muted-foreground">
-                  This video couldn't be loaded, it may not have finished uploading, or the file is missing.
+                  {t("This video couldn't be loaded, it may not have finished uploading, or the file is missing.")}
                 </div>
               )}
               {videoPreview && !videoPreviewError && (
@@ -2429,7 +2399,7 @@ export default function CoachAnalytics() {
                   />
                   <Button variant="outline" onClick={() => setAnalyzingVideo(true)}>
                     <Wand2 className="h-4 w-4" />
-                    Analysis Tools
+                    {t("Analysis Tools")}
                   </Button>
                 </>
               )}
@@ -2448,7 +2418,7 @@ export default function CoachAnalytics() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Flag className="h-4 w-4 text-amber-500" />
-                  {viewingFaults && `${format(parseISO(viewingFaults.date), "MMM d")} · Set ${viewingFaults.setNumber}`}
+                  {viewingFaults && `${t.date(parseISO(viewingFaults.date), { month: "short", day: "numeric" })} · ${t("Set {n}", { n: viewingFaults.setNumber })}`}
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-2">
@@ -2534,6 +2504,7 @@ function SkillsTab({
   athleteSearch: string;
   onAthleteSearchChange: (value: string) => void;
 }) {
+  const t = useT();
   const athleteName = roster.find((a) => String(a.id) === athleteId)?.name;
   return (
     <div className="space-y-4">
@@ -2550,7 +2521,7 @@ function SkillsTab({
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Users className="h-10 w-10 text-muted-foreground" />
-            <p className="text-muted-foreground">Pick an athlete to see their Skills tracking history.</p>
+            <p className="text-muted-foreground">{t("Pick an athlete to see their Skills tracking history.")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -2579,24 +2550,25 @@ function AthletePickerField({
   search: string;
   onSearchChange: (value: string) => void;
 }) {
+  const t = useT();
   const filtered = search.trim()
     ? roster.filter((a) => a.name.toLowerCase().includes(search.trim().toLowerCase()))
     : roster;
   return (
     <div className="space-y-1.5">
-      <label className="label-xs">Athlete</label>
+      <label className="label-xs">{t("Athlete")}</label>
       <div className="relative">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search athletes…"
+          placeholder={t("Search athletes…")}
           className="mb-1.5 h-8 pl-8 text-sm"
         />
       </div>
       <Select value={athleteId} onValueChange={onChange}>
         <SelectTrigger>
-          <SelectValue placeholder="Select an athlete" />
+          <SelectValue placeholder={t("Select an athlete")} />
         </SelectTrigger>
         <SelectContent>
           {filtered.length === 0 && (
@@ -2606,10 +2578,10 @@ function AthletePickerField({
             // failed search, with no hint that the answer is to invite someone first.
             <p className="px-2 py-1.5 text-sm text-muted-foreground">
               {rosterFailed
-                ? "We couldn't load your roster."
+                ? t("We couldn't load your roster.")
                 : roster.length === 0
-                  ? "No athletes yet, invite one from Roster and their history shows up here."
-                  : "No athletes match"}
+                  ? t("No athletes yet, invite one from Roster and their history shows up here.")
+                  : t("No athletes match")}
             </p>
           )}
           {filtered.map((a) => (
@@ -2672,6 +2644,7 @@ function VideosTab({
   athleteSearch: string;
   onAthleteSearchChange: (value: string) => void;
 }) {
+  const t = useT();
   const [liftFilter, setLiftFilter] = useState("");
   const [watching, setWatching] = useState<{ url: string; title: string } | null>(null);
 
@@ -2693,7 +2666,7 @@ function VideosTab({
       kind: "lift" as const,
       exerciseName: v.exerciseName,
       date: v.date,
-      label: `${format(parseISO(v.date), "MMM d, yyyy")} · Set ${v.setNumber}`,
+      label: `${formatDate(parseISO(v.date), { month: "short", day: "numeric", year: "numeric" })} · ${translate("Set {n}", { n: v.setNumber })}`,
       videoUrl: v.videoUrl,
       flag: v.flag,
     })),
@@ -2702,7 +2675,7 @@ function VideosTab({
       kind: "skill" as const,
       exerciseName: v.skillExerciseName,
       date: v.createdAt,
-      label: format(parseISO(v.createdAt), "MMM d, yyyy"),
+      label: formatDate(parseISO(v.createdAt), { month: "short", day: "numeric", year: "numeric" }),
       videoUrl: v.videoUrl,
       flag: null,
     })),
@@ -2729,12 +2702,12 @@ function VideosTab({
         />
         <div className="space-y-1.5">
           <label className="label-xs">
-            Lift (optional)
+            {t("Lift (optional)")}
           </label>
           {athleteId ? (
             <PinnedExercisePicker options={availableLiftNames} value={liftFilter} onChange={setLiftFilter} />
           ) : (
-            <p className="text-sm text-muted-foreground">Pick an athlete first</p>
+            <p className="text-sm text-muted-foreground">{t("Pick an athlete first")}</p>
           )}
         </div>
       </div>
@@ -2743,7 +2716,7 @@ function VideosTab({
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Users className="h-10 w-10 text-muted-foreground" />
-            <p className="text-muted-foreground">Pick an athlete to see every video they've recorded.</p>
+            <p className="text-muted-foreground">{t("Pick an athlete to see every video they've recorded.")}</p>
           </CardContent>
         </Card>
       )}
@@ -2751,7 +2724,7 @@ function VideosTab({
       {athleteId && (liftFailed || skillFailed) && (
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="this athlete's videos" onRetry={() => void refetchLift()} />
+            <ReadFailed what={t("this athlete's videos")} onRetry={() => void refetchLift()} />
           </CardContent>
         </Card>
       )}
@@ -2760,7 +2733,7 @@ function VideosTab({
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Video className="h-10 w-10 text-muted-foreground" />
-            <p className="text-muted-foreground">No videos recorded yet for {athleteName ?? "this athlete"}.</p>
+            <p className="text-muted-foreground">{t("No videos recorded yet for {name}.", { name: athleteName ?? t("this athlete") })}</p>
           </CardContent>
         </Card>
       )}
@@ -2769,7 +2742,7 @@ function VideosTab({
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Video className="h-10 w-10 text-muted-foreground" />
-            <p className="text-muted-foreground">No {liftFilter} videos yet for {athleteName ?? "this athlete"}.</p>
+            <p className="text-muted-foreground">{t("No {lift} videos yet for {name}.", { lift: t.exercise(liftFilter), name: athleteName ?? t("this athlete") })}</p>
           </CardContent>
         </Card>
       )}
@@ -2788,29 +2761,29 @@ function VideosTab({
                   {v.kind === "skill" ? <Activity className="h-4 w-4" /> : <Video className="h-4 w-4" />}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold">{v.exerciseName}</p>
+                  <p className="text-sm font-semibold">{t.exercise(v.exerciseName)}</p>
                   <p className="text-xs text-muted-foreground">{v.label}</p>
                 </div>
                 {v.flag === "best" && (
                   <Badge className="gap-1 bg-success/15 text-success hover:bg-success/15">
                     <ThumbsUp className="h-3 w-3" />
-                    Best
+                    {t("Best")}
                   </Badge>
                 )}
                 {v.flag === "worst" && (
                   <Badge className="gap-1 bg-destructive/15 text-destructive hover:bg-destructive/15">
                     <ThumbsDown className="h-3 w-3" />
-                    Worst
+                    {t("Worst")}
                   </Badge>
                 )}
               </div>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setWatching({ url: v.videoUrl, title: `${v.exerciseName} — ${v.label}` })}
+                onClick={() => setWatching({ url: v.videoUrl, title: `${t.exercise(v.exerciseName)} — ${v.label}` })}
               >
                 <Wand2 className="h-3.5 w-3.5" />
-                Watch
+                {t("Watch")}
               </Button>
             </div>
           ))}
@@ -2969,6 +2942,7 @@ const ACWR_WINDOW_OPTIONS = [
 ];
 
 function AcwrTrendCard({ athleteId }: { athleteId: string }) {
+  const t = useT();
   const [windowDays, setWindowDays] = useState(60);
   const { data: history = [], isLoading, isError, refetch } = useQuery<AcwrPoint[]>({
     queryKey: ["/api/coach/roster", athleteId, "acwr-history", windowDays],
@@ -2977,7 +2951,7 @@ function AcwrTrendCard({ athleteId }: { athleteId: string }) {
   });
 
   const chartData = history.map((p) => ({
-    label: format(parseISO(p.date), "MMM d"),
+    label: formatDate(parseISO(p.date), { month: "short", day: "numeric" }),
     acute: Math.round(p.acuteLoad),
     chronic: Math.round(p.chronicLoad),
   }));
@@ -3011,7 +2985,7 @@ function AcwrTrendCard({ athleteId }: { athleteId: string }) {
           <div>
             <CardTitle className="flex items-center gap-2">
               <Activity className="h-5 w-5" />
-              Training Load (ACWR)
+              {t("Training Load (ACWR)")}
             </CardTitle>
             <CsvExportButton
               filename="training-load-acwr.csv"
@@ -3020,8 +2994,7 @@ function AcwrTrendCard({ athleteId }: { athleteId: string }) {
               rows={history.map((h) => [h.date, h.acuteLoad, h.chronicLoad, h.ratio, h.level])}
             />
             <CardDescription>
-              Acute (7-day) vs. chronic (28-day average) load, from logged volume. A general
-              load-management guideline, not a medical diagnosis.
+              {t("Acute (7-day) vs. chronic (28-day average) load, from logged volume. A general load-management guideline, not a medical diagnosis.")}
             </CardDescription>
           </div>
           <RadioChipGroup
@@ -3042,16 +3015,16 @@ function AcwrTrendCard({ athleteId }: { athleteId: string }) {
             the wellness badge used to give, and it comes with advice -- try a wider
             window -- that cannot help. */}
         {isError ? (
-          <ReadFailed what="this athlete's training load" onRetry={() => void refetch()} />
+          <ReadFailed what={t("this athlete's training load")} onRetry={() => void refetch()} />
         ) : !hasEnoughData ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No training load logged in the last {windowDays} days, try a wider window.
+            {t("No training load logged in the last {count} days, try a wider window.", { count: windowDays })}
           </p>
         ) : (
           <>
             {latest?.ratio != null && (
               <div className="flex items-center justify-between rounded-md border border-border p-3 text-sm">
-                <span className="text-muted-foreground">Current ratio</span>
+                <span className="text-muted-foreground">{t("Current ratio")}</span>
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{latest.ratio.toFixed(2)}</span>
                   <span
@@ -3089,7 +3062,7 @@ function AcwrTrendCard({ athleteId }: { athleteId: string }) {
                   <Area
                     type="monotone"
                     dataKey="acute"
-                    name="Acute (7d)"
+                    name={t("Acute (7d)")}
                     stroke="hsl(var(--primary))"
                     strokeWidth={2}
                     fill="url(#acwrTrendAcuteFill)"
@@ -3099,7 +3072,7 @@ function AcwrTrendCard({ athleteId }: { athleteId: string }) {
                   <Area
                     type="monotone"
                     dataKey="chronic"
-                    name="Chronic (28d avg)"
+                    name={t("Chronic (28d avg)")}
                     stroke="hsl(var(--muted-foreground))"
                     strokeWidth={2}
                     strokeDasharray="4 3"
@@ -3132,6 +3105,7 @@ const WEEKLY_LOAD_WINDOW_OPTIONS = [
 ];
 
 function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
+  const t = useT();
   const [windowWeeks, setWindowWeeks] = useState(12);
   const { data: series = [], isLoading, isError, refetch } = useQuery<WeeklyLoadPoint[]>({
     queryKey: ["/api/coach/roster", athleteId, "weekly-load", windowWeeks],
@@ -3140,7 +3114,7 @@ function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
   });
 
   const chartData = series.map((p) => ({
-    label: format(parseISO(p.weekStart), "MMM d"),
+    label: formatDate(parseISO(p.weekStart), { month: "short", day: "numeric" }),
     volume: Math.round(p.totalVolume),
     intensity: Math.round(p.avgIntensity),
     sets: p.totalSets,
@@ -3173,7 +3147,7 @@ function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
           <div>
             <CardTitle className="flex items-center gap-2">
               <Weight className="h-5 w-5" />
-              Volume & Intensity
+              {t("Volume & Intensity")}
             </CardTitle>
             <CsvExportButton
               filename="volume-intensity.csv"
@@ -3182,8 +3156,7 @@ function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
               rows={series.map((w) => [w.weekStart, w.totalVolume, w.totalSets, w.avgIntensity])}
             />
             <CardDescription>
-              Weekly training load, total volume lifted (bars) vs. average weight per rep
-              (line). Only counts sets logged with a numeric weight.
+              {t("Weekly training load, total volume lifted (bars) vs. average weight per rep (line). Only counts sets logged with a numeric weight.")}
             </CardDescription>
           </div>
           <RadioChipGroup
@@ -3200,10 +3173,10 @@ function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
       </CardHeader>
       <CardContent>
         {isError ? (
-          <ReadFailed what="this athlete's weekly load" onRetry={() => void refetch()} />
+          <ReadFailed what={t("this athlete's weekly load")} onRetry={() => void refetch()} />
         ) : !hasEnoughData ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No training load logged in the last {windowWeeks} weeks, try a wider window.
+            {t("No training load logged in the last {count} weeks, try a wider window.", { count: windowWeeks })}
           </p>
         ) : (
           <div className="h-64">
@@ -3227,7 +3200,7 @@ function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
                 <Bar
                   yAxisId="volume"
                   dataKey="volume"
-                  name="Total Volume"
+                  name={t("Total Volume")}
                   fill="hsl(var(--primary))"
                   radius={[3, 3, 0, 0]}
                 />
@@ -3235,7 +3208,7 @@ function WeeklyLoadTrendCard({ athleteId }: { athleteId: string }) {
                   yAxisId="intensity"
                   type="monotone"
                   dataKey="intensity"
-                  name="Avg Load/Rep"
+                  name={t("Avg Load/Rep")}
                   stroke="hsl(var(--muted-foreground))"
                   strokeWidth={2}
                   fill="url(#weeklyLoadIntensityFill)"
@@ -3273,6 +3246,7 @@ const TREND_COLORS = [
  * trends rather than just one athlete at a time. Reuses the automatic snapshot
  * history built from profile-edit testing fields -- no separate data entry. */
 function TeamTrends() {
+  const t = useT();
   const [metric, setMetric] = useState<TestingMetricKey>("fortyYardDash");
 
   const { data: points = [], isLoading, isError: trendsFailed, refetch: refetchTrends } = useQuery<TrendPoint[]>({
@@ -3285,7 +3259,7 @@ function TeamTrends() {
   const dates = Array.from(new Set(points.map((p) => p.date))).sort();
 
   const chartData = dates.map((date) => {
-    const row: Record<string, string | number> = { label: format(parseISO(date), "MMM d") };
+    const row: Record<string, string | number> = { label: formatDate(parseISO(date), { month: "short", day: "numeric" }) };
     for (const p of points.filter((pt) => pt.date === date)) {
       row[p.athleteName] = p.value;
     }
@@ -3295,7 +3269,7 @@ function TeamTrends() {
   return (
     <div className="space-y-4">
       <RadioChipGroup
-        label="Metric"
+        label={t("Metric")}
         options={TESTING_METRICS.map((m) => m.label)}
         value={activeMetric.label}
         onChange={(label) => {
@@ -3318,7 +3292,7 @@ function TeamTrends() {
         <Card>
           <CardContent className="py-16">
             <ReadFailed
-              what={`${activeMetric.label.toLowerCase()} history`}
+              what={t("{metric} history", { metric: t(activeMetric.label).toLowerCase() })}
               onRetry={() => void refetchTrends()}
             />
           </CardContent>
@@ -3328,7 +3302,7 @@ function TeamTrends() {
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <TrendingUp className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">
-              No {activeMetric.label.toLowerCase()} entries recorded for your team yet.
+              {t("No {metric} entries recorded for your team yet.", { metric: t(activeMetric.label).toLowerCase() })}
             </p>
           </CardContent>
         </Card>
@@ -3336,7 +3310,7 @@ function TeamTrends() {
         <Card>
           <CardHeader>
             <div className="flex items-start justify-between gap-3">
-            <CardTitle>{activeMetric.label} — Team Trend</CardTitle>
+            <CardTitle>{t("{metric} — Team Trend", { metric: t(activeMetric.label) })}</CardTitle>
             <CsvExportButton
               filename="team-trend.csv"
               testId="button-export-team-trend"
@@ -3345,8 +3319,7 @@ function TeamTrends() {
             />
             </div>
             <CardDescription>
-              Every athlete with a recorded {activeMetric.label.toLowerCase()} ({activeMetric.unit}
-              ), over time.
+              {t("Every athlete with a recorded {metric} ({unit}), over time.", { metric: t(activeMetric.label).toLowerCase(), unit: activeMetric.unit })}
             </CardDescription>
           </CardHeader>
           <CardContent className="h-80">
@@ -3405,6 +3378,7 @@ function coachClassPct(n: number) {
 }
 
 function CoachClassFunnelRow({ row }: { row: CoachClassAnalyticsRow }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-md border border-border">
@@ -3418,12 +3392,12 @@ function CoachClassFunnelRow({ row }: { row: CoachClassAnalyticsRow }) {
             {row.name}
             {row.isForgeOfficial && (
               <Badge variant="outline" className="text-[10px]">
-                FORGE
+                {t("FORGE")}
               </Badge>
             )}
           </p>
           <p className="text-xs text-muted-foreground">
-            {row.lessonCount} lesson{row.lessonCount === 1 ? "" : "s"}
+            {t.plural(row.lessonCount, "{count} lesson", "{count} lessons")}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-4 text-xs">
@@ -3445,7 +3419,7 @@ function CoachClassFunnelRow({ row }: { row: CoachClassAnalyticsRow }) {
       {open && (
         <div className="border-t border-border p-3">
           {row.enrolledCount === 0 ? (
-            <p className="py-2 text-center text-xs text-muted-foreground">No enrollments yet.</p>
+            <p className="py-2 text-center text-xs text-muted-foreground">{t("No enrollments yet.")}</p>
           ) : (
             <div className="space-y-1.5">
               {row.lessons.map((l) => {
@@ -3467,14 +3441,13 @@ function CoachClassFunnelRow({ row }: { row: CoachClassAnalyticsRow }) {
                       />
                     </div>
                     <span className="w-24 shrink-0 text-right text-muted-foreground">
-                      {l.started} read / {l.passed} passed
+                      {t("{read} read / {passed} passed", { read: l.started, passed: l.passed })}
                     </span>
                   </div>
                 );
               })}
               <p className="pt-1 text-[11px] text-muted-foreground">
-                Lighter bar = read the content, solid bar = passed the quiz, out of{" "}
-                {row.enrolledCount} of your enrolled athletes.
+                {t("Lighter bar = read the content, solid bar = passed the quiz, out of {count} of your enrolled athletes.", { count: row.enrolledCount })}
               </p>
             </div>
           )}
@@ -3490,12 +3463,13 @@ function CoachClassFunnelRow({ row }: { row: CoachClassAnalyticsRow }) {
  * assigned), and only counting their own enrollments within a shared Forge
  * class rather than every coach's on the platform. */
 function CoachClassAnalyticsTab() {
+  const t = useT();
   const { data, isLoading, isError, refetch } = useQuery<CoachClassAnalytics>({
     queryKey: ["/api/coach/classes/analytics"],
   });
 
   if (isError) {
-    return <ReadFailed what="your class analytics" onRetry={() => void refetch()} />;
+    return <ReadFailed what={t("your class analytics")} onRetry={() => void refetch()} />;
   }
 
   if (isLoading) {
@@ -3528,7 +3502,7 @@ function CoachClassAnalyticsTab() {
         <CardContent className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
           <GraduationCap className="h-8 w-8" />
           <p className="text-sm">
-            Enroll an athlete in a Class to see enrollment, completion, and per-lesson drop-off here.
+            {t("Enroll an athlete in a Class to see enrollment, completion, and per-lesson drop-off here.")}
           </p>
         </CardContent>
       </Card>
@@ -3545,7 +3519,7 @@ function CoachClassAnalyticsTab() {
             </div>
             <div>
               <p className="font-display text-3xl font-bold">{data.totalClasses}</p>
-              <p className="text-sm text-muted-foreground">Classes you run</p>
+              <p className="text-sm text-muted-foreground">{t("Classes you run")}</p>
             </div>
           </CardContent>
         </Card>
@@ -3556,7 +3530,7 @@ function CoachClassAnalyticsTab() {
             </div>
             <div>
               <p className="font-display text-3xl font-bold">{data.totalEnrollments}</p>
-              <p className="text-sm text-muted-foreground">Your enrollments</p>
+              <p className="text-sm text-muted-foreground">{t("Your enrollments")}</p>
             </div>
           </CardContent>
         </Card>
@@ -3572,7 +3546,7 @@ function CoachClassAnalyticsTab() {
                   : "–"}
               </p>
               <p className="text-sm text-muted-foreground">
-                Completion rate ({data.totalCompletions} finished)
+                {t("Completion rate ({count} finished)", { count: data.totalCompletions })}
               </p>
             </div>
           </CardContent>
@@ -3581,8 +3555,8 @@ function CoachClassAnalyticsTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Enrollment &amp; Drop-off</CardTitle>
-          <CardDescription>Expand a class to see where your athletes stall lesson by lesson.</CardDescription>
+          <CardTitle>{t("Enrollment & Drop-off")}</CardTitle>
+          <CardDescription>{t("Expand a class to see where your athletes stall lesson by lesson.")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">

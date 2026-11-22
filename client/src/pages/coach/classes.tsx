@@ -2,15 +2,17 @@ import { ClassListPage } from "@/pages/class-list";
 import { LibraryTabs } from "@/components/library-tabs";
 import { CoachSectionGate } from "@/components/coach-section-gate";
 import { useAuth } from "@/hooks/use-auth";
+import { useT } from "@/i18n";
 
 export default function CoachClasses() {
+  const t = useT();
   const { user } = useAuth();
   return (
     <CoachSectionGate section="classes">
       <ClassListPage
         apiBase="/api/coach"
         routeBase="/coach/classes"
-        title="Classes"
+        title={t("Classes")}
         showAiDraft
         emptyStateText="No Classes yet. Build a self-guided curriculum your athletes work through lesson by lesson, or draft one from your own notes."
         libraryTabs={

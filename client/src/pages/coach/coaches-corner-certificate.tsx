@@ -6,7 +6,7 @@ import { ForgeMark } from "@/components/forge-mark";
 import { ProgramCertificateMark, useProgramBranding } from "@/components/program-certificate-mark";
 import { ReadFailed } from "@/components/read-failed";
 import { ArrowLeft, Printer } from "lucide-react";
-import { format } from "date-fns";
+import { useT } from "@/i18n";
 
 type Certificate = {
   trackTitle: string;
@@ -24,6 +24,7 @@ type Certificate = {
  * never names a certification body or claims continuing-education credit: whether a director
  * accepts it is their call (docs/legal-open-questions.md, question 13). */
 export default function CoachesCornerCertificate({ kind = "track" }: { kind?: "track" | "path" }) {
+  const t = useT();
   const programBranding = useProgramBranding();
   const { trackId, pathId } = useParams<{ trackId?: string; pathId?: string }>();
   const url = kind === "path" ? `/api/coach/academy/paths/${pathId}/certificate` : `/api/coach/academy/tracks/${trackId}/certificate`;
@@ -44,9 +45,9 @@ export default function CoachesCornerCertificate({ kind = "track" }: { kind?: "t
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="w-full max-w-md space-y-4 text-center">
-          <ReadFailed what="the certificate" error={error} onRetry={() => void refetch()} />
+          <ReadFailed what={t("the certificate")} error={error} onRetry={() => void refetch()} />
           <Button asChild variant="outline" size="sm">
-            <Link href="/coach/coaches-corner">Back to Coaches Corner</Link>
+            <Link href="/coach/coaches-corner">{t("Back to Coaches Corner")}</Link>
           </Button>
         </div>
       </div>
@@ -59,54 +60,52 @@ export default function CoachesCornerCertificate({ kind = "track" }: { kind?: "t
         <Button asChild variant="outline" size="sm">
           <Link href="/coach/coaches-corner">
             <ArrowLeft className="h-4 w-4" />
-            Back
+            {t("Back")}
           </Link>
         </Button>
         <Button size="sm" onClick={() => window.print()}>
           <Printer className="h-4 w-4" />
-          Print or save as PDF
+          {t("Print or save as PDF")}
         </Button>
       </div>
       <div className="mx-auto max-w-2xl rounded-xl border-2 border-primary/40 bg-card p-10 text-center print:border-black print:text-black">
         <ProgramCertificateMark branding={programBranding.branding} />
         <p className="mt-4 text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          Certificate of completion
+          {t("Certificate of completion")}
         </p>
         <h1 className="mt-6 font-display text-3xl font-bold uppercase tracking-wide">{data.coachName}</h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          has completed the Coaches Corner {kind === "path" ? "learning path" : "track"}
+          {kind === "path" ? t("has completed the Coaches Corner learning path") : t("has completed the Coaches Corner track")}
         </p>
         <h2 className="mt-2 font-display text-2xl font-bold">{data.trackTitle}</h2>
         <div className="mx-auto mt-8 grid max-w-sm grid-cols-3 gap-4 text-sm">
           <div>
             <p className="text-2xl font-bold">{data.lessonCount}</p>
-            <p className="text-xs text-muted-foreground">lessons read</p>
+            <p className="text-xs text-muted-foreground">{t("lessons read")}</p>
           </div>
           <div>
             <p className="text-2xl font-bold">{data.estimatedMinutes || "—"}</p>
-            <p className="text-xs text-muted-foreground">minutes of study</p>
+            <p className="text-xs text-muted-foreground">{t("minutes of study")}</p>
           </div>
           <div>
             {kind === "path" ? (
               <>
                 <p className="text-2xl font-bold">{data.trackCount ?? "—"}</p>
-                <p className="text-xs text-muted-foreground">tracks, quizzes passed</p>
+                <p className="text-xs text-muted-foreground">{t("tracks, quizzes passed")}</p>
               </>
             ) : (
               <>
                 <p className="text-2xl font-bold">{data.quiz ? `${data.quiz.correct}/${data.quiz.total}` : "—"}</p>
-                <p className="text-xs text-muted-foreground">quiz score</p>
+                <p className="text-xs text-muted-foreground">{t("quiz score")}</p>
               </>
             )}
           </div>
         </div>
         <p className="mt-8 text-sm text-muted-foreground">
-          Completed {format(new Date(data.completedAt), "MMMM d, yyyy")}
+          {t("Completed {date}", { date: t.date(new Date(data.completedAt), { month: "long", day: "numeric", year: "numeric" }) })}
         </p>
         <p className="mt-6 text-xs text-muted-foreground">
-          Issued by Forge Performance Systems. Coaches Corner is Forge's own coach-education
-          library. This certificate records study completed on Forge and is not a credential from
-          any certifying body.
+          {t("Issued by Forge Performance Systems. Coaches Corner is Forge's own coach-education library. This certificate records study completed on Forge and is not a credential from any certifying body.")}
         </p>
       </div>
     </div>

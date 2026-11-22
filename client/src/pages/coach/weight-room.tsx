@@ -17,6 +17,7 @@ import { Dumbbell, Tv, Copy, Trash2, FileText, Upload } from "lucide-react";
 import { WeightRoomSheetEditor } from "@/components/weight-room-sheet-editor";
 import { WeightRoomSheetUploadDialog } from "@/components/weight-room-sheet-upload-dialog";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
 
 type Team = { id: number; name: string; memberCount: number };
 type Display = { id: number; teamId: number; teamName: string | null; label: string | null; createdAt: string; lastSeenAt: string | null };
@@ -24,6 +25,7 @@ type Display = { id: number; teamId: number; teamName: string | null; label: str
 const DISPLAYS_KEY = ["/api/coach/weight-room/displays"];
 
 export default function CoachWeightRoomPage() {
+  const t = useT();
   const [, setLocation] = useLocation();
   const teams = useQuery<Team[]>({ queryKey: ["/api/coach/weight-room/teams"], queryFn: () => getJson("/api/coach/weight-room/teams") });
   const displays = useQuery<Display[]>({ queryKey: DISPLAYS_KEY, queryFn: () => getJson("/api/coach/weight-room/displays") });
@@ -48,7 +50,7 @@ export default function CoachWeightRoomPage() {
   const revoke = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `/api/coach/weight-room/displays/${id}/revoke`),
     onSuccess: () => {
-      toast.success("Display link turned off. Any TV using it stops showing the boards.");
+      toast.success(t("Display link turned off. Any TV using it stops showing the boards."));
       void queryClient.invalidateQueries({ queryKey: DISPLAYS_KEY });
     },
     onError: (err: Error) => toast.error(err.message),
@@ -63,30 +65,28 @@ export default function CoachWeightRoomPage() {
 
   const teamList = teams.data ?? [];
   return (
-    <AppShell title="Weight Room">
+    <AppShell title={t("Weight Room")}>
       <div className="mx-auto max-w-3xl space-y-6">
         <Card>
           <CardContent className="space-y-4 p-6">
             <div className="flex items-center gap-2">
               <Dumbbell className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-semibold">Station for a shared tablet</h2>
+              <h2 className="text-lg font-semibold">{t("Station for a shared tablet")}</h2>
             </div>
             <p className="text-sm text-muted-foreground">
-              Open this on the weight room iPad. Each athlete on the team taps their own name and logs today's sets
-              from their own program, without signing in on their phone. The station runs on your account, so it locks
-              to this one screen: leaving it asks for your password. Filming stays on the athlete's phone.
+              {t("Open this on the weight room iPad. Each athlete on the team taps their own name and logs today's sets from their own program, without signing in on their phone. The station runs on your account, so it locks to this one screen: leaving it asks for your password. Filming stays on the athlete's phone.")}
             </p>
             {teams.isError ? (
-              <ReadFailed what="your teams" onRetry={() => teams.refetch()} error={teams.error} />
+              <ReadFailed what={t("your teams")} onRetry={() => teams.refetch()} error={teams.error} />
             ) : teamList.length === 0 && !teams.isLoading ? (
-              <p className="text-sm text-muted-foreground">Make a team under Roster &amp; Teams first; a station shows one team.</p>
+              <p className="text-sm text-muted-foreground">{t("Make a team under Roster & Teams first; a station shows one team.")}</p>
             ) : (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="flex-1 space-y-1">
-                  <Label>Team</Label>
+                  <Label>{t("Team")}</Label>
                   <Select value={stationTeam} onValueChange={setStationTeam}>
                     <SelectTrigger data-testid="select-station-team">
-                      <SelectValue placeholder="Pick a team" />
+                      <SelectValue placeholder={t("Pick a team")} />
                     </SelectTrigger>
                     <SelectContent>
                       {teamList.map((t) => (
@@ -98,7 +98,7 @@ export default function CoachWeightRoomPage() {
                   </Select>
                 </div>
                 <Button size="lg" disabled={!stationTeam} onClick={openStation} data-testid="button-open-station">
-                  Open station
+                  {t("Open station")}
                 </Button>
               </div>
             )}
@@ -109,20 +109,17 @@ export default function CoachWeightRoomPage() {
           <CardContent className="space-y-4 p-6">
             <div className="flex items-center gap-2">
               <Tv className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-semibold">Gym TV</h2>
+              <h2 className="text-lg font-semibold">{t("Gym TV")}</h2>
             </div>
             <p className="text-sm text-muted-foreground">
-              A link for the TV in your weight room. It shows the team's top hand-logged lifts, this week's PRs and how
-              much of this week's training is done, by first name and last initial, and changes board every 15 seconds.
-              Anyone with the link can see those boards, so turn it off if it leaves the room. It never shows a camera
-              number.
+              {t("A link for the TV in your weight room. It shows the team's top hand-logged lifts, this week's PRs and how much of this week's training is done, by first name and last initial, and changes board every 15 seconds. Anyone with the link can see those boards, so turn it off if it leaves the room. It never shows a camera number.")}
             </p>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1 space-y-1">
-                <Label>Team</Label>
+                <Label>{t("Team")}</Label>
                 <Select value={tvTeam} onValueChange={setTvTeam}>
                   <SelectTrigger data-testid="select-tv-team">
-                    <SelectValue placeholder="Pick a team" />
+                    <SelectValue placeholder={t("Pick a team")} />
                   </SelectTrigger>
                   <SelectContent>
                     {teamList.map((t) => (
@@ -134,45 +131,47 @@ export default function CoachWeightRoomPage() {
                 </Select>
               </div>
               <div className="flex-1 space-y-1">
-                <Label htmlFor="tv-label">Name (optional)</Label>
-                <Input id="tv-label" value={tvLabel} maxLength={60} placeholder="Main room TV" onChange={(e) => setTvLabel(e.target.value)} />
+                <Label htmlFor="tv-label">{t("Name (optional)")}</Label>
+                <Input id="tv-label" value={tvLabel} maxLength={60} placeholder={t("Main room TV")} onChange={(e) => setTvLabel(e.target.value)} />
               </div>
               <Button disabled={!tvTeam || makeDisplay.isPending} onClick={() => makeDisplay.mutate()} data-testid="button-make-display">
-                Make link
+                {t("Make link")}
               </Button>
             </div>
             {newLink && (
               <div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm">
-                <p className="mb-2 font-medium">Open this on the TV. It is shown once; if you lose it, turn it off and make another.</p>
+                <p className="mb-2 font-medium">{t("Open this on the TV. It is shown once; if you lose it, turn it off and make another.")}</p>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 break-all text-xs" data-testid="text-new-display-link">{newLink}</code>
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      void navigator.clipboard?.writeText(newLink).then(() => toast.success("Link copied"));
+                      void navigator.clipboard?.writeText(newLink).then(() => toast.success(t("Link copied")));
                     }}
                   >
-                    <Copy className="mr-1 h-4 w-4" /> Copy
+                    <Copy className="mr-1 h-4 w-4" /> {t("Copy")}
                   </Button>
                 </div>
               </div>
             )}
             {displays.isError ? (
-              <ReadFailed what="your display links" onRetry={() => displays.refetch()} error={displays.error} />
+              <ReadFailed what={t("your display links")} onRetry={() => displays.refetch()} error={displays.error} />
             ) : (displays.data ?? []).length > 0 ? (
               <ul className="divide-y rounded-md border">
                 {(displays.data ?? []).map((d) => (
                   <li key={d.id} className="flex items-center justify-between gap-3 p-3 text-sm">
                     <div>
-                      <p className="font-medium">{d.label || "Display link"} · {d.teamName ?? "a team you no longer see"}</p>
+                      <p className="font-medium">{d.label || t("Display link")} · {d.teamName ?? t("a team you no longer see")}</p>
                       <p className="text-xs text-muted-foreground">
-                        Made {new Date(d.createdAt).toLocaleDateString()}
-                        {d.lastSeenAt ? ` · last shown ${new Date(d.lastSeenAt).toLocaleString()}` : " · not opened yet"}
+                        {t("Made {date}", { date: t.date(new Date(d.createdAt)) })}
+                        {d.lastSeenAt
+                          ? ` · ${t("last shown {when}", { when: t.date(new Date(d.lastSeenAt), { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) })}`
+                          : ` · ${t("not opened yet")}`}
                       </p>
                     </div>
                     <Button size="sm" variant="ghost" onClick={() => revoke.mutate(d.id)} data-testid={`button-revoke-display-${d.id}`}>
-                      <Trash2 className="mr-1 h-4 w-4" /> Turn off
+                      <Trash2 className="mr-1 h-4 w-4" /> {t("Turn off")}
                     </Button>
                   </li>
                 ))}
@@ -186,16 +185,14 @@ export default function CoachWeightRoomPage() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-semibold">Weight-room sheets</h2>
+                <h2 className="text-lg font-semibold">{t("Weight-room sheets")}</h2>
               </div>
               <Button variant="outline" size="sm" onClick={() => setUploadOpen(true)} disabled={teamList.length === 0} data-testid="button-upload-sheet">
-                <Upload className="mr-1 h-4 w-4" /> Upload a filled sheet
+                <Upload className="mr-1 h-4 w-4" /> {t("Upload a filled sheet")}
               </Button>
             </div>
             <p className="text-sm text-muted-foreground">
-              Print the team's workout with every athlete's own numbers filled in: their max, today's target, last time and the
-              plates. Everything on it can be turned off, moved or typed over. Then photograph the filled sheet and Forge logs it,
-              without ever writing over a set an athlete already logged on their phone.
+              {t("Print the team's workout with every athlete's own numbers filled in: their max, today's target, last time and the plates. Everything on it can be turned off, moved or typed over. Then photograph the filled sheet and Forge logs it, without ever writing over a set an athlete already logged on their phone.")}
             </p>
             {teamList.length > 0 && <WeightRoomSheetEditor teams={teamList} />}
           </CardContent>

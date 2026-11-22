@@ -24,6 +24,7 @@ import {
 import { ReadFailed } from "@/components/read-failed";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import type { DocumentStatus } from "@shared/required-documents";
+import { msg, plural, translate, useT } from "@/i18n";
 
 /** WHO ON MY ROSTER IS NOT COVERED.
  *
@@ -73,38 +74,43 @@ type RequestResult = {
 const IN_APP_ONLY_REASON: Record<RequestResult["results"][number]["detail"], string> = {
   athlete: "",
   guardians: "",
-  no_email: "no email address",
-  not_configured: "email isn't set up on this server",
-  send_failed: "the email couldn't be sent",
+  no_email: msg("no email address"),
+  not_configured: msg("email isn't set up on this server"),
+  send_failed: msg("the email couldn't be sent"),
 };
 
 /** "3 emailed, 1 in-app only: no email address — 2 already asked today." The scan test reads this
  * file for the wording rather than trusting a toast it cannot render. */
 function describeRequestOutcome(result: RequestResult): string {
   const parts: string[] = [];
-  if (result.emailed > 0) parts.push(`${result.emailed} emailed`);
+  if (result.emailed > 0) parts.push(translate("{count} emailed", { count: result.emailed }));
   if (result.inAppOnly > 0) {
     const reasons = [
       ...new Set(
         result.results
           .filter((r) => r.delivery === "in_app_only")
           .map((r) => IN_APP_ONLY_REASON[r.detail])
-          .filter(Boolean),
+          .filter(Boolean)
+          .map((reason) => translate(reason)),
       ),
     ];
-    parts.push(`${result.inAppOnly} in-app only${reasons.length ? `: ${reasons.join(", ")}` : ""}`);
+    parts.push(
+      reasons.length
+        ? translate("{count} in-app only: {reasons}", { count: result.inAppOnly, reasons: reasons.join(", ") })
+        : translate("{count} in-app only", { count: result.inAppOnly }),
+    );
   }
-  const skipped = result.skipped > 0 ? ` — ${result.skipped} already asked today` : "";
-  return `${parts.join(", ") || `Asked ${result.sent}`}${skipped}.`;
+  const skipped = result.skipped > 0 ? ` — ${translate("{count} already asked today", { count: result.skipped })}` : "";
+  return `${parts.join(", ") || translate("Asked {count}", { count: result.sent })}${skipped}.`;
 }
 
 const STATUS_TEXT: Record<DocumentStatus, string> = {
-  missing: "Not on file",
-  pending_review: "Being checked",
-  accepted: "On file",
-  rejected: "Rejected — needs replacing",
-  expiring_soon: "Expires soon",
-  expired: "Expired",
+  missing: msg("Not on file"),
+  pending_review: msg("Being checked"),
+  accepted: msg("On file"),
+  rejected: msg("Rejected — needs replacing"),
+  expiring_soon: msg("Expires soon"),
+  expired: msg("Expired"),
 };
 
 function StatusIcon({ status }: { status: DocumentStatus }) {
@@ -115,6 +121,7 @@ function StatusIcon({ status }: { status: DocumentStatus }) {
 }
 
 export default function CoachAthleteDocuments() {
+  const t = useT();
   const qc = useQueryClient();
   const key = ["/api/coach/documents-status"];
   const { data, isLoading, isError, refetch } = useQuery<Row[]>({
@@ -133,15 +140,15 @@ export default function CoachAthleteDocuments() {
       // the mail never left is worse, so the toast counts what was emailed and what was only
       // written in the app, with the reason.
       if (result.sent === 0 && result.skipped > 0) {
-        toast.info(`Everyone outstanding was already asked in the last 24 hours.`);
+        toast.info(t("Everyone outstanding was already asked in the last 24 hours."));
       } else if (result.sent === 0) {
-        toast.info("Nobody is outstanding right now.");
+        toast.info(t("Nobody is outstanding right now."));
       } else {
         toast.success(describeRequestOutcome(result));
       }
       qc.invalidateQueries({ queryKey: key });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't send that right now"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't send that right now")),
   });
 
   const rows = data ?? [];
@@ -149,7 +156,7 @@ export default function CoachAthleteDocuments() {
 
   return (
     <AppShell
-      title="Athlete documents"
+      title={t("Athlete documents")}
       actions={
         outstanding.length > 0 ? (
           <Button
@@ -159,7 +166,7 @@ export default function CoachAthleteDocuments() {
             onClick={() => request.mutate(undefined)}
           >
             <Send className="h-4 w-4" />
-            Ask all {outstanding.length}
+            {t("Ask all {count}", { count: outstanding.length })}
           </Button>
         ) : undefined
       }
@@ -167,11 +174,9 @@ export default function CoachAthleteDocuments() {
       <div className="mx-auto max-w-2xl space-y-4 p-4">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">What your athletes have on file</CardTitle>
+            <CardTitle className="text-base">{t("What your athletes have on file")}</CardTitle>
             <CardDescription>
-              The forms their school or club already had signed — participation waiver, medical
-              clearance. Forge holds the record; it doesn't clear anyone to train, and nothing
-              here says a document is legally enforceable.
+              {t("The forms their school or club already had signed — participation waiver, medical clearance. Forge holds the record; it doesn't clear anyone to train, and nothing here says a document is legally enforceable.")}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -182,19 +187,19 @@ export default function CoachAthleteDocuments() {
           <Card>
             <CardContent className="flex flex-col items-start gap-2 py-8">
               <p className="text-sm text-muted-foreground">
-                We couldn't load this. That isn't the same as everyone being covered.
+                {t("We couldn't load this. That isn't the same as everyone being covered.")}
               </p>
               <Button variant="outline" size="sm" onClick={() => void refetch()}>
-                Try again
+                {t("Try again")}
               </Button>
             </CardContent>
           </Card>
         ) : isLoading ? (
-          <p className="px-1 text-sm text-muted-foreground">Loading…</p>
+          <p className="px-1 text-sm text-muted-foreground">{t("Loading…")}</p>
         ) : rows.length === 0 ? (
           <Card>
             <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              No athletes on your roster yet.
+              {t("No athletes on your roster yet.")}
             </CardContent>
           </Card>
         ) : (
@@ -210,8 +215,8 @@ export default function CoachAthleteDocuments() {
                     <CardTitle className="truncate text-base">{row.athleteName}</CardTitle>
                     <CardDescription>
                       {row.outstanding === 0
-                        ? "Everything required is on file."
-                        : `${row.outstanding} outstanding`}
+                        ? t("Everything required is on file.")
+                        : t("{count} outstanding", { count: row.outstanding })}
                     </CardDescription>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
@@ -224,7 +229,7 @@ export default function CoachAthleteDocuments() {
                     <Button asChild size="sm" variant="outline" className="gap-1.5">
                       <Link href={`/documents/${row.athleteId}`}>
                         <Upload className="h-3.5 w-3.5" />
-                        Upload
+                        {t("Upload")}
                       </Link>
                     </Button>
                     {row.outstanding > 0 && (
@@ -236,7 +241,7 @@ export default function CoachAthleteDocuments() {
                         onClick={() => request.mutate([row.athleteId])}
                       >
                         <Send className="h-3.5 w-3.5" />
-                        Ask
+                        {t("Ask for it")}
                       </Button>
                     )}
                   </div>
@@ -248,7 +253,7 @@ export default function CoachAthleteDocuments() {
                         <StatusIcon status={doc.status} />
                         <span className="min-w-0 flex-1 truncate">{doc.label}</span>
                         <span className="shrink-0 text-muted-foreground">
-                          {STATUS_TEXT[doc.status]}
+                          {t(STATUS_TEXT[doc.status])}
                           {doc.expiresOn && (doc.status === "expiring_soon" || doc.status === "expired")
                             ? ` · ${doc.expiresOn}`
                             : ""}
@@ -275,10 +280,11 @@ export default function CoachAthleteDocuments() {
  */
 /** A minor's copy goes to a parent; this names how many have no parent address on file yet. */
 function guardianNotOnFile(n: number): string {
-  return `no parent's address on file for ${n} ${n === 1 ? "minor" : "minors"}`;
+  return plural(n, "no parent's address on file for {count} minor", "no parent's address on file for {count} minors");
 }
 
 function SendDocumentToRoster() {
+  const t = useT();
   const [type, setType] = useState<string>("");
   const [confirming, setConfirming] = useState(false);
   const {
@@ -315,22 +321,22 @@ function SendDocumentToRoster() {
     onSuccess: (r) => {
       setConfirming(false);
       if (r.notConfigured) {
-        toast.error("Email isn't set up on this server, so nothing was sent.");
+        toast.error(t("Email isn't set up on this server, so nothing was sent."));
       } else if (r.emailed === 0) {
         toast.info(
-          r.recipients === 0 ? "Nobody on your roster has an email address on file." : "Nothing could be sent.",
+          r.recipients === 0 ? t("Nobody on your roster has an email address on file.") : t("Nothing could be sent."),
         );
       } else {
         toast.success(
-          `${r.title} sent to ${r.emailed} ${r.emailed === 1 ? "address" : "addresses"}${
-            r.failed > 0 ? ` — ${r.failed} couldn't be sent` : ""
-          }${r.athletesWithoutAddress > 0 ? ` — ${r.athletesWithoutAddress} with no email on file` : ""}${
+          `${t.plural(r.emailed, "{title} sent to {count} address", "{title} sent to {count} addresses", { title: r.title })}${
+            r.failed > 0 ? ` — ${t("{count} couldn't be sent", { count: r.failed })}` : ""
+          }${r.athletesWithoutAddress > 0 ? ` — ${t("{count} with no email on file", { count: r.athletesWithoutAddress })}` : ""}${
             r.minorsWithoutGuardianAddress > 0 ? ` — ${guardianNotOnFile(r.minorsWithoutGuardianAddress)}` : ""
           }.`,
         );
       }
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't send that right now"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't send that right now")),
   });
 
   const chosen = sendable?.find((d) => d.type === type);
@@ -340,22 +346,20 @@ function SendDocumentToRoster() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Mail className="h-4 w-4 text-primary" />
-          Send a document to your roster
+          {t("Send a document to your roster")}
         </CardTitle>
         <CardDescription>
-          Email one of Forge's agreements to everyone on your roster — athletes get their own copy,
-          a minor's parents get it about their child. It's a copy for their records; it doesn't
-          sign anyone up to anything.
+          {t("Email one of Forge's agreements to everyone on your roster — athletes get their own copy, a minor's parents get it about their child. It's a copy for their records; it doesn't sign anyone up to anything.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {sendableFailed ? (
-          <ReadFailed what="the list of documents" onRetry={() => void refetchSendable()} />
+          <ReadFailed what={t("the list of documents")} onRetry={() => void refetchSendable()} />
         ) : (
           <div className="flex flex-col gap-2 sm:flex-row">
             <Select value={type} onValueChange={setType}>
               <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Pick a document" />
+                <SelectValue placeholder={t("Pick a document")} />
               </SelectTrigger>
               <SelectContent>
                 {(sendable ?? []).map((d) => (
@@ -372,7 +376,7 @@ function SendDocumentToRoster() {
               onClick={() => setConfirming(true)}
             >
               <Send className="h-4 w-4" />
-              Send
+              {t("Send")}
             </Button>
           </div>
         )}
@@ -381,24 +385,27 @@ function SendDocumentToRoster() {
       <Dialog open={confirming} onOpenChange={(open) => !send.isPending && setConfirming(open)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Send {chosen?.title ?? "this document"}?</DialogTitle>
+            <DialogTitle>{t("Send {title}?", { title: chosen?.title ?? t("this document") })}</DialogTitle>
             <DialogDescription>
               {countFailed ? (
-                <ReadFailed what="the recipient count" onRetry={() => void refetchCount()} />
+                <ReadFailed what={t("the recipient count")} onRetry={() => void refetchCount()} />
               ) : !count ? (
-                "Counting who this reaches…"
+                t("Counting who this reaches…")
               ) : (
-                `This goes to ${count.recipients} ${count.recipients === 1 ? "address" : "addresses"} across ${
-                  count.athletes
-                } ${count.athletes === 1 ? "athlete" : "athletes"} on your roster.${
+                `${t("This goes to {addresses} across {athletes} on your roster.", {
+                  addresses: t.plural(count.recipients, "{count} address", "{count} addresses"),
+                  athletes: t.plural(count.athletes, "{count} athlete", "{count} athletes"),
+                })}${
                   count.athletesWithoutAddress > 0
-                    ? ` ${count.athletesWithoutAddress} ${
-                        count.athletesWithoutAddress === 1 ? "has" : "have"
-                      } no email address on file and won't get it.`
+                    ? ` ${t.plural(
+                        count.athletesWithoutAddress,
+                        "{count} has no email address on file and won't get it.",
+                        "{count} have no email address on file and won't get it.",
+                      )}`
                     : ""
                 }${
                   count.minorsWithoutGuardianAddress > 0
-                    ? ` There's ${guardianNotOnFile(count.minorsWithoutGuardianAddress)}, so they won't get it: a minor's copy goes to a parent, never to the athlete.`
+                    ? ` ${t("There's {who}, so they won't get it: a minor's copy goes to a parent, never to the athlete.", { who: guardianNotOnFile(count.minorsWithoutGuardianAddress) })}`
                     : ""
                 }`
               )}
@@ -406,13 +413,13 @@ function SendDocumentToRoster() {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" disabled={send.isPending} onClick={() => setConfirming(false)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               disabled={!chosen || !count || count.recipients === 0 || send.isPending}
               onClick={() => chosen && send.mutate(chosen.type)}
             >
-              {send.isPending ? "Sending…" : `Send to ${count?.recipients ?? 0}`}
+              {send.isPending ? t("Sending…") : t("Send to {count}", { count: count?.recipients ?? 0 })}
             </Button>
           </DialogFooter>
         </DialogContent>

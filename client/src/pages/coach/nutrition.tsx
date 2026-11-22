@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/food-log-panel";
 import { Search } from "lucide-react";
+import { useT } from "@/i18n";
 
 type RosterEntry = {
   id: number;
@@ -29,6 +30,7 @@ type NutritionSummary = {
  * their full nutrition tab (targets + food-log history) on their own
  * profile page -- see the ?tab=nutrition handling in athlete-detail.tsx. */
 export default function CoachNutrition() {
+  const t = useT();
   const [, navigate] = useLocation();
   const { data: roster = [], isError: rosterFailed, refetch: refetchRoster } = useQuery<
     RosterEntry[]
@@ -56,11 +58,9 @@ export default function CoachNutrition() {
   });
 
   return (
-    <AppShell title="Nutrition">
+    <AppShell title={t("Nutrition")}>
       <p className="mb-6 text-sm text-muted-foreground">
-        Today's macro goals vs. what each athlete has actually logged. Click an athlete to see
-        their full targets and food-log history, set targets there too, ideally from a real
-        nutritionist's plan. The AI never generates these numbers.
+        {t("Today's macro goals vs. what each athlete has actually logged. Click an athlete to see their full targets and food-log history, set targets there too, ideally from a real nutritionist's plan. The AI never generates these numbers.")}
       </p>
 
       {/* A failed summary read is worse here than a missing row: summaryByAthlete simply
@@ -69,7 +69,7 @@ export default function CoachNutrition() {
       {!rosterFailed && summariesFailed && (
         <Card className="mb-4">
           <CardContent className="py-6">
-            <ReadFailed what="today's food logs" onRetry={() => void refetchSummaries()} />
+            <ReadFailed what={t("today's food logs")} onRetry={() => void refetchSummaries()} />
           </CardContent>
         </Card>
       )}
@@ -77,13 +77,13 @@ export default function CoachNutrition() {
       {rosterFailed ? (
         <Card>
           <CardContent className="py-14">
-            <ReadFailed what="your roster" onRetry={() => void refetchRoster()} />
+            <ReadFailed what={t("your roster")} onRetry={() => void refetchRoster()} />
           </CardContent>
         </Card>
       ) : roster.length === 0 ? (
         <Card>
           <CardContent className="py-14 text-center text-sm text-muted-foreground">
-            No athletes on your roster yet.
+            {t("No athletes on your roster yet.")}
           </CardContent>
         </Card>
       ) : (
@@ -93,14 +93,14 @@ export default function CoachNutrition() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search athletes by name, sport, position..."
+              placeholder={t("Search athletes by name, sport, position...")}
               className="pl-8"
-              aria-label="Search athletes"
+              aria-label={t("Search athletes")}
             />
           </div>
           {filtered.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              No athletes match "{search}".
+              {t("No athletes match \"{search}\".", { search })}
             </p>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -129,13 +129,13 @@ export default function CoachNutrition() {
                       {hasTargets ? (
                         <div className="space-y-2 border-t border-border pt-3">
                           <ProgressBar
-                            label="Calories"
+                            label={t("Calories")}
                             value={summary!.totals.caloriesKcal}
                             target={summary!.targets!.caloriesKcal}
                             unit="kcal"
                           />
                           <ProgressBar
-                            label="Protein"
+                            label={t("Protein")}
                             value={summary!.totals.proteinG}
                             target={summary!.targets!.proteinG}
                             unit="g"
@@ -143,7 +143,7 @@ export default function CoachNutrition() {
                         </div>
                       ) : (
                         <p className="border-t border-border pt-3 text-xs text-muted-foreground">
-                          No targets set yet
+                          {t("No targets set yet")}
                         </p>
                       )}
                     </CardContent>

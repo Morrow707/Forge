@@ -166,9 +166,12 @@ describe("the report", () => {
 describe("the named interactions stay matched to the app", () => {
   it("the coach athlete page's tabs are exactly the tabs that page draws, with its own labels", () => {
     const page = read("client/src/pages/coach/athlete-detail.tsx");
+    // The label may be wrapped for translation: `{t("Goals")}` -> "Goals"; a bare `Goals` is left as is.
+    // https://regex101.com/?regex=%5E%5C%7Bt%5C(%22(.*)%22%5C)%5C%7D%24&testString=%7Bt(%22Goals%22)%7D
+    const unwrap = (label: string) => label.replace(/^\{t\("(.*)"\)\}$/, "$1");
     // `<TabsTrigger value="goals">Goals</TabsTrigger>` -> ["goals", "Goals"]; a TabsContent no.
     // https://regex101.com/?regex=%3CTabsTrigger%20value%3D%22(%5B%5E%22%5D%2B)%22%3E(%5B%5E%3C%5D%2B)%3C&testString=%3CTabsTrigger%20value%3D%22goals%22%3EGoals%3C%2FTabsTrigger%3E
-    const drawn = Object.fromEntries(Array.from(page.matchAll(/<TabsTrigger value="([^"]+)">([^<]+)</g), (m) => [m[1], m[2]]));
+    const drawn = Object.fromEntries(Array.from(page.matchAll(/<TabsTrigger value="([^"]+)">([^<]+)</g), (m) => [m[1], unwrap(m[2])]));
     expect(drawn).toEqual(ATHLETE_PAGE_TABS);
   });
 

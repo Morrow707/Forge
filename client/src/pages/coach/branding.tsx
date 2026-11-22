@@ -29,6 +29,7 @@ import { FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES } from "@shared/billing-tiers
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ImagePlus, Trash2, Copy, Mail, Palette, Lock } from "lucide-react";
+import { msg, useT } from "@/i18n";
 
 /** THE BRANDING PAGE. Scott, 2026-10-03: the app should be fully customizable, in the order
  *  an athlete meets it: "login page first, landing page, emails, so on and so forth."
@@ -40,27 +41,27 @@ import { ImagePlus, Trash2, Copy, Mail, Palette, Lock } from "lucide-react";
 
 const ORG_QUERY_KEY = ["/api/coach/branding"];
 const BACKGROUND_HUE_PRESETS = [
-  { label: "Ink", hue: 222 },
-  { label: "Navy", hue: 215 },
-  { label: "Royal", hue: 225 },
-  { label: "Sky", hue: 200 },
-  { label: "Teal", hue: 178 },
-  { label: "Forest", hue: 150 },
-  { label: "Olive", hue: 80 },
-  { label: "Gold", hue: 45 },
-  { label: "Rust", hue: 20 },
-  { label: "Crimson", hue: 355 },
-  { label: "Wine", hue: 340 },
-  { label: "Plum", hue: 280 },
+  { label: msg("Ink"), hue: 222 },
+  { label: msg("Navy"), hue: 215 },
+  { label: msg("Royal"), hue: 225 },
+  { label: msg("Sky"), hue: 200 },
+  { label: msg("Teal"), hue: 178 },
+  { label: msg("Forest"), hue: 150 },
+  { label: msg("Olive"), hue: 80 },
+  { label: msg("Gold"), hue: 45 },
+  { label: msg("Rust"), hue: 20 },
+  { label: msg("Crimson"), hue: 355 },
+  { label: msg("Wine"), hue: 340 },
+  { label: msg("Plum"), hue: 280 },
   // A preset is a hue, and hue 0 is red, so "Charcoal" used to tint the app red. It is no color at
   // all instead: strength 0, every surface a neutral grey. Its hue is a cool one so that tapping a
   // strength afterwards gives a blue-grey, never pink.
-  { label: "Charcoal", hue: 220, strength: 0 },
+  { label: msg("Charcoal"), hue: 220, strength: 0 },
 ] as { label: string; hue: number; strength?: number }[];
 
 /** The background hue slider's track: every hue, left to right. */
 const HUE_RAINBOW = `linear-gradient(to right, ${[0, 60, 120, 180, 240, 300, 360].map((h) => `hsl(${h} 70% 50%)`).join(", ")})`;
-const STRENGTH_LABEL: Record<number, string> = { 1: "Subtle", 2: "Clear", 3: "Bold" };
+const STRENGTH_LABEL: Record<number, string> = { 1: msg("Subtle"), 2: msg("Clear"), 3: msg("Bold") };
 
 type OrgBranding = EffectiveBranding & { features: Record<CoachFeature, boolean> };
 type CoachEntitlements = { hasCustomColors?: boolean; hasTeamIdentity?: boolean; coachesCorner?: unknown };
@@ -71,6 +72,7 @@ type CoachEntitlements = { hasCustomColors?: boolean; hasTeamIdentity?: boolean;
 // click on a color it brings me to the top") and a text box lost its cursor after every letter.
 // branding-sections-stay-mounted.test.ts holds the rule.
 function SuggestedPair({ colors, withSecondary, onUse }: { colors: string[]; withSecondary: boolean; onUse: (pair: { primary: string; secondary: string | null }) => void }) {
+  const t = useT();
   const pair = suggestBrandPair(colors);
   if (!pair) return null;
   const secondary = withSecondary ? pair.secondary : null;
@@ -82,22 +84,23 @@ function SuggestedPair({ colors, withSecondary, onUse }: { colors: string[]; wit
   );
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-md border border-border px-3 py-2">
-      <span className="text-[11px] text-muted-foreground">Suggested from your logo</span>
-      {chip(pair.primary, "Primary")}
-      {secondary && chip(secondary, "Secondary")}
+      <span className="text-[11px] text-muted-foreground">{t("Suggested from your logo")}</span>
+      {chip(pair.primary, t("Primary"))}
+      {secondary && chip(secondary, t("Secondary"))}
       <Button type="button" variant="outline" size="sm" onClick={() => onUse({ primary: pair.primary, secondary })}>
-        Use {secondary ? "these" : "this"}
+        {secondary ? t("Use these") : t("Use this")}
       </Button>
     </div>
   );
 }
 function Gate({ unlocked, children }: { unlocked: boolean; children: React.ReactNode }) {
+  const t = useT();
   return (
     <div className={cn("space-y-3", !unlocked && "rounded-md border border-dashed border-amber-500/40 p-3")}>
       {!unlocked && (
         <p className="flex items-center gap-1.5 text-xs text-amber-500">
-          <Lock className="h-3 w-3" /> Part of Full Personalization. Free on any plan of{" "}
-          {FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES} athletes or more; smaller programs add it from Billing. Saving leaves these fields as they are.
+          <Lock className="h-3 w-3" />{" "}
+          {t("Part of Full Personalization. Free on any plan of {count} athletes or more; smaller programs add it from Billing. Saving leaves these fields as they are.", { count: FULL_PERSONALIZATION_INCLUDED_AT_ATHLETES })}
         </p>
       )}
       {children}
@@ -126,6 +129,7 @@ function Section({
   canEdit: boolean;
   saving: boolean;
 }) {
+  const t = useT();
   return (
     <Card className="mt-6">
       <CardHeader>
@@ -138,7 +142,7 @@ function Section({
       <CardContent className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {/* The preview stays on screen while the controls beside it scroll, so every pick shows. */}
         <div className="min-w-0 lg:sticky lg:top-[calc(var(--app-shell-sticky-height,5rem)+1rem)] lg:self-start">
-          <p className="label-xs mb-2">Preview</p>
+          <p className="label-xs mb-2">{t("Preview")}</p>
           <div className="brand-scope overflow-hidden rounded-lg border border-border bg-background" style={draftStyle}>
             {preview}
           </div>
@@ -147,7 +151,7 @@ function Section({
           {children}
           {onSave && canEdit && (
             <Button type="button" onClick={onSave} disabled={saving}>
-              {saving ? "Saving…" : "Save"}
+              {saving ? t("Saving…") : t("Save")}
             </Button>
           )}
         </div>
@@ -157,6 +161,7 @@ function Section({
 }
 
 export default function CoachBranding() {
+  const t = useT();
   const { user } = useAuth();
   const qc = useQueryClient();
   const canEdit = user?.role === "coach" && user.isPrimaryCoach === true;
@@ -271,9 +276,9 @@ export default function CoachBranding() {
     },
     onSuccess: () => {
       invalidate();
-      toast.success("Saved");
+      toast.success(t("Saved"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save that")),
   });
   const uploadLogo = useMutation({
     mutationFn: async (file: File) => {
@@ -286,9 +291,9 @@ export default function CoachBranding() {
       setPendingLogo(null);
       setLogoUrl(result.logoUrl ?? result.brandLogoUrl ?? null);
       invalidate();
-      toast.success("Logo updated");
+      toast.success(t("Logo updated"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't upload that logo"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't upload that logo")),
   });
   const removeLogo = useMutation({
     mutationFn: () => apiRequest("DELETE", "/api/coach/branding/logo"),
@@ -296,18 +301,18 @@ export default function CoachBranding() {
       setLogoUrl(null);
       invalidate();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't remove the logo"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't remove the logo")),
   });
   const features = useMutation({
     mutationFn: (patch: Partial<Record<CoachFeature, boolean>>) =>
       apiRequest("PUT", "/api/coach/features", patch),
     onSuccess: invalidate,
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save that")),
   });
   const testEmail = useMutation({
     mutationFn: () => apiRequest("POST", "/api/coach/branding/test-email"),
-    onSuccess: () => toast.success(`Sent to ${user?.email}`),
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't send the test"),
+    onSuccess: () => toast.success(t("Sent to {email}", { email: user?.email ?? "" })),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't send the test")),
   });
 
   // The draft, as the app would draw it. Every preview on this page is the real component
@@ -344,26 +349,25 @@ export default function CoachBranding() {
   async function copy(text: string, what: string) {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success(`${what} copied`);
+      toast.success(t("{what} copied", { what }));
     } catch {
-      toast.error("Couldn't copy, select it and copy by hand");
+      toast.error(t("Couldn't copy, select it and copy by hand"));
     }
   }
 
 
   return (
-    <AppShell title="Branding">
+    <AppShell title={t("Branding")}>
       <p className="max-w-2xl text-sm text-muted-foreground">
-        Everything an athlete sees, in the order they see it. Each preview updates as you type.{" "}
-        {POWERED_BY_FORGE_LABEL} stays as a small mark under the name and at the foot of every page; it is
-        the one thing on this page that cannot be changed.
-        {!canEdit && " Only the primary coach can edit these; you are viewing."}
+        {t("Everything an athlete sees, in the order they see it. Each preview updates as you type.")}{" "}
+        {t("{mark} stays as a small mark under the name and at the foot of every page; it is the one thing on this page that cannot be changed.", { mark: POWERED_BY_FORGE_LABEL })}
+        {!canEdit && ` ${t("Only the primary coach can edit these; you are viewing.")}`}
       </p>
 
       {isError ? (
         <Card className="mt-6">
           <CardContent className="pt-6">
-            <ReadFailed what="your branding" onRetry={() => void refetch()} />
+            <ReadFailed what={t("your branding")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       ) : isLoading || !org ? (
@@ -376,11 +380,11 @@ export default function CoachBranding() {
             canEdit={canEdit}
             saving={save.isPending}
             step={1}
-            title="Login screen"
-            description="The first thing an athlete sees. Logo, program name and primary color are free at every size."
+            title={t("Login screen")}
+            description={t("The first thing an athlete sees. Logo, program name and primary color are free at every size.")}
             preview={
               <div className="bg-background px-6 py-8">
-                <BrandedMark brand={draft} tagline="Coach. Program. Perform." />
+                <BrandedMark brand={draft} tagline={t("Coach. Program. Perform.")} />
                 <div className="mx-auto mt-6 max-w-xs space-y-2">
                   <div className="h-9 rounded-md border border-border bg-surface" />
                   <div className="h-9 rounded-md border border-border bg-surface" />
@@ -391,7 +395,7 @@ export default function CoachBranding() {
                       color: `hsl(${contrastForegroundHsl(primaryColor || "#e2521a")})`,
                     }}
                   >
-                    Sign in
+                    {t("Sign in")}
                   </div>
                 </div>
               </div>
@@ -406,40 +410,40 @@ export default function CoachBranding() {
             }}
           >
             <div className="space-y-1.5">
-              <Label htmlFor="brand-name">Program name</Label>
-              <Input id="brand-name" value={teamName} onChange={(e) => setTeamName(e.target.value)} maxLength={60} placeholder="e.g. Ridgeview Strength & Conditioning" disabled={!canEdit} />
-              <p className="text-xs text-muted-foreground">Replaces the word Forge inside the app. The app's name on the phone stays Forge.</p>
+              <Label htmlFor="brand-name">{t("Program name")}</Label>
+              <Input id="brand-name" value={teamName} onChange={(e) => setTeamName(e.target.value)} maxLength={60} placeholder={t("e.g. Ridgeview Strength & Conditioning")} disabled={!canEdit} />
+              <p className="text-xs text-muted-foreground">{t("Replaces the word Forge inside the app. The app's name on the phone stays Forge.")}</p>
             </div>
             <div className="space-y-1.5">
-              <Label>Logo</Label>
+              <Label>{t("Logo")}</Label>
               <div className="flex items-center gap-3">
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-surface">
-                  {logoUrl ? <img src={resolveApiUrl(logoUrl)} alt="Current logo" className="h-full w-full object-contain" /> : <ImagePlus className="h-6 w-6 text-muted-foreground" />}
+                  {logoUrl ? <img src={resolveApiUrl(logoUrl)} alt={t("Current logo")} className="h-full w-full object-contain" /> : <ImagePlus className="h-6 w-6 text-muted-foreground" />}
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <input ref={logoInput} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setPendingLogo(f); e.target.value = ""; }} />
                   <Button type="button" variant="outline" size="sm" onClick={() => logoInput.current?.click()} disabled={!canEdit || uploadLogo.isPending}>
-                    {uploadLogo.isPending ? "Uploading…" : logoUrl ? "Replace" : "Upload"}
+                    {uploadLogo.isPending ? t("Uploading…") : logoUrl ? t("Replace") : t("Upload")}
                   </Button>
                   {logoUrl && canEdit && (
                     <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => removeLogo.mutate()} disabled={removeLogo.isPending}>
-                      <Trash2 className="h-3.5 w-3.5" /> Remove
+                      <Trash2 className="h-3.5 w-3.5" /> {t("Remove")}
                     </Button>
                   )}
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">PNG with a transparent background works best. Also becomes the home-screen icon on the web.</p>
+              <p className="text-xs text-muted-foreground">{t("PNG with a transparent background works best. Also becomes the home-screen icon on the web.")}</p>
             </div>
             <ColorField
-              label="Primary color"
+              label={t("Primary color")}
               value={primaryColor}
               onChange={setPrimaryColor}
               suggested={[
-                { label: "From your logo, tap to use", colors: swatches },
-                { label: "Your saved palette", colors: palette },
+                { label: t("From your logo, tap to use"), colors: swatches },
+                { label: t("Your saved palette"), colors: palette },
               ]}
             />
-            {!primaryOk && <p className="text-xs text-amber-500">Too light or dark to read as button text. The save will still go through, but pick a stronger shade.</p>}
+            {!primaryOk && <p className="text-xs text-amber-500">{t("Too light or dark to read as button text. The save will still go through, but pick a stronger shade.")}</p>}
             <SuggestedPair
               colors={swatches}
               withSecondary={colorsUnlocked}
@@ -452,26 +456,26 @@ export default function CoachBranding() {
               }}
             />
             <div className="flex flex-wrap items-center gap-2">
-              <input ref={imageInput} type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; const colors = await extractColorsFromFile(f); if (colors.length === 0) { toast.error("Couldn't read colors from that image"); return; } savePalette([...new Set([...colors, ...palette])].slice(0, 12)); toast.success(`${colors.length} colors added to your palette`); }} />
+              <input ref={imageInput} type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; const colors = await extractColorsFromFile(f); if (colors.length === 0) { toast.error(t("Couldn't read colors from that image")); return; } savePalette([...new Set([...colors, ...palette])].slice(0, 12)); toast.success(t("{count} colors added to your palette", { count: colors.length })); }} />
               <Button type="button" variant="outline" size="sm" onClick={() => imageInput.current?.click()}>
-                <Palette className="h-3.5 w-3.5" /> Pull colors from an image
+                <Palette className="h-3.5 w-3.5" /> {t("Pull colors from an image")}
               </Button>
               {primaryColor && !palette.includes(primaryColor.toLowerCase()) && (
                 <Button type="button" variant="ghost" size="sm" onClick={() => savePalette([primaryColor.toLowerCase(), ...palette].slice(0, 12))}>
-                  Save {primaryColor} to palette
+                  {t("Save {color} to palette", { color: primaryColor })}
                 </Button>
               )}
               {palette.length > 0 && (
-                <Button type="button" variant="ghost" size="sm" onClick={() => savePalette([])}>Clear palette</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => savePalette([])}>{t("Clear palette")}</Button>
               )}
             </div>
             <div className="space-y-1.5 rounded-md bg-surface p-3">
-              <p className="text-xs font-semibold">Team login link</p>
+              <p className="text-xs font-semibold">{t("Team login link")}</p>
               <p className="break-all font-mono text-xs text-muted-foreground">{loginLink}</p>
-              <Button type="button" variant="outline" size="sm" onClick={() => void copy(loginLink, "Login link")}>
-                <Copy className="h-3.5 w-3.5" /> Copy
+              <Button type="button" variant="outline" size="sm" onClick={() => void copy(loginLink, t("Login link"))}>
+                <Copy className="h-3.5 w-3.5" /> {t("Copy")}
               </Button>
-              <p className="text-xs text-muted-foreground">Send this to athletes. Their phone remembers your look from then on.</p>
+              <p className="text-xs text-muted-foreground">{t("Send this to athletes. Their phone remembers your look from then on.")}</p>
             </div>
           </Section>
 
@@ -481,8 +485,8 @@ export default function CoachBranding() {
             canEdit={canEdit}
             saving={save.isPending}
             step={2}
-            title="Home"
-            description="The header, the background and the feel of every screen once they are in."
+            title={t("Home")}
+            description={t("The header, the background and the feel of every screen once they are in.")}
             preview={
               <div className="bg-background">
                 <div className="flex items-center gap-2 bg-surface px-3 py-2.5" style={{ borderBottom: `3px solid ${secondaryColor || "#0b0b0f"}` }}>
@@ -496,17 +500,17 @@ export default function CoachBranding() {
                 </div>
                 <div className="space-y-3 p-3">
                   <div className="flex gap-2">
-                    <span className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{ backgroundColor: primaryColor || "#e2521a", color: `hsl(${contrastForegroundHsl(primaryColor || "#e2521a")})` }}>Today</span>
-                    <span className="rounded-md bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground">Calendar</span>
-                    <span className="rounded-md bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground">Library</span>
+                    <span className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{ backgroundColor: primaryColor || "#e2521a", color: `hsl(${contrastForegroundHsl(primaryColor || "#e2521a")})` }}>{t("Today")}</span>
+                    <span className="rounded-md bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground">{t("Calendar")}</span>
+                    <span className="rounded-md bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground">{t("Library")}</span>
                   </div>
                   <div className="rounded-lg border border-border bg-card p-3">
-                    <p className="font-display text-lg font-extrabold uppercase">Upper Body Strength</p>
-                    <p className="text-xs text-muted-foreground">4 exercises · 45 min</p>
+                    <p className="font-display text-lg font-extrabold uppercase">{t("Upper Body Strength")}</p>
+                    <p className="text-xs text-muted-foreground">{t("4 exercises · 45 min")}</p>
                   </div>
                   <div className="rounded-lg border border-border bg-card p-3">
-                    <p className="text-xs text-muted-foreground">Weekly streak</p>
-                    <p className="font-display text-2xl font-extrabold text-primary">6 days</p>
+                    <p className="text-xs text-muted-foreground">{t("Weekly streak")}</p>
+                    <p className="font-display text-2xl font-extrabold text-primary">{t("6 days")}</p>
                   </div>
                 </div>
               </div>
@@ -524,36 +528,36 @@ export default function CoachBranding() {
             {/* Redesigned 2026-11-20 (Scott: "make this section sexier, more colors for the primary
                 and secondary, i can't even select a primary ... why are there only 6 fonts?"). */}
             <div className="space-y-3">
-              <p className="label-xs">Team colors</p>
+              <p className="label-xs">{t("Team colors")}</p>
               <ColorField
-                label="Primary color"
+                label={t("Primary color")}
                 value={primaryColor}
                 onChange={setPrimaryColor}
                 suggested={[
-                  { label: "From your logo", colors: swatches },
-                  { label: "Your saved palette", colors: palette },
+                  { label: t("From your logo"), colors: swatches },
+                  { label: t("Your saved palette"), colors: palette },
                 ]}
               />
-              {!primaryOk && <p className="text-xs text-amber-500">Too light or dark to read as button text. Pick a stronger shade.</p>}
+              {!primaryOk && <p className="text-xs text-amber-500">{t("Too light or dark to read as button text. Pick a stronger shade.")}</p>}
             </div>
             <Gate unlocked={colorsUnlocked}>
               <ColorField
-                label="Secondary color"
+                label={t("Secondary color")}
                 value={secondaryColor}
                 onChange={setSecondaryColor}
                 suggested={[
-                  { label: "From your logo", colors: swatches },
-                  { label: "Your saved palette", colors: palette },
+                  { label: t("From your logo"), colors: swatches },
+                  { label: t("Your saved palette"), colors: palette },
                 ]}
               />
-              {!secondaryOk && <p className="text-xs text-amber-500">Hard to read against text. Pick a stronger shade.</p>}
+              {!secondaryOk && <p className="text-xs text-amber-500">{t("Hard to read against text. Pick a stronger shade.")}</p>}
               {primaryColor && secondaryColor && primaryColor.toUpperCase() === secondaryColor.toUpperCase() && (
-                <p className="text-xs text-amber-500">Your secondary is the same color as your primary, so the two will not stand apart.</p>
+                <p className="text-xs text-amber-500">{t("Your secondary is the same color as your primary, so the two will not stand apart.")}</p>
               )}
 
               <div className="space-y-2 border-t border-border pt-4">
-                <p className="label-xs">Background</p>
-                <p className="text-xs text-muted-foreground">Shifts every surface toward a hue. A navy-and-gold school picks navy, a forest-green program picks forest.</p>
+                <p className="label-xs">{t("Background")}</p>
+                <p className="text-xs text-muted-foreground">{t("Shifts every surface toward a hue. A navy-and-gold school picks navy, a forest-green program picks forest.")}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {BACKGROUND_HUE_PRESETS.map((p) => (
                     <button
@@ -573,7 +577,7 @@ export default function CoachBranding() {
                       )}
                     >
                       <span className="h-3 w-3 rounded-full border border-border" style={{ backgroundColor: p.strength === 0 ? "#555" : `hsl(${p.hue} 55% 45%)` }} />
-                      {p.label}
+                      {t(p.label)}
                     </button>
                   ))}
                 </div>
@@ -584,7 +588,7 @@ export default function CoachBranding() {
                     max={359}
                     value={backgroundHue ?? 222}
                     disabled={!canEdit}
-                    aria-label="Background hue, any color"
+                    aria-label={t("Background hue, any color")}
                     data-testid="tint-hue-slider"
                     onChange={(e) => {
                       setBackgroundHue(Number(e.target.value));
@@ -598,32 +602,32 @@ export default function CoachBranding() {
                     min={0}
                     max={359}
                     value={backgroundHue ?? ""}
-                    placeholder="hue"
+                    placeholder={t("hue")}
                     onChange={(e) => setBackgroundHue(e.target.value === "" ? null : Math.min(359, Math.max(0, Number(e.target.value) || 0)))}
                     className="h-8 w-20 text-xs"
-                    aria-label="Exact hue, 0 to 359"
+                    aria-label={t("Exact hue, 0 to 359")}
                     disabled={!canEdit}
                   />
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {primaryColor && (
                     <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => { setBackgroundHue(hueOf(primaryColor)); if (backgroundStrength === 0) setBackgroundStrength(1); }}>
-                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: primaryColor }} /> Match primary
+                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: primaryColor }} /> {t("Match primary")}
                     </Button>
                   )}
                   {secondaryColor && (
                     <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => { setBackgroundHue(hueOf(secondaryColor)); if (backgroundStrength === 0) setBackgroundStrength(1); }}>
-                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: secondaryColor }} /> Match secondary
+                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: secondaryColor }} /> {t("Match secondary")}
                     </Button>
                   )}
                   {backgroundHue !== null && (
                     <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => setBackgroundHue(null)}>
-                      No tint
+                      {t("No tint")}
                     </Button>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Strength</span>
+                  <span className="text-xs text-muted-foreground">{t("Strength")}</span>
                   <div className="inline-flex overflow-hidden rounded-full border border-border">
                     {BRAND_BACKGROUND_STRENGTHS.map((s) => (
                       <button
@@ -633,7 +637,7 @@ export default function CoachBranding() {
                         onClick={() => setBackgroundStrength(s)}
                         className={cn("px-3 py-1 text-xs font-medium", backgroundStrength === s ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
                       >
-                        {STRENGTH_LABEL[s]}
+                        {t(STRENGTH_LABEL[s])}
                       </button>
                     ))}
                   </div>
@@ -641,25 +645,25 @@ export default function CoachBranding() {
               </div>
 
               <div className="space-y-2 border-t border-border pt-4">
-                <p className="label-xs">Heading font</p>
+                <p className="label-xs">{t("Heading font")}</p>
                 <FontPicker
                   fonts={BRAND_HEADING_FONTS}
                   kind="heading"
                   value={headingFont}
                   onChange={setHeadingFont}
-                  sample={teamName || "Upper Body Strength"}
+                  sample={teamName || t("Upper Body Strength")}
                   disabled={!canEdit}
                   uppercase
                 />
               </div>
             </Gate>
             <div className="space-y-2 border-t border-border pt-4">
-              <Label>Nav sections</Label>
-              <p className="text-xs text-muted-foreground">Turn off what your program doesn't use. Tab names are renamed from the menu under your name.</p>
+              <Label>{t("Nav sections")}</Label>
+              <p className="text-xs text-muted-foreground">{t("Turn off what your program doesn't use. Tab names are renamed from the menu under your name.")}</p>
               {COACH_FEATURE_FIELDS.map((field) => (
                 <label key={field.key} className="flex cursor-pointer items-start gap-2.5 text-sm">
                   <Checkbox className="mt-0.5" checked={org.features?.[field.key] ?? true} disabled={!canEdit || features.isPending} onCheckedChange={(c) => features.mutate({ [field.key]: c === true })} />
-                  <span><span className="font-medium">{field.label}</span><span className="block text-xs text-muted-foreground">{field.description}</span></span>
+                  <span><span className="font-medium">{t(field.label)}</span><span className="block text-xs text-muted-foreground">{t(field.description)}</span></span>
                 </label>
               ))}
             </div>
@@ -671,8 +675,8 @@ export default function CoachBranding() {
             canEdit={canEdit}
             saving={save.isPending}
             step={3}
-            title="Emails"
-            description="Every email an athlete or a parent on your program receives: welcome, guardian claim, password reset, new device."
+            title={t("Emails")}
+            description={t("Every email an athlete or a parent on your program receives: welcome, guardian claim, password reset, new device.")}
             preview={
               <div className="bg-white text-[#111]" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
                 <div className="flex items-center gap-3 px-5 py-4" style={{ backgroundColor: primaryColor || "#F65B23" }}>
@@ -691,15 +695,15 @@ export default function CoachBranding() {
           >
             <Gate unlocked={identityUnlocked}>
               <div className="space-y-1.5">
-                <Label htmlFor="brand-sender">Sender name</Label>
-                <Input id="brand-sender" value={senderName} onChange={(e) => setSenderName(e.target.value)} maxLength={40} placeholder={teamName || "Your program"} disabled={!canEdit} />
-                <p className="text-xs text-muted-foreground">Shows as "{senderName || teamName || "Your program"} via Forge" in the inbox. The address stays Forge's, so mail keeps delivering.</p>
+                <Label htmlFor="brand-sender">{t("Sender name")}</Label>
+                <Input id="brand-sender" value={senderName} onChange={(e) => setSenderName(e.target.value)} maxLength={40} placeholder={teamName || t("Your program")} disabled={!canEdit} />
+                <p className="text-xs text-muted-foreground">{t("Shows as \"{sender} via Forge\" in the inbox. The address stays Forge's, so mail keeps delivering.", { sender: senderName || teamName || t("Your program") })}</p>
               </div>
             </Gate>
             <Button type="button" variant="outline" size="sm" onClick={() => testEmail.mutate()} disabled={testEmail.isPending}>
-              <Mail className="h-3.5 w-3.5" /> {testEmail.isPending ? "Sending…" : "Send me a test"}
+              <Mail className="h-3.5 w-3.5" /> {testEmail.isPending ? t("Sending…") : t("Send me a test")}
             </Button>
-            <p className="text-xs text-muted-foreground">Uses what is saved, not what is typed. Save first.</p>
+            <p className="text-xs text-muted-foreground">{t("Uses what is saved, not what is typed. Save first.")}</p>
           </Section>
 
           {/* 4. ATHLETE SCREENS */}
@@ -708,19 +712,19 @@ export default function CoachBranding() {
             canEdit={canEdit}
             saving={save.isPending}
             step={4}
-            title="Athlete screens"
-            description="The welcome note on their dashboard and the colors of the screen they log every set on."
+            title={t("Athlete screens")}
+            description={t("The welcome note on their dashboard and the colors of the screen they log every set on.")}
             preview={
               <div className="space-y-3 bg-background p-3">
                 <div className="rounded-lg border border-border bg-card p-3">
-                  <p className="label-xs mb-1">From {teamName || "your coach"}</p>
-                  <p className="text-sm">{welcomeMessage || "Welcome to the program. Check your calendar for today's session."}</p>
+                  <p className="label-xs mb-1">{t("From {name}", { name: teamName || t("your coach") })}</p>
+                  <p className="text-sm">{welcomeMessage || t("Welcome to the program. Check your calendar for today's session.")}</p>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-3">
-                  <p className="font-display text-base font-extrabold uppercase">Back Squat</p>
+                  <p className="font-display text-base font-extrabold uppercase">{t.exercise("Back Squat")}</p>
                   <div className="mt-2 flex gap-2">
-                    <span className="rounded-md bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground">Set 1</span>
-                    <span className="rounded-md bg-secondary px-2 py-1 text-xs text-secondary-foreground">Set 2</span>
+                    <span className="rounded-md bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground">{t("Set {n}", { n: 1 })}</span>
+                    <span className="rounded-md bg-secondary px-2 py-1 text-xs text-secondary-foreground">{t("Set {n}", { n: 2 })}</span>
                   </div>
                 </div>
               </div>
@@ -729,14 +733,14 @@ export default function CoachBranding() {
           >
             <Gate unlocked={identityUnlocked}>
               <div className="space-y-1.5">
-                <Label htmlFor="brand-welcome">Welcome message for athletes</Label>
-                <Textarea id="brand-welcome" value={welcomeMessage} onChange={(e) => setWelcomeMessage(e.target.value)} maxLength={300} rows={3} placeholder="A note in your own voice, shown on their dashboard" disabled={!canEdit} />
+                <Label htmlFor="brand-welcome">{t("Welcome message for athletes")}</Label>
+                <Textarea id="brand-welcome" value={welcomeMessage} onChange={(e) => setWelcomeMessage(e.target.value)} maxLength={300} rows={3} placeholder={t("A note in your own voice, shown on their dashboard")} disabled={!canEdit} />
               </div>
             </Gate>
             <div className="space-y-1.5 border-t border-border pt-4">
-              <Label>Exercise screen colors</Label>
-              <p className="text-xs text-muted-foreground">The backdrop, the Watch Demo button and the completed-set marker on the logging screen.</p>
-              <Button type="button" variant="outline" size="sm" onClick={() => setThemeOpen(true)} disabled={!canEdit}>Edit exercise screen colors</Button>
+              <Label>{t("Exercise screen colors")}</Label>
+              <p className="text-xs text-muted-foreground">{t("The backdrop, the Watch Demo button and the completed-set marker on the logging screen.")}</p>
+              <Button type="button" variant="outline" size="sm" onClick={() => setThemeOpen(true)} disabled={!canEdit}>{t("Edit exercise screen colors")}</Button>
             </div>
           </Section>
 
@@ -746,13 +750,13 @@ export default function CoachBranding() {
             canEdit={canEdit}
             saving={save.isPending}
             step={5}
-            title="Public page"
-            description="What anyone sees at your team address before they have an account."
+            title={t("Public page")}
+            description={t("What anyone sees at your team address before they have an account.")}
             preview={
               <div className="bg-background p-4 text-center">
                 <BrandedMark brand={draft} size="md" />
                 {motto && <p className="mt-2 font-display text-lg uppercase tracking-wide">{motto}</p>}
-                <p className="mt-2 text-sm text-muted-foreground">{mission || "About the program goes here."}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{mission || t("About the program goes here.")}</p>
                 {contactEmail && <p className="mt-2 text-xs text-muted-foreground">{contactEmail}</p>}
                 <p className="mt-3 break-all font-mono text-[10px] text-muted-foreground">{publicLink}</p>
               </div>
@@ -768,24 +772,24 @@ export default function CoachBranding() {
           >
             <Gate unlocked={identityUnlocked}>
               <div className="space-y-1.5">
-                <Label htmlFor="brand-slug">Team address</Label>
+                <Label htmlFor="brand-slug">{t("Team address")}</Label>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">{origin}/team/</span>
-                  <Input id="brand-slug" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} maxLength={30} placeholder="ridgeview-strength" disabled={!canEdit} className="max-w-[12rem]" />
+                  <Input id="brand-slug" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} maxLength={30} placeholder={t("ridgeview-strength")} disabled={!canEdit} className="max-w-[12rem]" />
                 </div>
-                <p className="text-xs text-muted-foreground">Letters, numbers and hyphens. Your invite code keeps working too.</p>
-                <Button type="button" variant="ghost" size="sm" onClick={() => void copy(publicLink, "Team address")}><Copy className="h-3.5 w-3.5" /> Copy address</Button>
+                <p className="text-xs text-muted-foreground">{t("Letters, numbers and hyphens. Your invite code keeps working too.")}</p>
+                <Button type="button" variant="ghost" size="sm" onClick={() => void copy(publicLink, t("Team address"))}><Copy className="h-3.5 w-3.5" /> {t("Copy address")}</Button>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="brand-motto">Motto</Label>
-                <Input id="brand-motto" value={motto} onChange={(e) => setMotto(e.target.value)} maxLength={80} placeholder="e.g. Earn it every day" disabled={!canEdit} />
+                <Label htmlFor="brand-motto">{t("Motto")}</Label>
+                <Input id="brand-motto" value={motto} onChange={(e) => setMotto(e.target.value)} maxLength={80} placeholder={t("e.g. Earn it every day")} disabled={!canEdit} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="brand-mission">About the program</Label>
+                <Label htmlFor="brand-mission">{t("About the program")}</Label>
                 <Textarea id="brand-mission" value={mission} onChange={(e) => setMission(e.target.value)} maxLength={500} rows={4} disabled={!canEdit} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="brand-contact">Public contact email</Label>
+                <Label htmlFor="brand-contact">{t("Public contact email")}</Label>
                 <Input id="brand-contact" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} maxLength={255} disabled={!canEdit} />
               </div>
             </Gate>
@@ -800,15 +804,15 @@ export default function CoachBranding() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <span className="rounded-md bg-primary/15 px-2 py-0.5 font-mono text-xs text-primary">8</span>
-                Everywhere else
+                {t("Everywhere else")}
               </CardTitle>
-              <CardDescription>Follows the colors above with nothing to set.</CardDescription>
+              <CardDescription>{t("Follows the colors above with nothing to set.")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <p>Charts, toasts, the loading spinner, the glow behind buttons, and the screens an athlete sees while waiting on a parent all take the primary color.</p>
-              <p>Training-history and recruiting PDFs, the subscribed calendar, push notifications, share images and certificates carry your name and colors too.</p>
-              <p>The app's name on the phone and the splash screen stay Forge: Apple allows one app name. The icon's color is yours to pick above. On the web, your logo is the home-screen icon.</p>
-              <p className="flex items-center gap-2 pt-2 text-xs font-semibold uppercase tracking-wide opacity-60">{POWERED_BY_FORGE_LABEL} <span className="font-normal normal-case tracking-normal">appears under your name and at the foot of every page.</span></p>
+              <p>{t("Charts, toasts, the loading spinner, the glow behind buttons, and the screens an athlete sees while waiting on a parent all take the primary color.")}</p>
+              <p>{t("Training-history and recruiting PDFs, the subscribed calendar, push notifications, share images and certificates carry your name and colors too.")}</p>
+              <p>{t("The app's name on the phone and the splash screen stay Forge: Apple allows one app name. The icon's color is yours to pick above. On the web, your logo is the home-screen icon.")}</p>
+              <p className="flex items-center gap-2 pt-2 text-xs font-semibold uppercase tracking-wide opacity-60">{POWERED_BY_FORGE_LABEL} <span className="font-normal normal-case tracking-normal">{t("appears under your name and at the foot of every page.")}</span></p>
             </CardContent>
           </Card>
           <ExercisePageThemeDialog open={themeOpen} onOpenChange={setThemeOpen} />
