@@ -33,7 +33,7 @@ export function SingleSportYearNote({ athleteId }: { athleteId: number }) {
   );
 }
 
-const WEEK_LABEL: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", timeZone: "UTC" };
+const WEEK_FORMAT: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", timeZone: "UTC" };
 
 export function ThrowingWorkloadPanel({ athleteId }: { athleteId: number }) {
   const t = useT();
@@ -90,7 +90,7 @@ export function ThrowingWorkloadPanel({ athleteId }: { athleteId: number }) {
                 <tbody>
                   {data.weeks.map((w) => (
                     <tr key={w.weekOf} className="border-t border-border/60">
-                      <td className="py-1 pr-2">{new Date(`${w.weekOf}T00:00:00Z`).toLocaleDateString(undefined, WEEK_LABEL)}</td>
+                      <td className="py-1 pr-2">{new Date(`${w.weekOf}T00:00:00Z`).toLocaleDateString(undefined, WEEK_FORMAT)}</td>
                       <td className="py-1 pr-2">{w.pitches}</td>
                       <td className="py-1 pr-2">{w.innings}</td>
                       <td className="py-1 pr-2">{w.topGamePitches}</td>

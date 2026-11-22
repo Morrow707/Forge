@@ -3033,7 +3033,7 @@ function AcwrTrendCard({ athleteId }: { athleteId: string }) {
                       ACWR_RISK_CLASSNAME[latest.level],
                     )}
                   >
-                    {ACWR_RISK_LABEL[latest.level]}
+                    {t(ACWR_RISK_LABEL[latest.level])}
                   </span>
                 </div>
               </div>

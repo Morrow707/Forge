@@ -18,7 +18,7 @@ import { shareOrDownloadFile, shareOrDownloadBlob } from "@/lib/share-file";
 import { renderPrShareCard } from "@/lib/share-card";
 import { shareCardBrandFromCache } from "@/lib/share-card";
 import { toast } from "sonner";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import {
   LineChart,
   Line,
@@ -142,7 +142,7 @@ export default function AthleteProgress() {
         weight: pr.weight,
         unit: pr.unit,
         reps: pr.reps,
-        dateLabel: format(parseISO(pr.date), "MMM d, yyyy"),
+        dateLabel: t.date(parseISO(pr.date), { month: "short", day: "numeric", year: "numeric" }),
       });
       await shareOrDownloadBlob(blob, `${pr.exerciseName}-pr.png`, `New PR: ${pr.exerciseName}`);
     } catch {

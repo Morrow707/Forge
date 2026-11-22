@@ -543,7 +543,7 @@ export default function AdminPlatformTrends() {
                     <tbody>
                       {data.bySport.map((row) => (
                         <tr key={row.sport} className="border-b border-border/50">
-                          <td className="py-1.5 pr-3 font-semibold">{row.sport}</td>
+                          <td className="py-1.5 pr-3 font-semibold">{t.term("sport", row.sport)}</td>
                           <td className="py-1.5 pr-3">
                             <Badge variant="secondary" className="font-normal">
                               {row.athleteCount}

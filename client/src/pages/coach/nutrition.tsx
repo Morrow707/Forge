@@ -121,7 +121,7 @@ export default function CoachNutrition() {
                         <p className="truncate text-xs text-muted-foreground">{a.email}</p>
                         {(a.sport || a.position) && (
                           <div className="mt-1.5 flex flex-wrap gap-1">
-                            {a.sport && <Badge variant="secondary">{a.sport}</Badge>}
+                            {a.sport && <Badge variant="secondary">{t.term("sport", a.sport)}</Badge>}
                             {a.position && <Badge variant="outline">{a.position}</Badge>}
                           </div>
                         )}

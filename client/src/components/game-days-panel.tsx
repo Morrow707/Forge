@@ -273,7 +273,7 @@ function MicrocycleDialog({
                         {d.label}
                       </Badge>
                       <p className="mt-1 text-[10px] font-normal text-muted-foreground">
-                        {format(parseISO(d.date), "EEE M/d")}
+                        {t.date(parseISO(d.date), { weekday: "short", month: "numeric", day: "numeric" })}
                       </p>
                     </th>
                   ))}

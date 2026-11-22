@@ -167,7 +167,7 @@ export function ProfileFieldsForm({
               <SelectItem value="unset">{t("Not set")}</SelectItem>
               {SEASON_PHASE_OPTIONS.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
-                  {o.label}
+                  {t(o.label)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -188,7 +188,7 @@ export function ProfileFieldsForm({
               <SelectItem value="unset">{t("No preference")}</SelectItem>
               {TRAINING_STYLE_OPTIONS.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
-                  {o.label}
+                  {t(o.label)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -234,7 +234,7 @@ export function ProfileFieldsForm({
               <SelectItem value="unset">{t("Not set")}</SelectItem>
               {GENDER_OPTIONS.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
-                  {o.label}
+                  {t(o.label)}
                 </SelectItem>
               ))}
             </SelectContent>

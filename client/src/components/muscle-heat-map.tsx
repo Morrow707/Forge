@@ -195,7 +195,7 @@ export function MuscleHeatMap({ athleteId }: { athleteId?: string }) {
                     className="h-2.5 w-2.5 shrink-0 rounded-sm"
                     style={{ background: muscleHeatColor(max > 0 ? count / max : 0) }}
                   />
-                  {MUSCLE_REGION_LABEL[region]}
+                  {t(MUSCLE_REGION_LABEL[region])}
                   <span className="tabular-nums opacity-70">{Math.round(count)}</span>
                 </span>
               ))}
@@ -254,7 +254,7 @@ function MuscleExerciseList({
     <div className="mt-3 overflow-hidden rounded-md border border-border bg-surface-elevated">
       <div className="flex items-baseline gap-2 border-b border-border px-3 py-2.5">
         <span className="h-2.5 w-2.5 shrink-0 self-center rounded-sm" style={{ background: colour ?? GRAY }} />
-        <h4 className="text-sm font-semibold">{region ? MUSCLE_REGION_LABEL[region] : group}</h4>
+        <h4 className="text-sm font-semibold">{t(region ? MUSCLE_REGION_LABEL[region] : group)}</h4>
         <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">
           {sets ? t("{count} sets", { count: Math.round(sets) }) : t("none logged")} · {t("last {days} days", { days: windowDays })}
         </span>

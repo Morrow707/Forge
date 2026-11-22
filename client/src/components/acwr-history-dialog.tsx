@@ -8,7 +8,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { getJson } from "@/lib/queryClient";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import {
   AreaChart,
   Area,
@@ -163,7 +163,7 @@ export function AcwrHistoryDialog({
   });
 
   const chartData = data.map((p) => ({
-    label: format(parseISO(p.date), "MMM d"),
+    label: t.date(parseISO(p.date), { month: "short", day: "numeric" }),
     acute: Math.round(p.acuteLoad),
     chronic: Math.round(p.chronicLoad),
   }));
@@ -205,7 +205,7 @@ export function AcwrHistoryDialog({
                       ACWR_RISK_CLASSNAME[latest.level],
                     )}
                   >
-                    {ACWR_RISK_LABEL[latest.level]}
+                    {t(ACWR_RISK_LABEL[latest.level])}
                   </span>
                 </div>
               </div>

@@ -4,7 +4,7 @@ import { useCameraAccess } from "@/hooks/use-camera-access";
 import { SkillsGate } from "@/components/skills-gate";
 import { useParams, useLocation, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -281,7 +281,7 @@ function SkillWorkoutPageInner() {
             >
               <ArrowLeft className="h-6 w-6 md:h-7 md:w-7" />
             </button>
-            <span>{format(parseISO(date), "EEEE, MMM d")}</span>
+            <span>{t.date(parseISO(date), { weekday: "long", month: "short", day: "numeric" })}</span>
           </div>
         }
       >
@@ -337,7 +337,7 @@ function SkillWorkoutPageInner() {
                         >
                           <span className="truncate">{t.exercise(ex.name)}</span>
                           <span className="shrink-0 rounded bg-teal-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-teal-400">
-                            {ex.skillType}
+                            {t.term("skill type", ex.skillType)}
                           </span>
                         </button>
                         <p className="text-xs font-semibold text-muted-foreground">
@@ -396,19 +396,19 @@ function SkillWorkoutPageInner() {
                         </p>
                         {ex.targets && ex.targets.length > 0 && (
                           <div className="flex flex-wrap gap-1.5">
-                            {ex.targets.map((t) => (
+                            {ex.targets.map((target) => (
                               <span
-                                key={t}
+                                key={target}
                                 className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${TARGET_BADGE_CLASS}`}
                               >
-                                {t}
+                                {t.term("skill target", target)}
                               </span>
                             ))}
                           </div>
                         )}
                         {ex.equipment && ex.equipment.length > 0 && (
                           <p className="text-xs text-muted-foreground">
-                            {t("You need: {equipment}", { equipment: ex.equipment.map((e) => t(e)).join(", ") })}
+                            {t("You need: {equipment}", { equipment: ex.equipment.map((e) => t.term("skill equipment", e)).join(", ") })}
                           </p>
                         )}
                         {ex.instructions && (

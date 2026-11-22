@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { Sparkles, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
@@ -109,7 +109,7 @@ export function WeaknessReportPanel({
                   <div>
                     <p className="text-sm font-semibold">{r.summary}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {format(parseISO(r.createdAt), "MMM d, yyyy 'at' h:mm a")} ·{" "}
+                      {t.date(parseISO(r.createdAt), { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })} ·{" "}
                       {t.plural(r.deficits.length, "{count} deficit flagged", "{count} deficits flagged")}
                     </p>
                   </div>

@@ -7,7 +7,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { getJson } from "@/lib/queryClient";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import {
   LineChart,
   Line,
@@ -74,7 +74,7 @@ export function WellnessHistoryDialog({
   });
 
   const chartData = [...data].reverse().map((e) => ({
-    label: format(parseISO(e.date), "MMM d"),
+    label: t.date(parseISO(e.date), { month: "short", day: "numeric" }),
     value: e.score,
   }));
 
@@ -172,7 +172,7 @@ export function WellnessHistoryDialog({
                 <span>
                   <span className="text-muted-foreground">{a.questionText}</span> <span className="font-semibold">{a.value}</span>
                 </span>
-                <span className="shrink-0 text-muted-foreground">{format(parseISO(a.date), "MMM d")}</span>
+                <span className="shrink-0 text-muted-foreground">{t.date(parseISO(a.date), { month: "short", day: "numeric" })}</span>
               </div>
             ))}
           </div>

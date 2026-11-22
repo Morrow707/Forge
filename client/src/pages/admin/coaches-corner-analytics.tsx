@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { formatDistanceToNow } from "date-fns";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -158,7 +157,7 @@ export default function AdminCoachesCornerAnalytics() {
                       </p>
                       <p className="mt-1 text-sm">{f.reason}</p>
                       <div className="mt-2 flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(f.createdAt), { addSuffix: true })}</span>
+                        <span className="text-xs text-muted-foreground">{t.relative(new Date(f.createdAt))}</span>
                         <div className="flex gap-2">
                           {f.trackId != null && (
                             <Button asChild size="sm" variant="ghost">
@@ -195,7 +194,7 @@ export default function AdminCoachesCornerAnalytics() {
                       <p className="text-sm font-semibold">{item.question}</p>
                       {item.answerGiven && <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{t("Library said: {answer}", { answer: item.answerGiven })}</p>}
                       <div className="mt-2 flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</span>
+                        <span className="text-xs text-muted-foreground">{t.relative(new Date(item.createdAt))}</span>
                         <Button size="sm" variant="outline" onClick={() => resolve.mutate(item.id)} disabled={resolve.isPending}>
                           <Check className="h-4 w-4" />
                           {t("Done")}

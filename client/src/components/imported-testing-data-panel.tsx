@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ReadFailed } from "@/components/read-failed";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { FileSpreadsheet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useT } from "@/i18n";
@@ -76,7 +76,7 @@ export function ImportedTestingDataPanel({ athleteId }: { athleteId: number }) {
         {[...byDate.entries()].map(([date, dayRows]) => (
           <div key={date} className="rounded-md border border-border">
             <p className="border-b border-border px-2.5 py-1.5 text-xs font-semibold">
-              {format(parseISO(date), "d MMM yyyy")}
+              {t.date(parseISO(date), { day: "numeric", month: "short", year: "numeric" })}
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">

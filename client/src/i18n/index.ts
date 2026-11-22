@@ -198,11 +198,72 @@ export function formatNumber(value: number, options?: Intl.NumberFormatOptions):
   return value.toLocaleString(activeLocale(), options);
 }
 
+/** The fixed vocabularies Forge's library stores as English words and the screens draw. */
+export type VocabularyKind =
+  | "exercise category"
+  | "exercise family"
+  | "movement type"
+  | "movement complexity"
+  | "body region"
+  | "plane"
+  | "muscle group"
+  | "equipment"
+  | "laterality"
+  | "skill type"
+  | "skill equipment"
+  | "skill target"
+  | "class category"
+  | "joint"
+  | "sport";
+
+/** A word from one of Forge's fixed vocabularies (a muscle group, a piece of equipment, a skill
+ *  type ...), in the language on screen. The catalog key "{word} ({kind})" is tried first, so a word
+ *  whose plain key means something else ("Back" is also the button) can be told apart; then the
+ *  plain word; then the word as stored, which is how a coach's own free text comes back unchanged. */
+export function vocabularyTerm(kind: VocabularyKind, value: string | null | undefined): string {
+  if (!value) return "";
+  const language = getLanguage();
+  if (language === "en") return value;
+  const catalog = state.catalogs.get(language);
+  return catalog?.[`${value} (${kind})`] ?? catalog?.[value] ?? value;
+}
+
+const MS_PER_SECOND = 1000;
+const SECONDS_PER_MINUTE = 60;
+const MINUTES_PER_HOUR = 60;
+const HOURS_PER_DAY = 24;
+const DAYS_PER_WEEK = 7;
+const DAYS_PER_MONTH = 30;
+const DAYS_PER_YEAR = 365;
+const HOUR = SECONDS_PER_MINUTE * MINUTES_PER_HOUR;
+const DAY = HOUR * HOURS_PER_DAY;
+/** Largest first: a distance is told in the first unit it reaches. */
+const RELATIVE_UNITS: Array<{ unit: Intl.RelativeTimeFormatUnit; seconds: number }> = [
+  { unit: "year", seconds: DAYS_PER_YEAR * DAY },
+  { unit: "month", seconds: DAYS_PER_MONTH * DAY },
+  { unit: "week", seconds: DAYS_PER_WEEK * DAY },
+  { unit: "day", seconds: DAY },
+  { unit: "hour", seconds: HOUR },
+  { unit: "minute", seconds: SECONDS_PER_MINUTE },
+  { unit: "second", seconds: 1 },
+];
+
+/** A moment relative to now ("3 minutes ago", "hace 3 minutos", "in 2 days"), in the language on
+ *  screen. Replaces date-fns formatDistance*, which prints English. */
+export function formatRelative(value: Date | string | number, now: Date = new Date()): string {
+  const date = value instanceof Date ? value : new Date(value);
+  const seconds = Math.round((date.getTime() - now.getTime()) / MS_PER_SECOND);
+  const unit = RELATIVE_UNITS.find((u) => Math.abs(seconds) >= u.seconds) ?? RELATIVE_UNITS[RELATIVE_UNITS.length - 1];
+  return new Intl.RelativeTimeFormat(activeLocale(), { numeric: "auto" }).format(Math.round(seconds / unit.seconds), unit.unit);
+}
+
 export type T = ((text: string, vars?: Vars) => string) & {
   plural: typeof plural;
   exercise: typeof exerciseName;
   date: typeof formatDate;
   number: typeof formatNumber;
+  term: typeof vocabularyTerm;
+  relative: typeof formatRelative;
   language: Language;
   locale: string;
 };
@@ -222,6 +283,8 @@ export function useT(): T {
     t.exercise = exerciseName;
     t.date = formatDate;
     t.number = formatNumber;
+    t.term = vocabularyTerm;
+    t.relative = formatRelative;
     t.language = getLanguage();
     t.locale = activeLocale();
     return t;

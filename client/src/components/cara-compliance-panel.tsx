@@ -12,7 +12,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { format } from "date-fns";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -419,7 +418,7 @@ function CaraSessionHistoryDialog({
               </div>
               <p className="mt-0.5 text-muted-foreground">
                 {t.date(new Date(s.startedAt), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })}
-                {s.endedAt ? ` - ${format(new Date(s.endedAt), "HH:mm")}` : ""}
+                {s.endedAt ? ` - ${new Date(new Date(s.endedAt)).toLocaleTimeString(t.locale, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}` : ""}
                 {s.endReason ? ` · ${t("ended: {reason}", { reason: t(s.endReason.replace(/_/g, " ")) })}` : ""}
               </p>
             </div>

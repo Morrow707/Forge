@@ -887,7 +887,7 @@ export function ClassBuilderPage({
                   <SelectItem value="unset">{t("Not set (drafts read as high school)")}</SelectItem>
                   {CLASS_READING_LEVELS.map((lvl) => (
                     <SelectItem key={lvl} value={lvl}>
-                      {CLASS_READING_LEVEL_LABELS[lvl]}
+                      {t(CLASS_READING_LEVEL_LABELS[lvl])}
                     </SelectItem>
                   ))}
                 </SelectContent>

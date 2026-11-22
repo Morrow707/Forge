@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import {
   ResponsiveContainer,
   LineChart,
@@ -194,23 +194,13 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
       {active?.trackingLevel === "mechanics" && (
         <RadioChipGroup
           label={t("Metric")}
-          options={[
-            MECHANICS_METRIC_LABEL.hipShoulderSeparationDeg,
-            MECHANICS_METRIC_LABEL.weightTransferPct,
-            MECHANICS_METRIC_LABEL.hipRotationDeg,
-            MECHANICS_METRIC_LABEL.peakWristSpeedMps,
-            MECHANICS_METRIC_LABEL.strideLengthM,
-            MECHANICS_METRIC_LABEL.elbowExtensionDeg,
-            MECHANICS_METRIC_LABEL.releaseHeightM,
-            MECHANICS_METRIC_LABEL.setPointPauseSeconds,
-            MECHANICS_METRIC_LABEL.kneeBendDepthDeg,
-          ]}
-          value={MECHANICS_METRIC_LABEL[mechanicsMetric]}
+          options={(Object.keys(MECHANICS_METRIC_LABEL) as MechanicsMetric[]).map((k) => t(MECHANICS_METRIC_LABEL[k]))}
+          value={t(MECHANICS_METRIC_LABEL[mechanicsMetric])}
           onChange={(label) => {
-            const entry = (Object.entries(MECHANICS_METRIC_LABEL) as [MechanicsMetric, string][]).find(
-              ([, v]) => v === label,
+            const picked = (Object.keys(MECHANICS_METRIC_LABEL) as MechanicsMetric[]).find(
+              (k) => t(MECHANICS_METRIC_LABEL[k]) === label,
             );
-            if (entry) setMechanicsMetric(entry[0]);
+            if (picked) setMechanicsMetric(picked);
           }}
         />
       )}
@@ -226,7 +216,7 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis
                   dataKey="createdAt"
-                  tickFormatter={(v) => format(parseISO(v), "MMM d")}
+                  tickFormatter={(v) => t.date(parseISO(v), { month: "short", day: "numeric" })}
                   tick={{ fontSize: 11 }}
                 />
                 <YAxis
@@ -236,10 +226,10 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
                   domain={active?.trackingLevel === "sprint" ? undefined : [0, "auto"]}
                 />
                 <Tooltip
-                  labelFormatter={(v) => format(parseISO(v as string), "MMM d, yyyy")}
+                  labelFormatter={(v) => t.date(parseISO(v as string), { month: "short", day: "numeric", year: "numeric" })}
                   formatter={(v) => [
                     active?.trackingLevel === "sprint" ? `${v}s` : `${v}${MECHANICS_METRIC_UNIT[mechanicsMetric]}`,
-                    active?.trackingLevel === "sprint" ? "Time" : MECHANICS_METRIC_LABEL[mechanicsMetric],
+                    t(active?.trackingLevel === "sprint" ? "Time" : MECHANICS_METRIC_LABEL[mechanicsMetric]),
                   ]}
                 />
                 <Line
@@ -270,7 +260,7 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
               <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold">{format(parseISO(s.createdAt), "MMM d, yyyy")}</p>
+                    <p className="text-sm font-semibold">{t.date(parseISO(s.createdAt), { month: "short", day: "numeric", year: "numeric" })}</p>
                     {s.trackingLevel === "sprint" ? (
                       <span className="text-xs text-muted-foreground">
                         {s.elapsedSeconds != null ? `${s.elapsedSeconds}s` : "–"}
@@ -310,7 +300,7 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setAnalyzing({ url: s.videoUrl!, title: `${s.skillExerciseName} — ${format(parseISO(s.createdAt), "MMM d")}` })}
+                    onClick={() => setAnalyzing({ url: s.videoUrl!, title: `${s.skillExerciseName} — ${t.date(parseISO(s.createdAt), { month: "short", day: "numeric" })}` })}
                   >
                     <VideoIcon className="h-3.5 w-3.5" />
                     {t("Watch video")}

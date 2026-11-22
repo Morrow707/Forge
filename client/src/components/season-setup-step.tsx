@@ -439,7 +439,7 @@ export function SeasonSetupStep({
                     className={cn(CHIP, s.picked.has(p.id) ? CHIP_ON : CHIP_OFF)}
                     data-testid={`chip-season-program-${p.id}`}
                   >
-                    {p.name} · {PROGRAM_SEASON_PHASE_LABEL[p.seasonPhase as ProgramSeasonPhase]}
+                    {p.name} · {t(PROGRAM_SEASON_PHASE_LABEL[p.seasonPhase as ProgramSeasonPhase])}
                   </button>
                 ))}
               </div>
@@ -453,7 +453,7 @@ export function SeasonSetupStep({
                 <div key={p.programId} className="min-w-0 rounded-md border border-border/60 p-2">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
-                      {PROGRAM_SEASON_PHASE_LABEL[p.seasonPhase]}
+                      {t(PROGRAM_SEASON_PHASE_LABEL[p.seasonPhase])}
                     </span>
                     <span className="min-w-0 text-xs font-semibold">{s.programsById.get(p.programId)?.name}</span>
                   </div>
@@ -544,7 +544,7 @@ export function SeasonSetupStep({
                 className={cn(CHIP, s.teamGender === g ? CHIP_ON : CHIP_OFF)}
                 data-testid={`chip-team-${g}`}
               >
-                {TEAM_GENDER_LABEL[g]}
+                {t(TEAM_GENDER_LABEL[g])}
               </button>
             ))}
           </div>

@@ -105,7 +105,7 @@ type Targets = {
 // Ordered as a day is eaten, with the bucket for entries that have no meal last -- see
 // foodLogMealEnum in shared/schema.ts for why that bucket has to exist at all.
 const MEAL_SECTIONS: { key: FoodLogMeal | null; label: string }[] = [
-  ...FOOD_LOG_MEALS.map((key) => ({ key: key as FoodLogMeal | null, label: FOOD_LOG_MEAL_LABEL[key] })),
+  ...FOOD_LOG_MEALS.map((key) => ({ key: key as FoodLogMeal | null, label: msg(FOOD_LOG_MEAL_LABEL[key]) })),
   { key: null, label: msg("Not sorted") },
 ];
 
@@ -236,7 +236,7 @@ export function FoodLogPanel({
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="min-w-24 text-center text-xs text-muted-foreground">
-            {isToday ? t("Today") : format(parseISO(date), "MMM d")}
+            {isToday ? t("Today") : t.date(parseISO(date), { month: "short", day: "numeric" })}
           </span>
           <Button
             type="button"
@@ -267,7 +267,7 @@ export function FoodLogPanel({
             fat={{ value: totals.fatG, target: targets?.fatG ?? null }}
             fiber={{ value: totals.fiberG, target: targets?.fiberG ?? null }}
             water={{ value: waterOz, target: targets?.waterOz ?? null }}
-            dateLabel={isToday ? "today" : format(parseISO(date), "MMM d")}
+            dateLabel={isToday ? "today" : t.date(parseISO(date), { month: "short", day: "numeric" })}
           />
 
           <WaterSection
@@ -535,7 +535,7 @@ function WaterSection({
               {editingId === entry.id ? (
                 <span className="flex items-center gap-1.5">
                   <span className="text-muted-foreground">
-                    {format(parseISO(entry.loggedAt), "h:mm a")}
+                    {new Date(parseISO(entry.loggedAt)).toLocaleTimeString(t.locale, { hour: "numeric", minute: "2-digit" })}
                   </span>
                   <input
                     type="number"

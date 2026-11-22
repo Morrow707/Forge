@@ -36,6 +36,7 @@ type Recap = NonNullable<BrandExtras["recap"]>;
 type Welcome = NonNullable<BrandExtras["welcomeScreens"]>[number];
 
 const KIND_LABEL: Record<Question["kind"], string> = { scale: "1 to 5", yesno: "Yes or no", text: "Short answer" };
+/** Keys only: each day is drawn in the reader's language from a known Sunday (2023-01-01). */
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DEFAULT_RECAP: Recap = {
   enabled: false,
@@ -145,7 +146,7 @@ export function ProgramExperienceEditor({ canEdit }: { canEdit: boolean }) {
               </div>
               <select className={SELECT} value={q.kind} disabled={!canEdit} aria-label={t("Answer type")} onChange={(e) => edit(setQuestions, i, { kind: e.target.value as Question["kind"] })}>
                 {CHECKIN_QUESTION_KINDS.map((k) => (
-                  <option key={k} value={k}>{KIND_LABEL[k]}</option>
+                  <option key={k} value={k}>{t(KIND_LABEL[k])}</option>
                 ))}
               </select>
               <Button type="button" variant="ghost" size="icon" disabled={!canEdit} aria-label={t("Remove question")} onClick={() => drop(setQuestions, i)}>
@@ -173,7 +174,7 @@ export function ProgramExperienceEditor({ canEdit }: { canEdit: boolean }) {
               </div>
               <select className={SELECT} value={trophy.category} disabled={!canEdit} aria-label={t("Earned for")} onChange={(e) => edit(setTrophies, i, { category: e.target.value as Trophy["category"] })}>
                 {PROGRAM_TROPHY_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{TROPHY_CATEGORY_LABEL[c]}</option>
+                  <option key={c} value={c}>{t(TROPHY_CATEGORY_LABEL[c])}</option>
                 ))}
               </select>
               <div className="w-24 space-y-1.5">
@@ -263,7 +264,7 @@ export function ProgramExperienceEditor({ canEdit }: { canEdit: boolean }) {
             <span>{t("Send it on")}</span>
             <select className={SELECT} value={recap.weekday} disabled={!canEdit || !recap.enabled} aria-label={t("Day")} onChange={(e) => setRecap({ ...recap, weekday: Number(e.target.value) })}>
               {WEEKDAYS.map((d, i) => (
-                <option key={d} value={i}>{d}</option>
+                <option key={d} value={i}>{t.date(new Date(2023, 0, 1 + i), { weekday: "long" })}</option>
               ))}
             </select>
           </div>

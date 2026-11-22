@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ReadFailed } from "@/components/read-failed";
 import { apiRequest, getJson } from "@/lib/queryClient";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Send, MessagesSquare, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -154,7 +154,7 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
                   )}
                 </div>
                 <span className="shrink-0 text-xs text-muted-foreground">
-                  {format(parseISO(p.createdAt), "MMM d, h:mm a")}
+                  {t.date(parseISO(p.createdAt), { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                 </span>
               </div>
               <p className="whitespace-pre-wrap text-sm">{p.body}</p>

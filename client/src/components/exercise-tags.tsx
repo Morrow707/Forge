@@ -47,6 +47,7 @@ export function positionsFromText(text: string): string[] {
 
 /** The small chips on a search result: what a drill is for and which joints it is about. */
 export function ExerciseTagChips({ exercise, className }: { exercise: TaggedExercise; className?: string }) {
+  const t = useT();
   const purposes = (exercise.purposes ?? []).filter(isExercisePurpose);
   const joints = (exercise.joints ?? []).filter(isExerciseJoint);
   if (purposes.length === 0 && joints.length === 0) return null;
@@ -54,12 +55,12 @@ export function ExerciseTagChips({ exercise, className }: { exercise: TaggedExer
     <div className={cn("flex flex-wrap gap-1", className)}>
       {purposes.map((p) => (
         <span key={p} className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-          {EXERCISE_PURPOSE_LABEL[p]}
+          {t(EXERCISE_PURPOSE_LABEL[p])}
         </span>
       ))}
       {joints.map((j) => (
         <span key={j} className="rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
-          {EXERCISE_JOINT_LABEL[j]}
+          {t.term("joint", EXERCISE_JOINT_LABEL[j])}
         </span>
       ))}
     </div>
@@ -109,7 +110,7 @@ export function ExerciseTagsView({ exercise }: { exercise: TaggedExercise }) {
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {purposes.map((p) => (
               <Badge key={p} variant="secondary">
-                {EXERCISE_PURPOSE_LABEL[p]}
+                {t(EXERCISE_PURPOSE_LABEL[p])}
               </Badge>
             ))}
           </div>
@@ -121,7 +122,7 @@ export function ExerciseTagsView({ exercise }: { exercise: TaggedExercise }) {
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {joints.map((j) => (
               <Badge key={j} variant="outline">
-                {EXERCISE_JOINT_LABEL[j]}
+                {t.term("joint", EXERCISE_JOINT_LABEL[j])}
               </Badge>
             ))}
           </div>
@@ -147,14 +148,14 @@ export function ExerciseTagsView({ exercise }: { exercise: TaggedExercise }) {
 function ChipToggles<T extends string>({
   label,
   options,
-  labels,
+  labelFor,
   selected,
   onToggle,
   testIdPrefix,
 }: {
   label: string;
   options: readonly T[];
-  labels: Record<T, string>;
+  labelFor: (value: T) => string;
   selected: ReadonlySet<T>;
   onToggle: (value: T) => void;
   testIdPrefix: string;
@@ -175,7 +176,7 @@ function ChipToggles<T extends string>({
               selected.has(opt) ? CHIP_ACTIVE : CHIP_IDLE,
             )}
           >
-            {labels[opt]}
+            {labelFor(opt)}
           </button>
         ))}
       </div>
@@ -240,7 +241,7 @@ export function ExerciseTagsEditor({
       <ChipToggles
         label={t("Used for")}
         options={EXERCISE_PURPOSES}
-        labels={EXERCISE_PURPOSE_LABEL}
+        labelFor={(p) => t(EXERCISE_PURPOSE_LABEL[p])}
         selected={value.purposes}
         onToggle={(p) => onChange({ ...value, purposes: toggled(value.purposes, p) })}
         testIdPrefix="toggle-purpose"
@@ -248,7 +249,7 @@ export function ExerciseTagsEditor({
       <ChipToggles
         label={t("Joints")}
         options={EXERCISE_JOINTS}
-        labels={EXERCISE_JOINT_LABEL}
+        labelFor={(j) => t.term("joint", EXERCISE_JOINT_LABEL[j])}
         selected={value.joints}
         onToggle={(j) => onChange({ ...value, joints: toggled(value.joints, j) })}
         testIdPrefix="toggle-joint"
@@ -369,7 +370,7 @@ export function ProgramTagsEditor({
                 value.seasonPhase === phase ? CHIP_ACTIVE : CHIP_IDLE,
               )}
             >
-              {PROGRAM_SEASON_PHASE_LABEL[phase]}
+              {t(PROGRAM_SEASON_PHASE_LABEL[phase])}
             </button>
           ))}
         </div>
@@ -377,7 +378,7 @@ export function ProgramTagsEditor({
       <ChipToggles
         label={t("Used for")}
         options={EXERCISE_PURPOSES}
-        labels={EXERCISE_PURPOSE_LABEL}
+        labelFor={(p) => t(EXERCISE_PURPOSE_LABEL[p])}
         selected={value.purposes}
         onToggle={(p) => onChange({ ...value, purposes: toggled(value.purposes, p) })}
         testIdPrefix="toggle-program-purpose"
@@ -385,7 +386,7 @@ export function ProgramTagsEditor({
       <ChipToggles
         label={t("Joints it looks after")}
         options={EXERCISE_JOINTS}
-        labels={EXERCISE_JOINT_LABEL}
+        labelFor={(j) => t.term("joint", EXERCISE_JOINT_LABEL[j])}
         selected={value.joints}
         onToggle={(j) => onChange({ ...value, joints: toggled(value.joints, j) })}
         testIdPrefix="toggle-program-joint"

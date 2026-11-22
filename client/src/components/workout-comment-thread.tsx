@@ -9,7 +9,7 @@ import { FormVideoRecorderDialog } from "@/components/form-video-recorder-dialog
 import { VideoAnnotationDialog } from "@/components/video-annotation-dialog";
 import { toast } from "sonner";
 import { MessageSquare, Video, Send, X, Pencil, Download, Loader2 } from "lucide-react";
-import { formatDistanceToNow, format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { watermarkVideo } from "@/lib/video-watermark";
 import { shareOrDownloadBlob, describeSaveOutcome } from "@/lib/share-file";
 import { useT } from "@/i18n";
@@ -141,11 +141,11 @@ export function WorkoutCommentThread({
                         {t("For {date}", { date: t.date(parseISO(c.date), { month: "short", day: "numeric", year: "numeric" }) })}
                       </span>
                       <span className="block">
-                        {t("submitted {when}", { when: formatDistanceToNow(new Date(c.createdAt), { addSuffix: true }) })}
+                        {t("submitted {when}", { when: t.relative(new Date(c.createdAt)) })}
                       </span>
                     </>
                   ) : (
-                    formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })
+                    t.relative(new Date(c.createdAt))
                   )}
                 </span>
               </div>

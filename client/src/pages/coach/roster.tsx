@@ -1057,7 +1057,7 @@ export default function CoachRoster() {
                             <td className="px-3 py-2">
                               {a.sport ? (
                                 <Badge variant="secondary" className="whitespace-nowrap text-[10px]">
-                                  {a.sport}
+                                  {t.term("sport", a.sport)}
                                 </Badge>
                               ) : (
                                 <span className="text-muted-foreground">-</span>
@@ -1338,7 +1338,7 @@ export default function CoachRoster() {
                           />
                           {m.athlete.sport && (
                             <Badge variant="secondary" className="text-[10px]">
-                              {m.athlete.sport}
+                              {t.term("sport", m.athlete.sport)}
                             </Badge>
                           )}
                           {m.athlete.position && (

@@ -132,10 +132,10 @@ function MealPicker({
   return (
     <RadioChipGroup
       label={t("Meal")}
-      options={FOOD_LOG_MEALS.map((m) => FOOD_LOG_MEAL_LABEL[m])}
-      value={FOOD_LOG_MEAL_LABEL[value]}
+      options={FOOD_LOG_MEALS.map((m) => t(FOOD_LOG_MEAL_LABEL[m]))}
+      value={t(FOOD_LOG_MEAL_LABEL[value])}
       onChange={(label) => {
-        const picked = FOOD_LOG_MEALS.find((m) => FOOD_LOG_MEAL_LABEL[m] === label);
+        const picked = FOOD_LOG_MEALS.find((m) => t(FOOD_LOG_MEAL_LABEL[m]) === label);
         if (picked) onChange(picked);
       }}
     />

@@ -8,7 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getJson } from "@/lib/queryClient";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import {
   LineChart,
   Line,
@@ -49,7 +49,7 @@ export function TestingHistoryPanel({ fetchUrl }: { fetchUrl: string }) {
   const activeMetric = TESTING_METRICS.find((m) => m.key === metric)!;
   const points = data.filter((r) => r[metric] != null);
   const chartData = points.map((r) => ({
-    label: format(parseISO(r.date), "MMM d"),
+    label: t.date(parseISO(r.date), { month: "short", day: "numeric" }),
     value: r[metric] as number,
   }));
 
@@ -118,7 +118,7 @@ export function TestingHistoryPanel({ fetchUrl }: { fetchUrl: string }) {
                   {r[metric]} {activeMetric.unit}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {format(parseISO(r.date), "MMM d, yyyy")}
+                  {t.date(parseISO(r.date), { month: "short", day: "numeric", year: "numeric" })}
                 </span>
               </div>
             ))}

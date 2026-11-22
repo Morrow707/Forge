@@ -286,9 +286,9 @@ export function QuizEditor({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {QUIZ_QUESTION_TYPES.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {QUIZ_TYPE_LABELS[t]}
+                  {QUIZ_QUESTION_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {t(QUIZ_TYPE_LABELS[type])}
                     </SelectItem>
                   ))}
                 </SelectContent>

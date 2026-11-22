@@ -24,7 +24,7 @@ export function CoachSectionGate({ section, children }: { section: CoachSection;
 
   if (user?.role === "coach" && user.hiddenSections?.includes(section)) {
     return (
-      <AppShell title={COACH_SECTION_LABEL[section]}>
+      <AppShell title={t(COACH_SECTION_LABEL[section])}>
         <Card className="mt-6">
           <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
             <ShieldOff className="h-8 w-8 text-muted-foreground" />

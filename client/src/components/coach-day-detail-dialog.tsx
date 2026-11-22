@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DayDetailList, type CalendarEntry } from "@/components/calendar-view";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
+import { useT } from "@/i18n";
 
 /** The "very detailed view" a coach lands on after clicking a date (or a
  * combined pill) on the roster-wide month calendar -- every athlete
@@ -21,11 +22,12 @@ export function CoachDayDetailDialog({
   onOpenChange: (open: boolean) => void;
   onEntryClick: (entry: CalendarEntry) => void;
 }) {
+  const t = useT();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[80vh] max-w-lg flex-col">
         <DialogHeader>
-          <DialogTitle>{date ? format(parseISO(date), "EEEE, MMMM d, yyyy") : ""}</DialogTitle>
+          <DialogTitle>{date ? t.date(parseISO(date), { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : ""}</DialogTitle>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <DayDetailList entries={entries} onEntryClick={onEntryClick} />

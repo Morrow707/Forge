@@ -129,7 +129,7 @@ function CalendarEventDialog({
           <DialogHeader>
             <DialogTitle>{event.title}</DialogTitle>
             <DialogDescription>
-              {format(parseISO(event.date), "EEEE, MMM d")} · {eventTimeText(event)}
+              {t.date(parseISO(event.date), { weekday: "long", month: "short", day: "numeric" })} · {eventTimeText(event)}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 text-sm">
@@ -185,7 +185,7 @@ function CalendarEventDialog({
                   onClick={() => set({ label: l.id, ...(colorTouched ? {} : { color: DEFAULT_COLOR_FOR_LABEL[l.id] }) })}
                   className={cn("rounded-full border px-3 py-1 text-xs font-semibold", draft.label === l.id ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground")}
                 >
-                  {l.name}
+                  {t(l.name)}
                 </button>
               ))}
             </div>

@@ -114,7 +114,7 @@ export default function AdminWaiversPage() {
                   <div className="min-w-0">
                     <p className="text-sm font-semibold">{athleteName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {DOCUMENT_LABEL[waiver.kind]}
+                      {t(DOCUMENT_LABEL[waiver.kind])}
                       {waiver.issuingOrganization ? ` · ${waiver.issuingOrganization}` : ""}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -282,7 +282,7 @@ function AthleteDocuments({ athleteId }: { athleteId: number }) {
             <div key={d.id} className="space-y-2 rounded-md border border-border p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">{DOCUMENT_LABEL[d.kind]}</p>
+                  <p className="text-sm font-medium">{t(DOCUMENT_LABEL[d.kind])}</p>
                   <p className="text-xs text-muted-foreground">
                     {d.reviewStatus.replace("_", " ")}
                     {d.reviewSource ? ` · ${t("by {source}", { source: d.reviewSource })}` : ""}
@@ -330,7 +330,7 @@ function AthleteDocuments({ athleteId }: { athleteId: number }) {
               {data!.views.map((v) => (
                 <li key={v.grant.id}>
                   {new Date(v.grant.createdAt).toLocaleString()} · {v.adminName} ·{" "}
-                  {DOCUMENT_LABEL[v.kind]} · {v.grant.usedAt ? t("opened") : t("not opened")} · "
+                  {t(DOCUMENT_LABEL[v.kind])} · {v.grant.usedAt ? t("opened") : t("not opened")} · "
                   {v.grant.reason}"
                 </li>
               ))}

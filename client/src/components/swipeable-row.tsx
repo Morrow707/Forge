@@ -7,6 +7,7 @@ import {
 } from "react";
 import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 // How far (in px) a pointer has to move before we commit to treating the
 // gesture as a horizontal swipe rather than a tap or a vertical scroll.
@@ -32,7 +33,7 @@ const SNAP_DURATION_MS = 200;
 export function SwipeableRow({
   children,
   onDelete,
-  deleteLabel = "Delete",
+  deleteLabel,
   className,
 }: {
   children: ReactNode;
@@ -40,6 +41,7 @@ export function SwipeableRow({
   deleteLabel?: string;
   className?: string;
 }) {
+  const t = useT();
   const rowRef = useRef<HTMLDivElement>(null);
   // Gesture bookkeeping lives in a ref, not state -- it needs to be read
   // synchronously inside the same pointer-move/up handlers that write it,
@@ -164,7 +166,7 @@ export function SwipeableRow({
       >
         <span className="flex shrink-0 items-center gap-1.5 px-5 text-sm font-semibold">
           <Trash2 className="h-4 w-4" />
-          {deleteLabel}
+          {deleteLabel ?? t("Delete")}
         </span>
       </div>
       <div

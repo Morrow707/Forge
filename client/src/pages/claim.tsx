@@ -176,7 +176,7 @@ export default function ClaimPage() {
                   <SelectContent>
                     {SPORTS.map((s) => (
                       <SelectItem key={s} value={s}>
-                        {s}
+                        {t.term("sport", s)}
                       </SelectItem>
                     ))}
                   </SelectContent>

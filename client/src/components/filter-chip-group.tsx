@@ -21,6 +21,7 @@ export function FilterChipGroup({
   className,
   colorClass,
   optionColorClass,
+  optionLabel,
 }: {
   label: string;
   options: string[];
@@ -29,6 +30,9 @@ export function FilterChipGroup({
   className?: string;
   colorClass?: string;
   optionColorClass?: (option: string) => string | undefined;
+  /** What a chip reads, when the option is a stored value (a muscle group, "bilateral") rather
+   *  than the words to draw: `(v) => t.term("muscle group", v)`. The option itself is drawn otherwise. */
+  optionLabel?: (option: string) => string;
 }) {
   return (
     <div className={cn("space-y-1.5", className)}>
@@ -50,7 +54,7 @@ export function FilterChipGroup({
                   : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
               )}
             >
-              {opt}
+              {optionLabel ? optionLabel(opt) : opt}
             </button>
           );
         })}
@@ -72,6 +76,7 @@ export function RadioChipGroup({
   className,
   colorClass,
   optionColorClass,
+  optionLabel,
   allowNone = false,
 }: {
   label: string;
@@ -81,6 +86,9 @@ export function RadioChipGroup({
   className?: string;
   colorClass?: string;
   optionColorClass?: (option: string) => string | undefined;
+  /** What a chip reads, when the option is a stored value (a muscle group, "bilateral") rather
+   *  than the words to draw: `(v) => t.term("muscle group", v)`. The option itself is drawn otherwise. */
+  optionLabel?: (option: string) => string;
   allowNone?: boolean;
 }) {
   return (
@@ -103,7 +111,7 @@ export function RadioChipGroup({
                   : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
               )}
             >
-              {opt}
+              {optionLabel ? optionLabel(opt) : opt}
             </button>
           );
         })}

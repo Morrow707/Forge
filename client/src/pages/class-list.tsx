@@ -381,7 +381,7 @@ export function ClassListPage({
                 </div>
                 {c.category && (
                   <p className="label-xs mt-0.5 text-primary">
-                    {c.category}
+                    {t.term("class category", c.category)}
                   </p>
                 )}
                 {c.description && (
@@ -521,7 +521,7 @@ export function ClassListPage({
                   <SelectContent>
                     {CLASS_READING_LEVELS.map((level) => (
                       <SelectItem key={level} value={level}>
-                        {CLASS_READING_LEVEL_LABELS[level]}
+                        {t(CLASS_READING_LEVEL_LABELS[level])}
                       </SelectItem>
                     ))}
                   </SelectContent>

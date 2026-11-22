@@ -155,7 +155,7 @@ export function NutritionPanel({
 
   const setGoalMutation = useMutation({
     mutationFn: async () => {
-      const nutritionGoal = NUTRITION_GOALS.find((g) => NUTRITION_GOAL_LABEL[g] === goalChoice);
+      const nutritionGoal = NUTRITION_GOALS.find((g) => t(NUTRITION_GOAL_LABEL[g]) === goalChoice);
       const res = await apiRequest("POST", goalUrl!, {
         nutritionGoal,
         nutritionGoalNote: goalNote.trim() || null,
@@ -421,7 +421,7 @@ export function NutritionPanel({
               </p>
               <RadioChipGroup
                 label={t("Goal")}
-                options={NUTRITION_GOALS.map((g) => NUTRITION_GOAL_LABEL[g])}
+                options={NUTRITION_GOALS.map((g) => t(NUTRITION_GOAL_LABEL[g]))}
                 value={goalChoice}
                 onChange={setGoalChoice}
               />
@@ -449,7 +449,7 @@ export function NutritionPanel({
                 <Target className="h-3.5 w-3.5 text-primary" />
                 {t("Nutrition goal:")}{" "}
                 <span className="font-semibold">
-                  {NUTRITION_GOAL_LABEL[goalData.nutritionGoal]}
+                  {t(NUTRITION_GOAL_LABEL[goalData.nutritionGoal])}
                 </span>
               </span>
               <Button

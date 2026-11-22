@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { formatDistanceToNow } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -250,7 +249,7 @@ function ShowYourCalendarInForge({ open }: { open: boolean }) {
                   <p className="truncate text-xs text-muted-foreground">
                     {cal.host} · {t("{count} events", { count: cal.eventCount })}
                     {cal.lastFetchedAt
-                      ? ` · ${t("updated {when}", { when: formatDistanceToNow(new Date(cal.lastFetchedAt), { addSuffix: true }) })}`
+                      ? ` · ${t("updated {when}", { when: t.relative(new Date(cal.lastFetchedAt)) })}`
                       : ""}
                   </p>
                 </div>

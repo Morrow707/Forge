@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import {
   LineChart,
   Line,
@@ -75,7 +75,7 @@ export function BodyMetricsPanel({
   });
 
   const chartData = (data ?? []).map((m) => ({
-    label: format(parseISO(m.date), "MMM d"),
+    label: t.date(parseISO(m.date), { month: "short", day: "numeric" }),
     weight: m.weight,
   }));
 
@@ -183,7 +183,7 @@ export function BodyMetricsPanel({
                   )}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {format(parseISO(m.date), "MMM d, yyyy")}
+                  {t.date(parseISO(m.date), { month: "short", day: "numeric", year: "numeric" })}
                 </span>
               </div>
             ))}

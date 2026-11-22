@@ -118,7 +118,7 @@ export function SkillDayViewDialog({
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold">{ex.name}</p>
                       <span className="rounded bg-teal-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-teal-400">
-                        {ex.skillType}
+                        {t.term("skill type", ex.skillType)}
                       </span>
                     </div>
                     <p className="mt-0.5 text-xs text-muted-foreground">

@@ -8,7 +8,6 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getJson } from "@/lib/queryClient";
-import { formatDistanceToNow } from "date-fns";
 import { Copy, Users, Video, VideoOff, Sparkles } from "lucide-react";
 import { useT } from "@/i18n";
 
@@ -189,13 +188,13 @@ export default function AdminCoachExercisesPage() {
                 <div>
                   <CardTitle className="text-base">{ex.name}</CardTitle>
                   <CardDescription>
-                    {ex.coachName} · {ex.muscleGroup} · {ex.equipment}
-                    {ex.movementType ? ` · ${ex.movementType}` : ""} ·{" "}
-                    {formatDistanceToNow(new Date(ex.createdAt), { addSuffix: true })}
+                    {ex.coachName} · {t.term("muscle group", ex.muscleGroup)} · {t.term("equipment", ex.equipment)}
+                    {ex.movementType ? ` · ${t.term("movement type", ex.movementType)}` : ""} ·{" "}
+                    {t.relative(new Date(ex.createdAt))}
                   </CardDescription>
                 </div>
                 <div className="flex gap-1.5">
-                  <Badge variant="outline">{ex.category}</Badge>
+                  <Badge variant="outline">{t.term("exercise category", ex.category)}</Badge>
                   {ex.videoEligible !== false && (
                     <Badge variant="destructive" className="gap-1">
                       <Video className="h-3 w-3" />

@@ -21,7 +21,7 @@ import {
   ChefHat,
   type LucideIcon,
 } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import type { TrophyCategory, TrophyTier, TrophyDefinition } from "@shared/achievements";
 import { ALL_TROPHY_DEFINITIONS, TROPHY_CATEGORY_LABEL } from "@shared/achievements";
 import { cn } from "@/lib/utils";
@@ -218,7 +218,7 @@ export function TrophyCase({
       {CATEGORY_ORDER.map((category) => (
         <div key={category}>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {TROPHY_CATEGORY_LABEL[category]}
+            {t(TROPHY_CATEGORY_LABEL[category])}
           </p>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7">
             {byCategory.get(category)!.map(renderBadge)}

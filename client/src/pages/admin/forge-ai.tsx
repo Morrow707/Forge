@@ -194,7 +194,7 @@ export function ForgeAiContent() {
                   <Badge variant={proposal.maturity === "established" ? "default" : "secondary"}>
                     {proposal.maturity}
                   </Badge>
-                  {proposal.category && <Badge variant="outline">{proposal.category}</Badge>}
+                  {proposal.category && <Badge variant="outline">{t.term("exercise category", proposal.category)}</Badge>}
                   {proposal.position && <Badge variant="outline">{proposal.position}</Badge>}
                   {proposal.gender && <Badge variant="outline">{proposal.gender}</Badge>}
                   {(proposal.ageMin != null || proposal.ageMax != null) && (

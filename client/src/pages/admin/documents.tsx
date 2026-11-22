@@ -282,12 +282,12 @@ export default function AdminDocuments() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <SubSection title={t("Privacy tiers, roster counts")}>
                   {compliance.tierCounts.map((tr) => (
-                    <Row key={tr.tier} label={TIER_LABEL[tr.tier] ? t(TIER_LABEL[tr.tier]) : tr.tier} value={String(tr.count)} />
+                    <Row key={tr.tier} label={t(TIER_LABEL[tr.tier] ?? tr.tier)} value={String(tr.count)} />
                   ))}
                 </SubSection>
                 <SubSection title={t("Video retention windows")}>
                   {compliance.retentionWindows.map((r) => (
-                    <Row key={r.tier} label={TIER_LABEL[r.tier] ? t(TIER_LABEL[r.tier]) : r.tier} value={t("{days} days", { days: r.days })} />
+                    <Row key={r.tier} label={t(TIER_LABEL[r.tier] ?? r.tier)} value={t("{days} days", { days: r.days })} />
                   ))}
                   <Row label={t("Eligible for purge right now")} value={String(compliance.videosEligibleForPurgeNow)} />
                 </SubSection>

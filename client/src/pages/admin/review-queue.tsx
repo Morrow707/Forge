@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ReadFailed } from "@/components/read-failed";
-import { formatDistanceToNow } from "date-fns";
 import { Check, X, Pencil, CheckCircle2, TrendingUp, Flag, Youtube, Users } from "lucide-react";
 import { msg, useT } from "@/i18n";
 
@@ -54,9 +53,9 @@ function ExerciseSummaryLine({ exercise }: { exercise: ExerciseSummary }) {
     <div>
       <p className="font-semibold">{exercise.name}</p>
       <p className="text-xs text-muted-foreground">
-        {exercise.muscleGroup} · {exercise.equipment}
-        {exercise.movementType ? ` · ${exercise.movementType}` : ""}
-        {exercise.laterality ? ` · ${exercise.laterality}` : ""}
+        {t.term("muscle group", exercise.muscleGroup)} · {t.term("equipment", exercise.equipment)}
+        {exercise.movementType ? ` · ${t.term("movement type", exercise.movementType)}` : ""}
+        {exercise.laterality ? ` · ${t.term("laterality", exercise.laterality)}` : ""}
       </p>
       {exercise.videoUrl && (
         <a
@@ -177,9 +176,9 @@ export function ReviewQueueContent() {
                     className="h-8 max-w-xs font-semibold"
                   />
                   <p className="text-xs text-muted-foreground">
-                    {s.exercise.muscleGroup} · {s.exercise.equipment}
-                    {s.exercise.movementType ? ` · ${s.exercise.movementType}` : ""}
-                    {s.exercise.laterality ? ` · ${s.exercise.laterality}` : ""}
+                    {t.term("muscle group", s.exercise.muscleGroup)} · {t.term("equipment", s.exercise.equipment)}
+                    {s.exercise.movementType ? ` · ${t.term("movement type", s.exercise.movementType)}` : ""}
+                    {s.exercise.laterality ? ` · ${t.term("laterality", s.exercise.laterality)}` : ""}
                   </p>
                   {s.exercise.videoUrl && (
                     <a
@@ -200,7 +199,7 @@ export function ReviewQueueContent() {
                       <Users className="h-3 w-3" />
                       {t.plural(s.coachCount, "{count} coach", "{count} coaches")}
                     </p>
-                    <p>{formatDistanceToNow(new Date(s.createdAt), { addSuffix: true })}</p>
+                    <p>{t.relative(new Date(s.createdAt))}</p>
                   </div>
                   <div className="flex gap-1.5">
                     <Button
@@ -281,7 +280,7 @@ export function ReviewQueueContent() {
                 <div className="flex shrink-0 items-center gap-3">
                   <div className="text-right text-xs text-muted-foreground">
                     <p>{r.reporter.name}</p>
-                    <p>{formatDistanceToNow(new Date(r.createdAt), { addSuffix: true })}</p>
+                    <p>{t.relative(new Date(r.createdAt))}</p>
                   </div>
                   <div className="flex gap-1.5">
                     <Link href={`/admin/exercises/${r.exercise.id}`}>

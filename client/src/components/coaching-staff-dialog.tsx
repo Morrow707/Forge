@@ -219,7 +219,7 @@ export function CoachingStaffDialog({
                               {s.name}
                               {s.staffKind === "athletic_trainer" && (
                                 <span className="shrink-0 rounded-full border border-primary/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                                  {STAFF_KIND_LABELS.athletic_trainer}
+                                  {t(STAFF_KIND_LABELS.athletic_trainer)}
                                 </span>
                               )}
                               {s.staffTitle && (
@@ -290,7 +290,7 @@ export function CoachingStaffDialog({
                                       s.staffKind === kind && "border-primary/50 text-primary",
                                     )}
                                   >
-                                    {STAFF_KIND_LABELS[kind]}
+                                    {t(STAFF_KIND_LABELS[kind])}
                                   </button>
                                 ))}
                               </div>
@@ -362,7 +362,7 @@ export function CoachingStaffDialog({
                                         permissionsMutation.mutate({ staffCoachId: s.id, hiddenSections });
                                       }}
                                     />
-                                    {COACH_SECTION_LABEL[section]}
+                                    {t(COACH_SECTION_LABEL[section])}
                                   </label>
                                 );
                               })}

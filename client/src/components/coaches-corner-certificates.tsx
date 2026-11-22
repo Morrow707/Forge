@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { format } from "date-fns";
 import { Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getJson } from "@/lib/queryClient";

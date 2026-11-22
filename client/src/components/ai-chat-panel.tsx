@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Send, Sparkles, Eye, Lock, Loader2, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -179,7 +179,7 @@ export function AiChatPanel({
                     m.role === "athlete" ? "text-primary-foreground/70" : "text-muted-foreground",
                   )}
                 >
-                  {format(parseISO(m.createdAt), "MMM d, h:mm a")}
+                  {t.date(parseISO(m.createdAt), { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                 </p>
               </div>
             </div>

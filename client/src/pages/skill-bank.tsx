@@ -286,7 +286,7 @@ export function SkillBankPage({
                         : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
                     )}
                   >
-                    {sport}
+                    {t.term("sport", sport)}
                     <span className="ml-1 font-normal opacity-70">{count}</span>
                   </button>
                 );
@@ -296,6 +296,7 @@ export function SkillBankPage({
               <div className="space-y-2 rounded-md border border-border/60 bg-surface p-2.5">
                 <FilterChipGroup
                   label={t("Skill Type")}
+                  optionLabel={(v) => t.term("skill type", v)}
                   options={skillTypeOptions}
                   selected={skillTypeFilter}
                   onToggle={(v) => toggleInSet(setSkillTypeFilter, v)}
@@ -367,8 +368,8 @@ export function SkillBankPage({
                       </button>
                     )}
                     <div className="min-w-0">
-                      <p className="font-semibold leading-tight">{sk.name}</p>
-                      <p className="text-xs text-muted-foreground">{sk.skillType}</p>
+                      <p className="font-semibold leading-tight">{t.exercise(sk.name)}</p>
+                      <p className="text-xs text-muted-foreground">{t.term("skill type", sk.skillType)}</p>
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
@@ -376,7 +377,7 @@ export function SkillBankPage({
                     <span
                       className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${SKILL_BADGE_CLASS}`}
                     >
-                      {sk.skillType}
+                      {t.term("skill type", sk.skillType)}
                     </span>
                   </div>
                 </div>

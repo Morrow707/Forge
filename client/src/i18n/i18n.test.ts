@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   exerciseName,
   flipScreenLanguage,
+  formatRelative,
   getLanguage,
   getPreferredLanguage,
   isFlipped,
@@ -14,6 +15,7 @@ import {
   resetI18nForTests,
   setPreferredLanguage,
   translate,
+  vocabularyTerm,
 } from "./index";
 
 const ES = {
@@ -21,6 +23,9 @@ const ES = {
   "Currently {email}": "Actualmente {email}",
   "{count} athlete": "{count} atleta",
   "{count} athletes": "{count} atletas",
+  Back: "Atrás",
+  "Back (muscle group)": "Espalda",
+  Chest: "Pecho",
 };
 const LIBRARY = { "Back Squat": "Sentadilla trasera" };
 
@@ -60,6 +65,33 @@ describe("translate", () => {
     inSpanish();
     expect(exerciseName("Back Squat")).toBe("Sentadilla trasera");
     expect(exerciseName("Coach Riley's Special")).toBe("Coach Riley's Special");
+  });
+});
+
+describe("a word from a fixed vocabulary", () => {
+  it("reads the word's own kind first, then the plain word, then the word as stored", () => {
+    inSpanish();
+    expect(vocabularyTerm("muscle group", "Back")).toBe("Espalda");
+    expect(vocabularyTerm("muscle group", "Chest")).toBe("Pecho");
+    expect(vocabularyTerm("equipment", "Coach's sled")).toBe("Coach's sled");
+    expect(vocabularyTerm("equipment", null)).toBe("");
+  });
+
+  it("English shows the stored word untouched", () => {
+    resetI18nForTests({ es: ES });
+    expect(vocabularyTerm("muscle group", "Back")).toBe("Back");
+  });
+});
+
+describe("a relative time", () => {
+  const now = new Date("2026-11-22T12:00:00Z");
+  it("is told in the language on screen, in the largest unit the distance reaches", () => {
+    resetI18nForTests();
+    expect(formatRelative(new Date("2026-11-22T11:57:00Z"), now)).toBe("3 minutes ago");
+    expect(formatRelative(new Date("2026-11-24T12:00:00Z"), now)).toBe("in 2 days");
+    inSpanish();
+    expect(formatRelative(new Date("2026-11-22T11:57:00Z"), now)).toBe("hace 3 minutos");
+    expect(formatRelative(new Date("2026-11-21T12:00:00Z"), now)).toBe("ayer");
   });
 });
 

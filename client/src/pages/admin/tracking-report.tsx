@@ -92,7 +92,7 @@ function EntryCard({ entry }: { entry: TrackingReportEntry }) {
           </Badge>
           {entry.movementType && (
             <Badge variant="outline" className="text-[10px]">
-              {entry.movementType}
+              {t.term("movement type", entry.movementType)}
             </Badge>
           )}
         </div>

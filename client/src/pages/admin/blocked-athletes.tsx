@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { getJson } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatDistanceToNow } from "date-fns";
 import { ShieldCheck, MailX, MailWarning, Clock } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { ReadFailed } from "@/components/read-failed";
@@ -91,14 +90,14 @@ export default function AdminBlockedAthletesPage() {
         label: t("Invite expired"),
         icon: <MailWarning className="h-3.5 w-3.5" />,
         tone: "outline" as const,
-        detail: t("Sent {when} to {email}. The link no longer works.", { when: formatDistanceToNow(new Date(a.inviteSentAt), { addSuffix: true }), email: a.inviteEmail }),
+        detail: t("Sent {when} to {email}. The link no longer works.", { when: t.relative(new Date(a.inviteSentAt)), email: a.inviteEmail }),
       };
     }
     return {
       label: t("Waiting on the parent"),
       icon: <Clock className="h-3.5 w-3.5" />,
       tone: "secondary" as const,
-      detail: t("Sent {when} to {email}, not opened yet.", { when: formatDistanceToNow(new Date(a.inviteSentAt), { addSuffix: true }), email: a.inviteEmail }),
+      detail: t("Sent {when} to {email}, not opened yet.", { when: t.relative(new Date(a.inviteSentAt)), email: a.inviteEmail }),
     };
   }
 
@@ -180,7 +179,7 @@ export default function AdminBlockedAthletesPage() {
                   <CardContent className="space-y-1 pt-0 text-sm text-muted-foreground">
                     <p>{s.detail}</p>
                     <p className="text-xs">
-                      {t("Born {date} · signed up {when}", { date: a.dateOfBirth, when: formatDistanceToNow(new Date(a.createdAt), { addSuffix: true }) })}
+                      {t("Born {date} · signed up {when}", { date: a.dateOfBirth, when: t.relative(new Date(a.createdAt)) })}
                     </p>
                   </CardContent>
                 </Card>

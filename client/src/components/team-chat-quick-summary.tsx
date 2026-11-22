@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getJson } from "@/lib/queryClient";
-import { formatDistanceToNow, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { MessagesSquare, ChevronRight } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
 import { useT } from "@/i18n";
@@ -72,7 +72,7 @@ export function TeamChatQuickSummary() {
           <div className="text-sm">
             <span className="font-semibold">{latest.author.name}</span>{" "}
             <span className="text-xs text-muted-foreground">
-              {formatDistanceToNow(parseISO(latest.createdAt), { addSuffix: true })}
+              {t.relative(parseISO(latest.createdAt))}
             </span>
             <p className="mt-0.5 truncate text-muted-foreground">{latest.body}</p>
           </div>

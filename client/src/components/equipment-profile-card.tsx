@@ -80,7 +80,7 @@ function EquipmentChecklistEditor({
               onCheckedChange={(c) => toggle(item.id, c === true)}
               data-testid={`${testIdPrefix}-item-${item.id}`}
             />
-            {item.label}
+            {t(item.label)}
           </label>
         ))}
       </div>

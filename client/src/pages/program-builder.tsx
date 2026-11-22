@@ -886,14 +886,14 @@ export function ProgramBuilderPage({
                             <SelectItem value="none">{t("No phase")}</SelectItem>
                             {PERIODIZATION_PHASES.map((p) => (
                               <SelectItem key={p} value={p}>
-                                {PERIODIZATION_PHASE_LABEL[p]}
+                                {t(PERIODIZATION_PHASE_LABEL[p])}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                         {block.phase && (
                           <Badge className={cn("border-none", PHASE_CLASSNAME[block.phase])}>
-                            {PERIODIZATION_PHASE_LABEL[block.phase]}
+                            {t(PERIODIZATION_PHASE_LABEL[block.phase])}
                           </Badge>
                         )}
                         <button
@@ -960,7 +960,7 @@ export function ProgramBuilderPage({
                       )}
                       {weekBlock?.phase && (
                         <Badge className={cn("border-none", PHASE_CLASSNAME[weekBlock.phase])}>
-                          {PERIODIZATION_PHASE_LABEL[weekBlock.phase]}
+                          {t(PERIODIZATION_PHASE_LABEL[weekBlock.phase])}
                         </Badge>
                       )}
                     </div>
@@ -1483,7 +1483,7 @@ function SortableExerciseRow({
           {label}
         </span>
         <span className="flex-1 truncate text-sm font-semibold">
-          {exercise.exerciseName}
+          {t.exercise(exercise.exerciseName)}
         </span>
         <button
           type="button"

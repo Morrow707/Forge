@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { formatDistanceToNow } from "date-fns";
 import {
   Dialog,
   DialogContent,
@@ -133,7 +132,7 @@ export function ActiveSessionsDialog({
                       {session.location ?? t("Unknown location")}
                     </p>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      {t("Active {when}", { when: formatDistanceToNow(new Date(session.lastSeenAt), { addSuffix: true }) })}
+                      {t("Active {when}", { when: t.relative(new Date(session.lastSeenAt)) })}
                     </p>
                   </div>
                 </div>
@@ -197,7 +196,7 @@ export function ActiveSessionsDialog({
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
                       {t("{location} · used {when}", {
                         location: d.location ?? t("Unknown location"),
-                        when: formatDistanceToNow(new Date(d.lastUsedAt), { addSuffix: true }),
+                        when: t.relative(new Date(d.lastUsedAt)),
                       })}
                     </p>
                   </div>

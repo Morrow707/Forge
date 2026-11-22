@@ -52,9 +52,9 @@ type Today = {
 
 const ALL_TEAMS = "all";
 const STATUS_PILL: Record<TodayAthlete["status"], { label: string; className: string }> = {
-  completed: { label: SESSION_LABEL.completed, className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
-  started: { label: SESSION_LABEL.started, className: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
-  not_started: { label: SESSION_LABEL.not_started, className: "bg-muted text-muted-foreground" },
+  completed: { label: msg(SESSION_LABEL.completed), className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+  started: { label: msg(SESSION_LABEL.started), className: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  not_started: { label: msg(SESSION_LABEL.not_started), className: "bg-muted text-muted-foreground" },
   nothing_assigned: { label: msg("Nothing assigned"), className: "text-muted-foreground" },
 };
 const MARK_STYLE: Record<AttendanceStatus, string> = {
@@ -63,7 +63,7 @@ const MARK_STYLE: Record<AttendanceStatus, string> = {
   excused: "bg-blue-600 text-white hover:bg-blue-600/90",
 };
 const SHORT_MARK: Record<AttendanceStatus, string> = { present: "P", absent: "A", excused: "E" };
-const DAY_LABEL: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", timeZone: "UTC" };
+const DAY_FORMAT: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", timeZone: "UTC" };
 
 const localToday = () => formatISO(new Date(), { representation: "date" });
 const teamParam = (teamId: string) => (teamId === ALL_TEAMS ? "" : `&teamId=${teamId}`);
@@ -322,7 +322,7 @@ function WeekGrid({ query }: { query: UseQueryResult<AttendanceWeek> }) {
             <th className="py-1 pr-2 text-left font-medium">{t("Athlete")}</th>
             {dates.map((d) => (
               <th key={d} className="px-1 py-1 text-center font-medium">
-                {new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", DAY_LABEL)}
+                {new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", DAY_FORMAT)}
               </th>
             ))}
             {anyWarmups && <th className="px-1 py-1 text-center font-medium">{t("Warm-up")}</th>}

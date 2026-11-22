@@ -174,7 +174,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
 
   return (
     <AppShell
-      title={isNew ? t("New Skill Drill") : skill!.name}
+      title={isNew ? t("New Skill Drill") : t.exercise(skill!.name)}
       actions={
         <Button variant="outline" onClick={() => navigate(routeBase)}>
           <ArrowLeft className="h-4 w-4" />
@@ -196,7 +196,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
           <div className="flex flex-wrap items-center gap-2">
             <ExerciseOwnershipBadge isForgeOfficial={skill.isForgeOfficial} ownerLabel={skill.ownerLabel} />
             <span className={`rounded px-2 py-0.5 text-xs font-semibold ${SKILL_BADGE_CLASS}`}>
-              {skill.skillType}
+              {t.term("skill type", skill.skillType)}
             </span>
             {!skill.editable && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -213,22 +213,22 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
           <Card>
             <CardContent className="space-y-4 p-5">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                <Field label={t("Skill type")} value={skill.skillType} />
+                <Field label={t("Skill type")} value={t.term("skill type", skill.skillType)} />
                 <Field
                   label={t("Equipment")}
-                  value={skill.equipment && skill.equipment.length > 0 ? skill.equipment.join(", ") : "—"}
+                  value={skill.equipment && skill.equipment.length > 0 ? skill.equipment.map((e) => t.term("skill equipment", e)).join(", ") : "—"}
                 />
               </div>
               {skill.targets && skill.targets.length > 0 && (
                 <div>
                   <p className="label-xs">{t("Targets")}</p>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {skill.targets.map((t) => (
+                    {skill.targets.map((target) => (
                       <span
-                        key={t}
+                        key={target}
                         className={`rounded-full px-2 py-0.5 text-xs font-semibold ${TARGET_BADGE_CLASS}`}
                       >
-                        {t}
+                        {t.term("skill target", target)}
                       </span>
                     ))}
                   </div>
@@ -243,7 +243,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                         key={s}
                         className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground"
                       >
-                        {s}
+                        {t.term("sport", s)}
                       </span>
                     ))}
                   </div>
@@ -297,6 +297,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                 </div>
                 <RadioChipGroup
                   label={t("Skill type")}
+                  optionLabel={(v) => t.term("skill type", v)}
                   options={
                     form.skillType && !SKILL_TYPES.includes(form.skillType)
                       ? [form.skillType, ...SKILL_TYPES]
@@ -309,6 +310,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                 <div className="space-y-1.5">
                   <FilterChipGroup
                     label={t("Sports")}
+                    optionLabel={(v) => t.term("sport", v)}
                     options={SPORTS}
                     selected={form.sports}
                     onToggle={(v) =>
@@ -334,6 +336,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                 <div className="space-y-1.5">
                   <FilterChipGroup
                     label={t("Equipment")}
+                    optionLabel={(v) => t.term("skill equipment", v)}
                     options={
                       Array.from(form.equipment).some((e) => !SKILL_EQUIPMENT.includes(e))
                         ? [...Array.from(form.equipment).filter((e) => !SKILL_EQUIPMENT.includes(e)), ...SKILL_EQUIPMENT]
@@ -360,6 +363,7 @@ export function SkillDetailPage({ apiBase, routeBase }: { apiBase: string; route
                 <div className="space-y-1.5">
                   <FilterChipGroup
                     label={t("Targets")}
+                    optionLabel={(v) => t.term("skill target", v)}
                     options={
                       Array.from(form.targets).some((t) => !SKILL_TARGETS.includes(t))
                         ? [...Array.from(form.targets).filter((t) => !SKILL_TARGETS.includes(t)), ...SKILL_TARGETS]

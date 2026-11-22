@@ -84,10 +84,23 @@ toast.error(err.message ? translate(err.message) : translate("Couldn't save that
 4. **Plural:** `t.plural(count, "{count} athlete", "{count} athletes")` -- both forms are keys, and
    `count` is filled in for you.
 5. **Dates and numbers:** `t.date(...)` and `t.number(...)` (Intl with the active locale), never a
-   hard-coded English month name. `date-fns` `format(...)` prints English.
+   hard-coded English month name. `date-fns` `format(...)` prints English, and so does
+   `formatDistanceToNow`: use `t.relative(date)` ("hace 3 minutos").
 6. **Keys must be string literals** so the scripts can see them. A key that is only ever computed
    (from a shared constant, the server) works at runtime but `i18n-missing` cannot list it: add it
    to `es.json` by hand (the answer-style labels in `shared/answer-style.ts` are the example).
+7. **A label map is drawn through t().** `{EXERCISE_PURPOSE_LABEL[p]}` holds no string at the draw
+   site, so the page ratchet cannot see it: write `{t(EXERCISE_PURPOSE_LABEL[p])}`, or
+   `msg(X.a)` where the value is stored in a list that is translated where it is drawn.
+   `every-label-map-is-translated.test.ts` holds every name ending in LABEL/LABELS to it.
+8. **A word from Forge's library vocabulary** (category, family, movement type, body region, plane,
+   complexity, muscle group, equipment, laterality, skill type, skill equipment, skill target,
+   sport, class category, joint) is drawn with `t.term(kind, value)`. It reads the catalog key
+   `"{value} ({kind})"` first, so a word whose plain key means something else gets its own
+   ("Back (muscle group)": "Espalda", where "Back" is the button), then the plain word, then the
+   stored word unchanged (a coach's own free text). Option chips take `optionLabel={(v) =>
+   t.term("muscle group", v)}` (`FilterChipGroup`, `RadioChipGroup`). The ratchet checks every
+   value of these vocabularies (read from `shared/` and the seed) is in `es.json`.
 
 ## What NOT to translate
 

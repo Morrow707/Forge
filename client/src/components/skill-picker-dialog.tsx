@@ -242,7 +242,7 @@ export function SkillPickerDialog({
                       )}
                     >
                       {locked && <Lock className="mr-1 h-3 w-3" />}
-                      {sport}
+                      {t.term("sport", sport)}
                       <span className="ml-1 font-normal opacity-70">{count}</span>
                     </button>
                   );
@@ -272,7 +272,7 @@ export function SkillPickerDialog({
                                 : "border-border text-muted-foreground hover:border-teal-500/50 hover:text-teal-400",
                             )}
                           >
-                            {type} <span className="opacity-60">{count}</span>
+                            {t.term("skill type", type)} <span className="opacity-60">{count}</span>
                           </button>
                         );
                       })}
@@ -300,7 +300,7 @@ export function SkillPickerDialog({
                                 : "border-border text-muted-foreground hover:border-yellow-500/50 hover:text-yellow-400",
                             )}
                           >
-                            {eq} <span className="opacity-60">{count}</span>
+                            {t.term("skill equipment", eq)} <span className="opacity-60">{count}</span>
                           </button>
                         );
                       })}
@@ -350,8 +350,8 @@ export function SkillPickerDialog({
                 <div>
                   <p className="text-sm font-semibold">{sk.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {sk.skillType}
-                    {sk.equipment && sk.equipment.length > 0 ? ` · ${sk.equipment.join(", ")}` : ""}
+                    {t.term("skill type", sk.skillType)}
+                    {sk.equipment && sk.equipment.length > 0 ? ` · ${sk.equipment.map((e) => t.term("skill equipment", e)).join(", ")}` : ""}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getJson } from "@/lib/queryClient";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useT } from "@/i18n";
@@ -78,7 +78,7 @@ export function NutritionTrendPanel({
             d.loggedEntryCount > 0
               ? Math.max(4, Math.round((d.caloriesKcal / maxCalories) * CHART_HEIGHT_PX))
               : 3;
-          const label = `${format(parseISO(d.date), "EEE M/d")}: ${
+          const label = `${t.date(parseISO(d.date), { weekday: "short", month: "numeric", day: "numeric" })}: ${
             d.loggedEntryCount > 0 ? `${Math.round(d.caloriesKcal)} kcal` : "nothing logged"
           }`;
           const bar = (

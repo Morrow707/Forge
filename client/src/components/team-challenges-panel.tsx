@@ -85,8 +85,8 @@ export function TeamChallengesSection({
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{c.title}</p>
                   <p className="text-[10px] text-muted-foreground">
-                    {CHALLENGE_METRIC_LABEL[c.metric]} · {format(parseISO(c.startDate), "MMM d")}–
-                    {format(parseISO(c.endDate), "MMM d")}
+                    {t(CHALLENGE_METRIC_LABEL[c.metric])} · {t.date(parseISO(c.startDate), { month: "short", day: "numeric" })}–
+                    {t.date(parseISO(c.endDate), { month: "short", day: "numeric" })}
                   </p>
                 </div>
                 <button

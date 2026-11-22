@@ -378,9 +378,9 @@ export default function AthleteClasses() {
                     )}
                     {(c.category || c.readingLevel) && (
                       <p className="label-xs -mt-2 text-primary">
-                        {c.category}
+                        {t.term("class category", c.category)}
                         {c.category && c.readingLevel && " · "}
-                        {c.readingLevel && <span className="text-muted-foreground">{CLASS_READING_LEVEL_LABELS[c.readingLevel]}</span>}
+                        {c.readingLevel && <span className="text-muted-foreground">{t(CLASS_READING_LEVEL_LABELS[c.readingLevel])}</span>}
                       </p>
                     )}
                     {c.description && (

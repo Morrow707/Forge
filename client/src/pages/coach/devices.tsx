@@ -134,7 +134,7 @@ function ConnectionRow({ c, canManage }: { c: Connection; canManage: boolean }) 
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3" data-testid={`device-connection-${c.vendor}`}>
       <div className="min-w-0">
         <p className="font-medium">
-          {c.name} <Badge variant={c.status === "error" ? "destructive" : "secondary"}>{STATUS_LABEL[c.status] ? t(STATUS_LABEL[c.status]) : c.status}</Badge>
+          {c.name} <Badge variant={c.status === "error" ? "destructive" : "secondary"}>{t(STATUS_LABEL[c.status] ?? c.status)}</Badge>
         </p>
         <p className="text-xs text-muted-foreground">{t("Last synced {when}", { when: when(c.lastSyncedAt) })}</p>
         {c.lastError && <p className="text-xs text-muted-foreground">{c.lastError}</p>}

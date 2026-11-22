@@ -16,7 +16,6 @@ import {
   RotateCcw,
   ShieldAlert,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -170,7 +169,7 @@ export function NotificationBell() {
                 <p className="font-semibold">{words(n.title)}</p>
                 <p className="truncate text-xs text-muted-foreground">{words(n.body)}</p>
                 <p className="mt-0.5 text-[10px] text-muted-foreground">
-                  {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
+                  {t.relative(new Date(n.createdAt))}
                 </p>
               </div>
             </button>

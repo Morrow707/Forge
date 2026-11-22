@@ -409,7 +409,7 @@ export function ExerciseBankPage({
                         : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
                     )}
                   >
-                    {family}
+                    {t.term("exercise family", family)}
                     <span className="ml-1 font-normal opacity-70">{count}</span>
                   </button>
                 );
@@ -438,7 +438,7 @@ export function ExerciseBankPage({
                             : "border-border text-muted-foreground hover:border-yellow-500/50 hover:text-yellow-400",
                         )}
                       >
-                        {eq} <span className="opacity-60">{count}</span>
+                        {t.term("equipment", eq)} <span className="opacity-60">{count}</span>
                       </button>
                     );
                   })}
@@ -464,6 +464,7 @@ export function ExerciseBankPage({
                 <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-3">
                   <FilterChipGroup
                     label={t("Category")}
+                    optionLabel={(v) => t.term("exercise category", v)}
                     options={[...CATEGORIES]}
                     selected={categoryFilter}
                     onToggle={(v) => toggleInSet(setCategoryFilter, v)}
@@ -471,6 +472,7 @@ export function ExerciseBankPage({
                   />
                   <FilterChipGroup
                     label={t("Movement")}
+                    optionLabel={(v) => t.term("movement type", v)}
                     options={MOVEMENT_TYPES}
                     selected={movementFilter}
                     onToggle={(v) => toggleInSet(setMovementFilter, v)}
@@ -479,6 +481,7 @@ export function ExerciseBankPage({
                   <div className="space-y-2">
                     <FilterChipGroup
                       label={t("Laterality")}
+                      optionLabel={(v) => t.term("laterality", v)}
                       options={["bilateral", "unilateral"]}
                       selected={lateralityFilter}
                       onToggle={(v) => toggleInSet(setLateralityFilter, v)}
@@ -508,6 +511,7 @@ export function ExerciseBankPage({
                   />
                   <FilterChipGroup
                     label={t("Body Region")}
+                    optionLabel={(v) => t.term("body region", v)}
                     options={BODY_REGIONS}
                     selected={bodyRegionFilter}
                     onToggle={(v) => toggleInSet(setBodyRegionFilter, v)}
@@ -515,6 +519,7 @@ export function ExerciseBankPage({
                   />
                   <FilterChipGroup
                     label={t("Plane")}
+                    optionLabel={(v) => t.term("plane", v)}
                     options={PLANES}
                     selected={planeFilter}
                     onToggle={(v) => toggleInSet(setPlaneFilter, v)}
@@ -522,6 +527,7 @@ export function ExerciseBankPage({
                   />
                   <FilterChipGroup
                     label={t("Complexity")}
+                    optionLabel={(v) => t.term("movement complexity", v)}
                     options={MOVEMENT_COMPLEXITIES}
                     selected={complexityFilter}
                     onToggle={(v) => toggleInSet(setComplexityFilter, v)}
@@ -530,6 +536,7 @@ export function ExerciseBankPage({
                 </div>
                 <FilterChipGroup
                   label={t("Muscle")}
+                  optionLabel={(v) => t.term("muscle group", v)}
                   options={bodyParts}
                   selected={muscleGroupFilter}
                   onToggle={(v) => toggleInSet(setMuscleGroupFilter, v)}
@@ -537,6 +544,7 @@ export function ExerciseBankPage({
                 />
                 <FilterChipGroup
                   label={t("Sport")}
+                  optionLabel={(v) => t.term("sport", v)}
                   options={sportOptions}
                   selected={sportFilter}
                   onToggle={(v) => toggleInSet(setSportFilter, v)}
@@ -599,14 +607,14 @@ export function ExerciseBankPage({
                         </button>
                       )}
                       <div className="min-w-0">
-                        <p className="font-semibold leading-tight">{ex.name}</p>
+                        <p className="font-semibold leading-tight">{t.exercise(ex.name)}</p>
                         <p className="text-xs text-muted-foreground">
-                          {ex.muscleGroup}
-                          {ex.movementType ? ` · ${ex.movementType}` : ""}
-                          {ex.plane ? ` (${ex.plane})` : ""}
-                          {ex.laterality ? ` · ${ex.laterality}` : ""}
-                          {ex.bodyRegion ? ` · ${ex.bodyRegion}` : ""}
-                          {ex.movementComplexity ? ` · ${ex.movementComplexity}` : ""}
+                          {t.term("muscle group", ex.muscleGroup)}
+                          {ex.movementType ? ` · ${t.term("movement type", ex.movementType)}` : ""}
+                          {ex.plane ? ` (${t.term("plane", ex.plane)})` : ""}
+                          {ex.laterality ? ` · ${t.term("laterality", ex.laterality)}` : ""}
+                          {ex.bodyRegion ? ` · ${t.term("body region", ex.bodyRegion)}` : ""}
+                          {ex.movementComplexity ? ` · ${t.term("movement complexity", ex.movementComplexity)}` : ""}
                         </p>
                       </div>
                     </div>
@@ -616,7 +624,7 @@ export function ExerciseBankPage({
                         ownerLabel={ex.ownerLabel}
                       />
                       <Badge className={CATEGORY_BADGE_CLASS[ex.category]} variant="default">
-                        {ex.category}
+                        {t.term("exercise category", ex.category)}
                       </Badge>
                       {ex.isCorrective && (
                         <Badge variant="secondary" className="gap-1">
@@ -651,7 +659,7 @@ export function ExerciseBankPage({
                   )}
                   <div className="mt-auto flex items-center justify-between pt-2">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{ex.equipment}</span>
+                      <span>{t.term("equipment", ex.equipment)}</span>
                       {ex.videoUrl && <Video className="h-3.5 w-3.5 text-primary" />}
                     </div>
                     {ex.editable && (

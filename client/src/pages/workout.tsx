@@ -2564,7 +2564,7 @@ export function WorkoutPage({
         totalVolume: stats.totalVolume,
         volumeUnit: unit,
         exerciseCount,
-        dateLabel: format(parseISO(date), "MMM d, yyyy"),
+        dateLabel: t.date(parseISO(date), { month: "short", day: "numeric", year: "numeric" }),
       });
       await shareOrDownloadBlob(blob, `${data.day.title}-workout.png`, "Workout Complete");
     } catch {
@@ -2755,7 +2755,7 @@ export function WorkoutPage({
             </button>
             <span>
               {t.language === "en"
-                ? format(parseISO(date), "EEEE, MMM d")
+                ? t.date(parseISO(date), { weekday: "long", month: "short", day: "numeric" })
                 : t.date(parseISO(date), { weekday: "long", month: "short", day: "numeric" })}
             </span>
           </div>
@@ -3754,7 +3754,7 @@ function ExerciseLogContent({
                 ))}
               </div>
             )}
-            <Badge variant="outline">{item.muscleGroup}</Badge>
+            <Badge variant="outline">{t.term("muscle group", item.muscleGroup)}</Badge>
             {canSubstituteExercise && !isCorrective && (
               <button
                 type="button"

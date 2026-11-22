@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { formatDistanceToNow, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { getJson } from "@/lib/queryClient";
 import { ReadFailed } from "@/components/read-failed";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -73,7 +73,7 @@ export function TeamPrWallCard() {
                     {pr.reps ? ` × ${pr.reps}` : ""}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {formatDistanceToNow(parseISO(pr.date), { addSuffix: true })}
+                    {t.relative(parseISO(pr.date))}
                   </p>
                 </div>
               </div>

@@ -8,7 +8,7 @@ import { lazyDialog } from "@/components/lazy-dialog";
 // it is fetched the first time a clip is analysed, not with the page. See lazyDialog.
 const VideoAnalysisDialog = lazyDialog(() => import("@/components/video-analysis-dialog").then((m) => ({ default: m.VideoAnalysisDialog })));
 import { toast } from "sonner";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { Pencil, Wand2 } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
 import { useT } from "@/i18n";
@@ -79,7 +79,7 @@ export function SkillSessionsPanel({
               <div className="mb-1.5 flex items-center justify-between gap-2">
                 <p className="font-semibold">{s.skillExerciseName}</p>
                 <p className="text-xs text-muted-foreground">
-                  {format(parseISO(s.createdAt), "MMM d, yyyy")}
+                  {t.date(parseISO(s.createdAt), { month: "short", day: "numeric", year: "numeric" })}
                 </p>
               </div>
               <video src={resolveApiUrl(s.videoUrl)} controls className="mb-2 w-full rounded-md bg-black" />

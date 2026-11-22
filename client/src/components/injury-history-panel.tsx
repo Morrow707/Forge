@@ -9,7 +9,7 @@ import { ReadFailed } from "@/components/read-failed";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { BODY_PAIN_PARTS } from "@shared/wellness";
 import { toast } from "sonner";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { Plus, Trash2, HeartPulse } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { todayIso } from "@/lib/local-date";
@@ -127,7 +127,7 @@ export function InjuryHistoryPanel({
                 <p className="font-semibold">
                   {bodyPartLabel(e.bodyPart)}{" "}
                   <span className="font-normal text-muted-foreground">
-                    {format(parseISO(e.occurredOn), "MMM d, yyyy")}
+                    {t.date(parseISO(e.occurredOn), { month: "short", day: "numeric", year: "numeric" })}
                   </span>
                 </p>
                 {e.description && (

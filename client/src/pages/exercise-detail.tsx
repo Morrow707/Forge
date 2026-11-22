@@ -298,7 +298,7 @@ export function ExerciseDetailPage({
 
   return (
     <AppShell
-      title={isNew ? t("New Exercise") : exercise!.name}
+      title={isNew ? t("New Exercise") : t.exercise(exercise!.name)}
       actions={
         <Button variant="outline" onClick={() => navigate(routeBase)}>
           <ArrowLeft className="h-4 w-4" />
@@ -323,7 +323,7 @@ export function ExerciseDetailPage({
               ownerLabel={exercise.ownerLabel}
             />
             <Badge className={CATEGORY_BADGE_CLASS[exercise.category]} variant="default">
-              {exercise.category}
+              {t.term("exercise category", exercise.category)}
             </Badge>
             {exercise.isCorrective && (
               <Badge variant="secondary" className="gap-1">
@@ -366,13 +366,13 @@ export function ExerciseDetailPage({
           <Card>
             <CardContent className="space-y-4 p-5">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <Field label={t("Muscle group")} value={exercise.muscleGroup} />
-                <Field label={t("Movement")} value={exercise.movementType || "—"} />
-                <Field label={t("Laterality")} value={exercise.laterality || "—"} />
-                <Field label={t("Equipment")} value={exercise.equipment} />
-                <Field label={t("Body region")} value={exercise.bodyRegion || "—"} />
-                <Field label={t("Plane")} value={exercise.plane || "—"} />
-                <Field label={t("Complexity")} value={exercise.movementComplexity || "—"} />
+                <Field label={t("Muscle group")} value={t.term("muscle group", exercise.muscleGroup)} />
+                <Field label={t("Movement")} value={t.term("movement type", exercise.movementType) || "—"} />
+                <Field label={t("Laterality")} value={t.term("laterality", exercise.laterality) || "—"} />
+                <Field label={t("Equipment")} value={t.term("equipment", exercise.equipment)} />
+                <Field label={t("Body region")} value={t.term("body region", exercise.bodyRegion) || "—"} />
+                <Field label={t("Plane")} value={t.term("plane", exercise.plane) || "—"} />
+                <Field label={t("Complexity")} value={t.term("movement complexity", exercise.movementComplexity) || "—"} />
               </div>
               {exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0 && (
                 <div>
@@ -382,7 +382,7 @@ export function ExerciseDetailPage({
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {exercise.secondaryMuscles.map((m) => (
                       <Badge key={m} variant="outline">
-                        {m}
+                        {t.term("muscle group", m)}
                       </Badge>
                     ))}
                   </div>
@@ -394,7 +394,7 @@ export function ExerciseDetailPage({
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {exercise.sports.map((s) => (
                       <Badge key={s} variant="secondary">
-                        {s}
+                        {t.term("sport", s)}
                       </Badge>
                     ))}
                   </div>
@@ -404,10 +404,10 @@ export function ExerciseDetailPage({
                 label={t("Logged as")}
                 value={
                   [
-                    exercise.usesWeight && "Weight",
-                    exercise.usesBodyweight && "Bodyweight",
-                    exercise.usesBand && "Band",
-                    exercise.usesBox && "Box height",
+                    exercise.usesWeight && t("Weight"),
+                    exercise.usesBodyweight && t("Bodyweight"),
+                    exercise.usesBand && t("Band"),
+                    exercise.usesBox && t("Box height"),
                   ]
                     .filter(Boolean)
                     .join(", ") || "—"
@@ -464,6 +464,7 @@ export function ExerciseDetailPage({
                 </div>
                 <RadioChipGroup
                   label={t("Category")}
+                  optionLabel={(v) => t.term("exercise category", v)}
                   options={[...CATEGORIES]}
                   value={form.category}
                   onChange={(v) => setForm((f) => ({ ...f, category: v }))}
@@ -471,6 +472,7 @@ export function ExerciseDetailPage({
                 />
                 <RadioChipGroup
                   label={t("Body part")}
+                  optionLabel={(v) => t.term("muscle group", v)}
                   options={
                     form.muscleGroup && !MUSCLE_GROUPS.includes(form.muscleGroup)
                       ? [form.muscleGroup, ...MUSCLE_GROUPS]
@@ -483,6 +485,7 @@ export function ExerciseDetailPage({
                 <div className="space-y-1.5">
                   <FilterChipGroup
                     label={t("Also works (optional)")}
+                    optionLabel={(v) => t.term("muscle group", v)}
                     options={MUSCLE_GROUPS.filter((m) => m !== form.muscleGroup)}
                     selected={form.secondaryMuscles}
                     onToggle={(v) =>
@@ -508,6 +511,7 @@ export function ExerciseDetailPage({
                 <div className="space-y-1.5">
                   <FilterChipGroup
                     label={t("Sports (optional)")}
+                    optionLabel={(v) => t.term("sport", v)}
                     options={SPORTS}
                     selected={form.sports}
                     onToggle={(v) =>
@@ -532,6 +536,7 @@ export function ExerciseDetailPage({
                 </div>
                 <RadioChipGroup
                   label={t("Movement type")}
+                  optionLabel={(v) => t.term("movement type", v)}
                   options={
                     form.movementType && !MOVEMENT_TYPES.includes(form.movementType)
                       ? [form.movementType, ...MOVEMENT_TYPES]
@@ -544,6 +549,7 @@ export function ExerciseDetailPage({
                 />
                 <RadioChipGroup
                   label={t("Laterality")}
+                  optionLabel={(v) => t.term("laterality", v)}
                   options={["bilateral", "unilateral"]}
                   value={form.laterality}
                   onChange={(v) => setForm((f) => ({ ...f, laterality: v }))}
@@ -553,6 +559,7 @@ export function ExerciseDetailPage({
                 <div className="space-y-1.5">
                   <RadioChipGroup
                     label={t("Body region")}
+                    optionLabel={(v) => t.term("body region", v)}
                     options={BODY_REGIONS}
                     value={form.bodyRegion}
                     onChange={(v) => setForm((f) => ({ ...f, bodyRegion: v }))}
@@ -566,6 +573,7 @@ export function ExerciseDetailPage({
                 <div className="space-y-1.5">
                   <RadioChipGroup
                     label={t("Plane (push/pull only)")}
+                    optionLabel={(v) => t.term("plane", v)}
                     options={PLANES}
                     value={form.plane}
                     onChange={(v) => setForm((f) => ({ ...f, plane: v }))}
@@ -579,6 +587,7 @@ export function ExerciseDetailPage({
                 <div className="space-y-1.5">
                   <RadioChipGroup
                     label={t("Complexity")}
+                    optionLabel={(v) => t.term("movement complexity", v)}
                     options={
                       form.movementComplexity && !MOVEMENT_COMPLEXITIES.includes(form.movementComplexity)
                         ? [form.movementComplexity, ...MOVEMENT_COMPLEXITIES]

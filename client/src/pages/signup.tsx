@@ -580,7 +580,7 @@ export default function SignupPage() {
                     <SelectContent>
                       {SPORTS.map((s) => (
                         <SelectItem key={s} value={s}>
-                          {s}
+                          {t.term("sport", s)}
                         </SelectItem>
                       ))}
                     </SelectContent>

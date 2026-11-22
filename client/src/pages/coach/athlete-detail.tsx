@@ -373,7 +373,7 @@ export default function AthleteDetailPage() {
 
   const profileStats: { label: string; value: string }[] = [];
   if (athlete.age != null) profileStats.push({ label: t("Age"), value: `${athlete.age}` });
-  if (athlete.gender) profileStats.push({ label: t("Gender"), value: GENDER_LABEL[athlete.gender] ? t(GENDER_LABEL[athlete.gender]) : athlete.gender });
+  if (athlete.gender) profileStats.push({ label: t("Gender"), value: t(GENDER_LABEL[athlete.gender] ?? athlete.gender) });
   if (athlete.heightIn != null) {
     const h = formatHeight(athlete.heightIn);
     if (h) profileStats.push({ label: t("Height"), value: h });
@@ -384,7 +384,7 @@ export default function AthleteDetailPage() {
   if (athlete.seasonPhase) {
     profileStats.push({
       label: t("Season Phase"),
-      value: SEASON_PHASE_LABEL[athlete.seasonPhase] ? t(SEASON_PHASE_LABEL[athlete.seasonPhase]) : athlete.seasonPhase,
+      value: t(SEASON_PHASE_LABEL[athlete.seasonPhase] ?? athlete.seasonPhase),
     });
   }
 
@@ -440,7 +440,7 @@ export default function AthleteDetailPage() {
                 <p className="text-sm text-muted-foreground">{athlete.email}</p>
                 {(athlete.sport || athlete.position) && (
                   <div className="flex flex-wrap gap-1.5">
-                    {athlete.sport && <Badge variant="secondary">{athlete.sport}</Badge>}
+                    {athlete.sport && <Badge variant="secondary">{t.term("sport", athlete.sport)}</Badge>}
                     {athlete.position && <Badge variant="outline">{athlete.position}</Badge>}
                   </div>
                 )}

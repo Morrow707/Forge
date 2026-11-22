@@ -1,4 +1,9 @@
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
+
+/** The one owner word the server sends for the reader's own rows; FORGE and a coach's initials
+ *  are drawn as sent. */
+const OWN_ROW = "YOU";
 
 /** "FORGE" for admin-authored exercises (brand color, uneditable by
  * coaches), or a coach's own initials in a distinct color for exercises
@@ -12,6 +17,7 @@ export function ExerciseOwnershipBadge({
   ownerLabel: string;
   className?: string;
 }) {
+  const t = useT();
   return (
     <span
       className={cn(
@@ -20,7 +26,7 @@ export function ExerciseOwnershipBadge({
         className,
       )}
     >
-      {ownerLabel}
+      {ownerLabel === OWN_ROW ? t("YOU") : ownerLabel}
     </span>
   );
 }

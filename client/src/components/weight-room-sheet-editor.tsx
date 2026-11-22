@@ -250,7 +250,7 @@ export function WeightRoomSheetEditor({ teams }: { teams: { id: number; name: st
             <div className="flex flex-wrap gap-2">
               <Select value={layout.view} onValueChange={(v) => change({ view: v as SheetLayout["view"] })}>
                 <SelectTrigger className="w-auto"><SelectValue /></SelectTrigger>
-                <SelectContent>{SHEET_VIEWS.map((v) => <SelectItem key={v} value={v}>{SHEET_VIEW_LABEL[v]}</SelectItem>)}</SelectContent>
+                <SelectContent>{SHEET_VIEWS.map((v) => <SelectItem key={v} value={v}>{t(SHEET_VIEW_LABEL[v])}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={layout.page.size} onValueChange={(v) => change({ page: { ...layout.page, size: v as "letter" | "a4" } })}>
                 <SelectTrigger className="w-auto"><SelectValue /></SelectTrigger>
@@ -266,15 +266,15 @@ export function WeightRoomSheetEditor({ teams }: { teams: { id: number; name: st
               </Select>
               <Select value={layout.groupBy} onValueChange={(v) => change({ groupBy: v as SheetLayout["groupBy"] })}>
                 <SelectTrigger className="w-auto"><SelectValue /></SelectTrigger>
-                <SelectContent>{GROUP_BY.map((g) => <SelectItem key={g} value={g}>{GROUP_LABEL[g]}</SelectItem>)}</SelectContent>
+                <SelectContent>{GROUP_BY.map((g) => <SelectItem key={g} value={g}>{t(GROUP_LABEL[g])}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={layout.sortBy} onValueChange={(v) => change({ sortBy: v as SheetLayout["sortBy"] })}>
                 <SelectTrigger className="w-auto"><SelectValue /></SelectTrigger>
-                <SelectContent>{SORT_BY.map((s) => <SelectItem key={s} value={s}>{SORT_LABEL[s]}</SelectItem>)}</SelectContent>
+                <SelectContent>{SORT_BY.map((s) => <SelectItem key={s} value={s}>{t(SORT_LABEL[s])}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={layout.rpe} onValueChange={(v) => change({ rpe: v as SheetLayout["rpe"] })}>
                 <SelectTrigger className="w-auto"><SelectValue /></SelectTrigger>
-                <SelectContent>{RPE_MODES.map((r) => <SelectItem key={r} value={r}>{RPE_LABEL[r]}</SelectItem>)}</SelectContent>
+                <SelectContent>{RPE_MODES.map((r) => <SelectItem key={r} value={r}>{t(RPE_LABEL[r])}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-2">

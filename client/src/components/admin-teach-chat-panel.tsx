@@ -7,7 +7,7 @@ import { apiRequest, getJson } from "@/lib/queryClient";
 import { ReadFailed } from "@/components/read-failed";
 import { copyToClipboard } from "@/lib/clipboard";
 import { useSwipeToDismissKeyboard } from "@/hooks/use-swipe-to-dismiss-keyboard";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Send, Sparkles, Loader2, Copy, Check, BookOpen, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -179,7 +179,7 @@ export function AdminTeachChatPanel({
                       m.role === "admin" ? "text-primary-foreground/70" : "text-muted-foreground",
                     )}
                   >
-                    {format(parseISO(m.createdAt), "MMM d, h:mm a")}
+                    {t.date(parseISO(m.createdAt), { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                   </p>
                 </div>
               </div>

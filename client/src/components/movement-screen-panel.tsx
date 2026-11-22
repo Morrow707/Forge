@@ -17,7 +17,7 @@ import { PhotoUploadField } from "@/components/photo-upload-field";
 import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { format, parseISO, formatISO } from "date-fns";
+import { parseISO, formatISO } from "date-fns";
 import { Plus, ClipboardCheck, AlertTriangle, Camera, PenLine, Loader2, Ruler } from "lucide-react";
 import { resolveMovementScreenUnitLabel, formatMovementScreenScore } from "@shared/movement-screen";
 import { OverheadSquatCaptureDialog } from "@/components/overhead-squat-capture-dialog";
@@ -115,7 +115,7 @@ export function MovementScreenPanel({ athleteId }: { athleteId: number }) {
               <div className="flex items-center gap-2">
                 <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <p className="font-semibold">{format(parseISO(s.date), "MMM d, yyyy")}</p>
+                  <p className="font-semibold">{t.date(parseISO(s.date), { month: "short", day: "numeric", year: "numeric" })}</p>
                   <p className="text-xs text-muted-foreground">
                     {t.plural(s.testCount, "{count} test", "{count} tests")} ·{" "}
                     {s.captureMethod === "photo_import" ? t("photo import") : t("manual entry")}
@@ -160,7 +160,7 @@ function ScreenDetailDialog({ screenId, onClose }: { screenId: number; onClose: 
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{data ? format(parseISO(data.date), "MMMM d, yyyy") : t("Screen")}</DialogTitle>
+          <DialogTitle>{data ? t.date(parseISO(data.date), { month: "long", day: "numeric", year: "numeric" }) : t("Screen")}</DialogTitle>
           {data?.notes && <DialogDescription>{data.notes}</DialogDescription>}
         </DialogHeader>
         {isLoading || !data ? (
@@ -179,7 +179,7 @@ function ScreenDetailDialog({ screenId, onClose }: { screenId: number; onClose: 
                   </p>
                   <span className="font-mono text-xs">{formatMovementScreenScore(r.scoreType, r.scoreValue, r.unitLabel)}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">{r.category}</p>
+                <p className="text-xs text-muted-foreground">{t(r.category)}</p>
                 {r.flagged && r.correctives.length > 0 && (
                   <div className="mt-2 space-y-1 border-t border-destructive/20 pt-2">
                     <p className="text-xs font-semibold text-destructive">{t("Suggested correctives")}</p>

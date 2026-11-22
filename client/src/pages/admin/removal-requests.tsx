@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatDistanceToNow } from "date-fns";
 import { ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { ReadFailed } from "@/components/read-failed";
@@ -113,7 +112,7 @@ export default function AdminRemovalRequestsPage() {
                     </CardDescription>
                   </div>
                   <Badge variant="outline" className="shrink-0">
-                    {formatDistanceToNow(new Date(r.createdAt), { addSuffix: true })}
+                    {t.relative(new Date(r.createdAt))}
                   </Badge>
                 </div>
               </CardHeader>

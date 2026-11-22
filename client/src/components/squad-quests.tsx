@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { getJson } from "@/lib/queryClient";
 import { Trophy } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { CHALLENGE_METRIC_LABEL, type TeamChallenge } from "@/lib/team-challenges";
 import { useT } from "@/i18n";
 
@@ -44,8 +44,8 @@ export function SquadQuests() {
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{c.title}</p>
                 <p className="text-xs text-muted-foreground">
-                  {c.teamName} · {CHALLENGE_METRIC_LABEL[c.metric]} ·{" "}
-                  {format(parseISO(c.startDate), "MMM d")}–{format(parseISO(c.endDate), "MMM d")}
+                  {c.teamName} · {t(CHALLENGE_METRIC_LABEL[c.metric])} ·{" "}
+                  {t.date(parseISO(c.startDate), { month: "short", day: "numeric" })}–{t.date(parseISO(c.endDate), { month: "short", day: "numeric" })}
                 </p>
               </div>
             </div>

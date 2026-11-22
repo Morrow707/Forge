@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { format, parseISO, formatISO } from "date-fns";
+import { parseISO, formatISO } from "date-fns";
 import { Plus, Trash2, Ruler, Camera, X } from "lucide-react";
 import {
   GONIOMETER_JOINTS,
@@ -174,7 +174,7 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
                 <SelectContent>
                   {GONIOMETER_JOINTS.map((j) => (
                     <SelectItem key={j.key} value={j.key}>
-                      {j.label}
+                      {t(j.label)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -285,7 +285,7 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
                       {`${t(jointLabel(r.joint))} · ${t(movement?.label ?? r.movement)}: ${r.angleDegrees}°`}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {format(parseISO(r.date), "MMM d, yyyy")}
+                      {t.date(parseISO(r.date), { month: "short", day: "numeric", year: "numeric" })}
                     </p>
                     {r.notes && <p className="mt-1 text-xs text-muted-foreground">{r.notes}</p>}
                     {baseline != null && (

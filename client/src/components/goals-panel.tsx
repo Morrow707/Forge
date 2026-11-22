@@ -13,7 +13,7 @@ import {
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { format, parseISO, addDays, formatISO } from "date-fns";
+import { parseISO, addDays, formatISO } from "date-fns";
 import { Target, Dumbbell, Trophy, X, Plus, Sparkles, Timer, History } from "lucide-react";
 import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics";
 import { ReadFailed } from "@/components/read-failed";

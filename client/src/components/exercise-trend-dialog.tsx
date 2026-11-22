@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ReadFailed } from "@/components/read-failed";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getJson } from "@/lib/queryClient";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import {
   LineChart,
   Line,
@@ -55,7 +55,7 @@ export function ExerciseTrendDialog({
   // shown in. Older points are converted onto it.
   const unit = history[history.length - 1]?.weightUnit ?? history[0]?.weightUnit ?? "lbs";
   const chartData = history.map((p) => ({
-    label: format(parseISO(p.date), "MMM d"),
+    label: t.date(parseISO(p.date), { month: "short", day: "numeric" }),
     // Rounded like every other weight the app shows -- a converted value is
     // otherwise 220.46200000000002 in the tooltip.
     weight: round1(convertWeight(p.weight, p.weightUnit ?? unit, unit)),
