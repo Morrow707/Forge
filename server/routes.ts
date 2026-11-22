@@ -3532,8 +3532,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/exercises", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
-    const list = await storage.getExercisesByCoach(user.id, { includeAllAdmins: true });
+    // ?includeHidden=1 is the Forge Library page alone: its Hidden filter lists what the 2026-11-22
+    // library review hid, so an admin can bring one back. The admin pickers (program and class
+    // builders) call this route without it and never see a hidden row.
+    const list = await storage.getExercisesByCoach(user.id, {
+      includeAllAdmins: true,
+      includeHidden: req.query.includeHidden === "1",
+    });
     res.json(list);
+  });
+
+  // Bring back an exercise the library review hid. It never deletes or re-hides anything; the
+  // seed will not hide a restored row again (restoredAt).
+  app.post("/api/admin/exercises/:id/restore", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const exercise = await storage.getExercise(id);
+    if (!exercise || !(await adminReadableOwnerIds(user.id)).includes(exercise.coachId)) {
+      return res.status(404).json({ message: "Exercise not found" });
+    }
+    res.json(await storage.restoreExercise(id));
   });
 
   app.get("/api/admin/exercises/summary", requireRole("admin"), async (req, res) => {
@@ -3707,8 +3725,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/skill-exercises", requireRole("admin"), async (req, res) => {
     const user = currentUser(req);
-    const list = await storage.getSkillExercisesByCoach(user.id, { includeAllAdmins: true });
+    const list = await storage.getSkillExercisesByCoach(user.id, {
+      includeAllAdmins: true,
+      includeHidden: req.query.includeHidden === "1",
+    });
     res.json(list);
+  });
+
+  app.post("/api/admin/skill-exercises/:id/restore", requireRole("admin"), async (req, res) => {
+    const user = currentUser(req);
+    const id = Number(req.params.id);
+    const drill = await storage.getSkillExercise(id);
+    if (!drill || !(await adminReadableOwnerIds(user.id)).includes(drill.coachId)) {
+      return res.status(404).json({ message: "Skill exercise not found" });
+    }
+    res.json(await storage.restoreSkillExercise(id));
   });
 
   app.get("/api/admin/skill-exercises/:id", requireRole("admin"), async (req, res) => {

@@ -12774,11 +12774,14 @@ Hard rules, no exceptions:
   // A coach's own (and their staff's) bank plus every Forge-official
   // exercise -- what a coach sees in their exercise bank and the
   // program-builder picker.
+  // A HIDDEN exercise (retired_at set, the 2026-11-22 library review) is left out here, which is
+  // what keeps it out of the bank, the picker, search, swaps and every AI draft built on this list.
+  // A program that already holds one still loads it by id, so nothing anybody saved changes.
   async getVisibleExercisesForCoach(coachId: number) {
     const { coachIds, ownerIds } = await this.getCoachAndAdminOwnerIds(coachId);
     const [rows, favorites, usage] = await Promise.all([
       db.query.exercises.findMany({
-        where: inArray(exercises.coachId, ownerIds),
+        where: and(inArray(exercises.coachId, ownerIds), isNull(exercises.retiredAt)),
         orderBy: desc(exercises.createdAt),
         with: { coach: true },
       }),
@@ -12917,7 +12920,7 @@ Hard rules, no exceptions:
     if (ownerIds.length === 0) return [];
 
     const rows = await db.query.exercises.findMany({
-      where: and(inArray(exercises.coachId, ownerIds), eq(exercises.isCorrective, true)),
+      where: and(inArray(exercises.coachId, ownerIds), eq(exercises.isCorrective, true), isNull(exercises.retiredAt)),
     });
 
     const lowerKeywords = keywords.map((k) => k.toLowerCase());
@@ -13005,7 +13008,7 @@ Hard rules, no exceptions:
     const rows = await db
       .select({ category: exercises.category, n: count() })
       .from(exercises)
-      .where(inArray(exercises.coachId, ownerIds))
+      .where(and(inArray(exercises.coachId, ownerIds), isNull(exercises.retiredAt)))
       .groupBy(exercises.category);
     return { total: rows.reduce((sum, r) => sum + Number(r.n), 0), categories: rows.length };
   },
@@ -13020,10 +13023,14 @@ Hard rules, no exceptions:
     return this.summarizeExercisesForOwners(readableIds);
   },
 
-  async getExercisesByCoach(coachId: number, opts?: { includeAllAdmins?: boolean }) {
+  // `includeHidden` is the admin Forge Library alone: it lists hidden rows (retiredAt set) under
+  // its Hidden filter so an admin can restore one. Every other caller leaves them out.
+  async getExercisesByCoach(coachId: number, opts?: { includeAllAdmins?: boolean; includeHidden?: boolean }) {
     const { readableIds, editableIds } = await this.libraryOwnerIds(coachId, opts);
     const rows = await db.query.exercises.findMany({
-      where: inArray(exercises.coachId, readableIds),
+      where: opts?.includeHidden
+        ? inArray(exercises.coachId, readableIds)
+        : and(inArray(exercises.coachId, readableIds), isNull(exercises.retiredAt)),
       orderBy: desc(exercises.createdAt),
       with: { coach: true },
     });
@@ -13052,6 +13059,26 @@ Hard rules, no exceptions:
 
   async getExercise(id: number) {
     return db.query.exercises.findFirst({ where: eq(exercises.id, id) });
+  },
+
+  // An admin brings a hidden exercise back. restoredAt is what stops the seed hiding it again on
+  // the next deploy; mergedIntoName stays as the record of what the review had decided.
+  async restoreExercise(id: number) {
+    const [row] = await db
+      .update(exercises)
+      .set({ retiredAt: null, restoredAt: new Date() })
+      .where(eq(exercises.id, id))
+      .returning();
+    return row ?? null;
+  },
+
+  async restoreSkillExercise(id: number) {
+    const [row] = await db
+      .update(skillExercises)
+      .set({ retiredAt: null, restoredAt: new Date() })
+      .where(eq(skillExercises.id, id))
+      .returning();
+    return row ?? null;
   },
 
   // Server-side enforcement counterpart to the client's VideoTrackingToggle
@@ -13241,11 +13268,12 @@ Hard rules, no exceptions:
     return db.query.skillExercises.findMany();
   },
 
+  // Hidden drills (retired_at set) are left out, exactly as getVisibleExercisesForCoach does.
   async getVisibleSkillExercisesForCoach(coachId: number) {
     const { coachIds, ownerIds } = await this.getCoachAndAdminOwnerIds(coachId);
     const [rows, favorites, usage] = await Promise.all([
       db.query.skillExercises.findMany({
-        where: inArray(skillExercises.coachId, ownerIds),
+        where: and(inArray(skillExercises.coachId, ownerIds), isNull(skillExercises.retiredAt)),
         orderBy: desc(skillExercises.createdAt),
         with: { coach: true },
       }),
@@ -13335,10 +13363,12 @@ Hard rules, no exceptions:
   // Admin counterpart to getExercisesByCoach -- an admin's own skill bank
   // *is* the Forge skill library, everything in it automatically shared
   // read-only with every coach (see getVisibleSkillExercisesForCoach).
-  async getSkillExercisesByCoach(coachId: number, opts?: { includeAllAdmins?: boolean }) {
+  async getSkillExercisesByCoach(coachId: number, opts?: { includeAllAdmins?: boolean; includeHidden?: boolean }) {
     const { readableIds, editableIds } = await this.libraryOwnerIds(coachId, opts);
     const rows = await db.query.skillExercises.findMany({
-      where: inArray(skillExercises.coachId, readableIds),
+      where: opts?.includeHidden
+        ? inArray(skillExercises.coachId, readableIds)
+        : and(inArray(skillExercises.coachId, readableIds), isNull(skillExercises.retiredAt)),
       orderBy: desc(skillExercises.createdAt),
       with: { coach: true },
     });

@@ -49,7 +49,6 @@ const JUMP_TRACKED = new Set([
   "Countermovement Jump",
   "Squat Jump",
   "Tuck Jump",
-  "Standing Long Jump",
   "Lateral Bound",
 ]);
 
@@ -67,7 +66,9 @@ describe("every filmable lift is profiled", () => {
     // The point of the whole feature is video storage: the cost scales with how many DISTINCT
     // exercises can be filmed. If this number ever approaches the library's size, the backfill
     // has stopped working.
-    expect(names.length).toBe(54);
+    // 53 since 2026-11-22: the library review merged Standing Long Jump into Broad Jump, which
+    // is the filmed name now.
+    expect(names.length).toBe(53);
     for (const junk of ["Clamshell", "Barbell Curl", "Overhead Tricep Extension", "Foam Roll Quads"]) {
       expect(names).not.toContain(junk);
     }

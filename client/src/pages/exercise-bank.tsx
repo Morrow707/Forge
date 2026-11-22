@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SwipeableRow } from "@/components/swipeable-row";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { Plus, Trash2, Dumbbell, Search, Video, Stethoscope, Star, Clock, ChevronDown } from "lucide-react";
 import type { ExerciseWithOwnership } from "@/lib/exercise-types";
@@ -85,11 +85,21 @@ export function ExerciseBankPage({
 }) {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
-  const { data: exercises = [], isLoading, isError, refetch } = useQuery<
-    ExerciseWithOwnership[]
-  >({
-    queryKey: [`${apiBase}/exercises`],
+  // THE FORGE LIBRARY ALSO LISTS WHAT IS HIDDEN (2026-11-22 library review), and only there: the
+  // admin page asks for hidden rows so its Hidden filter can restore one. The key keeps
+  // `${apiBase}/exercises` first, so every existing invalidation of the list refreshes this too.
+  const isAdminLibrary = apiBase === "/api/admin";
+  const { data: allRows = [], isLoading, isError, refetch } = useQuery<ExerciseWithOwnership[]>({
+    queryKey: isAdminLibrary ? [`${apiBase}/exercises`, "with-hidden"] : [`${apiBase}/exercises`],
+    queryFn: () => getJson(isAdminLibrary ? `${apiBase}/exercises?includeHidden=1` : `${apiBase}/exercises`),
   });
+  const [hiddenOnly, setHiddenOnly] = useState(false);
+  const hiddenCount = useMemo(() => allRows.filter((e) => e.retiredAt != null).length, [allRows]);
+  // Hidden rows are shown only under the Hidden filter, and then nothing else is.
+  const exercises = useMemo(
+    () => allRows.filter((e) => (hiddenOnly ? e.retiredAt != null : e.retiredAt == null)),
+    [allRows, hiddenOnly],
+  );
   // Admin's Forge-library browse doesn't get favoriting/recently-used --
   // both are a coach's own shortlist/history for building their programs
   // faster, not concepts that apply to curating the shared library.
@@ -269,6 +279,17 @@ export function ExerciseBankPage({
     onError: (err: ApiError) => toast.error(err.message || "Could not delete exercise"),
   });
 
+  const restoreMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("POST", `${apiBase}/exercises/${id}/restore`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`${apiBase}/exercises`] });
+      toast.success("Exercise restored to the library");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not restore exercise"),
+  });
+
   const favoriteMutation = useMutation({
     mutationFn: async ({ id, next }: { id: number; next: boolean }) => {
       await apiRequest(next ? "POST" : "DELETE", `${apiBase}/exercises/${id}/favorite`);
@@ -333,6 +354,20 @@ export function ExerciseBankPage({
               Recently Used
             </button>
           </div>
+        )}
+        {isAdminLibrary && (
+          <button
+            type="button"
+            onClick={() => setHiddenOnly((v) => !v)}
+            aria-pressed={hiddenOnly}
+            data-testid="toggle-hidden-exercises"
+            className={cn(
+              "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+              hiddenOnly ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:border-primary/50",
+            )}
+          >
+            Hidden <span className="opacity-70">{hiddenCount}</span>
+          </button>
         )}
         {hasProfile && (
           <button
@@ -591,6 +626,26 @@ export function ExerciseBankPage({
                   </div>
                   {ex.instructions && (
                     <p className="line-clamp-2 text-xs text-muted-foreground">{ex.instructions}</p>
+                  )}
+                  {ex.retiredAt != null && (
+                    <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 p-2 text-xs">
+                      <span className="text-muted-foreground">
+                        {ex.mergedIntoName ? `Hidden: merged into ${ex.mergedIntoName}` : "Hidden: retired"}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        data-testid={`restore-exercise-${ex.id}`}
+                        disabled={restoreMutation.isPending}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          restoreMutation.mutate(ex.id);
+                        }}
+                      >
+                        Restore
+                      </Button>
+                    </div>
                   )}
                   <div className="mt-auto flex items-center justify-between pt-2">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">

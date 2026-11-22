@@ -61,6 +61,9 @@ export const SKILL_TYPES = [
   // Cross-sport
   "Footwork",
   "Agility",
+  // Added with the 2026-11-22 library review: team and sport warm-ups and re-warm-ups. Not a
+  // camera-eligible type (see isSkillVideoEligible in server/seed.ts).
+  "Warm-Up",
 ];
 
 // Fixed-position equipment grid for the skill picker's accordion, same

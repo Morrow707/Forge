@@ -344,6 +344,14 @@ ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "purposes" json;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "positions" json;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "youth_safe" boolean;
 ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "caution_note" text;
+-- Library review (2026-11-22): a Forge exercise is HIDDEN, never deleted, when it is retired or
+-- merged into another. Past sets, programs and assignments keep pointing at the row and still show
+-- its name; only the library, the picker, search and new AI suggestions leave it out. Nullable, so
+-- every existing row stays visible. merged_into_name names the exercise a merged name now points at.
+-- restored_at is written when an admin brings one back, so the seed never hides it again.
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "retired_at" timestamp;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "merged_into_name" text;
+ALTER TABLE "exercises" ADD COLUMN IF NOT EXISTS "restored_at" timestamp;
 
 -- Fully separate from "exercises" -- see the comment on skillExercises in
 -- shared/schema.ts for why this isn't just a category on the same table.
@@ -364,6 +372,10 @@ CREATE INDEX IF NOT EXISTS "skill_exercises_coach_idx" ON "skill_exercises" ("co
 ALTER TABLE "skill_exercises" ADD COLUMN IF NOT EXISTS "video_eligible" boolean;
 ALTER TABLE "skill_exercises" ADD COLUMN IF NOT EXISTS "cross_sport_free" boolean NOT NULL DEFAULT false;
 ALTER TABLE "skill_exercises" ADD COLUMN IF NOT EXISTS "targets" json;
+-- Library review (2026-11-22): the same hide-not-delete pair as on "exercises".
+ALTER TABLE "skill_exercises" ADD COLUMN IF NOT EXISTS "retired_at" timestamp;
+ALTER TABLE "skill_exercises" ADD COLUMN IF NOT EXISTS "merged_into_name" text;
+ALTER TABLE "skill_exercises" ADD COLUMN IF NOT EXISTS "restored_at" timestamp;
 -- equipment was a free-text "Bat, Balls, Screen" string until the skill
 -- picker got a real equipment filter -- converts any row still on the old
 -- text column to a real json array (comma-split), guarded by the column's

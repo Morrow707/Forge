@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   FIRST_CHOICE,
   NICKNAMES,
+  SEARCH_NICKNAMES,
   editDistance,
   normalizeSearchText,
   queryReadings,
@@ -16,6 +17,8 @@ import {
   isExercisePurpose,
   isProgramSeasonPhase,
 } from "./exercise-tags";
+import { HIDDEN_EXERCISES, HIDDEN_EXERCISE_NAMES } from "./library-review-2026-11-22";
+import { LIBRARY_REVIEW_EXERCISES } from "../server/seed-data/library-review-2026-11-22";
 
 /**
  * Scott, 2026-11-14: "rdl 4 romanian deadlift, shoulder press 4 barbell shoulder press ...
@@ -28,7 +31,13 @@ const seed = readFileSync(join(__dirname, "../server/seed.ts"), "utf8");
 const NAMES = Array.from(seed.matchAll(/name:\s*"([^"]+)",\s*\n?\s*(?:category|muscleGroup)/g)).map(
   (m) => m[1],
 );
-const LIBRARY = Array.from(new Set(NAMES)).map((name) => ({
+// What a coach can SEE: the seeded names, minus what the 2026-11-22 library review hid, plus what it
+// added. A search test run over hidden rows would pass for results nobody is shown.
+const VISIBLE_NAMES = [
+  ...NAMES.filter((n) => !HIDDEN_EXERCISE_NAMES.has(n)),
+  ...LIBRARY_REVIEW_EXERCISES.map((e) => e.name),
+];
+const LIBRARY = Array.from(new Set(VISIBLE_NAMES)).map((name) => ({
   name,
   muscleGroup: "",
   equipment: "",
@@ -38,7 +47,8 @@ const top = (q: string, n = 1) => searchExercises(LIBRARY, q).slice(0, n).map((e
 
 describe("exercise search", () => {
   it("reads the real library", () => {
-    expect(LIBRARY.length).toBeGreaterThan(350);
+    // 410 seeded, 134 hidden by the 2026-11-22 library review, 32 added: 308.
+    expect(LIBRARY.length).toBeGreaterThan(300);
   });
 
   it.each([
@@ -125,7 +135,10 @@ describe("exercise search", () => {
 
   it("every nickname and every first choice points at words the library really has", () => {
     const libraryNames = LIBRARY.map((e) => normalizeSearchText(e.name));
-    for (const [nick, expansions] of Object.entries(NICKNAMES)) {
+    // SEARCH_NICKNAMES is NICKNAMES plus every merged name, so a merge target that names nothing
+    // fails here too.
+    expect(Object.keys(SEARCH_NICKNAMES).length).toBeGreaterThan(Object.keys(NICKNAMES).length);
+    for (const [nick, expansions] of Object.entries(SEARCH_NICKNAMES)) {
       for (const phrase of expansions) {
         const hit = libraryNames.some((n) => ` ${n} `.includes(` ${phrase} `));
         expect(hit, `"${nick}" -> "${phrase}" names nothing in the library`).toBe(true);
@@ -134,6 +147,17 @@ describe("exercise search", () => {
     for (const [nick, name] of Object.entries(FIRST_CHOICE)) {
       expect(libraryNames, `first choice for "${nick}"`).toContain(name);
     }
+  });
+
+  it.each(HIDDEN_EXERCISES.filter((r) => r.mergeInto != null).map((r) => [r.name, r.mergeInto!]))(
+    "a merged name typed in full (%s) lands on the kept exercise (%s)",
+    (merged, kept) => {
+      expect(top(merged)).toEqual([kept]);
+    },
+  );
+
+  it("no hidden exercise is in the library the search is driven over", () => {
+    expect(LIBRARY.some((e) => HIDDEN_EXERCISE_NAMES.has(e.name))).toBe(false);
   });
 
   it("every tag nickname points at a tag that exists", () => {

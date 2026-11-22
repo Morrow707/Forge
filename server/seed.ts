@@ -41,6 +41,15 @@ import { ASSUMPTION_OF_RISK_RELEASE, nextAssumptionOfRisk } from "./seed-data/as
 import { REQUIRED_DOCUMENTS, documentAudienceFor } from "@shared/required-documents";
 import { AI_TERMS_OF_USE, nextAiTermsOfUse } from "./seed-data/ai-terms-of-use-draft";
 import { mergeNamedDuplicateExercises } from "./merge-duplicate-exercises";
+import { LIBRARY_REVIEW_EXERCISES, LIBRARY_REVIEW_SKILL_DRILLS } from "./seed-data/library-review-2026-11-22";
+import {
+  correctReviewedSkillInstructions,
+  describeLibraryReviewChanges,
+  hideReviewedExercises,
+  hideReviewedSkillDrills,
+  renameDuplicateSkillDrills,
+  tagReviewedExercises,
+} from "./library-review";
 
 const LEGAL_DOC_TYPES = legalDocumentTypeEnum.enumValues;
 
@@ -3143,6 +3152,20 @@ async function main() {
       exerciseMap[ex.name] = row.id;
     }
 
+    // The 2026-11-22 library review's additions: warm-up, joint-care and return-to-training work,
+    // each with its tags and its own instructions (server/seed-data/library-review-2026-11-22.ts).
+    // A fourth list, so it is named in videoRestrictedNames and forgeLibraryNames below like the
+    // other three.
+    const libraryReviewExercises = LIBRARY_REVIEW_EXERCISES;
+    for (const ex of libraryReviewExercises) {
+      if (existingExerciseNames.has(ex.name)) continue;
+      const row = await storage.createExercise(libraryOwner.id, {
+        ...ex,
+        videoUrl: videoSearchUrl(ex.name),
+      });
+      exerciseMap[ex.name] = row.id;
+    }
+
     // One-time backfill for exercises that already existed before the
     // materials columns were added -- only touches rows still at the
     // just-added default (usesWeight true, everything else false), so it
@@ -3266,10 +3289,12 @@ async function main() {
       "Snatch-Grip High Pull", "Split Jerk", "Tall Clean", "Tall Snatch",
       // Plyometric -- the standard, most commonly programmed ones
       "Box Jump", "Broad Jump", "Depth Jump", "Countermovement Jump",
-      "Squat Jump", "Tuck Jump", "Standing Long Jump", "Lateral Bound",
+      // Standing Long Jump left this list on 2026-11-22: the library review merged it into Broad
+      // Jump (and Drop Jump into Depth Jump), so the kept name is the one that is filmed.
+      "Squat Jump", "Tuck Jump", "Lateral Bound",
     ]);
     const videoRestrictedNames = new Set(
-      [...seedExercises, ...combinationExercises, ...expansionExercises]
+      [...seedExercises, ...combinationExercises, ...expansionExercises, ...libraryReviewExercises]
         .map((ex) => ex.name)
         .filter((name) => !CANONICAL_VIDEO_ELIGIBLE_NAMES.has(name)),
     );
@@ -3347,6 +3372,7 @@ async function main() {
       ...seedExercises.map((e) => e.name),
       ...combinationExercises.map((e) => e.name),
       ...expansionExercises.map((e) => e.name),
+      ...libraryReviewExercises.map((e) => e.name),
     ];
     const newlyOfficial = await storage.markSeededExercisesForgeOfficial(
       libraryOwner.id,
@@ -3355,6 +3381,21 @@ async function main() {
     if (newlyOfficial > 0) {
       console.log(`Flagged ${newlyOfficial} seeded exercise(s) Forge-official.`);
     }
+
+    // THE 2026-11-22 LIBRARY REVIEW, ON THE EXERCISES THIS DATABASE ALREADY HAS. Hidden, never
+    // deleted: merged and retired rows keep every logged set and program row pointing at them. Run
+    // after the creation loops and the flagging above, so a fresh database hides exactly what an
+    // existing one does. Reports only what it changed. See server/library-review.ts.
+    const exercisesHidden = await hideReviewedExercises(libraryOwner.id);
+    const exercisesTagged = await tagReviewedExercises(libraryOwner.id);
+    const exerciseReviewLine = describeLibraryReviewChanges({
+      exercisesHidden,
+      exercisesTagged,
+      drillsHidden: 0,
+      drillsRenamed: 0,
+      drillInstructionsCorrected: 0,
+    });
+    if (exerciseReviewLine) console.log(exerciseReviewLine);
   }
 
   // One-time production fixup: promote scott.morrow@live.com to admin and
@@ -3385,6 +3426,10 @@ async function main() {
   // admin-ownership union.
   {
     const skillLibraryOwner = forgeOwner;
+    // The one duplicate name in the skill library, renamed by sport BEFORE the name set below is
+    // read, so a database already holding two "Cone Weave Dribbling" rows renames them rather
+    // than being given two more (server/library-review.ts).
+    const drillsRenamed = await renameDuplicateSkillDrills(skillLibraryOwner.id);
     const allSkillExercises = await storage.getAllSkillExercises();
     const existingSkillNames = new Set(allSkillExercises.map((e) => e.name));
 
@@ -4112,7 +4157,7 @@ async function main() {
       { name: "Stationary Two-Ball Dribbling", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Dribble two balls simultaneously in place, alternating pound and crossover patterns without looking down." },
       { name: "Crossover Series", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Chain in-and-out, crossover, and behind-the-back moves stationary, then walking, then at full speed." },
       { name: "Full-Court Speed Dribble", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Push the ball ahead with the dominant hand at a sprint pace, keeping the dribble low and controlled." },
-      { name: "Cone Weave Dribbling", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball", "Cones"], instructions: "Weave through a line of cones using a crossover or between-the-legs move at each one, changing hands every touch." },
+      { name: "Cone Weave Dribbling (Basketball)", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball", "Cones"], instructions: "Weave through a line of cones using a crossover or between-the-legs move at each one, changing hands every touch." },
       { name: "Two-Ball Alternating Dribble", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Dribble two balls at alternating heights and rhythms to build independent hand control." },
       { name: "Pressure Dribbling vs. Defender", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball", "Partner"], instructions: "A live defender applies ball pressure while the ball handler works to protect the ball and change speeds." },
       { name: "Between-the-Legs Combo", skillType: "Ball Handling", sports: ["Basketball"], equipment: ["Basketball"], instructions: "Chain between-the-legs dribbles into a hesitation move, walking then at game speed." },
@@ -4160,7 +4205,7 @@ async function main() {
       { name: "Two-Touch Passing Circuit", skillType: "Ball Control", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Limit every touch to control-then-pass, forcing a quick, decisive first touch on every rep." },
       { name: "Back Pressure Shielding", skillType: "Ball Control", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Receive with your body between the ball and a defender applying pressure from behind, protecting it until support arrives." },
       // Dribbling
-      { name: "Cone Weave Dribbling", skillType: "Dribbling", sports: ["Soccer"], equipment: ["Soccer Ball", "Cones"], instructions: "Weave through a tight line of cones using the inside and outside of both feet, keeping the ball close." },
+      { name: "Cone Weave Dribbling (Soccer)", skillType: "Dribbling", sports: ["Soccer"], equipment: ["Soccer Ball", "Cones"], instructions: "Weave through a tight line of cones using the inside and outside of both feet, keeping the ball close." },
       { name: "Step-Over Move", skillType: "Dribbling", sports: ["Soccer"], equipment: ["Soccer Ball"], instructions: "Circle the foot over the ball without touching it to sell a fake direction, then push off the opposite way." },
       { name: "Cruyff Turn", skillType: "Dribbling", sports: ["Soccer"], equipment: ["Soccer Ball"], instructions: "Fake a pass or shot, then drag the ball behind the standing leg to reverse direction in one motion." },
       { name: "1v1 Attacking Moves", skillType: "Dribbling", sports: ["Soccer"], equipment: ["Soccer Ball", "Partner"], instructions: "Attack a live defender in a small grid, working to beat them with a change of pace or direction rather than pure speed." },
@@ -4256,7 +4301,7 @@ async function main() {
       { name: "Combo Block Reps", skillType: "Blocking (Football)", sports: ["Football"], equipment: ["Blocking Sled", "Partner"], instructions: "Two linemen double-team a defensive lineman before one climbs off to the second level on the linebacker." },
       { name: "Cut Block Technique", skillType: "Blocking (Football)", sports: ["Football"], equipment: ["Partner"], instructions: "Aim the shoulder low through the defender's outside hip to take out their legs on a designed cut block." },
       // Tackling
-      { name: "Form Tackle - Head-Up", skillType: "Tackling", sports: ["Football"], equipment: ["Partner"], instructions: "Wrap up with the head across the front of the ball carrier, driving the legs through contact to finish the tackle." },
+      { name: "Form Tackle - Head-Up", skillType: "Tackling", sports: ["Football"], equipment: ["Partner"], instructions: "Eyes up and head up, make contact with the shoulder, keeping the head out of the tackle and to the side of the ball carrier. Wrap the arms and drive the legs through contact to finish." },
       { name: "Open Field Tackling", skillType: "Tackling", sports: ["Football"], equipment: ["Partner"], instructions: "Break down into a short-stepped, balanced position before closing the final distance to a moving ball carrier." },
       { name: "Angle Tackling Drill", skillType: "Tackling", sports: ["Football"], equipment: ["Partner"], instructions: "Take a proper pursuit angle to cut off a ball carrier's path rather than chasing straight from behind." },
       { name: "Gang Tackling Reps", skillType: "Tackling", sports: ["Football"], equipment: ["Partner"], instructions: "Multiple defenders converge on a ball carrier, the first player breaking down to slow them for teammates arriving." },
@@ -4479,6 +4524,16 @@ async function main() {
       });
     }
 
+    // The 2026-11-22 library review's skill additions (warm-ups, landing and cutting, resisted and
+    // flying sprints). Every "Warm-Up" one is outside the camera-eligible skill types below.
+    for (const drill of LIBRARY_REVIEW_SKILL_DRILLS) {
+      if (existingSkillNames.has(drill.name)) continue;
+      await storage.createSkillExercise(skillLibraryOwner.id, {
+        ...drill,
+        videoUrl: skillVideoSearchUrl(drill.name),
+      });
+    }
+
     // Video-check eligibility default for skill drills: which ones a coach
     // can turn Sprint Timing or Mechanics tracking on for (see
     // SprintTrackingToggle/TrackingToggle client-side). Same cost-containment
@@ -4599,6 +4654,19 @@ async function main() {
     if (skillCrossSportBackfilled > 0) {
       console.log(`Set crossSportFree=true on ${skillCrossSportBackfilled} cross-sport skill drill(s).`);
     }
+
+    // The 2026-11-22 library review on the skill drills this database already has: hide the merged
+    // and retired ones (never delete) and correct the tackling cue, keyed on its old text.
+    const drillsHidden = await hideReviewedSkillDrills(skillLibraryOwner.id);
+    const drillInstructionsCorrected = await correctReviewedSkillInstructions(skillLibraryOwner.id);
+    const drillReviewLine = describeLibraryReviewChanges({
+      exercisesHidden: 0,
+      exercisesTagged: 0,
+      drillsHidden,
+      drillsRenamed,
+      drillInstructionsCorrected,
+    });
+    if (drillReviewLine) console.log(drillReviewLine);
   }
 
   // The platform's first paid, drip-content Class: "American Hitting -

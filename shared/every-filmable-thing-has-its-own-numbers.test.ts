@@ -1,4 +1,8 @@
-// ALL 269 FILMABLE THINGS RESOLVE THEIR OWN RECORD: 54 exercises and 215 skill drills.
+// ALL 253 FILMABLE THINGS RESOLVE THEIR OWN RECORD: 53 exercises and 200 skill drills.
+//
+// It was 269 (54 + 215) until 2026-11-22, when the library review hid Standing Long Jump (merged into
+// Broad Jump) and 24 filmable skill drills (merged or retired), and added 9 filmable drills (sprint
+// starts, sprint mechanics, landing and cutting). Hidden drills free their records.
 //
 // It was 216 drills until 2026-10-07, when a scan of the library found "Overload/Underload Bat
 // Drill" and "Bat Speed Overload/Underload Rounds" were one drill written twice -- and BOTH were
@@ -35,6 +39,8 @@ import {
   cameraTunablesFor,
   type FilmingTracker,
 } from "./camera-tunables-by-lift";
+import { HIDDEN_SKILL_DRILL_NAMES } from "./library-review-2026-11-22";
+import { LIBRARY_REVIEW_SKILL_DRILLS } from "../server/seed-data/library-review-2026-11-22";
 
 const SEED = path.resolve(__dirname, "../server/seed.ts");
 const src = fs.readFileSync(SEED, "utf8");
@@ -53,13 +59,20 @@ function filmableDrills(): { name: string; skillType: string }[] {
   const mechanics = new Set(namesInSet("MECHANICS_ELIGIBLE_SKILL_TYPES = new Set(["));
   const sprint = new Set(namesInSet("SPRINT_TIMING_ELIGIBLE_SKILL_TYPES = new Set(["));
   const footwork = new Set(namesInSet("SPRINT_TIMING_ELIGIBLE_FOOTWORK_NAMES = new Set(["));
+  const isEligible = (name: string, type: string) =>
+    mechanics.has(type) || sprint.has(type) || (type === "Footwork" && footwork.has(name));
   const out: { name: string; skillType: string }[] = [];
   for (const m of src.matchAll(/name:\s*"([^"]+)"/g)) {
     const window = src.slice(m.index! + m[0].length, m.index! + m[0].length + 500);
     const type = /skillType:\s*"([^"]+)"/.exec(window)?.[1];
     if (!type) continue;
-    const eligible = mechanics.has(type) || sprint.has(type) || (type === "Footwork" && footwork.has(m[1]));
-    if (eligible) out.push({ name: m[1], skillType: type });
+    // A drill the 2026-11-22 library review hid is no longer filmed; its record is freed.
+    if (HIDDEN_SKILL_DRILL_NAMES.has(m[1])) continue;
+    if (isEligible(m[1], type)) out.push({ name: m[1], skillType: type });
+  }
+  // The review's additions live in their own seed-data module, read by the same rule.
+  for (const d of LIBRARY_REVIEW_SKILL_DRILLS) {
+    if (isEligible(d.name, d.skillType)) out.push({ name: d.name, skillType: d.skillType });
   }
   return out;
 }
@@ -71,7 +84,6 @@ const JUMPS = new Set([
   "Countermovement Jump",
   "Squat Jump",
   "Tuck Jump",
-  "Standing Long Jump",
   "Lateral Bound",
 ]);
 
@@ -79,11 +91,11 @@ describe("every filmable thing has its own numbers", () => {
   const exercises = filmableExercises();
   const drills = filmableDrills();
 
-  it("counts 54 exercises and 215 drills", () => {
+  it("counts 53 exercises and 200 drills", () => {
     // Pinned so a change to either eligibility rule is a decision somebody made on purpose --
     // video storage is the whole reason the lists are short (see videoEligible's own comment).
-    expect(exercises.length).toBe(54);
-    expect(drills.length).toBe(215);
+    expect(exercises.length).toBe(53);
+    expect(drills.length).toBe(200);
   });
 
   it("covers the speed and agility work Scott named", () => {
@@ -96,7 +108,7 @@ describe("every filmable thing has its own numbers", () => {
     expect(drills.some((d) => d.name.startsWith("Ladder Drill"))).toBe(true);
   });
 
-  it("gives all 269 of them their own record, and no two the same one", () => {
+  it("gives all 253 of them their own record, and no two the same one", () => {
     const seen = new Set<object>();
     // A drill's tracker is sprint-timed for Agility/Starts/Footwork and mechanics for the rest
     // -- the same split server/seed.ts's eligibility rule makes.
@@ -113,7 +125,7 @@ describe("every filmable thing has its own numbers", () => {
         tracker: (SPRINT_TIMED.has(d.skillType) ? "sprint" : "mechanics") as FilmingTracker,
       })),
     ];
-    expect(identities.length).toBe(269);
+    expect(identities.length).toBe(253);
     for (const { name, bucket, tracker } of identities) {
       const resolved = cameraTunablesFor(name, bucket, tracker);
       expect(resolved.tracker).toBe(tracker);
@@ -127,10 +139,10 @@ describe("every filmable thing has its own numbers", () => {
         expect(Number.isFinite((resolved.values as Record<string, number>)[key])).toBe(true);
       }
     }
-    expect(seen.size).toBe(269);
+    expect(seen.size).toBe(253);
   });
 
-  it("writing on any one of the 269 leaves the other 268 alone", () => {
+  it("writing on any one of the 253 leaves the other 252 alone", () => {
     const all = [...exercises, ...drills.map((d) => d.name)];
     const before = all.map((name) => ({ ...cameraTunablesFor(name, romBucketForExercise(name)).values }));
     // Scribble on one drill's record the way a fitted calibration eventually will.

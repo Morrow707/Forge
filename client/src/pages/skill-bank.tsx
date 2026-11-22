@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { SkillFaultThresholdsDialog } from "@/components/skill-fault-thresholds-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getJson } from "@/lib/queryClient";
 import { Plus, Trash2, Target, Search, Video, SlidersHorizontal, Star, Clock, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SkillExerciseWithOwnership } from "@/lib/skill-types";
@@ -52,11 +52,20 @@ export function SkillBankPage({
   const qc = useQueryClient();
   const [, navigate] = useLocation();
   const [faultSettingsOpen, setFaultSettingsOpen] = useState(false);
-  const { data: skills = [], isLoading, isError, refetch } = useQuery<
-    SkillExerciseWithOwnership[]
-  >({
-    queryKey: [`${apiBase}/skill-exercises`],
+  // The admin Forge Skill Bank also lists what the 2026-11-22 library review hid, under its Hidden
+  // filter, so a drill can be restored. Same shape as exercise-bank.tsx.
+  const isAdminLibrary = apiBase === "/api/admin";
+  const { data: allRows = [], isLoading, isError, refetch } = useQuery<SkillExerciseWithOwnership[]>({
+    queryKey: isAdminLibrary ? [`${apiBase}/skill-exercises`, "with-hidden"] : [`${apiBase}/skill-exercises`],
+    queryFn: () =>
+      getJson(isAdminLibrary ? `${apiBase}/skill-exercises?includeHidden=1` : `${apiBase}/skill-exercises`),
   });
+  const [hiddenOnly, setHiddenOnly] = useState(false);
+  const hiddenCount = useMemo(() => allRows.filter((s) => s.retiredAt != null).length, [allRows]);
+  const skills = useMemo(
+    () => allRows.filter((s) => (hiddenOnly ? s.retiredAt != null : s.retiredAt == null)),
+    [allRows, hiddenOnly],
+  );
 
   const canFavorite = apiBase === "/api/coach";
 
@@ -158,6 +167,17 @@ export function SkillBankPage({
       setDeleteTarget(null);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not delete skill drill"),
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("POST", `${apiBase}/skill-exercises/${id}/restore`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`${apiBase}/skill-exercises`] });
+      toast.success("Skill drill restored to the library");
+    },
+    onError: (err: ApiError) => toast.error(err.message || "Could not restore skill drill"),
   });
 
   const favoriteMutation = useMutation({
@@ -360,6 +380,26 @@ export function SkillBankPage({
                 </div>
                 {sk.instructions && (
                   <p className="line-clamp-2 text-xs text-muted-foreground">{sk.instructions}</p>
+                )}
+                {sk.retiredAt != null && (
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 p-2 text-xs">
+                    <span className="text-muted-foreground">
+                      {sk.mergedIntoName ? `Hidden: merged into ${sk.mergedIntoName}` : "Hidden: retired"}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      data-testid={`restore-skill-${sk.id}`}
+                      disabled={restoreMutation.isPending}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        restoreMutation.mutate(sk.id);
+                      }}
+                    >
+                      Restore
+                    </Button>
+                  </div>
                 )}
                 <div className="mt-auto flex items-center justify-between pt-2">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">

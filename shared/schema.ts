@@ -1611,6 +1611,18 @@ export const exercises = pgTable("exercises", {
   youthSafe: boolean("youth_safe"),
   // One or two sentences shown under the exercise wherever it is placed. Never blocks anything.
   cautionNote: text("caution_note"),
+  /* ---- HIDDEN, NEVER DELETED (2026-11-22 library review). A Forge exercise that was retired or
+   * merged into another keeps its row: logged sets, assignments and program rows reference it and
+   * still show its name. A set retiredAt leaves it out of the library, the picker, search and new
+   * AI suggestions; an admin clears it to restore one. Only the seed sets it, and only on rows the
+   * library owner owns, so a coach's own exercise is never hidden. See
+   * shared/library-review-2026-11-22.ts. */
+  retiredAt: timestamp("retired_at"),
+  // The kept exercise a merged name now points at; null for a plain retirement.
+  mergedIntoName: text("merged_into_name"),
+  // When an admin brought a hidden exercise back. The seed never hides a row that has one, so a
+  // restore is permanent.
+  restoredAt: timestamp("restored_at"),
 });
 
 export const exerciseSubmissionStatusEnum = pgEnum("exercise_submission_status", [
@@ -1732,6 +1744,10 @@ export const skillExercises = pgTable(
     // storage.getVisibleSkillExercisesForFreeAgent for how this combines
     // with users.signupSport/unlockedSkillSports to decide what's locked.
     crossSportFree: boolean("cross_sport_free").notNull().default(false),
+    // Hidden, never deleted -- the same pair, and the same rules, as on exercises.
+    retiredAt: timestamp("retired_at"),
+    mergedIntoName: text("merged_into_name"),
+    restoredAt: timestamp("restored_at"),
   },
   (table) => ({
     coachIdx: index("skill_exercises_coach_idx").on(table.coachId),

@@ -8486,3 +8486,21 @@ All on main, pre-flight checked, not yet in a TestFlight build (Scott is holding
 - **The research** is in the artifact https://claude.ai/artifact/SPtw36pRmhH6aueGRcp4M8 (548 PubMed sources,
   every finding fetched and cited). The textbook was read for its program-design rules only; nothing of its
   text reaches the app, and the app never says CSCS or NSCA.
+- **The library review is applied (Scott: "a, apply all of them").** HIDDEN, NEVER DELETED:
+  `exercises` and `skill_exercises` carry `retired_at`, `merged_into_name` and `restored_at`. 134
+  exercises (94 merged, 40 retired) and 39 skill drills (37 merged, 2 retired) are hidden on the
+  library owner's rows by exact name (`server/library-review.ts`, run by the seed on every deploy,
+  reporting only what it changed); a coach's own row of the same name is never touched. Hidden =
+  out of the bank, the pickers, search, swaps and AI drafts (`getVisibleExercisesForCoach` and its
+  skill twin filter it); a program or logged set that already holds one still loads it by id and
+  name. An admin restores one from the Forge Library's (or Skill Bank's) Hidden filter; `restored_at`
+  stops the seed hiding it again. The "unsure" 8 + 6 are untouched. A merged name is a search
+  nickname (`MERGED_EXERCISE_ALIASES`, derived from `shared/library-review-2026-11-22.ts`).
+  Added: 32 exercises (warm-up, care, return-to-training, each tagged; return-to-training ones carry
+  the clinician caution) and 26 skill drills (new skill type "Warm-Up", not camera-eligible), in
+  `server/seed-data/library-review-2026-11-22.ts`; 48 existing exercises tagged where the review's
+  reason named the joint and role (only empty fields filled). "Cone Weave Dribbling" is now
+  "(Basketball)" and "(Soccer)"; the Form Tackle cue is head-up, shoulder contact, head out.
+  FILMABLE: Standing Long Jump left `CANONICAL_VIDEO_ELIGIBLE_NAMES` (53 now, Broad Jump kept); the
+  per-identity count is 53 exercises + 200 drills = 253. No camera constant moved.
+  `a-hidden-exercise-keeps-its-history.itest.ts`.

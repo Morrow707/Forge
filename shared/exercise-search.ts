@@ -32,6 +32,7 @@
  */
 
 import { TAG_NICKNAMES } from "./exercise-tags";
+import { MERGED_EXERCISE_ALIASES } from "./library-review-2026-11-22";
 
 export type SearchableExercise = {
   name: string;
@@ -47,15 +48,17 @@ export type SearchableExercise = {
  * What people type -> the library's words. Keys and values are already normalised (lowercase,
  * no punctuation). A value may hold several phrases; any of them may match.
  *
- * Every value names words that are really in the seeded library's names. The test checks that,
- * so a nickname cannot point at nothing.
+ * Every value names words that are really in the seeded library's VISIBLE names (hidden rows from
+ * the 2026-11-22 library review do not count). The test checks that, so a nickname cannot point at
+ * nothing a coach can see.
  */
 export const NICKNAMES: Record<string, string[]> = {
   rdl: ["romanian deadlift"],
   rdls: ["romanian deadlift"],
   "romanian dl": ["romanian deadlift"],
-  sldl: ["stiff leg deadlift"],
-  "straight leg deadlift": ["stiff leg deadlift"],
+  // Stiff-Leg Deadlift was merged into the Romanian Deadlift (2026-11-22 library review).
+  sldl: ["romanian deadlift"],
+  "straight leg deadlift": ["romanian deadlift"],
   dl: ["deadlift"],
   deads: ["deadlift"],
   "trap bar": ["hex bar", "trap bar"],
@@ -106,7 +109,7 @@ export const NICKNAMES: Record<string, string[]> = {
   skullcrushers: ["skull crusher"],
   "skull crushers": ["skull crusher"],
   "lying tricep extension": ["skull crusher"],
-  "tricep pushdown": ["tricep rope pushdown", "straight arm pushdown"],
+  "tricep pushdown": ["tricep rope pushdown"],
   pushdown: ["pushdown"],
   "lat pull": ["lat pulldown"],
   "lat pull down": ["lat pulldown"],
@@ -114,8 +117,8 @@ export const NICKNAMES: Record<string, string[]> = {
   "bent over row": ["bent over row"],
   "barbell row": ["bent over row", "pendlay row"],
   "bb row": ["bent over row", "pendlay row"],
-  "db row": ["single arm dumbbell row", "chest supported dumbbell row"],
-  "dumbbell row": ["single arm dumbbell row", "chest supported dumbbell row"],
+  "db row": ["single arm dumbbell row", "chest supported row"],
+  "dumbbell row": ["single arm dumbbell row", "chest supported row"],
   "cable row": ["seated cable row"],
   "farmers walk": ["farmer s carry"],
   "farmer walk": ["farmer s carry"],
@@ -127,7 +130,7 @@ export const NICKNAMES: Record<string, string[]> = {
   gm: ["good morning"],
   cmj: ["countermovement jump"],
   "counter movement jump": ["countermovement jump"],
-  "long jump": ["standing long jump", "broad jump"],
+  "long jump": ["broad jump"],
   "c j": ["clean jerk"],
   "clean and jerk": ["clean jerk"],
   cj: ["clean jerk"],
@@ -143,17 +146,18 @@ export const NICKNAMES: Record<string, string[]> = {
   "side raise": ["lateral raise"],
   "rear delt": ["rear delt"],
   "reverse fly": ["rear delt fly"],
-  "chest fly": ["fly", "pec deck"],
+  "chest fly": ["fly", "machine chest fly"],
   flys: ["fly"],
   flyes: ["fly"],
   flies: ["fly"],
-  "pec fly": ["pec deck", "machine chest fly"],
+  "pec fly": ["machine chest fly"],
   "bicep curls": ["curl"],
   curls: ["curl"],
   "ab wheel": ["ab wheel rollout"],
   "ab roller": ["ab wheel rollout"],
-  ttb: ["toes to bar"],
-  t2b: ["toes to bar"],
+  // Toes-to-Bar was merged into the Hanging Leg Raise (2026-11-22 library review).
+  ttb: ["hanging leg raise"],
+  t2b: ["hanging leg raise"],
   "hanging knee raise": ["hanging leg raise"],
   "back raise": ["back extension"],
   hyperextension: ["back extension"],
@@ -163,7 +167,7 @@ export const NICKNAMES: Record<string, string[]> = {
   "kb swing": ["kettlebell swing"],
   "kettlebell swings": ["kettlebell swing"],
   "jump squat": ["squat jump"],
-  prowler: ["prowler push", "sled push"],
+  prowler: ["sled push"],
   "sled pull": ["sled drag"],
   bike: ["assault bike"],
   rower: ["rowing machine"],
@@ -176,6 +180,18 @@ export const NICKNAMES: Record<string, string[]> = {
   shrugs: ["shrug"],
   lunges: ["lunge"],
 };
+
+/**
+ * A MERGED NAME IS A NICKNAME (2026-11-22 library review). An exercise merged into another is
+ * hidden from the library, so typing its old name ("Prowler Push", "Pec Deck") has to land on the
+ * kept one. Derived from shared/library-review-2026-11-22.ts rather than typed here, so the merge
+ * list and the search cannot drift; a hand-written NICKNAMES entry with the same key keeps its own
+ * expansions and gains the kept name beside them.
+ */
+export const SEARCH_NICKNAMES: Record<string, string[]> = Object.entries(MERGED_EXERCISE_ALIASES).reduce(
+  (acc, [merged, kept]) => ({ ...acc, [merged]: Array.from(new Set([...(acc[merged] ?? []), kept])) }),
+  { ...NICKNAMES } as Record<string, string[]>,
+);
 
 /** The plain version of a lift, shown above its own variations when its nickname is typed. */
 export const FIRST_CHOICE: Record<string, string> = {
@@ -467,12 +483,12 @@ function indexOf(ex: SearchableExercise): Indexed {
 export function queryReadings(query: string): string[] {
   const typed = normalizeSearchText(query);
   if (!typed) return [];
-  const keys = Object.keys(NICKNAMES).sort((a, b) => b.length - a.length);
+  const keys = Object.keys(SEARCH_NICKNAMES).sort((a, b) => b.length - a.length);
   // One pass is enough: nicknames expand to library words, not to other nicknames.
   const padded = ` ${typed} `;
   const swapped = keys.flatMap((key) => {
     const at = padded.indexOf(` ${key} `);
-    return at === -1 ? [] : NICKNAMES[key].map((replacement) => swapAt(padded, at, key, replacement));
+    return at === -1 ? [] : SEARCH_NICKNAMES[key].map((replacement) => swapAt(padded, at, key, replacement));
   });
   return withTagNicknames(Array.from(new Set([typed, ...swapped])), TAG_NICKNAMES);
 }
@@ -523,6 +539,8 @@ function scoreReading(reading: string, ix: Indexed): number | null {
 /** The plain lift a query names, allowing the same typos a word is allowed ("squatt"). */
 function firstChoiceFor(typed: string): string | undefined {
   if (FIRST_CHOICE[typed]) return FIRST_CHOICE[typed];
+  // A merged name typed in full puts the exercise it was merged into first.
+  if (MERGED_EXERCISE_ALIASES[typed]) return MERGED_EXERCISE_ALIASES[typed];
   const max = allowedTypos(typed);
   if (max === 0) return undefined;
   const near = Object.keys(FIRST_CHOICE).find((key) => editDistance(typed, key, ONE_TYPO) <= ONE_TYPO);
