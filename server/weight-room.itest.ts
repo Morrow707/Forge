@@ -15,7 +15,8 @@ import {
 import { db } from "./db";
 import { makeAssignedProgram, makeExercise, resetDatabase } from "./test-support/fixtures";
 import { loginAs, makeLoginableUser, startTestServer, TestClient, type TestServer } from "./test-support/http-app";
-import { clearTvCacheForTests } from "./weight-room";
+import { clearTvCacheForTests, STATION_REPLAY_DAYS } from "./weight-room";
+import { shiftIsoDate } from "@shared/athlete-day";
 
 /* WEIGHT ROOM MODE ON REAL POSTGRES (2026-11-21).
  *
@@ -32,6 +33,7 @@ import { clearTvCacheForTests } from "./weight-room";
 const OK = 200;
 const CREATED = 201;
 const NO_CONTENT = 204;
+const BAD_REQUEST = 400;
 const UNAUTHORIZED = 401;
 const FORBIDDEN = 403;
 const NOT_FOUND = 404;
@@ -250,6 +252,39 @@ describe("the weight room station", () => {
     expect(res.status).toBe(FORBIDDEN);
     expect(res.body.missing.length).toBeGreaterThan(0);
     expect(await setsOnDay(blocked.id)).toEqual([]);
+  });
+
+  it("lands a save the tablet queued yesterday, reads that day back, and still refuses a future or too-old day", async () => {
+    // The Wi-Fi dropped, the tablet queued the sets, and the connection came back after midnight.
+    const athlete = await makeLoginableUser({ role: "athlete", name: "Quinn Queued" } as never);
+    await db.insert(coachAthletes).values({ coachId: coach.id, athleteId: athlete.id });
+    await db.insert(teamMembers).values({ teamId: teamA, athleteId: athlete.id });
+    await db.insert(externalWaivers).values(waiver(athlete.id));
+    const yesterday = shiftIsoDate(today, -1);
+    const d = await makeAssignedProgram({ coachId: coach.id, athleteId: athlete.id, exerciseIds: [squatId], startDate: yesterday });
+    const url = `/api/coach/weight-room/station/${teamA}/athletes/${athlete.id}/log`;
+    const body = (date: string) => ({
+      assignmentId: d.assignment.id,
+      programDayId: d.day.id,
+      date,
+      sets: [{ programExerciseId: d.programExercises[0].id, setNumber: 1, reps: "5", weight: "175", weightUnit: "lbs" }],
+    });
+
+    const landed = await coachClient.post(url, body(yesterday));
+    expect(landed.status).toBe(OK);
+    const [log] = await db.select().from(workoutLogs).where(and(eq(workoutLogs.athleteId, athlete.id), eq(workoutLogs.date, yesterday)));
+    expect(log).toBeDefined();
+
+    // The queue's 409 catch-up re-reads the day it queued for, not today.
+    const read = await coachClient.get(`/api/coach/weight-room/station/${teamA}/athletes/${athlete.id}?date=${yesterday}`);
+    expect(read.status).toBe(OK);
+    expect(read.body.date).toBe(yesterday);
+    expect(read.body.workouts[0].revision).toBe(landed.body.revision);
+    expect(read.body.workouts[0].exercises[0].logged.map((s: { setNumber: number }) => s.setNumber)).toEqual([1]);
+
+    expect((await coachClient.post(url, body(shiftIsoDate(today, 1)))).status).toBe(BAD_REQUEST);
+    expect((await coachClient.post(url, body(shiftIsoDate(today, -(STATION_REPLAY_DAYS + 1))))).status).toBe(BAD_REQUEST);
+    expect((await coachClient.get(`/api/coach/weight-room/station/${teamA}/athletes/${athlete.id}?date=${shiftIsoDate(today, 1)}`)).status).toBe(BAD_REQUEST);
   });
 
   it("leaves the station only on the coach's own password", async () => {

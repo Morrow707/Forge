@@ -7,6 +7,14 @@ import { toast } from "sonner";
 import { dropHeavyFields } from "@/lib/log-payload-trim";
 import { belongsToCurrentUser, getQueueOwner } from "@/lib/queue-owner";
 import {
+  STATION_DAY_KEY_PREFIX,
+  isStationLogUrl,
+  stationDayUrl,
+  stationRebaseDecision,
+  type StationDayRead,
+  type StationSavePayload,
+} from "@/lib/station-save-rules";
+import {
   deletePendingLogFile,
   pendingLogFilePath,
   pendingLogFilesSupported,
@@ -597,6 +605,11 @@ async function runFlush() {
       // in flight.
       const queue = readQueue();
       if (!queue.some((p) => p.id === entry.id)) continue;
+      // A WEIGHT-ROOM STATION entry is counted and shown by the station itself: its banner says how
+      // many athletes' sets are waiting on the tablet for as long as they wait. This toast's "check
+      // that day and re-enter it" is a sentence for an athlete about their own day, and on a tablet
+      // whose timer retries every minute in a room with no signal it would arrive within minutes.
+      if (entry.dayKey.startsWith(STATION_DAY_KEY_PREFIX)) continue;
       const failures = readFailures();
       const previous = failures[entry.dayKey] ?? { count: 0, notified: false };
       const count = previous.count + 1;
@@ -652,6 +665,9 @@ export function startOfflineLogSync() {
 /** Re-read the day and re-send a 409'd save at the server's revision when it still carries every
  * set the server holds. True when the re-send landed. Never throws, never drops. */
 export async function catchUpQueuedSave(url: string, payload: QueuedSavePayload): Promise<boolean> {
+  // A WEIGHT-ROOM STATION SAVE re-reads through the station's own read, for the day it was queued
+  // on, and is re-sent to the station's own route. See station-save-rules.ts.
+  if (isStationLogUrl(url)) return catchUpStationSave(url, payload as unknown as StationSavePayload);
   const dayUrl = dayUrlFor(url, payload);
   if (!dayUrl) return false;
   try {
@@ -666,6 +682,26 @@ export async function catchUpQueuedSave(url: string, payload: QueuedSavePayload)
     return true;
   } catch (err) {
     logDebug("SAVE", `409 catch-up failed, kept: ${String(err)}`);
+    return false;
+  }
+}
+
+/** The station's catch-up: its own read for the queued day's date, the shared rule, its own route. */
+async function catchUpStationSave(url: string, payload: StationSavePayload): Promise<boolean> {
+  const dayUrl = stationDayUrl(url, payload.date);
+  if (!dayUrl) return false;
+  try {
+    const fresh = (await (await apiRequest("GET", dayUrl)).json()) as StationDayRead;
+    const decision = stationRebaseDecision(payload, fresh);
+    if (decision.kind === "hold") {
+      logDebug("SAVE", `station 409 held: ${decision.why}`);
+      return false;
+    }
+    logDebug("SAVE", `station 409 caught up: re-sending at revision ${decision.serverRevision}`);
+    await apiRequest("POST", url, decision.payload);
+    return true;
+  } catch (err) {
+    logDebug("SAVE", `station 409 catch-up failed, kept: ${String(err)}`);
     return false;
   }
 }
