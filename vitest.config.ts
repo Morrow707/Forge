@@ -26,7 +26,7 @@ export default defineConfig({
     // A test for anything that actually touches the DOM, MediaPipe or
     // Capacitor does not belong here; it would need a browser environment
     // this config deliberately does not set up.
-    include: ["server/**/*.test.ts", "shared/**/*.test.ts", "client/src/lib/**/*.test.ts"],
+    include: ["server/**/*.test.ts", "shared/**/*.test.ts", "client/src/lib/**/*.test.ts", "client/src/i18n/**/*.test.ts"],
     // *.itest.ts is the database-backed suite -- see
     // vitest.integration.config.ts. Excluded here so `npm test` keeps
     // running with no Postgres at all.

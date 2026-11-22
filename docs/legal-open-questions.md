@@ -607,6 +607,35 @@ answer change for a minor?
 **(c) The documents.** Do the Privacy Policy, the Notice to Parent or Guardian or the Institutional
 Service Agreement need a line saying a program's athletic trainer may see and file this
 information, or is it covered by what they already say about a program's staff?
+## 30. Spanish in the app, and the legal documents that stay in English
+
+Added 2026-11-22. (Numbered 30 because a parallel change may take 29.) Every person can now pick
+English or Spanish in Account Settings, and a button in the top bar flips one screen between the
+two, so an athlete can show an English-only teammate. The app's own words are translated once, by
+Forge's team (not native speakers; Scott knows the Spanish will not be perfect yet). Anything a
+coach types (a note on a day, a message) is translated on the fly by the AI provider, marked
+"Translated", with a "Show original" button. The weekly guardian email goes out in the guardian's
+chosen language.
+
+The eight reviewed documents (Terms of Use, Privacy Policy, EULA, Notice to Parent or Guardian,
+Video and Biometric Consent, Assumption of Risk, AI Terms of Use, research consent) and the
+Institutional Service Agreement are NOT translated. A reader in Spanish mode sees one sentence in
+Spanish above the English text: "Este documento se muestra en inglés. La versión en inglés es la
+que aplica." The signup and consent check boxes still describe the English text.
+
+We would like counsel's view on these, in this order:
+
+**(a) May a Spanish-reading athlete or parent accept a document they were shown only in English**,
+with that one sentence above it, or does any of the eight need a Spanish version before a Spanish
+reader can agree to it (the Notice to Parent or Guardian and the biometric consent first)?
+
+**(b) If Forge shows a Spanish translation of a reviewed document, which version binds**, and what
+must the translation say about that? Should the translation be reviewed by counsel or a certified
+translator before it is shown, and must a changed English text re-ask Spanish readers too?
+
+**(c) Does sending a coach's typed note or message to the AI provider for translation** need a line
+in the Privacy Policy or the AI Terms of Use, given messages with minors (question 25) are part of
+what would be translated? Forge keeps no copy of a translation beyond the server's memory.
 
 ---
 

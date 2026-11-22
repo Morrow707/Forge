@@ -65,6 +65,8 @@ import {
   Megaphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { msg, useT } from "@/i18n";
+import { LanguageFlipButton } from "@/components/language-flip-button";
 import { ForgeMark } from "@/components/forge-mark";
 import { AthleteAvatar } from "@/components/athlete-avatar";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
@@ -108,6 +110,15 @@ import { rememberBrand } from "@/lib/remembered-brand";
 import { COACH_FEATURE_FIELDS, type CoachFeature } from "@shared/team-features";
 import { COACH_SECTION_NAV_HREFS } from "@shared/coach-sections";
 
+/** A role as a reader sees it. */
+const ROLE_LABELS: Record<string, string> = {
+  coach: msg("coach"),
+  athlete: msg("athlete"),
+  admin: msg("admin"),
+  guardian: msg("guardian"),
+};
+const roleLabel = (role: string | undefined) => (role ? (ROLE_LABELS[role] ?? role) : "");
+
 type NavItem = {
   href: string;
   label: string;
@@ -126,11 +137,11 @@ type NavItem = {
 };
 
 const coachNav: NavItem[] = [
-  { href: "/coach", label: "Dashboard", icon: Flame, exact: true },
-  { href: "/coach/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/coach", label: msg("Dashboard"), icon: Flame, exact: true },
+  { href: "/coach/calendar", label: msg("Calendar"), icon: CalendarDays },
   {
     href: "/coach/programs",
-    label: "Library",
+    label: msg("Library"),
     icon: Dumbbell,
     matchPrefixes: [
       "/coach/programs",
@@ -140,40 +151,40 @@ const coachNav: NavItem[] = [
       "/coach/classes",
     ],
   },
-  { href: "/coach/roster", label: "Roster & Teams", icon: Users },
-  { href: "/coach/analytics", label: "Analytics", icon: LineChart },
-  { href: "/coach/movement-screens", label: "Movement Screens", icon: ClipboardCheck, overflow: true },
-  { href: "/coach/nutrition", label: "Nutrition", icon: Apple, overflow: true },
-  { href: "/coach/leaderboard", label: "Leaderboard", icon: Trophy, overflow: true },
+  { href: "/coach/roster", label: msg("Roster & Teams"), icon: Users },
+  { href: "/coach/analytics", label: msg("Analytics"), icon: LineChart },
+  { href: "/coach/movement-screens", label: msg("Movement Screens"), icon: ClipboardCheck, overflow: true },
+  { href: "/coach/nutrition", label: msg("Nutrition"), icon: Apple, overflow: true },
+  { href: "/coach/leaderboard", label: msg("Leaderboard"), icon: Trophy, overflow: true },
   // The shared-tablet station and the gym TV link (2026-11-21).
-  { href: "/coach/weight-room", label: "Weight Room", icon: Dumbbell, overflow: true },
-  { href: "/coach/team-board", label: "Team Board", icon: MessagesSquare, overflow: true },
+  { href: "/coach/weight-room", label: msg("Weight Room"), icon: Dumbbell, overflow: true },
+  { href: "/coach/team-board", label: msg("Team Board"), icon: MessagesSquare, overflow: true },
   // Private coach <-> athlete messages, only with athletes this coach coaches (2026-11-21).
-  { href: "/coach/messages", label: "Messages", icon: Mail, overflow: true },
-  { href: "/coach/my", label: "My Training", icon: UserCircle, overflow: true },
-  { href: "/coach/anvil", label: "The Anvil", icon: Activity, overflow: true },
-  { href: "/coach/video-bank", label: "My Video Bank", icon: Video, overflow: true },
-  { href: "/coach/billing", label: "Billing", icon: CreditCard, overflow: true },
+  { href: "/coach/messages", label: msg("Messages"), icon: Mail, overflow: true },
+  { href: "/coach/my", label: msg("My Training"), icon: UserCircle, overflow: true },
+  { href: "/coach/anvil", label: msg("The Anvil"), icon: Activity, overflow: true },
+  { href: "/coach/video-bank", label: msg("My Video Bank"), icon: Video, overflow: true },
+  { href: "/coach/billing", label: msg("Billing"), icon: CreditCard, overflow: true },
   // The whole look of the app for this program, in the order an athlete meets it (2026-10-03).
-  { href: "/coach/branding", label: "Branding", icon: Palette, overflow: true },
+  { href: "/coach/branding", label: msg("Branding"), icon: Palette, overflow: true },
   // Force plates and velocity devices, and a CSV upload for the rest (2026-11-21).
-  { href: "/coach/devices", label: "Devices", icon: Cable, overflow: true },
+  { href: "/coach/devices", label: msg("Devices"), icon: Cable, overflow: true },
   // Same page for every role, different checklist -- see shared/required-documents.ts. A coach
   // is asked for credentials (background check, certification, CPR), not for a waiver.
-  { href: "/documents", label: "Documents", icon: FileCheck2, overflow: true },
+  { href: "/documents", label: msg("Documents"), icon: FileCheck2, overflow: true },
   // Their ROSTER's documents, which is a different question from their own -- who is not
   // covered, and asking them for it.
-  { href: "/coach/athlete-documents", label: "Athlete Documents", icon: FileWarning, overflow: true },
-  { href: "/coach/about", label: "About", icon: Info, overflow: true },
-  { href: "/legal", label: "Terms & Privacy", icon: Scale, overflow: true },
+  { href: "/coach/athlete-documents", label: msg("Athlete Documents"), icon: FileWarning, overflow: true },
+  { href: "/coach/about", label: msg("About"), icon: Info, overflow: true },
+  { href: "/legal", label: msg("Terms & Privacy"), icon: Scale, overflow: true },
 ];
 
 const athleteNav: NavItem[] = [
-  { href: "/athlete", label: "Dashboard", icon: Flame, exact: true },
-  { href: "/athlete/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/athlete", label: msg("Dashboard"), icon: Flame, exact: true },
+  { href: "/athlete/calendar", label: msg("Calendar"), icon: CalendarDays },
   {
     href: "/athlete/programs",
-    label: "Library",
+    label: msg("Library"),
     icon: Dumbbell,
     // Strength and Skills are independently paywalled for a Free Agent (see
     // requirePaidAiAccess in routes.ts), but the nav tab itself covers both
@@ -189,13 +200,13 @@ const athleteNav: NavItem[] = [
   // The self-guided, scheduled counterpart to the AI Chat's make-it-up-as-
   // you-go coaching -- its own nav entry rather than folded into Library,
   // since browsing/enrolling here is never AI-gated at all.
-  { href: "/athlete/classes", label: "Classes", icon: GraduationCap },
-  { href: "/athlete/progress", label: "Progress", icon: LineChart },
-  { href: "/athlete/nutrition", label: "Nutrition", icon: Apple },
-  { href: "/athlete/team-board", label: "Team Board", icon: MessagesSquare },
+  { href: "/athlete/classes", label: msg("Classes"), icon: GraduationCap },
+  { href: "/athlete/progress", label: msg("Progress"), icon: LineChart },
+  { href: "/athlete/nutrition", label: msg("Nutrition"), icon: Apple },
+  { href: "/athlete/team-board", label: msg("Team Board"), icon: MessagesSquare },
   // Private messages with their coaches only; a Free Agent has none, so it is filtered out below.
-  { href: "/athlete/messages", label: "Messages", icon: Mail },
-  { href: "/athlete/chat", label: "AI Chat", icon: Sparkles },
+  { href: "/athlete/messages", label: msg("Messages"), icon: Mail },
+  { href: "/athlete/chat", label: msg("AI Chat"), icon: Sparkles },
   // Golf Swing/Hitting/Pitching -- separate paid add-ons from the general AI
   // Chat above (see requireFreeAgentAddOn in routes.ts), so this is its own
   // tab rather than folded in. Overflow since most Free Agents won't own any
@@ -208,10 +219,10 @@ const athleteNav: NavItem[] = [
   // all (filtered out below, same as AI Chat/Sport Coaches), and a Free
   // Agent who taps it on web/Android or before billing is live just sees an
   // explanatory card instead of a purchase button.
-  { href: "/athlete/upgrade", label: "Upgrade", icon: CreditCard, overflow: true },
+  { href: "/athlete/upgrade", label: msg("Upgrade"), icon: CreditCard, overflow: true },
   // Overflow, not primary -- same "engagement nicety, not daily-use" call
   // as the coach nav's own Leaderboard entry, which already lives there.
-  { href: "/athlete/leaderboard", label: "Leaderboard", icon: Trophy, overflow: true },
+  { href: "/athlete/leaderboard", label: msg("Leaderboard"), icon: Trophy, overflow: true },
   // Recovery & Vitals and the Video Bank both had a route and a finished page
   // and no door of their own. Recovery was linked only from a Progress card
   // that renders when Apple Health has already synced a vital, and from a
@@ -221,51 +232,51 @@ const athleteNav: NavItem[] = [
   // capture is still queued OFFLINE, which is a different condition from the
   // one the page exists for: recovering a clip that uploaded and never
   // attached to a set.
-  { href: "/athlete/recovery", label: "Recovery", icon: HeartPulse, overflow: true },
-  { href: "/athlete/anvil", label: "The Anvil", icon: Activity, overflow: true },
-  { href: "/athlete/video-bank", label: "Video Bank", icon: Video, overflow: true },
-  { href: "/documents", label: "Documents", icon: FileCheck2, overflow: true },
-  { href: "/athlete/about", label: "About", icon: Info },
-  { href: "/legal", label: "Terms & Privacy", icon: Scale, overflow: true },
+  { href: "/athlete/recovery", label: msg("Recovery"), icon: HeartPulse, overflow: true },
+  { href: "/athlete/anvil", label: msg("The Anvil"), icon: Activity, overflow: true },
+  { href: "/athlete/video-bank", label: msg("Video Bank"), icon: Video, overflow: true },
+  { href: "/documents", label: msg("Documents"), icon: FileCheck2, overflow: true },
+  { href: "/athlete/about", label: msg("About"), icon: Info },
+  { href: "/legal", label: msg("Terms & Privacy"), icon: Scale, overflow: true },
 ];
 
 const adminNav: NavItem[] = [
-  { href: "/admin", label: "Dashboard", icon: Flame, exact: true },
-  { href: "/admin/my", label: "My Calendar", icon: CalendarDays },
-  { href: "/admin/anvil", label: "The Anvil", icon: Activity, overflow: true },
-  { href: "/admin/video-bank", label: "My Video Bank", icon: Video, overflow: true },
-  { href: "/admin/exercises", label: "Forge Library", icon: Dumbbell },
-  { href: "/admin/skills", label: "Forge Skill Bank", icon: Target, overflow: true },
-  { href: "/admin/skill-programs", label: "Forge Skill Programs", icon: Target, overflow: true },
-  { href: "/admin/programs", label: "Forge Programs", icon: CalendarRange },
-  { href: "/admin/classes", label: "Forge Classes", icon: GraduationCap },
+  { href: "/admin", label: msg("Dashboard"), icon: Flame, exact: true },
+  { href: "/admin/my", label: msg("My Calendar"), icon: CalendarDays },
+  { href: "/admin/anvil", label: msg("The Anvil"), icon: Activity, overflow: true },
+  { href: "/admin/video-bank", label: msg("My Video Bank"), icon: Video, overflow: true },
+  { href: "/admin/exercises", label: msg("Forge Library"), icon: Dumbbell },
+  { href: "/admin/skills", label: msg("Forge Skill Bank"), icon: Target, overflow: true },
+  { href: "/admin/skill-programs", label: msg("Forge Skill Programs"), icon: Target, overflow: true },
+  { href: "/admin/programs", label: msg("Forge Programs"), icon: CalendarRange },
+  { href: "/admin/classes", label: msg("Forge Classes"), icon: GraduationCap },
   // Same overflow treatment as coachNav above -- at 14+ items, admin's full
   // nav was the one role actually forced into horizontal scroll instead of
   // getting the "More" dropdown this exact problem already has a fix for.
-  { href: "/admin/classes-analytics", label: "Class Analytics", icon: TrendingUp, overflow: true },
-  { href: "/admin/coaches-corner", label: "Coaches Corner", icon: BookOpen, overflow: true },
-  { href: "/admin/review", label: "Reports", icon: Flag, overflow: true },
-  { href: "/admin/coach-exercises", label: "Coach builds", icon: Copy, overflow: true },
-  { href: "/admin/teach-ai", label: "Teach AI", icon: Sparkles, overflow: true },
-  { href: "/admin/camera-ai", label: "Camera AI", icon: Aperture, overflow: true },
-  { href: "/admin/tracking-report", label: "AR Diagnosis", icon: FileText, overflow: true },
-  { href: "/admin/platform-trends", label: "Cohort Explorer", icon: BarChart3, overflow: true },
+  { href: "/admin/classes-analytics", label: msg("Class Analytics"), icon: TrendingUp, overflow: true },
+  { href: "/admin/coaches-corner", label: msg("Coaches Corner"), icon: BookOpen, overflow: true },
+  { href: "/admin/review", label: msg("Reports"), icon: Flag, overflow: true },
+  { href: "/admin/coach-exercises", label: msg("Coach builds"), icon: Copy, overflow: true },
+  { href: "/admin/teach-ai", label: msg("Teach AI"), icon: Sparkles, overflow: true },
+  { href: "/admin/camera-ai", label: msg("Camera AI"), icon: Aperture, overflow: true },
+  { href: "/admin/tracking-report", label: msg("AR Diagnosis"), icon: FileText, overflow: true },
+  { href: "/admin/platform-trends", label: msg("Cohort Explorer"), icon: BarChart3, overflow: true },
   // No nav entry for /admin/knowledge-base: Teach the AI's "Books & Documents" tab renders the
   // very same KnowledgeBaseContent component, so this was a second door onto one room. The
   // route still resolves, so an existing link or bookmark keeps working.
-  { href: "/admin/ai-spend", label: "AI Spend", icon: DollarSign, overflow: true },
-  { href: "/admin/exercise-videos", label: "Demo Videos", icon: Youtube, overflow: true },
+  { href: "/admin/ai-spend", label: msg("AI Spend"), icon: DollarSign, overflow: true },
+  { href: "/admin/exercise-videos", label: msg("Demo Videos"), icon: Youtube, overflow: true },
   // No Dataset Extracts entry: it is a section of Cohort Explorer now. The two answered the
   // same question -- who is on the platform and what do their numbers look like -- once for a
   // chart and once for a document, and having them as separate destinations made that look like
   // two different capabilities.
-  { href: "/admin/billing", label: "Billing", icon: CreditCard, overflow: true },
-  { href: "/admin/users", label: "Users", icon: Users, overflow: true },
-  { href: "/admin/email-list", label: "Email List", icon: Mail, overflow: true },
-  { href: "/admin/hardy-usage", label: "What People Ask Hardy", icon: MessageSquare, overflow: true },
-  { href: "/admin/feature-usage", label: "What People Use", icon: BarChart3, overflow: true },
-  { href: "/admin/documents", label: "Legal & Compliance", icon: ShieldCheck, overflow: true },
-  { href: "/legal", label: "Terms & Privacy", icon: Scale, overflow: true },
+  { href: "/admin/billing", label: msg("Billing"), icon: CreditCard, overflow: true },
+  { href: "/admin/users", label: msg("Users"), icon: Users, overflow: true },
+  { href: "/admin/email-list", label: msg("Email List"), icon: Mail, overflow: true },
+  { href: "/admin/hardy-usage", label: msg("What People Ask Hardy"), icon: MessageSquare, overflow: true },
+  { href: "/admin/feature-usage", label: msg("What People Use"), icon: BarChart3, overflow: true },
+  { href: "/admin/documents", label: msg("Legal & Compliance"), icon: ShieldCheck, overflow: true },
+  { href: "/legal", label: msg("Terms & Privacy"), icon: Scale, overflow: true },
   // BOTH OF THESE EXISTED, WORKED, AND HAD NO WAY IN.
   //
   // Each had a route in App.tsx, a working server endpoint and a finished page, and no entry
@@ -280,13 +291,13 @@ const adminNav: NavItem[] = [
   // The 60-field filter builder, CSV export, NLQ front end and saved views were all
   // built, redacted and access-logged, with no screen anywhere -- so its suppression
   // floor and per-admin query budget had never been exercised by a real user.
-  { href: "/admin/query-engine", label: "Query Engine", icon: Search, overflow: true },
-  { href: "/admin/diagnostics", label: "Data & Diagnostics", icon: FileSearch, overflow: true },
-  { href: "/admin/removal-requests", label: "Removal Requests", icon: Trash2, overflow: true },
-  { href: "/admin/blocked-athletes", label: "Blocked Athletes", icon: Flag, overflow: true },
+  { href: "/admin/query-engine", label: msg("Query Engine"), icon: Search, overflow: true },
+  { href: "/admin/diagnostics", label: msg("Data & Diagnostics"), icon: FileSearch, overflow: true },
+  { href: "/admin/removal-requests", label: msg("Removal Requests"), icon: Trash2, overflow: true },
+  { href: "/admin/blocked-athletes", label: msg("Blocked Athletes"), icon: Flag, overflow: true },
   // The review queue. A compliance queue with no door is the same as no queue -- the comment
   // above this list already learned that once.
-  { href: "/admin/waivers", label: "Uploaded Documents", icon: FileCheck2, overflow: true },
+  { href: "/admin/waivers", label: msg("Uploaded Documents"), icon: FileCheck2, overflow: true },
 ];
 
 export function AppShell({
@@ -313,6 +324,7 @@ export function AppShell({
   showWatermark?: boolean;
 }) {
   const { user, logoutMutation } = useAuth();
+  const t = useT();
   const [location, navigate] = useLocation();
   // Measured height of the sticky brand/nav/title/subheader bar just below,
   // published as a CSS var on the root element -- lets a page nest its own
@@ -549,12 +561,18 @@ export function AppShell({
   // "Trainer" sees those words in every tab and every page title (shared/brand-extras.ts). A tab
   // the coach renamed by hand keeps the exact name they typed.
   const programWords = (text: string) => applyBrandTerms(text, branding?.brandExtras ?? null);
+  // A tab name in the reader's language -- unless the program renamed it or its own words change
+  // it, which are the program's wording and are shown exactly as the coach typed them.
+  const translatedOrProgramWord = (label: string) => {
+    const worded = programWords(label);
+    return worded === label ? t(label) : worded;
+  };
   function navLabel(item: NavItem) {
-    if (user?.role === "coach") return navLabelOverrides[item.href] || programWords(item.label);
+    if (user?.role === "coach") return navLabelOverrides[item.href] || translatedOrProgramWord(item.label);
     if (user?.role === "athlete" && item.href.startsWith("/athlete/")) {
-      return programNavLabels[item.href.replace(/^\/athlete\//, "/coach/")] || programWords(item.label);
+      return programNavLabels[item.href.replace(/^\/athlete\//, "/coach/")] || translatedOrProgramWord(item.label);
     }
-    return item.label;
+    return t(item.label);
   }
 
   // Same /api/coach/roster query (and cache) AthleteSwitcher and the roster
@@ -660,7 +678,7 @@ export function AppShell({
   // no switcher.
   const navWithGuardian =
     user?.hasGuardianLinks && user.role !== "guardian"
-      ? [...nav, { href: "/guardian", label: "My Athlete", icon: ShieldCheck, overflow: true }]
+      ? [...nav, { href: "/guardian", label: msg("My Athlete"), icon: ShieldCheck, overflow: true }]
       : nav;
 
   // WHERE THE WORDMARK AND THE FLAME GO.
@@ -749,20 +767,20 @@ export function AppShell({
           <Link
             href={homeHref}
             onClick={() => setMobileNavOpen(false)}
-            aria-label="Go to your dashboard"
+            aria-label={t("Go to your dashboard")}
             className="flex items-center gap-2 rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {branding?.brandExtras?.wordmarkUrl ? (
               // The program's wide wordmark replaces the square logo and the name (2026-11-19).
               <img
                 src={resolveApiUrl(branding.brandExtras.wordmarkUrl)}
-                alt={branding.brandTeamName || "Team"}
+                alt={branding.brandTeamName || t("Team")}
                 className="h-8 max-w-[11rem] shrink-0 object-contain"
               />
             ) : branding?.brandLogoUrl ? (
               <img
                 src={resolveApiUrl(branding.brandLogoUrl)}
-                alt={branding.brandTeamName || "Team logo"}
+                alt={branding.brandTeamName || t("Team logo")}
                 className="h-8 w-8 shrink-0 rounded-md object-contain"
               />
             ) : (
@@ -809,7 +827,7 @@ export function AppShell({
                   {navLabel(item)}
                   {showUnreadDot && (
                     <span className="rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none text-black">
-                      New
+                      {t("New")}
                     </span>
                   )}
                 </Link>
@@ -844,7 +862,7 @@ export function AppShell({
                       : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
                   )}
                 >
-                  More
+                  {t("More")}
                   {overflowNav.some(
                     (item) => item.href.endsWith("/team-board") && teamBoardUnread?.hasUnread,
                   ) && <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />}
@@ -877,10 +895,10 @@ export function AppShell({
                           )}
                         >
                           <Icon className="h-4 w-4" />
-                          {item.label}
+                          {t(item.label)}
                           {showUnreadDot && (
                             <span className="ml-auto rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none text-black">
-                              New
+                              {t("New")}
                             </span>
                           )}
                         </Link>
@@ -906,7 +924,7 @@ export function AppShell({
                 )}
               >
                 <BookOpen className="h-4 w-4" />
-                Coaches Corner
+                {t("Coaches Corner")}
               </Link>
             )}
             {/* Hoverable on desktop (mouse enter/leave), click-toggleable for
@@ -927,7 +945,7 @@ export function AppShell({
                 <span className="min-w-0 text-right">
                   <span className="block truncate text-sm font-semibold">{user?.name}</span>
                   <span className="block truncate text-xs capitalize text-muted-foreground">
-                    {user?.staffTitle || (isFreeAgent ? "Free Agent" : user?.role)}
+                    {user?.staffTitle || (isFreeAgent ? t("Free Agent") : t(roleLabel(user?.role)))}
                   </span>
                 </span>
                 <ChevronDown
@@ -953,7 +971,7 @@ export function AppShell({
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                     >
                       <UserCog className="h-4 w-4" />
-                      Account settings
+                      {t("Account settings")}
                     </button>
                   )}
                   {/* EVERY ROLE THAT CAN FILM ITS OWN TRAINING CAN EDIT THE PROFILE THE CAMERA
@@ -983,7 +1001,7 @@ export function AppShell({
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                     >
                       <UserCircle className="h-4 w-4" />
-                      Edit profile
+                      {t("Edit profile")}
                     </button>
                   )}
                   {(user?.role === "coach" || user?.role === "athlete") && (
@@ -997,7 +1015,7 @@ export function AppShell({
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                     >
                       <Settings className="h-4 w-4" />
-                      Notification settings
+                      {t("Notification settings")}
                     </button>
                   )}
                   {/* Tucked right under Notification settings rather than
@@ -1016,7 +1034,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                   >
                     <Flag className="h-4 w-4" />
-                    Report a problem
+                    {t("Report a problem")}
                   </button>
                   {/* Athletes only: it is their own risk statement, and a coach or admin reading
                       it here would be reading somebody else's. Tucked down beside the other
@@ -1036,7 +1054,7 @@ export function AppShell({
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                     >
                       <ShieldAlert className="h-4 w-4" />
-                      Training risks
+                      {t("Training risks")}
                     </Link>
                   )}
                   <button
@@ -1049,7 +1067,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                   >
                     <MonitorSmartphone className="h-4 w-4" />
-                    Where you're logged in
+                    {t("Where you're logged in")}
                   </button>
                   <button
                     type="button"
@@ -1061,7 +1079,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                   >
                     <KeyRound className="h-4 w-4" />
-                    Change password
+                    {t("Change password")}
                   </button>
                   {(user?.role === "coach" || user?.role === "admin") && (
                     <button
@@ -1074,7 +1092,7 @@ export function AppShell({
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                     >
                       <ShieldCheck className="h-4 w-4" />
-                      Two-factor authentication
+                      {t("Two-factor authentication")}
                     </button>
                   )}
                   {user?.role === "coach" && (
@@ -1088,7 +1106,7 @@ export function AppShell({
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                     >
                       <UserPlus className="h-4 w-4" />
-                      Coaching staff
+                      {t("Coaching staff")}
                     </button>
                   )}
                   {user?.role === "coach" && user.isPrimaryCoach && (
@@ -1102,7 +1120,7 @@ export function AppShell({
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                     >
                       <Palette className="h-4 w-4" />
-                      Branding
+                      {t("Branding")}
                     </button>
                   )}
                   {user?.role === "coach" && user.isPrimaryCoach && (
@@ -1116,7 +1134,7 @@ export function AppShell({
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                     >
                       <Sparkles className="h-4 w-4" />
-                      Exercise screen colors
+                      {t("Exercise screen colors")}
                     </button>
                   )}
                   {user?.role === "coach" && user.isPrimaryCoach && (
@@ -1130,7 +1148,7 @@ export function AppShell({
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                     >
                       <SlidersHorizontal className="h-4 w-4" />
-                      Customize navigation
+                      {t("Customize navigation")}
                     </button>
                   )}
                   {Capacitor.getPlatform() === "ios" && user?.role === "admin" && (
@@ -1141,7 +1159,7 @@ export function AppShell({
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-muted-foreground hover:bg-surface-elevated"
                     >
                       <Aperture className="h-4 w-4" />
-                      AV preview test (Phase 1)
+                      {t("AV preview test (Phase 1)")}
                     </Link>
                   )}
                   <button
@@ -1151,7 +1169,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 border-t border-border px-4 py-2.5 text-left text-sm font-medium text-destructive hover:bg-surface-elevated"
                   >
                     <LogOut className="h-4 w-4" />
-                    Log out
+                    {t("Log out")}
                   </button>
                   {user?.role === "athlete" && (
                     <button
@@ -1164,7 +1182,7 @@ export function AppShell({
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-surface-elevated"
                     >
                       <ShieldCheck className="h-4 w-4" />
-                      Guardian access
+                      {t("Guardian access")}
                     </button>
                   )}
                   <button
@@ -1177,7 +1195,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-destructive/70 hover:bg-surface-elevated"
                   >
                     <Trash2 className="h-4 w-4" />
-                    Delete account
+                    {t("Delete account")}
                   </button>
                 </div>
               )}
@@ -1187,13 +1205,15 @@ export function AppShell({
                 (server/reflection-job.ts), and GET /api/notifications is plain
                 requireAuth, so those rows were being written and then shown to
                 nobody. */}
+            {/* The one-tap language flip, for every role (client/src/i18n/README.md). */}
+            <LanguageFlipButton />
             {(user?.role === "coach" || user?.role === "athlete" || user?.role === "admin") && (
               <NotificationBell />
             )}
             <button
               type="button"
               onClick={() => setMobileNavOpen((v) => !v)}
-              aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+              aria-label={mobileNavOpen ? t("Close menu") : t("Open menu")}
               aria-expanded={mobileNavOpen}
               className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-foreground md:hidden"
             >
@@ -1211,7 +1231,7 @@ export function AppShell({
           <div className="hidden items-center gap-1 border-t border-white/10 px-4 py-1.5 md:flex md:px-8">
             <span className="flex shrink-0 items-center gap-1 pr-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               <Pin className="h-3 w-3" />
-              Pinned
+              {t("Pinned")}
             </span>
             <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
               {pinnedAthletes.map((athlete) => {
@@ -1245,7 +1265,7 @@ export function AppShell({
             <div className="mb-3 min-w-0">
               <p className="truncate text-sm font-semibold">{user?.name}</p>
               <p className="truncate text-xs capitalize text-muted-foreground">
-                {user?.staffTitle || (isFreeAgent ? "Free Agent" : user?.role)}
+                {user?.staffTitle || (isFreeAgent ? t("Free Agent") : t(roleLabel(user?.role)))}
               </p>
             </div>
             {pinnedAthletes.length > 0 && (
@@ -1293,7 +1313,7 @@ export function AppShell({
                     {navLabel(item)}
                     {showUnreadDot && (
                       <span className="rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none text-black">
-                        New
+                        {t("New")}
                       </span>
                     )}
                   </Link>
@@ -1305,7 +1325,7 @@ export function AppShell({
                   onClick={() => void refetchCoaches()}
                   className="flex items-center gap-1.5 rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  Some sections are hidden, tap to retry
+                  {t("Some sections are hidden, tap to retry")}
                 </button>
               )}
               {user?.role === "coach" && (
@@ -1320,7 +1340,7 @@ export function AppShell({
                   )}
                 >
                   <BookOpen className="h-3.5 w-3.5" />
-                  Coaches Corner
+                  {t("Coaches Corner")}
                 </Link>
               )}
             </div>
@@ -1328,7 +1348,7 @@ export function AppShell({
               <div className="min-w-0 pb-2">
                 <p className="truncate text-sm font-semibold">{user?.name}</p>
                 <p className="truncate text-xs capitalize text-muted-foreground">
-                  {user?.staffTitle || (isFreeAgent ? "Free Agent" : user?.role)}
+                  {user?.staffTitle || (isFreeAgent ? t("Free Agent") : t(roleLabel(user?.role)))}
                 </p>
               </div>
               {/* One uniform full-width row per item (matching the desktop
@@ -1350,7 +1370,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <UserCog className="h-4 w-4" />
-                    Account
+                    {t("Account")}
                   </button>
                 )}
                 {canEditTrainingProfile && (
@@ -1363,7 +1383,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <UserCircle className="h-4 w-4" />
-                    Profile
+                    {t("Profile")}
                   </button>
                 )}
                 {(user?.role === "coach" || user?.role === "athlete") && (
@@ -1376,7 +1396,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <Settings className="h-4 w-4" />
-                    Notifications
+                    {t("Notifications")}
                   </button>
                 )}
                 <button
@@ -1388,7 +1408,7 @@ export function AppShell({
                   className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                 >
                   <Flag className="h-4 w-4" />
-                  Report a problem
+                  {t("Report a problem")}
                 </button>
                 <button
                   type="button"
@@ -1399,7 +1419,7 @@ export function AppShell({
                   className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                 >
                   <MonitorSmartphone className="h-4 w-4" />
-                  Devices
+                  {t("Devices")}
                 </button>
                 <button
                   type="button"
@@ -1410,7 +1430,7 @@ export function AppShell({
                   className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                 >
                   <KeyRound className="h-4 w-4" />
-                  Password
+                  {t("Password")}
                 </button>
                 {(user?.role === "coach" || user?.role === "admin") && (
                   <button
@@ -1422,7 +1442,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <ShieldCheck className="h-4 w-4" />
-                    2FA
+                    {t("2FA")}
                   </button>
                 )}
                 {user?.role === "coach" && (
@@ -1435,7 +1455,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <UserPlus className="h-4 w-4" />
-                    Staff
+                    {t("Staff")}
                   </button>
                 )}
                 {user?.role === "coach" && user.isPrimaryCoach && (
@@ -1448,7 +1468,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <Palette className="h-4 w-4" />
-                    Branding
+                    {t("Branding")}
                   </button>
                 )}
                 {user?.role === "coach" && user.isPrimaryCoach && (
@@ -1461,7 +1481,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <Sparkles className="h-4 w-4" />
-                    Exercise screen colors
+                    {t("Exercise screen colors")}
                   </button>
                 )}
                 {user?.role === "coach" && user.isPrimaryCoach && (
@@ -1474,7 +1494,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <SlidersHorizontal className="h-4 w-4" />
-                    Customize navigation
+                    {t("Customize navigation")}
                   </button>
                 )}
                 {user?.role === "athlete" && (
@@ -1487,7 +1507,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <ShieldCheck className="h-4 w-4" />
-                    Guardian access
+                    {t("Guardian access")}
                   </button>
                 )}
                 {Capacitor.getPlatform() === "ios" && user?.role === "admin" && (
@@ -1497,7 +1517,7 @@ export function AppShell({
                     className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-foreground"
                   >
                     <Aperture className="h-4 w-4" />
-                    AV preview test (Phase 1)
+                    {t("AV preview test (Phase 1)")}
                   </Link>
                 )}
                 <button
@@ -1509,7 +1529,7 @@ export function AppShell({
                   className="flex w-full items-center gap-2 border-t border-border py-2 pt-3 text-left text-sm font-semibold text-destructive/70"
                 >
                   <Trash2 className="h-4 w-4" />
-                  Delete account
+                  {t("Delete account")}
                 </button>
                 <button
                   type="button"
@@ -1517,7 +1537,7 @@ export function AppShell({
                   className="flex w-full items-center gap-2 py-2 text-left text-sm font-semibold text-destructive"
                 >
                   <LogOut className="h-4 w-4" />
-                  Log out
+                  {t("Log out")}
                 </button>
               </div>
             </div>
@@ -1564,7 +1584,7 @@ export function AppShell({
                 setAnnouncementDismissed(true);
               }}
             >
-              Dismiss
+              {t("Dismiss")}
             </button>
           </div>
         )}
@@ -1589,7 +1609,7 @@ export function AppShell({
                 setSeasonDismissed(true);
               }}
             >
-              Dismiss
+              {t("Dismiss")}
             </button>
           </div>
         )}

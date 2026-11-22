@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useT } from "@/i18n";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Dialog,
@@ -76,6 +77,7 @@ export function ExercisePickerDialog({
   /** What the search box holds each time the dialog opens ("warmup" for the warm-up section). */
   initialSearch?: string;
 }) {
+  const t = useT();
   const { data: exercises = [], isError, refetch } = useQuery<Exercise[]>({
     queryKey: [`${apiBase}/exercises`],
     enabled: open,
@@ -155,10 +157,10 @@ export function ExercisePickerDialog({
   // before they commit to it, not just after.
   const familyCounts = useMemo(() => {
     const counts = new Map<ExerciseFamily, number>();
-    for (const ex of exercises) {
+    exercises.forEach((ex) => {
       const family = getExerciseFamily(ex);
       counts.set(family, (counts.get(family) ?? 0) + 1);
-    }
+    });
     return counts;
   }, [exercises]);
   const equipmentCounts = useMemo(() => {
@@ -166,9 +168,9 @@ export function ExercisePickerDialog({
     const scoped = activeFamily
       ? exercises.filter((ex) => getExerciseFamily(ex) === activeFamily)
       : exercises;
-    for (const ex of scoped) {
+    scoped.forEach((ex) => {
       counts.set(ex.equipment, (counts.get(ex.equipment) ?? 0) + 1);
-    }
+    });
     return counts;
   }, [exercises, activeFamily]);
 
@@ -281,10 +283,10 @@ export function ExercisePickerDialog({
       // hip mobility with a band" substring match against exercise names.
       setSearch(result.searchText ?? "");
       if (!family && !result.equipment && !result.movementType && !result.searchText) {
-        toast.info("Couldn't narrow that down, try the filters below instead.");
+        toast.info(t("Couldn't narrow that down, try the filters below instead."));
       }
     },
-    onError: () => toast.error("Couldn't interpret that search, try the filters below instead."),
+    onError: () => toast.error(t("Couldn't interpret that search, try the filters below instead.")),
   });
 
   const isBrowsing = !search.trim();
@@ -298,7 +300,7 @@ export function ExercisePickerDialog({
       <DialogContent className="inset-0 top-0 left-0 flex h-[100dvh] w-screen max-w-none max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0 pt-[env(safe-area-inset-top)] [&>button:last-child]:top-[calc(env(safe-area-inset-top)+0.5rem)]">
         <div className="shrink-0 space-y-4 border-b border-border p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>{title ?? (correctivesOnly ? "Add Corrective" : "Add Exercise")}</DialogTitle>
+            <DialogTitle>{title ?? (correctivesOnly ? t("Add Corrective") : t("Add Exercise"))}</DialogTitle>
           </DialogHeader>
           {/* THE BODY MAP SITS BESIDE SEARCH, NEVER IN PLACE OF IT. It is here for the athlete
               who does not yet know what a lat is; anyone who does will type "hamstring" and
@@ -334,7 +336,7 @@ export function ExercisePickerDialog({
                   // The keyboard's Search key puts the keyboard away so the results can be read.
                   if (e.key === "Enter") e.currentTarget.blur();
                 }}
-                placeholder="Search your exercise bank (try rdl)"
+                placeholder={t("Search your exercise bank (try rdl)")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
@@ -342,7 +344,7 @@ export function ExercisePickerDialog({
             </div>
             <button
               type="button"
-              title="Describe what you're looking for"
+              title={t("Describe what you're looking for")}
               disabled={aiSearchMutation.isPending}
               onClick={() => {
                 if (search.trim()) aiSearchMutation.mutate(search.trim());
@@ -372,7 +374,7 @@ export function ExercisePickerDialog({
                 )}
               >
                 <Star className={cn("h-3.5 w-3.5", favoritesOnly && "fill-amber-400")} />
-                Favorites
+                {t("Favorites")}
               </button>
               <button
                 type="button"
@@ -386,7 +388,7 @@ export function ExercisePickerDialog({
                 )}
               >
                 <Clock className="h-3.5 w-3.5" />
-                Recently Used
+                {t("Recently Used")}
               </button>
             </div>
           )}
@@ -404,7 +406,7 @@ export function ExercisePickerDialog({
               )}
             >
               <Dumbbell className="h-3.5 w-3.5" />
-              Only what my room has
+              {t("Only what my room has")}
             </button>
           </div>
         )}
@@ -472,7 +474,7 @@ export function ExercisePickerDialog({
               {activeFamily && (
                 <div className="rounded-md border border-border/60 bg-surface p-2.5">
                   <p className="mb-1.5 text-[10px] font-semibold uppercase text-muted-foreground">
-                    Equipment
+                    {t("Equipment")}
                   </p>
                   {/* Fixed 4-column grid, every equipment type in the same
                       canonical order (shared/exercise-family.ts) no matter
@@ -511,19 +513,19 @@ export function ExercisePickerDialog({
                 className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-primary"
               >
                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showMoreFilters && "rotate-180")} />
-                More filters
+                {t("More filters")}
               </button>
               {showMoreFilters && (
                 <div className="grid grid-cols-2 gap-3 border-t border-border pt-3 sm:grid-cols-4">
                   <FilterChipGroup
-                    label="Category"
+                    label={t("Category")}
                     options={CATEGORIES}
                     selected={categoryFilter}
                     onToggle={(v) => toggleInSet(setCategoryFilter, v)}
                     optionColorClass={(v) => CATEGORY_FILTER_ACTIVE_CLASS[v]}
                   />
                   <FilterChipGroup
-                    label="Movement"
+                    label={t("Movement")}
                     options={MOVEMENT_TYPES}
                     selected={movementFilter}
                     onToggle={(v) => toggleInSet(setMovementFilter, v)}
@@ -531,7 +533,7 @@ export function ExercisePickerDialog({
                   />
                   <div className="space-y-2">
                     <FilterChipGroup
-                      label="Laterality"
+                      label={t("Laterality")}
                       options={["bilateral", "unilateral"]}
                       selected={lateralityFilter}
                       onToggle={(v) => toggleInSet(setLateralityFilter, v)}
@@ -549,39 +551,39 @@ export function ExercisePickerDialog({
                       )}
                     >
                       <Stethoscope className="h-3 w-3" />
-                      Correctives only
+                      {t("Correctives only")}
                     </button>
                   </div>
                   <FilterChipGroup
-                    label="Created By"
+                    label={t("Created By")}
                     options={ownerOptions}
                     selected={ownerFilter}
                     onToggle={(v) => toggleInSet(setOwnerFilter, v)}
                     colorClass={OWNER_FILTER_ACTIVE_CLASS}
                   />
                   <FilterChipGroup
-                    label="Body Region"
+                    label={t("Body Region")}
                     options={BODY_REGIONS}
                     selected={bodyRegionFilter}
                     onToggle={(v) => toggleInSet(setBodyRegionFilter, v)}
                     colorClass={BODY_REGION_FILTER_ACTIVE_CLASS}
                   />
                   <FilterChipGroup
-                    label="Plane"
+                    label={t("Plane")}
                     options={PLANES}
                     selected={planeFilter}
                     onToggle={(v) => toggleInSet(setPlaneFilter, v)}
                     colorClass={PLANE_FILTER_ACTIVE_CLASS}
                   />
                   <FilterChipGroup
-                    label="Complexity"
+                    label={t("Complexity")}
                     options={MOVEMENT_COMPLEXITIES}
                     selected={complexityFilter}
                     onToggle={(v) => toggleInSet(setComplexityFilter, v)}
                     colorClass={MOVEMENT_COMPLEXITY_FILTER_ACTIVE_CLASS}
                   />
                   <FilterChipGroup
-                    label="Muscle"
+                    label={t("Muscle")}
                     options={bodyParts}
                     selected={muscleGroupFilter}
                     onToggle={(v) => toggleInSet(setMuscleGroupFilter, v)}
@@ -589,7 +591,7 @@ export function ExercisePickerDialog({
                     className="col-span-2 sm:col-span-4"
                   />
                   <FilterChipGroup
-                    label="Sport"
+                    label={t("Sport")}
                     options={sportOptions}
                     selected={sportFilter}
                     onToggle={(v) => toggleInSet(setSportFilter, v)}
@@ -606,7 +608,7 @@ export function ExercisePickerDialog({
               // reads as "no exercise matches that", and the suggestion to try AI
               // search sends a coach chasing a search that cannot succeed either.
               <ReadFailed
-                what="the exercise library"
+                what={t("the exercise library")}
                 onRetry={() => void refetch()}
                 className="flex flex-col items-center gap-2 py-10 text-center"
               />
@@ -619,17 +621,16 @@ export function ExercisePickerDialog({
               <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
                 <Sparkles className="h-8 w-8" />
                 <p>
-                  No exercises match "{search}" by name.
+                  {t("No exercises match \"{search}\" by name.", { search })}
                   <br />
-                  Try the <Sparkles className="mx-0.5 inline h-3.5 w-3.5" /> button above to describe what
-                  you're looking for instead.
+                  {t("Try the")} <Sparkles className="mx-0.5 inline h-3.5 w-3.5" /> {t("button above to describe what you're looking for instead.")}
                 </p>
               </div>
             )}
             {!isError && displayed.length === 0 && !search.trim() && (
               <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
                 <Dumbbell className="h-8 w-8" />
-                No exercises found matching these filters.
+                {t("No exercises found matching these filters.")}
               </div>
             )}
             {displayed.map((ex) => (
@@ -644,7 +645,7 @@ export function ExercisePickerDialog({
                 className="flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated"
               >
                 <div>
-                  <p className="text-sm font-semibold">{ex.name}</p>
+                  <p className="text-sm font-semibold">{t.exercise(ex.name)}</p>
                   <p className="text-xs text-muted-foreground">
                     {ex.muscleGroup} · {ex.equipment}
                     {ex.movementType ? ` · ${ex.movementType}` : ""}

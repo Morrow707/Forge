@@ -88,7 +88,7 @@ describe("the nav carries the same paths the map does", () => {
     // orphan scan reported /admin/anvil as a page reachable only by typing the URL. A scan that
     // can only see literals is a reason to write the literal and assert the equality, not a
     // reason to defeat the scan. Same call CLAUDE.md records for the `requireRole([...])` gates.
-    const navEntry = (href: string) => `{ href: "${href}", label: "The Anvil"`;
+    const navEntry = (href: string) => `{ href: "${href}", label: msg("The Anvil")`;
     expect(SHELL).toContain(navEntry(ANVIL_ROUTES.athlete.check));
     expect(SHELL).toContain(navEntry(ANVIL_ROUTES.coach.roster!));
     expect(SHELL).toContain(navEntry(ANVIL_ROUTES.admin.roster!));

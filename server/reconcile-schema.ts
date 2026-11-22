@@ -4301,6 +4301,9 @@ CREATE TABLE IF NOT EXISTS "workout_log_warmups" (
   "done_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "workout_log_warmups_log_unique" ON "workout_log_warmups" ("workout_log_id");
+-- ---- LANGUAGE (2026-11-22) ----
+-- The language a person reads Forge in: 'en' or 'es', null = English. See client/src/i18n/README.md.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "language" text;
 `;
 
 // SEASON SETUP (2026-11-22): one row per assignment, see assignmentSeasonSetups in shared/schema.ts.

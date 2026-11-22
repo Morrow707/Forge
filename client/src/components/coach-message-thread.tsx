@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { useT } from "@/i18n";
+import { TranslatableText } from "@/components/translatable-text";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { toast } from "sonner";
 import { Send, ShieldCheck, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ export function CoachMessageThread({
   replyToTeamPost?: { id: number; body: string } | null;
   onReplySent?: () => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [body, setBody] = useState("");
   const { data, isLoading, isError, error, refetch } = useQuery<Thread>({
@@ -74,23 +76,23 @@ export function CoachMessageThread({
       onReplySent?.();
       refresh();
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : "Couldn't send that, try again"),
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : t("Couldn't send that, try again")),
   });
 
   const remove = useMutation({
     mutationFn: async (id: number) => apiRequest("POST", `/api/messages/${id}/remove`),
     onSuccess: refresh,
-    onError: () => toast.error("Couldn't remove that message"),
+    onError: () => toast.error(t("Couldn't remove that message")),
   });
 
   if (isLoading) return <div className="h-40 animate-pulse rounded-md bg-surface" />;
-  if (isError || !data) return <ReadFailed what="this conversation" error={error} onRetry={() => void refetch()} />;
+  if (isError || !data) return <ReadFailed what={t("this conversation")} error={error} onRetry={() => void refetch()} />;
 
   return (
     <div className="flex flex-col gap-3" data-testid="coach-message-thread">
       <h2 className="text-base font-semibold">{data.with.name}</h2>
       <div className="space-y-2">
-        {data.messages.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No messages yet.</p>}
+        {data.messages.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">{t("No messages yet.")}</p>}
         {data.messages.map((m) => (
           <div
             key={m.id}
@@ -98,21 +100,27 @@ export function CoachMessageThread({
             data-testid={`message-${m.id}`}
           >
             {m.replyTo && (
-              <p className="mb-1 border-l-2 pl-2 text-xs text-muted-foreground">Replying to the Team Board post: “{m.replyTo.body}”</p>
+              <p className="mb-1 border-l-2 pl-2 text-xs text-muted-foreground">{t("Replying to the Team Board post: “{post}”", { post: m.replyTo.body })}</p>
             )}
             {m.body === null ? (
-              <p className="italic text-muted-foreground">This message was removed.</p>
+              <p className="italic text-muted-foreground">{t("This message was removed.")}</p>
             ) : (
-              <p className="whitespace-pre-wrap">{m.body}</p>
+              m.fromMe ? (
+                <p className="whitespace-pre-wrap">{m.body}</p>
+              ) : (
+                // The other person's words, translated by AI for a reader in another language and
+                // marked as translated, with the original one tap away.
+                <TranslatableText text={m.body} className="whitespace-pre-wrap" />
+              )
             )}
             <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>
-                {format(new Date(m.createdAt), "MMM d, h:mm a")}
-                {m.removed && m.body !== null && " · removed, the other side sees only that it was"}
+                {t.date(m.createdAt, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                {m.removed && m.body !== null && ` · ${t("removed, the other side sees only that it was")}`}
               </span>
               {m.fromMe && !m.removed && (
                 <button type="button" className="underline" onClick={() => remove.mutate(m.id)} disabled={remove.isPending}>
-                  Remove
+                  {t("Remove")}
                 </button>
               )}
             </div>
@@ -123,7 +131,7 @@ export function CoachMessageThread({
       {data.parentCanSee && (
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid="text-parent-can-see">
           <ShieldCheck className="h-3.5 w-3.5" />
-          A parent or guardian can read this conversation.
+          {t("A parent or guardian can read this conversation.")}
         </p>
       )}
 
@@ -136,13 +144,13 @@ export function CoachMessageThread({
           }}
         >
           {replyToTeamPost && (
-            <p className="border-l-2 pl-2 text-xs text-muted-foreground">Replying privately to: “{replyToTeamPost.body}”</p>
+            <p className="border-l-2 pl-2 text-xs text-muted-foreground">{t("Replying privately to: “{post}”", { post: replyToTeamPost.body })}</p>
           )}
           <Textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
             maxLength={MESSAGE_MAX_LENGTH}
-            placeholder="Write a message…"
+            placeholder={t("Write a message…")}
             className="min-h-16 text-sm"
           />
           <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -151,7 +159,7 @@ export function CoachMessageThread({
             </span>
             <Button type="submit" size="sm" disabled={send.isPending || !body.trim()}>
               <Send className="h-4 w-4" />
-              Send
+              {t("Send")}
             </Button>
           </div>
         </form>
@@ -183,7 +191,8 @@ export function ThreadList({
   selectedId: number | null;
   onSelect: (id: number) => void;
 }) {
-  const stateLabel: Record<ThreadSummary["state"], string> = { active: "", held: "On hold", ended: "Read-only" };
+  const tr = useT();
+  const stateLabel: Record<ThreadSummary["state"], string> = { active: "", held: tr("On hold"), ended: tr("Read-only") };
   return (
     <ul className="divide-y rounded-md border" data-testid="message-thread-list">
       {threads.map((t) => (

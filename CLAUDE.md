@@ -8629,3 +8629,39 @@ the Anvil's adults-only rule, the guardian emails, and a minor not ticking their
 for a return-to-training program (`RETURN_TO_TRAINING_MINOR_SELF`, a medical attestation). Published
 pitch-count guidance for young pitchers (`shared/throwing-workload.ts`, the pitching coach prompt) is
 throwing workload, not a weight-room rule, and is unchanged. Client and server: `verify_build`.
+## 2026-11-22: FORGE IN ENGLISH AND SPANISH, AND EVERY PAGE MOVES TOWARD IT
+
+Scott: "can we have the athlete select which language they want, and the app automatically
+translates? and they can go back and forth?" and "make sure every single page hits this, it won't be
+translated perfectly yet as we aren't native spanish speakers." **Read `client/src/i18n/README.md`
+before adding or changing any text a reader sees.** The foundation and the shell are done; the rest
+of the app converts page by page against a ratchet.
+- **The choice** is `users.language` (`en` | `es`, null = English; `shared/languages.ts`), picked in
+  Account Settings by every role, saved by `PUT /api/account/language` (a self response with the
+  flags), carried on `/api/auth/me`. **The top-bar flip** (`LanguageFlipButton`: AppShell, the
+  guardian header, login, signup) shows the other language for this device until the app is closed
+  and never changes the saved choice. Before sign-in the browser's language decides.
+- **Rules for text:** the English IS the key, `const t = useT()` then `t("Save program")`,
+  `t("{count} athletes", { count })`, `t.plural(n, one, other)`, `t.exercise(name)` for a Forge
+  library name, `t.date`/`t.number`, `msg("...")` where a label is defined and `t(label)` where it
+  is drawn, `translate(...)` outside a component. One whole sentence per key, never fragments.
+  Missing keys fall back to English. **Never translate** a person's own words (use
+  `<TranslatableText>`, which asks `POST /api/translate`, the fast model, cached in server memory
+  only), a legal document (they stay English with one sentence above them; counsel question 30), the
+  brand name, or a program's own branding words.
+- **The ratchet** (`client/src/i18n/every-page-is-translated.test.ts`): a per-file count of untranslated
+  reader-facing English in `client/src/pages` and `client/src/components`
+  (`untranslated-baseline.json`, AST scan, comments never counted) may only go DOWN; every literal
+  key must be in `es.json`; placeholders must match. Scripts: `scripts/i18n-wrap.ts <file>` (first
+  pass), `scripts/i18n-missing.ts --json`, `scripts/i18n-baseline.ts` (rewrite after converting;
+  `--top 20`, `--file`). Started at 7,477 across 353 files.
+- **The Spanish catalogs are lazy chunks** loaded only when Spanish is on screen. `exercise-es.json`
+  covers all 696 visible library exercises and drills (`every-library-name-is-translated.test.ts`).
+  Exercise INSTRUCTIONS and cues have no catalog yet and show in English.
+- **The weekly parent email** goes out in the guardian's `users.language`
+  (`parent-weekly-summary-email.ts`, `WORDS`); every other email is still English.
+- **Not done, named:** every page outside the shell (wave 2), the iOS native login screen (native
+  code), server error sentences (shown through `translate()`, so a known one translates once it is
+  in `es.json`), exercise instructions, and searching the library by a Spanish name. The AI
+  translation path has not run against the real model here (no key in the sandbox). Client and
+  server: `verify_build`.

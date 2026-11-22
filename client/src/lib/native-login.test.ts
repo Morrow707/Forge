@@ -77,7 +77,7 @@ describe("the native login screen", () => {
     // The two are meant to be one screen. Copy drifting apart is how that claim quietly stops
     // being true, so the heading is asserted on both sides.
     expect(plugin).toMatch(/Self\.label\("Welcome back"/);
-    expect(loginPage).toMatch(/<CardTitle>Welcome back<\/CardTitle>/);
+    expect(loginPage).toMatch(/<CardTitle>\{t\("Welcome back"\)\}<\/CardTitle>/);
     expect(loginPage).not.toMatch(/Enter your credentials to continue/);
   });
 
