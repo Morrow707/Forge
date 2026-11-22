@@ -6,6 +6,13 @@ import { resetDatabase } from "./test-support/fixtures";
 import { loginAs as rawLoginAs, makeLoginableUser, startTestServer, type TestServer } from "./test-support/http-app";
 import { testOutbox } from "./email";
 
+// Every sign-in sends a "New login" email that is never awaited, so it can land in the outbox after the
+// login returned, in the middle of a case (CLAUDE.md, "an unawaited branded send lands late"; CI run
+// 2269 and a local full run each caught one here). These cases are about what the ROSTER send mails,
+// so they read the outbox without the login notices.
+const NEW_LOGIN_SUBJECT = "New login to your Forge account";
+const rosterMail = () => testOutbox.filter((m) => m.subject !== NEW_LOGIN_SUBJECT);
+
 /** Signing in writes its own "new login" notice to the outbox; nothing here is about that
  * email, so it is cleared after every login and the assertions read only what the routes sent. */
 async function loginAs(baseUrl: string, user: { email: string }) {
@@ -79,17 +86,17 @@ describe("asking for outstanding documents", () => {
     expect(byAthlete[adult.id].detail).toBe("athlete");
     expect(byAthlete[minor.id].detail).toBe("guardians");
 
-    const to = testOutbox.map((m) => m.to).sort();
+    const to = rosterMail().map((m) => m.to).sort();
     expect(to).toEqual([adult.email, mum.email].sort());
     // The minor's own inbox is never written to about their own paperwork.
     expect(to).not.toContain(minor.email);
 
-    const toMum = testOutbox.find((m) => m.to === mum.email)!;
+    const toMum = rosterMail().find((m) => m.to === mum.email)!;
     expect(toMum.subject).toBe("Documents needed for Minor Athlete");
     expect(toMum.html).toContain("Coach Rivera");
     expect(toMum.html).toContain("needs these on file");
     expect(toMum.html).toContain(`/documents/${minor.id}`);
-    const toAdult = testOutbox.find((m) => m.to === adult.email)!;
+    const toAdult = rosterMail().find((m) => m.to === adult.email)!;
     expect(toAdult.html).toMatch(/href="[^"]*\/documents"/);
 
     // The in-app notice is still written, for everybody it always was.
@@ -111,7 +118,7 @@ describe("asking for outstanding documents", () => {
     expect(res.body.emailed).toBe(0);
     expect(res.body.inAppOnly).toBe(1);
     expect(res.body.results[0].detail).toBe("no_email");
-    expect(testOutbox).toHaveLength(0);
+    expect(rosterMail()).toHaveLength(0);
     const notes = await db.select().from(notifications).where(eq(notifications.userId, minor.id));
     expect(notes).toHaveLength(1);
   });
@@ -124,13 +131,13 @@ describe("asking for outstanding documents", () => {
 
     const first = await client.post("/api/coach/documents-status/request", {});
     expect(first.body.sent).toBe(1);
-    expect(testOutbox).toHaveLength(1);
+    expect(rosterMail()).toHaveLength(1);
 
     const second = await client.post("/api/coach/documents-status/request", {});
     expect(second.body.sent).toBe(0);
     expect(second.body.skipped).toBe(1);
     expect(second.body.emailed).toBe(0);
-    expect(testOutbox).toHaveLength(1);
+    expect(rosterMail()).toHaveLength(1);
   });
 });
 
@@ -168,7 +175,7 @@ describe("sending a public document to the roster", () => {
     expect(types).not.toContain("institutional_agreement");
     const refused = await client.post("/api/coach/legal-documents/institutional_agreement/email-roster");
     expect(refused.status).toBe(404);
-    expect(testOutbox).toHaveLength(0);
+    expect(rosterMail()).toHaveLength(0);
   });
 
   it("routes adults to themselves, minors to guardians, de-duplicates, and never crosses rosters", async () => {
@@ -200,12 +207,12 @@ describe("sending a public document to the roster", () => {
     expect(res.body.failed).toBe(0);
     expect(res.body.notConfigured).toBe(false);
 
-    const to = testOutbox.map((m) => m.to).sort();
+    const to = rosterMail().map((m) => m.to).sort();
     expect(to).toEqual([adult.email, parent.email].sort());
     expect(to).not.toContain(stranger.email);
     expect(to).not.toContain(kidA.email);
 
-    const toParent = testOutbox.find((m) => m.to === parent.email)!;
+    const toParent = rosterMail().find((m) => m.to === parent.email)!;
     expect(toParent.subject).toContain("Privacy Policy");
     expect(toParent.html).toContain("Coach Rivera");
     expect(toParent.html).toContain("/privacy");
@@ -238,11 +245,11 @@ describe("sending a public document to the roster", () => {
     const res = await client.post("/api/coach/legal-documents/parental_notice/email-roster");
     expect(res.status).toBe(200);
     expect(res.body.minorsWithoutGuardianAddress).toBe(1);
-    const to = testOutbox.map((m) => m.to);
+    const to = rosterMail().map((m) => m.to);
     expect(to).toEqual(["parent-of-waiting@example.com"]);
     expect(to).not.toContain(waiting.email);
     expect(to).not.toContain(noParent.email);
-    expect(testOutbox[0].subject).toContain("Waiting Kid");
+    expect(rosterMail()[0].subject).toContain("Waiting Kid");
   });
 
   it("respects per-team narrowing for a staff coach, and a primary coach sends to everyone", async () => {
@@ -269,12 +276,7 @@ describe("sending a public document to the roster", () => {
     const staffSend = await staffClient.post("/api/coach/legal-documents/privacy_policy/email-roster");
     expect(staffSend.status).toBe(200);
     expect(staffSend.body.emailed).toBe(1);
-    // Signing the two coaches in sends each a "New login" email that is never awaited, so it can land
-    // in the outbox after the login returned, in the middle of this case (CLAUDE.md, "an unawaited
-    // branded send lands late"; CI run 2269 caught the staff coach's). The roster send is what is
-    // under test, so only the athletes' mail is read here.
-    const athleteMail = () =>
-      testOutbox.map((m) => m.to).filter((to) => to !== staff.email && to !== primary.email);
+    const athleteMail = () => rosterMail().map((m) => m.to);
     expect(athleteMail()).toEqual([varsityAthlete.email]);
 
     testOutbox.length = 0;
