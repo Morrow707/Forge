@@ -1,4 +1,7 @@
 import { ApiError } from "@/lib/queryClient";
+import { msg } from "@/i18n";
+
+const TOO_MANY_REQUESTS = 429;
 
 /** A 429 IS NOT A CONNECTION PROBLEM, and telling somebody it is sends them to the wrong fix.
  *
@@ -13,9 +16,10 @@ import { ApiError } from "@/lib/queryClient";
  * "A set that was logged and a set that reached the server" section of CLAUDE.md) -- so a
  * connection that dropped can never land in this branch, which is exactly the point.
  */
-export const RATE_LIMITED_MESSAGE =
-  "Forge is getting a lot of requests from this connection. Wait a minute and try again.";
+export const RATE_LIMITED_MESSAGE = msg(
+  "Forge is getting a lot of requests from this connection. Wait a minute and try again.",
+);
 
 export function isRateLimited(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 429;
+  return error instanceof ApiError && error.status === TOO_MANY_REQUESTS;
 }

@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/queryClient";
 import { RATE_LIMITED_MESSAGE, isRateLimited } from "@/lib/rate-limit-message";
+import { msg, translate, useT } from "@/i18n";
 
 /* A REFUSAL IS NOT A FAILED READ (2026-11-12). The 500,000-account scale test opened every page
  * as every kind of account, and "We couldn't load ... That isn't the same as there being none"
@@ -12,10 +13,10 @@ import { RATE_LIMITED_MESSAGE, isRateLimited } from "@/lib/rate-limit-message";
 const PERMANENT_STATUSES = new Set([403, 404, 409, 410]);
 const BARE_STATUS_WORDS = new Set(["not found", "forbidden", "conflict", "gone", "unauthorized"]);
 const DEFAULT_FOR_STATUS: Record<number, string> = {
-  403: "This isn't available to your account.",
-  404: "This doesn't exist, or it isn't yours to see.",
-  409: "This isn't ready yet.",
-  410: "This is no longer available.",
+  403: msg("This isn't available to your account."),
+  404: msg("This doesn't exist, or it isn't yours to see."),
+  409: msg("This isn't ready yet."),
+  410: msg("This is no longer available."),
 };
 
 /** The sentence for a permanent refusal, or null when the error is not one. */
@@ -25,7 +26,9 @@ export function refusalSentence(error: unknown): string | null {
   // The server's own words, unless they are only the status word ("Not found.").
   // https://regex101.com/?regex=%5B.!%5D%2B%24&testString=Not%20found.
   const bare = BARE_STATUS_WORDS.has(said.toLowerCase().replace(/[.!]+$/, ""));
-  return said && !bare ? said : DEFAULT_FOR_STATUS[error.status];
+  // The server's sentence goes through the catalog too: a known one is shown translated, an
+  // unknown one in English, which is the fallback for everything.
+  return translate(said && !bare ? said : DEFAULT_FOR_STATUS[error.status]);
 }
 
 /** "We couldn't load this" — said out loud, instead of rendering as "there is nothing here".
@@ -56,13 +59,15 @@ export function ReadFailed({
   className,
   error,
 }: {
-  /** What failed to load, as a noun phrase: "this athlete's injury history". */
+  /** What failed to load, as a noun phrase: "this athlete's injury history". Pass it already
+   *  translated, `what={t("this athlete's injury history")}`; it is drawn inside the sentence. */
   what: string;
   onRetry: () => void;
   className?: string;
   /** The read's error, when the caller has it. A 429 or a permanent refusal changes what is said. */
   error?: unknown;
 }) {
+  const t = useT();
   const refusal = refusalSentence(error);
   if (refusal) {
     return (
@@ -77,11 +82,11 @@ export function ReadFailed({
     <div className={className ?? "flex flex-col items-center gap-2 py-6 text-center"}>
       <p className="text-sm text-muted-foreground">
         {isRateLimited(error)
-          ? RATE_LIMITED_MESSAGE
-          : `We couldn't load ${what}. That isn't the same as there being none.`}
+          ? t(RATE_LIMITED_MESSAGE)
+          : t("We couldn't load {what}. That isn't the same as there being none.", { what })}
       </p>
       <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-        Try again
+        {t("Try again")}
       </Button>
     </div>
   );

@@ -1,4 +1,6 @@
 import { MAX_EXPECTED_ATHLETES } from "@shared/schema-constants";
+import { useT } from "@/i18n";
+import { LanguageFlipButton } from "@/components/language-flip-button";
 import { PASSWORD_MIN_LENGTH, passwordIsAcceptable } from "@shared/password-rules";
 import { PasswordRequirements } from "@/components/password-requirements";
 import { HeightInput } from "@/components/height-input";
@@ -63,6 +65,7 @@ function useDebounced<T>(value: T, delayMs: number): T {
 
 export default function SignupPage() {
   const { user, isLoading, signupMutation } = useAuth();
+  const t = useT();
   // The site is visible, sign-up is closed (server/signup-availability.ts). Closed and without
   // an accepted invite, the page is a "Coming soon" card with a place to type the code.
   const availability = useSignupAvailability();
@@ -231,17 +234,20 @@ export default function SignupPage() {
     e.preventDefault();
     if (!agreedToTerms) return;
     if (role === "coach" && joiningStaff && !staffInviteCode.trim()) {
-      setFormError("Enter the staff invite code your head coach gave you.");
+      setFormError(t("Enter the staff invite code your head coach gave you."));
       return;
     }
     if (role === "coach" && !joiningStaff && !expectedAthletesValid) {
       setFormError(
-        `Tell us roughly how many athletes you'll have: a whole number between ${MIN_EXPECTED_ATHLETES} and ${MAX_EXPECTED_ATHLETES}. You can change it any time.`,
+        t("Tell us roughly how many athletes you'll have: a whole number between {min} and {max}. You can change it any time.", {
+          min: MIN_EXPECTED_ATHLETES,
+          max: MAX_EXPECTED_ATHLETES,
+        }),
       );
       return;
     }
     if (!firstName.trim() || !lastName.trim()) {
-      setFormError("Enter both your first name and your last name.");
+      setFormError(t("Enter both your first name and your last name."));
       return;
     }
     setFormError("");
@@ -283,12 +289,15 @@ export default function SignupPage() {
       }}
     >
       <div className="w-full max-w-md">
+        <div className="mb-2 flex justify-end">
+          <LanguageFlipButton />
+        </div>
         <div className="mb-8 flex flex-col items-center gap-3">
           {/* A program's wide wordmark stands in for its logo and name, as on its login page. */}
           {inviteBranding?.brandExtras?.wordmarkUrl ? (
             <img
               src={resolveApiUrl(inviteBranding.brandExtras.wordmarkUrl)}
-              alt={inviteBranding.brandTeamName || "Team"}
+              alt={inviteBranding.brandTeamName || t("Team")}
               className="h-16 max-w-[18rem] object-contain"
             />
           ) : (
@@ -296,7 +305,7 @@ export default function SignupPage() {
               {inviteBranding?.brandLogoUrl ? (
                 <img
                   src={resolveApiUrl(inviteBranding.brandLogoUrl)}
-                  alt={inviteBranding.brandTeamName || "Team logo"}
+                  alt={inviteBranding.brandTeamName || t("Team logo")}
                   className="h-14 w-14 rounded-xl object-contain"
                 />
               ) : (
@@ -308,13 +317,13 @@ export default function SignupPage() {
             </>
           )}
           {inviteBranding?.brandTeamName ? (
-            <p className="text-sm text-muted-foreground">You're joining {inviteBranding.brandTeamName}</p>
+            <p className="text-sm text-muted-foreground">{t("You're joining {team}", { team: inviteBranding.brandTeamName })}</p>
           ) : inviteBranding?.brandLogoUrl ? (
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {POWERED_BY_FORGE_LABEL}
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground">Coach. Program. Perform.</p>
+            <p className="text-sm text-muted-foreground">{t("Coach. Program. Perform.")}</p>
           )}
         </div>
 
@@ -322,11 +331,10 @@ export default function SignupPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-primary" /> Coming soon
+                <Clock className="h-5 w-5 text-primary" /> {t("Coming soon")}
               </CardTitle>
               <CardDescription>
-                Forge isn't open for sign-ups yet. Have a look around; the whole site is here. If you
-                were given an invite code, enter it to create your account.
+                {t("Forge isn't open for sign-ups yet. Have a look around; the whole site is here. If you were given an invite code, enter it to create your account.")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -338,26 +346,26 @@ export default function SignupPage() {
                 }}
               >
                 <div className="space-y-1.5">
-                  <Label htmlFor="invite-code">Invite code</Label>
+                  <Label htmlFor="invite-code">{t("Invite code")}</Label>
                   <Input
                     id="invite-code"
                     autoCapitalize="characters"
                     autoComplete="off"
                     value={inviteDraft}
                     onChange={(e) => setInviteDraft(e.target.value)}
-                    placeholder="Enter your invite code"
+                    placeholder={t("Enter your invite code")}
                   />
                 </div>
                 {availability.inviteRejected && (
-                  <p className="text-sm text-destructive">That code didn't open the door. Check it and try again.</p>
+                  <p className="text-sm text-destructive">{t("That code didn't open the door. Check it and try again.")}</p>
                 )}
                 <Button type="submit" className="w-full" disabled={!inviteDraft.trim()}>
-                  Continue
+                  {t("Continue")}
                 </Button>
                 <p className="text-center text-sm text-muted-foreground">
-                  Already have an account?{" "}
+                  {t("Already have an account?")}{" "}
                   <Link href="/login" className="font-semibold text-primary hover:underline">
-                    Log in
+                    {t("Log in")}
                   </Link>
                 </p>
               </form>
@@ -369,8 +377,8 @@ export default function SignupPage() {
         ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Create Account</CardTitle>
-            <CardDescription>Choose your role to get started.</CardDescription>
+            <CardTitle>{t("Create Account")}</CardTitle>
+            <CardDescription>{t("Choose your role to get started.")}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="mb-5 grid grid-cols-2 gap-3">
@@ -385,7 +393,7 @@ export default function SignupPage() {
                 )}
               >
                 <ClipboardList className="h-6 w-6" />
-                Coach
+                {t("Coach")}
               </button>
               <button
                 type="button"
@@ -398,39 +406,39 @@ export default function SignupPage() {
                 )}
               >
                 <Dumbbell className="h-6 w-6" />
-                Athlete
+                {t("Athlete")}
               </button>
             </div>
 
             <form onSubmit={handleSubmit} noValidate className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="firstName">First name</Label>
+                  <Label htmlFor="firstName">{t("First name")}</Label>
                   <Input
                     id="firstName"
                     autoComplete="given-name"
                     required
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Jordan"
+                    placeholder={t("Jordan")}
                     data-testid="input-first-name"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="lastName">Last name</Label>
+                  <Label htmlFor="lastName">{t("Last name")}</Label>
                   <Input
                     id="lastName"
                     autoComplete="family-name"
                     required
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Smith"
+                    placeholder={t("Smith")}
                     data-testid="input-last-name"
                   />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t("Email")}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -438,11 +446,11 @@ export default function SignupPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder={t("you@example.com")}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">{t("Password")}</Label>
                 <PasswordInput
                   id="password"
                   autoComplete="new-password"
@@ -450,12 +458,12 @@ export default function SignupPage() {
                   minLength={PASSWORD_MIN_LENGTH}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Pick something only you would type"
+                  placeholder={t("Pick something only you would type")}
                 />
                 <PasswordRequirements value={password} className="pt-0.5" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="dateOfBirth">Date of birth</Label>
+                <Label htmlFor="dateOfBirth">{t("Date of birth")}</Label>
                 <Input
                   id="dateOfBirth"
                   type="date"
@@ -467,8 +475,7 @@ export default function SignupPage() {
                 />
                 {role === "athlete" && (
                   <p className="text-xs text-muted-foreground">
-                    Under 18? We'll ask for a parent or guardian's email next, and they set up
-                    their own linked account before you can start training.
+                    {t("Under 18? We'll ask for a parent or guardian's email next, and they set up their own linked account before you can start training.")}
                   </p>
                 )}
               </div>
@@ -481,29 +488,28 @@ export default function SignupPage() {
                     onChange={(e) => setJoiningStaff(e.target.checked)}
                   />
                   <span>
-                    I'm joining a program that's already on Forge
+                    {t("I'm joining a program that's already on Forge")}
                     <span className="block text-xs text-muted-foreground">
-                      Assistant coaches use the head coach's staff invite code. The plan stays
-                      with the head coach.
+                      {t("Assistant coaches use the head coach's staff invite code. The plan stays with the head coach.")}
                     </span>
                   </span>
                 </label>
               )}
               {role === "coach" && joiningStaff && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="staffInviteCode">Staff invite code</Label>
+                  <Label htmlFor="staffInviteCode">{t("Staff invite code")}</Label>
                   <Input
                     id="staffInviteCode"
                     autoCapitalize="characters"
                     value={staffInviteCode}
                     onChange={(e) => setStaffInviteCode(e.target.value.toUpperCase())}
-                    placeholder="From your head coach"
+                    placeholder={t("From your head coach")}
                   />
                 </div>
               )}
               {role === "coach" && !joiningStaff && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="expectedAthletes">How many athletes will you have?</Label>
+                  <Label htmlFor="expectedAthletes">{t("How many athletes will you have?")}</Label>
                   <Input
                     id="expectedAthletes"
                     type="number"
@@ -523,17 +529,21 @@ export default function SignupPage() {
                     <p className="rounded-md bg-surface-elevated p-3 text-sm font-semibold">
                       {Capacitor.isNativePlatform()
                         ? expectedBand.label
-                        : `${expectedAthletesNum} athletes · ${formatCents(coachMonthlyCents(expectedAthletesNum))}/month · ${formatCents(ORG_PER_ATHLETE_CENTS)} per athlete`}
+                        : t("{count} athletes · {monthly}/month · {perAthlete} per athlete", {
+                            count: expectedAthletesNum,
+                            monthly: formatCents(coachMonthlyCents(expectedAthletesNum)),
+                            perAthlete: formatCents(ORG_PER_ATHLETE_CENTS),
+                          })}
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Just a starting point. You can change it any time.
+                    {t("Just a starting point. You can change it any time.")}
                   </p>
                 </div>
               )}
               {isMinorAthlete && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="guardianEmail">Parent/guardian email</Label>
+                  <Label htmlFor="guardianEmail">{t("Parent/guardian email")}</Label>
                   <Input
                     id="guardianEmail"
                     type="email"
@@ -541,20 +551,19 @@ export default function SignupPage() {
                     required
                     value={guardianEmail}
                     onChange={(e) => setGuardianEmail(e.target.value)}
-                    placeholder="parent@example.com"
+                    placeholder={t("parent@example.com")}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Required under 18, so we'll email them to set up a linked account before a coach
-                    can assign you anything.
+                    {t("Required under 18, so we'll email them to set up a linked account before a coach can assign you anything.")}
                   </p>
                 </div>
               )}
               {role === "athlete" && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="sport">Sport</Label>
+                  <Label htmlFor="sport">{t("Sport")}</Label>
                   <Select value={sport} onValueChange={setSport}>
                     <SelectTrigger id="sport">
-                      <SelectValue placeholder="Select your sport" />
+                      <SelectValue placeholder={t("Select your sport")} />
                     </SelectTrigger>
                     <SelectContent>
                       {SPORTS.map((s) => (
@@ -568,13 +577,13 @@ export default function SignupPage() {
               )}
               {role === "athlete" && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="position">Position</Label>
+                  <Label htmlFor="position">{t("Position")}</Label>
                   <Input
                     id="position"
                     required
                     value={position}
                     onChange={(e) => setPosition(e.target.value)}
-                    placeholder="e.g. Linebacker"
+                    placeholder={t("e.g. Linebacker")}
                   />
                 </div>
               )}
@@ -582,7 +591,7 @@ export default function SignupPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <HeightInput id="heightIn" value={heightIn} onChange={setHeightIn} required />
                   <div className="space-y-1.5">
-                    <Label htmlFor="bodyWeightLbs">Weight (lbs)</Label>
+                    <Label htmlFor="bodyWeightLbs">{t("Weight (lbs)")}</Label>
                     <Input
                       id="bodyWeightLbs"
                       type="number"
@@ -596,14 +605,13 @@ export default function SignupPage() {
                     />
                   </div>
                   <p className="col-span-2 text-xs text-muted-foreground">
-                    Required for camera tracking. Your height is how the app converts what it
-                    sees into real distances and speeds.
+                    {t("Required for camera tracking. Your height is how the app converts what it sees into real distances and speeds.")}
                   </p>
                 </div>
               )}
               {role === "athlete" && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="coachCode">Invite code (optional)</Label>
+                  <Label htmlFor="coachCode">{t("Invite code (optional)")}</Label>
                   <Input
                     id="coachCode"
                     value={coachCode}
@@ -612,14 +620,14 @@ export default function SignupPage() {
                   />
                   <p className="text-xs text-muted-foreground">
                     {prefilledCode
-                      ? "Filled in from your invite link/QR code."
-                      : "Ask your coach for their code (or a team code) to join now, or add it later."}
+                      ? t("Filled in from your invite link/QR code.")
+                      : t("Ask your coach for their code (or a team code) to join now, or add it later.")}
                   </p>
                 </div>
               )}
               {promoCodeApplies && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="promoCode">Promo code (optional)</Label>
+                  <Label htmlFor="promoCode">{t("Promo code (optional)")}</Label>
                   <Input
                     id="promoCode"
                     autoCapitalize="characters"
@@ -627,27 +635,26 @@ export default function SignupPage() {
                     maxLength={30}
                     value={promoCode}
                     onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                    placeholder="Have a code?"
+                    placeholder={t("Have a code?")}
                     className="font-mono uppercase"
                     data-testid="signup-promo-code"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Free time on a code counts from the day you sign up. You can also enter it later
-                    from your billing page.
+                    {t("Free time on a code counts from the day you sign up. You can also enter it later from your billing page.")}
                   </p>
                 </div>
               )}
               <div className="space-y-2">
-                <Label>Terms</Label>
+                <Label>{t("Terms")}</Label>
                 <div className="max-h-32 overflow-y-auto whitespace-pre-line rounded-md border border-border bg-surface p-3 text-xs text-muted-foreground">
                   {agreementFailed ? (
                     <ReadFailed
-                      what="the terms"
+                      what={t("the terms")}
                       onRetry={() => void refetchAgreement()}
                       className="flex flex-col items-start gap-2"
                     />
                   ) : (
-                    (agreement?.content ?? "Loading…")
+                    (agreement?.content ?? t("Loading…"))
                   )}
                 </div>
                 <label className="flex items-start gap-2 text-sm">
@@ -657,7 +664,7 @@ export default function SignupPage() {
                     onCheckedChange={(c) => setAgreedToTerms(c === true)}
                     className="mt-0.5"
                   />
-                  I've read and agree to the terms above.
+                  {t("I've read and agree to the terms above.")}
                 </label>
               </div>
 
@@ -672,13 +679,10 @@ export default function SignupPage() {
                   of their own in the research store; the question is meaningless for them. */}
               {role === "athlete" && (
               <div className="space-y-2 rounded-md border border-border p-3">
-                <Label className="text-sm">Research (optional)</Label>
+                <Label className="text-sm">{t("Research (optional)")}</Label>
                 {isMinorAthlete ? (
                   <p className="text-xs text-muted-foreground">
-                    Forge is sometimes asked to share group statistics with researchers studying
-                    training and injury. Because you're under 18, a parent or guardian decides
-                    this, not you. Nothing is shared unless they say yes, and your training works
-                    exactly the same either way.
+                    {t("Forge is sometimes asked to share group statistics with researchers studying training and injury. Because you're under 18, a parent or guardian decides this, not you. Nothing is shared unless they say yes, and your training works exactly the same either way.")}
                   </p>
                 ) : (
                   <>
@@ -688,15 +692,10 @@ export default function SignupPage() {
                         onCheckedChange={(c) => setResearchConsent(c === true)}
                         className="mt-0.5"
                       />
-                      My training data may be used, in group form only, for research on training
-                      and injury.
+                      {t("My training data may be used, in group form only, for research on training and injury.")}
                     </label>
                     <p className="text-xs text-muted-foreground">
-                      Group numbers only, and never any group smaller than ten people. Your name,
-                      email, birthday, team, coach, videos and anything you type are never shared,
-                      and nothing shared can be traced back to you. This is optional: saying no
-                      changes nothing about your training or what you pay, and you can change your
-                      mind at any time.
+                      {t("Group numbers only, and never any group smaller than ten people. Your name, email, birthday, team, coach, videos and anything you type are never shared, and nothing shared can be traced back to you. This is optional: saying no changes nothing about your training or what you pay, and you can change your mind at any time.")}
                     </p>
                   </>
                 )}
@@ -719,18 +718,18 @@ export default function SignupPage() {
                   (role === "coach" && !joiningStaff && !expectedAthletesValid)
                 }
               >
-                {signupMutation.isPending ? "Creating account…" : "Create Account"}
+                {signupMutation.isPending ? t("Creating account…") : t("Create Account")}
               </Button>
             </form>
             <p className="mt-5 text-center text-sm text-muted-foreground">
-              Already have an account?{" "}
+              {t("Already have an account?")}{" "}
               <Link href="/login" className="font-semibold text-primary hover:underline">
-                Log in
+                {t("Log in")}
               </Link>
             </p>
             <p className="mt-2 text-center text-sm text-muted-foreground">
               <Link href="/pricing" className="font-semibold text-primary hover:underline">
-                View pricing
+                {t("View pricing")}
               </Link>
             </p>
           </CardContent>
@@ -747,6 +746,7 @@ export default function SignupPage() {
  * via the button: there's nothing else on screen underneath it to interact
  * with, so an accidental outside-click closing it would just be confusing. */
 function FreeAgentWelcomeDialog({ onContinue, covered = false }: { onContinue: () => void; covered?: boolean }) {
+  const t = useT();
   return (
     <Dialog open onOpenChange={() => {}}>
       <DialogContent hideClose onEscapeKeyDown={(e) => e.preventDefault()}>
@@ -754,47 +754,43 @@ function FreeAgentWelcomeDialog({ onContinue, covered = false }: { onContinue: (
           <DialogTitle className="flex items-center gap-2">
             <Badge className="gap-1.5 bg-primary/15 text-primary hover:bg-primary/15">
               <Sparkles className="h-3.5 w-3.5" />
-              Free Agent
+              {t("Free Agent")}
             </Badge>
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 text-sm">
           {covered && (
             <p className="rounded-md border border-primary/40 p-3 font-semibold" data-testid="welcome-covered-by-forge">
-              Your account is covered by Forge. You do not need to pick a plan or pay.
+              {t("Your account is covered by Forge. You do not need to pick a plan or pay.")}
             </p>
           )}
           <p className="text-muted-foreground">
-            You signed up without a coach's invite code, so you're training as a{" "}
-            <strong className="text-foreground">Free Agent</strong>, which just means no coach
-            is on your account yet. You can join one anytime from your dashboard and nothing
-            you build here goes away when you do.
+            {t(
+              "You signed up without a coach's invite code, so you're training as a Free Agent, which just means no coach is on your account yet. You can join one anytime from your dashboard and nothing you build here goes away when you do.",
+            )}
           </p>
           <div className="space-y-2 rounded-md border border-border p-3">
             <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <Check className="h-3.5 w-3.5 text-primary" />
-              On every plan
+              {t("On every plan")}
             </p>
             <p className="text-muted-foreground">
-              Build your own programs by hand, duplicate a Forge template, log workouts, track
-              progress, and ask the exercise substitution agent to swap out anything that doesn't
-              work for you.
+              {t("Build your own programs by hand, duplicate a Forge template, log workouts, track progress, and ask the exercise substitution agent to swap out anything that doesn't work for you.")}
             </p>
           </div>
           <div className="space-y-2 rounded-md border border-border p-3">
             <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <Lock className="h-3.5 w-3.5" />
-              On the AI plans
+              {t("On the AI plans")}
             </p>
             <p className="text-muted-foreground">
-              Conversational AI program building, an AI form-check review of your lifts, and the
-              AI chat coach.{covered ? "" : " You choose your plan on the next screen."}
+              {t("Conversational AI program building, an AI form-check review of your lifts, and the AI chat coach.")}{covered ? "" : ` ${t("You choose your plan on the next screen.")}`}
             </p>
           </div>
         </div>
         <DialogFooter>
           <Button onClick={onContinue} className="w-full">
-            Let's Go
+            {t("Let's Go")}
           </Button>
         </DialogFooter>
       </DialogContent>

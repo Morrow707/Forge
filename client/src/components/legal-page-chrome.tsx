@@ -4,6 +4,25 @@ import { ArrowLeft } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { ForgeMark } from "@/components/forge-mark";
 import { ROLES_THAT_FILM_THEIR_OWN_TRAINING } from "@shared/roles-that-film-their-own-training";
+import { useT } from "@/i18n";
+
+/**
+ * A LEGAL DOCUMENT STAYS IN ENGLISH (2026-11-22). Every document here was reviewed by Forge's
+ * attorney in English, and a machine translation of one would be an unreviewed legal text. So a
+ * reader in another language sees one sentence, in their language, above the English text -- and
+ * nothing at all in English mode. Whether Forge may show reviewed translations, and which version
+ * would bind, is counsel question 30 in docs/legal-open-questions.md. Never wrap a legal
+ * document's text in t() or TranslatableText.
+ */
+function ShownInEnglishNotice() {
+  const t = useT();
+  if (t.language === "en") return null;
+  return (
+    <p className="mb-4 rounded-md border border-border bg-surface p-3 text-sm" data-testid="text-legal-shown-in-english">
+      {t("This document is shown in English. The English version is the one that applies.")}
+    </p>
+  );
+}
 
 /**
  * THE FRAME AROUND A LEGAL DOCUMENT DEPENDS ON WHO IS READING IT.
@@ -40,15 +59,22 @@ export function LegalPageChrome({
   children: ReactNode;
 }) {
   const { user } = useAuth();
+  const t = useT();
   const role = user?.role;
+  const page = (
+    <>
+      <ShownInEnglishNotice />
+      {children}
+    </>
+  );
   if (
     role &&
     (ROLES_THAT_FILM_THEIR_OWN_TRAINING as ReadonlySet<string>).has(role)
   ) {
     return (
-      <Suspense fallback={<PublicFrame title={title}>{children}</PublicFrame>}>
+      <Suspense fallback={<PublicFrame title={title}>{page}</PublicFrame>}>
         <LazyAppShell title={title}>
-          <div className="mx-auto max-w-2xl py-4">{children}</div>
+          <div className="mx-auto max-w-2xl py-4">{page}</div>
         </LazyAppShell>
       </Suspense>
     );
@@ -62,17 +88,17 @@ export function LegalPageChrome({
             className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to your dashboard
+            {t("Back to your dashboard")}
           </Link>
           <h1 className="mb-2 font-display text-3xl font-extrabold uppercase tracking-wide">
             {title}
           </h1>
-          {children}
+          {page}
         </div>
       </div>
     );
   }
-  return <PublicFrame title={title}>{children}</PublicFrame>;
+  return <PublicFrame title={title}>{page}</PublicFrame>;
 }
 
 /** The public page as it has always been: the Forge mark linking home, then the document. */

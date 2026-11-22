@@ -15,9 +15,12 @@ import { MfaLoginStep } from "@/components/mfa-login-step";
 import { DeviceApprovalStep } from "@/components/device-approval-step";
 import { isNativeLoginAvailable, presentNativeLogin } from "@/lib/native-auth";
 import { homeRouteForRole } from "@shared/home-route-by-role";
+import { useT } from "@/i18n";
+import { LanguageFlipButton } from "@/components/language-flip-button";
 
 export default function LoginPage() {
   const { user, isLoading, loginMutation, deviceApprovalCompleteMutation } = useAuth();
+  const t = useT();
   const [, setLocation] = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -126,7 +129,11 @@ export default function LoginPage() {
       }}
     >
       <div className="w-full max-w-md">
-        <BrandedMark brand={brand} className="mb-8" tagline="Coach. Program. Perform." />
+        {/* Before sign-in the browser's language picks the screen; the flip is here too. */}
+        <div className="mb-2 flex justify-end">
+          <LanguageFlipButton />
+        </div>
+        <BrandedMark brand={brand} className="mb-8" tagline={t("Coach. Program. Perform.")} />
 
         {nativeShowing && !mfaPending && !devicePending ? (
           // What sits behind the native screen. It is presented full screen and cannot be swiped
@@ -134,7 +141,7 @@ export default function LoginPage() {
           // screen coming back or the redirect firing -- but a half-drawn form flashing there is
           // exactly the thing that made the last attempt look broken.
           <p className="text-center text-sm text-muted-foreground">
-            {loginMutation.isPending ? "Logging in\u2026" : "Opening sign in\u2026"}
+            {loginMutation.isPending ? t("Logging in…") : t("Opening sign in…")}
           </p>
         ) : devicePending ? (
           <DeviceApprovalStep
@@ -171,7 +178,7 @@ export default function LoginPage() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle>Welcome back</CardTitle>
+              <CardTitle>{t("Welcome back")}</CardTitle>
             </CardHeader>
             <CardContent>
               {/* noValidate: WKWebView's native HTML5 constraint-validation UI
@@ -182,7 +189,7 @@ export default function LoginPage() {
                   so submission is always handled entirely by JS/React state. */}
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">{t("Email")}</Label>
                   <Input
                     id="email"
                     type="email"
@@ -190,17 +197,17 @@ export default function LoginPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
+                    placeholder={t("you@example.com")}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="password">{t("Password")}</Label>
                     <Link
                       href="/forgot-password"
                       className="text-xs font-semibold text-primary hover:underline"
                     >
-                      Forgot password?
+                      {t("Forgot password?")}
                     </Link>
                   </div>
                   <PasswordInput
@@ -244,18 +251,18 @@ export default function LoginPage() {
                     if (!loginMutation.isPending) submitLogin();
                   }}
                 >
-                  {loginMutation.isPending ? "Logging in…" : "Log In"}
+                  {loginMutation.isPending ? t("Logging in…") : t("Log In")}
                 </Button>
               </form>
               <p className="mt-5 text-center text-sm text-muted-foreground">
-                Don't have an account?{" "}
-                <SignupLink className="font-semibold text-primary hover:underline">Sign up</SignupLink>
+                {t("Don't have an account?")}{" "}
+                <SignupLink className="font-semibold text-primary hover:underline">{t("Sign up")}</SignupLink>
               </p>
               {!wearsAProgramsBrand && (
                 <p className="mt-2 text-center text-sm text-muted-foreground">
-                  Are you an admin?{" "}
+                  {t("Are you an admin?")}{" "}
                   <Link href="/admin/login" className="font-semibold text-primary hover:underline">
-                    Log in here
+                    {t("Log in here")}
                   </Link>
                 </p>
               )}
@@ -264,7 +271,7 @@ export default function LoginPage() {
               {!Capacitor.isNativePlatform() && (
                 <p className="mt-2 text-center text-sm text-muted-foreground">
                   <Link href="/pricing" className="font-semibold text-primary hover:underline">
-                    View pricing
+                    {t("View pricing")}
                   </Link>
                 </p>
               )}

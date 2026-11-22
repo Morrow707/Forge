@@ -398,6 +398,11 @@ export const users = pgTable(
     // move an athlete's training day, and the browser already knows the
     // real answer.
     timeZone: text("time_zone"),
+    // THE LANGUAGE THIS PERSON READS FORGE IN (2026-11-22). "en" or "es"; null reads as English,
+    // which is every account that existed before the choice did. Picked in Account Settings for
+    // every role. The top bar's one-tap flip (to show an English-only teammate) changes only the
+    // screen on that device and never this column -- see client/src/i18n/README.md.
+    language: text("language"),
     gender: genderEnum("gender"),
     heightIn: integer("height_in"),
     // THE ONE DISTANCE THE ATHLETE CAN SIMPLY TELL US, AND THE FIRST RULER HERE THAT IS NEITHER

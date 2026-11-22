@@ -23,13 +23,21 @@ import { join } from "node:path";
  * pays that 9 kB for pages it never shows; that is the known cost and it is why nothing larger
  * goes eager on the same reasoning without a number beside it here.
  *
+ * RAISED 2026-11-22, 560 -> 568 kB (gzip unchanged at 172 kB), for the language system
+ * (client/src/i18n/README.md): the translator every screen calls, the top-bar flip and its icon,
+ * and the t() calls in the eager login, legal and read-failed screens -- measured at +4.6 kB on the
+ * entry off its source map (i18n/index.ts 2.4 kB, the flip 0.85 kB, the rest under 0.3 kB each).
+ * It has to be eager because the shell and the login screen draw through it. The Spanish catalogs
+ * are NOT: es.json and exercise-es.json are their own chunks, fetched only when Spanish is on
+ * screen, and an English reader never downloads them.
+ *
  * Runs only when dist/public exists (CI builds after `npm test`; a developer who has not built
  * sees it skipped, not failed). scripts/check-first-paint.mjs is the build-time twin that always
  * runs; this one carries the byte budget. */
 const DIST = join(__dirname, "..", "..", "..", "dist", "public");
 const built = existsSync(join(DIST, "index.html"));
 
-const EAGER_BUDGET_BYTES = 560 * 1024;
+const EAGER_BUDGET_BYTES = 568 * 1024;
 const EAGER_BUDGET_GZIP_BYTES = 172 * 1024;
 
 /** Chunks that must never be on the first paint, and what each one is. */

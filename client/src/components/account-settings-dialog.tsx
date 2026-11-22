@@ -27,17 +27,19 @@ import { forgeCodeEntryIsAllowed } from "@/lib/forge-code-entry";
 import { derivePrivacyTier } from "@shared/privacy-tiers";
 import { PersonalEquipmentCard, ProgramEquipmentCard } from "@/components/equipment-profile-card";
 import type { PublicUser } from "@shared/schema";
+import { msg, useT } from "@/i18n";
+import { LanguageSetting } from "@/components/language-setting";
 
 // Same five hues shown in the "Coach Themes" concept deck -- named presets
 // for the common case, with an exact-number field right next to them for
 // anyone who wants a precise value. Ink (222) matches the app's own
 // default neutral hue, so picking it is equivalent to clearing the override.
 const BACKGROUND_HUE_PRESETS = [
-  { label: "Ink", hue: 222 },
-  { label: "Slate", hue: 210 },
-  { label: "Forest", hue: 150 },
-  { label: "Wine", hue: 350 },
-  { label: "Plum", hue: 280 },
+  { label: msg("Ink"), hue: 222 },
+  { label: msg("Slate"), hue: 210 },
+  { label: msg("Forest"), hue: 150 },
+  { label: msg("Wine"), hue: 350 },
+  { label: msg("Plum"), hue: 280 },
 ];
 
 /** Account-level self-service: name and login email -- neither had any
@@ -57,6 +59,7 @@ export function AccountSettingsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
 
   // Per-device, applies immediately -- no Save step, same "no batching"
@@ -89,9 +92,9 @@ export function AccountSettingsDialog({
       setConfirmTrackingOff(false);
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/camera-access"] });
-      toast.success("Camera tracking is off and your consent is withdrawn");
+      toast.success(t("Camera tracking is off and your consent is withdrawn"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't turn camera tracking off"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't turn camera tracking off")),
   });
 
   // An athlete may wear Forge's standard look instead of their program's (2026-11-20).
@@ -103,9 +106,9 @@ export function AccountSettingsDialog({
     onSuccess: (on) => {
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
       qc.invalidateQueries({ queryKey: ["/api/branding/me"] });
-      toast.success(on ? "Using Forge's standard look" : "Using your program's look");
+      toast.success(on ? t("Using Forge's standard look") : t("Using your program's look"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't change your look"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't change your look")),
   });
 
   const [name, setName] = useState(user.name);
@@ -115,9 +118,9 @@ export function AccountSettingsDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast.success("Name updated");
+      toast.success(t("Name updated"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update name"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't update name")),
   });
 
   const [emailPassword, setEmailPassword] = useState("");
@@ -128,11 +131,11 @@ export function AccountSettingsDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast.success("Email updated");
+      toast.success(t("Email updated"));
       setEmailPassword("");
       setNewEmail("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update email"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't update email")),
   });
 
   const [accentColor, setAccentColor] = useState(user.personalAccentColor ?? "");
@@ -153,9 +156,9 @@ export function AccountSettingsDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast.success("Personal theme updated");
+      toast.success(t("Personal theme updated"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update your theme"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't update your theme")),
   });
   const accentContrastOk =
     !accentColor ||
@@ -174,9 +177,9 @@ export function AccountSettingsDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast.success("Coaching philosophy updated");
+      toast.success(t("Coaching philosophy updated"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update your philosophy"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't update your philosophy")),
   });
 
   const [redeemCode, setRedeemCode] = useState("");
@@ -196,23 +199,23 @@ export function AccountSettingsDialog({
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
       // The server's sentence says what the code did: a trial through a date, or a discount on
       // the card plan (shared/promo-codes.ts). The date form is kept for an older server.
-      toast.success(data.message ?? (until ? `Code redeemed, full access unlocked through ${until}` : "Code redeemed"));
+      toast.success(data.message ?? (until ? t("Code redeemed, full access unlocked through {date}", { date: until }) : t("Code redeemed")));
       setRedeemCode("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't redeem that code"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't redeem that code")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Account Settings</DialogTitle>
-          <DialogDescription>Your name and login email.</DialogDescription>
+          <DialogTitle>{t("Account Settings")}</DialogTitle>
+          <DialogDescription>{t("Your name and login email.")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
           <div className="space-y-1.5">
-            <Label htmlFor="account-name">Name</Label>
+            <Label htmlFor="account-name">{t("Name")}</Label>
             <div className="flex items-center gap-2">
               <Input id="account-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
               <Button
@@ -221,26 +224,24 @@ export function AccountSettingsDialog({
                 onClick={() => nameMutation.mutate()}
                 disabled={!name.trim() || name.trim() === user.name || nameMutation.isPending}
               >
-                Save
+                {t("Save")}
               </Button>
             </div>
           </div>
 
+          <LanguageSetting user={user} />
+
           {isAdultAthlete && (
             <div className="space-y-1.5 border-t border-border pt-4" data-testid="camera-tracking-switch">
-              <Label>Camera tracking</Label>
+              <Label>{t("Camera tracking")}</Label>
               {user.trackingOptOut ? (
                 <p className="text-xs text-muted-foreground">
-                  Off. Nothing is measured from your video and your Video and Biometric Consent is
-                  withdrawn. To turn it back on, tap Record on a workout and agree to the consent
-                  again.
+                  {t("Off. Nothing is measured from your video and your Video and Biometric Consent is withdrawn. To turn it back on, tap Record on a workout and agree to the consent again.")}
                 </p>
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground">
-                    On. Turning it off stops every camera measurement from now on and withdraws
-                    your Video and Biometric Consent. Video already saved stays in your video bank
-                    until you delete it.
+                    {t("On. Turning it off stops every camera measurement from now on and withdraws your Video and Biometric Consent. Video already saved stays in your video bank until you delete it.")}
                   </p>
                   {confirmTrackingOff ? (
                     <div className="flex items-center gap-2">
@@ -251,15 +252,15 @@ export function AccountSettingsDialog({
                         onClick={() => trackingOffMutation.mutate()}
                         disabled={trackingOffMutation.isPending}
                       >
-                        {trackingOffMutation.isPending ? "Turning off…" : "Yes, turn it off"}
+                        {trackingOffMutation.isPending ? t("Turning off…") : t("Yes, turn it off")}
                       </Button>
                       <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmTrackingOff(false)}>
-                        Keep it on
+                        {t("Keep it on")}
                       </Button>
                     </div>
                   ) : (
                     <Button type="button" variant="outline" size="sm" onClick={() => setConfirmTrackingOff(true)}>
-                      Turn camera tracking off
+                      {t("Turn camera tracking off")}
                     </Button>
                   )}
                 </>
@@ -268,18 +269,18 @@ export function AccountSettingsDialog({
           )}
 
           <div className="space-y-1.5 border-t border-border pt-4">
-            <Label>Email</Label>
-            <p className="text-xs text-muted-foreground">Currently {user.email}</p>
+            <Label>{t("Email")}</Label>
+            <p className="text-xs text-muted-foreground">{t("Currently {email}", { email: user.email })}</p>
             <Input
               type="email"
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
-              placeholder="New email address"
+              placeholder={t("New email address")}
             />
             <PasswordInput
               value={emailPassword}
               onChange={(e) => setEmailPassword(e.target.value)}
-              placeholder="Current password, to confirm"
+              placeholder={t("Current password, to confirm")}
               autoComplete="current-password"
             />
             <Button
@@ -289,15 +290,14 @@ export function AccountSettingsDialog({
               onClick={() => emailMutation.mutate()}
               disabled={!newEmail.trim() || !emailPassword || emailMutation.isPending}
             >
-              Update email
+              {t("Update email")}
             </Button>
           </div>
 
           <div className="space-y-1.5 border-t border-border pt-4">
-            <Label>Appearance</Label>
+            <Label>{t("Appearance")}</Label>
             <p className="text-xs text-muted-foreground">
-              Dark is the default. This is just a look for this device, it switches immediately,
-              nothing to save.
+              {t("Dark is the default. This is just a look for this device, it switches immediately, nothing to save.")}
             </p>
             <div className="flex gap-2">
               <button
@@ -312,7 +312,7 @@ export function AccountSettingsDialog({
                 )}
               >
                 <Moon className="h-4 w-4" />
-                Dark
+                {t("Dark")}
               </button>
               <button
                 type="button"
@@ -326,14 +326,14 @@ export function AccountSettingsDialog({
                 )}
               >
                 <Sun className="h-4 w-4" />
-                Light
+                {t("Light")}
               </button>
             </div>
           </div>
 
           {user.role === "athlete" && (
             <div className="space-y-1.5 border-t border-border pt-4" data-testid="standard-look-switch">
-              <Label htmlFor="standard-look">Program colors</Label>
+              <Label htmlFor="standard-look">{t("Program colors")}</Label>
               <label className="flex items-start gap-2 text-sm">
                 <Checkbox
                   id="standard-look"
@@ -341,12 +341,10 @@ export function AccountSettingsDialog({
                   disabled={standardLookMutation.isPending}
                   onCheckedChange={(c) => standardLookMutation.mutate(c === true)}
                 />
-                <span>Use Forge's standard look</span>
+                <span>{t("Use Forge's standard look")}</span>
               </label>
               <p className="text-xs text-muted-foreground">
-                Shows the app in Forge's colors, fonts and icon instead of your program's. Your
-                program's name, logo, notes and announcements still show. Saved to your account, so
-                it follows you to every device.
+                {t("Shows the app in Forge's colors, fonts and icon instead of your program's. Your program's name, logo, notes and announcements still show. Saved to your account, so it follows you to every device.")}
               </p>
             </div>
           )}
@@ -361,7 +359,7 @@ export function AccountSettingsDialog({
           )}
           {user.role !== "guardian" && (
             <div className="border-t border-border pt-4">
-              <PersonalEquipmentCard title={user.role === "coach" ? "My own training equipment" : "My equipment"} />
+              <PersonalEquipmentCard title={user.role === "coach" ? t("My own training equipment") : t("My equipment")} />
             </div>
           )}
 
@@ -370,32 +368,29 @@ export function AccountSettingsDialog({
           {user.role === "coach" && (
             <div className="space-y-5 border-t border-border pt-4">
               <div className="space-y-1.5">
-                <Label>Personal theme</Label>
+                <Label>{t("Personal theme")}</Label>
                 <p className="text-xs text-muted-foreground">
-                  Yours alone, everything below is layered on top of whatever your program's own
-                  branding already sets, only in your own view, and never touches what your athletes
-                  or other coaches see. Type an exact hex/number if you know it, or use the pickers.
+                  {t("Yours alone, everything below is layered on top of whatever your program's own branding already sets, only in your own view, and never touches what your athletes or other coaches see. Type an exact hex/number if you know it, or use the pickers.")}
                 </p>
               </div>
 
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">
-                  Accent, buttons, focus rings, card outlines, "today" highlights, PR/stat numbers,
-                  and the ambient glow under every card.
+                  {t("Accent, buttons, focus rings, card outlines, \"today\" highlights, PR/stat numbers, and the ambient glow under every card.")}
                 </p>
-                <ColorField label="Accent" value={accentColor || "#F65B23"} onChange={setAccentColor} />
+                <ColorField label={t("Accent")} value={accentColor || "#F65B23"} onChange={setAccentColor} />
                 {!accentContrastOk && (
                   <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                     <div className="space-y-1.5">
-                      <p>This color is too light/dark to read clearly as button text.</p>
+                      <p>{t("This color is too light/dark to read clearly as button text.")}</p>
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
                         onClick={() => setAccentColor(nearestAccessibleColor(accentColor) ?? accentColor)}
                       >
-                        Use a readable version of this color
+                        {t("Use a readable version of this color")}
                       </Button>
                     </div>
                   </div>
@@ -408,7 +403,7 @@ export function AccountSettingsDialog({
                     onClick={() => themeMutation.mutate({ accentColor: accentColor || null })}
                     disabled={themeMutation.isPending}
                   >
-                    Save accent
+                    {t("Save accent")}
                   </Button>
                   {user.personalAccentColor && (
                     <Button
@@ -420,7 +415,7 @@ export function AccountSettingsDialog({
                       }}
                       disabled={themeMutation.isPending}
                     >
-                      Clear
+                      {t("Clear")}
                     </Button>
                   )}
                 </div>
@@ -428,22 +423,21 @@ export function AccountSettingsDialog({
 
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">
-                  Secondary, your own second color, independent of your accent (mirrors your
-                  program's own primary + secondary pair).
+                  {t("Secondary, your own second color, independent of your accent (mirrors your program's own primary + secondary pair).")}
                 </p>
-                <ColorField label="Secondary" value={secondaryColor || "#4C6B8A"} onChange={setSecondaryColor} />
+                <ColorField label={t("Secondary")} value={secondaryColor || "#4C6B8A"} onChange={setSecondaryColor} />
                 {!secondaryContrastOk && (
                   <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                     <div className="space-y-1.5">
-                      <p>This color is too light/dark to read clearly as text.</p>
+                      <p>{t("This color is too light/dark to read clearly as text.")}</p>
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
                         onClick={() => setSecondaryColor(nearestAccessibleColor(secondaryColor) ?? secondaryColor)}
                       >
-                        Use a readable version of this color
+                        {t("Use a readable version of this color")}
                       </Button>
                     </div>
                   </div>
@@ -456,7 +450,7 @@ export function AccountSettingsDialog({
                     onClick={() => themeMutation.mutate({ secondaryColor: secondaryColor || null })}
                     disabled={themeMutation.isPending}
                   >
-                    Save secondary
+                    {t("Save secondary")}
                   </Button>
                   {user.personalSecondaryColor && (
                     <Button
@@ -468,7 +462,7 @@ export function AccountSettingsDialog({
                       }}
                       disabled={themeMutation.isPending}
                     >
-                      Clear
+                      {t("Clear")}
                     </Button>
                   )}
                 </div>
@@ -476,9 +470,7 @@ export function AccountSettingsDialog({
 
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">
-                  Background tint, shifts the whole app's neutral surfaces (background, cards,
-                  borders) toward a hue of your choice, keeping the exact same contrast already tuned
-                  for legibility.
+                  {t("Background tint, shifts the whole app's neutral surfaces (background, cards, borders) toward a hue of your choice, keeping the exact same contrast already tuned for legibility.")}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {BACKGROUND_HUE_PRESETS.map((preset) => (
@@ -493,7 +485,7 @@ export function AccountSettingsDialog({
                           : "border-border text-muted-foreground hover:text-foreground",
                       )}
                     >
-                      {preset.label}
+                      {t(preset.label)}
                     </button>
                   ))}
                   <Input
@@ -503,7 +495,7 @@ export function AccountSettingsDialog({
                     value={backgroundHue}
                     onChange={(e) => setBackgroundHue(Math.min(359, Math.max(0, Number(e.target.value) || 0)))}
                     className="h-auto w-20 py-1.5 text-xs"
-                    aria-label="Exact background hue, 0-359"
+                    aria-label={t("Exact background hue, 0-359")}
                   />
                 </div>
                 <div className="flex gap-2">
@@ -514,7 +506,7 @@ export function AccountSettingsDialog({
                     onClick={() => themeMutation.mutate({ backgroundHue })}
                     disabled={themeMutation.isPending}
                   >
-                    Save background tint
+                    {t("Save background tint")}
                   </Button>
                   {user.personalBackgroundHue != null && (
                     <Button
@@ -526,7 +518,7 @@ export function AccountSettingsDialog({
                       }}
                       disabled={themeMutation.isPending}
                     >
-                      Clear
+                      {t("Clear")}
                     </Button>
                   )}
                 </div>
@@ -536,16 +528,15 @@ export function AccountSettingsDialog({
 
           {user.role === "coach" && (
             <div className="space-y-1.5 border-t border-border pt-4">
-              <Label htmlFor="coaching-philosophy">Coaching philosophy</Label>
+              <Label htmlFor="coaching-philosophy">{t("Coaching philosophy")}</Label>
               <p className="text-xs text-muted-foreground">
-                A short line about your approach or a personal quote, shown under your own name
-                on your team's public About page, alongside anyone else on staff who sets one.
+                {t("A short line about your approach or a personal quote, shown under your own name on your team's public About page, alongside anyone else on staff who sets one.")}
               </p>
               <Textarea
                 id="coaching-philosophy"
                 value={philosophy}
                 onChange={(e) => setPhilosophy(e.target.value.slice(0, PHILOSOPHY_MAX))}
-                placeholder="e.g. Compete like it's the last rep, every rep."
+                placeholder={t("e.g. Compete like it's the last rep, every rep.")}
                 maxLength={PHILOSOPHY_MAX}
                 className="min-h-16"
               />
@@ -564,7 +555,7 @@ export function AccountSettingsDialog({
                       }}
                       disabled={philosophyMutation.isPending}
                     >
-                      Clear
+                      {t("Clear")}
                     </Button>
                   )}
                   <Button
@@ -576,7 +567,7 @@ export function AccountSettingsDialog({
                       philosophyMutation.isPending
                     }
                   >
-                    Save
+                    {t("Save")}
                   </Button>
                 </div>
               </div>
@@ -590,16 +581,16 @@ export function AccountSettingsDialog({
             <div className="space-y-1.5 border-t border-border pt-4">
               <Label className="flex items-center gap-1.5">
                 <Ticket className="h-4 w-4" />
-                Redeem a code
+                {t("Redeem a code")}
               </Label>
               <p className="text-xs text-muted-foreground">
-                Have a promo code for free trial access? Enter it here.
+                {t("Have a promo code for free trial access? Enter it here.")}
               </p>
               <div className="flex items-center gap-2">
                 <Input
                   value={redeemCode}
                   onChange={(e) => setRedeemCode(e.target.value.toUpperCase())}
-                  placeholder="CODE"
+                  placeholder={t("CODE")}
                   className="font-mono uppercase"
                 />
                 <Button
@@ -608,7 +599,7 @@ export function AccountSettingsDialog({
                   onClick={() => redeemMutation.mutate()}
                   disabled={!redeemCode.trim() || redeemMutation.isPending}
                 >
-                  Redeem
+                  {t("Redeem")}
                 </Button>
               </div>
             </div>
@@ -619,9 +610,9 @@ export function AccountSettingsDialog({
               role renders this dialog, the guardian dashboard included, so this is the one row
               that reaches all four. The routes render the reviewed text from the API. */}
           <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-border pt-4 text-xs text-muted-foreground" data-testid="account-legal-links">
-            <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">Privacy Policy</Link>
-            <Link href="/eula" className="underline underline-offset-2 hover:text-foreground">Terms of Use (EULA)</Link>
-            <Link href="/legal" className="underline underline-offset-2 hover:text-foreground">All legal documents</Link>
+            <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">{t("Privacy Policy")}</Link>
+            <Link href="/eula" className="underline underline-offset-2 hover:text-foreground">{t("Terms of Use (EULA)")}</Link>
+            <Link href="/legal" className="underline underline-offset-2 hover:text-foreground">{t("All legal documents")}</Link>
           </div>
         </div>
       </DialogContent>
@@ -641,6 +632,7 @@ export function AccountSettingsDialog({
  * a reader who never touches this gets exactly what they got before.
  */
 function AnswerStyleSection() {
+  const t = useT();
   const qc = useQueryClient();
   const { data } = useQuery<{ answerRegister: string | null; answerLength: string | null }>({
     queryKey: ["/api/answer-style"],
@@ -652,9 +644,9 @@ function AnswerStyleSection() {
       apiRequest("PUT", "/api/answer-style", next),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/answer-style"] });
-      toast.success("The assistants will write to you this way from now on.");
+      toast.success(t("The assistants will write to you this way from now on."));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save that")),
   });
 
   const register = data?.answerRegister ?? "standard";
@@ -688,7 +680,7 @@ function AnswerStyleSection() {
                 : "border-border text-muted-foreground hover:text-foreground",
             )}
           >
-            {o.label}
+            {t(o.label)}
           </button>
         ))}
       </div>
@@ -699,7 +691,7 @@ function AnswerStyleSection() {
           different topic. Live in shared/answer-style.ts beside the instruction each one
           describes, so a preview cannot drift from what the model is really told. */}
       <p className="text-xs italic leading-relaxed text-muted-foreground">
-        {options.find((o) => o.key === value)?.preview}
+        {t(options.find((o) => o.key === value)?.preview ?? "")}
       </p>
     </div>
   );
@@ -707,20 +699,19 @@ function AnswerStyleSection() {
   return (
     <div className="space-y-4 border-t border-border pt-4">
       <div className="space-y-1.5">
-        <Label>How the AI writes to you</Label>
+        <Label>{t("How the AI writes to you")}</Label>
         <p className="text-xs text-muted-foreground">
-          Applies everywhere an assistant writes to you. It changes the wording only, never
-          what you are told, and never a safety caveat.
+          {t("Applies everywhere an assistant writes to you. It changes the wording only, never what you are told, and never a safety caveat.")}
         </p>
       </div>
       <Row
-        label="Language"
+        label={t("Language")}
         options={ANSWER_REGISTERS}
         value={register}
         onPick={(key) => save.mutate({ register: key, length })}
       />
       <Row
-        label="Length"
+        label={t("Length")}
         options={ANSWER_LENGTHS}
         value={length}
         onPick={(key) => save.mutate({ register, length: key })}
@@ -742,6 +733,7 @@ function AnswerStyleSection() {
  * fail.
  */
 function MyResearchConsentSection() {
+  const t = useT();
   const qc = useQueryClient();
   const [showText, setShowText] = useState(false);
 
@@ -767,9 +759,9 @@ function MyResearchConsentSection() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/research-consent/request"] });
-      toast.success("Sent to your guardian");
+      toast.success(t("Sent to your guardian"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't send that request"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't send that request")),
   });
 
   const mutation = useMutation({
@@ -780,11 +772,11 @@ function MyResearchConsentSection() {
       qc.invalidateQueries({ queryKey: ["/api/athlete/research-consent"] });
       toast.success(
         granted
-          ? "You're opted in to research data collection"
-          : "You're opted out, nothing prepared from now on will include you",
+          ? t("You're opted in to research data collection")
+          : t("You're opted out, nothing prepared from now on will include you"),
       );
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't change that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't change that")),
   });
 
   if (!status) return null;
@@ -792,12 +784,9 @@ function MyResearchConsentSection() {
   return (
     <div className="space-y-3 border-t border-border pt-4">
       <div className="space-y-1.5">
-        <Label>Research data</Label>
+        <Label>{t("Research data")}</Label>
         <p className="text-xs text-muted-foreground">
-          Separate from your training data, which your coach always sees. This is only about
-          whether your numbers can be included, without your name, in anything Forge prepares for
-          an outside party. You can change it whenever you like, and changing it to off leaves you
-          out of everything prepared from that point on.
+          {t("Separate from your training data, which your coach always sees. This is only about whether your numbers can be included, without your name, in anything Forge prepares for an outside party. You can change it whenever you like, and changing it to off leaves you out of everything prepared from that point on.")}
         </p>
       </div>
 
@@ -809,30 +798,26 @@ function MyResearchConsentSection() {
           come to change this, and says exactly what is different. */}
       {status.staleTerms && (
         <div className="space-y-2 rounded-md border border-amber-500/50 bg-amber-500/5 px-3 py-2.5">
-          <p className="text-sm font-semibold">What you agreed to has changed</p>
+          <p className="text-sm font-semibold">{t("What you agreed to has changed")}</p>
           <p className="text-xs text-muted-foreground">
-            When you said yes, the only limit we named was that a report already sent
-            can't be recalled. We've added one: if you delete your account, the group
-            numbers stay, age, sport, position and the training numbers, with nothing
-            in them that points back to you. Your account, your videos and anything that
-            identifies you still go.
+            {t("When you said yes, the only limit we named was that a report already sent can't be recalled. We've added one: if you delete your account, the group numbers stay, age, sport, position and the training numbers, with nothing in them that points back to you. Your account, your videos and anything that identifies you still go.")}
           </p>
           <p className="text-xs text-muted-foreground">
             {status.requiresGuardian
-              ? "Until a parent or guardian answers, the version you agreed to is the one that applies, and deleting your account would still remove you from everything."
-              : "Until you answer, the version you agreed to is the one that applies, and deleting your account would still remove you from everything."}
+              ? t("Until a parent or guardian answers, the version you agreed to is the one that applies, and deleting your account would still remove you from everything.")
+              : t("Until you answer, the version you agreed to is the one that applies, and deleting your account would still remove you from everything.")}
           </p>
           <button
             type="button"
             onClick={() => setShowText((v) => !v)}
             className="text-xs underline underline-offset-2 text-muted-foreground hover:text-foreground"
           >
-            {showText ? "Hide" : "Read"} the new wording
+            {showText ? t("Hide the new wording") : t("Read the new wording")}
           </button>
           {!status.requiresGuardian && (
             <div className="flex flex-wrap gap-2 pt-0.5">
               <Button size="sm" disabled={mutation.isPending} onClick={() => mutation.mutate(true)}>
-                I still agree
+                {t("I still agree")}
               </Button>
               <Button
                 size="sm"
@@ -840,7 +825,7 @@ function MyResearchConsentSection() {
                 disabled={mutation.isPending}
                 onClick={() => mutation.mutate(false)}
               >
-                Withdraw instead
+                {t("Withdraw instead")}
               </Button>
             </div>
           )}
@@ -853,13 +838,13 @@ function MyResearchConsentSection() {
         // coach, so a minor who wanted back in could not say so.
         <div className="space-y-2 rounded-md border border-border bg-surface px-3 py-2">
           <p className="text-sm text-muted-foreground">
-            A parent or guardian signs this off while you're under 18. Send them a request and
-            they can approve it in their own account.
+            {t("A parent or guardian signs this off while you're under 18. Send them a request and they can approve it in their own account.")}
           </p>
           {pendingRequest ? (
             <p className="text-sm font-medium">
-              Waiting on your guardian to approve turning this{" "}
-              {pendingRequest.requestedGranted ? "on" : "off"}.
+              {pendingRequest.requestedGranted
+                ? t("Waiting on your guardian to approve turning this on.")
+                : t("Waiting on your guardian to approve turning this off.")}
             </p>
           ) : (
             <Button
@@ -868,7 +853,7 @@ function MyResearchConsentSection() {
               disabled={requestChange.isPending}
               onClick={() => requestChange.mutate(!status.granted)}
             >
-              Ask my guardian to turn this {status.granted ? "off" : "on"}
+              {status.granted ? t("Ask my guardian to turn this off") : t("Ask my guardian to turn this on")}
             </Button>
           )}
         </div>
@@ -880,7 +865,7 @@ function MyResearchConsentSection() {
             disabled={mutation.isPending}
             onClick={() => mutation.mutate(true)}
           >
-            Opted in
+            {t("Opted in")}
           </Button>
           <Button
             variant={!status.granted ? "default" : "outline"}
@@ -888,14 +873,14 @@ function MyResearchConsentSection() {
             disabled={mutation.isPending}
             onClick={() => mutation.mutate(false)}
           >
-            Opted out
+            {t("Opted out")}
           </Button>
           <button
             type="button"
             onClick={() => setShowText((v) => !v)}
             className="text-xs underline underline-offset-2 text-muted-foreground hover:text-foreground"
           >
-            {showText ? "Hide" : "Read"} what you're agreeing to
+            {showText ? t("Hide what you're agreeing to") : t("Read what you're agreeing to")}
           </button>
         </div>
       )}
@@ -907,13 +892,13 @@ function MyResearchConsentSection() {
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>
-              Keep a copy: <a href="/research-consent" className="underline">read it as a page</a>
+              {t("Keep a copy:")} <a href="/research-consent" className="underline">{t("read it as a page")}</a>
             </span>
             <DownloadButton
               url="/api/legal-documents/research_consent.pdf"
               filename="forge-research-consent.pdf"
               shareTitle="Forge Research Consent"
-              label="Download PDF"
+              label={t("Download PDF")}
             />
           </div>
         </div>

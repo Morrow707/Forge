@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type TouchEvent } from "react";
+import { useT } from "@/i18n";
+import { TranslatableText } from "@/components/translatable-text";
 import { eachSideSuffix } from "@shared/prescription-laterality";
 import { filmSideLabel, isUnilateral, pairIndexFor, rowsPerSet, setPills, setRowCountFor, setStartIndex, sideForNewSet, sideLabel, type BodySide } from "@shared/unilateral-sides";
 import type { Autoregulation } from "@shared/autoregulation";
@@ -1095,6 +1097,7 @@ export function WorkoutPage({
   showReadinessBanner?: boolean;
   programsApiBase?: string;
 }) {
+  const t = useT();
   const isFreeAgent = useIsFreeAgent();
   const { assignmentId, programDayId, date } = useParams<{
     assignmentId: string;
@@ -2993,7 +2996,7 @@ export function WorkoutPage({
                                     onClick={() => toggleExercise(item, page)}
                                     className="flex w-full items-center gap-1.5 text-left text-sm font-semibold"
                                   >
-                                    <span className="truncate">{item.exerciseName}</span>
+                                    <span className="truncate">{t.exercise(item.exerciseName)}</span>
                                     {item.trackingLevel === "none" && (
                                       <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
                                         No video needed
@@ -3231,6 +3234,7 @@ function ExerciseLogContent({
   // The saved row id of one of this exercise's sets, or undefined before its first save.
   setRowIdFor: (programExerciseId: number, setNumber: number) => number | undefined;
 }) {
+  const t = useT();
   const { user } = useAuth();
   // A return-to-training assignment's clinician restrictions, under every exercise (2026-11-22).
   const restrictionNote = useAssignmentRestrictionNote(assignmentId);
@@ -3859,9 +3863,12 @@ function ExerciseLogContent({
         </div>
       )}
       {item.coachNotes && (
-        <p className="rounded-md bg-surface-elevated p-2 text-xs text-muted-foreground">
-          Coach note: {item.coachNotes}
-        </p>
+        // What the coach typed, translated by AI for a reader in another language and marked so
+        // (client/src/components/translatable-text.tsx).
+        <div className="rounded-md bg-surface-elevated p-2 text-xs text-muted-foreground">
+          <p className="font-semibold">{t("Coach note")}</p>
+          <TranslatableText text={item.coachNotes} className="whitespace-pre-wrap" />
+        </div>
       )}
       {item.instructions && (
         <p className="text-xs text-muted-foreground">{item.instructions}</p>

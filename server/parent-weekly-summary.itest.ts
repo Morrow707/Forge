@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import {
   attendanceRecords,
+  users,
   coachAthletes,
   guardianLinks,
   guardianWeeklySummaryOptOuts,
@@ -126,6 +127,20 @@ describe("the weekly parent summary", () => {
     expect(mail[0].html).not.toContain("m/s");
     const [row] = await db.select().from(guardianWeeklySummarySends);
     expect(row).toMatchObject({ guardianId: guardian.id, athleteId: minor.id, weekStart: WEEK_START });
+  });
+
+  it("goes out in the guardian's own language (users.language), and in English when none is set", async () => {
+    await db.update(users).set({ language: "es" }).where(eq(users.id, guardian.id));
+    try {
+      expect((await runParentWeeklySummaries(MONDAY_RUN)).sent).toBe(1);
+      const mail = testOutbox.filter((m) => m.to === guardian.email);
+      expect(mail).toHaveLength(1);
+      expect(mail[0].subject).toContain("La semana de entrenamiento de Riley Minor");
+      expect(mail[0].html).toContain("Sesiones completadas:</strong> 1 de 1 sesión asignada.");
+      expect(mail[0].html).not.toContain("assigned session");
+    } finally {
+      await db.update(users).set({ language: null }).where(eq(users.id, guardian.id));
+    }
   });
 
   it("an adult athlete's guardian link gets nothing", async () => {

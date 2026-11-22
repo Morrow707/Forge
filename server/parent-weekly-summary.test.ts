@@ -49,4 +49,23 @@ describe("the weekly parent summary, pure", () => {
     expect(buildParentWeeklySummaryEmail({ ...base, warmup: { withWarmup: 3, done: 2 } }).html).toContain("<strong>Warm-up done</strong> 2 of 3.");
     expect(buildParentWeeklySummaryEmail({ ...base, warmup: { withWarmup: 0, done: 0 } }).html).not.toContain("Warm-up");
   });
+
+  it("goes out in the guardian's language: Spanish words, Spanish dates, English when none is set", () => {
+    const summary = {
+      athleteName: "Riley",
+      weekStart: "2026-11-16",
+      weekEnd: "2026-11-22",
+      sessions: [{ date: "2026-11-17", title: "Lower", completed: true }, { date: "2026-11-19", title: "Upper", completed: false }],
+      attendance: { present: 1 },
+      prs: [],
+    };
+    const es = buildParentWeeklySummaryEmail(summary, "es");
+    expect(es.html).toContain("Sesiones completadas:</strong> 1 de 2 sesiones asignadas.");
+    expect(es.html).toContain("presente 1 día");
+    expect(es.html).toContain("Correo de resumen semanal");
+    expect(es.subject).toContain("La semana de entrenamiento de Riley");
+    expect(es.html).not.toContain("assigned session");
+    expect(FORGE_EMAIL_HEADER_RE.test(es.html)).toBe(true);
+    expect(buildParentWeeklySummaryEmail(summary).html).toContain("1 of 2 assigned sessions completed");
+  });
 });

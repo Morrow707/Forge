@@ -5,6 +5,7 @@ import { escapeHtml } from "./email";
 import { emailShell } from "./email-shell";
 import { ageFromDateOfBirth } from "@shared/privacy-tiers";
 import { ATTENDANCE_LABEL, mondayOf, type AttendanceStatus } from "@shared/attendance";
+import { LANGUAGE_LOCALES, type Language } from "@shared/languages";
 
 const ADULT_AGE = 18;
 const ISO_DATE_LENGTH = 10;
@@ -27,8 +28,75 @@ export type WeeklySummary = {
 };
 
 const SHORT_DATE: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" };
-const shortDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", SHORT_DATE);
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const shortDate = (iso: string, language: Language = "en") =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString(LANGUAGE_LOCALES[language], SHORT_DATE);
+
+/* THE EMAIL IN THE GUARDIAN'S OWN LANGUAGE (2026-11-22). The guardian's `users.language` picks the
+ * words; English is the default and the fallback. A third language is one more entry here. Not
+ * perfect Spanish yet, and Scott knows it: nobody on the team is a native speaker. */
+type Words = {
+  day: (n: number) => string;
+  assignedSessions: (n: number) => string;
+  completed: string;
+  notCompleted: string;
+  range: (from: string, to: string) => string;
+  intro: (name: string, range: string) => string;
+  sessions: (done: number, of: string) => string;
+  warmup: (done: number, of: number) => string;
+  attendanceMarked: (marks: string) => string;
+  attendanceNone: string;
+  prsHeading: string;
+  prsNone: string;
+  why: (name: string) => string;
+  subject: (name: string, range: string) => string;
+  title: (name: string) => string;
+  attendance: Record<AttendanceStatus, string>;
+};
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+const WORDS: Record<Language, Words> = {
+  en: {
+    day: (n) => plural(n, "day", "days"),
+    assignedSessions: (n) => plural(n, "assigned session", "assigned sessions"),
+    completed: "completed",
+    notCompleted: "not completed",
+    range: (from, to) => `${from} to ${to}`,
+    intro: (name, range) => `Here is ${name}'s training for the week of ${range}.`,
+    sessions: (done, of) => `<strong>Sessions:</strong> ${done} of ${of} completed.`,
+    warmup: (done, of) => `<strong>Warm-up done</strong> ${done} of ${of}.`,
+    attendanceMarked: (marks) => `<strong>Attendance, as marked by the coach:</strong> ${marks}.`,
+    attendanceNone: "<strong>Attendance:</strong> the coach did not mark attendance this week.",
+    prsHeading: "<strong>Personal records</strong> (from the weights logged by hand):",
+    prsNone: "<strong>Personal records:</strong> none logged this week.",
+    why: (name) =>
+      `You get this email because you are ${name}'s parent or guardian on Forge. ` +
+      `To stop it, open Forge, go to your guardian dashboard and switch off "Weekly summary email" for ${name}.`,
+    subject: (name, range) => `${name}'s training week, ${range}`,
+    title: (name) => `${name}'s week`,
+    attendance: { present: ATTENDANCE_LABEL.present.toLowerCase(), absent: ATTENDANCE_LABEL.absent.toLowerCase(), excused: ATTENDANCE_LABEL.excused.toLowerCase() },
+  },
+  es: {
+    day: (n) => plural(n, "día", "días"),
+    assignedSessions: (n) => plural(n, "sesión asignada", "sesiones asignadas"),
+    completed: "completada",
+    notCompleted: "no completada",
+    range: (from, to) => `${from} al ${to}`,
+    intro: (name, range) => `Este es el entrenamiento de ${name} de la semana del ${range}.`,
+    sessions: (done, of) => `<strong>Sesiones completadas:</strong> ${done} de ${of}.`,
+    warmup: (done, of) => `<strong>Calentamiento hecho</strong> ${done} de ${of}.`,
+    attendanceMarked: (marks) => `<strong>Asistencia, según la marcó el entrenador:</strong> ${marks}.`,
+    attendanceNone: "<strong>Asistencia:</strong> el entrenador no marcó la asistencia esta semana.",
+    prsHeading: "<strong>Récords personales</strong> (de los pesos registrados a mano):",
+    prsNone: "<strong>Récords personales:</strong> ninguno registrado esta semana.",
+    why: (name) =>
+      `Recibes este correo porque eres el padre, la madre o el tutor de ${name} en Forge. ` +
+      `Para dejar de recibirlo, abre Forge, ve a tu panel de tutor y desactiva "Correo de resumen semanal" para ${name}.`,
+    subject: (name, range) => `La semana de entrenamiento de ${name}, ${range}`,
+    title: (name) => `La semana de ${name}`,
+    attendance: { present: "presente", absent: "ausente", excused: "justificado" },
+  },
+};
 
 /** The Monday-to-Sunday week that last ENDED before `now`, and how many days ago it ended. */
 export function lastCompletedWeek(now: Date): { weekStart: string; weekEnd: string; daysSinceEnd: number } {
@@ -47,43 +115,40 @@ export function isKnownMinorOn(dateOfBirth: string | null | undefined, onIso: st
   return ageFromDateOfBirth(dateOfBirth, new Date(`${onIso}T00:00:00Z`)) < ADULT_AGE;
 }
 
-export function buildParentWeeklySummaryEmail(summary: WeeklySummary): { subject: string; html: string } {
+export function buildParentWeeklySummaryEmail(
+  summary: WeeklySummary,
+  language: Language = "en",
+): { subject: string; html: string } {
+  const w = WORDS[language];
+  const date = (iso: string) => shortDate(iso, language);
   const p = (text: string) => `<p style="font-size:15px;line-height:1.5;margin:0 0 12px;">${text}</p>`;
   const name = escapeHtml(summary.athleteName);
-  const range = `${shortDate(summary.weekStart)} to ${shortDate(summary.weekEnd)}`;
+  const range = w.range(date(summary.weekStart), date(summary.weekEnd));
   const done = summary.sessions.filter((s) => s.completed).length;
   const sessionList = summary.sessions
-    .map((s) => `<li>${escapeHtml(shortDate(s.date))}: ${escapeHtml(s.title)} (${s.completed ? "completed" : "not completed"})</li>`)
+    .map((s) => `<li>${escapeHtml(date(s.date))}: ${escapeHtml(s.title)} (${s.completed ? w.completed : w.notCompleted})</li>`)
     .join("");
   const marks = (Object.keys(ATTENDANCE_LABEL) as AttendanceStatus[])
     .filter((k) => (summary.attendance[k] ?? 0) > 0)
-    .map((k) => `${ATTENDANCE_LABEL[k].toLowerCase()} ${plural(summary.attendance[k] ?? 0, "day")}`);
+    .map((k) => `${w.attendance[k]} ${w.day(summary.attendance[k] ?? 0)}`);
   const prList = summary.prs
     .map((pr) => {
       const load = pr.weight ? `${escapeHtml(pr.weight)}${pr.unit ? ` ${escapeHtml(pr.unit)}` : ""}` : "";
       const reps = pr.reps ? ` x ${escapeHtml(pr.reps)}` : "";
-      return `<li>${escapeHtml(shortDate(pr.date))}: ${escapeHtml(pr.exercise)}${load ? ` ${load}` : ""}${reps}</li>`;
+      return `<li>${escapeHtml(date(pr.date))}: ${escapeHtml(pr.exercise)}${load ? ` ${load}` : ""}${reps}</li>`;
     })
     .join("");
   const sections = [
-    p(`Here is ${name}'s training for the week of ${escapeHtml(range)}.`),
-    p(`<strong>Sessions:</strong> ${done} of ${plural(summary.sessions.length, "assigned session")} completed.`),
+    p(w.intro(name, escapeHtml(range))),
+    p(w.sessions(done, w.assignedSessions(summary.sessions.length))),
     `<ul style="font-size:14px;line-height:1.5;margin:0 0 12px;padding-left:20px;">${sessionList}</ul>`,
-    ...(summary.warmup && summary.warmup.withWarmup > 0
-      ? [p(`<strong>Warm-up done</strong> ${summary.warmup.done} of ${summary.warmup.withWarmup}.`)]
-      : []),
-    marks.length > 0
-      ? p(`<strong>Attendance, as marked by the coach:</strong> ${marks.join(", ")}.`)
-      : p("<strong>Attendance:</strong> the coach did not mark attendance this week."),
+    ...(summary.warmup && summary.warmup.withWarmup > 0 ? [p(w.warmup(summary.warmup.done, summary.warmup.withWarmup))] : []),
+    marks.length > 0 ? p(w.attendanceMarked(marks.join(", "))) : p(w.attendanceNone),
     summary.prs.length > 0
-      ? `${p("<strong>Personal records</strong> (from the weights logged by hand):")}<ul style="font-size:14px;line-height:1.5;margin:0 0 12px;padding-left:20px;">${prList}</ul>`
-      : p("<strong>Personal records:</strong> none logged this week."),
-    p(
-      `<span style="color:#555;font-size:13px;">You get this email because you are ${name}'s parent or guardian on Forge. ` +
-        `To stop it, open Forge, go to your guardian dashboard and switch off "Weekly summary email" for ${name}.</span>`,
-    ),
+      ? `${p(w.prsHeading)}<ul style="font-size:14px;line-height:1.5;margin:0 0 12px;padding-left:20px;">${prList}</ul>`
+      : p(w.prsNone),
+    p(`<span style="color:#555;font-size:13px;">${w.why(name)}</span>`),
   ];
-  const subject = `${summary.athleteName}'s training week, ${range}`;
-  return { subject, html: emailShell(escapeHtml(`${summary.athleteName}'s week`), sections.join("")) };
+  const subject = w.subject(summary.athleteName, range);
+  return { subject, html: emailShell(escapeHtml(w.title(summary.athleteName)), sections.join("")) };
 }
-

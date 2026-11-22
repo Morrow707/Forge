@@ -19,6 +19,7 @@
  * WHAT IT NEVER CARRIES: a camera number. Personal records are the `isPr` flag on a set, which is
  * computed from the weight and reps the athlete TYPED (submitWorkoutLog), so they need no accuracy
  * caveat; every camera-derived column is left out on purpose. */
+import { languageOrEnglish } from "@shared/languages";
 import type { Express, Request } from "express";
 import { z } from "zod";
 import { and, eq, gte, isNull, lte } from "drizzle-orm";
@@ -142,6 +143,8 @@ export type SummaryOutcome =
 type Link = {
   guardianId: number;
   guardianEmail: string | null;
+  /** The guardian's own `users.language`; the email goes out in it (null = English). */
+  guardianLanguage: string | null;
   athleteId: number;
   athleteName: string;
   athleteRole: string;
@@ -164,7 +167,7 @@ async function summaryFor(link: Link, weekStart: string, weekEnd: string): Promi
     })
     .returning({ id: guardianWeeklySummarySends.id });
   if (claimed.length === 0) return "already_sent";
-  const email = buildParentWeeklySummaryEmail(summary);
+  const email = buildParentWeeklySummaryEmail(summary, languageOrEnglish(link.guardianLanguage));
   const result = await sendEmail({ to: link.guardianEmail, subject: email.subject, html: email.html, brandForUserId: link.athleteId });
   if (!result.sent) {
     await db.delete(guardianWeeklySummarySends).where(eq(guardianWeeklySummarySends.id, claimed[0].id));
@@ -179,13 +182,14 @@ export async function runParentWeeklySummaries(now: Date = new Date()): Promise<
   const { weekStart, weekEnd, daysSinceEnd } = lastCompletedWeek(now);
   if (daysSinceEnd > SEND_WINDOW_DAYS) return { outside_window: 1 };
   const guardian = db
-    .select({ id: users.id, email: users.email })
+    .select({ id: users.id, email: users.email, language: users.language })
     .from(users)
     .as("guardian");
   const links: Link[] = await db
     .select({
       guardianId: guardianLinks.guardianId,
       guardianEmail: guardian.email,
+      guardianLanguage: guardian.language,
       athleteId: users.id,
       athleteName: users.name,
       athleteRole: users.role,

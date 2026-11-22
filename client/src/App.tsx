@@ -1,3 +1,4 @@
+import { LanguageSync } from "@/i18n/language-sync";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { lockedRedirectFor, readStationLock } from "@/lib/weight-room-lock";
 import { DocumentsGate } from "@/components/document-gate";
@@ -902,6 +903,8 @@ export default function App() {
   return (
     <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
       <AuthProvider>
+        {/* The signed-in person's saved language on screen (client/src/i18n/README.md). */}
+        <LanguageSync />
         {/* THE FIRST-RUN QUEUE. Three modals are due at once on a first sign-in -- this gate and
             the two camera notices in AppShell -- and all three used to open together, each with
             its own blocking layer, so nothing underneath was tappable. This hands the screen to

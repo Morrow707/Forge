@@ -1,4 +1,6 @@
 import { format } from "date-fns";
+import { msg, useT } from "@/i18n";
+import { LanguageFlipButton } from "@/components/language-flip-button";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
@@ -162,6 +164,7 @@ function rangeLast14Days() {
  * detail queries below by whichever athleteId is currently selected. */
 export default function GuardianDashboardPage() {
   const { user, logoutMutation } = useAuth();
+  const t = useT();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
@@ -316,7 +319,7 @@ export default function GuardianDashboardPage() {
       >
         <div className="flex min-w-0 items-center gap-2">
           {programWordmark ? (
-            <img src={resolveApiUrl(programWordmark)} alt={programName || "Team"} className="h-8 max-w-[12rem] object-contain" />
+            <img src={resolveApiUrl(programWordmark)} alt={programName || t("Team")} className="h-8 max-w-[12rem] object-contain" />
           ) : (
             <>
               {programLogo ? (
@@ -361,6 +364,8 @@ export default function GuardianDashboardPage() {
               The same reasoning as the account menu applies to every other notice a guardian can
               receive -- the terms re-acceptance, a consent request -- which is why this is the
               bell itself rather than a documents-specific banner. */}
+          {/* The one-tap language flip (client/src/i18n/README.md): this header is not AppShell's. */}
+          <LanguageFlipButton />
           <NotificationBell />
           <div className="relative">
             <Button
@@ -368,20 +373,20 @@ export default function GuardianDashboardPage() {
               size="sm"
               onClick={() => setAccountMenuOpen((v) => !v)}
               aria-expanded={accountMenuOpen}
-              aria-label="Account"
+              aria-label={t("Account")}
               className="gap-1.5"
             >
               <UserCircle className="h-4 w-4" />
-              Account
+              {t("Account")}
             </Button>
             {accountMenuOpen && (
               <div className="absolute right-0 z-50 mt-1 w-60 overflow-hidden rounded-md border border-border bg-surface-elevated shadow-lg">
                 {(
                   [
-                    { label: "Account settings", icon: UserCircle, open: setAccountSettingsOpen },
-                    { label: "Change password", icon: KeyRound, open: setChangePasswordOpen },
-                    { label: "Active sessions", icon: MonitorSmartphone, open: setActiveSessionsOpen },
-                    { label: "Report a problem", icon: Flag, open: setReportProblemOpen },
+                    { label: msg("Account settings"), icon: UserCircle, open: setAccountSettingsOpen },
+                    { label: msg("Change password"), icon: KeyRound, open: setChangePasswordOpen },
+                    { label: msg("Active sessions"), icon: MonitorSmartphone, open: setActiveSessionsOpen },
+                    { label: msg("Report a problem"), icon: Flag, open: setReportProblemOpen },
                   ] as const
                 ).map((item) => (
                   <button
@@ -394,7 +399,7 @@ export default function GuardianDashboardPage() {
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
                   >
                     <item.icon className="h-4 w-4 text-muted-foreground" />
-                    {item.label}
+                    {t(item.label)}
                   </button>
                 ))}
                 <button
@@ -406,14 +411,14 @@ export default function GuardianDashboardPage() {
                   className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-destructive hover:bg-muted"
                 >
                   <Trash2 className="h-4 w-4" />
-                  Delete account
+                  {t("Delete account")}
                 </button>
               </div>
             )}
           </div>
           <Button variant="ghost" size="sm" onClick={() => logoutMutation.mutate()} className="gap-1.5">
             <LogOut className="h-4 w-4" />
-            Log out
+            {t("Log out")}
           </Button>
         </div>
       </header>
