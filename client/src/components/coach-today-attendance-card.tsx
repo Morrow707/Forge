@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { formatISO } from "date-fns";
+import { Link } from "wouter";
 import { CalendarCheck, ChevronLeft, ChevronRight, Flame } from "lucide-react";
+import { NOTHING_WAITING, needsLines, type NeedsYouToday } from "@shared/coach-needs-today";
 import { warmupCompletionLine } from "@shared/program-day-warmup";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -100,7 +102,8 @@ export function CoachTodayAttendanceCard() {
           )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        <NeedsYouTodayLines date={date} />
         <Tabs defaultValue="today">
           <TabsList>
             <TabsTrigger value="today" data-testid="tab-attendance-today">Today</TabsTrigger>
@@ -115,6 +118,41 @@ export function CoachTodayAttendanceCard() {
         </Tabs>
       </CardContent>
     </Card>
+  );
+}
+
+/** "Needs you today" (2026-11-22): what is waiting on this coach, one line each, linking to the
+ * screen that settles it. Coach-wide, not narrowed by the team picker; see shared/coach-needs-today.ts. */
+function NeedsYouTodayLines({ date }: { date: string }) {
+  const needs = useQuery<NeedsYouToday>({
+    queryKey: ["/api/coach/needs-you-today", date],
+    queryFn: () => getJson(`/api/coach/needs-you-today?date=${date}`),
+  });
+  if (needs.isError) return <ReadFailed what="what needs you today" error={needs.error} onRetry={() => void needs.refetch()} />;
+  if (!needs.data) return <div className="h-6" aria-hidden data-testid="needs-today-loading" />;
+  const lines = needsLines(needs.data);
+  return (
+    <section aria-label="Needs you today" data-testid="needs-you-today" className="rounded-md border p-3">
+      <h3 className="mb-1 text-sm font-medium">Needs you today</h3>
+      {lines.length === 0 ? (
+        <p className="text-sm text-muted-foreground" data-testid="needs-today-nothing">{NOTHING_WAITING}</p>
+      ) : (
+        <ul className="divide-y">
+          {lines.map((line) => (
+            <li key={line.key}>
+              <Link
+                href={line.href}
+                className="flex min-h-10 items-center justify-between gap-2 py-2 text-sm hover:underline"
+                data-testid={`needs-today-${line.key}`}
+              >
+                <span>{line.text}</span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
