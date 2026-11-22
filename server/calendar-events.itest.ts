@@ -159,6 +159,16 @@ describe("calendar events", () => {
     expect(text).toContain("SUMMARY:Home game");
     expect(text).toContain("LOCATION:Main gym");
   });
+
+  it("keeps a coached athlete's personal events out of the feed, because their coach holds its link", async () => {
+    const today = new Date().toISOString().slice(0, ISO_DATE_LENGTH);
+    await headClient.request("POST", "/api/calendar-events", { body: event({ teamId: teamA, date: today }) });
+    await aClient.request("POST", "/api/calendar-events", { body: event({ title: "Dentist", date: today }) });
+    const link = await aClient.request("GET", "/api/athlete/calendar-link");
+    const text = await (await fetch(`${server.baseUrl}/api/calendar/${link.body.token}.ics`)).text();
+    expect(text).toContain("SUMMARY:Home game");
+    expect(text).not.toContain("SUMMARY:Dentist");
+  });
 });
 
 describe("pasted calendars", () => {

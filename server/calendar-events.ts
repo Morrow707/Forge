@@ -236,9 +236,17 @@ export async function calendarEventsFor(reader: Reader, start: string, end: stri
 }
 
 /** The Forge events for the outbound subscribe feed. Imported events are never re-exported. */
-export async function forgeEventsForFeed(reader: Reader, start: string, end: string): Promise<IcsEvent[]> {
+export async function forgeEventsForFeed(
+  reader: Reader,
+  start: string,
+  end: string,
+  options: { includePersonal: boolean } = { includePersonal: true },
+): Promise<IcsEvent[]> {
   const rows = await forgeEventRows(reader, start, end);
-  return rows.map(({ event: e, teamName }) => ({
+  // A coached athlete's coach holds a copy of this feed's link (the roster's "export this athlete's
+  // calendar"), so the athlete's own personal events stay out of it: team events and training only.
+  const kept = options.includePersonal ? rows : rows.filter(({ event: e }) => e.teamId != null);
+  return kept.map(({ event: e, teamName }) => ({
     uid: `forge-event${e.id}`,
     date: e.date,
     summary: e.title,
