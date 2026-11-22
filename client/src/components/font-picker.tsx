@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { ensureBrandFontLoaded } from "@/lib/branding-style";
 import { cn } from "@/lib/utils";
 import { FONT_CATEGORY_LABEL, type BrandFont, type FontCategory } from "@shared/brand-font-catalog";
+import { useT } from "@/i18n";
 
 /** A grid of fonts, each drawn in its own face (2026-11-20, Scott: "why are there only 6 fonts?").
  *  Filter by kind or search by name. A font is downloaded only once its button is on screen, so
@@ -26,6 +27,7 @@ export function FontPicker({
   disabled?: boolean;
   uppercase?: boolean;
 }) {
+  const t = useT();
   const [category, setCategory] = useState<FontCategory | "all">("all");
   const [query, setQuery] = useState("");
   const categories = useMemo(() => [...new Set(fonts.map((f) => f.category))], [fonts]);
@@ -46,12 +48,12 @@ export function FontPicker({
               category === c ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground",
             )}
           >
-            {c === "all" ? `All ${fonts.length}` : FONT_CATEGORY_LABEL[c]}
+            {c === "all" ? t("All {count}", { count: fonts.length }) : t(FONT_CATEGORY_LABEL[c])}
           </button>
         ))}
         <div className="relative ml-auto w-40">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search fonts" aria-label="Search fonts" className="h-8 pl-7 text-xs" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search fonts")} aria-label={t("Search fonts")} className="h-8 pl-7 text-xs" />
         </div>
       </div>
       <div className="grid max-h-72 grid-cols-2 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-3" style={{ scrollbarGutter: "auto" }} data-testid={`font-picker-${kind}`}>
@@ -67,7 +69,7 @@ export function FontPicker({
             uppercase={uppercase}
           />
         ))}
-        {shown.length === 0 && <p className="col-span-full py-4 text-center text-xs text-muted-foreground">No font matches that.</p>}
+        {shown.length === 0 && <p className="col-span-full py-4 text-center text-xs text-muted-foreground">{t("No font matches that.")}</p>}
       </div>
     </div>
   );

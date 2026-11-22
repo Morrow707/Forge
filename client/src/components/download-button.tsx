@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { shareOrDownloadFile, describeSaveOutcome } from "@/lib/share-file";
 import { toast } from "sonner";
 import { Download } from "lucide-react";
+import { useT } from "@/i18n";
 
 /** A plain `<a download>` is a no-op inside the native app -- WKWebView has
  * no download manager and ignores it (see share-file.ts's own comment).
@@ -21,6 +22,7 @@ export function DownloadButton({
   shareTitle: string;
   label: string;
 }) {
+  const t = useT();
   const mutation = useMutation({
     mutationFn: () => shareOrDownloadFile(url, filename, shareTitle),
     // Say where it went. On native the save finishes with no browser
@@ -30,7 +32,7 @@ export function DownloadButton({
       if (outcome.kind === "failed") toast.error(describeSaveOutcome(outcome));
       else toast.success(describeSaveOutcome(outcome));
     },
-    onError: (err: Error) => toast.error(err.message || "Couldn't generate that file"),
+    onError: (err: Error) => toast.error(err.message || t("Couldn't generate that file")),
   });
 
   return (
@@ -41,7 +43,7 @@ export function DownloadButton({
       disabled={mutation.isPending}
     >
       <Download className="h-4 w-4" />
-      {mutation.isPending ? "Preparing…" : label}
+      {mutation.isPending ? t("Preparing…") : label}
     </Button>
   );
 }

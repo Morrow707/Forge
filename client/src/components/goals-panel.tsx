@@ -17,6 +17,8 @@ import { format, parseISO, addDays, formatISO } from "date-fns";
 import { Target, Dumbbell, Trophy, X, Plus, Sparkles, Timer, History } from "lucide-react";
 import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
+import { TranslatableText } from "@/components/translatable-text";
 
 type ExerciseOption = { id: number; name: string };
 
@@ -64,6 +66,7 @@ export function GoalsPanel({
    * so showing the button would only produce a 403. */
   canSuggest?: boolean;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -135,12 +138,12 @@ export function GoalsPanel({
     },
     onSuccess: (data) => {
       if (!data) {
-        toast.info("Not enough history yet to suggest a target for this.");
+        toast.info(t("Not enough history yet to suggest a target for this."));
         return;
       }
       setSuggestion(data);
     },
-    onError: () => toast.error("Couldn't get a suggestion right now"),
+    onError: () => toast.error(t("Couldn't get a suggestion right now")),
   });
 
   const createGoal = useMutation({
@@ -164,9 +167,9 @@ export function GoalsPanel({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [goalsUrl] });
       resetForm();
-      toast.success("Goal set");
+      toast.success(t("Goal set"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't set that goal"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't set that goal")),
   });
 
   const deleteGoal = useMutation({
@@ -181,7 +184,7 @@ export function GoalsPanel({
     },
     // Without this the X button simply did nothing on a failure -- the goal
     // stayed on screen with no explanation, which reads as a dead button.
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't remove that goal"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't remove that goal")),
   });
 
   return (
@@ -190,36 +193,36 @@ export function GoalsPanel({
         {canCreate && !showForm && (
           <Button size="sm" variant="outline" onClick={() => setShowForm(true)}>
             <Plus className="h-4 w-4" />
-            Set a Goal
+            {t("Set a Goal")}
           </Button>
         )}
         <Button size="sm" variant="ghost" onClick={() => setShowHistory((v) => !v)}>
           <History className="h-4 w-4" />
-          {showHistory ? "Hide History" : "View History"}
+          {showHistory ? t("Hide History") : t("View History")}
         </Button>
       </div>
 
       {showHistory && (
         <div className="space-y-2 rounded-md border border-dashed border-border p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Past Goals
+            {t("Past Goals")}
           </p>
           {historyLoading ? (
             <div className="h-10 animate-pulse rounded-md bg-surface" />
           ) : historyFailed ? (
-            <ReadFailed what="past goals" onRetry={() => void refetchHistory()} />
+            <ReadFailed what={t("past goals")} onRetry={() => void refetchHistory()} />
           ) : archivedGoals.length === 0 ? (
             <p className="py-2 text-center text-sm text-muted-foreground">
-              Nothing here yet, goals you remove from the active list stay here.
+              {t("Nothing here yet, goals you remove from the active list stay here.")}
             </p>
           ) : (
             archivedGoals.map((g) => {
               const label =
                 g.type === "exercise"
-                  ? g.exerciseName ?? "Deleted exercise"
+                  ? g.exerciseName ? t.exercise(g.exerciseName) : t("Deleted exercise")
                   : g.type === "skill"
-                    ? g.skillExerciseName ?? "Deleted drill"
-                    : TESTING_METRICS.find((m) => m.key === g.testingMetric)?.label ?? g.testingMetric;
+                    ? g.skillExerciseName ? t.exercise(g.skillExerciseName) : t("Deleted drill")
+                    : t(TESTING_METRICS.find((m) => m.key === g.testingMetric)?.label ?? g.testingMetric ?? "");
               return (
                 <div key={g.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-2.5 text-sm">
                   <div className="flex min-w-0 items-center gap-1.5">
@@ -232,16 +235,16 @@ export function GoalsPanel({
                     )}
                     <span className="truncate font-medium">{label}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">
-                      target {g.targetValue} {g.targetUnit}
+                      {t("target {value} {unit}", { value: g.targetValue, unit: g.targetUnit })}
                     </span>
                   </div>
                   {g.achievedAt ? (
                     <span className="flex shrink-0 items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-500">
                       <Trophy className="h-3 w-3" />
-                      Hit {format(parseISO(g.achievedAt), "MMM d, yyyy")}
+                      {t("Hit {date}", { date: t.date(parseISO(g.achievedAt), { month: "short", day: "numeric", year: "numeric" }) })}
                     </span>
                   ) : (
-                    <span className="shrink-0 text-xs text-muted-foreground">Not achieved</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{t("Not achieved")}</span>
                   )}
                 </div>
               );
@@ -266,7 +269,7 @@ export function GoalsPanel({
             >
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label>Goal type</Label>
+                  <Label>{t("Goal type")}</Label>
                   <Select
                     value={type}
                     onValueChange={(v) => {
@@ -278,16 +281,16 @@ export function GoalsPanel({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="exercise">A lift</SelectItem>
-                      <SelectItem value="testing">A testing metric</SelectItem>
-                      {skillExercisesUrl && <SelectItem value="skill">A sprint time</SelectItem>}
+                      <SelectItem value="exercise">{t("A lift")}</SelectItem>
+                      <SelectItem value="testing">{t("A testing metric")}</SelectItem>
+                      {skillExercisesUrl && <SelectItem value="skill">{t("A sprint time")}</SelectItem>}
                     </SelectContent>
                   </Select>
                 </div>
 
                 {type === "exercise" ? (
                   <div className="space-y-1.5">
-                    <Label>Exercise</Label>
+                    <Label>{t("Exercise")}</Label>
                     <Select
                       value={exerciseId}
                       onValueChange={(v) => {
@@ -296,7 +299,7 @@ export function GoalsPanel({
                       }}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Pick a lift" />
+                        <SelectValue placeholder={t("Pick a lift")} />
                       </SelectTrigger>
                       <SelectContent>
                         {exercises.map((e) => (
@@ -309,15 +312,15 @@ export function GoalsPanel({
                   </div>
                 ) : type === "skill" ? (
                   <div className="space-y-1.5">
-                    <Label>Skill drill</Label>
+                    <Label>{t("Skill drill")}</Label>
                     <Select value={skillExerciseId} onValueChange={setSkillExerciseId}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Pick a drill" />
+                        <SelectValue placeholder={t("Pick a drill")} />
                       </SelectTrigger>
                       <SelectContent>
                         {skillExercises.length === 0 ? (
                           <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                            No timed sprints recorded yet
+                            {t("No timed sprints recorded yet")}
                           </div>
                         ) : (
                           skillExercises.map((e) => (
@@ -331,7 +334,7 @@ export function GoalsPanel({
                   </div>
                 ) : (
                   <div className="space-y-1.5">
-                    <Label>Metric</Label>
+                    <Label>{t("Metric")}</Label>
                     <Select
                       value={testingMetric}
                       onValueChange={(v) => {
@@ -340,7 +343,7 @@ export function GoalsPanel({
                       }}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Pick a metric" />
+                        <SelectValue placeholder={t("Pick a metric")} />
                       </SelectTrigger>
                       <SelectContent>
                         {TESTING_METRICS.map((m) => (
@@ -354,7 +357,7 @@ export function GoalsPanel({
                 )}
 
                 <div className="space-y-1.5">
-                  <Label>Target</Label>
+                  <Label>{t("Target")}</Label>
                   <div className="flex gap-2">
                     <Input
                       type="number"
@@ -371,22 +374,22 @@ export function GoalsPanel({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="lbs">lbs</SelectItem>
-                          <SelectItem value="kg">kg</SelectItem>
+                          <SelectItem value="lbs">{t("lbs")}</SelectItem>
+                          <SelectItem value="kg">{t("kg")}</SelectItem>
                         </SelectContent>
                       </Select>
                     ) : (
                       <div className="flex w-16 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
                         {type === "skill"
-                          ? "sec"
-                          : TESTING_METRICS.find((m) => m.key === testingMetric)?.unit ?? "unit"}
+                          ? t("sec")
+                          : TESTING_METRICS.find((m) => m.key === testingMetric)?.unit ?? t("unit")}
                       </div>
                     )}
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>Target date (optional)</Label>
+                  <Label>{t("Target date (optional)")}</Label>
                   <Input
                     type="date"
                     value={targetDate}
@@ -410,7 +413,7 @@ export function GoalsPanel({
                   }}
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  {suggestMutation.isPending ? "Thinking..." : "Suggest a target"}
+                  {suggestMutation.isPending ? t("Thinking...") : t("Suggest a target")}
                 </Button>
               )}
 
@@ -420,10 +423,11 @@ export function GoalsPanel({
                   <div className="min-w-0 flex-1">
                     <p>
                       <span className="font-semibold">
-                        {suggestion.targetValue} in {suggestion.timeframeWeeks} week
-                        {suggestion.timeframeWeeks === 1 ? "" : "s"}
+                        {t.plural(suggestion.timeframeWeeks, "{value} in {count} week", "{value} in {count} weeks", {
+                          value: suggestion.targetValue,
+                        })}
                       </span>{" "}
-                      — {suggestion.rationale}
+                      — <TranslatableText text={suggestion.rationale} />
                     </p>
                     <button
                       type="button"
@@ -438,7 +442,7 @@ export function GoalsPanel({
                         setSuggestion(null);
                       }}
                     >
-                      Use this
+                      {t("Use this")}
                     </button>
                   </div>
                 </div>
@@ -446,10 +450,10 @@ export function GoalsPanel({
 
               <div className="flex gap-2">
                 <Button type="submit" size="sm" disabled={createGoal.isPending}>
-                  Save Goal
+                  {t("Save Goal")}
                 </Button>
                 <Button type="button" size="sm" variant="ghost" onClick={resetForm}>
-                  Cancel
+                  {t("Cancel")}
                 </Button>
               </div>
             </form>
@@ -460,20 +464,20 @@ export function GoalsPanel({
       {isLoading ? (
         <div className="h-16 animate-pulse rounded-md bg-surface" />
       ) : isError ? (
-        <ReadFailed what="these goals" onRetry={() => void refetch()} />
+        <ReadFailed what={t("these goals")} onRetry={() => void refetch()} />
       ) : goals.length === 0 ? (
         <p className="py-4 text-center text-sm text-muted-foreground">
-          No goals set yet.
+          {t("No goals set yet.")}
         </p>
       ) : (
         <div className="space-y-2">
           {goals.map((g) => {
             const label =
               g.type === "exercise"
-                ? g.exerciseName ?? "Deleted exercise"
+                ? g.exerciseName ? t.exercise(g.exerciseName) : t("Deleted exercise")
                 : g.type === "skill"
-                  ? g.skillExerciseName ?? "Deleted drill"
-                  : TESTING_METRICS.find((m) => m.key === g.testingMetric)?.label ?? g.testingMetric;
+                  ? g.skillExerciseName ? t.exercise(g.skillExerciseName) : t("Deleted drill")
+                  : t(TESTING_METRICS.find((m) => m.key === g.testingMetric)?.label ?? g.testingMetric ?? "");
             const lowerIsBetter =
               g.type === "skill" ||
               (g.type === "testing" && TESTING_METRICS.find((m) => m.key === g.testingMetric)?.lowerIsBetter);
@@ -499,13 +503,13 @@ export function GoalsPanel({
                     {g.achieved && (
                       <span className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-500">
                         <Trophy className="h-3 w-3" />
-                        Achieved
+                        {t("Achieved")}
                       </span>
                     )}
                   </div>
                   <button
                     type="button"
-                    aria-label={`Delete goal: ${label}`}
+                    aria-label={t("Delete goal: {label}", { label })}
                     onClick={() => deleteGoal.mutate(g.id)}
                     className="text-muted-foreground hover:text-destructive"
                   >
@@ -513,9 +517,13 @@ export function GoalsPanel({
                   </button>
                 </div>
                 <p className="mb-1.5 text-xs text-muted-foreground">
-                  Target: {g.targetValue} {g.targetUnit}
-                  {g.targetDate ? ` by ${format(parseISO(g.targetDate), "MMM d, yyyy")}` : ""}
-                  {g.currentValue != null ? ` — currently ${g.currentValue} ${g.targetUnit}` : " — no data yet"}
+                  {t("Target: {value} {unit}", { value: g.targetValue, unit: g.targetUnit })}
+                  {g.targetDate
+                    ? ` ${t("by {date}", { date: t.date(parseISO(g.targetDate), { month: "short", day: "numeric", year: "numeric" }) })}`
+                    : ""}
+                  {g.currentValue != null
+                    ? ` — ${t("currently {value} {unit}", { value: g.currentValue, unit: g.targetUnit })}`
+                    : ` — ${t("no data yet")}`}
                 </p>
                 {g.currentValue != null && (
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">

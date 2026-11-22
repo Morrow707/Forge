@@ -6,6 +6,7 @@ import {
   parseFeetInches,
   MAX_HEIGHT_INCHES,
 } from "@shared/height-units";
+import { msg, useT } from "@/i18n";
 
 /**
  * TWO BOXES IN, ONE NUMBER OUT.
@@ -23,7 +24,7 @@ import {
  */
 export function HeightInput({
   id,
-  label = "Height",
+  label = msg("Height"),
   value,
   onChange,
   required,
@@ -35,6 +36,7 @@ export function HeightInput({
   onChange: (totalInches: string) => void;
   required?: boolean;
 }) {
+  const t = useT();
   const initial = value.trim() === "" ? null : fromTotalInches(Number(value));
   const [feet, setFeet] = useState(initial ? String(initial.feet) : "");
   const [inches, setInches] = useState(initial ? String(initial.inches) : "");
@@ -68,7 +70,7 @@ export function HeightInput({
 
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={`${id}-feet`}>{label}</Label>
+      <Label htmlFor={`${id}-feet`}>{t(label)}</Label>
       <div className="flex items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-1">
           <Input
@@ -81,9 +83,9 @@ export function HeightInput({
             value={feet}
             onChange={(e) => publish(e.target.value, inches)}
             placeholder="6"
-            aria-label={`${label} in feet`}
+            aria-label={t("{label} in feet", { label: t(label) })}
           />
-          <span className="text-sm text-muted-foreground">ft</span>
+          <span className="text-sm text-muted-foreground">{t("ft")}</span>
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-1">
           <Input
@@ -95,15 +97,15 @@ export function HeightInput({
             value={inches}
             onChange={(e) => publish(feet, e.target.value)}
             placeholder="3"
-            aria-label={`${label} in inches`}
+            aria-label={t("{label} in inches", { label: t(label) })}
           />
-          <span className="text-sm text-muted-foreground">in</span>
+          <span className="text-sm text-muted-foreground">{t("in")}</span>
         </div>
       </div>
       {/* The conversion shown rather than hidden. Somebody who knows their height in inches can
           check the number that is actually being stored, and the camera reads this one. */}
       <p className="text-xs text-muted-foreground">
-        {total === null ? "Feet and inches, for example 6 ft 3 in" : `Saved as ${total} inches`}
+        {total === null ? t("Feet and inches, for example 6 ft 3 in") : t("Saved as {total} inches", { total })}
       </p>
     </div>
   );

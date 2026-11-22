@@ -24,7 +24,7 @@ describe("every AI chat surface says it is not medical advice", () => {
 
   it("the general chat's default description carries it, so a caller that passes no description still shows it", () => {
     const src = readFileSync("client/src/components/ai-chat-panel.tsx", "utf8");
-    const def = src.match(/description = "([^"]+)"/)?.[1] ?? "";
+    const def = src.match(/description = (?:msg\(\s*)?"([^"]+)"/)?.[1] ?? "";
     expect(def).toMatch(SAYS_NOT_MEDICAL);
   });
 });

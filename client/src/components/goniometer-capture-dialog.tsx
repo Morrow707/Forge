@@ -9,6 +9,7 @@ import { cameraGoniometerJointFor, convertCameraAngle } from "@/lib/movement-scr
 import { Camera, Loader2, Check } from "lucide-react";
 import type { PoseLandmarker } from "@mediapipe/tasks-vision";
 import { WebCameraChrome } from "@/components/web-camera-chrome";
+import { useT } from "@/i18n";
 
 /** Live-camera angle readout for the goniometer -- reuses joint-angles.ts's
  * already-shipped tap-a-joint math (see movement-screen-vision.ts's own
@@ -33,6 +34,7 @@ export function GoniometerCaptureDialog({
   movementLabel: string;
   onCapture: (angleDeg: number) => void;
 }) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const videoTrackRef = useRef<MediaStreamTrack | null>(null);
@@ -62,7 +64,7 @@ export function GoniometerCaptureDialog({
       })
       .catch(() => {
         if (!stopped) {
-          setCameraError("Couldn't load the pose-tracking model, check your connection and retry.");
+          setCameraError(t("Couldn't load the pose-tracking model, check your connection and retry."));
           setModelLoading(false);
         }
       });
@@ -70,7 +72,7 @@ export function GoniometerCaptureDialog({
     ensureCameraPermission().then((granted) => {
       if (stopped) return;
       if (!granted) {
-        setCameraError("Camera access denied, enable it for Forge in Settings.");
+        setCameraError(t("Camera access denied, enable it for Forge in Settings."));
         return;
       }
       navigator.mediaDevices
@@ -84,7 +86,7 @@ export function GoniometerCaptureDialog({
           videoTrackRef.current = stream.getVideoTracks()[0] ?? null;
           if (videoRef.current) videoRef.current.srcObject = stream;
         })
-        .catch(() => setCameraError("Camera access denied or unavailable."));
+        .catch(() => setCameraError(t("Camera access denied or unavailable.")));
     });
 
     let lastVideoTime = -1;
@@ -124,11 +126,13 @@ export function GoniometerCaptureDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Camera className="h-5 w-5 text-primary" />
-            Camera-Assisted Reading
+            {t("Camera-Assisted Reading")}
           </DialogTitle>
           <DialogDescription>
-            {jointLabel} &middot; {movementLabel}. Hold the end-range position, this is an estimate from a 2D
-            camera view, not a clinical-grade reading. Capture, then adjust the number if it looks off.
+            {t(
+              "{joint} · {movement}. Hold the end-range position, this is an estimate from a 2D camera view, not a clinical-grade reading. Capture, then adjust the number if it looks off.",
+              { joint: t(jointLabel), movement: t(movementLabel) },
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -139,7 +143,7 @@ export function GoniometerCaptureDialog({
             <div className="absolute inset-0 flex items-center justify-center bg-black/70 p-4 text-center text-sm text-white">
               {cameraError ?? (
                 <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading camera and pose model...
+                  <Loader2 className="h-4 w-4 animate-spin" /> {t("Loading camera and pose model...")}
                 </span>
               )}
             </div>
@@ -153,7 +157,7 @@ export function GoniometerCaptureDialog({
 
         <Button type="button" onClick={() => liveAngle != null && onCapture(liveAngle)} disabled={liveAngle == null}>
           <Check className="h-4 w-4" />
-          Capture {liveAngle != null ? `${liveAngle}°` : ""}
+          {liveAngle != null ? t("Capture {angle}°", { angle: liveAngle }) : t("Capture")}
         </Button>
       </DialogContent>
     </Dialog>

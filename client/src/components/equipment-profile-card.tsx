@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { ReadFailed } from "@/components/read-failed";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { EQUIPMENT_ITEMS, type EquipmentId, type EquipmentRoom } from "@shared/equipment-profile";
+import { msg, translate, useT } from "@/i18n";
 
 const ALL_IDS = EQUIPMENT_ITEMS.map((i) => i.id) as EquipmentId[];
 
@@ -26,7 +27,7 @@ function EquipmentChecklistEditor({
   onClear,
   testIdPrefix,
   fallback = null,
-  unsetNote = "Not set yet, so Forge assumes everything is here.",
+  unsetNote = msg("Not set yet, so Forge assumes everything is here."),
 }: {
   room: EquipmentRoom | null;
   /** What applies while this room is unset (a team inherits the program default). */
@@ -38,6 +39,7 @@ function EquipmentChecklistEditor({
   onClear?: () => void;
   testIdPrefix: string;
 }) {
+  const t = useT();
   // A room with no profile starts with everything ticked: the honest starting point for "untick
   // what you don't have".
   const start = room ?? fallback;
@@ -59,7 +61,7 @@ function EquipmentChecklistEditor({
 
   return (
     <div className="space-y-3" data-testid={`${testIdPrefix}-editor`}>
-      {!room && <p className="text-xs text-muted-foreground">{unsetNote}</p>}
+      {!room && <p className="text-xs text-muted-foreground">{t(unsetNote)}</p>}
       <label className="flex items-center gap-2 text-sm font-medium">
         <Checkbox
           checked={bodyweightOnly}
@@ -67,7 +69,7 @@ function EquipmentChecklistEditor({
           onCheckedChange={(c) => setItems(c === true ? new Set() : new Set(ALL_IDS))}
           data-testid={`${testIdPrefix}-none`}
         />
-        None (bodyweight only)
+        {t("None (bodyweight only)")}
       </label>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {EQUIPMENT_ITEMS.map((item) => (
@@ -85,7 +87,7 @@ function EquipmentChecklistEditor({
       {items.has("dumbbells") && (
         <div className="flex items-center gap-2">
           <Label htmlFor={`${testIdPrefix}-db-max`} className="text-sm">
-            Heaviest dumbbell (lb, optional)
+            {t("Heaviest dumbbell (lb, optional)")}
           </Label>
           <Input
             id={`${testIdPrefix}-db-max`}
@@ -107,11 +109,11 @@ function EquipmentChecklistEditor({
             }
             data-testid={`${testIdPrefix}-save`}
           >
-            Save equipment
+            {t("Save equipment")}
           </Button>
           {room && onClear && (
             <Button size="sm" variant="outline" disabled={saving} onClick={onClear}>
-              Clear (everything available)
+              {t("Clear (everything available)")}
             </Button>
           )}
         </div>
@@ -127,6 +129,7 @@ type ProgramRooms = {
 };
 
 function useRoomMutation(url: string, invalidate: string[]) {
+  const t = useT();
   const qc = useQueryClient();
   const done = () => {
     invalidate.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
@@ -136,24 +139,24 @@ function useRoomMutation(url: string, invalidate: string[]) {
     mutationFn: (room: EquipmentRoom) => apiRequest("PUT", url, room),
     onSuccess: () => {
       done();
-      toast.success("Equipment saved. The AI plans for this room from now on.");
+      toast.success(t("Equipment saved. The AI plans for this room from now on."));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save that")),
   });
   const clear = useMutation({
     mutationFn: () => apiRequest("DELETE", url),
     onSuccess: () => {
       done();
-      toast.success("Cleared. Forge assumes everything is available.");
+      toast.success(t("Cleared. Forge assumes everything is available."));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't clear that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't clear that")),
   });
   return { save, clear };
 }
 
 function roomSummary(room: EquipmentRoom | null, unsetLabel: string): string {
-  if (!room) return unsetLabel;
-  return room.items.length ? `${room.items.length} items` : "Bodyweight only";
+  if (!room) return translate(unsetLabel);
+  return room.items.length ? translate("{count} items", { count: room.items.length }) : translate("Bodyweight only");
 }
 
 function ProgramRoomRow({
@@ -180,7 +183,7 @@ function ProgramRoomRow({
       <button type="button" className="flex w-full items-center justify-between text-left text-sm font-medium" onClick={() => setOpen((o) => !o)} data-testid={`${testIdPrefix}-toggle`}>
         <span>{label}</span>
         <span className="text-xs text-muted-foreground">
-          {roomSummary(room, inherits ? "Uses the program default" : "Everything available")}
+          {roomSummary(room, inherits ? msg("Uses the program default") : msg("Everything available"))}
         </span>
       </button>
       {open && (
@@ -195,8 +198,8 @@ function ProgramRoomRow({
             fallback={fallback}
             unsetNote={
               inherits
-                ? "No list of its own yet, so this team uses the program default (shown). Save to give it its own."
-                : "Not set yet, so Forge assumes everything is here."
+                ? msg("No list of its own yet, so this team uses the program default (shown). Save to give it its own.")
+                : msg("Not set yet, so Forge assumes everything is here.")
             }
           />
         </div>
@@ -207,21 +210,23 @@ function ProgramRoomRow({
 
 /** The coach program's rooms: the default and one per team. */
 export function ProgramEquipmentCard() {
+  const t = useT();
   const { data, isError, refetch } = useQuery<ProgramRooms>({
     queryKey: ["/api/coach/equipment-profiles"],
     queryFn: () => getJson("/api/coach/equipment-profiles"),
   });
-  if (isError) return <ReadFailed what="your weight room equipment" onRetry={() => refetch()} />;
+  if (isError) return <ReadFailed what={t("your weight room equipment")} onRetry={() => refetch()} />;
   if (!data) return null;
   return (
     <div className="space-y-2" data-testid="program-equipment-card">
-      <Label>Weight room equipment</Label>
+      <Label>{t("Weight room equipment")}</Label>
       <p className="text-xs text-muted-foreground">
-        What your weight room has. The AI builds, swaps and suggests only what these rooms can do, and the builder marks an
-        exercise you add that needs something you haven't listed. A team with its own list uses it; every other team uses the
-        program default.{!data.canEdit && " Only the head coach can change these."}
+        {t(
+          "What your weight room has. The AI builds, swaps and suggests only what these rooms can do, and the builder marks an exercise you add that needs something you haven't listed. A team with its own list uses it; every other team uses the program default.",
+        )}
+        {!data.canEdit && ` ${t("Only the head coach can change these.")}`}
       </p>
-      <ProgramRoomRow label="Program default" url="/api/coach/equipment-profiles/default" room={data.defaultRoom} canEdit={data.canEdit} testIdPrefix="equipment-default" />
+      <ProgramRoomRow label={t("Program default")} url="/api/coach/equipment-profiles/default" room={data.defaultRoom} canEdit={data.canEdit} testIdPrefix="equipment-default" />
       {data.teams.map((t) => (
         <ProgramRoomRow
           key={t.id}
@@ -238,21 +243,22 @@ export function ProgramEquipmentCard() {
 }
 
 /** A person's own room, for their own training. Read-only for a coached athlete. */
-export function PersonalEquipmentCard({ title = "My equipment" }: { title?: string }) {
+export function PersonalEquipmentCard({ title = msg("My equipment") }: { title?: string }) {
+  const t = useT();
   const { data, isError, refetch } = useQuery<{ room: EquipmentRoom | null; canEdit: boolean; message?: string }>({
     queryKey: ["/api/account/equipment-profile"],
     queryFn: () => getJson("/api/account/equipment-profile"),
   });
   const { save, clear } = useRoomMutation("/api/account/equipment-profile", ["/api/account/equipment-profile"]);
-  if (isError) return <ReadFailed what="your equipment" onRetry={() => refetch()} />;
+  if (isError) return <ReadFailed what={t("your equipment")} onRetry={() => refetch()} />;
   if (!data) return null;
   return (
     <div className="space-y-2" data-testid="personal-equipment-card">
-      <Label>{title}</Label>
+      <Label>{t(title)}</Label>
       <p className="text-xs text-muted-foreground">
         {data.canEdit
-          ? "What you have to train with. The AI plans, swaps and suggests only what you can do with it."
-          : (data.message ?? "Your coach sets your weight room's equipment.")}
+          ? t("What you have to train with. The AI plans, swaps and suggests only what you can do with it.")
+          : (data.message ?? t("Your coach sets your weight room's equipment."))}
       </p>
       <EquipmentChecklistEditor
         room={data.room}

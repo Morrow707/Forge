@@ -15,6 +15,7 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 /** How long a press has to be held before it counts as confirmed. Long
  * enough that a stray tap can't trigger it, short enough not to feel like
@@ -32,6 +33,7 @@ export function DeleteAccountDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [password, setPassword] = useState("");
   const [holding, setHolding] = useState(false);
@@ -62,10 +64,10 @@ export function DeleteAccountDialog({
     onSuccess: () => {
       qc.setQueryData(["/api/auth/me"], null);
       qc.clear();
-      toast.success("Your account has been deleted.");
+      toast.success(t("Your account has been deleted."));
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not delete account"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not delete account")),
   });
 
   return (
@@ -83,26 +85,25 @@ export function DeleteAccountDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <TriangleAlert className="h-5 w-5" />
-            Delete account
+            {t("Delete account")}
           </DialogTitle>
           <DialogDescription>
-            This permanently deletes your account and everything tied to it, programs, logged
-            workouts, and video. There is no way to undo this. Enter your password to confirm.
+            {t("This permanently deletes your account and everything tied to it, programs, logged workouts, and video. There is no way to undo this. Enter your password to confirm.")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">
-          <Label htmlFor="delete-account-password">Password</Label>
+          <Label htmlFor="delete-account-password">{t("Password")}</Label>
           <PasswordInput
             id="delete-account-password"
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Confirm your password"
+            placeholder={t("Confirm your password")}
           />
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           {/* Press-and-hold instead of a second tap-to-confirm -- a single
               extra tap on a destructive action is easy to fire off without
@@ -133,10 +134,10 @@ export function DeleteAccountDialog({
             />
             <span className="relative">
               {deleteMutation.isPending
-                ? "Deleting…"
+                ? t("Deleting…")
                 : holding
-                  ? "Keep holding…"
-                  : "Hold to permanently delete my account"}
+                  ? t("Keep holding…")
+                  : t("Hold to permanently delete my account")}
             </span>
           </button>
         </DialogFooter>

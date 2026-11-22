@@ -27,6 +27,7 @@ import { GoniometerCaptureDialog } from "@/components/goniometer-capture-dialog"
 import { AvGoniometerCaptureDialog } from "@/components/av-goniometer-capture-dialog";
 import { isAvPreviewPlatform } from "@/lib/native-av-preview";
 import { ReadFailed } from "@/components/read-failed";
+import { msg, useT } from "@/i18n";
 
 type GoniometerReading = {
   id: number;
@@ -46,9 +47,9 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  restricted: "Restricted",
-  normal: "Normal",
-  hypermobile: "Hypermobile",
+  restricted: msg("Restricted"),
+  normal: msg("Normal"),
+  hypermobile: msg("Hypermobile"),
 };
 
 function jointLabel(key: string) {
@@ -65,6 +66,7 @@ function jointLabel(key: string) {
  * cases like a pitcher's throwing shoulder, where the population norm is
  * the wrong comparison on every single reading. */
 export function GoniometerPanel({ athleteId }: { athleteId: number }) {
+  const t = useT();
   const qc = useQueryClient();
   const fetchUrl = `/api/coach/roster/${athleteId}/goniometer`;
   const [showForm, setShowForm] = useState(false);
@@ -92,9 +94,9 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [baselinesUrl] });
-      toast.success("Baseline set for this athlete");
+      toast.success(t("Baseline set for this athlete"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not set baseline"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not set baseline")),
   });
 
   const clearBaselineMutation = useMutation({
@@ -103,9 +105,9 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [baselinesUrl] });
-      toast.success("Baseline reset to population normal");
+      toast.success(t("Baseline reset to population normal"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not reset baseline"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not reset baseline")),
   });
 
   const joint = GONIOMETER_JOINTS.find((j) => j.key === jointKey)!;
@@ -124,11 +126,11 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [fetchUrl] });
-      toast.success("Reading saved");
+      toast.success(t("Reading saved"));
       setAngle("");
       setNotes("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save reading"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not save reading")),
   });
 
   const deleteMutation = useMutation({
@@ -137,29 +139,27 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [fetchUrl] });
-      toast.success("Reading deleted");
+      toast.success(t("Reading deleted"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not delete reading"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not delete reading")),
   });
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Joint range-of-motion readings from a goniometer, compared against standard clinical
-        normal ranges as a starting signal, not a diagnosis. Flag a reading as this athlete's
-        own normal to stop re-flagging it going forward.
+        {t("Joint range-of-motion readings from a goniometer, compared against standard clinical normal ranges as a starting signal, not a diagnosis. Flag a reading as this athlete's own normal to stop re-flagging it going forward.")}
       </p>
 
       {!showForm ? (
         <Button size="sm" onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4" />
-          Log Reading
+          {t("Log Reading")}
         </Button>
       ) : (
         <div className="space-y-3 rounded-lg border border-border p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Joint</Label>
+              <Label>{t("Joint")}</Label>
               <Select
                 value={jointKey}
                 onValueChange={(v) => {
@@ -181,7 +181,7 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Movement</Label>
+              <Label>{t("Movement")}</Label>
               <Select value={movementKey} onValueChange={setMovementKey}>
                 <SelectTrigger>
                   <SelectValue />
@@ -189,7 +189,7 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
                 <SelectContent>
                   {joint.movements.map((m) => (
                     <SelectItem key={m.key} value={m.key}>
-                      {m.label} (~{m.normalDegrees}° normal)
+                      {t("{movement} (~{degrees}° normal)", { movement: t(m.label), degrees: m.normalDegrees })}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -197,7 +197,7 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Angle (degrees)</Label>
+            <Label>{t("Angle (degrees)")}</Label>
             <div className="flex gap-2">
               <Input
                 type="number"
@@ -208,7 +208,7 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
               {cameraSupportsGoniometerMovement(jointKey, movementKey) && (
                 <Button type="button" variant="outline" onClick={() => setCameraCaptureOpen(true)}>
                   <Camera className="h-4 w-4" />
-                  Camera
+                  {t("Camera")}
                 </Button>
               )}
             </div>
@@ -233,12 +233,12 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
             );
           })()}
           <div className="space-y-1.5">
-            <Label>Notes (optional)</Label>
+            <Label>{t("Notes (optional)")}</Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              placeholder="End-feel, compensation, athlete-reported pain..."
+              placeholder={t("End-feel, compensation, athlete-reported pain...")}
             />
           </div>
           <div className="flex items-center gap-2">
@@ -247,10 +247,10 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
               onClick={() => createMutation.mutate()}
               disabled={createMutation.isPending || !angle}
             >
-              Save
+              {t("Save")}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>
-              Cancel
+              {t("Cancel")}
             </Button>
           </div>
         </div>
@@ -259,10 +259,10 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
       {isLoading ? (
         <div className="h-24 animate-pulse rounded-md bg-surface" />
       ) : isError ? (
-        <ReadFailed what="these measurements" onRetry={() => void refetch()} />
+        <ReadFailed what={t("these measurements")} onRetry={() => void refetch()} />
       ) : readings.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          No goniometer readings logged yet.
+          {t("No goniometer readings logged yet.")}
         </p>
       ) : (
         <div className="max-h-96 space-y-2 overflow-y-auto">
@@ -282,8 +282,7 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
                   <Ruler className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                   <div>
                     <p className="font-semibold">
-                      {jointLabel(r.joint)} &middot; {movement?.label ?? r.movement}:{" "}
-                      {r.angleDegrees}&deg;
+                      {`${t(jointLabel(r.joint))} · ${t(movement?.label ?? r.movement)}: ${r.angleDegrees}°`}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {format(parseISO(r.date), "MMM d, yyyy")}
@@ -291,10 +290,10 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
                     {r.notes && <p className="mt-1 text-xs text-muted-foreground">{r.notes}</p>}
                     {baseline != null && (
                       <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span>Custom baseline for this athlete: {baseline}&deg;</span>
+                        <span>{t("Custom baseline for this athlete: {degrees}°", { degrees: baseline })}</span>
                         <button
                           type="button"
-                          aria-label="Reset to population normal"
+                          aria-label={t("Reset to population normal")}
                           onClick={() => clearBaselineMutation.mutate({ joint: r.joint, movement: r.movement })}
                           className="hover:text-destructive"
                         >
@@ -314,7 +313,7 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
                         }
                         className="mt-1 text-xs font-medium text-primary hover:underline"
                       >
-                        This is normal for this athlete
+                        {t("This is normal for this athlete")}
                       </button>
                     )}
                   </div>
@@ -322,12 +321,12 @@ export function GoniometerPanel({ athleteId }: { athleteId: number }) {
                 <div className="flex shrink-0 items-center gap-2">
                   {status && (
                     <Badge className={cn("border-none", STATUS_BADGE_CLASS[status])}>
-                      {STATUS_LABEL[status]}
+                      {t(STATUS_LABEL[status])}
                     </Badge>
                   )}
                   <button
                     type="button"
-                    aria-label="Delete reading"
+                    aria-label={t("Delete reading")}
                     onClick={() => deleteMutation.mutate(r.id)}
                     className="text-muted-foreground hover:text-destructive"
                   >

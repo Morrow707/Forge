@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { colorForLabel } from "@/lib/supersets";
 import { GraduationCap, ChevronDown, Link2 } from "lucide-react";
+import { useT } from "@/i18n";
 
 const SEEN_KEY = "forge:exercise-sheet-tutorial-seen";
 
@@ -23,6 +24,7 @@ const SEEN_KEY = "forge:exercise-sheet-tutorial-seen";
  * 400, ...) so it stays accurate if that styling ever changes -- not a
  * separate illustration that can drift out of sync. */
 export function ExerciseSheetTutorial() {
+  const t = useT();
   const [open, setOpen] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(SEEN_KEY) !== "1";
@@ -39,7 +41,7 @@ export function ExerciseSheetTutorial() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GraduationCap className="h-5 w-5 text-primary" />
-            How This Screen Works
+            {t("How This Screen Works")}
           </DialogTitle>
         </DialogHeader>
 
@@ -55,30 +57,28 @@ export function ExerciseSheetTutorial() {
                 A1
               </span>
             }
-            title="Colored letter badges"
-            body="Each exercise gets a letter. Two exercises sharing a letter (A1, A2, ...) are a superset, back-to-back, same color, same border down the left edge of the card."
+            title={t("Colored letter badges")}
+            body={t("Each exercise gets a letter. Two exercises sharing a letter (A1, A2, ...) are a superset, back-to-back, same color, same border down the left edge of the card.")}
           />
 
           <TutorialRow
             sample={
               <div className="flex gap-1.5">
                 <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-black">
-                  Set 1
+                  {t("Set 1")}
                 </span>
                 <span className="rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-bold text-black">
-                  Set 2
+                  {t("Set 2")}
                 </span>
                 <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-black ring-2 ring-orange-400 ring-offset-1 ring-offset-background">
-                  Set 3
+                  {t("Set 3")}
                 </span>
               </div>
             }
-            title="The set pager"
+            title={t("The set pager")}
             body={
               <>
-                White = not logged yet, gold = done. The bright ring marks whichever set you're
-                currently looking at. Tap a pill to jump straight to that set, or just swipe left
-                and right on an open exercise to move between sets.
+                {t("White = not logged yet, gold = done. The bright ring marks whichever set you're currently looking at. Tap a pill to jump straight to that set, or just swipe left and right on an open exercise to move between sets.")}
               </>
             }
           />
@@ -86,35 +86,35 @@ export function ExerciseSheetTutorial() {
           <TutorialRow
             sample={
               <div className="flex items-center gap-2 text-muted-foreground">
-                <span className="truncate text-sm font-semibold text-foreground">Exercise name</span>
+                <span className="truncate text-sm font-semibold text-foreground">{t("Exercise name")}</span>
                 {" "}
                 <Link2 className="h-4 w-4 text-primary" />
                 <ChevronDown className="h-4 w-4" />
               </div>
             }
-            title="Tap the name to open it"
-            body="Only one exercise stays open at a time. A link icon means it's chained to the next one in a superset, everything for today is always listed, whether it's expanded or not."
+            title={t("Tap the name to open it")}
+            body={t("Only one exercise stays open at a time. A link icon means it's chained to the next one in a superset, everything for today is always listed, whether it's expanded or not.")}
           />
 
           <TutorialRow
             sample={
               <div className="grid w-full max-w-[180px] grid-cols-2 gap-1.5">
                 <div className="rounded border border-border px-2 py-1 text-center text-[10px] text-muted-foreground">
-                  REPS
+                  {t("REPS")}
                 </div>
                 <div className="rounded border border-border px-2 py-1 text-center text-[10px] text-muted-foreground">
-                  WEIGHT
+                  {t("WEIGHT")}
                 </div>
               </div>
             }
-            title="Log what you actually did"
-            body="Type reps and weight for the set you're viewing, then rate how it felt (RPE) if your coach uses it. A camera icon next to a set means video tracking is on for that exercise, optional, on top of the numbers you type."
+            title={t("Log what you actually did")}
+            body={t("Type reps and weight for the set you're viewing, then rate how it felt (RPE) if your coach uses it. A camera icon next to a set means video tracking is on for that exercise, optional, on top of the numbers you type.")}
           />
         </div>
 
         <DialogFooter>
           <Button onClick={dismiss} className="w-full">
-            Got it
+            {t("Got it")}
           </Button>
         </DialogFooter>
       </DialogContent>

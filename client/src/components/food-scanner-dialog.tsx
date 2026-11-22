@@ -43,6 +43,7 @@ import {
   Flashlight,
   FlashlightOff,
 } from "lucide-react";
+import { msg, useT } from "@/i18n";
 
 type FoodCandidate = {
   description: string;
@@ -68,22 +69,22 @@ type Mode = "scan" | "search" | "manual" | "confirm" | "photo" | "photo-review";
 type Source = "barcode" | "search" | "manual" | "photo";
 
 const MACRO_FIELDS = [
-  ["caloriesKcal", "Calories"],
-  ["proteinG", "Protein (g)"],
-  ["carbsG", "Carbs (g)"],
-  ["fatG", "Fat (g)"],
-  ["fiberG", "Fiber (g)"],
-  ["sodiumMg", "Sodium (mg)"],
+  ["caloriesKcal", msg("Calories")],
+  ["proteinG", msg("Protein (g)")],
+  ["carbsG", msg("Carbs (g)")],
+  ["fatG", msg("Fat (g)")],
+  ["fiberG", msg("Fiber (g)")],
+  ["sodiumMg", msg("Sodium (mg)")],
 ] as const;
 
 const MICRO_FIELDS = [
-  ["calciumMg", "Calcium (mg)"],
-  ["ironMg", "Iron (mg)"],
-  ["vitaminDMcg", "Vitamin D (mcg)"],
-  ["potassiumMg", "Potassium (mg)"],
-  ["magnesiumMg", "Magnesium (mg)"],
-  ["vitaminB12Mcg", "Vitamin B12 (mcg)"],
-  ["zincMg", "Zinc (mg)"],
+  ["calciumMg", msg("Calcium (mg)")],
+  ["ironMg", msg("Iron (mg)")],
+  ["vitaminDMcg", msg("Vitamin D (mcg)")],
+  ["potassiumMg", msg("Potassium (mg)")],
+  ["magnesiumMg", msg("Magnesium (mg)")],
+  ["vitaminB12Mcg", msg("Vitamin B12 (mcg)")],
+  ["zincMg", msg("Zinc (mg)")],
 ] as const;
 
 function emptyManual(): FoodCandidate {
@@ -127,9 +128,10 @@ function MealPicker({
   value: FoodLogMeal;
   onChange: (meal: FoodLogMeal) => void;
 }) {
+  const t = useT();
   return (
     <RadioChipGroup
-      label="Meal"
+      label={t("Meal")}
       options={FOOD_LOG_MEALS.map((m) => FOOD_LOG_MEAL_LABEL[m])}
       value={FOOD_LOG_MEAL_LABEL[value]}
       onChange={(label) => {
@@ -149,6 +151,7 @@ export function FoodScannerDialog({
   onOpenChange: (open: boolean) => void;
   date: string;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   // Reading a plate is a vision call, and every AI call an athlete can make
   // is Free Agent only. Barcode scan, database search and manual entry are
@@ -227,8 +230,8 @@ export function FoodScannerDialog({
         const granted = await ensureCameraPermission();
         if (cancelled) return;
         if (!granted) {
-          setCameraError("Camera access denied, enable it for Forge in Settings.");
-          setPhotoError("Camera access denied, enable it for Forge in Settings, or upload a photo instead.");
+          setCameraError(t("Camera access denied, enable it for Forge in Settings."));
+          setPhotoError(t("Camera access denied, enable it for Forge in Settings, or upload a photo instead."));
           return;
         }
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -243,8 +246,8 @@ export function FoodScannerDialog({
         setCameraStream(stream);
       } catch {
         if (!cancelled) {
-          setCameraError("Couldn't access the camera, check permissions.");
-          setPhotoError("Couldn't access the camera, check permissions, or upload a photo instead.");
+          setCameraError(t("Couldn't access the camera, check permissions."));
+          setPhotoError(t("Couldn't access the camera, check permissions, or upload a photo instead."));
         }
       }
     };
@@ -322,11 +325,11 @@ export function FoodScannerDialog({
             await handleBarcodeDetected(barcode);
           },
           () => {
-            if (!cancelled) setCameraError("Couldn't access the camera, check permissions.");
+            if (!cancelled) setCameraError(t("Couldn't access the camera, check permissions."));
           },
         );
       } catch {
-        if (!cancelled) setCameraError("Couldn't access the camera, check permissions.");
+        if (!cancelled) setCameraError(t("Couldn't access the camera, check permissions."));
       }
     })();
 
@@ -365,7 +368,7 @@ export function FoodScannerDialog({
       setServings("1");
       setMode("confirm");
     } catch {
-      toast.error("Couldn't find that product, try search or enter it manually.");
+      toast.error(t("Couldn't find that product, try search or enter it manually."));
       setMode("search");
     }
   }
@@ -386,7 +389,7 @@ export function FoodScannerDialog({
       setSearching(false);
       // The server says when name search simply isn't configured (503) -- that is
       // not something retrying fixes, so don't tell the athlete to try again.
-      toast.error(err.message || "Search failed, try again");
+      toast.error(err.message || t("Search failed, try again"));
     },
   });
 
@@ -427,16 +430,16 @@ export function FoodScannerDialog({
     },
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/food-log"] });
-      toast.success("Logged");
+      toast.success(t("Logged"));
       onOpenChange(false);
       qc.invalidateQueries({ queryKey: ["/api/athlete/trophies"] });
       for (const trophy of result?.newlyUnlockedTrophies ?? []) {
-        toast.success(`🏆 New trophy: ${trophy.label}`, {
-          description: `${trophy.tier[0].toUpperCase()}${trophy.tier.slice(1)}`,
+        toast.success(t("🏆 New trophy: {trophy}", { trophy: t(trophy.label) }), {
+          description: t(`${trophy.tier[0].toUpperCase()}${trophy.tier.slice(1)}`),
         });
       }
     },
-    onError: () => toast.error("Couldn't log that, try again"),
+    onError: () => toast.error(t("Couldn't log that, try again")),
   });
 
   async function analyzePhoto(photo: CapturedPhoto) {
@@ -449,7 +452,7 @@ export function FoodScannerDialog({
       setMode("photo-review");
     } catch (err) {
       const message =
-        err instanceof ApiError ? err.message : "Couldn't analyze that photo, try again or enter it manually.";
+        err instanceof ApiError ? t(err.message) : t("Couldn't analyze that photo, try again or enter it manually.");
       setPhotoError(message);
     } finally {
       setAnalyzingPhoto(false);
@@ -469,7 +472,7 @@ export function FoodScannerDialog({
       const photo = await downscalePhotoFile(file);
       await analyzePhoto(photo);
     } catch {
-      setPhotoError("Couldn't read that image, try another one.");
+      setPhotoError(t("Couldn't read that image, try another one."));
     }
   }
 
@@ -528,16 +531,16 @@ export function FoodScannerDialog({
     },
     onSuccess: ({ loggedCount, newlyUnlockedTrophies }) => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/food-log"] });
-      toast.success(loggedCount > 1 ? `Logged ${loggedCount} items` : "Logged");
+      toast.success(loggedCount > 1 ? t("Logged {count} items", { count: loggedCount }) : t("Logged"));
       onOpenChange(false);
       qc.invalidateQueries({ queryKey: ["/api/athlete/trophies"] });
       for (const trophy of newlyUnlockedTrophies) {
-        toast.success(`🏆 New trophy: ${trophy.label}`, {
-          description: `${trophy.tier[0].toUpperCase()}${trophy.tier.slice(1)}`,
+        toast.success(t("🏆 New trophy: {trophy}", { trophy: t(trophy.label) }), {
+          description: t(`${trophy.tier[0].toUpperCase()}${trophy.tier.slice(1)}`),
         });
       }
     },
-    onError: () => toast.error("Couldn't log one or more of those items, try again"),
+    onError: () => toast.error(t("Couldn't log one or more of those items, try again")),
   });
 
   function pickSearchResult(result: FoodCandidate) {
@@ -560,10 +563,10 @@ export function FoodScannerDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Camera className="h-5 w-5 text-primary" />
-            Log Food
+            {t("Log Food")}
           </DialogTitle>
           <DialogDescription>
-            Scan a barcode, search by name, or enter it manually.
+            {t("Scan a barcode, search by name, or enter it manually.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -586,7 +589,7 @@ export function FoodScannerDialog({
             </div>
             {cameraError && <p className="text-sm text-destructive">{cameraError}</p>}
             <p className="text-center text-xs text-muted-foreground">
-              Hold a barcode steady in the frame
+              {t("Hold a barcode steady in the frame")}
             </p>
             {canAnalyzePhoto && (
               <Button
@@ -599,17 +602,17 @@ export function FoodScannerDialog({
                 }}
               >
                 <ImagePlus className="h-4 w-4" />
-                No barcode? Snap a photo of the meal
+                {t("No barcode? Snap a photo of the meal")}
               </Button>
             )}
             <div className="flex gap-2">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setMode("search")}>
                 <Search className="h-4 w-4" />
-                Search by name
+                {t("Search by name")}
               </Button>
               <Button type="button" variant="outline" className="flex-1" onClick={startManualEntry}>
                 <Pencil className="h-4 w-4" />
-                Enter manually
+                {t("Enter manually")}
               </Button>
             </div>
           </div>
@@ -623,13 +626,13 @@ export function FoodScannerDialog({
               {analyzingPhoto && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-white">
                   <Loader2 className="h-6 w-6 animate-spin" />
-                  <p className="text-sm">Identifying what's on the plate…</p>
+                  <p className="text-sm">{t("Identifying what's on the plate…")}</p>
                 </div>
               )}
             </div>
             {photoError && <p className="text-sm text-destructive">{photoError}</p>}
             <p className="text-center text-xs text-muted-foreground">
-              Fit the whole plate in frame, then take the photo
+              {t("Fit the whole plate in frame, then take the photo")}
             </p>
             <div className="flex gap-2">
               <Button
@@ -639,7 +642,7 @@ export function FoodScannerDialog({
                 disabled={analyzingPhoto}
               >
                 <Camera className="h-4 w-4" />
-                Take Photo
+                {t("Take Photo")}
               </Button>
               <Button
                 type="button"
@@ -649,7 +652,7 @@ export function FoodScannerDialog({
                 disabled={analyzingPhoto}
               >
                 <Upload className="h-4 w-4" />
-                Upload
+                {t("Upload")}
               </Button>
               <input
                 ref={photoFileInputRef}
@@ -661,7 +664,7 @@ export function FoodScannerDialog({
             </div>
             <Button type="button" variant="ghost" size="sm" onClick={() => setMode("scan")}>
               <Camera className="h-3.5 w-3.5" />
-              Back to scanning
+              {t("Back to scanning")}
             </Button>
           </div>
         )}
@@ -669,15 +672,14 @@ export function FoodScannerDialog({
         {mode === "photo-review" && (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Review and adjust the estimates below, these are Claude's best guess from the
-              photo, not a database lookup.
+              {t("Review and adjust the estimates below, these are Claude's best guess from the photo, not a database lookup.")}
             </p>
             <div className="max-h-96 space-y-3 overflow-y-auto">
               {photoItems.length === 0 && (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  Nothing left to log --{" "}
+                  {t("Nothing left to log --")}{" "}
                   <button type="button" className="underline" onClick={() => setMode("photo")}>
-                    try another photo
+                    {t("try another photo")}
                   </button>
                   .
                 </p>
@@ -694,7 +696,7 @@ export function FoodScannerDialog({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      aria-label="Remove item"
+                      aria-label={t("Remove item")}
                       onClick={() => removePhotoItem(i)}
                     >
                       <X className="h-4 w-4" />
@@ -703,14 +705,14 @@ export function FoodScannerDialog({
                   <Input
                     value={item.servingDescription ?? ""}
                     onChange={(e) => updatePhotoItem(i, { servingDescription: e.target.value })}
-                    placeholder="Portion, e.g. 1 cup"
+                    placeholder={t("Portion, e.g. 1 cup")}
                     className="text-xs"
                   />
                   <div className="grid grid-cols-3 gap-2">
                     {MACRO_FIELDS.map(([key, label]) => (
                       <div key={key} className="space-y-1">
                         <Label htmlFor={`photo-${i}-${key}`} className="text-xs">
-                          {label}
+                          {t(label)}
                         </Label>
                         <Input
                           id={`photo-${i}-${key}`}
@@ -737,14 +739,14 @@ export function FoodScannerDialog({
                     }
                     className="text-xs font-semibold text-muted-foreground hover:text-foreground"
                   >
-                    {microsOpenForPhotoItem.has(i) ? "Hide micros" : "Micros (optional)"}
+                    {microsOpenForPhotoItem.has(i) ? t("Hide micros") : t("Micros (optional)")}
                   </button>
                   {microsOpenForPhotoItem.has(i) && (
                     <div className="grid grid-cols-3 gap-2">
                       {MICRO_FIELDS.map(([key, label]) => (
                         <div key={key} className="space-y-1">
                           <Label htmlFor={`photo-${i}-${key}`} className="text-xs">
-                            {label}
+                            {t(label)}
                           </Label>
                           <Input
                             id={`photo-${i}-${key}`}
@@ -766,7 +768,7 @@ export function FoodScannerDialog({
             <MealPicker value={meal} onChange={setMeal} />
             <div className="flex gap-2">
               <Button type="button" variant="ghost" onClick={() => setMode("photo")}>
-                Retake
+                {t("Retake")}
               </Button>
               <Button
                 type="button"
@@ -775,7 +777,7 @@ export function FoodScannerDialog({
                 onClick={() => logPhotoItemsMutation.mutate()}
               >
                 <Plus className="h-4 w-4" />
-                Log {photoItems.length > 1 ? `${photoItems.length} Items` : "Item"}
+                {photoItems.length > 1 ? t("Log {count} Items", { count: photoItems.length }) : t("Log Item")}
               </Button>
             </div>
           </div>
@@ -787,7 +789,7 @@ export function FoodScannerDialog({
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="e.g. grilled chicken breast"
+                placeholder={t("e.g. grilled chicken breast")}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && searchQuery.trim().length >= 2) searchMutation.mutate();
                 }}
@@ -803,9 +805,9 @@ export function FoodScannerDialog({
             <div className="max-h-72 space-y-1.5 overflow-y-auto">
               {searchResults.length === 0 && !searching && (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  Search a food name, or{" "}
+                  {t("Search a food name, or")}{" "}
                   <button type="button" className="underline" onClick={startManualEntry}>
-                    enter it manually
+                    {t("enter it manually")}
                   </button>
                   .
                 </p>
@@ -821,13 +823,13 @@ export function FoodScannerDialog({
                     <p className="font-medium">{r.description}</p>
                     {r.brand && <p className="text-xs text-muted-foreground">{r.brand}</p>}
                   </div>
-                  <p className="text-xs text-muted-foreground">{r.caloriesKcal ?? "?"} kcal</p>
+                  <p className="text-xs text-muted-foreground">{t("{kcal} kcal", { kcal: r.caloriesKcal ?? "?" })}</p>
                 </button>
               ))}
             </div>
             <Button type="button" variant="ghost" size="sm" onClick={() => setMode("scan")}>
               <Camera className="h-3.5 w-3.5" />
-              Back to scanning
+              {t("Back to scanning")}
             </Button>
           </div>
         )}
@@ -835,12 +837,12 @@ export function FoodScannerDialog({
         {(mode === "confirm" || mode === "manual") && (
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="food-desc">Food</Label>
+              <Label htmlFor="food-desc">{t("Food")}</Label>
               <Input
                 id="food-desc"
                 value={candidate.description}
                 onChange={(e) => setCandidate((c) => ({ ...c, description: e.target.value }))}
-                placeholder="e.g. Grilled Chicken Breast"
+                placeholder={t("e.g. Grilled Chicken Breast")}
                 readOnly={mode === "confirm"}
               />
             </div>
@@ -850,7 +852,7 @@ export function FoodScannerDialog({
             <MealPicker value={meal} onChange={setMeal} />
             {mode === "confirm" ? (
               <div className="space-y-1.5">
-                <Label htmlFor="food-servings">Servings ({candidate.servingDescription ?? "1 serving"})</Label>
+                <Label htmlFor="food-servings">{t("Servings ({serving})", { serving: candidate.servingDescription ?? t("1 serving") })}</Label>
                 <Input
                   id="food-servings"
                   type="number"
@@ -863,12 +865,12 @@ export function FoodScannerDialog({
               </div>
             ) : (
               <div className="space-y-1.5">
-                <Label htmlFor="food-serving-desc">Serving description (optional)</Label>
+                <Label htmlFor="food-serving-desc">{t("Serving description (optional)")}</Label>
                 <Input
                   id="food-serving-desc"
                   value={candidate.servingDescription ?? ""}
                   onChange={(e) => setCandidate((c) => ({ ...c, servingDescription: e.target.value }))}
-                  placeholder="e.g. 1 cup"
+                  placeholder={t("e.g. 1 cup")}
                 />
               </div>
             )}
@@ -876,7 +878,7 @@ export function FoodScannerDialog({
               {MACRO_FIELDS.map(([key, label]) => (
                 <div key={key} className="space-y-1">
                   <Label htmlFor={`food-${key}`} className="text-xs">
-                    {label}
+                    {t(label)}
                   </Label>
                   <Input
                     id={`food-${key}`}
@@ -903,14 +905,14 @@ export function FoodScannerDialog({
                   onClick={() => setMicrosOpenForConfirm((v) => !v)}
                   className="text-xs font-semibold text-muted-foreground hover:text-foreground"
                 >
-                  {microsOpenForConfirm ? "Hide micros" : "Micros (optional)"}
+                  {microsOpenForConfirm ? t("Hide micros") : t("Micros (optional)")}
                 </button>
                 {microsOpenForConfirm && (
                   <div className="grid grid-cols-3 gap-2">
                     {MICRO_FIELDS.map(([key, label]) => (
                       <div key={key} className="space-y-1">
                         <Label htmlFor={`food-${key}`} className="text-xs">
-                          {label}
+                          {t(label)}
                         </Label>
                         <Input
                           id={`food-${key}`}
@@ -938,7 +940,7 @@ export function FoodScannerDialog({
                 variant="ghost"
                 onClick={() => setMode(mode === "confirm" ? "scan" : "scan")}
               >
-                Cancel
+                {t("Cancel")}
               </Button>
               <Button
                 type="button"
@@ -947,7 +949,7 @@ export function FoodScannerDialog({
                 onClick={() => addMutation.mutate()}
               >
                 <Plus className="h-4 w-4" />
-                Add to Log
+                {t("Add to Log")}
               </Button>
             </div>
           </div>
@@ -960,11 +962,12 @@ export function FoodScannerDialog({
 /** Only rendered by callers once torchAvailable is known true, so no
  * disabled/unavailable state to represent here -- just on vs. off. */
 function TorchToggleButton({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  const t = useT();
   return (
     <button
       type="button"
       onClick={onToggle}
-      aria-label={on ? "Turn off flashlight" : "Turn on flashlight"}
+      aria-label={on ? t("Turn off flashlight") : t("Turn on flashlight")}
       aria-pressed={on}
       className={cn(
         "absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border backdrop-blur",

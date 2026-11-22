@@ -24,6 +24,7 @@ import {
   type AnvilPartId,
 } from "@shared/anvil-tasks";
 import { TAPPING_TRIALS } from "@shared/anvil-part-metrics";
+import { msg, useT } from "@/i18n";
 
 /**
  * THE FOUR TASKS, RUN ON THE PHONE.
@@ -80,16 +81,16 @@ type Stage =
 type PanelState = "waiting" | "go" | "leave" | "hold";
 
 const PART_TITLE: Record<1 | 2 | 3 | 4, string> = {
-  1: "Tap on sight",
-  2: "Three rules",
-  3: "In order",
-  4: "Ten seconds",
+  1: msg("Tap on sight"),
+  2: msg("Three rules"),
+  3: msg("In order"),
+  4: msg("Ten seconds"),
 };
 const PART_RULE: Record<1 | 2 | 3 | 4, string> = {
-  1: "One finger, the same finger every day",
-  2: "Circle tap · square nothing · triangle hold till it fills",
-  3: "Three to start, one longer each time",
-  4: "One panel, as fast as you can",
+  1: msg("One finger, the same finger every day"),
+  2: msg("Circle tap · square nothing · triangle hold till it fills"),
+  3: msg("Three to start, one longer each time"),
+  4: msg("One panel, as fast as you can"),
 };
 
 export function AnvilRun({ onDone }: { onDone: (result: AnvilRunResult) => void }) {
@@ -209,15 +210,16 @@ export function AnvilRun({ onDone }: { onDone: (result: AnvilRunResult) => void 
 }
 
 function ReadyCard({ part, onStart }: { part: 1 | 2 | 3 | 4; onStart: () => void }) {
+  const t = useT();
   return (
     <div className="space-y-3 text-center">
       <p className="text-xs uppercase tracking-widest text-muted-foreground">
-        Part {part} of {ANVIL_PARTS.length}
+        {t("Part {part} of {total}", { part, total: ANVIL_PARTS.length })}
       </p>
-      <h2 className="text-xl font-semibold">{PART_TITLE[part]}</h2>
-      <p className="text-sm text-muted-foreground">{PART_RULE[part]}</p>
+      <h2 className="text-xl font-semibold">{t(PART_TITLE[part])}</h2>
+      <p className="text-sm text-muted-foreground">{t(PART_RULE[part])}</p>
       <Button onClick={onStart} className="w-full" data-testid="anvil-part-start">
-        {part === 1 ? "Begin" : "Continue"}
+        {part === 1 ? t("Begin") : t("Continue")}
       </Button>
     </div>
   );
@@ -237,12 +239,13 @@ function Panel({
   onPressDown: () => void;
   onPressUp: () => void;
 }) {
+  const t = useT();
   return (
     <div
       data-testid="anvil-panel"
       role="button"
       tabIndex={0}
-      aria-label="Tap target"
+      aria-label={t("Tap target")}
       onPointerDown={(e) => {
         e.preventDefault();
         onPressDown();
@@ -263,7 +266,7 @@ function Panel({
     >
       {state === "waiting" ? (
         <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-          {label ?? "Get ready"}
+          {label ?? t("Get ready")}
         </span>
       ) : (
         <>
@@ -326,6 +329,7 @@ function TrialPanel({
   onComplete: () => void;
   rule?: string;
 }) {
+  const t = useT();
   const [trial, setTrial] = useState(0);
   const [state, setState] = useState<PanelState>("waiting");
   const [holdFill, setHoldFill] = useState(0);
@@ -420,13 +424,13 @@ function TrialPanel({
   return (
     <div className="space-y-3">
       <p className="text-xs uppercase tracking-widest text-muted-foreground">
-        Part {part} of {ANVIL_PARTS.length} · {PART_TITLE[part]}
+        {t("Part {part} of {total}", { part, total: ANVIL_PARTS.length })} · {t(PART_TITLE[part])}
       </p>
       <p className="text-xs text-muted-foreground" data-testid="anvil-trial">
-        Trial {Math.min(trial + 1, total)} of {total}
+        {t("Trial {trial} of {total}", { trial: Math.min(trial + 1, total), total })}
       </p>
       <Panel state={state} holdFill={holdFill} onPressDown={pressDown} onPressUp={pressUp} />
-      {rule && <p className="text-center text-sm text-muted-foreground">{rule}</p>}
+      {rule && <p className="text-center text-sm text-muted-foreground">{t(rule)}</p>}
     </div>
   );
 }
@@ -469,6 +473,7 @@ function SequenceStage({
   onBest: (n: number) => void;
   onComplete: () => void;
 }) {
+  const t = useT();
   const [length, setLength] = useState(SEQ_START);
   const [lit, setLit] = useState<number | null>(null);
   const [live, setLive] = useState(false);
@@ -481,7 +486,7 @@ function SequenceStage({
     sequence.current = buildSequence(length);
     at.current = 0;
     setLive(false);
-    setHint(`Watch · ${length} to come`);
+    setHint(t("Watch · {count} to come", { count: length }));
     if (SEQ_RELAYOUT_EACH_ROUND) {
       const slots = [...Array(SEQ_PADS).keys()];
       for (let i = slots.length - 1; i > 0; i--) {
@@ -494,7 +499,7 @@ function SequenceStage({
     const step = () => {
       if (k >= sequence.current.length) {
         setLit(null);
-        setHint("Now tap them back");
+        setHint(t("Now tap them back"));
         setLive(true);
         return;
       }
@@ -529,14 +534,14 @@ function SequenceStage({
       onComplete();
       return;
     }
-    setHint(`Right · ${length + 1} next`);
+    setHint(t("Right · {count} next", { count: length + 1 }));
     timer.current = setTimeout(() => setLength((n) => n + 1), 900);
   };
 
   return (
     <div className="space-y-3">
       <p className="text-xs uppercase tracking-widest text-muted-foreground">
-        Part 3 of {ANVIL_PARTS.length} · {PART_TITLE[3]}
+        {t("Part {part} of {total}", { part: 3, total: ANVIL_PARTS.length })} · {t(PART_TITLE[3])}
       </p>
       <p className="text-xs text-muted-foreground" data-testid="anvil-seq-hint">
         {hint}
@@ -556,7 +561,7 @@ function SequenceStage({
               "aspect-square select-none touch-none rounded-xl border-2 transition-none",
               lit === i ? "border-emerald-500 bg-emerald-500" : "border-border bg-muted",
             )}
-            aria-label={`Pad ${i + 1}`}
+            aria-label={t("Pad {n}", { n: i + 1 })}
           />
         ))}
       </div>
@@ -575,6 +580,7 @@ function TapStage({
   onTrial: (count: number) => void;
   onComplete: () => void;
 }) {
+  const t = useT();
   const [trial, setTrial] = useState(0);
   const [running, setRunning] = useState(false);
   const [left, setLeft] = useState(TAP_TRIAL_MS / 1000);
@@ -617,16 +623,16 @@ function TapStage({
   return (
     <div className="space-y-3">
       <p className="text-xs uppercase tracking-widest text-muted-foreground">
-        Part 4 of {ANVIL_PARTS.length} · {PART_TITLE[4]}
+        {t("Part {part} of {total}", { part: 4, total: ANVIL_PARTS.length })} · {t(PART_TITLE[4])}
       </p>
       <p className="text-xs text-muted-foreground" data-testid="anvil-tap-trial">
-        Trial {trial + 1} of {TAPPING_TRIALS}
+        {t("Trial {trial} of {total}", { trial: trial + 1, total: TAPPING_TRIALS })}
       </p>
       <div
         data-testid="anvil-tap-panel"
         role="button"
         tabIndex={0}
-        aria-label="Tap as fast as you can"
+        aria-label={t("Tap as fast as you can")}
         onPointerDown={(e) => {
           e.preventDefault();
           if (!running) return;
@@ -647,13 +653,14 @@ function TapStage({
       ) : (
         <>
           <Button onClick={start} className="w-full" data-testid="anvil-tap-start">
-            {trial === 0 ? "Start the ten seconds" : `Start trial ${trial + 1}`}
+            {trial === 0 ? t("Start the ten seconds") : t("Start trial {n}", { n: trial + 1 })}
           </Button>
           {trial > 0 && (
             <p className="text-center text-xs text-muted-foreground">
-              Three trials, and the BEST one is the number. A fumble can only make a
-              maximal-effort count lower, which is the whole reason there are three.
-              Rest {Math.round(TAP_REST_MS / 1000)} seconds between them.
+              {t(
+                "Three trials, and the BEST one is the number. A fumble can only make a maximal-effort count lower, which is the whole reason there are three. Rest {seconds} seconds between them.",
+                { seconds: Math.round(TAP_REST_MS / 1000) },
+              )}
             </p>
           )}
         </>

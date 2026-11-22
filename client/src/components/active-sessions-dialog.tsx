@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Laptop, Smartphone, MapPin, LogOut, ShieldCheck, X } from "lucide-react";
+import { useT } from "@/i18n";
 
 const QUERY_KEY = ["/api/auth/sessions"];
 const TRUSTED_KEY = ["/api/auth/trusted-devices"];
@@ -45,6 +46,7 @@ export function ActiveSessionsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery<SessionRow[]>({
@@ -57,18 +59,18 @@ export function ActiveSessionsDialog({
     mutationFn: (sessionId: number) => apiRequest("POST", `/api/auth/sessions/${sessionId}/revoke`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY });
-      toast.success("Logged out of that device");
+      toast.success(t("Logged out of that device"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't log that device out"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't log that device out")),
   });
 
   const revokeOthersMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/auth/sessions/revoke-others"),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY });
-      toast.success("Logged out of your other devices");
+      toast.success(t("Logged out of your other devices"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't log out other devices"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't log out other devices")),
   });
 
   const others = data?.filter((s) => !s.isCurrent) ?? [];
@@ -87,19 +89,18 @@ export function ActiveSessionsDialog({
     mutationFn: (id: number) => apiRequest("POST", `/api/auth/trusted-devices/${id}/forget`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: TRUSTED_KEY });
-      toast.success("That device will need email approval next time");
+      toast.success(t("That device will need email approval next time"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't forget that device"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't forget that device")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Where you're logged in</DialogTitle>
+          <DialogTitle>{t("Where you're logged in")}</DialogTitle>
           <DialogDescription>
-            Every device with an active Forge session. Location is approximate, based on IP
-            address, not exact.
+            {t("Every device with an active Forge session. Location is approximate, based on IP address, not exact.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -120,19 +121,19 @@ export function ActiveSessionsDialog({
                   )}
                   <div className="min-w-0">
                     <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                      <span className="truncate">{session.deviceLabel ?? "Unknown device"}</span>
+                      <span className="truncate">{session.deviceLabel ?? t("Unknown device")}</span>
                       {session.isCurrent && (
                         <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                          This device
+                          {t("This device")}
                         </span>
                       )}
                     </p>
                     <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                       <MapPin className="h-3 w-3 shrink-0" />
-                      {session.location ?? "Unknown location"}
+                      {session.location ?? t("Unknown location")}
                     </p>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      Active {formatDistanceToNow(new Date(session.lastSeenAt), { addSuffix: true })}
+                      {t("Active {when}", { when: formatDistanceToNow(new Date(session.lastSeenAt), { addSuffix: true }) })}
                     </p>
                   </div>
                 </div>
@@ -146,12 +147,12 @@ export function ActiveSessionsDialog({
                     disabled={revokeMutation.isPending}
                   >
                     <LogOut className="h-3.5 w-3.5" />
-                    Log out
+                    {t("Log out")}
                   </Button>
                 )}
               </div>
             ))}
-            {!data?.length && <p className="text-sm text-muted-foreground">No active sessions found.</p>}
+            {!data?.length && <p className="text-sm text-muted-foreground">{t("No active sessions found.")}</p>}
           </div>
         )}
 
@@ -163,37 +164,41 @@ export function ActiveSessionsDialog({
             onClick={() => revokeOthersMutation.mutate()}
             disabled={revokeOthersMutation.isPending}
           >
-            {revokeOthersMutation.isPending ? "Logging out…" : `Log out of ${others.length} other device${others.length === 1 ? "" : "s"}`}
+            {revokeOthersMutation.isPending
+              ? t("Logging out…")
+              : t.plural(others.length, "Log out of {count} other device", "Log out of {count} other devices")}
           </Button>
         )}
 
         <div className="mt-2 border-t border-border pt-4">
           <p className="flex items-center gap-1.5 text-sm font-semibold">
-            <ShieldCheck className="h-4 w-4" /> Trusted devices
+            <ShieldCheck className="h-4 w-4" /> {t("Trusted devices")}
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Devices where your password alone signs you in. Any other device has to be approved
-            from your email first. Trust lasts 30 days from the last sign-in there.
+            {t("Devices where your password alone signs you in. Any other device has to be approved from your email first. Trust lasts 30 days from the last sign-in there.")}
           </p>
           {trusted.isLoading ? (
             <div className="mt-3 h-16 animate-pulse rounded-md bg-surface" />
           ) : trusted.isError ? (
-            <p className="mt-3 text-sm text-muted-foreground">Couldn't load trusted devices.</p>
+            <p className="mt-3 text-sm text-muted-foreground">{t("Couldn't load trusted devices.")}</p>
           ) : (
             <div className="mt-3 space-y-2">
               {trusted.data?.map((d) => (
                 <div key={d.id} className="flex items-start justify-between gap-3 rounded-md border border-border p-3">
                   <div className="min-w-0">
                     <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                      <span className="truncate">{d.deviceLabel ?? "Unknown device"}</span>
+                      <span className="truncate">{d.deviceLabel ?? t("Unknown device")}</span>
                       {d.isCurrent && (
                         <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                          This device
+                          {t("This device")}
                         </span>
                       )}
                     </p>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      {d.location ?? "Unknown location"} · used {formatDistanceToNow(new Date(d.lastUsedAt), { addSuffix: true })}
+                      {t("{location} · used {when}", {
+                        location: d.location ?? t("Unknown location"),
+                        when: formatDistanceToNow(new Date(d.lastUsedAt), { addSuffix: true }),
+                      })}
                     </p>
                   </div>
                   <Button
@@ -205,12 +210,12 @@ export function ActiveSessionsDialog({
                     disabled={forgetMutation.isPending}
                   >
                     <X className="h-3.5 w-3.5" />
-                    Forget
+                    {t("Forget")}
                   </Button>
                 </div>
               ))}
               {!trusted.data?.length && (
-                <p className="text-sm text-muted-foreground">No trusted devices yet.</p>
+                <p className="text-sm text-muted-foreground">{t("No trusted devices yet.")}</p>
               )}
             </div>
           )}

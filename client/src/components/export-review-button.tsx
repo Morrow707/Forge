@@ -19,6 +19,7 @@ import {
   MAX_EXPORT_SECONDS,
   type ExportSources,
 } from "@/lib/review-export";
+import { translate, useT } from "@/i18n";
 
 /**
  * BURN THIS REVIEW INTO A FILE AND GET A LINK (Phase 5 of docs/video-review-plan.md).
@@ -42,6 +43,7 @@ export function ExportReviewButton({
   /** Deferred, because the media elements only exist once the player has rendered. */
   sources: () => ExportSources;
 }) {
+  const t = useT();
   const [confirming, setConfirming] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -67,18 +69,18 @@ export function ExportReviewButton({
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(body?.message ?? "The export could not be saved.");
+        throw new Error(body?.message ?? translate("The export could not be saved."));
       }
       const saved = (await res.json()) as { shareUrl: string; expiresAt: string };
       setShareUrl(saved.shareUrl);
-      toast.success("Export ready. The link expires — see the dialog.");
+      toast.success(t("Export ready. The link expires — see the dialog."));
     } catch (err) {
       // The review itself is untouched by a failed export, and saying so is the difference
       // between "try again" and "did I just lose my work".
       toast.error(
         err instanceof Error
-          ? `${err.message} Your review is unchanged.`
-          : "Couldn't export this review. Your review is unchanged.",
+          ? t("{message} Your review is unchanged.", { message: t(err.message) })
+          : t("Couldn't export this review. Your review is unchanged."),
       );
     } finally {
       setProgress(null);
@@ -90,8 +92,7 @@ export function ExportReviewButton({
     // desktop browsers have no canvas recording at all.
     return (
       <p className="text-xs text-muted-foreground">
-        This device can't burn a review into a video file. Open the review on a phone or in
-        Chrome to export it.
+        {t("This device can't burn a review into a video file. Open the review on a phone or in Chrome to export it.")}
       </p>
     );
   }
@@ -105,36 +106,34 @@ export function ExportReviewButton({
         onClick={() => setConfirming(true)}
       >
         <Download className="h-3.5 w-3.5" />
-        {progress === null ? "Export video" : `Rendering… ${Math.round(progress * 100)}%`}
+        {progress === null ? t("Export video") : t("Rendering… {pct}%", { pct: Math.round(progress * 100) })}
       </Button>
       {progress !== null && (
         <p className="text-xs text-muted-foreground">
-          The review is playing through to record it — keep this screen open.
+          {t("The review is playing through to record it — keep this screen open.")}
         </p>
       )}
 
       <Dialog open={confirming} onOpenChange={setConfirming}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Export this review as a video?</DialogTitle>
+            <DialogTitle>{t("Export this review as a video?")}</DialogTitle>
             <DialogDescription asChild>
               <div className="space-y-2 text-sm">
                 <p>
-                  The review plays through to record it, so this takes as long as the review
-                  itself (up to {Math.round(MAX_EXPORT_SECONDS / 60)} minutes). Keep the screen
-                  open.
+                  {t(
+                    "The review plays through to record it, so this takes as long as the review itself (up to {minutes} minutes). Keep the screen open.",
+                    { minutes: Math.round(MAX_EXPORT_SECONDS / 60) },
+                  )}
                 </p>
                 <p>
-                  You'll get a link that <strong>anyone you send it to can open</strong>, with no
-                  Forge account. It expires, and you can revoke it.
+                  {t("You'll get a link that anyone you send it to can open, with no Forge account. It expires, and you can revoke it.")}
                 </p>
                 {review.athleteId != null && (
                   <p className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2">
                     <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                     <span>
-                      This is footage of one of your athletes. If they are under 18, exporting
-                      confirms that the guardian consent on file covers sharing this video
-                      outside Forge.
+                      {t("This is footage of one of your athletes. If they are under 18, exporting confirms that the guardian consent on file covers sharing this video outside Forge.")}
                     </span>
                   </p>
                 )}
@@ -143,9 +142,9 @@ export function ExportReviewButton({
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirming(false)}>
-              Cancel
+              {t("Cancel")}
             </Button>
-            <Button onClick={() => void run()}>Export</Button>
+            <Button onClick={() => void run()}>{t("Export")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -153,10 +152,10 @@ export function ExportReviewButton({
       <Dialog open={shareUrl !== null} onOpenChange={(o: boolean) => !o && setShareUrl(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Your share link</DialogTitle>
+            <DialogTitle>{t("Your share link")}</DialogTitle>
             <DialogDescription asChild>
               <div className="space-y-2 text-sm">
-                <p>Anyone with this link can watch the review. It expires, and you can revoke it.</p>
+                <p>{t("Anyone with this link can watch the review. It expires, and you can revoke it.")}</p>
                 <code className="block break-all rounded bg-muted p-2 text-xs">
                   {shareUrl ? resolveApiUrl(shareUrl) : ""}
                 </code>
@@ -169,7 +168,7 @@ export function ExportReviewButton({
                 if (shareUrl) void copyToClipboard(resolveApiUrl(shareUrl));
               }}
             >
-              Copy link
+              {t("Copy link")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -24,6 +24,7 @@ import {
   type WarmupBlock,
   type WarmupProgramDay,
 } from "@shared/program-day-warmup";
+import { useT } from "@/i18n";
 
 export type LocalWarmupItem = {
   key: string;
@@ -104,6 +105,7 @@ export function DayWarmupSection({
   onAddDrill: () => void;
   onUseProgram: () => void;
 }) {
+  const t = useT();
   const minutes = estimateWarmupMinutes(
     warmup.items.map((i) => ({ sets: numberOrNull(i.sets), reps: i.reps || null, durationSeconds: numberOrNull(i.seconds) })),
   );
@@ -114,37 +116,37 @@ export function DayWarmupSection({
       <div className="flex items-center justify-between gap-2">
         <p className="label-xs flex items-center gap-1.5 text-orange-600 dark:text-orange-400">
           <Flame className="h-3.5 w-3.5" />
-          Warm-up
+          {t("Warm-up")}
         </p>
-        {warmup.items.length > 0 && <span className="text-[11px] text-muted-foreground">about {minutes} min</span>}
+        {warmup.items.length > 0 && <span className="text-[11px] text-muted-foreground">{t("about {minutes} min", { minutes })}</span>}
       </div>
       {warmup.items.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No warm-up yet. Add drills, or copy one from a warm-up program.</p>
+        <p className="text-xs text-muted-foreground">{t("No warm-up yet. Add drills, or copy one from a warm-up program.")}</p>
       ) : (
         <ol className="space-y-1.5">
           {warmup.items.map((item, i) => (
             <li key={item.key} className="rounded border border-border bg-surface-elevated p-2" data-testid={`warmup-item-${dayNumber}-${i}`}>
               <div className="mb-1.5 flex items-center gap-1">
-                <span className="flex-1 truncate text-xs font-semibold">{item.exerciseName}</span>
-                <button type="button" aria-label={`Move ${item.exerciseName} up`} onClick={() => onChange({ ...warmup, items: move(warmup.items, i, i - 1) })} className="text-muted-foreground hover:text-foreground">
+                <span className="flex-1 truncate text-xs font-semibold">{t.exercise(item.exerciseName)}</span>
+                <button type="button" aria-label={t("Move {name} up", { name: t.exercise(item.exerciseName) })} onClick={() => onChange({ ...warmup, items: move(warmup.items, i, i - 1) })} className="text-muted-foreground hover:text-foreground">
                   <ArrowUp className="h-3.5 w-3.5" />
                 </button>
-                <button type="button" aria-label={`Move ${item.exerciseName} down`} onClick={() => onChange({ ...warmup, items: move(warmup.items, i, i + 1) })} className="text-muted-foreground hover:text-foreground">
+                <button type="button" aria-label={t("Move {name} down", { name: t.exercise(item.exerciseName) })} onClick={() => onChange({ ...warmup, items: move(warmup.items, i, i + 1) })} className="text-muted-foreground hover:text-foreground">
                   <ArrowDown className="h-3.5 w-3.5" />
                 </button>
-                <button type="button" aria-label={`Remove ${item.exerciseName} from the warm-up`} onClick={() => onChange({ ...warmup, items: warmup.items.filter((x) => x.key !== item.key) })} className="text-muted-foreground hover:text-destructive">
+                <button type="button" aria-label={t("Remove {name} from the warm-up", { name: t.exercise(item.exerciseName) })} onClick={() => onChange({ ...warmup, items: warmup.items.filter((x) => x.key !== item.key) })} className="text-muted-foreground hover:text-destructive">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
               <div className="grid grid-cols-3 gap-1.5">
-                <SmallField label="Sets" value={item.sets} inputMode="numeric" onChange={(v) => patch(item.key, { sets: v })} />
-                <SmallField label="Reps" value={item.reps} inputMode="numeric" onChange={(v) => patch(item.key, { reps: v })} />
-                <SmallField label="Seconds" value={item.seconds} inputMode="numeric" onChange={(v) => patch(item.key, { seconds: v })} />
+                <SmallField label={t("Sets")} value={item.sets} inputMode="numeric" onChange={(v) => patch(item.key, { sets: v })} />
+                <SmallField label={t("Reps")} value={item.reps} inputMode="numeric" onChange={(v) => patch(item.key, { reps: v })} />
+                <SmallField label={t("Seconds")} value={item.seconds} inputMode="numeric" onChange={(v) => patch(item.key, { seconds: v })} />
               </div>
               <Input
                 value={item.note}
-                placeholder="Note (optional)"
-                aria-label={`Note for ${item.exerciseName}`}
+                placeholder={t("Note (optional)")}
+                aria-label={t("Note for {name}", { name: t.exercise(item.exerciseName) })}
                 onChange={(e) => patch(item.key, { note: e.target.value })}
                 className="mt-1.5 h-7 px-2 text-xs"
               />
@@ -154,19 +156,19 @@ export function DayWarmupSection({
       )}
       <Input
         value={warmup.note}
-        placeholder="Warm-up note (optional)"
-        aria-label={`Warm-up note for day ${dayNumber}`}
+        placeholder={t("Warm-up note (optional)")}
+        aria-label={t("Warm-up note for day {n}", { n: dayNumber })}
         onChange={(e) => onChange({ ...warmup, note: e.target.value })}
         className="h-7 px-2 text-xs"
       />
       <div className="flex flex-col gap-1.5">
         <Button size="sm" variant="outline" className="w-full" onClick={onAddDrill} data-testid={`button-add-warmup-${dayNumber}`}>
           <Plus className="h-3.5 w-3.5" />
-          Add warm-up drill
+          {t("Add warm-up drill")}
         </Button>
         <Button size="sm" variant="ghost" className="w-full" onClick={onUseProgram} data-testid={`button-use-warmup-program-${dayNumber}`}>
           <ListPlus className="h-3.5 w-3.5" />
-          Use a warm-up program
+          {t("Use a warm-up program")}
         </Button>
       </div>
     </div>
@@ -205,6 +207,7 @@ export function WarmupProgramDialog({
   apiBase: string;
   onPick: (warmup: LocalWarmup) => void;
 }) {
+  const t = useT();
   const [programId, setProgramId] = useState<number | null>(null);
   const list = useQuery<ProgramSummary[]>({
     queryKey: [`${apiBase}/programs`],
@@ -237,14 +240,14 @@ export function WarmupProgramDialog({
     onOpenChange(false);
   };
   const body = () => {
-    if (list.isError) return <ReadFailed what="your programs" error={list.error} onRetry={() => void list.refetch()} />;
+    if (list.isError) return <ReadFailed what={t("your programs")} error={list.error} onRetry={() => void list.refetch()} />;
     if (programId == null) {
       return (
         <div className="space-y-1.5" data-testid="warmup-program-list">
-          {list.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {list.isLoading && <p className="text-sm text-muted-foreground">{t("Loading…")}</p>}
           {!list.isLoading && warmupPrograms.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              No warm-up programs yet. Tag a program "Warm-up" in its builder and it shows here.
+              {t("No warm-up programs yet. Tag a program \"Warm-up\" in its builder and it shows here.")}
             </p>
           )}
           {warmupPrograms.map((p) => (
@@ -255,10 +258,10 @@ export function WarmupProgramDialog({
         </div>
       );
     }
-    if (detail.isError) return <ReadFailed what="that program" error={detail.error} onRetry={() => void detail.refetch()} />;
+    if (detail.isError) return <ReadFailed what={t("that program")} error={detail.error} onRetry={() => void detail.refetch()} />;
     return (
       <div className="space-y-1.5" data-testid="warmup-program-days">
-        {detail.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+        {detail.isLoading && <p className="text-sm text-muted-foreground">{t("Loading…")}</p>}
         {days.map((d) => (
           <Button key={d.id} variant="outline" className="h-auto w-full flex-col items-start py-2" onClick={() => pick([d])}>
             <span className="text-sm font-semibold">{d.title}</span>
@@ -267,12 +270,12 @@ export function WarmupProgramDialog({
         ))}
         {days.length > 1 && (
           <Button variant="secondary" className="w-full" onClick={() => pick(days)}>
-            All days, in order
+            {t("All days, in order")}
           </Button>
         )}
-        {!detail.isLoading && days.length === 0 && <p className="text-sm text-muted-foreground">That program has no drills to copy.</p>}
+        {!detail.isLoading && days.length === 0 && <p className="text-sm text-muted-foreground">{t("That program has no drills to copy.")}</p>}
         <Button variant="ghost" size="sm" onClick={() => setProgramId(null)}>
-          Back to warm-up programs
+          {t("Back to warm-up programs")}
         </Button>
       </div>
     );
@@ -287,8 +290,8 @@ export function WarmupProgramDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Use a warm-up program</DialogTitle>
-          <DialogDescription>Copies a warm-up program's drills into this day's warm-up. The program itself is not changed.</DialogDescription>
+          <DialogTitle>{t("Use a warm-up program")}</DialogTitle>
+          <DialogDescription>{t("Copies a warm-up program's drills into this day's warm-up. The program itself is not changed.")}</DialogDescription>
         </DialogHeader>
         {body()}
       </DialogContent>

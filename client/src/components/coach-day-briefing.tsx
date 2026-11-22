@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import type { ReadinessLevel } from "@shared/wellness";
 import type { AcwrRiskLevel } from "@shared/load";
 import { todayIso } from "@/lib/local-date";
+import { useT } from "@/i18n";
 
 type BriefingExercise = { name: string; sets: number; reps: string; weight: string | null };
 type BriefingEntry = {
@@ -36,6 +37,7 @@ type AthleteBriefing = {
  * getRosterAcwrSummary), not something that can be shown historically for
  * a past date without being misleading. */
 export function CoachDayBriefing({ date }: { date: string }) {
+  const t = useT();
   const [historyAthlete, setHistoryAthlete] = useState<{ id: number; name: string } | null>(null);
   const [historyView, setHistoryView] = useState<"wellness" | "acwr" | null>(null);
 
@@ -54,12 +56,12 @@ export function CoachDayBriefing({ date }: { date: string }) {
   // for the screen that surfaces who is flagged, sore or overreaching this morning, reads as
   // "nobody needs looking at today".
   if (isError) {
-    return <ReadFailed what="today's briefing" onRetry={() => void refetch()} />;
+    return <ReadFailed what={t("today's briefing")} onRetry={() => void refetch()} />;
   }
 
   if (data.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">No athletes on your roster yet.</p>
+      <p className="py-8 text-center text-sm text-muted-foreground">{t("No athletes on your roster yet.")}</p>
     );
   }
 
@@ -90,7 +92,7 @@ export function CoachDayBriefing({ date }: { date: string }) {
             </div>
 
             {a.entries.length === 0 && (
-              <p className="text-xs text-muted-foreground">Nothing scheduled.</p>
+              <p className="text-xs text-muted-foreground">{t("Nothing scheduled.")}</p>
             )}
 
             <div className="space-y-2">
@@ -99,7 +101,7 @@ export function CoachDayBriefing({ date }: { date: string }) {
                   {e.isRestDay ? (
                     <p className="flex items-center gap-1 text-muted-foreground">
                       <MoonStar className="h-3 w-3 shrink-0" />
-                      {e.title || "Rest day"}
+                      {e.title || t("Rest day")}
                     </p>
                   ) : (
                     <>

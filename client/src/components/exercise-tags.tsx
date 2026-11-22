@@ -28,6 +28,7 @@ import {
   type ExercisePurpose,
   type ProgramSeasonPhase,
 } from "@shared/exercise-tags";
+import { useT } from "@/i18n";
 
 type TaggedExercise = {
   joints?: readonly string[] | null;
@@ -96,6 +97,7 @@ export function CautionNote({
 
 /** The read-only tags on an exercise's page (a Forge exercise, or one somebody else owns). */
 export function ExerciseTagsView({ exercise }: { exercise: TaggedExercise }) {
+  const t = useT();
   const purposes = (exercise.purposes ?? []).filter(isExercisePurpose);
   const joints = (exercise.joints ?? []).filter(isExerciseJoint);
   const positions = exercise.positions ?? [];
@@ -103,7 +105,7 @@ export function ExerciseTagsView({ exercise }: { exercise: TaggedExercise }) {
     <div className="space-y-2" data-testid="exercise-tags-view">
       {purposes.length > 0 && (
         <div>
-          <p className="label-xs">Used for</p>
+          <p className="label-xs">{t("Used for")}</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {purposes.map((p) => (
               <Badge key={p} variant="secondary">
@@ -115,7 +117,7 @@ export function ExerciseTagsView({ exercise }: { exercise: TaggedExercise }) {
       )}
       {joints.length > 0 && (
         <div>
-          <p className="label-xs">Joints</p>
+          <p className="label-xs">{t("Joints")}</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {joints.map((j) => (
               <Badge key={j} variant="outline">
@@ -127,7 +129,7 @@ export function ExerciseTagsView({ exercise }: { exercise: TaggedExercise }) {
       )}
       {positions.length > 0 && (
         <div>
-          <p className="label-xs">Positions</p>
+          <p className="label-xs">{t("Positions")}</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {positions.map((p) => (
               <Badge key={p} variant="outline" className="capitalize">
@@ -231,11 +233,12 @@ export function ExerciseTagsEditor({
   value: ExerciseTagForm;
   onChange: (next: ExerciseTagForm) => void;
 }) {
+  const t = useT();
   return (
     <div className="space-y-3 rounded-md border border-border p-3" data-testid="exercise-tags-editor">
-      <p className="text-sm font-medium">Warm-up, care and return-to-training tags (optional)</p>
+      <p className="text-sm font-medium">{t("Warm-up, care and return-to-training tags (optional)")}</p>
       <ChipToggles
-        label="Used for"
+        label={t("Used for")}
         options={EXERCISE_PURPOSES}
         labels={EXERCISE_PURPOSE_LABEL}
         selected={value.purposes}
@@ -243,7 +246,7 @@ export function ExerciseTagsEditor({
         testIdPrefix="toggle-purpose"
       />
       <ChipToggles
-        label="Joints"
+        label={t("Joints")}
         options={EXERCISE_JOINTS}
         labels={EXERCISE_JOINT_LABEL}
         selected={value.joints}
@@ -251,25 +254,25 @@ export function ExerciseTagsEditor({
         testIdPrefix="toggle-joint"
       />
       <div className="space-y-1.5">
-        <Label htmlFor="ex-positions">Positions (comma separated)</Label>
+        <Label htmlFor="ex-positions">{t("Positions (comma separated)")}</Label>
         <Input
           id="ex-positions"
           value={value.positionsText}
           onChange={(e) => onChange({ ...value, positionsText: e.target.value })}
-          placeholder="pitcher, goalkeeper"
+          placeholder={t("pitcher, goalkeeper")}
         />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="ex-caution">Caution note (optional)</Label>
+        <Label htmlFor="ex-caution">{t("Caution note (optional)")}</Label>
         <Textarea
           id="ex-caution"
           value={value.cautionNote}
           maxLength={MAX_CAUTION_NOTE_LENGTH}
           onChange={(e) => onChange({ ...value, cautionNote: e.target.value })}
-          placeholder="Skip after a recent shoulder dislocation unless cleared"
+          placeholder={t("Skip after a recent shoulder dislocation unless cleared")}
           rows={2}
         />
-        <p className="text-xs text-muted-foreground">Shown under the exercise wherever it is placed. It never blocks anything.</p>
+        <p className="text-xs text-muted-foreground">{t("Shown under the exercise wherever it is placed. It never blocks anything.")}</p>
       </div>
     </div>
   );
@@ -328,30 +331,31 @@ export function ProgramTagsEditor({
   value: ProgramTagForm;
   onChange: (next: ProgramTagForm) => void;
 }) {
+  const t = useT();
   return (
     <div className="space-y-3 sm:col-span-2" data-testid="program-tags-editor">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="program-sport">Sport (optional)</Label>
+          <Label htmlFor="program-sport">{t("Sport (optional)")}</Label>
           <Input
             id="program-sport"
             value={value.sport}
             onChange={(e) => onChange({ ...value, sport: e.target.value })}
-            placeholder="Soccer"
+            placeholder={t("Soccer")}
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="program-positions">Positions (comma separated)</Label>
+          <Label htmlFor="program-positions">{t("Positions (comma separated)")}</Label>
           <Input
             id="program-positions"
             value={value.positionsText}
             onChange={(e) => onChange({ ...value, positionsText: e.target.value })}
-            placeholder="pitcher, catcher"
+            placeholder={t("pitcher, catcher")}
           />
         </div>
       </div>
       <div className="space-y-1.5">
-        <p className="label-xs">Season</p>
+        <p className="label-xs">{t("Season")}</p>
         <div className="flex flex-wrap gap-1">
           {PROGRAM_SEASON_PHASES.map((phase) => (
             <button
@@ -371,7 +375,7 @@ export function ProgramTagsEditor({
         </div>
       </div>
       <ChipToggles
-        label="Used for"
+        label={t("Used for")}
         options={EXERCISE_PURPOSES}
         labels={EXERCISE_PURPOSE_LABEL}
         selected={value.purposes}
@@ -379,7 +383,7 @@ export function ProgramTagsEditor({
         testIdPrefix="toggle-program-purpose"
       />
       <ChipToggles
-        label="Joints it looks after"
+        label={t("Joints it looks after")}
         options={EXERCISE_JOINTS}
         labels={EXERCISE_JOINT_LABEL}
         selected={value.joints}

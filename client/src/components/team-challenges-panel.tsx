@@ -231,7 +231,7 @@ function CreateChallengeDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="min-w-0 space-y-1.5">
-              <Label htmlFor="quest-start">{t("Start")}</Label>
+              <Label htmlFor="quest-start">{t("Start date")}</Label>
               <Input
                 id="quest-start"
                 type="date"
@@ -241,7 +241,7 @@ function CreateChallengeDialog({
               />
             </div>
             <div className="min-w-0 space-y-1.5">
-              <Label htmlFor="quest-end">{t("End")}</Label>
+              <Label htmlFor="quest-end">{t("End date")}</Label>
               <Input
                 id="quest-end"
                 type="date"

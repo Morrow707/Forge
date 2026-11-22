@@ -7,6 +7,7 @@ import { getJson } from "@/lib/queryClient";
 import { Award, CheckCircle2, Circle, Route } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 type PathTrack = { id: number; title: string; completed: boolean };
 type Path = {
@@ -23,6 +24,7 @@ type Path = {
 /** Learning paths (2026-10-03): ordered sets of tracks for a kind of coach, each a checklist
  * with a certificate at the end. Tapping a track opens it in the catalog. */
 export function CoachesCornerPaths({ onOpenTrack }: { onOpenTrack: (trackId: number) => void }) {
+  const t = useT();
   const { data, isError, refetch } = useQuery<Path[]>({
     queryKey: ["/api/coach/academy/paths"],
     queryFn: () => getJson("/api/coach/academy/paths"),
@@ -31,7 +33,7 @@ export function CoachesCornerPaths({ onOpenTrack }: { onOpenTrack: (trackId: num
   if (isError) {
     return (
       <div className="mb-6">
-        <ReadFailed what="the learning paths" onRetry={() => void refetch()} />
+        <ReadFailed what={t("the learning paths")} onRetry={() => void refetch()} />
       </div>
     );
   }
@@ -41,9 +43,9 @@ export function CoachesCornerPaths({ onOpenTrack }: { onOpenTrack: (trackId: num
     <div className="mb-6">
       <h2 className="mb-1 flex items-center gap-2 font-display text-lg font-bold uppercase tracking-wide">
         <Route className="h-5 w-5 text-primary" />
-        Learning paths
+        {t("Learning paths")}
       </h2>
-      <p className="mb-3 text-sm text-muted-foreground">Tracks in the order to take them, for where you are.</p>
+      <p className="mb-3 text-sm text-muted-foreground">{t("Tracks in the order to take them, for where you are.")}</p>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {paths.map((p) => (
           <Card key={p.id} className={cn(p.completed && "border-success/50")}>
@@ -76,13 +78,13 @@ export function CoachesCornerPaths({ onOpenTrack }: { onOpenTrack: (trackId: num
               </ol>
               <div className="flex items-center justify-between">
                 <Badge variant={p.completed ? "success" : "secondary"}>
-                  {p.completed ? "Completed" : `${p.tracksCompleted}/${p.tracks.length} tracks`}
+                  {p.completed ? t("Completed") : t("{done}/{total} tracks", { done: p.tracksCompleted, total: p.tracks.length })}
                 </Badge>
                 {p.completed && (
                   <Button asChild size="sm" variant="outline">
                     <Link href={`/coach/coaches-corner/path-certificate/${p.id}`}>
                       <Award className="h-4 w-4" />
-                      Certificate
+                      {t("Certificate")}
                     </Link>
                   </Button>
                 )}

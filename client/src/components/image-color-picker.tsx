@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { pixelHex } from "@/lib/color-input";
+import { translate, useT } from "@/i18n";
 
 /** THE EYEDROPPER (Scott, 2026-11-20: "the little inkblot thing where i can click on an image and
  *  capture that color"). The browser's own EyeDropper exists only in Chrome and Edge, never on an
@@ -36,10 +37,10 @@ const LOUPE_LIFT = 24;
 type Spot = { x: number; y: number; hex: string | null; px: number; py: number };
 
 function statusLine(hover: Spot | null, chosen: string | null): string {
-  if (hover?.hex) return "Under your pointer";
-  if (chosen) return "Picked";
-  if (hover) return "That spot is see-through";
-  return "Tap the picture to pick";
+  if (hover?.hex) return translate("Under your pointer");
+  if (chosen) return translate("Picked");
+  if (hover) return translate("That spot is see-through");
+  return translate("Tap the picture to pick");
 }
 
 export function ImageColorPicker({
@@ -56,6 +57,7 @@ export function ImageColorPicker({
   onPick: (hex: string) => void;
   label: string;
 }) {
+  const t = useT();
   const [src, setSrc] = useState<string | null>(null);
   const [readable, setReadable] = useState<"loading" | "ok" | "failed">("loading");
   const [hover, setHover] = useState<Spot | null>(null);
@@ -165,9 +167,12 @@ export function ImageColorPicker({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Take a color from a picture</DialogTitle>
+          <DialogTitle>{t("Take a color from a picture")}</DialogTitle>
           <DialogDescription>
-            For {label}. Move over the picture or drag your finger across it; the magnifier shows the exact spot. Tap to take that color.
+            {t(
+              "For {label}. Move over the picture or drag your finger across it; the magnifier shows the exact spot. Tap to take that color.",
+              { label },
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -185,12 +190,12 @@ export function ImageColorPicker({
             data-testid="color-picker-choose-picture"
           >
             <ImagePlus className="h-3.5 w-3.5" />
-            Choose a picture
+            {t("Choose a picture")}
           </Button>
           {hasEyeDropper && (
             <Button type="button" size="sm" variant="outline" onClick={() => void pickFromScreen()}>
               <Pipette className="h-3.5 w-3.5" />
-              Anywhere on screen
+              {t("Anywhere on screen")}
             </Button>
           )}
           <input
@@ -249,16 +254,16 @@ export function ImageColorPicker({
             )}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Choose a picture to take a color from.</p>
+          <p className="text-sm text-muted-foreground">{t("Choose a picture to take a color from.")}</p>
         )}
         {readable === "failed" && src && (
-          <p className="text-sm text-destructive">That picture can't be read for colors. Try choosing it from your device instead.</p>
+          <p className="text-sm text-destructive">{t("That picture can't be read for colors. Try choosing it from your device instead.")}</p>
         )}
 
         <div className="flex items-center gap-3 rounded-md border border-border p-3" data-testid="color-picker-result">
           <span className="h-9 w-9 shrink-0 rounded-md border border-border" style={{ backgroundColor: shown ?? "transparent" }} />
           <div className="min-w-0 text-sm">
-            <p className="font-mono font-semibold">{shown ?? "No color yet"}</p>
+            <p className="font-mono font-semibold">{shown ?? t("No color yet")}</p>
             <p className="text-xs text-muted-foreground">
               {statusLine(hover, chosen)}
             </p>
@@ -267,7 +272,7 @@ export function ImageColorPicker({
 
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
             type="button"
@@ -279,7 +284,7 @@ export function ImageColorPicker({
               onOpenChange(false);
             }}
           >
-            Use this color
+            {t("Use this color")}
           </Button>
         </DialogFooter>
       </DialogContent>

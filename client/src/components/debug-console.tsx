@@ -5,6 +5,7 @@ import { subscribeDebug, clearDebug, logDebug, type DebugEntry } from "@/lib/deb
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { useAuth } from "@/hooks/use-auth";
+import { useT } from "@/i18n";
 
 /** Temporary, on-screen debug console -- a floating toggle that opens a
  * scrollable, timestamped log of AUTH/NAV events so they can be screenshotted
@@ -14,6 +15,7 @@ import { useAuth } from "@/hooks/use-auth";
  * it's deliberately a single self-contained component easy to delete along
  * with its one mount point in App.tsx and its lib/debug-console.ts module. */
 export function DebugConsole() {
+  const t = useT();
   // ADMIN ONLY, AND THE LOGGING IS DELIBERATELY NOT.
   //
   // Scott, 2026-10-19, reading his own console on an admin account: "make sure the debug is only
@@ -84,7 +86,7 @@ export function DebugConsole() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        aria-label={open ? "Close debug console" : "Open debug console"}
+        aria-label={open ? t("Close debug console") : t("Open debug console")}
         className="fixed bottom-4 left-4 z-[999] flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-white shadow-lg backdrop-blur-sm"
         style={{ marginBottom: "env(safe-area-inset-bottom)" }}
       >
@@ -98,14 +100,14 @@ export function DebugConsole() {
         >
           <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2">
             <span className="font-mono text-[11px] font-semibold text-white/80">
-              DEBUG CONSOLE, {entries.length} lines
+              {t("DEBUG CONSOLE, {count} lines", { count: entries.length })}
               {buildLabel ? <span className="ml-2 text-primary">{buildLabel}</span> : null}
             </span>
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => clearDebug()}
-                aria-label="Clear log"
+                aria-label={t("Clear log")}
                 className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -113,7 +115,7 @@ export function DebugConsole() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                aria-label="Close"
+                aria-label={t("Close")}
                 className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10"
               >
                 <X className="h-3.5 w-3.5" />
@@ -122,7 +124,7 @@ export function DebugConsole() {
           </div>
           <div ref={listRef} className="select-text flex-1 overflow-y-auto px-3 py-2">
             {entries.length === 0 && (
-              <p className="font-mono text-[10px] text-white/40">Nothing logged yet.</p>
+              <p className="font-mono text-[10px] text-white/40">{t("Nothing logged yet.")}</p>
             )}
             {entries.map((e, i) => {
               const time = new Date(e.t).toLocaleTimeString(undefined, {

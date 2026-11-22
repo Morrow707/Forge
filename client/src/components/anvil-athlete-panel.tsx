@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/skeleton";
 import { getJson } from "@/lib/queryClient";
 import { ANVIL_ACCURACY_CAVEAT } from "@shared/anvil-agreement";
 import type { AnvilReading } from "@shared/anvil-reading";
+import { useT } from "@/i18n";
 
 /**
  * ONE ATHLETE'S ANVIL, ON THEIR COACH'S PAGE.
@@ -33,6 +34,7 @@ export function AnvilAthletePanel({
   athleteId: number;
   athleteName: string;
 }) {
+  const t = useT();
   const { data, isLoading, isError, refetch, error } = useQuery<{ days: Day[] }>({
     queryKey: [`/api/coach/roster/${athleteId}/anvil`],
     queryFn: () => getJson(`/api/coach/roster/${athleteId}/anvil?days=28`),
@@ -42,7 +44,7 @@ export function AnvilAthletePanel({
   if (isError) {
     return (
       <ReadFailed
-        what={`${athleteName}'s Anvil checks`}
+        what={t("{name}'s Anvil checks", { name: athleteName })}
         onRetry={() => void refetch()}
         error={error}
       />
@@ -52,13 +54,15 @@ export function AnvilAthletePanel({
   const days = data?.days ?? [];
   return (
     <div className="space-y-2 border-t border-border pt-4" data-testid="anvil-athlete-panel">
-      <p className="text-sm font-medium">The Anvil · last 28 days</p>
+      <p className="text-sm font-medium">{t("The Anvil · last 28 days")}</p>
       {days.length === 0 ? (
         // NOT "nothing to report". Most accounts have not accepted the agreement, and a coach
         // reading an empty panel should know which of the two it is.
         <p className="text-sm text-muted-foreground">
-          {athleteName} hasn't taken the Anvil in this window. It is adults-only while its
-          paperwork is being reviewed, and each person accepts it on their own account.
+          {t(
+            "{name} hasn't taken the Anvil in this window. It is adults-only while its paperwork is being reviewed, and each person accepts it on their own account.",
+            { name: athleteName },
+          )}
         </p>
       ) : (
         <>
@@ -71,18 +75,23 @@ export function AnvilAthletePanel({
                   <span className="w-24 shrink-0 tabular-nums text-muted-foreground">{d.date}</span>
                   <span className="font-medium tabular-nums">
                     {d.reading.numbers.medianMs == null
-                      ? "no trials"
-                      : `${Math.round(d.reading.numbers.medianMs)} ms`}
+                      ? t("no trials")
+                      : t("{ms} ms", { ms: Math.round(d.reading.numbers.medianMs) })}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {d.reading.comparison.kind === "compared"
-                      ? `${d.reading.comparison.medianZ >= 0 ? "+" : ""}${d.reading.comparison.medianZ.toFixed(2)} SD vs own normal`
+                      ? t("{z} SD vs own normal", {
+                          z: `${d.reading.comparison.medianZ >= 0 ? "+" : ""}${d.reading.comparison.medianZ.toFixed(2)}`,
+                        })
                       : d.reading.comparison.kind === "learning"
-                        ? `learning their normal (${d.reading.comparison.have} of ${d.reading.comparison.need})`
-                        : "no spread in their own history yet"}
+                        ? t("learning their normal ({have} of {need})", {
+                            have: d.reading.comparison.have,
+                            need: d.reading.comparison.need,
+                          })
+                        : t("no spread in their own history yet")}
                     {d.window !== "in_window" &&
-                      (d.window === "practice" ? " · practice run" : " · outside the window")}
-                    {!d.counts && d.window === "in_window" && " · second attempt"}
+                      (d.window === "practice" ? ` · ${t("practice run")}` : ` · ${t("outside the window")}`)}
+                    {!d.counts && d.window === "in_window" && ` · ${t("second attempt")}`}
                   </span>
                 </div>
               ))}

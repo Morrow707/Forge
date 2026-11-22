@@ -3,6 +3,7 @@ import { ReadFailed } from "@/components/read-failed";
 import { format, parseISO } from "date-fns";
 import { FileSpreadsheet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { useT } from "@/i18n";
 
 type ImportedRow = {
   id: number;
@@ -30,6 +31,7 @@ type ImportedRow = {
  * out of Forge's own tracking.
  */
 export function ImportedTestingDataPanel({ athleteId }: { athleteId: number }) {
+  const t = useT();
   const { data: rows = [], isLoading, isError, refetch } = useQuery<ImportedRow[]>({
     queryKey: [`/api/coach/roster/${athleteId}/testing-data-import`],
   });
@@ -42,7 +44,7 @@ export function ImportedTestingDataPanel({ athleteId }: { athleteId: number }) {
   if (isError) {
     return (
       <ReadFailed
-        what="this athlete's imported testing data"
+        what={t("this athlete's imported testing data")}
         onRetry={() => void refetch()}
         className="flex flex-col items-start gap-2 py-4 text-left"
       />
@@ -64,11 +66,10 @@ export function ImportedTestingDataPanel({ athleteId }: { athleteId: number }) {
         <div>
           <p className="flex items-center gap-1.5 text-sm font-semibold">
             <FileSpreadsheet className="h-4 w-4 text-primary" />
-            Imported from a printout
+            {t("Imported from a printout")}
           </p>
           <p className="text-xs text-muted-foreground">
-            Transcribed from a photographed VBT / OVR / Perch sheet, not
-            measured by Forge.
+            {t("Transcribed from a photographed VBT / OVR / Perch sheet, not measured by Forge.")}
           </p>
         </div>
 
@@ -81,11 +82,11 @@ export function ImportedTestingDataPanel({ athleteId }: { athleteId: number }) {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-border/60 text-muted-foreground">
-                    <th className="px-2.5 py-1 font-medium">Exercise</th>
-                    <th className="px-2 py-1 font-medium">Set</th>
-                    <th className="px-2 py-1 font-medium">Load</th>
-                    <th className="px-2 py-1 font-medium">Velocity</th>
-                    <th className="px-2 py-1 font-medium">Power</th>
+                    <th className="px-2.5 py-1 font-medium">{t("Exercise")}</th>
+                    <th className="px-2 py-1 font-medium">{t("Set")}</th>
+                    <th className="px-2 py-1 font-medium">{t("Load")}</th>
+                    <th className="px-2 py-1 font-medium">{t("Velocity")}</th>
+                    <th className="px-2 py-1 font-medium">{t("Power")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -94,12 +95,12 @@ export function ImportedTestingDataPanel({ athleteId }: { athleteId: number }) {
                       key={r.id}
                       className="border-b border-border/40 last:border-b-0"
                     >
-                      <td className="px-2.5 py-1">{r.exerciseName}</td>
+                      <td className="px-2.5 py-1">{t.exercise(r.exerciseName)}</td>
                       <td className="px-2 py-1 tabular-nums">
                         {r.setNumber ?? "--"}
                       </td>
                       <td className="px-2 py-1 tabular-nums">
-                        {r.loadLbs != null ? `${r.loadLbs} lbs` : "--"}
+                        {r.loadLbs != null ? t("{lbs} lbs", { lbs: r.loadLbs }) : "--"}
                       </td>
                       <td className="px-2 py-1 tabular-nums">
                         {r.velocityMps != null

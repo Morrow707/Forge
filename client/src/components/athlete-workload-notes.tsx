@@ -17,6 +17,7 @@ import {
   type ThrowingNote,
   type ThrowingWeek,
 } from "@shared/throwing-workload";
+import { useT } from "@/i18n";
 
 type SingleSport = { note: { sport: string; months: number; text: string } | null };
 type Throwing = { weeks: ThrowingWeek[]; inningsLastYear: number; notes: ThrowingNote[]; guide: string[]; hasAny: boolean };
@@ -35,12 +36,13 @@ export function SingleSportYearNote({ athleteId }: { athleteId: number }) {
 const WEEK_LABEL: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", timeZone: "UTC" };
 
 export function ThrowingWorkloadPanel({ athleteId }: { athleteId: number }) {
+  const t = useT();
   const { data, isError, refetch } = useQuery<Throwing>({ queryKey: [`/api/coach/roster/${athleteId}/throwing`] });
   if (isError) {
     return (
       <Card>
         <CardContent className="p-5">
-          <ReadFailed what="the throwing history" onRetry={() => void refetch()} />
+          <ReadFailed what={t("the throwing history")} onRetry={() => void refetch()} />
         </CardContent>
       </Card>
     );
@@ -50,10 +52,16 @@ export function ThrowingWorkloadPanel({ athleteId }: { athleteId: number }) {
     <Card data-testid="panel-throwing-workload">
       <CardContent className="space-y-3 p-5">
         <div>
-          <p className="text-sm font-semibold">Throwing workload</p>
+          <p className="text-sm font-semibold">{t("Throwing workload")}</p>
           <p className="text-xs text-muted-foreground">
-            Log a game as one set of {PITCHING_GAME_EXERCISE} per inning with reps as the pitches, a bullpen as one set of {BULLPEN_EXERCISE}, and an inning
-            caught as one set of {CATCHING_GAME_EXERCISE}.
+            {t(
+              "Log a game as one set of {pitching} per inning with reps as the pitches, a bullpen as one set of {bullpen}, and an inning caught as one set of {catching}.",
+              {
+                pitching: t.exercise(PITCHING_GAME_EXERCISE),
+                bullpen: t.exercise(BULLPEN_EXERCISE),
+                catching: t.exercise(CATCHING_GAME_EXERCISE),
+              },
+            )}
           </p>
         </div>
         {data.notes.length > 0 && (
@@ -66,17 +74,17 @@ export function ThrowingWorkloadPanel({ athleteId }: { athleteId: number }) {
         {data.hasAny ? (
           <>
             <p className="text-xs">
-              Innings pitched in the last year: <span className="font-semibold">{data.inningsLastYear}</span>
+              {t("Innings pitched in the last year:")} <span className="font-semibold">{data.inningsLastYear}</span>
             </p>
             <div className="min-w-0 overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-left text-muted-foreground">
-                    <th className="py-1 pr-2 font-medium">Week of</th>
-                    <th className="py-1 pr-2 font-medium">Pitches</th>
-                    <th className="py-1 pr-2 font-medium">Innings</th>
-                    <th className="py-1 pr-2 font-medium">Top game</th>
-                    <th className="py-1 font-medium">Caught</th>
+                    <th className="py-1 pr-2 font-medium">{t("Week of")}</th>
+                    <th className="py-1 pr-2 font-medium">{t("Pitches")}</th>
+                    <th className="py-1 pr-2 font-medium">{t("Innings")}</th>
+                    <th className="py-1 pr-2 font-medium">{t("Top game")}</th>
+                    <th className="py-1 font-medium">{t("Caught")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -94,7 +102,7 @@ export function ThrowingWorkloadPanel({ athleteId }: { athleteId: number }) {
             </div>
           </>
         ) : (
-          <p className="text-xs text-muted-foreground">No pitching, bullpen or catching logged in the last year.</p>
+          <p className="text-xs text-muted-foreground">{t("No pitching, bullpen or catching logged in the last year.")}</p>
         )}
         <div className="space-y-0.5 text-[11px] text-muted-foreground">
           {data.guide.map((line) => (

@@ -8,6 +8,7 @@ import { AthleteAvatar } from "@/components/athlete-avatar";
 import { cn } from "@/lib/utils";
 import { ArrowRightLeft, Search } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 // Only the fields this needs -- the real `/api/coach/roster` response (see
 // roster.tsx's RosterEntry) carries a lot more, but id + name is all a
@@ -25,6 +26,7 @@ type RosterEntry = { id: number; name: string };
  * built from the Radix Popover + a plain filtered list, per the athlete
  * detail page's own fallback pattern (AthleteAvatar for the identity bit). */
 export function AthleteSwitcher({ currentAthleteId }: { currentAthleteId: number }) {
+  const t = useT();
   const [, navigate] = useLocation();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -88,7 +90,7 @@ export function AthleteSwitcher({ currentAthleteId }: { currentAthleteId: number
           className="shrink-0 gap-1.5 text-xs font-semibold normal-case tracking-normal"
         >
           <ArrowRightLeft className="h-3.5 w-3.5" />
-          Switch Athlete
+          {t("Switch Athlete")}
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -107,22 +109,22 @@ export function AthleteSwitcher({ currentAthleteId }: { currentAthleteId: number
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Search your roster..."
+              placeholder={t("Search your roster...")}
               className="h-8 pl-8 text-sm"
-              aria-label="Search your roster"
+              aria-label={t("Search your roster")}
             />
           </div>
         </div>
-        <div role="listbox" aria-label="Athletes" className="max-h-72 overflow-y-auto p-1">
+        <div role="listbox" aria-label={t("Athletes")} className="max-h-72 overflow-y-auto p-1">
           {isError ? (
             <ReadFailed
-              what="your roster"
+              what={t("your roster")}
               onRetry={() => void refetch()}
               className="flex flex-col items-center gap-2 px-2 py-4 text-center"
             />
           ) : filtered.length === 0 ? (
             <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-              {roster.length <= 1 ? "No other athletes on your roster" : "No matches"}
+              {roster.length <= 1 ? t("No other athletes on your roster") : t("No matches")}
             </p>
           ) : (
             filtered.map((athlete, i) => (

@@ -25,6 +25,7 @@ import {
 } from "@/lib/google-play-billing";
 import { GraduationCap, Lock, Unlock } from "lucide-react";
 import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
+import { useT } from "@/i18n";
 
 type Entitlements = {
   addOns: Record<FreeAgentAddOnId, boolean>;
@@ -38,6 +39,7 @@ type Entitlements = {
  * Android, Stripe on the web, exactly as a tier does. A coached athlete never sees this: their
  * classes come from their coach, and the server refuses the purchase for them. */
 export function AllClassesCard({ compact = false }: { compact?: boolean }) {
+  const t = useT();
   const [, navigate] = useLocation();
   const nativeIap = isAppleIapSupported();
   const androidNative = isGooglePlayBillingSupported();
@@ -98,15 +100,15 @@ export function AllClassesCard({ compact = false }: { compact?: boolean }) {
         window.location.href = url;
         return;
       }
-      toast.success("Every class is open.");
+      toast.success(t("Every class is open."));
       await refetch();
     } catch (err) {
       if (err instanceof ApplePurchaseCancelledError || err instanceof GooglePlayPurchaseCancelledError) {
         // Backed out of the store's sheet: not an error.
       } else if (err instanceof ApplePurchasePendingError || err instanceof GooglePlayPurchasePendingError) {
-        toast("Purchase pending approval, every class opens once it's confirmed.");
+        toast(t("Purchase pending approval, every class opens once it's confirmed."));
       } else {
-        toast.error(err instanceof Error ? err.message : "Couldn't start that purchase");
+        toast.error(err instanceof Error ? err.message : t("Couldn't start that purchase"));
       }
     } finally {
       setBusy(false);
@@ -118,15 +120,15 @@ export function AllClassesCard({ compact = false }: { compact?: boolean }) {
       <div className="flex flex-wrap items-center gap-2">
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Lock className="h-3.5 w-3.5 shrink-0" />
-          Comes with All Classes{price ? `, ${price}/mo` : ""}
+          {price ? t("Comes with All Classes, {price}/mo", { price }) : t("Comes with All Classes")}
         </span>
         {sellable ? (
           <Button size="sm" variant="outline" disabled={busy} onClick={() => void buy()}>
-            {busy ? "Opening..." : "Get All Classes"}
+            {busy ? t("Opening...") : t("Get All Classes")}
           </Button>
         ) : (
           <Button size="sm" variant="outline" onClick={() => navigate("/athlete/upgrade")}>
-            See plans
+            {t("See plans")}
           </Button>
         )}
         {sellable && <SubscriptionLegalLinks compact className="basis-full" />}
@@ -144,12 +146,12 @@ export function AllClassesCard({ compact = false }: { compact?: boolean }) {
           {unlocked ? (
             <Badge variant="success" className="shrink-0 gap-1 text-[10px]">
               <Unlock className="h-2.5 w-2.5" />
-              {owned ? "SUBSCRIBED" : "UNLOCKED"}
+              {owned ? t("SUBSCRIBED") : t("UNLOCKED")}
             </Badge>
           ) : (
             <Badge variant="secondary" className="shrink-0 gap-1 text-[10px]">
               <Lock className="h-2.5 w-2.5" />
-              {sellable && price ? price : "LOCKED"}
+              {sellable && price ? price : t("LOCKED")}
             </Badge>
           )}
         </div>
@@ -157,15 +159,15 @@ export function AllClassesCard({ compact = false }: { compact?: boolean }) {
         <p className="text-sm text-muted-foreground">{addOn.description}</p>
         {unlocked ? (
           <Button size="sm" className="mt-auto w-full" onClick={() => navigate("/athlete/classes")}>
-            Open classes
+            {t("Open classes")}
           </Button>
         ) : sellable ? (
           <Button size="sm" variant="outline" className="mt-auto w-full" disabled={busy} onClick={() => void buy()}>
-            {busy ? "Opening..." : `Get for ${price}/mo`}
+            {busy ? t("Opening...") : t("Get for {price}/mo", { price })}
           </Button>
         ) : (
           <p className="mt-auto rounded-md border border-border px-3 py-2 text-center text-xs text-muted-foreground">
-            {billingOpen ? "Not available in the store yet." : "Not available yet."}
+            {billingOpen ? t("Not available in the store yet.") : t("Not available yet.")}
           </p>
         )}
         {!unlocked && sellable && <SubscriptionLegalLinks compact />}

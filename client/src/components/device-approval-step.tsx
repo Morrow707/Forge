@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { MailCheck, ShieldAlert, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
 
 type Status = "pending" | "approved" | "denied" | "expired";
 
@@ -45,6 +46,7 @@ export function DeviceApprovalStep({
   authenticatorAvailable?: boolean;
   onBack: () => void;
 }) {
+  const t = useT();
   const { deviceApprovalCompleteMutation, deviceAuthenticatorMutation } = useAuth();
   const [pollToken, setPollToken] = useState(initialPollToken);
   const [resending, setResending] = useState(false);
@@ -95,9 +97,9 @@ export function DeviceApprovalStep({
       setPollToken(body.pollToken);
       setEmailOut(true);
       deviceApprovalCompleteMutation.reset();
-      toast.success("Sent another email");
+      toast.success(t("Sent another email"));
     } catch (err) {
-      toast.error((err as ApiError).message || "Couldn't resend the email");
+      toast.error((err as ApiError).message || t("Couldn't resend the email"));
     } finally {
       setResending(false);
     }
@@ -112,18 +114,18 @@ export function DeviceApprovalStep({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5" />
-            We don't recognize this device
+            {t("We don't recognize this device")}
           </CardTitle>
           <CardDescription>
             {useBackupCode
-              ? "Enter one of your saved backup codes to approve this device."
-              : "Enter the 6-digit code from your authenticator app to approve this device."}
+              ? t("Enter one of your saved backup codes to approve this device.")
+              : t("Enter the 6-digit code from your authenticator app to approve this device.")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={submitCode} noValidate className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="device-authenticator-code">{useBackupCode ? "Backup code" : "Code"}</Label>
+              <Label htmlFor="device-authenticator-code">{useBackupCode ? t("Backup code") : t("Code")}</Label>
               <Input
                 id="device-authenticator-code"
                 autoComplete="one-time-code"
@@ -131,12 +133,12 @@ export function DeviceApprovalStep({
                 inputMode={useBackupCode ? "text" : "numeric"}
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                placeholder={useBackupCode ? "XXXX-XXXX" : "123456"}
+                placeholder={useBackupCode ? t("XXXX-XXXX") : "123456"}
                 maxLength={useBackupCode ? 9 : 6}
               />
             </div>
             <Button type="submit" size="lg" className="w-full" disabled={!code.trim() || deviceAuthenticatorMutation.isPending}>
-              {deviceAuthenticatorMutation.isPending ? "Verifying…" : "Verify"}
+              {deviceAuthenticatorMutation.isPending ? t("Verifying…") : t("Verify")}
             </Button>
           </form>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -148,7 +150,7 @@ export function DeviceApprovalStep({
               }}
               className="font-semibold text-primary hover:underline"
             >
-              Use the email instead
+              {t("Use the email instead")}
             </button>
             <button
               type="button"
@@ -158,12 +160,12 @@ export function DeviceApprovalStep({
               }}
               className="text-muted-foreground hover:underline"
             >
-              {useBackupCode ? "Use authenticator code instead" : "Use a backup code instead"}
+              {useBackupCode ? t("Use authenticator code instead") : t("Use a backup code instead")}
             </button>
           </div>
           <div className="mt-3 text-sm">
             <button type="button" onClick={onBack} className="text-muted-foreground hover:underline">
-              Back
+              {t("Back")}
             </button>
           </div>
         </CardContent>
@@ -176,16 +178,16 @@ export function DeviceApprovalStep({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           {denied ? <ShieldAlert className="h-5 w-5 text-destructive" /> : <MailCheck className="h-5 w-5" />}
-          {denied ? "This sign-in was denied" : "We don't recognize this device"}
+          {denied ? t("This sign-in was denied") : t("We don't recognize this device")}
         </CardTitle>
         <CardDescription>
           {denied
-            ? "The owner of this account said this wasn't them. Every device has been signed out and they are choosing a new password."
+            ? t("The owner of this account said this wasn't them. Every device has been signed out and they are choosing a new password.")
             : expired
-              ? "That email link has expired. Send a new one to try again."
+              ? t("That email link has expired. Send a new one to try again.")
               : emailOut
-                ? `We sent an email to ${emailHint}. Open it and approve this device, and this screen will sign you in on its own.`
-                : `We couldn't send the email to ${emailHint}. Send it again, or use your authenticator app.`}
+                ? t("We sent an email to {email}. Open it and approve this device, and this screen will sign you in on its own.", { email: emailHint })
+                : t("We couldn't send the email to {email}. Send it again, or use your authenticator app.", { email: emailHint })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -196,12 +198,12 @@ export function DeviceApprovalStep({
               ? // The approval was granted and the claim did not land. It is claimed
                 // once per token on purpose, so the way back in is a fresh approval --
                 // the button below -- and saying so beats a spinner that never resolves.
-                "Approved, but we couldn't finish signing you in. Send the email again to try once more."
+                t("Approved, but we couldn't finish signing you in. Send the email again to try once more.")
               : status === "approved" || deviceApprovalCompleteMutation.isPending
-                ? "Approved. Signing you in…"
+                ? t("Approved. Signing you in…")
                 : isError
-                  ? "Still waiting. Having trouble reaching the server, retrying…"
-                  : "Waiting for you to approve it from your email…"}
+                  ? t("Still waiting. Having trouble reaching the server, retrying…")
+                  : t("Waiting for you to approve it from your email…")}
           </div>
         )}
         {!denied && !expired && authenticatorAvailable && (
@@ -214,17 +216,17 @@ export function DeviceApprovalStep({
             }}
           >
             <ShieldCheck className="mr-2 h-4 w-4" />
-            Use my authenticator app instead
+            {t("Use my authenticator app instead")}
           </Button>
         )}
         {!denied && (
           <Button type="button" variant="outline" className="w-full" onClick={resend} disabled={resending}>
-            {resending ? "Sending…" : expired ? "Send a new email" : "Send the email again"}
+            {resending ? t("Sending…") : expired ? t("Send a new email") : t("Send the email again")}
           </Button>
         )}
         <div className="text-sm">
           <button type="button" onClick={onBack} className="text-muted-foreground hover:underline">
-            Back
+            {t("Back")}
           </button>
         </div>
       </CardContent>

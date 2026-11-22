@@ -23,6 +23,7 @@ import { Activity } from "lucide-react";
 import { ACWR_RISK_LABEL, type AcwrRiskLevel } from "@shared/load";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type AcwrPoint = {
   date: string;
@@ -154,6 +155,7 @@ export function AcwrHistoryDialog({
   athleteName: string;
   fetchUrl: string;
 }) {
+  const t = useT();
   const { data = [], isLoading, isError, refetch } = useQuery<AcwrPoint[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
@@ -173,11 +175,10 @@ export function AcwrHistoryDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Activity className="h-5 w-5" />
-            {athleteName}'s Training Load
+            {t("{name}'s Training Load", { name: athleteName })}
           </DialogTitle>
           <DialogDescription>
-            Acute (7-day) vs. chronic (28-day average) training load, a general
-            load-management guideline, not a medical diagnosis.
+            {t("Acute (7-day) vs. chronic (28-day average) training load, a general load-management guideline, not a medical diagnosis.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -186,16 +187,16 @@ export function AcwrHistoryDialog({
         ) : isError ? (
           // "Not enough logged training yet" is a statement about how much this athlete has
           // trained. A request that did not arrive knows nothing about that.
-          <ReadFailed what="this load history" onRetry={() => void refetch()} />
+          <ReadFailed what={t("this load history")} onRetry={() => void refetch()} />
         ) : data.length === 0 || data.every((p) => p.acuteLoad === 0 && p.chronicLoad === 0) ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            Not enough logged training yet to calculate a load ratio.
+            {t("Not enough logged training yet to calculate a load ratio.")}
           </p>
         ) : (
           <div className="space-y-4">
             {latest?.ratio != null && (
               <div className="flex items-center justify-between rounded-md border border-border p-2.5 text-sm">
-                <span className="text-muted-foreground">Current ratio</span>
+                <span className="text-muted-foreground">{t("Current ratio")}</span>
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{latest.ratio.toFixed(2)}</span>
                   <span

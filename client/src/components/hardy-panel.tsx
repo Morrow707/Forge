@@ -6,6 +6,7 @@ import { ApiError, apiRequest, getJson } from "@/lib/queryClient";
 import { todayIso } from "@/lib/local-date";
 import { cn } from "@/lib/utils";
 import { HardyMark } from "@/components/hardy-mark";
+import { formatDate, msg, translate, useT } from "@/i18n";
 
 /* HARDY'S PANEL (2026-11-11). Two tabs:
  *   - Ask: a question in a sentence, answered from the person's own logs (a coach: the athlete
@@ -32,10 +33,11 @@ const PANEL_WIDTH = 380;
  * 3% at the top to 10% at the bottom), Scott's pick of three strengths, so the window reads as
  * Forge's and not as a blue card dropped on the page. */
 export const HARDY_FLAME = { core: "#4800B5", flame: "#0EB4FF", onFlame: "#06122B" } as const;
-const KIND_LABEL: Record<Hit["kind"], string> = { workout: "Training", food: "Food", checkin: "Check-in" };
-const niceDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+const KIND_LABEL: Record<Hit["kind"], string> = { workout: msg("Training"), food: msg("Food"), checkin: msg("Check-in") };
+const niceDate = (iso: string) => formatDate(new Date(`${iso}T12:00:00`), { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 
 export function HardyPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT();
   const [, navigate] = useLocation();
   const { data: access, isError: accessFailed, refetch: retryAccess } = useQuery<Access>({ queryKey: ["/api/hardy/access"], queryFn: () => getJson("/api/hardy/access"), staleTime: Infinity });
   const [tab, setTab] = useState<"ask" | "search" | null>(null);
@@ -52,7 +54,11 @@ export function HardyPanel({ open, onClose }: { open: boolean; onClose: () => vo
     },
     onMutate: (text) => setTurns((t) => [...t, { who: "me", text }]),
     onSuccess: (r) => setTurns((t) => [...t, { who: "hardy", text: r.answer, link: r.link, date: r.date }]),
-    onError: (e) => setTurns((t) => [...t, { who: "hardy", text: e instanceof ApiError ? e.message : "I couldn't answer that just now. Search still works." }]),
+    onError: (e) =>
+      setTurns((prev) => [
+        ...prev,
+        { who: "hardy", text: e instanceof ApiError ? translate(e.message) : translate("I couldn't answer that just now. Search still works.") },
+      ]),
   });
   const search = useMutation({
     mutationFn: async (text: string) => {
@@ -71,26 +77,26 @@ export function HardyPanel({ open, onClose }: { open: boolean; onClose: () => vo
   const showNames = (hits ?? []).some((h) => h.athleteName && hits?.some((o) => o.athleteId !== h.athleteId));
   return (
     <section
-      aria-label="Hardy"
+      aria-label={t("Hardy")}
       className="fixed z-40 flex max-h-[min(640px,calc(100dvh-110px))] flex-col overflow-hidden rounded-2xl border-2 bg-card"
       style={{ scrollbarGutter: "auto", borderColor: HARDY_FLAME.flame, backgroundImage: "linear-gradient(to bottom, hsl(var(--primary) / 0.03), hsl(var(--primary) / 0.1))", boxShadow: "0 0 0 1px rgba(14,180,255,0.25), 0 0 28px rgba(14,180,255,0.35), 0 18px 40px rgba(0,0,0,0.55)", right: "calc(16px + env(safe-area-inset-right, 0px))", bottom: "calc(84px + env(safe-area-inset-bottom, 0px))", width: `min(${PANEL_WIDTH}px, calc(100vw - 32px))` }}
     >
       <header className="flex items-center gap-2.5 px-3 py-2.5 text-white" style={{ background: `linear-gradient(90deg, ${HARDY_FLAME.core}, ${HARDY_FLAME.flame})` }}>
         <HardyMark className="h-8 w-8 shrink-0" id="hardy-panel-mark" />
         <div className="min-w-0 flex-1">
-          <p className="font-display text-lg font-bold uppercase leading-tight tracking-wide">Hardy</p>
-          <p className="text-[11px] opacity-85">{access?.ask ? "Ask in a sentence, or search your logs" : "Search anything you've logged"}</p>
+          <p className="font-display text-lg font-bold uppercase leading-tight tracking-wide">{t("Hardy")}</p>
+          <p className="text-[11px] opacity-85">{access?.ask ? t("Ask in a sentence, or search your logs") : t("Search anything you've logged")}</p>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close Hardy" className="rounded-md bg-black/30 p-1.5 hover:bg-black/45">
+        <button type="button" onClick={onClose} aria-label={t("Close Hardy")} className="rounded-md bg-black/30 p-1.5 hover:bg-black/45">
           <X className="h-4 w-4" />
         </button>
       </header>
 
       {access?.ask && (
         <div className="grid grid-cols-2 border-b text-sm font-semibold" role="tablist">
-          {(["ask", "search"] as const).map((t) => (
-            <button key={t} type="button" role="tab" aria-selected={current === t} onClick={() => setTab(t)} className={cn("py-2", current === t ? "border-b-2 border-[#0EB4FF] text-foreground" : "text-muted-foreground")}>
-              {t === "ask" ? "Ask Hardy" : "Search"}
+          {(["ask", "search"] as const).map((tab) => (
+            <button key={tab} type="button" role="tab" aria-selected={current === tab} onClick={() => setTab(tab)} className={cn("py-2", current === tab ? "border-b-2 border-[#0EB4FF] text-foreground" : "text-muted-foreground")}>
+              {tab === "ask" ? t("Ask Hardy") : t("Search")}
             </button>
           ))}
         </div>
@@ -101,20 +107,20 @@ export function HardyPanel({ open, onClose }: { open: boolean; onClose: () => vo
           <div className="flex-1 space-y-2 overflow-y-auto p-3 text-sm" aria-live="polite">
             {turns.length === 0 && (
               <div className="rounded-lg bg-secondary p-3 text-muted-foreground">
-                Ask about any day, meal or lift. Try "What day did I squat the heaviest?" or "What did I eat the week before my last PR?" Every answer comes from your logs.
+                {t("Ask about any day, meal or lift. Try \"What day did I squat the heaviest?\" or \"What did I eat the week before my last PR?\" Every answer comes from your logs.")}
               </div>
             )}
-            {turns.map((t, i) => (
-              <div key={i} className={cn("max-w-[88%] rounded-xl px-3 py-2", t.who === "me" ? "ml-auto bg-[#0EB4FF] text-[#06122B]" : "bg-secondary")}>
-                <p className="whitespace-pre-wrap">{t.text}</p>
-                {t.link && (
-                  <button type="button" onClick={() => go(t.link!)} className="mt-1.5 rounded-md border bg-card px-2.5 py-1 text-xs font-semibold text-foreground">
-                    Take me there{t.date ? ` · ${niceDate(t.date)}` : ""}
+            {turns.map((turn, i) => (
+              <div key={i} className={cn("max-w-[88%] rounded-xl px-3 py-2", turn.who === "me" ? "ml-auto bg-[#0EB4FF] text-[#06122B]" : "bg-secondary")}>
+                <p className="whitespace-pre-wrap">{turn.text}</p>
+                {turn.link && (
+                  <button type="button" onClick={() => go(turn.link!)} className="mt-1.5 rounded-md border bg-card px-2.5 py-1 text-xs font-semibold text-foreground">
+                    {turn.date ? t("Take me there · {date}", { date: niceDate(turn.date) }) : t("Take me there")}
                   </button>
                 )}
               </div>
             ))}
-            {ask.isPending && <p className="text-xs text-muted-foreground">Looking through your logs…</p>}
+            {ask.isPending && <p className="text-xs text-muted-foreground">{t("Looking through your logs…")}</p>}
           </div>
           <form
             className="flex gap-2 border-t p-2.5"
@@ -127,25 +133,25 @@ export function HardyPanel({ open, onClose }: { open: boolean; onClose: () => vo
             }}
           >
             <input
-              aria-label="Ask Hardy"
+              aria-label={t("Ask Hardy")}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask about a day, meal or lift"
+              placeholder={t("Ask about a day, meal or lift")}
               className="h-10 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm"
               maxLength={400}
             />
             <button type="submit" disabled={ask.isPending || !question.trim()} className="rounded-lg bg-[#0EB4FF] px-4 text-sm font-semibold text-[#06122B] disabled:opacity-50">
-              Ask
+              {t("Ask")}
             </button>
           </form>
-          <p className="px-3 pb-2 text-[10.5px] text-muted-foreground">Answers come from your logs and aren't saved. Not medical advice.</p>
+          <p className="px-3 pb-2 text-[10.5px] text-muted-foreground">{t("Answers come from your logs and aren't saved. Not medical advice.")}</p>
         </>
       ) : (
         <>
           {accessFailed && (
             <p className="border-b px-3 py-2 text-xs text-muted-foreground">
-              Couldn't check whether answers are on for you. Search still works.{" "}
-              <button type="button" className="font-semibold text-foreground underline" onClick={() => void retryAccess()}>Try again</button>
+              {t("Couldn't check whether answers are on for you. Search still works.")}{" "}
+              <button type="button" className="font-semibold text-foreground underline" onClick={() => void retryAccess()}>{t("Try again")}</button>
             </p>
           )}
           {access && !access.ask && access.why && <p className="border-b px-3 py-2 text-xs text-muted-foreground">{access.why}</p>}
@@ -159,22 +165,26 @@ export function HardyPanel({ open, onClose }: { open: boolean; onClose: () => vo
             <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
-                aria-label="Search your logs"
+                aria-label={t("Search your logs")}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder='e.g. "squat", "July 14", "oatmeal"'
+                placeholder={t('e.g. "squat", "July 14", "oatmeal"')}
                 className="h-10 w-full rounded-lg border bg-background pl-8 pr-3 text-sm"
                 maxLength={400}
               />
             </div>
             <button type="submit" disabled={search.isPending || !q.trim()} className="rounded-lg bg-[#0EB4FF] px-4 text-sm font-semibold text-[#06122B] disabled:opacity-50">
-              Search
+              {t("Search")}
             </button>
           </form>
           <div className="flex-1 overflow-y-auto p-2.5 text-sm">
-            {hits == null && !search.isPending && <p className="p-1 text-muted-foreground">Search by a date, a lift, a food or a word from a note.</p>}
-            {search.isPending && <p className="p-1 text-muted-foreground">Searching…</p>}
-            {hits?.length === 0 && <p className="p-1 text-muted-foreground">Nothing found for "{q}". Try a lift name, a food, or a date like "July 14".</p>}
+            {hits == null && !search.isPending && <p className="p-1 text-muted-foreground">{t("Search by a date, a lift, a food or a word from a note.")}</p>}
+            {search.isPending && <p className="p-1 text-muted-foreground">{t("Searching…")}</p>}
+            {hits?.length === 0 && (
+              <p className="p-1 text-muted-foreground">
+                {t('Nothing found for "{query}". Try a lift name, a food, or a date like "July 14".', { query: q })}
+              </p>
+            )}
             {hits && hits.length > 0 && (
               <ul className="space-y-1.5">
                 {hits.map((h, i) => (
@@ -182,7 +192,7 @@ export function HardyPanel({ open, onClose }: { open: boolean; onClose: () => vo
                     <button type="button" onClick={() => go(h.href)} className="w-full rounded-lg border p-2.5 text-left hover:bg-secondary">
                       <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                         <span className="font-semibold text-foreground">{niceDate(h.date)}</span>
-                        <span>{KIND_LABEL[h.kind]}</span>
+                        <span>{t(KIND_LABEL[h.kind])}</span>
                         {showNames && <span>· {h.athleteName}</span>}
                       </span>
                       <span className="mt-0.5 block text-[13px]">{h.label}</span>

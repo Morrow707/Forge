@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { countInteraction } from "@/lib/feature-usage";
 import { useLocation } from "wouter";
 import { HardyMark } from "@/components/hardy-mark";
+import { useT } from "@/i18n";
 
 /* HARDY'S CORNER BUTTON (2026-11-11). The Forge mark in the bottom corner of every signed-in page
  * the app shell draws (athlete, coach, admin; a guardian never renders the shell). Tapping it opens
@@ -16,6 +17,7 @@ const HardyPanel = lazy(async () => ({ default: (await import("@/components/hard
 const WORKOUT_DAY = "/day/";
 
 export function HardyButton() {
+  const t = useT();
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -32,7 +34,7 @@ export function HardyButton() {
     <div data-hardy-root>
       <button
         type="button"
-        aria-label={open ? "Close Hardy" : "Open Hardy, search your logs"}
+        aria-label={open ? t("Close Hardy") : t("Open Hardy, search your logs")}
         aria-expanded={open}
         onClick={() => {
           setLoaded(true);

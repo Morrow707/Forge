@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { todayIso } from "@/lib/local-date";
+import { useT } from "@/i18n";
 
 type RosterEntry = { id: number; name: string; email: string };
 
@@ -35,6 +36,7 @@ export function EnrollInClassDialog({
   classId: number | undefined;
   apiBase?: string;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [athleteIds, setAthleteIds] = useState<Set<number>>(new Set());
   const [startDate, setStartDate] = useState(() => todayIso());
@@ -58,10 +60,10 @@ export function EnrollInClassDialog({
     onSuccess: (count) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/classes`] });
       qc.invalidateQueries({ queryKey: [`${apiBase}/classes`, classId, "roster"] });
-      toast.success(`Enrolled ${count} athlete${count === 1 ? "" : "s"}`);
+      toast.success(t.plural(count, "Enrolled {count} athlete", "Enrolled {count} athletes"));
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not enroll athlete"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not enroll athlete")),
   });
 
   function toggleAthlete(id: number) {
@@ -77,7 +79,7 @@ export function EnrollInClassDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Enroll Athletes</DialogTitle>
+          <DialogTitle>{t("Enroll Athletes")}</DialogTitle>
         </DialogHeader>
         <form
           onSubmit={(e) => {
@@ -88,7 +90,7 @@ export function EnrollInClassDialog({
           className="space-y-4"
         >
           <div className="space-y-1.5">
-            <Label htmlFor="enroll-start-date">Start date</Label>
+            <Label htmlFor="enroll-start-date">{t("Start date")}</Label>
             <Input
               id="enroll-start-date"
               type="date"
@@ -96,13 +98,13 @@ export function EnrollInClassDialog({
               onChange={(e) => setStartDate(e.target.value)}
               required
             />
-            <p className="text-xs text-muted-foreground">Lesson 1 becomes active on this date.</p>
+            <p className="text-xs text-muted-foreground">{t("Lesson 1 becomes active on this date.")}</p>
           </div>
           <div className="space-y-1.5">
-            <Label>Athletes</Label>
+            <Label>{t("Athletes")}</Label>
             <div className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-border p-2">
               {roster.length === 0 && (
-                <p className="py-4 text-center text-xs text-muted-foreground">No athletes on your roster yet.</p>
+                <p className="py-4 text-center text-xs text-muted-foreground">{t("No athletes on your roster yet.")}</p>
               )}
               {roster.map((a) => (
                 <label
@@ -120,10 +122,10 @@ export function EnrollInClassDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button type="submit" disabled={enrollMutation.isPending || athleteIds.size === 0}>
-              {enrollMutation.isPending ? "Enrolling…" : "Enroll"}
+              {enrollMutation.isPending ? t("Enrolling…") : t("Enroll")}
             </Button>
           </DialogFooter>
         </form>

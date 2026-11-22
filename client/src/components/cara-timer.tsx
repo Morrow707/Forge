@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { getJson, apiRequest } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Timer } from "lucide-react";
+import { useT } from "@/i18n";
 
 type CaraStatus = {
   tracking: boolean;
@@ -39,6 +40,7 @@ function formatDuration(ms: number) {
  * the one thing the server can't see on its own -- an athlete who
  * genuinely stopped and forgot to say so. */
 export function CaraTimer() {
+  const t = useT();
   const qc = useQueryClient();
   const [now, setNow] = useState(() => Date.now());
   // Keyed on the server's lastActivityAt value (not the session id) so a
@@ -75,13 +77,13 @@ export function CaraTimer() {
   const confirmActiveMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/athlete/cara/confirm-active"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/athlete/cara/status"] }),
-    onError: (err: Error) => toast.error(err.message || "Couldn't keep the timer running"),
+    onError: (err: Error) => toast.error(err.message || t("Couldn't keep the timer running")),
   });
 
   const stopMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/athlete/cara/stop"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/athlete/cara/status"] }),
-    onError: (err: Error) => toast.error(err.message || "Couldn't stop the timer"),
+    onError: (err: Error) => toast.error(err.message || t("Couldn't stop the timer")),
   });
 
   if (!data?.tracking || !data.open) return null;
@@ -98,19 +100,18 @@ export function CaraTimer() {
       <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-muted-foreground">
         <Timer className="h-3.5 w-3.5 shrink-0 text-primary" />
         <span className="text-foreground">{formatDuration(now - startedAt)}</span>
-        <span>training time logged today</span>
+        <span>{t("training time logged today")}</span>
         <span className="ml-auto">
-          {data.weeklyMinutes} / {data.capMinutes} min this week
+          {t("{used} / {cap} min this week", { used: data.weeklyMinutes, cap: data.capMinutes })}
         </span>
       </div>
 
       <Dialog open={showIdlePrompt} onOpenChange={() => {}}>
         <DialogContent hideClose onEscapeKeyDown={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()}>
           <DialogHeader>
-            <DialogTitle>Still working out?</DialogTitle>
+            <DialogTitle>{t("Still working out?")}</DialogTitle>
             <DialogDescription>
-              We haven't seen a new set logged in a few minutes. Let us know so your training time
-              stays accurate for your program's activity log.
+              {t("We haven't seen a new set logged in a few minutes. Let us know so your training time stays accurate for your program's activity log.")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-2">
@@ -122,7 +123,7 @@ export function CaraTimer() {
               }}
               disabled={stopMutation.isPending}
             >
-              No, I'm done
+              {t("No, I'm done")}
             </Button>
             <Button
               onClick={() => {
@@ -131,7 +132,7 @@ export function CaraTimer() {
               }}
               disabled={confirmActiveMutation.isPending}
             >
-              Yes, still going
+              {t("Yes, still going")}
             </Button>
           </DialogFooter>
         </DialogContent>

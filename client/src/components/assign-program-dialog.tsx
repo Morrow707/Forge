@@ -30,6 +30,7 @@ import { Stethoscope, Plus, Trash2, Clock, Repeat } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 import { todayIso } from "@/lib/local-date";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 const DURATION_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
 
@@ -75,6 +76,7 @@ export function AssignProgramDialog({
   programId?: number;
   initialAthleteIds?: number[];
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [assignAthletes, setAssignAthletes] = useState<Map<number, boolean>>(new Map());
   const [selectedProgramId, setSelectedProgramId] = useState<string>(
@@ -177,7 +179,9 @@ export function AssignProgramDialog({
       const programCount = new Set(result.created.map((a) => a.programId)).size;
       if (result.created.length > 0) {
         toast.success(
-          `Assigned${programCount > 1 ? ` ${programCount} programs` : ""} to ${athleteCount} athlete${athleteCount === 1 ? "" : "s"} — calendars updated`,
+          programCount > 1
+            ? t("Assigned {programs} programs to {count} athletes — calendars updated", { programs: programCount, count: athleteCount })
+            : t.plural(athleteCount, "Assigned to {count} athlete — calendars updated", "Assigned to {count} athletes — calendars updated"),
         );
       }
 
@@ -189,7 +193,7 @@ export function AssignProgramDialog({
         .map((a) => ({
           assignmentId: a.id,
           athleteId: a.athleteId,
-          athleteName: roster.find((r) => r.id === a.athleteId)?.name ?? "Athlete",
+          athleteName: roster.find((r) => r.id === a.athleteId)?.name ?? t("Athlete"),
         }))
         .sort((a, b) => a.athleteName.localeCompare(b.athleteName));
 
@@ -216,11 +220,11 @@ export function AssignProgramDialog({
       }
       setCorrectivesQueue(queue);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not assign program"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not assign program")),
   });
 
   const lockedProgramName = programId
-    ? (programs.find((p) => p.id === programId)?.name ?? "This program")
+    ? (programs.find((p) => p.id === programId)?.name ?? t("This program"))
     : null;
   const programWeekCount = schedule.length
     ? Math.max(...schedule.map((d) => d.weekNumber))
@@ -232,7 +236,7 @@ export function AssignProgramDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign Program</DialogTitle>
+            <DialogTitle>{t("Assign Program")}</DialogTitle>
           </DialogHeader>
           <form
             onSubmit={(e) => {
@@ -242,7 +246,7 @@ export function AssignProgramDialog({
             className="space-y-4"
           >
             <div className="space-y-1.5">
-              <Label>Program</Label>
+              <Label>{t("Program")}</Label>
               {lockedProgramName ? (
                 <div className="rounded-md border border-border bg-surface-elevated px-3 py-2 text-sm font-semibold">
                   {lockedProgramName}
@@ -250,7 +254,7 @@ export function AssignProgramDialog({
               ) : (
                 <Select value={selectedProgramId} onValueChange={setSelectedProgramId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a program" />
+                    <SelectValue placeholder={t("Select a program")} />
                   </SelectTrigger>
                   <SelectContent>
                     {programs.map((p) => (
@@ -264,7 +268,7 @@ export function AssignProgramDialog({
             </div>
             {!setup.planOn && (<>
             <div className="space-y-1.5">
-              <Label>Start date</Label>
+              <Label>{t("Start date")}</Label>
               <Input
                 type="date"
                 value={startDate}
@@ -279,15 +283,14 @@ export function AssignProgramDialog({
                 className="h-12 text-base"
               />
               <p className="text-xs text-muted-foreground">
-                Day 1 of Week 1 lands on this date by default, adjust individual days below for
-                games, travel, or extra rest.
+                {t("Day 1 of Week 1 lands on this date by default, adjust individual days below for games, travel, or extra rest.")}
               </p>
             </div>
 
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5">
                 <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
-                {programWeekCount > 1 ? "Repeat" : "Duration"}
+                {programWeekCount > 1 ? t("Repeat") : t("Duration")}
               </Label>
               <RadioChipGroup
                 label=""
@@ -298,8 +301,14 @@ export function AssignProgramDialog({
               />
               <p className="text-xs text-muted-foreground">
                 {programWeekCount > 1
-                  ? `Runs this program's own ${programWeekCount}-week pattern ${durationWeeks} time${durationWeeks === 1 ? "" : "s"} — ${totalWeeks} weeks total.`
-                  : `${totalWeeks} week${totalWeeks === 1 ? "" : "s"} total.`}
+                  ? durationWeeks === 1
+                    ? t("Runs this program's own {weeks}-week pattern once — {total} weeks total.", { weeks: programWeekCount, total: totalWeeks })
+                    : t("Runs this program's own {weeks}-week pattern {times} times — {total} weeks total.", {
+                        weeks: programWeekCount,
+                        times: durationWeeks,
+                        total: totalWeeks,
+                      })
+                  : t.plural(totalWeeks, "{count} week total.", "{count} weeks total.")}
               </p>
             </div>
 
@@ -318,7 +327,7 @@ export function AssignProgramDialog({
                 simply stops sending it and sends every day's date explicitly instead. */}
             {schedule.length > 0 && (
               <div className="space-y-1.5">
-                <Label>When is each day?</Label>
+                <Label>{t("When is each day?")}</Label>
                 <div className="max-h-72 min-w-0 space-y-1.5 overflow-y-auto rounded-md border border-border p-2">
                   {schedule.map((day, i) => (
                     <div
@@ -329,17 +338,17 @@ export function AssignProgramDialog({
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
-                              Day {i + 1}
+                              {t("Day {n}", { n: i + 1 })}
                             </span>
                             {programWeekCount > 1 && (
                               <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                Wk {day.weekNumber}
+                                {t("Wk {n}", { n: day.weekNumber })}
                               </span>
                             )}
                             <span className="text-xs font-semibold">{day.title}</span>
                             {day.isRestDay && (
                               <span className="shrink-0 rounded-full border border-border px-1.5 py-0 text-[9px] font-bold uppercase text-muted-foreground">
-                                Rest
+                                {t("Rest")}
                               </span>
                             )}
                           </div>
@@ -355,7 +364,7 @@ export function AssignProgramDialog({
                         </div>
                         <Input
                           type="date"
-                          aria-label={`Date for day ${i + 1}, ${day.title}`}
+                          aria-label={t("Date for day {n}, {title}", { n: i + 1, title: day.title })}
                           value={dateOverrides.get(day.programDayId) ?? day.defaultDate}
                           onChange={(e) =>
                             setDateOverrides((prev) => {
@@ -371,8 +380,7 @@ export function AssignProgramDialog({
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Each day starts out the day after the one before it. Set any date to fit
-                  games, practice or rest.
+                  {t("Each day starts out the day after the one before it. Set any date to fit games, practice or rest.")}
                 </p>
               </div>
             )}
@@ -380,16 +388,16 @@ export function AssignProgramDialog({
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label>Athletes</Label>
+                <Label>{t("Athletes")}</Label>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Stethoscope className="h-3.5 w-3.5" />
-                  Correctives
+                  {t("Correctives")}
                   <button
                     type="button"
                     className="font-semibold text-primary hover:underline"
                     onClick={() => toggleCorrectivesForAll(true)}
                   >
-                    all on
+                    {t("all on")}
                   </button>
                   ·
                   <button
@@ -397,7 +405,7 @@ export function AssignProgramDialog({
                     className="font-semibold text-primary hover:underline"
                     onClick={() => toggleCorrectivesForAll(false)}
                   >
-                    all off
+                    {t("all off")}
                   </button>
                 </div>
               </div>
@@ -441,7 +449,7 @@ export function AssignProgramDialog({
                             })
                           }
                         />
-                        Correctives
+                        {t("Correctives")}
                       </label>
                     </div>
                   );
@@ -456,7 +464,7 @@ export function AssignProgramDialog({
             />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {t("Cancel")}
               </Button>
               {/* NOT COSMETIC. A failed schedule read leaves `schedule` empty, and the
                   submit above builds effectiveOverrides from it -- so with training
@@ -467,7 +475,7 @@ export function AssignProgramDialog({
                   week on the way past. Assigning is blocked until the read lands. */}
               {scheduleFailed && (
                 <ReadFailed
-                  what="this program's schedule"
+                  what={t("this program's schedule")}
                   onRetry={() => void refetchSchedule()}
                   className="flex flex-col items-start gap-2 text-left"
                 />
@@ -489,8 +497,7 @@ export function AssignProgramDialog({
                   setup.request.programs.length === 0
                 }
               >
-                Assign to {assignAthletes.size} athlete
-                {assignAthletes.size === 1 ? "" : "s"}
+                {t.plural(assignAthletes.size, "Assign to {count} athlete", "Assign to {count} athletes")}
               </Button>
             </DialogFooter>
           </form>
@@ -523,6 +530,7 @@ function CorrectivesSetupFlow({
   queue: CorrectivesQueueItem[];
   onDone: () => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [index, setIndex] = useState(0);
   const [correctives, setCorrectives] = useState<LocalCorrective[]>([]);
@@ -570,14 +578,14 @@ function CorrectivesSetupFlow({
         : current.athleteName;
       toast.success(
         correctives.length > 0
-          ? `Correctives set for ${label}`
-          : `No correctives added for ${label}`,
+          ? t("Correctives set for {name}", { name: label })
+          : t("No correctives added for {name}", { name: label }),
       );
       setCorrectives([]);
       if (isLast) onDone();
       else setIndex((i) => i + 1);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save correctives"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not save correctives")),
   });
 
   return (
@@ -586,7 +594,7 @@ function CorrectivesSetupFlow({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Correctives for {current.athleteName}
+              {t("Correctives for {name}", { name: current.athleteName })}
               {current.groupCount > 1 && (
                 <span className="ml-2 text-sm font-normal text-muted-foreground">
                   · {current.dayGroup.title}
@@ -594,11 +602,15 @@ function CorrectivesSetupFlow({
               )}
             </DialogTitle>
             <DialogDescription>
-              Athlete {athleteOrdinal} of {totalAthletes}
+              {t("Athlete {n} of {total}", { n: athleteOrdinal, total: totalAthletes })}
               {current.groupCount > 1 &&
-                ` · Day type ${current.groupIndex + 1} of ${current.groupCount}`}{" "}
-              · Applied to every{current.dayGroup.title ? ` ${current.dayGroup.title}` : ""} day
-              in this program — fine-tune specific days later from the calendar.
+                ` · ${t("Day type {n} of {total}", { n: current.groupIndex + 1, total: current.groupCount })}`}{" "}
+              ·{" "}
+              {current.dayGroup.title
+                ? t("Applied to every {title} day in this program — fine-tune specific days later from the calendar.", {
+                    title: current.dayGroup.title,
+                  })
+                : t("Applied to every day in this program — fine-tune specific days later from the calendar.")}
             </DialogDescription>
           </DialogHeader>
 
@@ -607,14 +619,14 @@ function CorrectivesSetupFlow({
               never used a corrective before. */}
           {recentFailed && (
             <p className="py-1 text-xs text-muted-foreground">
-              Couldn't load recent correctives.
+              {t("Couldn't load recent correctives.")}
             </p>
           )}
           {recentCorrectives.length > 0 && (
             <div className="space-y-1">
               <p className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
                 <Clock className="h-3 w-3" />
-                Recently used
+                {t("Recently used")}
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {recentCorrectives.map((ex) => (
@@ -650,10 +662,10 @@ function CorrectivesSetupFlow({
                 className="rounded-md border border-cyan-900/40 bg-cyan-950/10 p-2.5"
               >
                 <div className="mb-2 flex items-center gap-2">
-                  <span className="flex-1 truncate text-sm font-semibold">{c.exerciseName}</span>
+                  <span className="flex-1 truncate text-sm font-semibold">{t.exercise(c.exerciseName)}</span>
                   <button
                     type="button"
-                    aria-label={`Remove ${c.exerciseName}`}
+                    aria-label={t("Remove {name}", { name: t.exercise(c.exerciseName) })}
                     onClick={() =>
                       setCorrectives((prev) => prev.filter((e) => e.key !== c.key))
                     }
@@ -664,7 +676,7 @@ function CorrectivesSetupFlow({
                 </div>
                 <div className="grid grid-cols-3 gap-1.5">
                   <MiniField
-                    label="Sets"
+                    label={t("Sets")}
                     value={c.sets}
                     type="number"
                     onChange={(v) =>
@@ -674,7 +686,7 @@ function CorrectivesSetupFlow({
                     }
                   />
                   <MiniField
-                    label="Reps"
+                    label={t("Reps")}
                     inputMode="numeric"
                     value={c.reps}
                     onChange={(v) =>
@@ -684,7 +696,7 @@ function CorrectivesSetupFlow({
                     }
                   />
                   <MiniField
-                    label="Weight"
+                    label={t("Weight")}
                     value={c.weight}
                     onChange={(v) =>
                       setCorrectives((prev) =>
@@ -697,7 +709,7 @@ function CorrectivesSetupFlow({
             ))}
             {correctives.length === 0 && (
               <p className="py-2 text-center text-xs text-muted-foreground">
-                No correctives added yet for {current.athleteName}
+                {t("No correctives added yet for {name}", { name: current.athleteName })}
               </p>
             )}
           </div>
@@ -710,19 +722,19 @@ function CorrectivesSetupFlow({
             onClick={() => setPickerOpen(true)}
           >
             <Plus className="h-3.5 w-3.5" />
-            Add Corrective
+            {t("Add Corrective")}
           </Button>
 
           <DialogFooter className="sm:justify-between">
             <Button type="button" variant="ghost" onClick={onDone}>
-              Cancel remaining setup
+              {t("Cancel remaining setup")}
             </Button>
             <Button
               type="button"
               onClick={() => applyMutation.mutate()}
               disabled={applyMutation.isPending}
             >
-              {applyMutation.isPending ? "Saving…" : isLast ? "Finish" : "Save & Continue"}
+              {applyMutation.isPending ? t("Saving…") : isLast ? t("Finish") : t("Save & Continue")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -732,7 +744,7 @@ function CorrectivesSetupFlow({
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         correctivesOnly
-        title="Add Corrective"
+        title={t("Add Corrective")}
         onSelect={(exercise) =>
           setCorrectives((prev) => [
             ...prev,

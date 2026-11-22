@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
 import { ShieldOff } from "lucide-react";
 import { COACH_SECTION_LABEL, type CoachSection } from "@shared/coach-sections";
+import { useT } from "@/i18n";
 
 /**
  * Wraps a coach page that a primary coach can restrict a staff member from
@@ -18,6 +19,7 @@ import { COACH_SECTION_LABEL, type CoachSection } from "@shared/coach-sections";
  * to hide outright.
  */
 export function CoachSectionGate({ section, children }: { section: CoachSection; children: ReactNode }) {
+  const t = useT();
   const { user } = useAuth();
 
   if (user?.role === "coach" && user.hiddenSections?.includes(section)) {
@@ -27,7 +29,7 @@ export function CoachSectionGate({ section, children }: { section: CoachSection;
           <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
             <ShieldOff className="h-8 w-8 text-muted-foreground" />
             <p className="max-w-sm text-muted-foreground">
-              Your staff lead hasn't given you access to {COACH_SECTION_LABEL[section]}.
+              {t("Your staff lead hasn't given you access to {section}.", { section: t(COACH_SECTION_LABEL[section]) })}
             </p>
           </CardContent>
         </Card>

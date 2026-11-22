@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import type { PublicUser } from "@shared/schema";
 import { todayIso } from "@/lib/local-date";
+import { useT } from "@/i18n";
 
 /** Shown only for an account old enough to predate dateOfBirth as a signup
  * field at all -- see shared/privacy-tiers.ts's "unknown" tier comment.
@@ -27,6 +28,7 @@ import { todayIso } from "@/lib/local-date";
  * button) this needs real input -- and only ever fills a currently-empty
  * value, never lets someone edit an existing one back out. */
 export function DateOfBirthBanner() {
+  const t = useT();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [dateOfBirth, setDateOfBirth] = useState("");
@@ -38,10 +40,10 @@ export function DateOfBirthBanner() {
     },
     onSuccess: (user) => {
       qc.setQueryData(["/api/auth/me"], user);
-      toast.success("Date of birth saved");
+      toast.success(t("Date of birth saved"));
       setOpen(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save that")),
   });
 
   return (
@@ -49,7 +51,7 @@ export function DateOfBirthBanner() {
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-500 md:px-8">
         <span className="flex items-center gap-1.5">
           <CalendarClock className="h-3.5 w-3.5 shrink-0" />
-          Your account is missing a date of birth, we need it to apply the right privacy protections.
+          {t("Your account is missing a date of birth, we need it to apply the right privacy protections.")}
         </span>
         <Button
           type="button"
@@ -58,21 +60,20 @@ export function DateOfBirthBanner() {
           className="h-6 px-2 text-amber-500 hover:text-amber-500"
           onClick={() => setOpen(true)}
         >
-          Add date of birth
+          {t("Add date of birth")}
         </Button>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Add your date of birth</DialogTitle>
+            <DialogTitle>{t("Add your date of birth")}</DialogTitle>
             <DialogDescription>
-              Your account was created before Forge collected this. It's used to apply the right
-              privacy protections for your age, it won't be shown to anyone else on the platform.
+              {t("Your account was created before Forge collected this. It's used to apply the right privacy protections for your age, it won't be shown to anyone else on the platform.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
-            <Label htmlFor="dob-backfill">Date of birth</Label>
+            <Label htmlFor="dob-backfill">{t("Date of birth")}</Label>
             <Input
               id="dob-backfill"
               type="date"
@@ -84,7 +85,7 @@ export function DateOfBirthBanner() {
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline">
-                Cancel
+                {t("Cancel")}
               </Button>
             </DialogClose>
             <Button
@@ -92,7 +93,7 @@ export function DateOfBirthBanner() {
               onClick={() => submitMutation.mutate()}
               disabled={submitMutation.isPending || !dateOfBirth}
             >
-              {submitMutation.isPending ? "Saving…" : "Save"}
+              {submitMutation.isPending ? t("Saving…") : t("Save")}
             </Button>
           </DialogFooter>
         </DialogContent>

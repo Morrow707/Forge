@@ -29,6 +29,7 @@ import {
   type CalendarEventItem,
   type CalendarEventLabel,
 } from "@shared/calendar-events";
+import { useT } from "@/i18n";
 
 const EVENTS_KEY = "/api/calendar-events";
 const PERSONAL = "personal";
@@ -74,8 +75,9 @@ function CalendarEventDialog({
   event: CalendarEventItem | null;
   defaultDate: string;
 }) {
+  const t = useT();
   const readOnly = !!event && !event.canEdit;
-  const saveLabel = event ? "Save" : "Add event";
+  const saveLabel = event ? t("Save") : t("Add event");
   const [draft, setDraft] = useState<Draft>(() => draftFrom(event, defaultDate));
   const [colorTouched, setColorTouched] = useState(!!event);
   const { data: teams = [] } = useQuery<{ id: number; name: string }[]>({
@@ -104,20 +106,20 @@ function CalendarEventDialog({
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: [EVENTS_KEY] });
-      toast.success(event ? "Event updated" : "Event added");
+      toast.success(event ? t("Event updated") : t("Event added"));
       onOpenChange(false);
     },
-    onError: (err: Error) => toast.error(err.message || "Couldn't save that event"),
+    onError: (err: Error) => toast.error(err.message || t("Couldn't save that event")),
   });
 
   const remove = useMutation({
     mutationFn: async () => apiRequest("DELETE", `/api/calendar-events/${event!.id}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: [EVENTS_KEY] });
-      toast.success("Event deleted");
+      toast.success(t("Event deleted"));
       onOpenChange(false);
     },
-    onError: (err: Error) => toast.error(err.message || "Couldn't delete that event"),
+    onError: (err: Error) => toast.error(err.message || t("Couldn't delete that event")),
   });
 
   if (readOnly && event) {
@@ -132,7 +134,7 @@ function CalendarEventDialog({
           </DialogHeader>
           <div className="space-y-2 text-sm">
             <span className="cal-ev inline-block rounded px-2 py-0.5 text-xs font-semibold" style={eventColorStyle(event.color)}>
-              {event.source === "imported" ? event.calendarName ?? "Imported calendar" : labelText(event.label, event.customLabel)}
+              {event.source === "imported" ? event.calendarName ?? t("Imported calendar") : labelText(event.label, event.customLabel)}
             </span>
             {event.location && (
               <p className="flex items-center gap-1.5 text-muted-foreground">
@@ -143,8 +145,10 @@ function CalendarEventDialog({
             {event.note && <p className="whitespace-pre-wrap">{event.note}</p>}
             <p className="text-xs text-muted-foreground">
               {event.source === "imported"
-                ? "From a calendar shown in Forge. Change it in the calendar app it came from."
-                : `Added for ${event.teamName ?? "your team"}. Only the coach who added it can change it.`}
+                ? t("From a calendar shown in Forge. Change it in the calendar app it came from.")
+                : event.teamName
+                  ? t("Added for {team}. Only the coach who added it can change it.", { team: event.teamName })
+                  : t("Added for your team. Only the coach who added it can change it.")}
             </p>
           </div>
         </DialogContent>
@@ -156,8 +160,8 @@ function CalendarEventDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{event ? "Edit event" : "Add an event"}</DialogTitle>
-          <DialogDescription>Games, practices, meetings, anything. Events sit beside training and never count as a workout.</DialogDescription>
+          <DialogTitle>{event ? t("Edit event") : t("Add an event")}</DialogTitle>
+          <DialogDescription>{t("Games, practices, meetings, anything. Events sit beside training and never count as a workout.")}</DialogDescription>
         </DialogHeader>
         <form
           className="space-y-3"
@@ -167,11 +171,11 @@ function CalendarEventDialog({
           }}
         >
           <div className="space-y-1">
-            <Label htmlFor="ev-title">Title</Label>
-            <Input id="ev-title" value={draft.title} maxLength={EVENT_TITLE_MAX} onChange={(e) => set({ title: e.target.value })} placeholder="Home game vs. Central" required />
+            <Label htmlFor="ev-title">{t("Title")}</Label>
+            <Input id="ev-title" value={draft.title} maxLength={EVENT_TITLE_MAX} onChange={(e) => set({ title: e.target.value })} placeholder={t("Home game vs. Central")} required />
           </div>
           <div className="space-y-1">
-            <Label>Label</Label>
+            <Label>{t("Label")}</Label>
             <div className="flex flex-wrap gap-1.5">
               {CALENDAR_EVENT_LABELS.map((l) => (
                 <button
@@ -185,11 +189,11 @@ function CalendarEventDialog({
                 </button>
               ))}
             </div>
-            <Input aria-label="Your own label (optional)" value={draft.customLabel} maxLength={EVENT_CUSTOM_LABEL_MAX} onChange={(e) => set({ customLabel: e.target.value })} placeholder="Your own label (optional), e.g. Scrimmage" />
+            <Input aria-label={t("Your own label (optional)")} value={draft.customLabel} maxLength={EVENT_CUSTOM_LABEL_MAX} onChange={(e) => set({ customLabel: e.target.value })} placeholder={t("Your own label (optional), e.g. Scrimmage")} />
           </div>
           <div className="space-y-1">
-            <Label>Color</Label>
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Color">
+            <Label>{t("Color")}</Label>
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t("Color")}>
               {CALENDAR_EVENT_COLORS.map((c) => (
                 <button
                   key={c.id}
@@ -210,33 +214,33 @@ function CalendarEventDialog({
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-3 space-y-1 sm:col-span-1">
-              <Label htmlFor="ev-date">Date</Label>
+              <Label htmlFor="ev-date">{t("Date")}</Label>
               <Input id="ev-date" type="date" value={draft.date} onChange={(e) => set({ date: e.target.value })} required />
             </div>
             <div className="col-span-3 grid grid-cols-2 gap-2 sm:col-span-2">
               <div className="space-y-1">
-                <Label htmlFor="ev-start">Start (optional)</Label>
+                <Label htmlFor="ev-start">{t("Start (optional)")}</Label>
                 <Input id="ev-start" type="time" value={draft.startTime} onChange={(e) => set({ startTime: e.target.value })} />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="ev-end">End</Label>
+                <Label htmlFor="ev-end">{t("End")}</Label>
                 <Input id="ev-end" type="time" value={draft.endTime} disabled={!draft.startTime} onChange={(e) => set({ endTime: e.target.value })} />
               </div>
             </div>
           </div>
-          <p className="-mt-1 text-xs text-muted-foreground">Leave the start empty for an all-day event.</p>
+          <p className="-mt-1 text-xs text-muted-foreground">{t("Leave the start empty for an all-day event.")}</p>
           {teams.length > 0 && (
             <div className="space-y-1">
-              <Label>Who sees it</Label>
+              <Label>{t("Who sees it")}</Label>
               <Select value={draft.team} onValueChange={(v) => set({ team: v })}>
-                <SelectTrigger aria-label="Who sees it">
+                <SelectTrigger aria-label={t("Who sees it")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={PERSONAL}>Just me</SelectItem>
-                  {teams.map((t) => (
-                    <SelectItem key={t.id} value={String(t.id)}>
-                      Everyone on {t.name}
+                  <SelectItem value={PERSONAL}>{t("Just me")}</SelectItem>
+                  {teams.map((team) => (
+                    <SelectItem key={team.id} value={String(team.id)}>
+                      {t("Everyone on {team}", { team: team.name })}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -244,22 +248,22 @@ function CalendarEventDialog({
             </div>
           )}
           <div className="space-y-1">
-            <Label htmlFor="ev-location">Location (optional)</Label>
+            <Label htmlFor="ev-location">{t("Location (optional)")}</Label>
             <Input id="ev-location" value={draft.location} maxLength={EVENT_LOCATION_MAX} onChange={(e) => set({ location: e.target.value })} />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="ev-note">Note (optional)</Label>
+            <Label htmlFor="ev-note">{t("Note (optional)")}</Label>
             <Textarea id="ev-note" value={draft.note} maxLength={EVENT_NOTE_MAX} onChange={(e) => set({ note: e.target.value })} rows={2} />
           </div>
           <div className="flex items-center gap-2 pt-1">
             {event && (
               <Button type="button" variant="ghost" onClick={() => remove.mutate()} disabled={remove.isPending}>
                 <Trash2 className="h-4 w-4" />
-                Delete
+                {t("Delete")}
               </Button>
             )}
             <Button type="submit" className="ml-auto" disabled={save.isPending || !draft.title.trim() || !draft.date}>
-              {save.isPending ? "Saving..." : saveLabel}
+              {save.isPending ? t("Saving...") : saveLabel}
             </Button>
           </div>
         </form>
@@ -276,6 +280,7 @@ export function useCalendarEventsLayer(range: { start: string; end: string }): {
   addButton: ReactNode;
   dialog: ReactNode;
 } {
+  const t = useT();
   const { data = [] } = useQuery<CalendarEventItem[]>({
     queryKey: [EVENTS_KEY, range.start, range.end],
     queryFn: () => getJson(`${EVENTS_KEY}?start=${range.start}&end=${range.end}`),
@@ -298,7 +303,7 @@ export function useCalendarEventsLayer(range: { start: string; end: string }): {
     addButton: (
       <Button variant="outline" size="sm" onClick={() => openFor(null)}>
         <CalendarPlus className="h-4 w-4" />
-        Add Event
+        {t("Add Event")}
       </Button>
     ),
     dialog: open ? <CalendarEventDialog key={nonce} open={open} onOpenChange={setOpen} event={editing} defaultDate={editing?.date ?? today} /> : null,

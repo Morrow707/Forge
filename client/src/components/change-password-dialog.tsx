@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { KeyRound } from "lucide-react";
+import { useT } from "@/i18n";
 
 /** Self-service password change for an already-logged-in user -- previously
  * the only way to change a password was the forgot-password email flow,
@@ -30,6 +31,7 @@ export function ChangePasswordDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -45,11 +47,11 @@ export function ChangePasswordDialog({
   const changeMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/account/change-password", { currentPassword, newPassword }),
     onSuccess: () => {
-      toast.success("Password changed, your other devices have been logged out.");
+      toast.success(t("Password changed, your other devices have been logged out."));
       reset();
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't change your password"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't change your password")),
   });
 
   return (
@@ -64,15 +66,15 @@ export function ChangePasswordDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <KeyRound className="h-5 w-5" />
-            Change password
+            {t("Change password")}
           </DialogTitle>
           <DialogDescription>
-            Changing your password logs every other device out, this one stays signed in.
+            {t("Changing your password logs every other device out, this one stays signed in.")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="current-password">Current password</Label>
+            <Label htmlFor="current-password">{t("Current password")}</Label>
             <PasswordInput
               id="current-password"
               autoComplete="current-password"
@@ -82,18 +84,18 @@ export function ChangePasswordDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="new-password">New password</Label>
+            <Label htmlFor="new-password">{t("New password")}</Label>
             <PasswordInput
               id="new-password"
               autoComplete="new-password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Pick something only you would type"
+              placeholder={t("Pick something only you would type")}
             />
             <PasswordRequirements value={newPassword} className="pt-0.5" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="confirm-password">Confirm new password</Label>
+            <Label htmlFor="confirm-password">{t("Confirm new password")}</Label>
             <PasswordInput
               id="confirm-password"
               autoComplete="new-password"
@@ -101,12 +103,12 @@ export function ChangePasswordDialog({
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="••••••••"
             />
-            {mismatch && <p className="text-xs text-destructive">Passwords don't match.</p>}
+            {mismatch && <p className="text-xs text-destructive">{t("Passwords don't match.")}</p>}
           </div>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
             onClick={() => changeMutation.mutate()}
@@ -117,7 +119,7 @@ export function ChangePasswordDialog({
               changeMutation.isPending
             }
           >
-            {changeMutation.isPending ? "Changing…" : "Change password"}
+            {changeMutation.isPending ? t("Changing…") : t("Change password")}
           </Button>
         </DialogFooter>
       </DialogContent>

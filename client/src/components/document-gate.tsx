@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
+import { useT } from "@/i18n";
 
 export type DocumentCompliance = {
   audience: string;
@@ -70,18 +71,18 @@ export function DocumentsRequiredDialog({
   onOpenChange: (open: boolean) => void;
   missing: DocumentCompliance["missing"];
 }) {
+  const t = useT();
   const [, navigate] = useLocation();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <FileWarning className="h-7 w-7 text-primary" />
-          <DialogTitle>Finish your documents first</DialogTitle>
+          <DialogTitle>{t("Finish your documents first")}</DialogTitle>
           <DialogDescription asChild>
             <div className="space-y-3 text-left text-sm text-muted-foreground">
               <p>
-                You can look around Forge, but training, skills and the camera stay locked until
-                these are on file.
+                {t("You can look around Forge, but training, skills and the camera stay locked until these are on file.")}
               </p>
               <ul className="space-y-2">
                 {missing.map((doc) => (
@@ -103,10 +104,10 @@ export function DocumentsRequiredDialog({
               navigate("/documents");
             }}
           >
-            Take me to my documents
+            {t("Take me to my documents")}
           </Button>
           <Button type="button" variant="ghost" className="w-full" onClick={() => onOpenChange(false)}>
-            Keep looking around
+            {t("Keep looking around")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -174,15 +175,16 @@ export function useDocumentGuard() {
  * navigation costs every athlete a wait to catch a case that currently never fires.
  */
 export function DocumentsGate({ children }: { children: ReactNode }) {
+  const t = useT();
   const { blocked, missing } = useDocumentGate();
   const [, navigate] = useLocation();
   if (blocked !== true) return <>{children}</>;
   return (
     <div className="mx-auto max-w-md px-4 py-16 text-center">
       <FileWarning className="mx-auto h-10 w-10 text-primary" />
-      <h2 className="mt-4 text-xl font-semibold">Finish your documents first</h2>
+      <h2 className="mt-4 text-xl font-semibold">{t("Finish your documents first")}</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        Training, skills and the camera unlock as soon as these are on file.
+        {t("Training, skills and the camera unlock as soon as these are on file.")}
       </p>
       <ul className="mt-5 space-y-2 text-left">
         {missing.map((doc) => (
@@ -193,7 +195,7 @@ export function DocumentsGate({ children }: { children: ReactNode }) {
         ))}
       </ul>
       <Button type="button" className="mt-6 w-full" onClick={() => navigate("/documents")}>
-        Take me to my documents
+        {t("Take me to my documents")}
       </Button>
     </div>
   );

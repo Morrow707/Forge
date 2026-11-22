@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { getJson, apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ShieldCheck, Lock } from "lucide-react";
+import { useT } from "@/i18n";
 
 type GuardianLinkStatus = { id: number; removable: boolean } | null;
 
@@ -25,6 +26,7 @@ export function GuardianAccessDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const { data: link, isLoading } = useQuery<GuardianLinkStatus>({
     queryKey: ["/api/account/guardian-link"],
@@ -38,10 +40,10 @@ export function GuardianAccessDialog({
     },
     onSuccess: () => {
       qc.setQueryData(["/api/account/guardian-link"], null);
-      toast.success("Guardian access removed");
+      toast.success(t("Guardian access removed"));
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not remove guardian access"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not remove guardian access")),
   });
 
   return (
@@ -50,27 +52,27 @@ export function GuardianAccessDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-primary" />
-            Guardian access
+            {t("Guardian access")}
           </DialogTitle>
           <DialogDescription>
             {isLoading
-              ? "Checking..."
+              ? t("Checking...")
               : !link
-                ? "No guardian account is linked to your profile."
+                ? t("No guardian account is linked to your profile.")
                 : link.removable
-                  ? "A guardian account is linked to your profile. Since you're 18 or older, you can remove it."
-                  : "A guardian account is linked to your profile. It can't be removed until you turn 18."}
+                  ? t("A guardian account is linked to your profile. Since you're 18 or older, you can remove it.")
+                  : t("A guardian account is linked to your profile. It can't be removed until you turn 18.")}
           </DialogDescription>
         </DialogHeader>
         {!isLoading && link && !link.removable && (
           <p className="flex items-start gap-2 rounded-md border border-border bg-surface p-3 text-xs text-muted-foreground">
             <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            This stays in place while you're under 18, whether or not you'd rather it didn't.
+            {t("This stays in place while you're under 18, whether or not you'd rather it didn't.")}
           </p>
         )}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Close
+            {t("Close")}
           </Button>
           {!isLoading && link?.removable && (
             <Button
@@ -79,7 +81,7 @@ export function GuardianAccessDialog({
               disabled={removeMutation.isPending}
               onClick={() => removeMutation.mutate()}
             >
-              {removeMutation.isPending ? "Removing…" : "Remove guardian access"}
+              {removeMutation.isPending ? t("Removing…") : t("Remove guardian access")}
             </Button>
           )}
         </DialogFooter>

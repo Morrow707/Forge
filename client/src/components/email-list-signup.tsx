@@ -5,6 +5,7 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 /** "Tell me when Forge opens." The one form that joins the launch email list, drawn on the
  * coming-soon card and in the marketing footer. POST /api/public/email-list answers the same
@@ -19,6 +20,7 @@ export function EmailListSignup({
   className?: string;
   compact?: boolean;
 }) {
+  const t = useT();
   const [email, setEmail] = useState("");
   const [joined, setJoined] = useState(false);
   const mutation = useMutation({
@@ -31,7 +33,7 @@ export function EmailListSignup({
   if (joined) {
     return (
       <p className={cn("text-sm text-muted-foreground", className)} role="status">
-        You're on the list. We'll email you when Forge opens.
+        {t("You're on the list. We'll email you when Forge opens.")}
       </p>
     );
   }
@@ -46,7 +48,7 @@ export function EmailListSignup({
     <form onSubmit={onSubmit} className={cn("space-y-2", className)}>
       {!compact && (
         <p className="text-sm text-muted-foreground">
-          Want to know when sign-ups open, and hear about launch offers? Leave your email.
+          {t("Want to know when sign-ups open, and hear about launch offers? Leave your email.")}
         </p>
       )}
       <div className="flex gap-2">
@@ -57,22 +59,22 @@ export function EmailListSignup({
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          aria-label="Email address for Forge news"
+          placeholder={t("you@example.com")}
+          aria-label={t("Email address for Forge news")}
           className={compact ? "h-9" : undefined}
         />
         <Button type="submit" size={compact ? "sm" : "default"} disabled={mutation.isPending || !email.trim()}>
           <Mail className="h-4 w-4" />
-          {mutation.isPending ? "Joining…" : "Sign me up"}
+          {mutation.isPending ? t("Joining…") : t("Sign me up")}
         </Button>
       </div>
       {mutation.isError && (
         <p className="text-sm text-destructive">
-          {mutation.error instanceof ApiError ? mutation.error.message : "That didn't go through. Try again."}
+          {mutation.error instanceof ApiError ? mutation.error.message : t("That didn't go through. Try again.")}
         </p>
       )}
       {!compact && (
-        <p className="text-xs text-muted-foreground">Forge news and offers only. Every email has an unsubscribe link.</p>
+        <p className="text-xs text-muted-foreground">{t("Forge news and offers only. Every email has an unsubscribe link.")}</p>
       )}
     </form>
   );

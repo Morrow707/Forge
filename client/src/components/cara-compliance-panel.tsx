@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { ShieldCheck, ClipboardPlus, AlertTriangle, Timer, Download } from "lucide-react";
 import { shareOrDownloadFile } from "@/lib/share-file";
 import { ReadFailed } from "@/components/read-failed";
+import { msg, useT } from "@/i18n";
 
 type ComplianceRow = {
   athleteId: number;
@@ -32,10 +33,10 @@ type ComplianceRow = {
 };
 
 const ACTIVITY_TYPES = [
-  { value: "meeting", label: "Team Meeting" },
-  { value: "film_review", label: "Film Review" },
-  { value: "travel", label: "Travel" },
-  { value: "other", label: "Other" },
+  { value: "meeting", label: msg("Team Meeting") },
+  { value: "film_review", label: msg("Film Review") },
+  { value: "travel", label: msg("Travel") },
+  { value: "other", label: msg("Other") },
 ] as const;
 
 /** NCAA-style weekly countable-hours compliance -- fully opt-in per coach.
@@ -43,6 +44,7 @@ const ACTIVITY_TYPES = [
  * and this roster-wide weekly snapshot; clearing it (back to "off") stops
  * both immediately. */
 export function CaraCompliancePanel({ roster }: { roster: { id: number; name: string }[] }) {
+  const t = useT();
   const qc = useQueryClient();
   const [capInput, setCapInput] = useState("");
   const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
@@ -77,9 +79,9 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/cara/settings"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/cara/compliance"] });
-      toast.success("CARA settings updated");
+      toast.success(t("CARA settings updated"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save that")),
   });
 
   const logMutation = useMutation({
@@ -93,14 +95,14 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/cara/compliance"] });
-      toast.success("Activity logged");
+      toast.success(t("Activity logged"));
       setLogOpen(false);
       setLogAthleteId("");
       setLogStart("");
       setLogEnd("");
       setLogNote("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't log that activity"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't log that activity")),
   });
 
   async function handleExport(format: "csv" | "pdf") {
@@ -109,10 +111,10 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
       await shareOrDownloadFile(
         `/api/coach/cara/compliance-report.${format}`,
         `cara-compliance.${format}`,
-        "CARA Compliance Report",
+        t("CARA Compliance Report"),
       );
     } catch {
-      toast.error("Couldn't generate that export");
+      toast.error(t("Couldn't generate that export"));
     } finally {
       setExporting(null);
     }
@@ -124,18 +126,16 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <ShieldCheck className="h-4 w-4" />
-            CARA Time-Log Compliance
+            {t("CARA Time-Log Compliance")}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Tracks countable athletically-related activity time against a weekly cap. Off by
-            default, turn it on only if your program needs it. Once set, each athlete's
-            training session starts timing itself the moment they submit their daily check-in.
+            {t("Tracks countable athletically-related activity time against a weekly cap. Off by default, turn it on only if your program needs it. Once set, each athlete's training session starts timing itself the moment they submit their daily check-in.")}
           </p>
           <div className="flex items-end gap-2">
             <div className="space-y-1.5">
-              <Label htmlFor="cara-cap">Weekly cap (hours)</Label>
+              <Label htmlFor="cara-cap">{t("Weekly cap (hours)")}</Label>
               <Input
                 id="cara-cap"
                 type="number"
@@ -150,7 +150,7 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
               disabled={!capInput || saveCapMutation.isPending}
               onClick={() => saveCapMutation.mutate(Math.round(Number(capInput) * 60))}
             >
-              Turn On
+              {t("Turn On")}
             </Button>
           </div>
         </CardContent>
@@ -163,12 +163,12 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
       <CardHeader className="flex flex-row items-center justify-between gap-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <ShieldCheck className="h-4 w-4" />
-          CARA Time-Log Compliance
+          {t("CARA Time-Log Compliance")}
         </CardTitle>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="secondary" onClick={() => setLogOpen(true)}>
             <ClipboardPlus className="h-3.5 w-3.5" />
-            Log Activity
+            {t("Log Activity")}
           </Button>
           <Button
             size="sm"
@@ -177,7 +177,7 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
             onClick={() => handleExport("csv")}
           >
             <Download className="h-3.5 w-3.5" />
-            {exporting === "csv" ? "Exporting..." : "CSV"}
+            {exporting === "csv" ? t("Exporting...") : t("CSV")}
           </Button>
           <Button
             size="sm"
@@ -186,26 +186,27 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
             onClick={() => handleExport("pdf")}
           >
             <Download className="h-3.5 w-3.5" />
-            {exporting === "pdf" ? "Exporting..." : "PDF"}
+            {exporting === "pdf" ? t("Exporting...") : t("PDF")}
           </Button>
           <Button size="sm" variant="outline" onClick={() => saveCapMutation.mutate(null)}>
-            Turn Off
+            {t("Turn Off")}
           </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
         <p className="text-xs text-muted-foreground">
-          Weekly cap: {Math.round(settings.capMinutes / 60)} hours. Resets Sunday. Exports cover
-          the last 12 weeks for an audit record.
+          {t("Weekly cap: {hours} hours. Resets Sunday. Exports cover the last 12 weeks for an audit record.", {
+            hours: Math.round(settings.capMinutes / 60),
+          })}
         </p>
         {complianceFailed ? (
           // The old branch was `compliance?.athletes.length === 0`, which on a failed read is
           // undefined === 0, i.e. false -- so it fell through and rendered an empty list with no
           // message at all. On a panel about an hours cap, "nobody is over" and "we don't know"
           // have to look different.
-          <ReadFailed what="these hours" onRetry={() => void refetchCompliance()} />
+          <ReadFailed what={t("these hours")} onRetry={() => void refetchCompliance()} />
         ) : compliance?.athletes.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">No athletes yet.</p>
+          <p className="py-4 text-center text-sm text-muted-foreground">{t("No athletes yet.")}</p>
         ) : (
           <div className="space-y-1.5">
             {compliance?.athletes.map((a) => (
@@ -256,17 +257,17 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
       <Dialog open={logOpen} onOpenChange={setLogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Log a Team Activity</DialogTitle>
+            <DialogTitle>{t("Log a Team Activity")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label>Athlete</Label>
+              <Label>{t("Athlete")}</Label>
               <select
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                 value={logAthleteId}
                 onChange={(e) => setLogAthleteId(e.target.value ? Number(e.target.value) : "")}
               >
-                <option value="">Select an athlete</option>
+                <option value="">{t("Select an athlete")}</option>
                 {roster.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.name}
@@ -275,22 +276,22 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label>Activity type</Label>
+              <Label>{t("Activity type")}</Label>
               <select
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                 value={logActivityType}
                 onChange={(e) => setLogActivityType(e.target.value as typeof logActivityType)}
               >
-                {ACTIVITY_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
+                {ACTIVITY_TYPES.map((a) => (
+                  <option key={a.value} value={a.value}>
+                    {t(a.label)}
                   </option>
                 ))}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="min-w-0 space-y-1.5">
-                <Label>Start</Label>
+                <Label>{t("Start date")}</Label>
                 <Input
                   type="datetime-local"
                   value={logStart}
@@ -299,7 +300,7 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
                 />
               </div>
               <div className="min-w-0 space-y-1.5">
-                <Label>End</Label>
+                <Label>{t("End date")}</Label>
                 <Input
                   type="datetime-local"
                   value={logEnd}
@@ -309,23 +310,23 @@ export function CaraCompliancePanel({ roster }: { roster: { id: number; name: st
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Note (optional)</Label>
+              <Label>{t("Note (optional)")}</Label>
               <Input
                 value={logNote}
                 onChange={(e) => setLogNote(e.target.value)}
-                placeholder="e.g. Film review, last week's game"
+                placeholder={t("e.g. Film review, last week's game")}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLogOpen(false)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               disabled={!logAthleteId || !logStart || !logEnd || logMutation.isPending}
               onClick={() => logMutation.mutate()}
             >
-              Log Activity
+              {t("Log Activity")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -348,11 +349,11 @@ type CaraSession = {
 };
 
 const ACTIVITY_LABEL: Record<string, string> = {
-  training: "Training",
-  meeting: "Team Meeting",
-  film_review: "Film Review",
-  travel: "Travel",
-  other: "Other",
+  training: msg("Training"),
+  meeting: msg("Team Meeting"),
+  film_review: msg("Film Review"),
+  travel: msg("Travel"),
+  other: msg("Other"),
 };
 
 /** This week's countable time, session by session.
@@ -370,6 +371,7 @@ function CaraSessionHistoryDialog({
   target: { id: number; name: string } | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const { data: sessions = [], isLoading } = useQuery<CaraSession[]>({
     queryKey: [`/api/coach/cara/${target?.id}/history`],
     queryFn: () => getJson(`/api/coach/cara/${target!.id}/history`),
@@ -383,16 +385,15 @@ function CaraSessionHistoryDialog({
     <Dialog open={target != null} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{target?.name}: this week's sessions</DialogTitle>
+          <DialogTitle>{t("{name}: this week's sessions", { name: target?.name })}</DialogTitle>
           <DialogDescription>
-            Every countable session since Sunday. An open session counts up to right now, which is
-            why the total on the roster moves while someone is training.
+            {t("Every countable session since Sunday. An open session counts up to right now, which is why the total on the roster moves while someone is training.")}
           </DialogDescription>
         </DialogHeader>
         {isLoading && <div className="h-20 animate-pulse rounded-md bg-surface" />}
         {!isLoading && sessions.length === 0 && (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            No countable time recorded this week.
+            {t("No countable time recorded this week.")}
           </p>
         )}
         <div className="space-y-1.5">
@@ -400,16 +401,16 @@ function CaraSessionHistoryDialog({
             <div key={s.id} className="rounded-md border border-border px-2.5 py-2 text-xs">
               <div className="flex flex-wrap items-center gap-x-2">
                 <span className="font-semibold">
-                  {ACTIVITY_LABEL[s.activityType] ?? s.activityType}
+                  {t(ACTIVITY_LABEL[s.activityType] ?? s.activityType)}
                 </span>
                 {s.loggedByCoachId != null && (
                   <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                    logged by a coach
+                    {t("logged by a coach")}
                   </span>
                 )}
                 {s.endedAt == null && (
                   <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                    open now
+                    {t("open now")}
                   </span>
                 )}
                 <span className="ml-auto font-mono tabular-nums">
@@ -417,9 +418,9 @@ function CaraSessionHistoryDialog({
                 </span>
               </div>
               <p className="mt-0.5 text-muted-foreground">
-                {format(new Date(s.startedAt), "EEE d MMM, HH:mm")}
+                {t.date(new Date(s.startedAt), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })}
                 {s.endedAt ? ` - ${format(new Date(s.endedAt), "HH:mm")}` : ""}
-                {s.endReason ? ` · ended: ${s.endReason.replace(/_/g, " ")}` : ""}
+                {s.endReason ? ` · ${t("ended: {reason}", { reason: t(s.endReason.replace(/_/g, " ")) })}` : ""}
               </p>
             </div>
           ))}

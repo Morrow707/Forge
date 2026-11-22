@@ -34,6 +34,7 @@ import {
   MoonStar,
   Target,
 } from "lucide-react";
+import { msg, useT } from "@/i18n";
 
 export type CalendarEntry = {
   // Which system this entry came from -- an exercise-program day and a
@@ -66,10 +67,10 @@ export type CalendarEntry = {
 export type CalendarViewMode = "single-day" | "month" | "week" | "day";
 
 const VIEW_LABEL: Record<CalendarViewMode, string> = {
-  "single-day": "Today",
-  day: "3-Day",
-  week: "Week",
-  month: "Month",
+  "single-day": msg("Today"),
+  day: msg("3-Day"),
+  week: msg("Week"),
+  month: msg("Month"),
 };
 
 function rangeFor(mode: CalendarViewMode, cursor: Date) {
@@ -139,12 +140,13 @@ export function EntryPill({
 /** A calendar event (a game, a practice, a pasted-in calendar's entry) as a pill in its own
  * colour. Never styled as training and never counted as one (2026-11-22). */
 function EventPill({ event, onClick, compact = true }: { event: CalendarEventItem; onClick?: () => void; compact?: boolean }) {
+  const t = useT();
   const time = event.startTime ? eventTimeText(event).split(" – ")[0] : null;
   return (
     <button
       type="button"
       onClick={onClick}
-      title={`${event.title} · ${eventTimeText(event)}`}
+      title={`${event.title} · ${t(eventTimeText(event))}`}
       className={cn("cal-ev flex w-full items-center gap-1 truncate rounded px-1.5 py-1 text-left font-semibold", compact ? "text-[11px] sm:text-xs" : "text-sm")}
       style={eventColorStyle(event.color)}
     >
@@ -158,6 +160,7 @@ function EventPill({ event, onClick, compact = true }: { event: CalendarEventIte
 
 /** A day's events as full-width rows, for the agenda, the 3-day and the single-day views. */
 function EventRows({ events, onEventClick }: { events: CalendarEventItem[]; onEventClick?: (ev: CalendarEventItem) => void }) {
+  const t = useT();
   if (events.length === 0) return null;
   return (
     <div className="space-y-1.5">
@@ -177,7 +180,7 @@ function EventRows({ events, onEventClick }: { events: CalendarEventItem[]; onEv
             </p>
           </div>
           <span className="shrink-0 rounded-full bg-background/40 px-2 py-0.5 text-[10px] font-semibold uppercase">
-            {ev.source === "imported" ? ev.calendarName ?? "Calendar" : labelText(ev.label, ev.customLabel)}
+            {ev.source === "imported" ? ev.calendarName ?? t("Calendar") : labelText(ev.label, ev.customLabel)}
           </span>
         </button>
       ))}
@@ -229,6 +232,7 @@ export function CalendarView({
    * calendars don't have one of yet. */
   dayPreviewFetchUrl?: (entry: CalendarEntry) => string;
 }) {
+  const t = useT();
   const [view, setView] = useState<CalendarViewMode>(initialView);
   const [cursor, setCursor] = useState(() => new Date());
   const lastRangeKey = useRef<string>("");
@@ -269,28 +273,28 @@ export function CalendarView({
 
   const label =
     view === "month"
-      ? format(cursor, "MMMM yyyy")
+      ? t.date(cursor, { month: "long", year: "numeric" })
       : view === "week"
-        ? `${format(start, "MMM d")} – ${format(end, "MMM d, yyyy")}`
+        ? `${t.date(start, { month: "short", day: "numeric" })} – ${t.date(end, { month: "short", day: "numeric", year: "numeric" })}`
         : view === "single-day"
-          ? format(cursor, "EEEE, MMM d")
-          : `${format(start, "MMM d")} – ${format(end, "MMM d")}`;
+          ? t.date(cursor, { weekday: "long", month: "short", day: "numeric" })
+          : `${t.date(start, { month: "short", day: "numeric" })} – ${t.date(end, { month: "short", day: "numeric" })}`;
 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Button size="icon" variant="outline" aria-label="Previous" onClick={goPrev}>
+          <Button size="icon" variant="outline" aria-label={t("Previous")} onClick={goPrev}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="min-w-40 text-center font-display text-lg font-bold uppercase">
             {label}
           </span>
-          <Button size="icon" variant="outline" aria-label="Next" onClick={goNext}>
+          <Button size="icon" variant="outline" aria-label={t("Next")} onClick={goNext}>
             <ChevronRight className="h-4 w-4" />
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setCursor(new Date())}>
-            Today
+            {t("Today")}
           </Button>
         </div>
         <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
@@ -305,7 +309,7 @@ export function CalendarView({
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {VIEW_LABEL[m]}
+              {t(VIEW_LABEL[m])}
             </button>
           ))}
         </div>
@@ -348,7 +352,7 @@ export function CalendarView({
           <DayDetailList
             entries={entriesByDate.get(startISO) ?? []}
             onEntryClick={onEntryClick}
-            emptyLabel="Nothing scheduled."
+            emptyLabel={t("Nothing scheduled.")}
             dayPreviewFetchUrl={dayPreviewFetchUrl}
           />
         ))}
@@ -387,7 +391,7 @@ function groupDayEntries(dayEntries: CalendarEntry[]) {
 export function DayDetailList({
   entries,
   onEntryClick,
-  emptyLabel = "Nothing scheduled.",
+  emptyLabel = msg("Nothing scheduled."),
   dayPreviewFetchUrl,
 }: {
   entries: CalendarEntry[];
@@ -395,10 +399,11 @@ export function DayDetailList({
   emptyLabel?: string;
   dayPreviewFetchUrl?: (entry: CalendarEntry) => string;
 }) {
+  const t = useT();
   const groups = groupDayEntries(entries);
 
   if (groups.length === 0) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">{emptyLabel}</p>;
+    return <p className="py-8 text-center text-sm text-muted-foreground">{t(emptyLabel)}</p>;
   }
 
   return (
@@ -427,7 +432,7 @@ export function DayDetailList({
             <p className="truncate text-xs text-muted-foreground">
               {rep.programName}
               {!rep.isRestDay &&
-                ` · ${rep.exerciseCount} exercise${rep.exerciseCount === 1 ? "" : "s"}`}
+                ` · ${t.plural(rep.exerciseCount, "{count} exercise", "{count} exercises")}`}
             </p>
           </div>
         );
@@ -462,7 +467,7 @@ export function DayDetailList({
               {titleBlock}
               {group.length > 1 && (
                 <span className="ml-auto shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                  {group.length} athletes
+                  {t("{count} athletes", { count: group.length })}
                 </span>
               )}
             </div>
@@ -492,6 +497,7 @@ type DayPreviewExercise = { exerciseName: string; sets: number; reps: string; su
  * onClick can stop the click from bubbling to the row's own onEntryClick
  * (navigating away) without the whole row needing to know about that. */
 function DayPreviewChevron({ open, onToggle, label }: { open: boolean; onToggle: () => void; label: string }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -499,7 +505,7 @@ function DayPreviewChevron({ open, onToggle, label }: { open: boolean; onToggle:
         e.stopPropagation();
         onToggle();
       }}
-      aria-label={open ? `Hide ${label} preview` : `Preview ${label}`}
+      aria-label={open ? t("Hide {name} preview", { name: label }) : t("Preview {name}", { name: label })}
       aria-expanded={open}
       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-elevated hover:text-foreground"
     >
@@ -528,6 +534,7 @@ function DayPreviewList({
   limit?: number;
   className?: string;
 }) {
+  const t = useT();
   const { data, isLoading, isError, refetch } = useQuery<DayPreviewExercise[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
@@ -545,17 +552,17 @@ function DayPreviewList({
         // staleTime: Infinity means a failure sticks for the whole session, so this one
         // does not quietly come right on the next glance -- the retry is the way back.
         <ReadFailed
-          what="this day's exercises"
+          what={t("this day's exercises")}
           onRetry={() => void refetch()}
           className="flex flex-col items-center gap-1.5 py-1 text-center text-xs"
         />
       ) : !data?.length ? (
-        <p className="py-1 text-center text-xs text-muted-foreground">Nothing prescribed here yet.</p>
+        <p className="py-1 text-center text-xs text-muted-foreground">{t("Nothing prescribed here yet.")}</p>
       ) : (
         <>
           {shown!.map((ex, i) => (
             <div key={i} className="flex items-baseline justify-between gap-3 text-xs">
-              <span className="truncate">{ex.exerciseName}</span>
+              <span className="truncate">{t.exercise(ex.exerciseName)}</span>
               <span className="shrink-0 font-semibold text-muted-foreground">
                 {ex.sets}x{ex.reps}
               </span>
@@ -563,7 +570,7 @@ function DayPreviewList({
           ))}
           {hidden > 0 && (
             <p className="pt-0.5 text-[11px] text-muted-foreground">
-              +{hidden} more {hidden === 1 ? "lift" : "lifts"}
+              {t.plural(hidden, "+{count} more lift", "+{count} more lifts")}
             </p>
           )}
         </>
@@ -666,13 +673,14 @@ function MonthGrid({
   eventsByDate: Map<string, CalendarEventItem[]>;
   onEventClick?: (event: CalendarEventItem) => void;
 }) {
+  const t = useT();
   const days = eachDayOfInterval({ start, end });
   return (
     <div>
       <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-muted-foreground sm:gap-2 sm:text-xs">
-        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
           <div key={d} className="py-1">
-            {d}
+            {t.date(new Date(2023, 0, 1 + i), { weekday: "short" })}
           </div>
         ))}
       </div>
@@ -698,14 +706,16 @@ function MonthGrid({
                 <button
                   type="button"
                   onClick={() => onDayClick(dateStr, dayEntries)}
-                  aria-label={`View full details for ${format(day, "MMMM d, yyyy")}`}
+                  aria-label={t("View full details for {date}", {
+                    date: t.date(day, { month: "long", day: "numeric", year: "numeric" }),
+                  })}
                   className={cn(
                     "flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-semibold transition-shadow hover:ring-2 hover:ring-primary/50 sm:h-5 sm:w-5 sm:text-xs",
                     isToday(day) && "bg-primary text-primary-foreground",
                   )}
                 >
                   {format(day, "d")}
-                  {isToday(day) && <span className="sr-only"> (Today)</span>}
+                  {isToday(day) && <span className="sr-only">{` (${t("Today")})`}</span>}
                 </button>
               ) : (
                 <span
@@ -715,7 +725,7 @@ function MonthGrid({
                   )}
                 >
                   {format(day, "d")}
-                  {isToday(day) && <span className="sr-only"> (Today)</span>}
+                  {isToday(day) && <span className="sr-only">{` (${t("Today")})`}</span>}
                 </span>
               )}
 
@@ -826,6 +836,7 @@ function DayAgendaRow({
   dayEvents?: CalendarEventItem[];
   onEventClick?: (event: CalendarEventItem) => void;
 }) {
+  const t = useT();
   return (
     <div>
       <div className="mb-2 flex items-baseline justify-between">
@@ -834,7 +845,7 @@ function DayAgendaRow({
         >
           {label}
         </span>
-        <span className="text-xs text-muted-foreground">{format(day, "MMM d")}</span>
+        <span className="text-xs text-muted-foreground">{t.date(day, { month: "short", day: "numeric" })}</span>
       </div>
       {dayEvents.length > 0 && (
         <div className={cn(dayEntries.length > 0 && "mb-2")}>
@@ -844,7 +855,7 @@ function DayAgendaRow({
       {dayEntries.length === 0 && dayEvents.length > 0 ? null : dayEntries.length === 0 ? (
         <div className="flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border py-6 text-xs text-muted-foreground">
           <MoonStar className="h-3.5 w-3.5" />
-          Nothing scheduled
+          {t("Nothing scheduled")}
         </div>
       ) : (
         <div className="space-y-2">
@@ -886,7 +897,7 @@ function DayAgendaRow({
                   <p className="font-semibold">{e.title}</p>
                   <p className="text-xs text-muted-foreground">
                     {e.programName}
-                    {!e.isRestDay && ` · ${e.exerciseCount} exercise${e.exerciseCount === 1 ? "" : "s"}`}
+                    {!e.isRestDay && ` · ${t.plural(e.exerciseCount, "{count} exercise", "{count} exercises")}`}
                   </p>
                 </div>
               </div>
@@ -926,6 +937,7 @@ function WeekRow({
   eventsByDate: Map<string, CalendarEventItem[]>;
   onEventClick?: (event: CalendarEventItem) => void;
 }) {
+  const t = useT();
   const days = eachDayOfInterval({ start, end });
   const weekEntries = days.flatMap((d) => entriesByDate.get(formatISO(d, { representation: "date" })) ?? []);
   const workoutCount = weekEntries.filter((e) => !e.isRestDay).length;
@@ -938,7 +950,7 @@ function WeekRow({
           <div>
             <p className="font-display text-2xl font-extrabold leading-none">{workoutCount}</p>
             <p className="mt-1 text-[10px] font-semibold uppercase text-muted-foreground">
-              Workouts this week
+              {t("Workouts this week")}
             </p>
           </div>
           <div className="h-8 w-px bg-border" />
@@ -946,7 +958,7 @@ function WeekRow({
             <p className="font-display text-2xl font-extrabold leading-none text-success">
               {completedCount}
             </p>
-            <p className="mt-1 text-[10px] font-semibold uppercase text-muted-foreground">Completed</p>
+            <p className="mt-1 text-[10px] font-semibold uppercase text-muted-foreground">{t("Completed")}</p>
           </div>
           <div className="ml-auto h-2 w-24 overflow-hidden rounded-full bg-secondary sm:w-32">
             <div
@@ -969,7 +981,7 @@ function WeekRow({
               day={day}
               dayEntries={entriesByDate.get(dateStr) ?? []}
               onEntryClick={onEntryClick}
-              label={isToday(day) ? "Today" : format(day, "EEEE")}
+              label={isToday(day) ? t("Today") : t.date(day, { weekday: "long" })}
               dayEvents={eventsByDate.get(dateStr) ?? []}
               onEventClick={onEventClick}
             />
@@ -1001,7 +1013,7 @@ function WeekRow({
                     today ? "text-primary" : "text-muted-foreground",
                   )}
                 >
-                  {today ? "Today" : format(day, "EEE")}
+                  {today ? t("Today") : t.date(day, { weekday: "short" })}
                 </span>
                 <span
                   className={cn(
@@ -1063,18 +1075,19 @@ function ThreeDayAgenda({
   eventsByDate: Map<string, CalendarEventItem[]>;
   onEventClick?: (event: CalendarEventItem) => void;
 }) {
+  const t = useT();
   const days = [centerDate, addDays(centerDate, 1), addDays(centerDate, 2)];
   return (
     <div className="space-y-5">
       {days.map((day) => {
         const dateStr = formatISO(day, { representation: "date" });
         const label = isToday(day)
-          ? "Today"
+          ? t("Today")
           : isYesterday(day)
-            ? "Yesterday"
+            ? t("Yesterday")
             : isTomorrow(day)
-              ? "Tomorrow"
-              : format(day, "EEEE");
+              ? t("Tomorrow")
+              : t.date(day, { weekday: "long" });
         return (
           <DayAgendaRow
             key={dateStr}

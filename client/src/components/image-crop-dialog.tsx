@@ -19,6 +19,7 @@ import {
   type CropKind,
   type CropView,
 } from "@/lib/image-crop";
+import { msg, useT } from "@/i18n";
 
 /** CROP, SEE IT WHERE ATHLETES WILL, THEN SAVE (Scott, 2026-11-20). Every brand image upload --
  *  the logo, the wordmark, the login background and a team's own logo -- opens this first.
@@ -31,9 +32,9 @@ const ZOOM_STEP = 0.01;
 const PERCENT = 100;
 
 const TITLES: Record<CropKind, string> = {
-  logo: "Crop your logo",
-  wordmark: "Crop your wordmark",
-  background: "Crop your login background",
+  logo: msg("Crop your logo"),
+  wordmark: msg("Crop your wordmark"),
+  background: msg("Crop your login background"),
 };
 
 export function ImageCropDialog({
@@ -54,6 +55,7 @@ export function ImageCropDialog({
   onCancel: () => void;
   onSave: (cropped: File) => void;
 }) {
+  const t = useT();
   const shape = CROP_SHAPES[kind];
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [srcUrl, setSrcUrl] = useState<string | null>(null);
@@ -109,13 +111,15 @@ export function ImageCropDialog({
     <Dialog open={!!file} onOpenChange={(open) => !open && !saving && onCancel()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{TITLES[kind]}</DialogTitle>
+          <DialogTitle>{t(TITLES[kind])}</DialogTitle>
           <DialogDescription>
-            {shape.label}. Drag to move the picture, use the slider to zoom. Nothing is uploaded until you press Save.
+            {t("{shape}. Drag to move the picture, use the slider to zoom. Nothing is uploaded until you press Save.", {
+              shape: t(shape.label),
+            })}
           </DialogDescription>
         </DialogHeader>
         {failed ? (
-          <p className="text-sm text-destructive">That file couldn't be opened as a picture. Try a PNG, JPG or WEBP.</p>
+          <p className="text-sm text-destructive">{t("That file couldn't be opened as a picture. Try a PNG, JPG or WEBP.")}</p>
         ) : (
           <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <div className="min-w-0 space-y-3">
@@ -155,7 +159,7 @@ export function ImageCropDialog({
                 {img && srcUrl && rect && !view.fitWhole && (
                   <img
                     src={srcUrl}
-                    alt="Your picture"
+                    alt={t("Your picture")}
                     draggable={false}
                     className="pointer-events-none absolute max-w-none"
                     // In percentages of the frame, so the picture fills it exactly at any width.
@@ -197,15 +201,15 @@ export function ImageCropDialog({
               <div className="flex items-start justify-between gap-3">
                 <p className="text-xs text-muted-foreground" data-testid="crop-centered-status">
                   {view.fitWhole
-                    ? "The whole picture is centered."
+                    ? t("The whole picture is centered.")
                     : centered.x && centered.y
-                      ? "Centered both ways."
+                      ? t("Centered both ways.")
                       : centered.x
-                        ? "Centered left to right."
+                        ? t("Centered left to right.")
                         : centered.y
-                          ? "Centered top to bottom."
-                          : "Drag near the middle and it snaps to center. A line lights up when it is centered."}{" "}
-                  The lines are not part of the picture.
+                          ? t("Centered top to bottom.")
+                          : t("Drag near the middle and it snaps to center. A line lights up when it is centered.")}{" "}
+                  {t("The lines are not part of the picture.")}
                 </p>
                 <Button
                   type="button"
@@ -216,11 +220,11 @@ export function ImageCropDialog({
                   disabled={!img || view.fitWhole || (centered.x && centered.y)}
                   onClick={() => setView((v) => { const middle = initialCropView(); return { ...v, centerX: middle.centerX, centerY: middle.centerY }; })}
                 >
-                  Center
+                  {t("Center")}
                 </Button>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="crop-zoom">Zoom</Label>
+                <Label htmlFor="crop-zoom">{t("Zoom")}</Label>
                 <input
                   id="crop-zoom"
                   type="range"
@@ -235,21 +239,21 @@ export function ImageCropDialog({
               </div>
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox checked={view.fitWhole} onCheckedChange={(c) => setView((v) => ({ ...v, fitWhole: c === true }))} />
-                Fit the whole picture (nothing cut off)
+                {t("Fit the whole picture (nothing cut off)")}
               </label>
             </div>
             <div className="min-w-0 space-y-2">
-              <p className="label-xs">How athletes will see it</p>
+              <p className="label-xs">{t("How athletes will see it")}</p>
               {preview && <CropPreview kind={kind} src={preview} programName={programName} primaryColor={primaryColor} />}
             </div>
           </div>
         )}
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onCancel} disabled={saving}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button type="button" onClick={() => void save()} disabled={!img || saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("Saving…") : t("Save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -259,7 +263,8 @@ export function ImageCropDialog({
 
 /** The cropped picture in the places it is used, with the same sizes and corners the app uses. */
 function CropPreview({ kind, src, programName, primaryColor }: { kind: CropKind; src: string; programName: string | null; primaryColor: string | null }) {
-  const name = programName || "Your program";
+  const t = useT();
+  const name = programName || t("Your program");
   const button = { backgroundColor: primaryColor || "hsl(var(--primary))" };
   if (kind === "background") {
     return (
@@ -271,7 +276,7 @@ function CropPreview({ kind, src, programName, primaryColor }: { kind: CropKind;
           <p className="font-display text-lg font-extrabold uppercase tracking-wider">{name}</p>
           <div className="h-6 w-full rounded-full bg-white/15" />
           <div className="h-6 w-full rounded-full bg-white/15" />
-          <div className="h-7 w-full rounded-full text-xs font-semibold leading-7" style={button}>Sign in</div>
+          <div className="h-7 w-full rounded-full text-xs font-semibold leading-7" style={button}>{t("Sign in")}</div>
         </div>
       </div>
     );
@@ -279,7 +284,7 @@ function CropPreview({ kind, src, programName, primaryColor }: { kind: CropKind;
   return (
     <div className="space-y-3">
       <div className="rounded-md border border-border bg-background p-3">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">App header</p>
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t("App header")}</p>
         <div className="flex items-center gap-2">
           {kind === "wordmark" ? (
             <img src={src} alt="" className="h-8 max-w-[11rem] shrink-0 object-contain" />
@@ -293,7 +298,7 @@ function CropPreview({ kind, src, programName, primaryColor }: { kind: CropKind;
         </div>
       </div>
       <div className="rounded-md border border-border bg-background p-4">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Login screen</p>
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t("Login screen")}</p>
         <div className="flex flex-col items-center gap-2 text-center">
           {kind === "wordmark" ? (
             <img src={src} alt="" className="h-16 max-w-[18rem] object-contain" />
@@ -304,13 +309,13 @@ function CropPreview({ kind, src, programName, primaryColor }: { kind: CropKind;
             </>
           )}
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{POWERED_BY_FORGE_LABEL}</p>
-          <div className="mt-1 h-7 w-40 rounded-full text-xs font-semibold leading-7 text-white" style={button}>Sign in</div>
+          <div className="mt-1 h-7 w-40 rounded-full text-xs font-semibold leading-7 text-white" style={button}>{t("Sign in")}</div>
         </div>
       </div>
       {kind === "logo" && (
         <div className="flex items-center gap-3 rounded-md border border-border bg-background p-3">
           <img src={src} alt="" className="h-14 w-14 rounded-[22%] border border-border bg-white object-contain" />
-          <p className="text-xs text-muted-foreground">Home-screen icon when an athlete saves the website to their phone.</p>
+          <p className="text-xs text-muted-foreground">{t("Home-screen icon when an athlete saves the website to their phone.")}</p>
         </div>
       )}
     </div>

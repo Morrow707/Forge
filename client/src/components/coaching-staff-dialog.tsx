@@ -18,6 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { COACH_SECTIONS, COACH_SECTION_LABEL, type CoachSection } from "@shared/coach-sections";
 import { cn } from "@/lib/utils";
 import { STAFF_KINDS, STAFF_KIND_LABELS, type StaffKind } from "@shared/staff-kinds";
+import { useT } from "@/i18n";
 
 type StaffMember = {
   id: number;
@@ -48,6 +49,7 @@ export function CoachingStaffDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const { user } = useAuth();
   const qc = useQueryClient();
   const [joinCode, setJoinCode] = useState("");
@@ -78,9 +80,9 @@ export function CoachingStaffDialog({
       qc.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
       setJoinCode("");
-      toast.success("Joined, you now share this staff's full roster and programs");
+      toast.success(t("Joined, you now share this staff's full roster and programs"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't join with that code"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't join with that code")),
   });
 
   const permissionsMutation = useMutation({
@@ -88,7 +90,7 @@ export function CoachingStaffDialog({
       await apiRequest("PATCH", `/api/coach/staff/${staffCoachId}/permissions`, { hiddenSections });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/coach/staff"] }),
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update their access"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't update their access")),
   });
 
   const titleMutation = useMutation({
@@ -96,7 +98,7 @@ export function CoachingStaffDialog({
       await apiRequest("PATCH", `/api/coach/staff/${staffCoachId}/title`, { title });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/coach/staff"] }),
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update their title"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't update their title")),
   });
 
   // An athletic trainer is a staff member whose program, billing, branding and staff writes the
@@ -106,7 +108,7 @@ export function CoachingStaffDialog({
       await apiRequest("PATCH", `/api/coach/staff/${staffCoachId}/kind`, { staffKind });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/coach/staff"] }),
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't change that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't change that")),
   });
 
   const removeMutation = useMutation({
@@ -115,9 +117,9 @@ export function CoachingStaffDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/staff"] });
-      toast.success("Removed from staff");
+      toast.success(t("Removed from staff"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't remove"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't remove")),
   });
 
   const regenerateMutation = useMutation({
@@ -127,9 +129,9 @@ export function CoachingStaffDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast.success("New invite code generated, the old one no longer works");
+      toast.success(t("New invite code generated, the old one no longer works"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't generate a new code"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't generate a new code")),
   });
 
   const leaveMutation = useMutation({
@@ -142,27 +144,25 @@ export function CoachingStaffDialog({
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/programs"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
-      toast.success("Left the staff, back to your own roster");
+      toast.success(t("Left the staff, back to your own roster"));
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't leave"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't leave")),
   });
 
   function copyCode() {
     if (!user?.staffInviteCode) return;
     navigator.clipboard.writeText(user.staffInviteCode);
-    toast.success("Copied");
+    toast.success(t("Copied"));
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Coaching Staff</DialogTitle>
+          <DialogTitle>{t("Coaching Staff")}</DialogTitle>
           <DialogDescription>
-            Every coach on the same staff sees and edits the same roster, teams, programs, and
-            exercise bank, built for a program with an assistant or position-coach staff, not
-            just a solo coach.
+            {t("Every coach on the same staff sees and edits the same roster, teams, programs, and exercise bank, built for a program with an assistant or position-coach staff, not just a solo coach.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -172,14 +172,14 @@ export function CoachingStaffDialog({
           <div className="space-y-5">
             {isPrimary ? (
               <div className="space-y-1.5">
-                <Label>Your staff invite code</Label>
+                <Label>{t("Your staff invite code")}</Label>
                 <div className="flex items-center gap-2">
                   <Input readOnly value={user?.staffInviteCode ?? ""} className="font-mono" />
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
-                    aria-label="Copy invite code"
+                    aria-label={t("Copy invite code")}
                     onClick={copyCode}
                   >
                     <Copy className="h-4 w-4" />
@@ -188,7 +188,7 @@ export function CoachingStaffDialog({
                     type="button"
                     variant="outline"
                     size="icon"
-                    aria-label="Generate a new invite code"
+                    aria-label={t("Generate a new invite code")}
                     onClick={() => regenerateMutation.mutate()}
                     disabled={regenerateMutation.isPending}
                   >
@@ -196,21 +196,18 @@ export function CoachingStaffDialog({
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Share this with another coach, when they enter it below, they join your staff
-                  and see everything you do. This is a different code from your athlete signup
-                  invite, so sharing it with athletes or recruits doesn't grant them staff access.
+                  {t("Share this with another coach, when they enter it below, they join your staff and see everything you do. This is a different code from your athlete signup invite, so sharing it with athletes or recruits doesn't grant them staff access.")}
                 </p>
               </div>
             ) : (
               <p className="rounded-md border border-border p-3 text-sm text-muted-foreground">
-                You're on a shared staff. Everything you and your staff-mates create is visible to
-                everyone on it.
+                {t("You're on a shared staff. Everything you and your staff-mates create is visible to everyone on it.")}
               </p>
             )}
 
             {data && data.staff.length > 0 && (
               <div className="space-y-1.5">
-                <Label>Staff members</Label>
+                <Label>{t("Staff members")}</Label>
                 <div className="space-y-2">
                   {data.staff.map((s) => {
                     const isEditingThis = editingPermissionsFor === s.id;
@@ -234,7 +231,7 @@ export function CoachingStaffDialog({
                             <p className="truncate text-xs text-muted-foreground">{s.email}</p>
                             {s.hiddenSections.length > 0 && (
                               <p className="mt-0.5 text-[11px] text-muted-foreground">
-                                {s.hiddenSections.length} section{s.hiddenSections.length === 1 ? "" : "s"} hidden
+                                {t.plural(s.hiddenSections.length, "{count} section hidden", "{count} sections hidden")}
                               </p>
                             )}
                           </div>
@@ -244,7 +241,11 @@ export function CoachingStaffDialog({
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                aria-label={isEditingThis ? `Close ${s.name}'s access settings` : `Edit ${s.name}'s access`}
+                                aria-label={
+                                  isEditingThis
+                                    ? t("Close {name}'s access settings", { name: s.name })
+                                    : t("Edit {name}'s access", { name: s.name })
+                                }
                                 onClick={() => {
                                   setEditingPermissionsFor(isEditingThis ? null : s.id);
                                   setTitleDraft(isEditingThis ? "" : (s.staffTitle ?? ""));
@@ -260,7 +261,7 @@ export function CoachingStaffDialog({
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                aria-label={`Remove ${s.name}`}
+                                aria-label={t("Remove {name}", { name: s.name })}
                                 onClick={() => removeMutation.mutate(s.id)}
                                 disabled={removeMutation.isPending}
                               >
@@ -273,10 +274,7 @@ export function CoachingStaffDialog({
                           <div className="space-y-2 border-t border-border p-2.5">
                             <div className="space-y-1.5">
                               <p className="text-xs text-muted-foreground">
-                                An athletic trainer sees the roster and athlete profiles, sets health
-                                status and return-to-training clearance, files medical documents and
-                                messages athletes. They cannot build, assign or change programs, the
-                                plan, branding or staff.
+                                {t("An athletic trainer sees the roster and athlete profiles, sets health status and return-to-training clearance, files medical documents and messages athletes. They cannot build, assign or change programs, the plan, branding or staff.")}
                               </p>
                               <div className="flex gap-1.5">
                                 {STAFF_KINDS.map((kind) => (
@@ -299,8 +297,10 @@ export function CoachingStaffDialog({
                             </div>
                             <div className="space-y-1.5">
                               <p className="text-xs text-muted-foreground">
-                                Display title, shown instead of "Coach" wherever {s.name.split(" ")[0]}'s
-                                name appears. Leave blank to keep the default.
+                                {t(
+                                  "Display title, shown instead of \"Coach\" wherever {name}'s name appears. Leave blank to keep the default.",
+                                  { name: s.name.split(" ")[0] },
+                                )}
                               </p>
                               <div className="flex items-center gap-2">
                                 <Input
@@ -311,7 +311,7 @@ export function CoachingStaffDialog({
                                       titleMutation.mutate({ staffCoachId: s.id, title: titleDraft });
                                     }
                                   }}
-                                  placeholder="e.g. Nutritionist"
+                                  placeholder={t("e.g. Nutritionist")}
                                   maxLength={40}
                                   className="h-8 text-xs"
                                 />
@@ -336,8 +336,10 @@ export function CoachingStaffDialog({
                               </div>
                             </div>
                             <p className="pt-1 text-xs text-muted-foreground">
-                              What {s.name.split(" ")[0]} can see, unchecked sections stay hidden from
-                              their nav until you turn them back on.
+                              {t(
+                                "What {name} can see, unchecked sections stay hidden from their nav until you turn them back on.",
+                                { name: s.name.split(" ")[0] },
+                              )}
                             </p>
                             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                               {COACH_SECTIONS.map((section) => {
@@ -382,19 +384,19 @@ export function CoachingStaffDialog({
                 onClick={() => leaveMutation.mutate()}
                 disabled={leaveMutation.isPending}
               >
-                Leave this staff
+                {t("Leave this staff")}
               </Button>
             )}
 
             {isPrimary && (
               <div className="space-y-1.5 border-t border-border pt-4">
-                <Label htmlFor="join-code">Join another coach's staff instead</Label>
+                <Label htmlFor="join-code">{t("Join another coach's staff instead")}</Label>
                 <div className="flex items-center gap-2">
                   <Input
                     id="join-code"
                     value={joinCode}
                     onChange={(e) => setJoinCode(e.target.value)}
-                    placeholder="Their staff invite code"
+                    placeholder={t("Their staff invite code")}
                     className="font-mono uppercase"
                   />
                   <Button
@@ -402,17 +404,16 @@ export function CoachingStaffDialog({
                     onClick={() => joinMutation.mutate()}
                     disabled={!joinCode.trim() || joinMutation.isPending}
                   >
-                    Join
+                    {t("Join")}
                   </Button>
                 </div>
                 <label className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Checkbox checked={joinAsTrainer} onCheckedChange={(next) => setJoinAsTrainer(next === true)} />
-                  I'm joining as the athletic trainer
+                  {t("I'm joining as the athletic trainer")}
                 </label>
                 {data && data.staff.length > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    You'll need to remove your current staff members first, a coach can't run
-                    their own staff and join someone else's at the same time.
+                    {t("You'll need to remove your current staff members first, a coach can't run their own staff and join someone else's at the same time.")}
                   </p>
                 )}
               </div>

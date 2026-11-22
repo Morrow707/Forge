@@ -3,6 +3,7 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { MailWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/i18n";
 
 /** Nothing in the app is actually gated on email verification -- same
  * "flag, don't block" philosophy as the rest of this app's soft nudges
@@ -11,17 +12,18 @@ import { Button } from "@/components/ui/button";
  * unverified -- no dismiss-forever, since an unconfirmed email is still
  * true tomorrow if it's true today. */
 export function EmailVerificationBanner() {
+  const t = useT();
   const resendMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/auth/resend-verification"),
-    onSuccess: () => toast.success("Verification email sent, check your inbox."),
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't send that email"),
+    onSuccess: () => toast.success(t("Verification email sent, check your inbox.")),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't send that email")),
   });
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-500 md:px-8">
       <span className="flex items-center gap-1.5">
         <MailWarning className="h-3.5 w-3.5 shrink-0" />
-        Please confirm your email address.
+        {t("Please confirm your email address.")}
       </span>
       <Button
         type="button"
@@ -31,7 +33,7 @@ export function EmailVerificationBanner() {
         onClick={() => resendMutation.mutate()}
         disabled={resendMutation.isPending}
       >
-        {resendMutation.isPending ? "Sending…" : "Resend email"}
+        {resendMutation.isPending ? t("Sending…") : t("Resend email")}
       </Button>
     </div>
   );

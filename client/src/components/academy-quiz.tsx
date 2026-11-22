@@ -14,6 +14,7 @@ import {
 } from "@shared/class-quiz-grading";
 import { FillBlankInput, OrderingInput, MatchingInput, QuizKeyResult } from "@/components/quiz-question-inputs";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
 
 type QuizAnswer = {
   id: number;
@@ -74,6 +75,7 @@ export function AcademyQuiz({
    * their account. */
   preview?: boolean;
 }) {
+  const t = useT();
   const [subs, setSubs] = useState<Record<number, QuizSubmission>>({});
   const [result, setResult] = useState<AttemptResult | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -113,7 +115,7 @@ export function AcademyQuiz({
       setExpanded(new Set());
       onAttempt?.();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't score the quiz"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't score the quiz")),
   });
 
   if (questions.length === 0) return null;
@@ -133,7 +135,7 @@ export function AcademyQuiz({
   return (
     <div className="mt-8 border-t border-border pt-6">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-display text-lg font-bold uppercase tracking-wide">Track Quiz</h2>
+        <h2 className="font-display text-lg font-bold uppercase tracking-wide">{t("Track Quiz")}</h2>
         {bestAttempt && (
           <span
             className={cn(
@@ -141,15 +143,25 @@ export function AcademyQuiz({
               bestAttempt.passed ? "bg-success/15 text-success" : "bg-secondary text-muted-foreground",
             )}
           >
-            Best: {bestAttempt.correct}/{bestAttempt.total}
-            {bestAttempt.passed ? ", passed" : ""}
+            {bestAttempt.passed
+              ? t("Best: {correct}/{total}, passed", { correct: bestAttempt.correct, total: bestAttempt.total })
+              : t("Best: {correct}/{total}", { correct: bestAttempt.correct, total: bestAttempt.total })}
           </span>
         )}
       </div>
       <p className="mb-4 text-sm text-muted-foreground">
         {result
-          ? `You scored ${result.correct} of ${result.total}${result.passed ? ", which passes." : `. ${passMarkPct}% passes; retake when you're ready.`} Tap a multiple-choice answer to see why.`
-          : `Answer every question and submit. ${passMarkPct}% passes, and your best score is kept.`}
+          ? result.passed
+            ? t("You scored {correct} of {total}, which passes. Tap a multiple-choice answer to see why.", {
+                correct: result.correct,
+                total: result.total,
+              })
+            : t("You scored {correct} of {total}. {pct}% passes; retake when you're ready. Tap a multiple-choice answer to see why.", {
+                correct: result.correct,
+                total: result.total,
+                pct: passMarkPct,
+              })
+          : t("Answer every question and submit. {pct}% passes, and your best score is kept.", { pct: passMarkPct })}
       </p>
       <div className="space-y-6">
         {questions.map((q, qi) => {
@@ -257,15 +269,15 @@ export function AcademyQuiz({
             }}
           >
             <RotateCcw className="h-4 w-4" />
-            Retake
+            {t("Retake")}
           </Button>
         ) : (
           <>
             <Button onClick={() => submit.mutate()} disabled={submit.isPending || answered === 0}>
-              {submit.isPending ? "Scoring..." : "Submit answers"}
+              {submit.isPending ? t("Scoring...") : t("Submit answers")}
             </Button>
             <span className="text-xs text-muted-foreground">
-              {answered}/{questions.length} answered
+              {t("{answered}/{total} answered", { answered, total: questions.length })}
             </span>
           </>
         )}

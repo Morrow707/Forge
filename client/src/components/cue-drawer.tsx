@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { ReadFailed } from "@/components/read-failed";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
 
 export type CoachCue = {
   id: number;
@@ -26,6 +27,7 @@ export type CoachCue = {
  * what a coach already said in a review somebody has watched.
  */
 export function CueDrawer({ onDrop }: { onDrop: (cue: CoachCue) => void }) {
+  const t = useT();
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
@@ -47,7 +49,7 @@ export function CueDrawer({ onDrop }: { onDrop: (cue: CoachCue) => void }) {
       void qc.invalidateQueries({ queryKey: ["/api/coach/cues"] });
     },
     onError: (err: unknown) =>
-      toast.error(err instanceof Error ? err.message : "Couldn't save that cue."),
+      toast.error(err instanceof Error ? err.message : t("Couldn't save that cue.")),
   });
 
   const remove = useMutation({
@@ -57,22 +59,22 @@ export function CueDrawer({ onDrop }: { onDrop: (cue: CoachCue) => void }) {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["/api/coach/cues"] }),
     // Only the coach who made a cue may delete it, so a staff coach meets a 404 here. Said
     // plainly rather than as "not found", which reads like the cue is gone.
-    onError: () => toast.error("That cue belongs to another coach on your staff."),
+    onError: () => toast.error(t("That cue belongs to another coach on your staff.")),
   });
 
   // isError before any emptiness claim: "no cues yet" and "we could not ask" are different
   // things, and the second read as the first looks like a coach's library was wiped.
   if (cues.isError) {
-    return <ReadFailed what="your cues" onRetry={() => void cues.refetch()} />;
+    return <ReadFailed what={t("your cues")} onRetry={() => void cues.refetch()} />;
   }
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cues</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("Cues")}</p>
         <Button size="sm" variant="ghost" onClick={() => setAdding((a) => !a)}>
           <Plus className="h-3.5 w-3.5" />
-          {adding ? "Cancel" : "New cue"}
+          {adding ? t("Cancel") : t("New cue")}
         </Button>
       </div>
 
@@ -82,16 +84,16 @@ export function CueDrawer({ onDrop }: { onDrop: (cue: CoachCue) => void }) {
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             maxLength={80}
-            placeholder="Short name (e.g. Knees out)"
-            aria-label="Cue name"
+            placeholder={t("Short name (e.g. Knees out)")}
+            aria-label={t("Cue name")}
             className="w-40"
           />
           <Input
             value={body}
             onChange={(e) => setBody(e.target.value)}
             maxLength={280}
-            placeholder="What you say"
-            aria-label="What you say"
+            placeholder={t("What you say")}
+            aria-label={t("What you say")}
             className="min-w-[12rem] flex-1"
           />
           <Button
@@ -99,7 +101,7 @@ export function CueDrawer({ onDrop }: { onDrop: (cue: CoachCue) => void }) {
             disabled={create.isPending || !label.trim() || !body.trim()}
             onClick={() => create.mutate()}
           >
-            Save
+            {t("Save")}
           </Button>
         </div>
       )}
@@ -108,7 +110,7 @@ export function CueDrawer({ onDrop }: { onDrop: (cue: CoachCue) => void }) {
         <div className="h-8 w-full animate-pulse rounded-md bg-surface" />
       ) : (cues.data ?? []).length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          Save the things you say every session — tap one to drop it on the timeline.
+          {t("Save the things you say every session — tap one to drop it on the timeline.")}
         </p>
       ) : (
         <div className="flex flex-wrap gap-1.5">
@@ -129,7 +131,7 @@ export function CueDrawer({ onDrop }: { onDrop: (cue: CoachCue) => void }) {
               </button>
               <button
                 type="button"
-                aria-label={`Delete cue ${c.label}`}
+                aria-label={t("Delete cue {label}", { label: c.label })}
                 disabled={remove.isPending}
                 onClick={() => remove.mutate(c.id)}
                 className="rounded-r-full px-2 py-1 text-muted-foreground transition-colors hover:text-destructive"

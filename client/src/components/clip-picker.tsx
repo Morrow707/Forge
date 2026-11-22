@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import type { ClipSummary } from "@shared/video-clips";
 import type { PoseFrame } from "@/lib/pose-tracking";
 import { agoLabel, priorClipRouteFor } from "@/lib/prior-clip";
+import { exerciseName, formatDate, translate, useT } from "@/i18n";
 
 /**
  * Who the clips on the table belong to. The compare tool is opened FROM somewhere -- an
@@ -55,7 +56,7 @@ export function clipsRouteFor(subject: CompareSubject): string {
 function toCompareClip(c: ClipSummary, listRoute: string, owner: string | null): CompareClip {
   const day = (() => {
     try {
-      return format(parseISO(c.date), "MMM d, yyyy");
+      return formatDate(parseISO(c.date), { month: "short", day: "numeric", year: "numeric" });
     } catch {
       return c.date;
     }
@@ -63,7 +64,10 @@ function toCompareClip(c: ClipSummary, listRoute: string, owner: string | null):
   return {
     key: `${c.source}:${c.id}`,
     videoUrl: c.videoUrl,
-    label: c.setNumber != null ? `${c.exerciseName} — Set ${c.setNumber}` : c.exerciseName,
+    label:
+      c.setNumber != null
+        ? translate("{exercise} — Set {set}", { exercise: exerciseName(c.exerciseName), set: c.setNumber })
+        : exerciseName(c.exerciseName),
     sublabel: owner ? `${owner} · ${day}` : day,
     repBreakdown: c.repBreakdown,
     exerciseName: c.exerciseName,
@@ -85,6 +89,7 @@ function ClipList({
   excludeKey?: string;
   onPick: (clip: CompareClip) => void;
 }) {
+  const t = useT();
   const clips = useQuery<ClipSummary[]>({
     queryKey: [route],
     queryFn: () => getJson(route),
@@ -98,15 +103,15 @@ function ClipList({
   }, [clips.data, filter, route, owner]);
 
   if (clips.isError) {
-    return <ReadFailed what="these clips" onRetry={() => clips.refetch()} error={clips.error} />;
+    return <ReadFailed what={t("these clips")} onRetry={() => clips.refetch()} error={clips.error} />;
   }
   if (clips.isLoading) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">Loading clips…</p>;
+    return <p className="py-6 text-center text-sm text-muted-foreground">{t("Loading clips…")}</p>;
   }
   if (rows.length === 0) {
     return (
       <p className="py-6 text-center text-sm text-muted-foreground">
-        {filter.trim() ? "No clips match that movement." : "No recorded clips yet."}
+        {filter.trim() ? t("No clips match that movement.") : t("No recorded clips yet.")}
       </p>
     );
   }
@@ -130,11 +135,11 @@ function ClipList({
                 <span className="block truncate font-medium">{clip.label}</span>
                 <span className="block truncate text-xs text-muted-foreground">
                   {clip.sublabel}
-                  {clip.framesUrl ? " · skeleton" : ""}
-                  {clip.repBreakdown?.length ? ` · ${clip.repBreakdown.length} reps tracked` : ""}
+                  {clip.framesUrl ? ` · ${t("skeleton")}` : ""}
+                  {clip.repBreakdown?.length ? ` · ${t("{count} reps tracked", { count: clip.repBreakdown.length })}` : ""}
                 </span>
               </span>
-              {isCurrent && <span className="text-[10px] uppercase text-muted-foreground">on this side</span>}
+              {isCurrent && <span className="text-[10px] uppercase text-muted-foreground">{t("on this side")}</span>}
             </button>
           </li>
         );
@@ -157,6 +162,7 @@ function RosterClips({
   onPick: (clip: CompareClip) => void;
   initialAthleteId?: number;
 }) {
+  const t = useT();
   const roster = useQuery<{ id: number; name: string }[]>({
     queryKey: ["/api/coach/roster"],
     queryFn: () => getJson("/api/coach/roster"),
@@ -165,7 +171,7 @@ function RosterClips({
   const chosen = roster.data?.find((a) => a.id === athleteId);
 
   if (roster.isError) {
-    return <ReadFailed what="your roster" onRetry={() => roster.refetch()} error={roster.error} />;
+    return <ReadFailed what={t("your roster")} onRetry={() => roster.refetch()} error={roster.error} />;
   }
   return (
     <div className="space-y-3">
@@ -173,8 +179,8 @@ function RosterClips({
         value={athleteId != null ? String(athleteId) : undefined}
         onValueChange={(v) => setAthleteId(Number(v))}
       >
-        <SelectTrigger className="h-9 text-sm" aria-label="Athlete">
-          <SelectValue placeholder={roster.isLoading ? "Loading roster…" : "Choose an athlete"} />
+        <SelectTrigger className="h-9 text-sm" aria-label={t("Athlete")}>
+          <SelectValue placeholder={roster.isLoading ? t("Loading roster…") : t("Choose an athlete")} />
         </SelectTrigger>
         <SelectContent>
           {(roster.data ?? []).map((a) => (
@@ -193,7 +199,7 @@ function RosterClips({
           onPick={onPick}
         />
       ) : (
-        <p className="py-4 text-center text-sm text-muted-foreground">Pick an athlete to see their clips.</p>
+        <p className="py-4 text-center text-sm text-muted-foreground">{t("Pick an athlete to see their clips.")}</p>
       )}
     </div>
   );
@@ -222,6 +228,7 @@ function PriorClipSuggestion({
   excludeKey?: string;
   onPick: (clip: CompareClip) => void;
 }) {
+  const t = useT();
   const route = priorClipRouteFor(subject);
   const exercise = from.exerciseName;
   const before = from.date;
@@ -250,11 +257,15 @@ function PriorClipSuggestion({
       <History className="h-4 w-4 shrink-0 text-primary" />
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">
-          {ago ? `Compare to ${ago}` : `Compare to an earlier ${clip.exerciseName ?? "set"}`}
+          {ago
+            ? t("Compare to {when}", { when: t(ago) })
+            : clip.exerciseName
+              ? t("Compare to an earlier {exercise}", { exercise: t.exercise(clip.exerciseName) })
+              : t("Compare to an earlier set")}
         </span>
         <span className="block truncate text-xs text-muted-foreground">
           {clip.label}
-          {clip.repBreakdown?.length ? " · reps line up automatically" : ""}
+          {clip.repBreakdown?.length ? ` · ${t("reps line up automatically")}` : ""}
         </span>
       </span>
     </button>
@@ -291,6 +302,7 @@ export function ClipPickerDialog({
   excludeKey?: string;
   onPick: (clip: CompareClip) => void;
 }) {
+  const t = useT();
   const { user } = useAuth();
   const isCoach = user?.role === "coach";
   const [tab, setTab] = useState<Tab>("subject");
@@ -298,7 +310,7 @@ export function ClipPickerDialog({
 
   const subjectRoute = clipsRouteFor(subject);
   const subjectName = subject.kind === "self" ? null : subject.athleteName;
-  const subjectTabLabel = subject.kind === "self" ? "My clips" : subjectName ?? "This athlete";
+  const subjectTabLabel = subject.kind === "self" ? t("My clips") : subjectName ?? t("This athlete");
 
   function pick(clip: CompareClip) {
     onPick(clip);
@@ -307,30 +319,30 @@ export function ClipPickerDialog({
 
   const tabs: { id: Tab; label: string; icon: typeof Film }[] = [
     { id: "subject", label: subjectTabLabel, icon: Film },
-    ...(isCoach ? [{ id: "roster" as const, label: "Roster", icon: Users }] : []),
-    { id: "reference", label: "Reference", icon: Library },
+    ...(isCoach ? [{ id: "roster" as const, label: t("Roster"), icon: Users }] : []),
+    { id: "reference", label: t("Reference"), icon: Library },
   ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Choose a clip for the {sideLabel} side</DialogTitle>
-          <DialogDescription>Any recorded set or skill clip, from any day.</DialogDescription>
+          <DialogTitle>{t("Choose a clip for the {side} side", { side: t(sideLabel) })}</DialogTitle>
+          <DialogDescription>{t("Any recorded set or skill clip, from any day.")}</DialogDescription>
         </DialogHeader>
         <div className="flex overflow-hidden rounded-md border border-border text-xs font-semibold">
-          {tabs.map((t) => (
+          {tabs.map((tb) => (
             <button
-              key={t.id}
+              key={tb.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={() => setTab(tb.id)}
               className={cn(
                 "flex flex-1 items-center justify-center gap-1.5 px-2 py-1.5 transition-colors",
-                tab === t.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                tab === tb.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <t.icon className="h-3.5 w-3.5" />
-              <span className="truncate">{t.label}</span>
+              <tb.icon className="h-3.5 w-3.5" />
+              <span className="truncate">{tb.label}</span>
             </button>
           ))}
         </div>
@@ -340,9 +352,9 @@ export function ClipPickerDialog({
             <Input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="Filter by movement (e.g. squat)"
+              placeholder={t("Filter by movement (e.g. squat)")}
               className="pl-8"
-              aria-label="Filter clips by movement"
+              aria-label={t("Filter clips by movement")}
             />
           </div>
         )}
@@ -367,8 +379,7 @@ export function ClipPickerDialog({
         )}
         {tab === "reference" && (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            No reference clips yet. A library of model lifts to compare against is coming; until
-            then, compare against another set or another athlete.
+            {t("No reference clips yet. A library of model lifts to compare against is coming; until then, compare against another set or another athlete.")}
           </p>
         )}
       </DialogContent>

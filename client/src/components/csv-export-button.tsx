@@ -8,6 +8,7 @@ import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toCsv, csvField } from "@/lib/csv";
 import { shareOrDownloadBlob } from "@/lib/share-file";
+import { useT } from "@/i18n";
 
 export type CsvCell = string | number | null | undefined;
 
@@ -29,6 +30,7 @@ export function CsvExportButton({
   note?: string;
   testId?: string;
 }) {
+  const t = useT();
   return (
     <Button
       type="button"
@@ -38,11 +40,11 @@ export function CsvExportButton({
       data-testid={testId ?? "button-export-csv"}
       onClick={() => {
         const blob = new Blob([buildCsvExport(header, rows, note)], { type: "text/csv" });
-        void shareOrDownloadBlob(blob, filename, "Export");
+        void shareOrDownloadBlob(blob, filename, t("Export"));
       }}
     >
       <Download className="h-4 w-4 mr-1.5" />
-      CSV
+      {t("CSV")}
     </Button>
   );
 }

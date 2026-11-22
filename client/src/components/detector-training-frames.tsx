@@ -10,6 +10,7 @@ import { resolveApiUrl } from "@/lib/queryClient";
 import { extractFramesFromVideo } from "@/lib/extract-video-frames";
 import { buildStoredZip, type ZipEntry } from "@/lib/zip-store";
 import { shareOrDownloadBlob, describeSaveOutcome } from "@/lib/share-file";
+import { translate, useT } from "@/i18n";
 
 type Clip = {
   seq: number;
@@ -40,6 +41,7 @@ type Clip = {
  * second place the video now lives.
  */
 export function DetectorTrainingFrames() {
+  const t = useT();
   const [framesPerClip, setFramesPerClip] = useState("8");
   const [busySetId, setBusySetId] = useState<number | null>(null);
   const [progress, setProgress] = useState(0);
@@ -59,7 +61,7 @@ export function DetectorTrainingFrames() {
         `${clip.exerciseName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${clip.date}-set${clip.setNumber ?? "x"}`,
         (done, total) => setProgress(Math.round((done / total) * 100)),
       );
-      if (frames.length === 0) throw new Error("No frames came out of that clip.");
+      if (frames.length === 0) throw new Error(translate("No frames came out of that clip."));
       const entries: ZipEntry[] = [];
       for (const f of frames) {
         entries.push({ name: f.name, bytes: new Uint8Array(await f.blob.arrayBuffer()) });
@@ -89,12 +91,12 @@ export function DetectorTrainingFrames() {
       const outcome = await shareOrDownloadBlob(
         zip,
         `forge-detector-frames-set${clip.seq}.zip`,
-        "Forge detector training frames",
+        translate("Forge detector training frames"),
       );
       if (outcome.kind === "failed") toast.error(describeSaveOutcome(outcome, "frames"));
       else toast.success(describeSaveOutcome(outcome, "frames"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not pull frames from that clip.");
+      toast.error(err instanceof Error ? err.message : t("Could not pull frames from that clip."));
     } finally {
       setBusySetId(null);
       setProgress(0);
@@ -105,21 +107,16 @@ export function DetectorTrainingFrames() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Film className="h-4 w-4" /> Detector training frames
+          <Film className="h-4 w-4" /> {t("Detector training frames")}
         </CardTitle>
         <CardDescription>
-          The object detector was trained on 3 barbell instances and 12 plates, all of them photos
-          of an empty gym, racked bars and plate trees, nobody lifting. That is why it reads a
-          rack upright as a plate. These are frames from real filmed sets: a loaded bar, an
-          athlete under it, at the angle and distance the detector actually has to work at.
-          Extraction runs in this browser and nothing is stored, the frames go straight to a
-          download.
+          {t("The object detector was trained on 3 barbell instances and 12 plates, all of them photos of an empty gym, racked bars and plate trees, nobody lifting. That is why it reads a rack upright as a plate. These are frames from real filmed sets: a loaded bar, an athlete under it, at the angle and distance the detector actually has to work at. Extraction runs in this browser and nothing is stored, the frames go straight to a download.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <div className="flex items-end gap-2">
           <div className="space-y-1.5">
-            <Label htmlFor="frames-per-clip">Frames per clip</Label>
+            <Label htmlFor="frames-per-clip">{t("Frames per clip")}</Label>
             <Input
               id="frames-per-clip"
               type="number"
@@ -131,16 +128,15 @@ export function DetectorTrainingFrames() {
             />
           </div>
           <p className="pb-2 text-xs text-muted-foreground">
-            Spread evenly across the set, not taken from one second of it, consecutive frames are
-            near-duplicates and a model learns nothing from seeing the same picture forty times.
+            {t("Spread evenly across the set, not taken from one second of it, consecutive frames are near-duplicates and a model learns nothing from seeing the same picture forty times.")}
           </p>
         </div>
 
-        {isLoading && <p className="text-muted-foreground">Loading clips...</p>}
-        {isError && <p className="text-destructive">Could not load the clip list.</p>}
+        {isLoading && <p className="text-muted-foreground">{t("Loading clips...")}</p>}
+        {isError && <p className="text-destructive">{t("Could not load the clip list.")}</p>}
         {data && data.clips.length === 0 && (
           <p className="text-muted-foreground">
-            No filmed sets with video yet. Film one and it will appear here.
+            {t("No filmed sets with video yet. Film one and it will appear here.")}
           </p>
         )}
 
@@ -149,9 +145,9 @@ export function DetectorTrainingFrames() {
             {data.clips.map((clip) => (
               <div key={clip.seq} className="flex items-center justify-between gap-3 p-2">
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{clip.exerciseName}</p>
+                  <p className="truncate font-medium">{t.exercise(clip.exerciseName)}</p>
                   <p className="text-xs text-muted-foreground">
-                    {clip.date} · set {clip.setNumber ?? "?"} · {clip.athlete}
+                    {clip.date} · {t("set {n}", { n: clip.setNumber ?? "?" })} · {clip.athlete}
                     {clip.trackingLevel ? ` · ${clip.trackingLevel}` : ""}
                   </p>
                 </div>
@@ -166,7 +162,7 @@ export function DetectorTrainingFrames() {
                       <Loader2 className="h-4 w-4 animate-spin" /> {progress}%
                     </>
                   ) : (
-                    "Pull frames"
+                    t("Pull frames")
                   )}
                 </Button>
               </div>

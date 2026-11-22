@@ -16,6 +16,7 @@ import { ReadFailed } from "@/components/read-failed";
 import { ColorField } from "@/components/color-field";
 import { BILLING_ADD_ONS, formatCents } from "@shared/billing-tiers";
 import type { ExercisePageTheme } from "@shared/schema";
+import { useT } from "@/i18n";
 
 const QUERY_KEY = ["/api/coach/exercise-page-theme"];
 
@@ -37,6 +38,7 @@ export function ExercisePageThemeDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const { data, isLoading, isError, refetch } = useQuery<ThemeResponse>({
     queryKey: QUERY_KEY,
@@ -84,10 +86,10 @@ export function ExercisePageThemeDialog({
       }),
     onSuccess: () => {
       invalidate();
-      toast.success("Exercise screen colors saved");
+      toast.success(t("Exercise screen colors saved"));
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save those colors"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save those colors")),
   });
 
   const resetMutation = useMutation({
@@ -104,10 +106,10 @@ export function ExercisePageThemeDialog({
       setCompletedSetColor("");
       setNavArrowColor("");
       invalidate();
-      toast.success("Reset to Forge defaults");
+      toast.success(t("Reset to Forge defaults"));
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't reset those colors"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't reset those colors")),
   });
 
   const entitled = data?.entitled ?? false;
@@ -122,11 +124,10 @@ export function ExercisePageThemeDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-amber-400" />
-            Exercise Screen Colors
+            {t("Exercise Screen Colors")}
           </DialogTitle>
           <DialogDescription>
-            Recolor your athletes' real exercise-logging screen, the bottom action bar, the
-            Watch Demo button, the completed-set indicator, and the set-paging arrows.
+            {t("Recolor your athletes' real exercise-logging screen, the bottom action bar, the Watch Demo button, the completed-set indicator, and the set-paging arrows.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -135,26 +136,27 @@ export function ExercisePageThemeDialog({
         ) : isError ? (
           // `entitled` falls back to false when the read fails, so without this branch a coach
           // who HAS the add-on is told to buy it -- an answer nobody asked the server for.
-          <ReadFailed what="your exercise screen colors" onRetry={() => void refetch()} />
+          <ReadFailed what={t("your exercise screen colors")} onRetry={() => void refetch()} />
         ) : !entitled ? (
           <div className="flex flex-col items-start gap-3 rounded-md border border-border bg-surface p-4">
             <Lock className="h-6 w-6 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              Custom colors for your athletes' exercise screen are part of <b>{addOn.label}</b>, a{" "}
-              {formatCents(addOn.monthlyPriceCents)}/mo add-on. Your athletes see Forge's own colors
-              until then.
+              {t(
+                "Custom colors for your athletes' exercise screen are part of {addOn}, a {price}/mo add-on. Your athletes see Forge's own colors until then.",
+                { addOn: addOn.label, price: formatCents(addOn.monthlyPriceCents) },
+              )}
             </p>
           </div>
         ) : (
           <div className="space-y-1.5">
             <div className="grid grid-cols-2 gap-3">
-              <ColorField label="Bottom bar backdrop" value={backdropColor} allowEmpty onChange={setBackdropColor} />
-              <ColorField label="Watch Demo button" value={watchDemoColor} allowEmpty onChange={setWatchDemoColor} />
-              <ColorField label="Completed set" value={completedSetColor} allowEmpty onChange={setCompletedSetColor} />
-              <ColorField label="Set-paging arrows" value={navArrowColor} allowEmpty onChange={setNavArrowColor} />
+              <ColorField label={t("Bottom bar backdrop")} value={backdropColor} allowEmpty onChange={setBackdropColor} />
+              <ColorField label={t("Watch Demo button")} value={watchDemoColor} allowEmpty onChange={setWatchDemoColor} />
+              <ColorField label={t("Completed set")} value={completedSetColor} allowEmpty onChange={setCompletedSetColor} />
+              <ColorField label={t("Set-paging arrows")} value={navArrowColor} allowEmpty onChange={setNavArrowColor} />
             </div>
             <p className="pt-1 text-xs text-muted-foreground">
-              Leave any field blank to keep Forge's own color for that piece.
+              {t("Leave any field blank to keep Forge's own color for that piece.")}
             </p>
           </div>
         )}
@@ -168,11 +170,11 @@ export function ExercisePageThemeDialog({
                 onClick={() => resetMutation.mutate()}
                 disabled={resetMutation.isPending}
               >
-                Reset to defaults
+                {t("Reset to defaults")}
               </Button>
             )}
             <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? "Saving…" : "Save Colors"}
+              {saveMutation.isPending ? t("Saving…") : t("Save Colors")}
             </Button>
           </DialogFooter>
         )}

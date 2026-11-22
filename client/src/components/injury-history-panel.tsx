@@ -13,6 +13,7 @@ import { format, parseISO } from "date-fns";
 import { Plus, Trash2, HeartPulse } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { todayIso } from "@/lib/local-date";
+import { useT } from "@/i18n";
 
 type InjuryEntry = {
   id: number;
@@ -40,6 +41,7 @@ export function InjuryHistoryPanel({
   baseUrl: string;
   canToggleResolved?: boolean;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const { data: entries = [], isLoading, isError, refetch } = useQuery<InjuryEntry[]>({
     queryKey: [baseUrl],
@@ -63,13 +65,13 @@ export function InjuryHistoryPanel({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [baseUrl] });
-      toast.success("Injury logged");
+      toast.success(t("Injury logged"));
       setAdding(false);
       setBodyPartLabelChoice("");
       setDescription("");
       setOccurredOn(todayIso());
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't log that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't log that")),
   });
 
   const resolveMutation = useMutation({
@@ -77,7 +79,7 @@ export function InjuryHistoryPanel({
       await apiRequest("PATCH", `${baseUrl}/${id}`, { resolved });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [baseUrl] }),
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't update")),
   });
 
   const deleteMutation = useMutation({
@@ -85,7 +87,7 @@ export function InjuryHistoryPanel({
       await apiRequest("DELETE", `${baseUrl}/${id}`);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [baseUrl] }),
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't delete"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't delete")),
   });
 
   return (
@@ -93,26 +95,25 @@ export function InjuryHistoryPanel({
       <div className="flex items-center justify-between">
         <Label className="flex items-center gap-1.5">
           <HeartPulse className="h-4 w-4" />
-          Injury History
+          {t("Injury History")}
         </Label>
         {!adding && (
           <Button type="button" size="sm" variant="outline" onClick={() => setAdding(true)}>
             <Plus className="h-3.5 w-3.5" />
-            Log Injury
+            {t("Log Injury")}
           </Button>
         )}
       </div>
       <p className="text-xs text-muted-foreground">
-        When and where you've been hurt, lets the AI program builder add correctives around it
-        or stay cautious near it.
+        {t("When and where you've been hurt, lets the AI program builder add correctives around it or stay cautious near it.")}
       </p>
 
       {isLoading && <div className="h-10 animate-pulse rounded-md bg-surface" />}
 
-      {isError && <ReadFailed what="this injury history" onRetry={() => void refetch()} />}
+      {isError && <ReadFailed what={t("this injury history")} onRetry={() => void refetch()} />}
 
       {!isLoading && !isError && entries.length === 0 && !adding && (
-        <p className="py-2 text-center text-xs text-muted-foreground">Nothing logged</p>
+        <p className="py-2 text-center text-xs text-muted-foreground">{t("Nothing logged")}</p>
       )}
 
       {entries.length > 0 && (
@@ -145,7 +146,7 @@ export function InjuryHistoryPanel({
                         : "border-amber-500 bg-amber-500/15 text-amber-500",
                     )}
                   >
-                    {e.resolved ? "Resolved" : "Active"}
+                    {e.resolved ? t("Resolved") : t("Active")}
                   </button>
                 ) : (
                   <span
@@ -156,12 +157,12 @@ export function InjuryHistoryPanel({
                         : "border-amber-500 bg-amber-500/15 text-amber-500",
                     )}
                   >
-                    {e.resolved ? "Resolved" : "Active"}
+                    {e.resolved ? t("Resolved") : t("Active")}
                   </span>
                 )}
                 <button
                   type="button"
-                  aria-label="Delete injury entry"
+                  aria-label={t("Delete injury entry")}
                   onClick={() => deleteMutation.mutate(e.id)}
                   className="text-muted-foreground hover:text-destructive"
                 >
@@ -176,13 +177,13 @@ export function InjuryHistoryPanel({
       {adding && (
         <div className="space-y-3 rounded-md border border-border p-3">
           <RadioChipGroup
-            label="Body part"
+            label={t("Body part")}
             options={BODY_PAIN_PARTS.map((p) => p.label)}
             value={bodyPartLabelChoice}
             onChange={setBodyPartLabelChoice}
           />
           <div className="space-y-1.5">
-            <Label htmlFor="injury-date">When</Label>
+            <Label htmlFor="injury-date">{t("When")}</Label>
             <Input
               id="injury-date"
               type="date"
@@ -192,19 +193,19 @@ export function InjuryHistoryPanel({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="injury-desc">Details (optional)</Label>
+            <Label htmlFor="injury-desc">{t("Details (optional)")}</Label>
             <Textarea
               id="injury-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g. Grade 1 UCL sprain, throwing shoulder"
+              placeholder={t("e.g. Grade 1 UCL sprain, throwing shoulder")}
               rows={2}
               maxLength={500}
             />
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setAdding(false)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               type="button"
@@ -212,7 +213,7 @@ export function InjuryHistoryPanel({
               disabled={!bodyPartLabelChoice || addMutation.isPending}
               onClick={() => addMutation.mutate()}
             >
-              Save
+              {t("Save")}
             </Button>
           </div>
         </div>

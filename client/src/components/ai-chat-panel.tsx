@@ -10,6 +10,7 @@ import { Send, Sparkles, Eye, Lock, Loader2, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 import { useSwipeToDismissKeyboard } from "@/hooks/use-swipe-to-dismiss-keyboard";
+import { msg, useT } from "@/i18n";
 
 type ChatMessage = {
   id: number;
@@ -27,12 +28,14 @@ export function AiChatPanel({
   fetchUrl,
   postUrl,
   athleteName,
-  title = "AI Training Chat",
+  title = msg("AI Training Chat"),
   // The sentence a reviewer reads (App Store guideline 1.4.1): the AI's own instructions already
   // refuse to diagnose and send pain to a doctor, and the EULA carries the legal disclaimer, but
   // neither is on this screen. The sport coach pages say the same thing in their own words;
   // ai-coach-says-not-medical-advice.test.ts keeps every AI chat surface saying it.
-  description = "Ask about your training, recovery, or progress. Training guidance, not medical advice: for pain or injury, see a doctor or athletic trainer. If you join a coach later, they'll be able to see this conversation.",
+  description = msg(
+    "Ask about your training, recovery, or progress. Training guidance, not medical advice: for pain or injury, see a doctor or athletic trainer. If you join a coach later, they'll be able to see this conversation.",
+  ),
 }: {
   fetchUrl: string;
   postUrl?: string;
@@ -40,6 +43,7 @@ export function AiChatPanel({
   title?: string;
   description?: string;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [content, setContent] = useState("");
   // Same keyboard-dismiss gap as program-ai-chat-panel.tsx's own textarea -- Enter already means
@@ -58,10 +62,10 @@ export function AiChatPanel({
   async function handleCopy(message: ChatMessage) {
     const copied = await copyToClipboard(message.content);
     if (!copied) {
-      toast.error("Couldn't copy, try selecting the text instead");
+      toast.error(t("Couldn't copy, try selecting the text instead"));
       return;
     }
-    toast.success("Message copied");
+    toast.success(t("Message copied"));
     setCopiedId(message.id);
     setTimeout(() => setCopiedId((current) => (current === message.id ? null : current)), 1500);
   }
@@ -85,7 +89,7 @@ export function AiChatPanel({
       qc.invalidateQueries({ queryKey: [fetchUrl] });
       setContent("");
     },
-    onError: () => toast.error("Couldn't send that, try again"),
+    onError: () => toast.error(t("Couldn't send that, try again")),
   });
 
   // A Free Agent who hasn't paid gets a 402 here (see requirePaidAiAccess in
@@ -100,7 +104,7 @@ export function AiChatPanel({
         <CardHeader className="shrink-0">
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            {title}
+            {t(title)}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center">
@@ -116,14 +120,16 @@ export function AiChatPanel({
       <CardHeader className="shrink-0">
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" />
-          {title}
+          {t(title)}
         </CardTitle>
         <CardDescription className="flex items-start gap-1.5">
           <Eye className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             {postUrl
-              ? description
-              : `${athleteName ?? "This athlete"}'s conversation with the AI training chat, always visible to you as their coach.`}
+              ? t(description)
+              : athleteName
+                ? t("{name}'s conversation with the AI training chat, always visible to you as their coach.", { name: athleteName })
+                : t("This athlete's conversation with the AI training chat, always visible to you as their coach.")}
           </span>
         </CardDescription>
       </CardHeader>
@@ -133,8 +139,8 @@ export function AiChatPanel({
           {!isLoading && !messages?.length && (
             <p className="py-8 text-center text-sm text-muted-foreground">
               {postUrl
-                ? "No messages yet, ask something to get started."
-                : "No messages yet."}
+                ? t("No messages yet, ask something to get started.")
+                : t("No messages yet.")}
             </p>
           )}
           {messages?.map((m) => (
@@ -153,8 +159,8 @@ export function AiChatPanel({
                 <button
                   type="button"
                   onClick={() => handleCopy(m)}
-                  aria-label="Copy message"
-                  title="Copy"
+                  aria-label={t("Copy message")}
+                  title={t("Copy")}
                   className={cn(
                     "absolute right-0.5 top-0.5 rounded p-2 opacity-70 transition-opacity hover:opacity-100",
                     m.role === "athlete" ? "text-primary-foreground" : "text-muted-foreground",
@@ -183,7 +189,7 @@ export function AiChatPanel({
               <div className="max-w-[85%] rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Thinking...
+                  {t("Thinking...")}
                 </span>
               </div>
             </div>
@@ -198,7 +204,7 @@ export function AiChatPanel({
               onClick={() => textareaRef.current?.blur()}
               className="text-xs font-semibold text-primary"
             >
-              Done
+              {t("Done")}
             </button>
           </div>
         )}
@@ -217,7 +223,7 @@ export function AiChatPanel({
               onChange={(e) => setContent(e.target.value)}
               onFocus={() => setInputFocused(true)}
               onBlur={() => setInputFocused(false)}
-              placeholder="Ask your AI training chat something..."
+              placeholder={t("Ask your AI training chat something...")}
               className="min-h-[44px] flex-1 resize-none"
               maxLength={2000}
               onKeyDown={(e) => {

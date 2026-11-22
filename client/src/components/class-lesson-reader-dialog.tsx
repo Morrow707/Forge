@@ -36,6 +36,7 @@ import {
   type QuizQuestionType,
   type QuizSubmission,
 } from "@shared/class-quiz-grading";
+import { msg, useT } from "@/i18n";
 
 export type ContentPage = {
   title?: string;
@@ -174,11 +175,11 @@ function renderInline(text: string): React.ReactNode {
  * attempt so grinding through retries doesn't feel like reading a stern
  * error message over and over. */
 const ENCOURAGING_FAIL_LINES = [
-  "Oh, so close! Hit the books (well, the chapter) and give it another go.",
-  "Not quite, your swing needs a little more film study first.",
-  "Solid effort! Review the chapter and step back up to the plate.",
-  "Almost there! A quick re-read and you'll crush this one.",
-  "Good try! Brush up on the chapter and take another cut at it.",
+  msg("Oh, so close! Hit the books (well, the chapter) and give it another go."),
+  msg("Not quite, your swing needs a little more film study first."),
+  msg("Solid effort! Review the chapter and step back up to the plate."),
+  msg("Almost there! A quick re-read and you'll crush this one."),
+  msg("Good try! Brush up on the chapter and take another cut at it."),
 ];
 function randomFailLine() {
   return ENCOURAGING_FAIL_LINES[Math.floor(Math.random() * ENCOURAGING_FAIL_LINES.length)];
@@ -231,6 +232,7 @@ export function ClassLessonReaderDialog({
    * round trip. */
   previewContent?: LessonContent;
 }) {
+  const t = useT();
   const isPreview = previewContent != null;
   const qc = useQueryClient();
   const { data: fetchedContent, isLoading, isError, refetch } = useQuery<LessonContent>({
@@ -309,7 +311,7 @@ export function ClassLessonReaderDialog({
       if (!isPreview) invalidateProgress();
       afterReading();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save your progress"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not save your progress")),
   });
 
   const flashcards = lessonContent?.flashcards ?? [];
@@ -392,7 +394,7 @@ export function ClassLessonReaderDialog({
       if (!result.passed) setFailLine(randomFailLine());
       if (result.passed && !isPreview) invalidateProgress();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not submit quiz"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not submit quiz")),
   });
 
   const activateMutation = useMutation({
@@ -407,15 +409,15 @@ export function ClassLessonReaderDialog({
     },
     onSuccess: () => {
       if (isPreview) {
-        toast.info("This is just a preview, nothing was saved or added to a calendar.");
+        toast.info(t("This is just a preview, nothing was saved or added to a calendar."));
       } else {
         invalidateProgress();
-        toast.success("Added to your calendar");
+        toast.success(t("Added to your calendar"));
       }
       onOpenChange(false);
     },
     onError: (err: ApiError) =>
-      toast.error(err.message || "Could not add this lesson to your calendar"),
+      toast.error(err.message || t("Could not add this lesson to your calendar")),
   });
 
   const pages = lessonContent?.content ?? [];
@@ -485,19 +487,19 @@ export function ClassLessonReaderDialog({
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
-                aria-label="Exit lesson"
+                aria-label={t("Exit lesson")}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border text-foreground hover:bg-surface-elevated"
               >
                 <X className="h-5 w-5" />
               </button>
               <DialogTitle className="flex min-w-0 items-center gap-2">
                 <Badge variant="outline" className="shrink-0">
-                  Lesson {lesson.lessonNumber}
+                  {t("Lesson {n}", { n: lesson.lessonNumber })}
                 </Badge>
                 <span className="truncate">{lesson.title}</span>
                 {isPreview && (
                   <Badge className="shrink-0 gap-1 bg-primary/15 text-primary hover:bg-primary/15">
-                    Preview
+                    {t("Preview")}
                   </Badge>
                 )}
               </DialogTitle>
@@ -507,11 +509,11 @@ export function ClassLessonReaderDialog({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>
-                  Page {Math.min(pageIndex + 1, pages.length)} of {pages.length}
+                  {t("Page {n} of {total}", { n: Math.min(pageIndex + 1, pages.length), total: pages.length })}
                 </span>
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  {readingMinutes} min read
+                  {t("{minutes} min read", { minutes: readingMinutes })}
                 </span>
               </div>
               <div className="h-1 w-full overflow-hidden rounded-full bg-border" role="progressbar" aria-valuemin={0} aria-valuemax={pages.length} aria-valuenow={pageIndex + 1}>
@@ -520,7 +522,7 @@ export function ClassLessonReaderDialog({
             </div>
           )}
           {phase === "quiz" && !quizResult && questions.length > 0 && (
-            <p className="text-xs text-muted-foreground">Chapter quiz, {questions.length} questions</p>
+            <p className="text-xs text-muted-foreground">{t("Chapter quiz, {count} questions", { count: questions.length })}</p>
           )}
         </div>
 
@@ -539,14 +541,14 @@ export function ClassLessonReaderDialog({
               The reading view refuses rather than offering to complete nothing. */}
           {contentFailed && phase === "reading" && (
             <div className="mx-auto max-w-2xl">
-              <ReadFailed what="this lesson" onRetry={() => void refetch()} />
+              <ReadFailed what={t("this lesson")} onRetry={() => void refetch()} />
             </div>
           )}
 
           {!contentFailed && !contentLoading && phase === "reading" && (
             <div className="mx-auto max-w-2xl space-y-3">
               {pages.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No reading content for this lesson yet.</p>
+                <p className="text-sm text-muted-foreground">{t("No reading content for this lesson yet.")}</p>
               ) : (
                 <>
   {pages[pageIndex]?.title && (
@@ -602,7 +604,7 @@ export function ClassLessonReaderDialog({
                         src={pages[pageIndex].videoUrl!}
                         className="w-full rounded-md border border-border bg-black"
                       >
-                        Your browser doesn't support inline video playback.
+                        {t("Your browser doesn't support inline video playback.")}
                       </video>
                     ) : getEmbedUrl(pages[pageIndex].videoUrl!) ? (
                       // A YouTube/Vimeo link -- embed it the same way an
@@ -611,7 +613,7 @@ export function ClassLessonReaderDialog({
                       <div className="aspect-video w-full overflow-hidden rounded-md border border-border bg-black">
                         <iframe
                           src={getEmbedUrl(pages[pageIndex].videoUrl!)!}
-                          title="Instructional video"
+                          title={t("Instructional video")}
                           className="h-full w-full"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
@@ -626,7 +628,7 @@ export function ClassLessonReaderDialog({
                         className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm font-medium text-primary hover:bg-primary/10"
                       >
                         <PlayCircle className="h-5 w-5 shrink-0" />
-                        Watch instructional video
+                        {t("Watch instructional video")}
                       </a>
                     ))}
                   <div className="space-y-3 text-sm leading-relaxed text-foreground/90">
@@ -642,7 +644,7 @@ export function ClassLessonReaderDialog({
                       className="flex items-center gap-2 rounded-md border border-border bg-surface-elevated p-3 text-sm font-medium hover:bg-secondary"
                     >
                       <FileDown className="h-5 w-5 shrink-0 text-primary" />
-                      Download {pages[pageIndex]?.attachmentName || "worksheet"}
+                      {t("Download {name}", { name: pages[pageIndex]?.attachmentName || t("worksheet") })}
                     </a>
                   )}
                 </>
@@ -657,11 +659,11 @@ export function ClassLessonReaderDialog({
           {!contentLoading && phase === "quiz" && !quizResult && (
             <div className="mx-auto max-w-2xl space-y-5">
               {questions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">This lesson's quiz isn't ready yet.</p>
+                <p className="text-sm text-muted-foreground">{t("This lesson's quiz isn't ready yet.")}</p>
               ) : (
                 <>
                   <p className="text-sm text-muted-foreground">
-                    Answer every question, then submit. You can retry as many times as you need.
+                    {t("Answer every question, then submit. You can retry as many times as you need.")}
                   </p>
                   {questions.map((q, qi) => {
                     const type = q.questionType ?? "multiple_choice";
@@ -741,12 +743,12 @@ export function ClassLessonReaderDialog({
                   <XCircle className="h-4 w-4 shrink-0" />
                 )}
                 <span>
-                  {quizResult.correctCount}/{quizResult.totalQuestions} correct --{" "}
+                  {t("{correct}/{total} correct --", { correct: quizResult.correctCount, total: quizResult.totalQuestions })}{" "}
                   {quizResult.perfect
-                    ? "perfect score! Gold star earned."
+                    ? t("perfect score! Gold star earned.")
                     : quizResult.passed
-                      ? "you passed!"
-                      : failLine}
+                      ? t("you passed!")
+                      : t(failLine)}
                 </span>
               </div>
               {quizResult.results.map((r, ri) => (
@@ -789,11 +791,11 @@ export function ClassLessonReaderDialog({
           {!contentLoading && phase === "ready" && (
             <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 py-10 text-center">
               <CheckCircle2 className="h-10 w-10 text-success" />
-              <p className="font-semibold">Content read and quiz passed.</p>
+              <p className="font-semibold">{t("Content read and quiz passed.")}</p>
               <p className="max-w-sm text-sm text-muted-foreground">
                 {isPreview
-                  ? "That's the full lesson, a real athlete would add its drills to their calendar here."
-                  : "Add this lesson's drills to your calendar to start training it."}
+                  ? t("That's the full lesson, a real athlete would add its drills to their calendar here.")
+                  : t("Add this lesson's drills to your calendar to start training it.")}
               </p>
             </div>
           )}
@@ -826,7 +828,7 @@ export function ClassLessonReaderDialog({
                   disabled={pageIndex === 0}
                 >
                   <ArrowLeft className="h-5 w-5" />
-                  Back
+                  {t("Back")}
                 </Button>
                 {pageIndex < pages.length - 1 ? (
                   <Button
@@ -834,7 +836,7 @@ export function ClassLessonReaderDialog({
                     className="flex-1"
                     onClick={() => setPageIndex((i) => Math.min(pages.length - 1, i + 1))}
                   >
-                    Next
+                    {t("Next")}
                     <ArrowRight className="h-5 w-5" />
                   </Button>
                 ) : (
@@ -846,12 +848,12 @@ export function ClassLessonReaderDialog({
                   >
                     {questions.length === 0 && <BookOpen className="h-5 w-5" />}
                     {completeContentMutation.isPending
-                      ? "Saving…"
+                      ? t("Saving…")
                       : flashcards.length > 0
-                        ? "Review Cards"
+                        ? t("Review Cards")
                         : questions.length > 0
-                          ? "View Quiz"
-                          : "Finish Reading"}
+                          ? t("View Quiz")
+                          : t("Finish Reading")}
                     {(questions.length > 0 || flashcards.length > 0) && <ArrowRight className="h-5 w-5" />}
                   </Button>
                 )}
@@ -862,10 +864,10 @@ export function ClassLessonReaderDialog({
               <>
                 <Button size="lg" variant="outline" onClick={() => setPhase("reading")}>
                   <ArrowLeft className="h-5 w-5" />
-                  Back to reading
+                  {t("Back to reading")}
                 </Button>
                 <Button size="lg" variant="ghost" className="ml-auto" onClick={afterCards}>
-                  Skip cards
+                  {t("Skip cards")}
                   <ArrowRight className="h-5 w-5" />
                 </Button>
               </>
@@ -877,9 +879,9 @@ export function ClassLessonReaderDialog({
                     instead -- on a real phone the header sits right under
                     the status bar/notch, so this is the one that's
                     actually easy to tap mid-quiz. */}
-                <Button size="lg" variant="outline" onClick={() => onOpenChange(false)} aria-label="Exit lesson">
+                <Button size="lg" variant="outline" onClick={() => onOpenChange(false)} aria-label={t("Exit lesson")}>
                   <X className="h-5 w-5" />
-                  Exit
+                  {t("Exit")}
                 </Button>
                 <Button
                   size="lg"
@@ -887,7 +889,7 @@ export function ClassLessonReaderDialog({
                   onClick={() => submitQuizMutation.mutate()}
                   disabled={!allAnswered || submitQuizMutation.isPending}
                 >
-                  {submitQuizMutation.isPending ? "Submitting…" : "Submit Quiz"}
+                  {submitQuizMutation.isPending ? t("Submitting…") : t("Submit Quiz")}
                 </Button>
               </>
             )}
@@ -903,19 +905,19 @@ export function ClassLessonReaderDialog({
                   setFailLine("");
                 }}
               >
-                Try Again
+                {t("Try Again")}
               </Button>
             )}
 
             {phase === "quiz" && quizResult && quizResult.passed && alreadyActive && (
               <Button size="lg" className="ml-auto" onClick={() => onOpenChange(false)}>
-                Close
+                {t("Close")}
               </Button>
             )}
 
             {phase === "quiz" && quizResult && quizResult.passed && !alreadyActive && (
               <Button size="lg" className="ml-auto" onClick={() => setPhase("ready")}>
-                Continue
+                {t("Continue")}
                 <ArrowRight className="h-5 w-5" />
               </Button>
             )}
@@ -928,7 +930,7 @@ export function ClassLessonReaderDialog({
                 disabled={activateMutation.isPending}
               >
                 <CalendarPlus className="h-5 w-5" />
-                {activateMutation.isPending ? "Adding…" : isPreview ? "Close Preview" : "Add to Calendar"}
+                {activateMutation.isPending ? t("Adding…") : isPreview ? t("Close Preview") : t("Add to Calendar")}
               </Button>
             )}
           </div>

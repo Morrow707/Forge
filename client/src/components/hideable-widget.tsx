@@ -2,6 +2,7 @@ import { type CSSProperties, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 /** One card on a Dashboard/Analytics page that a user can personally hide
  * (and, once wrapped in SortableHideableWidget, drag to reorder) -- see
@@ -47,6 +48,7 @@ export function HideableWidget({
   dragRef?: (node: HTMLElement | null) => void;
   dragStyle?: CSSProperties;
 }) {
+  const t = useT();
   if (isHidden && !editMode) return null;
 
   if (!editMode) return <>{children}</>;
@@ -57,7 +59,7 @@ export function HideableWidget({
         {dragHandleProps && (
           <button
             type="button"
-            aria-label={`Reorder ${label}`}
+            aria-label={t("Reorder {label}", { label })}
             {...dragHandleProps}
             className="cursor-grab touch-none text-muted-foreground transition-colors hover:text-foreground active:cursor-grabbing"
           >
@@ -72,7 +74,7 @@ export function HideableWidget({
           onClick={() => onToggle(id, !isHidden)}
         >
           {isHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-          {isHidden ? `Show ${label}` : `Hide ${label}`}
+          {isHidden ? t("Show {label}", { label }) : t("Hide {label}", { label })}
         </Button>
       </div>
       <div className={cn("rounded-lg ring-2 ring-dashed ring-border", isHidden && "opacity-40")}>

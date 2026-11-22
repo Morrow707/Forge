@@ -16,6 +16,7 @@ import {
 import { InjuryHistoryPanel } from "@/components/injury-history-panel";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
 
 export type ProfileAthlete = {
   id: number;
@@ -74,6 +75,7 @@ export function AthleteProfileDialog({
   athlete: ProfileAthlete | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [value, setValue] = useState<ProfileFieldsValue>(emptyProfileFields);
 
@@ -116,10 +118,10 @@ export function AthleteProfileDialog({
       // staleTime 30s and refetchOnWindowFocus off, saving a height or a max
       // showed a success toast over the old values.
       qc.invalidateQueries({ queryKey: [`/api/coach/roster/${athlete?.id}`] });
-      toast.success("Profile updated");
+      toast.success(t("Profile updated"));
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not update profile"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not update profile")),
   });
 
   return (
@@ -145,14 +147,14 @@ export function AthleteProfileDialog({
         )}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Close
+            {t("Close")}
           </Button>
           <Button
             type="button"
             onClick={() => saveMutation.mutate()}
             disabled={saveMutation.isPending}
           >
-            Save
+            {t("Save")}
           </Button>
         </DialogFooter>
       </DialogContent>

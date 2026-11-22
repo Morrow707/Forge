@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
 
 export type HealthStatus = "healthy" | "hurt";
 
@@ -50,7 +51,8 @@ export function WellnessBadge({
    * look identical to a coach otherwise, and only one of them means "no flag today". */
   unavailable?: boolean;
 }) {
-  if (unavailable) return <StatusUnavailable label="Readiness unavailable" />;
+  const t = useT();
+  if (unavailable) return <StatusUnavailable label={t("Readiness unavailable")} />;
   if (!entry) return null;
   return (
     <button
@@ -59,14 +61,17 @@ export function WellnessBadge({
         e.stopPropagation();
         onClick();
       }}
-      aria-label={`Readiness ${entry.score}/100, ${READINESS_LABEL[entry.level]}, view wellness history`}
+      aria-label={t("Readiness {score}/100, {level}, view wellness history", {
+        score: entry.score,
+        level: t(READINESS_LABEL[entry.level]),
+      })}
       className={cn(
         "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-opacity hover:opacity-80",
         READINESS_CLASSNAME[entry.level],
       )}
     >
       <Gauge className="h-3 w-3" />
-      {entry.score} · {READINESS_LABEL[entry.level]}
+      {entry.score} · {t(READINESS_LABEL[entry.level])}
     </button>
   );
 }
@@ -86,7 +91,8 @@ export function AcwrBadge({
    * not the same as one missing because the ratio could not be computed. */
   unavailable?: boolean;
 }) {
-  if (unavailable) return <StatusUnavailable label="Training load unavailable" />;
+  const t = useT();
+  if (unavailable) return <StatusUnavailable label={t("Training load unavailable")} />;
   if (!entry || entry.ratio == null) return null;
   return (
     <button
@@ -95,14 +101,14 @@ export function AcwrBadge({
         e.stopPropagation();
         onClick();
       }}
-      aria-label={`Training load: ${ACWR_RISK_LABEL[entry.level]}, view load history`}
+      aria-label={t("Training load: {level}, view load history", { level: t(ACWR_RISK_LABEL[entry.level]) })}
       className={cn(
         "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-opacity hover:opacity-80",
         ACWR_RISK_CLASSNAME[entry.level],
       )}
     >
       <Activity className="h-3 w-3" />
-      {ACWR_RISK_LABEL[entry.level]}
+      {t(ACWR_RISK_LABEL[entry.level])}
     </button>
   );
 }
@@ -114,6 +120,7 @@ export function AcwrBadge({
 // so this renders nothing (see the early return below) in the meantime --
 // no separate check needed here.
 export function GuardianNoticeBadge({ athleteId }: { athleteId: number }) {
+  const t = useT();
   const qc = useQueryClient();
   const { data, isError, refetch } = useQuery<{ flagged: boolean; acknowledgedAt: string | null }>({
     queryKey: [`/api/coach/roster/${athleteId}/guardian-notice`],
@@ -125,9 +132,9 @@ export function GuardianNoticeBadge({ athleteId }: { athleteId: number }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`/api/coach/roster/${athleteId}/guardian-notice`] });
-      toast.success("Marked, waiver/consent on file");
+      toast.success(t("Marked, waiver/consent on file"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not update"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not update")),
   });
 
   // ABSENCE IS THE SIGNAL HERE, which is what makes a failed read dangerous. This badge appears
@@ -143,12 +150,12 @@ export function GuardianNoticeBadge({ athleteId }: { athleteId: number }) {
           e.stopPropagation();
           void refetch();
         }}
-        title="We couldn't check this athlete's guardian status, tap to try again"
-        aria-label="Guardian status unknown, the check failed. Tap to try again."
+        title={t("We couldn't check this athlete's guardian status, tap to try again")}
+        aria-label={t("Guardian status unknown, the check failed. Tap to try again.")}
         className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
       >
         <ShieldAlert className="h-3 w-3" />
-        Guardian status unknown
+        {t("Guardian status unknown")}
       </button>
     );
   }
@@ -162,12 +169,12 @@ export function GuardianNoticeBadge({ athleteId }: { athleteId: number }) {
         ackMutation.mutate();
       }}
       disabled={ackMutation.isPending}
-      aria-label="This athlete signed up as a minor, recommend a parent/guardian waiver, click once one is on file"
-      title="Signed up as a minor, recommend getting a parent/guardian waiver or consent on file, then click to mark it done"
+      aria-label={t("This athlete signed up as a minor, recommend a parent/guardian waiver, click once one is on file")}
+      title={t("Signed up as a minor, recommend getting a parent/guardian waiver or consent on file, then click to mark it done")}
       className="flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-500 transition-opacity hover:opacity-80"
     >
       <ShieldAlert className="h-3 w-3" />
-      {ackMutation.isPending ? "Marking…" : "Guardian waiver needed"}
+      {ackMutation.isPending ? t("Marking…") : t("Guardian waiver needed")}
     </button>
   );
 }
@@ -182,6 +189,7 @@ export function HealthStatusToggle({
   athleteId: number;
   status: HealthStatus;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const isHealthy = status === "healthy";
 
@@ -195,7 +203,7 @@ export function HealthStatusToggle({
       qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not update status"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not update status")),
   });
 
   return (
@@ -206,7 +214,7 @@ export function HealthStatusToggle({
         mutation.mutate(isHealthy ? "hurt" : "healthy");
       }}
       disabled={mutation.isPending}
-      aria-label={`${isHealthy ? "Healthy" : "Hurt"}, click to mark ${isHealthy ? "hurt" : "healthy"}`}
+      aria-label={isHealthy ? t("Healthy, click to mark hurt") : t("Hurt, click to mark healthy")}
       className={cn(
         "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors",
         isHealthy
@@ -215,7 +223,7 @@ export function HealthStatusToggle({
       )}
     >
       {isHealthy ? <HeartPulse className="h-3 w-3" /> : <HeartCrack className="h-3 w-3" />}
-      {isHealthy ? "Healthy" : "Hurt"}
+      {isHealthy ? t("Healthy") : t("Hurt")}
     </button>
   );
 }
@@ -234,6 +242,7 @@ export function TrackingOptOutToggle({
   athleteId: number;
   trackingOptOut: boolean;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState(false);
 
@@ -246,10 +255,10 @@ export function TrackingOptOutToggle({
     onSuccess: (_data, next) => {
       qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
       qc.invalidateQueries({ queryKey: [`/api/coach/roster/${athleteId}`] });
-      toast.success(next ? "Camera tracking turned off for this athlete" : "Camera tracking turned back on");
+      toast.success(next ? t("Camera tracking turned off for this athlete") : t("Camera tracking turned back on"));
       setConfirming(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not update"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not update")),
   });
 
   return (
@@ -267,13 +276,13 @@ export function TrackingOptOutToggle({
         disabled={mutation.isPending}
         aria-label={
           trackingOptOut
-            ? "Camera tracking is off for this athlete, click to turn back on"
-            : "Camera tracking is on, click to turn off at a parent/guardian's request"
+            ? t("Camera tracking is off for this athlete, click to turn back on")
+            : t("Camera tracking is on, click to turn off at a parent/guardian's request")
         }
         title={
           trackingOptOut
-            ? "Camera tracking is off for this athlete at a parent/guardian's request, click to turn back on"
-            : "Turn off camera-tracking collection for this athlete (parent/guardian request)"
+            ? t("Camera tracking is off for this athlete at a parent/guardian's request, click to turn back on")
+            : t("Turn off camera-tracking collection for this athlete (parent/guardian request)")
         }
         className={cn(
           "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors",
@@ -283,14 +292,14 @@ export function TrackingOptOutToggle({
         )}
       >
         {trackingOptOut ? <VideoOff className="h-3 w-3" /> : <Video className="h-3 w-3" />}
-        {trackingOptOut ? "Tracking off" : "Tracking on"}
+        {trackingOptOut ? t("Tracking off") : t("Tracking on")}
       </button>
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Turn off camera tracking?"
-        description="This stops all future camera-tracked video and tracking metrics (bar speed, jump height, swing mechanics, and the like) from being collected for this athlete going forward, at a parent or guardian's request. It does not delete anything already recorded, and doesn't affect the rest of their account, they can still log workouts normally."
-        confirmLabel="Turn off tracking"
+        title={t("Turn off camera tracking?")}
+        description={t("This stops all future camera-tracked video and tracking metrics (bar speed, jump height, swing mechanics, and the like) from being collected for this athlete going forward, at a parent or guardian's request. It does not delete anything already recorded, and doesn't affect the rest of their account, they can still log workouts normally.")}
+        confirmLabel={t("Turn off tracking")}
         onConfirm={() => mutation.mutate(true)}
         isPending={mutation.isPending}
       />
@@ -309,6 +318,7 @@ export function TrackingOptOutToggle({
 // the coach recording it, is. Withdrawing is one click, since making it
 // harder to take back than to give would be exactly backwards.
 export function ResearchConsentControl({ athleteId }: { athleteId: number }) {
+  const t = useT();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [relayedFrom, setRelayedFrom] = useState("");
@@ -348,13 +358,13 @@ export function ResearchConsentControl({ athleteId }: { athleteId: number }) {
       qc.invalidateQueries({ queryKey: [`/api/coach/roster/${athleteId}/research-consent`] });
       toast.success(
         input.granted
-          ? "Research consent recorded"
-          : "Research consent withdrawn — this athlete is left out of everything prepared from now on",
+          ? t("Research consent recorded")
+          : t("Research consent withdrawn — this athlete is left out of everything prepared from now on"),
       );
       setOpen(false);
       setRelayedFrom("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not update"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not update")),
   });
 
   return (
@@ -377,62 +387,61 @@ export function ResearchConsentControl({ athleteId }: { athleteId: number }) {
         )}
         aria-label={
           consentFailed
-            ? "We couldn't check this athlete's research consent, click to try again"
+            ? t("We couldn't check this athlete's research consent, click to try again")
             : granted
-              ? "Research consent given, click to withdraw"
-              : "No research consent on file, click to record a guardian's consent"
+              ? t("Research consent given, click to withdraw")
+              : t("No research consent on file, click to record a guardian's consent")
         }
       >
-        {consentFailed ? "Research: ?" : granted ? "Research: yes" : "Research: no"}
+        {consentFailed ? t("Research: ?") : granted ? t("Research: yes") : t("Research: no")}
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Record research consent</DialogTitle>
+            <DialogTitle>{t("Record research consent")}</DialogTitle>
             <DialogDescription>
-              Only record this if a parent or guardian has actually read the following and agreed.
+              {t("Only record this if a parent or guardian has actually read the following and agreed.")}
             </DialogDescription>
           </DialogHeader>
 
           <pre className="whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-3 text-xs leading-relaxed">
-            {consentText?.text ?? "Loading…"}
+            {consentText?.text ?? t("Loading…")}
           </pre>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>
-              Keep a copy: <a href="/research-consent" className="underline">read it as a page</a>
+              {t("Keep a copy:")} <a href="/research-consent" className="underline">{t("read it as a page")}</a>
             </span>
             <DownloadButton
               url="/api/legal-documents/research_consent.pdf"
               filename="forge-research-consent.pdf"
-              shareTitle="Forge Research Consent"
-              label="Download PDF"
+              shareTitle={t("Forge Research Consent")}
+              label={t("Download PDF")}
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="relayed-from">Who gave this answer</Label>
+            <Label htmlFor="relayed-from">{t("Who gave this answer")}</Label>
             <Input
               id="relayed-from"
               value={relayedFrom}
               onChange={(e) => setRelayedFrom(e.target.value)}
-              placeholder="e.g. Dana Reyes (mother)"
+              placeholder={t("e.g. Dana Reyes (mother)")}
             />
             <p className="text-xs text-muted-foreground">
-              Stored with the consent record. It is what makes this a guardian's decision rather
-              than a coach's.
+              {t("Stored with the consent record. It is what makes this a guardian's decision rather than a coach's.")}
             </p>
           </div>
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               onClick={() => mutation.mutate({ granted: true, relayedFrom: relayedFrom.trim() })}
               disabled={mutation.isPending || relayedFrom.trim().length === 0}
             >
-              Record consent
+              {t("Record consent")}
             </Button>
           </DialogFooter>
         </DialogContent>

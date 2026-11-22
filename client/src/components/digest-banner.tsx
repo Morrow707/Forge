@@ -4,6 +4,7 @@ import { getJson } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, X } from "lucide-react";
+import { useT } from "@/i18n";
 
 const DISMISS_KEY = "forge-athlete-digest-dismissed";
 
@@ -15,6 +16,7 @@ const DISMISS_KEY = "forge-athlete-digest-dismissed";
  * CoachDigestBanner's own pattern -- so clearing it frees up space
  * immediately, but a genuinely new digest (next week) still pops back up. */
 export function DigestBanner() {
+  const t = useT();
   const { data } = useQuery<{ digest: string } | null>({
     queryKey: ["/api/athlete/digest"],
     queryFn: () => getJson("/api/athlete/digest"),
@@ -30,7 +32,7 @@ export function DigestBanner() {
         <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">
-            Your Weekly Training Summary
+            {t("Your Weekly Training Summary")}
           </p>
           <p className="mt-1 text-sm text-foreground">{data.digest}</p>
         </div>
@@ -38,7 +40,7 @@ export function DigestBanner() {
           size="icon"
           variant="ghost"
           className="-mr-1.5 -mt-1.5 shrink-0"
-          aria-label="Dismiss weekly summary"
+          aria-label={t("Dismiss weekly summary")}
           onClick={() => {
             localStorage.setItem(DISMISS_KEY, data.digest);
             setDismissed(data.digest);
