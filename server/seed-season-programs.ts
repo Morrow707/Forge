@@ -17,7 +17,7 @@
  * the library review). In tests an unresolved name throws, loudly; in production the one exercise
  * is skipped and the seed log names it, so one typo never stops a deploy.
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "./db";
 import { exercises, programs } from "@shared/schema";
 import { storage } from "./storage";
@@ -76,4 +76,25 @@ export async function seedSeasonPrograms(
     result.created.push({ file, name: program.name });
   }, Promise.resolve());
   return result;
+}
+
+/** Scott posted every season program on 2026-11-22 ("post all the programs"). Applied once, behind an
+ * applied_backfills marker, so an admin who later unposts one is never overridden by a redeploy, and a
+ * program added to the files after this date still arrives unposted for Scott to post himself. */
+export const POST_SEASON_PROGRAMS_MARKER = "post_season_programs_2026_11_22";
+
+export async function postSeasonProgramsOnce(libraryOwnerId: number, files: string[] = seasonProgramFiles()): Promise<number | null> {
+  const done = await db.execute(sql`SELECT 1 FROM applied_backfills WHERE key = ${POST_SEASON_PROGRAMS_MARKER}`);
+  if (done.rows.length > 0) return null;
+  const names = files.flatMap((file) => readSeasonProgramFile(file).programs.map((program) => program.name));
+  const posted =
+    names.length === 0
+      ? []
+      : await db
+          .update(programs)
+          .set({ isPublished: true })
+          .where(and(eq(programs.coachId, libraryOwnerId), inArray(programs.name, names), eq(programs.isPublished, false)))
+          .returning({ id: programs.id });
+  await db.execute(sql`INSERT INTO applied_backfills (key) VALUES (${POST_SEASON_PROGRAMS_MARKER}) ON CONFLICT DO NOTHING`);
+  return posted.length;
 }
