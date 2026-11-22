@@ -17,6 +17,7 @@ import { UserMinus, Copy, Settings2, ChevronDown, RefreshCw } from "lucide-react
 import { Checkbox } from "@/components/ui/checkbox";
 import { COACH_SECTIONS, COACH_SECTION_LABEL, type CoachSection } from "@shared/coach-sections";
 import { cn } from "@/lib/utils";
+import { STAFF_KINDS, STAFF_KIND_LABELS, type StaffKind } from "@shared/staff-kinds";
 
 type StaffMember = {
   id: number;
@@ -24,6 +25,7 @@ type StaffMember = {
   email: string;
   hiddenSections: CoachSection[];
   staffTitle: string | null;
+  staffKind: StaffKind;
 };
 type StaffResponse = { primaryCoachId: number; staff: StaffMember[] };
 
@@ -49,6 +51,7 @@ export function CoachingStaffDialog({
   const { user } = useAuth();
   const qc = useQueryClient();
   const [joinCode, setJoinCode] = useState("");
+  const [joinAsTrainer, setJoinAsTrainer] = useState(false);
   const [editingPermissionsFor, setEditingPermissionsFor] = useState<number | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
 
@@ -62,7 +65,10 @@ export function CoachingStaffDialog({
 
   const joinMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/coach/staff/join", { code: joinCode });
+      await apiRequest("POST", "/api/coach/staff/join", {
+        code: joinCode,
+        staffKind: joinAsTrainer ? "athletic_trainer" : "coach",
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/staff"] });
@@ -70,6 +76,7 @@ export function CoachingStaffDialog({
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/programs"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+      qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
       setJoinCode("");
       toast.success("Joined, you now share this staff's full roster and programs");
     },
@@ -90,6 +97,16 @@ export function CoachingStaffDialog({
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/coach/staff"] }),
     onError: (err: ApiError) => toast.error(err.message || "Couldn't update their title"),
+  });
+
+  // An athletic trainer is a staff member whose program, billing, branding and staff writes the
+  // server refuses (server/athletic-trainer-gate.ts). The head coach sets it here.
+  const kindMutation = useMutation({
+    mutationFn: async ({ staffCoachId, staffKind }: { staffCoachId: number; staffKind: StaffKind }) => {
+      await apiRequest("PATCH", `/api/coach/staff/${staffCoachId}/kind`, { staffKind });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/coach/staff"] }),
+    onError: (err: ApiError) => toast.error(err.message || "Couldn't change that"),
   });
 
   const removeMutation = useMutation({
@@ -203,6 +220,11 @@ export function CoachingStaffDialog({
                           <div className="min-w-0">
                             <p className="flex items-center gap-1.5 truncate font-medium">
                               {s.name}
+                              {s.staffKind === "athletic_trainer" && (
+                                <span className="shrink-0 rounded-full border border-primary/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                  {STAFF_KIND_LABELS.athletic_trainer}
+                                </span>
+                              )}
                               {s.staffTitle && (
                                 <span className="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                                   {s.staffTitle}
@@ -249,6 +271,32 @@ export function CoachingStaffDialog({
                         </div>
                         {isEditingThis && (
                           <div className="space-y-2 border-t border-border p-2.5">
+                            <div className="space-y-1.5">
+                              <p className="text-xs text-muted-foreground">
+                                An athletic trainer sees the roster and athlete profiles, sets health
+                                status and return-to-training clearance, files medical documents and
+                                messages athletes. They cannot build, assign or change programs, the
+                                plan, branding or staff.
+                              </p>
+                              <div className="flex gap-1.5">
+                                {STAFF_KINDS.map((kind) => (
+                                  <button
+                                    key={kind}
+                                    type="button"
+                                    disabled={kindMutation.isPending}
+                                    onClick={() => {
+                                      if (kind !== s.staffKind) kindMutation.mutate({ staffCoachId: s.id, staffKind: kind });
+                                    }}
+                                    className={cn(
+                                      "rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary",
+                                      s.staffKind === kind && "border-primary/50 text-primary",
+                                    )}
+                                  >
+                                    {STAFF_KIND_LABELS[kind]}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
                             <div className="space-y-1.5">
                               <p className="text-xs text-muted-foreground">
                                 Display title, shown instead of "Coach" wherever {s.name.split(" ")[0]}'s
@@ -357,6 +405,10 @@ export function CoachingStaffDialog({
                     Join
                   </Button>
                 </div>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Checkbox checked={joinAsTrainer} onCheckedChange={(next) => setJoinAsTrainer(next === true)} />
+                  I'm joining as the athletic trainer
+                </label>
                 {data && data.staff.length > 0 && (
                   <p className="text-xs text-muted-foreground">
                     You'll need to remove your current staff members first, a coach can't run

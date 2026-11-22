@@ -43,6 +43,9 @@ import { registerVelocityZoneRoutes } from "./velocity-zones";
 import { forgeEventsForFeed, registerCalendarEventRoutes } from "./calendar-events";
 import { registerAttendanceRoutes } from "./attendance";
 import { refusedReturnToTrainingWithoutSetup, registerSeasonSetupRoutes } from "./season-setup";
+import { mountAthleticTrainerGate } from "./athletic-trainer-gate";
+import { STAFF_KINDS } from "@shared/staff-kinds";
+import { registerAthleticTrainerRoutes } from "./athletic-trainer-routes";
 import { registerThrowingWorkloadRoutes } from "./throwing-workload";
 import { registerParentWeeklySummaryRoutes } from "./parent-weekly-summary";
 import { registerEquipmentProfileRoutes } from "./equipment-profile-routes";
@@ -1837,6 +1840,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // report) go after, because they need the session. See server/feature-usage.ts.
   mountFeatureUsageCounter(app);
   setupAuth(app);
+  // An athletic trainer is a coach on the staff whose writes are refused outside a short allowed
+  // list (server/athletic-trainer-gate.ts). Mounted before every route below so no handler can be
+  // reached around it; it needs the session, hence after setupAuth.
+  mountAthleticTrainerGate(app);
   registerFeatureUsage(app);
   registerInstitutionalAgreementRoutes(app);
   registerEmailListRoutes(app);
@@ -1844,6 +1851,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerCalendarEventRoutes(app);
   registerAttendanceRoutes(app);
   registerSeasonSetupRoutes(app);
+  registerAthleticTrainerRoutes(app);
   registerThrowingWorkloadRoutes(app);
   registerParentWeeklySummaryRoutes(app);
   registerEquipmentProfileRoutes(app);
@@ -6405,12 +6413,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/coach/staff/join", requireRole("coach"), async (req, res) => {
     const user = currentUser(req);
-    const schema = z.object({ code: z.string().trim().min(1) });
+    // staffKind is what the person joining says they are (shared/staff-kinds.ts); it is written on
+    // the first join only, and the head coach can change it afterwards.
+    const schema = z.object({ code: z.string().trim().min(1), staffKind: z.enum(STAFF_KINDS).optional() });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invite code required" });
     }
-    const joined = await storage.joinCoachStaffByCode(user.id, parsed.data.code);
+    const joined = await storage.joinCoachStaffByCode(user.id, parsed.data.code, parsed.data.staffKind ?? "coach");
     if (!joined) {
       return res.status(400).json({
         message:

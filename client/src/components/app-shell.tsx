@@ -1,4 +1,5 @@
 import { HardyButton } from "@/components/hardy-button";
+import { ATHLETIC_TRAINER_HIDDEN_NAV_HREFS } from "@shared/staff-kinds";
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Capacitor } from "@capacitor/core";
@@ -508,6 +509,12 @@ export function AppShell({
     for (const section of user.hiddenSections) {
       for (const href of COACH_SECTION_NAV_HREFS[section] ?? []) disabledNavHrefs.add(href);
     }
+  }
+  // An athletic trainer's program, billing, branding and staff writes are refused on the server
+  // (server/athletic-trainer-gate.ts); these are the tabs that lead only to those. Hiding a tab is
+  // not the gate, the server is.
+  if (user?.role === "coach" && user.isAthleticTrainer) {
+    for (const href of ATHLETIC_TRAINER_HIDDEN_NAV_HREFS) disabledNavHrefs.add(href);
   }
 
   // THE ANVIL IS HIDDEN UNTIL THE SERVER SAYS IT IS OPEN, which includes while the answer is

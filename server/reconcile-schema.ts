@@ -4323,6 +4323,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS "assignment_season_setups_assignment_unique"
   ON "assignment_season_setups" ("assignment_id");
 `;
 
+// THE ATHLETIC TRAINER (2026-11-22): what kind of staff member a coach_staff row is. Every existing
+// row reads "coach", which is what it always was. See shared/staff-kinds.ts.
+const SQL_STAFF_KIND = `
+ALTER TABLE "coach_staff" ADD COLUMN IF NOT EXISTS "staff_kind" text NOT NULL DEFAULT 'coach';
+`;
+
 async function main() {
   console.log("Reconciling schema (idempotent, additive-only)...");
   // Two separate calls, two separate implicit transactions -- see
@@ -4332,6 +4338,7 @@ async function main() {
   await pool.query(SQL_PART_2);
   await pool.query(SQL_PART_3);
   await pool.query(SQL_SEASON_SETUP);
+  await pool.query(SQL_STAFF_KIND);
   console.log("Schema reconciliation complete.");
   await pool.end();
 }

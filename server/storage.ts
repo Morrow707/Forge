@@ -391,6 +391,7 @@ import { todayInZone, utcToday, shiftIsoDate } from "@shared/athlete-day";
 import { EXERCISE_FAMILIES, EQUIPMENT_ORDER } from "@shared/exercise-family";
 import { MOVEMENT_TYPES } from "@shared/exercise-taxonomy";
 import type { CoachSection } from "@shared/coach-sections";
+import type { StaffKind } from "@shared/staff-kinds";
 import type { WidgetLayoutEntry } from "@shared/dashboard-widgets";
 import type { RosterGroup } from "@shared/roster-groups";
 import { findVerbatimLesson } from "./academy-draft-guard";
@@ -8546,7 +8547,7 @@ export const storage = {
   // owner is themselves staff under someone else, this resolves to that
   // person's actual primary so the whole org always converges on one head
   // coach.
-  async joinCoachStaffByCode(joiningCoachId: number, code: string) {
+  async joinCoachStaffByCode(joiningCoachId: number, code: string, staffKind: StaffKind = "coach") {
     const target = await this.getUserByStaffInviteCode(code);
     if (!target || target.role !== "coach") return null;
     if (target.id === joiningCoachId) return null;
@@ -8581,7 +8582,9 @@ export const storage = {
     // Silently no-op on the loser and fetch what the winner created.
     const [row] = await db
       .insert(coachStaff)
-      .values({ primaryCoachId: resolvedPrimaryId, staffCoachId: joiningCoachId })
+      // The kind the joiner chose is written on the FIRST join only; after that it is the head
+      // coach's to change (setStaffKind), so a re-sent join never changes anybody's kind.
+      .values({ primaryCoachId: resolvedPrimaryId, staffCoachId: joiningCoachId, staffKind })
       .onConflictDoNothing({ target: [coachStaff.primaryCoachId, coachStaff.staffCoachId] })
       .returning();
     if (row) return row;
@@ -8608,8 +8611,29 @@ export const storage = {
         ...r.staffCoach,
         hiddenSections: r.hiddenSections,
         staffTitle: r.staffTitle,
+        staffKind: r.staffKind,
       })),
     };
+  },
+
+  // THE ATHLETIC TRAINER (2026-11-22). True only for a coach who is on a staff as an athletic
+  // trainer; a primary or solo coach has no coach_staff row and is never one. Reads the same
+  // memoised row getEffectiveCoachIds starts from, so the gate costs no extra query on a request
+  // that resolves the staff anyway. See shared/staff-kinds.ts.
+  async isAthleticTrainer(coachId: number): Promise<boolean> {
+    const asStaff = await this.staffLinkFor(coachId);
+    return asStaff?.staffKind === "athletic_trainer";
+  },
+
+  // Primary-only, scoped by the WHERE clause exactly as setStaffTitle is: a coach who is not this
+  // staff member's primary updates nothing and gets undefined back.
+  async setStaffKind(primaryCoachId: number, staffCoachId: number, staffKind: StaffKind) {
+    const [row] = await db
+      .update(coachStaff)
+      .set({ staffKind })
+      .where(and(eq(coachStaff.primaryCoachId, primaryCoachId), eq(coachStaff.staffCoachId, staffCoachId)))
+      .returning();
+    return row;
   },
 
   // Name + display title (+ each coach's own optional personal line) only

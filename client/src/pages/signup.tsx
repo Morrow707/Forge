@@ -103,6 +103,8 @@ export default function SignupPage() {
   // coach's staff invite code instead of a headcount.
   const [joiningStaff, setJoiningStaff] = useState(false);
   const [staffInviteCode, setStaffInviteCode] = useState("");
+  // An athletic trainer joins the same way, marked as a trainer (shared/staff-kinds.ts).
+  const [joiningAsTrainer, setJoiningAsTrainer] = useState(false);
   // A launch or holiday code. Its free time counts from the signup date whether it is typed
   // here or later on the billing page (shared/promo-trial.ts), so the field is optional and
   // the server checks it before the account exists -- a typo is a message on this form, never
@@ -255,6 +257,8 @@ export default function SignupPage() {
       coachCode: role === "athlete" ? coachCode || undefined : undefined,
       staffInviteCode:
         role === "coach" && joiningStaff ? staffInviteCode.trim().toUpperCase() : undefined,
+      staffKind:
+        role === "coach" && joiningStaff ? (joiningAsTrainer ? "athletic_trainer" : "coach") : undefined,
       dateOfBirth,
       guardianEmail: isMinorAthlete ? guardianEmail.trim() || undefined : undefined,
       sport: role === "athlete" ? sport : undefined,
@@ -499,6 +503,14 @@ export default function SignupPage() {
                     onChange={(e) => setStaffInviteCode(e.target.value.toUpperCase())}
                     placeholder="From your head coach"
                   />
+                  <label className="flex items-center gap-2 pt-1 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={joiningAsTrainer}
+                      onChange={(e) => setJoiningAsTrainer(e.target.checked)}
+                    />
+                    I'm the program's athletic trainer
+                  </label>
                 </div>
               )}
               {role === "coach" && !joiningStaff && (

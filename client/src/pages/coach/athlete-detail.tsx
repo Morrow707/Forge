@@ -1,4 +1,5 @@
 import { BarSpeedTab } from "@/components/bar-speed-tab";
+import { ReturnToTrainingClearanceCard } from "@/components/return-to-training-clearance-card";
 import { athleteTabInteraction } from "@shared/feature-usage";
 import { SingleSportYearNote, ThrowingWorkloadPanel } from "@/components/athlete-workload-notes";
 import { countInteraction } from "@/lib/feature-usage";
@@ -454,6 +455,8 @@ export default function AthleteDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            <ReturnToTrainingClearanceCard athleteId={athlete.id} />
 
             <UnattachedClipsNote athleteId={athlete.id} />
 

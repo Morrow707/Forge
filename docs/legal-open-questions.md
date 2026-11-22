@@ -581,6 +581,33 @@ by default, because injury rates differ. Does wording such as "higher landing do
 teams" need care, and is there a way to describe it that avoids implying anything about an
 individual athlete?
 
+## 29. An athletic trainer on a program's staff reading and filing medical records
+
+Added 2026-11-22. A school's athletic trainer can now join a program in Forge the way an assistant
+coach does, with the head coach's staff invite code, and is marked as the athletic trainer. They
+see the roster and each athlete's profile, mark an athlete hurt or healthy, tick the
+return-to-training clearance on an athlete's program and type the clinician's restrictions (which
+every coach on the staff then sees), read and upload medical documents such as a medical clearance
+for athletes on that program, record injuries and range-of-motion readings, and message athletes.
+They cannot build, assign or change programs, the plan or the branding. Forge treats them as staff
+of the school's program; it does not check their credentials, and the head coach decides who is
+marked as the trainer. Athletes may be under 18.
+
+We would like counsel's view on these, in this order:
+
+**(a) Does an athletic trainer, a licensed health professional, reading and filing athletes'
+medical documents and injury status in Forge change Forge's obligations?** In particular, could
+Forge become a HIPAA business associate of a trainer or a school that is a covered entity, and if
+so, what would that require (an agreement, safeguards, breach notice)?
+
+**(b) State law and school policy.** Do state medical-record or student-health-record rules, or a
+school's own policy on athletic training records, reach what a trainer records here, and does the
+answer change for a minor?
+
+**(c) The documents.** Do the Privacy Policy, the Notice to Parent or Guardian or the Institutional
+Service Agreement need a line saying a program's athletic trainer may see and file this
+information, or is it covered by what they already say about a program's staff?
+
 ---
 
 ## FORGE'S WORKING POSITION ON 15 TO 24, 2026-11-06 -- NOT COUNSEL'S ANSWER

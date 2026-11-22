@@ -3,7 +3,7 @@ import { AnvilDailyCard } from "@/components/anvil-daily-card";
 import { useQuery } from "@tanstack/react-query";
 import { BrandedMark } from "@/components/branded-mark";
 import type { EffectiveBranding } from "@/lib/branding-style";
-import { Link } from "wouter";
+import { Link, Redirect } from "wouter";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -90,7 +90,16 @@ type ProgramSummary = {
 type RosterEntry = { id: number; name: string; email: string };
 type TeamSummary = { id: number; name: string; code: string | null };
 
+// An athletic trainer lands on the roster, where health status and each athlete's documents and
+// clearance are, rather than on a dashboard built around programs they cannot build or assign
+// (shared/staff-kinds.ts). The split keeps the hook order of the dashboard body fixed.
 export default function CoachDashboard() {
+  const { user } = useAuth();
+  if (user?.isAthleticTrainer) return <Redirect to="/coach/roster" />;
+  return <CoachDashboardBody />;
+}
+
+function CoachDashboardBody() {
   const { user } = useAuth();
   const { extras: brandExtras } = useBrandExtras();
   const widgetVisibility = useWidgetVisibility("coach");
