@@ -12198,7 +12198,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // program already gives them, and that is worth one sentence pointing at iOS Settings. A
     // warning, never a refusal.
     const coachedAthlete =
-      user.role === "athlete" && (await storage.getCoachSeatsForAthlete(user.id)).length > 0;
+      user.role === "athlete" && (await storage.getCoachesForAthlete(user.id)).length > 0;
     if (user.role !== "athlete" && user.role !== "coach") {
       return res.status(403).json({ message: "Nothing is sold to this account in the app." });
     }
