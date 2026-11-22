@@ -42,6 +42,8 @@ import { registerEmailListRoutes } from "./email-list";
 import { registerVelocityZoneRoutes } from "./velocity-zones";
 import { forgeEventsForFeed, registerCalendarEventRoutes } from "./calendar-events";
 import { registerAttendanceRoutes } from "./attendance";
+import { refusedReturnToTrainingWithoutSetup, registerSeasonSetupRoutes } from "./season-setup";
+import { registerThrowingWorkloadRoutes } from "./throwing-workload";
 import { registerParentWeeklySummaryRoutes } from "./parent-weekly-summary";
 import { registerEquipmentProfileRoutes } from "./equipment-profile-routes";
 import { registerProgramImportRoutes } from "./program-import-routes";
@@ -1841,6 +1843,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerVelocityZoneRoutes(app);
   registerCalendarEventRoutes(app);
   registerAttendanceRoutes(app);
+  registerSeasonSetupRoutes(app);
+  registerThrowingWorkloadRoutes(app);
   registerParentWeeklySummaryRoutes(app);
   registerEquipmentProfileRoutes(app);
   registerWeightRoomSheetRoutes(app, { requireActiveCoachPlan });
@@ -5429,6 +5433,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const usable = await storage.getProgramIfUsableByCoach(user.id, parsed.data.programId);
     if (!usable) return res.status(404).json({ message: "Program not found" });
+    // A return-to-training program needs the clinician clearance, ticked in the season setup step.
+    if (await refusedReturnToTrainingWithoutSetup(user.id, parsed.data.programId, res)) return;
 
     let dateOverrides = parsed.data.dateOverrides;
     if (parsed.data.trainingWeekdays && parsed.data.trainingWeekdays.length > 0) {
@@ -11459,6 +11465,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const usable = await storage.getProgramIfUsableByCoach(user.id, parsed.data.programId);
     if (!usable) return res.status(404).json({ message: "Program not found" });
+    // A return-to-training program needs the clinician clearance, ticked in the season setup step.
+    if (await refusedReturnToTrainingWithoutSetup(user.id, parsed.data.programId, res)) return;
 
     // INCLUDING HELD: a MEMBERSHIP check, not a current-squad view. Filtering here would
     // answer "Athlete not on your roster" about somebody sitting on the coach's own screen
@@ -11573,6 +11581,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const usable = await storage.getProgramIfUsableByCoach(user.id, parsed.data.programId);
     if (!usable) return res.status(404).json({ message: "Program not found" });
+    // A return-to-training program needs the clinician clearance, ticked in the season setup step.
+    if (await refusedReturnToTrainingWithoutSetup(user.id, parsed.data.programId, res)) return;
 
     let dateOverrides = parsed.data.dateOverrides;
     if (parsed.data.trainingWeekdays && parsed.data.trainingWeekdays.length > 0) {
@@ -14683,6 +14693,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const usable = await storage.getProgramIfUsableByCoach(user.id, parsed.data.programId);
     if (!usable) return res.status(404).json({ message: "Program not found" });
+    // A return-to-training program needs the clinician clearance, ticked in the season setup step.
+    if (await refusedReturnToTrainingWithoutSetup(user.id, parsed.data.programId, res)) return;
 
     let dateOverrides = parsed.data.dateOverrides;
     if (parsed.data.trainingWeekdays && parsed.data.trainingWeekdays.length > 0) {

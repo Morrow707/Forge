@@ -553,6 +553,34 @@ coach messages?
 **(c) Does sending it require any consent beyond the guardian link itself**, given it repeats
 information the guardian can already read on their dashboard?
 
+## 28. Return-to-training plans, the clinician clearance tick, and team wording
+
+Added 2026-11-22. A program can be tagged "return to training": the work an athlete does while
+coming back from time off for an injury. Forge never decides when somebody is ready. Before such a
+program can be assigned, the person assigning it must tick one sentence: "A physician, athletic
+trainer or physical therapist has cleared this athlete to train." They may also type the
+clinician's restrictions, which Forge then shows on every day of that program. Forge stores who
+ticked it and when, and the restrictions as typed; it does not collect or check the clinician's
+note. A coach may tick it for an athlete on their roster, of any age. An adult training on their
+own may tick it for themselves. An athlete under 18 training on their own cannot tick it and is
+told their coach sets these programs up. The same step also lets a coach mark the group as a girls'
+team, a boys' team or a mixed team; that choice is stored and does not yet change any content.
+
+We would like counsel's view on these, in this order:
+
+**(a) Who may assign a return-to-training program to a minor.** Is a coach ticking the clearance
+enough, or should the minor's linked guardian be told (or have to agree) before it starts?
+
+**(b) What the tick must say.** Is the sentence above the right one, should it name the clinician
+or ask for a copy of the clearance, and does storing the typed restrictions (which may describe an
+injury) change how that text must be treated under the Privacy Policy or the Notice to Parent or
+Guardian?
+
+**(c) Wording for girls' teams.** Later builds may give girls' teams more landing and knee-care work
+by default, because injury rates differ. Does wording such as "higher landing dose for girls'
+teams" need care, and is there a way to describe it that avoids implying anything about an
+individual athlete?
+
 ---
 
 ## FORGE'S WORKING POSITION ON 15 TO 24, 2026-11-06 -- NOT COUNSEL'S ANSWER

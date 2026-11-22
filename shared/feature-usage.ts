@@ -52,6 +52,7 @@ export const ATHLETE_PAGE_TABS = {
   metrics: "Body Metrics",
   testing: "Testing History",
   "bar-speed": "Bar Speed",
+  throwing: "Throwing",
   rom: "Goniometer",
   "movement-screen": "Movement Screen",
   weakness: "Weakness Report",
