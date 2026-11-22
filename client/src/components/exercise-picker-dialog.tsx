@@ -67,6 +67,7 @@ export function ExercisePickerDialog({
   title,
   apiBase = "/api/coach",
   forYouth = false,
+  initialSearch,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -77,6 +78,8 @@ export function ExercisePickerDialog({
   /** The program is for an athlete under 14 (shared/exercise-tags.ts): exercises marked not for
    * under-14s go to the bottom with a note. They stay choosable; a coach's choice is never refused. */
   forYouth?: boolean;
+  /** What the search box holds each time the dialog opens ("warmup" for the warm-up section). */
+  initialSearch?: string;
 }) {
   const { data: exercises = [], isError, refetch } = useQuery<Exercise[]>({
     queryKey: [`${apiBase}/exercises`],
@@ -115,6 +118,9 @@ export function ExercisePickerDialog({
   useEffect(() => {
     if (open) setOnlyCorrectives(correctivesOnly);
   }, [open, correctivesOnly]);
+  useEffect(() => {
+    if (open && initialSearch !== undefined) setSearch(initialSearch);
+  }, [open, initialSearch]);
 
   // Clicking the active family again clears back to a fresh state (see the
   // accordion's own toggle-to-reset spec); clicking a different family

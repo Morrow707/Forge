@@ -16,6 +16,7 @@
  * guess: "Bench" on a whiteboard may be a flat, an incline or a close-grip press, and the only
  * person who knows is the coach. A row is never dropped and never put on a guessed exercise.
  */
+import type { ResolvedWarmupBlock } from "./program-day-warmup";
 import { NICKNAMES, normalizeSearchText, searchExercises } from "./exercise-search";
 
 /** What the model reports for one row. Every field but the name is optional: a sheet that does
@@ -84,6 +85,9 @@ export type ImportedDay = {
   title: string;
   isRestDay: boolean;
   exercises: ImportedExerciseRow[];
+  /** A warm-up Forge drafted for the day from tagged warm-up drills (2026-11-22), added by the
+   * import route after the read. The file's own rows are never moved into it. */
+  warmup?: ResolvedWarmupBlock | null;
 };
 
 export type ImportDraft = {

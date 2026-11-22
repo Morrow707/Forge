@@ -53,6 +53,7 @@ import {
   assignmentExerciseOverrides,
   assignmentExerciseRegressions,
   workoutLogs,
+  workoutLogWarmups,
   workoutLogEntries,
   workoutSetEntries,
   workoutComments,
@@ -472,6 +473,13 @@ import { generateTotpSecret, verifyTotpCode, generateBackupCodes, consumeBackupC
 import { formatDeviceLabel, type SessionKind } from "./session-tracking";
 import { requestMemo } from "./request-cache";
 import { equipmentPromptBlock, roomForActor } from "./equipment-room";
+import {
+  fillMissingWarmups,
+  resolveWarmupBlock,
+  warmupCandidatesFor,
+  withResolvedWarmups,
+} from "./program-day-warmup";
+import { normalizeWarmupBlock, type WarmupBlock } from "@shared/program-day-warmup";
 import { keepForRoom, roomAllows } from "@shared/exercise-needs";
 import { SET_BLOB_COLUMNS_EXCLUDED } from "./set-blob-columns";
 import {
@@ -1593,6 +1601,17 @@ type WeekPatch = {
 // to delete something, unlike the old "re-emit everything or it's gone"
 // design this replaces. A day named in dayUpdates without an `exercises`
 // array (e.g. just renaming a day) keeps its existing exercises verbatim.
+/** Every exercise a structure's warm-up blocks name, so the visibility check covers them too. */
+function warmupExerciseIdsOf(days: ReadonlyArray<{ warmup?: { items?: Array<{ exerciseId: number }> | null } | null }>): number[] {
+  return days.flatMap((d) => (d.warmup?.items ?? []).map((i) => i.exerciseId));
+}
+
+/** A day's warm-up as a write: undefined (keep what is stored) stays undefined, anything else is
+ * the normalized block or null. */
+function warmupColumn(warmup: Parameters<typeof normalizeWarmupBlock>[0] | undefined): WarmupBlock | null | undefined {
+  return warmup === undefined ? undefined : normalizeWarmupBlock(warmup);
+}
+
 function applyProgramWeekUpdates(
   currentWeeks: MergeableWeek[],
   patches: WeekPatch[],
@@ -17458,7 +17477,7 @@ Hard rules, no exceptions:
   },
 
   async getProgramFull(id: number) {
-    return db.query.programs.findFirst({
+    const program = await db.query.programs.findFirst({
       where: eq(programs.id, id),
       with: {
         blocks: { orderBy: asc(programBlocks.orderIndex) },
@@ -17478,6 +17497,8 @@ Hard rules, no exceptions:
         },
       },
     });
+    // Each day's warm-up comes back with its exercises' names (2026-11-22).
+    return program ? withResolvedWarmups(program) : program;
   },
 
   // Detail view for a program a coach may only look at, not necessarily
@@ -17509,7 +17530,7 @@ Hard rules, no exceptions:
     if (!program) return null;
     const coachIds = await this.getEffectiveCoachIds(requestingUserId);
     if (!programIsVisibleTo(program, coachIds)) return null;
-    return this.withOwnership(program, requestingUserId, coachIds);
+    return this.withOwnership(await withResolvedWarmups(program), requestingUserId, coachIds);
   },
 
   // A program a coach (or their staff) may assign to their athletes --
@@ -17594,10 +17615,10 @@ Hard rules, no exceptions:
     structure: ProgramStructureInput,
   ) {
     const allExercises = structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises));
-    await this.assertExerciseIdsVisibleTo(
-      coachId,
-      allExercises.map((ex) => ex.exerciseId),
-    );
+    await this.assertExerciseIdsVisibleTo(coachId, [
+      ...allExercises.map((ex) => ex.exerciseId),
+      ...warmupExerciseIdsOf(structure.weeks.flatMap((w) => w.days)),
+    ]);
     const videoCheckMap = await this.resolveVideoCheckEnabled(allExercises);
     await this.recordExerciseUsage(coachId, allExercises.map((ex) => ex.exerciseId));
     return db.transaction(async (tx) => {
@@ -17645,6 +17666,7 @@ Hard rules, no exceptions:
               dayNumber: day.dayNumber,
               title: day.title,
               isRestDay: day.isRestDay,
+              warmup: warmupColumn(day.warmup) ?? null,
             })
             .returning();
 
@@ -17841,6 +17863,9 @@ Design a complete draft program matching the coach's request, using only exercis
     const draft = parsedDraft.data;
 
     const validIdSet = new Set(validIds);
+    // EVERY DRAFTED DAY GETS A WARM-UP (2026-11-22): a RAMP block from tagged warm-up drills this
+    // room can do and that suit the athlete's age, never from the main catalog's fallback.
+    const draftWarmupCandidates = warmupCandidatesFor(visibleExercises, draftRoom, draftAge);
     return {
       note: draft.note?.trim() || null,
       structure: {
@@ -17850,7 +17875,7 @@ Design a complete draft program matching the coach's request, using only exercis
         weeks: (draft.weeks ?? []).map((w, wi) => ({
           weekNumber: w.weekNumber ?? wi + 1,
           name: w.name ?? null,
-          days: (w.days ?? []).map((d, di) => ({
+          days: fillMissingWarmups((w.days ?? []).map((d, di) => ({
             dayNumber: d.dayNumber ?? di + 1,
             title: d.title?.trim() || "Training Day",
             isRestDay: Boolean(d.isRestDay),
@@ -17865,7 +17890,7 @@ Design a complete draft program matching the coach's request, using only exercis
                 restSeconds: ex.restSeconds ?? null,
                 notes: ex.notes || null,
               })),
-          })),
+          })), draftWarmupCandidates, visibleExercises),
         })),
       },
     };
@@ -18281,10 +18306,10 @@ Respond to the user's latest message by calling ask_question or update_program.`
     requesterId: number,
   ) {
     const allExercises = structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises));
-    await this.assertExerciseIdsVisibleTo(
-      requesterId,
-      allExercises.map((ex) => ex.exerciseId),
-    );
+    await this.assertExerciseIdsVisibleTo(requesterId, [
+      ...allExercises.map((ex) => ex.exerciseId),
+      ...warmupExerciseIdsOf(structure.weeks.flatMap((w) => w.days)),
+    ]);
     const videoCheckMap = await this.resolveVideoCheckEnabled(allExercises);
     await this.recordExerciseUsage(requesterId, allExercises.map((ex) => ex.exerciseId));
     return db.transaction(async (tx) => {
@@ -18401,6 +18426,9 @@ Respond to the user's latest message by calling ask_question or update_program.`
             dayNumber: day.dayNumber,
             title: day.title,
             isRestDay: day.isRestDay,
+            // The warm-up block (2026-11-22). Omitted keeps the stored one (drizzle skips an
+            // undefined key on update, and an insert takes the column's null); null clears it.
+            warmup: warmupColumn(day.warmup),
           };
           const byId =
             day.id != null && daysById.has(day.id) && !claimedDayIds.has(day.id)
@@ -18589,6 +18617,14 @@ Respond to the user's latest message by calling ask_question or update_program.`
     // the room lacks its equipment (the builder marks it instead).
     const chatRoom = await roomForActor(authorId, builtForSelf ? authorId : null);
     const chatRoomBlock = equipmentPromptBlock(chatRoom);
+    // The warm-up drills a day the chat creates may draw from (2026-11-22): tagged, in the room,
+    // and held back for an under-14 program as every other offer is.
+    const chatAge = chatAthleteProfile?.dateOfBirth
+      ? ageFromDateOfBirth(chatAthleteProfile.dateOfBirth)
+      : (await this.programIsForYouth(programId, authorId))
+        ? YOUTH_SAFE_MIN_AGE - 1
+        : null;
+    const chatWarmupCandidates = warmupCandidatesFor(visibleExercises, chatRoom, chatAge);
     const alreadyPlaced = new Set(program.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.exerciseId))));
     const chatExercises = (() => {
       const kept = visibleExercises.filter((e) => alreadyPlaced.has(e.id) || roomAllows(e, chatRoom));
@@ -18862,8 +18898,14 @@ Respond to the user's latest message by calling ask_question or update_program.`
       // narrower, strength-specific Zod enum.
       weeks: applyProgramWeekUpdates(program.weeks, update.weekUpdates ?? [], validIdSet).map((w) => {
         const blockId = blockIdByWeekNumber.get(w.weekNumber);
+        // A day the chat CREATED gets a drafted warm-up (2026-11-22); a day that already existed
+        // keeps whatever it had (its warm-up rides through untouched, or is absent and kept).
+        const existingDayNumbers = new Set(program.weeks.find((pw) => pw.weekNumber === w.weekNumber)?.days.map((d) => d.dayNumber) ?? []);
+        const newDays = w.days.filter((d) => !existingDayNumbers.has(d.dayNumber));
+        const filled = new Map(fillMissingWarmups(newDays, chatWarmupCandidates, visibleExercises).map((d, i) => [newDays[i], d]));
         return {
           ...w,
+          days: w.days.map((d) => filled.get(d) ?? d),
           blockIndex: blockId != null ? (blockIdToIndex.get(blockId) ?? null) : null,
         };
       }) as ProgramStructureInput["weeks"],
@@ -21462,7 +21504,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     return db.transaction(async (tx) => {
       await tx
         .update(programDays)
-        .set({ title: input.title, isRestDay: input.isRestDay })
+        .set({ title: input.title, isRestDay: input.isRestDay, warmup: warmupColumn(input.warmup) })
         .where(eq(programDays.id, dayId));
 
       // Reconciled in place rather than replaced wholesale.
@@ -23952,6 +23994,16 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     return extractPerformanceHistory(logs, exerciseId);
   },
 
+  /** Whether the athlete ticked "Warm-up done" on this logged day (2026-11-22). */
+  async isWarmupDone(workoutLogId: number): Promise<boolean> {
+    const [row] = await db
+      .select({ id: workoutLogWarmups.id })
+      .from(workoutLogWarmups)
+      .where(eq(workoutLogWarmups.workoutLogId, workoutLogId))
+      .limit(1);
+    return !!row;
+  },
+
   async getWorkoutDayDetail(
     athleteId: number,
     assignmentId: number,
@@ -24131,9 +24183,16 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       // which is the real signal for whether to show a coach comment thread.
       isSelfAssigned: assignment.coachId === athleteId,
       correctivesEnabled: assignment.correctivesEnabled,
-      day: { ...dayFields, weekNumber: week.weekNumber, exercises: withProgramDemos(exercisesWithHistory) },
+      day: {
+        ...dayFields,
+        // The warm-up block, with each drill's name, shown first on the workout screen.
+        warmup: await resolveWarmupBlock(dayFields.warmup),
+        weekNumber: week.weekNumber,
+        exercises: withProgramDemos(exercisesWithHistory),
+      },
       correctives: withProgramDemos(correctivesWithHistory),
-      log: log ?? null,
+      // warmupDone is the day's one "Warm-up done" tick (workout_log_warmups).
+      log: log ? { ...log, warmupDone: await this.isWarmupDone(log.id) } : null,
       todayPainParts,
       hasModifiableRisk,
       isModified: overrides.length > 0,
@@ -24693,6 +24752,14 @@ ${catalog}`;
             .returning();
           await tx.delete(workoutLogEntries).where(eq(workoutLogEntries.workoutLogId, log.id));
         }
+      }
+
+      // THE "WARM-UP DONE" TICK (2026-11-22), inside the same transaction and after the same
+      // revision check as everything else in the save. Omitted leaves it as stored.
+      if (input.warmupDone === true) {
+        await tx.insert(workoutLogWarmups).values({ workoutLogId: log.id }).onConflictDoNothing({ target: workoutLogWarmups.workoutLogId });
+      } else if (input.warmupDone === false) {
+        await tx.delete(workoutLogWarmups).where(eq(workoutLogWarmups.workoutLogId, log.id));
       }
 
       // Resolved lazily per entry below, then reused to run retention

@@ -32,6 +32,14 @@ import { BODY_PAIN_PARTS } from "./wellness";
 import type { WidgetLayoutEntry } from "./dashboard-widgets";
 import type { RosterGroup } from "./roster-groups";
 import {
+  MAX_WARMUP_DURATION_SECONDS,
+  MAX_WARMUP_ITEMS,
+  MAX_WARMUP_NOTE_LENGTH,
+  MAX_WARMUP_REPS_LENGTH,
+  MAX_WARMUP_SETS,
+  type WarmupBlock,
+} from "./program-day-warmup";
+import {
   EXERCISE_JOINTS,
   EXERCISE_PURPOSES,
   MAX_CAUTION_NOTE_LENGTH,
@@ -2278,6 +2286,11 @@ export const programDays = pgTable(
     dayNumber: integer("day_number").notNull(),
     title: text("title").notNull().default("Training Day"),
     isRestDay: boolean("is_rest_day").notNull().default(false),
+    // The day's warm-up block (2026-11-22): ordered library exercises with sets, reps or time and
+    // a note, plus a note for the block. Null = no warm-up. JSON rather than a child table because
+    // it is read and written whole with the day, and nothing ever points INTO it; an exercise
+    // deleted from the library drops out on read. See shared/program-day-warmup.ts.
+    warmup: json("warmup").$type<WarmupBlock>(),
   },
   (table) => ({
     weekIdx: index("program_days_week_idx").on(table.weekId),
@@ -9322,11 +9335,29 @@ export const programExerciseInputSchema = z.object({
   videoCheckEnabled: z.boolean().optional(),
 });
 
+// One item of a day's warm-up block (2026-11-22). See shared/program-day-warmup.ts, whose
+// normalizeWarmupBlock is the one place this becomes a stored item.
+export const programDayWarmupItemInputSchema = z.object({
+  exerciseId: z.number().int().positive(),
+  sets: z.number().int().min(1).max(MAX_WARMUP_SETS).optional().nullable(),
+  reps: z.string().max(MAX_WARMUP_REPS_LENGTH).optional().nullable(),
+  durationSeconds: z.number().int().min(1).max(MAX_WARMUP_DURATION_SECONDS).optional().nullable(),
+  note: z.string().max(MAX_WARMUP_NOTE_LENGTH).optional().nullable(),
+});
+
+export const programDayWarmupInputSchema = z.object({
+  note: z.string().max(MAX_WARMUP_NOTE_LENGTH).optional().nullable(),
+  items: z.array(programDayWarmupItemInputSchema).max(MAX_WARMUP_ITEMS).default([]),
+});
+
 export const programDayInputSchema = z.object({
   id: z.number().optional(),
   dayNumber: z.number(),
   title: z.string().default("Training Day"),
   isRestDay: z.boolean().default(false),
+  // Omitted = keep the warm-up the day already has (an older client, the AI chat's merge);
+  // null = clear it. See updateProgramStructure.
+  warmup: programDayWarmupInputSchema.optional().nullable(),
   exercises: z.array(programExerciseInputSchema).default([]),
 });
 
@@ -9390,6 +9421,8 @@ export const updateAssignmentSchema = z.object({
 export const updateProgramDaySchema = z.object({
   title: z.string().min(1),
   isRestDay: z.boolean(),
+  // Same rule as programDayInputSchema: omitted keeps it, null clears it.
+  warmup: programDayWarmupInputSchema.optional().nullable(),
   exercises: z.array(programExerciseInputSchema).default([]),
 });
 
@@ -10960,6 +10993,10 @@ export const submitWorkoutLogSchema = z.object({
   // no log yet) still works; when it is present and does not match, the save is
   // refused rather than allowed to overwrite newer data.
   baseRevision: z.number().int().nonnegative().optional(),
+  // The day's single "Warm-up done" tick (2026-11-22), kept on workout_log_warmups. Omitted =
+  // leave it as stored (an older client, a day with no warm-up); true/false = set it. It rides the
+  // same revision rule as the rest of the save.
+  warmupDone: z.boolean().optional(),
 });
 
 /** What a coach may send when creating or editing a review.
@@ -12039,3 +12076,22 @@ export const calendarImportEvents = pgTable(
     importDateIdx: index("calendar_import_events_import_date_idx").on(table.importId, table.date),
   }),
 );
+// ---- WARM-UP DONE (2026-11-22) ----
+/** The athlete's one "Warm-up done" tick for a logged day. A row means done; no row means not.
+ * Its own table keyed on the workout log (cascades with it) rather than a column on workout_logs,
+ * so the tick survives the save's delete-and-reinsert of entries and nothing else about the log
+ * changes shape. Written only inside submitWorkoutLog, so it obeys the same revision rule. */
+export const workoutLogWarmups = pgTable(
+  "workout_log_warmups",
+  {
+    id: serial("id").primaryKey(),
+    workoutLogId: integer("workout_log_id")
+      .notNull()
+      .references(() => workoutLogs.id, { onDelete: "cascade" }),
+    doneAt: timestamp("done_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    logUnique: uniqueIndex("workout_log_warmups_log_unique").on(table.workoutLogId),
+  }),
+);
+export type WorkoutLogWarmup = typeof workoutLogWarmups.$inferSelect;

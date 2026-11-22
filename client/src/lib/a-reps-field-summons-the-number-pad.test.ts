@@ -83,6 +83,7 @@ describe("a reps field summons the number pad", () => {
     expect(names).toEqual([
       "components/assign-program-dialog.tsx",
       "components/coach-day-edit-dialog.tsx",
+      "components/day-warmup-editor.tsx",
       "pages/class-builder.tsx",
       "pages/program-builder.tsx",
       "pages/skill-program-builder.tsx",

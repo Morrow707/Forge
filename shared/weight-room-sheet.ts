@@ -652,6 +652,10 @@ export type SheetSource = {
   coachUnit: WeightUnit;
   lifts: SheetSourceLift[];
   athletes: SheetSourceAthlete[];
+  /** The day's own warm-up block, one printed line per drill ("Jumping Jacks 2 × 20"), 2026-11-22.
+   * When present it is what the warm-up line prints, and every lift stays in the main work. Absent
+   * or empty, the sheet falls back to guessing the warm-up from mobility and activation lifts. */
+  warmupBlock?: string[] | null;
 };
 
 export type SheetCell = {
@@ -770,8 +774,10 @@ export function buildSheet(source: SheetSource, layout: SheetLayout, edits: Shee
   const across = layout.view === "across";
   const showLast = across ? on.acrossLastTime : on.lastTime;
   const showPlates = across ? on.acrossPlates : on.plates;
-  const warmupLifts = source.lifts.filter(isWarmupLift);
-  const working = source.lifts.filter((l) => !isWarmupLift(l));
+  const realWarmup = source.warmupBlock && source.warmupBlock.length > ZERO ? source.warmupBlock : null;
+  const warmupLifts = realWarmup ? [] : source.lifts.filter(isWarmupLift);
+  const working = realWarmup ? source.lifts : source.lifts.filter((l) => !isWarmupLift(l));
+  const warmupLines = realWarmup ?? warmupLifts.map((l) => `${l.name} ${l.sets}×${l.reps}`);
   const ordered = layout.liftOrder.length > ZERO ? orderByPreferred(working, (l) => l.exerciseId, layout.liftOrder) : defaultLiftOrder(working);
   const hidden = new Set(layout.hiddenLifts);
   const visible = ordered.filter((l) => !hidden.has(l.exerciseId));
@@ -867,7 +873,7 @@ export function buildSheet(source: SheetSource, layout: SheetLayout, edits: Shee
     coachName: source.coachName,
     phaseLine: shown(on.phaseLine, source.phaseLine),
     lighterWeek: on.phaseLine && source.lighterWeek,
-    warmup: shown(on.warmup && warmupLifts.length > ZERO, warmupLifts.map((l) => `${l.name} ${l.sets}×${l.reps}`)),
+    warmup: shown(on.warmup && warmupLines.length > ZERO, warmupLines),
     note: shown(on.note, edits.note),
     unit,
     bar,

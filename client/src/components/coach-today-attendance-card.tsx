@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { formatISO } from "date-fns";
-import { CalendarCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarCheck, ChevronLeft, ChevronRight, Flame } from "lucide-react";
+import { warmupCompletionLine } from "@shared/program-day-warmup";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,6 +37,8 @@ type TodayAthlete = {
   sessions: Array<{ title: string; status: SessionStatus }>;
   status: SessionStatus | "nothing_assigned";
   attendance: AttendanceStatus | null;
+  /** Null when none of today's sessions has a warm-up (2026-11-22). */
+  warmup: { withWarmup: number; done: number } | null;
 };
 type Today = {
   date: string;
@@ -167,6 +170,7 @@ function TodayBody({ query, date, teamId }: { query: UseQueryResult<Today>; date
                 <span className={cn("mr-1.5 rounded px-1.5 py-0.5 text-[11px] font-medium", STATUS_PILL[a.status].className)}>
                   {STATUS_PILL[a.status].label}
                 </span>
+                {a.warmup && <WarmupMark warmup={a.warmup} athleteId={a.athleteId} />}
                 {a.sessions.map((s) => s.title).join(", ")}
               </p>
             </div>
@@ -225,13 +229,42 @@ function WeekBody({ teamId }: { teamId: string }) {
   );
 }
 
+/** The small warm-up mark beside an athlete's status: lit when every warm-up today was ticked. */
+function WarmupMark({ warmup, athleteId }: { warmup: { withWarmup: number; done: number }; athleteId: number }) {
+  const all = warmup.done >= warmup.withWarmup;
+  const partial = `Warm-up ${warmupCompletionLine(warmup)} done`;
+  const label = all ? "Warm-up done" : partial;
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className={cn(
+        "mr-1.5 inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-medium",
+        all ? "bg-orange-500/15 text-orange-700 dark:text-orange-400" : "text-muted-foreground",
+      )}
+      data-testid={`warmup-mark-${athleteId}`}
+    >
+      <Flame className="h-3 w-3" />
+      {all || warmup.withWarmup === 1 ? "WU" : `WU ${warmup.done}/${warmup.withWarmup}`}
+    </span>
+  );
+}
+
 function WeekGrid({ query }: { query: UseQueryResult<AttendanceWeek> }) {
   if (query.isError) return <ReadFailed what="this week's attendance" error={query.error} onRetry={() => void query.refetch()} />;
   if (query.isLoading || !query.data) return <p className="text-sm text-muted-foreground">Loading…</p>;
-  const { dates, athletes } = query.data;
+  const { dates, athletes, warmupTeam } = query.data;
   if (athletes.length === 0) return <p className="text-sm text-muted-foreground">No athletes on this roster yet.</p>;
+  const anyWarmups = warmupTeam.withWarmup > 0;
   return (
     <div className="overflow-x-auto">
+      {anyWarmups && (
+        <p className="mb-2 text-xs" data-testid="text-warmup-team-rate">
+          <Flame className="mr-1 inline h-3 w-3 text-orange-500" />
+          Warm-ups done: {warmupCompletionLine(warmupTeam)}
+          {warmupTeam.ratePercent != null && ` (${warmupTeam.ratePercent}%)`}
+        </p>
+      )}
       <table className="w-full text-xs" data-testid="table-attendance-week">
         <thead>
           <tr className="text-muted-foreground">
@@ -241,6 +274,7 @@ function WeekGrid({ query }: { query: UseQueryResult<AttendanceWeek> }) {
                 {new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", DAY_LABEL)}
               </th>
             ))}
+            {anyWarmups && <th className="px-1 py-1 text-center font-medium">Warm-up</th>}
           </tr>
         </thead>
         <tbody>
@@ -256,11 +290,18 @@ function WeekGrid({ query }: { query: UseQueryResult<AttendanceWeek> }) {
                   <div className="text-muted-foreground">{d.assigned > 0 ? `${d.completed}/${d.assigned}` : ""}</div>
                 </td>
               ))}
+              {anyWarmups && (
+                <td className="px-1 py-1.5 text-center" data-testid={`warmup-week-${a.athleteId}`}>
+                  {a.warmup.withWarmup > 0 ? warmupCompletionLine(a.warmup) : "·"}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
-      <p className="mt-2 text-xs text-muted-foreground">Letter: attendance mark. Fraction: sessions completed of assigned.</p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Letter: attendance mark. Fraction: sessions completed of assigned.{anyWarmups && " Warm-up: warm-ups ticked done of days that had one."}
+      </p>
     </div>
   );
 }

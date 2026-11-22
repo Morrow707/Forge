@@ -1,3 +1,4 @@
+/* eslint-disable ts-patterns/no-magic-numbers -- test fixtures */
 import { describe, expect, it } from "vitest";
 import { buildParentWeeklySummaryEmail, isKnownMinorOn, lastCompletedWeek, SEND_WINDOW_DAYS } from "./parent-weekly-summary-email";
 import { FORGE_EMAIL_HEADER_RE } from "./email-branding";
@@ -33,5 +34,19 @@ describe("the weekly parent summary, pure", () => {
     expect(email.html).toContain("none logged this week");
     expect(email.html).toContain('switch off "Weekly summary email"');
     expect(email.html).not.toContain("<Minor>");
+    expect(email.html).not.toContain("Warm-up");
+  });
+
+  it("adds Warm-up done X of Y when the week had warm-ups, and nothing when it had none", () => {
+    const base = {
+      athleteName: "Riley",
+      weekStart: "2026-11-16",
+      weekEnd: "2026-11-22",
+      sessions: [{ date: "2026-11-17", title: "Lower", completed: true }],
+      attendance: {},
+      prs: [],
+    };
+    expect(buildParentWeeklySummaryEmail({ ...base, warmup: { withWarmup: 3, done: 2 } }).html).toContain("<strong>Warm-up done</strong> 2 of 3.");
+    expect(buildParentWeeklySummaryEmail({ ...base, warmup: { withWarmup: 0, done: 0 } }).html).not.toContain("Warm-up");
   });
 });

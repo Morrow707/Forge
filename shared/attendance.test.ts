@@ -42,9 +42,10 @@ describe("attendance rules", () => {
     const rows = attendanceWeekCsvRows({
       start: "2026-11-16",
       dates: ["2026-11-16"],
+      warmupTeam: { withWarmup: 0, done: 0, ratePercent: null },
       athletes: [
-        { athleteId: 1, name: "Jordan Reyes", held: false, days: [{ date: "2026-11-16", attendance: "excused", assigned: 1, completed: 0 }] },
-        { athleteId: SAM_ID, name: "Sam Lee", held: true, days: [{ date: "2026-11-16", attendance: null, assigned: 0, completed: 0 }] },
+        { athleteId: 1, name: "Jordan Reyes", held: false, warmup: { withWarmup: 0, done: 0 }, days: [{ date: "2026-11-16", attendance: "excused", assigned: 1, completed: 0 }] },
+        { athleteId: SAM_ID, name: "Sam Lee", held: true, warmup: { withWarmup: 0, done: 0 }, days: [{ date: "2026-11-16", attendance: null, assigned: 0, completed: 0 }] },
       ],
     });
     expect(rows).toEqual([

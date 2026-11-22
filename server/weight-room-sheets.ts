@@ -27,6 +27,8 @@
  * so no assignment is invented. Attendance comes from the numbers alone: a set written on the
  * sheet is "present", nothing written is "not marked", never "absent".
  */
+import { resolveWarmupBlock } from "./program-day-warmup";
+import { warmupItemLine } from "@shared/program-day-warmup";
 import type { Express, Request, RequestHandler, Response } from "express";
 import multer from "multer";
 import { z } from "zod";
@@ -275,6 +277,9 @@ export async function loadSheetDay(coachId: number, teamId: number, date: string
     ),
   }));
   const phase = phaseLineOf(day);
+  // The day's real warm-up block, printed in place of the mobility-lift guess (2026-11-22).
+  const warmup = await resolveWarmupBlock(day.warmup);
+  const warmupBlock = (warmup?.items ?? []).flatMap((i) => (i.exercise ? [warmupItemLine(i, i.exercise.name)] : []));
   const source: SheetSource = {
     teamId,
     teamName: roster.team.name,
@@ -291,6 +296,7 @@ export async function loadSheetDay(coachId: number, teamId: number, date: string
     coachUnit: (coach?.preferredWeightUnit ?? "lbs") as WeightUnit,
     lifts,
     athletes,
+    warmupBlock,
   };
   return { source, days, layout, brand };
 }

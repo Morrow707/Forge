@@ -83,12 +83,16 @@ export type AttendanceWeekAthlete = {
   athleteId: number;
   name: string;
   held: boolean;
+  /** The week's warm-ups (2026-11-22): sessions that had one, and how many the athlete ticked. */
+  warmup: { withWarmup: number; done: number };
   days: AttendanceWeekDay[];
 };
 
 export type AttendanceWeek = {
   start: string;
   dates: string[];
+  /** The team's warm-ups this week, summed, with the rate as a whole percent (null with none). */
+  warmupTeam: { withWarmup: number; done: number; ratePercent: number | null };
   athletes: AttendanceWeekAthlete[];
 };
 
