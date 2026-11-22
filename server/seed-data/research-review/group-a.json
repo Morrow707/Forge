@@ -1,0 +1,2539 @@
+{
+ "group": "A",
+ "generated": "2026-11-22",
+ "method": "PubMed E-utilities searches; every cited record's abstract was fetched in this session. Findings rest on abstracts; full texts were not read. Where evidence comes from another sport (mostly soccer), the finding says so.",
+ "sports": [
+  {
+   "sport": "American football",
+   "demands": [
+    {
+     "finding": "College GPS data show practice workload intensity is driven mostly by drill type and day of the week rather than position alone, but each position group responds differently to each drill type, so conditioning needs to be planned per position and per drill (college, Division I).",
+     "sources": [
+      "PMID:35080203"
+     ]
+    },
+    {
+     "finding": "In college players, maximal strength (back squat, hang clean) feeds change-of-direction ability through jump power in skill positions, while in linemen and other non-skill positions the hang clean relates to change of direction directly; strength alone does not explain agility (college).",
+     "sources": [
+      "PMID:36752757"
+     ]
+    },
+    {
+     "finding": "Across elite team sports, American football was the only sport in a systematic review where high-intensity accelerations outnumbered decelerations; most other field sports are deceleration-dominant. Training for football should emphasise repeated short explosive starts.",
+     "sources": [
+      "PMID:31506901"
+     ]
+    },
+    {
+     "finding": "College players' GPS player load tracked their repetitive head impact exposure within sessions and across a season, and both were higher in games than in practices; physical load may act as a rough proxy for head-impact exposure (college).",
+     "sources": [
+      "PMID:35972602"
+     ]
+    },
+    {
+     "finding": "Exertional heat stroke deaths in football cluster around high-intensity conditioning that is not position-specific, exercise used as punishment, and failure to modify activity for heat and humidity; linemen need position-specific work-to-rest ratios (registry of youth, high school and college cases; NATA task force consensus).",
+     "sources": [
+      "PMID:38874455",
+      "PMID:42948998"
+     ]
+    },
+    {
+     "finding": "High schools in states with mandated preseason heat-acclimatisation guidelines had roughly half the rate of exertional heat illness during preseason (adjusted rate ratio about 0.45, CI 0.23-0.87) (high school).",
+     "sources": [
+      "PMID:30969138"
+     ]
+    },
+    {
+     "finding": "Only about a quarter of high schools reported using all six recommended exertional heat-stroke preparedness strategies; use was highest in hot regions with state mandates (high school athletic trainers survey).",
+     "sources": [
+      "PMID:31454289"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "Among boys' high school contact and collision sports, football had the highest overall injury rate (3.87 per 1000 athlete-exposures), the highest severe injury rate (0.80/1000 AE) and the highest concussion risk; competition was about 4 times riskier than practice. The head/face was the most common site overall and the knee the most common site for severe injuries (high school, RIO surveillance).",
+     "sources": [
+      "PMID:32133385"
+     ]
+    },
+    {
+     "finding": "Emergency-department presentations for football injuries were about 16 per 1000 high school participants per year and 12 per 1000 youth players, and both fell between 2010 and 2019; high schoolers were about twice as likely as youth players to present with knee injuries and 2.4 times as likely with shoulder injuries (youth and high school, NEISS).",
+     "sources": [
+      "PMID:34029497"
+     ]
+    },
+    {
+     "finding": "Using identical methods across seven youth sports at one English high school, American football had the highest match injury incidence (86 per 1000 match-hours); concussion was the most common injury and 59% of injuries came from player contact (high school, age about 17-18).",
+     "sources": [
+      "PMID:33461229"
+     ]
+    },
+    {
+     "finding": "In high school football, acromioclavicular sprains were the most common shoulder/arm/elbow injury, fractures cost the most time (about 42 days), about a third of these injuries came from tackling, and running backs and linebackers were most affected (high school, NATION-SP).",
+     "sources": [
+      "PMID:36111698"
+     ]
+    },
+    {
+     "finding": "In NCAA football, shoulder and elbow injuries occurred at 13.2 per 10,000 exposures; AC separation was most common (30%) and instability episodes made up 28% of these injuries; tackling caused about 38% (college, NCAA ISP).",
+     "sources": [
+      "PMID:30513039"
+     ]
+    },
+    {
+     "finding": "Boys' football had the second-highest ACL injury rate of any adolescent sport after girls' soccer (about 0.10 per 1000 athlete-exposures), and ACL injuries were about 7 times more likely in games than practice for boys (adolescent, systematic review).",
+     "sources": [
+      "PMID:33090889"
+     ]
+    },
+    {
+     "finding": "A later adolescent meta-analysis put the per-season ACL risk for boys highest in football (0.82% per season), then lacrosse, and found club sport participation raised risk (adolescent).",
+     "sources": [
+      "PMID:38692337"
+     ]
+    },
+    {
+     "finding": "Older youth athletes, girls, and those with prior concussion carried higher concussion risk (prior concussion 3-5 times); in this youth cohort football position did not change concussion risk (youth, baseline-testing cohort).",
+     "sources": [
+      "PMID:29554189"
+     ]
+    },
+    {
+     "finding": "Shoulder dislocations in high school and college athletes presenting to EDs were 87% male, and football was the second-commonest sport after basketball (high school and college, NEISS).",
+     "sources": [
+      "PMID:34766071"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Linemen (offensive and defensive)",
+     "differences": [
+      {
+       "finding": "Linemen carry the highest exertional heat-stroke risk; conditioning for linemen should use position-specific work-to-rest ratios and avoid high-intensity aerobic testing during transition periods.",
+       "sources": [
+        "PMID:42948998",
+        "PMID:38874455"
+       ]
+      },
+      {
+       "finding": "For non-skill positions, the hang clean related directly to change-of-direction performance rather than through jump power, suggesting strength transfer differs from skill positions (college).",
+       "sources": [
+        "PMID:36752757"
+       ]
+      }
+     ]
+    },
+    {
+     "position": "Running backs and linebackers",
+     "differences": [
+      {
+       "finding": "Running backs and linebackers had the largest share of shoulder, upper-arm and elbow injuries in high school football, about 15% each, largely from tackling.",
+       "sources": [
+        "PMID:36111698"
+       ]
+      }
+     ]
+    },
+    {
+     "position": "Skill positions (receivers, defensive backs)",
+     "differences": [
+      {
+       "finding": "In skill positions, maximal strength improved change of direction through better vertical jump power, so jump and power work is the link between the weight room and agility (college).",
+       "sources": [
+        "PMID:36752757"
+       ]
+      }
+     ]
+    },
+    {
+     "position": "All positions (concussion)",
+     "differences": [
+      {
+       "finding": "Position did not differ in concussion risk in a large youth cohort, and in college players position affected physical load but not head impact exposure.",
+       "sources": [
+        "PMID:29554189",
+        "PMID:35972602"
+       ]
+      }
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "Limiting full contact in practice was associated with a 64% lower practice concussion rate in American football (systematic review of prevention strategies).",
+     "exercises": [
+      "practice contact limits (policy)"
+     ],
+     "dose": "not specified in abstract",
+     "effect": "IRR 0.36 (CI 0.16-0.80) for practice concussion",
+     "sources": [
+      "PMID:37316182"
+     ]
+    },
+    {
+     "finding": "Mouthguards were associated with about a 26% lower concussion rate across collision sports.",
+     "exercises": [
+      "mouthguard use"
+     ],
+     "dose": "wear in play",
+     "effect": "IRR 0.74 (CI 0.64-0.89)",
+     "sources": [
+      "PMID:37316182"
+     ]
+    },
+    {
+     "finding": "Programmes that include the Nordic hamstring exercise roughly halve hamstring injury rates across sports; most trials are in soccer, so application to football is an extrapolation.",
+     "exercises": [
+      "Nordic hamstring exercise"
+     ],
+     "dose": "varies by trial; see cross-cutting Nordic entries",
+     "effect": "risk ratio about 0.49-0.52",
+     "sources": [
+      "PMID:30808663",
+      "PMID:27752982"
+     ]
+    },
+    {
+     "finding": "Neuromuscular training (landing, strength, balance) reduces ACL injuries by about half in all athletes; evidence for male athletes alone is insufficient, so for football it is a reasonable but not proven transfer.",
+     "exercises": [
+      "landing technique",
+      "lower-body strength",
+      "balance"
+     ],
+     "dose": "see cross-cutting ACL entries",
+     "effect": "OR about 0.50 for all ACL injuries",
+     "sources": [
+      "PMID:29737024"
+     ]
+    },
+    {
+     "finding": "Heat acclimatisation policies following NATA-IATF guidance in the preseason were associated with fewer exertional heat illnesses.",
+     "exercises": [
+      "phased preseason acclimatisation (equipment and session progression)"
+     ],
+     "dose": "per NATA-IATF guidance (details not in abstract)",
+     "effect": "adjusted rate ratio about 0.45",
+     "sources": [
+      "PMID:30969138"
+     ]
+    },
+    {
+     "finding": "Padded helmet covers (Guardian Cap) reduced lab brain-injury metrics by 10-25% depending on speed, but on-field data in college linebackers showed no clear reduction; in the NFL their mandated use in preseason practice coincided with a 54-62% fall in concussions, though not for helmet-shell impacts specifically. Evidence is mixed and not from high school.",
+     "exercises": [
+      "padded helmet shell covers (equipment)"
+     ],
+     "dose": "preseason practice",
+     "effect": "mixed; see finding",
+     "sources": [
+      "PMID:36917295",
+      "PMID:40746051"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "No football-specific structured warm-up trial was found in this search; the best evidence is from youth team-sport neuromuscular programmes, which cut lower-extremity injuries by about a third (see cross-cutting).",
+     "sources": [
+      "PMID:26084526"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "High school football players who returned to play after arthroscopic shoulder stabilisation had a 16.7% recurrence rate, rising with years of eligibility remaining (42% in the youngest group); 60% chose not to return, mostly from fear of reinjury (age 14-17).",
+     "sources": [
+      "PMID:38584991"
+     ]
+    },
+    {
+     "finding": "Only about two-thirds (67%) of football players returned to play after ACL reconstruction, at an average of about 11.6 months, and most performed below their pre-injury level (mixed high school, college and NFL, systematic review).",
+     "sources": [
+      "PMID:33195714"
+     ]
+    },
+    {
+     "finding": "Injury rates were higher in competition than practice for high school football players, which points to managing game exposure and game-intensity practice periods.",
+     "sources": [
+      "PMID:32133385"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "Rugby (union and league)",
+   "demands": [
+    {
+     "finding": "In elite rugby union, backs cover more total and high-speed distance in training and matches, while forwards make far more tackles, tackle assists, breakdown entries and contact events (elite adult).",
+     "sources": [
+      "PMID:36515599"
+     ]
+    },
+    {
+     "finding": "During ball-in-play periods, backs show higher metabolic and high-speed demands and forwards perform more collisions, and both running and collision demands change with the length of the passage of play (international adult).",
+     "sources": [
+      "PMID:29559318"
+     ]
+    },
+    {
+     "finding": "In elite under-20 players, centres covered the most distance (about 6.5 km) and the front row the least (about 5.0 km); the back three did the most high-speed running and forwards carried greater contact loads (U20 elite).",
+     "sources": [
+      "PMID:27055230"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "Youth rugby union match injury rates were about 40 per 1000 match-hours for boys and 69 for girls; concussion rates were about 6 per 1000 player-hours for boys and 34 for girls; the tackle caused most match injuries (55% boys, 71% girls); boys mostly injured the lower limb and girls the head/neck (youth, systematic review).",
+     "sources": [
+      "PMID:37191819"
+     ]
+    },
+    {
+     "finding": "Senior amateur rugby union match injuries were about 47 per 1000 player-hours, mostly in contact, with the tackler at more risk than the ball-carrier (adult amateur, meta-analysis).",
+     "sources": [
+      "PMID:29299876"
+     ]
+    },
+    {
+     "finding": "Irish schoolboy rugby had shoulder injuries at 12.2 per 1000 match-hours, higher than adult levels; dislocations/subluxations (34%) and AC sprains (30%) dominated, 81% came from the tackle, and forwards had about twice the shoulder injury rate of backs (schoolboy, cohort).",
+     "sources": [
+      "PMID:34485581"
+     ]
+    },
+    {
+     "finding": "In elite Super Rugby, shoulder injuries occurred at 13 per 1000 player-hours, tacklers were hurt more than ball-carriers, and the two main mechanisms were landing on the ground with the arm across the body and internally rotated, and a direct blow to the side of the shoulder with the arm at the side (elite adult).",
+     "sources": [
+      "PMID:25156881"
+     ]
+    },
+    {
+     "finding": "In elite tackles, most concussions happen to the tackler (77%); head-to-hip and head-to-knee contact are especially risky for the tackler, while head-to-head contact is worst for the ball-carrier; lower tackles protect the ball-carrier (elite adult, case-control video).",
+     "sources": [
+      "PMID:40766043"
+     ]
+    },
+    {
+     "finding": "Rugby league match injury incidence varies by level and the hooker had the highest pooled incidence; head and neck injuries rose about 10-fold compared with the 2014 analysis (all levels, systematic review).",
+     "sources": [
+      "PMID:35782281"
+     ]
+    },
+    {
+     "finding": "Rugby union hamstring injury risk factors include position, fatigue, previous injury and between-leg strength imbalance (systematic review, mixed levels).",
+     "sources": [
+      "PMID:34637371"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Forwards",
+     "differences": [
+      {
+       "finding": "Forwards do far more collisions and contact actions and, in schoolboys, about twice the shoulder injury rate of backs; forwards are also stronger in the hamstrings than backs.",
+       "sources": [
+        "PMID:36515599",
+        "PMID:34485581",
+        "PMID:34637371"
+       ]
+      }
+     ]
+    },
+    {
+     "position": "Backs",
+     "differences": [
+      {
+       "finding": "Backs cover greater total and high-speed distances and have higher metabolic load, so their conditioning should emphasise repeated high-speed running.",
+       "sources": [
+        "PMID:36515599",
+        "PMID:27055230",
+        "PMID:29559318"
+       ]
+      }
+     ]
+    },
+    {
+     "position": "Hooker (rugby league)",
+     "differences": [
+      {
+       "finding": "The hooker had the highest pooled match injury incidence of any rugby league position.",
+       "sources": [
+        "PMID:35782281"
+       ]
+      }
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "A pre-activity movement control programme (the RFU 'Activate' programme) in schoolboys aged 14-18 cut concussion and match injuries; when teams did it at least three times a week, overall match injuries fell by about 72% and concussions by about 59%.",
+     "exercises": [
+      "balance",
+      "single-leg control",
+      "landing",
+      "lower-limb and trunk strength",
+      "neck exercises in the programme (per trial design)"
+     ],
+     "dose": "pre-activity warm-up, at least 3 sessions per week for full effect",
+     "effect": "ITT: concussion RR 0.71; teams with 3+ weekly sessions: match injuries RR 0.28, concussion RR 0.41",
+     "sources": [
+      "PMID:28515056",
+      "PMID:27900148"
+     ]
+    },
+    {
+     "finding": "The same movement control programme in adult community rugby gave likely reductions of 40% in lower-limb injuries and 60% in concussion, with larger effects in high-compliance clubs.",
+     "exercises": [
+      "movement control warm-up"
+     ],
+     "dose": "before training and matches; higher compliance mattered",
+     "effect": "lower limb RR 0.6, concussion RR 0.4",
+     "sources": [
+      "PMID:29055883"
+     ]
+    },
+    {
+     "finding": "Neck-strengthening programmes reduced concussion in male rugby players by about 45% in the two studies that measured it; no evidence yet for female rugby players or soccer.",
+     "exercises": [
+      "cervical strengthening (isometric and resisted neck work)"
+     ],
+     "dose": "varied across studies",
+     "effect": "RR 0.55 (CI 0.33-0.92)",
+     "sources": [
+      "PMID:41316595"
+     ]
+    },
+    {
+     "finding": "Weak neck extensors (under about 36 kg) and left-right asymmetry in neck side-flexion strength were linked to much higher odds of missing games from head, neck and face injuries in pro rugby league.",
+     "exercises": [
+      "neck extension and lateral flexion strengthening (modifiable target)"
+     ],
+     "dose": "screening cut-offs from preseason testing",
+     "effect": "OR about 8 for weak extensors, about 12.6 for asymmetry (exploratory)",
+     "sources": [
+      "PMID:39632417"
+     ]
+    },
+    {
+     "finding": "Progressive Nordic programmes increased hamstring strength and muscle thickness and reduced imbalance in rugby players, and reduced injury incidence and severity in professionals.",
+     "exercises": [
+      "Nordic hamstring exercise"
+     ],
+     "dose": "progressive programmes (details vary)",
+     "effect": "reduced incidence and severity in pros",
+     "sources": [
+      "PMID:34637371"
+     ]
+    },
+    {
+     "finding": "Lowering the legal tackle height to the armpit in amateur rugby showed a non-significant trend toward fewer concussions; most head injuries still happened in the tackle.",
+     "exercises": [
+      "law change (tackle height)",
+      "tackle technique coaching"
+     ],
+     "dose": "season-long",
+     "effect": "SRC IRR 0.69 (not significant)",
+     "sources": [
+      "PMID:36600566"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "In high school girls' rugby, a neuromuscular warm-up did not significantly change match injury or concussion rates, but head-injury burden (days lost) was lower in intervention seasons; concussions were 31-41% of all match injuries (high school girls).",
+     "sources": [
+      "PMID:41919929"
+     ]
+    },
+    {
+     "finding": "The youth rugby systematic review found neuromuscular training to be the most promising prevention strategy, though only eight studies tested any prevention.",
+     "sources": [
+      "PMID:37191819"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "In youth rugby, higher playing level and older age were the risk factors with the strongest evidence.",
+     "sources": [
+      "PMID:37191819"
+     ]
+    },
+    {
+     "finding": "Neck strength rises with age and is higher in males; adolescent male rugby players with a history of concussion had a lower neck flexor-to-extensor strength ratio (adolescent to adult).",
+     "sources": [
+      "PMID:35490148"
+     ]
+    },
+    {
+     "finding": "Female university players had 47% lower isometric neck strength than males and showed uncontrolled whiplash in most head-impact events, so male-derived neck and tackle protocols may not transfer to girls (university).",
+     "sources": [
+      "PMID:34463209"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "Wrestling",
+   "demands": [
+    {
+     "finding": "Successful wrestlers across ages, weight classes and styles have high anaerobic power and capacity, good aerobic fitness for recovery between periods, and high maximal, isometric, explosive and strength-endurance; flexibility did not separate successful from less successful wrestlers (review).",
+     "sources": [
+      "PMID:28030533"
+     ]
+    },
+    {
+     "finding": "Rapid weight loss ('cutting weight') by dehydration and food restriction is common; losing more than about 5% of body mass quickly is linked to worse performance, more injury, lower testosterone, higher cortisol and higher eating-disorder risk (narrative review, includes female wrestlers).",
+     "sources": [
+      "PMID:40266645"
+     ]
+    },
+    {
+     "finding": "A decision-tree approach to acute weight loss in combat sports aims to minimise performance loss; chronic body-fat reduction is preferred to large acute manipulations (review, Olympic combat sports).",
+     "sources": [
+      "PMID:27347784"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "High school boys' wrestling injury rate was 2.38 per 1000 athlete-exposures versus 9.28 in college; in high school the head/face and shoulder/clavicle were the most common sites, while college wrestlers most often injured the knee (high school RIO and NCAA ISP).",
+     "sources": [
+      "PMID:30721631"
+     ]
+    },
+    {
+     "finding": "Wrestling-related concussions and closed head injuries seen in EDs peak at ages 15-16 and are 96% male; wrestlers may under-report symptoms as normal fatigue (NEISS).",
+     "sources": [
+      "PMID:32880134"
+     ]
+    },
+    {
+     "finding": "Among high school wrestlers with concussion, two-thirds occurred in competition, takedowns were the most common player mechanism (59%) and head-to-mat/wall the most common contact mechanism (56%) (high school, cohort).",
+     "sources": [
+      "PMID:38841729"
+     ]
+    },
+    {
+     "finding": "Head and face injuries from wrestling seen in EDs were mostly under age 18 (82%); concussion was the commonest diagnosis and the takedown the commonest mechanism (NEISS).",
+     "sources": [
+      "PMID:34505955"
+     ]
+    },
+    {
+     "finding": "In youth athletes, wrestling and martial arts had the highest relative concussion risk of all sports compared (youth).",
+     "sources": [
+      "PMID:29554189"
+     ]
+    },
+    {
+     "finding": "In college wrestling, knee injuries were mostly ligament (53%) and meniscus (22%); about a fifth of wrestlers had a recurrent knee injury (college, cohort).",
+     "sources": [
+      "PMID:37383862"
+     ]
+    },
+    {
+     "finding": "Skin fungal infection (tinea corporis gladiatorum) spreads by repeated skin contact among wrestlers; mat and skin hygiene matter (review).",
+     "sources": [
+      "PMID:33913669"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Weight classes",
+     "differences": [
+      {
+       "finding": "Anaerobic power and capacity distinguish successful wrestlers regardless of weight class; the main weight-class-specific risk is weight cutting, which is worse when losses exceed about 5% of body mass.",
+       "sources": [
+        "PMID:28030533",
+        "PMID:40266645"
+       ]
+      }
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "Takedowns and head-to-mat contact drive concussion, so safe-fall and takedown technique, and neck strength (see cross-cutting), are the logical targets; no wrestling-specific prevention trial was found in this search.",
+     "exercises": [
+      "break-fall technique",
+      "neck strengthening",
+      "takedown defence technique"
+     ],
+     "dose": "not trialled",
+     "effect": "no trial effect sizes found",
+     "sources": [
+      "PMID:38841729",
+      "PMID:34505955"
+     ]
+    },
+    {
+     "finding": "Avoiding rapid weight loss of more than about 5% body mass protects performance and health; plan weight class through gradual body-fat change.",
+     "exercises": [
+      "nutrition and weight-management planning"
+     ],
+     "dose": "chronic, not acute",
+     "effect": "observational association",
+     "sources": [
+      "PMID:40266645",
+      "PMID:27347784"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "No wrestling-specific structured warm-up trial was found; the youth team-sport neuromuscular training evidence (about one-third fewer lower-extremity injuries) is the nearest guide.",
+     "sources": [
+      "PMID:26084526"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "Head injuries in wrestling are concentrated in 15-16 year olds, the high school years, so concussion education and symptom reporting should target that age group.",
+     "sources": [
+      "PMID:32880134"
+     ]
+    },
+    {
+     "finding": "High school wrestlers have a lower total injury rate than college wrestlers but more head/face and shoulder injuries proportionally.",
+     "sources": [
+      "PMID:30721631"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "Ice hockey",
+   "demands": [
+    {
+     "finding": "Hockey is repeated bursts of fast skating with sharp changes in speed and direction and frequent contact, in shifts of about 30-80 seconds totalling about 15-25 minutes on ice; nearly half the distance is at high intensity, forwards more than defence; both phosphagen and glycolytic energy and a strong aerobic base matter, and skating ability fades late in games, linked to glycogen depletion (review).",
+     "sources": [
+      "PMID:36517860"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "In a 5-year Canadian cohort of 4418 players aged 11-17, game injury risk was higher in girls (IRR 1.57), those with a previous injury (1.46) and those with a concussion history (1.41); goaltenders had about half the injury rate of forwards (youth).",
+     "sources": [
+      "PMID:39189073"
+     ]
+    },
+    {
+     "finding": "Body checking brings a 2-3 times higher risk of all injury, severe injury and concussion at all levels of boys' youth hockey (AAP policy statement).",
+     "sources": [
+      "PMID:24864185"
+     ]
+    },
+    {
+     "finding": "Injuries happen much more in games than practices and risk rises with each level of play; mandatory facial protection and delaying body checking until age 13 are proven protections (review across levels).",
+     "sources": [
+      "PMID:31158326"
+     ]
+    },
+    {
+     "finding": "In US data, eliminating body checking at Pee Wee cut overall injuries by about 17% and checking-related injuries by 38%, though reported concussions rose in that dataset (youth registry).",
+     "sources": [
+      "PMID:29238733"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Goaltender",
+     "differences": [
+      {
+       "finding": "Goaltenders had about half the injury rate of forwards in youth hockey.",
+       "sources": [
+        "PMID:39189073"
+       ]
+      },
+      {
+       "finding": "Elite goalies reach near end-range hip internal rotation, most extremely when decelerating on skates rather than in the butterfly itself; repetitive end-range internal rotation is the likely driver of hip impingement (FAI) in goalies (elite).",
+       "sources": [
+        "PMID:25878118"
+       ]
+      },
+      {
+       "finding": "Goalies using the butterfly put the hip in flexion with end-range internal rotation, a position linked to overuse hip and labral injury; rehabilitation must progress on ice (clinical commentary).",
+       "sources": [
+        "PMID:23404067"
+       ]
+      }
+     ]
+    },
+    {
+     "position": "Forwards vs defence",
+     "differences": [
+      {
+       "finding": "Forwards show a more intense activity pattern than defence.",
+       "sources": [
+        "PMID:36517860"
+       ]
+      }
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "Disallowing body checking in 11-12 year old (Pee Wee) leagues halved game injuries and cut concussions by 64%.",
+     "exercises": [
+      "policy: no body checking under age 13"
+     ],
+     "dose": "league rule",
+     "effect": "injury IRR 0.50, concussion IRR 0.36",
+     "sources": [
+      "PMID:28279963"
+     ]
+    },
+    {
+     "finding": "Across child and adolescent hockey, no-checking policies were associated with 58% fewer concussions, with no unintended rise in other injuries.",
+     "exercises": [
+      "policy"
+     ],
+     "dose": "league rule",
+     "effect": "IRR 0.42 (CI 0.33-0.53)",
+     "sources": [
+      "PMID:37316182"
+     ]
+    },
+    {
+     "finding": "The no-checking policy for 11-12 year olds was also likely cost-saving for health care.",
+     "exercises": [
+      "policy"
+     ],
+     "dose": "league rule",
+     "effect": "about 2.2 fewer game injuries per 1000 player-hours",
+     "sources": [
+      "PMID:34096399"
+     ]
+    },
+    {
+     "finding": "A preseason adductor strengthening programme in pro players identified as weak cut adductor strains from 3.2 to 0.71 per 1000 game exposures.",
+     "exercises": [
+      "functional adductor strengthening"
+     ],
+     "dose": "6 weeks preseason for players screened as at-risk",
+     "effect": "about 78% fewer strains (before-after)",
+     "sources": [
+      "PMID:12239001"
+     ]
+    },
+    {
+     "finding": "Screening the hip adductor-to-abductor strength ratio preseason and in season can flag hockey players at risk of groin strain who would benefit from strengthening (level 3 evidence).",
+     "exercises": [
+      "adductor strength screening and strengthening"
+     ],
+     "dose": "preseason and monthly in-season checks",
+     "effect": "predictive, level 3 evidence",
+     "sources": [
+      "PMID:30676199"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "No hockey-specific injury-prevention warm-up trial was returned in this search; youth team-sport neuromuscular evidence is the nearest guide.",
+     "sources": [
+      "PMID:26084526"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "The American Academy of Pediatrics recommends restricting body checking to elite boys' levels and starting no earlier than age 15, and expanding non-checking programmes.",
+     "sources": [
+      "PMID:24864185"
+     ]
+    },
+    {
+     "finding": "Girls' hockey players had higher game and practice injury risk than boys in the Canadian cohort, even though girls' hockey does not allow checking.",
+     "sources": [
+      "PMID:39189073"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "Lacrosse",
+   "demands": [
+    {
+     "finding": "In elite men's international lacrosse, attack and defence players covered more total distance and more low-intensity accelerations and decelerations, while midfielders had the highest average speed and sprint distance; midfielders should emphasise anaerobic power (elite adult).",
+     "sources": [
+      "PMID:31191099"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "Across lacrosse studies, the lower leg, ankle and foot had the highest injury rate (0.66 per 1000 athlete-exposures) for both sexes, with no significant sex difference in rates by body region (systematic review, mixed levels).",
+     "sources": [
+      "PMID:34968164"
+     ]
+    },
+    {
+     "finding": "Among 11-18 year olds treated in EDs, boys were 1.6 times more likely to be hurt by player contact and girls 2.2 times more likely to have non-contact injuries; stick injuries fall and player contact rises with age (youth, NEISS).",
+     "sources": [
+      "PMID:32810607"
+     ]
+    },
+    {
+     "finding": "Boys' club summer lacrosse had an injury rate of 2.13 per 1000 exposures, similar to high school football and wrestling; head/face was the commonest site (22%), concussions were 19% of injuries, and midfielders were injured most (41%) (youth club).",
+     "sources": [
+      "PMID:32966564"
+     ]
+    },
+    {
+     "finding": "About 16% of youth lacrosse ED injuries were concussions, at a higher annual rate than youth football (443 vs 355 per 100,000 participants); boys' concussions mostly came from hitting the ground, girls' from ball or stick contact (youth, NEISS).",
+     "sources": [
+      "PMID:38390398"
+     ]
+    },
+    {
+     "finding": "Women's lacrosse injuries come more from ball and stick contact than body contact, with more head/face injuries than in men; ankle injuries dominate in female youth; attackers are injured most and goalies least (review).",
+     "sources": [
+      "PMID:28742608"
+     ]
+    },
+    {
+     "finding": "Boys' lacrosse is the second-highest male sport for per-season ACL risk after football (0.64% per season) in adolescents.",
+     "sources": [
+      "PMID:38692337"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Midfielders",
+     "differences": [
+      {
+       "finding": "Midfielders run fastest and sprint most and were injured most in boys' club play.",
+       "sources": [
+        "PMID:31191099",
+        "PMID:32966564"
+       ]
+      }
+     ]
+    },
+    {
+     "position": "Goalkeepers",
+     "differences": [
+      {
+       "finding": "Goalkeepers have the lowest share of injuries in both boys' and women's lacrosse.",
+       "sources": [
+        "PMID:32966564",
+        "PMID:28742608"
+       ]
+      }
+     ]
+    },
+    {
+     "position": "Attack",
+     "differences": [
+      {
+       "finding": "In women's lacrosse attackers had the most injuries.",
+       "sources": [
+        "PMID:28742608"
+       ]
+      }
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "Because girls' lacrosse injuries are disproportionately non-contact and ACL injury is common in female field sports, neuromuscular ACL programmes are the best-supported option (trials mostly in soccer, basketball and handball).",
+     "exercises": [
+      "landing stabilisation",
+      "lower-body strength",
+      "plyometrics",
+      "balance"
+     ],
+     "dose": "about 24 minutes, 2-3 times per week",
+     "effect": "ACL odds about halved; greater in high school-age athletes (OR 0.38)",
+     "sources": [
+      "PMID:30001501",
+      "PMID:32810607"
+     ]
+    },
+    {
+     "finding": "Headgear in girls' lacrosse is debated: stakeholders saw possible head/face benefit but worried about more aggressive play; no effect size available from this source.",
+     "exercises": [
+      "equipment policy"
+     ],
+     "dose": "n/a",
+     "effect": "not measured",
+     "sources": [
+      "PMID:38899324"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "No lacrosse-specific warm-up trial found; youth team-sport neuromuscular warm-ups reduce lower-extremity injuries by about a third.",
+     "sources": [
+      "PMID:26084526"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "Concussion rates in youth lacrosse rose over 2006-2019 as participation grew.",
+     "sources": [
+      "PMID:38390398"
+     ]
+    },
+    {
+     "finding": "Club sport participation increased ACL injury risk in adolescents roughly 4-fold per exposure.",
+     "sources": [
+      "PMID:38692337"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "Field hockey",
+   "demands": [
+    {
+     "finding": "In pro men's field hockey, 1-minute peak periods far exceed match averages; forwards had the highest player load per minute and defenders the lowest running and heart-rate demands but similar accelerations and decelerations (pro).",
+     "sources": [
+      "PMID:37229408"
+     ]
+    },
+    {
+     "finding": "In elite women's field hockey, forwards had the highest peak high-speed running in the most intense minute compared with defenders and midfielders; training should prepare players for peak, not average, intensity (elite female).",
+     "sources": [
+      "PMID:32243426"
+     ]
+    },
+    {
+     "finding": "Field hockey, like most team sports, has more high-intensity decelerations than accelerations in match play (systematic review).",
+     "sources": [
+      "PMID:31506901"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "Most field hockey injuries are minor and ankle sprains are the commonest; men have more and more severe injuries; severe injuries are to the head, face and upper limb from stick or ball contact (review).",
+     "sources": [
+      "PMID:19741355"
+     ]
+    },
+    {
+     "finding": "Lifetime prevalence of mouth and tooth injury was 20-29% among Dutch and international players even though most wore mouthguards; current mouthguards may not give enough protection (cross-sectional).",
+     "sources": [
+      "PMID:38496809"
+     ]
+    },
+    {
+     "finding": "In amateur field hockey, collisions, ball and stick caused shoulder, neck, head and face injuries, and few were diagnosed as concussion, suggesting under-recognition (amateur survey).",
+     "sources": [
+      "PMID:38249769"
+     ]
+    },
+    {
+     "finding": "In team sports including field hockey, female players have about twice the ACL injury rate of males (meta-regression).",
+     "sources": [
+      "PMID:34052518"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Forwards",
+     "differences": [
+      {
+       "finding": "Forwards reach the highest peak player load and high-speed running.",
+       "sources": [
+        "PMID:37229408",
+        "PMID:32243426"
+       ]
+      }
+     ]
+    },
+    {
+     "position": "Defenders",
+     "differences": [
+      {
+       "finding": "Defenders have lower running demands but similar acceleration/deceleration counts.",
+       "sources": [
+        "PMID:37229408"
+       ]
+      }
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "Balance training, alone or in a programme, reduced ankle injuries by 36-42% (soccer data; ankle sprain is the commonest field hockey injury, so this is a reasonable transfer).",
+     "exercises": [
+      "single-leg balance",
+      "proprioceptive training"
+     ],
+     "dose": "as in soccer programmes (FIFA 11+ style)",
+     "effect": "IRR 0.58-0.64",
+     "sources": [
+      "PMID:35753965",
+      "PMID:19741355"
+     ]
+    },
+    {
+     "finding": "Neuromuscular ACL programmes roughly halve ACL injury in young female athletes, most so in middle and high school.",
+     "exercises": [
+      "landing stabilisation",
+      "lower-body strength"
+     ],
+     "dose": "about 24 min, about 2.5 times per week, about 18 h total",
+     "effect": "OR 0.51 overall; 0.38 in school-age",
+     "sources": [
+      "PMID:30001501"
+     ]
+    },
+    {
+     "finding": "Face and hand protection and mouthguards are commonly recommended because severe injuries come from stick and ball, but mouthguard protection appears incomplete.",
+     "exercises": [
+      "protective equipment"
+     ],
+     "dose": "n/a",
+     "effect": "not quantified",
+     "sources": [
+      "PMID:19741355",
+      "PMID:38496809"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "FIFA 11+ style structured warm-ups reduced overall injuries by about 39% in soccer; no field-hockey-specific trial was found here.",
+     "sources": [
+      "PMID:28087568"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "Female adolescents have about 1.4-1.6 times the ACL risk of male adolescents overall, and ACL injuries are far more frequent in games than practice.",
+     "sources": [
+      "PMID:33090889",
+      "PMID:38692337"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "Cheerleading and dance",
+   "demands": [
+    {
+     "finding": "Cheer has evolved into a year-round, acrobatic sport of stunts, tossing and tumbling with high athletic demands (AAP policy).",
+     "sources": [
+      "PMID:39429001",
+      "PMID:23090348"
+     ]
+    },
+    {
+     "finding": "Dancers are performing athletes whose training is often skill-focused; in adolescent ballet, boys' jump height rose with training year while girls' did not and girls became more injury-prone with age, possibly because of a ballet-only training approach without supplementary conditioning (adolescent ballet).",
+     "sources": [
+      "PMID:35697490"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "Overall cheer injury rate is fairly low but time lost after injury is long; cheer accounted for about 66% of catastrophic injuries in high school girl athletes over 25 years (AAP).",
+     "sources": [
+      "PMID:23090348",
+      "PMID:39429001"
+     ]
+    },
+    {
+     "finding": "Cheer ED injuries fell 15% from 2010 to 2019 and stunt injuries fell, but concussions and closed head injuries rose 44% and hospital admissions rose (age 5-25, NEISS).",
+     "sources": [
+      "PMID:34676270"
+     ]
+    },
+    {
+     "finding": "In ED data, cheer injuries were mostly sprains/strains (44%), fractures (17%) and contusions; the commonest mechanism was collision between cheerleaders (29%), then stunting (20%) and tumbling (11%) (NEISS, mean age 14.6).",
+     "sources": [
+      "PMID:22327989"
+     ]
+    },
+    {
+     "finding": "Catastrophic cheer injuries in high school and college occurred at about 2.1 per million cheerleaders, mostly in practice, to the head (52%) and cervical spine (32%); basket tosses were the leading cause (high school and college).",
+     "sources": [
+      "PMID:30354940"
+     ]
+    },
+    {
+     "finding": "Collegiate cheer injury rates were 2.4-2.8 per 1000 exposures, mostly sprains/strains, concussions and fractures, with stunting and practice as the main contexts (systematic review).",
+     "sources": [
+      "PMID:42389157"
+     ]
+    },
+    {
+     "finding": "In a high school cheer survey, 41% had an injury in the past year; the ankle (24%), back (16%) and wrist/hand (16%) were most affected (high school).",
+     "sources": [
+      "PMID:15189018"
+     ]
+    },
+    {
+     "finding": "Dance students and teachers injure at about 0.8-4.7 per 1000 dance-hours, similar to professional dancers, mostly overuse injuries of the lower limb (systematic review).",
+     "sources": [
+      "PMID:35287785"
+     ]
+    },
+    {
+     "finding": "Pre-professional dancers in a 30-week prospective study had 5.5 injuries per 1000 hours; knees, lower back, feet and groin were the main sites, with higher rates in females; adolescents had more moderate-to-severe injuries than university dancers.",
+     "sources": [
+      "PMID:38114411"
+     ]
+    },
+    {
+     "finding": "Youth street dancers (median age 16) had about 4.5 injuries per 1000 dance-hours, mostly acute knee injuries during breaking (youth).",
+     "sources": [
+      "PMID:40111104"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Cheer flyers, bases and spotters",
+     "differences": [
+      {
+       "finding": "Stunting and tossing roles (basket tosses, pyramids) drive catastrophic head and neck injury; collisions between cheerleaders are the commonest overall mechanism; ankles and wrists bear load in tosses and braces.",
+       "sources": [
+        "PMID:30354940",
+        "PMID:22327989",
+        "PMID:40703179"
+       ]
+      }
+     ]
+    },
+    {
+     "position": "Dance styles",
+     "differences": [
+      {
+       "finding": "Ballet and contemporary injuries are mostly overuse in the lower limb; street dance and breaking have more acute knee injuries.",
+       "sources": [
+        "PMID:35287785",
+        "PMID:40111104"
+       ]
+      }
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "Banning basket tosses on hard surfaces cut the catastrophic basket-toss injury rate nearly 4-fold (1.55 to 0.40 per million).",
+     "exercises": [
+      "rule: no hard-surface basket tosses",
+      "matting"
+     ],
+     "dose": "policy",
+     "effect": "about 74% fewer catastrophic basket-toss injuries",
+     "sources": [
+      "PMID:30354940"
+     ]
+    },
+    {
+     "finding": "Cheer risk factors include higher BMI, previous injury, hard surfaces, stunting and poorly trained coaches; recommendations include coach certification, proper matting and spotting.",
+     "exercises": [
+      "coach certification",
+      "spotting",
+      "mats"
+     ],
+     "dose": "n/a",
+     "effect": "risk factors, not trial",
+     "sources": [
+      "PMID:23090348",
+      "PMID:39429001"
+     ]
+    },
+    {
+     "finding": "Lower strength may be linked to injury in pre-professional ballet dancers, but evidence is too weak to design a proven prevention programme yet.",
+     "exercises": [
+      "lower-limb strength training (unproven)"
+     ],
+     "dose": "n/a",
+     "effect": "association trend only",
+     "sources": [
+      "PMID:28282478"
+     ]
+    },
+    {
+     "finding": "Excessive compensated and functional turnout range was greater in injured dancers and may help screening.",
+     "exercises": [
+      "turnout screening"
+     ],
+     "dose": "n/a",
+     "effect": "mean difference about 14-23 degrees",
+     "sources": [
+      "PMID:30022294"
+     ]
+    },
+    {
+     "finding": "A cheer review recommends closed-chain eccentric strength work and technique work alongside rule changes, though trial evidence is thin.",
+     "exercises": [
+      "closed-chain eccentric strength",
+      "technique training"
+     ],
+     "dose": "not specified",
+     "effect": "not quantified",
+     "sources": [
+      "PMID:40703179"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "No cheer or dance structured warm-up trial was found in this search; the youth neuromuscular training evidence is the nearest guide.",
+     "sources": [
+      "PMID:26084526"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "Cheer participants are mostly girls aged 6-17; children aged 5-11 have a higher share of moderate-to-severe cheer injuries than teens.",
+     "sources": [
+      "PMID:39429001",
+      "PMID:40703179"
+     ]
+    },
+    {
+     "finding": "Adolescent dance and gymnastics ED injuries in girls are mostly strains/sprains and fractures.",
+     "sources": [
+      "PMID:36612793"
+     ]
+    }
+   ]
+  }
+ ],
+ "crossCutting": [
+  {
+   "topic": "Neck strength and concussion",
+   "findings": [
+    {
+     "finding": "In high school athletes across sports, each extra pound of overall neck strength was linked to 5% lower odds of concussion, after adjusting for sex and sport (high school, 51 schools).",
+     "sources": [
+      "PMID:24930131"
+     ]
+    },
+    {
+     "finding": "Resistance training clearly increases isometric neck strength (large effect, SMD 0.85, high-quality evidence), but no trial has yet tested whether it lowers concussion incidence, and it did not clearly change head acceleration (systematic review and meta-analysis).",
+     "sources": [
+      "PMID:39242177"
+     ]
+    },
+    {
+     "finding": "A 2026 meta-analysis of five studies found no statistically significant neck-strength difference between concussed and non-concussed athletes; the link remains inconclusive.",
+     "sources": [
+      "PMID:41524441"
+     ]
+    },
+    {
+     "finding": "In male rugby, cervical strengthening reduced concussions by about 45% (two studies); no evidence yet for females.",
+     "sources": [
+      "PMID:41316595"
+     ]
+    },
+    {
+     "finding": "In adults, neck strengthening improved isometric neck strength but no study showed fewer cervical spine injuries (systematic review, three studies).",
+     "sources": [
+      "PMID:33462169"
+     ]
+    },
+    {
+     "finding": "Neck training programmes using isometric or dynamic resistance generally increase strength, with smaller gains at low intensity or frequency; isometric training was linked to fewer match cervical injuries in pro rugby union (review).",
+     "sources": [
+      "PMID:26861960"
+     ]
+    },
+    {
+     "finding": "Isometric neck strength, but not neck size, appears to predict lower concussion risk; optimal dose is unknown (review).",
+     "sources": [
+      "PMID:38363718"
+     ]
+    },
+    {
+     "finding": "Neuromuscular warm-ups showed a non-significant trend toward fewer concussions overall (RR 0.69), while rugby movement-control programmes reported up to 60% lower concussion rates.",
+     "sources": [
+      "PMID:39242177",
+      "PMID:37316182"
+     ]
+    }
+   ]
+  },
+  {
+   "topic": "Collision-sport shoulder injuries",
+   "findings": [
+    {
+     "finding": "In collision sports, the tackle causes most shoulder injuries (50-85%), with Bankart lesions, SLAP tears, dislocation and rotator cuff tears common (systematic review).",
+     "sources": [
+      "PMID:26535182"
+     ]
+    },
+    {
+     "finding": "Male sex, younger age at first dislocation and contact sport participation raise recurrence risk; non-operative care allows same-season return but with high recurrence (review).",
+     "sources": [
+      "PMID:40928422"
+     ]
+    },
+    {
+     "finding": "High school football players returning after stabilisation surgery had about a 17% recurrence, higher with more seasons remaining.",
+     "sources": [
+      "PMID:38584991"
+     ]
+    },
+    {
+     "finding": "Shoulder injury mechanisms in rugby (falling on an adducted, internally rotated arm; direct lateral blow) suggest training safe falling, tackle technique and shoulder strength, though no collision-sport shoulder prevention trial was returned by this search.",
+     "sources": [
+      "PMID:25156881"
+     ]
+    }
+   ]
+  },
+  {
+   "topic": "Neuromuscular warm-ups and ACL prevention",
+   "findings": [
+    {
+     "finding": "Youth neuromuscular training programmes reduced lower-extremity injuries by 36% (IRR 0.64) and showed a non-significant reduction in knee injury (meta-analysis of RCTs).",
+     "sources": [
+      "PMID:26084526"
+     ]
+    },
+    {
+     "finding": "ACL prevention programmes halve all ACL injuries and cut non-contact ACL injuries by two-thirds in females; data for males alone are insufficient (meta-analysis of meta-analyses).",
+     "sources": [
+      "PMID:29737024"
+     ]
+    },
+    {
+     "finding": "In young female athletes neuromuscular training reduced ACL risk from 1 in 54 to 1 in 111; average dose was about 24 minutes, about 2.5 times per week, about 18 hours total; landing stabilisation and lower-body strength exercises in every session improved the effect, and school-age athletes benefited most.",
+     "sources": [
+      "PMID:30001501"
+     ]
+    },
+    {
+     "finding": "FIFA 11+ reduced overall injury by 39% (IRR 0.61) in recreational and sub-elite soccer, while the older FIFA 11 did not (meta-analysis).",
+     "sources": [
+      "PMID:28087568"
+     ]
+    },
+    {
+     "finding": "Balance exercises alone reduced ankle injuries by 42% and balance-containing programmes by 36% (soccer meta-analysis).",
+     "sources": [
+      "PMID:35753965"
+     ]
+    }
+   ]
+  },
+  {
+   "topic": "Hamstring and groin strengthening",
+   "findings": [
+    {
+     "finding": "Programmes including the Nordic hamstring exercise reduce hamstring injuries by about half across sports (risk ratio 0.49).",
+     "sources": [
+      "PMID:30808663",
+      "PMID:27752982"
+     ]
+    },
+    {
+     "finding": "A simple adductor strengthening programme reduced the prevalence of groin problems in male soccer players by 41% (cluster RCT).",
+     "sources": [
+      "PMID:29891614"
+     ]
+    },
+    {
+     "finding": "The Copenhagen adduction exercise reliably increases adduction strength, with gains depending on repetitions done, but isolated use did not significantly reduce groin injury (very low-quality evidence).",
+     "sources": [
+      "PMID:40827942"
+     ]
+    }
+   ]
+  },
+  {
+   "topic": "Adolescent athletes: resistance training, growth and specialisation",
+   "findings": [
+    {
+     "finding": "Supervised youth resistance training is endorsed as safe and beneficial by an international consensus and by the NSCA position statement.",
+     "sources": [
+      "PMID:24055781",
+      "PMID:19620931"
+     ]
+    },
+    {
+     "finding": "Resistance training in at-risk youth (early specialisers, inactive youth, girls) has been reported to reduce injury risk by up to 68%.",
+     "sources": [
+      "PMID:28447880"
+     ]
+    },
+    {
+     "finding": "Injury incidence and burden generally rise with maturity; growth-related injuries peak around the adolescent growth spurt, and faster growth in height and leg length is linked to more injury (elite youth, scoping review).",
+     "sources": [
+      "PMID:39209526"
+     ]
+    },
+    {
+     "finding": "Higher degrees of sport specialisation are likely linked to overuse and lower-extremity injury; sports-medicine bodies recommend multisport participation (review).",
+     "sources": [
+      "PMID:31633420"
+     ]
+    },
+    {
+     "finding": "Specialised youth athletes are more injury-prone, though few studies separate specialisation from training volume; delaying specialisation until at least adolescence is advised.",
+     "sources": [
+      "PMID:37104869"
+     ]
+    },
+    {
+     "finding": "Overuse, overtraining and burnout come from loads exceeding recovery; burnout is a main reason youth leave sport (AAP clinical report).",
+     "sources": [
+      "PMID:38247370"
+     ]
+    },
+    {
+     "finding": "Female team-sport athletes have about 2.2 times the ACL injury rate of males, but males have more upper-limb, hip/groin and thigh injuries (meta-regression).",
+     "sources": [
+      "PMID:34052518"
+     ]
+    }
+   ]
+  }
+ ],
+ "sources": [
+  {
+   "id": "PMID:12239001",
+   "doi": "10.1177/03635465020300050801",
+   "firstAuthor": "Tyler",
+   "year": 2002,
+   "journal": "Am J Sports Med",
+   "title": "The effectiveness of a preseason exercise program to prevent adductor muscle strains in professional ice hockey players.",
+   "population": "pro (NHL)",
+   "design": "prospective intervention"
+  },
+  {
+   "id": "PMID:15189018",
+   "doi": "10.2519/jospt.2004.34.5.261",
+   "firstAuthor": "Jacobson",
+   "year": 2004,
+   "journal": "J Orthop Sports Phys Ther",
+   "title": "An assessment of high school cheerleading: injury distribution, frequency, and associated factors.",
+   "population": "high school",
+   "design": "cross-sectional survey"
+  },
+  {
+   "id": "PMID:19620931",
+   "doi": "10.1519/JSC.0b013e31819df407",
+   "firstAuthor": "Faigenbaum",
+   "year": 2009,
+   "journal": "J Strength Cond Res",
+   "title": "Youth resistance training: updated position statement paper from the national strength and conditioning association.",
+   "population": "youth",
+   "design": "position statement"
+  },
+  {
+   "id": "PMID:19741355",
+   "doi": "10.1249/JSR.0b013e3181b7f1f4",
+   "firstAuthor": "Murtaugh",
+   "year": 2009,
+   "journal": "Curr Sports Med Rep",
+   "title": "Field hockey injuries.",
+   "population": "mixed",
+   "design": "review"
+  },
+  {
+   "id": "PMID:22327989",
+   "doi": "10.1097/TA.0b013e31823f5fe3",
+   "firstAuthor": "Jacobson",
+   "year": 2012,
+   "journal": "J Trauma Acute Care Surg",
+   "title": "Epidemiology of cheerleading injuries presenting to NEISS hospitals from 2002 to 2007.",
+   "population": "youth, mean age 14.6 (NEISS)",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:23090348",
+   "doi": "10.1542/peds.2012-2480",
+   "firstAuthor": "LaBella",
+   "year": 2012,
+   "journal": "Pediatrics",
+   "title": "Cheerleading injuries: epidemiology and recommendations for prevention.",
+   "population": "youth cheer",
+   "design": "policy statement"
+  },
+  {
+   "id": "PMID:23404067",
+   "doi": "10.2519/jospt.2013.4430",
+   "firstAuthor": "Pierce",
+   "year": 2013,
+   "journal": "J Orthop Sports Phys Ther",
+   "title": "Ice hockey goaltender rehabilitation, including on-ice progression, after arthroscopic hip surgery for femoroacetabular impingement.",
+   "population": "goaltenders",
+   "design": "clinical commentary"
+  },
+  {
+   "id": "PMID:24055781",
+   "doi": "10.1136/bjsports-2013-092952",
+   "firstAuthor": "Lloyd",
+   "year": 2014,
+   "journal": "Br J Sports Med",
+   "title": "Position statement on youth resistance training: the 2014 International Consensus.",
+   "population": "youth",
+   "design": "consensus statement"
+  },
+  {
+   "id": "PMID:24864185",
+   "doi": "10.1542/peds.2014-0692",
+   "firstAuthor": "Council on Sports Medicine and Fitness",
+   "year": 2014,
+   "journal": "Pediatrics",
+   "title": "Reducing injury risk from body checking in boys' youth ice hockey.",
+   "population": "youth boys",
+   "design": "policy statement"
+  },
+  {
+   "id": "PMID:24930131",
+   "doi": "10.1007/s10935-014-0355-2",
+   "firstAuthor": "Collins",
+   "year": 2014,
+   "journal": "J Prim Prev",
+   "title": "Neck strength: a protective factor reducing risk for concussion in high school sports.",
+   "population": "high school",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:25156881",
+   "doi": "10.1016/j.jsams.2014.07.020",
+   "firstAuthor": "Usman",
+   "year": 2015,
+   "journal": "J Sci Med Sport",
+   "title": "Shoulder injuries in elite rugby union football matches: Epidemiology and mechanisms.",
+   "population": "elite adult",
+   "design": "cohort with video analysis"
+  },
+  {
+   "id": "PMID:25878118",
+   "doi": "10.1177/0363546515578251",
+   "firstAuthor": "Whiteside",
+   "year": 2015,
+   "journal": "Am J Sports Med",
+   "title": "Femoroacetabular Impingement in Elite Ice Hockey Goaltenders: Etiological Implications of On-Ice Hip Mechanics.",
+   "population": "elite goaltenders",
+   "design": "biomechanical study"
+  },
+  {
+   "id": "PMID:26084526",
+   "doi": "10.1136/bjsports-2015-094639",
+   "firstAuthor": "Emery",
+   "year": 2015,
+   "journal": "Br J Sports Med",
+   "title": "Neuromuscular training injury prevention strategies in youth sport: a systematic review and meta-analysis.",
+   "population": "youth",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:26535182",
+   "doi": "",
+   "firstAuthor": "Papalia",
+   "year": 2015,
+   "journal": "Transl Med UniSa",
+   "title": "Rugby and Shoulder Trauma: A Systematic Review.",
+   "population": "rugby, mixed",
+   "design": "systematic review"
+  },
+  {
+   "id": "PMID:26861960",
+   "doi": "10.1007/s40279-016-0490-4",
+   "firstAuthor": "Hrysomallis",
+   "year": 2016,
+   "journal": "Sports Med",
+   "title": "Neck Muscular Strength, Training, Performance and Sport Injury Risk: A Review.",
+   "population": "mixed",
+   "design": "review"
+  },
+  {
+   "id": "PMID:27055230",
+   "doi": "10.1371/journal.pone.0153275",
+   "firstAuthor": "Cunningham",
+   "year": 2016,
+   "journal": "PLoS One",
+   "title": "Movement Demands of Elite U20 International Rugby Union Players.",
+   "population": "U20 elite",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:27347784",
+   "doi": "10.1123/ijspp.2016-0211",
+   "firstAuthor": "Reale",
+   "year": 2017,
+   "journal": "Int J Sports Physiol Perform",
+   "title": "Acute-Weight-Loss Strategies for Combat Sports and Applications to Olympic Success.",
+   "population": "Olympic combat sports",
+   "design": "review"
+  },
+  {
+   "id": "PMID:27752982",
+   "doi": "10.1007/s40279-016-0638-2",
+   "firstAuthor": "Al Attar",
+   "year": 2017,
+   "journal": "Sports Med",
+   "title": "Effect of Injury Prevention Programs that Include the Nordic Hamstring Exercise on Hamstring Injury Rates in Soccer Players: A Systematic Review and Meta-Analysis.",
+   "population": "soccer, mixed levels",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:27900148",
+   "doi": "10.1136/bmjsem-2015-000043",
+   "firstAuthor": "Hislop",
+   "year": 2016,
+   "journal": "BMJ Open Sport Exerc Med",
+   "title": "The efficacy of a movement control exercise programme to reduce injuries in youth rugby: a cluster randomised controlled trial.",
+   "population": "schoolboy age 14-18",
+   "design": "RCT protocol"
+  },
+  {
+   "id": "PMID:28030533",
+   "doi": "10.1519/JSC.0000000000001738",
+   "firstAuthor": "Chaabene",
+   "year": 2017,
+   "journal": "J Strength Cond Res",
+   "title": "Physical and Physiological Attributes of Wrestlers: An Update.",
+   "population": "wrestlers, all levels",
+   "design": "review"
+  },
+  {
+   "id": "PMID:28087568",
+   "doi": "10.1136/bjsports-2016-097066",
+   "firstAuthor": "Thorborg",
+   "year": 2017,
+   "journal": "Br J Sports Med",
+   "title": "Effect of specific exercise-based football injury prevention programmes on the overall injury rate in football: a systematic review and meta-analysis of the FIFA 11 and 11+ programmes.",
+   "population": "recreational and sub-elite soccer",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:28279963",
+   "doi": "10.1136/bjsports-2016-097392",
+   "firstAuthor": "Black",
+   "year": 2017,
+   "journal": "Br J Sports Med",
+   "title": "The risk of injury associated with body checking among Pee Wee ice hockey players: an evaluation of Hockey Canada's national body checking policy change.",
+   "population": "youth age 11-12",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:28282478",
+   "doi": "10.21091/mppa.2017.1002",
+   "firstAuthor": "Moita",
+   "year": 2017,
+   "journal": "Med Probl Perform Art",
+   "title": "The Relationship Between Muscular Strength and Dance Injuries: A Systematic Review.",
+   "population": "pre-professional ballet and others",
+   "design": "systematic review"
+  },
+  {
+   "id": "PMID:28447880",
+   "doi": "10.1177/1941738117704153",
+   "firstAuthor": "Zwolski",
+   "year": 2017,
+   "journal": "Sports Health",
+   "title": "Resistance Training in Youth: Laying the Foundation for Injury Prevention and Physical Literacy.",
+   "population": "youth",
+   "design": "clinical review"
+  },
+  {
+   "id": "PMID:28515056",
+   "doi": "10.1136/bjsports-2016-097434",
+   "firstAuthor": "Hislop",
+   "year": 2017,
+   "journal": "Br J Sports Med",
+   "title": "Reducing musculoskeletal injury and concussion risk in schoolboy rugby players with a pre-activity movement control exercise programme: a cluster randomised controlled trial.",
+   "population": "schoolboy age 14-18",
+   "design": "cluster RCT"
+  },
+  {
+   "id": "PMID:28742608",
+   "doi": "10.1097/JSM.0000000000000458",
+   "firstAuthor": "Barber Foss",
+   "year": 2018,
+   "journal": "Clin J Sport Med",
+   "title": "Epidemiology of Injuries in Women's Lacrosse: Implications for Sport-, Level-, and Sex-Specific Injury Prevention Strategies.",
+   "population": "women, youth to college",
+   "design": "clinical review"
+  },
+  {
+   "id": "PMID:29055883",
+   "doi": "10.1136/bjsports-2017-098005",
+   "firstAuthor": "Attwood",
+   "year": 2018,
+   "journal": "Br J Sports Med",
+   "title": "Efficacy of a movement control injury prevention programme in adult men's community rugby union: a cluster randomised controlled trial.",
+   "population": "adult community",
+   "design": "cluster RCT"
+  },
+  {
+   "id": "PMID:29238733",
+   "doi": "10.1177/2325967117741647",
+   "firstAuthor": "Trofa",
+   "year": 2017,
+   "journal": "Orthop J Sports Med",
+   "title": "The Impact of Body Checking on Youth Ice Hockey Injuries.",
+   "population": "youth (US registry)",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:29299876",
+   "doi": "10.1007/s40279-017-0838-4",
+   "firstAuthor": "Yeomans",
+   "year": 2018,
+   "journal": "Sports Med",
+   "title": "The Incidence of Injury in Amateur Male Rugby Union: A Systematic Review and Meta-Analysis.",
+   "population": "adult amateur",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:29554189",
+   "doi": "10.1093/arclin/acy019",
+   "firstAuthor": "Tsushima",
+   "year": 2019,
+   "journal": "Arch Clin Neuropsychol",
+   "title": "Incidence and Risk of Concussions in Youth Athletes: Comparisons of Age, Sex, Concussion History, Sport, and Football Position.",
+   "population": "youth",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:29559318",
+   "doi": "10.1016/j.jsams.2018.02.015",
+   "firstAuthor": "Pollard",
+   "year": 2018,
+   "journal": "J Sci Med Sport",
+   "title": "The ball in play demands of international rugby union.",
+   "population": "international adult",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:29737024",
+   "doi": "10.1002/jor.24043",
+   "firstAuthor": "Webster",
+   "year": 2018,
+   "journal": "J Orthop Res",
+   "title": "Meta-analysis of meta-analyses of anterior cruciate ligament injury reduction training programs.",
+   "population": "mixed, mostly female",
+   "design": "meta-analysis of meta-analyses"
+  },
+  {
+   "id": "PMID:29891614",
+   "doi": "10.1136/bjsports-2017-098937",
+   "firstAuthor": "Har\u00f8y",
+   "year": 2019,
+   "journal": "Br J Sports Med",
+   "title": "The Adductor Strengthening Programme prevents groin problems among male football players: a cluster-randomised controlled trial.",
+   "population": "adult male soccer",
+   "design": "cluster RCT"
+  },
+  {
+   "id": "PMID:30001501",
+   "doi": "10.1177/0363546518782460",
+   "firstAuthor": "Petushek",
+   "year": 2019,
+   "journal": "Am J Sports Med",
+   "title": "Evidence-Based Best-Practice Guidelines for Preventing Anterior Cruciate Ligament Injuries in Young Female Athletes: A Systematic Review and Meta-analysis.",
+   "population": "young female athletes",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:30022294",
+   "doi": "10.1186/s40798-018-0146-z",
+   "firstAuthor": "Armstrong",
+   "year": 2018,
+   "journal": "Sports Med Open",
+   "title": "Screening Tools as a Predictor of Injury in Dance: Systematic Literature Review and Meta-analysis.",
+   "population": "dancers, mixed",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:30354940",
+   "doi": "10.1177/1941738118807122",
+   "firstAuthor": "Yau",
+   "year": 2019,
+   "journal": "Sports Health",
+   "title": "Catastrophic High School and Collegiate Cheerleading Injuries in the United States: An Examination of the 2006-2007 Basket Toss Rule Change.",
+   "population": "high school and college",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:30513039",
+   "doi": "10.1080/00913847.2018.1554167",
+   "firstAuthor": "Goodman",
+   "year": 2019,
+   "journal": "Phys Sportsmed",
+   "title": "Shoulder and elbow injuries in NCAA football players, 2009-2010 through 2013-2014.",
+   "population": "college (NCAA)",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:30676199",
+   "doi": "10.1123/jsr.2018-0250",
+   "firstAuthor": "Rodriguez",
+   "year": 2020,
+   "journal": "J Sport Rehabil",
+   "title": "Measuring the Hip Adductor to Abductor Strength Ratio in Ice Hockey and Soccer Players: A Critically Appraised Topic.",
+   "population": "hockey and soccer, pro and U17",
+   "design": "critically appraised topic"
+  },
+  {
+   "id": "PMID:30721631",
+   "doi": "10.4085/1062-6050-154-17",
+   "firstAuthor": "Kroshus",
+   "year": 2018,
+   "journal": "J Athl Train",
+   "title": "The First Decade of Web-Based Sports Injury Surveillance: Descriptive Epidemiology of Injuries in US High School Boys' Wrestling (2005-2006 Through 2013-2014) and National Collegiate Athletic Association Men's Wrestling (2004-2005 Through 2013-2014).",
+   "population": "high school and college (RIO, NCAA ISP)",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:30808663",
+   "doi": "10.1136/bjsports-2018-100045",
+   "firstAuthor": "van Dyk",
+   "year": 2019,
+   "journal": "Br J Sports Med",
+   "title": "Including the Nordic hamstring exercise in injury prevention programmes halves the rate of hamstring injuries: a systematic review and meta-analysis of 8459 athletes.",
+   "population": "mixed sports and levels",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:30969138",
+   "doi": "10.1289/EHP4163",
+   "firstAuthor": "Kerr",
+   "year": 2019,
+   "journal": "Environ Health Perspect",
+   "title": "The Association between Mandated Preseason Heat Acclimatization Guidelines and Exertional Heat Illness during Preseason High School American Football Practices.",
+   "population": "high school (US)",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:31158326",
+   "doi": "10.1177/1941738119849105",
+   "firstAuthor": "Anderson",
+   "year": 2019,
+   "journal": "Sports Health",
+   "title": "Epidemiology of Injuries in Ice Hockey.",
+   "population": "youth to pro",
+   "design": "clinical review"
+  },
+  {
+   "id": "PMID:31191099",
+   "doi": "",
+   "firstAuthor": "Akiyama",
+   "year": 2019,
+   "journal": "J Sports Sci Med",
+   "title": "Elite Male Lacrosse Players' Match Activity Profile.",
+   "population": "elite adult men",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:31454289",
+   "doi": "10.4085/1062-6050-581-18",
+   "firstAuthor": "Kerr",
+   "year": 2019,
+   "journal": "J Athl Train",
+   "title": "Exertional Heat-Stroke Preparedness in High School Football by Region and State Mandate Presence.",
+   "population": "high school (US)",
+   "design": "cross-sectional survey"
+  },
+  {
+   "id": "PMID:31506901",
+   "doi": "10.1007/s40279-019-01170-1",
+   "firstAuthor": "Harper",
+   "year": 2019,
+   "journal": "Sports Med",
+   "title": "High-Intensity Acceleration and Deceleration Demands in Elite Team Sports Competitive Match Play: A Systematic Review and Meta-Analysis of Observational Studies.",
+   "population": "elite adult/youth team sports",
+   "design": "systematic review"
+  },
+  {
+   "id": "PMID:31633420",
+   "doi": "10.4085/1062-6050-380-18",
+   "firstAuthor": "Jayanthi",
+   "year": 2019,
+   "journal": "J Athl Train",
+   "title": "Health Consequences of Youth Sport Specialization.",
+   "population": "youth",
+   "design": "narrative review"
+  },
+  {
+   "id": "PMID:32133385",
+   "doi": "10.1177/2325967120903699",
+   "firstAuthor": "Hammer",
+   "year": 2020,
+   "journal": "Orthop J Sports Med",
+   "title": "Epidemiology of Injuries Sustained in Boys' High School Contact and Collision Sports, 2008-2009 Through 2012-2013.",
+   "population": "high school (US, RIO)",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:32243426",
+   "doi": "10.1519/JSC.0000000000003582",
+   "firstAuthor": "McGuinness",
+   "year": 2022,
+   "journal": "J Strength Cond Res",
+   "title": "Peak Running Intensity of Elite Female Field Hockey Players During Competitive Match Play.",
+   "population": "elite women",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:32810607",
+   "doi": "10.1016/j.jshs.2020.08.006",
+   "firstAuthor": "Bano",
+   "year": 2023,
+   "journal": "J Sport Health Sci",
+   "title": "Lacrosse-related injuries in boys and girls treated in U.S. emergency departments, 2000-2016.",
+   "population": "youth age 11-18 (NEISS)",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:32880134",
+   "doi": "10.23736/S0022-4707.20.11194-0",
+   "firstAuthor": "Pirruccio",
+   "year": 2021,
+   "journal": "J Sports Med Phys Fitness",
+   "title": "Wrestling-related concussions and closed head injuries predominantly occur in high school age athletes.",
+   "population": "all ages, mostly high school (NEISS)",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:32966564",
+   "doi": "10.4085/1062-6050-0272.19",
+   "firstAuthor": "McGinnis",
+   "year": 2020,
+   "journal": "J Athl Train",
+   "title": "Epidemiology of Boys' Club Lacrosse Injuries During the 2018 Summer Lacrosse Season.",
+   "population": "youth boys club",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:33090889",
+   "doi": "10.1177/0363546520959619",
+   "firstAuthor": "Bram",
+   "year": 2021,
+   "journal": "Am J Sports Med",
+   "title": "Anterior Cruciate Ligament Injury Incidence in Adolescent Athletes: A Systematic Review and Meta-analysis.",
+   "population": "adolescent",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:33195714",
+   "doi": "10.1177/2325967120959654",
+   "firstAuthor": "Ross",
+   "year": 2020,
+   "journal": "Orthop J Sports Med",
+   "title": "Return to Play and Performance After Primary ACL Reconstruction in American Football Players: A Systematic Review.",
+   "population": "high school, college and pro",
+   "design": "systematic review"
+  },
+  {
+   "id": "PMID:33461229",
+   "doi": "10.1055/a-1327-3009",
+   "firstAuthor": "Barden",
+   "year": 2021,
+   "journal": "Int J Sports Med",
+   "title": "Employing Standardised Methods to Compare Injury Risk Across Seven Youth Team Sports.",
+   "population": "high school (England)",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:33462169",
+   "doi": "10.3390/jfmk6010008",
+   "firstAuthor": "Daly",
+   "year": 2021,
+   "journal": "J Funct Morphol Kinesiol",
+   "title": "A Systematic Review of Strength and Conditioning Protocols for Improving Neck Strength and Reducing Concussion Incidence and Impact Injury Risk in Collision Sports; Is There Evidence?",
+   "population": "adult",
+   "design": "systematic review"
+  },
+  {
+   "id": "PMID:33913669",
+   "doi": "10.23736/S2784-8671.21.06903-0",
+   "firstAuthor": "Veraldi",
+   "year": 2022,
+   "journal": "Ital J Dermatol Venerol",
+   "title": "Tinea corporis gladiatorum.",
+   "population": "wrestlers and judoka",
+   "design": "review"
+  },
+  {
+   "id": "PMID:34029497",
+   "doi": "10.1080/00913847.2021.1931980",
+   "firstAuthor": "Hoge",
+   "year": 2022,
+   "journal": "Phys Sportsmed",
+   "title": "Epidemiology of youth and high school American football-related injuries presenting to United States emergency departments: 2010-2019.",
+   "population": "youth and high school (US, NEISS)",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:34052518",
+   "doi": "10.1016/j.jshs.2021.04.003",
+   "firstAuthor": "Zech",
+   "year": 2022,
+   "journal": "J Sport Health Sci",
+   "title": "Sex differences in injury rates in team-sport athletes: A systematic review and meta-regression analysis.",
+   "population": "team sports, mixed",
+   "design": "systematic review and meta-regression"
+  },
+  {
+   "id": "PMID:34096399",
+   "doi": "10.1177/19417381211021551",
+   "firstAuthor": "Currie",
+   "year": 2022,
+   "journal": "Sports Health",
+   "title": "An Economic Evaluation of Disallowing Body Checking in 11- to 12-Year-Old Ice Hockey Leagues.",
+   "population": "youth age 11-12",
+   "design": "economic evaluation"
+  },
+  {
+   "id": "PMID:34463209",
+   "doi": "10.1080/17461391.2021.1973573",
+   "firstAuthor": "Williams",
+   "year": 2022,
+   "journal": "Eur J Sport Sci",
+   "title": "Sex differences in neck strength and head impact kinematics in university rugby union players.",
+   "population": "university",
+   "design": "cross-sectional"
+  },
+  {
+   "id": "PMID:34485581",
+   "doi": "10.1177/23259671211023431",
+   "firstAuthor": "Leahy",
+   "year": 2021,
+   "journal": "Orthop J Sports Med",
+   "title": "Epidemiology of Shoulder Injuries in Schoolboy Rugby Union in Ireland.",
+   "population": "schoolboy (high school age)",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:34505955",
+   "doi": "10.1007/s10006-021-01004-3",
+   "firstAuthor": "Stanbouly",
+   "year": 2022,
+   "journal": "Oral Maxillofac Surg",
+   "title": "Craniomaxillofacial injuries from the sport of wrestling: a query of the National Electronic Injury Surveillance System (NEISS).",
+   "population": "all ages, mostly under 18 (NEISS)",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:34637371",
+   "doi": "10.1080/00913847.2021.1992601",
+   "firstAuthor": "Chavarro-Nieto",
+   "year": 2023,
+   "journal": "Phys Sportsmed",
+   "title": "Hamstrings injury incidence, risk factors, and prevention in Rugby Union players: a systematic review.",
+   "population": "rugby union, mixed levels",
+   "design": "systematic review"
+  },
+  {
+   "id": "PMID:34676270",
+   "doi": "10.1177/23259671211038895",
+   "firstAuthor": "Xu",
+   "year": 2021,
+   "journal": "Orthop J Sports Med",
+   "title": "Progress in Cheerleading Safety: Update on the Epidemiology of Cheerleading Injuries Presenting to US Emergency Departments, 2010-2019.",
+   "population": "age 5-25 (NEISS)",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:34766071",
+   "doi": "10.1016/j.jseint.2021.06.006",
+   "firstAuthor": "Twomey-Kozak",
+   "year": 2021,
+   "journal": "JSES Int",
+   "title": "Shoulder dislocations among high school-aged and college-aged athletes in the United States: an epidemiologic analysis.",
+   "population": "high school and college (US, NEISS)",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:34968164",
+   "doi": "10.1080/00913847.2021.2020601",
+   "firstAuthor": "Hasan",
+   "year": 2023,
+   "journal": "Phys Sportsmed",
+   "title": "Incidence of injuries among lacrosse athletes: a systematic review and meta-analysis.",
+   "population": "mixed levels",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:35080203",
+   "doi": "10.1519/JSC.0000000000004174",
+   "firstAuthor": "Mamon",
+   "year": 2022,
+   "journal": "J Strength Cond Res",
+   "title": "Position-Specific Physical Workload Intensities in American Collegiate Football Training.",
+   "population": "college (NCAA D1)",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:35287785",
+   "doi": "10.12678/1089-313X.061522b",
+   "firstAuthor": "Critchley",
+   "year": 2022,
+   "journal": "J Dance Med Sci",
+   "title": "Injury Rates and Characteristics Associated with Participation in Organized Dance Education: A Systematic Review.",
+   "population": "dance students and teachers",
+   "design": "systematic review"
+  },
+  {
+   "id": "PMID:35490148",
+   "doi": "10.1016/j.jsams.2022.04.001",
+   "firstAuthor": "Nutt",
+   "year": 2022,
+   "journal": "J Sci Med Sport",
+   "title": "Neck strength and concussion prevalence in football and rugby athletes.",
+   "population": "adolescent to adult",
+   "design": "cross-sectional"
+  },
+  {
+   "id": "PMID:35697490",
+   "doi": "10.12678/1089-313X.091522b",
+   "firstAuthor": "Kolokythas",
+   "year": 2022,
+   "journal": "J Dance Med Sci",
+   "title": "The Relationship of Year Group and Sex on Injury Incidence and Countermovement Jump in Adolescent Ballet Dancers: A Cross-Sectional Analysis.",
+   "population": "adolescent ballet",
+   "design": "cross-sectional/prospective"
+  },
+  {
+   "id": "PMID:35753965",
+   "doi": "10.1016/j.jphys.2022.05.019",
+   "firstAuthor": "Al Attar",
+   "year": 2022,
+   "journal": "J Physiother",
+   "title": "Injury prevention programs that include balance training exercises reduce ankle injury rates among soccer players: a systematic review.",
+   "population": "soccer, mixed",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:35782281",
+   "doi": "10.1016/j.smhs.2022.03.002",
+   "firstAuthor": "A King",
+   "year": 2022,
+   "journal": "Sports Med Health Sci",
+   "title": "Match and training injury incidence in rugby league: A systematic review, pooled analysis, and update on published studies.",
+   "population": "rugby league, all levels",
+   "design": "systematic review and pooled analysis"
+  },
+  {
+   "id": "PMID:35972602",
+   "doi": "10.1007/s10439-022-03042-8",
+   "firstAuthor": "Lauck",
+   "year": 2022,
+   "journal": "Ann Biomed Eng",
+   "title": "Association Between Head Impact Biomechanics and Physical Load in College Football.",
+   "population": "college",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:36111698",
+   "doi": "10.1080/15438627.2022.2125318",
+   "firstAuthor": "Gupta",
+   "year": 2024,
+   "journal": "Res Sports Med",
+   "title": "Shoulder, upper arm and elbow injuries in high school men's American football.",
+   "population": "high school (US)",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:36515599",
+   "doi": "10.1519/JSC.0000000000004237",
+   "firstAuthor": "Cousins",
+   "year": 2023,
+   "journal": "J Strength Cond Res",
+   "title": "Training and Match Demands of Elite Rugby Union.",
+   "population": "elite adult",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:36517860",
+   "doi": "10.1111/sms.14284",
+   "firstAuthor": "Vigh-Larsen",
+   "year": 2024,
+   "journal": "Scand J Med Sci Sports",
+   "title": "The physiology of ice hockey performance: An update.",
+   "population": "mostly elite adult",
+   "design": "review"
+  },
+  {
+   "id": "PMID:36600566",
+   "doi": "10.1136/ip-2022-044714",
+   "firstAuthor": "van Tonder",
+   "year": 2023,
+   "journal": "Inj Prev",
+   "title": "Tackling sport-related concussion: effectiveness of lowering the maximum legal height of the tackle in amateur male rugby - a cross-sectional analytical study.",
+   "population": "adult amateur",
+   "design": "cohort (before-after law change)"
+  },
+  {
+   "id": "PMID:36612793",
+   "doi": "10.3390/ijerph20010471",
+   "firstAuthor": "Pei",
+   "year": 2022,
+   "journal": "Int J Environ Res Public Health",
+   "title": "Comparing Musculoskeletal Injuries across Dance and Gymnastics in Adolescent Females Presenting to Emergency Departments.",
+   "population": "adolescent females (NEISS)",
+   "design": "cross-sectional"
+  },
+  {
+   "id": "PMID:36752757",
+   "doi": "10.1519/JSC.0000000000004441",
+   "firstAuthor": "Burke",
+   "year": 2023,
+   "journal": "J Strength Cond Res",
+   "title": "Revisiting the Assessment of Strength, Power, and Change of Direction in Collegiate American Football Athletes.",
+   "population": "college",
+   "design": "cross-sectional"
+  },
+  {
+   "id": "PMID:36917295",
+   "doi": "10.1007/s10439-023-03169-2",
+   "firstAuthor": "Cecchi",
+   "year": 2024,
+   "journal": "Ann Biomed Eng",
+   "title": "Padded Helmet Shell Covers in American Football: A Comprehensive Laboratory Evaluation with Preliminary On-Field Findings.",
+   "population": "college (lab and field)",
+   "design": "laboratory and cohort"
+  },
+  {
+   "id": "PMID:37104869",
+   "doi": "10.1097/JSM.0000000000001157",
+   "firstAuthor": "Strosser",
+   "year": 2023,
+   "journal": "Clin J Sport Med",
+   "title": "Youth Sport Specialization and Risk of Injury: A General Review.",
+   "population": "youth",
+   "design": "review"
+  },
+  {
+   "id": "PMID:37191819",
+   "doi": "10.1007/s40279-023-01826-z",
+   "firstAuthor": "West",
+   "year": 2023,
+   "journal": "Sports Med",
+   "title": "Injury Rates, Mechanisms, Risk Factors and Prevention Strategies in Youth Rugby Union: What's All the Ruck-Us About? A Systematic Review and Meta-analysis.",
+   "population": "youth",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:37229408",
+   "doi": "10.5114/jhk/161551",
+   "firstAuthor": "Lin",
+   "year": 2023,
+   "journal": "J Hum Kinet",
+   "title": "Peak Running, Mechanical, and Physiological Demands of Professional Men's Field Hockey Matches.",
+   "population": "pro men",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:37316182",
+   "doi": "10.1136/bjsports-2022-106656",
+   "firstAuthor": "Eliason",
+   "year": 2023,
+   "journal": "Br J Sports Med",
+   "title": "Prevention strategies and modifiable risk factors for sport-related concussions and head impacts: a systematic review and meta-analysis.",
+   "population": "youth to adult, many sports",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:37383862",
+   "doi": "",
+   "firstAuthor": "Ford",
+   "year": 2023,
+   "journal": "Iowa Orthop J",
+   "title": "Return to Sport After Knee Injuries in Collegiate Wrestling.",
+   "population": "college",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:38114411",
+   "doi": "10.1016/j.jsams.2023.09.021",
+   "firstAuthor": "Dang",
+   "year": 2024,
+   "journal": "J Sci Med Sport",
+   "title": "Injury incidence and severity in Chinese pre-professional dancers: A prospective weekly monitoring survey.",
+   "population": "pre-professional adolescent and university",
+   "design": "prospective cohort"
+  },
+  {
+   "id": "PMID:38247370",
+   "doi": "10.1542/peds.2023-065129",
+   "firstAuthor": "Brenner",
+   "year": 2024,
+   "journal": "Pediatrics",
+   "title": "Overuse Injuries, Overtraining, and Burnout in Young Athletes.",
+   "population": "youth",
+   "design": "clinical report"
+  },
+  {
+   "id": "PMID:38249769",
+   "doi": "10.17159/2078-516X/2023/v35i1a15697",
+   "firstAuthor": "King",
+   "year": 2023,
+   "journal": "S Afr J Sports Med",
+   "title": "Concussion injury management, perception, and knowledge in amateur field hockey.",
+   "population": "amateur",
+   "design": "mixed-methods survey"
+  },
+  {
+   "id": "PMID:38363718",
+   "doi": "10.1097/PHM.0000000000002464",
+   "firstAuthor": "Silverman",
+   "year": 2024,
+   "journal": "Am J Phys Med Rehabil",
+   "title": "Risk Reduction of Concussion in Athletes: Do Neck Size or Neck Strength Make a Difference?",
+   "population": "mixed",
+   "design": "review"
+  },
+  {
+   "id": "PMID:38390398",
+   "doi": "10.1177/23259671231223169",
+   "firstAuthor": "Macknofsky",
+   "year": 2024,
+   "journal": "Orthop J Sports Med",
+   "title": "Concussion Rates in Youth Lacrosse Players and Comparison With Youth American Football.",
+   "population": "youth (NEISS)",
+   "design": "surveillance"
+  },
+  {
+   "id": "PMID:38496809",
+   "doi": "10.4317/jced.61200",
+   "firstAuthor": "van Vliet",
+   "year": 2024,
+   "journal": "J Clin Exp Dent",
+   "title": "Orodental injury and mouthguard usage in Dutch and international field hockey.",
+   "population": "adult club and international",
+   "design": "cross-sectional"
+  },
+  {
+   "id": "PMID:38584991",
+   "doi": "10.1177/23259671241239334",
+   "firstAuthor": "Stambaugh",
+   "year": 2024,
+   "journal": "Orthop J Sports Med",
+   "title": "Arthroscopic Shoulder Stabilization in High School Football Players.",
+   "population": "high school (age 14-17)",
+   "design": "case series"
+  },
+  {
+   "id": "PMID:38692337",
+   "doi": "10.1016/j.arthro.2024.03.050",
+   "firstAuthor": "Childers",
+   "year": 2025,
+   "journal": "Arthroscopy",
+   "title": "Reported Anterior Cruciate Ligament Injury Incidence in Adolescent Athletes Is Greatest in Female Soccer Players and Athletes Participating in Club Sports: A Systematic Review and Meta-analysis.",
+   "population": "adolescent",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:38841729",
+   "doi": "10.23736/S0022-4707.24.15911-7",
+   "firstAuthor": "Dugan",
+   "year": 2024,
+   "journal": "J Sports Med Phys Fitness",
+   "title": "Sport-related concussions in wrestling: does mechanism of injury affect recovery?",
+   "population": "high school",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:38874455",
+   "doi": "10.1177/19417381241260045",
+   "firstAuthor": "Anderson",
+   "year": 2025,
+   "journal": "Sports Health",
+   "title": "Preventing Exertional Heat Stroke in Football: Time for a Paradigm Shift.",
+   "population": "youth, high school, college (registry)",
+   "design": "clinical review"
+  },
+  {
+   "id": "PMID:38899324",
+   "doi": "10.3389/fspor.2024.1363007",
+   "firstAuthor": "Recker",
+   "year": 2024,
+   "journal": "Front Sports Act Living",
+   "title": "Headgear use in girls' lacrosse-stakeholders not ready for change.",
+   "population": "girls lacrosse stakeholders",
+   "design": "qualitative"
+  },
+  {
+   "id": "PMID:39189073",
+   "doi": "10.1080/07853890.2024.2385024",
+   "firstAuthor": "Eliason",
+   "year": 2024,
+   "journal": "Ann Med",
+   "title": "Safe2Play in youth ice hockey: injury profile and risk factors in a 5-year Canadian longitudinal cohort study.",
+   "population": "youth age 11-17",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:39209526",
+   "doi": "10.1136/bjsports-2024-108233",
+   "firstAuthor": "Parry",
+   "year": 2024,
+   "journal": "Br J Sports Med",
+   "title": "Associations between growth, maturation and injury in youth athletes engaged in elite pathways: a scoping review.",
+   "population": "elite youth",
+   "design": "scoping review"
+  },
+  {
+   "id": "PMID:39242177",
+   "doi": "10.1136/bjsports-2024-108260",
+   "firstAuthor": "Ivanic",
+   "year": 2024,
+   "journal": "Br J Sports Med",
+   "title": "Efficacy of exercise interventions on prevention of sport-related concussion and related outcomes: a systematic review and meta-analysis.",
+   "population": "mixed",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:39429001",
+   "doi": "10.1542/peds.2024-068956",
+   "firstAuthor": "Canty",
+   "year": 2024,
+   "journal": "Pediatrics",
+   "title": "Safety in Cheerleading: Epidemiology and Recommendations: Policy Statement.",
+   "population": "youth cheer",
+   "design": "policy statement"
+  },
+  {
+   "id": "PMID:39632417",
+   "doi": "10.1080/02640414.2024.2432793",
+   "firstAuthor": "Hides",
+   "year": 2024,
+   "journal": "J Sports Sci",
+   "title": "Decreased isometric neck strength is a risk factor for head, neck and face injuries in professional rugby league players.",
+   "population": "pro rugby league",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:40111104",
+   "doi": "10.21091/mppa.2025.01003",
+   "firstAuthor": "Tran",
+   "year": 2025,
+   "journal": "Med Probl Perform Art",
+   "title": "Injury Rates in Youth Street Dancers.",
+   "population": "youth street dancers",
+   "design": "prospective cohort"
+  },
+  {
+   "id": "PMID:40266645",
+   "doi": "10.1519/JSC.0000000000005097",
+   "firstAuthor": "Marten",
+   "year": 2025,
+   "journal": "J Strength Cond Res",
+   "title": "Effects of Rapid Weight Loss in Male and Female Wrestlers.",
+   "population": "wrestlers incl. female",
+   "design": "narrative review"
+  },
+  {
+   "id": "PMID:40703179",
+   "doi": "10.3389/fpubh.2025.1614164",
+   "firstAuthor": "Deng",
+   "year": 2025,
+   "journal": "Front Public Health",
+   "title": "A systematic review of cheerleading injuries: epidemiological characteristics, biomechanical mechanisms, and prevention strategies.",
+   "population": "youth to college",
+   "design": "systematic review"
+  },
+  {
+   "id": "PMID:40746051",
+   "doi": "10.1177/03635465251351288",
+   "firstAuthor": "Funk",
+   "year": 2025,
+   "journal": "Am J Sports Med",
+   "title": "An Analysis of Guardian Cap Use and Changes in the Concussion Rate in National Football League Preseason Practices From 2018 to 2023.",
+   "population": "pro (NFL)",
+   "design": "cohort"
+  },
+  {
+   "id": "PMID:40766043",
+   "doi": "10.1136/bmjsem-2025-002612",
+   "firstAuthor": "Stokes",
+   "year": 2025,
+   "journal": "BMJ Open Sport Exerc Med",
+   "title": "Tackle characteristics associated with concussion in elite men's rugby union: unpicking the differences between tacklers and ball-carriers.",
+   "population": "elite adult",
+   "design": "case-control"
+  },
+  {
+   "id": "PMID:40827942",
+   "doi": "10.1111/sms.70119",
+   "firstAuthor": "Quintana-Cepedal",
+   "year": 2025,
+   "journal": "Scand J Med Sci Sports",
+   "title": "The Copenhagen Adduction Exercise Effect on Sport Performance and Injury Prevention: A Systematic Review With Meta-Analysis.",
+   "population": "mixed",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:40928422",
+   "doi": "10.1249/JSR.0000000000001282",
+   "firstAuthor": "Sylvester",
+   "year": 2025,
+   "journal": "Curr Sports Med Rep",
+   "title": "Shoulder Instability in Contact and Collision Athletes: A Focused Review on Assessment, Management, and Treatment.",
+   "population": "contact athletes",
+   "design": "review"
+  },
+  {
+   "id": "PMID:41316595",
+   "doi": "10.1016/j.jbmt.2025.08.023",
+   "firstAuthor": "Alvacite Cardenas",
+   "year": 2025,
+   "journal": "J Bodyw Mov Ther",
+   "title": "Does strengthening the cervical spine musculature enhance neck strength and reduce sports-related concussions in rugby and football players? A systematic literature review.",
+   "population": "rugby and soccer, mixed",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:41524441",
+   "doi": "10.1249/JSR.0000000000001313",
+   "firstAuthor": "Postula",
+   "year": 2026,
+   "journal": "Curr Sports Med Rep",
+   "title": "Evaluation of Neck Strength and Concussion Risk: A Systematic Review.",
+   "population": "mixed",
+   "design": "systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:41919929",
+   "doi": "10.2519/jospt.2026.13373",
+   "firstAuthor": "Shill",
+   "year": 2026,
+   "journal": "J Orthop Sports Phys Ther",
+   "title": "Is a Neuromuscular Training Warm-up Enough for Injury and Concussion Prevention in High School Girl Rugby Players?",
+   "population": "high school girls",
+   "design": "controlled intervention study"
+  },
+  {
+   "id": "PMID:42389157",
+   "doi": "10.3389/fspor.2026.1714122",
+   "firstAuthor": "Haymes",
+   "year": 2026,
+   "journal": "Front Sports Act Living",
+   "title": "Epidemiology and associated risk factors for injuries in collegiate cheerleading: a systematic review.",
+   "population": "college",
+   "design": "systematic review"
+  },
+  {
+   "id": "PMID:42948998",
+   "doi": "10.1177/19417381261486272",
+   "firstAuthor": "Stearns",
+   "year": 2026,
+   "journal": "Sports Health",
+   "title": "A NATA Task Force: Preventing Exertional Heat Stroke Death in American Football Linemen.",
+   "population": "American football linemen, all levels",
+   "design": "consensus statement"
+  }
+ ]
+}

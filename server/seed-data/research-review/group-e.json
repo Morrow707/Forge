@@ -1,0 +1,2607 @@
+{
+ "group": "E",
+ "generated": "2026-11-22",
+ "warmupTypes": [
+  {
+   "type": "General training warm-up (RAMP-style: raise, activate/mobilize, potentiate)",
+   "findings": [
+    {
+     "finding": "Most controlled studies find a warm-up improves the performance that follows it, and very few find harm.",
+     "exercises": [
+      "general active warm-up"
+     ],
+     "dose": "varied across 32 studies",
+     "effect": "Performance improved on 79% of the measures examined",
+     "sources": [
+      "PMID:19996770"
+     ]
+    },
+    {
+     "finding": "The recommended shape is light aerobic work first, then large-range dynamic stretching, then sport-specific dynamic activity.",
+     "exercises": [
+      "easy jog or cycle",
+      "dynamic stretching",
+      "sport-specific drills"
+     ],
+     "dose": "submaximal raise phase then dynamic and specific phases",
+     "effect": "Minimizes stretch-related losses and supports power output",
+     "sources": [
+      "PMID:21373870",
+      "PMID:12762825"
+     ]
+    },
+    {
+     "finding": "Much of a warm-up's benefit comes from raising muscle temperature; a short task-specific burst at the end can add a further boost, and different combinations of intensity, duration and rest can reach the same result.",
+     "exercises": [
+      "active warm-up",
+      "brief task-specific burst"
+     ],
+     "dose": "moderate intensity, followed by a short recovery",
+     "effect": "Raised muscle temperature and metabolic readiness",
+     "sources": [
+      "PMID:12744717",
+      "PMID:12762825",
+      "PMID:26400696"
+     ]
+    },
+    {
+     "finding": "A RAMP warm-up (raise, activate, mobilize, potentiate) improved 30-m sprint and jump compared with no warm-up and with static stretching in older adolescent and young adult soccer players.",
+     "exercises": [
+      "raise: jogging",
+      "activate: glute and core drills",
+      "mobilize: dynamic mobility",
+      "potentiate: jumps and accelerations"
+     ],
+     "dose": "single session",
+     "effect": "Moderate improvements in sprint and vertical jump (d about 0.4-0.5)",
+     "sources": [
+      "PMID:40630396"
+     ]
+    },
+    {
+     "finding": "After a RAMP warm-up, adolescent volleyball players reacted faster to light signals than before it.",
+     "exercises": [
+      "RAMP sequence"
+     ],
+     "dose": "single session",
+     "effect": "Shorter visual-motor reaction time",
+     "sources": [
+      "PMID:39796918"
+     ]
+    },
+    {
+     "finding": "Short static stretches inside a full dynamic warm-up neither helped nor hurt sprint, jump or change-of-direction, even though athletes believed stretching helped.",
+     "exercises": [
+      "5-s or 30-s static stretches",
+      "dynamic stretches"
+     ],
+     "dose": "short holds within a full warm-up",
+     "effect": "No measurable effect on performance",
+     "sources": [
+      "PMID:29300214"
+     ]
+    },
+    {
+     "finding": "Static stretching used as the only warm-up activity causes small losses in strength and explosive performance; losses are smallest when total hold time per muscle is 45 s or less.",
+     "exercises": [
+      "static stretching"
+     ],
+     "dose": "keep holds short (45 s or less total per muscle)",
+     "effect": "About -5% strength, -2% explosive performance when used alone",
+     "sources": [
+      "PMID:22316148"
+     ]
+    },
+    {
+     "finding": "A newer multilevel meta-analysis found strength loss mainly with holds of 60 s or more per bout and no general harm to athletic performance, so short static stretches do not need to be banned from a warm-up.",
+     "exercises": [
+      "static stretching"
+     ],
+     "dose": "under 60 s per bout",
+     "effect": "Isolated strength loss at long holds; no loss in jump or sprint",
+     "sources": [
+      "PMID:38735533"
+     ]
+    },
+    {
+     "finding": "Stretching or foam rolling gave no better short-term flexibility than other warm-up activities, so a warm-up does not need dedicated stretching to gain range of motion.",
+     "exercises": [
+      "stretching",
+      "foam rolling",
+      "active warm-up alternatives"
+     ],
+     "dose": "acute",
+     "effect": "Same range-of-motion gain",
+     "sources": [
+      "PMID:38244921"
+     ]
+    },
+    {
+     "finding": "Doing a dynamic warm-up daily over weeks gave lasting gains in power, strength, agility and endurance in wrestlers, and a 10-minute dynamic warm-up improved hamstring flexibility and eccentric quadriceps strength, where static warm-ups did not.",
+     "exercises": [
+      "dynamic stretching",
+      "running drills"
+     ],
+     "dose": "10 min, daily for 4 weeks",
+     "effect": "4% broad jump, 11% quadriceps peak torque over 4 weeks",
+     "sources": [
+      "PMID:18545176",
+      "PMID:22446678"
+     ]
+    },
+    {
+     "finding": "Warming up also offsets the morning dip in short maximal performance; a longer, more specific warm-up made morning performance match evening performance in young basketball players.",
+     "exercises": [
+      "prolonged running",
+      "dynamic stretching",
+      "specific drills"
+     ],
+     "dose": "25 min specific warm-up",
+     "effect": "Removed time-of-day differences",
+     "sources": [
+      "PMID:38353223",
+      "PMID:36152058"
+     ]
+    },
+    {
+     "finding": "A longer warm-up is not always better: a 15-min cycling warm-up gave no jump benefit over 5 min and lowered power when athletes were fasting.",
+     "exercises": [
+      "cycling warm-up"
+     ],
+     "dose": "5 vs 15 min",
+     "effect": "Longer warm-up added fatigue in a fasted state",
+     "sources": [
+      "PMID:25646955"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "Sprint warm-up",
+   "findings": [
+    {
+     "finding": "Competitive sprinters typically use a three-phase warm-up of about 40 minutes: easy jogging, dynamic or ballistic stretching, then sprint drills and accelerations at the end.",
+     "exercises": [
+      "jog about 8 min",
+      "dynamic/ballistic stretching about 9 min",
+      "sprint drills about 15 min",
+      "accelerations",
+      "high-speed running"
+     ],
+     "dose": "about 40 min total",
+     "effect": "Describes current practice, not an outcome",
+     "sources": [
+      "PMID:37955929"
+     ]
+    },
+    {
+     "finding": "Adding a heavy or explosive conditioning activity to a warm-up gives a moderate sprint benefit on average, larger in stronger and more experienced athletes.",
+     "exercises": [
+      "heavy squats",
+      "plyometrics",
+      "resisted sprints"
+     ],
+     "dose": "varies; stronger athletes respond to shorter rest",
+     "effect": "Moderate effect on sprint (about ES 0.5), small for jumps and throws",
+     "sources": [
+      "PMID:26508319"
+     ]
+    },
+    {
+     "finding": "For squat-based potentiation, sprint gains appear when the rest after the heavy set is about 4-8 minutes.",
+     "exercises": [
+      "back squat at 85-100% 1RM"
+     ],
+     "dose": "rest 4-8 min before sprinting",
+     "effect": "Faster 10-m and 30-m sprints, mainly in athletes and ball-sport players",
+     "sources": [
+      "PMID:35620952"
+     ]
+    },
+    {
+     "finding": "A potentiation effect typically appears 4-9 minutes after the conditioning activity, after an initial period of fatigue; loads of 60% 1RM or more work best for weights.",
+     "exercises": [
+      "resistance exercise",
+      "plyometrics",
+      "blood flow restriction"
+     ],
+     "dose": "wait 4-9 min",
+     "effect": "Short-term enhancement of sprint and jump",
+     "sources": [
+      "PMID:41195963"
+     ]
+    },
+    {
+     "finding": "A single resisted sprint with about 10% of body mass, followed by several minutes of rest, made later sprints faster in elite female and male college sprinters; 5% and 15% loads were less effective.",
+     "exercises": [
+      "resisted sprint (sled or motorized)"
+     ],
+     "dose": "1 sprint at 10% body mass, about 8 min rest",
+     "effect": "Up to about 4% faster flying 20 m; faster 0-60 m",
+     "sources": [
+      "PMID:33746784",
+      "PMID:40873761"
+     ]
+    },
+    {
+     "finding": "Different potentiating activities (squats, plyometrics, isometrics) each sped up 20-m sprints, but at different best times after the activity.",
+     "exercises": [
+      "back squat",
+      "plyometric jumps",
+      "isometric squat"
+     ],
+     "dose": "tested 4-20 min after",
+     "effect": "Faster 20-m sprints at specific time points",
+     "sources": [
+      "PMID:32509124",
+      "PMID:39689010"
+     ]
+    },
+    {
+     "finding": "One cluster set of 3 heavy squats with 30-s rest between reps sped up 20-m sprints at 10 minutes in college soccer players.",
+     "exercises": [
+      "back squat cluster set at 85% 1RM"
+     ],
+     "dose": "3 reps, 30 s between reps, 10 min before",
+     "effect": "20-m sprint about 0.05 s faster",
+     "sources": [
+      "PMID:29365286"
+     ]
+    },
+    {
+     "finding": "Not every potentiation add-on helps: loaded jump squats did not speed up sprints in college track athletes, and drop jumps did not change sprint times in top-level sprinters.",
+     "exercises": [
+      "loaded jump squats",
+      "drop jumps"
+     ],
+     "dose": "single session",
+     "effect": "No average sprint benefit; individual responses varied",
+     "sources": [
+      "PMID:32708930",
+      "PMID:36196355"
+     ]
+    },
+    {
+     "finding": "A recent meta-analysis found adding potentiation to a general warm-up reliably improves jumping but shows no clear sprint benefit on pooled evidence.",
+     "exercises": [
+      "conditioning activity after general warm-up"
+     ],
+     "dose": "acute",
+     "effect": "Jump improved; sprint effect not significant",
+     "sources": [
+      "PMID:42226251"
+     ]
+    },
+    {
+     "finding": "In adolescent boys and girls, 40-s static stretches slowed 20-m sprints by 2.5%, while dynamic stretching did not slow sprinting.",
+     "exercises": [
+      "static stretching",
+      "dynamic stretching"
+     ],
+     "dose": "40-s holds on four muscle groups",
+     "effect": "Static stretching hurt sprint; dynamic was neutral",
+     "sources": [
+      "PMID:23591944"
+     ]
+    },
+    {
+     "finding": "Adding a leg-press potentiation set or mental rehearsal of sprints to a standard warm-up improved agility and repeated-sprint ability.",
+     "exercises": [
+      "concentric leg press",
+      "motor imagery of sprint tasks"
+     ],
+     "dose": "single session",
+     "effect": "Better agility and repeated sprints; potentiation also improved 20-m sprint",
+     "sources": [
+      "PMID:37234064"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "Plyometric and jumping warm-up",
+   "findings": [
+    {
+     "finding": "Low-intensity preparation does not appear to harm landing mechanics: adding static stretching or glute resistance exercises to a dynamic warm-up did not meaningfully change landing kinematics.",
+     "exercises": [
+      "dynamic warm-up",
+      "static stretching",
+      "glute band exercises"
+     ],
+     "dose": "single session",
+     "effect": "Landing mechanics largely unchanged",
+     "sources": [
+      "PMID:30118391",
+      "PMID:37815265"
+     ]
+    },
+    {
+     "finding": "A general warm-up improved knee position sense and jump height in sprinters, while a hard plyometric bout afterwards worsened both, with the loss still present 5 minutes later.",
+     "exercises": [
+      "general warm-up",
+      "high-intensity plyometrics"
+     ],
+     "dose": "warm-up before, not instead of, hard plyometrics",
+     "effect": "Warm-up helped; fatiguing plyometrics hurt jump and joint sense",
+     "sources": [
+      "PMID:27341088"
+     ]
+    },
+    {
+     "finding": "In youth soccer players, a warm-up built on stretching (static, dynamic, ballistic or PNF) gave no better jump, sprint or kicking than a standard warm-up.",
+     "exercises": [
+      "static, dynamic, ballistic and PNF stretching"
+     ],
+     "dose": "10 min",
+     "effect": "No difference from standard warm-up",
+     "sources": [
+      "PMID:36875040"
+     ]
+    },
+    {
+     "finding": "Neuromuscular training (balance, plyometrics, strength) done as the warm-up improved fitness and self-confidence in pubertal soccer players, where stretching-based warm-ups did not.",
+     "exercises": [
+      "balance drills",
+      "plyometrics",
+      "strength exercises"
+     ],
+     "dose": "regular warm-up over weeks",
+     "effect": "Large gains in jump, sprint, change of direction and well-being",
+     "sources": [
+      "PMID:39982921"
+     ]
+    },
+    {
+     "finding": "Short, high-intensity forward-backward hurdle jumps after the warm-up improved sprint and change-of-direction in 12-year-old volleyball players more than low-intensity side-to-side hops.",
+     "exercises": [
+      "30-cm forward-backward hurdle jumps",
+      "20-cm side-to-side hurdle jumps"
+     ],
+     "dose": "3 sets of 6, 2 min rest before testing",
+     "effect": "Better sprint and COD after the high-intensity version",
+     "sources": [
+      "PMID:37931620"
+     ]
+    },
+    {
+     "finding": "Rest after a potentiating activity matters for jumps: under about 3-4 minutes the jump is worse, roughly 4-12 minutes is best, and benefits fade after that.",
+     "exercises": [
+      "heavy squats or similar conditioning activity"
+     ],
+     "dose": "rest about 4-12 min",
+     "effect": "Higher countermovement jump in the middle window",
+     "sources": [
+      "PMID:23140550",
+      "PMID:39060296"
+     ]
+    },
+    {
+     "finding": "A 12-week injury-prevention warm-up changed how adolescent female football and handball players pre-activated their thigh muscles before landing during cuts, a pattern thought to protect the ACL.",
+     "exercises": [
+      "neuromuscular injury-prevention programme"
+     ],
+     "dose": "3 times a week for 12 weeks",
+     "effect": "43% between-group difference in hamstring vs quadriceps pre-activation; no change in valgus angle",
+     "sources": [
+      "PMID:26400955"
+     ]
+    },
+    {
+     "finding": "ACL-focused programmes that include plyometrics reduce ACL injuries more than warm-ups without plyometrics, and landing stabilization (jump or hop and hold) is a recommended core component.",
+     "exercises": [
+      "plyometrics",
+      "jump/hop and hold landings",
+      "Nordic hamstrings",
+      "lunges"
+     ],
+     "dose": "throughout the season",
+     "effect": "About 60% fewer ACL injuries",
+     "sources": [
+      "PMID:36244964",
+      "PMID:30001501"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "Change-of-direction / agility warm-up",
+   "findings": [
+    {
+     "finding": "Neuromuscular warm-ups improve change-of-direction performance and knee strength compared with regular or dynamic warm-ups; the number of sets moderated the effect.",
+     "exercises": [
+      "balance",
+      "plyometrics",
+      "strength",
+      "agility drills"
+     ],
+     "dose": "regular use; more sets gave more benefit",
+     "effect": "Moderate COD improvement (g about 0.46) and knee strength (g about 0.72)",
+     "sources": [
+      "PMID:41940018"
+     ]
+    },
+    {
+     "finding": "A 10-minute dynamic warm-up improved a T-shuttle agility run and power tests compared with static stretching or no warm-up in young adults.",
+     "exercises": [
+      "dynamic movements and drills"
+     ],
+     "dose": "10 min, 1-2 min before testing",
+     "effect": "Better agility and power",
+     "sources": [
+      "PMID:16937960"
+     ]
+    },
+    {
+     "finding": "Youth sub-elite soccer players using the FIFA 11+ or a modified version over a season improved agility and dribbling speed, with the modified version improving most.",
+     "exercises": [
+      "FIFA 11+",
+      "modified dynamic warm-up"
+     ],
+     "dose": "3 times weekly over a season",
+     "effect": "Medium interaction effects on agility",
+     "sources": [
+      "PMID:36264894"
+     ]
+    },
+    {
+     "finding": "Body-weight alternate-leg bounding improved change-of-direction in women's team-sport players, but only after 8-12 minutes of recovery.",
+     "exercises": [
+      "alternate leg bounding"
+     ],
+     "dose": "short bout, 8-12 min rest",
+     "effect": "About 3-5% better COD",
+     "sources": [
+      "PMID:36394564"
+     ]
+    },
+    {
+     "finding": "Adding a weighted vest to a badminton warm-up gave small, individual COD effects with no group benefit, so it should be trialled per athlete.",
+     "exercises": [
+      "weighted-vest warm-up exercises"
+     ],
+     "dose": "3 loaded exercises",
+     "effect": "No significant group change",
+     "sources": [
+      "PMID:33524952"
+     ]
+    },
+    {
+     "finding": "Heavy back squats before testing improved jumps but not the T-test or short sprints in collegiate players.",
+     "exercises": [
+      "back squat 4x3 at 80% 1RM"
+     ],
+     "dose": "8 min recovery",
+     "effect": "Jumps up; agility unchanged",
+     "sources": [
+      "PMID:43054139"
+     ]
+    },
+    {
+     "finding": "Equipment-free neuromuscular warm-ups that include agility drills and landing technique reduce lower-limb injuries when used for more than three months.",
+     "exercises": [
+      "stretching",
+      "strengthening",
+      "balance",
+      "sport-specific agility drills",
+      "landing technique"
+     ],
+     "dose": "consistently for over 3 months",
+     "effect": "Large reductions in ACL and knee injuries in some programmes",
+     "sources": [
+      "PMID:22812375"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "Throwing and overhead warm-up",
+   "findings": [
+    {
+     "finding": "A shoulder warm-up programme (internal rotation range, external rotation and scapular strength, kinetic chain and thoracic mobility) done as part of the handball warm-up reduced shoulder problems in elite players.",
+     "exercises": [
+      "internal rotation stretch",
+      "band external rotation",
+      "scapular strengthening",
+      "thoracic mobility",
+      "kinetic chain exercises"
+     ],
+     "dose": "3 times a week, within the warm-up",
+     "effect": "28% lower risk of shoulder problems",
+     "sources": [
+      "PMID:27313171"
+     ]
+    },
+    {
+     "finding": "In adolescent elite handball players aged 15-19, a Shoulder Control programme lowered shoulder injury risk compared with usual training.",
+     "exercises": [
+      "shoulder strength and control exercises"
+     ],
+     "dose": "3 times a week",
+     "effect": "Lower shoulder injury rate; about 1 injury prevented per 9 players",
+     "sources": [
+      "PMID:35834139"
+     ]
+    },
+    {
+     "finding": "A warm-up of stretching, dynamic mobility and balance exercises halved shoulder and elbow throwing injuries in 9-11-year-old baseball players and improved hip and shoulder range.",
+     "exercises": [
+      "5 stretches",
+      "2 dynamic mobility drills",
+      "2 balance exercises"
+     ],
+     "dose": "during warm-up, 12 months",
+     "effect": "Injury rate 1.7 vs 3.1 per 1000 exposures; ball speed tended to rise",
+     "sources": [
+      "PMID:31336051"
+     ]
+    },
+    {
+     "finding": "External rotation strength training was not inferior to sleeper stretching for preventing arm injuries in high school pitchers, and the strength group had fewer injuries.",
+     "exercises": [
+      "external rotation strengthening",
+      "sleeper stretch"
+     ],
+     "dose": "nightly",
+     "effect": "Injury rate 9.8% vs 22.6%",
+     "sources": [
+      "PMID:36543874"
+     ]
+    },
+    {
+     "finding": "A volleyball warm-up shoulder programme used twice a week reduced total injuries and their severity; compliance needs shorter content.",
+     "exercises": [
+      "shoulder-specific warm-up exercises"
+     ],
+     "dose": "start of practice, twice a week",
+     "effect": "Fewer and less severe injuries; significant shoulder reduction in men",
+     "sources": [
+      "PMID:37812954"
+     ]
+    },
+    {
+     "finding": "Across overhead sports, shoulder programmes with strength, stability and sport-specific exercises cut shoulder injuries by about half, but overall evidence is limited and of low certainty.",
+     "exercises": [
+      "strength",
+      "stability/control",
+      "sport-specific exercises"
+     ],
+     "dose": "regular, mostly within warm-up",
+     "effect": "About 51% fewer shoulder injuries (very low certainty)",
+     "sources": [
+      "PMID:41135970",
+      "PMID:34560586",
+      "PMID:35971013",
+      "PMID:29581141"
+     ]
+    },
+    {
+     "finding": "The Thrower's Ten band and dumbbell routine improved shoulder stability and flexibility in teen water polo players and is consistently linked to better rotator cuff strength and range.",
+     "exercises": [
+      "Thrower's Ten band and dumbbell exercises"
+     ],
+     "dose": "2 x 10 reps, 3 times weekly for 10 weeks",
+     "effect": "Better closed-chain stability and rotation range",
+     "sources": [
+      "PMID:40313475",
+      "PMID:41280985",
+      "PMID:33080765"
+     ]
+    },
+    {
+     "finding": "Pitching 40 hard pitches reduced shoulder rotation range in professional pitchers; a short stretching and calisthenics drill restored it.",
+     "exercises": [
+      "short stretching/calisthenics drill"
+     ],
+     "dose": "after pitching, between innings",
+     "effect": "Rotation range returned to pre-pitching levels",
+     "sources": [
+      "PMID:27810848"
+     ]
+    },
+    {
+     "finding": "Weighted or light balls in the warm-up did not change later throwing velocity, and adding isometric or plyometric work to a handball warm-up did not raise throwing speed over a running warm-up.",
+     "exercises": [
+      "light and overweight baseballs",
+      "isometric and plyometric drills"
+     ],
+     "dose": "single session",
+     "effect": "No change in throwing velocity",
+     "sources": [
+      "PMID:30018931",
+      "PMID:41151771"
+     ]
+    },
+    {
+     "finding": "For hitting, warm-up swings with a standard-weight bat are best supported; on-deck devices from 22 to 96 oz did not change bat speed, while a high-intensity isometric swing hold raised bat speed about 5% at 6 minutes in softball players.",
+     "exercises": [
+      "standard bat swings",
+      "weighted on-deck devices",
+      "isometric pull in swing position"
+     ],
+     "dose": "isometric effect peaked 6 min later",
+     "effect": "Device weight did not matter; isometric added about 5%",
+     "sources": [
+      "PMID:25694615",
+      "PMID:21240027",
+      "PMID:30363035"
+     ]
+    },
+    {
+     "finding": "For tennis serves, low-volume flywheel internal-rotation sets raised serve speed 3-6 minutes later without losing accuracy.",
+     "exercises": [
+      "flywheel shoulder internal rotation"
+     ],
+     "dose": "3 sets of 6, test at 3-6 min",
+     "effect": "About 5% faster serve",
+     "sources": [
+      "PMID:39947194"
+     ]
+    },
+    {
+     "finding": "Swimmers should warm up about 1000-1500 m with a brief approach to race pace, then rest 8-20 minutes; extras in the transition period (heated jackets, dryland exercises, inspiratory muscle warm-up) can add small gains, but upper-body potentiation often hurts.",
+     "exercises": [
+      "in-water warm-up",
+      "race-pace efforts",
+      "heated jacket",
+      "dryland exercises",
+      "inspiratory muscle loading"
+     ],
+     "dose": "1000-1500 m, 8-20 min recovery",
+     "effect": "Small gains, around 0.6-1% on 100 m",
+     "sources": [
+      "PMID:24178508",
+      "PMID:34698232",
+      "PMID:36153425",
+      "PMID:35980952",
+      "PMID:27631544",
+      "PMID:26816389",
+      "PMID:24184589",
+      "PMID:39840133",
+      "PMID:35641619"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "Olympic lifting / barbell power warm-up",
+   "findings": [
+    {
+     "finding": "Ramping snatch warm-up sets up in smaller 10% steps produced more force and muscle activation in the second pull than 15% steps or a self-chosen ramp.",
+     "exercises": [
+      "power snatch at 50, 60, 70, 80% 1RM"
+     ],
+     "dose": "10% increments",
+     "effect": "Higher second-pull force",
+     "sources": [
+      "PMID:39149053"
+     ]
+    },
+    {
+     "finding": "A movement-specific warm-up of the lift itself raised high-pull power more than cycling or vibration warm-ups that raised muscle temperature.",
+     "exercises": [
+      "high-pull specific sets",
+      "cycling",
+      "whole-body vibration"
+     ],
+     "dose": "warm-up then 3 min rest",
+     "effect": "Specific warm-up gave the largest power gain",
+     "sources": [
+      "PMID:27398685"
+     ]
+    },
+    {
+     "finding": "Clean and jerk ramp sets (30-80% 1RM) raised both jump and bench-throw height 4-12 minutes later.",
+     "exercises": [
+      "clean and jerk 4x3 at 30-80% 1RM"
+     ],
+     "dose": "2 min between sets, test 4-12 min after",
+     "effect": "About 4% higher jump and throw",
+     "sources": [
+      "PMID:37536675"
+     ]
+    },
+    {
+     "finding": "Power cleans at 90% 1RM gave larger sprint gains than back squats 7 minutes later in elite junior rugby players.",
+     "exercises": [
+      "power clean 1x3 at 90%",
+      "back squat 1x3 at 90%"
+     ],
+     "dose": "7 min rest",
+     "effect": "Power cleans improved sprint more",
+     "sources": [
+      "PMID:24155118"
+     ]
+    },
+    {
+     "finding": "Heavier specific warm-up sets before training (for example at 80% of the training load) gave higher bar velocity in squats than a few light reps.",
+     "exercises": [
+      "specific warm-up sets at 40% or 80% of training load"
+     ],
+     "dose": "before 3x6 at 80% max",
+     "effect": "Higher squat velocity; few light reps were not enough",
+     "sources": [
+      "PMID:32971729"
+     ]
+    },
+    {
+     "finding": "An extra warm-up set only slightly improved velocity-based 1RM estimates.",
+     "exercises": [
+      "bench press warm-up sets"
+     ],
+     "dose": "varying number of sets",
+     "effect": "Small accuracy gain",
+     "sources": [
+      "PMID:34567373"
+     ]
+    },
+    {
+     "finding": "A 10-minute stretching routine improved balance in some barbell lifts more than a general 10-minute warm-up, but neither helped complex lifts like the overhead squat; foam rolling gave no better squat depth than a dynamic warm-up.",
+     "exercises": [
+      "stretching routine",
+      "general warm-up",
+      "self-myofascial release"
+     ],
+     "dose": "10 min",
+     "effect": "Limited balance and depth effects",
+     "sources": [
+      "PMID:25527262",
+      "PMID:31156751"
+     ]
+    },
+    {
+     "finding": "The NSCA position on weightlifting stresses technique and gradual, sequential progression; specific evidence on mobility drills for catch positions is lacking in the sources reviewed here.",
+     "exercises": [
+      "weightlifting derivatives"
+     ],
+     "dose": "progressive programming",
+     "effect": "Better force production than general training",
+     "sources": [
+      "PMID:36952649"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "Joint-focused warm-ups (ankle, knee, hip/groin, hamstring, shoulder, trunk, neck)",
+   "findings": [
+    {
+     "finding": "Ankle: warm-up programmes with balance work cut ankle injuries in soccer by about 36%, and multicomponent youth programmes by about 26%.",
+     "exercises": [
+      "single-leg balance",
+      "multicomponent strength and agility"
+     ],
+     "dose": "regular warm-up use",
+     "effect": "IRR about 0.64 (soccer) and 0.74 (youth)",
+     "sources": [
+      "PMID:35753965",
+      "PMID:38406839"
+     ]
+    },
+    {
+     "finding": "Ankle: neuromuscular training warm-ups lowered ankle sprains in youth soccer and basketball; a 10-minute basketball warm-up reduced ankle and knee injuries by 36% whether or not it was supervised.",
+     "exercises": [
+      "aerobic",
+      "agility",
+      "strength",
+      "balance (13 exercises)"
+     ],
+     "dose": "10 min, each practice",
+     "effect": "IRR 0.64-0.68",
+     "sources": [
+      "PMID:29864071",
+      "PMID:34972488"
+     ]
+    },
+    {
+     "finding": "Ankle: an 8-minute warm-up with barefoot single-leg balance, plank and calf stretching improved ankle dorsiflexion and balance in young female basketball players.",
+     "exercises": [
+      "eyes-closed single-leg stance",
+      "forearm plank",
+      "calf stretch"
+     ],
+     "dose": "8 min, 3 times a week for 10 weeks",
+     "effect": "Better dorsiflexion range and postural sway",
+     "sources": [
+      "PMID:31623096"
+     ]
+    },
+    {
+     "finding": "Knee/ACL: prevention programmes halve all ACL injuries and cut non-contact ACL injuries by about two-thirds in females; balance training adds benefit, especially with three or more sessions a week.",
+     "exercises": [
+      "balance",
+      "plyometrics",
+      "strength",
+      "landing technique"
+     ],
+     "dose": "3+ times per week; 20+ min per week",
+     "effect": "About 50% fewer ACL injuries",
+     "sources": [
+      "PMID:29737024",
+      "PMID:40051003"
+     ]
+    },
+    {
+     "finding": "Knee in female team athletes: benefit depends on compliance of at least 75%, sessions over 15 minutes, 2-3 times a week, with agility and running mechanics.",
+     "exercises": [
+      "agility",
+      "running mechanics",
+      "neuromuscular training"
+     ],
+     "dose": "over 15 min, 2-3 times weekly",
+     "effect": "RR about 0.74 for longer sessions",
+     "sources": [
+      "PMID:41175154"
+     ]
+    },
+    {
+     "finding": "Groin: a single Copenhagen adductor exercise with three progression levels lowered groin problems by 41% in male footballers; broader groin programmes show a non-significant 19% reduction.",
+     "exercises": [
+      "Copenhagen adduction exercise"
+     ],
+     "dose": "3 times weekly preseason, once weekly in season",
+     "effect": "OR 0.59 for groin problems",
+     "sources": [
+      "PMID:29891614",
+      "PMID:25730819"
+     ]
+    },
+    {
+     "finding": "Hamstring: programmes including the Nordic hamstring exercise roughly halve hamstring injuries across sports.",
+     "exercises": [
+      "Nordic hamstring exercise"
+     ],
+     "dose": "within prevention programmes",
+     "effect": "About 51% fewer hamstring injuries",
+     "sources": [
+      "PMID:30808663",
+      "PMID:27752982"
+     ]
+    },
+    {
+     "finding": "Hip and core: a hip and core programme done before running reduced overuse injuries in novice runners, while an ankle and foot programme did not.",
+     "exercises": [
+      "hip and core exercises",
+      "ankle and foot exercises"
+     ],
+     "dose": "before each run, 24 weeks",
+     "effect": "34% lower injury incidence for hip/core",
+     "sources": [
+      "PMID:38724071"
+     ]
+    },
+    {
+     "finding": "Neck: a 10-minute isometric neck warm-up raised neck rate of force development and lateral flexion range in adults, suggesting a short neck primer could be added to contact-sport warm-ups.",
+     "exercises": [
+      "isometric neck holds in all directions"
+     ],
+     "dose": "5-10 min",
+     "effect": "Faster neck force production",
+     "sources": [
+      "PMID:38142049"
+     ]
+    },
+    {
+     "finding": "Neck: neck strengthening programmes raise neck strength in age-grade and professional rugby players and are linked to fewer concussions in male rugby; a neuromuscular warm-up in rugby is associated with up to 60% fewer concussions.",
+     "exercises": [
+      "self-resisted neck exercises",
+      "neck strength training"
+     ],
+     "dose": "5-8 weeks, about twice a week",
+     "effect": "About 45% fewer concussions in male rugby",
+     "sources": [
+      "PMID:34558993",
+      "PMID:24561636",
+      "PMID:41316595",
+      "PMID:37316182"
+     ]
+    },
+    {
+     "finding": "Shoulder: see the throwing section; shoulder programmes inside the warm-up reduce shoulder problems in handball and volleyball.",
+     "exercises": [
+      "band external rotation",
+      "scapular control"
+     ],
+     "dose": "3 times weekly",
+     "effect": "28-51% fewer shoulder problems",
+     "sources": [
+      "PMID:27313171",
+      "PMID:41135970"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "Pre-game vs pre-practice warm-up, re-warm-up, and how fast the effect fades",
+   "findings": [
+    {
+     "finding": "Warm-up benefits fade quickly: muscle temperature rises and falls about 0.1 C per minute, a 9-minute rest cut jump height about 4%, and a 23-minute rest reduced lay-up scoring 7% in basketball players.",
+     "exercises": [
+      "20-min warm-up then inactivity"
+     ],
+     "dose": "9-23 min of rest",
+     "effect": "Jump and skill losses",
+     "sources": [
+      "PMID:35412960"
+     ]
+    },
+    {
+     "finding": "Keep the gap short: team-sport studies recommend a 10-15 minute active warm-up rising from about 50% to 90% of max heart rate, heated clothing soon after, and about 2 minutes of sprints and jumps if the wait exceeds 15 minutes.",
+     "exercises": [
+      "progressive active warm-up",
+      "heated garments",
+      "short sprints and jumps"
+     ],
+     "dose": "10-15 min warm-up; 2-min re-warm-up for gaps over 15 min",
+     "effect": "Preserved explosive performance",
+     "sources": [
+      "PMID:29968230"
+     ]
+    },
+    {
+     "finding": "Professional soccer warm-ups often run 25 minutes or more with about 12 minutes between warm-up and kickoff; only about 2.6 minutes are usually available at half-time.",
+     "exercises": [
+      "typical professional pre-match routine"
+     ],
+     "dose": "warm-up 15-45 min, 12 min gap",
+     "effect": "Describes practice and time limits",
+     "sources": [
+      "PMID:23734830"
+     ]
+    },
+    {
+     "finding": "Half-time re-warm-ups help: they kept sprint speed and reduced jump loss in professional soccer, and meta-analysis shows a moderate jump benefit but trivial sprint effect.",
+     "exercises": [
+      "low-intensity running",
+      "short sprints",
+      "jumps"
+     ],
+     "dose": "several minutes at half-time",
+     "effect": "Jump ES about 0.66; sprint maintained",
+     "sources": [
+      "PMID:25048430",
+      "PMID:37077775",
+      "PMID:27901341"
+     ]
+    },
+    {
+     "finding": "A brief heavy re-warm-up (5-rep max leg press) improved jump and repeated sprints after a break, while a 3-minute small-sided game improved skill execution.",
+     "exercises": [
+      "5RM leg press",
+      "small-sided game"
+     ],
+     "dose": "after 15-min break",
+     "effect": "Physical vs skill benefits differ",
+     "sources": [
+      "PMID:23444096"
+     ]
+    },
+    {
+     "finding": "Plyometrics and repeated changes of direction 6 minutes after warm-up limited losses in jump and sprint before a match, while eccentric exercise harmed jump.",
+     "exercises": [
+      "plyometric jumps",
+      "repeated changes of direction",
+      "eccentric exercise (avoid)"
+     ],
+     "dose": "6 min after warm-up",
+     "effect": "Smaller performance losses",
+     "sources": [
+      "PMID:28662123"
+     ]
+    },
+    {
+     "finding": "Non-starting futsal players who did plyometric and change-of-direction drills after the warm-up kept or improved sprint and COD, while resting or easy stretching made them worse.",
+     "exercises": [
+      "plyometric and COD drills",
+      "dynamic stretching",
+      "rest"
+     ],
+     "dose": "post-warm-up period",
+     "effect": "About 2-3% better sprint and COD",
+     "sources": [
+      "PMID:40463321"
+     ]
+    },
+    {
+     "finding": "Heated trousers for substitutes in cold weather led to more high-speed running once they entered the match.",
+     "exercises": [
+      "heated garments"
+     ],
+     "dose": "during 60 min on the bench",
+     "effect": "More high-speed running and accelerations",
+     "sources": [
+      "PMID:41061498",
+      "PMID:26590591"
+     ]
+    },
+    {
+     "finding": "Pre-match warm-ups in elite futsal last about 27 minutes and build intensity mainly through more accelerations and decelerations; changing the order of phases had small effects in professional soccer.",
+     "exercises": [
+      "aerobic",
+      "neuromuscular",
+      "velocity",
+      "ball-specific phases"
+     ],
+     "dose": "about 27 min",
+     "effect": "Order mostly did not matter",
+     "sources": [
+      "PMID:33324293",
+      "PMID:37551345"
+     ]
+    },
+    {
+     "finding": "In swimmers from pre-puberty to adulthood, an active re-warm-up during a 20-25 minute transition outperformed passive rest, especially in younger groups.",
+     "exercises": [
+      "dynamic activities during transition"
+     ],
+     "dose": "20-25 min transition",
+     "effect": "Better jump and start performance",
+     "sources": [
+      "PMID:39444072"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "Short (8-10 min) vs full (15-20 min) warm-ups and adolescent evidence",
+   "findings": [
+    {
+     "finding": "Coach-led 20-minute neuromuscular warm-ups in urban public high school girls' soccer and basketball cut non-contact lower-limb injuries by about two-thirds, with coaches using the warm-up at 80% of practices.",
+     "exercises": [
+      "neuromuscular warm-up (strength, balance, plyometrics, agility)"
+     ],
+     "dose": "20 min, before every practice",
+     "effect": "IRR 0.33 for acute non-contact lower-limb injuries",
+     "sources": [
+      "PMID:22065184"
+     ]
+    },
+    {
+     "finding": "A 15-minute neuromuscular warm-up done twice a week cut ACL injuries by 64% in adolescent female football players.",
+     "exercises": [
+      "core stability",
+      "balance",
+      "knee alignment"
+     ],
+     "dose": "15 min, twice weekly",
+     "effect": "Rate ratio 0.36",
+     "sources": [
+      "PMID:22556050"
+     ]
+    },
+    {
+     "finding": "The 11+ style comprehensive warm-up in female footballers aged 13-17 lowered severe injuries, overuse injuries and injuries overall.",
+     "exercises": [
+      "running, strength, plyometric and balance exercises"
+     ],
+     "dose": "each training session, one season",
+     "effect": "Severe injuries RR 0.55",
+     "sources": [
+      "PMID:19066253"
+     ]
+    },
+    {
+     "finding": "A 10-minute programme can work: the SHRed basketball warm-up reduced ankle and knee injuries in players aged 11-18.",
+     "exercises": [
+      "13 exercises: aerobic, agility, strength, balance"
+     ],
+     "dose": "10 min",
+     "effect": "36% fewer ankle and knee injuries",
+     "sources": [
+      "PMID:34972488"
+     ]
+    },
+    {
+     "finding": "Shorter programmes also showed benefits: an 8-minute combined warm-up improved ankle range and balance in young female players.",
+     "exercises": [
+      "balance",
+      "plank",
+      "calf stretch"
+     ],
+     "dose": "8 min",
+     "effect": "Improved risk-related measures (not injuries)",
+     "sources": [
+      "PMID:31623096"
+     ]
+    },
+    {
+     "finding": "Longer sessions and higher frequency give more protection in female athletes (over 15 min, 2-3 times weekly), and ACL benefits held with under 20 minutes per week but were larger with 3+ sessions.",
+     "exercises": [
+      "neuromuscular training"
+     ],
+     "dose": "15+ min; 2-3+ sessions weekly",
+     "effect": "More protection with more dose",
+     "sources": [
+      "PMID:41175154",
+      "PMID:40051003"
+     ]
+    },
+    {
+     "finding": "Warm-up injury prevention programmes in children and adolescents reduce injuries by about 36% overall, and compliance is the main source of variation.",
+     "exercises": [
+      "warm-up injury prevention programmes"
+     ],
+     "dose": "varied",
+     "effect": "IRR 0.64",
+     "sources": [
+      "PMID:35627873"
+     ]
+    },
+    {
+     "finding": "FIFA 11+ reduces football injuries by about 39%, ankle injuries by about 32% and head and neck injuries by about 40%; the original FIFA 11 showed no effect.",
+     "exercises": [
+      "FIFA 11+"
+     ],
+     "dose": "2-3 times weekly",
+     "effect": "IRR 0.61 overall",
+     "sources": [
+      "PMID:28087568",
+      "PMID:40084177",
+      "PMID:39481367",
+      "PMID:39360984"
+     ]
+    },
+    {
+     "finding": "FIFA 11+ Kids cut injuries by 57% in boys aged 7-13, with more sessions per week giving more benefit, but in real-world use coaches dropped the full programme because of time and motivation.",
+     "exercises": [
+      "FIFA 11+ Kids"
+     ],
+     "dose": "twice weekly",
+     "effect": "IRR 0.43",
+     "sources": [
+      "PMID:35903029",
+      "PMID:39026353",
+      "PMID:36755560"
+     ]
+    },
+    {
+     "finding": "In schoolboy rugby (14-18 years), a movement-control warm-up reduced concussions, and teams doing it 3+ times weekly had 72% fewer match injuries.",
+     "exercises": [
+      "balance",
+      "whole-body resistance",
+      "plyometrics",
+      "landing and cutting rehearsal"
+     ],
+     "dose": "3 or more times weekly",
+     "effect": "Match injuries RR 0.28 in high-dose teams",
+     "sources": [
+      "PMID:28515056"
+     ]
+    },
+    {
+     "finding": "Adherence drives results: players with high FIFA 11+ adherence had better balance and about 72% lower injury risk; coach workshops raised adherence more than an unsupervised website, and coaches and players rarely believed a warm-up prevented knee or ankle injuries.",
+     "exercises": [
+      "FIFA 11+"
+     ],
+     "dose": "high adherence across a season",
+     "effect": "IRR 0.28 for high adherence",
+     "sources": [
+      "PMID:23559666",
+      "PMID:23486935",
+      "PMID:24928848",
+      "PMID:41451616",
+      "PMID:38684329"
+     ]
+    },
+    {
+     "finding": "Youth neuromuscular warm-ups also improve function: a basketball programme in 15-year-old boys reduced injuries and improved muscle reaction times; school-based NMT reduced injuries in middle and high school girls.",
+     "exercises": [
+      "neuromuscular training warm-up",
+      "trunk and lower-limb exercises"
+     ],
+     "dose": "about 3 months to a full season",
+     "effect": "Lower injury rates",
+     "sources": [
+      "PMID:39545620",
+      "PMID:29332470",
+      "PMID:20547668",
+      "PMID:15888716"
+     ]
+    },
+    {
+     "finding": "A physical literacy based neuromuscular warm-up for 8-12-year-olds was feasible and enjoyable and improved movement skill, jumps and sprint.",
+     "exercises": [
+      "neuromuscular games and movement skills"
+     ],
+     "dose": "school-based",
+     "effect": "Better movement competence and jump/sprint",
+     "sources": [
+      "PMID:38842825"
+     ]
+    }
+   ]
+  }
+ ],
+ "sources": [
+  {
+   "id": "PMID:12744717",
+   "doi": "10.2165/00007256-200333060-00005",
+   "firstAuthor": "Bishop D",
+   "year": 2003,
+   "journal": "Sports Med",
+   "title": "Warm up I: potential mechanisms and the effects of passive warm up on exercise performance.",
+   "population": "Narrative review of warm-up research (mostly adults)",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:12762825",
+   "doi": "10.2165/00007256-200333070-00002",
+   "firstAuthor": "Bishop D",
+   "year": 2003,
+   "journal": "Sports Med",
+   "title": "Warm up II: performance changes following active warm up and how to structure the warm up.",
+   "population": "Narrative review of active warm-up studies (mostly adults)",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:15888716",
+   "doi": "10.1177/0363546504272261",
+   "firstAuthor": "Mandelbaum BR",
+   "year": 2005,
+   "journal": "Am J Sports Med",
+   "title": "Effectiveness of a neuromuscular and proprioceptive training program in preventing anterior cruciate ligament injuries in female athletes: 2-year follow-up.",
+   "population": "2946 female soccer players aged 14-18",
+   "design": "Prospective non-randomized cohort"
+  },
+  {
+   "id": "PMID:16937960",
+   "doi": "10.1519/18205.1",
+   "firstAuthor": "McMillian DJ",
+   "year": 2006,
+   "journal": "J Strength Cond Res",
+   "title": "Dynamic vs. static-stretching warm up: the effect on power and agility performance.",
+   "population": "30 US military cadets aged 18-24",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:18545176",
+   "doi": "10.1519/JSC.0b013e318173da50",
+   "firstAuthor": "Herman SL",
+   "year": 2008,
+   "journal": "J Strength Cond Res",
+   "title": "Four-week dynamic stretching warm-up intervention elicits longer-term performance benefits.",
+   "population": "24 collegiate wrestlers",
+   "design": "Randomized 4-week intervention"
+  },
+  {
+   "id": "PMID:19066253",
+   "doi": "10.1136/bmj.a2469",
+   "firstAuthor": "Soligard T",
+   "year": 2008,
+   "journal": "BMJ",
+   "title": "Comprehensive warm-up programme to prevent injuries in young female footballers: cluster randomised controlled trial.",
+   "population": "1892 female football players aged 13-17",
+   "design": "Cluster-randomized controlled trial"
+  },
+  {
+   "id": "PMID:19996770",
+   "doi": "10.1519/JSC.0b013e3181c643a0",
+   "firstAuthor": "Fradkin AJ",
+   "year": 2010,
+   "journal": "J Strength Cond Res",
+   "title": "Effects of warming-up on physical performance: a systematic review with meta-analysis.",
+   "population": "32 high-quality studies, mixed athletic and non-athletic samples",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:20547668",
+   "doi": "10.1136/bjsm.2010.074377",
+   "firstAuthor": "Emery CA",
+   "year": 2010,
+   "journal": "Br J Sports Med",
+   "title": "The effectiveness of a neuromuscular prevention strategy to reduce injuries in youth soccer: a cluster-randomised controlled trial.",
+   "population": "744 youth soccer players aged under 13 to under 18",
+   "design": "Cluster-randomized controlled trial"
+  },
+  {
+   "id": "PMID:21240027",
+   "doi": "10.1519/JSC.0b013e318202e31e",
+   "firstAuthor": "Szymanski DJ",
+   "year": 2011,
+   "journal": "J Strength Cond Res",
+   "title": "Effect of various warm-up devices on bat velocity of intercollegiate baseball players.",
+   "population": "22 Division I baseball players",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:21373870",
+   "doi": "10.1007/s00421-011-1879-2",
+   "firstAuthor": "Behm DG",
+   "year": 2011,
+   "journal": "Eur J Appl Physiol",
+   "title": "A review of the acute effects of static and dynamic stretching on performance.",
+   "population": "Review of stretching studies, mostly adults",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:22065184",
+   "doi": "10.1001/archpediatrics.2011.168",
+   "firstAuthor": "LaBella CR",
+   "year": 2011,
+   "journal": "Arch Pediatr Adolesc Med",
+   "title": "Effect of neuromuscular warm-up on injuries in female soccer and basketball athletes in urban public high schools: cluster randomized controlled trial.",
+   "population": "1492 female high school soccer and basketball athletes, urban Chicago",
+   "design": "Cluster-randomized controlled trial"
+  },
+  {
+   "id": "PMID:22316148",
+   "doi": "10.1111/j.1600-0838.2012.01444.x",
+   "firstAuthor": "Simic L",
+   "year": 2013,
+   "journal": "Scand J Med Sci Sports",
+   "title": "Does pre-exercise static stretching inhibit maximal muscular performance? A meta-analytical review.",
+   "population": "Pooled studies of healthy people, all ages and fitness levels",
+   "design": "Meta-analysis"
+  },
+  {
+   "id": "PMID:22446678",
+   "doi": "10.1519/JSC.0b013e31822e58b6",
+   "firstAuthor": "Aguilar AJ",
+   "year": 2012,
+   "journal": "J Strength Cond Res",
+   "title": "A dynamic warm-up model increases quadriceps strength and hamstring flexibility.",
+   "population": "45 active adult volunteers",
+   "design": "Randomized controlled trial"
+  },
+  {
+   "id": "PMID:22556050",
+   "doi": "10.1136/bmj.e3042",
+   "firstAuthor": "Waldén M",
+   "year": 2012,
+   "journal": "BMJ",
+   "title": "Prevention of acute knee injuries in adolescent female football players: cluster randomised controlled trial.",
+   "population": "4564 female football players aged 12-17",
+   "design": "Cluster-randomized controlled trial"
+  },
+  {
+   "id": "PMID:22812375",
+   "doi": "10.1136/bjsm.2009.070672",
+   "firstAuthor": "Herman K",
+   "year": 2012,
+   "journal": "BMC Med",
+   "title": "The effectiveness of neuromuscular warm-up strategies, that require no additional equipment, for preventing lower limb injuries during sports participation: a systematic review.",
+   "population": "Trials of equipment-free neuromuscular warm-ups (mostly young female athletes, military recruits)",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:23140550",
+   "doi": "10.1080/02640414.2012.738924",
+   "firstAuthor": "Gouvêa AL",
+   "year": 2013,
+   "journal": "J Sports Sci",
+   "title": "The effects of rest intervals on jumping performance: a meta-analysis on post-activation potentiation studies.",
+   "population": "14 post-activation studies",
+   "design": "Meta-analysis"
+  },
+  {
+   "id": "PMID:23444096",
+   "doi": "10.1055/s-0032-1331197",
+   "firstAuthor": "Zois J",
+   "year": 2013,
+   "journal": "Int J Sports Med",
+   "title": "High-intensity re-warm-ups enhance soccer performance.",
+   "population": "Team-sport athletes",
+   "design": "Randomized crossover"
+  },
+  {
+   "id": "PMID:23486935",
+   "doi": "10.1136/bjsports-2012-091887",
+   "firstAuthor": "Steffen K",
+   "year": 2013,
+   "journal": "Br J Sports Med",
+   "title": "Evaluation of how different implementation strategies of an injury prevention programme (FIFA 11+) impact team adherence and injury risk in Canadian female youth football players: a cluster-randomised trial.",
+   "population": "Female youth football players aged 13-18, 31 teams",
+   "design": "Cluster-randomized controlled trial"
+  },
+  {
+   "id": "PMID:23559666",
+   "doi": "10.1136/bjsports-2012-091886",
+   "firstAuthor": "Steffen K",
+   "year": 2013,
+   "journal": "Br J Sports Med",
+   "title": "High adherence to a neuromuscular injury prevention programme (FIFA 11+) improves functional balance and reduces injury risk in Canadian youth female football players: a cluster randomised trial.",
+   "population": "Female youth football players aged 13-18",
+   "design": "Cluster-randomized controlled trial"
+  },
+  {
+   "id": "PMID:23591944",
+   "doi": "10.1519/JSC.0b013e318295d2fb",
+   "firstAuthor": "Paradisis GP",
+   "year": 2014,
+   "journal": "J Strength Cond Res",
+   "title": "Effects of static and dynamic stretching on sprint and jump performance in boys and girls.",
+   "population": "47 active adolescent boys and girls",
+   "design": "Randomized crossover"
+  },
+  {
+   "id": "PMID:23734830",
+   "doi": "10.1080/02640414.2013.792946",
+   "firstAuthor": "Towlson C",
+   "year": 2013,
+   "journal": "J Sports Sci",
+   "title": "Warm-up strategies of professional soccer players: practitioners' perspectives.",
+   "population": "Practitioners at professional soccer clubs",
+   "design": "Survey"
+  },
+  {
+   "id": "PMID:24155118",
+   "doi": "10.1123/ijspp.2013-0358",
+   "firstAuthor": "Seitz LB",
+   "year": 2014,
+   "journal": "Int J Sports Physiol Perform",
+   "title": "The back squat and the power clean: elicitation of different degrees of potentiation.",
+   "population": "13 elite junior rugby league players",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:24178508",
+   "doi": "10.1007/s40279-013-0117-y",
+   "firstAuthor": "Neiva HP",
+   "year": 2014,
+   "journal": "Sports Med",
+   "title": "Warm-up and performance in competitive swimming.",
+   "population": "Studies of competitive swimmers",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:24184589",
+   "doi": "10.1136/bjsports-2013-092523",
+   "firstAuthor": "Wilson EE",
+   "year": 2014,
+   "journal": "Br J Sports Med",
+   "title": "Respiratory muscle specific warm-up and elite swimming performance.",
+   "population": "15 elite swimmers",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:24561636",
+   "doi": "10.1097/JSM.0000000000000071",
+   "firstAuthor": "Geary K",
+   "year": 2014,
+   "journal": "Clin J Sport Med",
+   "title": "Effects of neck strength training on isometric neck strength in rugby union players.",
+   "population": "25 professional and semi-professional rugby union players",
+   "design": "Controlled study"
+  },
+  {
+   "id": "PMID:24928848",
+   "doi": "10.1136/bjsports-2014-093543",
+   "firstAuthor": "McKay CD",
+   "year": 2014,
+   "journal": "Br J Sports Med",
+   "title": "The effect of coach and player injury knowledge, attitudes and beliefs on adherence to the FIFA 11+ programme in female youth soccer.",
+   "population": "29 coaches and 258 female players aged 13-18",
+   "design": "Subcohort of a cluster-randomized trial"
+  },
+  {
+   "id": "PMID:25048430",
+   "doi": "10.1111/sms.12236",
+   "firstAuthor": "Edholm P",
+   "year": 2014,
+   "journal": "Scand J Med Sci Sports",
+   "title": "Half-time re-warm up increases performance capacity in male elite soccer players.",
+   "population": "22 professional male soccer players",
+   "design": "Crossover match study"
+  },
+  {
+   "id": "PMID:25527262",
+   "doi": "10.2519/jospt.2003.33.12.713",
+   "firstAuthor": "Adelsberger R",
+   "year": 2014,
+   "journal": "BMC Res Notes",
+   "title": "Effects of stretching and warm-up routines on stability and balance during weight-lifting: a pilot investigation.",
+   "population": "18 adults (13 intervention, 5 controls)",
+   "design": "Pilot randomized study"
+  },
+  {
+   "id": "PMID:25646955",
+   "doi": "10.1136/bjsm.2010.072157",
+   "firstAuthor": "Baklouti H",
+   "year": 2015,
+   "journal": "PLoS One",
+   "title": "Does increasing active warm-up duration affect afternoon short-term maximal performance during Ramadan?",
+   "population": "12 active adult men, during Ramadan fasting",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:25694615",
+   "doi": "10.1136/bjsports-2014-094228",
+   "firstAuthor": "McCrary JM",
+   "year": 2015,
+   "journal": "Br J Sports Med",
+   "title": "A systematic review of the effects of upper body warm-up on performance and injury.",
+   "population": "31 randomized trials of upper-body warm-ups",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:25730819",
+   "doi": "10.1136/bjsports-2014-094162",
+   "firstAuthor": "Esteve E",
+   "year": 2015,
+   "journal": "Br J Sports Med",
+   "title": "Prevention of groin injuries in sports: a systematic review with meta-analysis of randomised controlled trials.",
+   "population": "7 trials, 4191 football and handball players",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:26400696",
+   "doi": "10.1007/s40279-015-0376-x",
+   "firstAuthor": "McGowan CJ",
+   "year": 2015,
+   "journal": "Sports Med",
+   "title": "Warm-Up Strategies for Sport and Exercise: Mechanisms and Applications.",
+   "population": "Review of warm-up studies across individual and team sports",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:26400955",
+   "doi": "10.1136/bjsports-2015-094776",
+   "firstAuthor": "Zebis MK",
+   "year": 2016,
+   "journal": "Br J Sports Med",
+   "title": "Effects of evidence-based prevention training on neuromuscular and biomechanical risk factors for ACL injury in adolescent female athletes: a randomised controlled trial.",
+   "population": "40 adolescent female football and handball players aged 15-16",
+   "design": "Randomized controlled trial"
+  },
+  {
+   "id": "PMID:26508319",
+   "doi": "10.1007/s40279-015-0415-7",
+   "firstAuthor": "Seitz LB",
+   "year": 2016,
+   "journal": "Sports Med",
+   "title": "Factors Modulating Post-Activation Potentiation of Jump, Sprint, Throw, and Upper-Body Ballistic Performances: A Systematic Review with Meta-Analysis.",
+   "population": "47 studies, 1954 participants",
+   "design": "Meta-analysis"
+  },
+  {
+   "id": "PMID:26590591",
+   "doi": "10.1016/j.jsams.2012.06.002",
+   "firstAuthor": "Raccuglia M",
+   "year": 2016,
+   "journal": "Eur J Appl Physiol",
+   "title": "Post-warm-up muscle temperature maintenance: blood flow contribution and external heating optimisation.",
+   "population": "10 male cyclists",
+   "design": "Laboratory experiment"
+  },
+  {
+   "id": "PMID:26816389",
+   "doi": "10.1123/ijspp.2015-0581",
+   "firstAuthor": "McGowan CJ",
+   "year": 2016,
+   "journal": "Int J Sports Physiol Perform",
+   "title": "Evaluating Warm-Up Strategies for Elite Sprint Breaststroke Swimming Performance.",
+   "population": "10 national and international swimmers",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:27313171",
+   "doi": "10.1136/bjsports-2016-096226",
+   "firstAuthor": "Andersson SH",
+   "year": 2017,
+   "journal": "Br J Sports Med",
+   "title": "Preventing overuse shoulder injuries among throwing athletes: a cluster-randomised controlled trial in 660 elite handball players.",
+   "population": "660 elite handball players, 45 teams",
+   "design": "Cluster-randomized controlled trial"
+  },
+  {
+   "id": "PMID:27341088",
+   "doi": "10.1080/00222895.2016.1152222",
+   "firstAuthor": "Romero-Franco N",
+   "year": 2017,
+   "journal": "J Mot Behav",
+   "title": "Effects of Warm-Up and Fatigue on Knee Joint Position Sense and Jump Performance.",
+   "population": "32 sprinters",
+   "design": "Randomized controlled experiment"
+  },
+  {
+   "id": "PMID:27398685",
+   "doi": "10.1080/02640414.2016.1206665",
+   "firstAuthor": "Barnes MJ",
+   "year": 2017,
+   "journal": "J Sports Sci",
+   "title": "Effects of different warm-up modalities on power output during the high pull.",
+   "population": "9 resistance-trained males",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:27631544",
+   "doi": "10.1080/02640414.2016.1223329",
+   "firstAuthor": "McGowan CJ",
+   "year": 2017,
+   "journal": "J Sports Sci",
+   "title": "Elite sprint swimming performance is enhanced by completion of additional warm-up activities.",
+   "population": "25 elite swimmers",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:27752982",
+   "doi": "10.1007/s40279-016-0638-2",
+   "firstAuthor": "Al Attar WSA",
+   "year": 2017,
+   "journal": "Sports Med",
+   "title": "Effect of Injury Prevention Programs that Include the Nordic Hamstring Exercise on Hamstring Injury Rates in Soccer Players: A Systematic Review and Meta-Analysis.",
+   "population": "Soccer players",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:27810848",
+   "doi": "10.1177/0363546516671943",
+   "firstAuthor": "Escamilla RF",
+   "year": 2017,
+   "journal": "Am J Sports Med",
+   "title": "Effects of a Short-Duration Stretching Drill After Pitching on Elbow and Shoulder Range of Motion in Professional Baseball Pitchers.",
+   "population": "20 male professional baseball pitchers",
+   "design": "Controlled laboratory study"
+  },
+  {
+   "id": "PMID:27901341",
+   "doi": "10.23736/S0022-4707.16.06806-7",
+   "firstAuthor": "Hammami A",
+   "year": 2018,
+   "journal": "J Sports Med Phys Fitness",
+   "title": "The efficacy and characteristics of warm-up and re-warm-up practices in soccer players: a systematic review.",
+   "population": "Studies of soccer players",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:28087568",
+   "doi": "10.1136/bjsports-2016-097066",
+   "firstAuthor": "Thorborg K",
+   "year": 2017,
+   "journal": "Br J Sports Med",
+   "title": "Effect of specific exercise-based football injury prevention programmes on the overall injury rate in football: a systematic review and meta-analysis of the FIFA 11 and 11+ programmes.",
+   "population": "Randomized trials in football players",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:28515056",
+   "doi": "10.1016/j.jsams.2008.04.002",
+   "firstAuthor": "Hislop MD",
+   "year": 2017,
+   "journal": "Br J Sports Med",
+   "title": "Reducing musculoskeletal injury and concussion risk in schoolboy rugby players with a pre-activity movement control exercise programme: a cluster randomised controlled trial.",
+   "population": "3188 schoolboy rugby players aged 14-18",
+   "design": "Cluster-randomized controlled trial"
+  },
+  {
+   "id": "PMID:28662123",
+   "doi": "10.2165/00007256-200939020-00004",
+   "firstAuthor": "Abade E",
+   "year": 2017,
+   "journal": "PLoS One",
+   "title": "Effects of different re-warm up activities in football players' performance.",
+   "population": "Elite under-19 football players",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:29300214",
+   "doi": "10.1249/MSS.0000000000001539",
+   "firstAuthor": "Blazevich AJ",
+   "year": 2018,
+   "journal": "Med Sci Sports Exerc",
+   "title": "No Effect of Muscle Stretching within a Full, Dynamic Warm-up on Athletic Performance.",
+   "population": "20 male team-sport athletes",
+   "design": "Randomized blinded crossover"
+  },
+  {
+   "id": "PMID:29332470",
+   "doi": "10.4085/1062-6050-173-16",
+   "firstAuthor": "Foss KDB",
+   "year": 2018,
+   "journal": "J Athl Train",
+   "title": "A School-Based Neuromuscular Training Program and Sport-Related Injury Incidence: A Prospective Randomized Controlled Clinical Trial.",
+   "population": "474 middle and high school girls",
+   "design": "Cluster-randomized controlled trial"
+  },
+  {
+   "id": "PMID:29365286",
+   "doi": "10.1139/apnm-2017-0610",
+   "firstAuthor": "Nickerson BS",
+   "year": 2018,
+   "journal": "Appl Physiol Nutr Metab",
+   "title": "Effect of cluster set warm-up configurations on sprint performance in collegiate male soccer players.",
+   "population": "12 collegiate male soccer players",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:29581141",
+   "doi": "10.1136/bjsports-2017-098254",
+   "firstAuthor": "Asker M",
+   "year": 2018,
+   "journal": "Br J Sports Med",
+   "title": "Risk factors for, and prevention of, shoulder injuries in overhead sports: a systematic review with best-evidence synthesis.",
+   "population": "Studies of overhead-sport athletes",
+   "design": "Systematic review with best-evidence synthesis"
+  },
+  {
+   "id": "PMID:29737024",
+   "doi": "10.1002/jor.24043",
+   "firstAuthor": "Webster KE",
+   "year": 2018,
+   "journal": "J Orthop Res",
+   "title": "Meta-analysis of meta-analyses of anterior cruciate ligament injury reduction training programs.",
+   "population": "8 meta-analyses, mostly female athletes",
+   "design": "Meta-analysis of meta-analyses"
+  },
+  {
+   "id": "PMID:29864071",
+   "doi": "10.1097/JSM.0000000000000462",
+   "firstAuthor": "Owoeye OBA",
+   "year": 2018,
+   "journal": "Clin J Sport Med",
+   "title": "Prevention of Ankle Sprain Injuries in Youth Soccer and Basketball: Effectiveness of a Neuromuscular Training Program and Examining Risk Factors.",
+   "population": "2265 youth soccer and basketball players aged 11-18",
+   "design": "Pooled secondary analysis of 5 studies"
+  },
+  {
+   "id": "PMID:29891614",
+   "doi": "10.1136/bjsports-2017-098937",
+   "firstAuthor": "Harøy J",
+   "year": 2019,
+   "journal": "Br J Sports Med",
+   "title": "The Adductor Strengthening Programme prevents groin problems among male football players: a cluster-randomised controlled trial.",
+   "population": "652 semi-professional male football players",
+   "design": "Cluster-randomized controlled trial"
+  },
+  {
+   "id": "PMID:29968230",
+   "doi": "10.1007/s40279-018-0958-5",
+   "firstAuthor": "Silva LM",
+   "year": 2018,
+   "journal": "Sports Med",
+   "title": "Effects of Warm-Up, Post-Warm-Up, and Re-Warm-Up Strategies on Explosive Efforts in Team Sports: A Systematic Review.",
+   "population": "30 studies of team-sport athletes",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:30001501",
+   "doi": "10.1136/injuryprev-2017-042639",
+   "firstAuthor": "Petushek EJ",
+   "year": 2019,
+   "journal": "Am J Sports Med",
+   "title": "Evidence-Based Best-Practice Guidelines for Preventing Anterior Cruciate Ligament Injuries in Young Female Athletes: A Systematic Review and Meta-analysis.",
+   "population": "Controlled trials in young female athletes",
+   "design": "Systematic review with meta-regression"
+  },
+  {
+   "id": "PMID:30018931",
+   "doi": "10.12965/jer.1836146.073",
+   "firstAuthor": "Shin YA",
+   "year": 2018,
+   "journal": "J Exerc Rehabil",
+   "title": "Effects of weighted baseball throwing during warm-up on ball velocity and upper extremity muscle activation in baseball pitchers.",
+   "population": "12 high school and college baseball pitchers",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:30118391",
+   "doi": "10.1080/14763141.2018.1503322",
+   "firstAuthor": "Avedesian JM",
+   "year": 2020,
+   "journal": "Sports Biomech",
+   "title": "The biomechanical effect of warm-up stretching strategies on landing mechanics in female volleyball athletes.",
+   "population": "Female collegiate volleyball players",
+   "design": "Repeated-measures laboratory study"
+  },
+  {
+   "id": "PMID:30363035",
+   "doi": "10.1519/JSC.0000000000002855",
+   "firstAuthor": "Gilmore SL",
+   "year": 2019,
+   "journal": "J Strength Cond Res",
+   "title": "Effect of a High-Intensity Isometric Potentiating Warm-up on Bat Velocity.",
+   "population": "Experienced female softball players",
+   "design": "Repeated-measures experiment"
+  },
+  {
+   "id": "PMID:30808663",
+   "doi": "10.1136/bjsports-2018-100045",
+   "firstAuthor": "van Dyk N",
+   "year": 2019,
+   "journal": "Br J Sports Med",
+   "title": "Including the Nordic hamstring exercise in injury prevention programmes halves the rate of hamstring injuries: a systematic review and meta-analysis of 8459 athletes.",
+   "population": "Athletes across sports and age groups",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:31156751",
+   "doi": "10.70252/GTDB7892",
+   "firstAuthor": "Beier Z",
+   "year": 2019,
+   "journal": "Int J Exerc Sci",
+   "title": "Self-Myofascial Release Does Not Improve Back Squat Range of Motion, Alter Muscle Activation, or Aid in Perceived Recovery 24-Hours Following Lower Body Resistance Training.",
+   "population": "Resistance-trained squatters",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:31336051",
+   "doi": "10.1177/0363546519861378",
+   "firstAuthor": "Sakata J",
+   "year": 2019,
+   "journal": "Am J Sports Med",
+   "title": "Throwing Injuries in Youth Baseball Players: Can a Prevention Program Help? A Randomized Controlled Trial.",
+   "population": "237 youth baseball players aged 9-11",
+   "design": "Block-randomized controlled trial"
+  },
+  {
+   "id": "PMID:31623096",
+   "doi": "10.2165/11534960-000000000-00000",
+   "firstAuthor": "Padua E",
+   "year": 2019,
+   "journal": "Medicina (Kaunas)",
+   "title": "Effectiveness of Warm-Up Routine on the Ankle Injuries Prevention in Young Female Basketball Players: A Randomized Controlled Trial.",
+   "population": "28 young female basketball players",
+   "design": "Randomized controlled trial"
+  },
+  {
+   "id": "PMID:32509124",
+   "doi": "10.70252/RPEZ7761",
+   "firstAuthor": "Piper AD",
+   "year": 2020,
+   "journal": "Int J Exerc Sci",
+   "title": "Comparison of Post-Activation Potentiating Stimuli on Jump and Sprint Performance.",
+   "population": "13 resistance-trained college-aged men and women",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:32708930",
+   "doi": "10.1037/0033-2909.112.1.155",
+   "firstAuthor": "Tomlinson KA",
+   "year": 2020,
+   "journal": "Sports (Basel)",
+   "title": "The Effects of Loaded Plyometric Exercise during Warm-Up on Subsequent Sprint Performance in Collegiate Track Athletes: A Randomized Trial.",
+   "population": "Collegiate track athletes, men and women",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:32971729",
+   "doi": "10.1590/S0103-51502011000200003",
+   "firstAuthor": "Ribeiro B",
+   "year": 2020,
+   "journal": "Int J Environ Res Public Health",
+   "title": "The Role of Specific Warm-up during Bench Press and Squat Exercises: A Novel Approach.",
+   "population": "40 resistance-trained males aged 19-30",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:33080765",
+   "doi": "10.1097/MD.0000000000022837",
+   "firstAuthor": "Gokalp O",
+   "year": 2020,
+   "journal": "Medicine (Baltimore)",
+   "title": "Effects of Thrower's Ten exercises on upper extremity performance: A randomized controlled study.",
+   "population": "36 healthy sedentary adults",
+   "design": "Randomized controlled trial"
+  },
+  {
+   "id": "PMID:33324293",
+   "doi": "10.1016/j.jsams.2011.03.012",
+   "firstAuthor": "Silva N",
+   "year": 2020,
+   "journal": "Front Psychol",
+   "title": "Pre-match Warm-Up Dynamics and Workload in Elite Futsal.",
+   "population": "Elite futsal teams",
+   "design": "Observational study"
+  },
+  {
+   "id": "PMID:33524952",
+   "doi": "10.1123/ijspp.2020-0313",
+   "firstAuthor": "Yeung WV",
+   "year": 2021,
+   "journal": "Int J Sports Physiol Perform",
+   "title": "Does a Loaded Warm-Up Influence Jump Asymmetry and Badminton-Specific Change of Direction Performance?",
+   "population": "21 amateur badminton players",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:33746784",
+   "doi": "10.1519/JSC.0000000000003723",
+   "firstAuthor": "Matusiński A",
+   "year": 2021,
+   "journal": "Front Physiol",
+   "title": "The Effects of Resisted Post-Activation Sprint Performance Enhancement in Elite Female Sprinters.",
+   "population": "Elite female sprinters",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:34558993",
+   "doi": "10.1177/19417381211044736",
+   "firstAuthor": "Attwood MJ",
+   "year": 2022,
+   "journal": "Sports Health",
+   "title": "Eight Weeks of Self-Resisted Neck Strength Training Improves Neck Strength in Age-Grade Rugby Union Players: A Pilot Randomized Controlled Trial.",
+   "population": "28 under-18 male rugby union players",
+   "design": "Pilot randomized controlled trial"
+  },
+  {
+   "id": "PMID:34560586",
+   "doi": "10.1016/j.ptsp.2021.09.004",
+   "firstAuthor": "Wright AA",
+   "year": 2021,
+   "journal": "Phys Ther Sport",
+   "title": "Effectiveness of shoulder injury prevention programs in an overhead athletic population: A systematic review.",
+   "population": "7 studies of overhead athletes",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:34567373",
+   "doi": "10.70252/WMNC1089",
+   "firstAuthor": "Perez GL",
+   "year": 2021,
+   "journal": "Int J Exerc Sci",
+   "title": "Evaluation of Load Velocity Profiles with Varying Warm-up Sets and Relative Intensities.",
+   "population": "20 resistance-trained men and women",
+   "design": "Repeated-measures experiment"
+  },
+  {
+   "id": "PMID:34698232",
+   "doi": "10.5114/hm.2018.76082",
+   "firstAuthor": "Czelusniak O",
+   "year": 2021,
+   "journal": "J Funct Morphol Kinesiol",
+   "title": "Effects of Warm-Up on Sprint Swimming Performance, Rating of Perceived Exertion, and Blood Lactate Concentration: A Systematic Review.",
+   "population": "14 studies of competitive swimmers",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:34972488",
+   "doi": "10.2519/jospt.2022.10959",
+   "firstAuthor": "Emery CA",
+   "year": 2022,
+   "journal": "J Orthop Sports Phys Ther",
+   "title": "The \"SHRed Injuries Basketball\" Neuromuscular Training Warm-up Program Reduces Ankle and Knee Injury Rates by 36% in Youth Basketball.",
+   "population": "High school and club basketball players aged 11-18",
+   "design": "Quasi-experimental two-season study"
+  },
+  {
+   "id": "PMID:35412960",
+   "doi": "10.1080/02701367.2021.2007212",
+   "firstAuthor": "Kapnia AΚ",
+   "year": 2023,
+   "journal": "Res Q Exerc Sport",
+   "title": "Impact of Warm-Up on Muscle Temperature and Athletic Performance.",
+   "population": "Young adult males (study 1) and high-level basketball players (study 2)",
+   "design": "Two experimental studies"
+  },
+  {
+   "id": "PMID:35620952",
+   "doi": "10.23736/S0022-4707.22.13502-4",
+   "firstAuthor": "Chen X",
+   "year": 2023,
+   "journal": "J Sports Med Phys Fitness",
+   "title": "Meta-analysis of the intermittent time of post-activation potentiation enhancement on sprint ability.",
+   "population": "Studies of athletes and college students using squat-based potentiation",
+   "design": "Meta-analysis"
+  },
+  {
+   "id": "PMID:35627873",
+   "doi": "10.1136/bjsports-2018-099395",
+   "firstAuthor": "Ding L",
+   "year": 2022,
+   "journal": "Int J Environ Res Public Health",
+   "title": "Effectiveness of Warm-Up Intervention Programs to Prevent Sports Injuries among Children and Adolescents: A Systematic Review and Meta-Analysis.",
+   "population": "15 studies of children and adolescents",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:35641619",
+   "doi": "10.1123/ijspp.1.1.50",
+   "firstAuthor": "Đurović M",
+   "year": 2022,
+   "journal": "Sci Rep",
+   "title": "The effects of post-activation performance enhancement and different warm-up protocols on swim start performance.",
+   "population": "10 male national-level swimmers",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:35753965",
+   "doi": "10.1016/j.jphys.2022.05.019",
+   "firstAuthor": "Al Attar WSA",
+   "year": 2022,
+   "journal": "J Physiother",
+   "title": "Injury prevention programs that include balance training exercises reduce ankle injury rates among soccer players: a systematic review.",
+   "population": "4959 soccer players in randomized trials",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:35834139",
+   "doi": "10.1136/bmjsem-2018-000391",
+   "firstAuthor": "Asker M",
+   "year": 2022,
+   "journal": "Sports Med Open",
+   "title": "The Effect of Shoulder and Knee Exercise Programmes on the Risk of Shoulder and Knee Injuries in Adolescent Elite Handball Players: A Three-Armed Cluster Randomised Controlled Trial.",
+   "population": "Adolescent elite handball players aged 15-19",
+   "design": "Cluster-randomized controlled trial"
+  },
+  {
+   "id": "PMID:35903029",
+   "doi": "10.1177/19417381221109224",
+   "firstAuthor": "Al Attar WSA",
+   "year": 2023,
+   "journal": "Sports Health",
+   "title": "The FIFA 11+ Kids Injury Prevention Program Reduces Injury Rates Among Male Children Soccer Players: A Clustered Randomized Controlled Trial.",
+   "population": "740 boys' soccer players aged 7-13",
+   "design": "Cluster-randomized controlled trial"
+  },
+  {
+   "id": "PMID:35971013",
+   "doi": "10.1177/0363546514538391",
+   "firstAuthor": "Hoppe MW",
+   "year": 2022,
+   "journal": "J Exp Orthop",
+   "title": "Risk factors and prevention strategies for shoulder injuries in overhead sports: an updated systematic review.",
+   "population": "Studies of overhead-sport athletes",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:35980952",
+   "doi": "10.1007/s004210050581",
+   "firstAuthor": "McKenzie MR",
+   "year": 2022,
+   "journal": "PLoS One",
+   "title": "Swimming performance, physiology, and post-activation performance enhancement following dryland transition phase warmup: A systematic review.",
+   "population": "Swimmers aged 15 and over",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:36152058",
+   "doi": "10.1007/s00421-022-05051-w",
+   "firstAuthor": "Carmo AAL",
+   "year": 2023,
+   "journal": "Eur J Appl Physiol",
+   "title": "Active warm-up and time-of-day effects on repeated-sprint performance and post-exercise recovery.",
+   "population": "11 adult males",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:36153425",
+   "doi": "10.1177/17479541221078279",
+   "firstAuthor": "Cuenca-Fernández F",
+   "year": 2022,
+   "journal": "Sports Med Open",
+   "title": "Swimming Warm-Up and Beyond: Dryland Protocols and Their Related Mechanisms-A Scoping Review.",
+   "population": "Studies of competitive swimmers",
+   "design": "Scoping review"
+  },
+  {
+   "id": "PMID:36196355",
+   "doi": "10.2478/hukin-2022-0062",
+   "firstAuthor": "Pereira LA",
+   "year": 2022,
+   "journal": "J Hum Kinet",
+   "title": "Post-Activation Performance Enhancement in Sprinters: Effects of Hard Versus Sand Surfaces.",
+   "population": "Top-level sprinters",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:36244964",
+   "doi": "10.1016/j.jphys.2022.09.001",
+   "firstAuthor": "Al Attar WSA",
+   "year": 2022,
+   "journal": "J Physiother",
+   "title": "Injury prevention programs that include plyometric exercises reduce the incidence of anterior cruciate ligament injury: a systematic review of cluster randomised trials.",
+   "population": "Sporting participants of any age and sex",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:36264894",
+   "doi": "10.1136/bmjsem-2015-000075",
+   "firstAuthor": "Asgari M",
+   "year": 2022,
+   "journal": "PLoS One",
+   "title": "Effects of the FIFA 11+ and a modified warm-up programme on injury prevention and performance improvement among youth male football players.",
+   "population": "90 youth sub-elite soccer players (Iranian youth league)",
+   "design": "Cluster-randomized controlled trial"
+  },
+  {
+   "id": "PMID:36394564",
+   "doi": "10.1519/JSC.0000000000004378",
+   "firstAuthor": "Dann E",
+   "year": 2023,
+   "journal": "J Strength Cond Res",
+   "title": "Alternate Leg Bounding Acutely Improves Change of Direction Performance in Women's Team Sports Players Irrespective of Ground Type.",
+   "population": "Women's team-sport players",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:36543874",
+   "doi": "10.1592/phco.31.9.833",
+   "firstAuthor": "Shitara H",
+   "year": 2022,
+   "journal": "Sci Rep",
+   "title": "Shoulder stretching versus shoulder muscle strength training for the prevention of baseball-related arm injuries: a randomized, active-controlled, open-label, non-inferiority study.",
+   "population": "113 high school baseball pitchers",
+   "design": "Randomized non-inferiority trial"
+  },
+  {
+   "id": "PMID:36755560",
+   "doi": "10.23736/S0026-4946.20.05944-7.",
+   "firstAuthor": "Franchina M",
+   "year": 2023,
+   "journal": "J Child Orthop",
+   "title": "FIFA 11+ Kids: Challenges in implementing a prevention program.",
+   "population": "237 Swiss youth soccer coaches and 3 teams",
+   "design": "Survey and implementation study"
+  },
+  {
+   "id": "PMID:36875040",
+   "doi": "10.1249/01.mss.0000759644.82994.50",
+   "firstAuthor": "Hernandez-Martinez J",
+   "year": 2023,
+   "journal": "Front Physiol",
+   "title": "Warm-up stretching exercises and physical performance of youth soccer players.",
+   "population": "85 male youth soccer players (about 10 years)",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:36952649",
+   "doi": "10.1519/JSC.0000000000004476",
+   "firstAuthor": "Comfort P",
+   "year": 2023,
+   "journal": "J Strength Cond Res",
+   "title": "National Strength and Conditioning Association Position Statement on Weightlifting for Sports Performance.",
+   "population": "Athletes using weightlifting derivatives",
+   "design": "Position statement"
+  },
+  {
+   "id": "PMID:37077775",
+   "doi": "10.1080/02701367.2020.1755414",
+   "firstAuthor": "González Fernández FT",
+   "year": 2023,
+   "journal": "Biol Sport",
+   "title": "Effects of re-warm-up protocols on the physical performance of soccer players: A systematic review with meta-analysis.",
+   "population": "Studies of soccer players",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:37234064",
+   "doi": "10.2466/pms.105.3.803-826",
+   "firstAuthor": "Rumeau V",
+   "year": 2023,
+   "journal": "Sports (Basel)",
+   "title": "Post-Activation Performance Enhancement and Motor Imagery Are Efficient to Emphasize the Effects of a Standardized Warm-Up on Sprint-Running Performances.",
+   "population": "Team-sport athletes",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:37316182",
+   "doi": "10.1136/bjsports-2022-106656",
+   "firstAuthor": "Eliason PH",
+   "year": 2023,
+   "journal": "Br J Sports Med",
+   "title": "Prevention strategies and modifiable risk factors for sport-related concussions and head impacts: a systematic review and meta-analysis.",
+   "population": "Studies of concussion prevention across sports",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:37536675",
+   "doi": "10.1123/ijspp.2022-0419",
+   "firstAuthor": "Caldeira C",
+   "year": 2023,
+   "journal": "Int J Sports Physiol Perform",
+   "title": "Simultaneous Upper- and Lower-Limb Postactivation Performance Enhancement After Clean and Jerk.",
+   "population": "Trained weightlifting-experienced adults",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:37551345",
+   "doi": "10.1016/J.JSAMS.2011.03.012",
+   "firstAuthor": "Ben Brahim M",
+   "year": 2023,
+   "journal": "PeerJ",
+   "title": "The effect of three different pre-match warm-up structures on male professional soccer players' physical fitness.",
+   "population": "17 male professional soccer players",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:37812954",
+   "doi": "10.1016/j.ptsp.2023.09.006",
+   "firstAuthor": "Tooth C",
+   "year": 2023,
+   "journal": "Phys Ther Sport",
+   "title": "Prevention of shoulder injuries in volleyball players: The usefulness and efficiency of a warm-up routine.",
+   "population": "93 recreational volleyball players, 8 teams",
+   "design": "Prospective controlled study"
+  },
+  {
+   "id": "PMID:37815265",
+   "doi": "10.1519/JSC.0000000000004618",
+   "firstAuthor": "Rauseo ML",
+   "year": 2024,
+   "journal": "J Strength Cond Res",
+   "title": "Acute Effect of Dynamic and Gluteal Resistance Exercise Warm-up Protocols on Jump Landing Mechanics in College-Aged Females.",
+   "population": "College-aged females",
+   "design": "Crossover laboratory study"
+  },
+  {
+   "id": "PMID:37931620",
+   "doi": "10.1123/mc.2023-0050",
+   "firstAuthor": "Ben Ayed K",
+   "year": 2024,
+   "journal": "Motor Control",
+   "title": "High-Intensity Forward-Backward Plyometrics After the Warm-Up Entail Better Sprint and Change-of-Direction Performance Than Low-Intensity Side-to-Side Plyometrics.",
+   "population": "30 male youth volleyball players (about 12 years)",
+   "design": "Randomized crossover"
+  },
+  {
+   "id": "PMID:37955929",
+   "doi": "10.23736/S0022-4707.23.15243-1",
+   "firstAuthor": "Prince C",
+   "year": 2024,
+   "journal": "J Sports Med Phys Fitness",
+   "title": "Current warm-up practices before maximal sprinting in track-and-field (athletics).",
+   "population": "Competitive track sprinters and jumpers",
+   "design": "Cross-sectional survey"
+  },
+  {
+   "id": "PMID:38142049",
+   "doi": "10.1080/09593985.2018.1430876",
+   "firstAuthor": "Nagai T",
+   "year": 2023,
+   "journal": "Ann Med",
+   "title": "Acute effects of an isometric neck warm-up programme on neck performance characteristics and ultrasound-based morphology.",
+   "population": "26 and 24 healthy adults, both sexes",
+   "design": "Two-arm crossover laboratory study"
+  },
+  {
+   "id": "PMID:38244921",
+   "doi": "10.3390/ijerph18168756",
+   "firstAuthor": "Warneke K",
+   "year": 2024,
+   "journal": "J Sport Health Sci",
+   "title": "Foam rolling and stretching do not provide superior acute flexibility and stiffness improvements compared to any other warm-up intervention: A systematic review with meta-analysis.",
+   "population": "38 studies, 1134 participants",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:38353223",
+   "doi": "10.1080/07420528.2024.2313646",
+   "firstAuthor": "Zelenović M",
+   "year": 2024,
+   "journal": "Chronobiol Int",
+   "title": "Warm-up is an efficient strategy to prevent diurnal variation of short-term maximal performance in young basketball players.",
+   "population": "15 young basketball players of both sexes",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:38406839",
+   "doi": "10.1177/19417381241231588",
+   "firstAuthor": "Berkey R",
+   "year": 2024,
+   "journal": "Sports Health",
+   "title": "Ankle Injury Prevention Programs for Youth Sports: A Systematic Review and Meta-analysis.",
+   "population": "10 studies of youth athletes",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:38684329",
+   "doi": "10.1136/bjsports-2023-106906",
+   "firstAuthor": "Lutz D",
+   "year": 2024,
+   "journal": "Br J Sports Med",
+   "title": "Best practices for the dissemination and implementation of neuromuscular training injury prevention warm-ups in youth team sport: a systematic review.",
+   "population": "Youth team-sport implementation studies",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:38724071",
+   "doi": "10.1136/bjsports-2023-107926",
+   "firstAuthor": "Leppänen M",
+   "year": 2024,
+   "journal": "Br J Sports Med",
+   "title": "Hip and core exercise programme prevents running-related overuse injuries in adult novice recreational runners: a three-arm randomised controlled trial (Run RCT).",
+   "population": "325 adult novice recreational runners",
+   "design": "Randomized controlled trial"
+  },
+  {
+   "id": "PMID:38735533",
+   "doi": "10.1371/journal.pone.0295571",
+   "firstAuthor": "Warneke K",
+   "year": 2024,
+   "journal": "J Sport Health Sci",
+   "title": "Revisiting the stretch-induced force deficit: A systematic review with multilevel meta-analysis of acute effects.",
+   "population": "Controlled pre-post trials, mostly adults",
+   "design": "Multilevel meta-analysis"
+  },
+  {
+   "id": "PMID:38842825",
+   "doi": "10.1080/02701367.2024.2343361",
+   "firstAuthor": "Jimenez-Garcia JA",
+   "year": 2024,
+   "journal": "Res Q Exerc Sport",
+   "title": "Feasibility and Effects of a Neuromuscular Warm-Up Based on the Physical Literacy Model for 8-12-Year-Old-Children.",
+   "population": "363 children aged 8-12",
+   "design": "Cluster non-randomized controlled trial"
+  },
+  {
+   "id": "PMID:39026353",
+   "doi": "10.5812/asjsm.61013",
+   "firstAuthor": "Ramos AP",
+   "year": 2024,
+   "journal": "J Orthop Surg Res",
+   "title": "FIFA 11+ KIDS in the prevention of soccer injuries in children: a systematic review.",
+   "population": "Studies of child soccer players",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:39060296",
+   "doi": "10.1016/j.clinph.2010.01.014",
+   "firstAuthor": "Li J",
+   "year": 2024,
+   "journal": "Sci Rep",
+   "title": "The impact of post-activation potentiation on explosive vertical jump after intermittent time: a meta-analysis and systematic review.",
+   "population": "21 studies, 327 participants",
+   "design": "Meta-analysis"
+  },
+  {
+   "id": "PMID:39149053",
+   "doi": "10.1016/j.heliyon.2024.e34827",
+   "firstAuthor": "Yang WC",
+   "year": 2024,
+   "journal": "Heliyon",
+   "title": "Effect of different resistance increments during warm-up on the snatch performance of male weightlifters.",
+   "population": "9 male college weightlifters",
+   "design": "Randomized crossover"
+  },
+  {
+   "id": "PMID:39360984",
+   "doi": "10.23736/S0022-4707.24.15910-5",
+   "firstAuthor": "Althomali OW",
+   "year": 2025,
+   "journal": "J Sports Med Phys Fitness",
+   "title": "The FIFA 11+ injury prevention program reduces the incidence of lower extremity injuries in football players: a systematic review and meta-analysis.",
+   "population": "12 trials of football players",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:39444072",
+   "doi": "10.1111/sms.14747",
+   "firstAuthor": "Cuenca-Fernández F",
+   "year": 2024,
+   "journal": "Scand J Med Sci Sports",
+   "title": "Is Warm-Up Preservation Modulated by Biological Maturation and Sex? Effects on Lower Limbs Performance.",
+   "population": "Swimmers from pre-puberty to adulthood, both sexes",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:39481367",
+   "doi": "10.1123/pes.2023-0187",
+   "firstAuthor": "Al Attar WSA",
+   "year": 2025,
+   "journal": "Pediatr Exerc Sci",
+   "title": "Effectiveness of FIFA 11+ Injury Prevention Programs in Reducing Head and Neck Injuries, Including Concussion, Among Soccer Players: A Systematic Review and Meta-Analysis.",
+   "population": "4 RCTs, 7109 soccer players",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:39545620",
+   "doi": "10.1080/02640414.2024.2415215",
+   "firstAuthor": "Paravlic AH",
+   "year": 2024,
+   "journal": "J Sports Sci",
+   "title": "The effectiveness of neuromuscular training warm-up program for injury prevention in adolescent male basketball players.",
+   "population": "275 adolescent male basketball players (about 15 years)",
+   "design": "Randomized controlled trial"
+  },
+  {
+   "id": "PMID:39689010",
+   "doi": "10.1080/02701367.2024.2434142",
+   "firstAuthor": "Chaves Lucas G",
+   "year": 2025,
+   "journal": "Res Q Exerc Sport",
+   "title": "Comparison between Warm-Up Protocols in Post-Activation Potentiation Enhancement (PAPE) of Sprint and Vertical Jump Performance in a Female Futsal Team.",
+   "population": "25 female university futsal players",
+   "design": "Randomized experiment"
+  },
+  {
+   "id": "PMID:39796918",
+   "doi": "10.1590/s1980-6574201600040013",
+   "firstAuthor": "Cieśluk K",
+   "year": 2024,
+   "journal": "Sensors (Basel)",
+   "title": "Assessing Changes in Reaction Time Following RAMP Warm-Up and Short-Term Repeated Volleyball Specific Exercise in Young Players.",
+   "population": "18 adolescent volleyball players (about 15.6 years)",
+   "design": "Repeated-measures experiment"
+  },
+  {
+   "id": "PMID:39840133",
+   "doi": "10.1249/JSR.0b013e31829a68cf",
+   "firstAuthor": "Lee HY",
+   "year": 2024,
+   "journal": "Front Bioeng Biotechnol",
+   "title": "Effects of different warm-up methods on 50-meter breaststroke swimming performance.",
+   "population": "18 intercollegiate swimmers",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:39947194",
+   "doi": "10.1123/ijspp.2024-0458",
+   "firstAuthor": "Baiget E",
+   "year": 2025,
+   "journal": "Int J Sports Physiol Perform",
+   "title": "Effects of Postactivation Performance Enhancement From Upper-Body Flywheel Overload on Tennis-Serve Performance.",
+   "population": "15 young competitive tennis players",
+   "design": "Randomized crossover"
+  },
+  {
+   "id": "PMID:39982921",
+   "doi": "10.1111/j.1469-8986.1979.tb01511.x",
+   "firstAuthor": "Hammami A",
+   "year": 2025,
+   "journal": "PLoS One",
+   "title": "Effects of neuromuscular versus stretching training performed during the warm-up on measures of physical fitness and mental well-being in highly-trained pubertal male soccer players.",
+   "population": "Highly trained pubertal male soccer players",
+   "design": "Randomized controlled trial"
+  },
+  {
+   "id": "PMID:40051003",
+   "doi": "10.1177/0363546505281241",
+   "firstAuthor": "Su W",
+   "year": 2025,
+   "journal": "J Orthop Surg Res",
+   "title": "Injury risk reduction programs including balance training reduce the incidence of anterior cruciate ligament injuries in soccer players: a systematic review and meta-analysis.",
+   "population": "Soccer players in randomized trials",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:40084177",
+   "doi": "10.1136/bjsm.36.6.436",
+   "firstAuthor": "Alhazmi M",
+   "year": 2025,
+   "journal": "PeerJ",
+   "title": "Effectiveness of FIFA injury prevention programs in reducing ankle injuries among football players: a systematic review.",
+   "population": "5 RCTs of football players",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:40313475",
+   "doi": "10.1177/17585732251335933",
+   "firstAuthor": "Asal B",
+   "year": 2026,
+   "journal": "Shoulder Elbow",
+   "title": "Assessing Thrower's Ten program's effect on shoulder flexibility, stability, and strength in water polo athletes.",
+   "population": "46 water polo athletes, mean age about 17",
+   "design": "Randomized controlled trial"
+  },
+  {
+   "id": "PMID:40463321",
+   "doi": "10.2478/hukin-2019-0043",
+   "firstAuthor": "Silva N",
+   "year": 2025,
+   "journal": "J Hum Kinet",
+   "title": "Effects of Different Post Warm-Up Strategies for Non-Starter Players in Futsal.",
+   "population": "13 highly trained male futsal players",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:40630396",
+   "doi": "10.1007/s11332-025-01341-w",
+   "firstAuthor": "Girginer FG",
+   "year": 2025,
+   "journal": "Front Physiol",
+   "title": "Acute effects of the RAMP warm-up on sprint and jump performance in youth soccer players.",
+   "population": "14 male amateur soccer players aged 16-22",
+   "design": "Randomized crossover"
+  },
+  {
+   "id": "PMID:40873761",
+   "doi": "10.1519/jsc.0000000000001227",
+   "firstAuthor": "Chen W",
+   "year": 2025,
+   "journal": "Front Physiol",
+   "title": "Post-activation performance enhancement in resisted sprinting: effects of different loads and rest intervals on 100-m sprint segments.",
+   "population": "10 male college sprinters",
+   "design": "Randomized crossover"
+  },
+  {
+   "id": "PMID:41061498",
+   "doi": "10.1016/j.jtherbio.2025.104288",
+   "firstAuthor": "Cowper G",
+   "year": 2025,
+   "journal": "J Therm Biol",
+   "title": "The impact of heated garments on substitute performance in soccer match-play.",
+   "population": "10 trained male soccer players",
+   "design": "Crossover experiment"
+  },
+  {
+   "id": "PMID:41135970",
+   "doi": "10.1136/bmjsem-2017-000317",
+   "firstAuthor": "Heming EE",
+   "year": 2025,
+   "journal": "Br J Sports Med",
+   "title": "Prevention strategies and modifiable risk factors for upper extremity injury: a systematic review and meta-analysis for the Female, woman and/or girl Athlete Injury pRevention (FAIR) consensus.",
+   "population": "Studies including female athletes, youth and adult",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:41151771",
+   "doi": "10.1055/a-2734-1436",
+   "firstAuthor": "Zecchin A",
+   "year": 2026,
+   "journal": "Int J Sports Med",
+   "title": "The Effects of Different Warm-Up Exercises on Throwing Velocity in Handball Players.",
+   "population": "16 under-22 elite male handball players",
+   "design": "Randomized crossover"
+  },
+  {
+   "id": "PMID:41175154",
+   "doi": "10.2519/jospt.2015.4986",
+   "firstAuthor": "Gu J",
+   "year": 2025,
+   "journal": "Ann Med",
+   "title": "Neuromuscular training for preventing knee injuries in female team athletes: a meta-analysis.",
+   "population": "Female team-sport athletes",
+   "design": "Meta-analysis of RCTs"
+  },
+  {
+   "id": "PMID:41195963",
+   "doi": "10.1111/sms.70162",
+   "firstAuthor": "Olsen OR",
+   "year": 2025,
+   "journal": "Scand J Med Sci Sports",
+   "title": "Post-Activation Performance Enhancement in Strength and Power Sports-A Narrative Review.",
+   "population": "Strength and power athletes",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:41280985",
+   "doi": "10.7759/cureus.95081",
+   "firstAuthor": "Patel P",
+   "year": 2025,
+   "journal": "Cureus",
+   "title": "Rehabilitative and Preventive Effects of the Thrower's Ten Program in Overhead Athletes: A Systematic Review.",
+   "population": "Mixed overhead athletes including youth",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:41316595",
+   "doi": "10.1016/j.jbmt.2025.08.023",
+   "firstAuthor": "Alvacite Cardenas D",
+   "year": 2025,
+   "journal": "J Bodyw Mov Ther",
+   "title": "Does strengthening the cervical spine musculature enhance neck strength and reduce sports-related concussions in rugby and football players? A systematic literature review.",
+   "population": "Studies of rugby and soccer players",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:41451616",
+   "doi": "10.1002/ksa.70256",
+   "firstAuthor": "Kayaalp ME",
+   "year": 2026,
+   "journal": "Knee Surg Sports Traumatol Arthrosc",
+   "title": "Adherence as the key to anterior cruciate ligament injury prevention programme success: From efficacy to effectiveness.",
+   "population": "Youth, amateur and elite sport",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:41940018",
+   "doi": "10.3389/fphys.2019.00947",
+   "firstAuthor": "Zhu C",
+   "year": 2026,
+   "journal": "Front Physiol",
+   "title": "Effects of neuromuscular warm-up on athletes' change-of-direction performance and knee isokinetic muscle strength: a systematic review and meta-analysis.",
+   "population": "Athletes in controlled trials of neuromuscular warm-ups",
+   "design": "Three-level meta-analysis"
+  },
+  {
+   "id": "PMID:42226251",
+   "doi": "10.1080/02701367.2024.2434142",
+   "firstAuthor": "Zheng Z",
+   "year": 2026,
+   "journal": "BMC Sports Sci Med Rehabil",
+   "title": "Effects of post-activation performance enhancement added to general warm-up on jump, sprint, and change-of-direction performance in competitive athletes: a systematic review and meta-analysis.",
+   "population": "Trained and competitive athletes",
+   "design": "Systematic review with meta-analysis"
+  },
+  {
+   "id": "PMID:43054139",
+   "doi": "10.1371/journal.pone.0277432",
+   "firstAuthor": "Xiang L",
+   "year": 2026,
+   "journal": "Front Physiol",
+   "title": "Acute effects of back squat and barbell hip thrust post-activation performance enhancement protocols on jumping, change-of-direction, and sprint performance in male collegiate basketball athletes.",
+   "population": "20 male collegiate players",
+   "design": "Randomized crossover"
+  }
+ ],
+ "notes": "All sources fetched from PubMed E-utilities this session; abstracts read, none flagged retracted (PMID 40827942 was excluded because PubMed listed it with a retraction publication type). Evidence on Olympic-lift catch-position mobility and wrist/elbow-specific warm-ups is thin in the fetched literature."
+}

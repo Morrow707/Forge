@@ -24,7 +24,8 @@ import { eq, isNull, and, asc, sql } from "drizzle-orm";
 import { normalizeInjuryRegion } from "@shared/injury-taxonomy";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
 import { seedForgeClasses } from "./seed-forge-classes";
-import { COACHES_CORNER_TRACKS_2026_10, COACHES_CORNER_TRACKS_2026_10_04, COACHES_CORNER_PATHS_2026_10 } from "./seed-data/coaches-corner";
+import { COACHES_CORNER_TRACKS_2026_10, COACHES_CORNER_TRACKS_2026_10_04, COACHES_CORNER_TRACKS_2026_11, COACHES_CORNER_PATHS_2026_10 } from "./seed-data/coaches-corner";
+import { seedResearchReview } from "./seed-research-review";
 import { COACHES_CORNER_TRACKS_ORIGINAL } from "./seed-data/coaches-corner/original-seven";
 import { resyncRepoTrackLessons } from "./seed-coaches-corner-lessons";
 import type { SeedAcademyTrack } from "./seed-data/coaches-corner/types";
@@ -4903,6 +4904,8 @@ async function main() {
     seedAcademyTracks.push(...COACHES_CORNER_TRACKS_2026_10);
     // The eleven tracks added 2026-10-04 (the rest of the field, Forge's own syllabus) follow.
     seedAcademyTracks.push(...COACHES_CORNER_TRACKS_2026_10_04);
+    // The seven tracks added 2026-11-22, written from Forge's own research review, follow.
+    seedAcademyTracks.push(...COACHES_CORNER_TRACKS_2026_11);
     seedAcademyPathsAfterTracks = true;
 
     for (const track of seedAcademyTracks) {
@@ -4938,6 +4941,14 @@ async function main() {
     if (seedAcademyPathsAfterTracks) {
       for (const path of COACHES_CORNER_PATHS_2026_10) await storage.ensureAcademyPath(path);
     }
+  }
+
+  // Forge's own research review (2026-11-22) in the AI knowledge library: one passage per
+  // finding, licensed for derived content, written once and rewritten only when the review's
+  // text changes. See server/seed-research-review.ts.
+  {
+    const review = await seedResearchReview(forgeOwner.id);
+    console.log(`Research review in the knowledge library: ${review.action} (source ${review.sourceId}, ${review.passages} passages).`);
   }
 
   // Looked up system-wide (not scoped to this coach), same reasoning as the

@@ -1,0 +1,2246 @@
+{
+ "group": "C",
+ "generated": "2026-11-22",
+ "sports": [
+  {
+   "sport": "Track sprints and hurdles",
+   "demands": [
+    {
+     "finding": "The 100 m is mostly anaerobic but not entirely: measured on a track, roughly a fifth to a quarter of the energy in a 100 m and about a quarter to a third in a 200 m came from aerobic metabolism (depending on method). Short sprints still need a phosphocreatine and glycolytic emphasis, while the 200 m and 400 m add more aerobic demand.",
+     "sources": [
+      "PMID:15518295"
+     ]
+    },
+    {
+     "finding": "Getting stronger in the squat carries over to sprinting: across 15 training studies the size of the squat-strength gain was very strongly tied to the size of the sprint gain (r = -0.77), with an average sprint improvement of about 3%. More sessions per week and longer rests between sets were linked to bigger sprint gains.",
+     "sources": [
+      "PMID:25059334"
+     ]
+    },
+    {
+     "finding": "Horizontal jump tests track sprint ability in trained adults: standing long jump and especially multiple (bounding) jumps correlate moderately with acceleration and very strongly with top speed (r about -0.73 to -0.76 for maximal speed). Bounding tests are a cheap field marker for sprinters.",
+     "sources": [
+      "PMID:36748088"
+     ]
+    },
+    {
+     "finding": "Sled (resisted) sprinting beats plain sprinting for acceleration only when the load is meaningful: loads of about 20% of body mass or more (or slowing the athlete more than 10%) improved sprint times beyond unresisted sprinting, light loads did not. The benefit was mostly in the first 5 m and was larger in trained athletes than in recreational ones.",
+     "sources": [
+      "PMID:41384676"
+     ]
+    },
+    {
+     "finding": "In youth athletes aged 6-18, resistance training has moderate effects on strength and jumping and smaller effects on linear sprint; the strength gains were largest with longer programmes (over 23 weeks), about 5 sets of 6-8 reps at 80-89% of 1RM and 3-4 min rest.",
+     "sources": [
+      "PMID:26851290"
+     ]
+    },
+    {
+     "finding": "In 13-year-old male track athletes, countermovement jump height and 50 m sprint time were the most useful tests for projecting 60 m and long jump results, and athletes past their growth spurt (post-peak height velocity) were far faster than those before or during it. Maturity status must be considered before judging a young sprinter's results.",
+     "sources": [
+      "PMID:39406358"
+     ]
+    },
+    {
+     "finding": "Hurdling is a sprint with repeated take-offs: in world-class finalists the men's hurdle is about 7% higher relative to body height than the women's, so men take off closer, fly higher and lose more step length and smoothness. Hurdlers need sprint speed plus hip mobility and take-off power over a fixed rhythm.",
+     "sources": [
+      "PMID:34308350"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "In US high school track running events (2008-2019), sprints produced the most injuries (1507), then distance (712) and hurdles (391). Thigh (35%) and lower leg (20%) were the commonest sites and muscle strain (42%) the commonest type. Avulsion fractures were most typical of sprints and concussions of hurdles.",
+     "sources": [
+      "PMID:42181777"
+     ]
+    },
+    {
+     "finding": "High school running-event injury rates were about twice as high in competition as practice; girls had higher rates in practice (about 1.6x) and boys higher in competition (about 3x). Recurrent injuries made up a larger share of chronic injuries.",
+     "sources": [
+      "PMID:42181777"
+     ]
+    },
+    {
+     "finding": "At international athletics championships, thigh strain was the single most frequent diagnosis (28% of injuries), and short-distance events produced about a third of in-competition time-loss injuries.",
+     "sources": [
+      "PMID:24620039"
+     ]
+    },
+    {
+     "finding": "Across all athletics studies the thigh is the most injured region (then lower leg, foot, ankle) and muscle is the most injured tissue, which in sprint events mainly means hamstring strains.",
+     "sources": [
+      "PMID:41644276"
+     ]
+    },
+    {
+     "finding": "Across sports, the strongest risk factors for a hamstring strain are a previous hamstring strain (about 2.7x risk; a recent one about 4.8x), older age, prior ACL injury and prior calf strain. Running exposure and hamstring strength were the most consistently linked modifiable factors.",
+     "sources": [
+      "PMID:32299793"
+     ]
+    },
+    {
+     "finding": "In elite Swedish sprinters and jumpers, hamstring injuries that involved the proximal free tendon took much longer to return from (about 73 vs 31 days on the better protocol), so injury location changes the timeline.",
+     "sources": [
+      "PMID:24620041"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "100/200 m sprinters",
+     "differences": [
+      "Mostly anaerobic energy with a meaningful aerobic share (about 20-33% depending on distance and sex), so training emphasises maximal speed, acceleration and strength (PMID:15518295, PMID:25059334).",
+      "Highest raw injury count and hamstring/avulsion pattern in high school (PMID:42181777)."
+     ]
+    },
+    {
+     "position": "Hurdlers",
+     "differences": [
+      "Repeated take-offs over fixed spacing; the relatively higher men's hurdle demands more vertical lift and changes rhythm (PMID:34308350).",
+      "Falls make concussion the signature high school hurdles injury, so falling technique and surfaces matter (PMID:42181777)."
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "Including the Nordic hamstring exercise in a programme roughly halves hamstring injuries across sports and ages (pooled risk ratio 0.49; 0.52 in RCTs only).",
+     "exercises": [
+      "Nordic hamstring exercise"
+     ],
+     "dose": "Part of a team or group programme; volumes varied across the 15 studies",
+     "effect": "About 51% fewer hamstring injuries (RR 0.49, 95% CI 0.32-0.74)",
+     "sources": [
+      "PMID:30808663"
+     ]
+    },
+    {
+     "finding": "Low-volume Nordic programmes build eccentric strength and lengthen biceps femoris fascicles about as much as high-volume ones after 6 or more weeks, which helps compliance.",
+     "exercises": [
+      "Nordic hamstring exercise"
+     ],
+     "dose": "At least 6 weeks; lower weekly volumes worked as well as high volumes",
+     "effect": "Very large strength (g about 2.1-2.3) and fascicle length (g 2.6 or more) gains either way",
+     "sources": [
+      "PMID:31502142"
+     ]
+    },
+    {
+     "finding": "In adult athletes, eccentric hamstring training reduced hamstring injury incidence by about 57-70% and improved eccentric strength, fascicle length and the functional hamstring-to-quadriceps ratio; sprint training also lengthened fascicles.",
+     "exercises": [
+      "Nordic hamstring exercise",
+      "other eccentric hamstring work",
+      "sprint training"
+     ],
+     "dose": "Varied across RCTs",
+     "effect": "Injury incidence reduced 56.8%-70.0%",
+     "sources": [
+      "PMID:35384731"
+     ]
+    },
+    {
+     "finding": "In a Japanese collegiate sprint programme over 24 seasons, a prevention approach that used a small number of supramaximal runs under controlled fatigue was associated with hamstring injuries during supramaximal running falling from 137.9 to 6.7 (study rate per athlete-seasons) across three programme periods, while injuries in submaximal running did not change.",
+     "exercises": [
+      "Controlled number of supramaximal sprints",
+      "fatigue management in sprint sessions"
+     ],
+     "dose": "Few supramaximal runs per session",
+     "effect": "Large drop across programme periods (observational)",
+     "sources": [
+      "PMID:35954732"
+     ]
+    },
+    {
+     "finding": "Single-exercise eccentric programmes have the strongest evidence for preventing first and repeat hamstring strains when athletes actually do them; evidence that lumbo-pelvic or core stability training prevents hamstring strains is thin.",
+     "exercises": [
+      "Nordic hamstring exercise",
+      "eccentric hamstring exercises"
+     ],
+     "dose": "Requires adequate compliance",
+     "effect": "Effective when compliance is adequate (narrative)",
+     "sources": [
+      "PMID:29143267"
+     ]
+    },
+    {
+     "finding": "After a hamstring injury in sprinters and jumpers, a rehab protocol built on lengthening (eccentric, long-muscle-length) exercises returned athletes to full training in about 49 days versus 86 days with conventional exercises.",
+     "exercises": [
+      "Lengthening-type hamstring exercises (e.g. the Askling L-protocol)"
+     ],
+     "dose": "Through rehab until return to full training",
+     "effect": "About 37 fewer days to return; two re-injuries, both in the conventional group",
+     "sources": [
+      "PMID:24620041"
+     ]
+    },
+    {
+     "finding": "A general exercise-based athletics prevention programme only appears to help once it has been done for about 5-6 weeks or more; analyses that ignored this early period showed no effect, while controlling for it showed odds of injury cut by roughly 63-72%. Unsupervised delivery had very poor compliance.",
+     "exercises": [
+      "Athletics Injury Prevention Programme (multi-exercise)"
+     ],
+     "dose": "Twice a week; benefit appeared after 5-6 weeks and plateaued at 7-12 weeks",
+     "effect": "OR about 0.28-0.37 after the early period; null overall in the main trial",
+     "sources": [
+      "PMID:39232249",
+      "PMID:34769849"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "In competitive sprinters, conditioning activities in the warm-up (plyometrics, heavy lifts, resisted or assisted sprints) did not reliably make sprints faster (pooled SMD 0.16, not significant). Sprint speed in trained sprinters is very stable, so a normal progressive warm-up with build-up sprints is the base.",
+     "sources": [
+      "PMID:38823792"
+     ]
+    },
+    {
+     "finding": "Across mixed populations, a conditioning activity before explosive work gives a moderate boost to sprinting (ES 0.51); the effect is larger in stronger, more experienced lifters, after plyometric or multi-set activities, and with longer rest before the effort.",
+     "sources": [
+      "PMID:26508319"
+     ]
+    },
+    {
+     "finding": "Static stretching in the warm-up causes a small loss in isolated muscle strength, larger with 60 s or more per stretch, but did not harm sprint or jump performance overall. Short static stretches inside a full warm-up are acceptable; long holds right before maximal efforts are best avoided.",
+     "sources": [
+      "PMID:38735533"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "In 13-year-old track athletes, those past peak height velocity were much faster and jumped further than those before or at it, so young sprinters should be compared within maturity groups.",
+     "sources": [
+      "PMID:39406358"
+     ]
+    },
+    {
+     "finding": "Avulsion fractures (a tendon pulling off growth-plate bone) were a characteristic sprint injury in high school athletes, which reflects the vulnerability of growing apophyses to explosive starts.",
+     "sources": [
+      "PMID:42181777"
+     ]
+    },
+    {
+     "finding": "Resistance training in youth athletes is effective and safe when supervised and progressed; heavier loads with fewer reps gave the best strength gains in 6-18 year-olds.",
+     "sources": [
+      "PMID:26851290",
+      "PMID:24055781"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "Track jumps (long, triple, high, pole vault)",
+   "demands": [
+    {
+     "finding": "Pole vault height rises almost linearly with run-up speed (about 0.5 m higher per 1 m/s faster in one experienced vaulter), so sprint speed on the runway is the main physical quality, backed by take-off and pole-support strength.",
+     "sources": [
+      "PMID:24149197"
+     ]
+    },
+    {
+     "finding": "In elite high jumpers, successful attempts had a faster horizontal speed at the last foot contact, less backward lean and a shorter final ground contact than failed attempts at the same height; the run-up sets up the take-off.",
+     "sources": [
+      "PMID:38380076"
+     ]
+    },
+    {
+     "finding": "For youth long jumpers, countermovement jump height and sprint speed were the most useful predictors of competition long jump distance, and both depend strongly on maturity status.",
+     "sources": [
+      "PMID:39406358"
+     ]
+    },
+    {
+     "finding": "Bounding and standing long jump distance correlate strongly with sprint speed in trained adults, which fits the shared speed-power demand of horizontal jumpers.",
+     "sources": [
+      "PMID:36748088"
+     ]
+    },
+    {
+     "finding": "Plyometric and strength training in youth athletes improves vertical jump moderately; programmes with heavier loads and more volume over longer periods gave the largest strength gains.",
+     "sources": [
+      "PMID:26851290"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "In US high school jumping events (2008-2019), the rate was 1.33 injuries per 10,000 athlete-exposures; thigh (20%), ankle (18%), knee (16%) and lower leg (11%) were most often hurt, and muscle strains (29%) and ligament sprains (21%) were the commonest types. Most athletes were back within 1-3 weeks; about 5% needed surgery.",
+     "sources": [
+      "PMID:39158839"
+     ]
+    },
+    {
+     "finding": "High school jumpers were injured about 2.6 times more often in competition than in practice; girls had about 1.5x higher practice injury rates than boys and a larger share of ankle injuries and ligament sprains.",
+     "sources": [
+      "PMID:39158839"
+     ]
+    },
+    {
+     "finding": "In international combined events, the jumps were the riskiest disciplines: pole vault and high jump in decathlon and long jump in heptathlon had the highest injury rates per start.",
+     "sources": [
+      "PMID:41055125"
+     ]
+    },
+    {
+     "finding": "Catastrophic pole vault injuries in the US (1982-1998) were almost all head injuries in males averaging 17.5 years; half were fatal. The main mechanisms were landing with the head off the pad, falling into the vault box after stalling, and missing the pad entirely.",
+     "sources": [
+      "PMID:11206256"
+     ]
+    },
+    {
+     "finding": "In national-level French vaulters (including U17 and U20), certain run-up and take-off patterns (lower take-off grip height, more stride adjustments and stride-length variation near the box) were associated with more injuries in the previous year.",
+     "sources": [
+      "PMID:33344944"
+     ]
+    },
+    {
+     "finding": "Patellar tendinopathy (jumper's knee) is common in jumping sports; associated factors include higher training volume, higher body weight and greater jump height, while ankle dorsiflexion and thigh flexibility have limited or conflicting evidence as risk factors.",
+     "sources": [
+      "PMID:30054341"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Long and triple jump",
+     "differences": [
+      "Speed-dominant horizontal take-off; sprint and bounding qualities predict performance (PMID:36748088, PMID:39406358).",
+      "Long jump had the highest per-start injury rate in heptathlon (PMID:41055125)."
+     ]
+    },
+    {
+     "position": "High jump",
+     "differences": [
+      "Curved run-up and vertical take-off; last-step speed and short final contact distinguish success (PMID:38380076)."
+     ]
+    },
+    {
+     "position": "Pole vault",
+     "differences": [
+      "Run-up speed is the main driver of height (PMID:24149197).",
+      "Unique catastrophic head-injury risk from landings; pad coverage and surrounding surfaces are the main safety levers (PMID:11206256)."
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "Nordic hamstring work halves hamstring injury rates across sports; thigh muscle strains are the most common jumping injury in high school, so the same approach applies to jumpers.",
+     "exercises": [
+      "Nordic hamstring exercise"
+     ],
+     "dose": "Ongoing within a weekly programme; low volumes are effective after 6 weeks",
+     "effect": "About 51% fewer hamstring injuries",
+     "sources": [
+      "PMID:30808663",
+      "PMID:31502142",
+      "PMID:39158839"
+     ]
+    },
+    {
+     "finding": "For pole vault the published preventive measures are environmental: bigger landing pads and soft surfaces around them, plus planting and take-off technique that avoids stalling.",
+     "exercises": [
+      "Landing-pad coverage",
+      "run-up and take-off technique work"
+     ],
+     "dose": "Not applicable (equipment and rules)",
+     "effect": "Not quantified; based on injury mechanisms",
+     "sources": [
+      "PMID:11206256",
+      "PMID:33344944"
+     ]
+    },
+    {
+     "finding": "Multi-exercise warm-up/prevention programmes cut injuries in children and adolescents by about a third, mainly when compliance is good; ankle sprains are a leading jumping injury, especially in girls.",
+     "exercises": [
+      "Neuromuscular warm-up programmes (balance, landing, strength, plyometric)"
+     ],
+     "dose": "Regular use before sessions; compliance moderated the effect",
+     "effect": "Injury rate ratio 0.64 (36% fewer injuries)",
+     "sources": [
+      "PMID:35627873",
+      "PMID:39158839"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "Injury-prevention warm-up programmes reduced upper- and lower-limb injuries by about 36% in children and adolescents.",
+     "sources": [
+      "PMID:35627873"
+     ]
+    },
+    {
+     "finding": "A conditioning activity before jumps gives a small performance boost (ES 0.29), more so in stronger athletes and after plyometric conditioning with adequate rest.",
+     "sources": [
+      "PMID:26508319"
+     ]
+    },
+    {
+     "finding": "Short static stretching in a full warm-up did not impair jump performance (a small positive effect on jumping was even found in adults); only long holds of 60 s or more reduce isolated strength.",
+     "sources": [
+      "PMID:38735533"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "High school girls in jumping events have higher practice injury rates and more ankle sprains than boys, so balance and landing work deserve priority for them.",
+     "sources": [
+      "PMID:39158839"
+     ]
+    },
+    {
+     "finding": "Catastrophic pole vault injuries occurred in teenagers (average 17.5 years), so supervision, pad standards and progression of pole and grip are critical at high school level.",
+     "sources": [
+      "PMID:11206256"
+     ]
+    },
+    {
+     "finding": "Maturity status strongly affects young jumpers' performance; compare and progress them by growth stage rather than age alone.",
+     "sources": [
+      "PMID:39406358",
+      "PMID:32961300"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "Track throws (shot put, discus, javelin)",
+   "demands": [
+    {
+     "finding": "Throwing distance depends on lean body mass, neural activation of the prime movers and the share of fast-twitch (type II) muscle area; long-term training develops all three.",
+     "sources": [
+      "PMID:34067149"
+     ]
+    },
+    {
+     "finding": "All throws use the kinetic chain, transferring energy from the legs through pelvis and trunk to the arm and implement; a break in the chain both lowers performance and raises injury risk.",
+     "sources": [
+      "PMID:29135636"
+     ]
+    },
+    {
+     "finding": "In high school shot putters, distance correlated strongly with broad jump (r 0.89), 1RM squat (0.90), 1RM bench (0.87) and 40-yard dash (-0.86). Strength, power and speed all matter for young throwers.",
+     "sources": [
+      "PMID:36582969"
+     ]
+    },
+    {
+     "finding": "In collegiate throwers, maximal isometric strength (mid-thigh pull) was strongly related to power output even at light loads, and power snatch was strongly related to shot put and weight throw distance.",
+     "sources": [
+      "PMID:14636111"
+     ]
+    },
+    {
+     "finding": "A 25-week periodised programme (hypertrophy/strength, then strength/power, then power/speed) improved competition throwing by about 11%, snatch and squat 1RM by about 10%, and gains in snatch and shot throws tracked gains in competition performance.",
+     "sources": [
+      "PMID:34319943"
+     ]
+    },
+    {
+     "finding": "Release speed is the key javelin factor, and up to 70% of it is produced in the final 0.1 s; body position at final foot strike and transfer of momentum from lower to upper body determine success.",
+     "sources": [
+      "PMID:8784963"
+     ]
+    },
+    {
+     "finding": "In javelin throwers, transferring energy from the thorax to the throwing arm (rather than generating it at the shoulder) gave higher release speed with lower joint load, so trunk-driven technique protects the shoulder and elbow.",
+     "sources": [
+      "PMID:37744222"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "In US high school throws (2008-2019) there were 267 injuries over the study period; the shoulder (22%), ankle (17%) and knee (12%) were most often hurt and strains (26%) and sprains (25%) were the commonest types. Girls had about 1.5x higher practice injury rates, and prior injury made up a large share of chronic injuries.",
+     "sources": [
+      "PMID:38818973"
+     ]
+    },
+    {
+     "finding": "At international championships the upper extremity was the main injured region in throwers, unlike runners.",
+     "sources": [
+      "PMID:24620039"
+     ]
+    },
+    {
+     "finding": "Javelin throwers can suffer elbow ulnar collateral ligament (UCL) tears needing reconstruction; in one series of college and high school javelin throwers return to the previous level took about 15 months.",
+     "sources": [
+      "PMID:21926384"
+     ]
+    },
+    {
+     "finding": "In a later series of javelin throwers after UCL reconstruction, only 62.5% returned to play (about 12 months), which is lower than reported for baseball pitchers.",
+     "sources": [
+      "PMID:34687920"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Shot put and discus",
+     "differences": [
+      "Rotational/glide power from legs and trunk; strength and lean mass strongly predict distance (PMID:36582969, PMID:34067149)."
+     ]
+    },
+    {
+     "position": "Javelin",
+     "differences": [
+      "Overhead throw with a run-up; elbow UCL and shoulder are the event-specific risks (PMID:21926384, PMID:34687920).",
+      "Energy transfer through the trunk lowers arm joint load (PMID:37744222)."
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "The cornerstone of throwing injury prevention in the published review is proper technique that keeps the kinetic chain intact; no event-specific prevention trials were found in the fetched literature.",
+     "exercises": [
+      "Technique work",
+      "whole-chain strength (legs, trunk, shoulder)"
+     ],
+     "dose": "Not quantified",
+     "effect": "Not quantified (expert review)",
+     "sources": [
+      "PMID:29135636",
+      "PMID:37744222"
+     ]
+    },
+    {
+     "finding": "Girls with a prior injury stood out in high school throws data, so return-to-throw progression after injury is a priority.",
+     "exercises": [
+      "Graded return-to-throwing progressions"
+     ],
+     "dose": "Not quantified",
+     "effect": "Not quantified (descriptive data)",
+     "sources": [
+      "PMID:38818973"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "A conditioning activity before throwing gives a small boost to throw and upper-body ballistic performance (ES about 0.23-0.26), larger in stronger athletes.",
+     "sources": [
+      "PMID:26508319"
+     ]
+    },
+    {
+     "finding": "Structured warm-up programmes reduce upper- and lower-limb injuries in youth sport by about a third.",
+     "sources": [
+      "PMID:35627873"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "High school girls in throwing events had higher practice injury rates than boys, and recurrent injuries were overrepresented among chronic ones.",
+     "sources": [
+      "PMID:38818973"
+     ]
+    },
+    {
+     "finding": "Javelin UCL reconstruction has been reported in high school athletes, so throw volume and technique in young javelin throwers warrant care.",
+     "sources": [
+      "PMID:21926384"
+     ]
+    },
+    {
+     "finding": "Strength, jump and sprint scores are strongly tied to high school shot put distance, supporting general strength training for young throwers.",
+     "sources": [
+      "PMID:36582969",
+      "PMID:24055781"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "Cross country and distance running",
+   "demands": [
+    {
+     "finding": "Heavy strength training (at least 80% 1RM) and combined methods improve running economy in middle- and long-distance runners (small to moderate effects), and plyometrics help at slower speeds; heavy loading helped most at faster speeds and in fitter runners.",
+     "sources": [
+      "PMID:38165636"
+     ]
+    },
+    {
+     "finding": "Heavy resistance training, especially near-maximal loads (90% 1RM or more), improved running economy and time trial performance more than plyometrics; programmes of 10-14 weeks worked better than 6-8 weeks.",
+     "sources": [
+      "PMID:36370207"
+     ]
+    },
+    {
+     "finding": "High-load and combined strength training improved actual running performance (time trials, time to exhaustion) without changing VO2max, and body composition was not harmed.",
+     "sources": [
+      "PMID:38627351",
+      "PMID:29249083"
+     ]
+    },
+    {
+     "finding": "In highly trained runners (VO2max above 60), 8-12 weeks of 2-3 weekly sessions mixing resistance exercises, jumps and short sprints had a large positive effect on running economy.",
+     "sources": [
+      "PMID:26694507"
+     ]
+    },
+    {
+     "finding": "Strength training in distance runners generally improved economy by 2-8% compared with run-only training, and 2-3 sessions per week with mixed modalities is a reasonable recommendation.",
+     "sources": [
+      "PMID:29249083"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "In Seattle high school cross-country runners, the injury rate was 17 per 1000 athlete-exposures; girls had higher rates (19.6 vs 15.0) and more injuries costing 15 or more days.",
+     "sources": [
+      "PMID:16306308"
+     ]
+    },
+    {
+     "finding": "Over 15 years of high school cross-country surveillance, girls had higher initial and repeat injury rates than boys, and shin injuries had the highest new-injury and re-injury rates.",
+     "sources": [
+      "PMID:10798792"
+     ]
+    },
+    {
+     "finding": "In US high school track running events, tendonitis was most typical of middle- and long-distance runners.",
+     "sources": [
+      "PMID:42181777"
+     ]
+    },
+    {
+     "finding": "Across 38 prospective studies, overall injury rates were similar in female and male runners (about 21 per 100), but females had about twice the risk of bone stress injury while males had more Achilles tendinopathy.",
+     "sources": [
+      "PMID:33433864"
+     ]
+    },
+    {
+     "finding": "Bone stress injuries are common in runners, possibly around 20% annually, and result from both biological (energy, hormones, bone health) and biomechanical factors.",
+     "sources": [
+      "PMID:26616181"
+     ]
+    },
+    {
+     "finding": "At international championships, bone stress injuries were a small share of acute injuries but occurred mostly in the foot and leg, and about half were in endurance athletes.",
+     "sources": [
+      "PMID:39148110"
+     ]
+    },
+    {
+     "finding": "In male collegiate distance runners followed up to 7 years, 27% had a bone stress injury; each point on a cumulative energy-deficiency risk score raised the risk of a new BSI by about 37%, and prior BSI was the strongest single factor.",
+     "sources": [
+      "PMID:30580252"
+     ]
+    },
+    {
+     "finding": "Pooled ground reaction force measures did not differ between runners with and without tibial stress fracture, so impact force alone is not a reliable marker of risk.",
+     "sources": [
+      "PMID:36481573"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Middle distance (800-1500 m)",
+     "differences": [
+      "Larger anaerobic and speed component; strength and plyometric training also benefit sprint capacity in some studies (PMID:29249083)."
+     ]
+    },
+    {
+     "position": "Long distance and cross country",
+     "differences": [
+      "Economy-driven; heavy strength training is most beneficial for running economy at higher speeds (PMID:38165636).",
+      "Highest bone stress and shin injury burden, especially in girls (PMID:10798792, PMID:33433864)."
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "Exercise-based prevention programmes did not reduce running injuries overall in RCTs, but supervised programmes did, probably because supervision improves compliance.",
+     "exercises": [
+      "Supervised strength and neuromuscular programmes"
+     ],
+     "dose": "Varied across 9 RCTs",
+     "effect": "No effect overall; significant risk reduction when supervised",
+     "sources": [
+      "PMID:38261240"
+     ]
+    },
+    {
+     "finding": "Neuromuscular training reduced medial tibial stress syndrome (shin splints) with high certainty evidence; shock-absorbing insoles and static stretching did not.",
+     "exercises": [
+      "Neuromuscular training (balance, strength, landing control)"
+     ],
+     "dose": "Varied across 4 trials (3887 people)",
+     "effect": "Odds ratio range 0.13-0.64",
+     "sources": [
+      "PMID:40633262"
+     ]
+    },
+    {
+     "finding": "Running gait retraining to land more softly cut knee injury risk by about two-thirds in one trial; graduated running programmes, footwear choice and generic exercise therapy did not change knee injury risk.",
+     "exercises": [
+      "Gait retraining to reduce impact"
+     ],
+     "dose": "Single trial in 320 runners",
+     "effect": "RR 0.32 (low certainty)",
+     "sources": [
+      "PMID:36150753"
+     ]
+    },
+    {
+     "finding": "In novice runners, increasing weekly distance by more than 30% over two weeks was associated with more overuse injuries such as patellofemoral pain, shin splints and IT band problems compared with increases under 10%.",
+     "exercises": [
+      "Gradual weekly distance progression"
+     ],
+     "dose": "Keep weekly distance increases below about 30% (ideally around 10%)",
+     "effect": "HR 1.59 for distance-related injuries (borderline)",
+     "sources": [
+      "PMID:25155475"
+     ]
+    },
+    {
+     "finding": "Bone stress injury prevention centres on screening risk factors, adequate energy, calcium and vitamin D intake, and encouraging ball sports in childhood and adolescence.",
+     "exercises": [
+      "Nutrition support",
+      "multi-sport participation"
+     ],
+     "dose": "Not quantified",
+     "effect": "Not quantified (clinical review)",
+     "sources": [
+      "PMID:26616181"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "Static stretching does not prevent shin splints; neuromuscular training does.",
+     "sources": [
+      "PMID:40633262"
+     ]
+    },
+    {
+     "finding": "Brief static stretching within a warm-up did not impair athletic performance overall; holds of 60 s or more reduce isolated muscle strength.",
+     "sources": [
+      "PMID:38735533"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "Female adolescent runners showed suppressed bone mineral accrual: bone mass rose with age in non-runner athletes but not in runners, leaving older runners with lower spine and whole-body bone values.",
+     "sources": [
+      "PMID:20200979"
+     ]
+    },
+    {
+     "finding": "Most adolescent female runners with low bone density at baseline still had it three years later, so catch-up is difficult and bone building in early adolescence matters.",
+     "sources": [
+      "PMID:20980925"
+     ]
+    },
+    {
+     "finding": "Female high school distance runners who specialised in running alone for 9 or more months a year were about 5 times more likely to have low bone density than low specialisers; over a third of the sample had low BMD.",
+     "sources": [
+      "PMID:33176358"
+     ]
+    },
+    {
+     "finding": "Low energy availability (too little food for the training done) underlies REDs and the Female Athlete Triad, harming bone, hormones and performance in females and males; the 2023 IOC statement provides a clinical assessment tool.",
+     "sources": [
+      "PMID:37752011",
+      "PMID:32245088"
+     ]
+    },
+    {
+     "finding": "The 2025 Triad update adds bone stress injuries to the bone health spectrum, moves away from a single energy-availability cut-off, and gives adolescent-specific screening and return-to-play guidance; menstrual disturbances can be reversed with moderate increases in food intake.",
+     "sources": [
+      "PMID:41474492"
+     ]
+    },
+    {
+     "finding": "In postpubertal adolescent runners, 10 weeks of twice-weekly plyometric, sprint and resistance training improved running economy by about 3-4% and sprint speed without harming body composition.",
+     "sources": [
+      "PMID:29315164"
+     ]
+    },
+    {
+     "finding": "In male adolescent distance runners, 8 weeks of complex training (heavy lifts paired with plyometrics) improved running economy and reactive strength more than traditional resistance training alone.",
+     "sources": [
+      "PMID:41312139"
+     ]
+    },
+    {
+     "finding": "High school cross-country girls get injured more often than boys, and prior injury or summer pre-season injury predicted new injury, which supports preseason screening and controlled summer build-up.",
+     "sources": [
+      "PMID:16306308",
+      "PMID:10798792"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "Swimming",
+   "demands": [
+    {
+     "finding": "Swimming performance benefits from dryland strength training combined with swimming; strength, plyometric and in-water resistance methods all improved performance by about 2-2.5% with no clear winner.",
+     "sources": [
+      "PMID:35099631"
+     ]
+    },
+    {
+     "finding": "Upper-body isometric strength is associated with swimming performance, and dryland power training (mainly plyometrics) improves the start; jump tests are the best predictor of start performance.",
+     "sources": [
+      "PMID:32149877"
+     ]
+    },
+    {
+     "finding": "Swim start time to 5-15 m is very strongly related to vertical jump height (r above 0.90), and plyometric training improves starts over time.",
+     "sources": [
+      "PMID:31493205"
+     ]
+    },
+    {
+     "finding": "In university swimmers, 6 weeks of maximal strength training (80-95% 1RM) or plyometrics improved 15 m start, 25 m and 50 m freestyle more than light muscular-endurance lifting.",
+     "sources": [
+      "PMID:40046224"
+     ]
+    },
+    {
+     "finding": "In junior (about 17-year-old) male swimmers, lean body mass, countermovement jump and knee strength correlated with 50 m sprint speed, more than in older swimmers.",
+     "sources": [
+      "PMID:28700512"
+     ]
+    },
+    {
+     "finding": "Anaerobic contribution during a maximal 400 m swim rose with pubertal stage in young swimmers, so younger swimmers rely relatively less on anaerobic energy.",
+     "sources": [
+      "PMID:35655527"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "Across 94 studies and nearly 11,000 swimmers, the shoulder was the most reported injury site, followed by the knee, arm/forearm, neck and low back; pooled shoulder injury prevalence was about 34% in competitive and 46% in elite swimmers.",
+     "sources": [
+      "PMID:41342747"
+     ]
+    },
+    {
+     "finding": "Shoulder, knee and low back overuse injuries dominate in adult swimmers, mostly tendon and muscle problems.",
+     "sources": [
+      "PMID:33010194"
+     ]
+    },
+    {
+     "finding": "Adolescent swimmers (15-17) had the highest shoulder pain rate (about 91%) of any age group, and their weekly training volume and years swimming correlated with supraspinatus tendon thickening.",
+     "sources": [
+      "PMID:31935141"
+     ]
+    },
+    {
+     "finding": "No risk factor for swimmer's shoulder has strong evidence; the best single study linked a high acute-to-chronic workload ratio and reduced posterior shoulder strength-endurance with injury, and range of motion, stroke specialty, sex and age were not associated.",
+     "sources": [
+      "PMID:37515375"
+     ]
+    },
+    {
+     "finding": "Knee pain is the second most common swimming complaint, mostly on the medial side and most often in breaststrokers.",
+     "sources": [
+      "PMID:10230572"
+     ]
+    },
+    {
+     "finding": "Low back injuries in swimmers include strains, spondylolysis, facet pain and disc problems, linked to hyperextension in butterfly and breaststroke and fatigue of trunk muscles.",
+     "sources": [
+      "PMID:38262981"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Sprint swimmers (50-100 m)",
+     "differences": [
+      "Start and power dominate; maximal strength and plyometric training improve start and sprint times (PMID:40046224, PMID:31493205)."
+     ]
+    },
+    {
+     "position": "Breaststroke",
+     "differences": [
+      "Highest rate of medial knee pain (PMID:10230572); undulating kick also loads the low back (PMID:38262981)."
+     ]
+    },
+    {
+     "position": "Butterfly",
+     "differences": [
+      "Dolphin-kick hyperextension is a common low back injury mechanism (PMID:38262981)."
+     ]
+    },
+    {
+     "position": "Distance swimmers",
+     "differences": [
+      "Highest yardage exposure; training volume is tied to shoulder pain in adolescents (PMID:31935141)."
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "A 12-week shoulder prevention programme (five exercises with weights or bands) limited the season-long drift into rotator cuff imbalance that the control group showed.",
+     "exercises": [
+      "Internal and external rotation strengthening",
+      "scapular exercises (weights or elastic bands)"
+     ],
+     "dose": "Twice a week for 12 weeks",
+     "effect": "Less rotator imbalance vs controls (strength outcomes, not injury counts)",
+     "sources": [
+      "PMID:40077099"
+     ]
+    },
+    {
+     "finding": "Programmes of 6-8 weeks with external rotator and scapular retractor strengthening plus pectoral stretching reduced the incidence of shoulder pain in swimmers; dryland open-chain work improved external rotation strength more than closed-chain or water training.",
+     "exercises": [
+      "Shoulder external rotation strengthening",
+      "scapular retraction work",
+      "pectoral stretching"
+     ],
+     "dose": "6-8 weeks for pain prevention; more than 12 weeks for strength ratios",
+     "effect": "Lower shoulder pain incidence (scoping review, limited quality)",
+     "sources": [
+      "PMID:35196648"
+     ]
+    },
+    {
+     "finding": "Avoid sudden large jumps in swim volume and monitor yardage year-round in developing swimmers, given the volume-pain link and the workload-ratio finding.",
+     "exercises": [
+      "Load monitoring"
+     ],
+     "dose": "Avoid sudden large increases in weekly volume",
+     "effect": "Association only",
+     "sources": [
+      "PMID:31935141",
+      "PMID:37515375"
+     ]
+    },
+    {
+     "finding": "Posterior shoulder strength-endurance may be the most useful modifiable risk factor to train.",
+     "exercises": [
+      "Posterior shoulder/rotator cuff endurance exercises"
+     ],
+     "dose": "Not specified",
+     "effect": "Association (best study n = 201)",
+     "sources": [
+      "PMID:37515375"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "A typical evidence-informed pre-race warm-up is about 1000-1500 m in water at moderate intensity with brief race-pace efforts, finished 8-20 minutes before the race.",
+     "sources": [
+      "PMID:24178508"
+     ]
+    },
+    {
+     "finding": "Because the gap between warm-up and race is often 20 minutes or more, dryland activity after the in-water warm-up (and keeping warm, e.g. heated clothing) helps maintain sprint performance; tethered swimming or paddles in warm-up did not help.",
+     "sources": [
+      "PMID:36153425"
+     ]
+    },
+    {
+     "finding": "Warm-ups improved sprint swim performance in about half of studies, with small effects.",
+     "sources": [
+      "PMID:34698232"
+     ]
+    },
+    {
+     "finding": "In male swimmers, both a 6-week FIFA 11+ style dryland warm-up and a drop-jump potentiation warm-up improved jumps and 50 m time; the 11+ approach also improved hamstring strength and leg strength ratios.",
+     "sources": [
+      "PMID:39557966"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "Adolescent swimmers carry the highest shoulder pain prevalence and among the highest training volumes, so volume management is most important in the 15-17 age band.",
+     "sources": [
+      "PMID:31935141"
+     ]
+    },
+    {
+     "finding": "Strength measures relate more closely to sprint speed in junior swimmers than in older ones, supporting dryland strength development during adolescence.",
+     "sources": [
+      "PMID:28700512"
+     ]
+    },
+    {
+     "finding": "Anaerobic capacity in young swimmers grows with puberty; interpret sprint ability against maturation stage.",
+     "sources": [
+      "PMID:35655527"
+     ]
+    },
+    {
+     "finding": "Adolescent athletes with active lumbar spondylolysis returned to sport 38 days sooner and had fewer low back pain recurrences when physical therapy began immediately instead of after rest.",
+     "sources": [
+      "PMID:41402030"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "Rowing",
+   "demands": [
+    {
+     "finding": "A 2000 m ergometer race in trained junior male rowers drew about 17% of energy from anaerobic sources; the shorter 1500 m format raised that to about 22%. Rowing is mainly aerobic with a significant anaerobic share.",
+     "sources": [
+      "PMID:38016454"
+     ]
+    },
+    {
+     "finding": "Elite rowers are stronger than less competitive peers, and leg press 1RM, isokinetic leg extension force and leg press power correlate moderately to strongly with 2000 m ergometer time (r about -0.54 to -0.68).",
+     "sources": [
+      "PMID:21510717"
+     ]
+    },
+    {
+     "finding": "In elite male rowers, power clean and bench pull power best predicted peak stroke power and 500 m, while leg press and bench pull or seated arm pulling predicted 2000 m.",
+     "sources": [
+      "PMID:23085974"
+     ]
+    },
+    {
+     "finding": "In elite female rowers, back squat, deadlift and power clean 1RM were the strongest predictors of peak stroke power and 2000 m and 5000 m power.",
+     "sources": [
+      "PMID:40010366"
+     ]
+    },
+    {
+     "finding": "Strength can be maintained in-season with one or two intense sessions per week (about 73-79% of max), while in the off-season about 2-6 sets of 4-12 reps three times a week is typical; concurrent endurance training may blunt short-term strength gains.",
+     "sources": [
+      "PMID:21510717"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "In a female NCAA Division I team over 5 years, 52% of rowers were injured; of those, 38% had low back injury, 23% rib injury and 16% hip/groin injury. Most published studies focus on the low back.",
+     "sources": [
+      "PMID:34000208"
+     ]
+    },
+    {
+     "finding": "Rib stress fractures occur in roughly 6-12% of rowers and account for the most time lost from on-water training; they reflect loading of the whole rib cage by the rowing muscles.",
+     "sources": [
+      "PMID:12392443"
+     ]
+    },
+    {
+     "finding": "In elite rowers, rib stress injury history was associated with lower bone density (including the ribs), diet restriction, menstrual dysfunction in females and lightweight status in males.",
+     "sources": [
+      "PMID:36137920"
+     ]
+    },
+    {
+     "finding": "Across 10 studies, the only factor significantly associated with low back pain in rowers was a previous episode (about 2.7x odds); age, sex, BMI, level and training volume were not significant.",
+     "sources": [
+      "PMID:40605029"
+     ]
+    },
+    {
+     "finding": "Rowers without back pain tend to keep a neutral or forward-tilted pelvis at the catch with good hip range, while those with pain show more posterior pelvic tilt; fatigue increases lumbar flexion at the catch, more so on the ergometer.",
+     "sources": [
+      "PMID:33397675"
+     ]
+    },
+    {
+     "finding": "Updated reviews highlight back and rib injury, training load and relative energy deficiency as key rowing health issues across ages.",
+     "sources": [
+      "PMID:27577685"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Lightweight rowers",
+     "differences": [
+      "Weight-making links to diet restriction, lower bone mass and rib injury history (PMID:36137920)."
+     ]
+    },
+    {
+     "position": "Sweep vs sculling",
+     "differences": [
+      "Rowing type was not significantly associated with low back pain in pooled data (PMID:40605029)."
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "The 2021 consensus recommends education on risk factors, rowing biomechanics and training load, and if back pain occurs, early unloading, pain control and exercise therapy with graded return.",
+     "exercises": [
+      "Technique coaching (pelvis and spine at the catch)",
+      "load management",
+      "exercise therapy"
+     ],
+     "dose": "Not quantified",
+     "effect": "Consensus recommendation",
+     "sources": [
+      "PMID:33685861",
+      "PMID:33397675"
+     ]
+    },
+    {
+     "finding": "Coaching neutral pelvic position and hip range at the catch, and watching for fatigue-related lumbar flexion (especially on the ergometer), are biomechanical targets for reducing back pain.",
+     "exercises": [
+      "Hip mobility",
+      "technique under fatigue",
+      "limiting long fatigued ergometer sessions"
+     ],
+     "dose": "Not quantified",
+     "effect": "Association only",
+     "sources": [
+      "PMID:33397675"
+     ]
+    },
+    {
+     "finding": "Rib stress injury prevention focuses on monitoring training load, addressing biomechanics and correcting nutritional or hormonal problems that weaken bone.",
+     "exercises": [
+      "Load monitoring",
+      "nutrition and energy availability"
+     ],
+     "dose": "Not quantified",
+     "effect": "Not quantified (review)",
+     "sources": [
+      "PMID:40472154",
+      "PMID:36137920"
+     ]
+    },
+    {
+     "finding": "Trunk endurance norms in healthy rowers differ from non-rowers (flexor endurance about 154% of extensor), which matters when screening or prescribing trunk endurance work; no trial of trunk endurance for injury prevention was found.",
+     "exercises": [
+      "Trunk flexor, extensor and side-plank endurance holds"
+     ],
+     "dose": "Not tested as an intervention",
+     "effect": "Descriptive reference values",
+     "sources": [
+      "PMID:16213246"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "Structured warm-up injury prevention programmes reduce injuries by about a third in youth sport overall; no rowing-specific warm-up trial was found.",
+     "sources": [
+      "PMID:35627873"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "Male adolescent elite rowers (about 16 years) reported low back pain far more often than matched controls (85% vs 31% over 3 months), and pain intensity tracked MRI signs of paraspinal muscle strain.",
+     "sources": [
+      "PMID:37979193"
+     ]
+    },
+    {
+     "finding": "Energy deficiency harms bone and is linked to rib injury in rowers, so the REDs and Triad guidance applies to junior rowers, especially lightweights.",
+     "sources": [
+      "PMID:36137920",
+      "PMID:37752011"
+     ]
+    },
+    {
+     "finding": "The shorter 1500 m race format being introduced raises the anaerobic demand in junior rowers.",
+     "sources": [
+      "PMID:38016454"
+     ]
+    }
+   ]
+  }
+ ],
+ "crossCutting": [
+  {
+   "finding": "Injury-prevention warm-up programmes cut sports injuries in children and adolescents by about 36%, and compliance determines how much benefit is seen.",
+   "sources": [
+    "PMID:35627873"
+   ]
+  },
+  {
+   "finding": "Youth resistance training is endorsed by international consensus as safe and beneficial when properly supervised and progressed.",
+   "sources": [
+    "PMID:24055781"
+   ]
+  },
+  {
+   "finding": "Athletes who slept less than 8 hours a night were about 1.7 times more likely to have been injured in a middle/high school sample.",
+   "sources": [
+    "PMID:25028798"
+   ]
+  },
+  {
+   "finding": "Around peak height velocity young athletes are at higher risk of overuse and growth-related injuries, so training load should be adjusted to maturity, not just age.",
+   "sources": [
+    "PMID:32961300"
+   ]
+  },
+  {
+   "finding": "Early specialisation in a single sport may raise overuse injury and burnout risk; diversified participation is recommended for younger athletes.",
+   "sources": [
+    "PMID:31157759"
+   ]
+  },
+  {
+   "finding": "Low energy availability affects both female and male athletes and is a shared risk for bone stress injuries across running, rowing and other lean sports.",
+   "sources": [
+    "PMID:37752011",
+    "PMID:30580252",
+    "PMID:36137920"
+   ]
+  },
+  {
+   "finding": "Chronic static stretching does not meaningfully improve sprint or jump performance; strength and plyometric training are the effective tools.",
+   "sources": [
+    "PMID:38595642"
+   ]
+  },
+  {
+   "finding": "A previous injury is the most consistent risk factor across events: prior hamstring strain for hamstring strain, prior low back pain for rowing back pain, prior BSI for BSI.",
+   "sources": [
+    "PMID:32299793",
+    "PMID:40605029",
+    "PMID:30580252"
+   ]
+  },
+  {
+   "finding": "Exercise-based prevention in individual sports often fails because athletes do not do it; supervised delivery and at least 5-6 weeks of consistent use are needed before benefits appear.",
+   "sources": [
+    "PMID:38261240",
+    "PMID:39232249",
+    "PMID:34769849"
+   ]
+  }
+ ],
+ "sources": [
+  {
+   "id": "PMID:10230572",
+   "doi": "10.1016/s0278-5919(05)70152-6",
+   "firstAuthor": "Rodeo SA",
+   "year": 1999,
+   "journal": "Clin Sports Med",
+   "title": "Knee pain in competitive swimming.",
+   "population": "Competitive swimmers",
+   "design": "Narrative clinical review"
+  },
+  {
+   "id": "PMID:10798792",
+   "doi": "10.1097/00042752-200004000-00005",
+   "firstAuthor": "Rauh MJ",
+   "year": 2000,
+   "journal": "Clin J Sport Med",
+   "title": "High school cross country running injuries: a longitudinal study.",
+   "population": "199 US high school cross-country teams over 15 years",
+   "design": "Prospective longitudinal surveillance"
+  },
+  {
+   "id": "PMID:11206256",
+   "doi": "10.1177/03635465010290011301",
+   "firstAuthor": "Boden BP",
+   "year": 2001,
+   "journal": "Am J Sports Med",
+   "title": "Catastrophic injuries in pole-vaulters.",
+   "population": "32 catastrophic pole-vault injuries in the US 1982-1998 (mean age 17.5)",
+   "design": "Retrospective case series"
+  },
+  {
+   "id": "PMID:12392443",
+   "doi": "10.2165/00007256-200232130-00002",
+   "firstAuthor": "Warden SJ",
+   "year": 2002,
+   "journal": "Sports Med",
+   "title": "Aetiology of rib stress fractures in rowers.",
+   "population": "Rowers",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:14636111",
+   "doi": "10.1519/1533-4287(2003)017<0739:msrict>2.0.co;2",
+   "firstAuthor": "Stone MH",
+   "year": 2003,
+   "journal": "J Strength Cond Res",
+   "title": "Maximum strength-power-performance relationships in collegiate throwers.",
+   "population": "11 collegiate throwers",
+   "design": "Longitudinal correlational (8 weeks)"
+  },
+  {
+   "id": "PMID:15518295",
+   "doi": "10.1016/s1440-2440(04)80025-2",
+   "firstAuthor": "Duffield R",
+   "year": 2004,
+   "journal": "J Sci Med Sport",
+   "title": "Energy system contribution to 100-m and 200-m track running events.",
+   "population": "Trained male and female sprinters",
+   "design": "Laboratory and track energetics study"
+  },
+  {
+   "id": "PMID:16213246",
+   "doi": "10.1016/j.apmr.2005.04.007",
+   "firstAuthor": "Chan RH",
+   "year": 2005,
+   "journal": "Arch Phys Med Rehabil",
+   "title": "Endurance times of trunk muscles in male intercollegiate rowers in Hong Kong.",
+   "population": "32 male intercollegiate rowers without back pain",
+   "design": "Cross-sectional"
+  },
+  {
+   "id": "PMID:16306308",
+   "doi": "10.1093/aje/kwj022",
+   "firstAuthor": "Rauh MJ",
+   "year": 2006,
+   "journal": "Am J Epidemiol",
+   "title": "Epidemiology of musculoskeletal injuries among high school cross-country runners.",
+   "population": "421 US high school cross-country runners, 23 teams",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:20200979",
+   "doi": "10.1002/jbmr.63",
+   "firstAuthor": "Barrack MT",
+   "year": 2010,
+   "journal": "J Bone Miner Res",
+   "title": "Cross-sectional evidence of suppressed bone mineral accrual among female adolescent runners.",
+   "population": "183 female interscholastic athletes (93 runners, 90 non-runners)",
+   "design": "Cross-sectional"
+  },
+  {
+   "id": "PMID:20980925",
+   "doi": "10.1249/MSS.0b013e318201d7bb",
+   "firstAuthor": "Barrack MT",
+   "year": 2011,
+   "journal": "Med Sci Sports Exerc",
+   "title": "Body mass, training, menses, and bone in adolescent runners: a 3-yr follow-up.",
+   "population": "40 adolescent runners followed 3 years",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:21510717",
+   "doi": "10.2165/11588540-000000000-00000",
+   "firstAuthor": "Lawton TW",
+   "year": 2011,
+   "journal": "Sports Med",
+   "title": "Strength testing and training of rowers: a review.",
+   "population": "Rowers",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:21926384",
+   "doi": "10.1177/0363546511422350",
+   "firstAuthor": "Dines JS",
+   "year": 2012,
+   "journal": "Am J Sports Med",
+   "title": "Elbow ulnar collateral ligament reconstruction in javelin throwers at a minimum 2-year follow-up.",
+   "population": "10 high school and college javelin throwers after UCL reconstruction",
+   "design": "Case series"
+  },
+  {
+   "id": "PMID:23085974",
+   "doi": "10.1519/JSC.0b013e3182772f27",
+   "firstAuthor": "Lawton TW",
+   "year": 2013,
+   "journal": "J Strength Cond Res",
+   "title": "Strength, power, and muscular endurance exercise and elite rowing ergometer performance.",
+   "population": "19 heavyweight elite male rowers",
+   "design": "Cross-sectional correlational"
+  },
+  {
+   "id": "PMID:24055781",
+   "doi": "10.1136/bjsports-2013-092952",
+   "firstAuthor": "Lloyd RS",
+   "year": 2014,
+   "journal": "Br J Sports Med",
+   "title": "Position statement on youth resistance training: the 2014 International Consensus.",
+   "population": "Children and adolescents",
+   "design": "International consensus position statement"
+  },
+  {
+   "id": "PMID:24149197",
+   "doi": "",
+   "firstAuthor": "Linthorne NP",
+   "year": 2012,
+   "journal": "J Sports Sci Med",
+   "title": "Effects of run-up velocity on performance, kinematics, and energy exchanges in the pole vault.",
+   "population": "One experienced male pole vaulter, 17 jumps",
+   "design": "Experimental single-subject biomechanics"
+  },
+  {
+   "id": "PMID:24178508",
+   "doi": "10.1007/s40279-013-0117-y",
+   "firstAuthor": "Neiva HP",
+   "year": 2014,
+   "journal": "Sports Med",
+   "title": "Warm-up and performance in competitive swimming.",
+   "population": "Competitive swimmers",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:24620039",
+   "doi": "10.1136/bjsports-2013-093087",
+   "firstAuthor": "Feddermann-Demont N",
+   "year": 2014,
+   "journal": "Br J Sports Med",
+   "title": "Injuries in 13 international Athletics championships between 2007-2012.",
+   "population": "Elite athletes, 13 international athletics championships 2007-2012 (1470 injuries)",
+   "design": "Prospective injury surveillance"
+  },
+  {
+   "id": "PMID:24620041",
+   "doi": "10.1136/bjsports-2013-093214",
+   "firstAuthor": "Askling CM",
+   "year": 2014,
+   "journal": "Br J Sports Med",
+   "title": "Acute hamstring injuries in Swedish elite sprinters and jumpers: a prospective randomised controlled clinical trial comparing two rehabilitation protocols.",
+   "population": "56 Swedish elite sprinters and jumpers with MRI-confirmed hamstring injury",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:25028798",
+   "doi": "10.1097/BPO.0000000000000151",
+   "firstAuthor": "Milewski MD",
+   "year": 2014,
+   "journal": "J Pediatr Orthop",
+   "title": "Chronic lack of sleep is associated with increased sports injuries in adolescent athletes.",
+   "population": "112 middle and high school athletes, grades 7-12",
+   "design": "Retrospective cohort survey"
+  },
+  {
+   "id": "PMID:25059334",
+   "doi": "10.1007/s40279-014-0227-1",
+   "firstAuthor": "Seitz LB",
+   "year": 2014,
+   "journal": "Sports Med",
+   "title": "Increases in lower-body strength transfer positively to sprint performance: a systematic review with meta-analysis.",
+   "population": "510 subjects, 15 training studies",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:25155475",
+   "doi": "10.2519/jospt.2014.5164",
+   "firstAuthor": "Nielsen RØ",
+   "year": 2014,
+   "journal": "J Orthop Sports Phys Ther",
+   "title": "Excessive progression in weekly running distance and risk of running-related injuries: an association which varies according to type of injury.",
+   "population": "874 novice runners",
+   "design": "Prospective cohort (1 year)"
+  },
+  {
+   "id": "PMID:26508319",
+   "doi": "10.1007/s40279-015-0415-7",
+   "firstAuthor": "Seitz LB",
+   "year": 2016,
+   "journal": "Sports Med",
+   "title": "Factors Modulating Post-Activation Potentiation of Jump, Sprint, Throw, and Upper-Body Ballistic Performances: A Systematic Review with Meta-Analysis.",
+   "population": "1954 participants, 47 studies",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:26616181",
+   "doi": "10.1016/j.pmr.2015.08.008",
+   "firstAuthor": "Tenforde AS",
+   "year": 2016,
+   "journal": "Phys Med Rehabil Clin N Am",
+   "title": "Bone Stress Injuries in Runners.",
+   "population": "Runners",
+   "design": "Narrative clinical review"
+  },
+  {
+   "id": "PMID:26694507",
+   "doi": "10.1519/JSC.0000000000001316",
+   "firstAuthor": "Balsalobre-Fernández C",
+   "year": 2016,
+   "journal": "J Strength Cond Res",
+   "title": "Effects of Strength Training on Running Economy in Highly Trained Runners: A Systematic Review With Meta-Analysis of Controlled Trials.",
+   "population": "93 highly trained runners (VO2max >60)",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:26851290",
+   "doi": "10.1136/bjsports-2015-095497",
+   "firstAuthor": "Lesinski M",
+   "year": 2016,
+   "journal": "Br J Sports Med",
+   "title": "Effects and dose-response relationships of resistance training on physical performance in youth athletes: a systematic review and meta-analysis.",
+   "population": "Youth athletes aged 6-18 (43 studies)",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:27577685",
+   "doi": "10.1007/s40279-016-0613-y",
+   "firstAuthor": "Thornton JS",
+   "year": 2017,
+   "journal": "Sports Med",
+   "title": "Rowing Injuries: An Updated Review.",
+   "population": "Rowers of all ages",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:28700512",
+   "doi": "10.1519/JSC.0000000000002084",
+   "firstAuthor": "Strzała M",
+   "year": 2019,
+   "journal": "J Strength Cond Res",
+   "title": "Influence of Morphology and Strength on Front Crawl Swimming Speed in Junior and Youth Age-Group Swimmers.",
+   "population": "Male junior (17 y) and youth (21 y) swimmers",
+   "design": "Cross-sectional"
+  },
+  {
+   "id": "PMID:29135636",
+   "doi": "10.1249/JSR.0000000000000416",
+   "firstAuthor": "Meron A",
+   "year": 2017,
+   "journal": "Curr Sports Med Rep",
+   "title": "Track and Field Throwing Sports: Injuries and Prevention.",
+   "population": "Track and field throwers",
+   "design": "Narrative clinical review"
+  },
+  {
+   "id": "PMID:29143267",
+   "doi": "10.1007/s40279-017-0819-7",
+   "firstAuthor": "Shield AJ",
+   "year": 2018,
+   "journal": "Sports Med",
+   "title": "Hamstring Injury Prevention Practices in Elite Sport: Evidence for Eccentric Strength vs. Lumbo-Pelvic Training.",
+   "population": "Elite sport, running-based",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:29249083",
+   "doi": "10.1007/s40279-017-0835-7",
+   "firstAuthor": "Blagrove RC",
+   "year": 2018,
+   "journal": "Sports Med",
+   "title": "Effects of Strength Training on the Physiological Determinants of Middle- and Long-Distance Running Performance: A Systematic Review.",
+   "population": "Middle- and long-distance runners (24 studies)",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:29315164",
+   "doi": "10.1249/MSS.0000000000001543",
+   "firstAuthor": "Blagrove RC",
+   "year": 2018,
+   "journal": "Med Sci Sports Exerc",
+   "title": "Effects of Strength Training on Postpubertal Adolescent Distance Runners.",
+   "population": "25 postpubertal adolescent distance runners (17.2 y)",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:30054341",
+   "doi": "10.1136/bjsports-2017-099000",
+   "firstAuthor": "Sprague AL",
+   "year": 2018,
+   "journal": "Br J Sports Med",
+   "title": "Modifiable risk factors for patellar tendinopathy in athletes: a systematic review and meta-analysis.",
+   "population": "Athletes in jumping sports (31 studies)",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:30580252",
+   "doi": "10.1136/bjsports-2018-099861",
+   "firstAuthor": "Kraus E",
+   "year": 2019,
+   "journal": "Br J Sports Med",
+   "title": "Bone stress injuries in male distance runners: higher modified Female Athlete Triad Cumulative Risk Assessment scores predict increased rates of injury.",
+   "population": "156 male collegiate distance runners",
+   "design": "Mixed retrospective-prospective cohort (7 years)"
+  },
+  {
+   "id": "PMID:30808663",
+   "doi": "10.1136/bjsports-2018-100045",
+   "firstAuthor": "van Dyk N",
+   "year": 2019,
+   "journal": "Br J Sports Med",
+   "title": "Including the Nordic hamstring exercise in injury prevention programmes halves the rate of hamstring injuries: a systematic review and meta-analysis of 8459 athletes.",
+   "population": "8459 athletes across sports, ages and sexes (15 studies)",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:31157759",
+   "doi": "10.5435/JAAOS-D-18-00187",
+   "firstAuthor": "Popkin CA",
+   "year": 2019,
+   "journal": "J Am Acad Orthop Surg",
+   "title": "Early Sport Specialization.",
+   "population": "Children and adolescents",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:31493205",
+   "doi": "10.1007/s40279-019-01174-x",
+   "firstAuthor": "Thng S",
+   "year": 2019,
+   "journal": "Sports Med",
+   "title": "Relationships Between Dry-land Resistance Training and Swim Start Performance and Effects of Such Training on the Swim Start: A Systematic Review.",
+   "population": "Swimmers (16 studies)",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:31502142",
+   "doi": "10.1007/s40279-019-01178-7",
+   "firstAuthor": "Cuthbert M",
+   "year": 2020,
+   "journal": "Sports Med",
+   "title": "The Effect of Nordic Hamstring Exercise Intervention Volume on Eccentric Strength and Muscle Architecture Adaptations: A Systematic Review and Meta-analyses.",
+   "population": "Athletes in Nordic hamstring training interventions (13 studies)",
+   "design": "Systematic review and meta-analyses"
+  },
+  {
+   "id": "PMID:31935141",
+   "doi": "10.4085/1062-6050-439-18",
+   "firstAuthor": "Feijen S",
+   "year": 2020,
+   "journal": "J Athl Train",
+   "title": "Swim-Training Volume and Shoulder Pain Across the Life Span of the Competitive Swimmer: A Systematic Review.",
+   "population": "1460 competitive swimmers, youth to masters",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:32149877",
+   "doi": "10.1519/JSC.0000000000003572",
+   "firstAuthor": "Muniz-Pardos B",
+   "year": 2022,
+   "journal": "J Strength Cond Res",
+   "title": "Nonspecific Resistance Training and Swimming Performance: Strength or Power? A Systematic Review.",
+   "population": "Swimmers (33 studies)",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:32245088",
+   "doi": "10.3390/nu12030835",
+   "firstAuthor": "Logue DM",
+   "year": 2020,
+   "journal": "Nutrients",
+   "title": "Low Energy Availability in Athletes 2020: An Updated Narrative Review of Prevalence, Risk, Within-Day Energy Balance, Knowledge, and Impact on Sports Performance.",
+   "population": "Athletes, with focus on females",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:32299793",
+   "doi": "10.1136/bjsports-2019-100983",
+   "firstAuthor": "Green B",
+   "year": 2020,
+   "journal": "Br J Sports Med",
+   "title": "Recalibrating the risk of hamstring strain injury (HSI): A 2020 systematic review and meta-analysis of risk factors for index and recurrent hamstring strain injury in sport.",
+   "population": "71,324 athletes in 78 prospective studies",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:32961300",
+   "doi": "10.1016/j.jshs.2020.09.003",
+   "firstAuthor": "Towlson C",
+   "year": 2021,
+   "journal": "J Sport Health Sci",
+   "title": "Maturity-associated considerations for training load, injury risk, and physical performance in youth soccer: One size does not fit all.",
+   "population": "Youth soccer players (applies to growth generally)",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:33010194",
+   "doi": "10.1002/pmrj.12503",
+   "firstAuthor": "Trinidad A",
+   "year": 2021,
+   "journal": "PM R",
+   "title": "An Updated Review of the Epidemiology of Swimming Injuries.",
+   "population": "Adult swimmers (14 studies)",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:33176358",
+   "doi": "10.4085/1062-6050-0547.19",
+   "firstAuthor": "Rauh MJ",
+   "year": 2020,
+   "journal": "J Athl Train",
+   "title": "Sport Specialization and Low Bone Mineral Density in Female High School Distance Runners.",
+   "population": "64 female high school distance runners (mean 15.6 y)",
+   "design": "Cross-sectional"
+  },
+  {
+   "id": "PMID:33344944",
+   "doi": "10.3389/fspor.2019.00020",
+   "firstAuthor": "Edouard P",
+   "year": 2019,
+   "journal": "Front Sports Act Living",
+   "title": "Biomechanical Pole Vault Patterns Were Associated With a Higher Proportion of Injuries.",
+   "population": "62 national-level French pole vaulters incl. U17 and U20",
+   "design": "Cross-sectional biomechanics with retrospective injury recall"
+  },
+  {
+   "id": "PMID:33397675",
+   "doi": "10.1136/bjsports-2020-102533",
+   "firstAuthor": "Nugent FJ",
+   "year": 2021,
+   "journal": "Br J Sports Med",
+   "title": "The relationship between rowing-related low back pain and rowing biomechanics: a systematic review.",
+   "population": "429 rowers in 22 studies",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:33433864",
+   "doi": "10.1007/s40279-020-01412-7",
+   "firstAuthor": "Hollander K",
+   "year": 2021,
+   "journal": "Sports Med",
+   "title": "Sex-Specific Differences in Running Injuries: A Systematic Review with Meta-Analysis and Meta-Regression.",
+   "population": "Runners in 38 prospective studies",
+   "design": "Systematic review, meta-analysis and meta-regression"
+  },
+  {
+   "id": "PMID:33685861",
+   "doi": "10.1136/bjsports-2020-103385",
+   "firstAuthor": "Wilson F",
+   "year": 2021,
+   "journal": "Br J Sports Med",
+   "title": "2021 consensus statement for preventing and managing low back pain in elite and subelite adult rowers.",
+   "population": "Elite and subelite adult rowers",
+   "design": "Consensus statement (modified Delphi)"
+  },
+  {
+   "id": "PMID:34000208",
+   "doi": "10.1080/00913847.2021.1931526",
+   "firstAuthor": "Treloar J",
+   "year": 2022,
+   "journal": "Phys Sportsmed",
+   "title": "Update on injury epidemiology in rowing: our experience with female NCAA Division I athletes and a systematic review of the literature.",
+   "population": "92 injured female NCAA Division I rowers plus 10 studies",
+   "design": "Case series and systematic review"
+  },
+  {
+   "id": "PMID:34067149",
+   "doi": "10.3390/jfmk6020040",
+   "firstAuthor": "Zaras N",
+   "year": 2021,
+   "journal": "J Funct Morphol Kinesiol",
+   "title": "Biological Determinants of Track and Field Throwing Performance.",
+   "population": "Track and field throwers",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:34308350",
+   "doi": "10.3389/fspor.2021.704308",
+   "firstAuthor": "Hanley B",
+   "year": 2021,
+   "journal": "Front Sports Act Living",
+   "title": "Biomechanics of World-Class Men and Women Hurdlers.",
+   "population": "16 world championship finalist hurdlers (2017)",
+   "design": "Cross-sectional kinematics"
+  },
+  {
+   "id": "PMID:34319943",
+   "doi": "10.1519/JSC.0000000000004098",
+   "firstAuthor": "Anousaki E",
+   "year": 2021,
+   "journal": "J Strength Cond Res",
+   "title": "Effects of a 25-Week Periodized Training Macrocycle on Muscle Strength, Power, Muscle Architecture, and Performance in Well-Trained Track and Field Throwers.",
+   "population": "12 well-trained adult throwers",
+   "design": "Prospective training study (single group)"
+  },
+  {
+   "id": "PMID:34687920",
+   "doi": "10.1016/j.jse.2021.10.003",
+   "firstAuthor": "Hadley CJ",
+   "year": 2022,
+   "journal": "J Shoulder Elbow Surg",
+   "title": "Ulnar collateral ligament reconstruction in javelin throwers: an analysis of return to play rates and patient outcomes.",
+   "population": "16 javelin throwers after elbow UCL reconstruction (mean age 21)",
+   "design": "Case series"
+  },
+  {
+   "id": "PMID:34698232",
+   "doi": "10.3390/jfmk6040085",
+   "firstAuthor": "Czelusniak O",
+   "year": 2021,
+   "journal": "J Funct Morphol Kinesiol",
+   "title": "Effects of Warm-Up on Sprint Swimming Performance, Rating of Perceived Exertion, and Blood Lactate Concentration: A Systematic Review.",
+   "population": "Sprint swimmers (14 studies)",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:34769849",
+   "doi": "10.3390/ijerph182111334",
+   "firstAuthor": "Edouard P",
+   "year": 2021,
+   "journal": "Int J Environ Res Public Health",
+   "title": "Effect of an Unsupervised Exercises-Based Athletics Injury Prevention Programme on Injury Complaints Leading to Participation Restriction in Athletics: A Cluster-Randomised Controlled Trial.",
+   "population": "840 athletics club athletes",
+   "design": "Cluster randomised controlled trial"
+  },
+  {
+   "id": "PMID:35099631",
+   "doi": "10.1186/s40798-022-00410-5",
+   "firstAuthor": "Fone L",
+   "year": 2022,
+   "journal": "Sports Med Open",
+   "title": "Effect of Different Types of Strength Training on Swimming Performance in Competitive Swimmers: A Systematic Review.",
+   "population": "Youth and older competitive swimmers (27 studies)",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:35196648",
+   "doi": "10.1123/jsr.2021-0403",
+   "firstAuthor": "Yoma M",
+   "year": 2022,
+   "journal": "J Sport Rehabil",
+   "title": "The Effect of Exercise Therapy Interventions on Shoulder Pain and Musculoskeletal Risk Factors for Shoulder Pain in Competitive Swimmers: A Scoping Review.",
+   "population": "Competitive swimmers (14 studies)",
+   "design": "Scoping review"
+  },
+  {
+   "id": "PMID:35384731",
+   "doi": "10.1177/03635465221083998",
+   "firstAuthor": "Rudisill SS",
+   "year": 2023,
+   "journal": "Am J Sports Med",
+   "title": "Evidence-Based Hamstring Injury Prevention and Risk Factor Management: A Systematic Review and Meta-analysis of Randomized Controlled Trials.",
+   "population": "Adult recreational to professional athletes (108 RCTs)",
+   "design": "Systematic review and meta-analysis of RCTs"
+  },
+  {
+   "id": "PMID:35627873",
+   "doi": "10.3390/ijerph19106336",
+   "firstAuthor": "Ding L",
+   "year": 2022,
+   "journal": "Int J Environ Res Public Health",
+   "title": "Effectiveness of Warm-Up Intervention Programs to Prevent Sports Injuries among Children and Adolescents: A Systematic Review and Meta-Analysis.",
+   "population": "Children and adolescents in sport (15 studies)",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:35655527",
+   "doi": "10.3389/fspor.2022.760296",
+   "firstAuthor": "Campos EZ",
+   "year": 2022,
+   "journal": "Front Sports Act Living",
+   "title": "Anaerobic Contribution Determined in Free-Swimming: Sensitivity to Maturation Stages and Validity.",
+   "population": "34 young swimmers grouped by puberty stage",
+   "design": "Cross-sectional validation study"
+  },
+  {
+   "id": "PMID:35954732",
+   "doi": "10.3390/ijerph19159375",
+   "firstAuthor": "Sugiura Y",
+   "year": 2022,
+   "journal": "Int J Environ Res Public Health",
+   "title": "Effects of Various Numbers of Runs on the Success of Hamstring Injury Prevention Program in Sprinters.",
+   "population": "613 male collegiate sprinters over 24 seasons",
+   "design": "Retrospective cohort across programme periods"
+  },
+  {
+   "id": "PMID:36137920",
+   "doi": "10.1016/j.jsams.2022.08.017",
+   "firstAuthor": "Lundy B",
+   "year": 2022,
+   "journal": "J Sci Med Sport",
+   "title": "Nutrition factors associated with rib stress injury history in elite rowers.",
+   "population": "133 elite rowers",
+   "design": "Cross-sectional"
+  },
+  {
+   "id": "PMID:36150753",
+   "doi": "10.1136/bjsports-2022-105553",
+   "firstAuthor": "Alexander JLN",
+   "year": 2022,
+   "journal": "Br J Sports Med",
+   "title": "Strategies to prevent and manage running-related knee injuries: a systematic review of randomised controlled trials.",
+   "population": "Novice and recreational runners (30 RCTs)",
+   "design": "Systematic review of RCTs"
+  },
+  {
+   "id": "PMID:36153425",
+   "doi": "10.1186/s40798-022-00514-y",
+   "firstAuthor": "Cuenca-Fernández F",
+   "year": 2022,
+   "journal": "Sports Med Open",
+   "title": "Swimming Warm-Up and Beyond: Dryland Protocols and Their Related Mechanisms-A Scoping Review.",
+   "population": "Competitive swimmers (42 studies)",
+   "design": "Scoping review"
+  },
+  {
+   "id": "PMID:36370207",
+   "doi": "10.1186/s40798-022-00511-1",
+   "firstAuthor": "Eihara Y",
+   "year": 2022,
+   "journal": "Sports Med Open",
+   "title": "Heavy Resistance Training Versus Plyometric Training for Improving Running Economy and Running Time Trial Performance: A Systematic Review and Meta-analysis.",
+   "population": "Long-distance runners (22 studies)",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:36481573",
+   "doi": "10.1016/j.jshs.2022.12.002",
+   "firstAuthor": "Milner CE",
+   "year": 2023,
+   "journal": "J Sport Health Sci",
+   "title": "Biomechanics associated with tibial stress fracture in runners: A systematic review and meta-analysis.",
+   "population": "Runners with tibial stress fracture vs controls (14 studies)",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:36582969",
+   "doi": "10.70252/LGRI2993",
+   "firstAuthor": "Caughey RM",
+   "year": 2022,
+   "journal": "Int J Exerc Sci",
+   "title": "Variables Associated with High School Shot Put Performance.",
+   "population": "9 high school shot putters (16.9 y)",
+   "design": "Cross-sectional correlational"
+  },
+  {
+   "id": "PMID:36748088",
+   "doi": "10.7717/peerj.14650",
+   "firstAuthor": "Lin J",
+   "year": 2023,
+   "journal": "PeerJ",
+   "title": "Correlations between horizontal jump and sprint acceleration and maximal speed performance: a systematic review and meta-analysis.",
+   "population": "Well-trained adults over 18 (27 studies)",
+   "design": "Systematic review and meta-analysis of correlations"
+  },
+  {
+   "id": "PMID:37515375",
+   "doi": "10.1111/sms.14454",
+   "firstAuthor": "McKenzie A",
+   "year": 2023,
+   "journal": "Scand J Med Sci Sports",
+   "title": "Shoulder pain and injury risk factors in competitive swimmers: A systematic review.",
+   "population": "Competitive swimmers (22 studies)",
+   "design": "Systematic review, best-evidence synthesis"
+  },
+  {
+   "id": "PMID:37744222",
+   "doi": "10.7717/peerj.16081",
+   "firstAuthor": "Köhler HP",
+   "year": 2023,
+   "journal": "PeerJ",
+   "title": "Energy flow in men's javelin throw and its relationship to joint load and performance.",
+   "population": "10 experienced male javelin throwers",
+   "design": "Cross-sectional motion capture"
+  },
+  {
+   "id": "PMID:37752011",
+   "doi": "10.1136/bjsports-2023-106994",
+   "firstAuthor": "Mountjoy M",
+   "year": 2023,
+   "journal": "Br J Sports Med",
+   "title": "2023 International Olympic Committee's (IOC) consensus statement on Relative Energy Deficiency in Sport (REDs).",
+   "population": "Female and male athletes",
+   "design": "IOC consensus statement"
+  },
+  {
+   "id": "PMID:37979193",
+   "doi": "10.1080/02640414.2023.2283289",
+   "firstAuthor": "Marth AA",
+   "year": 2023,
+   "journal": "J Sports Sci",
+   "title": "Low back pain in adolescent rowers: Association to muscle changes detected by magnetic resonance imaging.",
+   "population": "20 male adolescent elite rowers (mean 15.8 y) vs 13 controls",
+   "design": "Prospective cross-sectional with MRI"
+  },
+  {
+   "id": "PMID:38016454",
+   "doi": "10.1123/ijspp.2023-0216",
+   "firstAuthor": "Astridge DJ",
+   "year": 2024,
+   "journal": "Int J Sports Physiol Perform",
+   "title": "Shifting the Energy Toward Los Angeles: Comparing the Energetic Contribution and Pacing Approach Between 2000- and 1500-m Maximal Ergometer Rowing.",
+   "population": "18 trained junior male rowers (16.7 y)",
+   "design": "Randomised crossover"
+  },
+  {
+   "id": "PMID:38165636",
+   "doi": "10.1007/s40279-023-01978-y",
+   "firstAuthor": "Llanos-Lagos C",
+   "year": 2024,
+   "journal": "Sports Med",
+   "title": "Effect of Strength Training Programs in Middle- and Long-Distance Runners' Economy at Different Running Speeds: A Systematic Review with Meta-analysis.",
+   "population": "Middle- and long-distance runners, moderately to highly trained",
+   "design": "Systematic review with three-level meta-analysis"
+  },
+  {
+   "id": "PMID:38261240",
+   "doi": "10.1007/s40279-024-01993-7",
+   "firstAuthor": "Wu H",
+   "year": 2024,
+   "journal": "Sports Med",
+   "title": "Do Exercise-Based Prevention Programs Reduce Injury in Endurance Runners? A Systematic Review and Meta-Analysis.",
+   "population": "1904 endurance runners in 9 RCTs",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:38262981",
+   "doi": "10.1177/19417381231225213",
+   "firstAuthor": "Hsu C",
+   "year": 2024,
+   "journal": "Sports Health",
+   "title": "Swimming Anatomy and Lower Back Injuries in Competitive Swimmers: A Narrative Review.",
+   "population": "Competitive swimmers",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:38380076",
+   "doi": "10.3389/fspor.2024.1352725",
+   "firstAuthor": "Nicholson G",
+   "year": 2024,
+   "journal": "Front Sports Act Living",
+   "title": "Differences in run-up, take-off, and flight characteristics: successful vs. unsuccessful high jump attempts at the IAAF world championships.",
+   "population": "7 male world indoor championship high jump finalists",
+   "design": "Cross-sectional kinematics"
+  },
+  {
+   "id": "PMID:38595642",
+   "doi": "10.3389/fphys.2024.1372689",
+   "firstAuthor": "Warneke K",
+   "year": 2024,
+   "journal": "Front Physiol",
+   "title": "Effects of chronic static stretching interventions on jumping and sprinting performance-a systematic review with multilevel meta-analysis.",
+   "population": "14 studies of chronic stretching",
+   "design": "Systematic review with multilevel meta-analysis"
+  },
+  {
+   "id": "PMID:38627351",
+   "doi": "10.1007/s40279-024-02018-z",
+   "firstAuthor": "Llanos-Lagos C",
+   "year": 2024,
+   "journal": "Sports Med",
+   "title": "The Effect of Strength Training Methods on Middle-Distance and Long-Distance Runners' Athletic Performance: A Systematic Review with Meta-analysis.",
+   "population": "Middle- and long-distance runners",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:38735533",
+   "doi": "10.1016/j.jshs.2024.05.002",
+   "firstAuthor": "Warneke K",
+   "year": 2024,
+   "journal": "J Sport Health Sci",
+   "title": "Revisiting the stretch-induced force deficit: A systematic review with multilevel meta-analysis of acute effects.",
+   "population": "2012 participants, 83 controlled studies",
+   "design": "Systematic review with multilevel meta-analysis"
+  },
+  {
+   "id": "PMID:38818973",
+   "doi": "10.1002/pmrj.13188",
+   "firstAuthor": "Rhim HC",
+   "year": 2024,
+   "journal": "PM R",
+   "title": "Epidemiology of injuries in U.S. high school track and field throwing events from 2008 to 2019.",
+   "population": "US high school athletes in throwing events (High School RIO 2008-2019)",
+   "design": "Descriptive epidemiology, national surveillance"
+  },
+  {
+   "id": "PMID:38823792",
+   "doi": "10.1123/ijspp.2024-0005",
+   "firstAuthor": "Loturco I",
+   "year": 2024,
+   "journal": "Int J Sports Physiol Perform",
+   "title": "Effects of Different Conditioning Activities on the Sprint Performance of Elite Sprinters: A Systematic Review With Meta-Analysis.",
+   "population": "Competitive sprinters (14 studies)",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:39148110",
+   "doi": "10.1186/s13102-024-00955-w",
+   "firstAuthor": "Hoenig T",
+   "year": 2024,
+   "journal": "BMC Sports Sci Med Rehabil",
+   "title": "Bone stress injuries in athletics (track and field) championships: findings from a prospective injury surveillance conducted across 24 international championships with 29,147 registered athletes.",
+   "population": "Elite athletes, 24 international championships, 29,147 registrations",
+   "design": "Prospective injury surveillance"
+  },
+  {
+   "id": "PMID:39158839",
+   "doi": "10.1080/00913847.2024.2394850",
+   "firstAuthor": "Rhim HC",
+   "year": 2025,
+   "journal": "Phys Sportsmed",
+   "title": "Epidemiology of injuries in united states high school track and field jumping events from 2008 - 2019.",
+   "population": "US high school athletes in jumping events (High School RIO 2008-2019)",
+   "design": "Descriptive epidemiology, national surveillance"
+  },
+  {
+   "id": "PMID:39232249",
+   "doi": "10.1111/sms.14720",
+   "firstAuthor": "Iatropoulos S",
+   "year": 2024,
+   "journal": "Scand J Med Sci Sports",
+   "title": "The Dose-Response Relationship of an Exercise-Based Injury Prevention Program: A Secondary Analysis of a Randomized Controlled Trial on Athletics (Track-and-Field) Athletes Over a 39-Week Follow-Up.",
+   "population": "840 athletics athletes over a 39-week season",
+   "design": "Secondary analysis of a cluster RCT"
+  },
+  {
+   "id": "PMID:39406358",
+   "doi": "10.1123/pes.2023-0150",
+   "firstAuthor": "Baker J",
+   "year": 2025,
+   "journal": "Pediatr Exerc Sci",
+   "title": "Physical Determinants of Sprint and Long Jump Performance in Male Youth Track-and-Field Athletes With Differing Maturity Statuses.",
+   "population": "54 male youth track athletes aged about 13, by maturity status",
+   "design": "Longitudinal observational (3 seasons)"
+  },
+  {
+   "id": "PMID:39557966",
+   "doi": "10.1038/s41598-024-79984-x",
+   "firstAuthor": "Zhou Z",
+   "year": 2024,
+   "journal": "Sci Rep",
+   "title": "Effects of two warm-up protocols on isokinetic knee strength, jumping ability and sprint swimming performance in competitive swimmers.",
+   "population": "24 male competitive swimmers",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:40010366",
+   "doi": "10.1123/ijspp.2024-0313",
+   "firstAuthor": "Behm S",
+   "year": 2025,
+   "journal": "Int J Sports Physiol Perform",
+   "title": "Does Maximum Strength Predict Rowing Performance in Elite Female Rowers?",
+   "population": "17 heavyweight elite female rowers",
+   "design": "Cross-sectional correlational"
+  },
+  {
+   "id": "PMID:40046224",
+   "doi": "10.52082/jssm.2025.128",
+   "firstAuthor": "Yang L",
+   "year": 2025,
+   "journal": "J Sports Sci Med",
+   "title": "Comparing The Effects of Maximal Strength Training, Plyometric Training, and Muscular Endurance Training on Swimming-Specific Performance Measures: A Randomized Parallel Controlled Study in Young Swimmers.",
+   "population": "27 high-level university swimmers (20 y)",
+   "design": "Randomised parallel controlled trial"
+  },
+  {
+   "id": "PMID:40077099",
+   "doi": "10.3390/healthcare13050538",
+   "firstAuthor": "Tavares N",
+   "year": 2025,
+   "journal": "Healthcare (Basel)",
+   "title": "Effect of Preventive Exercise Programs for Swimmer's Shoulder Injury on Rotator Cuff Torque and Balance in Competitive Swimmers: A Randomized Controlled Trial.",
+   "population": "Competitive swimmers aged 16-35",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:40472154",
+   "doi": "10.1249/JSR.0000000000001256",
+   "firstAuthor": "Schwanz KL",
+   "year": 2025,
+   "journal": "Curr Sports Med Rep",
+   "title": "Rib Bone Stress Injuries: A Narrative Review with Protocol for Rehabilitation and Prevention.",
+   "population": "Athletes in upper-body repetitive sports incl. rowing",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:40605029",
+   "doi": "10.1186/s13102-025-01153-y",
+   "firstAuthor": "Ze X",
+   "year": 2025,
+   "journal": "BMC Sports Sci Med Rehabil",
+   "title": "Risk factors associated with low back pain in rowers: a systematic review and meta-analysis.",
+   "population": "2082 rowers in 10 studies",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:40633262",
+   "doi": "10.1016/j.gaitpost.2025.07.312",
+   "firstAuthor": "Marques TBT",
+   "year": 2025,
+   "journal": "Gait Posture",
+   "title": "Preventive interventions for medial tibial stress syndrome: Systematic review and meta-analysis.",
+   "population": "8197 participants in 12 RCTs (mostly military and runners)",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:41055125",
+   "doi": "10.1111/sms.70142",
+   "firstAuthor": "Edouard P",
+   "year": 2025,
+   "journal": "Scand J Med Sci Sports",
+   "title": "Injuries by Events in Combined Events (Decathlon and Heptathlon) During 11 International Outdoor Athletics Championships.",
+   "population": "Elite decathletes and heptathletes, 11 international championships",
+   "design": "Total population surveillance study"
+  },
+  {
+   "id": "PMID:41312139",
+   "doi": "10.3389/fphys.2025.1718150",
+   "firstAuthor": "Yu S",
+   "year": 2025,
+   "journal": "Front Physiol",
+   "title": "Effect of complex training on lower limb strength and running economy in adolescent distance runners.",
+   "population": "32 male adolescent distance runners (16.8 y)",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:41342747",
+   "doi": "10.23736/S0022-4707.25.17045-X",
+   "firstAuthor": "Li D",
+   "year": 2026,
+   "journal": "J Sports Med Phys Fitness",
+   "title": "A 45-year global systematic evaluation of musculoskeletal injuries in swimmers: a systematic review and meta-analysis with 10973 athletes.",
+   "population": "10,973 amateur, competitive and elite swimmers",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:41384676",
+   "doi": "10.1111/sms.70182",
+   "firstAuthor": "Xu K",
+   "year": 2025,
+   "journal": "Scand J Med Sci Sports",
+   "title": "Effects of Resisted-Sprint Training on Sprint Performance and Mechanics: A Systematic Review and Meta-Analysis Focusing on Load Magnitude.",
+   "population": "1281 participants, 49 resisted sprint studies",
+   "design": "Systematic review, network meta-analysis"
+  },
+  {
+   "id": "PMID:41402030",
+   "doi": "10.1136/bjsports-2025-110606",
+   "firstAuthor": "Selhorst M",
+   "year": 2026,
+   "journal": "Br J Sports Med",
+   "title": "Immediate physical therapy is beneficial for adolescent athletes with active lumbar spondylolysis: a multicentre randomised trial.",
+   "population": "64 adolescent athletes aged 10-19 with active spondylolysis",
+   "design": "Multicentre randomised trial"
+  },
+  {
+   "id": "PMID:41474492",
+   "doi": "10.1007/s40279-025-02332-0",
+   "firstAuthor": "Williams NI",
+   "year": 2026,
+   "journal": "Sports Med",
+   "title": "2025 Update to the Female Athlete Triad Coalition Consensus Statement Part 2: Clinical Guidelines for Screening, Diagnosis, Treatment, and Return to Play for Adolescents and Adults.",
+   "population": "Adolescent and adult female athletes",
+   "design": "Consensus statement (clinical guidelines)"
+  },
+  {
+   "id": "PMID:41644276",
+   "doi": "10.1136/bjsports-2025-110541",
+   "firstAuthor": "Edouard P",
+   "year": 2026,
+   "journal": "Br J Sports Med",
+   "title": "Prevalence, incidence and characteristics of musculoskeletal injuries in Athletics (track and field): a systematic review and meta-analysis.",
+   "population": "All levels of athletes in Olympic athletics disciplines (216 studies)",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:42181777",
+   "doi": "10.4085/1062-6050-0203.25",
+   "firstAuthor": "Rhim HC",
+   "year": 2026,
+   "journal": "J Athl Train",
+   "title": "Epidemiology of Injuries in United States High School Track and Field Running Events From 2008 to 2019.",
+   "population": "US high school track athletes, running events (High School RIO 2008-2019)",
+   "design": "Descriptive epidemiology, national surveillance"
+  },
+  {
+   "id": "PMID:8784963",
+   "doi": "10.2165/00007256-199621060-00005",
+   "firstAuthor": "Morriss C",
+   "year": 1996,
+   "journal": "Sports Med",
+   "title": "Biomechanical factors critical for performance in the men's javelin throw.",
+   "population": "Elite male javelin throwers",
+   "design": "Narrative biomechanics review"
+  }
+ ],
+ "notes": [
+  "All sources fetched from PubMed E-utilities in this session. PMID 34251763 (Tenforde 2022, middle school BSI) was found but is RETRACTED and was excluded.",
+  "No high-quality prevention trials specific to throwing events, hurdles or rowing trunk endurance were found; findings there are descriptive or consensus."
+ ]
+}

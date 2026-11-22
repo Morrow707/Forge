@@ -1,0 +1,2546 @@
+{
+ "group": "D",
+ "generated": "2026-11-22",
+ "warmup": [
+  {
+   "finding": "Structured neuromuscular warm-ups (mixes of running, strength, balance, jumping and agility) cut injury rates in youth team sports by roughly a third to two-fifths.",
+   "dose": "Typically 10-20 min, before practice, 2-3x/week across a season",
+   "effect": "Lower-limb injury IRR 0.64 (25 studies, youth); adolescent team sports IRR 0.60 (40% fewer); 16 youth trials IRR 0.58",
+   "sources": [
+    "PMID:26084526",
+    "PMID:26673035",
+    "PMID:29184511"
+   ]
+  },
+  {
+   "finding": "Dose matters more than session length: two or three sessions a week gave the largest drop, and 10-15 minute sessions worked as well as longer ones. Programmes longer than 6 months were not better than shorter ones.",
+   "dose": "10-15 min per session, 2-3 sessions/week, more than ~30 min/week total",
+   "effect": "2x/week IRR 0.50; 3x/week IRR 0.40; 10-15 min IRR 0.55 vs longer 0.60",
+   "sources": [
+    "PMID:29184511"
+   ]
+  },
+  {
+   "finding": "The FIFA 11+ soccer warm-up lowers overall injury risk in recreational and sub-elite players; the older FIFA 11 did not show the same effect when pooled. Evidence in females is thinner than in males.",
+   "dose": "Whole 11+ programme as the team warm-up",
+   "effect": "FIFA programmes overall RR 0.75; FIFA 11+ alone IRR 0.61 (4 cluster RCTs)",
+   "sources": [
+    "PMID:28087568",
+    "PMID:39360984"
+   ]
+  },
+  {
+   "finding": "FIFA 11+ also lowered ankle injury rates in soccer (13-40 year olds) and ACL/knee injury in collegiate male soccer.",
+   "effect": "Ankle injuries about 32% lower with 11+; knee injuries RR 0.42 and ACL RR 0.24 in male college soccer (NNT 70 for ACL)",
+   "sources": [
+    "PMID:40084177",
+    "PMID:28389864"
+   ]
+  },
+  {
+   "finding": "In youth basketball (11-18 y), a 10-minute coach-led neuromuscular warm-up (13 aerobic, agility, strength and balance exercises) was linked to 36% fewer ankle and knee injuries, and worked as well unsupervised as supervised.",
+   "dose": "10 min, 13 exercises, as the team warm-up",
+   "effect": "IRR 0.64 (unsupervised 0.62, supervised 0.64)",
+   "sources": [
+    "PMID:34972488"
+   ]
+  },
+  {
+   "finding": "A neuromuscular warm-up in adolescent male basketball (15 y average) roughly halved injury prevalence over three months; in pooled youth soccer and basketball data it cut ankle sprains about a third.",
+   "dose": "Replaced usual warm-up for ~3 months",
+   "effect": "Injury prevalence 10.9% vs 23.3%; ankle sprain IRR 0.68",
+   "sources": [
+    "PMID:39545620",
+    "PMID:29864071"
+   ]
+  },
+  {
+   "finding": "Compliance drives the effect: in adolescent female footballers the most compliant third had far fewer ACL injuries than the least compliant, and compliance fell month by month over the season.",
+   "effect": "High-compliance tertile ACL RR 0.12 vs low-compliance; team compliance fell about 3% per month; time and motivation were the main barriers in elite handball",
+   "sources": [
+    "PMID:23962878",
+    "PMID:31344287"
+   ]
+  },
+  {
+   "finding": "Short static stretches cause only a small loss of strength and power, and the loss is smallest when each muscle is held 45 seconds or less. Static stretching alone should not be the whole warm-up.",
+   "dose": "Keep static holds to 45 s or less per muscle within a fuller warm-up",
+   "effect": "Strength -5.4%, power -1.9%, explosive performance -2.0% on average; larger losses with longer holds",
+   "sources": [
+    "PMID:22316148"
+   ]
+  },
+  {
+   "finding": "Stretching placed inside a warm-up that finishes with dynamic, sport-type activity has little effect on performance. Dynamic stretching gives small to moderate performance gains when done within minutes of activity; range-of-motion gains last under about 30 minutes.",
+   "effect": "Static and PNF stretching showed no clear effect on all-cause or overuse injury",
+   "sources": [
+    "PMID:26642915"
+   ]
+  },
+  {
+   "finding": "Across 25 trials, stretching programmes did not prevent sports injuries, while strength training and balance/proprioception training did.",
+   "effect": "Stretching RR 0.96 (no effect); balance training RR 0.55; strength training RR 0.32; overuse injuries RR 0.53",
+   "sources": [
+    "PMID:24100287"
+   ]
+  },
+  {
+   "finding": "Warming up in general improves performance in most outcomes tested, with little evidence of harm. A RAMP-style warm-up (raise, activate, mobilise, potentiate) beat static stretching and no warm-up for sprint and jump in youth soccer players.",
+   "effect": "Warm-up improved performance in 79% of outcomes; RAMP vs static d=0.41, vs control d=0.52",
+   "sources": [
+    "PMID:19996770",
+    "PMID:40630396",
+    "PMID:26400696"
+   ]
+  },
+  {
+   "finding": "In male youth soccer, stretch-based warm-ups (static, dynamic, ballistic or PNF) gave no extra jump, sprint or kicking benefit over a standard warm-up.",
+   "sources": [
+    "PMID:36875040"
+   ]
+  },
+  {
+   "finding": "Stretching increases joint range of motion over weeks, with static and PNF stretching beating dynamic; a single bout gives a small acute gain. Long-term static stretching lowers muscle stiffness.",
+   "effect": "Chronic ROM ES about 1.0; acute ROM ES about 0.56; stiffness ES -0.75 after 3-12 weeks",
+   "sources": [
+    "PMID:37301370",
+    "PMID:37962709",
+    "PMID:37231582"
+   ]
+  },
+  {
+   "finding": "Stretching after exercise (cool-down) did not speed recovery of strength or reduce soreness compared with passive rest.",
+   "sources": [
+    "PMID:34025459"
+   ]
+  },
+  {
+   "finding": "A coach-led warm-up targeting landing technique and trunk control (STOP-X, 8 weeks) improved jump-landing scores and lumbopelvic control in female basketball players who showed knee valgus.",
+   "sources": [
+    "PMID:40745375"
+   ]
+  },
+  {
+   "finding": "Most combined warm-up and training programmes cut lower-limb injury and also improve sprint, jump and balance; recent syntheses repeat that dynamic warm-ups help acute sprint and jump while recovery evidence is mixed.",
+   "sources": [
+    "PMID:42188564"
+   ]
+  }
+ ],
+ "joints": [
+  {
+   "joint": "shoulder",
+   "commonInjuries": [
+    "Overuse shoulder pain in throwing athletes (handball, baseball, volleyball, softball, swimming)",
+    "Throwing-related rotator cuff and labral problems",
+    "Anterior dislocation/instability in contact sport"
+   ],
+   "riskFactors": [
+    "Weak external rotators and supraspinatus before the season",
+    "Low external/internal rotation strength ratio",
+    "Reduced total rotation range in the throwing shoulder",
+    "Obvious scapular dyskinesis",
+    "Throwing volume, pitching with fatigue or arm pain",
+    "Dominant arm, prior injury, older age in female overhead athletes",
+    "Excess abducted external rotation (in one cohort of left-handed high school pitchers)"
+   ],
+   "riskReduction": [
+    {
+     "finding": "A coach-delivered shoulder programme added to the handball warm-up lowered shoulder problems in 660 elite players.",
+     "exercises": [],
+     "dose": "3x/week as part of the warm-up, 7-month season",
+     "effect": "Shoulder problems 17% vs 23%; OR 0.72",
+     "sources": [
+      "PMID:27313171"
+     ]
+    },
+    {
+     "finding": "In elite handball, external rotation weakness, lower total rotation range and obvious scapular dyskinesis each predicted shoulder injury, which is why prevention targets those three things.",
+     "exercises": [],
+     "dose": "",
+     "effect": "Scapular dyskinesis OR 8.4; each 10 Nm more ER strength OR 0.71; each 5 degrees more rotation OR 0.77",
+     "sources": [
+      "PMID:24948083"
+     ]
+    },
+    {
+     "finding": "In professional pitchers, preseason weakness in external rotation and supraspinatus was associated with later throwing injury needing surgery.",
+     "exercises": [],
+     "dose": "",
+     "effect": "",
+     "sources": [
+      "PMID:20489215"
+     ]
+    },
+    {
+     "finding": "A warm-up of stretching, mobility and balance drills cut shoulder and elbow injuries in 9-11 year old baseball players and raised ball speed.",
+     "exercises": [],
+     "dose": "During every warm-up, 12 months",
+     "effect": "1.7 vs 3.1 injuries per 1000 exposures (HR 1.94 for control)",
+     "sources": [
+      "PMID:31336051",
+      "PMID:38311104"
+     ]
+    },
+    {
+     "finding": "Pooled data did not find GIRD (loss of internal rotation) to be a statistically clear risk factor for upper-limb injury in overhead athletes; trends pointed the same way but crossed no-effect. Range-of-motion screening alone is a weak predictor.",
+     "exercises": [],
+     "dose": "",
+     "effect": "",
+     "sources": [
+      "PMID:29381423"
+     ]
+    },
+    {
+     "finding": "Stretches and manual techniques for GIRD (sleeper stretch, cross-body stretch, joint mobilisation) improve range and pain, with no one method clearly better.",
+     "exercises": [],
+     "dose": "",
+     "effect": "",
+     "sources": [
+      "PMID:38897400"
+     ]
+    },
+    {
+     "finding": "Volume and fatigue are the biggest modifiable shoulder/elbow risks in adolescent pitchers: injured pitchers threw more months, games, innings and pitches and more often pitched tired or in pain. Female overhead athletes show dominant-arm and volume as leading risks.",
+     "exercises": [],
+     "dose": "",
+     "effect": "Overuse/volume RR about 1.45 in female overhead athletes",
+     "sources": [
+      "PMID:16452269",
+      "PMID:38898813"
+     ]
+    },
+    {
+     "finding": "Thrower's Ten exercises improved upper-limb balance and explosive power in an RCT; the advanced version is described as a bridge from rehab to training for dynamic shoulder control.",
+     "exercises": [],
+     "dose": "",
+     "effect": "",
+     "sources": [
+      "PMID:33080765",
+      "PMID:22293772"
+     ]
+    }
+   ],
+   "returnToTraining": [
+    {
+     "finding": "Return to throwing after a shoulder or elbow injury is criteria-based: restore range, strength and scapular control first, then plyometrics, then an interval throwing programme that adds distance, effort and volume gradually.",
+     "criteria": "Normal ROM, strength and scapular mechanics, then plyometric progression, then interval throwing tracked by workload",
+     "sources": [
+      "PMID:29450826"
+     ]
+    },
+    {
+     "finding": "A modern interval throwing programme for pitchers built on workload data runs about 217 days and keeps week-to-week workload change inside a 0.7-1.3 band far more of the time than the older programme.",
+     "criteria": "Gradual chronic workload build; acute:chronic ratio kept near 0.7-1.3",
+     "sources": [
+      "PMID:38439773"
+     ]
+    },
+    {
+     "finding": "After surgical stabilisation for instability, about 7 in 10 return to their pre-injury level (Bankart or Latarjet), with lower rates in overhead athletes. Surgery and its timeline are a surgeon's decision.",
+     "criteria": "Clinician-led; return rates 60-100% across studies",
+     "sources": [
+      "PMID:28944249",
+      "PMID:36646363"
+     ]
+    },
+    {
+     "finding": "Return to sport should be treated as a continuum running alongside rehab, not a single end-point test, and decided jointly by clinician, athlete and coach using risk and risk-tolerance reasoning.",
+     "criteria": "Shared decision; StARRT framework",
+     "sources": [
+      "PMID:27226389"
+     ]
+    }
+   ]
+  },
+  {
+   "joint": "elbow",
+   "commonInjuries": [
+    "Medial elbow overuse in youth pitchers (including ulnar collateral ligament injury)",
+    "Lateral elbow tendinopathy (racket sports)",
+    "Throwing-related elbow pain requiring surgery in older adolescents"
+   ],
+   "riskFactors": [
+    "Pitching more than 100 innings a year",
+    "High pitch counts, many months of pitching, showcases",
+    "Pitching while fatigued or in pain",
+    "Also playing catcher (trend)",
+    "Higher pitch velocity",
+    "Coaches unaware of pitch-count guidance"
+   ],
+   "riskReduction": [
+    {
+     "finding": "In a 10-year study of youth pitchers, those throwing more than 100 innings a year were about three and a half times more likely to be seriously injured.",
+     "exercises": [],
+     "dose": "Cap innings below about 100 per year",
+     "effect": "RR 3.5; cumulative injury 5%",
+     "sources": [
+      "PMID:21098816"
+     ]
+    },
+    {
+     "finding": "Adolescent pitchers who got hurt had pitched more and more often while tired; volume control and rest are the main levers.",
+     "exercises": [],
+     "dose": "Limit pitches per game and per year, avoid year-round pitching, never pitch through fatigue or arm pain",
+     "effect": "",
+     "sources": [
+      "PMID:16452269"
+     ]
+    },
+    {
+     "finding": "Many youth coaches do not track pitch counts by published guidance: over half were non-compliant and few could name overuse risk factors, so education is part of prevention.",
+     "exercises": [],
+     "dose": "",
+     "effect": "",
+     "sources": [
+      "PMID:30134349"
+     ]
+    },
+    {
+     "finding": "A warm-up of stretching, mobility and balance work cut combined shoulder and elbow injuries in youth baseball.",
+     "exercises": [],
+     "dose": "Each warm-up, 12 months",
+     "effect": "1.7 vs 3.1 per 1000 exposures",
+     "sources": [
+      "PMID:31336051"
+     ]
+    },
+    {
+     "finding": "Elbow flexion during the pitch did not differ between youth pitchers with and without arm pain, so mechanics checks should look beyond that single angle.",
+     "exercises": [],
+     "dose": "",
+     "effect": "",
+     "sources": [
+      "PMID:39564394"
+     ]
+    },
+    {
+     "finding": "For lateral elbow tendinopathy, eccentric wrist extensor exercise improves pain and strength and beats concentric exercise for pain; manual therapy plus eccentric training are the best supported physiotherapy options.",
+     "exercises": [],
+     "dose": "",
+     "effect": "Pain SMD -0.63, strength SMD 1.05 vs adjunct therapy alone",
+     "sources": [
+      "PMID:34501416",
+      "PMID:34397403"
+     ]
+    }
+   ],
+   "returnToTraining": [
+    {
+     "finding": "Non-operative care of ulnar collateral ligament injuries returns about 80% to sport; partial proximal tears do much better than distal ones. Grading and treatment choice belong to the treating clinician.",
+     "criteria": "Clinician decision; RTS 79.7%, proximal 89.7% vs distal 41.2%",
+     "sources": [
+      "PMID:36876746"
+     ]
+    },
+    {
+     "finding": "After UCL reconstruction, most professional pitchers return to play in about a year, but return to the same level is lower and takes about 15 months.",
+     "criteria": "Surgical pathway; RTP 80-97% at ~12 months",
+     "sources": [
+      "PMID:33748295"
+     ]
+    },
+    {
+     "finding": "Throwers return through a criteria-based sequence ending in an interval throwing programme, tracked by workload.",
+     "criteria": "Full ROM and strength, then plyometrics, then interval throwing",
+     "sources": [
+      "PMID:29450826",
+      "PMID:38439773"
+     ]
+    }
+   ]
+  },
+  {
+   "joint": "wrist",
+   "commonInjuries": [
+    "Distal radial physeal stress injury ('gymnast's wrist') in skeletally immature gymnasts",
+    "Wrist sprains and fractures from falls (snowboarding, contact sport)",
+    "Scaphoid fracture",
+    "Triangular fibrocartilage complex (TFCC) tears",
+    "Wrist and hand injuries in volleyball and tennis"
+   ],
+   "riskFactors": [
+    "Repeated weight-bearing through the hands in immature athletes",
+    "Age 10-14, higher skill level and more years of training in gymnastics",
+    "Falling onto an outstretched hand",
+    "High weekly training frequency and hours in tennis"
+   ],
+   "riskReduction": [
+    {
+     "finding": "Wrist pain is very common in young gymnasts and tracks with radiographic physeal stress injury; pain was more common at ages 10-14 and with more training years.",
+     "exercises": [],
+     "dose": "",
+     "effect": "Wrist pain in 56% overall, 83% at age 10-14; about half had grade 2+ physeal stress",
+     "sources": [
+      "PMID:12435656"
+     ]
+    },
+    {
+     "finding": "Reviews of gymnast's wrist stress early recognition, load modification and attention to upper-limb weight-bearing volume, because long-term growth-plate damage can follow.",
+     "exercises": [],
+     "dose": "Reduce hand weight-bearing load when pain appears",
+     "effect": "",
+     "sources": [
+      "PMID:16493174",
+      "PMID:32950218",
+      "PMID:41835325"
+     ]
+    },
+    {
+     "finding": "Wrist guards roughly halve wrist injuries in snowboarders.",
+     "exercises": [],
+     "dose": "",
+     "effect": "OR 0.46; about 1 injury prevented per 50 riders",
+     "sources": [
+      "PMID:17414485",
+      "PMID:22035394",
+      "PMID:31431273"
+     ]
+    },
+    {
+     "finding": "In tennis, training three or more times a week or over 4.5 hours a week roughly doubled injury odds, and the wrist was the second most injured site.",
+     "exercises": [],
+     "dose": "",
+     "effect": "OR about 2.0-2.3 for higher training load",
+     "sources": [
+      "PMID:31311243"
+     ]
+    },
+    {
+     "finding": "In youth volleyball, the wrist, hand and fingers were the second most injured region after the ankle.",
+     "exercises": [],
+     "dose": "",
+     "effect": "",
+     "sources": [
+      "PMID:37789463"
+     ]
+    },
+    {
+     "finding": "Grip-lock injuries in gymnasts link to excessive forearm flexion and wrist overpronation on bar swings; equipment fit and technique are the levers, but prevention evidence is limited.",
+     "exercises": [],
+     "dose": "",
+     "effect": "",
+     "sources": [
+      "PMID:36834283"
+     ]
+    }
+   ],
+   "returnToTraining": [
+    {
+     "finding": "After a scaphoid fracture managed without surgery, about 90% return to sport; return was much faster when sport in a cast was allowed (about 2 weeks) than when casting had to finish first (about 14 weeks). Fracture management is a clinician's decision.",
+     "criteria": "Clinician-led; union and cast decisions",
+     "sources": [
+      "PMID:30788227"
+     ]
+    },
+    {
+     "finding": "After arthroscopic TFCC repair, about 84% return to work or sport, with range and grip usually back above 90% of the other side.",
+     "criteria": "Grip strength and ROM >90% of uninjured side",
+     "sources": [
+      "PMID:36728770",
+      "PMID:30943287"
+     ]
+    },
+    {
+     "finding": "In professional athletes, hand and wrist injuries returned to play in about 2.8 months on average.",
+     "criteria": "Clinician-led",
+     "sources": [
+      "PMID:33088241"
+     ]
+    }
+   ]
+  },
+  {
+   "joint": "low back and trunk",
+   "commonInjuries": [
+    "Non-specific low back pain in adolescent athletes",
+    "Lumbar spondylolysis (pars stress fracture), especially with repeated extension and rotation",
+    "Lumbar bone stress injury in young cricket fast bowlers"
+   ],
+   "riskFactors": [
+    "Sport participation, high training volume/intensity",
+    "Concurrent lower-limb pain",
+    "Overweight/high BMI, older age",
+    "Low back extensor endurance",
+    "Previous low back pain or lumbar bone stress injury",
+    "Biological maturity and poor lumbopelvic control in fast bowlers"
+   ],
+   "riskReduction": [
+    {
+     "finding": "Low back pain is common in adolescent athletes; risk rises with sport volume and intensity, lower-limb pain, high BMI and older age.",
+     "exercises": [],
+     "dose": "",
+     "effect": "12-month prevalence 42%; 2-year incidence 11%",
+     "sources": [
+      "PMID:36150752",
+      "PMID:28915154"
+     ]
+    },
+    {
+     "finding": "Exercise combined with education is the best supported way to prevent a low back pain episode; exercise alone may also help.",
+     "exercises": [],
+     "dose": "",
+     "effect": "Exercise + education RR 0.55; exercise alone RR 0.65",
+     "sources": [
+      "PMID:26752509"
+     ]
+    },
+    {
+     "finding": "Exercise programmes lower future back pain intensity, and exercise with education lowers future disability.",
+     "exercises": [],
+     "dose": "",
+     "effect": "Pain MD -4.5; disability MD -6.3 (0-100 scales)",
+     "sources": [
+      "PMID:32646887"
+     ]
+    },
+    {
+     "finding": "Low isometric back extensor endurance (Biering-Sorensen hold) predicted first-time low back trouble in men; good endurance appeared protective.",
+     "exercises": [],
+     "dose": "",
+     "effect": "",
+     "sources": [
+      "PMID:6233709",
+      "PMID:2529630"
+     ]
+    },
+    {
+     "finding": "Athletes with a history of low back pain show lower trunk extensor endurance and extension torque, supporting endurance work in prevention.",
+     "exercises": [],
+     "dose": "",
+     "effect": "Large negative correlation between extensor endurance and disability (r=-0.79)",
+     "sources": [
+      "PMID:38854796",
+      "PMID:27274419"
+     ]
+    },
+    {
+     "finding": "In young cricket fast bowlers, lumbar bone stress injury is common and tied to prior injury and maturity; workload regulation, technique screening and lumbopelvic strengthening are the recommended levers.",
+     "exercises": [],
+     "dose": "Monitor bowling workload",
+     "effect": "Seasonal prevalence 16.3%",
+     "sources": [
+      "PMID:42448493",
+      "PMID:41552182"
+     ]
+    }
+   ],
+   "returnToTraining": [
+    {
+     "finding": "Most elite athletes with active spondylolysis returned to the same level within about 5.5 months of conservative treatment; healing was most likely with a unilateral lesion.",
+     "criteria": "Clinician-led diagnosis, imaging and bracing decisions",
+     "sources": [
+      "PMID:11806390"
+     ]
+    },
+    {
+     "finding": "In children, early-stage spondylolysis healed in almost all cases within about 2.5 months of conservative care; healing was lower at later stages and recurrence was about 26%.",
+     "criteria": "Stage on imaging decides plan; clinician decision",
+     "sources": [
+      "PMID:27755499"
+     ]
+    },
+    {
+     "finding": "Simple exam tests are not reliable enough to diagnose spondylolysis in athletes with back pain, so suspected pars injury in a young athlete needs clinical assessment and imaging.",
+     "criteria": "Refer to clinician",
+     "sources": [
+      "PMID:27317501"
+     ]
+    }
+   ]
+  },
+  {
+   "joint": "hip and groin",
+   "commonInjuries": [
+    "Hamstring strain (sprinting)",
+    "Adductor-related groin pain",
+    "Acute adductor muscle injury",
+    "Iliopsoas, inguinal, pubic and hip-related groin pain"
+   ],
+   "riskFactors": [
+    "Previous hamstring, ACL or calf injury",
+    "Older age",
+    "Low eccentric hamstring strength and high-speed running exposure",
+    "Previous groin injury",
+    "Low adductor strength, absolute and relative to abductors",
+    "Higher level of play, lower sport-specific training",
+    "Reduced hip rotation range"
+   ],
+   "riskReduction": [
+    {
+     "finding": "Programmes that include the Nordic hamstring exercise roughly halve hamstring injuries across sports.",
+     "exercises": [],
+     "dose": "",
+     "effect": "RR 0.49 overall; 0.52 in RCTs only",
+     "sources": [
+      "PMID:30808663"
+     ]
+    },
+    {
+     "finding": "A progressive eccentric programme in men's soccer cut new and especially recurrent hamstring injuries; amateur soccer RCT agreed.",
+     "exercises": [],
+     "dose": "10-week progressive build then a weekly in-season dose (Petersen); 25 sessions over 13 weeks (van der Horst)",
+     "effect": "Overall RR 0.29, recurrent RR 0.14, NNT 13; amateur OR 0.28",
+     "sources": [
+      "PMID:21825112",
+      "PMID:25794868",
+      "PMID:24336837"
+     ]
+    },
+    {
+     "finding": "Eccentric training reduced hamstring injury 57-70% across RCTs; low-volume Nordic programmes gave strength gains as large as high-volume ones after 6+ weeks, and high volumes caused more soreness, which hurts compliance.",
+     "exercises": [],
+     "dose": "Low volume is enough after at least 6 weeks",
+     "effect": "Eccentric strength g about 2.1-2.3 for both volumes",
+     "sources": [
+      "PMID:35384731",
+      "PMID:31502142",
+      "PMID:36651719"
+     ]
+    },
+    {
+     "finding": "Recent hamstring injury, any history of it, older age and prior ACL or calf strain raise hamstring risk.",
+     "exercises": [],
+     "dose": "",
+     "effect": "Recent HSI RR 4.8; any history RR 2.7; prior ACL RR 1.7",
+     "sources": [
+      "PMID:32299793"
+     ]
+    },
+    {
+     "finding": "A single-exercise adductor programme (Copenhagen adduction with three levels) cut groin problems by about 40% in male footballers.",
+     "exercises": [],
+     "dose": "3x/week for 6-8 weeks preseason, then 1x/week in season",
+     "effect": "Prevalence 13.5% vs 21.3%; OR 0.59",
+     "sources": [
+      "PMID:29891614"
+     ]
+    },
+    {
+     "finding": "Eight weeks of the Copenhagen adduction exercise in season raised eccentric adductor strength by about 36% with high compliance and little soreness.",
+     "exercises": [],
+     "dose": "8-week progressive in-season programme",
+     "effect": "+35.7% eccentric adduction strength",
+     "sources": [
+      "PMID:26589483"
+     ]
+    },
+    {
+     "finding": "Previous groin injury, higher level of play, weaker adductors and less sport-specific training are associated with groin injury; screening tools such as hamstring:quadriceps ratio and hip abduction range have some predictive value.",
+     "exercises": [],
+     "dose": "",
+     "effect": "",
+     "sources": [
+      "PMID:25833903",
+      "PMID:22909185",
+      "PMID:36661128"
+     ]
+    },
+    {
+     "finding": "Interventions including the Nordic, FIFA 11+ and core/balance work reduced hamstring injuries in professional and semi-professional football.",
+     "exercises": [],
+     "dose": "",
+     "effect": "IRR 0.44",
+     "sources": [
+      "PMID:34444026"
+     ]
+    }
+   ],
+   "returnToTraining": [
+    {
+     "finding": "Hamstring rehab is mostly progressed by pain; clearance usually uses clinical exam and performance tests. Protocols using the Askling H-test had the lowest re-injury rates.",
+     "criteria": "Pain-guided progression; clinical tests, strength and sprint tests",
+     "sources": [
+      "PMID:28035586"
+     ]
+    },
+    {
+     "finding": "A lengthening-focused hamstring rehab protocol returned elite footballers about three weeks faster than conventional exercise; starting lengthening work earlier did not speed return further.",
+     "criteria": "Lengthening exercises (e.g., Askling L-protocol)",
+     "sources": [
+      "PMID:23536466",
+      "PMID:35338036"
+     ]
+    },
+    {
+     "finding": "After acute adductor injuries in male athletes, criteria-based rehab got grade 0-2 injuries pain-free in about 13 days and back to full team training in about 18 days.",
+     "criteria": "Pain-free clinical tests, completed controlled sport training, then full team training",
+     "sources": [
+      "PMID:32064292"
+     ]
+    },
+    {
+     "finding": "Groin pain should be classified clinically (adductor-, iliopsoas-, inguinal-, pubic- or hip-related) before rehab is planned; that classification is a clinician task.",
+     "criteria": "Clinical classification (Doha)",
+     "sources": [
+      "PMID:26031643"
+     ]
+    },
+    {
+     "finding": "Athletes with longstanding groin pain show lower adductor squeeze values and reduced hip range, so squeeze strength is a useful rehab marker.",
+     "criteria": "Adductor squeeze test",
+     "sources": [
+      "PMID:23684372"
+     ]
+    }
+   ]
+  },
+  {
+   "joint": "knee",
+   "commonInjuries": [
+    "Anterior cruciate ligament (ACL) rupture, highest in adolescent females",
+    "Patellofemoral pain",
+    "Osgood-Schlatter (tibial tubercle apophysitis) in growing athletes",
+    "Patellar tendinopathy"
+   ],
+   "riskFactors": [
+    "Knee abduction (valgus) angle and moment on landing, higher landing force",
+    "Female sex for non-contact ACL",
+    "Quadriceps weakness (patellofemoral pain in military); hip weakness in adolescents not consistently a risk",
+    "Younger age and high activity for second ACL injury",
+    "Early return to sport and quadriceps asymmetry after ACL surgery"
+   ],
+   "riskReduction": [
+    {
+     "finding": "ACL prevention programmes halve ACL injuries in athletes overall and cut non-contact ACL injuries by two-thirds in females; evidence in males is insufficient.",
+     "exercises": [],
+     "dose": "",
+     "effect": "All ACL OR 0.50; female non-contact OR 0.33",
+     "sources": [
+      "PMID:29737024"
+     ]
+    },
+    {
+     "finding": "In young females, neuromuscular training cut ACL risk from 1 in 54 to 1 in 111, and middle/high school programmes worked better than college/pro ones.",
+     "exercises": [],
+     "dose": "Average 24 min/session, 2.5x/week, about 18 h total",
+     "effect": "OR 0.51; school-age OR 0.38",
+     "sources": [
+      "PMID:30001501"
+     ]
+    },
+    {
+     "finding": "Female athletes who later tore an ACL landed with more knee abduction and much higher abduction moments; programmes should train the frontal plane, not only knee bend.",
+     "exercises": [],
+     "dose": "",
+     "effect": "Knee abduction moment 2.5x higher; predicted injury 78% sensitivity, 73% specificity",
+     "sources": [
+      "PMID:15722287",
+      "PMID:19372087"
+     ]
+    },
+    {
+     "finding": "Youth neuromuscular warm-ups reduce lower-limb injury, with a protective trend for the knee; youth basketball cut knee and ankle injury 36%.",
+     "exercises": [],
+     "dose": "10 min per session",
+     "effect": "Lower-limb IRR 0.64; knee IRR 0.74 (not significant); basketball knee+ankle IRR 0.64",
+     "sources": [
+      "PMID:26084526",
+      "PMID:34972488"
+     ]
+    },
+    {
+     "finding": "Compliance decides results: highly compliant adolescent female footballers had 88% fewer ACL injuries.",
+     "exercises": [],
+     "dose": "",
+     "effect": "RR 0.12",
+     "sources": [
+      "PMID:23962878"
+     ]
+    },
+    {
+     "finding": "Quadriceps weakness predicted patellofemoral pain in military recruits; age, height, weight, BMI and Q angle did not. Squats load the patellofemoral joint most between 60 and 90 degrees of knee bend.",
+     "exercises": [],
+     "dose": "",
+     "effect": "Quadriceps weakness SMD -0.69",
+     "sources": [
+      "PMID:30242107",
+      "PMID:35954598"
+     ]
+    },
+    {
+     "finding": "Osgood-Schlatter is mostly self-limiting; reviews suggest quadriceps and hamstring flexibility work and load management at sensitive ages, but prevention trials are lacking.",
+     "exercises": [],
+     "dose": "",
+     "effect": "",
+     "sources": [
+      "PMID:31714260",
+      "PMID:35742062"
+     ]
+    }
+   ],
+   "returnToTraining": [
+    {
+     "finding": "After ACL reconstruction, waiting until at least 9 months and having symmetrical quadriceps strength cut reinjury: risk fell 51% for each month return was delayed up to 9 months, and returning to pivoting sport raised risk 4-fold.",
+     "criteria": "At least 9 months after surgery; quadriceps LSI near symmetry; passing RTS battery",
+     "sources": [
+      "PMID:27162233"
+     ]
+    },
+    {
+     "finding": "Professional athletes who did not meet all six discharge criteria (isokinetic strength, running agility, hop tests) had four times the graft rupture risk; a lower hamstring:quadriceps ratio also raised risk.",
+     "criteria": "Six criteria incl. strength and single, triple and crossover hop tests",
+     "sources": [
+      "PMID:27215935"
+     ]
+    },
+    {
+     "finding": "Only about 23% of patients pass full RTS test batteries; passing lowered graft rupture risk but did not clearly lower all subsequent ACL injuries.",
+     "criteria": "Test batteries help but do not guarantee safety",
+     "sources": [
+      "PMID:30905035"
+     ]
+    },
+    {
+     "finding": "Typical phase goals are a quadriceps and hop LSI of 85%+ before agility and sprinting, and 90%+ with no pain or swelling and assessed confidence before full return.",
+     "criteria": "LSI >=85% mid-phase, >=90% at clearance; no effusion; psychological readiness",
+     "sources": [
+      "PMID:41314701",
+      "PMID:34932514"
+     ]
+    },
+    {
+     "finding": "Hop symmetry often passes while quadriceps symmetry is still under 90%, so strength must be measured, not inferred from hops.",
+     "criteria": "Measure quadriceps LSI directly",
+     "sources": [
+      "PMID:38220029"
+     ]
+    },
+    {
+     "finding": "Young athletes face high second-ACL rates: about 23% for under-25s who return to sport, and 27% for female soccer players.",
+     "criteria": "Plan secondary prevention",
+     "sources": [
+      "PMID:26772611",
+      "PMID:36988238"
+     ]
+    },
+    {
+     "finding": "Psychological readiness (ACL-RSI) rises from 6 to 12 months in adolescents and predicts return; knee confidence and limb symmetry relate to readiness.",
+     "criteria": "ACL-RSI screening alongside physical criteria",
+     "sources": [
+      "PMID:36638341",
+      "PMID:29718684"
+     ]
+    },
+    {
+     "finding": "Rehab protocols in soccer vary widely, and many studies use only one or two test batteries; the surgeon and therapist own the timeline.",
+     "criteria": "Clinician-led",
+     "sources": [
+      "PMID:38622858"
+     ]
+    }
+   ]
+  },
+  {
+   "joint": "ankle",
+   "commonInjuries": [
+    "Lateral ankle sprain, the most common sport injury in many court and field sports",
+    "Recurrent sprain and chronic ankle instability",
+    "Achilles and patellar tendinopathy in adolescents (Achilles less common)"
+   ],
+   "riskFactors": [
+    "Previous ankle sprain (about 2-3x risk)",
+    "Basketball vs soccer",
+    "In males: higher BMI/weight, weaker hip abduction, poorer dynamic balance",
+    "In females: weaker dorsiflexion strength",
+    "Female sex and younger age have higher incidence"
+   ],
+   "riskReduction": [
+    {
+     "finding": "Proprioceptive/balance training reduces ankle sprains by about a third, both for first sprains and repeats.",
+     "exercises": [],
+     "dose": "",
+     "effect": "RR 0.65 overall; 0.64 with prior sprain; NNT 17",
+     "sources": [
+      "PMID:24831756",
+      "PMID:29140127"
+     ]
+    },
+    {
+     "finding": "A balance programme in high school soccer and basketball cut ankle sprains, with the largest benefit in those with a past sprain.",
+     "exercises": [],
+     "dose": "",
+     "effect": "1.13 vs 1.87 sprains per 1000 exposures; RR 0.56",
+     "sources": [
+      "PMID:16476915"
+     ]
+    },
+    {
+     "finding": "Unsupervised home balance-board training after a sprain cut recurrences by about 35%.",
+     "exercises": [],
+     "dose": "Done at home after usual care (12-70 year olds)",
+     "effect": "22% vs 33% recurrence; RR 0.63; NNT 9",
+     "sources": [
+      "PMID:19589822",
+      "PMID:18492235"
+     ]
+    },
+    {
+     "finding": "Lace-up ankle braces cut acute ankle injuries by about two-thirds in high school basketball, with or without a past injury.",
+     "exercises": [],
+     "dose": "",
+     "effect": "HR 0.32",
+     "sources": [
+      "PMID:21795671"
+     ]
+    },
+    {
+     "finding": "Previous sprain doubles to triples risk, and risk factors differ by sex (hip abduction strength and balance in males; dorsiflexion strength in females).",
+     "exercises": [],
+     "dose": "",
+     "effect": "Prior sprain OR 2.74",
+     "sources": [
+      "PMID:36399159",
+      "PMID:29864071"
+     ]
+    },
+    {
+     "finding": "Neuromuscular warm-ups including FIFA 11+ reduce ankle sprains in youth soccer and basketball.",
+     "exercises": [],
+     "dose": "",
+     "effect": "Youth ankle sprain IRR 0.68; FIFA 11+ about 32% fewer ankle injuries",
+     "sources": [
+      "PMID:29864071",
+      "PMID:40084177"
+     ]
+    },
+    {
+     "finding": "Females and younger athletes have the highest sprain incidence, so prevention should start early.",
+     "exercises": [],
+     "dose": "",
+     "effect": "Females 13.6 vs males 6.9 per 1000 exposures",
+     "sources": [
+      "PMID:24105612"
+     ]
+    },
+    {
+     "finding": "Tape and braces restrict inversion; semirigid braces restrict more after exercise. They did not improve proprioception in unstable ankles, and guidelines favour braces for preventing recurrence.",
+     "exercises": [],
+     "dose": "",
+     "effect": "",
+     "sources": [
+      "PMID:10778794",
+      "PMID:22513304",
+      "PMID:29514819",
+      "PMID:31431273"
+     ]
+    }
+   ],
+   "returnToTraining": [
+    {
+     "finding": "Exercise-based rehab after an acute sprain cuts reinjury, but the best content and dose are not settled.",
+     "criteria": "Balance and strength rehab",
+     "sources": [
+      "PMID:30612980"
+     ]
+    },
+    {
+     "finding": "An international consensus (PAASS) sets five domains for return after a lateral ankle sprain: Pain, Ankle impairments, Athlete perception, Sensorimotor control and Sport/functional performance.",
+     "criteria": "Pain in sport and over 24 h; ROM, strength, endurance, power; confidence; balance; hops, agility, full session",
+     "sources": [
+      "PMID:34158354"
+     ]
+    },
+    {
+     "finding": "Clinical guidelines favour supervised exercise over passive treatment, reserve surgery for failed rehab and suggest braces to prevent recurrence. Suspected fracture or severe sprains need a clinician.",
+     "criteria": "Clinician assessment for severe sprains",
+     "sources": [
+      "PMID:29514819"
+     ]
+    },
+    {
+     "finding": "Ongoing instability after a sprain needs assessment because chronic instability can follow; evaluation in the subacute and return phases should look for those deficits.",
+     "criteria": "Clinician exam",
+     "sources": [
+      "PMID:31161943",
+      "PMID:31161942"
+     ]
+    }
+   ]
+  },
+  {
+   "joint": "neck (and concussion)",
+   "commonInjuries": [
+    "Sport-related concussion",
+    "Cervical spine injury in collision sports (tackling, scrums)",
+    "Neck strain"
+   ],
+   "riskFactors": [
+    "Lower overall neck strength (high school athletes)",
+    "Collision sport, bodychecking in youth hockey",
+    "No mouthguard in collision sports",
+    "Illegal or unsafe technique in tackling and scrummaging"
+   ],
+   "riskReduction": [
+    {
+     "finding": "In high school athletes, each extra pound of neck strength lowered concussion odds by about 5% after adjusting for sex and sport.",
+     "exercises": [],
+     "dose": "",
+     "effect": "OR 0.95 per lb",
+     "sources": [
+      "PMID:24930131"
+     ]
+    },
+    {
+     "finding": "A coach-delivered pre-activity programme (balance, whole-body resistance including neck work, plyometrics, landing and cutting) in schoolboy rugby lowered concussion, and teams doing it 3+ times a week saw large drops in all match injuries.",
+     "exercises": [],
+     "dose": "Pre-activity, 3+ sessions/week",
+     "effect": "Concussion RR 0.71 overall; with 3+/week RR 0.41 concussion and 0.28 all match injury",
+     "sources": [
+      "PMID:28515056"
+     ]
+    },
+    {
+     "finding": "Neck strengthening in male rugby players was linked to 45% fewer concussions in pooled data, though only two studies measured it.",
+     "exercises": [],
+     "dose": "",
+     "effect": "RR 0.55",
+     "sources": [
+      "PMID:41316595"
+     ]
+    },
+    {
+     "finding": "Five weeks of neck strength training raised isometric neck strength in every direction in rugby players; reviews confirm isometric routines raise strength, though direct concussion evidence is limited.",
+     "exercises": [],
+     "dose": "5 weeks",
+     "effect": "Flexion about 334 to 396 N; extension 606 to 734 N",
+     "sources": [
+      "PMID:24561636",
+      "PMID:33554689"
+     ]
+    },
+    {
+     "finding": "Mouthguards in collision sport and banning bodychecking in youth hockey lower concussion; the paediatric consensus also lists neuromuscular training in adolescent rugby.",
+     "exercises": [],
+     "dose": "",
+     "effect": "Mouthguard IRR 0.74; no-bodychecking about 58% fewer concussions",
+     "sources": [
+      "PMID:37316182",
+      "PMID:38044802"
+     ]
+    },
+    {
+     "finding": "Cervical spine injury prevention in collision sport rests on rules, safe technique coaching (tackling, scrummaging) and education.",
+     "exercises": [],
+     "dose": "",
+     "effect": "",
+     "sources": [
+      "PMID:30482364",
+      "PMID:12141883"
+     ]
+    }
+   ],
+   "returnToTraining": [
+    {
+     "finding": "For children and adolescents, early return to light activity and less screen time help recovery more than strict rest; cervicovestibular rehab is advised if dizziness, neck pain or headache last over 10 days. Diagnosis and clearance are a clinician's job.",
+     "criteria": "Clinician-led stepwise return; symptom scales",
+     "sources": [
+      "PMID:38044802"
+     ]
+    },
+    {
+     "finding": "The 6th international concussion consensus (Amsterdam 2022) provides the current assessment tools (SCAT6, Child SCAT6, SCOAT6) and management principles.",
+     "criteria": "Use consensus tools under medical supervision",
+     "sources": [
+      "PMID:37316210"
+     ]
+    }
+   ]
+  }
+ ],
+ "placement": [
+  {
+   "finding": "Doing the Nordic hamstring exercise before soccer training left the hamstrings weaker eccentrically during later football exercise than doing it after; the authors warn pre-training Nordics may add risk.",
+   "effect": "Eccentric peak torque 14-19% lower during simulated play when done beforehand",
+   "sources": [
+    "PMID:27267402"
+   ]
+  },
+  {
+   "finding": "Over 12 weeks, Nordics done before or after training gave the same strength gain; muscle structure changes differed (longer fascicles when done before, thicker muscle when done after).",
+   "dose": "12 weeks, twice-weekly sessions",
+   "sources": [
+    "PMID:28544170"
+   ]
+  },
+  {
+   "finding": "Eccentric hamstring work done after soccer training gave better protection of eccentric strength late in a match simulation than the same work in the warm-up.",
+   "sources": [
+    "PMID:19528859"
+   ]
+  },
+  {
+   "finding": "Match-like fatigue lowers the hamstring eccentric:quadriceps concentric strength ratio by about 10%, matching the late-half rise in hamstring strains.",
+   "sources": [
+    "PMID:25764064"
+   ]
+  },
+  {
+   "finding": "Fatigue changes landing mechanics, but most measures conflict across studies; reviews call for more research before changing ACL programmes for fatigue.",
+   "sources": [
+    "PMID:40567252",
+    "PMID:40334188"
+   ]
+  },
+  {
+   "finding": "Warm-up-based programmes (FIFA 11+, SHRed Basketball, ACL programmes) are proven in the warm-up slot; short 10-15 min doses 2-3 times a week are effective there.",
+   "sources": [
+    "PMID:29184511",
+    "PMID:34972488",
+    "PMID:28087568"
+   ]
+  }
+ ],
+ "sources": [
+  {
+   "id": "PMID:10778794",
+   "doi": "10.2519/jospt.2000.30.4.170",
+   "firstAuthor": "Cordova ML",
+   "year": 2000,
+   "journal": "J Orthop Sports Phys Ther",
+   "title": "Influence of ankle support on joint range of motion before and after exercise: a meta-analysis.",
+   "population": "Healthy adults",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:11806390",
+   "doi": "10.1007/s005860100326",
+   "firstAuthor": "Sys J",
+   "year": 2001,
+   "journal": "Eur Spine J",
+   "title": "Nonoperative treatment of active spondylolysis in elite athletes with normal X-ray findings: literature review and results of conservative treatment.",
+   "population": "Elite athletes with spondylolysis",
+   "design": "Case series with literature review"
+  },
+  {
+   "id": "PMID:12141883",
+   "doi": "10.2165/00007256-200232100-00003",
+   "firstAuthor": "Quarrie KL",
+   "year": 2002,
+   "journal": "Sports Med",
+   "title": "Rugby union injuries to the cervical spine and spinal cord.",
+   "population": "Rugby union players",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:12435656",
+   "doi": "10.1177/03635465020300062001",
+   "firstAuthor": "DiFiori JP",
+   "year": 2002,
+   "journal": "Am J Sports Med",
+   "title": "Wrist pain, distal radial physeal injury, and ulnar variance in young gymnasts: does a relationship exist?",
+   "population": "Young competitive gymnasts",
+   "design": "Cross-sectional"
+  },
+  {
+   "id": "PMID:15722287",
+   "doi": "10.1177/0363546504269591",
+   "firstAuthor": "Hewett TE",
+   "year": 2005,
+   "journal": "Am J Sports Med",
+   "title": "Biomechanical measures of neuromuscular control and valgus loading of the knee predict anterior cruciate ligament injury risk in female athletes: a prospective study.",
+   "population": "High school female athletes",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:16452269",
+   "doi": "10.1177/0363546505284188",
+   "firstAuthor": "Olsen SJ 2nd",
+   "year": 2006,
+   "journal": "Am J Sports Med",
+   "title": "Risk factors for shoulder and elbow injuries in adolescent baseball pitchers.",
+   "population": "Adolescent baseball pitchers",
+   "design": "Case-control"
+  },
+  {
+   "id": "PMID:16476915",
+   "doi": "10.1177/0363546505284191",
+   "firstAuthor": "McGuine TA",
+   "year": 2006,
+   "journal": "Am J Sports Med",
+   "title": "The effect of a balance training program on the risk of ankle sprains in high school athletes.",
+   "population": "High school soccer and basketball players",
+   "design": "Randomised controlled trial (by team)"
+  },
+  {
+   "id": "PMID:16493174",
+   "doi": "10.1177/0363546505284848",
+   "firstAuthor": "DiFiori JP",
+   "year": 2006,
+   "journal": "Am J Sports Med",
+   "title": "Wrist pain, distal radial physeal injury, and ulnar variance in the young gymnast.",
+   "population": "Young gymnasts",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:17414485",
+   "doi": "10.1097/JSM.0b013e31803f901b",
+   "firstAuthor": "Russell K",
+   "year": 2007,
+   "journal": "Clin J Sport Med",
+   "title": "The effect of wrist guards on wrist and arm injuries among snowboarders: a systematic review.",
+   "population": "Snowboarders",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:18492235",
+   "doi": "10.1186/1471-2474-9-71",
+   "firstAuthor": "Hupperets MD",
+   "year": 2008,
+   "journal": "BMC Musculoskelet Disord",
+   "title": "The 2BFit study: is an unsupervised proprioceptive balance board training programme, given in addition to usual care, effective in preventing ankle sprain recurrences? Design of a randomized controlled trial.",
+   "population": "Athletes after ankle sprain",
+   "design": "RCT protocol"
+  },
+  {
+   "id": "PMID:19372087",
+   "doi": "10.1136/bjsm.2009.059139",
+   "firstAuthor": "Quatman CE",
+   "year": 2009,
+   "journal": "Br J Sports Med",
+   "title": "The anterior cruciate ligament injury controversy: is \"valgus collapse\" a sex-specific mechanism?",
+   "population": "Athletes",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:19528859",
+   "doi": "10.1519/JSC.0b013e318194df5c",
+   "firstAuthor": "Small K",
+   "year": 2009,
+   "journal": "J Strength Cond Res",
+   "title": "Effect of timing of eccentric hamstring strengthening exercises during soccer training: implications for muscle fatigability.",
+   "population": "Amateur footballers",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:19589822",
+   "doi": "10.1136/bmj.b2684",
+   "firstAuthor": "Hupperets MD",
+   "year": 2009,
+   "journal": "BMJ",
+   "title": "Effect of unsupervised home based proprioceptive training on recurrences of ankle sprain: randomised controlled trial.",
+   "population": "Athletes 12-70 after ankle sprain",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:19996770",
+   "doi": "10.1519/JSC.0b013e3181c643a0",
+   "firstAuthor": "Fradkin AJ",
+   "year": 2010,
+   "journal": "J Strength Cond Res",
+   "title": "Effects of warming-up on physical performance: a systematic review with meta-analysis.",
+   "population": "Various athletes",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:20489215",
+   "doi": "10.1177/0363546509360404",
+   "firstAuthor": "Byram IR",
+   "year": 2010,
+   "journal": "Am J Sports Med",
+   "title": "Preseason shoulder strength measurements in professional baseball pitchers: identifying players at risk for injury.",
+   "population": "Professional baseball pitchers",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:21098816",
+   "doi": "10.1177/0363546510384224",
+   "firstAuthor": "Fleisig GS",
+   "year": 2011,
+   "journal": "Am J Sports Med",
+   "title": "Risk of serious injury for young baseball pitchers: a 10-year prospective study.",
+   "population": "Youth baseball pitchers 9-14",
+   "design": "Prospective cohort (10-year)"
+  },
+  {
+   "id": "PMID:21795671",
+   "doi": "10.1177/0363546511406242",
+   "firstAuthor": "McGuine TA",
+   "year": 2011,
+   "journal": "Am J Sports Med",
+   "title": "The effect of lace-up ankle braces on injury rates in high school basketball players.",
+   "population": "High school basketball players",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:21825112",
+   "doi": "10.1177/0363546511419277",
+   "firstAuthor": "Petersen J",
+   "year": 2011,
+   "journal": "Am J Sports Med",
+   "title": "Preventive effect of eccentric training on acute hamstring injuries in men's soccer: a cluster-randomized controlled trial.",
+   "population": "Danish male soccer players",
+   "design": "Cluster-randomised controlled trial"
+  },
+  {
+   "id": "PMID:22035394",
+   "doi": "",
+   "firstAuthor": "Kim S",
+   "year": 2011,
+   "journal": "Bull NYU Hosp Jt Dis",
+   "title": "Snowboard wrist guards--use, efficacy, and design. A systematic review.",
+   "population": "Snowboarders",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:22293772",
+   "doi": "10.3810/psm.2011.11.1943",
+   "firstAuthor": "Wilk KE",
+   "year": 2011,
+   "journal": "Phys Sportsmed",
+   "title": "The Advanced Throwers Ten Exercise Program: a new exercise series for enhanced dynamic shoulder control in the overhead throwing athlete.",
+   "population": "Overhead throwing athletes",
+   "design": "Clinical commentary"
+  },
+  {
+   "id": "PMID:22316148",
+   "doi": "10.1111/j.1600-0838.2012.01444.x",
+   "firstAuthor": "Simic L",
+   "year": 2013,
+   "journal": "Scand J Med Sci Sports",
+   "title": "Does pre-exercise static stretching inhibit maximal muscular performance? A meta-analytical review.",
+   "population": "Mixed adults",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:22513304",
+   "doi": "10.1016/j.jsams.2012.03.008",
+   "firstAuthor": "Raymond J",
+   "year": 2012,
+   "journal": "J Sci Med Sport",
+   "title": "The effect of ankle taping or bracing on proprioception in functional ankle instability: a systematic review and meta-analysis.",
+   "population": "Adults with functional ankle instability",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:22909185",
+   "doi": "10.1007/BF03262295",
+   "firstAuthor": "Dallinga JM",
+   "year": 2012,
+   "journal": "Sports Med",
+   "title": "Which screening tools can predict injury to the lower extremities in team sports?: a systematic review.",
+   "population": "Team-sport athletes",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:23536466",
+   "doi": "10.1136/bjsports-2013-092165",
+   "firstAuthor": "Askling CM",
+   "year": 2013,
+   "journal": "Br J Sports Med",
+   "title": "Acute hamstring injuries in Swedish elite football: a prospective randomised controlled clinical trial comparing two rehabilitation protocols.",
+   "population": "Elite Swedish footballers",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:23684372",
+   "doi": "10.1016/j.jsams.2013.04.008",
+   "firstAuthor": "Nevin F",
+   "year": 2014,
+   "journal": "J Sci Med Sport",
+   "title": "Adductor squeeze test values and hip joint range of motion in Gaelic football athletes with longstanding groin pain.",
+   "population": "Gaelic football players",
+   "design": "Case-control"
+  },
+  {
+   "id": "PMID:23962878",
+   "doi": "10.1136/bjsports-2013-092644",
+   "firstAuthor": "Hägglund M",
+   "year": 2013,
+   "journal": "Br J Sports Med",
+   "title": "Superior compliance with a neuromuscular training programme is associated with fewer ACL injuries and fewer acute knee injuries in female adolescent football players: secondary analysis of an RCT.",
+   "population": "Adolescent female football players",
+   "design": "Secondary analysis of cluster RCT"
+  },
+  {
+   "id": "PMID:24100287",
+   "doi": "10.1136/bjsports-2013-092538",
+   "firstAuthor": "Lauersen JB",
+   "year": 2014,
+   "journal": "Br J Sports Med",
+   "title": "The effectiveness of exercise interventions to prevent sports injuries: a systematic review and meta-analysis of randomised controlled trials.",
+   "population": "Athletes and active people",
+   "design": "Systematic review and meta-analysis of RCTs"
+  },
+  {
+   "id": "PMID:24105612",
+   "doi": "10.1007/s40279-013-0102-5",
+   "firstAuthor": "Doherty C",
+   "year": 2014,
+   "journal": "Sports Med",
+   "title": "The incidence and prevalence of ankle sprain injury: a systematic review and meta-analysis of prospective epidemiological studies.",
+   "population": "Mixed populations",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:24336837",
+   "doi": "10.1136/injuryprev-2013-041092",
+   "firstAuthor": "van der Horst N",
+   "year": 2014,
+   "journal": "Inj Prev",
+   "title": "The preventive effect of the Nordic hamstring exercise on hamstring injuries in amateur soccer players: study protocol for a randomised controlled trial.",
+   "population": "Male amateur soccer players",
+   "design": "RCT protocol"
+  },
+  {
+   "id": "PMID:24561636",
+   "doi": "10.1097/JSM.0000000000000071",
+   "firstAuthor": "Geary K",
+   "year": 2014,
+   "journal": "Clin J Sport Med",
+   "title": "Effects of neck strength training on isometric neck strength in rugby union players.",
+   "population": "Rugby union players",
+   "design": "Controlled trial"
+  },
+  {
+   "id": "PMID:24831756",
+   "doi": "10.1016/j.jsams.2014.04.005",
+   "firstAuthor": "Schiftan GS",
+   "year": 2015,
+   "journal": "J Sci Med Sport",
+   "title": "The effectiveness of proprioceptive training in preventing ankle sprains in sporting populations: a systematic review and meta-analysis.",
+   "population": "Sporting populations",
+   "design": "Systematic review and meta-analysis of RCTs"
+  },
+  {
+   "id": "PMID:24930131",
+   "doi": "10.1007/s10935-014-0355-2",
+   "firstAuthor": "Collins CL",
+   "year": 2014,
+   "journal": "J Prim Prev",
+   "title": "Neck strength: a protective factor reducing risk for concussion in high school sports.",
+   "population": "High school athletes",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:24948083",
+   "doi": "10.1136/bjsports-2014-093702",
+   "firstAuthor": "Clarsen B",
+   "year": 2014,
+   "journal": "Br J Sports Med",
+   "title": "Reduced glenohumeral rotation, external rotation weakness and scapular dyskinesis are risk factors for shoulder injuries among elite male handball players: a prospective cohort study.",
+   "population": "Elite male handball players",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:2529630",
+   "doi": "",
+   "firstAuthor": "Biering-Sørensen F",
+   "year": 1989,
+   "journal": "Scand J Rehabil Med",
+   "title": "Risk indicators for low back trouble.",
+   "population": "Danish adults",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:25764064",
+   "doi": "10.1080/02640414.2015.1022572",
+   "firstAuthor": "Jones RI",
+   "year": 2015,
+   "journal": "J Sports Sci",
+   "title": "Muscle fatigue induced by a soccer match-play simulation in amateur Black South African players.",
+   "population": "Amateur football players",
+   "design": "Laboratory study"
+  },
+  {
+   "id": "PMID:25794868",
+   "doi": "10.1177/0363546515574057",
+   "firstAuthor": "van der Horst N",
+   "year": 2015,
+   "journal": "Am J Sports Med",
+   "title": "The preventive effect of the nordic hamstring exercise on hamstring injuries in amateur soccer players: a randomized controlled trial.",
+   "population": "Male amateur soccer players",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:25833903",
+   "doi": "10.1136/bjsports-2014-094287",
+   "firstAuthor": "Whittaker JL",
+   "year": 2015,
+   "journal": "Br J Sports Med",
+   "title": "Risk factors for groin injury in sport: an updated systematic review.",
+   "population": "Athletes",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:26031643",
+   "doi": "10.1136/bjsports-2015-094869",
+   "firstAuthor": "Weir A",
+   "year": 2015,
+   "journal": "Br J Sports Med",
+   "title": "Doha agreement meeting on terminology and definitions in groin pain in athletes.",
+   "population": "Athletes with groin pain (expert panel)",
+   "design": "Consensus statement"
+  },
+  {
+   "id": "PMID:26084526",
+   "doi": "10.1136/bjsports-2015-094639",
+   "firstAuthor": "Emery CA",
+   "year": 2015,
+   "journal": "Br J Sports Med",
+   "title": "Neuromuscular training injury prevention strategies in youth sport: a systematic review and meta-analysis.",
+   "population": "Youth sport athletes",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:26400696",
+   "doi": "10.1007/s40279-015-0376-x",
+   "firstAuthor": "McGowan CJ",
+   "year": 2015,
+   "journal": "Sports Med",
+   "title": "Warm-Up Strategies for Sport and Exercise: Mechanisms and Applications.",
+   "population": "Athletes",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:26589483",
+   "doi": "10.1111/sms.12585",
+   "firstAuthor": "Ishøi L",
+   "year": 2016,
+   "journal": "Scand J Med Sci Sports",
+   "title": "Large eccentric strength increase using the Copenhagen Adduction exercise in football: A randomized controlled trial.",
+   "population": "Male football players",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:26642915",
+   "doi": "10.1139/apnm-2015-0235",
+   "firstAuthor": "Behm DG",
+   "year": 2016,
+   "journal": "Appl Physiol Nutr Metab",
+   "title": "Acute effects of muscle stretching on physical performance, range of motion, and injury incidence in healthy active individuals: a systematic review.",
+   "population": "Healthy active individuals",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:26673035",
+   "doi": "10.1177/0363546515618372",
+   "firstAuthor": "Soomro N",
+   "year": 2016,
+   "journal": "Am J Sports Med",
+   "title": "The Efficacy of Injury Prevention Programs in Adolescent Team Sports: A Meta-analysis.",
+   "population": "Adolescent team-sport athletes",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:26752509",
+   "doi": "10.1001/jamainternmed.2015.7431",
+   "firstAuthor": "Steffens D",
+   "year": 2016,
+   "journal": "JAMA Intern Med",
+   "title": "Prevention of Low Back Pain: A Systematic Review and Meta-analysis.",
+   "population": "General population",
+   "design": "Systematic review and meta-analysis of RCTs"
+  },
+  {
+   "id": "PMID:26772611",
+   "doi": "10.1177/0363546515621554",
+   "firstAuthor": "Wiggins AJ",
+   "year": 2016,
+   "journal": "Am J Sports Med",
+   "title": "Risk of Secondary Injury in Younger Athletes After Anterior Cruciate Ligament Reconstruction: A Systematic Review and Meta-analysis.",
+   "population": "Young athletes after ACL reconstruction",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:27162233",
+   "doi": "10.1136/bjsports-2016-096031",
+   "firstAuthor": "Grindem H",
+   "year": 2016,
+   "journal": "Br J Sports Med",
+   "title": "Simple decision rules can reduce reinjury risk by 84% after ACL reconstruction: the Delaware-Oslo ACL cohort study.",
+   "population": "Patients after ACL reconstruction",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:27215935",
+   "doi": "10.1136/bjsports-2015-095908",
+   "firstAuthor": "Kyritsis P",
+   "year": 2016,
+   "journal": "Br J Sports Med",
+   "title": "Likelihood of ACL graft rupture: not meeting six clinical discharge criteria before return to sport is associated with a four times greater risk of rupture.",
+   "population": "Male professional athletes after ACL reconstruction",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:27226389",
+   "doi": "10.1136/bjsports-2016-096278",
+   "firstAuthor": "Ardern CL",
+   "year": 2016,
+   "journal": "Br J Sports Med",
+   "title": "2016 Consensus statement on return to sport from the First World Congress in Sports Physical Therapy, Bern.",
+   "population": "Athletes (expert panel)",
+   "design": "Consensus statement"
+  },
+  {
+   "id": "PMID:27267402",
+   "doi": "10.1080/02640414.2016.1191661",
+   "firstAuthor": "Lovell R",
+   "year": 2016,
+   "journal": "J Sports Sci",
+   "title": "Acute neuromuscular and performance responses to Nordic hamstring exercises completed before or after football training.",
+   "population": "Male amateur footballers",
+   "design": "Randomised crossover trial"
+  },
+  {
+   "id": "PMID:27274419",
+   "doi": "",
+   "firstAuthor": "Abdelraouf OR",
+   "year": 2016,
+   "journal": "Int J Sports Phys Ther",
+   "title": "THE RELATIONSHIP BETWEEN CORE ENDURANCE AND BACK DYSFUNCTION IN COLLEGIATE MALE ATHLETES WITH AND WITHOUT NONSPECIFIC LOW BACK PAIN.",
+   "population": "Collegiate male athletes",
+   "design": "Case-control"
+  },
+  {
+   "id": "PMID:27313171",
+   "doi": "10.1136/bjsports-2016-096226",
+   "firstAuthor": "Andersson SH",
+   "year": 2017,
+   "journal": "Br J Sports Med",
+   "title": "Preventing overuse shoulder injuries among throwing athletes: a cluster-randomised controlled trial in 660 elite handball players.",
+   "population": "Elite handball players",
+   "design": "Cluster-randomised controlled trial"
+  },
+  {
+   "id": "PMID:27317501",
+   "doi": "10.1016/j.math.2016.03.011",
+   "firstAuthor": "Grødahl LH",
+   "year": 2016,
+   "journal": "Man Ther",
+   "title": "Diagnostic utility of patient history and physical examination data to detect spondylolysis and spondylolisthesis in athletes with low back pain: A systematic review.",
+   "population": "Athletes with low back pain",
+   "design": "Systematic review (diagnostic accuracy)"
+  },
+  {
+   "id": "PMID:27755499",
+   "doi": "10.1097/BRS.0000000000001931",
+   "firstAuthor": "Sakai T",
+   "year": 1976,
+   "journal": "Spine (Phila Pa 1976)",
+   "title": "Conservative Treatment for Bony Healing in Pediatric Lumbar Spondylolysis.",
+   "population": "Paediatric patients with spondylolysis",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:28035586",
+   "doi": "10.1007/s40279-016-0667-x",
+   "firstAuthor": "Hickey JT",
+   "year": 2017,
+   "journal": "Sports Med",
+   "title": "Criteria for Progressing Rehabilitation and Determining Return-to-Play Clearance Following Hamstring Strain Injury: A Systematic Review.",
+   "population": "Athletes with hamstring strain",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:28087568",
+   "doi": "10.1136/bjsports-2016-097066",
+   "firstAuthor": "Thorborg K",
+   "year": 2017,
+   "journal": "Br J Sports Med",
+   "title": "Effect of specific exercise-based football injury prevention programmes on the overall injury rate in football: a systematic review and meta-analysis of the FIFA 11 and 11+ programmes.",
+   "population": "Recreational/sub-elite football players",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:28389864",
+   "doi": "10.1007/s11999-017-5342-5",
+   "firstAuthor": "Silvers-Granelli HJ",
+   "year": 2017,
+   "journal": "Clin Orthop Relat Res",
+   "title": "Does the FIFA 11+ Injury Prevention Program Reduce the Incidence of ACL Injury in Male Soccer Players?",
+   "population": "Male collegiate soccer players",
+   "design": "Cluster-randomised controlled trial"
+  },
+  {
+   "id": "PMID:28515056",
+   "doi": "10.1136/bjsports-2016-097434",
+   "firstAuthor": "Hislop MD",
+   "year": 2017,
+   "journal": "Br J Sports Med",
+   "title": "Reducing musculoskeletal injury and concussion risk in schoolboy rugby players with a pre-activity movement control exercise programme: a cluster randomised controlled trial.",
+   "population": "Schoolboy rugby players 14-18",
+   "design": "Cluster-randomised controlled trial"
+  },
+  {
+   "id": "PMID:28544170",
+   "doi": "10.1111/sms.12925",
+   "firstAuthor": "Lovell R",
+   "year": 2018,
+   "journal": "Scand J Med Sci Sports",
+   "title": "Hamstring injury prevention in soccer: Before or after training?",
+   "population": "Amateur football players",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:28915154",
+   "doi": "10.1097/AJP.0000000000000558",
+   "firstAuthor": "Calvo-Muñoz I",
+   "year": 2018,
+   "journal": "Clin J Pain",
+   "title": "Risk Factors for Low Back Pain in Childhood and Adolescence: A Systematic Review.",
+   "population": "Children and adolescents",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:28944249",
+   "doi": "10.1177/2325967117726055",
+   "firstAuthor": "Ialenti MN",
+   "year": 2017,
+   "journal": "Orthop J Sports Med",
+   "title": "Return to Play Following Shoulder Stabilization: A Systematic Review and Meta-analysis.",
+   "population": "Patients after shoulder stabilisation",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:29140127",
+   "doi": "10.4085/1062-6050-52.11.16",
+   "firstAuthor": "Rivera MJ",
+   "year": 2017,
+   "journal": "J Athl Train",
+   "title": "Proprioceptive Training for the Prevention of Ankle Sprains: An Evidence-Based Review.",
+   "population": "Sporting populations",
+   "design": "Evidence-based review of meta-analysis"
+  },
+  {
+   "id": "PMID:29184511",
+   "doi": "10.3389/fphys.2017.00920",
+   "firstAuthor": "Steib S",
+   "year": 2017,
+   "journal": "Front Physiol",
+   "title": "Dose-Response Relationship of Neuromuscular Training for Injury Prevention in Youth Athletes: A Meta-Analysis.",
+   "population": "Youth athletes",
+   "design": "Systematic review and meta-analysis (dose-response)"
+  },
+  {
+   "id": "PMID:29381423",
+   "doi": "10.1177/1941738118756577",
+   "firstAuthor": "Keller RA",
+   "year": 2018,
+   "journal": "Sports Health",
+   "title": "Glenohumeral Internal Rotation Deficit and Risk of Upper Extremity Injury in Overhead Athletes: A Meta-Analysis and Systematic Review.",
+   "population": "Overhead athletes",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:29450826",
+   "doi": "10.1007/s12178-018-9454-7",
+   "firstAuthor": "Sgroi TA",
+   "year": 2018,
+   "journal": "Curr Rev Musculoskelet Med",
+   "title": "Return to Throwing after Shoulder or Elbow Injury.",
+   "population": "Throwing athletes",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:29514819",
+   "doi": "10.1136/bjsports-2017-098106",
+   "firstAuthor": "Vuurberg G",
+   "year": 2018,
+   "journal": "Br J Sports Med",
+   "title": "Diagnosis, treatment and prevention of ankle sprains: update of an evidence-based clinical guideline.",
+   "population": "General and athletic populations",
+   "design": "Clinical guideline"
+  },
+  {
+   "id": "PMID:29718684",
+   "doi": "10.1177/0363546518773757",
+   "firstAuthor": "Webster KE",
+   "year": 2018,
+   "journal": "Am J Sports Med",
+   "title": "Factors Associated With Psychological Readiness to Return to Sport After Anterior Cruciate Ligament Reconstruction Surgery.",
+   "population": "Patients after ACL reconstruction",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:29737024",
+   "doi": "10.1002/jor.24043",
+   "firstAuthor": "Webster KE",
+   "year": 2018,
+   "journal": "J Orthop Res",
+   "title": "Meta-analysis of meta-analyses of anterior cruciate ligament injury reduction training programs.",
+   "population": "Athletes",
+   "design": "Meta-analysis of meta-analyses"
+  },
+  {
+   "id": "PMID:29864071",
+   "doi": "10.1097/JSM.0000000000000462",
+   "firstAuthor": "Owoeye OBA",
+   "year": 2018,
+   "journal": "Clin J Sport Med",
+   "title": "Prevention of Ankle Sprain Injuries in Youth Soccer and Basketball: Effectiveness of a Neuromuscular Training Program and Examining Risk Factors.",
+   "population": "Youth soccer and basketball players 11-18",
+   "design": "Pooled secondary analysis of 5 studies"
+  },
+  {
+   "id": "PMID:29891614",
+   "doi": "10.1136/bjsports-2017-098937",
+   "firstAuthor": "Harøy J",
+   "year": 2019,
+   "journal": "Br J Sports Med",
+   "title": "The Adductor Strengthening Programme prevents groin problems among male football players: a cluster-randomised controlled trial.",
+   "population": "Semi-professional male footballers",
+   "design": "Cluster-randomised controlled trial"
+  },
+  {
+   "id": "PMID:30001501",
+   "doi": "10.1177/0363546518782460",
+   "firstAuthor": "Petushek EJ",
+   "year": 2019,
+   "journal": "Am J Sports Med",
+   "title": "Evidence-Based Best-Practice Guidelines for Preventing Anterior Cruciate Ligament Injuries in Young Female Athletes: A Systematic Review and Meta-analysis.",
+   "population": "Young female athletes",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:30134349",
+   "doi": "10.1097/BPO.0000000000001244",
+   "firstAuthor": "Knapik DM",
+   "year": 2018,
+   "journal": "J Pediatr Orthop",
+   "title": "Youth Baseball Coach Awareness of Pitch Count Guidelines and Overuse Throwing Injuries Remains Deficient.",
+   "population": "Youth baseball coaches",
+   "design": "Survey"
+  },
+  {
+   "id": "PMID:30242107",
+   "doi": "10.1136/bjsports-2017-098890",
+   "firstAuthor": "Neal BS",
+   "year": 2019,
+   "journal": "Br J Sports Med",
+   "title": "Risk factors for patellofemoral pain: a systematic review and meta-analysis.",
+   "population": "Military recruits, adolescents, runners",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:30482364",
+   "doi": "10.1016/B978-0-444-63954-7.00034-3",
+   "firstAuthor": "Swartz EE.",
+   "year": 2018,
+   "journal": "Handb Clin Neurol",
+   "title": "Cervical spine trauma: prevention strategies.",
+   "population": "Collision-sport athletes",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:30612980",
+   "doi": "10.1016/j.apmr.2018.10.005",
+   "firstAuthor": "Bleakley CM",
+   "year": 2019,
+   "journal": "Arch Phys Med Rehabil",
+   "title": "Rehabilitation Exercises Reduce Reinjury Post Ankle Sprain, But the Content and Parameters of an Optimal Exercise Program Have Yet to Be Established: A Systematic Review and Meta-analysis.",
+   "population": "Patients after acute ankle sprain",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:30788227",
+   "doi": "10.5312/wjo.v10.i2.101",
+   "firstAuthor": "Goffin JS",
+   "year": 2019,
+   "journal": "World J Orthop",
+   "title": "Return to sport following scaphoid fractures: A systematic review and meta-analysis.",
+   "population": "Athletes with scaphoid fractures",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:30808663",
+   "doi": "10.1136/bjsports-2018-100045",
+   "firstAuthor": "van Dyk N",
+   "year": 2019,
+   "journal": "Br J Sports Med",
+   "title": "Including the Nordic hamstring exercise in injury prevention programmes halves the rate of hamstring injuries: a systematic review and meta-analysis of 8459 athletes.",
+   "population": "Athletes in multiple sports",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:30905035",
+   "doi": "10.1007/s40279-019-01093-x",
+   "firstAuthor": "Webster KE",
+   "year": 2019,
+   "journal": "Sports Med",
+   "title": "What is the Evidence for and Validity of Return-to-Sport Testing after Anterior Cruciate Ligament Reconstruction Surgery? A Systematic Review and Meta-Analysis.",
+   "population": "Patients after ACL reconstruction",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:30943287",
+   "doi": "10.1093/bmb/ldz013",
+   "firstAuthor": "Robertson G",
+   "year": 2019,
+   "journal": "Br Med Bull",
+   "title": "Return to sport following surgical management of triangular fibrocartilage tears: a systematic review.",
+   "population": "Athletes with TFCC tears",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:31161942",
+   "doi": "10.4085/1062-6050-44-18",
+   "firstAuthor": "Delahunt E",
+   "year": 2019,
+   "journal": "J Athl Train",
+   "title": "Risk Factors for Lateral Ankle Sprains and Chronic Ankle Instability.",
+   "population": "Athletes",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:31161943",
+   "doi": "10.4085/1062-6050-484-17",
+   "firstAuthor": "Gribble PA.",
+   "year": 2019,
+   "journal": "J Athl Train",
+   "title": "Evaluating and Differentiating Ankle Instability.",
+   "population": "Athletes",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:31311243",
+   "doi": "10.23736/S0022-4707.19.09842-6",
+   "firstAuthor": "Minghelli B",
+   "year": 2019,
+   "journal": "J Sports Med Phys Fitness",
+   "title": "Epidemiology of musculoskeletal injuries in tennis players: risk factors.",
+   "population": "Tennis players",
+   "design": "Cross-sectional"
+  },
+  {
+   "id": "PMID:31336051",
+   "doi": "10.1177/0363546519861378",
+   "firstAuthor": "Sakata J",
+   "year": 2019,
+   "journal": "Am J Sports Med",
+   "title": "Throwing Injuries in Youth Baseball Players: Can a Prevention Program Help? A Randomized Controlled Trial.",
+   "population": "Youth baseball players 9-11",
+   "design": "Randomised controlled trial (block-randomised by team)"
+  },
+  {
+   "id": "PMID:31344287",
+   "doi": "10.1111/sms.13522",
+   "firstAuthor": "Andersson SH",
+   "year": 2019,
+   "journal": "Scand J Med Sci Sports",
+   "title": "Attitudes, beliefs, and behavior toward shoulder injury prevention in elite handball: Fertile ground for implementation.",
+   "population": "Elite handball coaches and captains",
+   "design": "Cross-sectional survey within RCT"
+  },
+  {
+   "id": "PMID:31431273",
+   "doi": "10.1016/j.berh.2019.02.009",
+   "firstAuthor": "Emery CA",
+   "year": 2019,
+   "journal": "Best Pract Res Clin Rheumatol",
+   "title": "Current trends in sport injury prevention.",
+   "population": "Athletes",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:31502142",
+   "doi": "10.1007/s40279-019-01178-7",
+   "firstAuthor": "Cuthbert M",
+   "year": 2020,
+   "journal": "Sports Med",
+   "title": "The Effect of Nordic Hamstring Exercise Intervention Volume on Eccentric Strength and Muscle Architecture Adaptations: A Systematic Review and Meta-analyses.",
+   "population": "Athletes and active adults",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:31714260",
+   "doi": "10.1097/MOP.0000000000000842",
+   "firstAuthor": "Ladenhauf HN",
+   "year": 2020,
+   "journal": "Curr Opin Pediatr",
+   "title": "Osgood-Schlatter disease: a 2020 update of a common knee condition in children.",
+   "population": "Children and adolescents",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:32064292",
+   "doi": "10.1177/2325967119897247",
+   "firstAuthor": "Serner A",
+   "year": 2020,
+   "journal": "Orthop J Sports Med",
+   "title": "Return to Sport After Criteria-Based Rehabilitation of Acute Adductor Injuries in Male Athletes: A Prospective Cohort Study.",
+   "population": "Male athletes with acute adductor injury",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:32299793",
+   "doi": "10.1136/bjsports-2019-100983",
+   "firstAuthor": "Green B",
+   "year": 2020,
+   "journal": "Br J Sports Med",
+   "title": "Recalibrating the risk of hamstring strain injury (HSI): A 2020 systematic review and meta-analysis of risk factors for index and recurrent hamstring strain injury in sport.",
+   "population": "Athletes",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:32646887",
+   "doi": "10.1136/bjsports-2019-101436",
+   "firstAuthor": "de Campos TF",
+   "year": 2021,
+   "journal": "Br J Sports Med",
+   "title": "Prevention strategies to reduce future impact of low back pain: a systematic review and meta-analysis.",
+   "population": "General population",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:32950218",
+   "doi": "10.1016/j.ocl.2020.06.012",
+   "firstAuthor": "Mauck B",
+   "year": 2020,
+   "journal": "Orthop Clin North Am",
+   "title": "Gymnast's Wrist (Distal Radial Physeal Stress Syndrome).",
+   "population": "Young gymnasts",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:33080765",
+   "doi": "10.1097/MD.0000000000022837",
+   "firstAuthor": "Gokalp O",
+   "year": 2020,
+   "journal": "Medicine (Baltimore)",
+   "title": "Effects of Thrower's Ten exercises on upper extremity performance: A randomized controlled study.",
+   "population": "Healthy sedentary adults",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:33088241",
+   "doi": "10.1007/s11420-020-09760-w",
+   "firstAuthor": "Lehman JD",
+   "year": 2020,
+   "journal": "HSS J",
+   "title": "Prevalence and Treatment Outcomes of Hand and Wrist Injuries in Professional Athletes: A Systematic Review.",
+   "population": "Professional athletes",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:33554689",
+   "doi": "10.1080/00913847.2021.1886574",
+   "firstAuthor": "Chavarro-Nieto C",
+   "year": 2021,
+   "journal": "Phys Sportsmed",
+   "title": "Neck strength in Rugby Union players: a systematic review of the literature.",
+   "population": "Rugby union players",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:33748295",
+   "doi": "10.1177/2325967120966310",
+   "firstAuthor": "Thomas SJ",
+   "year": 2020,
+   "journal": "Orthop J Sports Med",
+   "title": "Return-to-Play and Competitive Outcomes After Ulnar Collateral Ligament Reconstruction Among Baseball Players: A Systematic Review.",
+   "population": "Baseball players after UCL reconstruction",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:34025459",
+   "doi": "10.3389/fphys.2021.677581",
+   "firstAuthor": "Afonso J",
+   "year": 2021,
+   "journal": "Front Physiol",
+   "title": "The Effectiveness of Post-exercise Stretching in Short-Term and Delayed Recovery of Strength, Range of Motion and Delayed Onset Muscle Soreness: A Systematic Review and Meta-Analysis of Randomized Controlled Trials.",
+   "population": "Adults 17-38",
+   "design": "Systematic review and meta-analysis of RCTs"
+  },
+  {
+   "id": "PMID:34158354",
+   "doi": "10.1136/bjsports-2021-104087",
+   "firstAuthor": "Smith MD",
+   "year": 2021,
+   "journal": "Br J Sports Med",
+   "title": "Return to sport decisions after an acute lateral ankle sprain injury: introducing the PAASS framework-an international multidisciplinary consensus.",
+   "population": "Athletes (expert panel)",
+   "design": "Consensus statement (Delphi)"
+  },
+  {
+   "id": "PMID:34397403",
+   "doi": "10.3233/BMR-210053",
+   "firstAuthor": "Landesa-Piñeiro L",
+   "year": 2022,
+   "journal": "J Back Musculoskelet Rehabil",
+   "title": "Physiotherapy treatment of lateral epicondylitis: A systematic review.",
+   "population": "Adults with lateral epicondylitis",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:34444026",
+   "doi": "10.3390/ijerph18168272",
+   "firstAuthor": "Biz C",
+   "year": 2021,
+   "journal": "Int J Environ Res Public Health",
+   "title": "Hamstring Strain Injury (HSI) Prevention in Professional and Semi-Professional Football Teams: A Systematic Review and Meta-Analysis.",
+   "population": "Professional and semi-professional footballers",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:34501416",
+   "doi": "10.3390/jcm10173968",
+   "firstAuthor": "Yoon SY",
+   "year": 2021,
+   "journal": "J Clin Med",
+   "title": "The Beneficial Effects of Eccentric Exercise in the Management of Lateral Elbow Tendinopathy: A Systematic Review and Meta-Analysis.",
+   "population": "Adults with lateral elbow tendinopathy",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:34932514",
+   "doi": "10.2106/JBJS.21.00688",
+   "firstAuthor": "Glattke KE",
+   "year": 2022,
+   "journal": "J Bone Joint Surg Am",
+   "title": "Anterior Cruciate Ligament Reconstruction Recovery and Rehabilitation: A Systematic Review.",
+   "population": "Patients after ACL reconstruction",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:34972488",
+   "doi": "10.2519/jospt.2022.10959",
+   "firstAuthor": "Emery CA",
+   "year": 2022,
+   "journal": "J Orthop Sports Phys Ther",
+   "title": "The \"SHRed Injuries Basketball\" Neuromuscular Training Warm-up Program Reduces Ankle and Knee Injury Rates by 36% in Youth Basketball.",
+   "population": "Youth basketball players 11-18",
+   "design": "Quasi-experimental"
+  },
+  {
+   "id": "PMID:35338036",
+   "doi": "10.1136/bjsports-2020-103405",
+   "firstAuthor": "Vermeulen R",
+   "year": 2022,
+   "journal": "Br J Sports Med",
+   "title": "Early versus delayed lengthening exercises for acute hamstring injury in male athletes: a randomised controlled clinical trial.",
+   "population": "Male athletes with acute hamstring injury",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:35384731",
+   "doi": "10.1177/03635465221083998",
+   "firstAuthor": "Rudisill SS",
+   "year": 2023,
+   "journal": "Am J Sports Med",
+   "title": "Evidence-Based Hamstring Injury Prevention and Risk Factor Management: A Systematic Review and Meta-analysis of Randomized Controlled Trials.",
+   "population": "Athletes",
+   "design": "Systematic review and meta-analysis of RCTs"
+  },
+  {
+   "id": "PMID:35742062",
+   "doi": "10.3390/healthcare10061011",
+   "firstAuthor": "Corbi F",
+   "year": 2022,
+   "journal": "Healthcare (Basel)",
+   "title": "Osgood-Schlatter Disease: Appearance, Diagnosis and Treatment: A Narrative Review.",
+   "population": "Adolescent athletes",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:35954598",
+   "doi": "10.3390/ijerph19159241",
+   "firstAuthor": "Pereira PM",
+   "year": 2022,
+   "journal": "Int J Environ Res Public Health",
+   "title": "Patellofemoral Pain Syndrome Risk Associated with Squats: A Systematic Review.",
+   "population": "Mostly sports populations",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:36150752",
+   "doi": "10.1136/bjsports-2021-104749",
+   "firstAuthor": "Wall J",
+   "year": 2022,
+   "journal": "Br J Sports Med",
+   "title": "Incidence, prevalence and risk factors for low back pain in adolescent athletes: a systematic review and meta-analysis.",
+   "population": "Adolescent athletes",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:36399159",
+   "doi": "10.1186/s40798-022-00530-y",
+   "firstAuthor": "Mason J",
+   "year": 2022,
+   "journal": "Sports Med Open",
+   "title": "Intrinsic Risk Factors for Ankle Sprain Differ Between Male and Female Athletes: A Systematic Review and Meta-Analysis.",
+   "population": "Male and female athletes",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:36638341",
+   "doi": "10.4085/1062-6050-0543.21",
+   "firstAuthor": "Webster KE",
+   "year": 2022,
+   "journal": "J Athl Train",
+   "title": "Psychological Readiness to Return to Sport After Anterior Cruciate Ligament Reconstruction in the Adolescent Athlete.",
+   "population": "Adolescent athletes after ACL reconstruction",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:36646363",
+   "doi": "10.1016/j.arthro.2022.12.032",
+   "firstAuthor": "Gouveia K",
+   "year": 2023,
+   "journal": "Arthroscopy",
+   "title": "Return to Sport After Arthroscopic Bankart Repair With Remplissage: A Systematic Review.",
+   "population": "Patients after Bankart repair with remplissage",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:36651719",
+   "doi": "10.1111/sms.14317",
+   "firstAuthor": "Behan FP",
+   "year": 2023,
+   "journal": "Scand J Med Sci Sports",
+   "title": "The dose-response of pain throughout a Nordic hamstring exercise intervention.",
+   "population": "Males",
+   "design": "Randomised controlled trial"
+  },
+  {
+   "id": "PMID:36661128",
+   "doi": "10.1177/03635465221140923",
+   "firstAuthor": "Farrell SG",
+   "year": 2023,
+   "journal": "Am J Sports Med",
+   "title": "Acute Adductor Muscle Injury: A Systematic Review on Diagnostic Imaging, Treatment, and Prevention.",
+   "population": "Male athletes with adductor injury",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:36728770",
+   "doi": "10.1097/JSM.0000000000001114",
+   "firstAuthor": "Silber ZS",
+   "year": 2023,
+   "journal": "Clin J Sport Med",
+   "title": "Return to Activity After Arthroscopically Assisted Triangular Fibrocartilage Complex Repair: A Systematic Review.",
+   "population": "Patients after TFCC repair",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:36834283",
+   "doi": "10.3390/ijerph20043589",
+   "firstAuthor": "Kara E",
+   "year": 2023,
+   "journal": "Int J Environ Res Public Health",
+   "title": "The Risk Factors Associated with Grip Lock Injuries in Artistic Gymnasts: A Systematic Review.",
+   "population": "Artistic gymnasts",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:36875040",
+   "doi": "10.3389/fphys.2023.1127669",
+   "firstAuthor": "Hernandez-Martinez J",
+   "year": 2023,
+   "journal": "Front Physiol",
+   "title": "Warm-up stretching exercises and physical performance of youth soccer players.",
+   "population": "Male youth soccer players",
+   "design": "Randomised crossover trial"
+  },
+  {
+   "id": "PMID:36876746",
+   "doi": "10.1177/03635465221150507",
+   "firstAuthor": "Gopinatth V",
+   "year": 2023,
+   "journal": "Am J Sports Med",
+   "title": "Return to Sport After Nonoperative Management of Elbow Ulnar Collateral Ligament Injuries: A Systematic Review and Meta-analysis.",
+   "population": "Athletes with UCL injury (mean ~20 y)",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:36988238",
+   "doi": "10.1177/19417381231160167",
+   "firstAuthor": "Hong IS",
+   "year": 2023,
+   "journal": "Sports Health",
+   "title": "Clinical Outcomes After ACL Reconstruction in Soccer (Football, Futbol) Players: A Systematic Review and Meta-Analysis.",
+   "population": "Soccer players after ACL reconstruction",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:37231582",
+   "doi": "10.1111/sms.14402",
+   "firstAuthor": "Takeuchi K",
+   "year": 2023,
+   "journal": "Scand J Med Sci Sports",
+   "title": "Long-term static stretching can decrease muscle stiffness: A systematic review and meta-analysis.",
+   "population": "Healthy participants",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:37301370",
+   "doi": "10.1016/j.jshs.2023.06.002",
+   "firstAuthor": "Konrad A",
+   "year": 2024,
+   "journal": "J Sport Health Sci",
+   "title": "Chronic effects of stretching on range of motion with consideration of potential moderating variables: A systematic review with meta-analysis.",
+   "population": "Healthy participants",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:37316182",
+   "doi": "10.1136/bjsports-2022-106656",
+   "firstAuthor": "Eliason PH",
+   "year": 2023,
+   "journal": "Br J Sports Med",
+   "title": "Prevention strategies and modifiable risk factors for sport-related concussions and head impacts: a systematic review and meta-analysis.",
+   "population": "Athletes",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:37316210",
+   "doi": "10.1136/bjsports-2023-106898",
+   "firstAuthor": "Patricios JS",
+   "year": 2023,
+   "journal": "Br J Sports Med",
+   "title": "Consensus statement on concussion in sport: the 6th International Conference on Concussion in Sport-Amsterdam, October 2022.",
+   "population": "Athletes",
+   "design": "Consensus statement"
+  },
+  {
+   "id": "PMID:37789463",
+   "doi": "10.1186/s13018-023-04224-3",
+   "firstAuthor": "de Azevedo Sodré Silva A",
+   "year": 2023,
+   "journal": "J Orthop Surg Res",
+   "title": "Epidemiology of injuries in young volleyball athletes: a systematic review.",
+   "population": "Youth volleyball athletes",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:37962709",
+   "doi": "10.1186/s40798-023-00652-x",
+   "firstAuthor": "Behm DG",
+   "year": 2023,
+   "journal": "Sports Med Open",
+   "title": "Acute Effects of Various Stretching Techniques on Range of Motion: A Systematic Review with Meta-Analysis.",
+   "population": "Healthy participants",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:38044802",
+   "doi": "10.1542/peds.2023-063489",
+   "firstAuthor": "Davis GA",
+   "year": 2024,
+   "journal": "Pediatrics",
+   "title": "Pediatric Sport-Related Concussion: Recommendations From the Amsterdam Consensus Statement 2023.",
+   "population": "Children 5-12 and adolescents 13-18",
+   "design": "Consensus statement"
+  },
+  {
+   "id": "PMID:38220029",
+   "doi": "10.1016/j.arthro.2023.12.033",
+   "firstAuthor": "Gill VS",
+   "year": 2024,
+   "journal": "Arthroscopy",
+   "title": "Athletes Continue to Show Functional Performance Deficits at Return to Sport After Anterior Cruciate Ligament Reconstruction: A Systematic Review.",
+   "population": "Athletes after ACL reconstruction",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:38311104",
+   "doi": "10.1016/j.jse.2023.12.008",
+   "firstAuthor": "Karasuyama M",
+   "year": 2024,
+   "journal": "J Shoulder Elbow Surg",
+   "title": "Preventive interventions for throwing injuries in baseball players: a scoping review.",
+   "population": "Youth to high-school baseball players",
+   "design": "Scoping review"
+  },
+  {
+   "id": "PMID:38439773",
+   "doi": "10.26603/001c.94146",
+   "firstAuthor": "Reinold MM",
+   "year": 2024,
+   "journal": "Int J Sports Phys Ther",
+   "title": "An Interval Throwing Program for Baseball Pitchers Based upon Workload Data.",
+   "population": "Baseball pitchers",
+   "design": "Workload modelling study"
+  },
+  {
+   "id": "PMID:38622858",
+   "doi": "10.1177/03635465241233161",
+   "firstAuthor": "Mayer MA",
+   "year": 2025,
+   "journal": "Am J Sports Med",
+   "title": "Rehabilitation and Return to Play Protocols After Anterior Cruciate Ligament Reconstruction in Soccer Players: A Systematic Review.",
+   "population": "Soccer players after ACL reconstruction",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:38854796",
+   "doi": "10.7717/peerj.17508",
+   "firstAuthor": "Glazebrook T",
+   "year": 2024,
+   "journal": "PeerJ",
+   "title": "Lumbar extension peak-torque, muscle endurance and motor imagery in junior-elite basketballers with and without a history of low back pain: a pilot study.",
+   "population": "Junior elite basketball players",
+   "design": "Cross-sectional pilot"
+  },
+  {
+   "id": "PMID:38897400",
+   "doi": "10.1016/j.apmr.2024.05.027",
+   "firstAuthor": "Minhaj S",
+   "year": 2025,
+   "journal": "Arch Phys Med Rehabil",
+   "title": "Glenohumeral Internal Rotation Deficit and Risk of Upper Extremity Injury in Overhead Athletes: Systematic Review.",
+   "population": "Athletes with GIRD",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:38898813",
+   "doi": "10.1177/19417381241259987",
+   "firstAuthor": "Steele MC",
+   "year": 2025,
+   "journal": "Sports Health",
+   "title": "Risk Factors for Shoulder Injuries in Female Athletes Playing Overhead Sports: A Systematic Review.",
+   "population": "Female overhead athletes",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:39360984",
+   "doi": "10.23736/S0022-4707.24.15910-5",
+   "firstAuthor": "Althomali OW",
+   "year": 2025,
+   "journal": "J Sports Med Phys Fitness",
+   "title": "The FIFA 11+ injury prevention program reduces the incidence of lower extremity injuries in football players: a systematic review and meta-analysis.",
+   "population": "Male and female football players",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:39545620",
+   "doi": "10.1080/02640414.2024.2415215",
+   "firstAuthor": "Paravlic AH",
+   "year": 2024,
+   "journal": "J Sports Sci",
+   "title": "The effectiveness of neuromuscular training warm-up program for injury prevention in adolescent male basketball players.",
+   "population": "Adolescent male basketball players (~15 y)",
+   "design": "Cluster-randomised controlled trial"
+  },
+  {
+   "id": "PMID:39564394",
+   "doi": "10.1177/23259671241290841",
+   "firstAuthor": "Nebel AR",
+   "year": 2024,
+   "journal": "Orthop J Sports Med",
+   "title": "Comparison of Elbow Flexion in Youth Baseball Pitchers With and Without Throwing-Arm Pain.",
+   "population": "Youth baseball pitchers",
+   "design": "Cross-sectional biomechanics"
+  },
+  {
+   "id": "PMID:40084177",
+   "doi": "10.7717/peerj.18910",
+   "firstAuthor": "Alhazmi M",
+   "year": 2025,
+   "journal": "PeerJ",
+   "title": "Effectiveness of FIFA injury prevention programs in reducing ankle injuries among football players: a systematic review.",
+   "population": "Football players aged 13-40",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:40334188",
+   "doi": "10.1371/journal.pone.0321925",
+   "firstAuthor": "Liu C",
+   "year": 2025,
+   "journal": "PLoS One",
+   "title": "Gender differences in the impact of fatigue on lower limb landing biomechanics and their association with anterior cruciate ligament (ACL) injuries: A systematic review and meta-analysis.",
+   "population": "Athletes",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:40567252",
+   "doi": "10.3389/fbioe.2025.1587573",
+   "firstAuthor": "He Z",
+   "year": 2025,
+   "journal": "Front Bioeng Biotechnol",
+   "title": "Effects of different peripheral fatigue protocol on lower limb biomechanical changes during landing and its impact on the risk of anterior cruciate ligament injury: a systematic review.",
+   "population": "Athletes",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:40630396",
+   "doi": "10.3389/fphys.2025.1612611",
+   "firstAuthor": "Girginer FG",
+   "year": 2025,
+   "journal": "Front Physiol",
+   "title": "Acute effects of the RAMP warm-up on sprint and jump performance in youth soccer players.",
+   "population": "Male youth soccer players 16-22",
+   "design": "Randomised crossover trial"
+  },
+  {
+   "id": "PMID:40745375",
+   "doi": "10.1038/s41598-025-13817-3",
+   "firstAuthor": "Rostami M",
+   "year": 2025,
+   "journal": "Sci Rep",
+   "title": "Effects of a warm-up program on jump-landing pattern and lumbopelvic function in female basketball players with dynamic knee valgus.",
+   "population": "Female basketball players with dynamic knee valgus",
+   "design": "Quasi-experimental controlled trial"
+  },
+  {
+   "id": "PMID:41314701",
+   "doi": "10.1016/j.arthro.2025.08.001",
+   "firstAuthor": "Petterson SC",
+   "year": 2025,
+   "journal": "Arthroscopy",
+   "title": "Recovery Stages After Anterior Crucuiate Ligament Reconstruction.",
+   "population": "Patients after ACL reconstruction",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:41316595",
+   "doi": "10.1016/j.jbmt.2025.08.023",
+   "firstAuthor": "Alvacite Cardenas D",
+   "year": 2025,
+   "journal": "J Bodyw Mov Ther",
+   "title": "Does strengthening the cervical spine musculature enhance neck strength and reduce sports-related concussions in rugby and football players? A systematic literature review.",
+   "population": "Rugby and football players",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:41552182",
+   "doi": "10.7759/cureus.99363",
+   "firstAuthor": "Arun C",
+   "year": 2025,
+   "journal": "Cureus",
+   "title": "Biomechanical Evolution in Longitudinal Analysis of Lumbar Stress Injuries in Fast Bowlers: A Systematic Review.",
+   "population": "Cricket fast bowlers",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:41835325",
+   "doi": "10.5334/jbsr.4212",
+   "firstAuthor": "El Madani A",
+   "year": 2026,
+   "journal": "J Belg Soc Radiol",
+   "title": "MRI Diagnosis of Gymnast's Wrist (Distal Radial Physeal Stress Injury).",
+   "population": "16-year-old elite gymnast",
+   "design": "Case report"
+  },
+  {
+   "id": "PMID:42188564",
+   "doi": "10.3390/sports14050187",
+   "firstAuthor": "Kłobuchowski W",
+   "year": 2026,
+   "journal": "Sports (Basel)",
+   "title": "Exercise-Based Strategies from Warm-Up to Training: A Systematic Review of Performance Enhancement and Injury Prevention.",
+   "population": "Athletes",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:42448493",
+   "doi": "10.1016/j.jsams.2026.06.017",
+   "firstAuthor": "Daniels AP",
+   "year": 2026,
+   "journal": "J Sci Med Sport",
+   "title": "Incidence, prevalence and risk factors for symptomatic lumbar bone stress injury in female and male youth cricket bowlers.",
+   "population": "Youth cricket bowlers (~14 y)",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:6233709",
+   "doi": "10.1097/00007632-198403000-00002",
+   "firstAuthor": "Biering-Sørensen F.",
+   "year": 1976,
+   "journal": "Spine (Phila Pa 1976)",
+   "title": "Physical measurements as risk indicators for low-back trouble over a one-year period.",
+   "population": "Danish adults 30-60",
+   "design": "Prospective cohort"
+  }
+ ]
+}
