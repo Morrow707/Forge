@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useEquipmentRoom } from "@/hooks/use-equipment-room";
+import { missingEquipmentSentence } from "@shared/exercise-needs";
 import { useParams, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
@@ -104,6 +106,9 @@ type LocalExercise = {
   key: string;
   exerciseId: number;
   exerciseName: string;
+  // What the exercise is done with, for the "needs a bench you haven't listed" marker
+  // (shared/exercise-needs.ts). Optional: a row without it is never marked.
+  equipment?: string | null;
   sets: number;
   reps: string;
   weight: string;
@@ -271,6 +276,7 @@ function stateFromProgram(program: any) {
             key: uid(),
             exerciseId: pe.exercise.id,
             exerciseName: pe.exercise.name,
+            equipment: pe.exercise.equipment ?? null,
             sets: pe.sets,
             reps: pe.reps,
             weight: pe.weight ?? "",
@@ -935,6 +941,7 @@ export function ProgramBuilderPage({
                 key: uid(),
                 exerciseId: exercise.id,
                 exerciseName: exercise.name,
+                equipment: exercise.equipment ?? null,
                 sets: 3,
                 reps: "10",
                 weight: "",
@@ -1281,6 +1288,13 @@ function SortableExerciseRow({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: exercise.key });
+  // THE ROOM (2026-11-21): an exercise the coach placed by hand is theirs and stays; if their
+  // room lacks what it needs, it says so here rather than being removed.
+  const { room } = useEquipmentRoom();
+  const roomMarker =
+    room && exercise.equipment != null
+      ? missingEquipmentSentence({ name: exercise.exerciseName, equipment: exercise.equipment }, room)
+      : null;
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -1324,6 +1338,11 @@ function SortableExerciseRow({
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
+      {roomMarker && (
+        <p className="mb-2 text-xs text-amber-500" data-testid={`room-marker-${exercise.key}`}>
+          {roomMarker}
+        </p>
+      )}
       <div className={cn("grid gap-1.5", exercise.linkedToNext ? "grid-cols-3" : "grid-cols-4")}>
         <FieldInput
           label="Sets"

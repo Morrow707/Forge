@@ -470,6 +470,8 @@ import {
 import { generateTotpSecret, verifyTotpCode, generateBackupCodes, consumeBackupCode } from "./mfa";
 import { formatDeviceLabel, type SessionKind } from "./session-tracking";
 import { requestMemo } from "./request-cache";
+import { equipmentPromptBlock, roomForActor } from "./equipment-room";
+import { keepForRoom, roomAllows } from "@shared/exercise-needs";
 import { SET_BLOB_COLUMNS_EXCLUDED } from "./set-blob-columns";
 import {
   addDays,
@@ -11865,6 +11867,9 @@ Hard rules, no exceptions:
 6. Some of the athlete data below is coach-only analytics (health status, joint ROM flags, leg-drive asymmetry, training-load/ACWR risk) the athlete doesn't see on their own dashboard. Use it freely to give a safer, better-tailored answer, but never recite those specific coach-only labels or numbers back to the athlete verbatim (e.g. don't say "your ACWR is red" or "you're flagged as hurt") -- if it's worth raising, phrase it generally and point them to their coach, who decides how much of that detail to share directly.
 7. Ground any "why" explanation only in the taught coaching knowledge above and general training principles -- never in another athlete's data, a roster-wide pattern, or any platform-wide statistic, even in aggregate. If asked something that would require comparing this athlete to others, decline and point them to their coach instead of generalizing from data you weren't given for this purpose.`;
 
+    // THE ROOM (2026-11-21): what this athlete's weight room has, so an explanation never leans on
+    // a bench they do not have.
+    const chatRoomLine = equipmentPromptBlock(await roomForActor(athleteId));
     const dynamicSystem = `
 
 Athlete's data:
@@ -11872,7 +11877,7 @@ ${athleteContext}
 - Total workouts completed all-time: ${summary.totalWorkoutsCompleted}
 - Current streak: ${streak.currentStreak} days
 - Recent PRs: ${prSummary}
-- Today's wellness check-in: ${wellnessSummary}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}`;
+- Today's wellness check-in: ${wellnessSummary}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}${chatRoomLine ? `\n\n${chatRoomLine} When you explain an exercise or an alternative, keep to what this room has.` : ""}`;
 
     // The admin's guidelines and the Coaches Corner principles are the same for every athlete:
     // cached between the rules and this athlete's data (2026-11-17, the cost audit).
@@ -17587,6 +17592,11 @@ Hard rules, no exceptions:
       this.buildForgeAiContext(draftAthleteProfile ?? undefined, "program_draft"),
     ]);
     if (visibleExercises.length === 0) return null;
+    // THE ROOM (2026-11-21): the model only ever sees what this weight room can do, and is told so.
+    // keepForRoom falls back to the whole library rather than leave the draft with nothing.
+    const draftRoom = await roomForActor(coachId, athleteId ?? null);
+    const draftRoomBlock = equipmentPromptBlock(draftRoom);
+    const roomExercises = keepForRoom(visibleExercises, draftRoom);
 
     // Reference material from ingested books, retrieved on the coach's own
     // words plus whatever the athlete's profile makes relevant. Deliberately
@@ -17604,8 +17614,8 @@ Hard rules, no exceptions:
       domains: ["strength", "rehab", "sport"],
       limit: 8,
     });
-    const validIds = visibleExercises.map((e) => e.id);
-    const catalog = visibleExercises
+    const validIds = roomExercises.map((e) => e.id);
+    const catalog = roomExercises
       .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement${e.movementComplexity ? `, ${e.movementComplexity}` : ""}${e.bodyRegion ? `, ${e.bodyRegion}` : ""}${e.plane ? `, ${e.plane}` : ""}${e.sports && e.sports.length > 0 ? `, sports: ${e.sports.join("/")}` : ""})`)
       .join("\n");
 
@@ -17701,7 +17711,7 @@ ${COMBINATION_EXERCISE_TRAINING_PRINCIPLES}`;
       adminGuidelines,
       coachesCornerPrinciples,
       catalog: `Available exercises (id: name (category, muscle group, movement type)) -- you may ONLY use exercise IDs from this list:\n${catalog}`,
-      perRequest: [forgeAiContext || null, renderPassagesForPrompt(referencePassages) || null].filter(Boolean).join("\n\n") || null,
+      perRequest: [draftRoomBlock, forgeAiContext || null, renderPassagesForPrompt(referencePassages) || null].filter(Boolean).join("\n\n") || null,
     });
 
     const userPrompt = `Coach's request: "${prompt}"
@@ -18462,9 +18472,19 @@ Respond to the user's latest message by calling ask_question or update_program.`
       return fail("There aren't any exercises available to build with yet.");
     }
 
-    const validIds = visibleExercises.map((e) => e.id);
+    // THE ROOM (2026-11-21). The model may place what the room can do, plus anything ALREADY in
+    // this program: an exercise the coach put there by hand is theirs and is never dropped because
+    // the room lacks its equipment (the builder marks it instead).
+    const chatRoom = await roomForActor(authorId, builtForSelf ? authorId : null);
+    const chatRoomBlock = equipmentPromptBlock(chatRoom);
+    const alreadyPlaced = new Set(program.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.exerciseId))));
+    const chatExercises = (() => {
+      const kept = visibleExercises.filter((e) => alreadyPlaced.has(e.id) || roomAllows(e, chatRoom));
+      return kept.length > 0 ? kept : visibleExercises;
+    })();
+    const validIds = chatExercises.map((e) => e.id);
     const validIdSet = new Set(validIds);
-    const catalog = visibleExercises
+    const catalog = chatExercises
       .map((e) => `${e.id}: ${e.name} (${e.category}, ${e.muscleGroup}, ${e.movementType || "unclassified"} movement${e.movementComplexity ? `, ${e.movementComplexity}` : ""}${e.bodyRegion ? `, ${e.bodyRegion}` : ""}${e.plane ? `, ${e.plane}` : ""}${e.sports && e.sports.length > 0 ? `, sports: ${e.sports.join("/")}` : ""})`)
       .join("\n");
 
@@ -18653,7 +18673,7 @@ ${COMBINATION_EXERCISE_TRAINING_PRINCIPLES}`;
       adminGuidelines,
       coachesCornerPrinciples,
       catalog: `Available exercises (id: name (category, muscle group, movement type)) -- you may ONLY use exercise IDs from this list:\n${catalog}`,
-      perRequest: forgeAiContext || null,
+      perRequest: [chatRoomBlock, forgeAiContext || null].filter(Boolean).join("\n\n") || null,
     });
 
     const historyText = recentForAi(history, BUILDER_CHAT_HISTORY_MESSAGES)
@@ -18768,6 +18788,9 @@ Respond to the user's latest message by calling ask_question or update_program.`
     authorId: number,
     reason: string,
     notes: string,
+    // 2026-11-21: `allowedIds` narrows the catalog to a room (the assign dialog's "suggest swaps"
+    // passes the team room's exercises); `dryRun` returns the pick without writing it.
+    options: { allowedIds?: ReadonlySet<number>; dryRun?: boolean } = {},
   ) {
     const pe = await db.query.programExercises.findFirst({
       where: eq(programExercises.id, programExerciseId),
@@ -18789,7 +18812,14 @@ Respond to the user's latest message by calling ask_question or update_program.`
       return fail("AI isn't set up yet -- ask whoever manages this Forge instance to configure it.");
     }
 
-    const visibleExercises = await this.getVisibleExercisesForCoach(authorId);
+    const allVisibleExercises = await this.getVisibleExercisesForCoach(authorId);
+    // THE ROOM (2026-11-21): a swap never suggests what the room cannot do (falling back to the
+    // whole library only when the room leaves nothing to swap in).
+    const swapRoom = options.allowedIds ? null : await roomForActor(authorId);
+    const roomOnly = options.allowedIds
+      ? allVisibleExercises.filter((e) => options.allowedIds!.has(e.id))
+      : allVisibleExercises.filter((e) => roomAllows(e, swapRoom));
+    const visibleExercises = roomOnly.some((e) => e.id !== pe.exerciseId) ? roomOnly : allVisibleExercises;
     const validIds = visibleExercises.filter((e) => e.id !== pe.exerciseId).map((e) => e.id);
     if (validIds.length === 0) {
       return fail("There isn't another exercise available to swap in yet.");
@@ -18838,6 +18868,9 @@ Swap out "${pe.exercise.name}" (${pe.exercise.category}, ${pe.exercise.muscleGro
       return fail("Sorry, I couldn't find a good swap just now -- try again in a bit.");
     }
     const result = parsed.data;
+    if (options.dryRun) {
+      return { summary: result.summary?.trim() || "Suggested a swap.", exerciseId: result.exerciseId, program: null };
+    }
 
     await db
       .update(programExercises)
@@ -18846,6 +18879,7 @@ Swap out "${pe.exercise.name}" (${pe.exercise.category}, ${pe.exercise.muscleGro
 
     return {
       summary: result.summary?.trim() || "Swapped that exercise.",
+      exerciseId: result.exerciseId,
       program: await this.getProgramFull(programId),
     };
   },
@@ -21564,6 +21598,8 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     ).find((e) => e.id === input.programExerciseId);
     if (!slot?.exercise?.name) return null;
 
+    // THE ROOM (2026-11-21): an "easier variant" must be one this athlete's room can do.
+    const regressionRoomBlock = equipmentPromptBlock(await roomForActor(athleteId));
     const reference = await referenceBlock(
       `${slot.exercise.name} regression progression scaling load reps`,
       ["strength", "rehab"],
@@ -21585,6 +21621,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
         `Prescribed today: ${slot.exercise.name}, ${slot.sets ?? "?"} sets of ${slot.reps ?? "?"}.`,
         slot.exercise.movementType ? `Movement pattern: ${slot.exercise.movementType}.` : null,
         input.note ? `What they said: ${input.note.slice(0, 300)}` : null,
+        regressionRoomBlock,
         reference ? `\n${reference}` : null,
       ]
         .filter(Boolean)
@@ -24151,9 +24188,11 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     // excluded too, so it can't recommend one risky exercise for another.
     const usedExerciseIds = new Set(slots.map((s) => s.exercise.id));
     const visibleExercises = await this.getVisibleExercisesForCoach(assignment.coachId);
-    const candidates = visibleExercises.filter(
+    const safeCandidates = visibleExercises.filter(
       (e) => !usedExerciseIds.has(e.id) && !isExerciseRiskyForPainParts(e, painParts),
     );
+    // THE ROOM (2026-11-21): a safe replacement is also one this athlete's room can do.
+    const candidates = keepForRoom(safeCandidates, await roomForActor(athleteId));
     if (candidates.length === 0) {
       return fail("There isn't a safe alternative available to swap in yet.");
     }

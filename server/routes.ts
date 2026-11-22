@@ -42,6 +42,7 @@ import { registerEmailListRoutes } from "./email-list";
 import { registerVelocityZoneRoutes } from "./velocity-zones";
 import { registerAttendanceRoutes } from "./attendance";
 import { registerParentWeeklySummaryRoutes } from "./parent-weekly-summary";
+import { registerEquipmentProfileRoutes } from "./equipment-profile-routes";
 import { registerProgramImportRoutes } from "./program-import-routes";
 import { registerDeviceIntegrationRoutes } from "./device-integrations";
 import { registerCoachMessageRoutes } from "./coach-messages";
@@ -1837,6 +1838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerVelocityZoneRoutes(app);
   registerAttendanceRoutes(app);
   registerParentWeeklySummaryRoutes(app);
+  registerEquipmentProfileRoutes(app);
   registerProgramImportRoutes(app, { requireActiveCoachPlan, requireFreeAgent, requirePaidAiAccess });
   registerDeviceIntegrationRoutes(app);
   registerCoachMessageRoutes(app);

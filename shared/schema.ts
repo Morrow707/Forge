@@ -11764,3 +11764,32 @@ export const guardianWeeklySummarySends = pgTable(
     ),
   }),
 );
+// ---- EQUIPMENT PROFILE (2026-11-21) ----
+/** What a weight room HAS. One row per scope (`scopeKey`):
+ *   - `program:<primaryCoachId>:default` -- a coach program's room for any team without its own;
+ *   - `program:<primaryCoachId>:team:<teamId>` -- one team's room;
+ *   - `personal:<userId>` -- a Free Agent's, a coach's or an admin's room for their OWN training.
+ * No row means everything is available, so nothing changes for anybody until they set one.
+ * `items` holds ids from shared/equipment-profile.ts; an empty list is "none, bodyweight only".
+ * See server/equipment-room.ts (who reads which room) and shared/exercise-needs.ts. */
+export const equipmentProfiles = pgTable(
+  "equipment_profiles",
+  {
+    id: serial("id").primaryKey(),
+    scopeKey: text("scope_key").notNull(),
+    kind: text("kind").notNull(),
+    ownerId: integer("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    teamId: integer("team_id").references(() => teams.id, { onDelete: "cascade" }),
+    items: json("items").$type<string[]>().notNull().default([]),
+    dumbbellMaxLbs: integer("dumbbell_max_lbs"),
+    updatedBy: integer("updated_by").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    scopeKeyUnique: uniqueIndex("equipment_profiles_scope_key_unique").on(table.scopeKey),
+    ownerIdx: index("equipment_profiles_owner_idx").on(table.ownerId),
+  }),
+);
+export type EquipmentProfileRow = typeof equipmentProfiles.$inferSelect;

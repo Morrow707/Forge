@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { getStoredTheme, setTheme, type Theme } from "@/lib/theme";
 import { forgeCodeEntryIsAllowed } from "@/lib/forge-code-entry";
 import { derivePrivacyTier } from "@shared/privacy-tiers";
+import { PersonalEquipmentCard, ProgramEquipmentCard } from "@/components/equipment-profile-card";
 import type { PublicUser } from "@shared/schema";
 
 // Same five hues shown in the "Coach Themes" concept deck -- named presets
@@ -351,6 +352,18 @@ export function AccountSettingsDialog({
           )}
 
           <AnswerStyleSection />
+
+          {/* THE WEIGHT ROOM (2026-11-21): a coach's program rooms, and everybody's own. */}
+          {user.role === "coach" && (
+            <div className="border-t border-border pt-4">
+              <ProgramEquipmentCard />
+            </div>
+          )}
+          {user.role !== "guardian" && (
+            <div className="border-t border-border pt-4">
+              <PersonalEquipmentCard title={user.role === "coach" ? "My own training equipment" : "My equipment"} />
+            </div>
+          )}
 
           {user.role === "athlete" && <MyResearchConsentSection />}
 
