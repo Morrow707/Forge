@@ -365,12 +365,10 @@ const READ_PROMPT = [
   "6. If a code like 'FS-...' is printed in a corner, copy it exactly into sheetCode.",
 ].join("\n");
 
-export type SheetReadModel = (source: ImportSource, hints: { lifts: string[] }) => Promise<RawSheetRead | null>;
+export type SheetReadModel = (source: ImportSource, hints: { lifts: string[]; names: string[] }) => Promise<RawSheetRead | null>;
 
 const defaultReadModel: SheetReadModel = async (source, hints) => {
-  // No athlete name is ever sent to the model (Scott, 2026-11-22): it transcribes what is written and
-  // Forge alone matches names against the roster.
-  const context = `Lifts on the day: ${hints.lifts.join(", ") || "(unknown)"}`;
+  const context = `Lifts on the day: ${hints.lifts.join(", ") || "(unknown)"}\nNames on the team: ${hints.names.join(", ") || "(unknown)"}`;
   const options = { feature: "weight-room-sheet-read", maxTokens: 8000 };
   if (source.kind === "text") return askClaudeStructured<RawSheetRead>(READ_PROMPT, `${context}\n\nThe sheet:\n${source.text}`, SHEET_READ_TOOL, options);
   const file = source.kind === "pdf" ? { kind: "pdf" as const, data: source.data } : { kind: "image" as const, mediaType: source.mediaType, data: source.data };
@@ -878,6 +876,7 @@ export function registerWeightRoomSheetRoutes(app: Express, gates: SheetGates): 
       const hintDay = pick.teamId && pick.date ? await loadSheetDay(user.id, pick.teamId, pick.date, pick.programDayId) : null;
       const hints = {
         lifts: hintDay?.source?.lifts.map((l) => l.name) ?? [],
+        names: hintDay?.source?.athletes.map((a) => a.displayName) ?? [],
       };
       const sources = files.map((f) => {
         try {
