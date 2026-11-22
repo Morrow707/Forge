@@ -85,13 +85,13 @@ function currentUser(req: Request) {
 
 /** The team, when it is one this coach may see (getTeamsForCoach is narrowed for an assigned
  * assistant), the same rule as routes.ts's own assertOwnsTeam. */
-async function assertOwnsTeam(coachId: number, teamId: number) {
+export async function assertOwnsTeam(coachId: number, teamId: number) {
   const teams = await storage.getTeamsForCoach(coachId);
   return teams.find((t) => t.id === teamId) ?? null;
 }
 
 /** The athletes a station for this team may show: on the team, in the coach's scope, not parked. */
-async function stationAthletes(coachId: number, teamId: number) {
+export async function stationAthletes(coachId: number, teamId: number) {
   const team = await assertOwnsTeam(coachId, teamId);
   if (!team) return null;
   const inSeason = new Set((await storage.getRosterForCoach(coachId)).map((a) => a.id));
@@ -104,7 +104,7 @@ async function stationAthletes(coachId: number, teamId: number) {
 }
 
 /** Whether this athlete's documents stop them training today, and what is missing. */
-async function documentGate(athleteId: number) {
+export async function documentGate(athleteId: number) {
   const audience = documentAudienceFor({ role: "athlete", hasCoach: true });
   const summary = await storage.externalWaiverSummary(athleteId);
   const statusByKind: Record<string, DocumentStatus> = Object.fromEntries(
@@ -128,7 +128,7 @@ async function todaysDays(athleteId: number) {
 
 type DayDetail = NonNullable<Awaited<ReturnType<typeof storage.getWorkoutDayDetail>>>;
 
-function storedEntriesOf(detail: DayDetail): StoredEntry[] {
+export function storedEntriesOf(detail: DayDetail): StoredEntry[] {
   return (detail.log?.entries ?? []).map((e) => ({
     programExerciseId: e.programExerciseId,
     correctiveId: e.correctiveId,

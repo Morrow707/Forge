@@ -33,6 +33,16 @@ describe("the take-away PDFs", () => {
     const routes = raw("./routes.ts");
     expect(routes.split("await pdfBrandForAthlete(").length - 1).toBe(PDF_CALL_SITES);
   });
+
+  it("the weight-room sheet wears the COACH's program look, read and never written", () => {
+    expect(raw("./weight-room-sheet-pdf.ts")).toContain("drawPdfBrandBand(doc, brand, op.subtitle)");
+    expect(raw("./weight-room-sheets.ts")).toContain("await pdfBrandForCoach(user.id)");
+    // The sheet routes only display the brand: nothing in them writes a branding column.
+    const sheets = read("./weight-room-sheets.ts");
+    ["updateCoachBranding", "brandPrimaryColor:", "brandLogoUrl:", "brandTeamName:", "brandHeadingFont"].forEach((w) => {
+      expect(sheets).not.toContain(w);
+    });
+  });
 });
 
 describe("push titles", () => {

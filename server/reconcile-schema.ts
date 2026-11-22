@@ -4114,6 +4114,47 @@ CREATE TABLE IF NOT EXISTS "weight_room_display_tokens" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "weight_room_display_tokens_hash_unique" ON "weight_room_display_tokens" ("token_hash");
 CREATE INDEX IF NOT EXISTS "weight_room_display_tokens_coach_idx" ON "weight_room_display_tokens" ("coach_id");
+
+-- ---- WEIGHT-ROOM SHEETS (2026-11-21) ----
+-- A coach's saved sheet layout per team, the prescription as printed (for an old printout's
+-- upload), and each logged upload. See server/weight-room-sheets.ts.
+CREATE TABLE IF NOT EXISTS "weight_room_sheet_layouts" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "team_id" integer NOT NULL REFERENCES "teams"("id") ON DELETE CASCADE,
+  "layout" json NOT NULL,
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "weight_room_sheet_layouts_coach_team_unique"
+  ON "weight_room_sheet_layouts" ("coach_id", "team_id");
+CREATE TABLE IF NOT EXISTS "weight_room_sheet_prints" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "team_id" integer NOT NULL REFERENCES "teams"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "program_day_id" integer NOT NULL,
+  "version" text NOT NULL,
+  "lifts" json NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "weight_room_sheet_prints_unique"
+  ON "weight_room_sheet_prints" ("team_id", "date", "program_day_id", "version");
+CREATE TABLE IF NOT EXISTS "weight_room_sheet_uploads" (
+  "id" serial PRIMARY KEY,
+  "coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "team_id" integer REFERENCES "teams"("id") ON DELETE SET NULL,
+  "date" date NOT NULL,
+  "program_day_id" integer,
+  "version" text,
+  "logged_against" text NOT NULL DEFAULT 'current',
+  "attendance" json NOT NULL,
+  "coach_note" text,
+  "athlete_notes" json,
+  "summary" json NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "weight_room_sheet_uploads_team_date_idx"
+  ON "weight_room_sheet_uploads" ("team_id", "date");
 `;
 
 async function main() {

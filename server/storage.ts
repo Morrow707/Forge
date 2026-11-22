@@ -1463,7 +1463,7 @@ const NUTRITION_SUPPLEMENT_PRINCIPLES = `- Creatine monohydrate is the most-rese
 // on every cycle after the first, since a dateOverride is keyed by
 // program_day_id, which repeats every cycle -- applying it on every cycle
 // would drag every repeat of that day onto the same one-off date.
-function resolveAssignmentDate(
+export function resolveAssignmentDate(
   assignment: { startDate: string; dateOverrides?: Record<string, string> | null },
   calendarWeekNumber: number,
   dayNumber: number,
@@ -1482,7 +1482,7 @@ function resolveAssignmentDate(
 // identical to the only behavior that existed before durationWeeks was
 // added. A 4-native-week program with durationWeeks=3 repeats all 4 weeks
 // 3 times over (12 calendar weeks total), not "cut off after 3 weeks."
-function* assignmentWeekOccurrences<Week extends { weekNumber: number }>(
+export function* assignmentWeekOccurrences<Week extends { weekNumber: number }>(
   weeks: Week[],
   durationWeeks: number,
 ): Generator<{ week: Week; calendarWeekNumber: number; isFirstCycle: boolean }> {
