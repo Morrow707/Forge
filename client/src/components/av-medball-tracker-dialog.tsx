@@ -46,6 +46,7 @@ import { MIN_TRACKING_CONFIDENCE } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 import { buildTrackingDiagnostics, type TrackingDiagnostics } from "@/lib/tracking-diagnostics";
 
+import { translate, useT } from "@/i18n";
 /** AVFoundation + Vision med ball throw tracking -- genuinely new, no ARKit equivalent was ever
  * built for this mode (unlike every other tracker this AV pipeline replaced). It exists at all
  * because AvBodyTrackingPlugin.swift's implement tracker's motion-diff object tracking (built for bar_path/full --
@@ -191,6 +192,7 @@ export function AvMedballTrackerDialog({
   onProcessingSettled?: (setNumber: number) => void;
   videoContext?: VideoRecordContext;
 }) {
+  const t = useT();
 
   // WHICH SET THIS TAKE IS FOR, PINNED AT STOP. Every onCapture below goes through here, so no
   // exit has to remember to carry it and none of them can forget.
@@ -247,14 +249,14 @@ export function AvMedballTrackerDialog({
         const result = await uploadPromise;
         toast.error(
           result.status === "queued"
-            ? `${message} (No Wi-Fi, video saved on your device, will upload for your coach once connected.)`
-            : `${message} (Video saved for your coach.)`,
+            ? t("{message} (No Wi-Fi, video saved on your device, will upload for your coach once connected.)", { message: t(message) })
+            : t("{message} (Video saved for your coach.)", { message: t(message) }),
         );
         if (result.status === "queued") {
           if (!hasWarnedAboutQueueing()) {
             markWarnedAboutQueueing();
             toast.info(
-              "You can also upload a queued video manually anytime, even over cellular, from the Video Bank.",
+              t("You can also upload a queued video manually anytime, even over cellular, from the Video Bank."),
               { duration: 10000 },
             );
           }
@@ -265,7 +267,7 @@ export function AvMedballTrackerDialog({
         onOpenChange(false);
       } catch (err) {
         const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
-        toast.error(`${message} And the video didn't save either: ${detail}`);
+        toast.error(t("{message} And the video didn't save either: {detail}", { message: t(message), detail }));
         // THE TAKE STILL HAPPENED, EVEN IF ITS CLIP DID NOT ARRIVE.
         //
         // This used to toast and stop: no onCapture, no close. The metrics AND the
@@ -284,7 +286,7 @@ export function AvMedballTrackerDialog({
         setSaving(false);
       }
     } else {
-      toast.error(message);
+      toast.error(t(message));
       // Same reasoning as the catch above, for the no-video case: a refused take with no clip
       // to upload still produced a diagnostics record, and dropping it here left the set looking
       // as though the camera had never run. This branch only ever toasted.
@@ -357,8 +359,8 @@ export function AvMedballTrackerDialog({
       );
       toast.error(
         inFlightUpload
-          ? "Couldn't finish analyzing this take, but your video was saved for your coach."
-          : "Couldn't finish analyzing this take. The set was saved without numbers.",
+          ? t("Couldn't finish analyzing this take, but your video was saved for your coach.")
+          : t("Couldn't finish analyzing this take. The set was saved without numbers."),
       );
       onCapture(EMPTY_MEDBALL_METRICS, salvagedVideoUrl);
       setSaving(false);
@@ -712,8 +714,8 @@ export function AvMedballTrackerDialog({
     // but that's easy to miss scrolling past; this puts it in front of the athlete right away.
     toast.success(
       repBreakdown.length === 1
-        ? `Throw: ${repBreakdown[0].peakSpeedMps} m/s`
-        : `${repBreakdown.length} throws detected: ${repBreakdown.map((r) => r.peakSpeedMps).join(", ")} m/s`,
+        ? translate("Throw: {peakSpeedMps} m/s", { peakSpeedMps: repBreakdown[0].peakSpeedMps })
+        : translate("{length} throws detected: {value} m/s", { length: repBreakdown.length, value: repBreakdown.map((r) => r.peakSpeedMps).join(", ") }),
     );
 
     if (!recordVideo) {
@@ -735,7 +737,7 @@ export function AvMedballTrackerDialog({
         if (!hasWarnedAboutQueueing()) {
           markWarnedAboutQueueing();
           toast.info(
-            "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+            translate("No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular."),
             { duration: 10000 },
           );
         }
@@ -745,7 +747,7 @@ export function AvMedballTrackerDialog({
       }
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
+      toast.error(err instanceof ApiError ? err.message : translate("Saved the set, but the clip failed to upload"));
       onCapture(metrics, undefined, skeletonFrames);
       onOpenChange(false);
     } finally {
@@ -764,7 +766,7 @@ export function AvMedballTrackerDialog({
             <AvCameraChrome containerRef={containerRef} active={open} />
             <button
               type="button"
-              aria-label="Close"
+              aria-label={t("Close")}
               onClick={() => onOpenChange(false)}
               className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
             >
@@ -774,7 +776,7 @@ export function AvMedballTrackerDialog({
             {recording && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">
                 <Circle className="h-2.5 w-2.5 animate-pulse fill-destructive text-destructive" />
-                Recording
+                {t("Recording")}
               </div>
             )}
 
@@ -783,13 +785,13 @@ export function AvMedballTrackerDialog({
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
                 <p className="text-sm text-white">
                   {analyzing
-                    ? `Analyzing recording, ${analyzedFrames} frames processed…`
-                    : `Saving your video… ${Math.round(uploadProgress * 100)}%`}
+                    ? t("Analyzing recording, {analyzedFrames} frames processed…", { analyzedFrames })
+                    : t("Saving your video… {percent}%", { percent: Math.round(uploadProgress * 100) })}
                 </p>
                 {analyzing && (
                   <Button variant="outline" size="sm" onClick={cancelAnalysis}>
                     <XCircle className="h-4 w-4" />
-                    Cancel
+                    {t("Cancel")}
                   </Button>
                 )}
               </div>
@@ -797,7 +799,7 @@ export function AvMedballTrackerDialog({
 
             {!recording && !analyzing && !saving && !heightIn && (
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-md bg-amber-500/80 px-3 py-2 text-center text-sm font-semibold text-black">
-                Add your height in your profile to get calibrated numbers from this camera.
+                {t("Add your height in your profile to get calibrated numbers from this camera.")}
               </div>
             )}
 
@@ -811,7 +813,7 @@ export function AvMedballTrackerDialog({
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
-                  Camera tracking isn't supported on this device.
+                  {t("Camera tracking isn't supported on this device.")}
                 </div>
                 {supportError && (
                   <p className="select-text break-all text-center text-xs opacity-90">{supportError}</p>
@@ -831,18 +833,18 @@ export function AvMedballTrackerDialog({
                 disabled={!supported || !heightIn}
               >
                 <Circle className="h-4 w-4 fill-current" />
-                Start Set
+                {t("Start Set")}
               </Button>
             )}
             {recording && (
               <Button size="lg" variant="secondary" onClick={stopTracking}>
                 <Square className="h-4 w-4" />
-                Stop Set
+                {t("Stop Set")}
               </Button>
             )}
             {(analyzing || saving) && (
               <Button size="lg" variant="secondary" disabled>
-                {analyzing ? "Analyzing…" : `Saving… ${Math.round(uploadProgress * 100)}%`}
+                {analyzing ? t("Analyzing…") : t("Saving… {percent}%", { percent: Math.round(uploadProgress * 100) })}
               </Button>
             )}
           </div>

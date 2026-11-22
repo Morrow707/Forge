@@ -49,6 +49,7 @@ import {
   type TransportTarget,
 } from "@/lib/video-sync";
 
+import { useT } from "@/i18n";
 export type { CompareClip, CompareSubject };
 
 /**
@@ -140,6 +141,7 @@ export function VideoCompareDialog({
    * which has a server behind it and needs no recorder at all. */
   footer?: ReactNode;
 }) {
+  const t = useT();
   const [clips, setClips] = useState<{ left: CompareClip | null; right: CompareClip | null }>({
     left: initialLeft,
     right: initialRight,
@@ -233,7 +235,7 @@ export function VideoCompareDialog({
         clipLabel: left.label,
       });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't save this as a review.");
+      toast.error(err instanceof Error ? err.message : t("Couldn't save this as a review."));
     } finally {
       setSavingReview(false);
     }
@@ -597,12 +599,12 @@ export function VideoCompareDialog({
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs text-white/90 hover:text-white"
         >
           <Film className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{clip ? clip.label : `Choose a ${side} clip`}</span>
+          <span className="truncate">{clip ? clip.label : t("Choose a {side} clip", { side: side === "left" ? t("left") : t("right") })}</span>
           {clip?.sublabel && <span className="hidden truncate text-white/50 sm:inline">· {clip.sublabel}</span>}
         </button>
         {frames.failed && (
           <button type="button" onClick={frames.retry} className="shrink-0 text-[10px] text-amber-300 underline">
-            skeleton didn't load — retry
+            {t("skeleton didn't load — retry")}
           </button>
         )}
       </div>
@@ -621,15 +623,15 @@ export function VideoCompareDialog({
             variant="outline"
             className="h-7 w-7 shrink-0"
             disabled={disabled}
-            aria-label={playing[side] ? `Pause ${side}` : `Play ${side}`}
+            aria-label={playing[side] ? t("Pause {side}", { side: side === "left" ? t("left") : t("right") }) : t("Play {side}", { side: side === "left" ? t("left") : t("right") })}
             onClick={() => driveSides(side, playing[side] ? "pause" : "play")}
           >
             {playing[side] ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
           </Button>
-          <Button size="icon" variant="outline" className="h-7 w-7 shrink-0" disabled={disabled} aria-label={`Step ${side} back one frame`} onClick={() => step(side, -1)}>
+          <Button size="icon" variant="outline" className="h-7 w-7 shrink-0" disabled={disabled} aria-label={t("Step {side} back one frame", { side: side === "left" ? t("left") : t("right") })} onClick={() => step(side, -1)}>
             <StepBack className="h-3.5 w-3.5" />
           </Button>
-          <Button size="icon" variant="outline" className="h-7 w-7 shrink-0" disabled={disabled} aria-label={`Step ${side} forward one frame`} onClick={() => step(side, 1)}>
+          <Button size="icon" variant="outline" className="h-7 w-7 shrink-0" disabled={disabled} aria-label={t("Step {side} forward one frame", { side: side === "left" ? t("left") : t("right") })} onClick={() => step(side, 1)}>
             <StepForward className="h-3.5 w-3.5" />
           </Button>
           <input
@@ -641,7 +643,7 @@ export function VideoCompareDialog({
             disabled={disabled}
             onChange={(e) => scrub(side, Number(e.target.value))}
             className="h-1.5 min-w-0 flex-1 accent-primary"
-            aria-label={`Scrub ${side}`}
+            aria-label={t("Scrub {side}", { side: side === "left" ? t("left") : t("right") })}
           />
           <span className="w-16 shrink-0 text-right font-mono text-[10px] text-white/80">{fmtTime(times[side])}</span>
         </div>
@@ -653,10 +655,10 @@ export function VideoCompareDialog({
             className="flex items-center gap-1 rounded-full border border-white/20 px-2 py-0.5 text-[10px] font-semibold text-white/80 hover:text-white disabled:opacity-40"
           >
             <Flag className="h-3 w-3" />
-            Mark sync here
+            {t("Mark sync here")}
           </button>
           <span className="font-mono text-[10px] text-white/50">
-            sync {fmtTime(side === "left" ? marks.syncL : marks.syncR)}
+            {t("sync {time}", { time: fmtTime(side === "left" ? marks.syncL : marks.syncR) })}
           </span>
         </div>
         {/* TRIM: loop one rep without cutting the file. Per side, because the rep worth
@@ -668,7 +670,7 @@ export function VideoCompareDialog({
             onClick={() => setTrims((prev) => ({ ...prev, [side]: { ...prev[side], in: times[side] } }))}
             className="rounded-full border border-white/20 px-2 py-0.5 font-semibold hover:text-white disabled:opacity-40"
           >
-            Set in
+            {t("Set in")}
           </button>
           <button
             type="button"
@@ -676,19 +678,18 @@ export function VideoCompareDialog({
             onClick={() => setTrims((prev) => ({ ...prev, [side]: { ...prev[side], out: times[side] } }))}
             className="rounded-full border border-white/20 px-2 py-0.5 font-semibold hover:text-white disabled:opacity-40"
           >
-            Set out
+            {t("Set out")}
           </button>
           {hasTrim(trims[side], dur) ? (
             <>
               <span className="font-mono text-white/50">
-                {fmtTime(trims[side].in ?? 0)}–{fmtTime(trims[side].out ?? dur)} looping
-              </span>
+                {t("{value}–{value2} looping", { value: fmtTime(trims[side].in ?? 0), value2: fmtTime(trims[side].out ?? dur) })}</span>
               <button
                 type="button"
                 onClick={() => setTrims((prev) => ({ ...prev, [side]: NO_TRIM }))}
                 className="underline hover:text-white"
               >
-                clear
+                {t("clear")}
               </button>
             </>
           ) : (
@@ -696,7 +697,7 @@ export function VideoCompareDialog({
             // range that ends before it starts, and a clip that simply refused to play would
             // read as broken video.
             (trims[side].in != null || trims[side].out != null) && (
-              <span className="text-amber-300">out must come after in</span>
+              <span className="text-amber-300">{t("out must come after in")}</span>
             )
           )}
         </div>
@@ -718,12 +719,12 @@ export function VideoCompareDialog({
               className="flex h-full w-full flex-col items-center justify-center gap-2 text-sm text-white/70 hover:text-white"
             >
               <Film className="h-8 w-8" />
-              Choose a clip
+              {t("Choose a clip")}
             </button>
           ) : loadErrors[side] ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-xs text-white/70">
               <VideoOff className="h-6 w-6" />
-              This video couldn't be loaded — it may not have finished uploading, or the file is missing.
+              {t("This video couldn't be loaded — it may not have finished uploading, or the file is missing.")}
             </div>
           ) : null}
           {videoEl(side)}
@@ -758,7 +759,7 @@ export function VideoCompareDialog({
         hideClose
       >
         <div className="flex shrink-0 items-center justify-between gap-2 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
-          <DialogTitle className="truncate text-sm text-white">{title}</DialogTitle>
+          <DialogTitle className="truncate text-sm text-white">{t(title)}</DialogTitle>
           <div className="flex items-center gap-1">
             <div className="flex overflow-hidden rounded-md border border-white/20 text-[11px] font-semibold">
               <button
@@ -767,7 +768,7 @@ export function VideoCompareDialog({
                 className={cn("flex items-center gap-1 px-2 py-1", mode === "split" ? "bg-white text-black" : "text-white/70")}
               >
                 <Columns2 className="h-3.5 w-3.5" />
-                Split
+                {t("Split")}
               </button>
               <button
                 type="button"
@@ -775,12 +776,12 @@ export function VideoCompareDialog({
                 className={cn("flex items-center gap-1 px-2 py-1", mode === "overlay" ? "bg-white text-black" : "text-white/70")}
               >
                 <Layers className="h-3.5 w-3.5" />
-                Overlay
+                {t("Overlay")}
               </button>
             </div>
             <DialogClose className="ml-1 rounded-sm text-white/70 hover:text-white">
               <X className="h-5 w-5" />
-              <span className="sr-only">Close</span>
+              <span className="sr-only">{t("Close")}</span>
             </DialogClose>
           </div>
         </div>
@@ -803,35 +804,35 @@ export function VideoCompareDialog({
                 {videoEl("right")}
                 {(!clips.left || !clips.right) && (
                   <div className="absolute inset-0 flex items-center justify-center text-sm text-white/70">
-                    Choose a clip for both sides to overlay them.
+                    {t("Choose a clip for both sides to overlay them.")}
                   </div>
                 )}
               </div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-white/80 sm:grid-cols-4">
                 <label className="flex items-center gap-2">
-                  <span className="w-12 shrink-0">Opacity</span>
-                  <input type="range" min={0} max={100} step={5} value={overlay.opacity} onChange={(e) => setOverlay((o) => ({ ...o, opacity: Number(e.target.value) }))} className="h-1.5 flex-1 accent-primary" aria-label="Overlay opacity" />
+                  <span className="w-12 shrink-0">{t("Opacity")}</span>
+                  <input type="range" min={0} max={100} step={5} value={overlay.opacity} onChange={(e) => setOverlay((o) => ({ ...o, opacity: Number(e.target.value) }))} className="h-1.5 flex-1 accent-primary" aria-label={t("Overlay opacity")} />
                 </label>
                 <label className="flex items-center gap-2">
-                  <span className="w-12 shrink-0">Scale</span>
-                  <input type="range" min={0.5} max={1.5} step={0.01} value={overlay.scale} onChange={(e) => setOverlay((o) => ({ ...o, scale: Number(e.target.value) }))} className="h-1.5 flex-1 accent-primary" aria-label="Overlay scale" />
+                  <span className="w-12 shrink-0">{t("Scale")}</span>
+                  <input type="range" min={0.5} max={1.5} step={0.01} value={overlay.scale} onChange={(e) => setOverlay((o) => ({ ...o, scale: Number(e.target.value) }))} className="h-1.5 flex-1 accent-primary" aria-label={t("Overlay scale")} />
                 </label>
                 <label className="flex items-center gap-2">
-                  <span className="w-12 shrink-0">Left/right</span>
-                  <input type="range" min={-0.5} max={0.5} step={0.005} value={overlay.dx} onChange={(e) => setOverlay((o) => ({ ...o, dx: Number(e.target.value) }))} className="h-1.5 flex-1 accent-primary" aria-label="Overlay horizontal nudge" />
+                  <span className="w-12 shrink-0">{t("Left/right")}</span>
+                  <input type="range" min={-0.5} max={0.5} step={0.005} value={overlay.dx} onChange={(e) => setOverlay((o) => ({ ...o, dx: Number(e.target.value) }))} className="h-1.5 flex-1 accent-primary" aria-label={t("Overlay horizontal nudge")} />
                 </label>
                 <label className="flex items-center gap-2">
-                  <span className="w-12 shrink-0">Up/down</span>
-                  <input type="range" min={-0.5} max={0.5} step={0.005} value={overlay.dy} onChange={(e) => setOverlay((o) => ({ ...o, dy: Number(e.target.value) }))} className="h-1.5 flex-1 accent-primary" aria-label="Overlay vertical nudge" />
+                  <span className="w-12 shrink-0">{t("Up/down")}</span>
+                  <input type="range" min={-0.5} max={0.5} step={0.005} value={overlay.dy} onChange={(e) => setOverlay((o) => ({ ...o, dy: Number(e.target.value) }))} className="h-1.5 flex-1 accent-primary" aria-label={t("Overlay vertical nudge")} />
                 </label>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button size="sm" variant={overlay.mirror ? "default" : "outline"} className="h-7 text-xs" onClick={() => setOverlay((o) => ({ ...o, mirror: !o.mirror }))} aria-pressed={overlay.mirror}>
                   <FlipHorizontal2 className="h-3.5 w-3.5" />
-                  Mirror
+                  {t("Mirror")}
                 </Button>
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setOverlay(DEFAULT_OVERLAY)}>
-                  Reset overlay
+                  {t("Reset overlay")}
                 </Button>
               </div>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -852,12 +853,12 @@ export function VideoCompareDialog({
                 onClick={() => driveSides("both", anyPlaying ? "pause" : "play")}
               >
                 {bothPlaying || anyPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                {anyPlaying ? "Pause both" : "Play both"}
+                {anyPlaying ? t("Pause both") : t("Play both")}
               </Button>
-              <Button size="icon" variant="outline" className="h-7 w-7" disabled={!clips.left || !clips.right} aria-label="Step both back one frame" onClick={() => step("both", -1)}>
+              <Button size="icon" variant="outline" className="h-7 w-7" disabled={!clips.left || !clips.right} aria-label={t("Step both back one frame")} onClick={() => step("both", -1)}>
                 <StepBack className="h-3.5 w-3.5" />
               </Button>
-              <Button size="icon" variant="outline" className="h-7 w-7" disabled={!clips.left || !clips.right} aria-label="Step both forward one frame" onClick={() => step("both", 1)}>
+              <Button size="icon" variant="outline" className="h-7 w-7" disabled={!clips.left || !clips.right} aria-label={t("Step both forward one frame")} onClick={() => step("both", 1)}>
                 <StepForward className="h-3.5 w-3.5" />
               </Button>
               <Button
@@ -871,10 +872,10 @@ export function VideoCompareDialog({
                 }}
               >
                 {linked ? <Link2 className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
-                {linked ? "Linked" : "Unlinked"}
+                {linked ? t("Linked") : t("Unlinked")}
               </Button>
               <Select value={String(speed)} onValueChange={(v) => setSpeed(Number(v))}>
-                <SelectTrigger className="h-7 w-20 border-white/20 bg-transparent text-xs text-white" aria-label="Playback speed">
+                <SelectTrigger className="h-7 w-20 border-white/20 bg-transparent text-xs text-white" aria-label={t("Playback speed")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -893,7 +894,7 @@ export function VideoCompareDialog({
                 onClick={() => setShowSkeleton((s) => !s)}
                 disabled={!leftFrames.frames?.length && !rightFrames.frames?.length}
               >
-                Skeleton
+                {t("Skeleton")}
               </Button>
               <Button
                 size="sm"
@@ -903,11 +904,11 @@ export function VideoCompareDialog({
                 onClick={() => setShowGrid((g) => !g)}
               >
                 <Grid3x3 className="h-3.5 w-3.5" />
-                Grid
+                {t("Grid")}
               </Button>
               <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!clips.left && !clips.right} onClick={swapSides}>
                 <ArrowLeftRight className="h-3.5 w-3.5" />
-                Swap
+                {t("Swap")}
               </Button>
               {/* SAVE WHAT YOU SET UP. The pairing and the sync marks are the expensive part of
                   a review -- finding the two clips and lining them up -- and until this existed
@@ -923,13 +924,13 @@ export function VideoCompareDialog({
                   onClick={() => void saveAsReview()}
                 >
                   <Film className="h-3.5 w-3.5" />
-                  {savingReview ? "Saving..." : "Save as review"}
+                  {savingReview ? t("Saving...") : t("Save as review")}
                 </Button>
               )}
             </div>
             {reps.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-semibold uppercase text-white/60">Align to rep</span>
+                <span className="text-[10px] font-semibold uppercase text-white/60">{t("Align to rep")}</span>
                 {reps.map((n) => (
                   <button
                     key={n}
@@ -948,9 +949,7 @@ export function VideoCompareDialog({
             )}
             {linked && (
               <p className="text-[10px] text-white/50">
-                Linked: right = left − {fmtTime(marks.syncL)} + {fmtTime(marks.syncR)}. Mark a sync point on each side to line
-                up a moment.
-              </p>
+                {t("Linked: right = left − {value} + {value2}. Mark a sync point on each side to line up a moment.", { value: fmtTime(marks.syncL), value2: fmtTime(marks.syncR) })}</p>
             )}
           </div>
         </div>

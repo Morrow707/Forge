@@ -3,7 +3,9 @@ import { FreeAgentGate } from "@/components/free-agent-gate";
 import { LibraryTabs } from "@/components/library-tabs";
 import { useSkillsAccess } from "@/hooks/use-skills-access";
 
+import { useT } from "@/i18n";
 export default function AthletePrograms() {
+  const t = useT();
   // Skills moved onto the camera tier (see FreeAgentTierDef.hasSkills), so the Skill Programs tab
   // has to stop being drawn for a Free Agent on Basic or AI Coach -- the routes behind it answer
   // 402 now, and a tab that always errors is worse than no tab. Explicit true: undefined means
@@ -19,8 +21,8 @@ export default function AthletePrograms() {
       <ProgramListPage
         apiBase="/api/athlete"
         routeBase="/athlete/programs"
-        title="My Programs"
-        emptyStateText="Start from a Forge template below, or hit New Program to build your own from scratch."
+        title={t("My Programs")}
+        emptyStateText={t("Start from a Forge template below, or hit New Program to build your own from scratch.")}
         showAssign={false}
         showSelfAssign
         libraryTabs={

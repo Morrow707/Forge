@@ -1,6 +1,7 @@
 import { LibraryBankRemoved } from "@/components/library-bank-removed";
 import { SkillsGate } from "@/components/skills-gate";
 
+import { useT } from "@/i18n";
 // Same reasoning as athlete/exercises.tsx -- a Free Agent works through the
 // AI-built Skill Programs, not a standalone Skill Bank browse page.
 //
@@ -8,10 +9,11 @@ import { SkillsGate } from "@/components/skills-gate";
 // /athlete/skill-programs, which IS gated, so without this an athlete on Basic or AI Coach is
 // pointed at a page that turns them away. One answer, given once, in the right place.
 export default function AthleteSkills() {
+  const t = useT();
   return (
-    <SkillsGate title="Skill Library">
+    <SkillsGate title={t("Skill Library")}>
       <LibraryBankRemoved
-        title="Skill Library"
+        title={t("Skill Library")}
         redirectTo="/athlete/skill-programs"
         redirectLabel="Go to My Skill Programs"
       />

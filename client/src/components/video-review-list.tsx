@@ -6,8 +6,8 @@ import { Film, Share2, Lock } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
 import { getJson } from "@/lib/queryClient";
 import { lazyDialog } from "@/components/lazy-dialog";
-import { format } from "date-fns";
 
+import { useT } from "@/i18n";
 // Both dialogs are lazy: each pulls in a canvas renderer, and most visits to either page never
 // open one. Same treatment as the analysis and compare dialogs.
 const VideoReviewPlayerDialog = lazyDialog(() =>
@@ -55,6 +55,7 @@ export function VideoReviewList({
    *  button is drawn for somebody who has nobody to send to. Defaults true. */
   canSend?: boolean;
 }) {
+  const t = useT();
   const { data, isLoading, isError, refetch } = useQuery<ReviewRow[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
@@ -64,7 +65,7 @@ export function VideoReviewList({
 
   // isError before any emptiness claim: "no reviews yet" and "we could not ask" are different
   // things, and a coach reading the second as the first thinks their work vanished.
-  if (isError) return <ReadFailed what="saved reviews" onRetry={() => void refetch()} />;
+  if (isError) return <ReadFailed what={t("saved reviews")} onRetry={() => void refetch()} />;
   if (isLoading) return <div className="h-20 w-full animate-pulse rounded-lg bg-surface" />;
 
   const reviews = data ?? [];
@@ -81,30 +82,30 @@ export function VideoReviewList({
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium">{r.title}</p>
               <p className="truncate text-xs text-muted-foreground">
-                {r.leftClip?.label} &middot; {format(new Date(r.updatedAt), "d MMM yyyy")}
-                {r.purgedAt ? " · clip expired, notes kept" : ""}
+                {r.leftClip?.label} · {t.date(r.updatedAt, { day: "numeric", month: "short", year: "numeric" })}
+                {r.purgedAt ? t(" · clip expired, notes kept") : ""}
               </p>
             </div>
             {mode === "self" &&
               (r.sentToCoachAt ? (
                 <span className="flex items-center gap-1 text-xs text-emerald-500">
-                  <Share2 className="h-3.5 w-3.5" /> Sent
+                  <Share2 className="h-3.5 w-3.5" /> {t("Sent")}
                 </span>
               ) : (
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Lock className="h-3.5 w-3.5" /> Only you
+                  <Lock className="h-3.5 w-3.5" /> {t("Only you")}
                 </span>
               ))}
             {mode === "coach" &&
               (r.sharedWithAthleteAt ? (
                 <span className="flex items-center gap-1 text-xs text-emerald-500">
-                  <Share2 className="h-3.5 w-3.5" /> Shared
+                  <Share2 className="h-3.5 w-3.5" /> {t("Shared")}
                 </span>
               ) : (
                 // A draft is labelled on the coach's own screen so they can tell at a glance
                 // what the athlete can and cannot see.
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Lock className="h-3.5 w-3.5" /> Draft
+                  <Lock className="h-3.5 w-3.5" /> {t("Draft")}
                 </span>
               ))}
             {/* Watch is where the export lives (Phase 5): burning a review requires playing
@@ -112,7 +113,7 @@ export function VideoReviewList({
                 voice-over loaded. A coach gets both buttons. */}
             {mode === "coach" && (
               <Button size="sm" variant="ghost" onClick={() => setOpenId(r.id)}>
-                Watch
+                {t("Watch")}
               </Button>
             )}
             <Button
@@ -120,7 +121,7 @@ export function VideoReviewList({
               variant="outline"
               onClick={() => (mode === "read-only" ? setOpenId(r.id) : setEditing(r))}
             >
-              {mode === "read-only" ? "Watch" : "Edit"}
+              {mode === "read-only" ? t("Watch") : t("Edit")}
             </Button>
           </CardContent>
         </Card>

@@ -9,6 +9,7 @@ import { KNOWLEDGE_DOMAINS } from "@shared/knowledge-domains";
 import { toast } from "sonner";
 import { Library } from "lucide-react";
 
+import { useT } from "@/i18n";
 export type LessonSource = {
   sourceId: number | null;
   sourceTitle: string;
@@ -36,6 +37,7 @@ export function AcademyTrackLibraryDraftPanel({
 }: {
   onDraft: (structure: LibraryDraftStructure, note: string | null) => void;
 }) {
+  const t = useT();
   const [topic, setTopic] = useState("");
   const [domains, setDomains] = useState<string[]>(["strength"]);
   const [lessonCount, setLessonCount] = useState(4);
@@ -51,9 +53,9 @@ export function AcademyTrackLibraryDraftPanel({
     },
     onSuccess: (d) => {
       onDraft(d.structure, d.note);
-      toast.success(`Drafted from ${d.passagesUsed} passages. Read every word before saving.`);
+      toast.success(t("Drafted from {passagesUsed} passages. Read every word before saving.", { passagesUsed: d.passagesUsed }));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't draft from the library", { duration: 12000 }),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't draft from the library"), { duration: 12000 }),
   });
 
   return (
@@ -61,19 +63,17 @@ export function AcademyTrackLibraryDraftPanel({
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Library className="h-4 w-4" />
-          Draft from the library
+          {t("Draft from the library")}
         </CardTitle>
         <CardDescription>
-          Name a topic. Forge writes the lessons and a ten-question quiz in its own words from
-          licensed sources in the Knowledge Library, with further reading under each lesson. A
-          draft that repeats a source is refused.
+          {t("Name a topic. Forge writes the lessons and a ten-question quiz in its own words from licensed sources in the Knowledge Library, with further reading under each lesson. A draft that repeats a source is refused.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <Input
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
-          placeholder="e.g. Plyometric progressions for high-school athletes"
+          placeholder={t("e.g. Plyometric progressions for high-school athletes")}
           maxLength={200}
         />
         <div className="flex flex-wrap gap-x-3 gap-y-1.5">
@@ -90,7 +90,7 @@ export function AcademyTrackLibraryDraftPanel({
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-xs text-muted-foreground">Lessons</label>
+          <label className="text-xs text-muted-foreground">{t("Lessons")}</label>
           <Input
             type="number"
             min={2}
@@ -105,7 +105,7 @@ export function AcademyTrackLibraryDraftPanel({
           onClick={() => draft.mutate()}
           disabled={draft.isPending || topic.trim().length < 3 || domains.length === 0}
         >
-          {draft.isPending ? "Drafting, about a minute..." : "Draft track"}
+          {draft.isPending ? t("Drafting, about a minute...") : t("Draft track")}
         </Button>
       </CardContent>
     </Card>

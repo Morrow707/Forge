@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { Sparkles, Unlock, Lock } from "lucide-react";
 import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
 
+import { useT } from "@/i18n";
 /** What GET /api/athlete/entitlements answers with. `addOns` is MAY I OPEN THIS
  * and `ownedAddOns` is DID I PAY FOR THIS -- two different questions, and the
  * difference between them is the whole of beta. */
@@ -50,6 +51,7 @@ type AthleteEntitlements = {
  * rule CLAUDE.md states for the camera: the client never re-derives it, and every
  * gate below requires an explicit true. */
 export default function AthleteSportCoaches() {
+  const t = useT();
   const [, navigate] = useLocation();
   const nativeIap = isAppleIapSupported();
   const [busyAddOn, setBusyAddOn] = useState<FreeAgentAddOnId | null>(null);
@@ -77,7 +79,7 @@ export default function AthleteSportCoaches() {
     try {
       if (nativeIap) {
         await purchaseFreeAgentAddOn(id);
-        toast.success("Unlocked, your new coach is ready.");
+        toast.success(t("Unlocked, your new coach is ready."));
         await refetch();
       } else {
         const res = await apiRequest("POST", "/api/billing/checkout/free-agent-add-on", {
@@ -91,9 +93,9 @@ export default function AthleteSportCoaches() {
       if (err instanceof ApplePurchaseCancelledError) {
         // Backed out of Apple's sheet -- not an error.
       } else if (err instanceof ApplePurchasePendingError) {
-        toast("Purchase pending approval, you'll be unlocked once it's confirmed.");
+        toast(t("Purchase pending approval, you'll be unlocked once it's confirmed."));
       } else {
-        toast.error(err instanceof Error ? err.message : "Couldn't start that purchase");
+        toast.error(err instanceof Error ? err.message : t("Couldn't start that purchase"));
       }
     } finally {
       setBusyAddOn(null);
@@ -101,15 +103,15 @@ export default function AthleteSportCoaches() {
   }
 
   return (
-    <FreeAgentGate title="Sport Coaches">
-      <AppShell title="Sport Coaches">
+    <FreeAgentGate title={t("Sport Coaches")}>
+      <AppShell title={t("Sport Coaches")}>
         {/* Never render the cards over a failed read: without an answer every card
             would draw its locked state, which tells an athlete who owns all three
             that they own none. */}
         {isError ? (
           <Card>
             <CardContent className="py-16">
-              <ReadFailed what="your sport coaches" onRetry={() => void refetch()} />
+              <ReadFailed what={t("your sport coaches")} onRetry={() => void refetch()} />
             </CardContent>
           </Card>
         ) : (
@@ -154,22 +156,22 @@ export default function AthleteSportCoaches() {
                       {unlocked ? (
                         <Badge variant="success" className="shrink-0 gap-1 text-[10px]">
                           <Unlock className="h-2.5 w-2.5" />
-                          UNLOCKED
+                          {t("UNLOCKED")}
                         </Badge>
                       ) : (
                         <Badge variant="secondary" className="shrink-0 gap-1 text-[10px]">
                           <Lock className="h-2.5 w-2.5" />
-                          {sellable ? (price ?? "") : "LOCKED"}
+                          {sellable ? (price ?? "") : t("LOCKED")}
                         </Badge>
                       )}
                     </div>
                     <p className="font-display text-xl font-bold uppercase tracking-wide">
                       {addOn.label}
                     </p>
-                    <p className="text-sm text-muted-foreground">{addOn.description}</p>
+                    <p className="text-sm text-muted-foreground">{t(addOn.description)}</p>
                     {unlocked ? (
                       <Button size="sm" className="mt-auto w-full">
-                        Open chat
+                        {t("Open chat")}
                       </Button>
                     ) : sellable ? (
                       <Button
@@ -182,7 +184,7 @@ export default function AthleteSportCoaches() {
                           void buy(id);
                         }}
                       >
-                        {busyAddOn === id ? "Opening..." : `Get for ${price}/mo`}
+                        {busyAddOn === id ? t("Opening...") : t("Get for {price}/mo", { price })}
                       </Button>
                     ) : (
                       // NOT "free while Forge is in beta" -- this branch is reached
@@ -194,17 +196,17 @@ export default function AthleteSportCoaches() {
                       // in, and nothing sells it yet.
                       <p className="mt-auto rounded-md border border-border px-3 py-2 text-center text-xs text-muted-foreground">
                         {offered
-                          ? "Not available yet, this coach will be purchasable when billing opens."
+                          ? t("Not available yet, this coach will be purchasable when billing opens.")
                           : // A withdrawn coach is not waiting on the billing switch, so promising
                             // it "when billing opens" is a date that will not arrive. Same standard
                             // as the beta sentence above it: the branch is read precisely by the
                             // people for whom the other wording would be false.
-                            "Not available yet, this coach is still being tested."}
+                            t("Not available yet, this coach is still being tested.")}
                       </p>
                     )}
                     {unlocked && !owned && (
                       <p className="text-center text-[11px] text-muted-foreground">
-                        Included with your account.
+                        {t("Included with your account.")}
                       </p>
                     )}
                     {sellable && <SubscriptionLegalLinks compact />}

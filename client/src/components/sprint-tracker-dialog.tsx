@@ -45,6 +45,7 @@ import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import { burnTrackingOverlay, type OverlayRepMarker } from "@/lib/video-overlay";
 import { uploadOrQueueVideo } from "@/lib/video-offline-store";
 
+import { useT } from "@/i18n";
 type Step = "warning" | "calibrate" | "capture" | "review";
 
 const SKELETON_COLOR = "#2dd4bf";
@@ -117,6 +118,7 @@ export function SprintTrackerDialog({
   date?: string;
   setNumber?: number;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -669,16 +671,16 @@ export function SprintTrackerDialog({
         date,
         setNumber,
       });
-      toast.success("Sprint saved");
+      toast.success(t("Sprint saved"));
       // Said out loud, because a queued clip is otherwise indistinguishable from a lost one --
       // the numbers saved either way, and the athlete has no other sign the video is coming.
       if (queuedForWifi) {
-        toast.info("No Wi-Fi, the clip is saved on your device and uploads once you reconnect.");
+        toast.info(t("No Wi-Fi, the clip is saved on your device and uploads once you reconnect."));
       }
       qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", skillAssignmentId, skillProgramDayId] });
       onOpenChange(false);
     } catch (err: any) {
-      toast.error(err.message || "Could not save sprint session");
+      toast.error(err.message || t("Could not save sprint session"));
     } finally {
       setSaving(false);
     }
@@ -696,9 +698,9 @@ export function SprintTrackerDialog({
     try {
       await apiRequest("PATCH", "/api/athlete/profile", { fortyYardDash: result.totalElapsedSeconds });
       setSavedToProfile(true);
-      toast.success("Saved to your 40-yard dash");
+      toast.success(t("Saved to your 40-yard dash"));
     } catch (err: any) {
-      toast.error(err.message || "Could not save to testing profile");
+      toast.error(err.message || t("Could not save to testing profile"));
     } finally {
       setSavingToProfile(false);
     }
@@ -718,7 +720,7 @@ export function SprintTrackerDialog({
           <div className="space-y-4">
             <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>Camera angle changes what this can measure. Pick the angle you're actually filming from.</p>
+              <p>{t("Camera angle changes what this can measure. Pick the angle you're actually filming from.")}</p>
             </div>
             <button
               type="button"
@@ -728,9 +730,9 @@ export function SprintTrackerDialog({
                 cameraAngle === "side" ? "border-teal-500 bg-teal-950/30" : "border-border",
               )}
             >
-              <p className="font-semibold">Filming from the side</p>
+              <p className="font-semibold">{t("Filming from the side")}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Checks forward lean during acceleration. Won't catch hip drop.
+                {t("Checks forward lean during acceleration. Won't catch hip drop.")}
               </p>
             </button>
             <button
@@ -741,14 +743,14 @@ export function SprintTrackerDialog({
                 cameraAngle === "front_behind" ? "border-teal-500 bg-teal-950/30" : "border-border",
               )}
             >
-              <p className="font-semibold">Filming from the front or behind</p>
+              <p className="font-semibold">{t("Filming from the front or behind")}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Checks hip drop during stance. Won't catch forward lean.
+                {t("Checks hip drop during stance. Won't catch forward lean.")}
               </p>
             </button>
             <DialogFooter>
               <Button disabled={!cameraAngle} onClick={() => changeStep("calibrate")}>
-                Continue
+                {t("Continue")}
               </Button>
             </DialogFooter>
           </div>
@@ -756,9 +758,9 @@ export function SprintTrackerDialog({
 
         {(step === "calibrate" || step === "capture") && (
           <div className="space-y-3">
-            {cameraError && <p className="text-sm text-destructive">{cameraError}</p>}
+            {cameraError && <p className="text-sm text-destructive">{t(cameraError)}</p>}
             {modelLoading && !cameraError && (
-              <p className="text-sm text-muted-foreground">Loading tracking model…</p>
+              <p className="text-sm text-muted-foreground">{t("Loading tracking model…")}</p>
             )}
             <div ref={cameraChromeContainerRef} className="relative overflow-hidden rounded-md bg-black">
               <video ref={videoRef} autoPlay playsInline muted className="w-full" />
@@ -776,7 +778,7 @@ export function SprintTrackerDialog({
             {step === "calibrate" && (
               <>
                 <RadioChipGroup
-                  label="Drill"
+                  label={t("Drill")}
                   options={SPRINT_PRESETS.map((p) => p.label)}
                   value={preset.label}
                   onChange={(label) => {
@@ -787,25 +789,20 @@ export function SprintTrackerDialog({
                 <p className="text-sm text-muted-foreground">
                   {preset.tapCount === 3 ? (
                     <>
-                      Tap the video at <strong>center</strong>, then each <strong>cone</strong> in the order you'll
-                      run to them ({checkpointCount}/3 marked).
-                    </>
+                      {t("Tap the video at")} <strong>{t("center")}</strong>{t(", then each")} <strong>{t("cone")}</strong> {t("in the order you'll run to them ({checkpointCount}/3 marked).", { checkpointCount })}</>
                   ) : preset.tapCount === 1 ? (
                     <>
-                      Tap the video where the <strong>start/finish line</strong> is, the 3-cone starts and ends
-                      at the same spot ({checkpointCount}/1 marked).
-                    </>
+                      {t("Tap the video where the")} <strong>{t("start/finish line")}</strong> {t("is, the 3-cone starts and ends at the same spot ({checkpointCount}/1 marked).", { checkpointCount })}</>
                   ) : (
                     <>
-                      Tap the video where the <strong>start line</strong> is, then where the{" "}
-                      <strong>finish line</strong> is ({checkpointCount}/2 marked).
-                    </>
+                      {t("Tap the video where the")} <strong>{t("start line")}</strong> {t("is, then where the")}{" "}
+                      <strong>{t("finish line")}</strong> {t("is ({checkpointCount}/2 marked).", { checkpointCount })}</>
                   )}
                 </p>
                 <div className="flex items-end gap-2">
                   {preset.id === "custom" && (
                     <div className="flex-1 space-y-1.5">
-                      <Label>Distance (yards)</Label>
+                      <Label>{t("Distance (yards)")}</Label>
                       <Input
                         type="number"
                         value={distanceYards}
@@ -815,7 +812,7 @@ export function SprintTrackerDialog({
                   )}
                   <Button variant="outline" onClick={resetCheckpoints} disabled={checkpointCount === 0}>
                     <RotateCcw className="h-4 w-4" />
-                    Reset marks
+                    {t("Reset marks")}
                   </Button>
                 </div>
                 <DialogFooter>
@@ -824,7 +821,7 @@ export function SprintTrackerDialog({
                     onClick={startCapture}
                   >
                     <Play className="h-4 w-4" />
-                    Start Capture
+                    {t("Start Capture")}
                   </Button>
                 </DialogFooter>
               </>
@@ -833,18 +830,16 @@ export function SprintTrackerDialog({
             {step === "capture" && (
               <>
                 <p className="text-sm text-teal-400">
-                  Recording, run through{" "}
                   {preset.tapCount === 3
-                    ? "all three markers"
+                    ? t("Recording, run through all three markers now.")
                     : preset.tapCount === 1
-                      ? "the full drill, finishing back through the marker"
-                      : "both markers"}{" "}
-                  now.
+                      ? t("Recording, run through the full drill, finishing back through the marker now.")
+                      : t("Recording, run through both markers now.")}
                 </p>
                 <DialogFooter>
                   <Button variant="outline" onClick={retry}>
                     <Square className="h-4 w-4" />
-                    Cancel
+                    {t("Cancel")}
                   </Button>
                 </DialogFooter>
               </>
@@ -878,21 +873,21 @@ export function SprintTrackerDialog({
                   }}
                 >
                   {showSkeleton ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                  {showSkeleton ? "Hide Skeleton" : "Show Skeleton"}
+                  {showSkeleton ? t("Hide Skeleton") : t("Show Skeleton")}
                 </Button>
               </>
             )}
             <div className="grid grid-cols-2 gap-3 rounded-md border border-border p-4 text-center">
               <div>
                 <p className="text-2xl font-bold text-teal-400">{result.totalElapsedSeconds.toFixed(2)}s</p>
-                <p className="text-xs text-muted-foreground">Elapsed time</p>
+                <p className="text-xs text-muted-foreground">{t("Elapsed time")}</p>
               </div>
               <div>
                 <p className="text-2xl font-bold">{result.avgSpeedYardsPerSec.toFixed(1)}</p>
                 <p className="text-xs text-muted-foreground">
-                  Yards / sec
+                  {t("Yards / sec")}
                   {preset.id === "3-cone" && (
-                    <span className="block text-[10px] normal-case">(approximate, path isn't a straight line)</span>
+                    <span className="block text-[10px] normal-case">{t("(approximate, path isn't a straight line)")}</span>
                   )}
                 </p>
               </div>
@@ -901,8 +896,7 @@ export function SprintTrackerDialog({
             {result.likelyGlitch && (
               <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                This time looks faster than any human has ever run, almost certainly a tracking glitch,
-                not a real split. Recommend retaking before saving.
+                {t("This time looks faster than any human has ever run, almost certainly a tracking glitch, not a real split. Recommend retaking before saving.")}
               </div>
             )}
 
@@ -921,7 +915,7 @@ export function SprintTrackerDialog({
             ) : (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Check className="h-4 w-4 text-teal-400" />
-                No mechanics faults flagged from this angle.
+                {t("No mechanics faults flagged from this angle.")}
               </p>
             )}
 
@@ -933,7 +927,7 @@ export function SprintTrackerDialog({
                 disabled={savingToProfile || savedToProfile}
               >
                 <Trophy className="h-4 w-4" />
-                {savedToProfile ? "Saved to testing profile" : "Save as my 40-yard dash"}
+                {savedToProfile ? t("Saved to testing profile") : t("Save as my 40-yard dash")}
               </Button>
             )}
 
@@ -944,9 +938,9 @@ export function SprintTrackerDialog({
                   onCheckedChange={(c) => setSaveClipForCoach(c === true)}
                 />
                 <span>
-                  Save this clip so my coach can review it
+                  {t("Save this clip so my coach can review it")}
                   <span className="block text-xs text-muted-foreground">
-                    Off by default, only the numbers above are saved unless you turn this on.
+                    {t("Off by default, only the numbers above are saved unless you turn this on.")}
                   </span>
                 </span>
               </label>
@@ -955,10 +949,9 @@ export function SprintTrackerDialog({
               <label className="flex items-start gap-2 text-sm">
                 <Checkbox checked={favoriteClip} onCheckedChange={(c) => setFavoriteClip(c === true)} />
                 <span>
-                  Never auto-delete this clip
+                  {t("Never auto-delete this clip")}
                   <span className="block text-xs text-muted-foreground">
-                    Your plan only keeps a limited number of saved clips per drill, favoriting
-                    this one keeps it forever, even once older clips start rolling off.
+                    {t("Your plan only keeps a limited number of saved clips per drill, favoriting this one keeps it forever, even once older clips start rolling off.")}
                   </span>
                 </span>
               </label>
@@ -967,10 +960,10 @@ export function SprintTrackerDialog({
             <DialogFooter>
               <Button variant="outline" onClick={retry}>
                 <RotateCcw className="h-4 w-4" />
-                Retry
+                {t("Retry")}
               </Button>
               <Button onClick={saveMutation} disabled={saving}>
-                {saving ? "Saving…" : "Save Sprint"}
+                {saving ? t("Saving…") : t("Save Sprint")}
               </Button>
             </DialogFooter>
           </div>

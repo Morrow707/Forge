@@ -4,6 +4,7 @@ import { externalLinkClick } from "@/lib/open-external";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DemoVideo } from "@/components/demo-video";
 
+import { useT } from "@/i18n";
 export function extractYouTubeId(url: string): string | null {
   try {
     const u = new URL(url);
@@ -49,6 +50,7 @@ export function ExerciseVideoThumb({
   name: string;
   accentColor?: string | null;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   if (!url) return null;
 
@@ -64,12 +66,12 @@ export function ExerciseVideoThumb({
         target="_blank"
         rel="noopener noreferrer"
         onClick={externalLinkClick(url)}
-        aria-label={`Find a ${name} demo video`}
+        aria-label={t("Find a {name} demo video", { name })}
         className={pill}
         style={style}
       >
         <Play className="h-3 w-3" />
-        Find a demo
+        {t("Find a demo")}
       </a>
     );
   }
@@ -79,12 +81,12 @@ export function ExerciseVideoThumb({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={`Watch ${name} demo video`}
+        aria-label={t("Watch {name} demo video", { name })}
         className={pill}
         style={style}
       >
         <Play className="h-3 w-3" />
-        Watch Demo
+        {t("Watch Demo")}
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl">

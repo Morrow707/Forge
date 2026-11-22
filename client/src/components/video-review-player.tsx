@@ -19,6 +19,7 @@ import {
 import type { PoseFrame } from "@/lib/pose-tracking";
 import { cn } from "@/lib/utils";
 
+import { useT } from "@/i18n";
 /**
  * A saved review, played back.
  *
@@ -72,6 +73,7 @@ export function VideoReviewPlayerDialog({
   /** Draw the burn-in export control (Phase 5). Coach-side, on their own reviews. */
   canExport?: boolean;
 }) {
+  const t = useT();
   const { data, isLoading, isError, refetch } = useQuery<SavedReview>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
@@ -82,12 +84,12 @@ export function VideoReviewPlayerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl">
         <DialogHeader>
-          <DialogTitle>{data?.title ?? "Review"}</DialogTitle>
+          <DialogTitle>{data?.title ?? t("Review")}</DialogTitle>
         </DialogHeader>
         {/* isError BEFORE the spinner and before the player, per CLAUDE.md: a failed read is
             never rendered as "there is nothing here", and an editor never opens on one. */}
         {isError ? (
-          <ReadFailed what="this review" onRetry={() => void refetch()} />
+          <ReadFailed what={t("this review")} onRetry={() => void refetch()} />
         ) : isLoading || !data ? (
           <div className="h-64 w-full animate-pulse rounded-lg bg-surface" />
         ) : (
@@ -107,6 +109,7 @@ function ReviewPlayback({
   review: SavedReview;
   canExport?: boolean;
 }) {
+  const t = useT();
   const leftRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   /** Where the cue clock was last frame. Seeded to the start, so a cue at t=0 fires when
@@ -117,7 +120,7 @@ function ReviewPlayback({
   const leftCanvas = useRef<HTMLCanvasElement | null>(null);
   const rightCanvas = useRef<HTMLCanvasElement | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [t, setT] = useState(0);
+  const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
   const events: ReviewEvent[] = useMemo(
@@ -175,7 +178,7 @@ function ReviewPlayback({
         if (Math.abs(l.currentTime - want) > 0.08) l.currentTime = want;
       }
       if (l) {
-        setT(l.currentTime);
+        setTime(l.currentTime);
         if (Number.isFinite(l.duration)) setDuration(l.duration);
         const r = rightRef.current;
         if (r) {
@@ -282,8 +285,7 @@ function ReviewPlayback({
         // The notes survived the footage. Saying so is the whole reason the row is kept: a
         // review that simply vanished would read as data loss rather than as retention.
         <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-muted-foreground">
-          The clip for this review has passed its retention limit and is gone. The coach's notes
-          below are kept.
+          {t("The clip for this review has passed its retention limit and is gone. The coach's notes below are kept.")}
         </p>
       )}
 
@@ -329,10 +331,10 @@ function ReviewPlayback({
       )}
 
       <div className="flex items-center gap-3">
-        <Button size="sm" variant="secondary" onClick={toggle} aria-label={playing ? "Pause" : "Play"}>
+        <Button size="sm" variant="secondary" onClick={toggle} aria-label={playing ? t("Pause") : t("Play")}>
           {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </Button>
-        <Button size="sm" variant="outline" onClick={() => seek(0)} aria-label="Back to start">
+        <Button size="sm" variant="outline" onClick={() => seek(0)} aria-label={t("Back to start")}>
           <SkipBack className="h-4 w-4" />
         </Button>
         {/* A plain range input, matching the compare tool -- there is no Slider primitive in
@@ -342,13 +344,13 @@ function ReviewPlayback({
           min={0}
           max={Math.max(duration, 0.1)}
           step={1 / 60}
-          value={t}
+          value={time}
           onChange={(e) => seek(Number(e.target.value))}
           className="h-1.5 flex-1 accent-primary"
-          aria-label="Scrub the review"
+          aria-label={t("Scrub the review")}
         />
         <span className="w-16 text-right text-xs tabular-nums text-muted-foreground">
-          {t.toFixed(2)}s
+          {time.toFixed(2)}s
         </span>
       </div>
 

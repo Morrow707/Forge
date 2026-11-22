@@ -10,12 +10,14 @@ import { useAuth } from "@/hooks/use-auth";
 import { ReadFailed } from "@/components/read-failed";
 import { DemoVideo } from "@/components/demo-video";
 
+import { useT } from "@/i18n";
 /**
  * A PROGRAM'S OWN DEMO VIDEO ON A FORGE EXERCISE (Scott, 2026-11-19, item 10). The program's
  * athletes see it in place of Forge's video on their workout; the exercise itself is not copied
  * or changed, so their lifts still count toward the strength percentile. The head coach sets it.
  */
 export function ProgramDemoVideoCard({ exerciseId, exerciseName }: { exerciseId: number; exerciseName: string }) {
+  const t = useT();
   const { user } = useAuth();
   const canEdit = user?.isPrimaryCoach !== false;
   const qc = useQueryClient();
@@ -26,9 +28,9 @@ export function ProgramDemoVideoCard({ exerciseId, exerciseName }: { exerciseId:
   const done = (message: string) => {
     qc.invalidateQueries({ queryKey: [url] });
     setLink("");
-    toast.success(message);
+    toast.success(t(message));
   };
-  const fail = (err: ApiError) => toast.error(err.message || "Couldn't save the video");
+  const fail = (err: ApiError) => toast.error(err.message || t("Couldn't save the video"));
 
   const saveLink = useMutation({
     mutationFn: () => apiRequest("PUT", url, { videoUrl: link.trim() }),
@@ -53,40 +55,38 @@ export function ProgramDemoVideoCard({ exerciseId, exerciseName }: { exerciseId:
   return (
     <Card data-testid="program-demo-video">
       <CardHeader>
-        <CardTitle className="text-base">Your program's video</CardTitle>
+        <CardTitle className="text-base">{t("Your program's video")}</CardTitle>
         <CardDescription>
-          Your athletes see this in place of Forge's video for {exerciseName}. The exercise stays Forge's, so their
-          lifts still count toward their strength percentile.
-        </CardDescription>
+          {t("Your athletes see this in place of Forge's video for {exerciseName}. The exercise stays Forge's, so their lifts still count toward their strength percentile.", { exerciseName: t.exercise(exerciseName) })}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {isError && <ReadFailed what="your program's video" onRetry={() => void refetch()} />}
+        {isError && <ReadFailed what={t("your program's video")} onRetry={() => void refetch()} />}
         {!isError && data?.videoUrl && (
           <div className="space-y-2">
             <DemoVideo url={data.videoUrl} name={exerciseName} />
             {canEdit && (
               <Button size="sm" variant="outline" disabled={remove.isPending} onClick={() => remove.mutate()}>
-                <Trash2 className="mr-1 h-4 w-4" /> Use Forge's video again
+                <Trash2 className="mr-1 h-4 w-4" /> {t("Use Forge's video again")}
               </Button>
             )}
           </div>
         )}
         {!isError && data && !data.videoUrl && (
-          <p className="text-sm text-muted-foreground">None yet: your athletes see Forge's video.</p>
+          <p className="text-sm text-muted-foreground">{t("None yet: your athletes see Forge's video.")}</p>
         )}
         {canEdit ? (
           <div className="flex flex-wrap gap-2">
             <Input
               className="min-w-56 flex-1"
               value={link}
-              placeholder="Paste a link (YouTube, Vimeo, Hudl...)"
+              placeholder={t("Paste a link (YouTube, Vimeo, Hudl...)")}
               onChange={(e) => setLink(e.target.value)}
             />
             <Button disabled={!link.trim() || saveLink.isPending} onClick={() => saveLink.mutate()}>
-              Use this link
+              {t("Use this link")}
             </Button>
             <Button variant="outline" disabled={upload.isPending} onClick={() => fileRef.current?.click()}>
-              <Upload className="mr-1 h-4 w-4" /> {upload.isPending ? "Uploading…" : "Upload a video"}
+              <Upload className="mr-1 h-4 w-4" /> {upload.isPending ? t("Uploading…") : t("Upload a video")}
             </Button>
             <input
               ref={fileRef}
@@ -103,7 +103,7 @@ export function ProgramDemoVideoCard({ exerciseId, exerciseName }: { exerciseId:
             />
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">Your head coach sets this.</p>
+          <p className="text-xs text-muted-foreground">{t("Your head coach sets this.")}</p>
         )}
       </CardContent>
     </Card>

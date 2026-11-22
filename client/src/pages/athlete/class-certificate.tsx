@@ -6,8 +6,8 @@ import { ForgeMark } from "@/components/forge-mark";
 import { ProgramCertificateMark, useProgramBranding } from "@/components/program-certificate-mark";
 import { ReadFailed } from "@/components/read-failed";
 import { ArrowLeft, Printer } from "lucide-react";
-import { format } from "date-fns";
 
+import { useT } from "@/i18n";
 type Certificate = {
   className: string;
   athleteName: string;
@@ -21,6 +21,7 @@ type Certificate = {
  * Coaches Corner certificate. Every fact comes from the server, which refuses to issue one
  * until the enrollment is marked complete. It names Forge as the issuer and nothing else. */
 export default function AthleteClassCertificate() {
+  const t = useT();
   const programBranding = useProgramBranding();
   const { id } = useParams<{ id: string }>();
   const url = `/api/athlete/classes/${id}/certificate`;
@@ -41,9 +42,9 @@ export default function AthleteClassCertificate() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="w-full max-w-md space-y-4 text-center">
-          <ReadFailed what="the certificate" error={error} onRetry={() => void refetch()} />
+          <ReadFailed what={t("the certificate")} error={error} onRetry={() => void refetch()} />
           <Button asChild variant="outline" size="sm">
-            <Link href={`/athlete/classes/${id}`}>Back to the class</Link>
+            <Link href={`/athlete/classes/${id}`}>{t("Back to the class")}</Link>
           </Button>
         </div>
       </div>
@@ -56,42 +57,41 @@ export default function AthleteClassCertificate() {
         <Button asChild variant="outline" size="sm">
           <Link href={`/athlete/classes/${id}`}>
             <ArrowLeft className="h-4 w-4" />
-            Back
+            {t("Back")}
           </Link>
         </Button>
         <Button size="sm" onClick={() => window.print()}>
           <Printer className="h-4 w-4" />
-          Print or save as PDF
+          {t("Print or save as PDF")}
         </Button>
       </div>
       <div className="mx-auto max-w-2xl rounded-xl border-2 border-primary/40 bg-card p-10 text-center print:border-black print:text-black">
         <ProgramCertificateMark branding={programBranding.branding} />
         <p className="mt-4 text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          Certificate of completion
+          {t("Certificate of completion")}
         </p>
         <h1 className="mt-6 font-display text-3xl font-bold uppercase tracking-wide">{data.athleteName}</h1>
-        <p className="mt-3 text-sm text-muted-foreground">has completed the class</p>
+        <p className="mt-3 text-sm text-muted-foreground">{t("has completed the class")}</p>
         <h2 className="mt-2 font-display text-2xl font-bold">{data.className}</h2>
         <div className="mx-auto mt-8 grid max-w-sm grid-cols-3 gap-4 text-sm">
           <div>
             <p className="text-2xl font-bold">{data.lessonCount}</p>
-            <p className="text-xs text-muted-foreground">lessons read</p>
+            <p className="text-xs text-muted-foreground">{t("lessons read")}</p>
           </div>
           <div>
             <p className="text-2xl font-bold">{data.estimatedMinutes || "—"}</p>
-            <p className="text-xs text-muted-foreground">minutes of reading</p>
+            <p className="text-xs text-muted-foreground">{t("minutes of reading")}</p>
           </div>
           <div>
             <p className="text-2xl font-bold">{data.quizCount}</p>
-            <p className="text-xs text-muted-foreground">quizzes passed</p>
+            <p className="text-xs text-muted-foreground">{t("quizzes passed")}</p>
           </div>
         </div>
         <p className="mt-8 text-sm text-muted-foreground">
-          Completed {format(new Date(data.completedAt), "MMMM d, yyyy")}
+          {t("Completed {date}", { date: t.date(data.completedAt, { month: "long", day: "numeric", year: "numeric" }) })}
         </p>
         <p className="mt-6 text-xs text-muted-foreground">
-          Issued by Forge Performance Systems. This certificate records study completed on Forge
-          and is not a credential from any certifying body.
+          {t("Issued by Forge Performance Systems. This certificate records study completed on Forge and is not a credential from any certifying body.")}
         </p>
       </div>
     </div>

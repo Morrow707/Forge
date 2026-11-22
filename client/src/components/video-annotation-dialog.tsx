@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { CustomPenColor } from "@/components/custom-pen-color";
 import { Pencil, Undo2, Trash2, Video } from "lucide-react";
 
+import { useT } from "@/i18n";
 type Point = { x: number; y: number };
 type Stroke = { points: Point[]; color: string; width: number };
 
@@ -36,6 +37,7 @@ export function VideoAnnotationDialog({
   videoUrl: string;
   onSaved: (imageUrl: string) => void;
 }) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const baseImageRef = useRef<HTMLImageElement | null>(null);
@@ -101,7 +103,7 @@ export function VideoAnnotationDialog({
     try {
       frame = offscreen.toDataURL("image/png");
     } catch {
-      toast.error("Couldn't capture this frame. Try reopening the video.");
+      toast.error(t("Couldn't capture this frame. Try reopening the video."));
       return;
     }
     const img = new Image();
@@ -175,7 +177,7 @@ export function VideoAnnotationDialog({
       onOpenChange(false);
       reset();
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Couldn't save the annotation");
+      toast.error(err instanceof ApiError ? err.message : t("Couldn't save the annotation"));
     } finally {
       setSaving(false);
     }
@@ -193,12 +195,12 @@ export function VideoAnnotationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Pencil className="h-5 w-5" />
-            Annotate Video
+            {t("Annotate Video")}
           </DialogTitle>
           <DialogDescription>
             {captured
-              ? "Draw directly on the frame, circle, arrow, whatever gets the point across."
-              : "Play to the moment you want to mark up, then capture that frame."}
+              ? t("Draw directly on the frame, circle, arrow, whatever gets the point across.")
+              : t("Play to the moment you want to mark up, then capture that frame.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -228,7 +230,7 @@ export function VideoAnnotationDialog({
             />
             <Button type="button" onClick={captureFrame} className="w-full">
               <Video className="h-4 w-4" />
-              Capture This Frame
+              {t("Capture This Frame")}
             </Button>
           </div>
         ) : (
@@ -246,7 +248,7 @@ export function VideoAnnotationDialog({
                 <button
                   key={c}
                   type="button"
-                  aria-label={`Draw in ${c}`}
+                  aria-label={t("Draw in {c}", { c })}
                   onClick={() => setColor(c)}
                   className={cn(
                     "h-7 w-7 rounded-full border-2",
@@ -258,14 +260,14 @@ export function VideoAnnotationDialog({
               <CustomPenColor color={color} presets={COLORS} onChange={setColor} video={() => videoRef.current} />
               <Button type="button" size="sm" variant="outline" onClick={undo} disabled={!strokes.length}>
                 <Undo2 className="h-3.5 w-3.5" />
-                Undo
+                {t("Undo")}
               </Button>
               <Button type="button" size="sm" variant="outline" onClick={clearAll} disabled={!strokes.length}>
                 <Trash2 className="h-3.5 w-3.5" />
-                Clear
+                {t("Clear")}
               </Button>
               <Button type="button" size="sm" variant="ghost" onClick={reset}>
-                Recapture
+                {t("Recapture")}
               </Button>
             </div>
           </div>
@@ -273,11 +275,11 @@ export function VideoAnnotationDialog({
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           {captured && (
             <Button type="button" onClick={save} disabled={saving}>
-              {saving ? "Saving…" : "Save & Attach"}
+              {saving ? t("Saving…") : t("Save & Attach")}
             </Button>
           )}
         </DialogFooter>

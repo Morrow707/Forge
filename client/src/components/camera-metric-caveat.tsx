@@ -7,6 +7,7 @@ import {
   CAMERA_ACCURACY_PURCHASE_WARNING,
 } from "@shared/camera-accuracy-copy";
 
+import { useT } from "@/i18n";
 /** Own flag, deliberately NOT CameraAccuracyNotice's.
  *
  * That dialog fires on the first authenticated render, which for most people
@@ -57,6 +58,7 @@ export function CameraMetricCaveat({
   dismissible?: boolean;
   className?: string;
 }) {
+  const t = useT();
   // A purchase warning is never dismissible, whatever the caller passes. It is the one variant
   // shown to somebody who has not bought yet, and a material fact about what they are paying for
   // is not something they can acknowledge away before the transaction -- nor something a caller
@@ -90,16 +92,16 @@ export function CameraMetricCaveat({
       />
       <span className="flex-1">
         {variant === "purchase"
-          ? CAMERA_ACCURACY_PURCHASE_WARNING
+          ? t(CAMERA_ACCURACY_PURCHASE_WARNING)
           : variant === "inline"
-            ? CAMERA_ACCURACY_INLINE
-            : CAMERA_ACCURACY_SHORT}
+            ? t(CAMERA_ACCURACY_INLINE)
+            : t(CAMERA_ACCURACY_SHORT)}
       </span>
       {canDismiss && (
         <button
           type="button"
           onClick={acknowledge}
-          aria-label="Got it, don't show this again"
+          aria-label={t("Got it, don't show this again")}
           className="-mt-0.5 shrink-0 rounded p-0.5 text-destructive/70 transition-colors hover:bg-destructive/10 hover:text-destructive"
         >
           <X className="h-3.5 w-3.5" />

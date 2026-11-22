@@ -5,6 +5,7 @@ import { AlertTriangle } from "lucide-react";
 import { CAMERA_ACCURACY_LONG } from "@shared/camera-accuracy-copy";
 import { useFirstRunDialogSlot } from "@/hooks/use-first-run-dialogs";
 
+import { useT } from "@/i18n";
 const SEEN_KEY = "forge:camera-accuracy-notice-seen";
 
 /** One-time, click-through acknowledgment that camera-tracked METRICS are
@@ -24,6 +25,7 @@ const SEEN_KEY = "forge:camera-accuracy-notice-seen";
  * which platform the athlete is on. "I understand" rather than "Got it" --
  * this is closer to a required acknowledgment than an FYI. */
 export function CameraAccuracyNotice() {
+  const t = useT();
   const [open, setOpen] = useState(() => {
     // Not over the plans screen: a new account lands there and is sent back there until it has
     // a plan, and a notice about the camera would cover the one question that screen asks. It is
@@ -50,12 +52,12 @@ export function CameraAccuracyNotice() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-destructive" />
-            Camera Tracking Accuracy
+            {t("Camera Tracking Accuracy")}
           </DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">{CAMERA_ACCURACY_LONG}</p>
+        <p className="text-sm text-muted-foreground">{t(CAMERA_ACCURACY_LONG)}</p>
         <DialogFooter>
-          <Button onClick={dismiss}>I understand</Button>
+          <Button onClick={dismiss}>{t("I understand")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

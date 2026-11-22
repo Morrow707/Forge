@@ -5,6 +5,7 @@ import { AlertTriangle } from "lucide-react";
 import { isAvPreviewPlatform } from "@/lib/native-av-preview";
 import { useFirstRunDialogSlot } from "@/hooks/use-first-run-dialogs";
 
+import { useT } from "@/i18n";
 const SEEN_KEY = "forge:non-ios-accuracy-notice-seen";
 
 /** A one-time, permanent notice for any platform that isn't native iOS --
@@ -19,6 +20,7 @@ const SEEN_KEY = "forge:non-ios-accuracy-notice-seen";
  * signed-in session on a device that gets this feature for the first time
  * would otherwise never see it). */
 export function NonIosTrackingNotice() {
+  const t = useT();
   const [open, setOpen] = useState(() => {
     if (isAvPreviewPlatform()) return false;
     // Not over the plans screen: a new account lands there and is sent back there until it has
@@ -46,16 +48,14 @@ export function NonIosTrackingNotice() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-400" />
-            About Camera Tracking Here
+            {t("About Camera Tracking Here")}
           </DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          On this device, bar path, sprint, and mechanics tracking run on a 2D-camera model
-          instead of iPhone's more accurate native motion tracking. Numbers here may be a bit
-          less precise, for the most accurate readings, use an iPhone.
+          {t("On this device, bar path, sprint, and mechanics tracking run on a 2D-camera model instead of iPhone's more accurate native motion tracking. Numbers here may be a bit less precise, for the most accurate readings, use an iPhone.")}
         </p>
         <DialogFooter>
-          <Button onClick={dismiss}>Got it</Button>
+          <Button onClick={dismiss}>{t("Got it")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

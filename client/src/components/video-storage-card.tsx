@@ -37,6 +37,7 @@ import {
 import { HardDrive, Lock, Unlock } from "lucide-react";
 import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
 
+import { useT } from "@/i18n";
 type Entitlements = {
   addOns: Record<FreeAgentAddOnId, boolean>;
   ownedAddOns: Record<FreeAgentAddOnId, boolean>;
@@ -50,6 +51,7 @@ type Entitlements = {
  * Android, Stripe on the web, exactly as a tier does. A coached athlete never sees this: their
  * classes come from their coach, and the server refuses the purchase for them. */
 export function VideoStorageCard() {
+  const t = useT();
   const nativeIap = isAppleIapSupported();
   const androidNative = isGooglePlayBillingSupported();
   const [busy, setBusy] = useState(false);
@@ -109,15 +111,15 @@ export function VideoStorageCard() {
         window.location.href = url;
         return;
       }
-      toast.success("Extra video storage is on.");
+      toast.success(t("Extra video storage is on."));
       await refetch();
     } catch (err) {
       if (err instanceof ApplePurchaseCancelledError || err instanceof GooglePlayPurchaseCancelledError) {
         // Backed out of the store's sheet: not an error.
       } else if (err instanceof ApplePurchasePendingError || err instanceof GooglePlayPurchasePendingError) {
-        toast("Purchase pending approval. Extra storage turns on once it's confirmed.");
+        toast(t("Purchase pending approval. Extra storage turns on once it's confirmed."));
       } else {
-        toast.error(err instanceof Error ? err.message : "Couldn't start that purchase");
+        toast.error(err instanceof Error ? err.message : t("Couldn't start that purchase"));
       }
     } finally {
       setBusy(false);
@@ -134,12 +136,12 @@ export function VideoStorageCard() {
           {unlocked ? (
             <Badge variant="success" className="shrink-0 gap-1 text-[10px]">
               <Unlock className="h-2.5 w-2.5" />
-              {owned ? "SUBSCRIBED" : "UNLOCKED"}
+              {owned ? t("SUBSCRIBED") : t("UNLOCKED")}
             </Badge>
           ) : (
             <Badge variant="secondary" className="shrink-0 gap-1 text-[10px]">
               <Lock className="h-2.5 w-2.5" />
-              {sellable && price ? price : "LOCKED"}
+              {sellable && price ? price : t("LOCKED")}
             </Badge>
           )}
         </div>
@@ -147,15 +149,15 @@ export function VideoStorageCard() {
         <p className="text-sm text-muted-foreground">{addOn.description}</p>
         {unlocked ? (
           <p className="mt-auto rounded-md border border-border px-3 py-2 text-center text-xs text-muted-foreground">
-            Your account keeps the larger limits.
+            {t("Your account keeps the larger limits.")}
           </p>
         ) : sellable ? (
           <Button size="sm" variant="outline" className="mt-auto w-full" disabled={busy} onClick={() => void buy()}>
-            {busy ? "Opening..." : `Get for ${price}/mo`}
+            {busy ? t("Opening...") : t("Get for {price}/mo", { price })}
           </Button>
         ) : (
           <p className="mt-auto rounded-md border border-border px-3 py-2 text-center text-xs text-muted-foreground">
-            {billingOpen ? "Not available in the store yet." : "Not available yet."}
+            {billingOpen ? t("Not available in the store yet.") : t("Not available yet.")}
           </p>
         )}
         {!unlocked && sellable && <SubscriptionLegalLinks compact />}

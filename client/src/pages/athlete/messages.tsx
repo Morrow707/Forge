@@ -8,6 +8,7 @@ import { CoachMessageThread, ThreadList, type ThreadSummary } from "@/components
 import { getJson } from "@/lib/queryClient";
 import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
 
+import { useT } from "@/i18n";
 /* AN ATHLETE'S MESSAGES (2026-11-21): their coaches, and only their coaches. There is no way to
  * address another athlete from here or anywhere (Scott: "0, absolute 0 communication between users
  * when they aren't being coached"). A Free Agent has no coach, so nothing is fetched and the page
@@ -18,6 +19,7 @@ const LIST_URL = "/api/athlete/messages";
 type AthleteThreadRow = Omit<ThreadSummary, "id"> & { coachId: number };
 
 export default function AthleteMessagesPage() {
+  const t = useT();
   const isFreeAgent = useIsFreeAgent();
   const params = new URLSearchParams(useSearch());
   const asked = Number(params.get("coach")) || null;
@@ -33,11 +35,11 @@ export default function AthleteMessagesPage() {
 
   if (isFreeAgent !== false) {
     return (
-      <AppShell title="Messages">
+      <AppShell title={t("Messages")}>
         {isFreeAgent === true && (
           <Card data-testid="card-messages-no-coach">
             <CardContent className="p-6 text-sm text-muted-foreground">
-              Messages are between you and your coach, so they open once you join a coach's team.
+              {t("Messages are between you and your coach, so they open once you join a coach's team.")}
             </CardContent>
           </Card>
         )}
@@ -49,20 +51,19 @@ export default function AthleteMessagesPage() {
   const current = selected ?? threads[0]?.id ?? null;
 
   return (
-    <AppShell title="Messages">
+    <AppShell title={t("Messages")}>
       <Card>
         <CardHeader>
-          <CardTitle>Messages</CardTitle>
+          <CardTitle>{t("Messages")}</CardTitle>
           <CardDescription>
-            Private messages with your coaches. Nobody else on your team can see them. If you're under
-            18, your parent or guardian can read them.
+            {t("Private messages with your coaches. Nobody else on your team can see them. If you're under 18, your parent or guardian can read them.")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading && <div className="h-40 animate-pulse rounded-md bg-surface" />}
-          {isError && <ReadFailed what="your messages" error={error} onRetry={() => void refetch()} />}
+          {isError && <ReadFailed what={t("your messages")} error={error} onRetry={() => void refetch()} />}
           {!isLoading && !isError && threads.length === 0 && (
-            <p className="py-6 text-center text-sm text-muted-foreground">No coach conversations yet.</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">{t("No coach conversations yet.")}</p>
           )}
           {!isLoading && !isError && threads.length > 0 && (
             <div className="grid gap-4 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
