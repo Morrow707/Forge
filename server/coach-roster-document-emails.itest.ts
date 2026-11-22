@@ -269,12 +269,18 @@ describe("sending a public document to the roster", () => {
     const staffSend = await staffClient.post("/api/coach/legal-documents/privacy_policy/email-roster");
     expect(staffSend.status).toBe(200);
     expect(staffSend.body.emailed).toBe(1);
-    expect(testOutbox.map((m) => m.to)).toEqual([varsityAthlete.email]);
+    // Signing the two coaches in sends each a "New login" email that is never awaited, so it can land
+    // in the outbox after the login returned, in the middle of this case (CLAUDE.md, "an unawaited
+    // branded send lands late"; CI run 2269 caught the staff coach's). The roster send is what is
+    // under test, so only the athletes' mail is read here.
+    const athleteMail = () =>
+      testOutbox.map((m) => m.to).filter((to) => to !== staff.email && to !== primary.email);
+    expect(athleteMail()).toEqual([varsityAthlete.email]);
 
     testOutbox.length = 0;
     const primarySend = await primaryClient.post("/api/coach/legal-documents/privacy_policy/email-roster");
     expect(primarySend.body.emailed).toBe(2);
-    expect(testOutbox.map((m) => m.to).sort()).toEqual([jvAthlete.email, varsityAthlete.email].sort());
+    expect(athleteMail().sort()).toEqual([jvAthlete.email, varsityAthlete.email].sort());
   });
 
   it("is a coach's control: an athlete gets 403", async () => {
