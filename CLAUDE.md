@@ -8453,3 +8453,36 @@ that goes red with the fix reverted:
   drawn under the hero buttons from `VITE_APP_STORE_ID`; it is a plain button, not Apple's badge
   artwork. Checked on the built prerendered page at 1280px and 390px. Web only (the native app
   never shows the landing page), so no build is needed for it.
+
+## 2026-11-22: SHEETS, ATTENDANCE, THE PARENT EMAIL, THE EQUIPMENT ROOM, ONE SEARCH
+
+All on main, pre-flight checked, not yet in a TestFlight build (Scott is holding the upload).
+- **Weight-room sheets** (`/coach/weight-room`, `shared/weight-room-sheet.ts`, `server/weight-room-sheets.ts`,
+  `server/weight-room-sheet-pdf.ts`). A printed team sheet filled from Forge's own data (max, target from the %,
+  last time, plates, PR star), edited in place like a spreadsheet, EVERY element optional except branding
+  (display only, from the Branding page). Upload any filled sheet (ours, a whiteboard, a notebook): the model
+  only TRANSCRIBES; Forge matches names to the in-scope roster and lifts to the day, never guesses, and logs
+  through the station's merge so a phone-logged or filmed set is skipped, never overwritten. The team's first
+  names and last initials ARE sent to the model as hints (Scott, 2026-11-22: "I want it to get it ... but I
+  don't want it to save it"); Forge stores no photo and no read-off text, the upload row is keyed by athlete id.
+  Attendance from a sheet comes from the numbers only: a set written = present, otherwise not marked, never
+  absent (no sign-in box; Scott removed it). Never run with a real model in the sandbox: the first real photo
+  is its test.
+- **Attendance + who trained today** (`server/attendance.ts`, the coach dashboard Today card and Week tab).
+  P/A/E marks per athlete per day per program; held athletes left off; "Mark all present" never overwrites
+  A or E.
+- **Weekly parent summary email** (`server/parent-weekly-summary*.ts`, daily 14:00 UTC, sends Mon-Wed only).
+  One email per minor per week to the linked guardian: sessions, attendance if marked, hand-logged PRs, no
+  camera numbers; per-child toggle on the guardian dashboard. Counsel question 27.
+- **Equipment room** (`shared/equipment-profile.ts`, `shared/exercise-needs.ts`, `server/equipment-room.ts`).
+  Program default and per-team gear lists; no bench listed = every bench press out, Floor Press in. The AI
+  draft, chat, swaps and picker respect it; an exercise the coach placed by hand is kept with a marker.
+- **Tags and one search** (`shared/exercise-tags.ts`, `shared/exercise-search.ts`, `shared/program-search.ts`).
+  Exercises and programs carry joints, purposes (warmup/care/return_to_training), positions; exercises also
+  youthSafe and cautionNote. One search understands nicknames ("acl", "rotator cuff", "rehab", "pre season")
+  and typos (only on words of 5+ letters for tags). Under-14 flags NEVER block a coach. "Add care drills" on a
+  builder day proposes, never adds without a tap. No real exercise is tagged yet: the tags come from the
+  research review, not guesses.
+- **The research** is in the artifact https://claude.ai/artifact/SPtw36pRmhH6aueGRcp4M8 (548 PubMed sources,
+  every finding fetched and cited). The textbook was read for its program-design rules only; nothing of its
+  text reaches the app, and the app never says CSCS or NSCA.
