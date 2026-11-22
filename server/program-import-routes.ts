@@ -53,7 +53,7 @@ function toLibrary(rows: Array<{ id: number; name: string; category?: string | n
   }));
 }
 
-type FullLibraryRow = Parameters<typeof toLibrary>[0][number] & WarmupCandidate & { youthSafe?: boolean | null };
+type FullLibraryRow = Parameters<typeof toLibrary>[0][number] & WarmupCandidate;
 
 async function handleImport(req: Request, res: Response, rows: FullLibraryRow[]) {
   const library = toLibrary(rows);
@@ -78,7 +78,7 @@ export async function withDraftedWarmups<D extends { days: Array<{ isRestDay: bo
   rows: readonly FullLibraryRow[],
   room: EquipmentRoom | null,
 ): Promise<D> {
-  const candidates = warmupCandidatesFor(rows, room, null);
+  const candidates = warmupCandidatesFor(rows, room);
   if (candidates.length === 0) return draft;
   const asDays = draft.days.map((d) => ({
     isRestDay: d.isRestDay,

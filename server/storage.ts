@@ -187,7 +187,6 @@ import { anvilEligibility } from "@shared/anvil-eligibility";
 import { ANVIL_AGREEMENT, ANVIL_AGREEMENT_VERSION } from "@shared/anvil-agreement";
 import { DEMO_ACCOUNT_EMAILS_SQL_LIST } from "./demo-accounts";
 import { ageFromDateOfBirth } from "@shared/privacy-tiers";
-import { YOUTH_SAFE_MIN_AGE, keepForAge } from "@shared/exercise-tags";
 import {
   BROADEST_COHORT,
   canNarrowByGender,
@@ -1200,46 +1199,27 @@ const PHYSICAL_THERAPY_TRAINING_PRINCIPLES = `- Movement quality comes before mu
 - McGill's "Big 3" (Bird Dog, McGill Curl-Up, Side Plank) trains spinal stability through isometric bracing rather than repeated spinal flexion, which is the safer default for core work generally -- prefer these and similar anti-extension/anti-rotation core work (Pallof Press, Plank) over high-rep sit-ups or back extensions unless the request specifically calls for the latter.
 - These principles are foundational and sport-independent -- apply them based on what the athlete's request or described history actually calls for (a named imbalance, an old injury, a body region flagged as tight or weak), on top of whichever sport-specific rules below also apply, not instead of them.`;
 
-// A 12-year-old and a 25-year-old asking for the same lift need different
-// programs, not just different numbers plugged into the same template --
-// the training METHOD itself should change. Bands and thresholds follow
-// the NSCA's youth resistance training position stand (children: not yet
-// showing secondary sex characteristics, roughly up to ~11 in girls / ~13
-// in boys; adolescents: roughly 12-18 girls / 14-18 boys) and the
-// Lloyd/Oliver Youth Physical Development model's guidance to lighten
-// high-impact loading specifically around an adolescent's growth spurt
-// (peak height velocity), not just by a fixed age cutoff. The
-// max-effort-vs-repetition-method split below is deliberately consistent
-// with PROGRAM_DESIGN_PRINCIPLES/Westside above: conjugate-style max
-// effort work (90%+ 1RM singles) is a well-established method for a
-// physically mature lifter, but every major source on youth strength
-// training -- including coaches who otherwise run conjugate systems --
-// treats it as inappropriate for a still-developing lifter, who gets the
-// same strength/technique benefit from the repetition method instead.
-// The skills-side counterpart to AGE_APPROPRIATE_TRAINING_PRINCIPLES below.
-// A separate constant rather than reusing that one: it is written in %1RM
-// and rep ranges that mean nothing for a footwork ladder or a throwing
-// progression, and pasting it into a drill prompt would be noise the model
-// has to work around. Every claim here is one this codebase already makes
-// somewhere else -- the growth-spurt impact caution and the technique-before-
-// load progression from AGE_APPROPRIATE_TRAINING_PRINCIPLES, and the youth
-// throwing overuse guidance from the pitching sport-coach prompt -- restated
-// for drill programming rather than newly asserted.
+// TRAINING READINESS IS WEIGHT-ROOM PROFICIENCY, NEVER AGE. Scott, 2026-11-22: "underage athletes
+// can do whatever they want, as an exercise professional, age doesn't matter in the weight room,
+// its about weight room proficiency, a 12 year old can back squat the bar if a) they are strong
+// enough to hold 45lbs on their backs, and b) they can show that they can do a back squat
+// correctly and safely, thats the only 2 things that matters." These two constants replaced the
+// age-banded rules (children / adolescents / adults) that the programming prompts used to apply
+// from the athlete's birthdate. What they keep from that research is what is about the BODY and
+// the WORKLOAD rather than the birthday: technique before load for anybody new to a lift, overuse
+// volume in throwing and jumping, and a stated growth spurt as a reason to lighten impact work.
 //
-// It exists because the skill program prompts loaded no age guidance at all:
-// SKILL_PROGRAM_DESIGN_PRINCIPLES is entirely about practice structure, so a
-// program of sprint, jump and throwing work for a 13-year-old was generated
-// under exactly the same constraints as one for an adult.
-const AGE_APPROPRIATE_SKILL_PRINCIPLES = `- Where an athlete profile is given, its age line is authoritative and comes from a real birthdate. A profile naming a minor means the rules below apply, whatever the request does or doesn't say. With no profile age and no maturity signal in the request, program as for a physically mature athlete.
-- Volume, not intensity, is the thing to watch for a young athlete in skill work. Overuse is the dominant injury mechanism in youth throwing and jumping, and it accumulates across everything they do -- if an athlete is on multiple teams or in a competitive season, the drill volume you program sits on top of that, not instead of it. Prefer fewer, higher-quality reps and say so in the summary.
-- For a throwing athlete who isn't clearly an adult, treat arm volume as a hard constraint rather than a target: keep high-intent throwing to a minority of sessions, leave real rest between them, and never program consecutive days of maximal-effort throwing. Any report of arm, shoulder or elbow soreness -- including "just tired" -- is a reason to stop and get it looked at, not to adjust mechanics.
-- Around a rapid growth phase (a recent large height jump, coordination suddenly off), lighten high-impact plyometric and maximal-sprint work for that block and lean toward technique, coordination and mobility. Rapid limb-length change is when overuse and growth-related injuries cluster.
-- Progress a young athlete on demonstrated technique, not on the calendar: the closed-to-open and blocked-to-interleaved progressions above are the mechanism, and a minor should move through them on competence rather than because a week ended.`;
+// The skills-side constant is separate from the barbell one because it is written for drill work,
+// where %1RM and rep ranges mean nothing.
+const SKILL_READINESS_PRINCIPLES = `- Progress an athlete on demonstrated technique, never on age or the calendar: the closed-to-open and blocked-to-interleaved progressions above are the mechanism, and an athlete moves through them on competence rather than because a week ended. An athlete's age is never a reason to remove a drill or cap its intent.
+- Volume, not intensity, is the thing to watch in skill work. Overuse is the dominant injury mechanism in throwing and jumping, and it accumulates across everything an athlete does -- if they are on multiple teams or in a competitive season, the drill volume you program sits on top of that, not instead of it. Prefer fewer, higher-quality reps and say so in the summary.
+- For a throwing athlete, treat arm volume as a hard constraint rather than a target: keep high-intent throwing to a minority of sessions, leave real rest between them, and never program consecutive days of maximal-effort throwing. Any report of arm, shoulder or elbow soreness -- including "just tired" -- is a reason to stop and get it looked at, not to adjust mechanics.
+- If the request describes a rapid growth phase (a recent large height jump, coordination suddenly off), lighten high-impact plyometric and maximal-sprint work for that block and lean toward technique, coordination and mobility. That is a stated signal about the athlete's body, not an age.`;
 
-const AGE_APPROPRIATE_TRAINING_PRINCIPLES = `- Chronological age is a proxy for training readiness, not a strict rule -- a stated training history (e.g. "has squatted for 3 years," "varsity starter") shifts an athlete toward the next band up even if their age alone wouldn't. Where an athlete profile is given, its age line is authoritative and comes from a real birthdate: a profile naming a minor means these restrictions apply, whatever the request does or doesn't say. Only when there is no profile age AND no maturity signal in the request should you assume a physically mature athlete and use standard adult programming (no need to ask -- just don't apply the restrictions below).
-- Children (not yet showing signs of puberty, roughly up to ~11-13): bodyweight and light-load work only, technique and movement-competency as the entire goal. Higher reps (roughly 8-15+), never a true 1-3 rep max-effort attempt, and favor variety across many movement patterns over specializing in one sport's lifts. Sessions should stay short and clearly supervised.
-- Adolescents (roughly early-mid teens through the high-school years, before clear physical maturity): can train with real external load and structured progression, but the method still differs from an adult's -- use the repetition method (submaximal loads, roughly 60-85% of 1RM, 6-15 reps) as the primary way to build strength, not the max-effort method; avoid programming a true 1-3 rep max/near-max attempt as a lift's primary intent. If the request describes an athlete visibly in a rapid-growth phase (recent large height/weight jump, "growing fast," coordination suddenly off), lean the program further toward technique and mobility work and lighten high-impact/max-intensity plyometrics for that block -- rapid limb-length changes are exactly when overuse and growth-related injuries cluster.
-- Adults (physically mature): the max-effort/dynamic-effort and percentage-of-training-max methods above apply as normal, with no additional restriction from this section.`;
+const TRAINING_READINESS_PRINCIPLES = `- Readiness to load a lift is decided by weight-room proficiency, never by age. An athlete of any age may load a lift once they (a) are strong enough to hold the weight in position -- for a back squat, the empty 45 lb bar on their back -- and (b) can show the lift done correctly and safely. Never remove a lift, cap a load or change the method because of an athlete's age alone, and never write an age limit into a program.
+- For an athlete new to a lift (no stated training history with it, "never squatted", a first program), start that lift with technique work at the empty bar or a light implement and higher reps (roughly 8-15), and add load once the technique holds; do not program a 1-3 rep max attempt on a lift the athlete has not shown they can do correctly and safely. This is about the athlete's competence with the lift, and it is the same for a beginner of any age.
+- For an athlete who is proficient (a stated training history such as "has squatted for 3 years", or a coach saying the technique is solid), the max-effort/dynamic-effort and percentage-of-training-max methods above apply as normal.
+- If the request describes a rapid growth phase (recent large height/weight jump, "growing fast", coordination suddenly off), lean that block further toward technique and mobility work and lighten high-impact/max-intensity plyometrics -- rapid limb-length changes are when overuse and growth-related injuries cluster. That is a stated signal about the athlete's body, not an age.`;
 
 // Combat sports (wrestling, boxing, MMA, and grappling arts like BJJ/judo)
 // have a strength-and-conditioning profile that's genuinely different from a
@@ -1251,8 +1231,8 @@ const AGE_APPROPRIATE_TRAINING_PRINCIPLES = `- Chronological age is a proxy for 
 // strength-supports-skill periodization point and the weight-cutting caution
 // are both standard, well-documented combat-sports coaching positions; the
 // weight-cutting language is deliberately written to compose with
-// AGE_APPROPRIATE_TRAINING_PRINCIPLES above, since the NSCA and NATA both
-// specifically warn against rapid weight loss in adolescent wrestlers.
+// TRAINING_READINESS_PRINCIPLES above; the NSCA and NATA both specifically warn
+// against rapid weight loss in adolescent wrestlers.
 const COMBAT_SPORTS_TRAINING_PRINCIPLES = `- Combat sports need two energy systems most sport programs don't stack together: a strong aerobic base (it's what lets an athlete recover between rounds/exchanges/scrambles, not just "cardio" for its own sake) and anaerobic alactic power (the explosive burst of a strike, shot, or scramble). Don't program conditioning as pure steady-state OR pure high-intensity intervals alone -- include both, with the aerobic base work as the larger volume share for an athlete who isn't already well-conditioned.
 - Striking power (punches, kicks) comes from hip-shoulder rotational transfer, not arm/shoulder strength -- the same rotational medicine-ball and landmine work already used for baseball/golf athletes (Medicine Ball Rotational Throw, Landmine Rotation, Pallof Press for the anti-rotation control that makes rotation repeatable) applies directly here and should be a staple, not an afterthought.
 - Grip strength and neck strength are sport-specific strength for wrestlers, BJJ, and judo athletes, not optional accessories -- grappling is won and lost in the grip and the clinch. Include carries (Farmer's/Suitcase Carry) and direct neck work (Neck Bridge, Neck Flexion/Lateral Flexion Hold) as a standing part of a grappler's program, not something to cut first when time is short.
@@ -1263,7 +1243,7 @@ const COMBAT_SPORTS_TRAINING_PRINCIPLES = `- Combat sports need two energy syste
 // Powerlifting and Olympic weightlifting are the one category where the
 // barbell lift ISN'T preparation for a separate sport skill -- it IS the
 // sport, contested for a 1RM total. That flips several defaults from
-// PROGRAM_DESIGN_PRINCIPLES/AGE_APPROPRIATE_TRAINING_PRINCIPLES above, which
+// PROGRAM_DESIGN_PRINCIPLES above, which
 // is why this gets its own block instead of just being "strength training
 // but more." The two sports are frequently confused with each other (both
 // are barbell sports run out of the same gyms) but are contested completely
@@ -1299,7 +1279,7 @@ const STRENGTH_SPORT_TRAINING_PRINCIPLES = `- For a powerlifter, train the exact
 - For an Olympic weightlifter, the snatch and clean & jerk (and their close derivatives -- hang variations, pulls from the floor or from blocks, overhead squats) are the primary training means, not "extra assistance" layered on top of generic strength work -- program them at high weekly frequency and prioritize technical quality over simply adding weight, since this sport rewards technique-per-pound more than raw strength does.
 - Front squat is nearly as central to a weightlifter's programming as the competition lifts themselves (it's the receiving position of the clean), and back squat, snatch pulls, and clean pulls round out the core strength work -- these are main lifts for this athlete, not accessories.
 - An Olympic weightlifter's mobility is a hard prerequisite, not optional maintenance work: ankle dorsiflexion and hip mobility limit squat depth in both lifts, thoracic extension and shoulder overhead mobility limit the locked-out overhead receiving position in the snatch, and any deficit here caps how well the athlete can even get into the required positions regardless of strength. Proactively include mobility work this athlete already has in their program (Ankle Dorsiflexion Mobilization, World's Greatest Stretch, Couch Stretch, Scapular Wall Slide) rather than only adding it after something starts hurting.
-- Despite a lingering reputation as unsafe for young athletes, the Olympic lifts are specifically endorsed by the NSCA's youth resistance training position stand as excellent power-development tools for adolescents and even children, when taught through a progression (technique with an empty bar or PVC pipe first, hang position before pulling from the floor, load added only after technical competency) rather than loaded before the technique is sound. Don't avoid teaching snatch/clean & jerk derivatives to a younger athlete purely because of the lift's reputation -- gate it on demonstrated technique, same as anything else in AGE_APPROPRIATE_TRAINING_PRINCIPLES above.`;
+- Despite a lingering reputation as unsafe for young athletes, the Olympic lifts are specifically endorsed by the NSCA's youth resistance training position stand as excellent power-development tools for adolescents and even children, when taught through a progression (technique with an empty bar or PVC pipe first, hang position before pulling from the floor, load added only after technical competency) rather than loaded before the technique is sound. Don't avoid teaching snatch/clean & jerk derivatives to a younger athlete purely because of the lift's reputation -- gate it on demonstrated technique, same as anything else in TRAINING_READINESS_PRINCIPLES above.`;
 
 // This is deliberately narrow and specific rather than a general "train
 // women differently" rule -- per PROGRAM_DESIGN_PRINCIPLES's sports-tag
@@ -1459,7 +1439,7 @@ const NUTRITION_MICRONUTRIENT_PRINCIPLES = `- Iron: at particular risk in menstr
 
 const NUTRITION_SEX_AND_AGE_PRINCIPLES = `- RED-S (Relative Energy Deficiency in Sport, per the IOC consensus statement) is the umbrella concept for what chronic low energy availability does to an athlete's body -- impaired bone health, menstrual dysfunction, suppressed immune function, impaired growth in younger athletes, and ultimately impaired performance despite the athlete often believing they're "doing everything right." It's driven by the energy availability math described above, not body weight or visible leanness -- an athlete who looks and performs fine can still have low EA. This is the same condition the female-athlete training principles above address from the training-load side; nutrition and training load both feed the same underlying energy-availability equation.
 - There is emerging (lower-certainty than the rest of this block) research suggesting carbohydrate and total energy needs may rise somewhat during the luteal phase of the menstrual cycle for some athletes -- worth mentioning as a "some evidence, still developing" point if directly relevant, not as a settled recommendation to restructure someone's whole week around.
-- Youth athletes have proportionally higher energy needs for growth on top of training demands, and restrictive dieting or intentional weight loss in a still-growing athlete carries real risk to that growth and to bone development -- the same posture as the weight-cutting cautions in the combat-sports and age-appropriate training principles elsewhere in this system. Default to a "food first," whole-food-variety framing for youth rather than any structured diet or restriction, and treat a youth athlete describing an intentional cut or skipped meals as something to flag for a coach/parent/doctor, not something to help optimize.`;
+- Youth athletes have proportionally higher energy needs for growth on top of training demands, and restrictive dieting or intentional weight loss in a still-growing athlete carries real risk to that growth and to bone development -- the same posture as the weight-cutting cautions in the combat-sports principles elsewhere in this system. Default to a "food first," whole-food-variety framing for youth rather than any structured diet or restriction, and treat a youth athlete describing an intentional cut or skipped meals as something to flag for a coach/parent/doctor, not something to help optimize.`;
 
 const NUTRITION_SUPPLEMENT_PRINCIPLES = `- Creatine monohydrate is the most-researched ergogenic supplement in sports nutrition and, per the ISSN's position stand, one of the few with consistently demonstrated benefit (strength, power, high-intensity repeated-effort capacity) and a strong safety record in healthy individuals, including adolescents in the studies ISSN reviewed. Standard dosing is either a loading phase (~20 g/day split into 4 doses for 5-7 days) followed by a 3-5 g/day maintenance dose, or simply starting at 3-5 g/day and reaching saturation more slowly over 3-4 weeks. Water retention (a few pounds, intracellular, in the muscle) is an expected, benign effect, not a warning sign. Still: any supplement decision for a minor should involve a parent/guardian and ideally a doctor or RD, not just the athlete's own read of the research.
 - Caffeine has good evidence for endurance and repeated-sprint performance at roughly 3-6 mg/kg body mass, taken 30-60 minutes pre-exercise, but individual sensitivity varies enormously and late-day use can wreck sleep quality, which itself is one of the biggest levers on recovery -- worth flagging that tradeoff rather than treating caffeine as a free performance boost.
@@ -11900,7 +11880,7 @@ You have the same strength-and-conditioning knowledge base Forge's program-build
 ${PROGRAM_DESIGN_PRINCIPLES}
 ${STRENGTH_SPORT_TRAINING_PRINCIPLES}
 ${PHYSICAL_THERAPY_TRAINING_PRINCIPLES}
-${AGE_APPROPRIATE_TRAINING_PRINCIPLES}
+${TRAINING_READINESS_PRINCIPLES}
 ${COMBAT_SPORTS_TRAINING_PRINCIPLES}
 ${FEMALE_ATHLETE_TRAINING_PRINCIPLES}
 ${SEASON_PHASE_TRAINING_PRINCIPLES}
@@ -17557,57 +17537,6 @@ Hard rules, no exceptions:
     return program;
   },
 
-  /**
-   * The youngest KNOWN age among a set of people, from a real date of birth (never users.age,
-   * which is a stale self-report). Null when nobody in the set has a birthday on file: an unknown
-   * age is not a child, and nothing is held back for it (shared/exercise-tags.ts).
-   */
-  async youngestKnownAge(userIds: readonly number[]): Promise<number | null> {
-    if (userIds.length === 0) return null;
-    const rows = await db
-      .select({ dateOfBirth: users.dateOfBirth })
-      .from(users)
-      .where(inArray(users.id, [...userIds]));
-    const ages = rows.filter((r) => r.dateOfBirth).map((r) => ageFromDateOfBirth(r.dateOfBirth as string));
-    return ages.length > 0 ? Math.min(...ages) : null;
-  },
-
-  /**
-   * Whether a program being built is for somebody under YOUTH_SAFE_MIN_AGE, as far as this viewer
-   * can know it, so the picker can flag exercises marked not for under-14s (2026-11-22).
-   *   - An athlete building their own program: their own age.
-   *   - A coach or admin: the athletes THIS staff assigned the program to; with none yet, the
-   *     staff's own in-season roster, because a coach building for a roster builds for them.
-   * Only this viewer's own assignments and roster are read, so the answer says nothing about who
-   * another coach assigned a shared Forge program to. It returns a yes or no, never an age.
-   */
-  async programIsForYouth(programId: number | null, viewerId: number): Promise<boolean> {
-    const viewer = await this.getUser(viewerId);
-    if (!viewer) return false;
-    if (viewer.role === "athlete") {
-      const own = await this.youngestKnownAge([viewerId]);
-      return own != null && own < YOUTH_SAFE_MIN_AGE;
-    }
-    const coachIds = await this.getEffectiveCoachIds(viewerId);
-    const assigned =
-      programId == null
-        ? []
-        : await db
-            .selectDistinct({ athleteId: assignments.athleteId })
-            .from(assignments)
-            .where(and(eq(assignments.programId, programId), inArray(assignments.coachId, coachIds)));
-    const rosterIds = async () =>
-      viewer.role === "coach" ? (await this.getRosterForCoach(viewerId)).map((a) => a.id) : [];
-    const athleteIds = assigned.length > 0 ? assigned.map((a) => a.athleteId) : await rosterIds();
-    const youngest = await this.youngestKnownAge(athleteIds);
-    return youngest != null && youngest < YOUTH_SAFE_MIN_AGE;
-  },
-
-  /** The age Forge holds exercises back for when it picks for one athlete (a draft, a swap). */
-  async knownAgeOf(userId: number | null | undefined): Promise<number | null> {
-    return userId == null ? null : this.youngestKnownAge([userId]);
-  },
-
   // Post or unpost an admin's program (programs.isPublished). The caller has already checked
   // the program is the admin's own.
   async setProgramPublished(programId: number, published: boolean) {
@@ -17739,10 +17668,9 @@ Hard rules, no exceptions:
     // keepForRoom falls back to the whole library rather than leave the draft with nothing.
     const draftRoom = await roomForActor(coachId, athleteId ?? null);
     const draftRoomBlock = equipmentPromptBlock(draftRoom);
-    // YOUTH (2026-11-22): drafting for an athlete under 14, the model is never shown an exercise
-    // marked not for under-14s. A coach can still place one by hand afterwards and sees a note.
-    const draftAge = draftAthleteProfile?.dateOfBirth ? ageFromDateOfBirth(draftAthleteProfile.dateOfBirth) : null;
-    const roomExercises = keepForAge(keepForRoom(visibleExercises, draftRoom), draftAge);
+    // No exercise is held back for an athlete's age (Scott, 2026-11-22: "age doesn't matter in the
+    // weight room, its about weight room proficiency").
+    const roomExercises = keepForRoom(visibleExercises, draftRoom);
     if (roomExercises.length === 0) return null;
 
     // Reference material from ingested books, retrieved on the coach's own
@@ -17839,8 +17767,8 @@ ${STRENGTH_SPORT_TRAINING_PRINCIPLES}
 Physical therapy / corrective rules -- foundational movement-quality principles that apply to every athlete by default, not just when they mention an injury:
 ${PHYSICAL_THERAPY_TRAINING_PRINCIPLES}
 
-Age-appropriate training rules -- apply whenever the athlete profile gives an age under 18, or the request gives any other signal the athlete isn't a physically mature adult (a grade level, "youth," "middle schooler," "13U," etc.). The profile's age line comes from a real birthdate on file and says so explicitly when the athlete is a minor; when it does, these rules are mandatory, not a judgement call:
-${AGE_APPROPRIATE_TRAINING_PRINCIPLES}
+Training-readiness rules -- apply to every athlete, whatever their age. Loading is decided by weight-room proficiency, never by age:
+${TRAINING_READINESS_PRINCIPLES}
 
 Combat-sport rules -- apply whenever the request signals wrestling, boxing, MMA, or a grappling art like BJJ/judo/Muay Thai (a named sport, "fighter," "grappler," "striker," an upcoming "weigh-in," etc.):
 ${COMBAT_SPORTS_TRAINING_PRINCIPLES}
@@ -17879,7 +17807,7 @@ Design a complete draft program matching the coach's request, using only exercis
     const validIdSet = new Set(validIds);
     // EVERY DRAFTED DAY GETS A WARM-UP (2026-11-22): a RAMP block from tagged warm-up drills this
     // room can do and that suit the athlete's age, never from the main catalog's fallback.
-    const draftWarmupCandidates = warmupCandidatesFor(visibleExercises, draftRoom, draftAge);
+    const draftWarmupCandidates = warmupCandidatesFor(visibleExercises, draftRoom);
     return {
       note: draft.note?.trim() || null,
       structure: {
@@ -17995,8 +17923,8 @@ Design a complete draft program matching the coach's request, using only exercis
 Skills programming rules:
 ${SKILL_PROGRAM_DESIGN_PRINCIPLES}
 
-Age-appropriate skill rules -- apply whenever the athlete profile gives an age under 18, or the request gives any other signal the athlete isn't a physically mature adult. The profile's age line comes from a real birthdate and says so explicitly when the athlete is a minor; when it does, these rules are mandatory, not a judgement call:
-${AGE_APPROPRIATE_SKILL_PRINCIPLES}`;
+Skill-readiness rules -- apply to every athlete, whatever their age. Progression is decided by demonstrated technique, never by age:
+${SKILL_READINESS_PRINCIPLES}`;
 
     const system = cachedBuilderSystem(staticSystem, {
       coachesCornerPrinciples,
@@ -18225,8 +18153,8 @@ Don't ask about anything you can reasonably infer, or that's already answered by
 Skills programming rules:
 ${SKILL_PROGRAM_DESIGN_PRINCIPLES}
 
-Age-appropriate skill rules -- apply whenever the athlete profile gives an age under 18, or the request gives any other signal the athlete isn't a physically mature adult. The profile's age line comes from a real birthdate and says so explicitly when the athlete is a minor; when it does, these rules are mandatory, not a judgement call:
-${AGE_APPROPRIATE_SKILL_PRINCIPLES}`;
+Skill-readiness rules -- apply to every athlete, whatever their age. Progression is decided by demonstrated technique, never by age:
+${SKILL_READINESS_PRINCIPLES}`;
 
     const system = cachedBuilderSystem(staticSystem, {
       coachesCornerPrinciples,
@@ -18631,14 +18559,8 @@ Respond to the user's latest message by calling ask_question or update_program.`
     // the room lacks its equipment (the builder marks it instead).
     const chatRoom = await roomForActor(authorId, builtForSelf ? authorId : null);
     const chatRoomBlock = equipmentPromptBlock(chatRoom);
-    // The warm-up drills a day the chat creates may draw from (2026-11-22): tagged, in the room,
-    // and held back for an under-14 program as every other offer is.
-    const chatAge = chatAthleteProfile?.dateOfBirth
-      ? ageFromDateOfBirth(chatAthleteProfile.dateOfBirth)
-      : (await this.programIsForYouth(programId, authorId))
-        ? YOUTH_SAFE_MIN_AGE - 1
-        : null;
-    const chatWarmupCandidates = warmupCandidatesFor(visibleExercises, chatRoom, chatAge);
+    // The warm-up drills a day the chat creates may draw from (2026-11-22): tagged and in the room.
+    const chatWarmupCandidates = warmupCandidatesFor(visibleExercises, chatRoom);
     const alreadyPlaced = new Set(program.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises.map((ex) => ex.exerciseId))));
     const chatExercises = (() => {
       const kept = visibleExercises.filter((e) => alreadyPlaced.has(e.id) || roomAllows(e, chatRoom));
@@ -18816,8 +18738,8 @@ ${STRENGTH_SPORT_TRAINING_PRINCIPLES}
 Physical therapy / corrective rules -- foundational movement-quality principles that apply to every athlete by default, not just when they mention an injury:
 ${PHYSICAL_THERAPY_TRAINING_PRINCIPLES}
 
-Age-appropriate training rules -- apply based on the athlete's age given below:
-${AGE_APPROPRIATE_TRAINING_PRINCIPLES}
+Training-readiness rules -- apply to every athlete, whatever their age. Loading is decided by weight-room proficiency, never by age:
+${TRAINING_READINESS_PRINCIPLES}
 
 Combat-sport rules -- apply whenever the conversation signals wrestling, boxing, MMA, or a grappling art like BJJ/judo/Muay Thai (a named sport, "fighter," "grappler," "striker," an upcoming "weigh-in," etc.):
 ${COMBAT_SPORTS_TRAINING_PRINCIPLES}
@@ -18988,10 +18910,7 @@ Respond to the user's latest message by calling ask_question or update_program.`
       ? allVisibleExercises.filter((e) => options.allowedIds!.has(e.id))
       : allVisibleExercises.filter((e) => roomAllows(e, swapRoom));
     const roomOrAll = roomOnly.some((e) => e.id !== pe.exerciseId) ? roomOnly : allVisibleExercises;
-    // YOUTH (2026-11-22): a swap on a program for an athlete under 14 never suggests an exercise
-    // marked not for under-14s.
-    const swapForYouth = await this.programIsForYouth(programId, authorId);
-    const visibleExercises = swapForYouth ? roomOrAll.filter((e) => e.youthSafe !== false) : roomOrAll;
+    const visibleExercises = roomOrAll;
     const validIds = visibleExercises.filter((e) => e.id !== pe.exerciseId).map((e) => e.id);
     if (validIds.length === 0) {
       return fail("There isn't another exercise available to swap in yet.");
@@ -24416,11 +24335,7 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     // today, and anything else still risky for the same pain map is
     // excluded too, so it can't recommend one risky exercise for another.
     const usedExerciseIds = new Set(slots.map((s) => s.exercise.id));
-    // YOUTH (2026-11-22): nothing marked not for under-14s is offered to an athlete under 14.
-    const visibleExercises = keepForAge(
-      await this.getVisibleExercisesForCoach(assignment.coachId),
-      await this.knownAgeOf(athleteId),
-    );
+    const visibleExercises = await this.getVisibleExercisesForCoach(assignment.coachId);
     const safeCandidates = visibleExercises.filter(
       (e) => !usedExerciseIds.has(e.id) && !isExerciseRiskyForPainParts(e, painParts),
     );

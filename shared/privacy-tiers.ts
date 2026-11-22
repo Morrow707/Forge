@@ -40,16 +40,14 @@ export function derivePrivacyTier(dateOfBirth: string | Date, asOf: Date = new D
   return "tier3_adult_18plus";
 }
 
-/** How an athlete's age should be stated to a coaching AI.
- *
- * The programming system prompt gates its age-appropriate training rules on
- * "any signal the athlete isn't a physically mature adult". That put a
- * genuinely well-researched set of youth-training constraints -- loading
- * caution around a growth spurt, technique-before-load progressions, the
- * weight-cutting warnings -- behind a signal that was usually absent, while
- * the real birthdate sat one column away in the same row. So the age is
- * stated from the birthdate, and a known minor is named as one rather than
- * left for the model to infer from a number.
+/** How an athlete's age is stated to a coaching AI: a number from the real
+ * birthdate (users.age is a stale self-report), and nothing more. It is a fact
+ * about the athlete, not a training rule: readiness to load a lift is decided
+ * by weight-room proficiency, never by age (Scott, 2026-11-22: "age doesn't
+ * matter in the weight room, its about weight room proficiency"), and the
+ * prompt's TRAINING_READINESS_PRINCIPLES say so. The account and consent rules
+ * that DO depend on age (the guardian claim, the privacy tiers above) are
+ * unaffected.
  */
 export function ageLineForAi(
   dateOfBirth: string | Date | null | undefined,
@@ -57,9 +55,7 @@ export function ageLineForAi(
   asOf: Date = new Date(),
 ): string {
   if (dateOfBirth) {
-    const age = ageFromDateOfBirth(dateOfBirth, asOf);
-    const minor = age < 18;
-    return `${age}${minor ? ", MINOR: apply the age-appropriate training rules in full, they are not optional for this athlete" : ""}`;
+    return String(ageFromDateOfBirth(dateOfBirth, asOf));
   }
   // No birthdate: an account predating that column. The self-reported
   // snapshot is better than nothing, and "not set" stays honest rather than

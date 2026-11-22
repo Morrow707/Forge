@@ -129,7 +129,7 @@ export function AssignProgramDialog({
     [schedule, dateOverrides],
   );
 
-  // THE SEASON SETUP STEP (2026-11-22): position, team, the under-14 note, the season plan and the
+  // THE SEASON SETUP STEP (2026-11-22): position, team, the loading note, the season plan and the
   // return-to-training clearance. See components/season-setup-step.tsx.
   const setup = useSeasonSetup({
     open,

@@ -1614,9 +1614,10 @@ export const exercises = pgTable("exercises", {
   purposes: json("purposes").$type<string[]>(),
   // Positions it is meant for, free text stored lower case ("pitcher", "goalkeeper").
   positions: json("positions").$type<string[]>(),
-  // Whether it suits an athlete under YOUTH_SAFE_MIN_AGE. Null = not classified, which is NOT
-  // "unsafe": only an explicit false keeps it out of what Forge offers a young athlete, and
-  // never stops a coach choosing it by hand.
+  // RETIRED AS A DECISION 2026-11-22. It once kept an exercise out of what Forge offered an athlete
+  // under 14; Scott: "age doesn't matter in the weight room, its about weight room proficiency".
+  // The column stays (no destructive migration) and NOTHING reads it for any decision:
+  // server/no-exercise-is-filtered-by-age.test.ts holds that.
   youthSafe: boolean("youth_safe"),
   // One or two sentences shown under the exercise wherever it is placed. Never blocks anything.
   cautionNote: text("caution_note"),

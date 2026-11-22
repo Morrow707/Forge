@@ -278,14 +278,7 @@ export function convertSeasonProgram(program: FileProgram, resolve: Resolver): C
     });
   }
 
-  const description = [
-    program.audience?.trim(),
-    program.note?.trim(),
-    ...(program.postSeason?.guidance?.length ? [program.postSeason.guidance.map((g) => `- ${g}`).join("\n")] : []),
-    program.evidence?.length ? `Research: ${program.evidence.join(", ")}` : null,
-  ]
-    .filter((p): p is string => !!p)
-    .join("\n\n");
+  const description = seasonProgramDescription(program);
 
   const positions = (program.positions ?? [])
     .map(normalizePosition)
@@ -305,6 +298,19 @@ export function convertSeasonProgram(program: FileProgram, resolve: Resolver): C
   };
 
   return { structure, layers: convertLayers(program, idFor, warmupItems), unresolved, clampedDurations };
+}
+
+/** The program's description as stored: audience, note, post-season guidance, research. Its own
+ * function so the 2026-11-22 age-line backfill can compute what an earlier text produced. */
+export function seasonProgramDescription(program: FileProgram): string {
+  return [
+    program.audience?.trim(),
+    program.note?.trim(),
+    ...(program.postSeason?.guidance?.length ? [program.postSeason.guidance.map((g) => `- ${g}`).join("\n")] : []),
+    program.evidence?.length ? `Research: ${program.evidence.join(", ")}` : null,
+  ]
+    .filter((p): p is string => !!p)
+    .join("\n\n");
 }
 
 function convertLayers(

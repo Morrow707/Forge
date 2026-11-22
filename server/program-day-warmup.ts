@@ -5,7 +5,7 @@
  *     exercise's name; an item whose exercise was deleted from the library drops out);
  *   - `warmupCandidatesFor` is the list a drafted warm-up may choose from: exercises tagged
  *     purpose "warmup", that this weight room CAN do (no fallback to the whole library, unlike a
- *     main-lift draft: a warm-up drill the room lacks is never drafted) and that suit the age;
+ *     main-lift draft: a warm-up drill the room lacks is never drafted). Never filtered by age;
  *   - `fillMissingWarmups` drafts a RAMP warm-up onto every training day of a structure that has
  *     none (the AI draft, the AI chat's new days, the import);
  *   - `warmupFactsFor` says, per athlete-day, how many sessions had a warm-up and how many had
@@ -26,7 +26,6 @@ import {
   type WarmupCompletion,
 } from "@shared/program-day-warmup";
 import { roomAllows, type ExerciseForNeeds } from "@shared/exercise-needs";
-import { keepForAge } from "@shared/exercise-tags";
 import type { EquipmentRoom } from "@shared/equipment-profile";
 
 type StoredBlock = WarmupBlock | null | undefined;
@@ -74,15 +73,13 @@ export async function withResolvedWarmups<P extends { weeks: Array<{ days: Array
   };
 }
 
-type LibraryRow = WarmupCandidate & ExerciseForNeeds & { youthSafe?: boolean | null; retiredAt?: Date | null };
+type LibraryRow = WarmupCandidate & ExerciseForNeeds & { retiredAt?: Date | null };
 
-/** The drills a drafted warm-up may use: tagged warm-up, possible in this room, right for the age. */
-export function warmupCandidatesFor<T extends LibraryRow>(library: readonly T[], room: EquipmentRoom | null, age: number | null): T[] {
-  return keepForAge(
-    // A drill hidden by the library review (retiredAt) is never drafted into a new warm-up.
-    library.filter((ex) => !ex.retiredAt && isTaggedWarmup(ex) && roomAllows(ex, room)),
-    age,
-  );
+/** The drills a drafted warm-up may use: tagged warm-up and possible in this room. Never filtered
+ * by an athlete's age (Scott, 2026-11-22: "its about weight room proficiency"). */
+export function warmupCandidatesFor<T extends LibraryRow>(library: readonly T[], room: EquipmentRoom | null): T[] {
+  // A drill hidden by the library review (retiredAt) is never drafted into a new warm-up.
+  return library.filter((ex) => !ex.retiredAt && isTaggedWarmup(ex) && roomAllows(ex, room));
 }
 
 type DraftDay = {

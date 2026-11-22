@@ -8479,8 +8479,9 @@ All on main, pre-flight checked, not yet in a TestFlight build (Scott is holding
   draft, chat, swaps and picker respect it; an exercise the coach placed by hand is kept with a marker.
 - **Tags and one search** (`shared/exercise-tags.ts`, `shared/exercise-search.ts`, `shared/program-search.ts`).
   Exercises and programs carry joints, purposes (warmup/care/return_to_training), positions; exercises also
-  youthSafe and cautionNote. One search understands nicknames ("acl", "rotator cuff", "rehab", "pre season")
-  and typos (only on words of 5+ letters for tags). Under-14 flags NEVER block a coach. "Add care drills" on a
+  cautionNote (the `youth_safe` column still exists and NOTHING reads it since the proficiency rule below).
+  One search understands nicknames ("acl", "rotator cuff", "rehab", "pre season") and typos (only on words
+  of 5+ letters for tags). Nothing is filtered or flagged by age. "Add care drills" on a
   builder day proposes, never adds without a tap. No real exercise is tagged yet: the tags come from the
   research review, not guesses.
 - **The research** is in the artifact https://claude.ai/artifact/SPtw36pRmhH6aueGRcp4M8 (548 PubMed sources,
@@ -8553,3 +8554,40 @@ All on main, not yet in a TestFlight build (Scott is holding the upload).
   logged set on a swapped slot snapshots the slot's original exercise id, exactly as an athlete's
   own swap already does. `season-programs.test.ts` (every name in every file against the visible
   library), `season-programs.itest.ts`. Client: `verify_build`.
+
+## AGE DOES NOT MATTER IN THE WEIGHT ROOM: PROFICIENCY DOES (2026-11-22)
+
+Scott: "underage athletes can do whatever they want, as an exercise professional, age doesn't matter
+in the weight room, its about weight room proficiency, a 12 year old can back squat the bar if a) they
+are strong enough to hold 45lbs on their backs, and b) they can show that they can do a back squat
+correctly and safely, thats the only 2 things that matters." And: "yes change the line for the
+underage athlete."
+
+**Forge never filters, sorts, labels or caps an exercise or a load by an athlete's age.** What changed:
+- The under-14 machinery is gone: `YOUTH_SAFE_MIN_AGE`, `keepForAge`, `heldBackForAge`,
+  `YOUTH_HELD_BACK_NOTE`, `storage.programIsForYouth` / `knownAgeOf` / `youngestKnownAge`, the three
+  `/programs/:id/youth-audience` routes, the picker's sort and note, the builder's row note, the care
+  drills' filter, the tag editor's "Athletes under 14" control and display, and the season setup's
+  under-14 note (replaced by `PROFICIENCY_LOADING_NOTE`, shown to everyone). The AI draft, the swap,
+  the pain swap and drafted warm-ups offer the whole library (room rules unchanged).
+- `exercises.youth_safe` STAYS (no destructive migration) and nothing reads it for a decision; the
+  library-review seed data still writes it. `server/no-exercise-is-filtered-by-age.test.ts` is the
+  ratchet (comments stripped; mutation-tested by putting a `youthSafe` filter back in storage.ts).
+- The programming AI's age bands (children / adolescents / adults) are replaced by
+  `TRAINING_READINESS_PRINCIPLES` and `SKILL_READINESS_PRINCIPLES` in storage.ts: load once the athlete
+  can hold the weight and do the lift correctly and safely; technique first for anybody NEW to a lift;
+  overuse and a stated growth spurt are about the body and the workload, never a birthday.
+  `ageLineForAi` states the age as a number with no "MINOR" instruction.
+- The 138 season programs' audience lines drop every age statement ("Not for athletes under 14",
+  "(14 and older)", "high school"); the 65 that load a barbell say "Load a lift once the athlete can
+  hold the weight and do the lift correctly and safely." Production holds them already, so
+  `rewriteSeasonProgramAgeLinesOnce` (marker `season_program_age_lines_2026_11_22`) rewrites a stored
+  description or layer note only where it still equals the old text
+  (`server/seed-data/season-program-text-before-2026-11-22.ts`, frozen); an admin's edit is left alone.
+
+**NOT changed, on purpose, because they are law about DATA, not the weight room:** the under-13
+guardian claim and card check, the date-of-birth gate, the privacy tiers and a minor's video retention,
+the Anvil's adults-only rule, the guardian emails, and a minor not ticking their own clinician clearance
+for a return-to-training program (`RETURN_TO_TRAINING_MINOR_SELF`, a medical attestation). Published
+pitch-count guidance for young pitchers (`shared/throwing-workload.ts`, the pitching coach prompt) is
+throwing workload, not a weight-room rule, and is unchanged. Client and server: `verify_build`.

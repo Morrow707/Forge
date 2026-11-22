@@ -18,7 +18,7 @@
    ],
    "weeks": 8,
    "daysPerWeek": 3,
-   "audience": "For high school athletes (14 and older) in the 100 m, 200 m, 400 m and hurdles, coached or training on their own.",
+   "audience": "For athletes in the 100 m, 200 m, 400 m and hurdles, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Two 4-week blocks. Block 1 builds muscle and work capacity; block 2 builds basic strength, the quality most tied to faster sprints. Lifting days sit beside the track sessions, not instead of them. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -1061,7 +1061,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 3,
-   "audience": "For high school athletes (14 and older) in the 100 m, 200 m, 400 m and hurdles, coached or training on their own.",
+   "audience": "For athletes in the 100 m, 200 m, 400 m and hurdles, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Strength turns into speed: power lifts 75-85% for 2-5 reps, core lifts 85-90%. Sled sprints use a load that slows the run by more than 10% (about 20% of body weight or more), where the research found the acceleration gain. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -1620,7 +1620,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 2,
-   "audience": "For high school athletes (14 and older) in the 100 m, 200 m, 400 m and hurdles, coached or training on their own.",
+   "audience": "For athletes in the 100 m, 200 m, 400 m and hurdles, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Maintenance block meant to repeat for the whole competitive season. Day 1 is the heavy day: place it 48-72 hours before the meet (Wednesday for a Saturday meet), never the day before. Day 2 goes early in the week, at least a day after competing. Keep the volume low; competing and practice are the main load. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -1986,7 +1986,7 @@
    ],
    "weeks": 3,
    "daysPerWeek": null,
-   "audience": "For high school athletes (14 and older) in the 100 m, 200 m, 400 m and hurdles, coached or training on their own.",
+   "audience": "For athletes in the 100 m, 200 m, 400 m and hurdles, coached or training on their own.",
    "note": "Active rest, not a lifting program. Start the off-season program after this.",
    "blocks": [],
    "positionLayers": {},
@@ -2140,7 +2140,7 @@
    ],
    "weeks": 8,
    "daysPerWeek": 3,
-   "audience": "For high school athletes (14 and older) in the long jump, triple jump, high jump and pole vault, coached or training on their own.",
+   "audience": "For athletes in the long jump, triple jump, high jump and pole vault, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Two 4-week blocks: muscle and work capacity, then basic strength. Landing-and-stick drills are in every lower warm-up; that is where landing work is known to cut injuries. Knee-tendon care (Spanish squat holds) is on the heaviest jump day. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -3198,7 +3198,7 @@
       "note": null
      }
     ],
-    "note": "High school girls in the jumps have more ankle sprains and more practice injuries, so the landing and balance work gets a little more time. Keep landing work at 15-20 minutes, 2-3 times a week, counting practice warm-ups."
+    "note": "Girls in the jumps have more ankle sprains and more practice injuries, so the landing and balance work gets a little more time. Keep landing work at 15-20 minutes, 2-3 times a week, counting practice warm-ups."
    },
    "postSeason": null,
    "evidence": [
@@ -3230,7 +3230,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 3,
-   "audience": "For high school athletes (14 and older) in the long jump, triple jump, high jump and pole vault, coached or training on their own.",
+   "audience": "For athletes in the long jump, triple jump, high jump and pole vault, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Strength turns into take-off power: power lifts 75-85% for 2-5 reps, core lifts 85-90%. Jump contacts stay inside 140 a session, counting the warm-up landings. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -3759,7 +3759,7 @@
       "note": null
      }
     ],
-    "note": "High school girls in the jumps have more ankle sprains and more practice injuries, so the landing and balance work gets a little more time. Keep landing work at 15-20 minutes, 2-3 times a week, counting practice warm-ups."
+    "note": "Girls in the jumps have more ankle sprains and more practice injuries, so the landing and balance work gets a little more time. Keep landing work at 15-20 minutes, 2-3 times a week, counting practice warm-ups."
    },
    "postSeason": null,
    "evidence": [
@@ -3791,7 +3791,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 2,
-   "audience": "For high school athletes (14 and older) in the long jump, triple jump, high jump and pole vault, coached or training on their own.",
+   "audience": "For athletes in the long jump, triple jump, high jump and pole vault, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Maintenance block meant to repeat for the whole competitive season. Day 1 is the heavy day: place it 48-72 hours before the meet (Wednesday for a Saturday meet), never the day before. Day 2 goes early in the week, at least a day after competing. Keep the volume low; competing and practice are the main load. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -4149,7 +4149,7 @@
       "note": null
      }
     ],
-    "note": "High school girls in the jumps have more ankle sprains and more practice injuries, so the landing and balance work gets a little more time. Keep landing work at 15-20 minutes, 2-3 times a week, counting practice warm-ups."
+    "note": "Girls in the jumps have more ankle sprains and more practice injuries, so the landing and balance work gets a little more time. Keep landing work at 15-20 minutes, 2-3 times a week, counting practice warm-ups."
    },
    "postSeason": null,
    "evidence": [
@@ -4181,7 +4181,7 @@
    ],
    "weeks": 3,
    "daysPerWeek": null,
-   "audience": "For high school athletes (14 and older) in the long jump, triple jump, high jump and pole vault, coached or training on their own.",
+   "audience": "For athletes in the long jump, triple jump, high jump and pole vault, coached or training on their own.",
    "note": "Active rest, not a lifting program. Start the off-season program after this.",
    "blocks": [],
    "positionLayers": {},
@@ -4343,7 +4343,7 @@
    ],
    "weeks": 8,
    "daysPerWeek": 4,
-   "audience": "For high school athletes (14 and older) in the shot put, discus and javelin, coached or training on their own.",
+   "audience": "For athletes in the shot put, discus and javelin, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Four days: two lower and total-body days and two upper. Block 1 builds muscle (lean mass ties strongly to throwing distance), block 2 builds basic strength. Throws are kinetic-chain events, so every day trains legs and trunk as well as arms. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -5588,7 +5588,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 3,
-   "audience": "For high school athletes (14 and older) in the shot put, discus and javelin, coached or training on their own.",
+   "audience": "For athletes in the shot put, discus and javelin, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Strength to power: snatch and clean at 75-85% for 2-5 reps, squat and bench at 85-90%. Med ball throws mirror the event's direction. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -6084,7 +6084,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 2,
-   "audience": "For high school athletes (14 and older) in the shot put, discus and javelin, coached or training on their own.",
+   "audience": "For athletes in the shot put, discus and javelin, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Maintenance block meant to repeat for the whole competitive season. Day 1 is the heavy day: place it 48-72 hours before the meet (Wednesday for a Saturday meet), never the day before. Day 2 goes early in the week, at least a day after competing. Keep the volume low; competing and practice are the main load. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -6428,7 +6428,7 @@
    ],
    "weeks": 3,
    "daysPerWeek": null,
-   "audience": "For high school athletes (14 and older) in the shot put, discus and javelin, coached or training on their own.",
+   "audience": "For athletes in the shot put, discus and javelin, coached or training on their own.",
    "note": "Active rest, not a lifting program. Start the off-season program after this.",
    "blocks": [],
    "positionLayers": {},
@@ -6588,7 +6588,7 @@
    ],
    "weeks": 8,
    "daysPerWeek": 2,
-   "audience": "For high school athletes (14 and older) in cross country and the 800 m through 3200 m, coached or training on their own.",
+   "audience": "For athletes in cross country and the 800 m through 3200 m, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Two lifting days a week beside the running. Unlike the other off-season programs this one goes heavy from the start: the running research shows heavy strength work (3-6 reps at 75% 1RM and up, 85-90% by block 2) improves running economy and race times without adding bulk, and programs of 10 weeks or more work best. Block 1 is 6-rep strength, block 2 is 4-rep heavy strength. Raise weekly running distance gradually (about 10% at a time). Eat enough for the training; low energy availability is what puts bone at risk in distance runners. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -7266,7 +7266,7 @@
       "note": null
      }
     ],
-    "note": "High school girls in cross country have higher injury and re-injury rates and twice the bone stress injuries. Extra balance and landing work in the warm-up helps; so do eating enough for the training, playing other sports through the year, and asking a clinician about missed periods. Aim for 15-20 minutes of this work 2-3 times a week, counting practice warm-ups."
+    "note": "Girls in cross country have higher injury and re-injury rates and twice the bone stress injuries. Extra balance and landing work in the warm-up helps; so do eating enough for the training, playing other sports through the year, and asking a clinician about missed periods. Aim for 15-20 minutes of this work 2-3 times a week, counting practice warm-ups."
    },
    "postSeason": null,
    "evidence": [
@@ -7300,7 +7300,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 3,
-   "audience": "For high school athletes (14 and older) in cross country and the 800 m through 3200 m, coached or training on their own.",
+   "audience": "For athletes in cross country and the 800 m through 3200 m, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Three short sessions: two heavy (core lifts at 85-90% for 3 reps) and one jump and trunk day of about 30 minutes. Heavy lifts paired with jumps (complex training) improved running economy in adolescent runners more than lifting alone. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -7781,7 +7781,7 @@
       "note": null
      }
     ],
-    "note": "High school girls in cross country have higher injury and re-injury rates and twice the bone stress injuries. Extra balance and landing work in the warm-up helps; so do eating enough for the training, playing other sports through the year, and asking a clinician about missed periods. Aim for 15-20 minutes of this work 2-3 times a week, counting practice warm-ups."
+    "note": "Girls in cross country have higher injury and re-injury rates and twice the bone stress injuries. Extra balance and landing work in the warm-up helps; so do eating enough for the training, playing other sports through the year, and asking a clinician about missed periods. Aim for 15-20 minutes of this work 2-3 times a week, counting practice warm-ups."
    },
    "postSeason": null,
    "evidence": [
@@ -7815,7 +7815,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 2,
-   "audience": "For high school athletes (14 and older) in cross country and the 800 m through 3200 m, coached or training on their own.",
+   "audience": "For athletes in cross country and the 800 m through 3200 m, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Maintenance block meant to repeat for the whole competitive season. Day 1 is the heavy day: place it 48-72 hours before the meet or race, never the day before. Day 2 goes early in the week, at least a day after competing. Keep the volume low; competing and practice are the main load. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -8150,7 +8150,7 @@
       "note": null
      }
     ],
-    "note": "High school girls in cross country have higher injury and re-injury rates and twice the bone stress injuries. Extra balance and landing work in the warm-up helps; so do eating enough for the training, playing other sports through the year, and asking a clinician about missed periods. Aim for 15-20 minutes of this work 2-3 times a week, counting practice warm-ups."
+    "note": "Girls in cross country have higher injury and re-injury rates and twice the bone stress injuries. Extra balance and landing work in the warm-up helps; so do eating enough for the training, playing other sports through the year, and asking a clinician about missed periods. Aim for 15-20 minutes of this work 2-3 times a week, counting practice warm-ups."
    },
    "postSeason": null,
    "evidence": [
@@ -8184,7 +8184,7 @@
    ],
    "weeks": 3,
    "daysPerWeek": null,
-   "audience": "For high school athletes (14 and older) in cross country and the 800 m through 3200 m, coached or training on their own.",
+   "audience": "For athletes in cross country and the 800 m through 3200 m, coached or training on their own.",
    "note": "Active rest, not a lifting program. Start the off-season program after this.",
    "blocks": [],
    "positionLayers": {},
@@ -8341,7 +8341,7 @@
    ],
    "weeks": 8,
    "daysPerWeek": 3,
-   "audience": "For high school athletes (14 and older) in swimming, coached or training on their own.",
+   "audience": "For athletes in swimming, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Two 4-week blocks of dryland: muscle and work capacity, then basic strength. Overhead pressing stays light: no barbell overhead press, only a one-arm landmine press, because the shoulder already does thousands of overhead strokes a week. Every day ends with shoulder care (external rotation and scapular work, the dose that cut shoulder pain in swimmers). Jumps build the start and the wall push. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -9303,7 +9303,7 @@
        "rest": "60 s"
       }
      ],
-     "note": "Shoulder pain in teenage swimmers tracks weekly yardage; avoid sudden jumps in volume."
+     "note": "Shoulder pain in swimmers tracks weekly yardage; avoid sudden jumps in volume."
     },
     "Breaststroke": {
      "swaps": [
@@ -9378,7 +9378,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 3,
-   "audience": "For high school athletes (14 and older) in swimming, coached or training on their own.",
+   "audience": "For athletes in swimming, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Strength turns into start and turn power: power lifts 75-85% for 2-5 reps, core lifts 85-90%; maximal strength and jumps both improved 15 m start and 50 m times in swimmers. Overhead pressing stays light: no barbell overhead press, only a one-arm landmine press, because the shoulder already does thousands of overhead strokes a week. Every day ends with shoulder care (external rotation and scapular work, the dose that cut shoulder pain in swimmers). Jumps build the start and the wall push. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -9827,7 +9827,7 @@
        "rest": "60 s"
       }
      ],
-     "note": "Shoulder pain in teenage swimmers tracks weekly yardage; avoid sudden jumps in volume."
+     "note": "Shoulder pain in swimmers tracks weekly yardage; avoid sudden jumps in volume."
     },
     "Breaststroke": {
      "swaps": [],
@@ -9890,7 +9890,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 2,
-   "audience": "For high school athletes (14 and older) in swimming, coached or training on their own.",
+   "audience": "For athletes in swimming, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Maintenance block meant to repeat for the whole competitive season. Day 1 is the heavy day: place it 48-72 hours before the meet, never the day before. Day 2 goes early in the week, at least a day after competing. Keep the volume low; competing and practice are the main load. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load. Taper weeks before a championship meet: keep Day 1's loads, cut the sets in half.",
    "blocks": [
     {
@@ -10193,7 +10193,7 @@
        "rest": "60 s"
       }
      ],
-     "note": "Shoulder pain in teenage swimmers tracks weekly yardage; avoid sudden jumps in volume."
+     "note": "Shoulder pain in swimmers tracks weekly yardage; avoid sudden jumps in volume."
     },
     "Breaststroke": {
      "swaps": [],
@@ -10256,7 +10256,7 @@
    ],
    "weeks": 3,
    "daysPerWeek": null,
-   "audience": "For high school athletes (14 and older) in swimming, coached or training on their own.",
+   "audience": "For athletes in swimming, coached or training on their own.",
    "note": "Active rest, not a lifting program. Start the off-season program after this.",
    "blocks": [],
    "positionLayers": {},
@@ -10410,7 +10410,7 @@
    ],
    "weeks": 8,
    "daysPerWeek": 3,
-   "audience": "For high school athletes (14 and older) in rowing, coached or training on their own.",
+   "audience": "For athletes in rowing, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Two 4-week blocks: muscle and work capacity, then basic strength. Squat, deadlift, clean and leg press strength tie to erg times. Trunk endurance and hip range are in every session (the hips need to reach the catch so the low back does not round). Low back pain is the most common rowing injury and a previous episode is the main risk, so loading stays technical: stop a set when the back position changes. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -11335,7 +11335,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 3,
-   "audience": "For high school athletes (14 and older) in rowing, coached or training on their own.",
+   "audience": "For athletes in rowing, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Strength turns into stroke power: power clean at 75-85% for 2-5 reps (it predicts peak stroke power), core lifts 85-90%. Trunk endurance and hip range are in every session (the hips need to reach the catch so the low back does not round). Low back pain is the most common rowing injury and a previous episode is the main risk, so loading stays technical: stop a set when the back position changes. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load.",
    "blocks": [
     {
@@ -11795,7 +11795,7 @@
    ],
    "weeks": 4,
    "daysPerWeek": 2,
-   "audience": "For high school athletes (14 and older) in rowing, coached or training on their own.",
+   "audience": "For athletes in rowing, coached or training on their own. Load a lift once the athlete can hold the weight and do the lift correctly and safely.",
    "note": "Maintenance block meant to repeat for the whole competitive season. Day 1 is the heavy day: place it 48-72 hours before the meet or regatta, never the day before. Day 2 goes early in the week, at least a day after competing. Keep the volume low; competing and practice are the main load. Week 4 is lighter: one set fewer on every lift and about 90% of week 3's load. Rowing strength holds with one or two intense sessions a week, which is what this block does.",
    "blocks": [
     {
@@ -12122,7 +12122,7 @@
    ],
    "weeks": 3,
    "daysPerWeek": null,
-   "audience": "For high school athletes (14 and older) in rowing, coached or training on their own.",
+   "audience": "For athletes in rowing, coached or training on their own.",
    "note": "Active rest, not a lifting program. Start the off-season program after this.",
    "blocks": [],
    "positionLayers": {},

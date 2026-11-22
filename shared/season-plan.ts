@@ -15,7 +15,7 @@
  *   - off-season comes before that, in whole 4-week blocks;
  *   - postseason is the 2 to 4 weeks after the last game.
  */
-import { PROGRAM_SEASON_PHASES, YOUTH_SAFE_MIN_AGE, normalizePosition, type ProgramSeasonPhase } from "./exercise-tags";
+import { PROGRAM_SEASON_PHASES, normalizePosition, type ProgramSeasonPhase } from "./exercise-tags";
 
 export const DAYS_PER_WEEK = 7;
 /** Preseason: at least this many weeks before the first game, where the program allows it. */
@@ -66,15 +66,13 @@ export const RETURN_TO_TRAINING_MINOR_SELF =
 /** The heading over the clinician's restrictions wherever they are shown with the day. */
 export const RESTRICTIONS_PREFIX = "Clinician's restrictions:";
 
-/** The under-14 loading note. Never blocks. */
-export const UNDER_14_LOADING_NOTE = `This athlete is under ${YOUTH_SAFE_MIN_AGE}: work on technique before load, and use estimated maxes.`;
-/** The same note for a group that includes somebody under 14. */
-export const UNDER_14_LOADING_NOTE_GROUP = `Some of these athletes are under ${YOUTH_SAFE_MIN_AGE}: work on technique before load, and use estimated maxes.`;
-
-/** True when a known age is under the youth line (the tags build's YOUTH_SAFE_MIN_AGE). Unknown is not young. */
-export function isUnderYouthAge(age: number | null | undefined): boolean {
-  return age != null && age < YOUTH_SAFE_MIN_AGE;
-}
+/**
+ * The loading note, the same for every athlete. Scott, 2026-11-22: "age doesn't matter in the
+ * weight room, its about weight room proficiency, a 12 year old can back squat the bar if a) they
+ * are strong enough to hold 45lbs on their backs, and b) they can show that they can do a back
+ * squat correctly and safely". Never blocks, never names an age.
+ */
+export const PROFICIENCY_LOADING_NOTE = "Add load once each athlete can hold the bar and do the lift correctly and safely.";
 
 /** True when a program is a return-to-training program (its purposes carry the tag). */
 export function isReturnToTrainingProgram(p: { purposes?: readonly string[] | null }): boolean {

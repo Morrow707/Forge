@@ -24,7 +24,7 @@ import { eq, isNull, and, asc, sql } from "drizzle-orm";
 import { normalizeInjuryRegion } from "@shared/injury-taxonomy";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
 import { seedForgeClasses } from "./seed-forge-classes";
-import { postSeasonProgramsOnce, seedSeasonPrograms } from "./seed-season-programs";
+import { postSeasonProgramsOnce, rewriteSeasonProgramAgeLinesOnce, seedSeasonPrograms } from "./seed-season-programs";
 import { COACHES_CORNER_TRACKS_2026_10, COACHES_CORNER_TRACKS_2026_10_04, COACHES_CORNER_TRACKS_2026_11, COACHES_CORNER_PATHS_2026_10 } from "./seed-data/coaches-corner";
 import { seedResearchReview } from "./seed-research-review";
 import { COACHES_CORNER_TRACKS_ORIGINAL } from "./seed-data/coaches-corner/original-seven";
@@ -3417,6 +3417,14 @@ async function main() {
   }
   const postedSeasonPrograms = await postSeasonProgramsOnce(libraryOwner.id);
   if (postedSeasonPrograms !== null) console.log(`Posted ${postedSeasonPrograms} Forge season program(s) (one time, on Scott's word).`);
+  // The age lines come out of the programs already stored (2026-11-22, Scott: "age doesn't matter
+  // in the weight room, its about weight room proficiency"). Exact-match guarded, once.
+  const ageLines = await rewriteSeasonProgramAgeLinesOnce(libraryOwner.id);
+  if (ageLines !== null) {
+    console.log(
+      `Season program age lines: rewrote ${ageLines.descriptions} description(s) and ${ageLines.layerNotes} layer note(s); left ${ageLines.leftAlone} edited text(s) alone.`,
+    );
+  }
 
   // One-time production fixup: promote scott.morrow@live.com to admin and
   // hand over the exercise library so it becomes the official Forge-branded

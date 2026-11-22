@@ -4,7 +4,7 @@ import {
   PRESEASON_MAX_WEEKS,
   addDays,
   isReturnToTrainingProgram,
-  isUnderYouthAge,
+  PROFICIENCY_LOADING_NOTE,
   positionMatchesProgram,
   proposeSeasonPlan,
   repeatsToFill,
@@ -98,10 +98,11 @@ describe("the step's small rules", () => {
     expect(suggestTeamGender(["prefer_not_to_say", null])).toBeNull();
   });
 
-  it("under 14 is a known age under the tags build's line; unknown is not young", () => {
-    expect(isUnderYouthAge(13)).toBe(true);
-    expect(isUnderYouthAge(14)).toBe(false);
-    expect(isUnderYouthAge(null)).toBe(false);
+  it("the loading note is about proficiency and names no age (Scott, 2026-11-22)", () => {
+    expect(PROFICIENCY_LOADING_NOTE).toContain("correctly and safely");
+    // Any digit at all: rejects "under 14" and "14 and older"; accepts the note as written.
+    // https://regex101.com/?regex=%5Cd&testString=under%2014
+    expect(PROFICIENCY_LOADING_NOTE).not.toMatch(/\d/);
   });
 
   it("a return-to-training program is the one carrying the purpose", () => {

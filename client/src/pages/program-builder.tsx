@@ -99,7 +99,6 @@ import {
   warmupPayload,
   type LocalWarmup,
 } from "@/components/day-warmup-editor";
-import { YOUTH_HELD_BACK_NOTE } from "@shared/exercise-tags";
 
 type RosterEntry = { id: number; name: string; email: string };
 type ScheduleDay = {
@@ -159,10 +158,9 @@ type LocalExercise = {
   // button entirely (unless it's already on -- see the render site).
   videoEligible: boolean | null;
   // Tags carried for the screen only (2026-11-22): what "Add care drills" reads to find the joints
-  // a day loads, and the caution and youth notes under the row. Never sent back on save.
+  // a day loads, and the caution note under the row. Never sent back on save.
   muscleGroup?: string | null;
   joints?: string[] | null;
-  youthSafe?: boolean | null;
   cautionNote?: string | null;
 };
 
@@ -189,7 +187,6 @@ function localExerciseFrom(exercise: Exercise): LocalExercise {
     videoEligible: exercise.videoEligible ?? null,
     muscleGroup: exercise.muscleGroup ?? null,
     joints: exercise.joints ?? null,
-    youthSafe: exercise.youthSafe ?? null,
     cautionNote: exercise.cautionNote ?? null,
   };
 }
@@ -353,7 +350,6 @@ function stateFromProgram(program: any) {
             videoEligible: pe.exercise.videoEligible ?? null,
             muscleGroup: pe.exercise.muscleGroup ?? null,
             joints: pe.exercise.joints ?? null,
-            youthSafe: pe.exercise.youthSafe ?? null,
             cautionNote: pe.exercise.cautionNote ?? null,
           })),
         ) as LocalExercise[],
@@ -421,13 +417,6 @@ export function ProgramBuilderPage({
   const [careForDay, setCareForDay] = useState<string | null>(null);
   const [warmupPickerForDay, setWarmupPickerForDay] = useState<string | null>(null);
   const [warmupProgramForDay, setWarmupProgramForDay] = useState<string | null>(null);
-  // Whether this program is for an athlete under 14 (shared/exercise-tags.ts). Flags, never blocks.
-  const { data: youthAudience } = useQuery<{ forYouth: boolean }>({
-    queryKey: [`${apiBase}/programs`, programId, "youth-audience"],
-    queryFn: () => getJson(`${apiBase}/programs/${programId}/youth-audience`),
-    enabled: Number.isFinite(programId),
-  });
-  const forYouth = youthAudience?.forYouth === true;
   const [hydrated, setHydrated] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -986,7 +975,6 @@ export function ProgramBuilderPage({
                           onAddWarmupDrill={() => setWarmupPickerForDay(day.key)}
                           onUseWarmupProgram={() => setWarmupProgramForDay(day.key)}
                           onRemove={() => removeDay(day.key)}
-                          forYouth={forYouth}
                         />
                       ))}
                     </div>
@@ -1036,7 +1024,6 @@ export function ProgramBuilderPage({
         apiBase={apiBase}
         open={pickerForDay !== null}
         onOpenChange={(open) => !open && setPickerForDay(null)}
-        forYouth={forYouth}
         onSelect={(exercise: Exercise) => {
           if (!pickerForDay) return;
           updateDay(pickerForDay, (d) => ({
@@ -1054,7 +1041,6 @@ export function ProgramBuilderPage({
         initialSearch="warmup"
         open={warmupPickerForDay !== null}
         onOpenChange={(open) => !open && setWarmupPickerForDay(null)}
-        forYouth={forYouth}
         onSelect={(exercise: Exercise) => {
           if (!warmupPickerForDay) return;
           updateDay(warmupPickerForDay, (d) => {
@@ -1085,7 +1071,7 @@ export function ProgramBuilderPage({
           muscleGroup: ex.muscleGroup ?? null,
           joints: ex.joints ?? null,
         }))}
-        program={{ ...programTagPayload(tags), forYouth }}
+        program={programTagPayload(tags)}
         onAccept={(chosen: Exercise[]) => {
           if (!careForDay) return;
           updateDay(careForDay, (d) => ({
@@ -1233,7 +1219,6 @@ function DayCard({
   onAddWarmupDrill,
   onUseWarmupProgram,
   onRemove,
-  forYouth = false,
 }: {
   day: LocalDay;
   dayNumber: number;
@@ -1246,7 +1231,6 @@ function DayCard({
   /** Opens "Use a warm-up program" for this day. */
   onUseWarmupProgram: () => void;
   onRemove: () => void;
-  forYouth?: boolean;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const exerciseLabels = computeExerciseLabels(day.exercises);
@@ -1332,7 +1316,6 @@ function DayCard({
                     <div key={ex.key} className="space-y-1">
                       <SortableExerciseRow
                         exercise={ex}
-                        forYouth={forYouth}
                         label={exerciseLabels[ex.key]}
                         onUpdate={(patch) =>
                           onChange((d) => ({
@@ -1450,13 +1433,11 @@ function SortableExerciseRow({
   label,
   onUpdate,
   onRemove,
-  forYouth = false,
 }: {
   exercise: LocalExercise;
   label: string;
   onUpdate: (patch: Partial<LocalExercise>) => void;
   onRemove: () => void;
-  forYouth?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: exercise.key });
@@ -1513,13 +1494,6 @@ function SortableExerciseRow({
       {roomMarker && (
         <p className="mb-2 text-xs text-amber-500" data-testid={`room-marker-${exercise.key}`}>
           {roomMarker}
-        </p>
-      )}
-      {/* YOUTH (2026-11-22): placed by hand on a program for an under-14, so it stays; the coach
-          is told, never refused. */}
-      {forYouth && exercise.youthSafe === false && (
-        <p className="mb-2 text-xs text-amber-500" data-testid={`youth-note-${exercise.key}`}>
-          {YOUTH_HELD_BACK_NOTE}
         </p>
       )}
       <CautionNote note={exercise.cautionNote} className="mb-2" />

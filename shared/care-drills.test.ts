@@ -3,7 +3,7 @@ import { MAX_CARE_SUGGESTIONS, MIN_CARE_SUGGESTIONS, dayJointLoad, suggestCareDr
 
 /**
  * "Add care drills" (Scott, 2026-11-22): two to four joint-care drills for the joints a day loads
- * most, then the program's sport and positions, youth-filtered for a program for under-14s. A
+ * most, then the program's sport and positions. Never filtered by age. A
  * proposal only; the builder adds nothing without the coach's tap.
  */
 const ROWS = [
@@ -13,7 +13,7 @@ const ROWS = [
   { name: "Spanish Squat Hold", joints: ["knee"], purposes: ["care"] },
   { name: "Copenhagen Plank", joints: ["hip"], purposes: ["care"], sports: ["Soccer"] },
   { name: "Band Pull-Apart", joints: ["shoulder"], purposes: ["care"], positions: ["pitcher"] },
-  { name: "Depth Drop Landing", joints: ["knee", "ankle"], purposes: ["care"], youthSafe: false },
+  { name: "Depth Drop Landing", joints: ["knee", "ankle"], purposes: ["care"] },
   { name: "Wrist Circles", joints: ["wrist"], purposes: ["warmup"] },
   { name: "Neck Isometrics", joints: ["neck"], purposes: ["care"] },
 ];
@@ -44,12 +44,6 @@ describe("care drill suggestions", () => {
     const r = suggestCareDrills(legDay, LIB);
     expect(names(r)).not.toContain("Wrist Circles");
     expect(names(r)).not.toContain("Back Squat");
-  });
-
-  it("holds back a drill marked not for under-14s on a program for one", () => {
-    const r = suggestCareDrills(legDay, LIB, { forYouth: true });
-    expect(names(r)).not.toContain("Depth Drop Landing");
-    expect(names(r)[0]).toBe("Spanish Squat Hold");
   });
 
   it("the program's sport and positions break the tie for a day that loads nothing tagged", () => {

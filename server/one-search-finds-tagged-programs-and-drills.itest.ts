@@ -2,7 +2,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { storage } from "./storage";
 import { makeAssignedProgram, makeAthlete, makeExercise, resetDatabase } from "./test-support/fixtures";
 import { addToRoster, loginAs, makeLoginableUser, startTestServer, type TestServer } from "./test-support/http-app";
-import { keepForAge, YOUTH_SAFE_MIN_AGE } from "@shared/exercise-tags";
 
 /**
  * ONE SEARCH FINDS EVERYTHING, ON REAL ROWS (2026-11-22).
@@ -10,7 +9,7 @@ import { keepForAge, YOUTH_SAFE_MIN_AGE } from "@shared/exercise-tags";
  * Scott: warm-up, joint-care and return-to-training drills live in the ordinary library and one
  * search finds them. The pure scorers are tested in shared/; this drives the program list routes'
  * `?q=` against programs saved through the real create and update routes, the exercise tags through
- * the real exercise route, and the youth classification against real dates of birth.
+ * the real exercise route, and that a twelve-year-old is offered the whole library.
  */
 let server: TestServer;
 beforeAll(async () => {
@@ -27,17 +26,14 @@ const OK = 200;
 const CREATED = 201;
 const FIRST_NON_SUCCESS = 300;
 const BAD_REQUEST = 400;
-const NOT_FOUND = 404;
-const ADULT = 30;
-/** Two years under the youth line: a 12-year-old today. */
-const YEARS_UNDER_THE_LINE = 2;
+/** Scott's own example: "a 12 year old can back squat the bar". */
+const YOUNG = 12;
 const PROGRAMS_MADE = 4;
 const LIBRARY_SIZE = 3;
 
 const thisYear = new Date().getUTCFullYear();
 /** A date of birth that is this many whole years ago today (born on 1 January). */
 const bornYearsAgo = (years: number) => `${thisYear - years}-01-01`;
-const YOUNG = YOUTH_SAFE_MIN_AGE - YEARS_UNDER_THE_LINE;
 
 const emptyProgram = (name: string, tags: Record<string, unknown> = {}) => ({ name, weeks: [], ...tags });
 
@@ -171,71 +167,21 @@ describe("exercise tags through the real exercise route", () => {
   });
 });
 
-describe("youth-safe: what Forge offers an athlete under 14", () => {
-  async function library(coachId: number) {
-    const safe = await makeExercise(coachId, { name: "Goblet Squat", youthSafe: true });
-    const unclassified = await makeExercise(coachId, { name: "Back Squat" });
-    const held = await makeExercise(coachId, { name: "Depth Jump", youthSafe: false });
-    return { safe, unclassified, held };
-  }
-
-  it("a program assigned to a 12-year-old is for youth; to an adult it is not", async () => {
+describe("no exercise is held back for an athlete's age (Scott, 2026-11-22: proficiency, not age)", () => {
+  it("a coach's library offers every exercise, whatever the column says, and the youth route is gone", async () => {
     const coach = await makeLoginableUser({ role: "coach" });
     const client = await loginAs(server.baseUrl, coach);
-    const { safe } = await library(coach.id);
-    const young = await makeAthlete({ dateOfBirth: bornYearsAgo(YOUNG) });
-    const adult = await makeAthlete({ dateOfBirth: bornYearsAgo(ADULT) });
-    const forYoung = await makeAssignedProgram({ coachId: coach.id, athleteId: young.id, exerciseIds: [safe.id] });
-    const forAdult = await makeAssignedProgram({ coachId: coach.id, athleteId: adult.id, exerciseIds: [safe.id] });
-
-    const youngRes = await client.get(`/api/coach/programs/${forYoung.program.id}/youth-audience`);
-    expect(youngRes.status).toBe(OK);
-    expect(youngRes.body).toEqual({ forYouth: true });
-    const adultRes = await client.get(`/api/coach/programs/${forAdult.program.id}/youth-audience`);
-    expect(adultRes.body).toEqual({ forYouth: false });
-  });
-
-  it("with no assignment yet, the coach's roster decides; an unknown birthday is not a child", async () => {
-    const coach = await makeLoginableUser({ role: "coach" });
-    const client = await loginAs(server.baseUrl, coach);
-    const created = await client.post("/api/coach/programs", emptyProgram("New Block"));
-    const noBirthday = await makeAthlete({ dateOfBirth: null });
-    await addToRoster(coach.id, noBirthday.id);
-    expect((await client.get(`/api/coach/programs/${created.body.id}/youth-audience`)).body.forYouth).toBe(false);
-
+    const safe = await makeExercise(coach.id, { name: "Goblet Squat", youthSafe: true });
+    await makeExercise(coach.id, { name: "Back Squat" });
+    await makeExercise(coach.id, { name: "Depth Jump", youthSafe: false });
     const young = await makeAthlete({ dateOfBirth: bornYearsAgo(YOUNG) });
     await addToRoster(coach.id, young.id);
-    expect((await client.get(`/api/coach/programs/${created.body.id}/youth-audience`)).body.forYouth).toBe(true);
-  });
+    const assigned = await makeAssignedProgram({ coachId: coach.id, athleteId: young.id, exerciseIds: [safe.id] });
 
-  it("another coach cannot ask about a program that is not theirs", async () => {
-    const coach = await makeLoginableUser({ role: "coach" });
-    const client = await loginAs(server.baseUrl, coach);
-    const created = await client.post("/api/coach/programs", emptyProgram("Mine"));
-    const other = await makeLoginableUser({ role: "coach" });
-    const otherClient = await loginAs(server.baseUrl, other);
-    expect((await otherClient.get(`/api/coach/programs/${created.body.id}/youth-audience`)).status).toBe(NOT_FOUND);
-  });
-
-  it("the library Forge picks from for a 12-year-old drops only the exercise marked not for them", async () => {
-    const coach = await makeLoginableUser({ role: "coach" });
-    await library(coach.id);
-    const young = await makeAthlete({ dateOfBirth: bornYearsAgo(YOUNG) });
-    const visible = await storage.getVisibleExercisesForCoach(coach.id);
-    const age = await storage.knownAgeOf(young.id);
-    expect(age).toBe(YOUNG);
-    const offered = keepForAge(visible, age).map((e) => e.name).sort();
-    expect(offered).toEqual(["Back Squat", "Goblet Squat"]);
-    // An adult, and somebody with no birthday on file, are offered everything.
-    expect(keepForAge(visible, ADULT)).toHaveLength(LIBRARY_SIZE);
-    const noBirthday = await makeAthlete({ dateOfBirth: null });
-    expect(keepForAge(visible, await storage.knownAgeOf(noBirthday.id))).toHaveLength(LIBRARY_SIZE);
-  });
-
-  it("a Free Agent's own age decides their own program", async () => {
-    const youngFa = await makeAthlete({ dateOfBirth: bornYearsAgo(YOUNG) });
-    const adultFa = await makeAthlete({ dateOfBirth: bornYearsAgo(ADULT) });
-    expect(await storage.programIsForYouth(null, youngFa.id)).toBe(true);
-    expect(await storage.programIsForYouth(null, adultFa.id)).toBe(false);
+    const visible = (await storage.getVisibleExercisesForCoach(coach.id)).map((e) => e.name).sort();
+    expect(visible).toEqual(["Back Squat", "Depth Jump", "Goblet Squat"]);
+    expect(visible).toHaveLength(LIBRARY_SIZE);
+    const route = await client.get(`/api/coach/programs/${assigned.program.id}/youth-audience`);
+    expect(route.status).toBeGreaterThanOrEqual(FIRST_NON_SUCCESS);
   });
 });

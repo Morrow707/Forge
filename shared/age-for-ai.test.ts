@@ -23,24 +23,17 @@ describe("age from a real birthdate", () => {
 });
 
 describe("how an athlete's age is stated to a coaching AI", () => {
-  it("names a minor as one rather than leaving it to be inferred", () => {
-    // The programming prompt's age rules were gated on "any signal the
-    // athlete isn't a physically mature adult". A bare number is a signal the
-    // model has to interpret; this does not leave that to chance.
-    const line = ageLineForAi("2012-09-06", null, NOW);
-    expect(line).toContain("14");
-    expect(line).toContain("MINOR");
-  });
-
-  it("says nothing extra for an adult", () => {
+  it("states the age as a fact and attaches no training rule to it (Scott, 2026-11-22)", () => {
+    // Readiness to load is weight-room proficiency, never age, so a minor's
+    // line carries no instruction the adult's does not.
+    expect(ageLineForAi("2012-09-06", null, NOW)).toBe("14");
     expect(ageLineForAi("1996-04-02", null, NOW)).toBe("30");
   });
 
   it("prefers the birthdate over the self-reported snapshot", () => {
     // users.age is written by a profile edit and goes stale as a season
     // passes; dateOfBirth cannot.
-    expect(ageLineForAi("2012-09-06", 25, NOW)).toContain("14");
-    expect(ageLineForAi("2012-09-06", 25, NOW)).toContain("MINOR");
+    expect(ageLineForAi("2012-09-06", 25, NOW)).toBe("14");
   });
 
   it("falls back to the snapshot only when there is no birthdate", () => {
@@ -53,10 +46,5 @@ describe("how an athlete's age is stated to a coaching AI", () => {
 
   it("says not set rather than guessing an adult", () => {
     expect(ageLineForAi(null, null, NOW)).toBe("not set");
-  });
-
-  it("treats the day before an 18th birthday as a minor", () => {
-    expect(ageLineForAi("2008-09-07", null, NOW)).toContain("MINOR");
-    expect(ageLineForAi("2008-09-06", null, NOW)).not.toContain("MINOR");
   });
 });
