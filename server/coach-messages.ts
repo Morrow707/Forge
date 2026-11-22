@@ -196,6 +196,15 @@ async function threadSummaries(readerId: number, side: "coach" | "athlete") {
   };
 }
 
+/** Unread messages in this coach's own readable threads, per athlete, by the same rule the
+ *  Messages page draws (used by the dashboard's "needs you today" lines). */
+export async function unreadForCoach(coachId: number): Promise<Map<number, number>> {
+  const { unread } = await threadSummaries(coachId, "coach");
+  const candidates = Array.from(unread.entries()).filter(([athleteId, n]) => n > 0 && athleteId !== coachId);
+  const rels = await Promise.all(candidates.map(([athleteId]) => coachingRelationship(coachId, athleteId)));
+  return new Map(candidates.filter((_, i) => threadIsReadable(rels[i].state)));
+}
+
 async function namesFor(ids: number[]) {
   if (ids.length === 0) return new Map<number, string>();
   const rows = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, ids));
