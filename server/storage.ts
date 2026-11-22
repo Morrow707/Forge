@@ -480,6 +480,8 @@ import {
   withResolvedWarmups,
 } from "./program-day-warmup";
 import { normalizeWarmupBlock, type WarmupBlock } from "@shared/program-day-warmup";
+import { swapsForDay, type ProgramLayers } from "@shared/season-program-layers";
+import { describeLayersForDay, layerCareFor, layerWarmupItemsFor, layersForAssignment } from "./season-program-layers";
 import { keepForRoom, roomAllows } from "@shared/exercise-needs";
 import { SET_BLOB_COLUMNS_EXCLUDED } from "./set-blob-columns";
 import {
@@ -1479,6 +1481,13 @@ const NUTRITION_SUPPLEMENT_PRINCIPLES = `- Creatine monohydrate is the most-rese
  * send is left as it is (undefined is skipped by drizzle), so an older client saving a program
  * never clears tags a newer one set; an explicit null or an empty list clears it.
  */
+// A day's resolved warm-up with a layer's extra drills after it. A day with no warm-up of its own
+// gets a block holding only the extra drills.
+function withLayerWarmup<B extends { note: string | null; items: unknown[] }, I>(block: B | null, extra: I[]) {
+  if (extra.length === 0) return block;
+  return block ? { ...block, items: [...block.items, ...extra] } : { note: null, items: extra };
+}
+
 function programTagColumns(structure: ProgramStructureInput) {
   const listOrNull = (v: readonly string[] | null | undefined) => {
     if (v == null) return v;
@@ -17610,9 +17619,12 @@ Hard rules, no exceptions:
     return row ?? null;
   },
 
+  // `options` is for the season-program seed (server/seed-season-programs.ts): a Forge program it
+  // creates starts UNPOSTED and carries its position and team layers. Every other caller omits it.
   async createProgramWithStructure(
     coachId: number,
     structure: ProgramStructureInput,
+    options: { isPublished?: boolean; layers?: ProgramLayers | null } = {},
   ) {
     const allExercises = structure.weeks.flatMap((w) => w.days.flatMap((d) => d.exercises));
     await this.assertExerciseIdsVisibleTo(coachId, [
@@ -17629,6 +17641,8 @@ Hard rules, no exceptions:
           name: structure.name,
           description: structure.description ?? null,
           ...programTagColumns(structure),
+          ...(options.isPublished === undefined ? {} : { isPublished: options.isPublished }),
+          ...(options.layers ? { layers: options.layers } : {}),
         })
         .returning();
 
@@ -21632,6 +21646,25 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     return row;
   },
 
+  // The position and team layers on one of a coach's assigned days (2026-11-22): the same answer
+  // getWorkoutDayDetail applies for the athlete, described for the coach's day dialog. Undefined
+  // when the assignment is not the coach's or the day is not in its program.
+  async getAssignmentDayLayersForCoach(coachId: number, assignmentId: number, programDayId: number) {
+    const assignment = await this.getAssignmentForCoach(coachId, assignmentId);
+    if (!assignment) return undefined;
+    const [program] = await db
+      .select({ id: programs.id, layers: programs.layers })
+      .from(programs)
+      .where(eq(programs.id, assignment.programId));
+    const day = await db.query.programDays.findFirst({
+      where: eq(programDays.id, programDayId),
+      with: { exercises: true, week: true },
+    });
+    if (!program || !day || day.week.programId !== program.id) return undefined;
+    const layers = await layersForAssignment(program.layers, assignmentId);
+    return describeLayersForDay(layers, day.exercises.map((pe) => pe.exerciseId));
+  },
+
   // Exact mirror of getAssignmentForCoach for the skill side, used by the
   // coach's skill-day comment routes.
   async getSkillAssignmentForCoach(coachId: number, skillAssignmentId: number) {
@@ -24063,6 +24096,13 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     });
     const overrideByProgramExerciseId = new Map(overrides.map((o) => [o.programExerciseId, o]));
 
+    // THE PROGRAM'S POSITION AND TEAM LAYERS (2026-11-22), from this assignment's season setup:
+    // a position swap replaces an exercise the day really holds (the athlete's own swap above
+    // still wins), its care drills follow the main work, and a girls' team gets the extra warm-up
+    // drills. program_exercises is never touched. See shared/season-program-layers.ts.
+    const layers = await layersForAssignment(assignment.program.layers, assignmentId);
+    const layerSwapByExerciseId = swapsForDay(layers.position, day.exercises.map((pe) => pe.exerciseId));
+
     // And this athlete's own "this is too hard" regressions for this date (see
     // assignment_exercise_regressions). Same occurrence-scoped shape as the
     // overrides above; this one lowers the prescription instead of replacing the
@@ -24093,11 +24133,13 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     const todayReadiness = todayCheckin ? computeReadiness(todayCheckin) : null;
     const exercisesWithHistory = day.exercises.map((pe) => {
       const override = overrideByProgramExerciseId.get(pe.id);
+      const layerSwap = override ? undefined : layerSwapByExerciseId.get(pe.exerciseId);
+      const layerExercise = layerSwap ? layers.exerciseById.get(layerSwap.withExerciseId) : undefined;
       // Sets/reps/rest/notes stay the coach's prescription -- only which
       // exercise fills the slot changes, so lastPerformance/setHistory
       // follow the substitute (what the athlete is actually about to log)
       // rather than the original.
-      const effectiveExercise = override ? override.substituteExercise : pe.exercise;
+      const effectiveExercise = override ? override.substituteExercise : layerExercise ?? pe.exercise;
       const { lastPerformance, setHistory } = extractPerformanceHistory(
         recentLogs,
         effectiveExercise.id,
@@ -24111,6 +24153,9 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
         ...pe,
         exercise: effectiveExercise,
         substitutedFrom: override ? pe.exercise.name : null,
+        // A position layer's swap, with the reason and the label the screens show.
+        layerSwappedFrom:
+          layerSwap && layerExercise ? { name: pe.exercise.name, reason: layerSwap.reason, label: layers.labels[0] ?? null } : null,
         sets: regression ? regression.sets : pe.sets,
         reps: regression ? regression.reps : pe.reps,
         regression: regression
@@ -24185,10 +24230,19 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
       correctivesEnabled: assignment.correctivesEnabled,
       day: {
         ...dayFields,
-        // The warm-up block, with each drill's name, shown first on the workout screen.
-        warmup: await resolveWarmupBlock(dayFields.warmup),
+        // The warm-up block, with each drill's name, shown first on the workout screen, plus a
+        // girls' team's extra drills from the program's layer.
+        warmup: withLayerWarmup(await resolveWarmupBlock(dayFields.warmup), layerWarmupItemsFor(layers)),
         weekNumber: week.weekNumber,
         exercises: withProgramDemos(exercisesWithHistory),
+        // A position layer's extra care drills, after the main work. Shown, not logged.
+        layerCare: layerCareFor(layers),
+      },
+      // The layer labels ("Position: pitcher", "Girls' team") and their notes.
+      layers: {
+        labels: layers.labels,
+        positionNote: layers.position?.note ?? null,
+        girlsTeamNote: layers.girlsTeam?.note ?? null,
       },
       correctives: withProgramDemos(correctivesWithHistory),
       // warmupDone is the day's one "Warm-up done" tick (workout_log_warmups).

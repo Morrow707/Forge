@@ -155,6 +155,7 @@ import { CautionNote } from "@/components/exercise-tags";
 import { WorkoutWarmupBlock } from "@/components/workout-warmup-block";
 import { warmupHasItems, type ResolvedWarmupBlock } from "@shared/program-day-warmup";
 import { useAssignmentRestrictionNote } from "@/lib/use-assignment-restrictions";
+import { WorkoutLayerCare, WorkoutLayerLabels, type DayLayers, type LayerCareDrill } from "@/components/workout-layer-panels";
 
 type ExerciseInfo = {
   id: number;
@@ -329,6 +330,8 @@ type PrescribedExercise = {
   // today's flagged pain (see the restricted-workout banner below) -- null
   // for anything still as prescribed.
   substitutedFrom: string | null;
+  // Set when the program's position layer swapped this exercise for this athlete (2026-11-22).
+  layerSwappedFrom?: { name: string; reason: string | null; label: string | null } | null;
   // Set when the athlete has asked for an easier version of this slot today (see
   // assignment_exercise_regressions). sets/reps above are already the lowered
   // numbers; this carries what the coach prescribed, so the card can show both.
@@ -642,7 +645,11 @@ type DayDetail = {
     // The day's warm-up block (2026-11-22), shown first; null when the day has none.
     warmup?: ResolvedWarmupBlock | null;
     exercises: PrescribedExercise[];
+    // A position layer's extra care drills, after the main work (2026-11-22). Display only.
+    layerCare?: LayerCareDrill[];
   };
+  // The program's layers applied to this assignment ("Position: pitcher", "Girls' team").
+  layers?: DayLayers;
   correctives: PrescribedCorrective[];
   // revision is the optimistic-concurrency token -- see workoutLogs.revision in
   // shared/schema.ts. Every payload carries the revision it was built from, and a
@@ -681,6 +688,7 @@ export type ItemState = {
   exerciseId: number;
   exerciseName: string;
   substitutedFrom: string | null;
+  layerSwappedFrom: PrescribedExercise["layerSwappedFrom"];
   regression: PrescribedExercise["regression"];
   muscleGroup: string;
   equipment: string;
@@ -793,6 +801,7 @@ function buildItem(
     exerciseId: prescribed.exercise.id,
     exerciseName: prescribed.exercise.name,
     substitutedFrom: kind === "exercise" ? (prescribed as PrescribedExercise).substitutedFrom : null,
+    layerSwappedFrom: kind === "exercise" ? ((prescribed as PrescribedExercise).layerSwappedFrom ?? null) : null,
     regression: kind === "exercise" ? ((prescribed as PrescribedExercise).regression ?? null) : null,
     muscleGroup: prescribed.exercise.muscleGroup,
     equipment: prescribed.exercise.equipment,
@@ -2895,6 +2904,7 @@ export function WorkoutPage({
             )}
             {/* THE WARM-UP COMES FIRST (2026-11-22), with one tick for the block. It saves with the
                 day like any other edit and never holds back the main work below it. */}
+            <WorkoutLayerLabels layers={data.layers} />
             {data.day.warmup && warmupHasItems(data.day.warmup) && (
               <WorkoutWarmupBlock
                 warmup={data.day.warmup}
@@ -3114,6 +3124,7 @@ export function WorkoutPage({
                 </div>
               </>
             )}
+            <WorkoutLayerCare drills={data.day.layerCare} />
           </div>
         </div>
       )}
@@ -3670,6 +3681,15 @@ function ExerciseLogContent({
             superset link mark, and the per-exercise controls. */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
+            {item.layerSwappedFrom && (
+              <Badge
+                variant="secondary"
+                className="shrink-0 text-[10px]"
+                title={`${item.layerSwappedFrom.label ?? "Position"}: in place of ${item.layerSwappedFrom.name}${item.layerSwappedFrom.reason ? `. ${item.layerSwappedFrom.reason}` : ""}`}
+              >
+                {item.layerSwappedFrom.label ?? "Position swap"}
+              </Badge>
+            )}
             {item.substitutedFrom && (
               <Badge
                 variant="secondary"

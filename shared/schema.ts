@@ -39,6 +39,7 @@ import {
   MAX_WARMUP_SETS,
   type WarmupBlock,
 } from "./program-day-warmup";
+import type { ProgramLayers } from "./season-program-layers";
 import {
   EXERCISE_JOINTS,
   EXERCISE_PURPOSES,
@@ -2233,6 +2234,11 @@ export const programs = pgTable("programs", {
   joints: json("joints").$type<string[]>(),
   // What it is for, from EXERCISE_PURPOSES (a warm-up program, a return-to-training program).
   purposes: json("purposes").$type<string[]>(),
+  // Position and team LAYERS (2026-11-22) on a Forge season program: per position, exercises to
+  // swap and care drills to add; for a girls' team, warm-up drills to add. Applied for one athlete
+  // on read from their assignment's season setup; the program itself is never changed by them.
+  // Null = no layers. Shape and rules in shared/season-program-layers.ts.
+  layers: json("layers").$type<ProgramLayers>(),
 });
 
 // A named, phase-tagged span of one or more weeks within a program (e.g.

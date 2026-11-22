@@ -24,6 +24,7 @@ import { eq, isNull, and, asc, sql } from "drizzle-orm";
 import { normalizeInjuryRegion } from "@shared/injury-taxonomy";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
 import { seedForgeClasses } from "./seed-forge-classes";
+import { seedSeasonPrograms } from "./seed-season-programs";
 import { COACHES_CORNER_TRACKS_2026_10, COACHES_CORNER_TRACKS_2026_10_04, COACHES_CORNER_TRACKS_2026_11, COACHES_CORNER_PATHS_2026_10 } from "./seed-data/coaches-corner";
 import { seedResearchReview } from "./seed-research-review";
 import { COACHES_CORNER_TRACKS_ORIGINAL } from "./seed-data/coaches-corner/original-seven";
@@ -3403,6 +3404,17 @@ async function main() {
   // The throwing-workload exercises (2026-11-22) live in their own module; see its header.
   const throwingCreated = await seedThrowingWorkloadExercises(libraryOwner.id);
   if (throwingCreated > 0) console.log(`Created ${throwingCreated} throwing-workload exercise(s).`);
+
+  // THE FORGE SEASON PROGRAMS (2026-11-22), after the library review so every name resolves
+  // against the library as it is now. Created once by name, UNPOSTED until Scott posts each one.
+  // See server/seed-season-programs.ts.
+  const seasonPrograms = await seedSeasonPrograms(libraryOwner.id);
+  if (seasonPrograms.created.length > 0) {
+    console.log(`Created ${seasonPrograms.created.length} Forge season program(s), unposted.`);
+  }
+  if (seasonPrograms.unresolved.length > 0) {
+    console.warn(`Season programs: ${seasonPrograms.unresolved.length} exercise name(s) not in the visible library were skipped.`);
+  }
 
   // One-time production fixup: promote scott.morrow@live.com to admin and
   // hand over the exercise library so it becomes the official Forge-branded

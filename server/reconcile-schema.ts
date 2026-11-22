@@ -548,6 +548,10 @@ ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "season_phase" text;
 ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "positions" json;
 ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "joints" json;
 ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "purposes" json;
+-- Position and team layers (2026-11-22), the Forge season programs' swaps, extra care drills and
+-- girls'-team warm-up additions, applied per assignment on read (shared/season-program-layers.ts).
+-- Nullable; a program with no layers reads exactly as before.
+ALTER TABLE "programs" ADD COLUMN IF NOT EXISTS "layers" json;
 
 CREATE TABLE IF NOT EXISTS "program_blocks" (
   "id" serial PRIMARY KEY,

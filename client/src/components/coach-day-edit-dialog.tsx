@@ -33,6 +33,55 @@ import { Plus, Trash2, MoonStar, Link2, Stethoscope, Copy, Clock, Repeat, LineCh
 import type { Exercise } from "@shared/schema";
 import { ReadFailed } from "@/components/read-failed";
 
+// What the program's position and team layers do to this athlete's day (2026-11-22). The server's
+// answer for the athlete, described for the coach: GET .../days/:programDayId/layers.
+type DayLayersForCoach = {
+  labels: string[];
+  positionNote: string | null;
+  girlsTeamNote: string | null;
+  swaps: { from: string; to: string; reason: string | null }[];
+  addCare: { name: string; prescription: string }[];
+  addWarmup: { name: string; prescription: string }[];
+};
+
+function AthleteLayersPanel({ layers, athleteName }: { layers: DayLayersForCoach | undefined; athleteName?: string }) {
+  if (!layers || layers.labels.length === 0) return null;
+  const notes = [layers.positionNote, layers.girlsTeamNote].filter((n): n is string => !!n);
+  return (
+    <div className="space-y-2 rounded-md border p-3 text-sm" data-testid="coach-day-layers">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-medium">For {athleteName ?? "this athlete"}:</span>
+        {layers.labels.map((label) => (
+          <Badge key={label} variant="secondary">
+            {label}
+          </Badge>
+        ))}
+      </div>
+      {layers.swaps.map((sw) => (
+        <p key={`${sw.from}-${sw.to}`}>
+          {sw.to} in place of {sw.from}
+          {sw.reason ? <span className="text-muted-foreground">. {sw.reason}</span> : null}
+        </p>
+      ))}
+      {layers.addWarmup.length > 0 && (
+        <p>
+          Warm-up adds: {layers.addWarmup.map((w) => (w.prescription ? `${w.name} ${w.prescription}` : w.name)).join("; ")}
+        </p>
+      )}
+      {layers.addCare.length > 0 && (
+        <p>
+          End-of-session care adds: {layers.addCare.map((c) => (c.prescription ? `${c.name} ${c.prescription}` : c.name)).join("; ")}
+        </p>
+      )}
+      {notes.map((note) => (
+        <p key={note} className="text-xs text-muted-foreground">
+          {note}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 type TrackingLevel =
   | "none"
   | "bar_path"
@@ -162,6 +211,12 @@ export function CoachDayEditDialog({
       );
       return res.json();
     },
+    enabled: open && assignmentId != null && programDayId != null,
+  });
+
+  const { data: dayLayers } = useQuery<DayLayersForCoach>({
+    queryKey: ["/api/coach/assignments", assignmentId, "days", programDayId, "layers"],
+    queryFn: () => getJson(`/api/coach/assignments/${assignmentId}/days/${programDayId}/layers`),
     enabled: open && assignmentId != null && programDayId != null,
   });
 
@@ -407,6 +462,7 @@ export function CoachDayEditDialog({
               </DialogDescription>
             )}
           </DialogHeader>
+          <AthleteLayersPanel layers={dayLayers} athleteName={athleteName} />
 
           {/* Fifth instance of the hydrate-in-an-effect shape (see CLAUDE.md). The
               effect fills title and exercises from `data`, and Save PUTs the whole day

@@ -11681,6 +11681,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updated);
   });
 
+  // The position and team layers on an athlete's assigned day (2026-11-22), for the coach's day
+  // dialog: what the athlete sees swapped and added, labeled. Read-only.
+  app.get("/api/coach/assignments/:assignmentId/days/:programDayId/layers", requireRole("coach"), async (req, res) => {
+    const user = currentUser(req);
+    const assignmentId = Number(req.params.assignmentId);
+    const programDayId = Number(req.params.programDayId);
+    if (!Number.isInteger(assignmentId) || !Number.isInteger(programDayId)) {
+      return res.status(400).json({ message: "Bad assignment or day id" });
+    }
+    const layers = await storage.getAssignmentDayLayersForCoach(user.id, assignmentId, programDayId);
+    if (!layers) return res.status(404).json({ message: "Assignment not found" });
+    res.json(layers);
+  });
+
   // ---------------- Coach: Correctives ----------------
 
   app.get(

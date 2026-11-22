@@ -8504,3 +8504,52 @@ All on main, pre-flight checked, not yet in a TestFlight build (Scott is holding
   FILMABLE: Standing Long Jump left `CANONICAL_VIDEO_ELIGIBLE_NAMES` (53 now, Broad Jump kept); the
   per-identity count is 53 exercises + 200 drills = 253. No camera constant moved.
   `a-hidden-exercise-keeps-its-history.itest.ts`.
+
+## 2026-11-22, LATER: WARM-UPS, SEASON SETUP, THE CALENDAR, THE LIBRARY REVIEW, THE RESEARCH, AND THE SEASON PROGRAMS
+
+All on main, not yet in a TestFlight build (Scott is holding the upload).
+- **Every program day has a warm-up block** (`program_days.warmup`, `shared/program-day-warmup.ts`,
+  `server/program-day-warmup.ts`): ordered library drills with sets, reps or seconds and a note.
+  Shown first on the workout screen with ONE "Warm-up done" tick (`workout_log_warmups`, same
+  revision rule), which never blocks the main work. The coach's Today card, the Week tab, the
+  parent email and the printed sheet read it. AI drafts, chat days and imports get a RAMP warm-up
+  from tagged warm-up drills the room can do, or nothing when nothing is tagged.
+- **Season setup** (`shared/season-plan.ts`, `server/season-setup.ts`, the "Plan a season" step on
+  Assign Program and Add to my calendar): phases proposed from the first and last game, every date
+  editable, nothing assigned until confirmed; position from the profile; girls/boys/mixed team
+  (suggested, never shown back as anybody's gender); a return-to-training program needs the
+  clinician clearance ticked (the ONE requirement; restrictions shown under every exercise);
+  throwing workload (Pitching (Game), Bullpen, Catching (Game)); a year-round single-sport note.
+  Stored per assignment in `assignment_season_setups`. Counsel q28.
+- **The calendar**: events anyone adds (a coach can add one to a team), never training; sync both
+  ways (the ICS feed carries Forge events; a pasted Google/Apple/Outlook address is fetched under
+  an SSRF guard, stored encrypted, refreshed every 3 hours). A coached athlete's PERSONAL events
+  stay out of the feed their coach holds.
+- **The library review is applied** (see the entry above): hidden, never deleted; a merged name is
+  a search alias (`MERGED_EXERCISE_ALIASES`).
+- **The research** is one knowledge-library source, "Forge research review" (706 passages, PMID
+  citations, licensed for derived content), and **seven Coaches Corner tracks** were written from it
+  (warm-ups, throwers, landing and cutting, hamstrings and groins, return to training, girls'
+  teams, heat and in-season load) plus a "Keeping Athletes Healthy" path.
+- **THE FORGE SEASON PROGRAMS, UNPOSTED UNTIL SCOTT POSTS EACH ONE.** `server/seed-season-programs.ts`,
+  called by the seed after the library review, reads EVERY `*.json` in
+  `server/seed-data/season-programs/` (drop a file in, no code change) and creates each entry as a
+  Forge program under the library owner with `is_published` false and its tags. CREATE ONCE BY EXACT
+  NAME: a program the owner already has is never touched again, so a corrected file reaches only a
+  database without that program (an admin edits the rest in the builder). Conversion is
+  `server/season-program-structure.ts`: blocks -> training blocks (the lighter week named, its rule
+  in the block note; a return-to-training stage with no weeks becomes one week named for the stage,
+  its move-on criteria in the block note), the day's focus and skill notes in the warm-up note (a
+  return-to-training day's stop rule lives there), main work in order, then the care drills marked
+  "End-of-session care"; a post-season entry is a short program of optional sessions with the
+  guidance in the description. Every name must be a visible library exercise: strict (throws)
+  under vitest, skipped with a log line in production. **Position and team LAYERS** live on
+  `programs.layers` (`shared/season-program-layers.ts`, `server/season-program-layers.ts`) and are
+  applied on read in `getWorkoutDayDetail` from the assignment's season setup: a position swap
+  replaces only an exercise the day holds (the athlete's own swap still wins), its care drills show
+  after the main work (display only, not logged), a girls' team gets the extra warm-up drills;
+  labels "Position: pitcher" / "Girls' team". The coach's day dialog shows the same
+  (`GET /api/coach/assignments/:id/days/:dayId/layers`). The program rows are never changed. A
+  logged set on a swapped slot snapshots the slot's original exercise id, exactly as an athlete's
+  own swap already does. `season-programs.test.ts` (every name in every file against the visible
+  library), `season-programs.itest.ts`. Client: `verify_build`.
