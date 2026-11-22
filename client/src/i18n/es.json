@@ -335,5 +335,6 @@
   "{count} athletes · {monthly}/month · {perAthlete} per athlete": "{count} atletas · {monthly}/mes · {perAthlete} por atleta",
   "“20% velocity loss against the set’s fastest rep — past the threshold where further reps stop contributing strength stimulus.”": "“Pérdida de velocidad del 20% respecto a la repetición más rápida de la serie: por encima del umbral en el que más repeticiones dejan de aportar estímulo de fuerza.”",
   "“Your bar slowed down a lot by the last rep — about a fifth slower than your first one. That is usually the point to stop a set.”": "“Tu barra se hizo mucho más lenta en la última repetición: más o menos una quinta parte más lenta que en la primera. Por lo general, ese es el momento de terminar la serie.”",
-  "“Your bar speed dropped about 20% by the last rep. That is a common cut-off for ending a strength set.”": "“La velocidad de tu barra bajó cerca de un 20% en la última repetición. Es un límite común para terminar una serie de fuerza.”"
+  "“Your bar speed dropped about 20% by the last rep. That is a common cut-off for ending a strength set.”": "“La velocidad de tu barra bajó cerca de un 20% en la última repetición. Es un límite común para terminar una serie de fuerza.”",
+  "I'm the program's athletic trainer": "Soy el entrenador atlético del programa"
 }

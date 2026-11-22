@@ -515,7 +515,7 @@ export default function SignupPage() {
                       checked={joiningAsTrainer}
                       onChange={(e) => setJoiningAsTrainer(e.target.checked)}
                     />
-                    I'm the program's athletic trainer
+                    {t("I'm the program's athletic trainer")}
                   </label>
                 </div>
               )}
