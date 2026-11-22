@@ -88,7 +88,7 @@ describe("an admin posts and unposts their own programs", () => {
 
 describe("the receipt before checkout", () => {
   async function freeAgentClient(overrides: Record<string, unknown> = {}) {
-    const fa = await makeLoginableUser({ role: "athlete", dateOfBirth: "1990-01-01", ...overrides });
+    const fa = await makeLoginableUser({ role: "athlete", dateOfBirth: "1990-01-01", isBetaAccount: false, ...overrides });
     return { fa, client: await loginAs(server.baseUrl, fa) };
   }
 

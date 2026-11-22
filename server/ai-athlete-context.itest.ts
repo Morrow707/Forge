@@ -30,7 +30,7 @@ async function athlete(overrides: Partial<typeof users.$inferInsert>) {
 describe("what the coaching AI is told about an athlete's age", () => {
   beforeEach(resetDatabase);
 
-  it("names a minor as a minor, from a row shaped the way signup shapes it", async () => {
+  it("states a minor's age as a number and nothing more, from a row shaped the way signup shapes it", async () => {
     // Signup requires a date of birth and never writes users.age. That is the
     // whole bug: the platform tiered this athlete as a minor and told the
     // programming AI "Age: not set".
@@ -40,7 +40,9 @@ describe("what the coaching AI is told about an athlete's age", () => {
 
     const context = await storage.getAthleteAiContext(kid.id);
     expect(context).toContain("- Age: 14");
-    expect(context).toContain("MINOR");
+    // The age is stated as a number and nothing more: since 2026-11-22 (Scott: "age doesn't matter in
+    // the weight room") the AI is given no "MINOR" instruction (shared/privacy-tiers.ts ageLineForAi).
+    expect(context).not.toContain("MINOR");
     expect(context).not.toContain("Age: not set");
   });
 
@@ -56,7 +58,7 @@ describe("what the coaching AI is told about an athlete's age", () => {
     const kid = await athlete({ dateOfBirth: isoYearsAgo(15), age: 30 });
     const context = await storage.getAthleteAiContext(kid.id);
     expect(context).toContain("- Age: 15");
-    expect(context).toContain("MINOR");
+    expect(context).not.toContain("MINOR");
   });
 
   it("still uses the snapshot for an account with no birthdate", async () => {

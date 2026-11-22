@@ -185,8 +185,24 @@ describe("Coaches Corner", () => {
 });
 
 describe("nobody can be charged while the card rail is closed", () => {
+  // The buyers here are NOT comped: since 2026-11-21 a comped (exempt) account is refused every
+  // checkout with 409 coveredByForge before the rail is asked (the-exempt-list.itest.ts), and these
+  // cases are about the closed rail and the add-on id, which only a paying buyer reaches.
+  let asBuyerAthlete: TestClient;
+  let asBuyerCoach: TestClient;
+  beforeAll(async () => {
+    asBuyerAthlete = await loginAs(
+      server.baseUrl,
+      await makeLoginableUser({ role: "athlete", name: "Buying Free Agent", isBetaAccount: false }),
+    );
+    asBuyerCoach = await loginAs(
+      server.baseUrl,
+      await makeLoginableUser({ role: "coach", name: "Buying Coach", isBetaAccount: false }),
+    );
+  });
+
   it("refuses a sport-coach checkout with the closed-till answer", async () => {
-    const res = await asBetaAthlete.post("/api/billing/checkout/free-agent-add-on", {
+    const res = await asBuyerAthlete.post("/api/billing/checkout/free-agent-add-on", {
       addOnId: "pitching",
     });
     expect(res.status).toBe(503);
@@ -195,7 +211,7 @@ describe("nobody can be charged while the card rail is closed", () => {
   });
 
   it("refuses a coach add-on checkout with the same answer", async () => {
-    const res = await asBetaCoach.post("/api/billing/checkout/coach-add-on", {
+    const res = await asBuyerCoach.post("/api/billing/checkout/coach-add-on", {
       addOnId: "coaches_corner",
     });
     expect(res.status).toBe(503);
@@ -218,10 +234,10 @@ describe("nobody can be charged while the card rail is closed", () => {
       ["/api/billing/checkout/free-agent-add-on", { addOnId: "archery" }],
       ["/api/billing/checkout/free-agent-add-on", {}],
     ] as const) {
-      const res = await asBetaAthlete.post(path, body);
+      const res = await asBuyerAthlete.post(path, body);
       expect(res.status).toBe(400);
     }
-    const coach = await asBetaCoach.post("/api/billing/checkout/coach-add-on", {
+    const coach = await asBuyerCoach.post("/api/billing/checkout/coach-add-on", {
       // A real add-on id that simply is not sold here -- the distinction between
       // "is this an add-on" and "may this be bought here".
       addOnId: "custom_colors",
