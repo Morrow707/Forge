@@ -48,6 +48,7 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
 import { uploadOrQueueVideo } from "@/lib/video-offline-store";
 import { burnTrackingOverlay, type OverlayRepMarker } from "@/lib/video-overlay";
 
+import { useT } from "@/i18n";
 type Step = "warning" | "calibrate" | "capture" | "analyzing" | "manual" | "review";
 
 const CHECKPOINT_COLOR = "#facc15";
@@ -191,6 +192,7 @@ export function AvSprintTrackerDialog({
   date?: string;
   setNumber?: number;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const reviewVideoRef = useRef<HTMLVideoElement>(null);
@@ -474,7 +476,7 @@ export function AvSprintTrackerDialog({
     manuallyTimedRef.current = true;
     const manualResult = buildManualResult(startTime, finishTime, checkpoints);
     if (!manualResult) {
-      toast.error("Finish must be after start, scrub back and try again");
+      toast.error(t("Finish must be after start, scrub back and try again"));
       return;
     }
     finishWithResult(manualResult);
@@ -586,16 +588,16 @@ export function AvSprintTrackerDialog({
         date,
         setNumber,
       });
-      toast.success("Sprint saved");
+      toast.success(t("Sprint saved"));
       // Said out loud, because a queued clip is otherwise indistinguishable from a lost one --
       // the numbers saved either way, and the athlete has no other sign the video is coming.
       if (queuedForWifi) {
-        toast.info("No Wi-Fi, the clip is saved on your device and uploads once you reconnect.");
+        toast.info(t("No Wi-Fi, the clip is saved on your device and uploads once you reconnect."));
       }
       qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", skillAssignmentId, skillProgramDayId] });
       onOpenChange(false);
     } catch (err: any) {
-      toast.error(err.message || "Could not save sprint session");
+      toast.error(err.message || t("Could not save sprint session"));
     } finally {
       setSaving(false);
     }
@@ -609,9 +611,9 @@ export function AvSprintTrackerDialog({
     try {
       await apiRequest("PATCH", "/api/athlete/profile", { fortyYardDash: result.totalElapsedSeconds });
       setSavedToProfile(true);
-      toast.success("Saved to your 40-yard dash");
+      toast.success(t("Saved to your 40-yard dash"));
     } catch (err: any) {
-      toast.error(err.message || "Could not save to testing profile");
+      toast.error(err.message || t("Could not save to testing profile"));
     } finally {
       setSavingToProfile(false);
     }
@@ -642,7 +644,7 @@ export function AvSprintTrackerDialog({
           <div className="space-y-4">
             <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>Camera angle changes what this can measure. Pick the angle you're actually filming from.</p>
+              <p>{t("Camera angle changes what this can measure. Pick the angle you're actually filming from.")}</p>
             </div>
             <button
               type="button"
@@ -652,9 +654,9 @@ export function AvSprintTrackerDialog({
                 cameraAngle === "side" ? "border-teal-500 bg-teal-950/30" : "border-border",
               )}
             >
-              <p className="font-semibold">Filming from the side</p>
+              <p className="font-semibold">{t("Filming from the side")}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Checks forward lean during acceleration. Won't catch hip drop.
+                {t("Checks forward lean during acceleration. Won't catch hip drop.")}
               </p>
             </button>
             <button
@@ -665,9 +667,9 @@ export function AvSprintTrackerDialog({
                 cameraAngle === "front_behind" ? "border-teal-500 bg-teal-950/30" : "border-border",
               )}
             >
-              <p className="font-semibold">Filming from the front or behind</p>
+              <p className="font-semibold">{t("Filming from the front or behind")}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Checks hip drop during stance. Won't catch forward lean.
+                {t("Checks hip drop during stance. Won't catch forward lean.")}
               </p>
             </button>
             {/* The screen genuinely rotates for this tracker (AppDelegate's
@@ -676,14 +678,12 @@ export function AvSprintTrackerDialog({
                 sideways layout. Said on the last screen before the camera opens rather than
                 over the live preview, where it would compete with the framing guides. */}
             <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              <span className="font-semibold text-foreground">This one records sideways.</span>{" "}
-              The screen turns with it. A sprint runs across the frame, so landscape roughly
-              halves how far back the phone has to sit, about 90ft instead of 240ft for a
-              60-yard run, or about 70ft on the 0.5x lens.
+              <span className="font-semibold text-foreground">{t("This one records sideways.")}</span>{" "}
+              {t("The screen turns with it. A sprint runs across the frame, so landscape roughly halves how far back the phone has to sit, about 90ft instead of 240ft for a 60-yard run, or about 70ft on the 0.5x lens.")}
             </p>
             <DialogFooter>
               <Button disabled={!cameraAngle} onClick={() => changeStep("calibrate")}>
-                Continue
+                {t("Continue")}
               </Button>
             </DialogFooter>
           </div>
@@ -695,7 +695,7 @@ export function AvSprintTrackerDialog({
               <AvCameraChrome containerRef={containerRef} active={showsCamera} />
               <button
                 type="button"
-                aria-label="Close"
+                aria-label={t("Close")}
                 onClick={() => onOpenChange(false)}
                 className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
               >
@@ -710,7 +710,7 @@ export function AvSprintTrackerDialog({
 
               {recording && (
                 <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-teal-400 backdrop-blur-sm">
-                  Recording
+                  {t("Recording")}
                 </div>
               )}
 
@@ -723,13 +723,13 @@ export function AvSprintTrackerDialog({
                   not get. See the readFailed state. */}
               {step === "calibrate" && !readFailed && (
                 <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-md bg-black/60 px-3 py-2 text-center text-sm text-white backdrop-blur-sm">
-                  Make sure your whole body will be in frame during the run.
+                  {t("Make sure your whole body will be in frame during the run.")}
                 </div>
               )}
 
               {step === "calibrate" && readFailed && (
                 <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-md bg-black/60 px-3 py-2 text-center text-sm text-white backdrop-blur-sm">
-                  Couldn't get a clean read on that run. Record it again whenever you're ready.
+                  {t("Couldn't get a clean read on that run. Record it again whenever you're ready.")}
                 </div>
               )}
 
@@ -743,7 +743,7 @@ export function AvSprintTrackerDialog({
                 <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
-                    Camera tracking isn't supported on this device.
+                    {t("Camera tracking isn't supported on this device.")}
                   </div>
                   {supportError && (
                     <p className="select-text break-all text-center text-xs opacity-90">{supportError}</p>
@@ -756,7 +756,7 @@ export function AvSprintTrackerDialog({
               {step === "calibrate" && (
                 <>
                   <RadioChipGroup
-                    label="Drill"
+                    label={t("Drill")}
                     options={SPRINT_PRESETS.map((p) => p.label)}
                     value={preset.label}
                     onChange={(label) => {
@@ -768,30 +768,26 @@ export function AvSprintTrackerDialog({
                   <p className="text-center text-sm text-white">
                     {preset.tapCount === 3 ? (
                       <>
-                        Tap the screen at <strong>center</strong>, then each <strong>cone</strong> in run order (
-                        {checkpointCount}/3 marked).
-                      </>
+                        {t("Tap the screen at")} <strong>{t("center")}</strong>{t(", then each")} <strong>{t("cone")}</strong> {t("in run order ( {checkpointCount}/3 marked).", { checkpointCount })}</>
                     ) : preset.tapCount === 1 ? (
                       <>
-                        Tap the screen at the <strong>start/finish line</strong> ({checkpointCount}/1 marked).
-                      </>
+                        {t("Tap the screen at the")} <strong>{t("start/finish line")}</strong> {t("({checkpointCount}/1 marked).", { checkpointCount })}</>
                     ) : (
                       <>
-                        Tap the screen where the <strong>start line</strong> is, then where the{" "}
-                        <strong>finish line</strong> is ({checkpointCount}/2 marked).
-                      </>
+                        {t("Tap the screen where the")} <strong>{t("start line")}</strong> {t("is, then where the")}{" "}
+                        <strong>{t("finish line")}</strong> {t("is ({checkpointCount}/2 marked).", { checkpointCount })}</>
                     )}
                   </p>
                   <div className="flex items-end gap-2">
                     {preset.id === "custom" && (
                       <div className="flex-1 space-y-1.5">
-                        <Label className="text-white">Distance (yards)</Label>
+                        <Label className="text-white">{t("Distance (yards)")}</Label>
                         <Input type="number" value={distanceYards} onChange={(e) => setDistanceYards(e.target.value)} />
                       </div>
                     )}
                     <Button variant="outline" onClick={resetCheckpoints} disabled={checkpointCount === 0}>
                       <RotateCcw className="h-4 w-4" />
-                      Reset
+                      {t("Reset")}
                     </Button>
                   </div>
                   <Button
@@ -804,7 +800,7 @@ export function AvSprintTrackerDialog({
                     onClick={startCapture}
                   >
                     <Play className="h-4 w-4" />
-                    Start Recording
+                    {t("Start Recording")}
                   </Button>
                 </>
               )}
@@ -812,11 +808,11 @@ export function AvSprintTrackerDialog({
                 <div className="flex gap-3">
                   <Button size="lg" variant="secondary" className="flex-1" onClick={cancelCapture}>
                     <X className="h-4 w-4" />
-                    Cancel
+                    {t("Cancel")}
                   </Button>
                   <Button size="lg" className="flex-1" onClick={stopCaptureAndAnalyze} disabled={!recording}>
                     <Square className="h-4 w-4" />
-                    Stop Recording
+                    {t("Stop Recording")}
                   </Button>
                 </div>
               )}
@@ -831,11 +827,10 @@ export function AvSprintTrackerDialog({
           <div className="space-y-4 py-6 text-center">
             <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
             <p className="text-sm text-muted-foreground">
-              Analyzing recording, {analyzedFrames} frames processed so far…
-            </p>
+              {t("Analyzing recording, {analyzedFrames} frames processed so far…", { analyzedFrames })}</p>
             <Button variant="outline" size="sm" onClick={cancelAnalysis}>
               <XCircle className="h-4 w-4" />
-              Cancel
+              {t("Cancel")}
             </Button>
           </div>
         )}
@@ -845,8 +840,7 @@ export function AvSprintTrackerDialog({
             <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                Couldn't auto-detect a clean checkpoint crossing from this take. Scrub the clip below and mark Start
-                and Finish by hand, the time will still count.
+                {t("Couldn't auto-detect a clean checkpoint crossing from this take. Scrub the clip below and mark Start and Finish by hand, the time will still count.")}
               </p>
             </div>
             {videoUrl && (
@@ -857,22 +851,21 @@ export function AvSprintTrackerDialog({
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={markManualStart}>
                 <Flag className="h-4 w-4" />
-                Mark Start
+                {t("Mark Start")}
               </Button>
               <Button className="flex-1" onClick={markManualFinish} disabled={manualStartTime == null}>
                 <Flag className="h-4 w-4" />
-                Mark Finish
+                {t("Mark Finish")}
               </Button>
             </div>
             {manualStartTime != null && (
               <p className="text-center text-xs text-muted-foreground">
-                Start marked at {manualStartTime.toFixed(2)}s, scrub to the finish and tap Mark Finish.
-              </p>
+                {t("Start marked at {manualStartTime}s, scrub to the finish and tap Mark Finish.", { manualStartTime: manualStartTime.toFixed(2) })}</p>
             )}
             <DialogFooter>
               <Button variant="outline" onClick={retry}>
                 <RotateCcw className="h-4 w-4" />
-                Retry Take
+                {t("Retry Take")}
               </Button>
             </DialogFooter>
           </div>
@@ -888,29 +881,25 @@ export function AvSprintTrackerDialog({
             <div className="grid grid-cols-2 gap-3 rounded-md border border-border p-4 text-center">
               <div>
                 <p className="text-2xl font-bold text-teal-400">{result.totalElapsedSeconds.toFixed(2)}s</p>
-                <p className="text-xs text-muted-foreground">Elapsed time</p>
+                <p className="text-xs text-muted-foreground">{t("Elapsed time")}</p>
               </div>
               <div>
                 <p className="text-2xl font-bold">{result.avgSpeedYardsPerSec.toFixed(1)}</p>
-                <p className="text-xs text-muted-foreground">Yards / sec</p>
+                <p className="text-xs text-muted-foreground">{t("Yards / sec")}</p>
               </div>
             </div>
 
             {result.likelyGlitch && (
               <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                This time looks faster than any human has ever run, almost certainly a tracking glitch,
-                not a real split. Recommend retaking before saving.
+                {t("This time looks faster than any human has ever run, almost certainly a tracking glitch, not a real split. Recommend retaking before saving.")}
               </div>
             )}
 
             {result.incompleteDrill && (
               <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                Only {result.crossingsFound} of this drill's {result.crossingsExpected} checkpoints were
-                crossed, so this time covers part of the run, not all of it. The speed is right for the
-                ground actually measured, it just isn't the whole drill.
-              </div>
+                {t("Only {crossingsFound} of this drill's {crossingsExpected} checkpoints were crossed, so this time covers part of the run, not all of it. The speed is right for the ground actually measured, it just isn't the whole drill.", { crossingsFound: result.crossingsFound, crossingsExpected: result.crossingsExpected })}</div>
             )}
 
             {faults.length > 0 ? (
@@ -928,7 +917,7 @@ export function AvSprintTrackerDialog({
             ) : (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Check className="h-4 w-4 text-teal-400" />
-                No mechanics faults flagged from this angle.
+                {t("No mechanics faults flagged from this angle.")}
               </p>
             )}
 
@@ -940,7 +929,7 @@ export function AvSprintTrackerDialog({
                 disabled={savingToProfile || savedToProfile}
               >
                 <Trophy className="h-4 w-4" />
-                {savedToProfile ? "Saved to testing profile" : "Save as my 40-yard dash"}
+                {savedToProfile ? t("Saved to testing profile") : t("Save as my 40-yard dash")}
               </Button>
             )}
 
@@ -948,9 +937,9 @@ export function AvSprintTrackerDialog({
               <label className="flex items-start gap-2 text-sm">
                 <Checkbox checked={saveClipForCoach} onCheckedChange={(c) => setSaveClipForCoach(c === true)} />
                 <span>
-                  Save this clip so my coach can review it
+                  {t("Save this clip so my coach can review it")}
                   <span className="block text-xs text-muted-foreground">
-                    Off by default, only the numbers above are saved unless you turn this on.
+                    {t("Off by default, only the numbers above are saved unless you turn this on.")}
                   </span>
                 </span>
               </label>
@@ -959,10 +948,9 @@ export function AvSprintTrackerDialog({
               <label className="flex items-start gap-2 text-sm">
                 <Checkbox checked={favoriteClip} onCheckedChange={(c) => setFavoriteClip(c === true)} />
                 <span>
-                  Never auto-delete this clip
+                  {t("Never auto-delete this clip")}
                   <span className="block text-xs text-muted-foreground">
-                    Your plan only keeps a limited number of saved clips per drill, favoriting
-                    this one keeps it forever, even once older clips start rolling off.
+                    {t("Your plan only keeps a limited number of saved clips per drill, favoriting this one keeps it forever, even once older clips start rolling off.")}
                   </span>
                 </span>
               </label>
@@ -971,10 +959,10 @@ export function AvSprintTrackerDialog({
             <DialogFooter>
               <Button variant="outline" onClick={retry}>
                 <RotateCcw className="h-4 w-4" />
-                Retry
+                {t("Retry")}
               </Button>
               <Button onClick={saveMutation} disabled={saving}>
-                {saving ? "Saving…" : "Save Sprint"}
+                {saving ? t("Saving…") : t("Save Sprint")}
               </Button>
             </DialogFooter>
           </div>

@@ -39,6 +39,7 @@ import { interpolateOcclusionGap, type TrackedPoint } from "@/lib/bar-tracking";
 import { videoFilenameForBlob } from "@/lib/video-recording";
 import { buildTrackingDiagnostics } from "@/lib/tracking-diagnostics";
 
+import { translate, useT } from "@/i18n";
 /** AVFoundation + Vision jump tracking (vertical/broad/box) -- the second real tracker built
  * on the new pipeline, directly parallel to ar-jump-tracker-dialog.tsx (which stays completely
  * untouched as a fallback). Jump was next for the same reason it went first off MediaPipe
@@ -144,6 +145,7 @@ export function AvJumpTrackerDialog({
   formFaultThresholds?: Partial<Record<keyof FormFaultThresholds, number | null>> | null;
   jumpHeightOutlierPercent?: number | null;
 }) {
+  const t = useT();
   const [saving, setSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -265,8 +267,8 @@ export function AvJumpTrackerDialog({
         );
         toast.error(
           inFlightUpload
-            ? "Couldn't finish analyzing this take, but your video was saved for your coach."
-            : "Couldn't finish analyzing this take. The set was saved without numbers.",
+            ? t("Couldn't finish analyzing this take, but your video was saved for your coach.")
+            : t("Couldn't finish analyzing this take. The set was saved without numbers."),
         );
         onCapture(
               EMPTY_JUMP_METRICS,
@@ -509,14 +511,14 @@ export function AvJumpTrackerDialog({
           const result = await uploadPromise;
           toast.error(
             result.status === "queued"
-              ? "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved. (No Wi-Fi, video saved on your device, will upload for your coach once connected.)"
-              : "Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved. (Video saved for your coach.)",
+              ? translate("Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved. (No Wi-Fi, video saved on your device, will upload for your coach once connected.)")
+              : translate("Couldn't set real-world scale on this take, so distances aren't shown. The clip and everything measured are saved. (Video saved for your coach.)"),
           );
           if (result.status === "queued") {
             if (!hasWarnedAboutQueueing()) {
               markWarnedAboutQueueing();
               toast.info(
-                "You can also upload a queued video manually anytime, even over cellular, from the Video Bank.",
+                translate("You can also upload a queued video manually anytime, even over cellular, from the Video Bank."),
                 { duration: 10000 },
               );
             }
@@ -527,7 +529,7 @@ export function AvJumpTrackerDialog({
           onOpenChange(false);
         } catch (err) {
           const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
-          toast.error(`Couldn't calibrate, and the video didn't save either: ${detail}`);
+          toast.error(translate("Couldn't calibrate, and the video didn't save either: {detail}", { detail }));
           // THE TAKE STILL HAPPENED, EVEN IF ITS CLIP DID NOT ARRIVE.
           //
           // This used to toast and stop: no onCapture, no close. The metrics AND the
@@ -563,7 +565,7 @@ export function AvJumpTrackerDialog({
          * every one of these -- none of them is in a catch.
          */
         toast.error(
-          "Couldn't set real-world scale on this take, so distances aren't shown. Everything the camera did measure is saved.",
+          translate("Couldn't set real-world scale on this take, so distances aren't shown. Everything the camera did measure is saved."),
         );
         onCapture(emptyMetrics, undefined, forSetNumber);
         onOpenChange(false);
@@ -729,7 +731,7 @@ export function AvJumpTrackerDialog({
       // RULE #1. The state machine found no clean rep; the number on screen is the best read the
       // trace supports, and the athlete is told exactly that instead of nothing.
       toast.warning(
-        `Couldn't find a clean takeoff and landing, showing the best read from the video (${Math.round(metrics.bestJumpHeightCm)} cm). Check the clip before trusting it.`,
+        translate("Couldn't find a clean takeoff and landing, showing the best read from the video ({value} cm). Check the clip before trusting it.", { value: Math.round(metrics.bestJumpHeightCm) }),
         { duration: 8000 },
       );
     }
@@ -749,14 +751,14 @@ export function AvJumpTrackerDialog({
           const result = await uploadPromise;
           toast.error(
             result.status === "queued"
-              ? "Couldn't get a clean read on this take. The clip is saved. (No Wi-Fi, video saved on your device, will upload for your coach once connected.)"
-              : "Couldn't get a clean read on this take. The clip is saved. (Video saved for your coach.)",
+              ? translate("Couldn't get a clean read on this take. The clip is saved. (No Wi-Fi, video saved on your device, will upload for your coach once connected.)")
+              : translate("Couldn't get a clean read on this take. The clip is saved. (Video saved for your coach.)"),
           );
           if (result.status === "queued") {
             if (!hasWarnedAboutQueueing()) {
               markWarnedAboutQueueing();
               toast.info(
-                "You can also upload a queued video manually anytime, even over cellular, from the Video Bank.",
+                translate("You can also upload a queued video manually anytime, even over cellular, from the Video Bank."),
                 { duration: 10000 },
               );
             }
@@ -767,7 +769,7 @@ export function AvJumpTrackerDialog({
           onOpenChange(false);
         } catch (err) {
           const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
-          toast.error(`Couldn't get a clean read, and the video didn't save either: ${detail}`);
+          toast.error(translate("Couldn't get a clean read, and the video didn't save either: {detail}", { detail }));
           onCapture(emptyMetrics, undefined, forSetNumber);
           onOpenChange(false);
         } finally {
@@ -790,7 +792,7 @@ export function AvJumpTrackerDialog({
          * refused-capture-survives.test.ts pairs a `try` with its `catch` and so was green on
          * every one of these -- none of them is in a catch.
          */
-        toast.error("Couldn't get a clean read on this take. Everything the camera did measure is saved.");
+        toast.error(translate("Couldn't get a clean read on this take. Everything the camera did measure is saved."));
         onCapture(emptyMetrics, undefined, forSetNumber);
         onOpenChange(false);
         setSaving(false);
@@ -850,7 +852,7 @@ export function AvJumpTrackerDialog({
     // the whole set. That distinction previously only ever reached the buried diagnostics
     // report.
     if (recordingStats.readerStatus === "failed" && recordingStats.frameCount > 0) {
-      toast.warning("Analysis was cut short partway through this set, numbers below may not cover every rep.");
+      toast.warning(translate("Analysis was cut short partway through this set, numbers below may not cover every rep."));
     }
 
     // Direct answer to "did I clear it" -- the real payoff of detecting the box at all rather
@@ -890,7 +892,7 @@ export function AvJumpTrackerDialog({
       // is simply false, and it was phrased to be read exactly that way.
       if (metrics.bestBoxClearanceCm >= 0) {
         toast.success(
-          `Cleared the box, feet peaked ${metrics.bestBoxClearanceCm.toFixed(1)} cm above the top`,
+          translate("Cleared the box, feet peaked {bestBoxClearanceCm} cm above the top", { bestBoxClearanceCm: metrics.bestBoxClearanceCm.toFixed(1) }),
         );
       }
       // AND NOTHING IS SAID WHEN THE READ SAYS HE MISSED IT. RULE #1.
@@ -941,7 +943,7 @@ export function AvJumpTrackerDialog({
         if (!hasWarnedAboutQueueing()) {
           markWarnedAboutQueueing();
           toast.info(
-            "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+            translate("No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular."),
             { duration: 10000 },
           );
         }
@@ -951,7 +953,7 @@ export function AvJumpTrackerDialog({
     } catch (err) {
       // diagnostics-exempt: the take was already handed up above, before this upload was awaited,
       // so the numbers and the diagnostics are on the set whatever happens to the clip.
-      toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
+      toast.error(err instanceof ApiError ? err.message : translate("Saved the set, but the clip failed to upload"));
     } finally {
       setSaving(false);
     }
@@ -968,7 +970,7 @@ export function AvJumpTrackerDialog({
             <AvCameraChrome containerRef={containerRef} active={open} />
             <button
               type="button"
-              aria-label="Close"
+              aria-label={t("Close")}
               onClick={() => onOpenChange(false)}
               className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
             >
@@ -978,7 +980,7 @@ export function AvJumpTrackerDialog({
             {recording && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">
                 <Circle className="h-2.5 w-2.5 animate-pulse fill-destructive text-destructive" />
-                Recording
+                {t("Recording")}
               </div>
             )}
 
@@ -993,13 +995,13 @@ export function AvJumpTrackerDialog({
                       happening quietly behind it), and only takes over once analysis is done
                       but the upload still has a tail left. */}
                   {analyzing
-                    ? `Analyzing recording, ${analyzedFrames} frames processed…`
-                    : `Saving your video… ${Math.round(uploadProgress * 100)}%`}
+                    ? t("Analyzing recording, {analyzedFrames} frames processed…", { analyzedFrames })
+                    : t("Saving your video… {percent}%", { percent: Math.round(uploadProgress * 100) })}
                 </p>
                 {analyzing && (
                   <Button variant="outline" size="sm" onClick={cancelAnalysis}>
                     <XCircle className="h-4 w-4" />
-                    Cancel
+                    {t("Cancel")}
                   </Button>
                 )}
               </div>
@@ -1007,7 +1009,7 @@ export function AvJumpTrackerDialog({
 
             {!recording && !analyzing && !saving && !heightIn && (
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-md bg-amber-500/80 px-3 py-2 text-center text-sm font-semibold text-black">
-                Add your height in your profile to get calibrated jump numbers from this camera.
+                {t("Add your height in your profile to get calibrated jump numbers from this camera.")}
               </div>
             )}
 
@@ -1021,7 +1023,7 @@ export function AvJumpTrackerDialog({
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
-                  Camera tracking isn't supported on this device.
+                  {t("Camera tracking isn't supported on this device.")}
                 </div>
                 {supportError && (
                   <p className="select-text break-all text-center text-xs opacity-90">{supportError}</p>
@@ -1041,18 +1043,18 @@ export function AvJumpTrackerDialog({
                 disabled={!supported || !heightIn}
               >
                 <Circle className="h-4 w-4 fill-current" />
-                Start Jump Set
+                {t("Start Jump Set")}
               </Button>
             )}
             {recording && (
               <Button size="lg" variant="secondary" onClick={stopTracking}>
                 <Square className="h-4 w-4" />
-                Stop Set
+                {t("Stop Set")}
               </Button>
             )}
             {(analyzing || saving) && (
               <Button size="lg" variant="secondary" disabled>
-                {analyzing ? "Analyzing…" : `Saving… ${Math.round(uploadProgress * 100)}%`}
+                {analyzing ? t("Analyzing…") : t("Saving… {percent}%", { percent: Math.round(uploadProgress * 100) })}
               </Button>
             )}
           </div>

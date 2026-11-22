@@ -21,6 +21,7 @@ const VideoAnalysisDialog = lazyDialog(() => import("@/components/video-analysis
 import type { PoseFrame } from "@/lib/pose-tracking";
 import type { CompareClip } from "@/components/clip-picker";
 
+import { useT } from "@/i18n";
 export type FlaggedSetVideo = {
   setNumber: number;
   videoUrl: string;
@@ -106,6 +107,7 @@ export function SetVideoPreviewDialog({
    * VideoAnalysisDialog's own prop of the same name. */
   skeletonFrames?: PoseFrame[] | null;
 }) {
+  const t = useT();
   const [analyzing, setAnalyzing] = useState(false);
   // Same reasoning as VideoAnalysisDialog's own loadError -- without this,
   // a failed <video> load (an expired/malformed signed URL, a genuinely
@@ -131,13 +133,13 @@ export function SetVideoPreviewDialog({
         hideClose
       >
         <div className="flex shrink-0 items-center justify-between px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-          <DialogTitle className="text-sm text-white">Set {setNumber} — Form Check</DialogTitle>
+          <DialogTitle className="text-sm text-white">{t("Set {setNumber} — Form Check", { setNumber })}</DialogTitle>
           <div className="flex items-center gap-3">
             {onToggleFavorite && (
               <button
                 type="button"
                 onClick={onToggleFavorite}
-                aria-label={favorited ? "Remove favorite" : "Favorite this video"}
+                aria-label={favorited ? t("Remove favorite") : t("Favorite this video")}
                 aria-pressed={!!favorited}
                 className={cn(
                   "transition-colors",
@@ -149,7 +151,7 @@ export function SetVideoPreviewDialog({
             )}
             <DialogClose className="rounded-sm text-white/70 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-ring">
               <X className="h-5 w-5" />
-              <span className="sr-only">Close</span>
+              <span className="sr-only">{t("Close")}</span>
             </DialogClose>
           </div>
         </div>
@@ -157,13 +159,13 @@ export function SetVideoPreviewDialog({
           {isPr && (
             <span className="absolute left-3 top-3 z-10 flex items-center gap-1 rounded-full bg-amber-400/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black">
               <Trophy className="h-3 w-3" />
-              PR
+              {t("PR")}
             </span>
           )}
           {loadError ? (
             <div className="flex flex-col items-center gap-2 px-6 text-center text-sm text-white/70">
               <VideoOff className="h-8 w-8" />
-              This video couldn't be loaded — it may not have finished uploading, or the file is missing.
+              {t("This video couldn't be loaded — it may not have finished uploading, or the file is missing.")}
             </div>
           ) : (
             <video
@@ -182,32 +184,32 @@ export function SetVideoPreviewDialog({
         <div className="shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
           <Button variant="outline" className="w-full" onClick={() => setAnalyzing(true)}>
             <Wand2 className="h-4 w-4" />
-            Analysis Tools
+            {t("Analysis Tools")}
           </Button>
           <div className="flex items-center justify-center gap-2">
             <FlagButton
               active={flag === "best"}
               onClick={() => onFlag(flag === "best" ? null : "best")}
               icon={ThumbsUp}
-              label="Best Set"
+              label={t("Best Set")}
               activeClass="border-success bg-success/15 text-success"
             />
             <FlagButton
               active={flag === "worst"}
               onClick={() => onFlag(flag === "worst" ? null : "worst")}
               icon={ThumbsDown}
-              label="Worst Set"
+              label={t("Worst Set")}
               activeClass="border-destructive bg-destructive/15 text-destructive"
             />
           </div>
           <div className="flex items-center justify-between gap-2">
             <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={onRemove}>
               <Trash2 className="h-4 w-4" />
-              Remove
+              {t("Remove")}
             </Button>
             <Button variant="outline" onClick={onRetake}>
               <RotateCcw className="h-4 w-4" />
-              Retake
+              {t("Retake")}
             </Button>
           </div>
         </div>
@@ -216,7 +218,7 @@ export function SetVideoPreviewDialog({
         open={analyzing}
         onOpenChange={setAnalyzing}
         videoUrl={videoUrl}
-        title={`Set ${setNumber} — Form Check`}
+        title={t("Set {setNumber} — Form Check", { setNumber })}
         skeletonFrames={skeletonFrames ?? null}
       />
     </Dialog>
@@ -264,6 +266,7 @@ export function SetVideoCompareDialog({
   sets: FlaggedSetVideo[];
   onFlag: (setNumber: number, flag: "best" | "worst" | null) => void;
 }) {
+  const t = useT();
   const leftSet = sets.find((s) => s.setNumber === pickDefault(sets, "worst", 0));
   const rightSet = sets.find((s) => s.setNumber === pickDefault(sets, "best", sets.length - 1));
   const initialLeft = useMemo(() => (leftSet ? toCompareClip(leftSet) : null), [leftSet?.setNumber, leftSet?.videoUrl]);
@@ -279,7 +282,7 @@ export function SetVideoCompareDialog({
       open={open}
       onOpenChange={onOpenChange}
       subject={{ kind: "self" }}
-      title="Compare Sets"
+      title={t("Compare Sets")}
       initialLeft={initialLeft}
       initialRight={initialRight}
       sideFooter={(clip) => {
@@ -291,14 +294,14 @@ export function SetVideoCompareDialog({
               active={s.flag === "best"}
               onClick={() => onFlag(s.setNumber, s.flag === "best" ? null : "best")}
               icon={ThumbsUp}
-              label="Best"
+              label={t("Best")}
               activeClass="border-success bg-success/15 text-success"
             />
             <FlagButton
               active={s.flag === "worst"}
               onClick={() => onFlag(s.setNumber, s.flag === "worst" ? null : "worst")}
               icon={ThumbsDown}
-              label="Worst"
+              label={t("Worst")}
               activeClass="border-destructive bg-destructive/15 text-destructive"
             />
           </div>

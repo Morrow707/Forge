@@ -37,6 +37,7 @@ import { SuggestedCorrective } from "@/components/suggested-corrective";
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import { uploadOrQueueVideo } from "@/lib/video-offline-store";
 
+import { useT } from "@/i18n";
 type Step = "warning" | "capture" | "review";
 
 const SKELETON_COLOR = "#2dd4bf";
@@ -110,6 +111,7 @@ export function MechanicsTrackerDialog({
   date?: string;
   setNumber?: number;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -374,7 +376,7 @@ export function MechanicsTrackerDialog({
 
     // A short capture is still a capture -- see av-mechanics-tracker-dialog.tsx (Rule #1).
     if (framesRef.current.length < 6) {
-      toast.info("That capture was short, so most numbers will be blank. What was tracked is kept.");
+      toast.info(t("That capture was short, so most numbers will be blank. What was tracked is kept."));
     }
 
     const effectiveThresholds = thresholds ?? DEFAULT_SKILL_FAULT_THRESHOLDS;
@@ -501,16 +503,16 @@ export function MechanicsTrackerDialog({
         date,
         setNumber,
       });
-      toast.success(`${actionLabel} saved`);
+      toast.success(t("{actionLabel} saved", { actionLabel: t(actionLabel) }));
       // Said out loud, because a queued clip is otherwise indistinguishable from a lost one --
       // the numbers saved either way, and the athlete has no other sign the video is coming.
       if (queuedForWifi) {
-        toast.info("No Wi-Fi, the clip is saved on your device and uploads once you reconnect.");
+        toast.info(t("No Wi-Fi, the clip is saved on your device and uploads once you reconnect."));
       }
       qc.invalidateQueries({ queryKey: ["/api/athlete/skill-day", skillAssignmentId, skillProgramDayId] });
       onOpenChange(false);
     } catch (err: any) {
-      toast.error(err.message || "Could not save this session");
+      toast.error(err.message || t("Could not save this session"));
     } finally {
       setSaving(false);
     }
@@ -532,7 +534,7 @@ export function MechanicsTrackerDialog({
           <div className="space-y-4">
             <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>Camera angle changes what this can measure. Pick the angle you're actually filming from.</p>
+              <p>{t("Camera angle changes what this can measure. Pick the angle you're actually filming from.")}</p>
             </div>
             <button
               type="button"
@@ -543,14 +545,14 @@ export function MechanicsTrackerDialog({
               )}
             >
               <p className="font-semibold">
-                Filming face-on
+                {t("Filming face-on")}
                 {profile.preferredAngle === "face_on" && (
-                  <span className="ml-2 text-xs font-normal text-teal-600 dark:text-teal-400">Best for this drill</span>
+                  <span className="ml-2 text-xs font-normal text-teal-600 dark:text-teal-400">{t("Best for this drill")}</span>
                 )}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">{profile.faceOn}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Checks weight transfer and hip rotation. Won't catch separation or sequencing.
+                {t("Checks weight transfer and hip rotation. Won't catch separation or sequencing.")}
               </p>
             </button>
             <button
@@ -562,20 +564,21 @@ export function MechanicsTrackerDialog({
               )}
             >
               <p className="font-semibold">
-                Filming down the line
+                {t("Filming down the line")}
                 {profile.preferredAngle === "down_the_line" && (
-                  <span className="ml-2 text-xs font-normal text-teal-600 dark:text-teal-400">Best for this drill</span>
+                  <span className="ml-2 text-xs font-normal text-teal-600 dark:text-teal-400">{t("Best for this drill")}</span>
                 )}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">{profile.downTheLine}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Checks hip-shoulder separation and sequencing
-                {mode === "throw" ? ", plus arm slot" : ""}. Won't catch weight transfer or hip rotation.
+                {mode === "throw"
+                  ? t("Checks hip-shoulder separation and sequencing, plus arm slot. Won't catch weight transfer or hip rotation.")
+                  : t("Checks hip-shoulder separation and sequencing. Won't catch weight transfer or hip rotation.")}
               </p>
             </button>
             <DialogFooter>
               <Button disabled={!cameraAngle} onClick={() => changeStep("capture")}>
-                Continue
+                {t("Continue")}
               </Button>
             </DialogFooter>
           </div>
@@ -583,9 +586,9 @@ export function MechanicsTrackerDialog({
 
         {step === "capture" && (
           <div className="space-y-3">
-            {cameraError && <p className="text-sm text-destructive">{cameraError}</p>}
+            {cameraError && <p className="text-sm text-destructive">{t(cameraError)}</p>}
             {modelLoading && !cameraError && (
-              <p className="text-sm text-muted-foreground">Loading tracking model…</p>
+              <p className="text-sm text-muted-foreground">{t("Loading tracking model…")}</p>
             )}
             <div ref={cameraChromeContainerRef} className="relative overflow-hidden rounded-md bg-black">
               <video ref={videoRef} autoPlay playsInline muted className="w-full" />
@@ -594,19 +597,19 @@ export function MechanicsTrackerDialog({
             </div>
             <p className="text-sm text-muted-foreground">
               {recording
-                ? `Recording, perform the full ${actionLabel.toLowerCase()}, then stop.`
-                : `Get in frame, then start recording your ${actionLabel.toLowerCase()}.`}
+                ? t("Recording, perform the full {value}, then stop.", { value: t(actionLabel).toLowerCase() })
+                : t("Get in frame, then start recording your {value}.", { value: t(actionLabel).toLowerCase() })}
             </p>
             <DialogFooter>
               {!recording ? (
                 <Button onClick={startRecording} disabled={!!cameraError || modelLoading}>
                   <Play className="h-4 w-4" />
-                  Start Recording
+                  {t("Start Recording")}
                 </Button>
               ) : (
                 <Button variant="secondary" onClick={stopRecording}>
                   <Square className="h-4 w-4" />
-                  Stop
+                  {t("Stop")}
                 </Button>
               )}
             </DialogFooter>
@@ -637,76 +640,76 @@ export function MechanicsTrackerDialog({
               }}
             >
               {showSkeleton ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              {showSkeleton ? "Hide Skeleton" : "Show Skeleton"}
+              {showSkeleton ? t("Hide Skeleton") : t("Show Skeleton")}
             </Button>
 
             <div className="grid grid-cols-2 gap-3 rounded-md border border-border p-4 text-center text-sm">
               {result.hipShoulderSeparationDeg != null && (
                 <div>
                   <p className="text-xl font-bold text-teal-400">{result.hipShoulderSeparationDeg}°</p>
-                  <p className="text-xs text-muted-foreground">Hip-shoulder separation</p>
+                  <p className="text-xs text-muted-foreground">{t("Hip-shoulder separation")}</p>
                 </div>
               )}
               {result.hipRotationDeg != null && (
                 <div>
                   <p className="text-xl font-bold">{result.hipRotationDeg}°</p>
-                  <p className="text-xs text-muted-foreground">Hip rotation</p>
+                  <p className="text-xs text-muted-foreground">{t("Hip rotation")}</p>
                 </div>
               )}
               {result.weightTransferPct != null && (
                 <div>
                   <p className="text-xl font-bold">{result.weightTransferPct}%</p>
-                  <p className="text-xs text-muted-foreground">Weight transfer</p>
+                  <p className="text-xs text-muted-foreground">{t("Weight transfer")}</p>
                 </div>
               )}
               {result.armSlot && (
                 <div>
                   <p className="text-xl font-bold capitalize">{result.armSlot.label}</p>
-                  <p className="text-xs text-muted-foreground">Arm slot ({result.armSlot.angleDeg}°)</p>
+                  <p className="text-xs text-muted-foreground">{t("Arm slot ({angleDeg}°)", { angleDeg: result.armSlot.angleDeg })}</p>
                 </div>
               )}
               {result.peakWristSpeedMps != null && (
                 <div>
                   <p className="text-xl font-bold">{result.peakWristSpeedMps} m/s</p>
                   <p className="text-xs text-muted-foreground">
-                    Peak wrist speed
-                    <span className="block text-[10px] normal-case">(proxy for release velocity)</span>
+                    {t("Peak wrist speed")}
+                    <span className="block text-[10px] normal-case">{t("(proxy for release velocity)")}</span>
                   </p>
                 </div>
               )}
               {result.strideLengthM != null && (
                 <div>
                   <p className="text-xl font-bold">{result.strideLengthM} m</p>
-                  <p className="text-xs text-muted-foreground">Stride length</p>
+                  <p className="text-xs text-muted-foreground">{t("Stride length")}</p>
                 </div>
               )}
               {result.elbowExtensionDeg != null && (
                 <div>
                   <p className="text-xl font-bold">{result.elbowExtensionDeg}°</p>
-                  <p className="text-xs text-muted-foreground">Elbow extension at release</p>
+                  <p className="text-xs text-muted-foreground">{t("Elbow extension at release")}</p>
                 </div>
               )}
               {result.releaseHeightM != null && (
                 <div>
                   <p className="text-xl font-bold">{result.releaseHeightM} m</p>
-                  <p className="text-xs text-muted-foreground">Release height above hips</p>
+                  <p className="text-xs text-muted-foreground">{t("Release height above hips")}</p>
                 </div>
               )}
               {result.setPointPauseSeconds != null && (
                 <div>
                   <p className="text-xl font-bold">{result.setPointPauseSeconds}s</p>
-                  <p className="text-xs text-muted-foreground">Set-point pause</p>
+                  <p className="text-xs text-muted-foreground">{t("Set-point pause")}</p>
                 </div>
               )}
               {result.kneeBendDepthDeg != null && (
                 <div>
                   <p className="text-xl font-bold">{result.kneeBendDepthDeg}°</p>
-                  <p className="text-xs text-muted-foreground">Knee-bend load depth</p>
+                  <p className="text-xs text-muted-foreground">{t("Knee-bend load depth")}</p>
                 </div>
               )}
               <div>
-                <p className="text-xl font-bold">{result.sequencing.wellSequenced ? "Good" : "Off"}</p>
-                <p className="text-xs text-muted-foreground">Sequencing</p>
+                <p className="text-xl font-bold">{result.sequencing.wellSequenced ? t("Good") : t("Out of sync")}</p>
+                <p className="text-xs text-muted-foreground">{t("Sequencing")}</p>
               </div>
             </div>
 
@@ -725,7 +728,7 @@ export function MechanicsTrackerDialog({
             ) : (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Check className="h-4 w-4 text-teal-400" />
-                No mechanics faults flagged from this angle.
+                {t("No mechanics faults flagged from this angle.")}
               </p>
             )}
 
@@ -735,9 +738,9 @@ export function MechanicsTrackerDialog({
                 onCheckedChange={(c) => setSaveClipForCoach(c === true)}
               />
               <span>
-                Save this clip so my coach can review it
+                {t("Save this clip so my coach can review it")}
                 <span className="block text-xs text-muted-foreground">
-                  Off by default, only the numbers above are saved unless you turn this on.
+                  {t("Off by default, only the numbers above are saved unless you turn this on.")}
                 </span>
               </span>
             </label>
@@ -745,10 +748,9 @@ export function MechanicsTrackerDialog({
               <label className="flex items-start gap-2 text-sm">
                 <Checkbox checked={favoriteClip} onCheckedChange={(c) => setFavoriteClip(c === true)} />
                 <span>
-                  Never auto-delete this clip
+                  {t("Never auto-delete this clip")}
                   <span className="block text-xs text-muted-foreground">
-                    Your plan only keeps a limited number of saved clips per drill, favoriting
-                    this one keeps it forever, even once older clips start rolling off.
+                    {t("Your plan only keeps a limited number of saved clips per drill, favoriting this one keeps it forever, even once older clips start rolling off.")}
                   </span>
                 </span>
               </label>
@@ -757,10 +759,10 @@ export function MechanicsTrackerDialog({
             <DialogFooter>
               <Button variant="outline" onClick={retry}>
                 <RotateCcw className="h-4 w-4" />
-                Retry
+                {t("Retry")}
               </Button>
               <Button onClick={save} disabled={saving}>
-                {saving ? "Saving…" : `Save ${actionLabel}`}
+                {saving ? t("Saving…") : t("Save {actionLabel}", { actionLabel: t(actionLabel) })}
               </Button>
             </DialogFooter>
           </div>

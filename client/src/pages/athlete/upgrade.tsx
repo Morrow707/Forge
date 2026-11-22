@@ -51,6 +51,7 @@ import { forgeCodeEntryIsAllowed } from "@/lib/forge-code-entry";
 import { checkoutReceipt, type CheckoutReceipt } from "@shared/checkout-receipt";
 import { formatCents } from "@shared/billing-tiers";
 
+import { translate, useT } from "@/i18n";
 /** The add-on half of GET /api/athlete/entitlements -- see sport-coaches.tsx for
  * why `addOns` (may I open it) and `ownedAddOns` (did I pay for it) are two
  * different questions. */
@@ -75,6 +76,7 @@ type AddOnEntitlements = {
  * on iOS the Sport Coaches page carries the StoreKit price, because only StoreKit
  * can state an Apple price and only it can take the purchase. */
 function SportCoachAddOns({ webCheckout }: { webCheckout: boolean }) {
+  const t = useT();
   const { data } = useQuery<AddOnEntitlements>({
     queryKey: ["/api/athlete/entitlements"],
     queryFn: () => getJson("/api/athlete/entitlements"),
@@ -88,9 +90,9 @@ function SportCoachAddOns({ webCheckout }: { webCheckout: boolean }) {
 
   return (
     <div className="mt-10">
-      <p className="label-xs mb-1">Add-ons</p>
+      <p className="label-xs mb-1">{t("Add-ons")}</p>
       <p className="mb-4 text-sm text-muted-foreground">
-        Bought one at a time, on top of whatever plan you are on.
+        {t("Bought one at a time, on top of whatever plan you are on.")}
       </p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {offered.map((id) => {
@@ -99,12 +101,12 @@ function SportCoachAddOns({ webCheckout }: { webCheckout: boolean }) {
           const unlocked = data?.addOns[id] === true;
           const owned = data?.ownedAddOns[id] === true;
           const status = owned
-            ? "Owned"
+            ? t("Owned")
             : unlocked
-              ? "Included with your account"
+              ? t("Included with your account")
               : data?.billingOpen === true
-                ? "Available"
-                : "Not available yet";
+                ? t("Available")
+                : t("Not available yet");
           return (
             <Card key={id} className="flex flex-col">
               <CardContent className="flex flex-1 flex-col gap-2 p-5">
@@ -116,10 +118,10 @@ function SportCoachAddOns({ webCheckout }: { webCheckout: boolean }) {
                     {status.toUpperCase()}
                   </Badge>
                 </div>
-                <p className="text-sm text-muted-foreground">{addOn.description}</p>
+                <p className="text-sm text-muted-foreground">{t(addOn.description)}</p>
                 <p className="mt-auto font-display text-xl font-bold">
                   {formatCents(addOn.monthlyPriceCents)}
-                  <span className="text-sm font-normal text-muted-foreground">/mo</span>
+                  <span className="text-sm font-normal text-muted-foreground">{t("/mo")}</span>
                 </p>
                 {/* Stripe on the web only. On iOS an add-on is a StoreKit purchase
                     made from the Sport Coaches page, and the server refuses a web
@@ -127,7 +129,7 @@ function SportCoachAddOns({ webCheckout }: { webCheckout: boolean }) {
                     here would be a guaranteed error toast. */}
                 {!unlocked && data?.billingOpen === true && webCheckout && (
                   <Button size="sm" variant="outline" onClick={() => void startAddOnCheckout(id)}>
-                    Get
+                    {t("Get")}
                   </Button>
                 )}
               </CardContent>
@@ -147,7 +149,7 @@ async function startAddOnCheckout(addOnId: FreeAgentAddOnId) {
     const { url } = await res.json();
     window.location.href = url;
   } catch (err) {
-    toast.error(err instanceof Error ? err.message : "Couldn't start checkout, try again");
+    toast.error(err instanceof Error ? err.message : translate("Couldn't start checkout, try again"));
   }
 }
 
@@ -164,6 +166,7 @@ async function startAddOnCheckout(addOnId: FreeAgentAddOnId) {
  * prices; until then the route answers with a plain "not configured" and
  * the button surfaces it rather than failing silently. */
 export default function AthleteUpgrade() {
+  const t = useT();
   const supported = isAppleIapSupported();
   // THE ANDROID APP SELLS NOTHING YET, AND SAYS SO. Google Play's billing policy is Apple's:
   // a digital subscription bought inside the app goes through Play Billing, and the app may not
@@ -281,7 +284,7 @@ export default function AthleteUpgrade() {
           await apiRequest("POST", "/api/billing/switch/free-agent-tier", { tier });
           await qc.invalidateQueries({ queryKey: ["/api/athlete/entitlements"] });
           await qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
-          toast.success(`You're on ${FREE_AGENT_TIERS[tier].label} now.`);
+          toast.success(t("You're on {label} now.", { label: FREE_AGENT_TIERS[tier].label }));
           setOrderTier(null);
           setCheckoutTier(null);
           return;
@@ -298,7 +301,7 @@ export default function AthleteUpgrade() {
       const { url } = await res.json();
       window.location.href = url;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't start checkout, try again");
+      toast.error(err instanceof Error ? err.message : t("Couldn't start checkout, try again"));
       setCheckoutTier(null);
     }
   }
@@ -313,7 +316,7 @@ export default function AthleteUpgrade() {
       const { url } = await res.json();
       window.location.href = url;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't open billing settings");
+      toast.error(err instanceof Error ? err.message : t("Couldn't open billing settings"));
       setOpeningPortal(false);
     }
   }
@@ -323,15 +326,15 @@ export default function AthleteUpgrade() {
     try {
       if (googleSupported) {
         await purchaseFreeAgentTierOnGooglePlay(tier);
-        toast.success("You're upgraded, welcome to the new tier.");
+        toast.success(t("You're upgraded, welcome to the new tier."));
       } else {
         const result = await purchaseFreeAgentTier(tier);
         if (result.deferred && result.appliedTier) {
           // Apple schedules a move to a lower tier for the next renewal and keeps the current one
           // until then; saying "upgraded" here was wrong on 2026-10-05.
-          toast(`${FREE_AGENT_TIERS[tier].label} starts at your next renewal. ${FREE_AGENT_TIERS[result.appliedTier].label} stays until then.`);
+          toast(t("{label} starts at your next renewal. {label2} stays until then.", { label: FREE_AGENT_TIERS[tier].label, label2: FREE_AGENT_TIERS[result.appliedTier].label }));
         } else {
-          toast.success(`You're on ${FREE_AGENT_TIERS[tier].label} now.`);
+          toast.success(t("You're on {label} now.", { label: FREE_AGENT_TIERS[tier].label }));
         }
       }
       refetch();
@@ -343,12 +346,12 @@ export default function AthleteUpgrade() {
       if (err instanceof ApplePurchaseCancelledError || err instanceof GooglePlayPurchaseCancelledError) {
         // Athlete backed out of the store's purchase sheet -- not an error.
       } else if (err instanceof ApplePurchasePendingError || err instanceof GooglePlayPurchasePendingError) {
-        toast("Purchase pending approval, you'll be upgraded once it's confirmed.");
+        toast(t("Purchase pending approval, you'll be upgraded once it's confirmed."));
       } else {
         // The server's own sentence when it refused the receipt (a 403 for a coached athlete, a
         // 502 when verification is not configured, a 422 for a product it does not sell), so the
         // screen says which step failed instead of "try again" for all of them.
-        toast.error(err instanceof ApiError && err.message ? err.message : "Couldn't complete that purchase, try again");
+        toast.error(err instanceof ApiError && err.message ? err.message : t("Couldn't complete that purchase, try again"));
       }
     } finally {
       setPurchasingTier(null);
@@ -360,10 +363,10 @@ export default function AthleteUpgrade() {
     try {
       if (googleSupported) await restoreGooglePlayPurchases();
       else await restoreFreeAgentPurchases();
-      toast.success("Purchases restored");
+      toast.success(t("Purchases restored"));
       refetch();
     } catch {
-      toast.error("Couldn't restore purchases, try again");
+      toast.error(t("Couldn't restore purchases, try again"));
     } finally {
       setRestoring(false);
     }
@@ -380,7 +383,7 @@ export default function AthleteUpgrade() {
       await redeemAppleOfferCode();
       refetch();
     } catch {
-      toast.error("Couldn't open the code sheet, try again");
+      toast.error(t("Couldn't open the code sheet, try again"));
     }
   }
 
@@ -401,11 +404,11 @@ export default function AthleteUpgrade() {
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
       toast.success(
         message ??
-          (trialExpiresAt ? `Code applied: full access is free through ${new Date(trialExpiresAt).toLocaleDateString()}` : "Code applied"),
+          (trialExpiresAt ? t("Code applied: full access is free through {date}", { date: t.date(trialExpiresAt) }) : t("Code applied")),
       );
       setForgeCode("");
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Couldn't redeem that code");
+      toast.error(err instanceof ApiError ? err.message : t("Couldn't redeem that code"));
     } finally {
       setRedeemingForgeCode(false);
     }
@@ -417,14 +420,14 @@ export default function AthleteUpgrade() {
   // checkout too; an App Store purchase cannot be refused there, so the buttons are not drawn.
   if (user?.planCoveredByForge === true) {
     return (
-      <FreeAgentGate title="Upgrade">
-        <AppShell title="Your plan">
+      <FreeAgentGate title={t("Upgrade")}>
+        <AppShell title={t("Your plan")}>
           <Card className="mb-6 border-primary/40" data-testid="covered-by-forge-banner">
             <CardContent className="p-5">
               <p className="text-sm font-semibold">
-                Your account is covered by Forge. You do not need to pick a plan or pay.
+                {t("Your account is covered by Forge. You do not need to pick a plan or pay.")}
               </p>
-              <p className="mt-1 text-sm text-muted-foreground">Everything is open. There is nothing to buy here.</p>
+              <p className="mt-1 text-sm text-muted-foreground">{t("Everything is open. There is nothing to buy here.")}</p>
             </CardContent>
           </Card>
         </AppShell>
@@ -433,26 +436,26 @@ export default function AthleteUpgrade() {
   }
 
   return (
-    <FreeAgentGate title="Upgrade">
+    <FreeAgentGate title={t("Upgrade")}>
       <AppShell
-        title={arrivedFromSignup && !currentTier ? "Choose your plan" : "Upgrade"}
+        title={arrivedFromSignup && !currentTier ? t("Choose your plan") : t("Upgrade")}
         actions={
           live ? (
             <div className="flex items-center gap-2">
               {supported && (
                 <Button variant="outline" size="sm" onClick={handleRedeemCode}>
-                  App Store code
+                  {t("App Store code")}
                 </Button>
               )}
               <Button variant="outline" size="sm" onClick={handleRestore} disabled={restoring}>
                 <RotateCcw className="h-4 w-4" />
-                {restoring ? "Restoring..." : "Restore Purchases"}
+                {restoring ? t("Restoring...") : t("Restore Purchases")}
               </Button>
             </div>
           ) : webBillingOpen ? (
             <Button variant="outline" size="sm" onClick={openBillingPortal} disabled={openingPortal}>
               <CreditCard className="h-4 w-4" />
-              {openingPortal ? "Opening..." : "Manage billing"}
+              {openingPortal ? t("Opening...") : t("Manage billing")}
             </Button>
           ) : undefined
         }
@@ -461,14 +464,15 @@ export default function AthleteUpgrade() {
           <Card className="mb-6 border-primary/40" data-testid="welcome-pick-a-plan">
             <CardContent className="p-5">
               <p className="font-display text-base font-bold uppercase tracking-wide">
-                Last step: which plan do you want?
+                {t("Last step: which plan do you want?")}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Tap Choose this plan on the one you want. You will see your order and confirm it before
-                anything is charged.
+                {t("Tap Choose this plan on the one you want. You will see your order and confirm it before anything is charged.")}
               </p>
               <p className="mt-3 text-xs text-muted-foreground">
-                Training on Forge needs a plan.{forgeCodeEntryIsAllowed() ? " If you have a code, enter it on your order." : ""}
+                {forgeCodeEntryIsAllowed()
+                  ? t("Training on Forge needs a plan. If you have a code, enter it on your order.")
+                  : t("Training on Forge needs a plan.")}
               </p>
             </CardContent>
           </Card>
@@ -477,10 +481,10 @@ export default function AthleteUpgrade() {
           <Card className="mb-6 border-primary/40" data-testid="plan-required-banner">
             <CardContent className="p-5">
               <p className="font-display text-base font-bold uppercase tracking-wide">
-                Pick a plan to train
+                {t("Pick a plan to train")}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Training on Forge needs a plan. Everything you have logged is still here.
+                {t("Training on Forge needs a plan. Everything you have logged is still here.")}
               </p>
             </CardContent>
           </Card>
@@ -489,10 +493,9 @@ export default function AthleteUpgrade() {
           <Card className="mb-6" data-testid="trial-running-banner">
             <CardContent className="p-5">
               <p className="text-sm font-semibold">
-                Your free trial runs through {trialEndsAt.toLocaleDateString()}.
-              </p>
+                {t("Your free trial runs through {date}.", { date: t.date(trialEndsAt) })}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Pick a plan before then to keep training. Nothing you log is lost either way.
+                {t("Pick a plan before then to keep training. Nothing you log is lost either way.")}
               </p>
             </CardContent>
           </Card>
@@ -511,21 +514,20 @@ export default function AthleteUpgrade() {
           <CardContent className="space-y-3 p-5">
             {trialEndsAt ? (
               <p className="text-sm font-semibold">
-                Full access is free through {trialEndsAt.toLocaleDateString()}.
-              </p>
+                {t("Full access is free through {date}.", { date: t.date(trialEndsAt) })}</p>
             ) : (
-              <p className="text-sm font-semibold">Have a Forge code?</p>
+              <p className="text-sm font-semibold">{t("Have a Forge code?")}</p>
             )}
             <div className="flex items-center gap-2">
               <Input
                 value={forgeCode}
                 onChange={(e) => setForgeCode(e.target.value.toUpperCase())}
-                placeholder="CODE"
+                placeholder={t("CODE")}
                 autoCapitalize="characters"
                 autoComplete="off"
                 maxLength={30}
                 className="font-mono uppercase"
-                aria-label="Forge code"
+                aria-label={t("Forge code")}
               />
               <Button
                 type="button"
@@ -533,11 +535,11 @@ export default function AthleteUpgrade() {
                 onClick={redeemForgeCode}
                 disabled={!forgeCode.trim() || redeemingForgeCode}
               >
-                {redeemingForgeCode ? "Checking…" : "Redeem"}
+                {redeemingForgeCode ? t("Checking…") : t("Redeem")}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Free time on a code counts from the day you signed up.
+              {t("Free time on a code counts from the day you signed up.")}
             </p>
           </CardContent>
         </Card>
@@ -545,10 +547,9 @@ export default function AthleteUpgrade() {
         {androidNative && !live && (
           <Card className="mt-6">
             <CardContent className="p-6 text-sm text-muted-foreground">
-              <p className="font-semibold text-foreground">Subscriptions aren't available in the Android app yet.</p>
+              <p className="font-semibold text-foreground">{t("Subscriptions aren't available in the Android app yet.")}</p>
               <p className="mt-2">
-                Everything you already have access to keeps working. Plans will be sold here through Google Play
-                once that is ready.
+                {t("Everything you already have access to keeps working. Plans will be sold here through Google Play once that is ready.")}
               </p>
             </CardContent>
           </Card>
@@ -561,10 +562,9 @@ export default function AthleteUpgrade() {
         {!supported && !androidNative && entitlements?.appleSubscriptionOnFile && (
           <Card className="mt-6 border-amber-500/40">
             <CardContent className="p-5 text-sm">
-              <p className="font-semibold">Your plan is billed through the App Store.</p>
+              <p className="font-semibold">{t("Your plan is billed through the App Store.")}</p>
               <p className="mt-1 text-muted-foreground">
-                Changing plans here starts a new card subscription and does not stop that one. Cancel
-                it in iOS Settings first, or you will be charged by both.
+                {t("Changing plans here starts a new card subscription and does not stop that one. Cancel it in iOS Settings first, or you will be charged by both.")}
               </p>
             </CardContent>
           </Card>
@@ -583,19 +583,19 @@ export default function AthleteUpgrade() {
                       {tier.hasVideoFormCheck && (
                         <Badge variant="secondary" className="shrink-0 gap-1 text-[10px]">
                           <Video className="h-2.5 w-2.5" />
-                          VIDEO
+                          {t("VIDEO")}
                         </Badge>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground">{tier.description}</p>
+                    <p className="text-sm text-muted-foreground">{t(tier.description)}</p>
                     {tier.hasVideoFormCheck && <CameraMetricCaveat variant="purchase" />}
                     <p className="mt-auto font-display text-2xl font-bold">
                       {formatCents(tier.monthlyPriceCents)}
-                      <span className="text-sm font-normal text-muted-foreground">/mo</span>
+                      <span className="text-sm font-normal text-muted-foreground">{t("/mo")}</span>
                     </p>
                     {currentTier === id ? (
                       <p className="rounded-md border border-success/60 px-3 py-2 text-center text-xs font-semibold text-success">
-                        Your current plan
+                        {t("Your current plan")}
                       </p>
                     ) : webBillingOpen ? (
                       <Button
@@ -604,11 +604,11 @@ export default function AthleteUpgrade() {
                         disabled={checkoutTier !== null}
                         data-testid={`button-choose-plan-${id}`}
                       >
-                        {orderTier === id ? "Selected" : currentTier ? "Switch to this plan" : "Choose this plan"}
+                        {orderTier === id ? t("Selected") : currentTier ? t("Switch to this plan") : t("Choose this plan")}
                       </Button>
                     ) : (
                       <p className="rounded-md border border-border px-3 py-2 text-center text-xs text-muted-foreground">
-                        Not available yet.
+                        {t("Not available yet.")}
                       </p>
                     )}
                   </CardContent>
@@ -620,19 +620,25 @@ export default function AthleteUpgrade() {
         {!supported && !androidNative && webBillingOpen && orderTier && orderReceipt && (
           <Card ref={orderRef} className="mt-6 scroll-mt-24 border-primary/50" data-testid="order-receipt">
             <CardContent className="space-y-4 p-5">
-              <p className="font-display text-lg font-bold uppercase tracking-wide">Your order</p>
+              <p className="font-display text-lg font-bold uppercase tracking-wide">{t("Your order")}</p>
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <span>{FREE_AGENT_TIERS[orderTier].label}, monthly</span>
+                  <span>{t("{label}, monthly", { label: FREE_AGENT_TIERS[orderTier].label })}</span>
                   <span data-testid="receipt-price">{formatCents(orderReceipt.monthlyPriceCents)}</span>
                 </div>
                 {orderReceipt.discount && (
                   <div className="flex items-center justify-between gap-3 text-success">
                     <span data-testid="receipt-discount-label">
-                      Code {orderReceipt.discount.code}:{" "}
                       {orderReceipt.discount.percentOff === 100
-                        ? `free for ${orderReceipt.discount.months} month${orderReceipt.discount.months === 1 ? "" : "s"}`
-                        : `${orderReceipt.discount.percentOff}% off for ${orderReceipt.discount.months} month${orderReceipt.discount.months === 1 ? "" : "s"}`}
+                        ? t.plural(orderReceipt.discount.months, "Code {code}: free for {count} month", "Code {code}: free for {count} months", {
+                            code: orderReceipt.discount.code,
+                          })
+                        : t.plural(
+                            orderReceipt.discount.months,
+                            "Code {code}: {percentOff}% off for {count} month",
+                            "Code {code}: {percentOff}% off for {count} months",
+                            { code: orderReceipt.discount.code, percentOff: orderReceipt.discount.percentOff },
+                          )}
                     </span>
                     <span data-testid="receipt-discount">-{formatCents(orderReceipt.discountCentsPerMonth)}</span>
                   </div>
@@ -641,27 +647,27 @@ export default function AthleteUpgrade() {
                   <div className="space-y-1 border-t border-border pt-2" data-testid="receipt-switch-note">
                     {orderPreview.carriedDiscount && (
                       <p className="font-semibold text-success" data-testid="receipt-carried-code">
-                        {orderPreview.carriedDiscount.code ? `Code ${orderPreview.carriedDiscount.code}` : "Your code"}{" "}
-                        stays on:{" "}
-                        {orderPreview.carriedDiscount.percentOff >= 100
-                          ? "free"
-                          : `${orderPreview.carriedDiscount.percentOff}% off`}
-                        {orderPreview.carriedDiscount.endsAt
-                          ? ` until ${new Date(orderPreview.carriedDiscount.endsAt).toLocaleDateString()}`
-                          : ""}
-                        .
+                        {t("{codeName} stays on: {discount}{until}.", {
+                          codeName: orderPreview.carriedDiscount.code
+                            ? t("Code {code}", { code: orderPreview.carriedDiscount.code })
+                            : t("Your code"),
+                          discount:
+                            orderPreview.carriedDiscount.percentOff >= 100
+                              ? t("free")
+                              : t("{percentOff}% off", { percentOff: orderPreview.carriedDiscount.percentOff }),
+                          until: orderPreview.carriedDiscount.endsAt
+                            ? t(" until {date}", { date: t.date(orderPreview.carriedDiscount.endsAt) })
+                            : "",
+                        })}
                       </p>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      Your plan changes now on the card you already have on file. Nothing new to enter. Your next
-                      bill is adjusted for the change, then it is {formatCents(orderReceipt.monthlyPriceCents)} each
-                      month until you cancel.
-                    </p>
+                      {t("Your plan changes now on the card you already have on file. Nothing new to enter. Your next bill is adjusted for the change, then it is {value} each month until you cancel.", { value: formatCents(orderReceipt.monthlyPriceCents) })}</p>
                   </div>
                 ) : (
                   <>
                     <div className="flex items-center justify-between gap-3 border-t border-border pt-2 text-base font-bold">
-                      <span>Due today</span>
+                      <span>{t("Due today")}</span>
                       <span data-testid="receipt-due-today">{formatCents(orderReceipt.dueTodayCents)}</span>
                     </div>
                     <p className="text-xs text-muted-foreground" data-testid="receipt-summary">
@@ -672,17 +678,17 @@ export default function AthleteUpgrade() {
               </div>
               {forgeCodeEntryIsAllowed() && !orderPreview?.switchesInPlace && (
                 <div className="space-y-1.5">
-                  <p className="text-sm font-semibold">Have a coupon code?</p>
+                  <p className="text-sm font-semibold">{t("Have a coupon code?")}</p>
                   <div className="flex items-center gap-2">
                     <Input
                       value={orderCode}
                       onChange={(e) => setOrderCode(e.target.value.toUpperCase())}
-                      placeholder="CODE"
+                      placeholder={t("CODE")}
                       autoCapitalize="characters"
                       autoComplete="off"
                       maxLength={30}
                       className="font-mono uppercase"
-                      aria-label="Coupon code"
+                      aria-label={t("Coupon code")}
                       data-testid="input-order-code"
                     />
                     <Button
@@ -692,12 +698,12 @@ export default function AthleteUpgrade() {
                       disabled={orderPreviewLoading || orderCode.trim() === appliedCode}
                       data-testid="button-apply-order-code"
                     >
-                      {orderPreviewLoading ? "Checking…" : "Apply"}
+                      {orderPreviewLoading ? t("Checking…") : t("Apply")}
                     </Button>
                   </div>
                   {appliedCode && orderPreview && !orderPreview.codeAccepted && (
                     <p className="text-xs text-destructive" data-testid="order-code-refused">
-                      {orderPreview.codeMessage ?? "That code isn't valid"}
+                      {orderPreview.codeMessage ?? t("That code isn't valid")}
                     </p>
                   )}
                 </div>
@@ -710,15 +716,15 @@ export default function AthleteUpgrade() {
               >
                 {orderPreview?.switchesInPlace
                   ? checkoutTier
-                    ? "Changing plan..."
-                    : "Change plan"
+                    ? t("Changing plan...")
+                    : t("Change plan")
                   : checkoutTier
-                    ? "Opening checkout..."
-                    : "Checkout"}
+                    ? t("Opening checkout...")
+                    : t("Checkout")}
               </Button>
               {!orderPreview?.switchesInPlace && (
                 <p className="text-xs text-muted-foreground">
-                  Your card is entered on the next page, with Stripe. Forge never sees the card number.
+                  {t("Your card is entered on the next page, with Stripe. Forge never sees the card number.")}
                 </p>
               )}
             </CardContent>
@@ -741,7 +747,7 @@ export default function AthleteUpgrade() {
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
               <Sparkles className="h-10 w-10 text-muted-foreground" />
               <p className="max-w-sm text-muted-foreground">
-                Upgrades aren't open yet, check back soon.
+                {t("Upgrades aren't open yet, check back soon.")}
               </p>
             </CardContent>
           </Card>
@@ -749,7 +755,7 @@ export default function AthleteUpgrade() {
         {live && (
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {productsFailed && !isLoading && (
-              <ReadFailed what={`the plans from ${storeName}`} onRetry={() => void refetch()} />
+              <ReadFailed what={t("the plans from {storeName}", { storeName })} onRetry={() => void refetch()} />
             )}
             {isLoading &&
               [0, 1, 2].map((i) => <div key={i} className="h-56 animate-pulse rounded-lg bg-surface" />)}
@@ -761,26 +767,26 @@ export default function AthleteUpgrade() {
                     {p.hasVideoFormCheck && (
                       <Badge variant="secondary" className="shrink-0 gap-1 text-[10px]">
                         <Video className="h-2.5 w-2.5" />
-                        VIDEO
+                        {t("VIDEO")}
                       </Badge>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground">{p.description}</p>
+                  <p className="text-sm text-muted-foreground">{t(p.description)}</p>
                   {p.hasVideoFormCheck && <CameraMetricCaveat variant="purchase" />}
                   <p className="mt-auto font-display text-2xl font-bold">
                     {p.displayPrice ?? "--"}
-                    <span className="text-sm font-normal text-muted-foreground">/mo</span>
+                    <span className="text-sm font-normal text-muted-foreground">{t("/mo")}</span>
                   </p>
                   {currentTier === p.tier ? (
                     <p className="rounded-md border border-success/60 px-3 py-2 text-center text-xs font-semibold text-success">
-                      Your current plan
+                      {t("Your current plan")}
                     </p>
                   ) : (
                     <Button
                       onClick={() => handlePurchase(p.tier)}
                       disabled={purchasingTier !== null || !p.displayPrice}
                     >
-                      {purchasingTier === p.tier ? "Purchasing..." : currentTier ? "Switch to this plan" : "Subscribe"}
+                      {purchasingTier === p.tier ? t("Purchasing...") : currentTier ? t("Switch to this plan") : t("Subscribe")}
                     </Button>
                   )}
                 </CardContent>

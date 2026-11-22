@@ -15,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { getJson } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { Trophy, Medal, Timer } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { formatHeight } from "@/components/profile-fields-form";
 import { StreakBadges } from "@/components/streak-badge";
 import { AthleteAvatar } from "@/components/athlete-avatar";
@@ -23,6 +23,7 @@ import { Skeleton } from "@/components/skeleton";
 import { ReadFailed } from "@/components/read-failed";
 import { cn } from "@/lib/utils";
 
+import { useT } from "@/i18n";
 type LeaderboardExercise = { id: number; name: string };
 type LeaderboardEntry = {
   // No athlete id, and no height or body weight for anyone but you -- the
@@ -91,6 +92,7 @@ function RosterRow({
   statValue: string;
   statCaption: string;
 }) {
+  const t = useT();
   return (
     <div className={cn("flex items-center gap-4 p-4", isYou && "bg-primary/5")}>
       <div
@@ -105,7 +107,7 @@ function RosterRow({
       <div className="min-w-0 flex-1">
         <p className="truncate font-semibold">
           {name}
-          {isYou && <span className="ml-1.5 text-xs font-normal text-primary">(you)</span>}
+          {isYou && <span className="ml-1.5 text-xs font-normal text-primary">{t("(you)")}</span>}
         </p>
         <div className="mt-1 flex flex-wrap gap-1.5">
           {sport && (
@@ -123,7 +125,7 @@ function RosterRow({
             <span className="text-[10px] text-muted-foreground">{formatHeight(heightIn)}</span>
           )}
           {bodyWeightLbs != null && (
-            <span className="text-[10px] text-muted-foreground">{bodyWeightLbs} lbs bw</span>
+            <span className="text-[10px] text-muted-foreground">{t("{bodyWeightLbs} lbs bw", { bodyWeightLbs })}</span>
           )}
           <StreakBadges currentStreak={currentStreak} totalCompleted={totalCompleted} />
         </div>
@@ -160,13 +162,13 @@ function RosterRowSkeleton() {
  * different fact from "your coach's roster exists but nobody's logged this
  * yet" (see the other empty states below). */
 function NoCoachCard() {
+  const t = useT();
   return (
     <Card>
       <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
         <Trophy className="h-10 w-10 text-muted-foreground" />
         <p className="text-muted-foreground">
-          The leaderboard ranks you against your coach's roster, you'll see it once you join a
-          team.
+          {t("The leaderboard ranks you against your coach's roster, you'll see it once you join a team.")}
         </p>
       </CardContent>
     </Card>
@@ -174,6 +176,7 @@ function NoCoachCard() {
 }
 
 function StrengthLeaderboard() {
+  const t = useT();
   const [exerciseId, setExerciseId] = useState<string>("");
 
   const { data: exercises, isError: exercisesFailed } = useQuery<LeaderboardExercise[] | null>({
@@ -193,15 +196,15 @@ function StrengthLeaderboard() {
   return (
     <>
       <div className="mb-6 max-w-xs space-y-1.5">
-        <label className="label-xs">Exercise</label>
+        <label className="label-xs">{t("Exercise")}</label>
         <Select value={exerciseId} onValueChange={setExerciseId}>
           <SelectTrigger>
-            <SelectValue placeholder="Pick an exercise" />
+            <SelectValue placeholder={t("Pick an exercise")} />
           </SelectTrigger>
           <SelectContent>
             {(exercises ?? []).length === 0 ? (
               <SelectItem value="_none" disabled>
-                {exercisesFailed ? "Couldn't load your exercises" : "No exercises assigned yet"}
+                {exercisesFailed ? t("Couldn't load your exercises") : t("No exercises assigned yet")}
               </SelectItem>
             ) : (
               (exercises ?? []).map((e) => (
@@ -219,7 +222,7 @@ function StrengthLeaderboard() {
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Trophy className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">
-              Pick an exercise to see where you rank on your team by best estimated 1RM.
+              {t("Pick an exercise to see where you rank on your team by best estimated 1RM.")}
             </p>
           </CardContent>
         </Card>
@@ -238,7 +241,7 @@ function StrengthLeaderboard() {
       {exerciseId && isError && (
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="this leaderboard" onRetry={() => void refetch()} />
+            <ReadFailed what={t("this leaderboard")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       )}
@@ -248,8 +251,7 @@ function StrengthLeaderboard() {
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Trophy className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">
-              No numeric-weight sets logged for {selectedName} yet.
-            </p>
+              {t("No numeric-weight sets logged for {selectedName} yet.", { selectedName })}</p>
           </CardContent>
         </Card>
       )}
@@ -271,7 +273,7 @@ function StrengthLeaderboard() {
                 currentStreak={entry.currentStreak}
                 totalCompleted={entry.totalCompleted}
                 statValue={`${entry.estimatedOneRm} ${entry.weightUnit}`}
-                statCaption={`${entry.weight} ${entry.weightUnit} × ${entry.reps} on ${format(parseISO(entry.date), "MMM d")}`}
+                statCaption={t("{weight} {unit} × {reps} on {date}", { weight: entry.weight, unit: entry.weightUnit, reps: entry.reps, date: t.date(parseISO(entry.date), { month: "short", day: "numeric" }) })}
               />
             ))}
           </CardContent>
@@ -282,6 +284,7 @@ function StrengthLeaderboard() {
 }
 
 function SpeedLeaderboard() {
+  const t = useT();
   const [skillExerciseId, setSkillExerciseId] = useState<string>("");
   // A 10, a 40 and a 60 are three different events, so the board is picked
   // per distance instead of ranking every sprint for this drill together --
@@ -323,15 +326,15 @@ function SpeedLeaderboard() {
     <>
       <div className="mb-6 flex flex-wrap gap-4">
         <div className="max-w-xs flex-1 space-y-1.5">
-          <label className="label-xs">Drill</label>
+          <label className="label-xs">{t("Drill")}</label>
           <Select value={skillExerciseId} onValueChange={setSkillExerciseId}>
             <SelectTrigger>
-              <SelectValue placeholder="Pick a timed drill" />
+              <SelectValue placeholder={t("Pick a timed drill")} />
             </SelectTrigger>
             <SelectContent>
               {(exercises ?? []).length === 0 ? (
                 <SelectItem value="_none" disabled>
-                  {exercisesFailed ? "Couldn't load your drills" : "No timed drills assigned yet"}
+                  {exercisesFailed ? t("Couldn't load your drills") : t("No timed drills assigned yet")}
                 </SelectItem>
               ) : (
                 (exercises ?? []).map((e) => (
@@ -346,21 +349,20 @@ function SpeedLeaderboard() {
 
         {skillExerciseId && (
           <div className="max-w-[10rem] flex-1 space-y-1.5">
-            <label className="label-xs">Distance</label>
+            <label className="label-xs">{t("Distance")}</label>
             <Select value={distanceYards} onValueChange={setDistanceYards}>
               <SelectTrigger>
-                <SelectValue placeholder="Distance" />
+                <SelectValue placeholder={t("Distance")} />
               </SelectTrigger>
               <SelectContent>
                 {distances.length === 0 ? (
                   <SelectItem value="_none" disabled>
-                    {distancesFailed ? "Couldn't load distances" : "No timed runs yet"}
+                    {distancesFailed ? t("Couldn't load distances") : t("No timed runs yet")}
                   </SelectItem>
                 ) : (
                   distances.map((d) => (
                     <SelectItem key={d} value={String(d)}>
-                      {d} yd
-                    </SelectItem>
+                      {t("{d} yd", { d })}</SelectItem>
                   ))
                 )}
               </SelectContent>
@@ -383,7 +385,7 @@ function SpeedLeaderboard() {
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Timer className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">
-              Pick a drill to see where you rank on your team by best camera-timed sprint.
+              {t("Pick a drill to see where you rank on your team by best camera-timed sprint.")}
             </p>
           </CardContent>
         </Card>
@@ -402,7 +404,7 @@ function SpeedLeaderboard() {
       {skillExerciseId && isError && (
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="this leaderboard" onRetry={() => void refetch()} />
+            <ReadFailed what={t("this leaderboard")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       )}
@@ -412,8 +414,7 @@ function SpeedLeaderboard() {
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Timer className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">
-              No camera-timed sprints recorded for {selectedName} yet.
-            </p>
+              {t("No camera-timed sprints recorded for {selectedName} yet.", { selectedName })}</p>
           </CardContent>
         </Card>
       )}
@@ -435,7 +436,7 @@ function SpeedLeaderboard() {
                 currentStreak={entry.currentStreak}
                 totalCompleted={entry.totalCompleted}
                 statValue={`${entry.elapsedSeconds.toFixed(2)}s`}
-                statCaption={`${entry.distanceYards != null ? `${entry.distanceYards} yd on ` : ""}${format(parseISO(entry.date), "MMM d")}`}
+                statCaption={entry.distanceYards != null ? t("{yards} yd on {date}", { yards: entry.distanceYards, date: t.date(parseISO(entry.date), { month: "short", day: "numeric" }) }) : t.date(parseISO(entry.date), { month: "short", day: "numeric" })}
               />
             ))}
           </CardContent>
@@ -452,15 +453,16 @@ function SpeedLeaderboard() {
  * contributions. Nothing here is editable; this is purely "where do I
  * stand." */
 export default function AthleteLeaderboard() {
+  const t = useT();
   const { user } = useAuth();
   if (!user) return null;
 
   return (
-    <AppShell title="Leaderboard">
+    <AppShell title={t("Leaderboard")}>
       <Tabs defaultValue="strength">
         <TabsList className="mb-6">
-          <TabsTrigger value="strength">Strength</TabsTrigger>
-          <TabsTrigger value="speed">Speed & Agility</TabsTrigger>
+          <TabsTrigger value="strength">{t("Strength")}</TabsTrigger>
+          <TabsTrigger value="speed">{t("Speed & Agility")}</TabsTrigger>
         </TabsList>
         <TabsContent value="strength">
           <StrengthLeaderboard />

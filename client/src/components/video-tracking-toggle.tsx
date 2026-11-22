@@ -6,6 +6,7 @@ import {
   type TrackingLevel,
 } from "@/lib/resolve-tracking-mode";
 
+import { useT } from "@/i18n";
 export type { TrackingLevel };
 
 // The name and equipment patterns live in resolve-tracking-mode.ts, read here AND by the
@@ -51,6 +52,7 @@ export function VideoTrackingToggle({
   exerciseName?: string | null;
   onChange: (patch: { trackingLevel: TrackingLevel; videoCheckEnabled: boolean }) => void;
 }) {
+  const t = useT();
   const isOn = trackingLevel !== "none";
   // Med ball is checked BEFORE the plyometric category, not after. "Med Ball Chest Pass" and
   // "Med Ball Overhead Throw" are both seeded as category plyometric, so the old order sent two
@@ -68,8 +70,8 @@ export function VideoTrackingToggle({
       aria-pressed={isOn}
       title={
         isOn
-          ? "Camera tracking + AI form-check is on for this exercise, click to turn off"
-          : "Turn on camera tracking (bar path, velocity, power, ROM, form faults) + AI form-check"
+          ? t("Camera tracking + AI form-check is on for this exercise, click to turn off")
+          : t("Turn on camera tracking (bar path, velocity, power, ROM, form faults) + AI form-check")
       }
       onClick={() =>
         onChange(
@@ -86,7 +88,7 @@ export function VideoTrackingToggle({
       )}
     >
       {isOn ? <Video className="h-3.5 w-3.5" /> : <VideoOff className="h-3.5 w-3.5" />}
-      {isOn ? "Video On" : "Video Off"}
+      {isOn ? t("Video On") : t("Video Off")}
     </button>
   );
 }

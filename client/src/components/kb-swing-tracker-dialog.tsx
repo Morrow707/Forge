@@ -31,6 +31,7 @@ import { ensureCameraPermission, onAppForeground, onAppBackground } from "@/lib/
 import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import type { PoseLandmarker } from "@mediapipe/tasks-vision";
 
+import { useT } from "@/i18n";
 const EMPTY_KB_SWING_METRICS: KbSwingSetMetrics = {
   peakSpeedMps: 0,
   meanSpeedMps: 0,
@@ -85,6 +86,7 @@ export function KbSwingTrackerDialog({
   onCapture: (metrics: KbSwingSetMetrics, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) => void;
   videoContext?: VideoRecordContext;
 }) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const videoTrackRef = useRef<MediaStreamTrack | null>(null);
@@ -301,13 +303,13 @@ export function KbSwingTrackerDialog({
           const result = await uploadOrQueueVideo(blob, videoFilenameForBlob(blob, "form-check"), videoContext ?? { label: "Kettlebell Swing" }, setUploadProgress);
           toast.error(
             result.status === "queued"
-              ? `${message} (No Wi-Fi, video saved on your device, will upload once connected.)`
-              : `${message} (Video saved for your coach.)`,
+              ? t("{message} (No Wi-Fi, video saved on your device, will upload once connected.)", { message: t(message) })
+              : t("{message} (Video saved for your coach.)", { message: t(message) }),
           );
           if (result.status === "queued" && !hasWarnedAboutQueueing()) {
             markWarnedAboutQueueing();
             toast.info(
-              "You can also upload a queued video manually anytime, even over cellular, from the Video Bank.",
+              t("You can also upload a queued video manually anytime, even over cellular, from the Video Bank."),
               { duration: 10000 },
             );
           }
@@ -315,7 +317,7 @@ export function KbSwingTrackerDialog({
           onOpenChange(false);
         } catch (err) {
           const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
-          toast.error(`${message} And the video didn't save either: ${detail}`);
+          toast.error(t("{message} And the video didn't save either: {detail}", { message: t(message), detail }));
           // THE TAKE STILL HAPPENED, EVEN IF ITS CLIP DID NOT ARRIVE.
           //
           // This used to toast and stop: no onCapture, no close. The metrics AND the
@@ -340,7 +342,7 @@ export function KbSwingTrackerDialog({
          * bare toast, so the set got no row, no number and no diagnostics. It also left the
          * dialog open and spinning. refused-capture-survives.test.ts paired a `try` with its
          * `catch` and was green on all six of these, because none of them is in a catch. */
-        toast.error(message);
+        toast.error(t(message));
         onCapture(EMPTY_KB_SWING_METRICS);
         onOpenChange(false);
         setSaving(false);
@@ -417,14 +419,14 @@ export function KbSwingTrackerDialog({
       if (result.status === "queued" && !hasWarnedAboutQueueing()) {
         markWarnedAboutQueueing();
         toast.info(
-          "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+          t("No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular."),
           { duration: 10000 },
         );
       }
       onCapture(metrics, result.status === "uploaded" ? result.url : undefined);
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
+      toast.error(err instanceof ApiError ? err.message : t("Saved the set, but the clip failed to upload"));
       onCapture(metrics, undefined);
       onOpenChange(false);
     } finally {
@@ -444,7 +446,7 @@ export function KbSwingTrackerDialog({
             <WebCameraChrome containerRef={cameraChromeContainerRef} videoTrackRef={videoTrackRef} active={open && !modelLoading && !cameraError} />
             <button
               type="button"
-              aria-label="Close"
+              aria-label={t("Close")}
               onClick={() => onOpenChange(false)}
               className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
             >
@@ -454,21 +456,21 @@ export function KbSwingTrackerDialog({
             {recording && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">
                 <Circle className="h-2.5 w-2.5 animate-pulse fill-destructive text-destructive" />
-                Recording
+                {t("Recording")}
               </div>
             )}
 
             {saving && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
-                <p className="text-sm text-white">Saving your video… {Math.round(uploadProgress * 100)}%</p>
+                <p className="text-sm text-white">{t("Saving your video… {percent}%", { percent: Math.round(uploadProgress * 100) })}</p>
               </div>
             )}
 
             {cameraError && (
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
-                {cameraError}
+                {t(cameraError)}
               </div>
             )}
           </div>
@@ -477,19 +479,18 @@ export function KbSwingTrackerDialog({
             {!recording && !saving && (
               <Button size="lg" onClick={startTracking} disabled={!!cameraError || modelLoading}>
                 <Circle className="h-4 w-4 fill-current" />
-                Start Set
+                {t("Start Set")}
               </Button>
             )}
             {recording && (
               <Button size="lg" variant="secondary" onClick={stopTracking}>
                 <Square className="h-4 w-4" />
-                Stop Set
+                {t("Stop Set")}
               </Button>
             )}
             {saving && (
               <Button size="lg" variant="secondary" disabled>
-                Saving… {Math.round(uploadProgress * 100)}%
-              </Button>
+                {t("Saving… {percent}%", { percent: Math.round(uploadProgress * 100) })}</Button>
             )}
           </div>
         </div>

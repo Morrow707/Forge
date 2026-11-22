@@ -16,9 +16,10 @@ import {
 } from "@/lib/video-offline-store";
 import type { UnattachedVideoCause, UnattachedVideoUpload } from "@shared/schema";
 import { toast } from "sonner";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { Upload, Video, Wifi, X, CloudUpload, Link2 } from "lucide-react";
 
+import { formatDate, msg, useT } from "@/i18n";
 // Read-only shape of what listPendingVideos() returns -- kept local since
 // the manifest entry's blob-storage internals (path, fieldName, mimeType)
 // aren't this page's concern, just the parts it displays and acts on.
@@ -41,27 +42,28 @@ const UNATTACHED_ROUTE = "/api/athlete/unattached-videos";
 // One sentence per way the server can decline a link, in the athlete's terms. Keyed by the
 // cause the server recorded, so a new cause is a type error here rather than a blank line.
 const CAUSE_COPY: Record<UnattachedVideoCause, string> = {
-  not_your_upload: "The upload was recorded under a different account.",
-  assignment_not_yours: "The program this set belonged to is no longer assigned to you.",
-  no_log_for_date: "No sets were saved for the day it was filmed, it may have saved under the next date.",
-  exercise_not_logged: "That exercise was no longer on the day's log when the clip finished uploading.",
-  set_not_logged: "That set number was no longer on the day's log when the clip finished uploading.",
-  set_already_has_video: "That set already had a video by the time this one finished uploading.",
+  not_your_upload: msg("The upload was recorded under a different account."),
+  assignment_not_yours: msg("The program this set belonged to is no longer assigned to you."),
+  no_log_for_date: msg("No sets were saved for the day it was filmed, it may have saved under the next date."),
+  exercise_not_logged: msg("That exercise was no longer on the day's log when the clip finished uploading."),
+  set_not_logged: msg("That set number was no longer on the day's log when the clip finished uploading."),
+  set_already_has_video: msg("That set already had a video by the time this one finished uploading."),
 };
 
 function describeCause(cause: string): string {
-  return (CAUSE_COPY as Record<string, string>)[cause] ?? "The set it was filmed for could not be found.";
+  return (CAUSE_COPY as Record<string, string>)[cause] ?? msg("The set it was filmed for could not be found.");
 }
 
 function formatWhen(iso: string): string {
   try {
-    return format(parseISO(iso), "MMM d, h:mm a");
+    return formatDate(parseISO(iso), { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   } catch {
     return iso;
   }
 }
 
 export default function AthleteVideoBank() {
+  const t = useT();
   const [pending, setPending] = useState<PendingVideo[]>([]);
   const [localUnattached, setLocalUnattached] = useState<UnattachedUpload[]>([]);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
@@ -89,11 +91,11 @@ export default function AthleteVideoBank() {
     setUploadingId(id);
     try {
       await uploadPendingVideoNow(id);
-      toast.success("Uploaded");
+      toast.success(t("Uploaded"));
       refresh();
       qc.invalidateQueries({ queryKey: [UNATTACHED_ROUTE] });
     } catch {
-      toast.error("Couldn't upload that video, it's still saved on your device, try again later.");
+      toast.error(t("Couldn't upload that video, it's still saved on your device, try again later."));
     } finally {
       setUploadingId(null);
     }
@@ -107,7 +109,7 @@ export default function AthleteVideoBank() {
   const dismissServer = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `${UNATTACHED_ROUTE}/${id}/dismiss`),
     onSuccess: () => qc.invalidateQueries({ queryKey: [UNATTACHED_ROUTE] }),
-    onError: () => toast.error("Couldn't dismiss that clip. Try again."),
+    onError: () => toast.error(t("Couldn't dismiss that clip. Try again.")),
   });
 
   // A clip the server knows about is shown from the server list; the local list only carries
@@ -118,29 +120,25 @@ export default function AthleteVideoBank() {
   const serverRows = serverUnattached.data ?? [];
 
   return (
-    <AppShell title="Video Bank">
+    <AppShell title={t("Video Bank")}>
       <p className="mb-6 text-sm text-muted-foreground">
-        Videos recorded with no Wi-Fi are saved right here on your device instead of using your
-        cellular data, they upload automatically once you're connected, or you can send them
-        now, cellular data and all.
+        {t("Videos recorded with no Wi-Fi are saved right here on your device instead of using your cellular data, they upload automatically once you're connected, or you can send them now, cellular data and all.")}
       </p>
 
       {!supported ? (
         <p className="py-6 text-center text-sm text-muted-foreground">
-          Clips only queue on the mobile app, where a recording can be saved on-device without
-          Wi-Fi. Clips that uploaded but never reached their set are listed below on every
-          device.
+          {t("Clips only queue on the mobile app, where a recording can be saved on-device without Wi-Fi. Clips that uploaded but never reached their set are listed below on every device.")}
         </p>
       ) : (
         <Card>
           <CardContent className="p-5">
             <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold">
               <Wifi className="h-4 w-4 text-primary" />
-              Waiting to Upload
+              {t("Waiting to Upload")}
             </h2>
             {pending.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
-                Nothing queued, every recent clip has uploaded.
+                {t("Nothing queued, every recent clip has uploaded.")}
               </p>
             ) : (
               <div className="space-y-2">
@@ -155,7 +153,7 @@ export default function AthleteVideoBank() {
                       </div>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold">{item.label}</p>
-                        <p className="text-xs text-muted-foreground">Queued {formatWhen(item.queuedAt)}</p>
+                        <p className="text-xs text-muted-foreground">{t("Queued {when}", { when: formatWhen(item.queuedAt) })}</p>
                       </div>
                     </div>
                     <Button
@@ -166,7 +164,7 @@ export default function AthleteVideoBank() {
                       onClick={() => handleUploadNow(item.id)}
                     >
                       <Upload className="h-3.5 w-3.5" />
-                      {uploadingId === item.id ? "Uploading…" : "Upload Now"}
+                      {uploadingId === item.id ? t("Uploading…") : t("Upload Now")}
                     </Button>
                   </div>
                 ))}
@@ -178,7 +176,7 @@ export default function AthleteVideoBank() {
 
       {serverUnattached.isError ? (
         <div className="mt-4">
-          <ReadFailed what="your unlinked clips" onRetry={() => serverUnattached.refetch()} />
+          <ReadFailed what={t("your unlinked clips")} onRetry={() => serverUnattached.refetch()} />
         </div>
       ) : (
         (serverRows.length > 0 || localOnly.length > 0) && (
@@ -186,29 +184,29 @@ export default function AthleteVideoBank() {
             <CardContent className="p-5">
               <h2 className="mb-1 flex items-center gap-2 font-display text-lg font-bold">
                 <CloudUpload className="h-4 w-4 text-primary" />
-                Uploaded, Not Linked to a Set
+                {t("Uploaded, Not Linked to a Set")}
               </h2>
               <p className="mb-3 text-xs text-muted-foreground">
-                These uploaded fine, but the set they were recorded for had changed by the time
-                they finished. Link one to the set it belongs to, or dismiss it, the video is
-                kept either way.
+                {t("These uploaded fine, but the set they were recorded for had changed by the time they finished. Link one to the set it belongs to, or dismiss it, the video is kept either way.")}
               </p>
               <div className="space-y-3">
                 {serverRows.map((item) => (
                   <div key={`s-${item.id}`} className="rounded-md border border-border p-3">
                     <div className="mb-2 flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{item.label ?? "Form check clip"}</p>
+                        <p className="truncate text-sm font-semibold">{item.label ?? t("Form check clip")}</p>
                         <p className="text-xs text-muted-foreground">
-                          {item.date ? `Filmed ${item.date} · ` : ""}Uploaded {formatWhen(String(item.createdAt))}
+                          {item.date
+                            ? t("Filmed {date} · Uploaded {when}", { date: item.date, when: formatWhen(String(item.createdAt)) })
+                            : t("Uploaded {when}", { when: formatWhen(String(item.createdAt)) })}
                         </p>
-                        <p className="mt-1 text-xs text-muted-foreground">{describeCause(item.cause)}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{t(describeCause(item.cause))}</p>
                       </div>
                       <Button
                         size="icon"
                         variant="ghost"
                         className="shrink-0"
-                        aria-label="Dismiss"
+                        aria-label={t("Dismiss")}
                         disabled={dismissServer.isPending}
                         onClick={() => dismissServer.mutate(item.id)}
                       >
@@ -223,7 +221,7 @@ export default function AthleteVideoBank() {
                     />
                     <Button size="sm" variant="outline" className="mt-2 w-full" onClick={() => setLinking(item)}>
                       <Link2 className="h-3.5 w-3.5" />
-                      Attach to a set
+                      {t("Attach to a set")}
                     </Button>
                   </div>
                 ))}
@@ -232,16 +230,16 @@ export default function AthleteVideoBank() {
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold">{item.label}</p>
-                        <p className="text-xs text-muted-foreground">Uploaded {formatWhen(item.uploadedAt)}</p>
+                        <p className="text-xs text-muted-foreground">{t("Uploaded {when}", { when: formatWhen(item.uploadedAt) })}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Uploaded from this device; the link to its set never got an answer from the server.
+                          {t("Uploaded from this device; the link to its set never got an answer from the server.")}
                         </p>
                       </div>
                       <Button
                         size="icon"
                         variant="ghost"
                         className="shrink-0"
-                        aria-label="Dismiss"
+                        aria-label={t("Dismiss")}
                         onClick={() => handleDismissLocal(item.url)}
                       >
                         <X className="h-4 w-4" />
@@ -287,6 +285,7 @@ function AttachToSetDialog({
   onClose: () => void;
   onAttached: () => void;
 }) {
+  const t = useT();
   const candidatesRoute = `${UNATTACHED_ROUTE}/${orphan.id}/candidate-sets`;
   const candidates = useQuery<CandidateSet[]>({
     queryKey: [candidatesRoute],
@@ -296,11 +295,11 @@ function AttachToSetDialog({
     mutationFn: (workoutSetEntryId: number) =>
       apiRequest("POST", `${UNATTACHED_ROUTE}/${orphan.id}/attach`, { workoutSetEntryId }),
     onSuccess: () => {
-      toast.success("Linked to that set");
+      toast.success(t("Linked to that set"));
       onAttached();
     },
     onError: (err) => {
-      toast.error(err instanceof ApiError ? err.message : "Couldn't link that clip. Try again.");
+      toast.error(err instanceof ApiError ? err.message : t("Couldn't link that clip. Try again."));
       candidates.refetch();
     },
   });
@@ -309,20 +308,27 @@ function AttachToSetDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Attach to a set</DialogTitle>
+          <DialogTitle>{t("Attach to a set")}</DialogTitle>
           <DialogDescription>
-            {orphan.label ?? "This clip"}
-            {orphan.date ? ` was filmed on ${orphan.date}.` : "."} Pick the set it belongs to. Only sets
-            without a video yet are listed.
+            {orphan.date
+              ? t("{clip} was filmed on {date}. Pick the set it belongs to. Only sets without a video yet are listed.", {
+                  clip: orphan.label ?? t("This clip"),
+                  date: orphan.date,
+                })
+              : t("{clip}. Pick the set it belongs to. Only sets without a video yet are listed.", {
+                  clip: orphan.label ?? t("This clip"),
+                })}
           </DialogDescription>
         </DialogHeader>
         {candidates.isError ? (
-          <ReadFailed what="that day's sets" onRetry={() => candidates.refetch()} />
+          <ReadFailed what={t("that day's sets")} onRetry={() => candidates.refetch()} />
         ) : candidates.isLoading ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">Loading sets…</p>
+          <p className="py-4 text-center text-sm text-muted-foreground">{t("Loading sets…")}</p>
         ) : (candidates.data ?? []).length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">
-            No sets without a video were found{orphan.date ? ` on ${orphan.date}` : " in the last 30 days"}.
+            {orphan.date
+              ? t("No sets without a video were found on {date}.", { date: orphan.date })
+              : t("No sets without a video were found in the last 30 days.")}
           </p>
         ) : (
           <div className="space-y-2">
@@ -336,11 +342,11 @@ function AttachToSetDialog({
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">
-                    {c.exerciseName} · Set {c.setNumber}
+                    {t("{exerciseName} · Set {setNumber}", { exerciseName: t.exercise(c.exerciseName), setNumber: c.setNumber })}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {c.date}
-                    {c.reps ? ` · ${c.reps} reps` : ""}
+                    {c.reps ? t(" · {reps} reps", { reps: c.reps }) : ""}
                     {c.weight ? ` · ${c.weight} ${c.weightUnit ?? ""}`.trimEnd() : ""}
                   </p>
                 </div>

@@ -8,6 +8,7 @@ import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { useCameraAccess } from "@/hooks/use-camera-access";
 import type { CompareSubject } from "@/components/clip-picker";
 
+import { useT } from "@/i18n";
 /** WHAT A FREE AGENT CAN DO WITH THEIR OWN FOOTAGE, now that the coach cards are gone.
  *
  * The three review cards were removed for a Free Agent because every one of them ended at a
@@ -49,13 +50,14 @@ export function CoachVideoWorkbenchCard({
   athleteId: number;
   athleteName: string;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   return (
     <WorkbenchBody
       open={open}
       setOpen={setOpen}
       subject={{ kind: "roster", athleteId, athleteName }}
-      heading={`Video analysis, ${athleteName}`}
+      heading={t("Video analysis, {athleteName}", { athleteName })}
     />
   );
 }
@@ -71,6 +73,7 @@ function WorkbenchBody({
   subject: CompareSubject;
   heading?: string;
 }) {
+  const t = useT();
   return (
     <>
       <Card>
@@ -82,9 +85,7 @@ function WorkbenchBody({
             <div className="min-w-0 flex-1">
               <p className="font-semibold">{heading}</p>
               <p className="text-sm text-muted-foreground">
-                Put one of your lifts next to a reference clip, step through them together, draw
-                on them and talk over the top. Record the session and save it to your phone,
-                Forge keeps no copy.
+                {t("Put one of your lifts next to a reference clip, step through them together, draw on them and talk over the top. Record the session and save it to your phone, Forge keeps no copy.")}
               </p>
             </div>
           </div>
@@ -92,7 +93,7 @@ function WorkbenchBody({
               video work; the measurements carry the same warning they carry everywhere. */}
           <CameraMetricCaveat />
           <Button type="button" onClick={() => setOpen(true)}>
-            Open video analysis
+            {t("Open video analysis")}
           </Button>
         </CardContent>
       </Card>

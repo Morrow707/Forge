@@ -50,6 +50,7 @@ import {
   Loader2,
 } from "lucide-react";
 
+import { useT } from "@/i18n";
 // Kept in sync with the hook call below -- shared so the indicator's own
 // "have we crossed the threshold yet" styling matches what actually
 // triggers the refresh.
@@ -69,6 +70,7 @@ type ProgressSummary = {
 };
 
 export default function AthleteDashboard() {
+  const t = useT();
   const { user } = useAuth();
   const { extras: brandExtras, term } = useBrandExtras();
   // The coach's layout for the program's athletes, until this athlete arranges their own.
@@ -166,7 +168,7 @@ export default function AthleteDashboard() {
     "next-3-days": (
       <SortableHideableWidget
         id="next-3-days"
-        label="Next 3 Days"
+        label={t("Next 3 Days")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("next-3-days")}
         onToggle={widgetVisibility.setHidden}
@@ -175,7 +177,7 @@ export default function AthleteDashboard() {
           days={days}
           entries={upcoming}
           calendarHref="/athlete/calendar"
-          description="Quick look at what's coming up, synced with the full calendar."
+          description={t("Quick look at what's coming up, synced with the full calendar.")}
           onEntryClick={(e) =>
             navigate(
               e.kind === "skill"
@@ -189,7 +191,7 @@ export default function AthleteDashboard() {
     "nutrition-summary": (
       <SortableHideableWidget
         id="nutrition-summary"
-        label="Today's Nutrition"
+        label={t("Today's Nutrition")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("nutrition-summary")}
         onToggle={widgetVisibility.setHidden}
@@ -200,7 +202,7 @@ export default function AthleteDashboard() {
     "stat-tiles": (
       <SortableHideableWidget
         id="stat-tiles"
-        label="Stat Tiles"
+        label={t("Stat Tiles")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("stat-tiles")}
         onToggle={widgetVisibility.setHidden}
@@ -208,14 +210,14 @@ export default function AthleteDashboard() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatTile
             icon={Flame}
-            label="Day streak"
+            label={t("Day streak")}
             value={progress?.currentStreak ?? 0}
             href="/athlete/progress"
             trend={progress?.last7DaysCompleted}
           />
           <StatTile
             icon={CalendarCheck}
-            label="Workouts this month"
+            label={t("Workouts this month")}
             value={progress?.workoutsThisMonth ?? 0}
             href="/athlete/progress"
             trend={progress?.last7DaysCompleted}
@@ -226,13 +228,13 @@ export default function AthleteDashboard() {
               coach anything new about "total," just repeat the same week. */}
           <StatTile
             icon={ListChecks}
-            label="Total completed"
+            label={t("Total completed")}
             value={progress?.totalCompleted ?? 0}
             href="/athlete/progress"
           />
           <StatTile
             icon={Trophy}
-            label="Recent PRs"
+            label={t("Recent PRs")}
             value={progress?.recentPRs?.length ?? 0}
             href="/athlete/progress"
           />
@@ -242,7 +244,7 @@ export default function AthleteDashboard() {
     "team-chat": (
       <SortableHideableWidget
         id="team-chat"
-        label="Team Chat"
+        label={t("Team Chat")}
         editMode={widgetVisibility.editMode}
         isHidden={widgetVisibility.hidden.has("team-chat")}
         onToggle={widgetVisibility.setHidden}
@@ -262,7 +264,7 @@ export default function AthleteDashboard() {
       onOpenChange={() => {}}
     />
     <AppShell
-      title={brandGreeting(brandExtras, user?.name?.split(" ")[0] ?? "Athlete", `Welcome, ${user?.name?.split(" ")[0] ?? "Athlete"}`)}
+      title={brandGreeting(brandExtras, user?.name?.split(" ")[0] ?? t("Athlete"), t("Welcome, {name}", { name: user?.name?.split(" ")[0] ?? t("Athlete") }))}
       actions={
         <Button
           size="sm"
@@ -270,7 +272,7 @@ export default function AthleteDashboard() {
           onClick={() => widgetVisibility.setEditMode((v) => !v)}
         >
           {widgetVisibility.editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-          {widgetVisibility.editMode ? "Done" : "Edit"}
+          {widgetVisibility.editMode ? t("Done") : t("Edit")}
         </Button>
       }
     >
@@ -324,7 +326,7 @@ export default function AthleteDashboard() {
         {brandExtras?.coachNote?.trim() && (
           <Card className="border-primary/40" data-testid="coach-note-card">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">From your {term("coach").toLowerCase()}</CardTitle>
+              <CardTitle className="text-base">{t("From your {value}", { value: term("coach").toLowerCase() })}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="whitespace-pre-line text-sm">{brandExtras.coachNote.trim()}</p>
@@ -363,7 +365,7 @@ export default function AthleteDashboard() {
         {coachesFailed && (
           <Card>
             <CardContent className="py-14">
-              <ReadFailed what="your dashboard" onRetry={() => void refetchCoaches()} />
+              <ReadFailed what={t("your dashboard")} onRetry={() => void refetchCoaches()} />
             </CardContent>
           </Card>
         )}
@@ -372,21 +374,19 @@ export default function AthleteDashboard() {
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
               <Badge className="gap-1.5 bg-primary/15 text-primary hover:bg-primary/15">
-                Free Agent
+                {t("Free Agent")}
               </Badge>
               <p className="max-w-sm text-muted-foreground">
-                You don't have a coach yet. Head to Library to build a program, start from a
-                Forge template and swap out any exercise that doesn't work for you, or let the AI
-                ask a few questions and build it with you on a paid plan.
+                {t("You don't have a coach yet. Head to Library to build a program, start from a Forge template and swap out any exercise that doesn't work for you, or let the AI ask a few questions and build it with you on a paid plan.")}
               </p>
               <Button asChild>
                 <Link href="/athlete/programs">
                   <CalendarDays className="h-4 w-4" />
-                  Go to Library
+                  {t("Go to Library")}
                 </Link>
               </Button>
               <p className="mt-2 text-xs text-muted-foreground">
-                Joining a team later? Your programs stay right where they are.
+                {t("Joining a team later? Your programs stay right where they are.")}
               </p>
               <CoachJoinHint />
             </CardContent>
@@ -403,7 +403,7 @@ export default function AthleteDashboard() {
         {!coachesFailed && !coachesLoading && coaches.length > 0 && upcomingFailed && (
           <Card>
             <CardContent className="py-14">
-              <ReadFailed what="what's coming up" onRetry={() => void refetchUpcoming()} />
+              <ReadFailed what={t("what's coming up")} onRetry={() => void refetchUpcoming()} />
             </CardContent>
           </Card>
         )}
@@ -416,11 +416,10 @@ export default function AthleteDashboard() {
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
               <p className="max-w-sm text-muted-foreground">
-                Nothing's been assigned to you yet. Your coach programs your training, and it'll
-                show up here and on your calendar as soon as they do.
+                {t("Nothing's been assigned to you yet. Your coach programs your training, and it'll show up here and on your calendar as soon as they do.")}
               </p>
               <p className="max-w-sm text-xs text-muted-foreground">
-                In the meantime you can still log food, body metrics and how you're feeling.
+                {t("In the meantime you can still log food, body metrics and how you're feeling.")}
               </p>
             </CardContent>
           </Card>
@@ -438,6 +437,7 @@ type CoachRequest = { id: number; coachId: number; coachName: string; createdAt:
 // Free Agent" button), but that never links them automatically -- the
 // athlete always sees it here first and has to accept or decline.
 function PendingCoachRequests() {
+  const t = useT();
   const qc = useQueryClient();
   const { data: requests = [] } = useQuery<CoachRequest[]>({
     queryKey: ["/api/athlete/coach-requests"],
@@ -451,9 +451,9 @@ function PendingCoachRequests() {
     onSuccess: (_data, { accept }) => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/coach-requests"] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/coaches"] });
-      toast.success(accept ? "You're on their roster now" : "Invite declined");
+      toast.success(accept ? t("You're on their roster now") : t("Invite declined"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't respond to that invite"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't respond to that invite")),
   });
 
   if (requests.length === 0) return null;
@@ -466,8 +466,7 @@ function PendingCoachRequests() {
             <div className="flex items-center gap-2">
               <UserPlus className="h-4 w-4 text-primary" />
               <p className="text-sm">
-                <span className="font-semibold">{r.coachName}</span> wants to add you to their
-                roster.
+                <span className="font-semibold">{r.coachName}</span> {t("wants to add you to their roster.")}
               </p>
             </div>
             <div className="flex gap-2">
@@ -477,14 +476,14 @@ function PendingCoachRequests() {
                 disabled={respondMutation.isPending}
                 onClick={() => respondMutation.mutate({ id: r.id, accept: false })}
               >
-                Decline
+                {t("Decline")}
               </Button>
               <Button
                 size="sm"
                 disabled={respondMutation.isPending}
                 onClick={() => respondMutation.mutate({ id: r.id, accept: true })}
               >
-                Accept
+                {t("Accept")}
               </Button>
             </div>
           </CardContent>
@@ -495,6 +494,7 @@ function PendingCoachRequests() {
 }
 
 function CoachJoinHint() {
+  const t = useT();
   const qc = useQueryClient();
   const [code, setCode] = useState("");
 
@@ -505,10 +505,10 @@ function CoachJoinHint() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/coaches"] });
-      toast.success(`Linked to ${data.coachName}`);
+      toast.success(t("Linked to {coachName}", { coachName: data.coachName }));
       setCode("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Invalid invite code"),
+    onError: (err: ApiError) => toast.error(err.message || t("Invalid invite code")),
   });
 
   return (
@@ -519,15 +519,15 @@ function CoachJoinHint() {
       }}
       className="flex items-center gap-2"
     >
-      <span className="text-xs text-muted-foreground">Or join a team:</span>
+      <span className="text-xs text-muted-foreground">{t("Or join a team:")}</span>
       <Input
         value={code}
         onChange={(e) => setCode(e.target.value.toUpperCase())}
-        placeholder="Enter invite code"
+        placeholder={t("Enter invite code")}
         className="h-9 w-40"
       />
       <Button type="submit" size="sm" disabled={joinMutation.isPending}>
-        Join
+        {t("Join")}
       </Button>
     </form>
   );

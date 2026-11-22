@@ -12,7 +12,7 @@ import {
   fetchRecentWorkouts,
   type HealthWorkoutSummary,
 } from "@/lib/native-health";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import {
   LineChart,
   Line,
@@ -26,6 +26,7 @@ import { TrendingUp, TrendingDown, Minus, Dumbbell, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 
+import { formatDate, msg, useT } from "@/i18n";
 type WellnessEntry = {
   id: number;
   date: string;
@@ -64,59 +65,60 @@ type MetricDef = {
 const METRICS: MetricDef[] = [
   {
     key: "sleepHours",
-    label: "Sleep",
+    label: msg("Sleep"),
     unit: "h",
     decimals: 1,
-    caption: "Hours logged per night, self-reported or synced from Health.",
+    caption: msg("Hours logged per night, self-reported or synced from Health."),
   },
   {
     key: "restingHeartRate",
-    label: "Resting HR",
+    label: msg("Resting HR"),
     unit: "bpm",
     decimals: 0,
     caption:
-      "A resting heart rate that creeps up week over week is one of the earliest signs of accumulating fatigue, dehydration, or illness, watch for a rising trend, not just a single high day.",
+      msg("A resting heart rate that creeps up week over week is one of the earliest signs of accumulating fatigue, dehydration, or illness, watch for a rising trend, not just a single high day."),
   },
   {
     key: "hrv",
-    label: "HRV",
+    label: msg("HRV"),
     unit: "ms",
     decimals: 0,
     caption:
-      "Heart rate variability trending down usually shows up before soreness or a slow bar speed does, it's often the first signal that recovery is behind training load.",
+      msg("Heart rate variability trending down usually shows up before soreness or a slow bar speed does, it's often the first signal that recovery is behind training load."),
   },
   {
     key: "vo2Max",
-    label: "VO2 Max",
+    label: msg("VO2 Max"),
     unit: "mL/kg/min",
     decimals: 1,
-    caption: "Aerobic capacity, should trend upward over a training block as conditioning improves.",
+    caption: msg("Aerobic capacity, should trend upward over a training block as conditioning improves."),
   },
   {
     key: "respiratoryRate",
-    label: "Respiratory Rate",
+    label: msg("Respiratory Rate"),
     unit: "br/min",
     decimals: 1,
-    caption: "Resting breathing rate, a sustained rise here can be an early flag for illness.",
+    caption: msg("Resting breathing rate, a sustained rise here can be an early flag for illness."),
   },
   {
     key: "bodyMass",
-    label: "Body Mass",
+    label: msg("Body Mass"),
     unit: "lbs",
     decimals: 1,
-    caption: "Also shown on the Nutrition page, useful context for a nutritionist reviewing targets.",
+    caption: msg("Also shown on the Nutrition page, useful context for a nutritionist reviewing targets."),
   },
   {
     key: "heartRateRecovery",
-    label: "HRR",
+    label: msg("HRR"),
     unit: "bpm",
     decimals: 0,
     caption:
-      "How many bpm the heart rate drops in the first minute after training, only fills in on days with a workout logged to Health. A steady rise over the season means better conditioning; a decline usually means illness or injury outrunning recovery, not just \"less improvement,\" and is worth flagging to a coach.",
+      msg("How many bpm the heart rate drops in the first minute after training, only fills in on days with a workout logged to Health. A steady rise over the season means better conditioning; a decline usually means illness or injury outrunning recovery, not just \"less improvement,\" and is worth flagging to a coach."),
   },
 ];
 
 function TrendBadge({ metricKey, values }: { metricKey: MetricKey; values: (number | null)[] }) {
+  const t = useT();
   const trend = recentTrend(values);
   if (!trend) return null;
   const betterDirection = METRIC_BETTER_DIRECTION[metricKey];
@@ -138,25 +140,25 @@ function TrendBadge({ metricKey, values }: { metricKey: MetricKey; values: (numb
       )}
     >
       <Icon className="h-3.5 w-3.5" />
-      {trend.direction === "flat" ? "Holding steady" : `${Math.abs(trend.changePct).toFixed(0)}% ${trend.direction}`}
+      {trend.direction === "flat" ? t("Holding steady") : `${Math.abs(trend.changePct).toFixed(0)}% ${trend.direction}`}
     </span>
   );
 }
 
 function MetricTab({ def, entries }: { def: MetricDef; entries: WellnessEntry[] }) {
+  const t = useT();
   const values = entries.map((e) => e[def.key] as number | null);
   const avg = average(values);
   const chartData = entries
     .filter((e) => e[def.key] != null)
-    .map((e) => ({ label: format(parseISO(e.date), "MMM d"), value: e[def.key] as number }));
+    .map((e) => ({ label: formatDate(parseISO(e.date), { month: "short", day: "numeric" }), value: e[def.key] as number }));
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">
-            {HISTORY_DAYS}-day average
-          </p>
+            {t("{HISTORYDAYS}-day average", { HISTORYDAYS: HISTORY_DAYS })}</p>
           <p className="font-display text-3xl font-bold">
             {avg == null ? "--" : `${avg.toFixed(def.decimals)} ${def.unit}`}
           </p>
@@ -165,7 +167,7 @@ function MetricTab({ def, entries }: { def: MetricDef; entries: WellnessEntry[] 
       </div>
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        {def.caption}
+        {t(def.caption)}
       </p>
       {chartData.length >= 2 ? (
         <div className="h-56">
@@ -176,12 +178,12 @@ function MetricTab({ def, entries }: { def: MetricDef; entries: WellnessEntry[] 
               <YAxis tick={{ fontSize: 11 }} width={40} domain={["auto", "auto"]} />
               <Tooltip
                 contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
-                formatter={(value: unknown) => [`${value} ${def.unit}`, def.label]}
+                formatter={(value: unknown) => [`${value} ${def.unit}`, t(def.label)]}
               />
               <Line
                 type="monotone"
                 dataKey="value"
-                name={def.label}
+                name={t(def.label)}
                 stroke="hsl(var(--primary))"
                 strokeWidth={2}
                 dot={{ r: 3 }}
@@ -191,7 +193,7 @@ function MetricTab({ def, entries }: { def: MetricDef; entries: WellnessEntry[] 
         </div>
       ) : (
         <p className="py-10 text-center text-sm text-muted-foreground">
-          Not enough synced data yet to chart a trend.
+          {t("Not enough synced data yet to chart a trend.")}
         </p>
       )}
     </div>
@@ -199,6 +201,7 @@ function MetricTab({ def, entries }: { def: MetricDef; entries: WellnessEntry[] 
 }
 
 function WorkoutsTab() {
+  const t = useT();
   const [workouts, setWorkouts] = useState<HealthWorkoutSummary[] | null>(null);
   const { user } = useAuth();
   const supported = user != null && isNativeHealthSupported() && isHealthSyncEnabled(user.id);
@@ -228,7 +231,7 @@ function WorkoutsTab() {
   if (!supported) {
     return (
       <p className="py-10 text-center text-sm text-muted-foreground">
-        Turn on Sync Apple Health in Settings to see workouts logged to Health here.
+        {t("Turn on Sync Apple Health in Settings to see workouts logged to Health here.")}
       </p>
     );
   }
@@ -240,8 +243,7 @@ function WorkoutsTab() {
   if (workouts.length === 0) {
     return (
       <p className="py-10 text-center text-sm text-muted-foreground">
-        No workouts logged to Health in the last {HISTORY_DAYS} days.
-      </p>
+        {t("No workouts logged to Health in the last {HISTORYDAYS} days.", { HISTORYDAYS: HISTORY_DAYS })}</p>
     );
   }
 
@@ -249,8 +251,7 @@ function WorkoutsTab() {
     <div className="space-y-2">
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        Calorie figures are the OS's own estimate from accelerometer and heart-rate data,
-        reliable for steady-state cardio, less so for resistance training.
+        {t("Calorie figures are the OS's own estimate from accelerometer and heart-rate data, reliable for steady-state cardio, less so for resistance training.")}
       </p>
       {workouts.map((w, i) => (
         <div
@@ -266,9 +267,8 @@ function WorkoutsTab() {
                 {w.workoutType.replace(/([A-Z])/g, " $1").trim()}
               </p>
               <p className="text-xs text-muted-foreground">
-                {format(parseISO(w.startDate), "MMM d, yyyy")} · {w.durationMinutes} min
-                {w.estimatedCaloriesBurned != null &&
-                  ` · ~${Math.round(w.estimatedCaloriesBurned)} kcal est.`}
+                {t("{date} · {durationMinutes} min", { date: t.date(parseISO(w.startDate), { month: "short", day: "numeric", year: "numeric" }), durationMinutes: w.durationMinutes })}{w.estimatedCaloriesBurned != null &&
+                  t(" · ~{kcal} kcal est.", { kcal: Math.round(w.estimatedCaloriesBurned) })}
               </p>
             </div>
           </div>
@@ -279,6 +279,7 @@ function WorkoutsTab() {
 }
 
 export default function AthleteRecovery() {
+  const t = useT();
   const { data: entries = [], isLoading, isError, refetch } = useQuery<WellnessEntry[]>({
     queryKey: ["/api/athlete/wellness/history", HISTORY_DAYS],
     queryFn: () => getJson(`/api/athlete/wellness/history?limit=${HISTORY_DAYS}`),
@@ -288,19 +289,16 @@ export default function AthleteRecovery() {
   const chronological = [...entries].reverse();
 
   return (
-    <AppShell title="Recovery & Vitals">
+    <AppShell title={t("Recovery & Vitals")}>
       <p className="mb-6 text-sm text-muted-foreground">
-        Trends from your daily check-ins and synced Apple Health data over the last{" "}
-        {HISTORY_DAYS} days. Averages recompute automatically every time you check in, nothing
-        here is a running total.
-      </p>
+        {t("Trends from your daily check-ins and synced Apple Health data over the last {days} days. Averages recompute automatically every time you check in, nothing here is a running total.", { days: HISTORY_DAYS })}</p>
       {isError ? (
         // Without this the trends card renders from an empty array, so every metric flatlines
         // at zero and the athlete reads it as "I have not checked in" rather than "this did not
         // load". Sleep, soreness and stress at zero is a picture of somebody in trouble.
         <Card>
           <CardContent className="py-10">
-            <ReadFailed what="your check-in history" onRetry={() => void refetch()} />
+            <ReadFailed what={t("your check-in history")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       ) : isLoading ? (
@@ -308,18 +306,18 @@ export default function AthleteRecovery() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Trends</CardTitle>
-            <CardDescription>Tap a tab to switch metrics.</CardDescription>
+            <CardTitle>{t("Trends")}</CardTitle>
+            <CardDescription>{t("Tap a tab to switch metrics.")}</CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="sleepHours">
               <TabsList className="flex-wrap h-auto">
                 {METRICS.map((m) => (
                   <TabsTrigger key={m.key} value={m.key}>
-                    {m.label}
+                    {t(m.label)}
                   </TabsTrigger>
                 ))}
-                <TabsTrigger value="workouts">Workouts</TabsTrigger>
+                <TabsTrigger value="workouts">{t("Workouts")}</TabsTrigger>
               </TabsList>
               {METRICS.map((m) => (
                 <TabsContent key={m.key} value={m.key}>

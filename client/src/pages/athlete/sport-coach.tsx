@@ -10,6 +10,7 @@ import {
   type SportCoachAddOnId,
 } from "@shared/free-agent-tiers";
 
+import { msg, useT } from "@/i18n";
 // Each coach gets its own "no coach to loop in" framing -- unlike the
 // general AI chat (which leans on "your coach can always read this"), a
 // Free Agent using one of these has no coach at all (see requireFreeAgent),
@@ -18,14 +19,15 @@ import {
 // that is not a coach has no "ask about your swing" line to give. See FreeAgentAddOnId.
 const ADD_ON_DESCRIPTIONS: Record<SportCoachAddOnId, string> = {
   golf_swing:
-    "Ask about your swing, short game, or putting. There's no coach on this platform to loop in here, for pain or injury, talk to a doctor or a certified instructor in person.",
+    msg("Ask about your swing, short game, or putting. There's no coach on this platform to loop in here, for pain or injury, talk to a doctor or a certified instructor in person."),
   hitting:
-    "Ask about your hitting mechanics or approach. There's no coach on this platform to loop in here, for pain or injury, talk to a doctor or a certified instructor in person.",
+    msg("Ask about your hitting mechanics or approach. There's no coach on this platform to loop in here, for pain or injury, talk to a doctor or a certified instructor in person."),
   pitching:
-    "Ask about your pitching mechanics, arm care, or mound work. There's no coach on this platform to loop in here, for pain or injury, talk to a doctor or a certified instructor in person.",
+    msg("Ask about your pitching mechanics, arm care, or mound work. There's no coach on this platform to loop in here, for pain or injury, talk to a doctor or a certified instructor in person."),
 };
 
 export default function AthleteSportCoach() {
+  const t = useT();
   const { addOnId } = useParams<{ addOnId: string }>();
   // A NON-COACH ADD-ON IS NOT A 404 BY ACCIDENT HERE, IT IS ONE BY RULE. This route is the
   // sport-coach chat; video_analysis is a real add-on with no chat behind it, so landing here
@@ -36,10 +38,10 @@ export default function AthleteSportCoach() {
 
   if (!addOn) {
     return (
-      <AppShell title="Sport Coach">
+      <AppShell title={t("Sport Coach")}>
         <Card className="mt-6">
           <CardContent className="py-14 text-center text-muted-foreground">
-            No such sport coach.
+            {t("No such sport coach.")}
           </CardContent>
         </Card>
       </AppShell>
@@ -54,7 +56,7 @@ export default function AthleteSportCoach() {
             fetchUrl={`/api/athlete/coach/${addOn.id}/chat`}
             postUrl={`/api/athlete/coach/${addOn.id}/chat`}
             title={addOn.label}
-            description={ADD_ON_DESCRIPTIONS[addOn.id as SportCoachAddOnId]}
+            description={t(ADD_ON_DESCRIPTIONS[addOn.id as SportCoachAddOnId])}
           />
         </div>
       </AppShell>

@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CustomPenColor } from "@/components/custom-pen-color";
 
+import { msg, useT } from "@/i18n";
 /**
  * The coach's side: draw on a clip, and every mark is an event at the moment it was made.
  *
@@ -51,15 +52,15 @@ import { CustomPenColor } from "@/components/custom-pen-color";
 type Tool = "stroke" | "arrow" | "line" | "circle" | "box" | "text" | "ruler" | "guideV" | "guideH";
 
 const TOOLS: { id: Tool; label: string; icon: typeof Pencil }[] = [
-  { id: "stroke", label: "Freehand", icon: Pencil },
-  { id: "arrow", label: "Arrow", icon: ArrowUpRight },
-  { id: "line", label: "Line", icon: Minus },
-  { id: "circle", label: "Circle", icon: Circle },
-  { id: "box", label: "Box", icon: Square },
-  { id: "text", label: "Label", icon: Type },
-  { id: "ruler", label: "Ruler", icon: RulerIcon },
-  { id: "guideV", label: "Plumb line", icon: MoveVertical },
-  { id: "guideH", label: "Floor line", icon: MoveHorizontal },
+  { id: "stroke", label: msg("Freehand"), icon: Pencil },
+  { id: "arrow", label: msg("Arrow"), icon: ArrowUpRight },
+  { id: "line", label: msg("Line"), icon: Minus },
+  { id: "circle", label: msg("Circle"), icon: Circle },
+  { id: "box", label: msg("Box"), icon: Square },
+  { id: "text", label: msg("Label"), icon: Type },
+  { id: "ruler", label: msg("Ruler"), icon: RulerIcon },
+  { id: "guideV", label: msg("Plumb line"), icon: MoveVertical },
+  { id: "guideH", label: msg("Floor line"), icon: MoveHorizontal },
 ];
 
 const COLORS = ["#ef4444", "#22c55e", "#3b82f6", "#eab308", "#ffffff"];
@@ -105,6 +106,7 @@ export function VideoReviewEditorDialog({
   canSend?: boolean;
   onSaved?: () => void;
 }) {
+  const t = useT();
   const base = variant === "coach" ? "/api/coach/video-reviews" : "/api/athlete/self-reviews";
   const isCoach = variant === "coach";
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -113,7 +115,7 @@ export function VideoReviewEditorDialog({
   const [tool, setTool] = useState<Tool>("stroke");
   const [color, setColor] = useState(COLORS[0]);
   const [playing, setPlaying] = useState(false);
-  const [t, setT] = useState(0);
+  const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [saving, setSaving] = useState(false);
   const [shared, setShared] = useState(initialShared);
@@ -125,11 +127,11 @@ export function VideoReviewEditorDialog({
   async function addCorrective(exerciseId: number) {
     try {
       await apiRequest("POST", `${base}/${reviewId}/corrective`, { exerciseId });
-      toast.success("Added to their next training day");
+      toast.success(t("Added to their next training day"));
     } catch (err) {
       // The server says which of the real refusals this is ("no upcoming training day", "not
       // about an athlete"), and those are the useful sentences -- not a generic failure.
-      toast.error(err instanceof Error ? err.message : "Couldn't add that corrective.");
+      toast.error(err instanceof Error ? err.message : t("Couldn't add that corrective."));
     }
   }
   const [dirty, setDirty] = useState(false);
@@ -167,7 +169,7 @@ export function VideoReviewEditorDialog({
     const tick = () => {
       const v = videoRef.current;
       if (v) {
-        setT(v.currentTime);
+        setTime(v.currentTime);
         if (Number.isFinite(v.duration)) setDuration(v.duration);
         paint(v.currentTime);
       }
@@ -310,7 +312,7 @@ export function VideoReviewEditorDialog({
       setPlaying(true);
     } catch {
       // A refused permission is the common case, not an error worth a stack trace.
-      toast.error("Forge needs microphone access to record a voice-over.");
+      toast.error(t("Forge needs microphone access to record a voice-over."));
     }
   }
 
@@ -334,10 +336,10 @@ export function VideoReviewEditorDialog({
         credentials: "include",
       });
       if (!res.ok) throw new Error(String(res.status));
-      toast.success("Voice-over saved");
+      toast.success(t("Voice-over saved"));
       onSaved?.();
     } catch {
-      toast.error("Couldn't save the voice-over. The drawings you made are still here.");
+      toast.error(t("Couldn't save the voice-over. The drawings you made are still here."));
     }
   }
 
@@ -353,12 +355,12 @@ export function VideoReviewEditorDialog({
         })),
       });
       setDirty(false);
-      toast.success("Review saved");
+      toast.success(t("Review saved"));
       onSaved?.();
     } catch {
       // Left dirty on purpose: the marks stay on screen and the button stays live, so a failed
       // save is a retry rather than lost work.
-      toast.error("Couldn't save the review. Your drawings are still here, try again.");
+      toast.error(t("Couldn't save the review. Your drawings are still here, try again."));
     } finally {
       setSaving(false);
     }
@@ -376,15 +378,15 @@ export function VideoReviewEditorDialog({
       toast.success(
         isCoach
           ? next
-            ? "Shared with the athlete"
-            : "No longer shared"
+            ? t("Shared with the athlete")
+            : t("No longer shared")
           : next
-            ? "Sent to your coach"
-            : "Taken back from your coach",
+            ? t("Sent to your coach")
+            : t("Taken back from your coach"),
       );
       onSaved?.();
     } catch {
-      toast.error("Couldn't change who can see this review.");
+      toast.error(t("Couldn't change who can see this review."));
     }
   }
 
@@ -393,7 +395,7 @@ export function VideoReviewEditorDialog({
     setDirty(true);
   };
 
-  const marksHere = useMemo(() => visibleAt(events, t, "left").length, [events, t]);
+  const marksHere = useMemo(() => visibleAt(events, time, "left").length, [events, time]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -453,7 +455,7 @@ export function VideoReviewEditorDialog({
               variant={tool === tl.id ? "default" : "outline"}
               onClick={() => setTool(tl.id)}
               aria-pressed={tool === tl.id}
-              title={tl.label}
+              title={t(tl.label)}
             >
               <tl.icon className="h-3.5 w-3.5" />
             </Button>
@@ -463,7 +465,7 @@ export function VideoReviewEditorDialog({
             <button
               key={c}
               onClick={() => setColor(c)}
-              aria-label={`Colour ${c}`}
+              aria-label={t("Colour {c}", { c })}
               aria-pressed={color === c}
               className={cn(
                 "h-6 w-6 rounded-full border-2",
@@ -490,7 +492,7 @@ export function VideoReviewEditorDialog({
                 setPlaying(false);
               }
             }}
-            aria-label={playing ? "Pause" : "Play"}
+            aria-label={playing ? t("Pause") : t("Play")}
           >
             {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </Button>
@@ -499,22 +501,22 @@ export function VideoReviewEditorDialog({
             min={0}
             max={Math.max(duration, 0.1)}
             step={1 / 60}
-            value={t}
+            value={time}
             onChange={(e) => {
               const v = videoRef.current;
               if (v) v.currentTime = Number(e.target.value);
             }}
             className="h-1.5 flex-1 accent-primary"
-            aria-label="Scrub"
+            aria-label={t("Scrub")}
           />
           <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">
-            {t.toFixed(2)}s
+            {time.toFixed(2)}s
           </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" variant="outline" onClick={undo} disabled={events.length === 0}>
-            <Undo2 className="h-3.5 w-3.5" /> Undo
+            <Undo2 className="h-3.5 w-3.5" /> {t("Undo")}
           </Button>
           <Button
             size="sm"
@@ -525,11 +527,11 @@ export function VideoReviewEditorDialog({
             }}
             disabled={events.length === 0}
           >
-            <Trash2 className="h-3.5 w-3.5" /> Clear
+            <Trash2 className="h-3.5 w-3.5" /> {t("Clear")}
           </Button>
           <span className="text-xs text-muted-foreground">
-            {events.length} mark{events.length === 1 ? "" : "s"}
-            {marksHere > 0 ? ` (${marksHere} on screen)` : ""}
+            {t.plural(events.length, "{count} mark", "{count} marks")}
+            {marksHere > 0 ? t(" ({marksHere} on screen)", { marksHere }) : ""}
           </span>
           {/* Coach-only for now: there is no self-review audio route, and drawing a button
               that always fails is worse than not drawing one. */}
@@ -540,7 +542,7 @@ export function VideoReviewEditorDialog({
               onClick={() => (recording ? stopRecording() : void startRecording())}
             >
               {recording ? <StopIcon className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
-              {recording ? "Stop" : "Voice-over"}
+              {recording ? t("Stop") : t("Voice-over")}
             </Button>
           )}
           {/* Coach-only: prescribing work is the coach's job. From the review straight to the
@@ -549,18 +551,18 @@ export function VideoReviewEditorDialog({
               addCorrectiveFromReview in storage.ts. */}
           {isCoach && (
             <Button size="sm" variant="outline" onClick={() => setPickingCorrective(true)}>
-              <ClipboardPlus className="h-3.5 w-3.5" /> Add a corrective
+              <ClipboardPlus className="h-3.5 w-3.5" /> {t("Add a corrective")}
             </Button>
           )}
           <span className="flex-1" />
           {canSend && (
             <Button size="sm" variant={shared ? "default" : "outline"} onClick={() => void toggleShare()}>
               <Share2 className="h-3.5 w-3.5" />{" "}
-              {isCoach ? (shared ? "Shared" : "Share") : shared ? "Sent" : "Send to coach"}
+              {isCoach ? (shared ? t("Shared") : t("Share")) : shared ? t("Sent") : t("Send to coach")}
             </Button>
           )}
           <Button size="sm" onClick={() => void save()} disabled={saving || !dirty}>
-            <Save className="h-3.5 w-3.5" /> {saving ? "Saving..." : "Save"}
+            <Save className="h-3.5 w-3.5" /> {saving ? t("Saving...") : t("Save")}
           </Button>
         </div>
 
@@ -570,7 +572,7 @@ export function VideoReviewEditorDialog({
         open={pickingCorrective}
         onOpenChange={setPickingCorrective}
         correctivesOnly
-        title="Add a corrective from this review"
+        title={t("Add a corrective from this review")}
         onSelect={(exercise) => {
           setPickingCorrective(false);
           void addCorrective(exercise.id);

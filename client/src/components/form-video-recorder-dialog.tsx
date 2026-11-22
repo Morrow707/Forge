@@ -18,6 +18,7 @@ import {
   type VideoRecordContext,
 } from "@/lib/video-offline-store";
 
+import { useT } from "@/i18n";
 // Live recording has no fixed duration -- a set is as long as it takes
 // (a slow tempo squat or a higher-rep set both run well past what a fixed
 // countdown assumed), so this is a generous safety ceiling only, not a
@@ -52,6 +53,7 @@ export function FormVideoRecorderDialog({
    * the set the same way it would with no video at all. */
   onQueued?: () => void;
 }) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   // Kept in sync with streamRef's own video track so WebCameraChrome can read it fresh on every
@@ -104,19 +106,19 @@ export function FormVideoRecorderDialog({
         // isn't just a number sitting in a profile field -- it improves
         // rep/jump-amplitude thresholds for every future tracked set.
         const heightIn = Math.round(result.feet * 12 + result.inches);
-        toast.success(`Measured: ${result.feet}' ${result.inches.toFixed(1)}" (${result.meters.toFixed(2)} m)`, {
+        toast.success(t("Measured: {feet}' {inches}\" ({meters} m)", { feet: result.feet, inches: result.inches.toFixed(1), meters: result.meters.toFixed(2) }), {
           action: {
             label: "Save as height",
             onClick: () => {
               apiRequest("PATCH", "/api/athlete/profile", { heightIn })
-                .then(() => toast.success("Height updated"))
-                .catch((err) => toast.error(err instanceof Error ? err.message : "Could not save height"));
+                .then(() => toast.success(t("Height updated")))
+                .catch((err) => toast.error(err instanceof Error ? err.message : t("Could not save height")));
             },
           },
         });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "AR measurement failed.");
+      toast.error(err instanceof Error ? err.message : t("AR measurement failed."));
     } finally {
       setMeasuring(false);
     }
@@ -302,13 +304,13 @@ export function FormVideoRecorderDialog({
       // actually happened and leave the dialog open so the athlete still has
       // the clip and can retry.
       if (!persistedVideoIdRef.current) {
-        toast.error("Couldn't save this video on your device, storage may be full.");
+        toast.error(t("Couldn't save this video on your device, storage may be full."));
         return;
       }
       if (!hasWarnedAboutQueueing()) {
         markWarnedAboutQueueing();
         toast.info(
-          "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+          t("No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular."),
           { duration: 10000 },
         );
       }
@@ -366,8 +368,8 @@ export function FormVideoRecorderDialog({
           // not a final loss, whenever persistence actually took.
           toast.error(
             persistedVideoIdRef.current
-              ? "Upload didn't go through, it's saved on your device and will finish uploading automatically once you're back online."
-              : "Upload failed — try again",
+              ? t("Upload didn't go through, it's saved on your device and will finish uploading automatically once you're back online.")
+              : t("Upload failed — try again"),
           );
           setStep("preview");
           return;
@@ -405,12 +407,12 @@ export function FormVideoRecorderDialog({
                 full-screen video dialogs. */}
             <button
               type="button"
-              aria-label="Close"
+              aria-label={t("Close")}
               onClick={() => {
                 // Only worth confirming once there's an actual capture at
                 // risk (preview); bail out of a bare camera/file-picker view
                 // with nothing recorded yet needs no prompt.
-                if (step === "preview" && !window.confirm("Discard this recorded video? It hasn't been saved yet.")) {
+                if (step === "preview" && !window.confirm(t("Discard this recorded video? It hasn't been saved yet."))) {
                   return;
                 }
                 // A confirmed discard means any disk copy from a prior
@@ -437,7 +439,7 @@ export function FormVideoRecorderDialog({
             {cameraError && step === "capture" && (
               <div className="absolute inset-x-4 top-[calc(max(0.75rem,env(safe-area-inset-top))_+_3.25rem)] flex items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white backdrop-blur-sm">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
-                {cameraError}
+                {t(cameraError)}
               </div>
             )}
           </div>
@@ -448,38 +450,37 @@ export function FormVideoRecorderDialog({
             {step === "capture" && !recording && (
               <Button size="lg" onClick={startRecording} disabled={!!cameraError}>
                 <Circle className="h-4 w-4 fill-current" />
-                Start Recording
+                {t("Start Recording")}
               </Button>
             )}
             {step === "capture" && !recording && arMeasureSupported && (
               <Button size="lg" variant="outline" onClick={handleMeasure} disabled={measuring}>
                 <Ruler className="h-4 w-4" />
-                {measuring ? "Measuring…" : "Measure"}
+                {measuring ? t("Measuring…") : t("Measure")}
               </Button>
             )}
             {step === "capture" && recording && (
               <Button size="lg" variant="secondary" onClick={stopRecording}>
                 <Square className="h-4 w-4" />
-                Stop
+                {t("Stop")}
               </Button>
             )}
             {step === "preview" && (
               <>
                 <Button variant="outline" onClick={retake}>
                   <RotateCcw className="h-4 w-4" />
-                  Retake
+                  {t("Retake")}
                 </Button>
                 <Button onClick={save}>
                   <Upload className="h-4 w-4" />
-                  Save
+                  {t("Save")}
                 </Button>
               </>
             )}
             {step === "uploading" && (
               <Button disabled>
                 <Upload className="h-4 w-4 animate-pulse" />
-                Saving… {Math.round(uploadProgress * 100)}%
-              </Button>
+                {t("Saving… {percent}%", { percent: Math.round(uploadProgress * 100) })}</Button>
             )}
           </div>
         </div>

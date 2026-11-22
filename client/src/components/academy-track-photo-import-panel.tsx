@@ -8,6 +8,7 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ImagePlus } from "lucide-react";
 
+import { useT } from "@/i18n";
 type PhotoDraftLesson = { lessonNumber?: number; title: string; content: string; estMinutes: number | null };
 export type PhotoDraftStructure = {
   title: string;
@@ -26,6 +27,7 @@ export function AcademyTrackPhotoImportPanel({
 }: {
   onDraft: (structure: PhotoDraftStructure, note: string | null) => void;
 }) {
+  const t = useT();
   const [images, setImages] = useState<CapturedPhoto[]>([]);
 
   const draftMutation = useMutation({
@@ -35,14 +37,14 @@ export function AcademyTrackPhotoImportPanel({
     },
     onSuccess: (draft) => {
       if (!draft) {
-        toast.error("Couldn't read that photo, try a clearer shot");
+        toast.error(t("Couldn't read that photo, try a clearer shot"));
         return;
       }
       onDraft(draft.structure, draft.note);
       setImages([]);
-      toast.success("Added from photo, review it before saving");
+      toast.success(t("Added from photo, review it before saving"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not read that photo"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not read that photo")),
   });
 
   return (
@@ -50,11 +52,10 @@ export function AcademyTrackPhotoImportPanel({
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <ImagePlus className="h-4 w-4" />
-          Import from Photo
+          {t("Import from Photo")}
         </CardTitle>
         <CardDescription>
-          Photograph or screenshot a document, outline, or slides, it fills in the fields to the left for
-          you to review and edit before saving.
+          {t("Photograph or screenshot a document, outline, or slides, it fills in the fields to the left for you to review and edit before saving.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -65,7 +66,7 @@ export function AcademyTrackPhotoImportPanel({
           disabled={images.length === 0 || draftMutation.isPending}
           onClick={() => draftMutation.mutate()}
         >
-          {draftMutation.isPending ? "Reading..." : "Generate from Photo"}
+          {draftMutation.isPending ? t("Reading...") : t("Generate from Photo")}
         </Button>
       </CardContent>
     </Card>

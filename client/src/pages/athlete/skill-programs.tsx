@@ -3,18 +3,20 @@ import { FreeAgentGate } from "@/components/free-agent-gate";
 import { SkillsGate } from "@/components/skills-gate";
 import { LibraryTabs } from "@/components/library-tabs";
 
+import { useT } from "@/i18n";
 // FreeAgentGate OUTSIDE SkillsGate, deliberately. A coached athlete has skills access but does
 // not belong on the Free Agent skill-program builder at all, so the "you have a coach now" answer
 // has to come first; the tier question only arises once we know they are a Free Agent.
 export default function AthleteSkillPrograms() {
+  const t = useT();
   return (
-    <FreeAgentGate title="My Skill Programs">
-      <SkillsGate title="My Skill Programs">
+    <FreeAgentGate title={t("My Skill Programs")}>
+      <SkillsGate title={t("My Skill Programs")}>
         <SkillProgramListPage
           apiBase="/api/athlete"
           routeBase="/athlete/skill-programs"
-          title="My Skill Programs"
-          emptyStateText="Nothing here yet, hit New Skill Program to build one."
+          title={t("My Skill Programs")}
+          emptyStateText={t("Nothing here yet, hit New Skill Program to build one.")}
           showAssign={false}
           showSelfAssign
           libraryTabs={

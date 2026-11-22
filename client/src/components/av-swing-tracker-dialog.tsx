@@ -38,6 +38,7 @@ import type {
 } from "@/lib/native-av-preview";
 import { buildTrackingDiagnostics, type TrackingDiagnostics } from "@/lib/tracking-diagnostics";
 
+import { translate, useT } from "@/i18n";
 // Was defined in ar-swing-tracker-dialog.tsx (the now-deleted ARKit dialog this one replaced)
 // and imported from there -- moved here, its one remaining consumer, now that the ARKit path
 // is gone.
@@ -157,6 +158,7 @@ export function AvSwingTrackerDialog({
   onProcessingSettled?: (setNumber: number) => void;
   videoContext?: VideoRecordContext;
 }) {
+  const t = useT();
 
   // WHICH SET THIS TAKE IS FOR, PINNED AT STOP. Every onCapture below goes through here, so no
   // exit has to remember to carry it and none of them can forget.
@@ -276,8 +278,8 @@ export function AvSwingTrackerDialog({
       );
       toast.error(
         inFlightUpload
-          ? "Couldn't finish analyzing this take, but your video was saved for your coach."
-          : "Couldn't finish analyzing this take. The set was saved without numbers.",
+          ? t("Couldn't finish analyzing this take, but your video was saved for your coach.")
+          : t("Couldn't finish analyzing this take. The set was saved without numbers."),
       );
       onCapture(EMPTY_SWING_METRICS, salvagedVideoUrl);
       setSaving(false);
@@ -435,14 +437,14 @@ export function AvSwingTrackerDialog({
           const result = await uploadPromise;
           toast.error(
             result.status === "queued"
-              ? "Couldn't get a clean read on this take. The clip is saved. (No Wi-Fi, video saved on your device, will upload once connected.)"
-              : "Couldn't get a clean read on this take. The clip is saved. (Video saved for your coach.)",
+              ? translate("Couldn't get a clean read on this take. The clip is saved. (No Wi-Fi, video saved on your device, will upload once connected.)")
+              : translate("Couldn't get a clean read on this take. The clip is saved. (Video saved for your coach.)"),
           );
           if (result.status === "queued") {
             if (!hasWarnedAboutQueueing()) {
               markWarnedAboutQueueing();
               toast.info(
-                "You can also upload a queued video manually anytime, even over cellular, from the Video Bank.",
+                translate("You can also upload a queued video manually anytime, even over cellular, from the Video Bank."),
                 { duration: 10000 },
               );
             }
@@ -453,7 +455,7 @@ export function AvSwingTrackerDialog({
           onOpenChange(false);
         } catch (err) {
           const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
-          toast.error(`Couldn't get a clean read, and the video didn't save either: ${detail}`);
+          toast.error(translate("Couldn't get a clean read, and the video didn't save either: {detail}", { detail }));
           // THE TAKE STILL HAPPENED, EVEN IF ITS CLIP DID NOT ARRIVE.
           //
           // This used to toast and stop: no onCapture, no close. The metrics AND the
@@ -488,7 +490,7 @@ export function AvSwingTrackerDialog({
          * refused-capture-survives.test.ts pairs a `try` with its `catch` and so was green on
          * every one of these -- none of them is in a catch.
          */
-        toast.error("Couldn't get a clean read on this take. Everything the camera did measure is saved.");
+        toast.error(translate("Couldn't get a clean read on this take. Everything the camera did measure is saved."));
         onCapture(emptyMetrics);
         onOpenChange(false);
         setSaving(false);
@@ -514,7 +516,7 @@ export function AvSwingTrackerDialog({
         if (!hasWarnedAboutQueueing()) {
           markWarnedAboutQueueing();
           toast.info(
-            "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+            translate("No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular."),
             { duration: 10000 },
           );
         }
@@ -524,7 +526,7 @@ export function AvSwingTrackerDialog({
       }
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
+      toast.error(err instanceof ApiError ? err.message : translate("Saved the set, but the clip failed to upload"));
       onCapture(metrics, undefined, skeletonFrames);
       onOpenChange(false);
     } finally {
@@ -543,7 +545,7 @@ export function AvSwingTrackerDialog({
             <AvCameraChrome containerRef={containerRef} active={open} />
             <button
               type="button"
-              aria-label="Close"
+              aria-label={t("Close")}
               onClick={() => onOpenChange(false)}
               className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
             >
@@ -553,7 +555,7 @@ export function AvSwingTrackerDialog({
             {recording && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">
                 <Circle className="h-2.5 w-2.5 animate-pulse fill-destructive text-destructive" />
-                Recording
+                {t("Recording")}
               </div>
             )}
 
@@ -562,13 +564,13 @@ export function AvSwingTrackerDialog({
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
                 <p className="text-sm text-white">
                   {analyzing
-                    ? `Analyzing swing, ${analyzedFrames} frames processed…`
-                    : `Saving your video… ${Math.round(uploadProgress * 100)}%`}
+                    ? t("Analyzing swing, {analyzedFrames} frames processed…", { analyzedFrames })
+                    : t("Saving your video… {percent}%", { percent: Math.round(uploadProgress * 100) })}
                 </p>
                 {analyzing && (
                   <Button variant="outline" size="sm" onClick={cancelAnalysis}>
                     <XCircle className="h-4 w-4" />
-                    Cancel
+                    {t("Cancel")}
                   </Button>
                 )}
               </div>
@@ -584,7 +586,7 @@ export function AvSwingTrackerDialog({
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
-                  Camera tracking isn't supported on this device.
+                  {t("Camera tracking isn't supported on this device.")}
                 </div>
                 {supportError && (
                   <p className="select-text break-all text-center text-xs opacity-90">{supportError}</p>
@@ -604,18 +606,18 @@ export function AvSwingTrackerDialog({
                 disabled={!supported}
               >
                 <Circle className="h-4 w-4 fill-current" />
-                Start {label}
+                {t("Start {label}", { label })}
               </Button>
             )}
             {recording && (
               <Button size="lg" variant="secondary" onClick={stopTracking}>
                 <Square className="h-4 w-4" />
-                Stop
+                {t("Stop")}
               </Button>
             )}
             {(analyzing || saving) && (
               <Button size="lg" variant="secondary" disabled>
-                {analyzing ? "Analyzing…" : `Saving… ${Math.round(uploadProgress * 100)}%`}
+                {analyzing ? t("Analyzing…") : t("Saving… {percent}%", { percent: Math.round(uploadProgress * 100) })}
               </Button>
             )}
           </div>

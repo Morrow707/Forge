@@ -15,6 +15,7 @@ import { AllClassesCard } from "@/components/all-classes-card";
 import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
 import { Capacitor } from "@capacitor/core";
 
+import { useT } from "@/i18n";
 type LessonProgress = {
   id: number;
   lessonNumber: number;
@@ -41,6 +42,7 @@ type ClassProgress = {
 };
 
 export default function AthleteClassDetail() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const qc = useQueryClient();
@@ -112,13 +114,13 @@ export default function AthleteClassDetail() {
       if (result?.redirected) return;
       qc.invalidateQueries({ queryKey: [`/api/athlete/classes/${classId}/progress`] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/my-classes"] });
-      toast.success("Lesson unlocked");
+      toast.success(t("Lesson unlocked"));
     },
     onError: (err: ApiError) => {
       if (err.status === 402) {
-        toast.info(err.message || "Payments aren't live yet, coming soon.");
+        toast.info(err.message || t("Payments aren't live yet, coming soon."));
       } else {
-        toast.error(err.message || "Could not unlock lesson");
+        toast.error(err.message || t("Could not unlock lesson"));
       }
     },
   });
@@ -129,10 +131,10 @@ export default function AthleteClassDetail() {
   // comes first.
   if (isError) {
     return (
-      <AppShell title="Class">
+      <AppShell title={t("Class")}>
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="this class" error={error} onRetry={() => void refetch()} />
+            <ReadFailed what={t("this class")} error={error} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       </AppShell>
@@ -141,7 +143,7 @@ export default function AthleteClassDetail() {
 
   if (isLoading || !data) {
     return (
-      <AppShell title="Loading Class…">
+      <AppShell title={t("Loading Class…")}>
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       </AppShell>
     );
@@ -153,7 +155,7 @@ export default function AthleteClassDetail() {
       actions={
         <Button variant="outline" onClick={() => navigate("/athlete/classes")}>
           <ArrowLeft className="h-4 w-4" />
-          Back
+          {t("Back")}
         </Button>
       }
     >
@@ -166,11 +168,11 @@ export default function AthleteClassDetail() {
       {data.streak && data.streak.current > 0 && (
         <p className="mb-6 inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
           <Flame className="h-3.5 w-3.5" />
-          {data.streak.current}-day learning streak
+          {t("{current}-day learning streak", { current: data.streak.current })}
           {data.streak.longest > data.streak.current && (
-            <span className="font-normal text-muted-foreground">· best {data.streak.longest}</span>
+            <span className="font-normal text-muted-foreground">{t("· best {longest}", { longest: data.streak.longest })}</span>
           )}
-          {!data.streak.activeToday && <span className="font-normal text-muted-foreground">· read today to keep it</span>}
+          {!data.streak.activeToday && <span className="font-normal text-muted-foreground">{t("· read today to keep it")}</span>}
         </p>
       )}
 
@@ -182,13 +184,13 @@ export default function AthleteClassDetail() {
         <Card className="mb-6 border-primary/40 bg-primary/5">
           <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="font-semibold">You haven't enrolled in this class</p>
+              <p className="font-semibold">{t("You haven't enrolled in this class")}</p>
               <p className="text-sm text-muted-foreground">
-                Here's every lesson in it. Enrol to start the first one.
+                {t("Here's every lesson in it. Enrol to start the first one.")}
               </p>
             </div>
             <Button size="sm" onClick={() => navigate("/athlete/classes")}>
-              Back to classes to enrol
+              {t("Back to classes to enrol")}
             </Button>
           </CardContent>
         </Card>
@@ -199,14 +201,13 @@ export default function AthleteClassDetail() {
           <CardContent className="flex items-center gap-3 p-4">
             <Trophy className="h-8 w-8 shrink-0 fill-amber-400 text-amber-400" />
             <div>
-              <p className="font-semibold">Class completed!</p>
+              <p className="font-semibold">{t("Class completed!")}</p>
               <p className="text-sm text-muted-foreground">
-                You've finished every lesson in {data.class.name}.
-              </p>
+                {t("You've finished every lesson in {name}.", { name: data.class.name })}</p>
             </div>
             <Button size="sm" variant="outline" className="ml-auto shrink-0" onClick={() => navigate(`/athlete/classes/${classId}/certificate`)}>
               <Award className="h-4 w-4" />
-              Certificate
+              {t("Certificate")}
             </Button>
           </CardContent>
         </Card>
@@ -238,14 +239,14 @@ export default function AthleteClassDetail() {
                   </div>
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline">Lesson {lesson.lessonNumber}</Badge>
+                      <Badge variant="outline">{t("Lesson {lessonNumber}", { lessonNumber: lesson.lessonNumber })}</Badge>
                       <p className="font-semibold">{lesson.title}</p>
                       {lesson.quizPerfectAt ? (
-                        <span title="Gold star, perfect quiz score">
+                        <span title={t("Gold star, perfect quiz score")}>
                           <Star className="h-4 w-4 shrink-0 fill-amber-400 text-amber-400" />
                         </span>
                       ) : lesson.quizPassedAt ? (
-                        <span title="Bronze star, quiz passed">
+                        <span title={t("Bronze star, quiz passed")}>
                           <Star className="h-4 w-4 shrink-0 fill-amber-700 text-amber-700" />
                         </span>
                       ) : null}
@@ -265,7 +266,7 @@ export default function AthleteClassDetail() {
                       onClick={() => navigate("/athlete/calendar")}
                     >
                       <CheckCircle2 className="h-4 w-4" />
-                      On your calendar
+                      {t("On your calendar")}
                     </Button>
                   )}
                   {canTakeLesson && (
@@ -275,7 +276,7 @@ export default function AthleteClassDetail() {
                       onClick={() => openReader(lesson.id, "reading")}
                     >
                       <BookOpen className="h-3.5 w-3.5" />
-                      {hasReadOnce ? "Take Lesson Again" : "Take Lesson"}
+                      {hasReadOnce ? t("Take Lesson Again") : t("Take Lesson")}
                     </Button>
                   )}
                   {/* hasQuiz too: a quiz is optional in the builder, and this
@@ -284,7 +285,7 @@ export default function AthleteClassDetail() {
                   {canTakeLesson && hasReadOnce && lesson.hasQuiz && (
                     <Button size="sm" onClick={() => openReader(lesson.id, "quiz")}>
                       <ListChecks className="h-3.5 w-3.5" />
-                      Take Test
+                      {t("Take Test")}
                     </Button>
                   )}
                   {lesson.state === "locked_preview" && (
@@ -294,7 +295,7 @@ export default function AthleteClassDetail() {
                       disabled={purchaseMutation.isPending}
                     >
                       <Lock className="h-3.5 w-3.5" />
-                      Unlock
+                      {t("Unlock")}
                       {lesson.priceCents != null && ` — $${(lesson.priceCents / 100).toFixed(2)}`}
                     </Button>
                   )}
@@ -304,8 +305,7 @@ export default function AthleteClassDetail() {
                   {lesson.state === "locked_tier" && <AllClassesCard compact />}
                   {lesson.state === "locked" && (
                     <span className="text-xs text-muted-foreground">
-                      Complete Lesson {lesson.lessonNumber - 1} to unlock
-                    </span>
+                      {t("Complete Lesson {value} to unlock", { value: lesson.lessonNumber - 1 })}</span>
                   )}
                 </div>
               </CardContent>

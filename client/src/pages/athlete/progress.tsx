@@ -62,6 +62,7 @@ import { MuscleHeatMap } from "@/components/muscle-heat-map";
 import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
 import { todayIso } from "@/lib/local-date";
 
+import { formatDate, msg, useT } from "@/i18n";
 type ProgressSummary = {
   totalWorkoutsCompleted: number;
   workoutsThisMonth: number;
@@ -97,6 +98,7 @@ type WellnessEntry = {
 const RECOVERY_HISTORY_DAYS = 90;
 
 export default function AthleteProgress() {
+  const t = useT();
   const { user } = useAuth();
   const qc = useQueryClient();
   const [sharingProfile, setSharingProfile] = useState(false);
@@ -144,7 +146,7 @@ export default function AthleteProgress() {
       });
       await shareOrDownloadBlob(blob, `${pr.exerciseName}-pr.png`, `New PR: ${pr.exerciseName}`);
     } catch {
-      toast.error("Couldn't generate that share card");
+      toast.error(t("Couldn't generate that share card"));
     } finally {
       setSharingPrIndex(null);
     }
@@ -159,7 +161,7 @@ export default function AthleteProgress() {
         "My Forge Recruiting Profile",
       );
     } catch {
-      toast.error("Couldn't generate your recruiting profile");
+      toast.error(t("Couldn't generate your recruiting profile"));
     } finally {
       setSharingProfile(false);
     }
@@ -216,9 +218,9 @@ export default function AthleteProgress() {
       qc.invalidateQueries({ queryKey: ["/api/athlete/body-metrics"] });
       setWeight("");
       setBodyFatPercent("");
-      toast.success("Logged");
+      toast.success(t("Logged"));
     },
-    onError: () => toast.error("Couldn't save that entry"),
+    onError: () => toast.error(t("Couldn't save that entry")),
   });
 
   const deleteMetric = useMutation({
@@ -228,17 +230,17 @@ export default function AthleteProgress() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/athlete/body-metrics"] }),
     // Without this a failed delete is completely silent: the row stays on screen
     // with no toast, which reads as the button doing nothing.
-    onError: () => toast.error("Couldn't delete that entry"),
+    onError: () => toast.error(t("Couldn't delete that entry")),
   });
 
   const chartData = (metrics ?? []).map((m) => ({
-    label: format(parseISO(m.date), "MMM d"),
+    label: formatDate(parseISO(m.date), { month: "short", day: "numeric" }),
     weight: m.weight,
   }));
 
   return (
     <AppShell
-      title="My Progress"
+      title={t("My Progress")}
       // On a phone-width screen, two full-text buttons crammed into the same
       // row as the title (AppShell's `actions` slot) squeezed "My Progress"
       // down to an unreadable "M...". They live in `subheader` instead --
@@ -248,18 +250,17 @@ export default function AthleteProgress() {
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
             <FileDown className="h-4 w-4" />
-            Export History
+            {t("Export History")}
           </Button>
           <Button variant="outline" size="sm" onClick={handleShareProfile} disabled={sharingProfile}>
             <Share2 className="h-4 w-4" />
-            Share Recruiting Profile
+            {t("Share Recruiting Profile")}
           </Button>
         </div>
       }
     >
       <p className="mb-6 text-sm text-muted-foreground">
-        A quick look at your own numbers, for the full breakdown (velocity trends, bar path,
-        team rankings), ask your coach.
+        {t("A quick look at your own numbers, for the full breakdown (velocity trends, bar path, team rankings), ask your coach.")}
       </p>
 
       {isLoading ? (
@@ -283,7 +284,7 @@ export default function AthleteProgress() {
           {isError && (
             <Card>
               <CardContent className="py-8">
-                <ReadFailed what="your training summary" onRetry={() => void refetch()} />
+                <ReadFailed what={t("your training summary")} onRetry={() => void refetch()} />
               </CardContent>
             </Card>
           )}
@@ -300,12 +301,12 @@ export default function AthleteProgress() {
                   has to filter -- and nothing here can accidentally stop filtering. */}
               <Card>
                 <CardContent className="space-y-3 p-5">
-                  <p className="font-semibold">Coach reviews</p>
+                  <p className="font-semibold">{t("Coach reviews")}</p>
                   <VideoReviewList
                     mode="read-only"
                     fetchUrl="/api/athlete/video-reviews"
                     reviewUrl={(id) => `/api/athlete/video-reviews/${id}`}
-                    emptyHint="When your coach breaks down one of your lifts, it shows up here."
+                    emptyHint={t("When your coach breaks down one of your lifts, it shows up here.")}
                   />
                 </CardContent>
               </Card>
@@ -350,7 +351,7 @@ export default function AthleteProgress() {
               and neither offers anything a Free Agent cannot do. */}
           <Card>
             <CardContent className="space-y-3 p-5">
-              <p className="font-semibold">Your own reviews</p>
+              <p className="font-semibold">{t("Your own reviews")}</p>
               <VideoReviewList
                 mode="self"
                 fetchUrl="/api/athlete/self-reviews"
@@ -358,8 +359,8 @@ export default function AthleteProgress() {
                 canSend={hasCoach}
                 emptyHint={
                   isFreeAgent
-                    ? "Break down one of your own lifts from the compare tool above and it will be saved here."
-                    : "Break down one of your own lifts from the compare tool, then send it to your coach."
+                    ? t("Break down one of your own lifts from the compare tool above and it will be saved here.")
+                    : t("Break down one of your own lifts from the compare tool, then send it to your coach.")
                 }
               />
             </CardContent>
@@ -373,7 +374,7 @@ export default function AthleteProgress() {
                   unlike the list above, this one has no recipient at all without a coach. */}
               <Card>
                 <CardContent className="space-y-3 p-5">
-                  <p className="font-semibold">Ask your coach to check a lift</p>
+                  <p className="font-semibold">{t("Ask your coach to check a lift")}</p>
                   <AskCoachForReview />
                 </CardContent>
               </Card>
@@ -390,7 +391,7 @@ export default function AthleteProgress() {
                   <p className="font-display text-3xl font-bold">
                     {data?.totalWorkoutsCompleted ?? 0}
                   </p>
-                  <p className="text-sm text-muted-foreground">Workouts completed all-time</p>
+                  <p className="text-sm text-muted-foreground">{t("Workouts completed all-time")}</p>
                 </div>
               </CardContent>
             </Card>
@@ -403,7 +404,7 @@ export default function AthleteProgress() {
                   <p className="font-display text-3xl font-bold">
                     {data?.workoutsThisMonth ?? 0}
                   </p>
-                  <p className="text-sm text-muted-foreground">Workouts this month</p>
+                  <p className="text-sm text-muted-foreground">{t("Workouts this month")}</p>
                 </div>
               </CardContent>
             </Card>
@@ -414,7 +415,7 @@ export default function AthleteProgress() {
                 </div>
                 <div>
                   <p className="font-display text-3xl font-bold">{data?.currentStreak ?? 0}</p>
-                  <p className="text-sm text-muted-foreground">Current streak</p>
+                  <p className="text-sm text-muted-foreground">{t("Current streak")}</p>
                 </div>
               </CardContent>
             </Card>
@@ -434,20 +435,20 @@ export default function AthleteProgress() {
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Crown className="h-5 w-5 text-primary" />
-                  Recent PRs
+                  {t("Recent PRs")}
                 </CardTitle>
                 <CardDescription>
-                  Your current best on each lift, most recent first, tap one to see the trend.
+                  {t("Your current best on each lift, most recent first, tap one to see the trend.")}
                 </CardDescription>
               </div>
               <Button asChild variant="ghost" size="sm" className="shrink-0">
-                <Link href="/athlete/lift-history">View Full History</Link>
+                <Link href="/athlete/lift-history">{t("View Full History")}</Link>
               </Button>
             </CardHeader>
             <CardContent className="space-y-2">
               {!isError && !data?.recentPRs.length && (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  Log some sets to start tracking PRs.
+                  {t("Log some sets to start tracking PRs.")}
                 </p>
               )}
               {data?.recentPRs.slice(0, 5).map((pr, i) => (
@@ -465,7 +466,7 @@ export default function AthleteProgress() {
                     <div>
                       <p className="font-semibold">{pr.exerciseName}</p>
                       <p className="text-xs text-muted-foreground">
-                        {format(parseISO(pr.date), "MMM d, yyyy")}
+                        {t.date(parseISO(pr.date), { month: "short", day: "numeric", year: "numeric" })}
                       </p>
                     </div>
                     <p className="font-display text-lg font-bold text-primary">
@@ -476,7 +477,7 @@ export default function AthleteProgress() {
                     size="icon"
                     variant="ghost"
                     className="shrink-0"
-                    aria-label={`Share ${pr.exerciseName} PR`}
+                    aria-label={t("Share {exerciseName} PR", { exerciseName: t.exercise(pr.exerciseName) })}
                     disabled={sharingPrIndex === i}
                     onClick={() => handleSharePr(pr, i)}
                   >
@@ -495,10 +496,10 @@ export default function AthleteProgress() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Target className="h-5 w-5 text-primary" />
-                Goals
+                {t("Goals")}
               </CardTitle>
               <CardDescription>
-                Set a target for a lift or testing metric and track progress toward it.
+                {t("Set a target for a lift or testing metric and track progress toward it.")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -524,24 +525,22 @@ export default function AthleteProgress() {
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <HeartPulse className="h-5 w-5 text-primary" />
-                    Recovery & Vitals
+                    {t("Recovery & Vitals")}
                   </CardTitle>
                   <CardDescription>
-                    {RECOVERY_HISTORY_DAYS}-day averages from your synced Apple Health data,
-                    recalculated every time you check in.
-                  </CardDescription>
+                    {t("{RECOVERYHISTORYDAYS}-day averages from your synced Apple Health data, recalculated every time you check in.", { RECOVERYHISTORYDAYS: RECOVERY_HISTORY_DAYS })}</CardDescription>
                 </div>
                 <Button asChild variant="ghost" size="sm" className="shrink-0">
-                  <Link href="/athlete/recovery">View Trends</Link>
+                  <Link href="/athlete/recovery">{t("View Trends")}</Link>
                 </Button>
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
                 {(
                   [
-                    { key: "restingHeartRate", label: "Resting HR", unit: "bpm", decimals: 0 },
+                    { key: "restingHeartRate", label: msg("Resting HR"), unit: "bpm", decimals: 0 },
                     { key: "hrv", label: "HRV", unit: "ms", decimals: 0 },
                     { key: "vo2Max", label: "VO2 Max", unit: "", decimals: 1 },
-                    { key: "respiratoryRate", label: "Resp. Rate", unit: "br/min", decimals: 1 },
+                    { key: "respiratoryRate", label: msg("Resp. Rate"), unit: "br/min", decimals: 1 },
                     { key: "heartRateRecovery", label: "HRR", unit: "bpm", decimals: 0 },
                   ] as const
                 ).map((m) => {
@@ -551,7 +550,7 @@ export default function AthleteProgress() {
                       <p className="font-display text-xl font-bold">
                         {avg == null ? "--" : `${avg.toFixed(m.decimals)}${m.unit ? ` ${m.unit}` : ""}`}
                       </p>
-                      <p className="text-xs text-muted-foreground">{m.label}</p>
+                      <p className="text-xs text-muted-foreground">{t(m.label)}</p>
                     </div>
                   );
                 })}
@@ -568,9 +567,9 @@ export default function AthleteProgress() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-primary" />
-                  Weakness Report
+                  {t("Weakness Report")}
                 </CardTitle>
-                <CardDescription>Generated by your coach, ask them for a new one.</CardDescription>
+                <CardDescription>{t("Generated by your coach, ask them for a new one.")}</CardDescription>
               </CardHeader>
               <CardContent>
                 <WeaknessReportPanel fetchUrl="/api/athlete/weakness-reports" canGenerate={false} />
@@ -582,10 +581,10 @@ export default function AthleteProgress() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Scale className="h-5 w-5 text-primary" />
-                Body Metrics
+                {t("Body Metrics")}
               </CardTitle>
               <CardDescription>
-                Track your weight over time. No photos, just the numbers.
+                {t("Track your weight over time. No photos, just the numbers.")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -593,7 +592,7 @@ export default function AthleteProgress() {
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (!weight) {
-                    toast.error("Enter a weight");
+                    toast.error(t("Enter a weight"));
                     return;
                   }
                   addMetric.mutate();
@@ -607,7 +606,7 @@ export default function AthleteProgress() {
                     itself doesn't balloon out to the full card width for
                     a value this short. */}
                 <div className="col-span-2 min-w-0 space-y-1.5">
-                  <Label htmlFor="metric-date">Date</Label>
+                  <Label htmlFor="metric-date">{t("Date")}</Label>
                   <Input
                     id="metric-date"
                     type="date"
@@ -618,7 +617,7 @@ export default function AthleteProgress() {
                   />
                 </div>
                 <div className="min-w-0 space-y-1.5">
-                  <Label htmlFor="metric-weight">Weight</Label>
+                  <Label htmlFor="metric-weight">{t("Weight")}</Label>
                   <Input
                     id="metric-weight"
                     type="number"
@@ -631,19 +630,19 @@ export default function AthleteProgress() {
                   />
                 </div>
                 <div className="min-w-0 space-y-1.5">
-                  <Label htmlFor="metric-unit">Unit</Label>
+                  <Label htmlFor="metric-unit">{t("Unit")}</Label>
                   <Select value={weightUnit} onValueChange={(v) => setWeightUnit(v as "lbs" | "kg")}>
                     <SelectTrigger id="metric-unit">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="lbs">lbs</SelectItem>
-                      <SelectItem value="kg">kg</SelectItem>
+                      <SelectItem value="lbs">{t("lbs")}</SelectItem>
+                      <SelectItem value="kg">{t("kg")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="col-span-2 min-w-0 space-y-1.5">
-                  <Label htmlFor="metric-bf">Body fat % (optional)</Label>
+                  <Label htmlFor="metric-bf">{t("Body fat % (optional)")}</Label>
                   <Input
                     id="metric-bf"
                     type="number"
@@ -657,7 +656,7 @@ export default function AthleteProgress() {
                   />
                 </div>
                 <Button type="submit" disabled={addMetric.isPending} className="col-span-2 w-full">
-                  Log Entry
+                  {t("Log Entry")}
                 </Button>
               </form>
 
@@ -701,13 +700,13 @@ export default function AthleteProgress() {
               <div className="space-y-2">
                 {metricsFailed && (
                   <ReadFailed
-                    what="your body metrics"
+                    what={t("your body metrics")}
                     onRetry={() => void refetchMetrics()}
                   />
                 )}
                 {!metricsFailed && !metrics?.length && (
                   <p className="py-4 text-center text-sm text-muted-foreground">
-                    No entries yet, log your first weigh-in above.
+                    {t("No entries yet, log your first weigh-in above.")}
                   </p>
                 )}
                 {[...(metrics ?? [])]
@@ -723,19 +722,18 @@ export default function AthleteProgress() {
                           {m.weight} {m.weightUnit}
                           {m.bodyFatPercent != null && (
                             <span className="ml-2 text-sm font-normal text-muted-foreground">
-                              {m.bodyFatPercent}% BF
-                            </span>
+                              {t("{bodyFatPercent}% BF", { bodyFatPercent: m.bodyFatPercent })}</span>
                           )}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {format(parseISO(m.date), "MMM d, yyyy")}
+                          {t.date(parseISO(m.date), { month: "short", day: "numeric", year: "numeric" })}
                         </p>
                       </div>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        aria-label="Delete entry"
+                        aria-label={t("Delete entry")}
                         onClick={() => deleteMetric.mutate(m.id)}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -753,10 +751,10 @@ export default function AthleteProgress() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Trophy className="h-5 w-5 text-primary" />
-                Trophy Case
+                {t("Trophy Case")}
               </CardTitle>
               <CardDescription>
-                Every milestone you've ever unlocked, they stack, and they're yours for good.
+                {t("Every milestone you've ever unlocked, they stack, and they're yours for good.")}
               </CardDescription>
             </CardHeader>
             <CardContent>

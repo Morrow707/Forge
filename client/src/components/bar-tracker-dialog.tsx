@@ -109,6 +109,7 @@ import {
   type VideoRecordContext,
 } from "@/lib/video-offline-store";
 
+import { translate, useT } from "@/i18n";
 type Step = "setup" | "tracking" | "review";
 
 const SKELETON_COLOR = "#4ade80";
@@ -481,6 +482,7 @@ export function BarTrackerDialog({
    * video-offline-store.ts. */
   videoContext?: VideoRecordContext;
 }) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -1899,7 +1901,7 @@ export function BarTrackerDialog({
             const mismatch = liveGuess.pattern !== "unknown" && !!expected && liveGuess.pattern !== expected;
             setLiveMismatchHint(
               mismatch
-                ? `Motion looks more like a ${liveGuess.label} — double check you're tracking ${exerciseName}.`
+                ? translate("Motion looks more like a {label} — double check you're tracking {exerciseName}.", { label: liveGuess.label, exerciseName })
                 : null,
             );
           }
@@ -1921,7 +1923,7 @@ export function BarTrackerDialog({
         // nothing saved (Rule #1). An empty set goes to review so the clip and the record are
         // kept; the athlete is told what happened, not where to stand.
         (() => {
-          toast.warning("Couldn't get a clean read on this take. The clip is saved.");
+          toast.warning(t("Couldn't get a clean read on this take. The clip is saved."));
           return { ...EMPTY_WEB_JUMP_METRICS };
         })();
       // Landing mechanics (valgus, forward lean) still matter for a jump;
@@ -1956,7 +1958,7 @@ export function BarTrackerDialog({
     );
     if (!metrics) {
       // Same rule as the jump branch above: an empty set is saved, never a refusal.
-      toast.warning("Couldn't get a clean read on this take. The clip is saved.");
+      toast.warning(t("Couldn't get a clean read on this take. The clip is saved."));
       setResult({ ...EMPTY_WEB_REP_METRICS });
       changeStep("review");
       return;
@@ -2172,14 +2174,14 @@ export function BarTrackerDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Camera className="h-4 w-4 text-primary" />
-            Track {exerciseName}
+            {t("Track {exerciseName}", { exerciseName: t.exercise(exerciseName) })}
           </DialogTitle>
           <DialogDescription>
             {mode === "jump"
-              ? "Jump height, distance, and ground contact time for this set."
+              ? t("Jump height, distance, and ground contact time for this set.")
               : mode === "full"
-                ? "Bar speed, tempo, and bar path for this set."
-                : "Bar path for this set — no speed emphasis."}
+                ? t("Bar speed, tempo, and bar path for this set.")
+                : t("Bar path for this set — no speed emphasis.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -2197,7 +2199,7 @@ export function BarTrackerDialog({
                     poseVisible ? "bg-success/80 text-success-foreground" : "bg-destructive/80 text-white",
                   )}
                 >
-                  {poseVisible ? "Tracking" : "Body not visible"}
+                  {poseVisible ? t("Tracking") : t("Body not visible")}
                 </span>
                 {mode === "full" && (
                   <span className="rounded-full bg-black/60 px-3 py-1 font-display text-lg font-bold text-white">
@@ -2206,7 +2208,7 @@ export function BarTrackerDialog({
                 )}
                 <span className="rounded-full bg-black/60 px-2.5 py-1 text-xs font-bold text-white">
                   {repCount}
-                  {targetReps ? `/${targetReps}` : ""} {mode === "jump" ? "jumps" : "reps"}
+                  {targetReps ? `/${targetReps}` : ""} {mode === "jump" ? t("jumps") : t("reps")}
                 </span>
               </div>
               {liveTiltDeg != null && (
@@ -2220,8 +2222,10 @@ export function BarTrackerDialog({
                     )}
                   >
                     {Math.abs(liveTiltDeg) > 7
-                      ? `${Math.abs(liveTiltDeg).toFixed(0)}° toward the ${liveTiltDeg > 0 ? "right" : "left"} arm`
-                      : "Bar level"}
+                      ? liveTiltDeg > 0
+                        ? t("{degrees}° toward the right arm", { degrees: Math.abs(liveTiltDeg).toFixed(0) })
+                        : t("{degrees}° toward the left arm", { degrees: Math.abs(liveTiltDeg).toFixed(0) })
+                      : t("Bar level")}
                   </span>
                 </div>
               )}
@@ -2233,7 +2237,7 @@ export function BarTrackerDialog({
                       implementDetected ? "bg-success/80 text-success-foreground" : "bg-black/40 text-white/70",
                     )}
                   >
-                    {implementDetected ? "Object detected" : "Estimating from hand position"}
+                    {implementDetected ? t("Object detected") : t("Estimating from hand position")}
                   </span>
                 </div>
               )}
@@ -2257,7 +2261,7 @@ export function BarTrackerDialog({
 
           {step === "setup" && countdown == null && alignmentHint && (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full bg-amber-500/80 px-3 py-1 text-xs font-semibold text-black">
-              {alignmentHint}
+              {t(alignmentHint)}
             </div>
           )}
 
@@ -2268,7 +2272,7 @@ export function BarTrackerDialog({
                 Math.abs(tilt) <= 8 ? "bg-success/80 text-success-foreground" : "bg-amber-500/80 text-black",
               )}
             >
-              {Math.abs(tilt) <= 8 ? "Phone level" : `Tilt ${tilt > 0 ? "down" : "up"} ${Math.abs(tilt)}°`}
+              {Math.abs(tilt) <= 8 ? t("Phone level") : tilt > 0 ? t("Tilt down {degrees}°", { degrees: Math.abs(tilt) }) : t("Tilt up {degrees}°", { degrees: Math.abs(tilt) })}
             </div>
           )}
         </div>
@@ -2276,7 +2280,7 @@ export function BarTrackerDialog({
         {cameraError && (
           <p className="flex items-center gap-2 text-sm text-destructive">
             <AlertTriangle className="h-4 w-4" />
-            {cameraError}
+            {t(cameraError)}
           </p>
         )}
 
@@ -2284,21 +2288,20 @@ export function BarTrackerDialog({
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               {mode === "jump"
-                ? "Step back far enough to fit your takeoff spot AND where you'll land in frame, and keep the phone level and perpendicular to your jump. No marker needed; this tracks your body directly."
-                : "Step back until your whole body is visible, and try to keep the phone level and perpendicular to your movement — an angled camera skews the reading. No marker or tape needed; this tracks your body directly."}
-              {" "}Prop the phone up and get in position — tracking starts on its own once you're set up, no need to touch it again.
-            </p>
+                ? t("Step back far enough to fit your takeoff spot AND where you'll land in frame, and keep the phone level and perpendicular to your jump. No marker needed; this tracks your body directly.")
+                : t("Step back until your whole body is visible, and try to keep the phone level and perpendicular to your movement — an angled camera skews the reading. No marker or tape needed; this tracks your body directly.")}
+              {t("Prop the phone up and get in position — tracking starts on its own once you're set up, no need to touch it again.")}</p>
             {modelLoading && (
               <p className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Sparkles className="h-3.5 w-3.5 animate-pulse text-primary" />
-                Loading the pose-tracking model…
+                {t("Loading the pose-tracking model…")}
               </p>
             )}
             <label className="flex items-center gap-2.5 text-sm">
               <Checkbox checked={voiceEnabled} onCheckedChange={(c) => toggleVoice(c === true)} />
               <span className="flex items-center gap-1.5">
                 {voiceEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-                Voice rep counts &amp; end-of-set cues (off by default)
+                {t("Voice rep counts & end-of-set cues (off by default)")}
               </span>
             </label>
           </div>
@@ -2307,9 +2310,9 @@ export function BarTrackerDialog({
         {step === "review" && jumpResult && (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3 rounded-md border border-border p-3 text-center">
-              <Stat label="Best Jump Height" value={`${jumpResult.bestJumpHeightCm} cm`} />
+              <Stat label={t("Best Jump Height")} value={`${jumpResult.bestJumpHeightCm} cm`} />
               <Stat
-                label="Best Distance"
+                label={t("Best Distance")}
                 value={
                   jumpResult.bestHorizontalDistanceCm != null
                     ? `${jumpResult.bestHorizontalDistanceCm} cm`
@@ -2317,33 +2320,32 @@ export function BarTrackerDialog({
                 }
               />
               {jumpResult.avgGroundContactSeconds != null && (
-                <Stat label="Avg. Ground Contact" value={`${jumpResult.avgGroundContactSeconds}s`} />
+                <Stat label={t("Avg. Ground Contact")} value={`${jumpResult.avgGroundContactSeconds}s`} />
               )}
               {jumpResult.reactiveStrengthIndex != null && (
-                <Stat label="Reactive Strength Index" value={`${jumpResult.reactiveStrengthIndex}`} />
+                <Stat label={t("Reactive Strength Index")} value={`${jumpResult.reactiveStrengthIndex}`} />
               )}
             </div>
             <FormFaultBadges faults={jumpResult.formFaults} />
             {jumpResult.repBreakdown.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase text-muted-foreground">Jump by jump</p>
+                <p className="text-xs font-semibold uppercase text-muted-foreground">{t("Jump by jump")}</p>
                 <div className="space-y-1 rounded-md border border-border p-2">
                   {jumpResult.repBreakdown.map((r) => (
                     <div key={r.repNumber} className="flex items-center justify-between gap-2 text-xs">
-                      <span className="font-semibold">Jump {r.repNumber}</span>
+                      <span className="font-semibold">{t("Jump {repNumber}", { repNumber: r.repNumber })}</span>
                       <span className="flex items-center gap-2 text-muted-foreground">
                         {r.likelyTrackingGlitch && (
                           <AlertTriangle
                             className="h-3.5 w-3.5 text-amber-500"
-                            aria-label="Way off from this set's other jumps, likely a tracking glitch, not corrected automatically"
+                            aria-label={t("Way off from this set's other jumps, likely a tracking glitch, not corrected automatically")}
                           />
                         )}
                         <span className={r.likelyTrackingGlitch ? "text-amber-500" : undefined}>
-                          {r.jumpHeightCm} cm
-                        </span>
-                        {r.horizontalDistanceCm != null && <span>{r.horizontalDistanceCm} cm dist.</span>}
+                          {t("{jumpHeightCm} cm", { jumpHeightCm: r.jumpHeightCm })}</span>
+                        {r.horizontalDistanceCm != null && <span>{t("{horizontalDistanceCm} cm dist.", { horizontalDistanceCm: r.horizontalDistanceCm })}</span>}
                         {r.groundContactSeconds != null && (
-                          <span>{r.groundContactSeconds}s contact</span>
+                          <span>{t("{groundContactSeconds}s contact", { groundContactSeconds: r.groundContactSeconds })}</span>
                         )}
                       </span>
                     </div>
@@ -2362,18 +2364,18 @@ export function BarTrackerDialog({
                   {/* Mean (concentric) velocity leads -- it's the stable, load-velocity-profiling
                       metric VBT autoregulation is actually built on; peak is one noisy sample and
                       stays as secondary context, not the headline number. */}
-                  <Stat label="Mean Velocity" value={`${liftResult.meanVelocityMps} m/s`} />
-                  <Stat label="Peak Velocity" value={`${liftResult.peakVelocityMps} m/s`} />
-                  <Stat label="Concentric" value={`${liftResult.concentricSeconds}s`} />
+                  <Stat label={t("Mean Velocity")} value={`${liftResult.meanVelocityMps} m/s`} />
+                  <Stat label={t("Peak Velocity")} value={`${liftResult.peakVelocityMps} m/s`} />
+                  <Stat label={t("Concentric")} value={`${liftResult.concentricSeconds}s`} />
                   <Stat
-                    label="Eccentric"
+                    label={t("Eccentric")}
                     value={`${liftResult.eccentricSeconds}s @ ${liftResult.eccentricMeanVelocityMps} m/s`}
                   />
                   {liftResult.peakPowerWatts != null && (
-                    <Stat label="Peak Power" value={`${liftResult.peakPowerWatts} W`} />
+                    <Stat label={t("Peak Power")} value={`${liftResult.peakPowerWatts} W`} />
                   )}
                   {liftResult.meanPowerWatts != null && (
-                    <Stat label="Mean Power" value={`${liftResult.meanPowerWatts} W`} />
+                    <Stat label={t("Mean Power")} value={`${liftResult.meanPowerWatts} W`} />
                   )}
                   {liftResult.velocityLossPercent != null && (
                     <Stat
@@ -2386,15 +2388,15 @@ export function BarTrackerDialog({
                       // label now swaps to match which direction it actually
                       // went, so the number and the word next to it always
                       // agree.
-                      label={liftResult.velocityLossPercent >= 0 ? "Velocity Loss" : "Velocity Gain"}
+                      label={liftResult.velocityLossPercent >= 0 ? t("Velocity Loss") : t("Velocity Gain")}
                       value={`${Math.abs(liftResult.velocityLossPercent)}%`}
                     />
                   )}
                 </>
               )}
-              <Stat label="Avg. ROM" value={`${liftResult.romCm} cm`} />
+              <Stat label={t("Avg. ROM")} value={`${liftResult.romCm} cm`} />
               <Stat
-                label={usesSharedBar ? "Bar Path Deviation" : "Hand Path Deviation"}
+                label={usesSharedBar ? t("Bar Path Deviation") : t("Hand Path Deviation")}
                 value={`${liftResult.barPathDeviationCm} cm`}
                 full={mode === "bar_path"}
               />
@@ -2413,8 +2415,7 @@ export function BarTrackerDialog({
                 ) : (
                   <Info className="h-3.5 w-3.5 shrink-0" />
                 )}
-                Leg drive: {avgLegAsymmetry}% avg. imbalance
-              </p>
+                {t("Leg drive: {avgLegAsymmetry}% avg. imbalance", { avgLegAsymmetry })}</p>
             )}
 
             {movementGuess && movementGuess.pattern !== "unknown" && (
@@ -2430,14 +2431,14 @@ export function BarTrackerDialog({
                   <Info className="h-3.5 w-3.5 shrink-0" />
                 )}
                 {patternMismatch
-                  ? `Motion looks more like a ${movementGuess.label} — double check you're tracking ${exerciseName}.`
-                  : `Motion pattern: ${movementGuess.label}`}
+                  ? t("Motion looks more like a {label} — double check you're tracking {exerciseName}.", { label: movementGuess.label, exerciseName })
+                  : t("Motion pattern: {label}", { label: movementGuess.label })}
               </p>
             )}
 
             {liftResult.repBreakdown.length > 1 && (
               <div className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase text-muted-foreground">Rep by rep</p>
+                <p className="text-xs font-semibold uppercase text-muted-foreground">{t("Rep by rep")}</p>
                 <div className="space-y-1 rounded-md border border-border p-2">
                   {liftResult.repBreakdown.map((r) => {
                     const decayPct =
@@ -2447,15 +2448,15 @@ export function BarTrackerDialog({
                     return (
                       <div key={r.repNumber} className="flex items-center justify-between gap-2 text-xs">
                         <span className="flex items-center gap-1.5 font-semibold">
-                          Rep {r.repNumber}
+                          {t("Rep {repNumber}", { repNumber: r.repNumber })}
                           {trustByRep.has(r.repNumber) && (
                             <span
                               title={
                                 trustByRep.get(r.repNumber)!.notes.length > 0
-                                  ? `Tracking confidence: ${trustByRep.get(r.repNumber)!.score}%. ${trustByRep
+                                  ? t("Tracking confidence: {score}%. {value}", { score: trustByRep.get(r.repNumber)!.score, value: trustByRep
                                       .get(r.repNumber)!
-                                      .notes.join(". ")}`
-                                  : `Tracking confidence: ${trustByRep.get(r.repNumber)!.score}%`
+                                      .notes.join(". ") })
+                                  : t("Tracking confidence: {score}%", { score: trustByRep.get(r.repNumber)!.score })
                               }
                               className={cn(
                                 "inline-block h-1.5 w-1.5 rounded-full",
@@ -2472,10 +2473,10 @@ export function BarTrackerDialog({
                           {mode === "full" && (
                             <span className={decayPct > 15 ? "font-semibold text-amber-500" : undefined}>
                               {r.meanVelocityMps} m/s{decayPct > 15 ? ` (-${decayPct}%)` : ""}
-                              <span className="ml-1 opacity-70">(pk {r.peakVelocityMps})</span>
+                              <span className="ml-1 opacity-70">{t("(pk {peakVelocityMps})", { peakVelocityMps: r.peakVelocityMps })}</span>
                             </span>
                           )}
-                          {r.depthDeg != null && <span>{r.depthDeg}° knee</span>}
+                          {r.depthDeg != null && <span>{t("{depthDeg}° knee", { depthDeg: r.depthDeg })}</span>}
                           {legDriveByRep.has(r.repNumber) && (
                             <span
                               className={
@@ -2484,9 +2485,9 @@ export function BarTrackerDialog({
                                   : undefined
                               }
                             >
-                              {legDriveByRep.get(r.repNumber)!.dominantSide === "left" ? "R" : "L"} weaker{" "}
-                              {legDriveByRep.get(r.repNumber)!.asymmetryPercent}%
-                            </span>
+                              {legDriveByRep.get(r.repNumber)!.dominantSide === "left"
+                                ? t("R weaker {asymmetryPercent}%", { asymmetryPercent: legDriveByRep.get(r.repNumber)!.asymmetryPercent })
+                                : t("L weaker {asymmetryPercent}%", { asymmetryPercent: legDriveByRep.get(r.repNumber)!.asymmetryPercent })}</span>
                           )}
                           {armDriveByRep.has(r.repNumber) && (
                             <span
@@ -2496,9 +2497,9 @@ export function BarTrackerDialog({
                                   : undefined
                               }
                             >
-                              {armDriveByRep.get(r.repNumber)!.dominantSide === "left" ? "R" : "L"} arm weaker{" "}
-                              {armDriveByRep.get(r.repNumber)!.asymmetryPercent}%
-                            </span>
+                              {armDriveByRep.get(r.repNumber)!.dominantSide === "left"
+                                ? t("R arm weaker {asymmetryPercent}%", { asymmetryPercent: armDriveByRep.get(r.repNumber)!.asymmetryPercent })
+                                : t("L arm weaker {asymmetryPercent}%", { asymmetryPercent: armDriveByRep.get(r.repNumber)!.asymmetryPercent })}</span>
                           )}
                         </span>
                       </div>
@@ -2511,7 +2512,7 @@ export function BarTrackerDialog({
             {mode === "full" && lastRepCurve.length > 1 && (
               <div className="space-y-1.5">
                 <p className="text-xs font-semibold uppercase text-muted-foreground">
-                  Sticking point (last rep)
+                  {t("Sticking point (last rep)")}
                 </p>
                 <div className="h-28">
                   <ResponsiveContainer width="100%" height="100%">
@@ -2537,20 +2538,20 @@ export function BarTrackerDialog({
           {step === "setup" && (
             <Button onClick={startTracking} disabled={!!cameraError || modelLoading}>
               <Video className="h-4 w-4" />
-              Start Set
+              {t("Start Set")}
             </Button>
           )}
           {step === "tracking" && (
             <Button variant="secondary" onClick={stopTracking}>
               <Square className="h-4 w-4" />
-              Stop &amp; Review
+              {t("Stop & Review")}
             </Button>
           )}
           {step === "review" && (
             <>
               <Button variant="outline" onClick={retry}>
                 <RotateCcw className="h-4 w-4" />
-                Retry
+                {t("Retry")}
               </Button>
               <Button
                 disabled={savePhase !== "idle"}
@@ -2602,7 +2603,7 @@ export function BarTrackerDialog({
                         if (!hasWarnedAboutQueueing()) {
                           markWarnedAboutQueueing();
                           toast.info(
-                            "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+                            t("No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular."),
                             { duration: 10000 },
                           );
                         }
@@ -2612,7 +2613,7 @@ export function BarTrackerDialog({
                       }
                       onOpenChange(false);
                     } catch {
-                      toast.error("Couldn't upload the video, analytics are still saved below.");
+                      toast.error(t("Couldn't upload the video, analytics are still saved below."));
                       onCapture(result);
                       onOpenChange(false);
                     } finally {
@@ -2626,10 +2627,10 @@ export function BarTrackerDialog({
               >
                 <Check className="h-4 w-4" />
                 {savePhase === "overlay"
-                  ? `Adding overlay… ${Math.round(overlayProgress * 100)}%`
+                  ? t("Adding overlay… {percent}%", { percent: Math.round(overlayProgress * 100) })
                   : savePhase === "uploading"
-                    ? "Uploading…"
-                    : "Use This Data"}
+                    ? t("Uploading…")
+                    : t("Use This Data")}
               </Button>
             </>
           )}
@@ -2640,12 +2641,13 @@ export function BarTrackerDialog({
 }
 
 function FormFaultBadges({ faults }: { faults: { code: string; label: string }[] }) {
+  const t = useT();
   if (faults.length === 0) return null;
   return (
     <div className="space-y-1.5">
       <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-amber-500">
         <AlertTriangle className="h-3.5 w-3.5" />
-        Form notes
+        {t("Form notes")}
       </p>
       <div className="flex flex-wrap gap-1.5">
         {faults.map((f) => (

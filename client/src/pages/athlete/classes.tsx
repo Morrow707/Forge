@@ -20,11 +20,11 @@ import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ReadFailed } from "@/components/read-failed";
 import { GraduationCap, ListOrdered, ArrowRight, Search, Trophy, Lock, Unlock, Play, Flame, Award, Layers } from "lucide-react";
-import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { todayIso } from "@/lib/local-date";
 import { CLASS_PRICING_LINE } from "@shared/class-pricing-rule";
 
+import { msg, useT } from "@/i18n";
 type EnrolledClass = {
   classId: number;
   name: string;
@@ -68,9 +68,9 @@ type BrowsableClass = {
 
 type ClassSort = "unlocked" | "name" | "newest";
 const CLASS_SORT_OPTIONS: { value: ClassSort; label: string }[] = [
-  { value: "unlocked", label: "Unlocked first" },
-  { value: "name", label: "Name" },
-  { value: "newest", label: "Newest" },
+  { value: "unlocked", label: msg("Unlocked first") },
+  { value: "name", label: msg("Name") },
+  { value: "newest", label: msg("Newest") },
 ];
 
 /** Classes -- "My Classes" (enrolled, works for any athlete regardless of
@@ -79,6 +79,7 @@ const CLASS_SORT_OPTIONS: { value: ClassSort; label: string }[] = [
  * put them in, same as programs/skill programs -- there's no self-service
  * browsing for them here. */
 export default function AthleteClasses() {
+  const t = useT();
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const {
@@ -156,25 +157,25 @@ export default function AthleteClasses() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/my-classes"] });
-      toast.success("Enrolled — lesson 1 is on your calendar");
+      toast.success(t("Enrolled — lesson 1 is on your calendar"));
       setEnrollTarget(null);
       if (enrollTarget) navigate(`/athlete/classes/${enrollTarget.id}`);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not enroll"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not enroll")),
   });
 
   return (
-    <AppShell title="Classes">
+    <AppShell title={t("Classes")}>
       <div className="space-y-8">
         <div>
           <h2 className="mb-3 font-display text-lg font-bold uppercase tracking-wide text-muted-foreground">
-            My Classes
+            {t("My Classes")}
           </h2>
           {!myFailed && coachesFailed && (
             <Card>
               <CardContent className="py-12">
                 <ReadFailed
-                  what="whether you have a coach"
+                  what={t("whether you have a coach")}
                   onRetry={() => void refetchCoaches()}
                 />
               </CardContent>
@@ -183,7 +184,7 @@ export default function AthleteClasses() {
           {myFailed && (
             <Card>
               <CardContent className="py-12">
-                <ReadFailed what="your classes" onRetry={() => void refetchMine()} />
+                <ReadFailed what={t("your classes")} onRetry={() => void refetchMine()} />
               </CardContent>
             </Card>
           )}
@@ -205,8 +206,8 @@ export default function AthleteClasses() {
                 <GraduationCap className="h-10 w-10 text-muted-foreground" />
                 <p className="text-muted-foreground">
                   {isFreeAgent
-                    ? "Nothing here yet, browse Forge Classes below to get started."
-                    : "Your coach hasn't enrolled you in a Class yet."}
+                    ? t("Nothing here yet, browse Forge Classes below to get started.")
+                    : t("Your coach hasn't enrolled you in a Class yet.")}
                 </p>
               </CardContent>
             </Card>
@@ -225,7 +226,7 @@ export default function AthleteClasses() {
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-display text-xl font-bold uppercase tracking-wide">{c.name}</p>
                     {c.completedAt && (
-                      <span title="Class completed">
+                      <span title={t("Class completed")}>
                         <Trophy className="h-5 w-5 shrink-0 fill-amber-400 text-amber-400" />
                       </span>
                     )}
@@ -237,8 +238,8 @@ export default function AthleteClasses() {
                     <span className="flex items-center gap-1">
                       <ListOrdered className="h-3.5 w-3.5" />
                       {c.completedAt
-                        ? "Completed"
-                        : `Lesson ${Math.min(c.lessonsStarted, c.lessonCount) || 1} of ${c.lessonCount}`}
+                        ? t("Completed")
+                        : t("Lesson {value} of {lessonCount}", { value: Math.min(c.lessonsStarted, c.lessonCount) || 1, lessonCount: c.lessonCount })}
                     </span>
                     {c.next ? (
                       // Straight into the reader at the last page read, or the quiz that is
@@ -251,7 +252,7 @@ export default function AthleteClasses() {
                         }}
                       >
                         <Play className="h-3.5 w-3.5" />
-                        {c.next.startAt === "quiz" ? "Take the quiz" : "Continue"}
+                        {c.next.startAt === "quiz" ? t("Take the quiz") : t("Continue")}
                       </Button>
                     ) : (
                       <ArrowRight className="h-3.5 w-3.5" />
@@ -266,12 +267,12 @@ export default function AthleteClasses() {
         {!coachesLoading && isFreeAgent && (
           <div>
             <h2 className="mb-1 font-display text-lg font-bold uppercase tracking-wide text-muted-foreground">
-              Browse Forge Classes
+              {t("Browse Forge Classes")}
             </h2>
-            <p className="mb-3 text-sm text-muted-foreground">{CLASS_PRICING_LINE}</p>
+            <p className="mb-3 text-sm text-muted-foreground">{t(CLASS_PRICING_LINE)}</p>
             {catalogFailed && (
               <ReadFailed
-                what="the Forge Classes catalog"
+                what={t("the Forge Classes catalog")}
                 onRetry={() => void refetchCatalog()}
                 className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border py-10 text-center"
               />
@@ -281,7 +282,7 @@ export default function AthleteClasses() {
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <GraduationCap className="h-5 w-5" />
                 </div>
-                <p className="text-sm text-muted-foreground">No Forge Classes published yet.</p>
+                <p className="text-sm text-muted-foreground">{t("No Forge Classes published yet.")}</p>
               </div>
             )}
             {catalog.length > 0 && (
@@ -292,7 +293,7 @@ export default function AthleteClasses() {
                     <Input
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search classes…"
+                      placeholder={t("Search classes…")}
                       className="pl-8"
                     />
                   </div>
@@ -309,7 +310,7 @@ export default function AthleteClasses() {
                             : "text-muted-foreground hover:text-foreground",
                         )}
                       >
-                        {opt.label}
+                        {t(opt.label)}
                       </button>
                     ))}
                   </div>
@@ -326,7 +327,7 @@ export default function AthleteClasses() {
                           : "border-border text-muted-foreground hover:bg-surface-elevated",
                       )}
                     >
-                      All
+                      {t("All")}
                     </button>
                     {categories.map((cat) => (
                       <button
@@ -348,7 +349,7 @@ export default function AthleteClasses() {
               </div>
             )}
             {unenrolledCatalog.length > 0 && filteredCatalog.length === 0 && (
-              <p className="py-6 text-center text-sm text-muted-foreground">No classes match your search.</p>
+              <p className="py-6 text-center text-sm text-muted-foreground">{t("No classes match your search.")}</p>
             )}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filteredCatalog.map((c) => (
@@ -362,17 +363,17 @@ export default function AthleteClasses() {
                       {c.fullAccess ? (
                         <Badge variant="success" className="shrink-0 gap-1 text-[10px]">
                           <Unlock className="h-2.5 w-2.5" />
-                          FULL ACCESS
+                          {t("FULL ACCESS")}
                         </Badge>
                       ) : (
                         <Badge variant="secondary" className="shrink-0 text-[10px]">
-                          CHAPTER 1 FREE
+                          {t("CHAPTER 1 FREE")}
                         </Badge>
                       )}
                     </div>
                     {c.forYourSport && (
                       <Badge variant="outline" className="-mt-1 w-fit border-primary/50 text-[10px] text-primary">
-                        For your sport
+                        {t("For your sport")}
                       </Badge>
                     )}
                     {(c.category || c.readingLevel) && (
@@ -389,14 +390,13 @@ export default function AthleteClasses() {
                       <div className="flex items-center border-t border-border pt-3 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <ListOrdered className="h-3.5 w-3.5" />
-                          {c.lessonCount} lesson{c.lessonCount === 1 ? "" : "s"}
+                          {t.plural(c.lessonCount, "{count} lesson", "{count} lessons")}
                         </span>
                       </div>
                       {c.prerequisiteName && !c.prerequisiteSatisfied ? (
                         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Lock className="h-3.5 w-3.5 shrink-0" />
-                          Complete "{c.prerequisiteName}" to unlock
-                        </p>
+                          {t("Complete \"{prerequisiteName}\" to unlock", { prerequisiteName: c.prerequisiteName })}</p>
                       ) : null}
                       <div className="flex gap-2">
                         {/* "Look before you enrol". GET /api/athlete/classes/:id/progress
@@ -411,7 +411,7 @@ export default function AthleteClasses() {
                           className="flex-1"
                           onClick={() => navigate(`/athlete/classes/${c.id}`)}
                         >
-                          Syllabus
+                          {t("Syllabus")}
                         </Button>
                         <Button
                           size="sm"
@@ -422,7 +422,7 @@ export default function AthleteClasses() {
                             setEnrollTarget(c);
                           }}
                         >
-                          Enroll
+                          {t("Enroll")}
                         </Button>
                       </div>
                     </div>
@@ -438,31 +438,29 @@ export default function AthleteClasses() {
         {summaryFailed && (
           <Card>
             <CardContent className="py-8">
-              <ReadFailed what="your streak and certificates" onRetry={() => void refetchSummary()} />
+              <ReadFailed what={t("your streak and certificates")} onRetry={() => void refetchSummary()} />
             </CardContent>
           </Card>
         )}
         {summary && (summary.streak.current > 0 || summary.certificates.length > 0 || summary.reviewCardCount > 0) && (
           <div>
             <h2 className="mb-3 font-display text-lg font-bold uppercase tracking-wide text-muted-foreground">
-              Your learning
+              {t("Your learning")}
             </h2>
             <div className="flex flex-wrap items-center gap-3">
               {summary.streak.current > 0 && (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
                   <Flame className="h-3.5 w-3.5" />
-                  {summary.streak.current}-day learning streak
-                  {summary.streak.longest > summary.streak.current && (
-                    <span className="font-normal text-muted-foreground">· best {summary.streak.longest}</span>
+                  {t("{current}-day learning streak", { current: summary.streak.current })}{summary.streak.longest > summary.streak.current && (
+                    <span className="font-normal text-muted-foreground">{t("· best {longest}", { longest: summary.streak.longest })}</span>
                   )}
-                  {!summary.streak.activeToday && <span className="font-normal text-muted-foreground">· read today to keep it</span>}
+                  {!summary.streak.activeToday && <span className="font-normal text-muted-foreground">{t("· read today to keep it")}</span>}
                 </span>
               )}
               {summary.reviewCardCount > 0 && (
                 <Button size="sm" variant="outline" onClick={() => navigate("/athlete/classes/review")}>
                   <Layers className="h-4 w-4" />
-                  Review deck ({summary.reviewCardCount} cards)
-                </Button>
+                  {t("Review deck ({reviewCardCount} cards)", { reviewCardCount: summary.reviewCardCount })}</Button>
               )}
             </div>
             {summary.certificates.length > 0 && (
@@ -474,11 +472,11 @@ export default function AthleteClasses() {
                         <Award className="h-4 w-4 shrink-0 text-amber-500" />
                         {cert.name}
                       </p>
-                      <p className="text-xs text-muted-foreground">Completed {format(new Date(cert.completedAt), "MMM d, yyyy")}</p>
+                      <p className="text-xs text-muted-foreground">{t("Completed {date}", { date: t.date(cert.completedAt, { month: "short", day: "numeric", year: "numeric" }) })}</p>
                     </div>
                     <Button asChild size="sm" variant="outline">
                       <a href={`/athlete/classes/${cert.classId}/certificate`} onClick={(e) => { e.preventDefault(); navigate(`/athlete/classes/${cert.classId}/certificate`); }}>
-                        Certificate
+                        {t("Certificate")}
                       </a>
                     </Button>
                   </li>
@@ -492,7 +490,7 @@ export default function AthleteClasses() {
       <Dialog open={enrollTarget !== null} onOpenChange={(open) => !open && setEnrollTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Enroll in {enrollTarget?.name}</DialogTitle>
+            <DialogTitle>{t("Enroll in {name}", { name: enrollTarget?.name })}</DialogTitle>
           </DialogHeader>
           <form
             onSubmit={(e) => {
@@ -502,7 +500,7 @@ export default function AthleteClasses() {
             className="space-y-4"
           >
             <div className="space-y-1.5">
-              <Label htmlFor="class-enroll-date">Start date</Label>
+              <Label htmlFor="class-enroll-date">{t("Start date")}</Label>
               <Input
                 id="class-enroll-date"
                 type="date"
@@ -510,14 +508,14 @@ export default function AthleteClasses() {
                 onChange={(e) => setStartDate(e.target.value)}
                 required
               />
-              <p className="text-xs text-muted-foreground">Lesson 1 lands on your calendar this day.</p>
+              <p className="text-xs text-muted-foreground">{t("Lesson 1 lands on your calendar this day.")}</p>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEnrollTarget(null)}>
-                Cancel
+                {t("Cancel")}
               </Button>
               <Button type="submit" disabled={enrollMutation.isPending}>
-                {enrollMutation.isPending ? "Enrolling…" : "Enroll"}
+                {enrollMutation.isPending ? t("Enrolling…") : t("Enroll")}
               </Button>
             </DialogFooter>
           </form>

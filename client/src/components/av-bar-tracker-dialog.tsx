@@ -138,6 +138,7 @@ import { cameraTunablesFor } from "@shared/camera-tunables-by-lift";
 import { setRangeOfMotionProvenance } from "@/lib/bar-tracking";
 import type { FormFaultEvidence } from "@/lib/pose-tracking";
 
+import { useT } from "@/i18n";
 /** AVFoundation + Vision bar-path/full mode tracking -- the last tracker mode converted off
  * ARKit (see ArBarTrackerDialog for the fallback this replaces, kept completely untouched per
  * the plan's own Context section). Same "needs a held implement, not just a body joint" problem
@@ -687,6 +688,7 @@ export function AvBarTrackerDialog({
   // are waiting on, and one bar cannot answer that.
   onAnalysisProgress?: (setNumber: number, percent: number) => void;
 }) {
+  const t = useT();
   const filmGuidance = filmGuidanceForExercise(exerciseName);
   // Where to film from is the one instruction that decides whether the take is measurable at
   // all, so it opens as a card in the middle of the screen that has to be dismissed, not a
@@ -853,8 +855,7 @@ export function AvBarTrackerDialog({
           if (!hasWarnedAboutQueueing()) {
             markWarnedAboutQueueing();
             toast.info(
-              "No Wi-Fi, the video is saved on your device and will upload for your coach once connected. "
-                + "You can also send it manually from the Video Bank.",
+              t("No Wi-Fi, the video is saved on your device and will upload for your coach once connected. You can also send it manually from the Video Bank."),
               { duration: 10000 },
             );
           }
@@ -866,7 +867,7 @@ export function AvBarTrackerDialog({
         const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
         // The SET is already saved by this point, which is the whole intent -- this toast is
         // about the clip alone, and says so rather than reading as a lost set.
-        toast.error(`Your set saved, but the video didn't: ${detail}`);
+        toast.error(t("Your set saved, but the video didn't: {detail}", { detail }));
       });
   }
 
@@ -881,13 +882,13 @@ export function AvBarTrackerDialog({
     const emptyMetrics: RepMetrics = { ...EMPTY_REP_METRICS, captureDeviceInfo, trackingDiagnostics };
     if (recordVideo && uploadPromise) {
       try {
-        toast.error(`${message} (Video uploading for your coach.)`);
+        toast.error(t("{message} (Video uploading for your coach.)", { message: t(message) }));
         onCapture(emptyMetrics, undefined, forSetNumber);
         onOpenChange(false);
         uploadInBackground(uploadPromise, videoContext ?? { label: exerciseName });
       } catch (err) {
         const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
-        toast.error(`${message} And the video didn't save either: ${detail}`);
+        toast.error(t("{message} And the video didn't save either: {detail}", { message: t(message), detail }));
         // THE TAKE STILL HAPPENED, EVEN IF ITS CLIP DID NOT ARRIVE.
         //
         // This used to toast and stop: no onCapture, no close. The metrics AND the
@@ -906,7 +907,7 @@ export function AvBarTrackerDialog({
         setSaving(false);
       }
     } else {
-      toast.error(message);
+      toast.error(t(message));
       // Same reasoning as the catch above, for the no-video case: a refused take with no clip
       // to upload still produced a diagnostics record, and dropping it here left the set looking
       // as though the camera had never run. This branch only ever toasted.
@@ -977,22 +978,23 @@ export function AvBarTrackerDialog({
       trackingDiagnostics: { ...trackingDiagnostics, scaleFree },
     };
     const summary =
-      `Got ${scaleFree.repCount} rep${scaleFree.repCount === 1 ? "" : "s"}, tempo` +
-      (scaleFree.velocityLossPercent != null
-        ? ` and ${Math.abs(Math.round(scaleFree.velocityLossPercent))}% velocity loss.`
-        : ".");
-    const full = `${message} ${summary}`;
+      scaleFree.velocityLossPercent != null
+        ? t.plural(scaleFree.repCount, "Got {count} rep, tempo and {loss}% velocity loss.", "Got {count} reps, tempo and {loss}% velocity loss.", {
+            loss: Math.abs(Math.round(scaleFree.velocityLossPercent)),
+          })
+        : t.plural(scaleFree.repCount, "Got {count} rep, tempo.", "Got {count} reps, tempo.");
+    const full = t("{message} {summary}", { message: t(message), summary });
     if (recordVideo && uploadPromise) {
       try {
         // Same as the refusal path above: the set is handed up and the dialog closes now, and
         // the clip attaches itself when it lands. See uploadInBackground.
-        toast.warning(`${full} (Video uploading for your coach.)`);
+        toast.warning(t("{message} (Video uploading for your coach.)", { message: full }));
         onCapture(metrics, undefined, forSetNumber);
         onOpenChange(false);
         uploadInBackground(uploadPromise, videoContext ?? { label: exerciseName });
       } catch (err) {
         const detail = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
-        toast.error(`${full} And the video didn't save either: ${detail}`);
+        toast.error(t("{message} And the video didn't save either: {detail}", { message: full, detail }));
         onCapture(metrics, undefined, forSetNumber);
         onOpenChange(false);
       } finally {
@@ -1102,8 +1104,8 @@ export function AvBarTrackerDialog({
         );
         toast.error(
           inFlightUpload
-            ? "Couldn't finish analyzing this take, but your video was saved for your coach."
-            : "Couldn't finish analyzing this take. The set was saved without numbers.",
+            ? t("Couldn't finish analyzing this take, but your video was saved for your coach.")
+            : t("Couldn't finish analyzing this take. The set was saved without numbers."),
         );
         onCapture(EMPTY_REP_METRICS, salvagedVideoUrl, forSetNumber);
         setSaving(false);
@@ -2904,7 +2906,7 @@ export function AvBarTrackerDialog({
     // clip's real-time length (frame striding, no real-time playback constraint), so that
     // comparison would false-positive on plenty of ordinary, complete reads.
     if (recordingStats.readerStatus === "failed" && recordingStats.frameCount > 0) {
-      toast.warning("Analysis was cut short partway through this set, numbers below may not cover every rep.");
+      toast.warning(t("Analysis was cut short partway through this set, numbers below may not cover every rep."));
     }
 
     // SAY SO WHEN THE COUNT DOES NOT MATCH.
@@ -2922,8 +2924,12 @@ export function AvBarTrackerDialog({
     if (targetReps && targetReps > 0 && metrics.repBreakdown.length !== targetReps) {
       const found = metrics.repBreakdown.length;
       toast.info(
-        `Tracked ${found} rep${found === 1 ? "" : "s"} on a set prescribed at ${targetReps}. ` +
-          `Check the rep list below if that isn't what you did, the set's averages are built from it.`,
+        t.plural(
+          found,
+          "Tracked {count} rep on a set prescribed at {targetReps}. Check the rep list below if that isn't what you did, the set's averages are built from it.",
+          "Tracked {count} reps on a set prescribed at {targetReps}. Check the rep list below if that isn't what you did, the set's averages are built from it.",
+          { targetReps },
+        ),
         { duration: 10000 },
       );
     }
@@ -2968,7 +2974,7 @@ export function AvBarTrackerDialog({
         if (!hasWarnedAboutQueueing()) {
           markWarnedAboutQueueing();
           toast.info(
-            "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+            t("No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular."),
             { duration: 10000 },
           );
         }
@@ -2978,7 +2984,7 @@ export function AvBarTrackerDialog({
     } catch (err) {
       // diagnostics-exempt: the take was already handed up above, before this upload was awaited,
       // so the numbers and the diagnostics are on the set whatever happens to the clip.
-      toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
+      toast.error(err instanceof ApiError ? err.message : t("Saved the set, but the clip failed to upload"));
     } finally {
       setSaving(false);
     }
@@ -2995,7 +3001,7 @@ export function AvBarTrackerDialog({
             <AvCameraChrome containerRef={containerRef} active={open} />
             <button
               type="button"
-              aria-label="Close"
+              aria-label={t("Close")}
               onClick={() => {
                 // Live incident, 2026-09-02: tapping this while `analyzing` was true left a
                 // stuck overlay behind -- this button called onOpenChange(false) unconditionally
@@ -3019,7 +3025,7 @@ export function AvBarTrackerDialog({
             {recording && (
               <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-white backdrop-blur-sm">
                 <Circle className="h-2.5 w-2.5 animate-pulse fill-destructive text-destructive" />
-                Recording
+                {t("Recording")}
               </div>
             )}
 
@@ -3034,8 +3040,8 @@ export function AvBarTrackerDialog({
                       and only takes over once analysis is done but the upload still has a tail
                       left. */}
                   {analyzing
-                    ? `Analyzing recording, ${analyzedFrames} frames processed…`
-                    : `Saving your video… ${Math.round(uploadProgress * 100)}%`}
+                    ? t("Analyzing recording, {analyzedFrames} frames processed…", { analyzedFrames })
+                    : t("Saving your video… {percent}%", { percent: Math.round(uploadProgress * 100) })}
                 </p>
                 {/* Cancel only applies to the on-device analysis pass (cancelAnalysis calls
                     the native cancelAvAnalysis) -- shown exactly while analysis is still
@@ -3043,7 +3049,7 @@ export function AvBarTrackerDialog({
                 {analyzing && (
                   <Button variant="outline" size="sm" onClick={cancelAnalysis}>
                     <XCircle className="h-4 w-4" />
-                    Cancel
+                    {t("Cancel")}
                   </Button>
                 )}
               </div>
@@ -3060,21 +3066,21 @@ export function AvBarTrackerDialog({
                   <button
                     type="button"
                     onClick={() => setGuidanceDismissed(true)}
-                    aria-label="Close filming instructions"
+                    aria-label={t("Close filming instructions")}
                     className="absolute right-2 top-2 rounded-full p-2 text-white/70 hover:text-white"
                   >
                     <X className="h-5 w-5" />
                   </button>
                   <p className="pr-8 font-semibold uppercase tracking-wide text-white/60">
-                    Where to film from
+                    {t("Where to film from")}
                   </p>
                   <p className="mt-1 leading-snug">{filmGuidance.view}</p>
                   <p className="mt-4 font-semibold uppercase tracking-wide text-white/60">
-                    Keep in frame
+                    {t("Keep in frame")}
                   </p>
                   <p className="mt-1 leading-snug">{filmGuidance.inFrame}</p>
                   <Button className="mt-5 w-full" onClick={() => setGuidanceDismissed(true)}>
-                    Got it
+                    {t("Got it")}
                   </Button>
                 </div>
               </div>
@@ -3082,7 +3088,7 @@ export function AvBarTrackerDialog({
 
             {!recording && !analyzing && !saving && !heightIn && (
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-md bg-amber-500/80 px-3 py-2 text-center text-sm font-semibold text-black">
-                Add your height in your profile to get calibrated numbers from this camera.
+                {t("Add your height in your profile to get calibrated numbers from this camera.")}
               </div>
             )}
 
@@ -3096,7 +3102,7 @@ export function AvBarTrackerDialog({
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
-                  Camera tracking isn't supported on this device.
+                  {t("Camera tracking isn't supported on this device.")}
                 </div>
                 {supportError && (
                   <p className="select-text break-all text-center text-xs opacity-90">{supportError}</p>
@@ -3121,18 +3127,18 @@ export function AvBarTrackerDialog({
                 disabled={!supported || !heightIn}
               >
                 <Circle className="h-4 w-4 fill-current" />
-                Start Set
+                {t("Start Set")}
               </Button>
             )}
             {recording && (
               <Button size="lg" variant="secondary" onClick={stopTracking}>
                 <Square className="h-4 w-4" />
-                Stop Set
+                {t("Stop Set")}
               </Button>
             )}
             {(analyzing || saving) && (
               <Button size="lg" variant="secondary" disabled>
-                {analyzing ? "Analyzing…" : `Saving… ${Math.round(uploadProgress * 100)}%`}
+                {analyzing ? t("Analyzing…") : t("Saving… {percent}%", { percent: Math.round(uploadProgress * 100) })}
               </Button>
             )}
           </div>

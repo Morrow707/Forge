@@ -11,6 +11,7 @@ import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { cn } from "@/lib/utils";
 import { CalendarDays, ChevronDown, Loader2 } from "lucide-react";
 
+import { useT } from "@/i18n";
 // Kept in sync with the hook call below -- shared so the indicator's own
 // "have we crossed the threshold yet" styling matches what actually
 // triggers the refresh.
@@ -21,6 +22,7 @@ const PULL_REFRESH_THRESHOLD = 60;
  * nutrition/team-chat summaries, the Free Agent empty state) lives on the
  * Dashboard tab now instead; this page used to carry all of that too. */
 export default function AthleteCalendar() {
+  const t = useT();
   const [, navigate] = useLocation();
   const [range, setRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
   const eventsLayer = useCalendarEventsLayer(range);
@@ -51,13 +53,13 @@ export default function AthleteCalendar() {
 
   return (
     <AppShell
-      title="My Calendar"
+      title={t("My Calendar")}
       actions={
         <div className="flex flex-wrap items-center gap-2">
           {eventsLayer.addButton}
           <Button variant="outline" size="sm" onClick={() => setSyncOpen(true)}>
             <CalendarDays className="h-4 w-4" />
-            Calendar Sync
+            {t("Calendar Sync")}
           </Button>
         </div>
       }
@@ -112,7 +114,7 @@ export default function AthleteCalendar() {
       <CalendarLinkDialog
         open={syncOpen}
         onOpenChange={setSyncOpen}
-        title="Sync Your Calendar"
+        title={t("Sync Your Calendar")}
         fetchUrl="/api/athlete/calendar-link"
       />
       {eventsLayer.dialog}

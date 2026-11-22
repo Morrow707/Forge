@@ -4,12 +4,13 @@ import { AppShell } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getJson } from "@/lib/queryClient";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { Crown } from "lucide-react";
 import { ExerciseTrendDialog } from "@/components/exercise-trend-dialog";
 import { PinnedExercisePicker } from "@/components/pinned-exercise-picker";
 import { ReadFailed } from "@/components/read-failed";
 
+import { useT } from "@/i18n";
 type PrEntry = {
   exerciseId: number;
   exerciseName: string;
@@ -24,6 +25,7 @@ type PrEntry = {
  * the top 5. Same click-through to a per-exercise trend as the card it's
  * linked from. */
 export default function AthleteLiftHistory() {
+  const t = useT();
   const [trendExercise, setTrendExercise] = useState<{ id: number; name: string } | null>(null);
   const [liftFilter, setLiftFilter] = useState("");
 
@@ -41,9 +43,9 @@ export default function AthleteLiftHistory() {
   const visible = liftFilter ? (data ?? []).filter((pr) => pr.exerciseName === liftFilter) : (data ?? []);
 
   return (
-    <AppShell title="Full Lift History">
+    <AppShell title={t("Full Lift History")}>
       <p className="mb-6 text-sm text-muted-foreground">
-        Every exercise's most recent PR, most recent first, tap one to see the trend.
+        {t("Every exercise's most recent PR, most recent first, tap one to see the trend.")}
       </p>
 
       {isLoading ? (
@@ -56,18 +58,17 @@ export default function AthleteLiftHistory() {
               value={liftFilter}
               onChange={setLiftFilter}
             />
-            {isError && <ReadFailed what="your PR history" onRetry={() => void refetch()} />}
+            {isError && <ReadFailed what={t("your PR history")} onRetry={() => void refetch()} />}
             {!isError && !data?.length && (
               // "Log some sets to start tracking PRs" told an athlete who has set PRs for years
               // that they have none, on any request that failed.
               <p className="py-6 text-center text-sm text-muted-foreground">
-                Log some sets to start tracking PRs.
+                {t("Log some sets to start tracking PRs.")}
               </p>
             )}
             {!!data?.length && visible.length === 0 && (
               <p className="py-6 text-center text-sm text-muted-foreground">
-                No sets logged for {liftFilter} yet.
-              </p>
+                {t("No sets logged for {liftFilter} yet.", { liftFilter })}</p>
             )}
             <div className="space-y-2">
               {visible.map((pr, i) => (
@@ -82,7 +83,7 @@ export default function AthleteLiftHistory() {
                     <Crown className="h-4 w-4 shrink-0 text-primary" />
                     {pr.exerciseName}
                   </p>
-                  <p className="text-xs text-muted-foreground">{format(parseISO(pr.date), "MMM d, yyyy")}</p>
+                  <p className="text-xs text-muted-foreground">{t.date(parseISO(pr.date), { month: "short", day: "numeric", year: "numeric" })}</p>
                 </div>
                 <p className="font-display text-lg font-bold text-primary">
                   {pr.weight} {pr.unit} × {pr.reps}

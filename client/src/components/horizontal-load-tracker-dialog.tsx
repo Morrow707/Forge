@@ -36,6 +36,7 @@ import { recordedVideoType, videoFilenameForBlob } from "@/lib/video-recording";
 import { hapticLight } from "@/lib/haptics";
 import type { PoseLandmarker } from "@mediapipe/tasks-vision";
 
+import { useT } from "@/i18n";
 type Step = "calibrate" | "capture" | "manual" | "review";
 
 const CHECKPOINT_COLOR = "#facc15";
@@ -139,6 +140,7 @@ export function HorizontalLoadTrackerDialog({
   onCapture: (metrics: HorizontalLoadSetMetrics | null, videoUrl?: string, skeletonFrames?: PoseFrame[] | null) => void;
   videoContext?: VideoRecordContext;
 }) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const manualVideoRef = useRef<HTMLVideoElement>(null);
@@ -456,7 +458,7 @@ export function HorizontalLoadTrackerDialog({
       movementProfile?.maxPlausibleSprintSpeedYardsPerSec ?? undefined,
     );
     if (!manualResult) {
-      toast.error("Finish must be after start (and distance must be set), scrub back and try again");
+      toast.error(t("Finish must be after start (and distance must be set), scrub back and try again"));
       return;
     }
     hapticLight();
@@ -493,7 +495,7 @@ export function HorizontalLoadTrackerDialog({
           if (!hasWarnedAboutQueueing()) {
             markWarnedAboutQueueing();
             toast.info(
-              "No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular.",
+              t("No Wi-Fi, this video is saved on your device and will upload automatically once you're connected. You can also upload it manually anytime from the Video Bank, even over cellular."),
               { duration: 10000 },
             );
           }
@@ -504,7 +506,7 @@ export function HorizontalLoadTrackerDialog({
       onCapture(result, uploadedVideoUrl, framesRef.current);
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Saved the set, but the clip failed to upload");
+      toast.error(err instanceof ApiError ? err.message : t("Saved the set, but the clip failed to upload"));
       onCapture(result, undefined, framesRef.current);
       onOpenChange(false);
     } finally {
@@ -531,7 +533,7 @@ export function HorizontalLoadTrackerDialog({
               <WebCameraChrome containerRef={cameraChromeContainerRef} videoTrackRef={videoTrackRef} active={showsCamera && !modelLoading && !cameraError} />
               <button
                 type="button"
-                aria-label="Close"
+                aria-label={t("Close")}
                 onClick={() => onOpenChange(false)}
                 className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
               >
@@ -546,7 +548,7 @@ export function HorizontalLoadTrackerDialog({
 
               {recording && (
                 <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-sm font-bold text-teal-400 backdrop-blur-sm">
-                  Recording
+                  {t("Recording")}
                 </div>
               )}
 
@@ -560,14 +562,14 @@ export function HorizontalLoadTrackerDialog({
                   native sibling DOES have a failure route and carries a readFailed flag for it. */}
               {step === "calibrate" && (
                 <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-md bg-black/60 px-3 py-2 text-center text-sm text-white backdrop-blur-sm">
-                  Make sure the whole distance being covered will be in frame.
+                  {t("Make sure the whole distance being covered will be in frame.")}
                 </div>
               )}
 
               {cameraError && (
                 <div className="absolute inset-x-4 bottom-24 flex items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
-                  {cameraError}
+                  {t(cameraError)}
                 </div>
               )}
             </div>
@@ -576,17 +578,16 @@ export function HorizontalLoadTrackerDialog({
               {step === "calibrate" && (
                 <>
                   <p className="text-center text-sm text-white">
-                    Tap the screen where the <strong>start line</strong> is, then where the{" "}
-                    <strong>finish line</strong> is ({checkpointCount}/2 marked).
-                  </p>
+                    {t("Tap the screen where the")} <strong>{t("start line")}</strong> {t("is, then where the")}{" "}
+                    <strong>{t("finish line")}</strong> {t("is ({checkpointCount}/2 marked).", { checkpointCount })}</p>
                   <div className="flex items-end gap-2">
                     <div className="flex-1 space-y-1.5">
-                      <Label className="text-white">Distance (yards)</Label>
+                      <Label className="text-white">{t("Distance (yards)")}</Label>
                       <Input type="number" value={distanceYards} onChange={(e) => setDistanceYards(e.target.value)} />
                     </div>
                     <Button variant="outline" onClick={resetCheckpoints} disabled={checkpointCount === 0}>
                       <RotateCcw className="h-4 w-4" />
-                      Reset
+                      {t("Reset")}
                     </Button>
                   </div>
                   <Button
@@ -595,7 +596,7 @@ export function HorizontalLoadTrackerDialog({
                     onClick={startCapture}
                   >
                     <Play className="h-4 w-4" />
-                    Start Recording
+                    {t("Start Recording")}
                   </Button>
                 </>
               )}
@@ -603,11 +604,11 @@ export function HorizontalLoadTrackerDialog({
                 <div className="flex gap-3">
                   <Button size="lg" variant="secondary" className="flex-1" onClick={cancelCapture}>
                     <X className="h-4 w-4" />
-                    Cancel
+                    {t("Cancel")}
                   </Button>
                   <Button size="lg" className="flex-1" onClick={stopCaptureManually} disabled={!recording}>
                     <Square className="h-4 w-4" />
-                    Stop Recording
+                    {t("Stop Recording")}
                   </Button>
                 </div>
               )}
@@ -620,8 +621,7 @@ export function HorizontalLoadTrackerDialog({
             <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                Couldn't auto-detect a clean checkpoint crossing from this take. Scrub the clip below and mark Start
-                and Finish by hand, the time will still count.
+                {t("Couldn't auto-detect a clean checkpoint crossing from this take. Scrub the clip below and mark Start and Finish by hand, the time will still count.")}
               </p>
             </div>
             {videoUrl && (
@@ -632,22 +632,21 @@ export function HorizontalLoadTrackerDialog({
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={markManualStart}>
                 <Flag className="h-4 w-4" />
-                Mark Start
+                {t("Mark Start")}
               </Button>
               <Button className="flex-1" onClick={markManualFinish} disabled={manualStartTime == null}>
                 <Flag className="h-4 w-4" />
-                Mark Finish
+                {t("Mark Finish")}
               </Button>
             </div>
             {manualStartTime != null && (
               <p className="text-center text-xs text-muted-foreground">
-                Start marked at {manualStartTime.toFixed(2)}s, scrub to the finish and tap Mark Finish.
-              </p>
+                {t("Start marked at {manualStartTime}s, scrub to the finish and tap Mark Finish.", { manualStartTime: manualStartTime.toFixed(2) })}</p>
             )}
             <DialogFooter>
               <Button variant="outline" onClick={retry}>
                 <RotateCcw className="h-4 w-4" />
-                Retry Take
+                {t("Retry Take")}
               </Button>
             </DialogFooter>
           </div>
@@ -663,35 +662,34 @@ export function HorizontalLoadTrackerDialog({
             <div className="grid grid-cols-2 gap-3 rounded-md border border-border p-4 text-center">
               <div>
                 <p className="text-2xl font-bold text-teal-400">{result.elapsedSeconds.toFixed(2)}s</p>
-                <p className="text-xs text-muted-foreground">Elapsed time</p>
+                <p className="text-xs text-muted-foreground">{t("Elapsed time")}</p>
               </div>
               <div>
                 <p className="text-2xl font-bold">{result.avgSpeedYardsPerSec.toFixed(1)}</p>
-                <p className="text-xs text-muted-foreground">Yards / sec</p>
+                <p className="text-xs text-muted-foreground">{t("Yards / sec")}</p>
               </div>
             </div>
 
             {result.likelyGlitch && (
               <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                This time looks faster than realistically possible, almost certainly a tracking glitch, not a
-                real split. Recommend retaking before saving.
+                {t("This time looks faster than realistically possible, almost certainly a tracking glitch, not a real split. Recommend retaking before saving.")}
               </div>
             )}
             {!result.likelyGlitch && (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Check className="h-4 w-4 text-teal-400" />
-                Clean read.
+                {t("Clean read.")}
               </p>
             )}
 
             <DialogFooter>
               <Button variant="outline" onClick={retry}>
                 <RotateCcw className="h-4 w-4" />
-                Retry
+                {t("Retry")}
               </Button>
               <Button onClick={saveMutation} disabled={saving}>
-                {saving ? `Saving… ${Math.round(uploadProgress * 100)}%` : "Save Set"}
+                {saving ? t("Saving… {percent}%", { percent: Math.round(uploadProgress * 100) }) : t("Save Set")}
               </Button>
             </DialogFooter>
           </div>

@@ -8,12 +8,14 @@ import { ReadFailed } from "@/components/read-failed";
 import { LessonFlashcards } from "@/components/lesson-flashcards";
 import { ArrowLeft, Layers } from "lucide-react";
 
+import { useT } from "@/i18n";
 type DeckCard = { className: string; lessonNumber: number; lessonTitle: string; front: string; back: string };
 
 /** The review deck (2026-10-04): every flashcard from every lesson the athlete has read, in
  * every class they are in, dealt shuffled by the server. Same cards, same flip-and-sort as
  * the lesson's own review step; each card says which class and lesson it came from. */
 export default function AthleteFlashcardReview() {
+  const t = useT();
   const [, navigate] = useLocation();
   const { data, isLoading, isError, refetch } = useQuery<{ cards: DeckCard[] }>({
     queryKey: ["/api/athlete/flashcards"],
@@ -24,11 +26,11 @@ export default function AthleteFlashcardReview() {
   const cards = (data?.cards ?? []).map((c) => ({ front: c.front, back: c.back, label: `${c.className}, ${c.lessonNumber}. ${c.lessonTitle}` }));
   return (
     <AppShell
-      title="Review deck"
+      title={t("Review deck")}
       actions={
         <Button variant="outline" onClick={() => navigate("/athlete/classes")}>
           <ArrowLeft className="h-4 w-4" />
-          Classes
+          {t("Classes")}
         </Button>
       }
     >
@@ -36,7 +38,7 @@ export default function AthleteFlashcardReview() {
         {isError ? (
           <Card>
             <CardContent className="py-12">
-              <ReadFailed what="your cards" onRetry={() => void refetch()} />
+              <ReadFailed what={t("your cards")} onRetry={() => void refetch()} />
             </CardContent>
           </Card>
         ) : isLoading ? (
@@ -45,17 +47,20 @@ export default function AthleteFlashcardReview() {
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
               <Layers className="h-10 w-10 text-muted-foreground" />
-              <p className="font-semibold">No cards yet</p>
+              <p className="font-semibold">{t("No cards yet")}</p>
               <p className="max-w-sm text-sm text-muted-foreground">
-                Cards come from lessons you have read that have flashcards turned on. Read a lesson and they land here.
+                {t("Cards come from lessons you have read that have flashcards turned on. Read a lesson and they land here.")}
               </p>
             </CardContent>
           </Card>
         ) : (
           <>
             <p className="mb-4 text-sm text-muted-foreground">
-              {cards.length} card{cards.length === 1 ? "" : "s"} from every lesson you have read, shuffled. Tap to flip, then say
-              whether you had it.
+              {t.plural(
+                cards.length,
+                "{count} card from every lesson you have read, shuffled. Tap to flip, then say whether you had it.",
+                "{count} cards from every lesson you have read, shuffled. Tap to flip, then say whether you had it.",
+              )}
             </p>
             <LessonFlashcards cards={cards} onDone={() => navigate("/athlete/classes")} />
           </>

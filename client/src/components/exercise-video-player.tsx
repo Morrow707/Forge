@@ -4,6 +4,7 @@ import { extractYouTubeId } from "@/components/exercise-video";
 import { clipWindowFromUrl } from "@shared/exercise-video-match";
 import { externalLinkClick } from "@/lib/open-external";
 
+import { useT } from "@/i18n";
 /**
  * THE DEMO VIDEO PLAYS INSIDE FORGE, NOT IN SOMEBODY ELSE'S APP.
  *
@@ -46,6 +47,7 @@ export function ExerciseVideoPlayer({
   name: string;
   className?: string;
 }) {
+  const t = useT();
   const [playing, setPlaying] = useState(false);
   if (!url) return null;
 
@@ -63,11 +65,11 @@ export function ExerciseVideoPlayer({
         target="_blank"
         rel="noopener noreferrer"
         onClick={externalLinkClick(url)}
-        aria-label={`Find a ${name} demo video`}
+        aria-label={t("Find a {name} demo video", { name })}
         className="inline-flex items-center gap-1.5 self-start rounded-full border border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
       >
         <Play className="h-3 w-3" />
-        Find a demo
+        {t("Find a demo")}
       </a>
     );
   }
@@ -81,7 +83,7 @@ export function ExerciseVideoPlayer({
             // into the system fullscreen player, which is the same "don't leave our app"
             // problem in a different costume.
             src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1${clipParams}`}
-            title={`${name} demo video`}
+            title={t("{name} demo video", { name })}
             className="h-full w-full"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
@@ -90,7 +92,7 @@ export function ExerciseVideoPlayer({
           <button
             type="button"
             onClick={() => setPlaying(true)}
-            aria-label={`Play ${name} demo video`}
+            aria-label={t("Play {name} demo video", { name })}
             className="group relative h-full w-full"
           >
             <img
@@ -120,7 +122,7 @@ export function ExerciseVideoPlayer({
         onClick={externalLinkClick(`https://www.youtube.com/watch?v=${videoId}`)}
         className="mt-1 inline-block text-[11px] text-muted-foreground hover:text-primary hover:underline"
       >
-        Open on YouTube
+        {t("Open on YouTube")}
       </a>
     </div>
   );

@@ -31,6 +31,7 @@ import {
   Download,
 } from "lucide-react";
 
+import { useT } from "@/i18n";
 type Tool = "none" | "angle" | "draw" | "ruler";
 type PixelPoint = { x: number; y: number };
 type Stroke = { points: PixelPoint[]; color: string };
@@ -166,6 +167,7 @@ export function VideoAnalysisDialog({
   // message on iOS in exactly those cases, same as before this prop existed.
   skeletonFrames?: PoseFrame[] | null;
 }) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const analyzedUrlRef = useRef<string | null>(null);
@@ -629,10 +631,10 @@ export function VideoAnalysisDialog({
         hideClose
       >
         <div className="flex shrink-0 items-center justify-between px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-          <DialogTitle className="text-sm text-white">{title ?? "Video Analysis"}</DialogTitle>
+          <DialogTitle className="text-sm text-white">{title ?? t("Video Analysis")}</DialogTitle>
           <DialogClose className="rounded-sm text-white/70 ring-offset-background transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-ring">
             <X className="h-5 w-5" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t("Close")}</span>
           </DialogClose>
         </div>
 
@@ -640,7 +642,7 @@ export function VideoAnalysisDialog({
           {loadError ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-white/70">
               <VideoOff className="h-8 w-8" />
-              This video couldn't be loaded — it may not have finished uploading, or the file is missing.
+              {t("This video couldn't be loaded — it may not have finished uploading, or the file is missing.")}
             </div>
           ) : (
             <>
@@ -700,17 +702,17 @@ export function VideoAnalysisDialog({
               />
 
               <div className="absolute right-2 top-2 flex flex-col gap-1.5">
-                <RailButton icon={PersonStanding} active={showSkeleton} label="Skeleton" onClick={toggleSkeleton} />
-                <RailButton icon={Compass} active={activeTool === "angle"} label="Angle" onClick={() => selectTool("angle")} />
-                <RailButton icon={Pencil} active={activeTool === "draw"} label="Draw" onClick={() => selectTool("draw")} />
-                <RailButton icon={Ruler} active={activeTool === "ruler"} label="Ruler" onClick={() => selectTool("ruler")} />
+                <RailButton icon={PersonStanding} active={showSkeleton} label={t("Skeleton")} onClick={toggleSkeleton} />
+                <RailButton icon={Compass} active={activeTool === "angle"} label={t("Angle")} onClick={() => selectTool("angle")} />
+                <RailButton icon={Pencil} active={activeTool === "draw"} label={t("Draw")} onClick={() => selectTool("draw")} />
+                <RailButton icon={Ruler} active={activeTool === "ruler"} label={t("Ruler")} onClick={() => selectTool("ruler")} />
                 <RailButton
                   icon={Timer}
                   active={showStopwatch}
-                  label="Stopwatch"
+                  label={t("Stopwatch")}
                   onClick={() => setShowStopwatch((v) => !v)}
                 />
-                <RailButton icon={Download} active={false} label="Save Snapshot" onClick={saveSnapshot} />
+                <RailButton icon={Download} active={false} label={t("Save Snapshot")} onClick={saveSnapshot} />
               </div>
             </>
           )}
@@ -718,13 +720,12 @@ export function VideoAnalysisDialog({
           {!loadError && analyzing && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-sm text-white">
               <Loader2 className="h-5 w-5 animate-spin" />
-              Analyzing movement… {Math.round(analyzeProgress * 100)}%
-            </div>
+              {t("Analyzing movement… {percent}%", { percent: Math.round(analyzeProgress * 100) })}</div>
           )}
         </div>
 
         <div className="shrink-0 space-y-2 bg-black px-4 py-2">
-          {analyzeMessage && <p className="text-xs text-amber-400">{analyzeMessage}</p>}
+          {analyzeMessage && <p className="text-xs text-amber-400">{t(analyzeMessage)}</p>}
 
           {activeTool === "draw" && (
             <div className="flex flex-wrap items-center gap-2">
@@ -738,17 +739,17 @@ export function VideoAnalysisDialog({
                     drawColor === c ? "border-white" : "border-transparent",
                   )}
                   style={{ backgroundColor: c }}
-                  aria-label={`Draw color ${c}`}
+                  aria-label={t("Draw color {c}", { c })}
                 />
               ))}
               <CustomPenColor color={drawColor} presets={DRAW_COLORS} onChange={setDrawColor} video={() => videoRef.current} />
               <Button size="sm" variant="ghost" onClick={undoStroke}>
                 <Undo2 className="h-3.5 w-3.5" />
-                Undo
+                {t("Undo")}
               </Button>
               <Button size="sm" variant="ghost" onClick={clearStrokes}>
                 <Trash2 className="h-3.5 w-3.5" />
-                Clear
+                {t("Clear")}
               </Button>
             </div>
           )}
@@ -758,29 +759,29 @@ export function VideoAnalysisDialog({
               <span className="font-semibold">
                 {selectedJointKey
                   ? MEASURABLE_JOINTS.find((j) => j.key === selectedJointKey)?.label
-                  : "Angle"}
+                  : t("Angle")}
               </span>
               <Button size="sm" variant="outline" onClick={() => setFlipAngle((v) => !v)}>
                 <FlipHorizontal2 className="h-3.5 w-3.5" />
-                Inside / Outside
+                {t("Inside / Outside")}
               </Button>
               <Button size="sm" variant="ghost" onClick={clearAngle}>
-                Clear
+                {t("Clear")}
               </Button>
             </div>
           )}
           {activeTool === "angle" && !selectedJointKey && manualAnglePointCount > 0 && manualAnglePointCount < 3 && (
             <p className="text-xs text-muted-foreground">
-              {manualAnglePointCount === 1 ? "Tap the vertex of the angle." : "Tap the last point of the angle."}
+              {manualAnglePointCount === 1 ? t("Tap the vertex of the angle.") : t("Tap the last point of the angle.")}
             </p>
           )}
 
           {activeTool === "ruler" && (
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              {rulerPixelDist == null && <p className="text-xs text-muted-foreground">Tap two points to measure.</p>}
+              {rulerPixelDist == null && <p className="text-xs text-muted-foreground">{t("Tap two points to measure.")}</p>}
               {rulerPixelDist != null && !calibration && (
                 <>
-                  <span className="text-xs text-muted-foreground">That's how many inches in real life?</span>
+                  <span className="text-xs text-muted-foreground">{t("That's how many inches in real life?")}</span>
                   <Input
                     type="number"
                     value={calibrateInput}
@@ -788,15 +789,15 @@ export function VideoAnalysisDialog({
                     className="h-8 w-20"
                   />
                   <Button size="sm" onClick={applyCalibration}>
-                    Calibrate
+                    {t("Calibrate")}
                   </Button>
                 </>
               )}
               {measuredInches != null && (
                 <>
-                  <span className="font-semibold">{measuredInches.toFixed(1)} in</span>
+                  <span className="font-semibold">{t("{measuredInches} in", { measuredInches: measuredInches.toFixed(1) })}</span>
                   <Button size="sm" variant="ghost" onClick={() => setCalibration(null)}>
-                    Recalibrate
+                    {t("Recalibrate")}
                   </Button>
                 </>
               )}
@@ -806,15 +807,15 @@ export function VideoAnalysisDialog({
           {showStopwatch && (
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <Button size="sm" variant="outline" onClick={() => setMarkIn(currentTime)}>
-                Mark In
+                {t("Mark In")}
               </Button>
               <Button size="sm" variant="outline" onClick={() => setMarkOut(currentTime)}>
-                Mark Out
+                {t("Mark Out")}
               </Button>
-              {markIn != null && <span className="text-xs text-muted-foreground">In: {markIn.toFixed(2)}s</span>}
-              {markOut != null && <span className="text-xs text-muted-foreground">Out: {markOut.toFixed(2)}s</span>}
+              {markIn != null && <span className="text-xs text-muted-foreground">{t("In: {markIn}s", { markIn: markIn.toFixed(2) })}</span>}
+              {markOut != null && <span className="text-xs text-muted-foreground">{t("Out: {markOut}s", { markOut: markOut.toFixed(2) })}</span>}
               {markIn != null && markOut != null && (
-                <span className="font-semibold">{Math.abs(markOut - markIn).toFixed(2)}s elapsed</span>
+                <span className="font-semibold">{t("{value}s elapsed", { value: Math.abs(markOut - markIn).toFixed(2) })}</span>
               )}
               <Button
                 size="sm"
@@ -824,7 +825,7 @@ export function VideoAnalysisDialog({
                   setMarkOut(null);
                 }}
               >
-                Reset
+                {t("Reset")}
               </Button>
             </div>
           )}
@@ -842,7 +843,7 @@ export function VideoAnalysisDialog({
             <Button
               size="icon"
               variant="ghost"
-              aria-label={playing ? "Pause" : "Play"}
+              aria-label={playing ? t("Pause") : t("Play")}
               onClick={togglePlay}
               className="h-8 w-8 shrink-0"
             >
@@ -851,7 +852,7 @@ export function VideoAnalysisDialog({
             <Button
               size="icon"
               variant="ghost"
-              aria-label="Step back one frame"
+              aria-label={t("Step back one frame")}
               onClick={() => stepFrame(-1)}
               className="h-8 w-8 shrink-0"
             >
@@ -860,7 +861,7 @@ export function VideoAnalysisDialog({
             <Button
               size="icon"
               variant="ghost"
-              aria-label="Step forward one frame"
+              aria-label={t("Step forward one frame")}
               onClick={() => stepFrame(1)}
               className="h-8 w-8 shrink-0"
             >

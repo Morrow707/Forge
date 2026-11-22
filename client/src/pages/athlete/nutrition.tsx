@@ -10,6 +10,7 @@ import { Scale } from "lucide-react";
 import { Link } from "wouter";
 import { ReadFailed } from "@/components/read-failed";
 
+import { useT } from "@/i18n";
 type WellnessEntry = { bodyMass: number | null };
 const RECOVERY_HISTORY_DAYS = 90;
 
@@ -25,6 +26,7 @@ const RECOVERY_HISTORY_DAYS = 90;
  * toast. It now answers with the server's own "paid upgrade" message. Logging
  * food is always editable either way; that's never an AI capability. */
 export default function AthleteNutrition() {
+  const t = useT();
   const { user } = useAuth();
 
   const { data: coaches, isError: coachesFailed, refetch: refetchCoaches } = useQuery<{ id: number }[]>({
@@ -52,10 +54,10 @@ export default function AthleteNutrition() {
   // coach" -- they have none -- and loses the controls to set them at all.
   if (coachesFailed) {
     return (
-      <AppShell title="Nutrition">
+      <AppShell title={t("Nutrition")}>
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="your nutrition page" onRetry={() => void refetchCoaches()} />
+            <ReadFailed what={t("your nutrition page")} onRetry={() => void refetchCoaches()} />
           </CardContent>
         </Card>
       </AppShell>
@@ -63,12 +65,12 @@ export default function AthleteNutrition() {
   }
 
   return (
-    <AppShell title="Nutrition">
+    <AppShell title={t("Nutrition")}>
       <div className="mb-6 space-y-2">
         <p className="text-sm text-muted-foreground">
           {isFreeAgent
-            ? "Set your targets, log what you eat, ask nutrition questions."
-            : "Your targets, set by your coach. Log what you eat to track against them."}
+            ? t("Set your targets, log what you eat, ask nutrition questions.")
+            : t("Your targets, set by your coach. Log what you eat to track against them.")}
         </p>
         {/* Said once, plainly, on the page rather than only next to the AI box: Forge is not run
             by dietitians and nothing here is a prescription. Cut to one sentence 2026-09-23 --
@@ -76,14 +78,13 @@ export default function AthleteNutrition() {
             made survives: not a dietitian, not a prescription, go to a person who knows you.
             A disclaimer nobody finishes reading protects nobody. */}
         <p className="text-xs text-muted-foreground">
-          Not a dietitian, and nothing here is a prescription, your own targets should come from
-          a coach or a registered dietitian who knows you.
+          {t("Not a dietitian, and nothing here is a prescription, your own targets should come from a coach or a registered dietitian who knows you.")}
         </p>
       </div>
       {wellnessFailed && (
         <Card className="mb-6">
           <CardContent className="p-5">
-            <ReadFailed what="your body mass history" onRetry={() => void refetchWellness()} />
+            <ReadFailed what={t("your body mass history")} onRetry={() => void refetchWellness()} />
           </CardContent>
         </Card>
       )}
@@ -96,20 +97,19 @@ export default function AthleteNutrition() {
               </div>
               <div>
                 <p className="font-display text-2xl font-bold">
-                  {latestBodyMass != null ? `${latestBodyMass.toFixed(1)} lbs` : "--"}
+                  {latestBodyMass != null ? t("{latestBodyMass} lbs", { latestBodyMass: latestBodyMass.toFixed(1) }) : "--"}
                   {avgBodyMass != null && (
                     <span className="ml-2 text-sm font-normal text-muted-foreground">
-                      ({avgBodyMass.toFixed(1)} lbs avg, {RECOVERY_HISTORY_DAYS}d)
-                    </span>
+                      {t("({avgBodyMass} lbs avg, {days}d)", { avgBodyMass: avgBodyMass.toFixed(1), days: RECOVERY_HISTORY_DAYS })}</span>
                   )}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Body mass, synced from {nativeHealthName()}
+                  {t("Body mass, synced from {source}", { source: nativeHealthName() })}
                 </p>
               </div>
             </div>
             <Link href="/athlete/recovery" className="shrink-0 text-sm font-medium text-primary hover:underline">
-              View Trends
+              {t("View Trends")}
             </Link>
           </CardContent>
         </Card>
