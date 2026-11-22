@@ -74,12 +74,13 @@ export async function withResolvedWarmups<P extends { weeks: Array<{ days: Array
   };
 }
 
-type LibraryRow = WarmupCandidate & ExerciseForNeeds & { youthSafe?: boolean | null };
+type LibraryRow = WarmupCandidate & ExerciseForNeeds & { youthSafe?: boolean | null; retiredAt?: Date | null };
 
 /** The drills a drafted warm-up may use: tagged warm-up, possible in this room, right for the age. */
 export function warmupCandidatesFor<T extends LibraryRow>(library: readonly T[], room: EquipmentRoom | null, age: number | null): T[] {
   return keepForAge(
-    library.filter((ex) => isTaggedWarmup(ex) && roomAllows(ex, room)),
+    // A drill hidden by the library review (retiredAt) is never drafted into a new warm-up.
+    library.filter((ex) => !ex.retiredAt && isTaggedWarmup(ex) && roomAllows(ex, room)),
     age,
   );
 }
