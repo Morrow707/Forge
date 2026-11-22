@@ -7,7 +7,9 @@
  * the dialog's own button:
  *   - Plan a season: pick the off-season / preseason / in-season / postseason programs, type the
  *     first and last game, and Forge proposes each start date. Every date and repeat count is
- *     editable.
+ *     editable. When the person's calendar already holds games (shared/season-games.ts), the first
+ *     and last game are filled from them with one line saying what was found; still editable, and
+ *     a calendar with no games changes nothing.
  *   - Position: from each athlete's profile; programs written for a position show who matches.
  *   - Girls' / boys' / mixed team: a choice, suggested from the athletes and never shown as
  *     anybody's own gender.
@@ -26,6 +28,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ReadFailed } from "@/components/read-failed";
 import { apiRequest } from "@/lib/queryClient";
+import { todayIso } from "@/lib/local-date";
+import { foundGamesLine, shortDate, summarizeSeasonGames, type SeasonGame } from "@shared/season-games";
 import { cn } from "@/lib/utils";
 import { PROGRAM_SEASON_PHASE_LABEL, isProgramSeasonPhase, type ProgramSeasonPhase } from "@shared/exercise-tags";
 import {
@@ -60,6 +64,18 @@ type SeasonContext = {
   athletes: ContextAthlete[];
   suggestedTeamGender: TeamGender | null;
 };
+
+/** A game as GET /api/season-setup/games sends it. */
+type CalendarGame = { date: string; startsAt: string | null; allDay: boolean; title: string; source: "forge" | "imported" };
+
+const PAD = 2;
+const pad = (n: number) => String(n).padStart(PAD, "0");
+/** A timed imported game on the reader's own day (the server's date for it is the UTC one). */
+function localGameDate(g: CalendarGame): string {
+  if (!g.startsAt || g.allDay) return g.date;
+  const d = new Date(g.startsAt);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 type ClearanceState = { ticked: boolean; restrictions: string };
 type PlanEdit = { startDate?: string; durationWeeks?: number };
@@ -121,9 +137,33 @@ export function useSeasonSetup({
     enabled: open && allIds.length > 0,
   });
 
+  // The games already on the calendar. A failed read shows nothing new: the fields work as before.
+  const today = useMemo(() => todayIso(), [open]);
+  const gamesRead = useQuery<{ games: CalendarGame[] }>({
+    queryKey: ["/api/season-setup/games", mode, today, athleteKey],
+    queryFn: async () => {
+      const params = new URLSearchParams({ start: today });
+      if (mode === "coach" && athleteKey.length > 0) params.set("athleteIds", athleteKey.join(","));
+      const res = await apiRequest("GET", `/api/season-setup/games?${params.toString()}`);
+      return res.json();
+    },
+    enabled: open,
+  });
+  const foundGames = useMemo(
+    () =>
+      summarizeSeasonGames(
+        (gamesRead.data?.games ?? [])
+          .map((g): SeasonGame => ({ date: localGameDate(g), title: g.title }))
+          .filter((g) => g.date >= today),
+      ),
+    [gamesRead.data, today],
+  );
+
   const [planOn, setPlanOn] = useState(false);
   const [firstGame, setFirstGame] = useState("");
   const [lastGame, setLastGame] = useState("");
+  /** Set once the person types a game date, so the calendar never overwrites what they typed. */
+  const [gamesTouched, setGamesTouched] = useState(false);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [edits, setEdits] = useState<Map<number, PlanEdit>>(new Map());
   const [positions, setPositions] = useState<Map<number, string>>(new Map());
@@ -136,6 +176,7 @@ export function useSeasonSetup({
     setPlanOn(false);
     setFirstGame("");
     setLastGame("");
+    setGamesTouched(false);
     setPicked(new Set());
     setEdits(new Map());
     setPositions(new Map());
@@ -143,6 +184,13 @@ export function useSeasonSetup({
     setTeamTouched(false);
     setClearance(new Map());
   }, [open]);
+
+  // The calendar's games fill the two fields until the person types their own.
+  useEffect(() => {
+    if (!open || gamesTouched || !foundGames.firstGameDate) return;
+    setFirstGame(foundGames.firstGameDate);
+    setLastGame(foundGames.lastGameDate ?? "");
+  }, [open, gamesTouched, foundGames.firstGameDate, foundGames.lastGameDate]);
 
   const programsById = useMemo(() => new Map((context.data?.programs ?? []).map((p) => [p.id, p])), [context.data]);
   const primary = primaryProgramId ? programsById.get(primaryProgramId) ?? null : null;
@@ -232,9 +280,21 @@ export function useSeasonSetup({
     planOn,
     setPlanOn,
     firstGame,
-    setFirstGame,
+    setFirstGame: (v: string) => {
+      setGamesTouched(true);
+      setFirstGame(v);
+    },
     lastGame,
-    setLastGame,
+    setLastGame: (v: string) => {
+      setGamesTouched(true);
+      setLastGame(v);
+    },
+    foundGames,
+    useFoundGames: () => {
+      setGamesTouched(false);
+      setFirstGame(foundGames.firstGameDate ?? "");
+      setLastGame(foundGames.lastGameDate ?? "");
+    },
     picked,
     togglePicked: (id: number) =>
       setPicked((prev) => {
@@ -273,6 +333,47 @@ export function useSeasonSetup({
 const CHIP = "rounded-full border px-2.5 py-1 text-xs transition-colors";
 const CHIP_ON = "border-primary bg-primary/15 text-primary";
 const CHIP_OFF = "border-border text-muted-foreground hover:border-primary/50 hover:text-primary";
+
+/** The one line about games found on the calendar, with the list behind a button. */
+function FoundGames({ setup: s }: { setup: SeasonSetup }) {
+  const [showList, setShowList] = useState(false);
+  const line = foundGamesLine(s.foundGames);
+  if (!line) return null;
+  const usingThem = s.firstGame === s.foundGames.firstGameDate && s.lastGame === (s.foundGames.lastGameDate ?? "");
+  return (
+    <div className="min-w-0 space-y-1 text-xs text-muted-foreground" data-testid="text-found-games">
+      <p>
+        {line}{" "}
+        <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={() => setShowList((v) => !v)} data-testid="button-show-found-games">
+          {showList ? "Hide the games" : "See the games"}
+        </button>
+        {!usingThem && (
+          <>
+            {" · "}
+            <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={s.useFoundGames} data-testid="button-use-found-games">
+              Use these dates
+            </button>
+          </>
+        )}
+      </p>
+      {showList && (
+        <ul className="max-h-40 space-y-0.5 overflow-y-auto rounded-md border border-border/60 p-2" data-testid="list-found-games">
+          {s.foundGames.games.map((g) => (
+            <li key={`${g.date}-${g.title}`} className="flex min-w-0 gap-2">
+              <span className="w-14 shrink-0 tabular-nums">{shortDate(g.date)}</span>
+              <span className="min-w-0 truncate text-foreground">{g.title}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {s.foundGames.laterGames > 0 && (
+        <p>
+          {s.foundGames.laterGames} more game{s.foundGames.laterGames === 1 ? "" : "s"} after a long break look like the next season, so they are left out.
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function SeasonSetupStep({
   setup,
@@ -320,6 +421,7 @@ export function SeasonSetupStep({
               <Input type="date" value={s.lastGame} onChange={(e) => s.setLastGame(e.target.value)} className="h-10 min-w-0 text-base" data-testid="input-last-game" />
             </div>
           </div>
+          <FoundGames setup={s} />
           {s.seasonCandidates.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               No programs here are tagged off-season, preseason, in-season or postseason
