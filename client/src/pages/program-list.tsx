@@ -41,7 +41,7 @@ import {
   Search,
 } from "lucide-react";
 import { ProgramPhotoImportDialog } from "@/components/program-photo-import-dialog";
-import { todayIso } from "@/lib/local-date";
+import { SelfSeasonAssignDialog } from "@/components/self-season-assign-dialog";
 import { ReadFailed } from "@/components/read-failed";
 
 type ProgramSummary = {
@@ -136,9 +136,6 @@ export function ProgramListPage({
   // aiDraftMutation), so this stays unused there.
   const [aiAthleteId, setAiAthleteId] = useState<number | null>(null);
   const [selfAssignProgramId, setSelfAssignProgramId] = useState<number | null>(null);
-  const [selfAssignDate, setSelfAssignDate] = useState(() =>
-    todayIso(),
-  );
 
   const createMutation = useMutation({
     mutationFn: async (vars?: { name?: string }) => {
@@ -266,33 +263,6 @@ export function ProgramListPage({
       navigate(`${routeBase}/${result.program.id}`);
     },
     onError: (err: ApiError) => toast.error(err.message || "Could not generate a draft"),
-  });
-
-  // Self-assignment: coachId === athleteId -- lands the program straight on
-  // the caller's own personal calendar with no roster or athlete picker
-  // involved.
-  const selfAssignMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", `${apiBase}/my/assignments`, {
-        programId: selfAssignProgramId,
-        startDate: selfAssignDate,
-      });
-      return res.json();
-    },
-    onSuccess: () => {
-      // The calendar this lands on lives under a different path shape for
-      // each caller (admin's own training is "/api/admin/my/calendar", a
-      // coach's is "/api/coach/my/calendar", a Free Agent athlete's is
-      // "/api/athlete/calendar") -- invalidating all three is harmless (a
-      // no-op for whichever ones have no observers) and avoids this shared
-      // component needing to know which one it's in.
-      qc.invalidateQueries({ queryKey: ["/api/admin/my/calendar"] });
-      qc.invalidateQueries({ queryKey: ["/api/coach/my/calendar"] });
-      qc.invalidateQueries({ queryKey: ["/api/athlete/calendar"] });
-      toast.success("Added to your calendar");
-      setSelfAssignProgramId(null);
-    },
-    onError: (err: ApiError) => toast.error(err.message || "Could not add to your calendar"),
   });
 
   return (
@@ -453,10 +423,7 @@ export function ProgramListPage({
                     size="sm"
                     variant="secondary"
                     className="w-full"
-                    onClick={() => {
-                      setSelfAssignDate(todayIso());
-                      setSelfAssignProgramId(p.id);
-                    }}
+                    onClick={() => setSelfAssignProgramId(p.id)}
                   >
                     <CalendarPlus className="h-3.5 w-3.5" />
                     Add to My Calendar
@@ -522,49 +489,11 @@ export function ProgramListPage({
       )}
 
       {showSelfAssign && (
-        <Dialog
-          open={selfAssignProgramId !== null}
-          onOpenChange={(open) => !open && setSelfAssignProgramId(null)}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add to My Calendar</DialogTitle>
-            </DialogHeader>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                selfAssignMutation.mutate();
-              }}
-              className="space-y-4"
-            >
-              <div className="space-y-1.5">
-                <Label htmlFor="self-assign-date">Start date</Label>
-                <Input
-                  id="self-assign-date"
-                  type="date"
-                  value={selfAssignDate}
-                  onChange={(e) => setSelfAssignDate(e.target.value)}
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  Day 1 of Week 1 lands on this date.
-                </p>
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setSelfAssignProgramId(null)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={selfAssignMutation.isPending}>
-                  {selfAssignMutation.isPending ? "Adding…" : "Add to Calendar"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <SelfSeasonAssignDialog
+          programId={selfAssignProgramId}
+          programIds={programs.map((p) => p.id)}
+          onClose={() => setSelfAssignProgramId(null)}
+        />
       )}
 
       {showAiAssist && (

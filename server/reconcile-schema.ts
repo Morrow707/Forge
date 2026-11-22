@@ -4222,6 +4222,26 @@ CREATE INDEX IF NOT EXISTS "weight_room_sheet_uploads_team_date_idx"
   ON "weight_room_sheet_uploads" ("team_id", "date");
 `;
 
+// SEASON SETUP (2026-11-22): one row per assignment, see assignmentSeasonSetups in shared/schema.ts.
+// Its own statement so it runs after every table it references on a fresh database.
+const SQL_SEASON_SETUP = `
+CREATE TABLE IF NOT EXISTS "assignment_season_setups" (
+  "id" serial PRIMARY KEY,
+  "assignment_id" integer NOT NULL REFERENCES "assignments"("id") ON DELETE CASCADE,
+  "position" text,
+  "team_gender" text,
+  "season_phase" text,
+  "first_game_date" date,
+  "last_game_date" date,
+  "clearance_confirmed_by_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "clearance_confirmed_at" timestamp,
+  "clearance_restrictions" text,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "assignment_season_setups_assignment_unique"
+  ON "assignment_season_setups" ("assignment_id");
+`;
+
 async function main() {
   console.log("Reconciling schema (idempotent, additive-only)...");
   // Two separate calls, two separate implicit transactions -- see
@@ -4230,6 +4250,7 @@ async function main() {
   await pool.query(SQL_PART_1);
   await pool.query(SQL_PART_2);
   await pool.query(SQL_PART_3);
+  await pool.query(SQL_SEASON_SETUP);
   console.log("Schema reconciliation complete.");
   await pool.end();
 }

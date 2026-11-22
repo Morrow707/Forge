@@ -17,6 +17,7 @@ import { WeeklyDigestCard } from "@/components/weekly-digest-card";
 import { TeamPrWallCard } from "@/components/team-pr-wall-card";
 import { BarSpeedWeekCard } from "@/components/bar-speed-week-card";
 import { CoachTodayAttendanceCard } from "@/components/coach-today-attendance-card";
+import { CoachThrowingNotesCard } from "@/components/coach-throwing-notes-card";
 import { ReviewQueueCard } from "@/components/review-queue-card";
 import { ReengagementBanner } from "@/components/reengagement-banner";
 import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
@@ -238,6 +239,7 @@ export default function CoachDashboard() {
         onToggle={widgetVisibility.setHidden}
       >
         <CoachTodayAttendanceCard />
+        <CoachThrowingNotesCard />
       </SortableHideableWidget>
     ),
     "weekly-digest": (

@@ -41,6 +41,7 @@ import { ASSUMPTION_OF_RISK_RELEASE, nextAssumptionOfRisk } from "./seed-data/as
 import { REQUIRED_DOCUMENTS, documentAudienceFor } from "@shared/required-documents";
 import { AI_TERMS_OF_USE, nextAiTermsOfUse } from "./seed-data/ai-terms-of-use-draft";
 import { mergeNamedDuplicateExercises } from "./merge-duplicate-exercises";
+import { seedThrowingWorkloadExercises } from "./seed-throwing-exercises";
 
 const LEGAL_DOC_TYPES = legalDocumentTypeEnum.enumValues;
 
@@ -3356,6 +3357,10 @@ async function main() {
       console.log(`Flagged ${newlyOfficial} seeded exercise(s) Forge-official.`);
     }
   }
+
+  // The throwing-workload exercises (2026-11-22) live in their own module; see its header.
+  const throwingCreated = await seedThrowingWorkloadExercises(libraryOwner.id);
+  if (throwingCreated > 0) console.log(`Created ${throwingCreated} throwing-workload exercise(s).`);
 
   // One-time production fixup: promote scott.morrow@live.com to admin and
   // hand over the exercise library so it becomes the official Forge-branded

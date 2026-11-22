@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EquipmentGapNotice } from "@/components/equipment-gap-notice";
+import { SeasonSetupStep, useSeasonSetup } from "@/components/season-setup-step";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -43,7 +44,7 @@ type ScheduleDay = {
   exercisePreview: string;
   defaultDate: string;
 };
-type CreatedAssignment = { id: number; athleteId: number; correctivesEnabled: boolean };
+type CreatedAssignment = { id: number; athleteId: number; programId: number; correctivesEnabled: boolean };
 type DayGroup = { title: string; programDayIds: number[] };
 type CorrectivesQueueItem = {
   assignmentId: number;
@@ -120,6 +121,28 @@ export function AssignProgramDialog({
     enabled: open && !!selectedProgramId && !!startDate,
   });
 
+  // Every day is chosen on screen, so every day is sent. There is no pattern left for the server
+  // to re-derive the others from, and a partial map would silently fall back to a back-to-back
+  // grid for whatever was not touched.
+  const effectiveOverrides = useMemo(
+    () => Object.fromEntries(schedule.map((d) => [String(d.programDayId), dateOverrides.get(d.programDayId) ?? d.defaultDate])),
+    [schedule, dateOverrides],
+  );
+
+  // THE SEASON SETUP STEP (2026-11-22): position, team, the under-14 note, the season plan and the
+  // return-to-training clearance. See components/season-setup-step.tsx.
+  const setup = useSeasonSetup({
+    open,
+    mode: "coach",
+    primaryProgramId: selectedProgramId ? Number(selectedProgramId) : null,
+    programIds: programs.map((p) => p.id),
+    athleteIds: Array.from(assignAthletes.keys()),
+    startDate,
+    durationWeeks,
+    dateOverrides: Object.keys(effectiveOverrides).length > 0 ? effectiveOverrides : undefined,
+  });
+  const rosterNames = useMemo(() => new Map(roster.map((r) => [r.id, r.name])), [roster]);
+
   function toggleCorrectivesForAll(enabled: boolean) {
     setAssignAthletes((prev) => {
       const next = new Map(prev);
@@ -130,27 +153,18 @@ export function AssignProgramDialog({
 
   const assignMutation = useMutation({
     mutationFn: async () => {
-      // Whenever a weekday pattern is set, every day needs its (already
-      // weekday-walked) date sent explicitly -- not just the ones manually
-      // tweaked in "Customize schedule" -- since /api/coach/assignments
-      // itself only ever knows the plain day-in-a-row grid or whatever
-      // dateOverrides it's handed. Manual edits still win over the pattern
-      // for whichever day they touched.
-      // Every day is chosen on screen now, so every day is sent. There is no pattern
-      // left for the server to re-derive the others from, and a partial map would
-      // silently fall back to a back-to-back grid for whatever was not touched.
-      const effectiveOverrides = new Map(
-        schedule.map((d) => [d.programDayId, dateOverrides.get(d.programDayId) ?? d.defaultDate]),
-      );
-      const res = await apiRequest("POST", "/api/coach/assignments", {
-        programId: Number(selectedProgramId),
-        startDate,
-        durationWeeks,
-        dateOverrides:
-          effectiveOverrides.size > 0 ? Object.fromEntries(effectiveOverrides) : undefined,
+      // One route for a single program and for a season plan: each program is assigned through
+      // the same storage call the plain assign route uses, with the setup recorded beside it.
+      const r = setup.request;
+      const res = await apiRequest("POST", "/api/coach/season-assignments", {
+        programs: r.programs,
+        teamGender: r.teamGender,
+        firstGameDate: r.firstGameDate,
+        lastGameDate: r.lastGameDate,
         athletes: Array.from(assignAthletes.entries()).map(([athleteId, correctivesEnabled]) => ({
           athleteId,
           correctivesEnabled,
+          position: r.positions[athleteId] ?? null,
         })),
       });
       return res.json() as Promise<{ created: CreatedAssignment[] }>;
@@ -159,14 +173,19 @@ export function AssignProgramDialog({
       qc.invalidateQueries({ queryKey: ["/api/coach/calendar"] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/calendar"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/programs"] });
+      const athleteCount = new Set(result.created.map((a) => a.athleteId)).size;
+      const programCount = new Set(result.created.map((a) => a.programId)).size;
       if (result.created.length > 0) {
         toast.success(
-          `Assigned to ${result.created.length} athlete${result.created.length === 1 ? "" : "s"} — calendars updated`,
+          `Assigned${programCount > 1 ? ` ${programCount} programs` : ""} to ${athleteCount} athlete${athleteCount === 1 ? "" : "s"} — calendars updated`,
         );
       }
 
+      // Correctives are set per day type of the program this dialog was opened on, so only its
+      // assignments go through the setup flow; the other programs of a season plan keep the
+      // corrective switch and are adjusted from the calendar.
       const needsCorrectives = result.created
-        .filter((a) => a.correctivesEnabled)
+        .filter((a) => a.correctivesEnabled && a.programId === Number(selectedProgramId))
         .map((a) => ({
           assignmentId: a.id,
           athleteId: a.athleteId,
@@ -243,6 +262,7 @@ export function AssignProgramDialog({
                 </Select>
               )}
             </div>
+            {!setup.planOn && (<>
             <div className="space-y-1.5">
               <Label>Start date</Label>
               <Input
@@ -356,6 +376,7 @@ export function AssignProgramDialog({
                 </p>
               </div>
             )}
+            </>)}
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
@@ -427,6 +448,7 @@ export function AssignProgramDialog({
                 })}
               </div>
             </div>
+            {selectedProgramId && <SeasonSetupStep setup={setup} athleteNames={rosterNames} />}
             {/* THE ROOM (2026-11-21): a warning and swaps, never a block. */}
             <EquipmentGapNotice
               programId={selectedProgramId ? Number(selectedProgramId) : null}
@@ -450,13 +472,21 @@ export function AssignProgramDialog({
                   className="flex flex-col items-start gap-2 text-left"
                 />
               )}
+              {setup.blockReason && (
+                <p className="text-xs text-muted-foreground" data-testid="text-season-block-reason">
+                  {setup.blockReason}
+                </p>
+              )}
               <Button
                 type="submit"
+                data-testid="button-assign-program"
                 disabled={
                   assignMutation.isPending ||
                   !selectedProgramId ||
                   assignAthletes.size === 0 ||
-                  scheduleFailed
+                  (!setup.planOn && scheduleFailed) ||
+                  !!setup.blockReason ||
+                  setup.request.programs.length === 0
                 }
               >
                 Assign to {assignAthletes.size} athlete

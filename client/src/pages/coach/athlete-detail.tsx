@@ -1,5 +1,6 @@
 import { BarSpeedTab } from "@/components/bar-speed-tab";
 import { athleteTabInteraction } from "@shared/feature-usage";
+import { SingleSportYearNote, ThrowingWorkloadPanel } from "@/components/athlete-workload-notes";
 import { countInteraction } from "@/lib/feature-usage";
 import { format } from "date-fns";
 import { useState } from "react";
@@ -634,6 +635,7 @@ export default function AthleteDetailPage() {
           </div>
 
           <div>
+            <SingleSportYearNote athleteId={athlete.id} />
             <Tabs
               value={activeTab}
               onValueChange={(tab) => {
@@ -646,6 +648,7 @@ export default function AthleteDetailPage() {
                 <TabsTrigger value="metrics">Body Metrics</TabsTrigger>
                 <TabsTrigger value="testing">Testing History</TabsTrigger>
                 <TabsTrigger value="bar-speed">Bar Speed</TabsTrigger>
+                <TabsTrigger value="throwing">Throwing</TabsTrigger>
                 <TabsTrigger value="rom">Goniometer</TabsTrigger>
                 <TabsTrigger value="movement-screen">Movement Screen</TabsTrigger>
                 <TabsTrigger value="weakness">Weakness Report</TabsTrigger>
@@ -691,6 +694,10 @@ export default function AthleteDetailPage() {
 
               <TabsContent value="bar-speed">
                 <BarSpeedTab athleteId={athlete.id} athleteName={athlete.name} />
+              </TabsContent>
+
+              <TabsContent value="throwing">
+                <ThrowingWorkloadPanel athleteId={athlete.id} />
               </TabsContent>
 
               <TabsContent value="rom">

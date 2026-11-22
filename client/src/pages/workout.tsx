@@ -152,6 +152,7 @@ import { CaraTimer } from "@/components/cara-timer";
 import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
 import { ReadFailed } from "@/components/read-failed";
 import { CautionNote } from "@/components/exercise-tags";
+import { useAssignmentRestrictionNote } from "@/lib/use-assignment-restrictions";
 
 type ExerciseInfo = {
   id: number;
@@ -3193,6 +3194,8 @@ function ExerciseLogContent({
   setRowIdFor: (programExerciseId: number, setNumber: number) => number | undefined;
 }) {
   const { user } = useAuth();
+  // A return-to-training assignment's clinician restrictions, under every exercise (2026-11-22).
+  const restrictionNote = useAssignmentRestrictionNote(assignmentId);
   const isCorrective = item.kind === "corrective";
   const [distanceUnit] = useDistanceUnit();
   const [trackingSet, setTrackingSet] = useState<number | null>(null);
@@ -3816,7 +3819,7 @@ function ExerciseLogContent({
       {item.instructions && (
         <p className="text-xs text-muted-foreground">{item.instructions}</p>
       )}
-      <CautionNote note={item.cautionNote} />
+      <CautionNote note={item.cautionNote} extraNote={restrictionNote} />
 
       {/* Every camera-tracked exercise, whether or not a form-check video is also
           required -- the set rows below report velocity / bar path / jump height

@@ -11931,3 +11931,41 @@ export const weightRoomSheetUploads = pgTable(
   }),
 );
 export type WeightRoomSheetUpload = typeof weightRoomSheetUploads.$inferSelect;
+
+/* ===================================================================================================
+ * SEASON SETUP (2026-11-22). What the Season setup step of Assign Program and of "Add to my calendar"
+ * records about ONE assignment. Its own table, keyed by the assignment, so the assignment row and
+ * every query over it stay exactly as they were; a cascade takes it with the assignment. Rules in
+ * shared/season-plan.ts, writes in server/season-setup.ts.
+ *
+ * Nothing here changes a program's content today. Later builds read `position` and `teamGender`
+ * to swap position or team content; this build only stores the coach's choice.
+ * =================================================================================================== */
+export const assignmentSeasonSetups = pgTable(
+  "assignment_season_setups",
+  {
+    id: serial("id").primaryKey(),
+    assignmentId: integer("assignment_id")
+      .notNull()
+      .references(() => assignments.id, { onDelete: "cascade" }),
+    /** The position this assignment was set up for (the profile position by default; the coach may change it). Lower case. */
+    position: text("position"),
+    /** "girls" | "boys" | "mixed" (TEAM_GENDERS). The coach's choice; never shown back as anybody's gender. */
+    teamGender: text("team_gender"),
+    /** Where in the season this assignment was placed (PROGRAM_SEASON_PHASES), when it came from a season plan. */
+    seasonPhase: text("season_phase"),
+    /** The game dates the season plan was proposed from. */
+    firstGameDate: date("first_game_date"),
+    lastGameDate: date("last_game_date"),
+    /** A return-to-training clearance: WHO ticked the clinician sentence and WHEN. Both null = not ticked. */
+    clearanceConfirmedById: integer("clearance_confirmed_by_id").references(() => users.id, { onDelete: "set null" }),
+    clearanceConfirmedAt: timestamp("clearance_confirmed_at"),
+    /** The clinician's restrictions as typed. Shown with every day of the assignment. */
+    clearanceRestrictions: text("clearance_restrictions"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    assignmentUnique: uniqueIndex("assignment_season_setups_assignment_unique").on(table.assignmentId),
+  }),
+);
+export type AssignmentSeasonSetup = typeof assignmentSeasonSetups.$inferSelect;
