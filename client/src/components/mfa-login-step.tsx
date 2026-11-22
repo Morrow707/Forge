@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ShieldCheck } from "lucide-react";
+import { useT } from "@/i18n";
 
 /** Second step of login for an MFA-enabled coach/admin -- shared by login.tsx
  * and admin-login.tsx, shown in place of the normal password card once
@@ -24,6 +25,7 @@ export function MfaLoginStep({
   mfaToken: string;
   onBack: () => void;
 }) {
+  const t = useT();
   const { mfaVerifyMutation } = useAuth();
   const [code, setCode] = useState("");
   const [useBackupCode, setUseBackupCode] = useState(false);
@@ -38,18 +40,18 @@ export function MfaLoginStep({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ShieldCheck className="h-5 w-5" />
-          Two-factor authentication
+          {t("Two-factor authentication")}
         </CardTitle>
         <CardDescription>
           {useBackupCode
-            ? "Enter one of your saved backup codes."
-            : "Enter the 6-digit code from your authenticator app."}
+            ? t("Enter one of your saved backup codes.")
+            : t("Enter the 6-digit code from your authenticator app.")}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="mfa-code">{useBackupCode ? "Backup code" : "Code"}</Label>
+            <Label htmlFor="mfa-code">{useBackupCode ? t("Backup code") : t("Code")}</Label>
             <Input
               id="mfa-code"
               autoComplete="one-time-code"
@@ -57,7 +59,7 @@ export function MfaLoginStep({
               inputMode={useBackupCode ? "text" : "numeric"}
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder={useBackupCode ? "XXXX-XXXX" : "123456"}
+              placeholder={useBackupCode ? t("XXXX-XXXX") : "123456"}
               maxLength={useBackupCode ? 9 : 6}
             />
           </div>
@@ -67,12 +69,12 @@ export function MfaLoginStep({
             className="w-full"
             disabled={!code.trim() || mfaVerifyMutation.isPending}
           >
-            {mfaVerifyMutation.isPending ? "Verifying…" : "Verify"}
+            {mfaVerifyMutation.isPending ? t("Verifying…") : t("Verify")}
           </Button>
         </form>
         <div className="mt-4 flex items-center justify-between text-sm">
           <button type="button" onClick={onBack} className="text-muted-foreground hover:underline">
-            Back
+            {t("Back")}
           </button>
           <button
             type="button"
@@ -82,7 +84,7 @@ export function MfaLoginStep({
             }}
             className="font-semibold text-primary hover:underline"
           >
-            {useBackupCode ? "Use authenticator code instead" : "Use a backup code instead"}
+            {useBackupCode ? t("Use authenticator code instead") : t("Use a backup code instead")}
           </button>
         </div>
       </CardContent>

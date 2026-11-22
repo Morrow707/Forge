@@ -20,6 +20,7 @@ import {
   SKILL_FAULT_THRESHOLD_FIELDS,
   type SkillFaultThresholds,
 } from "@shared/skill-fault-thresholds";
+import { useT } from "@/i18n";
 
 const QUERY_KEY = ["/api/coach/skill-fault-thresholds"];
 
@@ -36,6 +37,7 @@ export function SkillFaultThresholdsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const { data, isError, refetch } = useQuery<{
     effective: SkillFaultThresholds;
@@ -57,19 +59,19 @@ export function SkillFaultThresholdsDialog({
       apiRequest("PUT", "/api/coach/skill-fault-thresholds", next),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY });
-      toast.success("Fault detection thresholds updated");
+      toast.success(t("Fault detection thresholds updated"));
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save those thresholds"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save those thresholds")),
   });
 
   const resetMutation = useMutation({
     mutationFn: () => apiRequest("DELETE", "/api/coach/skill-fault-thresholds"),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY });
-      toast.success("Reset to default thresholds");
+      toast.success(t("Reset to default thresholds"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't reset those thresholds"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't reset those thresholds")),
   });
 
   return (
@@ -78,7 +80,7 @@ export function SkillFaultThresholdsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <SlidersHorizontal className="h-5 w-5 text-teal-400" />
-            Fault Detection Sensitivity
+            {t("Fault Detection Sensitivity")}
           </DialogTitle>
         </DialogHeader>
         {/* HYDRATE-IN-AN-EFFECT, SAVE-THE-WHOLE-STATE -- see CLAUDE.md. On a failed read the
@@ -87,15 +89,13 @@ export function SkillFaultThresholdsDialog({
             not open until the read lands. */}
         {isError ? (
           <ReadFailed
-            what="your fault detection thresholds"
+            what={t("your fault detection thresholds")}
             onRetry={() => void refetch()}
           />
         ) : (
           <>
         <p className="text-sm text-muted-foreground">
-          These control how sensitive the camera tracker's automatic fault flags are for sprint
-          and swing/throw mechanics. They started as general coaching-literature defaults,
-          adjust any of them if they're too sensitive (or not sensitive enough) for your athletes.
+          {t("These control how sensitive the camera tracker's automatic fault flags are for sprint and swing/throw mechanics. They started as general coaching-literature defaults, adjust any of them if they're too sensitive (or not sensitive enough) for your athletes.")}
         </p>
         <div className="space-y-4">
           {SKILL_FAULT_THRESHOLD_FIELDS.map((field) => {
@@ -128,7 +128,7 @@ export function SkillFaultThresholdsDialog({
               onClick={() => resetMutation.mutate()}
               disabled={resetMutation.isPending || saveMutation.isPending}
             >
-              Reset to Defaults
+              {t("Reset to Defaults")}
             </Button>
           ) : (
             <span />
@@ -137,7 +137,7 @@ export function SkillFaultThresholdsDialog({
             onClick={() => saveMutation.mutate(values)}
             disabled={saveMutation.isPending}
           >
-            {saveMutation.isPending ? "Saving…" : "Save"}
+            {saveMutation.isPending ? t("Saving…") : t("Save")}
           </Button>
         </DialogFooter>
           </>

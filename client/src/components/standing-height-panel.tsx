@@ -5,9 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { todayIso } from "@/lib/local-date";
 import { heightAskDue } from "@shared/anvil-growth";
+import { useT } from "@/i18n";
 
 // Declared here rather than imported from shared/schema.ts, the same as every other row type in
 // this directory: one literal schema import drags 291 kB plus zod and drizzle into the eager
@@ -46,6 +47,7 @@ export function StandingHeightPanel({
   /** Present on a coach's view, which changes who the prompt is addressed to. */
   athleteName?: string;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [heightIn, setHeightIn] = useState("");
 
@@ -65,12 +67,12 @@ export function StandingHeightPanel({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [fetchUrl] });
       setHeightIn("");
-      toast.success("Height recorded");
+      toast.success(t("Height recorded"));
     },
     // The server's own sentence. The one refusal this can meet is the range check, whose message
     // names the fix ("enter it in inches"), and a generic toast would hide it.
     onError: (err: unknown) =>
-      toast.error(err instanceof Error && err.message ? err.message : "Couldn't save that height"),
+      toast.error(err instanceof Error && err.message ? err.message : t("Couldn't save that height")),
   });
 
   // A FAILED READ IS NOT AN EMPTY SERIES. With no guard, a read that failed would render the ask
@@ -80,7 +82,7 @@ export function StandingHeightPanel({
   if (isError) {
     return (
       <p className="text-xs text-muted-foreground">
-        Couldn&apos;t load the height history, so there&apos;s nothing to add to yet.
+        {t("Couldn't load the height history, so there's nothing to add to yet.")}
       </p>
     );
   }
@@ -90,24 +92,25 @@ export function StandingHeightPanel({
     heights.map((h) => ({ onIso: h.date, cm: h.heightIn * 2.54 })),
     todayIso(),
   );
-  const who = athleteName ? `${athleteName}'s` : "your";
 
   return (
     <div className="space-y-2">
-      <Label htmlFor={`standing-height-${fetchUrl}`}>Standing height (inches)</Label>
+      <Label htmlFor={`standing-height-${fetchUrl}`}>{t("Standing height (inches)")}</Label>
       {ask.ask ? (
         <>
           <p className="text-xs text-muted-foreground">
             {ask.because === "never_recorded"
-              ? `Measured without shoes. Recording ${who} height every month or so is what lets a growth spurt be told apart from anything else.`
-              : "It has been a month. Worth measuring again -- growing changes how everything else reads."}
+              ? athleteName
+                ? t("Measured without shoes. Recording {name}'s height every month or so is what lets a growth spurt be told apart from anything else.", { name: athleteName })
+                : t("Measured without shoes. Recording your height every month or so is what lets a growth spurt be told apart from anything else.")
+              : t("It has been a month. Worth measuring again -- growing changes how everything else reads.")}
           </p>
           <form
             className="flex gap-2"
             onSubmit={(e) => {
               e.preventDefault();
               if (!heightIn) {
-                toast.error("Enter a height in inches");
+                toast.error(t("Enter a height in inches"));
                 return;
               }
               record.mutate();
@@ -125,19 +128,18 @@ export function StandingHeightPanel({
               data-testid="standing-height-input"
             />
             <Button type="submit" variant="outline" disabled={record.isPending}>
-              Record
+              {t("Record")}
             </Button>
           </form>
         </>
       ) : (
         <p className="text-xs text-muted-foreground" data-testid="height-next-due">
-          Recorded {format(parseISO(ask.answeredOn), "MMM d")} — next one around{" "}
-          {format(parseISO(ask.nextDueOn), "MMM d")}.
+          {t("Recorded {date} — next one around {next}.", { date: t.date(parseISO(ask.answeredOn), { month: "short", day: "numeric" }), next: t.date(parseISO(ask.nextDueOn), { month: "short", day: "numeric" }) })}
         </p>
       )}
       {heights.length > 0 && (
         <p className="text-[11px] text-muted-foreground">
-          {heights.length} recorded, most recently {heights[heights.length - 1].heightIn}&quot;.
+          {t("{count} recorded, most recently {height}\".", { count: heights.length, height: heights[heights.length - 1].heightIn })}
         </p>
       )}
     </div>

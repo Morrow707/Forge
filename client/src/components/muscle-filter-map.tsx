@@ -3,6 +3,7 @@ import { ChevronDown, PersonStanding, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BodyMap, BODY_MAP_LEADERS, type BodyMapView } from "@/components/body-map";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 /**
  * "SHOW ME EXERCISES FOR *THIS*" -- the body map as a filter (Scott, 2026-09-21: beginners
@@ -28,6 +29,7 @@ export function MuscleFilterMap({
   onToggle: (group: string) => void;
   onClear: () => void;
 }) {
+  const t = useT();
   // Open on desktop, shut on a phone. The CSS handles which, so there is no viewport guess in
   // JavaScript that can be wrong on a tablet or after a rotation.
   const [open, setOpen] = useState(false);
@@ -44,7 +46,7 @@ export function MuscleFilterMap({
       >
         <PersonStanding className="h-4 w-4 shrink-0 text-muted-foreground" />
         <span className="flex-1 truncate">
-          {chosen.length === 0 ? "Find by muscle" : chosen.join(", ")}
+          {chosen.length === 0 ? t("Find by muscle") : chosen.join(", ")}
         </span>
         <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", open && "rotate-180")} />
       </button>
@@ -52,11 +54,11 @@ export function MuscleFilterMap({
       <div className={cn("px-3 pb-3 sm:block sm:pt-3", open ? "block" : "hidden")}>
         <div className="mb-2 hidden items-center gap-2 sm:flex">
           <PersonStanding className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Find by muscle</span>
-          <span className="text-xs text-muted-foreground">Tap a muscle to filter the list</span>
+          <span className="text-sm font-medium">{t("Find by muscle")}</span>
+          <span className="text-xs text-muted-foreground">{t("Tap a muscle to filter the list")}</span>
           {chosen.length > 0 && (
             <Button size="sm" variant="ghost" className="ml-auto h-7" onClick={onClear}>
-              <X className="h-3.5 w-3.5" /> Clear
+              <X className="h-3.5 w-3.5" /> {t("Clear")}
             </Button>
           )}
         </div>
@@ -115,7 +117,7 @@ export function MuscleFilterMap({
           </div>
           {chosen.length > 0 && (
             <Button size="sm" variant="ghost" className="ml-auto h-7" onClick={onClear}>
-              <X className="h-3.5 w-3.5" /> Clear
+              <X className="h-3.5 w-3.5" /> {t("Clear")}
             </Button>
           )}
         </div>
@@ -124,7 +126,7 @@ export function MuscleFilterMap({
           // Said in words as well as colour: somebody who cannot distinguish the highlight --
           // or who tapped by accident -- still needs to know why the list just got shorter.
           <p className="mt-2 text-xs text-muted-foreground">
-            Showing {chosen.join(", ")}. Search still works across everything.
+            {t("Showing {muscles}. Search still works across everything.", { muscles: chosen.join(", ") })}
           </p>
         )}
       </div>

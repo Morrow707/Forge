@@ -5,10 +5,12 @@ import { Trophy } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
 import { format, parseISO } from "date-fns";
 import { CHALLENGE_METRIC_LABEL, type TeamChallenge } from "@/lib/team-challenges";
+import { useT } from "@/i18n";
 
 /** Read-only for athletes -- team challenges are created and removed by the
  * coach only. Shows every quest for every team the athlete belongs to. */
 export function SquadQuests() {
+  const t = useT();
   const { data: challenges = [], isError, refetch } = useQuery<TeamChallenge[]>({
     queryKey: ["/api/athlete/team-challenges"],
     queryFn: () => getJson("/api/athlete/team-challenges"),
@@ -18,7 +20,7 @@ export function SquadQuests() {
     return (
       <Card className="mb-4">
         <CardContent className="p-4">
-          <ReadFailed what="your team's quests" onRetry={() => void refetch()} />
+          <ReadFailed what={t("your team's quests")} onRetry={() => void refetch()} />
         </CardContent>
       </Card>
     );
@@ -31,9 +33,9 @@ export function SquadQuests() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Trophy className="h-5 w-5 text-primary" />
-          Squad Quests
+          {t("Squad Quests")}
         </CardTitle>
-        <CardDescription>Your team's shared push, everyone's sets count toward it.</CardDescription>
+        <CardDescription>{t("Your team's shared push, everyone's sets count toward it.")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {challenges.map((c) => (
@@ -54,7 +56,7 @@ export function SquadQuests() {
                 </span>
                 {c.progress.target != null && (
                   <span className="text-xs text-muted-foreground">
-                    of {c.progress.target.toLocaleString()} goal
+                    {t("of {target} goal", { target: c.progress.target.toLocaleString() })}
                   </span>
                 )}
               </div>
@@ -76,7 +78,7 @@ export function SquadQuests() {
                     key={`${i}-${a.name}`}
                     className={`flex items-center justify-between text-xs ${a.isYou ? "text-foreground" : "text-muted-foreground"}`}
                   >
-                    <span className="truncate">{a.name}{a.isYou ? " (you)" : ""}</span>
+                    <span className="truncate">{a.name}{a.isYou ? ` ${t("(you)")}` : ""}</span>
                     <span className="shrink-0 font-semibold">{a.contribution.toLocaleString()}</span>
                   </div>
                 ))}

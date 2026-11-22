@@ -21,6 +21,7 @@ import { PhotoUploadField, type PhotoImportStep } from "@/components/photo-uploa
 import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
 
 type RosterEntry = { id: number; name: string };
 
@@ -63,6 +64,7 @@ export function TestingDayImportDialog({
   onOpenChange: (open: boolean) => void;
   roster: RosterEntry[];
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [step, setStep] = useState<PhotoImportStep>("capture");
   const [images, setImages] = useState<CapturedPhoto[]>([]);
@@ -85,7 +87,7 @@ export function TestingDayImportDialog({
       setStep("review");
     },
     onError: (err: ApiError) => {
-      toast.error(err.message || "Couldn't read that photo");
+      toast.error(err.message || t("Couldn't read that photo"));
       setStep("capture");
     },
   });
@@ -100,11 +102,11 @@ export function TestingDayImportDialog({
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
-      toast.success(`Updated ${data.applied} athlete${data.applied === 1 ? "" : "s"}`);
+      toast.success(t.plural(data.applied, "Updated {count} athlete", "Updated {count} athletes"));
       onOpenChange(false);
       reset();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not apply results"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not apply results")),
   });
 
   function updateRow(i: number, patch: Partial<Row>) {
@@ -123,9 +125,9 @@ export function TestingDayImportDialog({
     >
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Import Testing Day Results</DialogTitle>
+          <DialogTitle>{t("Import Testing Day Results")}</DialogTitle>
           <DialogDescription>
-            Photograph a combine/testing results sheet, review the numbers before they save.
+            {t("Photograph a combine/testing results sheet, review the numbers before they save.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -138,31 +140,30 @@ export function TestingDayImportDialog({
               disabled={images.length === 0 || analyzeMutation.isPending}
               onClick={() => analyzeMutation.mutate()}
             >
-              {analyzeMutation.isPending ? "Reading photo..." : "Read Photo"}
+              {analyzeMutation.isPending ? t("Reading photo...") : t("Read Photo")}
             </Button>
           </div>
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              {matchedCount} of {rows.length} row{rows.length === 1 ? "" : "s"} matched to a roster athlete. Fix any
-              mismatches or numbers before applying.
+              {t.plural(rows.length, "{matched} of {count} row matched to a roster athlete. Fix any mismatches or numbers before applying.", "{matched} of {count} rows matched to a roster athlete. Fix any mismatches or numbers before applying.", { matched: matchedCount })}
             </p>
             <div className="space-y-3">
               {rows.map((row, i) => (
                 <div key={i} className="space-y-2 rounded-md border border-border p-3">
                   <div className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                      Sheet: "{row.nameOnSheet}"
+                      {t("Sheet: \"{name}\"", { name: row.nameOnSheet })}
                     </span>
                     <Select
                       value={row.athleteId != null ? String(row.athleteId) : "none"}
                       onValueChange={(v) => updateRow(i, { athleteId: v === "none" ? null : Number(v) })}
                     >
                       <SelectTrigger className="h-8 w-40 text-xs">
-                        <SelectValue placeholder="Match athlete" />
+                        <SelectValue placeholder={t("Match athlete")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">Unmatched, skip</SelectItem>
+                        <SelectItem value="none">{t("Unmatched, skip")}</SelectItem>
                         {roster.map((a) => (
                           <SelectItem key={a.id} value={String(a.id)}>
                             {a.name}
@@ -197,14 +198,14 @@ export function TestingDayImportDialog({
           {step === "review" && (
             <>
               <Button type="button" variant="outline" onClick={() => setStep("capture")}>
-                Back
+                {t("Back")}
               </Button>
               <Button
                 type="button"
                 disabled={matchedCount === 0 || applyMutation.isPending}
                 onClick={() => applyMutation.mutate()}
               >
-                {applyMutation.isPending ? "Saving..." : `Apply to ${matchedCount} Athlete${matchedCount === 1 ? "" : "s"}`}
+                {applyMutation.isPending ? t("Saving...") : t.plural(matchedCount, "Apply to {count} Athlete", "Apply to {count} Athletes")}
               </Button>
             </>
           )}

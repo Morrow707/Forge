@@ -6,6 +6,7 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Copy, Check, Trash2, UserPlus } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type ProvisionalAthlete = {
   id: number;
@@ -25,6 +26,7 @@ type ProvisionalAthlete = {
  * Renders nothing when the list is empty, same as the other roster
  * sections that only matter once there's something to show. */
 export function ProvisionalRosterPanel() {
+  const t = useT();
   const qc = useQueryClient();
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
@@ -38,9 +40,9 @@ export function ProvisionalRosterPanel() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/roster/provisional"] });
-      toast.success("Removed");
+      toast.success(t("Removed"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not remove"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not remove")),
   });
 
   // Vanishing silently reads as "everybody claimed their code", which is the one
@@ -49,7 +51,7 @@ export function ProvisionalRosterPanel() {
     return (
       <Card className="border-dashed">
         <CardContent className="p-4">
-          <ReadFailed what="pending claim codes" onRetry={() => void refetch()} />
+          <ReadFailed what={t("pending claim codes")} onRetry={() => void refetch()} />
         </CardContent>
       </Card>
     );
@@ -70,7 +72,7 @@ export function ProvisionalRosterPanel() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm">
           <UserPlus className="h-4 w-4" />
-          Pending Claim Codes ({provisional.length})
+          {t("Pending Claim Codes ({count})", { count: provisional.length })}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -82,7 +84,7 @@ export function ProvisionalRosterPanel() {
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{slot.name}</p>
               <p className="truncate text-xs text-muted-foreground">
-                {[slot.sport, slot.position].filter(Boolean).join(" · ") || "No sport/position on file"}
+                {[slot.sport, slot.position].filter(Boolean).join(" · ") || t("No sport/position on file")}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">

@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, getJson, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ShieldCheck, ShieldOff, Copy } from "lucide-react";
+import { useT } from "@/i18n";
 
 const STATUS_QUERY_KEY = ["/api/auth/mfa/status"];
 
@@ -32,6 +33,7 @@ export function MfaSettingsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [step, setStep] = useState<Step>("status");
   const [setupData, setSetupData] = useState<{ secret: string; otpauthUri: string } | null>(null);
@@ -62,7 +64,7 @@ export function MfaSettingsDialog({
       setSetupData(data);
       setStep("setup");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't start setup"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't start setup")),
   });
 
   const confirmMutation = useMutation({
@@ -75,17 +77,17 @@ export function MfaSettingsDialog({
       setStep("backup-codes");
       qc.invalidateQueries({ queryKey: STATUS_QUERY_KEY });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Invalid code"),
+    onError: (err: ApiError) => toast.error(err.message || t("Invalid code")),
   });
 
   const disableMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/auth/mfa/disable", { password }),
     onSuccess: () => {
-      toast.success("Two-factor authentication turned off");
+      toast.success(t("Two-factor authentication turned off"));
       qc.invalidateQueries({ queryKey: STATUS_QUERY_KEY });
       reset();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Incorrect password"),
+    onError: (err: ApiError) => toast.error(err.message || t("Incorrect password")),
   });
 
   return (
@@ -100,16 +102,16 @@ export function MfaSettingsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5" />
-            Two-factor authentication
+            {t("Two-factor authentication")}
           </DialogTitle>
           <DialogDescription>
             {step === "status" &&
-              "Adds a second step to logging in, so a leaked password alone isn't enough."}
+              t("Adds a second step to logging in, so a leaked password alone isn't enough.")}
             {step === "setup" &&
-              "Scan this with an authenticator app (Google Authenticator, Authy, 1Password, etc.), then enter the code it shows."}
+              t("Scan this with an authenticator app (Google Authenticator, Authy, 1Password, etc.), then enter the code it shows.")}
             {step === "backup-codes" &&
-              "Save these somewhere safe, each one works once, if you ever lose access to your authenticator app."}
-            {step === "disable" && "Enter your password to turn two-factor authentication off."}
+              t("Save these somewhere safe, each one works once, if you ever lose access to your authenticator app.")}
+            {step === "disable" && t("Enter your password to turn two-factor authentication off.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -120,7 +122,7 @@ export function MfaSettingsDialog({
             <div className="space-y-4">
               <p className="flex items-center gap-2 text-sm text-emerald-500">
                 <ShieldCheck className="h-4 w-4" />
-                Two-factor authentication is on.
+                {t("Two-factor authentication is on.")}
               </p>
               <Button
                 type="button"
@@ -129,7 +131,7 @@ export function MfaSettingsDialog({
                 onClick={() => setStep("disable")}
               >
                 <ShieldOff className="h-4 w-4" />
-                Turn off
+                {t("Turn off")}
               </Button>
             </div>
           ) : (
@@ -139,7 +141,7 @@ export function MfaSettingsDialog({
               onClick={() => setupMutation.mutate()}
               disabled={setupMutation.isPending}
             >
-              {setupMutation.isPending ? "Starting…" : "Enable two-factor authentication"}
+              {setupMutation.isPending ? t("Starting…") : t("Enable two-factor authentication")}
             </Button>
           ))}
 
@@ -149,13 +151,13 @@ export function MfaSettingsDialog({
               <QRCodeSVG value={setupData.otpauthUri} size={180} />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Can't scan? Enter this manually:</Label>
+              <Label className="text-xs text-muted-foreground">{t("Can't scan? Enter this manually:")}</Label>
               <p className="break-all rounded-md border border-border bg-surface p-2 font-mono text-xs">
                 {setupData.secret}
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="mfa-confirm-code">6-digit code</Label>
+              <Label htmlFor="mfa-confirm-code">{t("6-digit code")}</Label>
               <Input
                 id="mfa-confirm-code"
                 inputMode="numeric"
@@ -183,24 +185,24 @@ export function MfaSettingsDialog({
               className="w-full"
               onClick={() => {
                 navigator.clipboard.writeText(backupCodes.join("\n"));
-                toast.success("Copied");
+                toast.success(t("Copied"));
               }}
             >
               <Copy className="h-3.5 w-3.5" />
-              Copy codes
+              {t("Copy codes")}
             </Button>
           </div>
         )}
 
         {step === "disable" && (
           <div className="space-y-1.5">
-            <Label htmlFor="mfa-disable-password">Password</Label>
+            <Label htmlFor="mfa-disable-password">{t("Password")}</Label>
             <PasswordInput
               id="mfa-disable-password"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Confirm your password"
+              placeholder={t("Confirm your password")}
             />
           </div>
         )}
@@ -208,31 +210,31 @@ export function MfaSettingsDialog({
         {step === "setup" && (
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setStep("status")}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button onClick={() => confirmMutation.mutate()} disabled={!code.trim() || confirmMutation.isPending}>
-              {confirmMutation.isPending ? "Verifying…" : "Verify & enable"}
+              {confirmMutation.isPending ? t("Verifying…") : t("Verify & enable")}
             </Button>
           </DialogFooter>
         )}
         {step === "backup-codes" && (
           <DialogFooter>
             <Button className="w-full" onClick={reset}>
-              I've saved these, done
+              {t("I've saved these, done")}
             </Button>
           </DialogFooter>
         )}
         {step === "disable" && (
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setStep("status")}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               variant="destructive"
               onClick={() => disableMutation.mutate()}
               disabled={!password || disableMutation.isPending}
             >
-              {disableMutation.isPending ? "Turning off…" : "Turn off"}
+              {disableMutation.isPending ? t("Turning off…") : t("Turn off")}
             </Button>
           </DialogFooter>
         )}

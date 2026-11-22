@@ -17,6 +17,7 @@ import {
   SPORT_FILTER_ACTIVE_CLASS,
   EQUIPMENT_FILTER_ACTIVE_CLASS,
 } from "@/lib/exercise-colors";
+import { useT } from "@/i18n";
 
 /** Skill-drill counterpart to ExercisePickerDialog -- same accordion
  * pattern (see that file's own comments): Sport is the top-level,
@@ -39,6 +40,7 @@ export function SkillPickerDialog({
   onSelect: (skill: SkillExercise) => void;
   apiBase?: string;
 }) {
+  const t = useT();
   const { data: skills = [], isError, refetch } = useQuery<SkillExercise[]>({
     queryKey: [`${apiBase}/skill-exercises`],
     enabled: open,
@@ -163,13 +165,13 @@ export function SkillPickerDialog({
       <DialogContent className="inset-0 top-0 left-0 flex h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0 pt-[env(safe-area-inset-top)] [&>button:last-child]:top-[calc(env(safe-area-inset-top)+0.5rem)]">
         <div className="shrink-0 space-y-4 border-b border-border p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>Add Skill Drill</DialogTitle>
+            <DialogTitle>{t("Add Skill Drill")}</DialogTitle>
           </DialogHeader>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               autoFocus
-              placeholder="Search your Skill Bank…"
+              placeholder={t("Search your Skill Bank…")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -192,7 +194,7 @@ export function SkillPickerDialog({
                 )}
               >
                 <Star className={cn("h-3.5 w-3.5", favoritesOnly && "fill-amber-400")} />
-                Favorites
+                {t("Favorites")}
               </button>
               <button
                 type="button"
@@ -206,7 +208,7 @@ export function SkillPickerDialog({
                 )}
               >
                 <Clock className="h-3.5 w-3.5" />
-                Recently Used
+                {t("Recently Used")}
               </button>
             </div>
           )}
@@ -250,7 +252,7 @@ export function SkillPickerDialog({
                 <div className="space-y-3 rounded-md border border-border/60 bg-surface p-2.5">
                   <div>
                     <p className="mb-1.5 text-[10px] font-semibold uppercase text-muted-foreground">
-                      Skill Type
+                      {t("Skill Type")}
                     </p>
                     <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
                       {SKILL_TYPES.map((type) => {
@@ -278,7 +280,7 @@ export function SkillPickerDialog({
                   </div>
                   <div>
                     <p className="mb-1.5 text-[10px] font-semibold uppercase text-muted-foreground">
-                      Equipment
+                      {t("Equipment")}
                     </p>
                     <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
                       {SKILL_EQUIPMENT.map((eq) => {
@@ -311,7 +313,7 @@ export function SkillPickerDialog({
           <div className="space-y-1 border-t border-border pt-4">
             {isError && (
               <ReadFailed
-                what="the skill drill library"
+                what={t("the skill drill library")}
                 onRetry={() => void refetch()}
                 className="flex flex-col items-center gap-2 py-10 text-center"
               />
@@ -319,7 +321,7 @@ export function SkillPickerDialog({
             {!isError && displayed.length === 0 && (
               <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
                 <Target className="h-8 w-8" />
-                No skill drills found matching these filters.
+                {t("No skill drills found matching these filters.")}
               </div>
             )}
             {displayed.map((sk) => (
@@ -332,7 +334,7 @@ export function SkillPickerDialog({
                     // skill sport, so naming a monthly figure here promised a purchase
                     // that does not exist.
                     toast.info(
-                      `${activeSport ?? sk.sports?.[0] ?? "This sport"} drills aren't in your plan.`,
+                      t("{sport} drills aren't in your plan.", { sport: activeSport ?? sk.sports?.[0] ?? t("This sport") }),
                     );
                     return;
                   }
@@ -356,7 +358,7 @@ export function SkillPickerDialog({
                   {sk.locked ? (
                     <Badge variant="secondary" className="gap-1 text-amber-500">
                       <Lock className="h-3 w-3" />
-                      Locked
+                      {t("Locked")}
                     </Badge>
                   ) : (
                     <>

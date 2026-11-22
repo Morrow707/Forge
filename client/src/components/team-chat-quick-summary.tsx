@@ -5,6 +5,7 @@ import { getJson } from "@/lib/queryClient";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { MessagesSquare, ChevronRight } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type TeamPost = {
   id: number;
@@ -17,6 +18,7 @@ type TeamPost = {
  * landing page -- never shown for a Free Agent, who has no team (see
  * app-shell.tsx's own nav filtering for the same reasoning). */
 export function TeamChatQuickSummary() {
+  const t = useT();
   const {
     data: posts,
     isLoading,
@@ -43,11 +45,11 @@ export function TeamChatQuickSummary() {
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <MessagesSquare className="h-4 w-4 text-primary" />
-          Team Chat
+          {t("Team Chat")}
           {unread?.hasUnread && <span className="h-2 w-2 rounded-full bg-primary" />}
         </CardTitle>
         <Link href="/athlete/team-board" className="flex items-center text-xs font-semibold text-primary hover:underline">
-          Open
+          {t("Open")}
           <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </CardHeader>
@@ -60,12 +62,12 @@ export function TeamChatQuickSummary() {
           // from a SEPARATE query, so a dot that loaded beside a list that did not reads as a
           // broken card rather than as a quiet one.
           <ReadFailed
-            what="Team Chat"
+            what={t("Team Chat")}
             onRetry={() => void refetchPosts()}
             className="flex flex-col items-start gap-2 text-left"
           />
         ) : !latest ? (
-          <p className="text-sm text-muted-foreground">No posts yet.</p>
+          <p className="text-sm text-muted-foreground">{t("No posts yet.")}</p>
         ) : (
           <div className="text-sm">
             <span className="font-semibold">{latest.author.name}</span>{" "}

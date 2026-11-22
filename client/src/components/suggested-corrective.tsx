@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getJson } from "@/lib/queryClient";
 import { Wrench } from "lucide-react";
+import { useT } from "@/i18n";
 
 type CorrectiveSuggestion = { id: number; name: string; muscleGroup: string };
 
@@ -12,6 +13,7 @@ type CorrectiveSuggestion = { id: number; name: string; muscleGroup: string };
  * nothing if no match is found, so it never implies a suggestion exists
  * when one doesn't. */
 export function SuggestedCorrective({ faultCode }: { faultCode: string }) {
+  const t = useT();
   const { data: suggestions = [], isError, refetch } = useQuery<CorrectiveSuggestion[]>({
     queryKey: ["/api/athlete/suggested-correctives", faultCode],
     queryFn: () => getJson(`/api/athlete/suggested-correctives?faultCode=${faultCode}`),
@@ -30,7 +32,7 @@ export function SuggestedCorrective({ faultCode }: { faultCode: string }) {
         className="ml-6 flex items-center gap-1.5 text-xs text-muted-foreground underline"
       >
         <Wrench className="h-3 w-3 shrink-0" />
-        We couldn't check for a corrective. Try again.
+        {t("We couldn't check for a corrective. Try again.")}
       </button>
     );
   }
@@ -40,7 +42,7 @@ export function SuggestedCorrective({ faultCode }: { faultCode: string }) {
   return (
     <p className="ml-6 flex items-center gap-1.5 text-xs text-muted-foreground">
       <Wrench className="h-3 w-3 shrink-0" />
-      Suggested corrective: {suggestions.map((s) => s.name).join(", ")}
+      {t("Suggested corrective: {exercises}", { exercises: suggestions.map((s) => t.exercise(s.name)).join(", ") })}
     </p>
   );
 }

@@ -6,6 +6,7 @@
 import { Scale } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { SIDE_DIFFERENCE_GUIDE_SENTENCE, sideBalance, type SidedSet } from "@shared/side-balance";
+import { useT } from "@/i18n";
 
 export function SideBalanceNote({
   points,
@@ -14,6 +15,7 @@ export function SideBalanceNote({
   points: readonly SidedSet[];
   exercise: { purposes?: readonly string[] | null } | undefined;
 }) {
+  const t = useT();
   if (!exercise || !(exercise.purposes ?? []).includes("return_to_training")) return null;
   const balance = sideBalance(points);
   if (!balance) return null;
@@ -24,8 +26,8 @@ export function SideBalanceNote({
         <div className="space-y-0.5">
           <p className="text-sm font-semibold">{balance.sentence}</p>
           <p className="text-xs text-muted-foreground">
-            Best set each side across the sets shown (load x reps, or reps when no load was logged).
-            {balance.setsWithoutSide > 0 ? ` ${balance.setsWithoutSide} set(s) had no side recorded and are left out.` : ""}
+            {t("Best set each side across the sets shown (load x reps, or reps when no load was logged).")}
+            {balance.setsWithoutSide > 0 ? ` ${t("{count} set(s) had no side recorded and are left out.", { count: balance.setsWithoutSide })}` : ""}
           </p>
           <p className="text-xs text-muted-foreground">{SIDE_DIFFERENCE_GUIDE_SENTENCE}</p>
         </div>

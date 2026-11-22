@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useT } from "@/i18n";
 
 export type ProfileFieldsValue = {
   name: string;
@@ -106,12 +107,13 @@ export function ProfileFieldsForm({
    * predates this field. */
   dateOfBirth?: string | null;
 }) {
+  const t = useT();
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {showName && (
           <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor={`${idPrefix}-name`}>Name</Label>
+            <Label htmlFor={`${idPrefix}-name`}>{t("Name")}</Label>
             <Input
               id={`${idPrefix}-name`}
               value={value.name}
@@ -121,37 +123,37 @@ export function ProfileFieldsForm({
         )}
         {showBio && (
           <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor={`${idPrefix}-bio`}>About me / goals</Label>
+            <Label htmlFor={`${idPrefix}-bio`}>{t("About me / goals")}</Label>
             <Textarea
               id={`${idPrefix}-bio`}
               value={value.bio}
               onChange={(e) => onChange({ ...value, bio: e.target.value })}
-              placeholder="What you're training for, in your own words"
+              placeholder={t("What you're training for, in your own words")}
               maxLength={300}
               className="min-h-20"
             />
           </div>
         )}
         <div className="space-y-1.5">
-          <Label htmlFor={`${idPrefix}-sport`}>Sport</Label>
+          <Label htmlFor={`${idPrefix}-sport`}>{t("Sport")}</Label>
           <Input
             id={`${idPrefix}-sport`}
             value={value.sport}
             onChange={(e) => onChange({ ...value, sport: e.target.value })}
-            placeholder="e.g. Football"
+            placeholder={t("e.g. Football")}
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`${idPrefix}-position`}>Position</Label>
+          <Label htmlFor={`${idPrefix}-position`}>{t("Position")}</Label>
           <Input
             id={`${idPrefix}-position`}
             value={value.position}
             onChange={(e) => onChange({ ...value, position: e.target.value })}
-            placeholder="e.g. Linebacker"
+            placeholder={t("e.g. Linebacker")}
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`${idPrefix}-season`}>Season phase</Label>
+          <Label htmlFor={`${idPrefix}-season`}>{t("Season phase")}</Label>
           <Select
             value={value.seasonPhase || "unset"}
             onValueChange={(v) =>
@@ -159,10 +161,10 @@ export function ProfileFieldsForm({
             }
           >
             <SelectTrigger id={`${idPrefix}-season`}>
-              <SelectValue placeholder="Not set" />
+              <SelectValue placeholder={t("Not set")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="unset">Not set</SelectItem>
+              <SelectItem value="unset">{t("Not set")}</SelectItem>
               {SEASON_PHASE_OPTIONS.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
                   {o.label}
@@ -172,7 +174,7 @@ export function ProfileFieldsForm({
           </Select>
         </div>
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor={`${idPrefix}-training-style`}>Training style preference</Label>
+          <Label htmlFor={`${idPrefix}-training-style`}>{t("Training style preference")}</Label>
           <Select
             value={value.trainingStylePreference || "unset"}
             onValueChange={(v) =>
@@ -180,10 +182,10 @@ export function ProfileFieldsForm({
             }
           >
             <SelectTrigger id={`${idPrefix}-training-style`}>
-              <SelectValue placeholder="No preference" />
+              <SelectValue placeholder={t("No preference")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="unset">No preference</SelectItem>
+              <SelectItem value="unset">{t("No preference")}</SelectItem>
               {TRAINING_STYLE_OPTIONS.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
                   {o.label}
@@ -192,13 +194,11 @@ export function ProfileFieldsForm({
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Tells the AI program builder whether to lean on standard compound lifts and isolation
-            accessories, or prioritize combination/circuit-style exercises that chain multiple
-            movements together to keep the heart rate up in less time.
+            {t("Tells the AI program builder whether to lean on standard compound lifts and isolation accessories, or prioritize combination/circuit-style exercises that chain multiple movements together to keep the heart rate up in less time.")}
           </p>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`${idPrefix}-age`}>Age</Label>
+          <Label htmlFor={`${idPrefix}-age`}>{t("Age")}</Label>
           <Input
             id={`${idPrefix}-age`}
             type="number"
@@ -211,7 +211,7 @@ export function ProfileFieldsForm({
         </div>
         {dateOfBirth && (
           <div className="space-y-1.5">
-            <Label>Date of birth</Label>
+            <Label>{t("Date of birth")}</Label>
             <p className="flex h-9 items-center rounded-md border border-transparent px-3 text-sm text-muted-foreground">
               {new Date(`${dateOfBirth}T00:00:00`).toLocaleDateString(undefined, {
                 year: "numeric",
@@ -222,16 +222,16 @@ export function ProfileFieldsForm({
           </div>
         )}
         <div className="space-y-1.5">
-          <Label htmlFor={`${idPrefix}-gender`}>Gender</Label>
+          <Label htmlFor={`${idPrefix}-gender`}>{t("Gender")}</Label>
           <Select
             value={value.gender || "unset"}
             onValueChange={(v) => onChange({ ...value, gender: v === "unset" ? "" : v })}
           >
             <SelectTrigger id={`${idPrefix}-gender`}>
-              <SelectValue placeholder="Not set" />
+              <SelectValue placeholder={t("Not set")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="unset">Not set</SelectItem>
+              <SelectItem value="unset">{t("Not set")}</SelectItem>
               {GENDER_OPTIONS.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
                   {o.label}
@@ -246,7 +246,7 @@ export function ProfileFieldsForm({
           onChange={(heightIn: string) => onChange({ ...value, heightIn })}
         />
         <div className="space-y-1.5">
-          <Label htmlFor={`${idPrefix}-weight`}>Body weight (lbs)</Label>
+          <Label htmlFor={`${idPrefix}-weight`}>{t("Body weight (lbs)")}</Label>
           <Input
             id={`${idPrefix}-weight`}
             type="number"
@@ -261,11 +261,11 @@ export function ProfileFieldsForm({
 
       <div className="space-y-3 border-t border-border pt-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Testing / Combine
+          {t("Testing / Combine")}
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor={`${idPrefix}-forty`}>40-Yard Dash (sec)</Label>
+            <Label htmlFor={`${idPrefix}-forty`}>{t("40-Yard Dash (sec)")}</Label>
             <Input
               id={`${idPrefix}-forty`}
               type="number"
@@ -279,7 +279,7 @@ export function ProfileFieldsForm({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${idPrefix}-agility`}>Pro Agility (sec)</Label>
+            <Label htmlFor={`${idPrefix}-agility`}>{t("Pro Agility (sec)")}</Label>
             <Input
               id={`${idPrefix}-agility`}
               type="number"
@@ -293,7 +293,7 @@ export function ProfileFieldsForm({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${idPrefix}-three-cone`}>3-Cone / L-Drill (sec)</Label>
+            <Label htmlFor={`${idPrefix}-three-cone`}>{t("3-Cone / L-Drill (sec)")}</Label>
             <Input
               id={`${idPrefix}-three-cone`}
               type="number"
@@ -307,7 +307,7 @@ export function ProfileFieldsForm({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${idPrefix}-vertical`}>Vertical Jump (in)</Label>
+            <Label htmlFor={`${idPrefix}-vertical`}>{t("Vertical Jump (in)")}</Label>
             <Input
               id={`${idPrefix}-vertical`}
               type="number"
@@ -320,7 +320,7 @@ export function ProfileFieldsForm({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${idPrefix}-broad`}>Broad Jump (in)</Label>
+            <Label htmlFor={`${idPrefix}-broad`}>{t("Broad Jump (in)")}</Label>
             <Input
               id={`${idPrefix}-broad`}
               type="number"
@@ -333,7 +333,7 @@ export function ProfileFieldsForm({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${idPrefix}-bench`}>Bench Max (lbs)</Label>
+            <Label htmlFor={`${idPrefix}-bench`}>{t("Bench Max (lbs)")}</Label>
             <Input
               id={`${idPrefix}-bench`}
               type="number"
@@ -345,7 +345,7 @@ export function ProfileFieldsForm({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${idPrefix}-squat`}>Squat Max (lbs)</Label>
+            <Label htmlFor={`${idPrefix}-squat`}>{t("Squat Max (lbs)")}</Label>
             <Input
               id={`${idPrefix}-squat`}
               type="number"
@@ -357,7 +357,7 @@ export function ProfileFieldsForm({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${idPrefix}-deadlift`}>Deadlift Max (lbs)</Label>
+            <Label htmlFor={`${idPrefix}-deadlift`}>{t("Deadlift Max (lbs)")}</Label>
             <Input
               id={`${idPrefix}-deadlift`}
               type="number"

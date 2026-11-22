@@ -3,6 +3,7 @@ import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { ForgeMark } from "@/components/forge-mark";
 import { computeBrandingStyle, type EffectiveBranding } from "@/lib/branding-style";
+import { useT } from "@/i18n";
 
 /** THE PROGRAM ON A CERTIFICATE (2026-11-19). A certificate is still issued by Forge -- that is
  *  what it certifies -- but an athlete or coach on a branded program receives it in the
@@ -20,13 +21,14 @@ export function useProgramBranding() {
 }
 
 export function ProgramCertificateMark({ branding }: { branding: EffectiveBranding | null }) {
+  const t = useT();
   const logo = branding?.brandExtras?.wordmarkUrl ?? branding?.brandLogoUrl ?? null;
   const name = branding?.brandTeamName?.trim() || null;
   if (!logo && !name) return <ForgeMark className="mx-auto h-10 w-10" />;
   return (
     <div className="flex flex-col items-center gap-2">
-      {logo && <img src={resolveApiUrl(logo)} alt={name ?? "Program"} className="mx-auto h-14 max-w-[16rem] object-contain" />}
-      {name && <p className="font-display text-lg font-bold uppercase tracking-wide">Presented through {name}</p>}
+      {logo && <img src={resolveApiUrl(logo)} alt={name ?? t("Program")} className="mx-auto h-14 max-w-[16rem] object-contain" />}
+      {name && <p className="font-display text-lg font-bold uppercase tracking-wide">{t("Presented through {name}", { name })}</p>}
       <ForgeMark className="mx-auto h-6 w-6 opacity-80" />
     </div>
   );

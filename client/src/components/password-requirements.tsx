@@ -1,6 +1,7 @@
 import { Check, X } from "lucide-react";
 import { PASSWORD_RULES } from "@shared/password-rules";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 /**
  * THE RULES, SHOWN WHILE SOMEBODY TYPES, RATHER THAN AFTER THEY SUBMIT.
@@ -29,8 +30,9 @@ export function PasswordRequirements({
   value: string;
   className?: string;
 }) {
+  const t = useT();
   return (
-    <ul className={cn("space-y-1", className)} aria-label="Password requirements">
+    <ul className={cn("space-y-1", className)} aria-label={t("Password requirements")}>
       {PASSWORD_RULES.map((rule) => {
         const met = rule.test(value);
         return (
@@ -46,8 +48,8 @@ export function PasswordRequirements({
             ) : (
               <X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             )}
-            <span>{rule.label}</span>
-            <span className="sr-only">{met ? " met" : " not met yet"}</span>
+            <span>{t(rule.label)}</span>
+            <span className="sr-only">{met ? ` ${t("met")}` : ` ${t("not met yet")}`}</span>
           </li>
         );
       })}

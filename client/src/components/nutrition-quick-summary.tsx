@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { getJson } from "@/lib/queryClient";
 import { Apple, ChevronRight, ScanLine } from "lucide-react";
 import { todayIso } from "@/lib/local-date";
+import { useT } from "@/i18n";
 
 // Same reasoning as food-log-panel.tsx's own lazy import: barcode scanning
 // (@zxing/browser) and the photo-analysis path it drags in are only needed
@@ -45,6 +46,7 @@ function MacroRing({
   target: number | null;
   unit: string;
 }) {
+  const t = useT();
   const pct = target ? Math.min(100, (value / target) * 100) : 0;
   const offset = RING_CIRCUMFERENCE * (1 - pct / 100);
   return (
@@ -78,7 +80,7 @@ function MacroRing({
       <div className="text-center leading-tight">
         <p className="text-[11px] font-semibold">{label}</p>
         <p className="text-[10px] text-muted-foreground">
-          {target ? `of ${target}${unit}` : "no target"}
+          {target ? t("of {target}", { target: `${target}${unit}` }) : t("no target")}
         </p>
       </div>
     </div>
@@ -91,6 +93,7 @@ function MacroRing({
  * something," everything else -- history, editing entries, micros -- still
  * needs the full page, hence "Full log" staying right here too). */
 export function NutritionQuickSummary() {
+  const t = useT();
   const today = todayIso();
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerEverOpened, setScannerEverOpened] = useState(false);
@@ -111,10 +114,10 @@ export function NutritionQuickSummary() {
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <Apple className="h-4 w-4 text-primary" />
-          Today's Nutrition
+          {t("Today's Nutrition")}
         </CardTitle>
         <Link href="/athlete/nutrition" className="flex items-center text-xs font-semibold text-primary hover:underline">
-          Full log
+          {t("Full log")}
           <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </CardHeader>
@@ -122,13 +125,13 @@ export function NutritionQuickSummary() {
         {targetsLoading || logLoading ? (
           <div className="h-16 animate-pulse rounded-md bg-surface" />
         ) : !targets ? (
-          <p className="text-sm text-muted-foreground">No nutrition targets set yet.</p>
+          <p className="text-sm text-muted-foreground">{t("No nutrition targets set yet.")}</p>
         ) : (
           <div className="flex justify-between gap-1">
-            <MacroRing label="Calories" value={totals.caloriesKcal} target={targets.caloriesKcal} unit="" />
-            <MacroRing label="Protein" value={totals.proteinG} target={targets.proteinG} unit="g" />
-            <MacroRing label="Carbs" value={totals.carbsG} target={targets.carbsG} unit="g" />
-            <MacroRing label="Fat" value={totals.fatG} target={targets.fatG} unit="g" />
+            <MacroRing label={t("Calories")} value={totals.caloriesKcal} target={targets.caloriesKcal} unit="" />
+            <MacroRing label={t("Protein")} value={totals.proteinG} target={targets.proteinG} unit="g" />
+            <MacroRing label={t("Carbs")} value={totals.carbsG} target={targets.carbsG} unit="g" />
+            <MacroRing label={t("Fat")} value={totals.fatG} target={targets.fatG} unit="g" />
           </div>
         )}
         <Button
@@ -141,7 +144,7 @@ export function NutritionQuickSummary() {
           }}
         >
           <ScanLine className="h-4 w-4" />
-          Scan or Add Food
+          {t("Scan or Add Food")}
         </Button>
       </CardContent>
 

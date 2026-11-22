@@ -25,6 +25,7 @@ import { AvOverheadSquatCaptureDialog } from "@/components/av-overhead-squat-cap
 import { isAvPreviewPlatform } from "@/lib/native-av-preview";
 import { isArMeasureSupported, measureWithAR } from "@/lib/ar-measure";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type Battery = { id: number; name: string; isForgeOfficial: boolean; editable: boolean };
 type BatteryTest = {
@@ -73,6 +74,7 @@ type PhotoRow = {
  * anywhere here -- a flagged result surfaces suggested correctives and
  * feeds the AI's own context, nothing more. */
 export function MovementScreenPanel({ athleteId }: { athleteId: number }) {
+  const t = useT();
   const qc = useQueryClient();
   const historyUrl = `/api/coach/roster/${athleteId}/movement-screens`;
   const [showNew, setShowNew] = useState(false);
@@ -87,22 +89,20 @@ export function MovementScreenPanel({ athleteId }: { athleteId: number }) {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Functional-movement screening history, informational, not a gate. A flagged result
-          suggests correctives below and quietly informs the AI's program suggestions; nothing
-          here blocks an assignment.
+          {t("Functional-movement screening history, informational, not a gate. A flagged result suggests correctives below and quietly informs the AI's program suggestions; nothing here blocks an assignment.")}
         </p>
         <Button size="sm" className="shrink-0" onClick={() => setShowNew(true)}>
           <Plus className="h-4 w-4" />
-          New Screen
+          {t("New Screen")}
         </Button>
       </div>
 
       {isLoading ? (
         <div className="h-24 animate-pulse rounded-md bg-surface" />
       ) : isError ? (
-        <ReadFailed what="this athlete's screens" onRetry={() => void refetch()} />
+        <ReadFailed what={t("this athlete's screens")} onRetry={() => void refetch()} />
       ) : screens.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">No screens logged yet.</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t("No screens logged yet.")}</p>
       ) : (
         <div className="space-y-2">
           {screens.map((s) => (
@@ -117,15 +117,15 @@ export function MovementScreenPanel({ athleteId }: { athleteId: number }) {
                 <div>
                   <p className="font-semibold">{format(parseISO(s.date), "MMM d, yyyy")}</p>
                   <p className="text-xs text-muted-foreground">
-                    {s.testCount} test{s.testCount === 1 ? "" : "s"} &middot;{" "}
-                    {s.captureMethod === "photo_import" ? "photo import" : "manual entry"}
+                    {t.plural(s.testCount, "{count} test", "{count} tests")} ·{" "}
+                    {s.captureMethod === "photo_import" ? t("photo import") : t("manual entry")}
                   </p>
                 </div>
               </div>
               {s.flaggedCount > 0 && (
                 <Badge variant="destructive" className="flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />
-                  {s.flaggedCount} flagged
+                  {t("{count} flagged", { count: s.flaggedCount })}
                 </Badge>
               )}
             </button>
@@ -150,6 +150,7 @@ export function MovementScreenPanel({ athleteId }: { athleteId: number }) {
 }
 
 function ScreenDetailDialog({ screenId, onClose }: { screenId: number; onClose: () => void }) {
+  const t = useT();
   const { data, isLoading } = useQuery<{ date: string; notes: string | null; results: ScreenResult[] }>({
     queryKey: [`/api/coach/movement-screens/${screenId}`],
     queryFn: () => getJson(`/api/coach/movement-screens/${screenId}`),
@@ -159,7 +160,7 @@ function ScreenDetailDialog({ screenId, onClose }: { screenId: number; onClose: 
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{data ? format(parseISO(data.date), "MMMM d, yyyy") : "Screen"}</DialogTitle>
+          <DialogTitle>{data ? format(parseISO(data.date), "MMMM d, yyyy") : t("Screen")}</DialogTitle>
           {data?.notes && <DialogDescription>{data.notes}</DialogDescription>}
         </DialogHeader>
         {isLoading || !data ? (
@@ -181,7 +182,7 @@ function ScreenDetailDialog({ screenId, onClose }: { screenId: number; onClose: 
                 <p className="text-xs text-muted-foreground">{r.category}</p>
                 {r.flagged && r.correctives.length > 0 && (
                   <div className="mt-2 space-y-1 border-t border-destructive/20 pt-2">
-                    <p className="text-xs font-semibold text-destructive">Suggested correctives</p>
+                    <p className="text-xs font-semibold text-destructive">{t("Suggested correctives")}</p>
                     <p className="text-xs text-muted-foreground">
                       {r.correctives.map((c) => c.name).join(", ")}
                     </p>
@@ -205,6 +206,7 @@ function NewScreenDialog({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const t = useT();
   const [mode, setMode] = useState<"manual" | "photo">("manual");
   const [batteryId, setBatteryId] = useState<number | null>(null);
   const [date, setDate] = useState(formatISO(new Date(), { representation: "date" }));
@@ -242,7 +244,7 @@ function NewScreenDialog({
       return res.json() as Promise<{ rows: PhotoRow[] }>;
     },
     onSuccess: (result) => setPhotoRows(result.rows),
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't read that photo"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't read that photo")),
   });
 
   const create = useMutation({
@@ -278,27 +280,27 @@ function NewScreenDialog({
       return res.json();
     },
     onSuccess: () => {
-      toast.success("Screen saved");
+      toast.success(t("Screen saved"));
       onCreated();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save that screen"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save that screen")),
   });
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[85vh] max-w-xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>New Movement Screen</DialogTitle>
-          <DialogDescription>Pick a battery, then enter scores by hand or import a photo of a filled-out sheet.</DialogDescription>
+          <DialogTitle>{t("New Movement Screen")}</DialogTitle>
+          <DialogDescription>{t("Pick a battery, then enter scores by hand or import a photo of a filled-out sheet.")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Battery</Label>
+              <Label>{t("Battery")}</Label>
               <Select value={batteryId?.toString() ?? ""} onValueChange={(v) => { setBatteryId(Number(v)); setPhotoRows(null); }}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Choose a battery" />
+                  <SelectValue placeholder={t("Choose a battery")} />
                 </SelectTrigger>
                 <SelectContent>
                   {batteries.map((b) => (
@@ -311,7 +313,7 @@ function NewScreenDialog({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Date</Label>
+              <Label>{t("Date")}</Label>
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
           </div>
@@ -320,39 +322,39 @@ function NewScreenDialog({
             <div className="flex gap-2">
               <Button type="button" size="sm" variant={mode === "manual" ? "default" : "outline"} onClick={() => setMode("manual")}>
                 <PenLine className="h-3.5 w-3.5" />
-                Manual entry
+                {t("Manual entry")}
               </Button>
               <Button type="button" size="sm" variant={mode === "photo" ? "default" : "outline"} onClick={() => setMode("photo")}>
                 <Camera className="h-3.5 w-3.5" />
-                Photo import
+                {t("Photo import")}
               </Button>
             </div>
           )}
 
           {batteryId != null && mode === "manual" && batteryDetail && (
             <div className="space-y-3">
-              {batteryDetail.tests.map((t) => (
-                <div key={t.testKey} className="rounded-md border border-border p-3">
+              {batteryDetail.tests.map((test) => (
+                <div key={test.testKey} className="rounded-md border border-border p-3">
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold">{t.label}</p>
-                      <p className="text-xs text-muted-foreground">{t.category} &middot; scored in {resolveMovementScreenUnitLabel(t.scoreType, t.unitLabel)}</p>
+                      <p className="text-sm font-semibold">{test.label}</p>
+                      <p className="text-xs text-muted-foreground">{test.category} · {t("scored in {unit}", { unit: resolveMovementScreenUnitLabel(test.scoreType, test.unitLabel) })}</p>
                     </div>
-                    {t.testKey === "overhead_squat" && (
+                    {test.testKey === "overhead_squat" && (
                       <Button type="button" size="sm" variant="outline" onClick={() => setSquatCaptureOpen(true)}>
                         <Camera className="h-3.5 w-3.5" />
-                        Camera
+                        {t("Camera")}
                       </Button>
                     )}
                   </div>
-                  {t.side === "bilateral" ? (
+                  {test.side === "bilateral" ? (
                     <Input
                       className="mt-2"
                       type="number"
                       step="0.1"
-                      placeholder="Score"
-                      value={scores[t.testKey] ?? ""}
-                      onChange={(e) => setScores((s) => ({ ...s, [t.testKey]: e.target.value }))}
+                      placeholder={t("Score")}
+                      value={scores[test.testKey] ?? ""}
+                      onChange={(e) => setScores((s) => ({ ...s, [test.testKey]: e.target.value }))}
                     />
                   ) : (
                     <div className="mt-2 grid grid-cols-2 gap-2">
@@ -360,18 +362,18 @@ function NewScreenDialog({
                         <Input
                           type="number"
                           step="0.1"
-                          placeholder="Left"
-                          value={scores[`${t.testKey}:left`] ?? ""}
-                          onChange={(e) => setScores((s) => ({ ...s, [`${t.testKey}:left`]: e.target.value }))}
+                          placeholder={t("Left")}
+                          value={scores[`${test.testKey}:left`] ?? ""}
+                          onChange={(e) => setScores((s) => ({ ...s, [`${test.testKey}:left`]: e.target.value }))}
                         />
-                        {t.scoreType === "distance_in" && arSupported && (
+                        {test.scoreType === "distance_in" && arSupported && (
                           <Button
                             type="button"
                             size="icon"
                             variant="outline"
-                            title="Measure with AR"
-                            aria-label="Measure left side with AR"
-                            onClick={() => measureFieldWithAR(`${t.testKey}:left`)}
+                            title={t("Measure with AR")}
+                            aria-label={t("Measure left side with AR")}
+                            onClick={() => measureFieldWithAR(`${test.testKey}:left`)}
                           >
                             <Ruler className="h-3.5 w-3.5" />
                           </Button>
@@ -381,18 +383,18 @@ function NewScreenDialog({
                         <Input
                           type="number"
                           step="0.1"
-                          placeholder="Right"
-                          value={scores[`${t.testKey}:right`] ?? ""}
-                          onChange={(e) => setScores((s) => ({ ...s, [`${t.testKey}:right`]: e.target.value }))}
+                          placeholder={t("Right")}
+                          value={scores[`${test.testKey}:right`] ?? ""}
+                          onChange={(e) => setScores((s) => ({ ...s, [`${test.testKey}:right`]: e.target.value }))}
                         />
-                        {t.scoreType === "distance_in" && arSupported && (
+                        {test.scoreType === "distance_in" && arSupported && (
                           <Button
                             type="button"
                             size="icon"
                             variant="outline"
-                            title="Measure with AR"
-                            aria-label="Measure right side with AR"
-                            onClick={() => measureFieldWithAR(`${t.testKey}:right`)}
+                            title={t("Measure with AR")}
+                            aria-label={t("Measure right side with AR")}
+                            onClick={() => measureFieldWithAR(`${test.testKey}:right`)}
                           >
                             <Ruler className="h-3.5 w-3.5" />
                           </Button>
@@ -425,11 +427,11 @@ function NewScreenDialog({
               <PhotoUploadField images={photos} onChange={setPhotos} maxImages={2} document />
               <Button type="button" size="sm" onClick={() => analyze.mutate()} disabled={photos.length === 0 || analyze.isPending}>
                 {analyze.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                Read photo
+                {t("Read photo")}
               </Button>
               {photoRows && (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Review before saving</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("Review before saving")}</p>
                   {photoRows.map((r, i) => (
                     <div key={i} className="flex items-center justify-between rounded-md border border-border p-2 text-sm">
                       <span>
@@ -455,17 +457,17 @@ function NewScreenDialog({
           )}
 
           <div className="space-y-1.5">
-            <Label>Session notes (optional)</Label>
+            <Label>{t("Session notes (optional)")}</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
           </div>
 
           <div className="flex justify-end gap-2 border-t border-border pt-3">
             <Button type="button" variant="ghost" onClick={onClose}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button type="button" onClick={() => create.mutate()} disabled={create.isPending || batteryId == null}>
               {create.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              Save Screen
+              {t("Save Screen")}
             </Button>
           </div>
         </div>

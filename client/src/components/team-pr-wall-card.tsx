@@ -6,6 +6,7 @@ import { ReadFailed } from "@/components/read-failed";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AthleteAvatar } from "@/components/athlete-avatar";
 import { Trophy } from "lucide-react";
+import { useT } from "@/i18n";
 
 type RecentPr = {
   id: number;
@@ -26,6 +27,7 @@ type RecentPr = {
  * when the roster genuinely has no PRs in the recent window, same pattern
  * WeeklyDigestCard uses for its "quiet week" state. */
 export function TeamPrWallCard() {
+  const t = useT();
   const { data, isError, refetch } = useQuery<RecentPr[]>({
     queryKey: ["/api/coach/recent-prs"],
     queryFn: () => getJson("/api/coach/recent-prs"),
@@ -39,22 +41,22 @@ export function TeamPrWallCard() {
       <CardHeader className="p-3 md:p-4">
         <CardTitle className="flex items-center gap-2 text-base md:text-lg">
           <Trophy className="h-4 w-4 text-primary" />
-          Team PR Wall
+          {t("Team PR Wall")}
         </CardTitle>
-        <CardDescription>Recent personal records across your roster.</CardDescription>
+        <CardDescription>{t("Recent personal records across your roster.")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">
         {isError ? (
           // "No PRs in the last 30 days" is a judgement on a squad's month, shown to their
           // coach on the dashboard.
           <ReadFailed
-            what="your team's recent PRs"
+            what={t("your team's recent PRs")}
             onRetry={() => void refetch()}
             className="flex flex-col items-start gap-2 py-1 text-left"
           />
         ) : data.length === 0 ? (
           <p className="py-1 text-sm text-muted-foreground">
-            No PRs logged across your roster in the last 30 days.
+            {t("No PRs logged across your roster in the last 30 days.")}
           </p>
         ) : (
           data.map((pr) => (

@@ -3,6 +3,7 @@ import { getJson } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import { TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 type TrendDay = {
   date: string;
@@ -45,6 +46,7 @@ export function NutritionTrendPanel({
   selectedDate?: string;
   onSelectDate?: (date: string) => void;
 }) {
+  const t = useT();
   const { data, isLoading } = useQuery<NutritionTrend>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
@@ -63,11 +65,11 @@ export function NutritionTrendPanel({
       <div className="flex flex-wrap items-center justify-between gap-1">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           <TrendingUp className="h-3.5 w-3.5" />
-          Last 7 days
+          {t("Last 7 days")}
         </p>
         <p className="text-xs text-muted-foreground">
-          {daysLogged}/{days.length} days logged
-          {daysHitTarget != null && ` · ${daysHitTarget}/${days.length} hit target`}
+          {t("{logged}/{total} days logged", { logged: daysLogged, total: days.length })}
+          {daysHitTarget != null && ` · ${t("{hit}/{total} hit target", { hit: daysHitTarget, total: days.length })}`}
         </p>
       </div>
       <div className="flex items-end gap-1.5" style={{ height: `${CHART_HEIGHT_PX}px` }}>
@@ -109,14 +111,14 @@ export function NutritionTrendPanel({
               ) : (
                 <div title={label}>{bar}</div>
               )}
-              <span className="text-[9px] text-muted-foreground">{format(parseISO(d.date), "EEEEE")}</span>
+              <span className="text-[9px] text-muted-foreground">{t.date(parseISO(d.date), { weekday: "narrow" })}</span>
             </div>
           );
         })}
       </div>
       {calorieTarget == null && (
         <p className="text-[11px] text-muted-foreground">
-          Set a calorie target above to see which days land within range.
+          {t("Set a calorie target above to see which days land within range.")}
         </p>
       )}
     </div>

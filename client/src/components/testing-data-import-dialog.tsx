@@ -22,6 +22,7 @@ import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { todayIso } from "@/lib/local-date";
+import { useT } from "@/i18n";
 
 type RosterEntry = { id: number; name: string };
 
@@ -55,6 +56,7 @@ export function TestingDataImportDialog({
   onOpenChange: (open: boolean) => void;
   roster: RosterEntry[];
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [step, setStep] = useState<PhotoImportStep>("capture");
   const [images, setImages] = useState<CapturedPhoto[]>([]);
@@ -77,7 +79,7 @@ export function TestingDataImportDialog({
       setStep("review");
     },
     onError: (err: ApiError) => {
-      toast.error(err.message || "Couldn't read that photo");
+      toast.error(err.message || t("Couldn't read that photo"));
       setStep("capture");
     },
   });
@@ -99,12 +101,12 @@ export function TestingDataImportDialog({
       return res.json() as Promise<{ applied: number }>;
     },
     onSuccess: (data) => {
-      toast.success(`Imported ${data.applied} row${data.applied === 1 ? "" : "s"}`);
+      toast.success(t.plural(data.applied, "Imported {count} row", "Imported {count} rows"));
       qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
       onOpenChange(false);
       reset();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not import rows"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not import rows")),
   });
 
   function updateRow(i: number, patch: Partial<Row>) {
@@ -121,10 +123,9 @@ export function TestingDataImportDialog({
     >
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Import OVR / Perch Testing Data</DialogTitle>
+          <DialogTitle>{t("Import OVR / Perch Testing Data")}</DialogTitle>
           <DialogDescription>
-            Photograph a velocity-based-training printout or screen, check every number, this doesn't
-            auto-correct itself the way a live tracked set does.
+            {t("Photograph a velocity-based-training printout or screen, check every number, this doesn't auto-correct itself the way a live tracked set does.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -137,13 +138,13 @@ export function TestingDataImportDialog({
               disabled={images.length === 0 || analyzeMutation.isPending}
               onClick={() => analyzeMutation.mutate()}
             >
-              {analyzeMutation.isPending ? "Reading photo..." : "Read Photo"}
+              {analyzeMutation.isPending ? t("Reading photo...") : t("Read Photo")}
             </Button>
           </div>
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              {readyRows.length} of {rows.length} row{rows.length === 1 ? "" : "s"} ready. Review every value.
+              {t.plural(rows.length, "{ready} of {count} row ready. Review every value.", "{ready} of {count} rows ready. Review every value.", { ready: readyRows.length })}
             </p>
             <div className="space-y-3">
               {rows.map((row, i) => (
@@ -154,10 +155,10 @@ export function TestingDataImportDialog({
                       onValueChange={(v) => updateRow(i, { athleteId: v === "none" ? null : Number(v) })}
                     >
                       <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="Match athlete" />
+                        <SelectValue placeholder={t("Match athlete")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">Unmatched ("{row.nameOnSheet}")</SelectItem>
+                        <SelectItem value="none">{t("Unmatched (\"{name}\")", { name: row.nameOnSheet })}</SelectItem>
                         {roster.map((a) => (
                           <SelectItem key={a.id} value={String(a.id)}>
                             {a.name}
@@ -173,7 +174,7 @@ export function TestingDataImportDialog({
                     />
                   </div>
                   <div className="min-w-0 space-y-1">
-                    <label className="text-[10px] text-muted-foreground">Exercise</label>
+                    <label className="text-[10px] text-muted-foreground">{t("Exercise")}</label>
                     <Input
                       className="h-8 w-full min-w-0 text-xs"
                       value={row.exerciseName}
@@ -182,7 +183,7 @@ export function TestingDataImportDialog({
                   </div>
                   <div className="grid grid-cols-4 gap-2">
                     <div className="min-w-0 space-y-1">
-                      <label className="text-[10px] text-muted-foreground">Set #</label>
+                      <label className="text-[10px] text-muted-foreground">{t("Set #")}</label>
                       <Input
                         type="number"
                         className="h-8 w-full min-w-0 text-xs"
@@ -191,7 +192,7 @@ export function TestingDataImportDialog({
                       />
                     </div>
                     <div className="min-w-0 space-y-1">
-                      <label className="text-[10px] text-muted-foreground">Load (lbs)</label>
+                      <label className="text-[10px] text-muted-foreground">{t("Load (lbs)")}</label>
                       <Input
                         type="number"
                         className="h-8 w-full min-w-0 text-xs"
@@ -200,7 +201,7 @@ export function TestingDataImportDialog({
                       />
                     </div>
                     <div className="min-w-0 space-y-1">
-                      <label className="text-[10px] text-muted-foreground">Velocity (m/s)</label>
+                      <label className="text-[10px] text-muted-foreground">{t("Velocity (m/s)")}</label>
                       <Input
                         type="number"
                         className="h-8 w-full min-w-0 text-xs"
@@ -211,7 +212,7 @@ export function TestingDataImportDialog({
                       />
                     </div>
                     <div className="min-w-0 space-y-1">
-                      <label className="text-[10px] text-muted-foreground">Power (W)</label>
+                      <label className="text-[10px] text-muted-foreground">{t("Power (W)")}</label>
                       <Input
                         type="number"
                         className="h-8 w-full min-w-0 text-xs"
@@ -232,14 +233,14 @@ export function TestingDataImportDialog({
           {step === "review" && (
             <>
               <Button type="button" variant="outline" onClick={() => setStep("capture")}>
-                Back
+                {t("Back")}
               </Button>
               <Button
                 type="button"
                 disabled={readyRows.length === 0 || applyMutation.isPending}
                 onClick={() => applyMutation.mutate()}
               >
-                {applyMutation.isPending ? "Saving..." : `Import ${readyRows.length} Row${readyRows.length === 1 ? "" : "s"}`}
+                {applyMutation.isPending ? t("Saving...") : t.plural(readyRows.length, "Import {count} Row", "Import {count} Rows")}
               </Button>
             </>
           )}

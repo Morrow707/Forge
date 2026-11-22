@@ -46,6 +46,7 @@ import {
   proposeSeasonPlan,
   type TeamGender,
 } from "@shared/season-plan";
+import { useT } from "@/i18n";
 
 type ContextProgram = {
   id: number;
@@ -335,6 +336,7 @@ const CHIP_OFF = "border-border text-muted-foreground hover:border-primary/50 ho
 
 /** The one line about games found on the calendar, with the list behind a button. */
 function FoundGames({ setup: s }: { setup: SeasonSetup }) {
+  const t = useT();
   const [showList, setShowList] = useState(false);
   const line = foundGamesLine(s.foundGames);
   if (!line) return null;
@@ -344,13 +346,13 @@ function FoundGames({ setup: s }: { setup: SeasonSetup }) {
       <p>
         {line}{" "}
         <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={() => setShowList((v) => !v)} data-testid="button-show-found-games">
-          {showList ? "Hide the games" : "See the games"}
+          {showList ? t("Hide the games") : t("See the games")}
         </button>
         {!usingThem && (
           <>
             {" · "}
             <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={s.useFoundGames} data-testid="button-use-found-games">
-              Use these dates
+              {t("Use these dates")}
             </button>
           </>
         )}
@@ -367,7 +369,7 @@ function FoundGames({ setup: s }: { setup: SeasonSetup }) {
       )}
       {s.foundGames.laterGames > 0 && (
         <p>
-          {s.foundGames.laterGames} more game{s.foundGames.laterGames === 1 ? "" : "s"} after a long break look like the next season, so they are left out.
+          {t.plural(s.foundGames.laterGames, "{count} more game after a long break look like the next season, so they are left out.", "{count} more games after a long break look like the next season, so they are left out.")}
         </p>
       )}
     </div>
@@ -382,9 +384,10 @@ export function SeasonSetupStep({
   /** Coach mode: who the athletes are, by id. */
   athleteNames?: Map<number, string>;
 }) {
+  const t = useT();
   const s = setup;
   if (s.context.isError) {
-    return <ReadFailed what="the season setup" onRetry={() => void s.context.refetch()} className="text-left" />;
+    return <ReadFailed what={t("the season setup")} onRetry={() => void s.context.refetch()} className="text-left" />;
   }
   const programPositions = s.primary?.positions ?? [];
 
@@ -392,7 +395,7 @@ export function SeasonSetupStep({
     <div className="min-w-0 space-y-3 rounded-md border border-border p-3" data-testid="season-setup-step">
       <p className="flex items-center gap-1.5 text-sm font-semibold">
         <CalendarRange className="h-4 w-4 text-muted-foreground" />
-        Season setup
+        {t("Season setup")}
       </p>
 
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground" data-testid="text-loading-note">
@@ -403,29 +406,30 @@ export function SeasonSetupStep({
       {/* PLAN A SEASON */}
       <label className="flex items-center gap-2 text-sm">
         <Checkbox checked={s.planOn} onCheckedChange={(c) => s.setPlanOn(c === true)} data-testid="checkbox-plan-season" />
-        Plan a season from the game dates
+        {t("Plan a season from the game dates")}
       </label>
       {s.planOn && (
         <div className="space-y-2">
           <div className="grid min-w-0 grid-cols-2 gap-2">
             <div className="min-w-0 space-y-1">
-              <Label className="text-xs">First game</Label>
+              <Label className="text-xs">{t("First game")}</Label>
               <Input type="date" value={s.firstGame} onChange={(e) => s.setFirstGame(e.target.value)} className="h-10 min-w-0 text-base" data-testid="input-first-game" />
             </div>
             <div className="min-w-0 space-y-1">
-              <Label className="text-xs">Last game</Label>
+              <Label className="text-xs">{t("Last game")}</Label>
               <Input type="date" value={s.lastGame} onChange={(e) => s.setLastGame(e.target.value)} className="h-10 min-w-0 text-base" data-testid="input-last-game" />
             </div>
           </div>
           <FoundGames setup={s} />
           {s.seasonCandidates.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              No programs here are tagged off-season, preseason, in-season or postseason
-              {s.primary?.sport ? ` for ${s.primary.sport}` : ""}. Tag a program's season on its builder page to plan with it.
+              {s.primary?.sport
+                ? t("No programs here are tagged off-season, preseason, in-season or postseason for {sport}. Tag a program's season on its builder page to plan with it.", { sport: s.primary.sport })
+                : t("No programs here are tagged off-season, preseason, in-season or postseason. Tag a program's season on its builder page to plan with it.")}
             </p>
           ) : (
             <div className="space-y-1">
-              <p className="label-xs">Programs for the season</p>
+              <p className="label-xs">{t("Programs for the season")}</p>
               <div className="flex flex-wrap gap-1.5">
                 {s.seasonCandidates.map((p) => (
                   <button
@@ -444,7 +448,7 @@ export function SeasonSetupStep({
           {!s.proposal.ok && <p className="text-xs text-muted-foreground">{s.proposal.reason}</p>}
           {s.planned.length > 0 && (
             <div className="space-y-1.5" data-testid="season-proposal">
-              <p className="label-xs">Forge's proposed dates. Change any of them.</p>
+              <p className="label-xs">{t("Forge's proposed dates. Change any of them.")}</p>
               {s.planned.map((p) => (
                 <div key={p.programId} className="min-w-0 rounded-md border border-border/60 p-2">
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -455,18 +459,18 @@ export function SeasonSetupStep({
                   </div>
                   <div className="mt-1.5 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
                     <div className="min-w-0 space-y-0.5">
-                      <label className="block text-[10px] uppercase text-muted-foreground">Starts</label>
+                      <label className="block text-[10px] uppercase text-muted-foreground">{t("Starts")}</label>
                       <Input
                         type="date"
                         value={p.startDate}
                         onChange={(e) => s.editPlan(p.programId, { startDate: e.target.value })}
                         className="h-9 min-w-0 text-base"
-                        aria-label={`Start date for ${s.programsById.get(p.programId)?.name}`}
+                        aria-label={t("Start date for {program}", { program: s.programsById.get(p.programId)?.name })}
                         data-testid={`input-season-start-${p.programId}`}
                       />
                     </div>
                     <div className="w-20 space-y-0.5">
-                      <label className="block text-[10px] uppercase text-muted-foreground">Repeats</label>
+                      <label className="block text-[10px] uppercase text-muted-foreground">{t("Repeats")}</label>
                       <Input
                         type="number"
                         inputMode="numeric"
@@ -485,7 +489,7 @@ export function SeasonSetupStep({
                 </div>
               ))}
               <p className="text-xs text-muted-foreground">
-                Each program's days follow its own week pattern from its start date. Move single days from the calendar afterwards.
+                {t("Each program's days follow its own week pattern from its start date. Move single days from the calendar afterwards.")}
               </p>
             </div>
           )}
@@ -495,7 +499,7 @@ export function SeasonSetupStep({
       {/* POSITION */}
       {s.athletes.length > 0 && (
         <div className="space-y-1">
-          <p className="label-xs">Position</p>
+          <p className="label-xs">{t("Position")}</p>
           <div className="max-h-40 space-y-1 overflow-y-auto">
             {s.athletes.map((a) => {
               const value = s.positions.get(a.id) ?? a.position ?? "";
@@ -503,26 +507,26 @@ export function SeasonSetupStep({
               return (
                 <div key={a.id} className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,9rem)] items-center gap-2 text-xs">
                   <span className="flex min-w-0 flex-col items-start gap-0.5">
-                    <span className="max-w-full truncate">{s.mode === "self" ? "You" : athleteNames?.get(a.id) ?? "Athlete"}</span>
+                    <span className="max-w-full truncate">{s.mode === "self" ? t("You") : athleteNames?.get(a.id) ?? t("Athlete")}</span>
                     {matches && (
                       <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                        Matches this program
+                        {t("Matches this program")}
                       </span>
                     )}
                   </span>
                   <Input
                     value={value}
-                    placeholder="Position"
+                    placeholder={t("Position")}
                     onChange={(e) => s.setPosition(a.id, e.target.value)}
                     className="h-8 min-w-0 text-base sm:text-xs"
-                    aria-label={`Position for ${s.mode === "self" ? "you" : athleteNames?.get(a.id) ?? "athlete"}`}
+                    aria-label={s.mode === "self" ? t("Your position") : t("Position for {name}", { name: athleteNames?.get(a.id) ?? t("athlete") })}
                   />
                 </div>
               );
             })}
           </div>
           {programPositions.length > 0 && (
-            <p className="text-[11px] text-muted-foreground">Written for: {programPositions.join(", ")}.</p>
+            <p className="text-[11px] text-muted-foreground">{t("Written for: {positions}.", { positions: programPositions.join(", ") })}</p>
           )}
         </div>
       )}
@@ -530,7 +534,7 @@ export function SeasonSetupStep({
       {/* TEAM */}
       {s.mode === "coach" && (
         <div className="space-y-1">
-          <p className="label-xs">Team</p>
+          <p className="label-xs">{t("Team")}</p>
           <div className="flex flex-wrap gap-1.5">
             {TEAM_GENDERS.map((g) => (
               <button
@@ -553,13 +557,13 @@ export function SeasonSetupStep({
         if (s.mode === "self" && !s.selfAdult) {
           return (
             <p key={p.id} className="rounded-md border border-border p-2 text-xs text-muted-foreground">
-              {p.name}: {RETURN_TO_TRAINING_MINOR_SELF}
+              {p.name}: {t(RETURN_TO_TRAINING_MINOR_SELF)}
             </p>
           );
         }
         return (
           <div key={p.id} className="space-y-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 p-2" data-testid={`clearance-${p.id}`}>
-            <p className="text-xs font-semibold">{p.name} is a return-to-training program</p>
+            <p className="text-xs font-semibold">{t("{program} is a return-to-training program", { program: p.name })}</p>
             <label className="flex items-start gap-2 text-xs">
               <Checkbox
                 checked={c.ticked}
@@ -567,13 +571,13 @@ export function SeasonSetupStep({
                 className="mt-0.5"
                 data-testid={`checkbox-clearance-${p.id}`}
               />
-              {s.mode === "self" ? RETURN_TO_TRAINING_SELF_CLEARANCE_SENTENCE : RETURN_TO_TRAINING_CLEARANCE_SENTENCE}
+              {s.mode === "self" ? t(RETURN_TO_TRAINING_SELF_CLEARANCE_SENTENCE) : t(RETURN_TO_TRAINING_CLEARANCE_SENTENCE)}
             </label>
             <Textarea
               value={c.restrictions}
               maxLength={MAX_RESTRICTIONS_LENGTH}
               onChange={(e) => s.setClearance(p.id, { restrictions: e.target.value })}
-              placeholder="Restrictions, if any. Shown on every day."
+              placeholder={t("Restrictions, if any. Shown on every day.")}
               className="min-h-[4rem] text-base sm:text-xs"
               data-testid={`textarea-restrictions-${p.id}`}
             />

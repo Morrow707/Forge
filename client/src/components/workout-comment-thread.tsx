@@ -12,6 +12,7 @@ import { MessageSquare, Video, Send, X, Pencil, Download, Loader2 } from "lucide
 import { formatDistanceToNow, format, parseISO } from "date-fns";
 import { watermarkVideo } from "@/lib/video-watermark";
 import { shareOrDownloadBlob, describeSaveOutcome } from "@/lib/share-file";
+import { useT } from "@/i18n";
 
 type Comment = {
   id: number;
@@ -47,6 +48,7 @@ export function WorkoutCommentThread({
   // in shared/schema.ts for why this matters for a backfilled log.
   date?: string;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const pathSegment = kind === "skill" ? "skill-assignments" : "assignments";
   const basePath = `/api/${role}/${pathSegment}/${assignmentId}/days/${programDayId}/comments`;
@@ -86,7 +88,7 @@ export function WorkoutCommentThread({
       if (outcome.kind === "failed") toast.error(describeSaveOutcome(outcome, "video"));
       else toast.success(describeSaveOutcome(outcome, "video"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not prepare that video for download");
+      toast.error(err instanceof Error ? err.message : t("Could not prepare that video for download"));
     } finally {
       setDownloadingId(null);
       setDownloadPct(0);
@@ -111,14 +113,14 @@ export function WorkoutCommentThread({
       setRecordedVideo(false);
       setImageUrl("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not post comment"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not post comment")),
   });
 
   return (
     <div className="space-y-3 rounded-md border border-border p-3">
       <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
         <MessageSquare className="h-3.5 w-3.5" />
-        Comments{comments.length > 0 && ` (${comments.length})`}
+        {comments.length > 0 ? t("Comments ({count})", { count: comments.length }) : t("Comments")}
       </div>
 
       {comments.length > 0 && (
@@ -136,10 +138,10 @@ export function WorkoutCommentThread({
                   {c.date ? (
                     <>
                       <span className="block font-semibold text-foreground/70">
-                        For {format(parseISO(c.date), "MMM d, yyyy")}
+                        {t("For {date}", { date: t.date(parseISO(c.date), { month: "short", day: "numeric", year: "numeric" }) })}
                       </span>
                       <span className="block">
-                        submitted {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
+                        {t("submitted {when}", { when: formatDistanceToNow(new Date(c.createdAt), { addSuffix: true }) })}
                       </span>
                     </>
                   ) : (
@@ -162,7 +164,7 @@ export function WorkoutCommentThread({
                 >
                   <img
                     src={resolveApiUrl(c.imageUrl)}
-                    alt="Coach annotation"
+                    alt={t("Coach annotation")}
                     className="max-h-48 rounded-md border border-border"
                   />
                 </a>
@@ -176,7 +178,7 @@ export function WorkoutCommentThread({
                     onClick={externalLinkClick(resolveApiUrl(c.videoUrl))}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                   >
-                    <Video className="h-3 w-3" /> Watch video
+                    <Video className="h-3 w-3" /> {t("Watch video")}
                   </a>
                   {role === "coach" && (
                     <button
@@ -184,7 +186,7 @@ export function WorkoutCommentThread({
                       onClick={() => setAnnotatingUrl(c.videoUrl)}
                       className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                     >
-                      <Pencil className="h-3 w-3" /> Annotate
+                      <Pencil className="h-3 w-3" /> {t("Annotate")}
                     </button>
                   )}
                   <button
@@ -197,12 +199,12 @@ export function WorkoutCommentThread({
                       <>
                         <Loader2 className="h-3 w-3 animate-spin" />{" "}
                         {downloadPct >= 100
-                          ? "Saving…"
-                          : `Preparing… ${downloadPct}%`}
+                          ? t("Saving…")
+                          : t("Preparing… {percent}%", { percent: downloadPct })}
                       </>
                     ) : (
                       <>
-                        <Download className="h-3 w-3" /> Download
+                        <Download className="h-3 w-3" /> {t("Download")}
                       </>
                     )}
                   </button>
@@ -218,15 +220,15 @@ export function WorkoutCommentThread({
             (Scott, 2026-11-12, "always done publicly"); the guardian reads the whole thread on
             their dashboard. */}
         <p className="text-xs text-muted-foreground" data-testid="text-thread-guardian-can-read">
-          For an athlete under 18, their parent or guardian can read this conversation.
+          {t("For an athlete under 18, their parent or guardian can read this conversation.")}
         </p>
         <Textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder={
             role === "athlete"
-              ? "Ask your coach a question or flag a rough set…"
-              : "Reply to your athlete…"
+              ? t("Ask your coach a question or flag a rough set…")
+              : t("Reply to your athlete…")
           }
           className="min-h-16 text-sm"
         />
@@ -234,11 +236,11 @@ export function WorkoutCommentThread({
           <div className="flex items-center justify-between rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs font-semibold text-success">
             <span className="flex items-center gap-1.5">
               <Pencil className="h-3 w-3" />
-              Annotated image attached
+              {t("Annotated image attached")}
             </span>
             <button
               type="button"
-              aria-label="Remove attached annotation"
+              aria-label={t("Remove attached annotation")}
               onClick={() => setImageUrl("")}
               className="text-muted-foreground hover:text-destructive"
             >
@@ -250,11 +252,11 @@ export function WorkoutCommentThread({
           <div className="flex items-center justify-between rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs font-semibold text-success">
             <span className="flex items-center gap-1.5">
               <Video className="h-3 w-3" />
-              Video attached
+              {t("Video attached")}
             </span>
             <button
               type="button"
-              aria-label="Remove attached video"
+              aria-label={t("Remove attached video")}
               onClick={() => {
                 setVideoUrl("");
                 setRecordedVideo(false);
@@ -269,13 +271,13 @@ export function WorkoutCommentThread({
             <Input
               value={videoUrl}
               onChange={(e) => setVideoUrl(e.target.value)}
-              placeholder="Video link (YouTube, Loom, etc.)"
+              placeholder={t("Video link (YouTube, Loom, etc.)")}
               className="h-8 text-xs"
               autoFocus
             />
             <button
               type="button"
-              aria-label="Cancel attaching a video link"
+              aria-label={t("Cancel attaching a video link")}
               onClick={() => {
                 setShowVideoField(false);
                 setVideoUrl("");
@@ -292,7 +294,7 @@ export function WorkoutCommentThread({
               onClick={() => setShowVideoField(true)}
               className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
             >
-              <Video className="h-3 w-3" /> Attach a video link
+              <Video className="h-3 w-3" /> {t("Attach a video link")}
             </button>
             {role === "athlete" && (
               <button
@@ -300,7 +302,7 @@ export function WorkoutCommentThread({
                 onClick={() => setRecorderOpen(true)}
                 className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
               >
-                <Video className="h-3 w-3" /> Record or upload a video
+                <Video className="h-3 w-3" /> {t("Record or upload a video")}
               </button>
             )}
           </div>
@@ -311,7 +313,7 @@ export function WorkoutCommentThread({
           onClick={() => postMutation.mutate()}
         >
           <Send className="h-3.5 w-3.5" />
-          {postMutation.isPending ? "Posting…" : "Post"}
+          {postMutation.isPending ? t("Posting…") : t("Post")}
         </Button>
       </div>
 

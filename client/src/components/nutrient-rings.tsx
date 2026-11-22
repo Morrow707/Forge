@@ -1,3 +1,4 @@
+import { useT } from "@/i18n";
 type Metric = { value: number; target: number | null };
 
 type RingKey = "water" | "calories" | "protein" | "carbs" | "fat" | "fiber";
@@ -66,6 +67,7 @@ export function NutrientRings({
    * total would just be wrong. */
   dateLabel?: string;
 }) {
+  const t = useT();
   const metrics: Record<RingKey, Metric> = { calories, protein, carbs, fat, fiber, water };
   const summary = RING_ORDER.map((r) => {
     const m = metrics[r.key];
@@ -116,7 +118,7 @@ export function NutrientRings({
           {Math.round(calories.value)}
         </text>
         <text x={CENTER} y={CENTER + 13} textAnchor="middle" fontSize="8" fill="currentColor" opacity={0.6}>
-          kcal {dateLabel}
+          {t("kcal {date}", { date: dateLabel })}
         </text>
       </svg>
 

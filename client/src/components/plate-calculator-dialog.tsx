@@ -15,6 +15,7 @@ import {
   type WeightUnit,
 } from "@shared/plates";
 import { Layers, Flame } from "lucide-react";
+import { useT } from "@/i18n";
 
 /** Pure client-side math (see shared/plates.ts) -- no request, no server
  * round trip, so it's instant and works offline like the rest of workout
@@ -33,6 +34,7 @@ export function PlateCalculatorDialog({
   initialWeight: number;
   unit: WeightUnit;
 }) {
+  const t = useT();
   const [weight, setWeight] = useState(initialWeight > 0 ? String(initialWeight) : "");
   const [barWeight, setBarWeight] = useState(String(DEFAULT_BAR_WEIGHT[unit]));
 
@@ -54,14 +56,14 @@ export function PlateCalculatorDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Layers className="h-5 w-5" />
-            Plates &amp; Warm-Up
+            {t("Plates & Warm-Up")}
           </DialogTitle>
-          <DialogDescription>{exerciseName}</DialogDescription>
+          <DialogDescription>{t.exercise(exerciseName)}</DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label htmlFor="plate-calc-weight">Target weight ({unit})</Label>
+            <Label htmlFor="plate-calc-weight">{t("Target weight ({unit})", { unit })}</Label>
             <Input
               id="plate-calc-weight"
               type="number"
@@ -72,7 +74,7 @@ export function PlateCalculatorDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="plate-calc-bar">Bar weight ({unit})</Label>
+            <Label htmlFor="plate-calc-bar">{t("Bar weight ({unit})", { unit })}</Label>
             <Input
               id="plate-calc-bar"
               type="number"
@@ -86,10 +88,10 @@ export function PlateCalculatorDialog({
         {breakdown && (
           <div className="space-y-1.5">
             <p className="text-[10px] font-semibold uppercase text-muted-foreground">
-              Load per side
+              {t("Load per side")}
             </p>
             {breakdown.plates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Just the bar, no plates needed.</p>
+              <p className="text-sm text-muted-foreground">{t("Just the bar, no plates needed.")}</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {breakdown.plates.map((p, i) => (
@@ -104,8 +106,7 @@ export function PlateCalculatorDialog({
             )}
             {!breakdown.exact && (
               <p className="text-xs text-muted-foreground">
-                Closest loadable weight: {breakdown.achievedWeight} {unit} (target was{" "}
-                {targetWeight} {unit})
+                {t("Closest loadable weight: {achieved} {unit} (target was {target} {unit})", { achieved: breakdown.achievedWeight, target: targetWeight, unit })}
               </p>
             )}
           </div>
@@ -114,7 +115,7 @@ export function PlateCalculatorDialog({
         {ramp.length > 0 && (
           <div className="space-y-1.5">
             <p className="flex items-center gap-1 text-[10px] font-semibold uppercase text-muted-foreground">
-              <Flame className="h-3 w-3" /> Warm-up ramp
+              <Flame className="h-3 w-3" /> {t("Warm-up ramp")}
             </p>
             <div className="space-y-1">
               {ramp.map((step) => (
@@ -129,7 +130,7 @@ export function PlateCalculatorDialog({
                 </div>
               ))}
               <div className="flex items-center justify-between rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-sm">
-                <span className="text-primary">Work set</span>
+                <span className="text-primary">{t("Work set")}</span>
                 <span className="font-semibold text-primary">
                   {targetWeight} {unit}
                 </span>

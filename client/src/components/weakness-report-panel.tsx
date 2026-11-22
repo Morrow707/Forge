@@ -8,6 +8,7 @@ import { format, parseISO } from "date-fns";
 import { Sparkles, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type WeaknessDeficit = {
   title: string;
@@ -43,6 +44,7 @@ export function WeaknessReportPanel({
   generateUrl?: string;
   canGenerate?: boolean;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -59,15 +61,15 @@ export function WeaknessReportPanel({
     onSuccess: (report: WeaknessReport) => {
       qc.invalidateQueries({ queryKey: [fetchUrl] });
       setExpandedId(report.id);
-      toast.success("Report generated");
+      toast.success(t("Report generated"));
     },
     onError: (err: ApiError) => {
       if (err.status === 402) {
-        toast.info(err.message || "Not available on this plan yet.");
+        toast.info(err.message || t("Not available on this plan yet."));
       } else if (err.status === 422) {
-        toast.info(err.message || "Not enough data logged yet to generate a report.");
+        toast.info(err.message || t("Not enough data logged yet to generate a report."));
       } else {
-        toast.error(err.message || "Could not generate report");
+        toast.error(err.message || t("Could not generate report"));
       }
     },
   });
@@ -75,25 +77,23 @@ export function WeaknessReportPanel({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        AI analysis of goniometer, asymmetry, load-management, wellness, and testing data on
-        file, identifying specific deficits and why they matter, a starting signal, not a
-        diagnosis. Each report is a snapshot; generate a new one later to see what's changed.
+        {t("AI analysis of goniometer, asymmetry, load-management, wellness, and testing data on file, identifying specific deficits and why they matter, a starting signal, not a diagnosis. Each report is a snapshot; generate a new one later to see what's changed.")}
       </p>
 
       {canGenerate && generateUrl && (
         <Button size="sm" onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
           <Sparkles className="h-4 w-4" />
-          {generateMutation.isPending ? "Analyzing…" : "Generate Report"}
+          {generateMutation.isPending ? t("Analyzing…") : t("Generate Report")}
         </Button>
       )}
 
       {isLoading ? (
         <div className="h-24 animate-pulse rounded-md bg-surface" />
       ) : isError ? (
-        <ReadFailed what="this athlete's reports" onRetry={() => void refetch()} />
+        <ReadFailed what={t("this athlete's reports")} onRetry={() => void refetch()} />
       ) : reports.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          No weakness reports generated yet.
+          {t("No weakness reports generated yet.")}
         </p>
       ) : (
         <div className="space-y-3">
@@ -109,8 +109,8 @@ export function WeaknessReportPanel({
                   <div>
                     <p className="text-sm font-semibold">{r.summary}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {format(parseISO(r.createdAt), "MMM d, yyyy 'at' h:mm a")} &middot;{" "}
-                      {r.deficits.length} {r.deficits.length === 1 ? "deficit" : "deficits"} flagged
+                      {format(parseISO(r.createdAt), "MMM d, yyyy 'at' h:mm a")} ·{" "}
+                      {t.plural(r.deficits.length, "{count} deficit flagged", "{count} deficits flagged")}
                     </p>
                   </div>
                   {isOpen ? (
@@ -123,7 +123,7 @@ export function WeaknessReportPanel({
                   <div className="space-y-3 border-t border-border p-4">
                     {r.deficits.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
-                        No concerning deficits found in this analysis.
+                        {t("No concerning deficits found in this analysis.")}
                       </p>
                     ) : (
                       r.deficits.map((d, i) => (
@@ -138,19 +138,19 @@ export function WeaknessReportPanel({
                           <div className="space-y-1.5 text-sm">
                             <p>
                               <span className="font-semibold text-muted-foreground">
-                                Evidence:{" "}
+                                {t("Evidence:")}{" "}
                               </span>
                               {d.evidence}
                             </p>
                             <p>
                               <span className="font-semibold text-muted-foreground">
-                                Why it matters:{" "}
+                                {t("Why it matters:")}{" "}
                               </span>
                               {d.whyItMatters}
                             </p>
                             <p>
                               <span className="font-semibold text-muted-foreground">
-                                Suggested focus:{" "}
+                                {t("Suggested focus:")}{" "}
                               </span>
                               {d.suggestedFocus}
                             </p>

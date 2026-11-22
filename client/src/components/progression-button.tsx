@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { parseProgression, stripProgression, composeProgression } from "@/lib/progression";
 import { CalendarRange } from "lucide-react";
+import { useT } from "@/i18n";
 
 /** Composes the "+X%/week" or "+X lbs/week" suffix onto a prescribed
  * weight, so a coach doesn't have to hand-calculate (or memorize the mini
@@ -18,6 +19,7 @@ export function ProgressionButton({
   value: string;
   onChange: (next: string) => void;
 }) {
+  const t = useT();
   const existing = parseProgression(value);
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(existing ? String(existing.amount) : "5");
@@ -38,8 +40,8 @@ export function ProgressionButton({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={existing ? "Edit weekly progression" : "Add weekly progression"}
-          title={existing ? "Edit weekly progression" : "Add weekly progression"}
+          aria-label={existing ? t("Edit weekly progression") : t("Add weekly progression")}
+          title={existing ? t("Edit weekly progression") : t("Add weekly progression")}
           className={cn(
             "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
             existing
@@ -52,11 +54,10 @@ export function ProgressionButton({
       </PopoverTrigger>
       <PopoverContent className="w-60" align="end">
         <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
-          Weekly progression
+          {t("Weekly progression")}
         </p>
         <p className="mb-2 text-[11px] text-muted-foreground">
-          Adds this much more every week after this one. Copy the same weight text (with this
-          suffix) onto later weeks and each one resolves its own number automatically.
+          {t("Adds this much more every week after this one. Copy the same weight text (with this suffix) onto later weeks and each one resolves its own number automatically.")}
         </p>
         <div className="flex items-center gap-1.5">
           <Input
@@ -89,7 +90,7 @@ export function ProgressionButton({
               %
             </button>
           </div>
-          <Label className="text-[11px] text-muted-foreground">/week</Label>
+          <Label className="text-[11px] text-muted-foreground">{t("/week")}</Label>
         </div>
         <div className="mt-3 flex justify-between gap-2">
           {existing && (
@@ -102,7 +103,7 @@ export function ProgressionButton({
                 setOpen(false);
               }}
             >
-              Remove
+              {t("Remove")}
             </Button>
           )}
           <Button
@@ -115,7 +116,7 @@ export function ProgressionButton({
               setOpen(false);
             }}
           >
-            Apply
+            {t("Apply")}
           </Button>
         </div>
       </PopoverContent>

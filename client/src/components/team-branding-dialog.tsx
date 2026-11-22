@@ -23,6 +23,7 @@ import { ColorField } from "@/components/color-field";
 import { ImageCropDialog } from "@/components/image-crop-dialog";
 import { extractDominantColors, suggestBrandPair } from "@/lib/image-colors";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 const ORG_QUERY_KEY = ["/api/coach/branding"];
 
@@ -86,6 +87,7 @@ export function TeamBrandingDialog({
   onOpenChange: (open: boolean) => void;
   scope?: BrandingScope;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const endpoints = endpointFor(scope);
   const isTeamScope = scope.type === "team";
@@ -196,10 +198,10 @@ export function TeamBrandingDialog({
     },
     onSuccess: () => {
       invalidateBranding();
-      toast.success("Branding saved");
+      toast.success(t("Branding saved"));
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save branding"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save branding")),
   });
 
   const uploadLogoMutation = useMutation({
@@ -213,9 +215,9 @@ export function TeamBrandingDialog({
       setPendingLogo(null);
       setLogoUrl(result.logoUrl ?? result.brandLogoUrl ?? null);
       invalidateBranding();
-      toast.success("Logo updated");
+      toast.success(t("Logo updated"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't upload that logo"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't upload that logo")),
   });
 
   const removeLogoMutation = useMutation({
@@ -223,16 +225,16 @@ export function TeamBrandingDialog({
     onSuccess: () => {
       setLogoUrl(null);
       invalidateBranding();
-      toast.success("Logo removed");
+      toast.success(t("Logo removed"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't remove that logo"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't remove that logo")),
   });
 
   const featureMutation = useMutation({
     mutationFn: (patch: Partial<Record<CoachFeature, boolean>>) =>
       apiRequest("PUT", "/api/coach/features", patch),
     onSuccess: invalidateBranding,
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't update that")),
   });
 
   // Clears everything this dialog can set -- name/colors/motto/etc via the
@@ -260,16 +262,16 @@ export function TeamBrandingDialog({
       setLogoUrl(null);
       invalidateBranding();
       toast.success(
-        isTeamScope ? "Team override removed, back to inheriting the org's branding" : "Branding reset to Forge defaults",
+        isTeamScope ? t("Team override removed, back to inheriting the org's branding") : t("Branding reset to Forge defaults"),
       );
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't reset branding"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't reset branding")),
   });
 
   async function handleFile(file: File) {
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-      toast.error("Use a PNG, JPEG, or WebP image");
+      toast.error(t("Use a PNG, JPEG, or WebP image"));
       return;
     }
     // Cropped and previewed first; nothing uploads until Save (2026-11-20).
@@ -303,12 +305,12 @@ export function TeamBrandingDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Palette className="h-5 w-5 text-teal-400" />
-            {isTeamScope ? `${scope.teamName} Branding` : "Branding & Features"}
+            {isTeamScope ? t("{team} Branding", { team: scope.teamName }) : t("Branding & Features")}
           </DialogTitle>
           <DialogDescription>
             {isTeamScope
-              ? "Overrides your org's colors and logo for this team only, leave a field blank to keep inheriting the org's own branding."
-              : `Re-skin Forge with your own name, logo, exact colors, and team-page copy, applies across your whole coaching staff and everyone on your roster. The ${POWERED_BY_FORGE_LABEL} mark stays as a small watermark either way. Turn off any nav sections your program doesn't use to keep the app simpler.`}
+              ? t("Overrides your org's colors and logo for this team only, leave a field blank to keep inheriting the org's own branding.")
+              : t("Re-skin Forge with your own name, logo, exact colors, and team-page copy, applies across your whole coaching staff and everyone on your roster. The {mark} mark stays as a small watermark either way. Turn off any nav sections your program doesn't use to keep the app simpler.", { mark: POWERED_BY_FORGE_LABEL })}
           </DialogDescription>
         </DialogHeader>
 
@@ -318,23 +320,23 @@ export function TeamBrandingDialog({
           <div className="space-y-6">
             {!isTeamScope && (
               <div className="space-y-1.5">
-                <Label htmlFor="brand-team-name">Program name</Label>
+                <Label htmlFor="brand-team-name">{t("Program name")}</Label>
                 <Input
                   id="brand-team-name"
                   value={teamName}
                   onChange={(e) => setTeamName(e.target.value)}
-                  placeholder="e.g. Ridgeview Strength & Conditioning"
+                  placeholder={t("e.g. Ridgeview Strength & Conditioning")}
                   maxLength={60}
                 />
               </div>
             )}
 
             <div className="space-y-1.5">
-              <Label>Logo</Label>
+              <Label>{t("Logo")}</Label>
               <div className="flex items-center gap-3">
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-surface">
                   {logoUrl ? (
-                    <img src={resolveApiUrl(logoUrl)} alt="Current logo" className="h-full w-full object-contain" />
+                    <img src={resolveApiUrl(logoUrl)} alt={t("Current logo")} className="h-full w-full object-contain" />
                   ) : (
                     <ImagePlus className="h-6 w-6 text-muted-foreground" />
                   )}
@@ -358,7 +360,7 @@ export function TeamBrandingDialog({
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploadLogoMutation.isPending}
                   >
-                    {uploadLogoMutation.isPending ? "Uploading…" : logoUrl ? "Replace" : "Upload"}
+                    {uploadLogoMutation.isPending ? t("Uploading…") : logoUrl ? t("Replace") : t("Upload")}
                   </Button>
                   {logoUrl && (
                     <Button
@@ -370,7 +372,7 @@ export function TeamBrandingDialog({
                       disabled={removeLogoMutation.isPending}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                      Remove
+                      {t("Remove")}
                     </Button>
                   )}
                 </div>
@@ -378,7 +380,7 @@ export function TeamBrandingDialog({
               {logoSwatches.length > 0 && (
                 <div className="space-y-1 pt-1">
                   <p className="text-[11px] text-muted-foreground">
-                    Pulled straight from your logo's own pixels, tap to set as your primary color.
+                    {t("Pulled straight from your logo's own pixels, tap to set as your primary color.")}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {logoSwatches.map((hex) => (
@@ -401,15 +403,15 @@ export function TeamBrandingDialog({
                     if (!pair) return null;
                     return (
                       <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
-                        <span className="text-muted-foreground">Suggested:</span>
+                        <span className="text-muted-foreground">{t("Suggested:")}</span>
                         <span className="flex items-center gap-1.5">
                           <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: pair.primary }} />
-                          Primary
+                          {t("Primary")}
                         </span>
                         {pair.secondary && (
                           <span className="flex items-center gap-1.5">
                             <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: pair.secondary }} />
-                            Secondary
+                            {t("Secondary")}
                           </span>
                         )}
                         <Button
@@ -421,7 +423,7 @@ export function TeamBrandingDialog({
                             if (pair.secondary) setSecondaryColor(pair.secondary);
                           }}
                         >
-                          Use {pair.secondary ? "these" : "this"}
+                          {pair.secondary ? t("Use these") : t("Use this")}
                         </Button>
                       </div>
                     );
@@ -431,22 +433,22 @@ export function TeamBrandingDialog({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <ColorField label="Primary color" value={primaryColor} onChange={setPrimaryColor} />
-              <ColorField label="Secondary color" value={secondaryColor} onChange={setSecondaryColor} />
+              <ColorField label={t("Primary color")} value={primaryColor} onChange={setPrimaryColor} />
+              <ColorField label={t("Secondary color")} value={secondaryColor} onChange={setSecondaryColor} />
             </div>
 
             {!primaryContrastOk && (
               <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                 <div className="space-y-1.5">
-                  <p>This primary color is too light/dark to read clearly as button text.</p>
+                  <p>{t("This primary color is too light/dark to read clearly as button text.")}</p>
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
                     onClick={() => setPrimaryColor(nearestAccessibleColor(primaryColor) ?? primaryColor)}
                   >
-                    Use a readable version of this color
+                    {t("Use a readable version of this color")}
                   </Button>
                 </div>
               </div>
@@ -456,24 +458,23 @@ export function TeamBrandingDialog({
               <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                 <div className="space-y-1.5">
-                  <p>This secondary color is too light/dark to read clearly as text.</p>
+                  <p>{t("This secondary color is too light/dark to read clearly as text.")}</p>
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
                     onClick={() => setSecondaryColor(nearestAccessibleColor(secondaryColor) ?? secondaryColor)}
                   >
-                    Use a readable version of this color
+                    {t("Use a readable version of this color")}
                   </Button>
                 </div>
               </div>
             )}
 
             <div className="space-y-1.5">
-              <Label>Preview</Label>
+              <Label>{t("Preview")}</Label>
               <p className="text-xs text-muted-foreground">
-                Updates live as you type/pick, before you save, this is exactly what shows in the app header for you
-                and your athletes.
+                {t("Updates live as you type/pick, before you save, this is exactly what shows in the app header for you and your athletes.")}
               </p>
               <div className="overflow-hidden rounded-md border border-border">
                 <div
@@ -504,9 +505,9 @@ export function TeamBrandingDialog({
                       color: `hsl(${contrastForegroundHsl(primaryColor || SWATCH_FALLBACK_PRIMARY)})`,
                     }}
                   >
-                    Active tab
+                    {t("Active tab")}
                   </span>
-                  <span className="text-xs text-muted-foreground">Your accent color</span>
+                  <span className="text-xs text-muted-foreground">{t("Your accent color")}</span>
                 </div>
               </div>
             </div>
@@ -514,43 +515,43 @@ export function TeamBrandingDialog({
             {!isTeamScope && (
               <div className="space-y-4 border-t border-border pt-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="brand-motto">Motto / tagline</Label>
+                  <Label htmlFor="brand-motto">{t("Motto / tagline")}</Label>
                   <Input
                     id="brand-motto"
                     value={motto}
                     onChange={(e) => setMotto(e.target.value)}
-                    placeholder="e.g. Earn it every day"
+                    placeholder={t("e.g. Earn it every day")}
                     maxLength={80}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="brand-mission">About the team</Label>
+                  <Label htmlFor="brand-mission">{t("About the team")}</Label>
                   <Textarea
                     id="brand-mission"
                     value={mission}
                     onChange={(e) => setMission(e.target.value)}
-                    placeholder="Shown on your team's About page, who you are, what the program's about"
+                    placeholder={t("Shown on your team's About page, who you are, what the program's about")}
                     maxLength={500}
                     className="min-h-20"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="brand-contact-email">Public contact email (optional)</Label>
+                  <Label htmlFor="brand-contact-email">{t("Public contact email (optional)")}</Label>
                   <Input
                     id="brand-contact-email"
                     type="email"
                     value={contactEmail}
                     onChange={(e) => setContactEmail(e.target.value)}
-                    placeholder="Shown on the About page, never your real login email unless you enter it here"
+                    placeholder={t("Shown on the About page, never your real login email unless you enter it here")}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="brand-welcome">Welcome message for athletes</Label>
+                  <Label htmlFor="brand-welcome">{t("Welcome message for athletes")}</Label>
                   <Textarea
                     id="brand-welcome"
                     value={welcomeMessage}
                     onChange={(e) => setWelcomeMessage(e.target.value)}
-                    placeholder="Shown on your athletes' own dashboard, a note in your own voice"
+                    placeholder={t("Shown on your athletes' own dashboard, a note in your own voice")}
                     maxLength={300}
                     className="min-h-16"
                   />
@@ -560,7 +561,7 @@ export function TeamBrandingDialog({
 
             {!isTeamScope && (
               <div className="space-y-2 border-t border-border pt-4">
-                <Label>Nav sections</Label>
+                <Label>{t("Nav sections")}</Label>
                 <div className="space-y-2.5">
                   {COACH_FEATURE_FIELDS.map((field) => (
                     <label key={field.key} className="flex cursor-pointer items-start gap-2.5 text-sm">
@@ -590,11 +591,11 @@ export function TeamBrandingDialog({
               onClick={() => resetMutation.mutate()}
               disabled={resetMutation.isPending}
             >
-              {isTeamScope ? "Remove override" : "Reset to defaults"}
+              {isTeamScope ? t("Remove override") : t("Reset to defaults")}
             </Button>
           )}
           <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-            {saveMutation.isPending ? "Saving…" : "Save Branding"}
+            {saveMutation.isPending ? t("Saving…") : t("Save Branding")}
           </Button>
         </DialogFooter>
         <ImageCropDialog

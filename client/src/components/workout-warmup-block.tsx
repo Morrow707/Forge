@@ -9,6 +9,7 @@ import { useState } from "react";
 import { CheckCircle2, ChevronDown, ChevronUp, Circle, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { estimateWarmupMinutes, warmupItemPrescription, type ResolvedWarmupBlock } from "@shared/program-day-warmup";
+import { useT } from "@/i18n";
 
 export function WorkoutWarmupBlock({
   warmup,
@@ -19,6 +20,7 @@ export function WorkoutWarmupBlock({
   done: boolean;
   onToggleDone: (done: boolean) => void;
 }) {
+  const t = useT();
   // Open until it is done; a done warm-up folds away so the main work is what the screen shows.
   const [openChoice, setOpenChoice] = useState<boolean | null>(null);
   const open = openChoice ?? !done;
@@ -38,9 +40,9 @@ export function WorkoutWarmupBlock({
           data-testid="button-toggle-warmup"
         >
           <Flame className="h-4 w-4 shrink-0 text-orange-500" />
-          <span className="font-semibold">Warm-up</span>
+          <span className="font-semibold">{t("Warm-up")}</span>
           <span className="text-xs text-muted-foreground">
-            {items.length} {items.length === 1 ? "drill" : "drills"}, about {minutes} min
+            {t.plural(items.length, "{count} drill, about {minutes} min", "{count} drills, about {minutes} min", { minutes })}
           </span>
           {open ? <ChevronUp className="ml-auto h-4 w-4" /> : <ChevronDown className="ml-auto h-4 w-4" />}
         </button>
@@ -72,7 +74,7 @@ export function WorkoutWarmupBlock({
         data-testid="button-warmup-done"
       >
         {done ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
-        Warm-up done
+        {t("Warm-up done")}
       </button>
     </section>
   );

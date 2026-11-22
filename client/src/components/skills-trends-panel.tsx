@@ -28,6 +28,7 @@ const VideoAnalysisDialog = lazyDialog(() => import("@/components/video-analysis
 import { getJson } from "@/lib/queryClient";
 import { Video as VideoIcon, TrendingUp } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 /** "none" is a real, common value: skillProgramExercises.trackingLevel defaults to it,
  * and it is exactly the case the athlete's free-text "Result" box serves. Typing it as
@@ -109,6 +110,7 @@ function fmtSpeed(elapsedSeconds: number | null, distanceYards: number | null): 
  * without rewatching every clip. Shares the athlete-picker state the
  * Performance/Videos tabs already lift, same as VideosTab. */
 export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: string; athleteName?: string }) {
+  const t = useT();
   const [selectedKey, setSelectedKey] = useState<string>("");
   const [mechanicsMetric, setMechanicsMetric] = useState<MechanicsMetric>("hipShoulderSeparationDeg");
   const [analyzing, setAnalyzing] = useState<{ url: string; title: string } | null>(null);
@@ -150,7 +152,7 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
     return (
       <Card>
         <CardContent className="py-16">
-          <ReadFailed what="this athlete's skill sessions" onRetry={() => void refetch()} />
+          <ReadFailed what={t("this athlete's skill sessions")} onRetry={() => void refetch()} />
         </CardContent>
       </Card>
     );
@@ -162,7 +164,7 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
         <CardContent className="flex flex-col items-center gap-2 py-16 text-center">
           <TrendingUp className="h-8 w-8 text-muted-foreground" />
           <p className="text-muted-foreground">
-            No Skills sessions logged yet for {athleteName?.split(" ")[0] ?? "this athlete"}.
+            {t("No Skills sessions logged yet for {name}.", { name: athleteName?.split(" ")[0] ?? t("this athlete") })}
           </p>
         </CardContent>
       </Card>
@@ -180,10 +182,10 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
             <SelectItem key={o.key} value={o.key}>
               {o.label} ·{" "}
               {o.trackingLevel === "sprint"
-                ? "Sprint"
+                ? t("Sprint")
                 : o.trackingLevel === "mechanics"
-                  ? "Mechanics"
-                  : "Logged by hand"}
+                  ? t("Mechanics")
+                  : t("Logged by hand")}
             </SelectItem>
           ))}
         </SelectContent>
@@ -191,7 +193,7 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
 
       {active?.trackingLevel === "mechanics" && (
         <RadioChipGroup
-          label="Metric"
+          label={t("Metric")}
           options={[
             MECHANICS_METRIC_LABEL.hipShoulderSeparationDeg,
             MECHANICS_METRIC_LABEL.weightTransferPct,
@@ -257,8 +259,7 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
 
       {active?.trackingLevel === "none" && (
         <p className="text-sm text-muted-foreground">
-          These were typed in rather than measured by the camera, so there is nothing to chart,
-          the entries themselves are below.
+          {t("These were typed in rather than measured by the camera, so there is nothing to chart, the entries themselves are below.")}
         </p>
       )}
 
@@ -273,21 +274,21 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
                     {s.trackingLevel === "sprint" ? (
                       <span className="text-xs text-muted-foreground">
                         {s.elapsedSeconds != null ? `${s.elapsedSeconds}s` : "–"}
-                        {s.distanceYards != null ? ` · ${s.distanceYards} yd` : ""}
+                        {s.distanceYards != null ? ` · ${t("{count} yd", { count: s.distanceYards })}` : ""}
                         {s.elapsedSeconds != null && s.distanceYards != null
                           ? ` · ${fmtSpeed(s.elapsedSeconds, s.distanceYards)}`
                           : ""}
                       </span>
                     ) : s.trackingLevel === "none" ? (
                       <span className="text-xs text-muted-foreground">
-                        {s.manualResult?.trim() ? s.manualResult : "logged, no result written"}
+                        {s.manualResult?.trim() ? s.manualResult : t("logged, no result written")}
                       </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">
-                        {s.hipShoulderSeparationDeg != null ? `Sep ${s.hipShoulderSeparationDeg}°` : ""}
-                        {s.weightTransferPct != null ? ` · Transfer ${s.weightTransferPct}%` : ""}
-                        {s.hipRotationDeg != null ? ` · Rotation ${s.hipRotationDeg}°` : ""}
-                        {s.wellSequenced != null ? ` · ${s.wellSequenced ? "Well sequenced" : "Sequencing off"}` : ""}
+                        {s.hipShoulderSeparationDeg != null ? t("Sep {degrees}°", { degrees: s.hipShoulderSeparationDeg }) : ""}
+                        {s.weightTransferPct != null ? ` · ${t("Transfer {percent}%", { percent: s.weightTransferPct })}` : ""}
+                        {s.hipRotationDeg != null ? ` · ${t("Rotation {degrees}°", { degrees: s.hipRotationDeg })}` : ""}
+                        {s.wellSequenced != null ? ` · ${s.wellSequenced ? t("Well sequenced") : t("Sequencing off")}` : ""}
                       </span>
                     )}
                   </div>
@@ -312,7 +313,7 @@ export function SkillsTrendsPanel({ athleteId, athleteName }: { athleteId: strin
                     onClick={() => setAnalyzing({ url: s.videoUrl!, title: `${s.skillExerciseName} — ${format(parseISO(s.createdAt), "MMM d")}` })}
                   >
                     <VideoIcon className="h-3.5 w-3.5" />
-                    Watch
+                    {t("Watch")}
                   </Button>
                 )}
               </div>

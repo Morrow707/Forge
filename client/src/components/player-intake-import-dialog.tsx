@@ -23,6 +23,7 @@ import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Copy, Check } from "lucide-react";
+import { useT } from "@/i18n";
 
 type Row = {
   name: string;
@@ -51,6 +52,7 @@ export function PlayerIntakeImportDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [step, setStep] = useState<PhotoImportStep | "done">("capture");
   const [images, setImages] = useState<CapturedPhoto[]>([]);
@@ -77,7 +79,7 @@ export function PlayerIntakeImportDialog({
       setStep("review");
     },
     onError: (err: ApiError) => {
-      toast.error(err.message || "Couldn't read that photo");
+      toast.error(err.message || t("Couldn't read that photo"));
       setStep("capture");
     },
   });
@@ -100,11 +102,11 @@ export function PlayerIntakeImportDialog({
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["/api/coach/roster/provisional"] });
-      toast.success(`Created ${data.length} claim code${data.length === 1 ? "" : "s"}`);
+      toast.success(t.plural(data.length, "Created {count} claim code", "Created {count} claim codes"));
       setCreated(data);
       setStep("done");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not create roster slots"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not create roster slots")),
   });
 
   function updateRow(i: number, patch: Partial<Row>) {
@@ -129,9 +131,9 @@ export function PlayerIntakeImportDialog({
     >
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Import Player Intake Sheet</DialogTitle>
+          <DialogTitle>{t("Import Player Intake Sheet")}</DialogTitle>
           <DialogDescription>
-            Photograph a tryout/sign-up sheet, each person gets a claim code to finish their own signup with.
+            {t("Photograph a tryout/sign-up sheet, each person gets a claim code to finish their own signup with.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -144,7 +146,7 @@ export function PlayerIntakeImportDialog({
               disabled={images.length === 0 || analyzeMutation.isPending}
               onClick={() => analyzeMutation.mutate()}
             >
-              {analyzeMutation.isPending ? "Reading photo..." : "Read Photo"}
+              {analyzeMutation.isPending ? t("Reading photo...") : t("Read Photo")}
             </Button>
           </div>
         )}
@@ -152,14 +154,14 @@ export function PlayerIntakeImportDialog({
         {step === "review" && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              {readyRows.length} of {rows.length} row{rows.length === 1 ? "" : "s"} have a name and are ready.
+              {t.plural(rows.length, "{ready} of {count} row have a name and are ready.", "{ready} of {count} rows have a name and are ready.", { ready: readyRows.length })}
             </p>
             {under13.length > 0 && (
               <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
                 <p className="text-xs font-semibold">
                   {under13.length === 1
-                    ? `${under13[0]!.name.trim() || "One athlete"} is under 13.`
-                    : `${under13.length} of these athletes are under 13.`}
+                    ? t("{name} is under 13.", { name: under13[0]!.name.trim() || t("One athlete") })
+                    : t("{count} of these athletes are under 13.", { count: under13.length })}
                 </p>
                 <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground">
                   {COACH_COPPA_ATTESTATION}
@@ -171,7 +173,7 @@ export function PlayerIntakeImportDialog({
                     checked={attested}
                     onChange={(e) => setAttested(e.target.checked)}
                   />
-                  <span>I confirm the above.</span>
+                  <span>{t("I confirm the above.")}</span>
                 </label>
               </div>
             )}
@@ -182,20 +184,20 @@ export function PlayerIntakeImportDialog({
                     className="h-8 text-xs font-medium"
                     value={row.name}
                     onChange={(e) => updateRow(i, { name: e.target.value })}
-                    placeholder="Name"
+                    placeholder={t("Name")}
                   />
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <Input
                       type="number"
                       className="h-8 text-xs"
-                      placeholder="Height (in)"
+                      placeholder={t("Height (in)")}
                       value={row.heightIn ?? ""}
                       onChange={(e) => updateRow(i, { heightIn: e.target.value === "" ? null : Number(e.target.value) })}
                     />
                     <Input
                       type="number"
                       className="h-8 text-xs"
-                      placeholder="Weight (lbs)"
+                      placeholder={t("Weight (lbs)")}
                       value={row.bodyWeightLbs ?? ""}
                       onChange={(e) =>
                         updateRow(i, { bodyWeightLbs: e.target.value === "" ? null : Number(e.target.value) })
@@ -204,7 +206,7 @@ export function PlayerIntakeImportDialog({
                     <Input
                       type="number"
                       className="h-8 text-xs"
-                      placeholder="Age"
+                      placeholder={t("Age")}
                       value={row.age ?? ""}
                       onChange={(e) => updateRow(i, { age: e.target.value === "" ? null : Number(e.target.value) })}
                     />
@@ -213,27 +215,27 @@ export function PlayerIntakeImportDialog({
                       onValueChange={(v) => updateRow(i, { gender: v === "unset" ? null : (v as Row["gender"]) })}
                     >
                       <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="Gender" />
+                        <SelectValue placeholder={t("Gender")} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="unset">--</SelectItem>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                        <SelectItem value="non_binary">Non-binary</SelectItem>
-                        <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+                        <SelectItem value="male">{t("Male")}</SelectItem>
+                        <SelectItem value="female">{t("Female")}</SelectItem>
+                        <SelectItem value="non_binary">{t("Non-binary")}</SelectItem>
+                        <SelectItem value="prefer_not_to_say">{t("Prefer not to say")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <Input
                       className="h-8 text-xs"
-                      placeholder="Sport"
+                      placeholder={t("Sport")}
                       value={row.sport ?? ""}
                       onChange={(e) => updateRow(i, { sport: e.target.value })}
                     />
                     <Input
                       className="h-8 text-xs"
-                      placeholder="Position"
+                      placeholder={t("Position")}
                       value={row.position ?? ""}
                       onChange={(e) => updateRow(i, { position: e.target.value })}
                     />
@@ -247,7 +249,7 @@ export function PlayerIntakeImportDialog({
         {step === "done" && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Hand each person their claim link, they finish signup themselves and it links to you automatically.
+              {t("Hand each person their claim link, they finish signup themselves and it links to you automatically.")}
             </p>
             <div className="space-y-2">
               {created.map((slot) => (
@@ -258,7 +260,7 @@ export function PlayerIntakeImportDialog({
                   </div>
                   <Button type="button" size="sm" variant="outline" onClick={() => copyClaimUrl(slot)}>
                     {copiedId === slot.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                    {copiedId === slot.id ? "Copied" : "Copy Link"}
+                    {copiedId === slot.id ? t("Copied") : t("Copy Link")}
                   </Button>
                 </div>
               ))}
@@ -270,7 +272,7 @@ export function PlayerIntakeImportDialog({
           {step === "review" && (
             <>
               <Button type="button" variant="outline" onClick={() => setStep("capture")}>
-                Back
+                {t("Back")}
               </Button>
               <Button
                 type="button"
@@ -282,14 +284,14 @@ export function PlayerIntakeImportDialog({
                 onClick={() => applyMutation.mutate()}
               >
                 {applyMutation.isPending
-                  ? "Creating..."
-                  : `Create ${readyRows.length} Claim Code${readyRows.length === 1 ? "" : "s"}`}
+                  ? t("Creating...")
+                  : t.plural(readyRows.length, "Create {count} Claim Code", "Create {count} Claim Codes")}
               </Button>
             </>
           )}
           {step === "done" && (
             <Button type="button" onClick={() => onOpenChange(false)}>
-              Done
+              {t("Done")}
             </Button>
           )}
         </DialogFooter>

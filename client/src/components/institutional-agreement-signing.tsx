@@ -16,6 +16,7 @@ import {
   institutionalAgreementFormSchema,
 } from "@shared/institutional-service-agreement";
 import { DOCUMENT_LABEL } from "@shared/required-documents";
+import { translate, useT } from "@/i18n";
 
 /** SIGNING THE SERVICE AGREEMENT, IN THE APP.
  *
@@ -94,7 +95,7 @@ async function downloadSignedCopy() {
       credentials: "include",
     });
     if (!res.ok) {
-      toast.error("Couldn't fetch your signed agreement.");
+      toast.error(translate("Couldn't fetch your signed agreement."));
       return;
     }
     await shareOrDownloadBlob(
@@ -103,7 +104,7 @@ async function downloadSignedCopy() {
       "Forge Institutional Service Agreement",
     );
   } catch {
-    toast.error("Couldn't reach the server. Try again when you have a signal.");
+    toast.error(translate("Couldn't reach the server. Try again when you have a signal."));
   }
 }
 
@@ -112,22 +113,23 @@ function SignedConfirmation({
 }: {
   signature: NonNullable<InstitutionalAgreementStatus["signature"]>;
 }) {
+  const t = useT();
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <FileCheck2 className="h-4 w-4 text-success" />
-          Your Service Agreement is signed
+          {t("Your Service Agreement is signed")}
         </CardTitle>
         <CardDescription>
-          Signed by {signature.signerName}
-          {signature.signerTitle ? `, ${signature.signerTitle},` : ""} on{" "}
-          {formatDate(signature.signedAt)} for {signature.institutionName}.
+          {signature.signerTitle
+            ? t("Signed by {name}, {title}, on {date} for {institution}.", { name: signature.signerName, title: signature.signerTitle, date: formatDate(signature.signedAt), institution: signature.institutionName })
+            : t("Signed by {name} on {date} for {institution}.", { name: signature.signerName, date: formatDate(signature.signedAt), institution: signature.institutionName })}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Button variant="outline" className="w-full" onClick={downloadSignedCopy}>
-          Download signed copy
+          {t("Download signed copy")}
         </Button>
       </CardContent>
     </Card>
@@ -143,32 +145,33 @@ function SignedConfirmation({
  * no upload box -- signing is the primary coach's act, and the server refuses a staff coach on
  * both routes regardless of what is drawn here. */
 function StaffAgreementView({ status }: { status: InstitutionalAgreementStatus }) {
+  const t = useT();
   const { signature } = status;
   return (
     <Card data-testid="staff-agreement-view">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <FileCheck2 className="h-4 w-4 text-success" />
-          Your organisation's Service Agreement
+          {t("Your organisation's Service Agreement")}
         </CardTitle>
         <CardDescription>
           {signature ? (
             <>
-              Signed by {signature.signerName}
-              {signature.signerTitle ? `, ${signature.signerTitle},` : ""} on{" "}
-              {formatDate(signature.signedAt)} for {signature.institutionName}.
+              {signature.signerTitle
+                ? t("Signed by {name}, {title}, on {date} for {institution}.", { name: signature.signerName, title: signature.signerTitle, date: formatDate(signature.signedAt), institution: signature.institutionName })
+                : t("Signed by {name} on {date} for {institution}.", { name: signature.signerName, date: formatDate(signature.signedAt), institution: signature.institutionName })}
             </>
           ) : (
-            <>On file, signed on paper and uploaded on {formatDate(status.signedAt)}.</>
+            <>{t("On file, signed on paper and uploaded on {date}.", { date: formatDate(status.signedAt) })}</>
           )}
           {status.primaryCoachName
-            ? ` It is held on ${status.primaryCoachName}'s account, your program's primary coach.`
+            ? ` ${t("It is held on {name}'s account, your program's primary coach.", { name: status.primaryCoachName })}`
             : ""}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Button variant="outline" className="w-full" onClick={downloadSignedCopy}>
-          Download signed copy
+          {t("Download signed copy")}
         </Button>
       </CardContent>
     </Card>
@@ -200,6 +203,7 @@ function AgreementText() {
 }
 
 export function InstitutionalAgreementSigning() {
+  const t = useT();
   const qc = useQueryClient();
   const { data: status } = useQuery<InstitutionalAgreementStatus>({
     queryKey: AGREEMENT_QUERY_KEY,
@@ -267,7 +271,7 @@ export function InstitutionalAgreementSigning() {
       if (!res.ok) {
         const body = await res.json().catch(() => ({}) as any);
         applyFieldErrors(body.fieldErrors);
-        toast.error(body.message || "Couldn't generate that agreement.");
+        toast.error(body.message || t("Couldn't generate that agreement."));
         return;
       }
       await shareOrDownloadBlob(
@@ -277,7 +281,7 @@ export function InstitutionalAgreementSigning() {
       );
       setGenerated(true);
     } catch {
-      toast.error("Couldn't reach the server. Try again when you have a signal.");
+      toast.error(translate("Couldn't reach the server. Try again when you have a signal."));
     } finally {
       setGenerating(false);
     }
@@ -317,7 +321,7 @@ export function InstitutionalAgreementSigning() {
       return (await res.json()) as { signedAt: string };
     },
     onSuccess: (result) => {
-      if (result) toast.success("Signed. Your agreement is on file.");
+      if (result) toast.success(t("Signed. Your agreement is on file."));
       qc.invalidateQueries({ queryKey: AGREEMENT_QUERY_KEY });
       // The signature also writes a consent record, which "What you've agreed to" on the same
       // page lists. That list is cached (30s, and the cache outlives a reload), so without this
@@ -326,7 +330,7 @@ export function InstitutionalAgreementSigning() {
     },
     onError: (err: Error) => {
       if (err.message === "invalid") return;
-      toast.error(err.message || "Couldn't sign that agreement.");
+      toast.error(err.message || t("Couldn't sign that agreement."));
     },
   });
 
@@ -353,11 +357,10 @@ export function InstitutionalAgreementSigning() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <FileDown className="h-4 w-4 text-primary" />
-            Your Service Agreement
+            {t("Your Service Agreement")}
           </CardTitle>
           <CardDescription>
-            Your organisation needs a signed Institutional Service Agreement on file. Your program's
-            primary coach can sign it in the app.
+            {t("Your organisation needs a signed Institutional Service Agreement on file. Your program's primary coach can sign it in the app.")}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -375,12 +378,10 @@ export function InstitutionalAgreementSigning() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <FileDown className="h-4 w-4 text-primary" />
-          Sign your Service Agreement
+          {t("Sign your Service Agreement")}
         </CardTitle>
         <CardDescription>
-          Your organisation needs a signed Institutional Service Agreement on file. Fill in your
-          details, read it through, and sign it here, there is nothing to request, nothing to
-          print and nothing to wait for.
+          {t("Your organisation needs a signed Institutional Service Agreement on file. Fill in your details, read it through, and sign it here, there is nothing to request, nothing to print and nothing to wait for.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -410,7 +411,7 @@ export function InstitutionalAgreementSigning() {
         </div>
 
         <div className="space-y-2">
-          <Label className="text-xs">The agreement</Label>
+          <Label className="text-xs">{t("The agreement")}</Label>
           <AgreementText />
           <button
             type="button"
@@ -418,7 +419,7 @@ export function InstitutionalAgreementSigning() {
             disabled={generating}
             className="text-xs font-semibold text-primary hover:underline disabled:opacity-60"
           >
-            {generating ? "Generating..." : "Download a copy to read first"}
+            {generating ? t("Generating...") : t("Download a copy to read first")}
           </button>
         </div>
 
@@ -442,11 +443,11 @@ export function InstitutionalAgreementSigning() {
         </div>
 
         <div className="space-y-1.5">
-          <Label className="text-xs">Type your full name to sign</Label>
+          <Label className="text-xs">{t("Type your full name to sign")}</Label>
           <Input
             className="h-9 text-sm"
             value={typedSignature}
-            placeholder={details.signerName || "Dana Whitfield"}
+            placeholder={details.signerName || t("Dana Whitfield")}
             onChange={(e) => {
               setTypedSignature(e.target.value);
               setErrors((errs) => {
@@ -464,7 +465,7 @@ export function InstitutionalAgreementSigning() {
         </div>
 
         <Button className="w-full" onClick={() => sign.mutate()} disabled={!canSign}>
-          {sign.isPending ? "Signing..." : "Sign agreement"}
+          {sign.isPending ? t("Signing...") : t("Sign agreement")}
         </Button>
 
         <div className="border-t border-border pt-3">
@@ -473,7 +474,7 @@ export function InstitutionalAgreementSigning() {
             onClick={() => setShowPaper((s) => !s)}
             className="text-xs font-semibold text-muted-foreground hover:underline"
           >
-            Prefer to sign on paper?
+            {t("Prefer to sign on paper?")}
           </button>
           {showPaper && (
             <div className="mt-2 space-y-2">
@@ -483,21 +484,16 @@ export function InstitutionalAgreementSigning() {
                 onClick={downloadAgreement}
                 disabled={generating}
               >
-                {generating ? "Generating..." : "Download agreement"}
+                {generating ? t("Generating...") : t("Download agreement")}
               </Button>
               <p className="rounded-md bg-muted p-3 text-[11px] leading-relaxed text-muted-foreground">
-                Print it or open it in a signing app, have{" "}
-                {details.signerName || "your authorised representative"} sign it, then come back and
-                upload the signed copy in the box below, choose{" "}
-                <span className="font-medium">{DOCUMENT_LABEL.institutional_agreement}</span> as the
-                document type. Signed on paper, it isn't on file until the signed copy has been
-                uploaded and checked.
+                {t("Print it or open it in a signing app, have {signer} sign it, then come back and upload the signed copy in the box below, choose {documentType} as the document type. Signed on paper, it isn't on file until the signed copy has been uploaded and checked.", { signer: details.signerName || t("your authorised representative"), documentType: t(DOCUMENT_LABEL.institutional_agreement) })}
               </p>
             </div>
           )}
           {generated && !showPaper && (
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Saved a copy to read. You can still sign it here when you're ready.
+              {t("Saved a copy to read. You can still sign it here when you're ready.")}
             </p>
           )}
         </div>

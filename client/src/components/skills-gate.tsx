@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PauseCircle, Target } from "lucide-react";
 import { useSkillsAccess } from "@/hooks/use-skills-access";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 /**
  * Wraps every skills page an athlete can reach.
@@ -37,6 +38,7 @@ import { ReadFailed } from "@/components/read-failed";
  * cannot record is refused by default rather than slipping through a list of known ones.
  */
 export function SkillsGate({ children, title = "Skills" }: { children: ReactNode; title?: string }) {
+  const t = useT();
   const [, navigate] = useLocation();
   const access = useSkillsAccess();
 
@@ -46,7 +48,7 @@ export function SkillsGate({ children, title = "Skills" }: { children: ReactNode
   if (access.failed) {
     return (
       <AppShell title={title}>
-        <ReadFailed what="whether skills are part of your plan" onRetry={access.retry} className="flex flex-col items-center gap-2 py-24 text-center" />
+        <ReadFailed what={t("whether skills are part of your plan")} onRetry={access.retry} className="flex flex-col items-center gap-2 py-24 text-center" />
       </AppShell>
     );
   }
@@ -76,11 +78,10 @@ export function SkillsGate({ children, title = "Skills" }: { children: ReactNode
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
               <PauseCircle className="h-10 w-10 text-muted-foreground" />
               <p className="max-w-sm text-muted-foreground">
-                Skill sessions are paused because your program's Forge plan isn't active. Every
-                drill already recorded is still on file.
+                {t("Skill sessions are paused because your program's Forge plan isn't active. Every drill already recorded is still on file.")}
               </p>
               <p className="max-w-sm text-sm text-muted-foreground">
-                This opens again as soon as the program's plan does.
+                {t("This opens again as soon as the program's plan does.")}
               </p>
             </CardContent>
           </Card>
@@ -94,12 +95,10 @@ export function SkillsGate({ children, title = "Skills" }: { children: ReactNode
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
               <PauseCircle className="h-10 w-10 text-muted-foreground" />
               <p className="max-w-sm text-muted-foreground">
-                Your coach has you on hold for the off season, so skill sessions are paused. Every
-                drill you have already recorded is still on file and still counts -- your times
-                show up on your goals and on the leaderboard.
+                {t("Your coach has you on hold for the off season, so skill sessions are paused. Every drill you have already recorded is still on file and still counts -- your times show up on your goals and on the leaderboard.")}
               </p>
               <p className="max-w-sm text-sm text-muted-foreground">
-                Your coach brings you back when the season starts, and this opens again.
+                {t("Your coach brings you back when the season starts, and this opens again.")}
               </p>
             </CardContent>
           </Card>
@@ -112,10 +111,9 @@ export function SkillsGate({ children, title = "Skills" }: { children: ReactNode
           <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
             <Target className="h-10 w-10 text-muted-foreground" />
             <p className="max-w-sm text-muted-foreground">
-              Skill programs, the Skill Bank and timed skill sessions are part of the AI Coach +
-              Video plan. A skill drill is measured by the camera, so it comes with the camera.
+              {t("Skill programs, the Skill Bank and timed skill sessions are part of the AI Coach + Video plan. A skill drill is measured by the camera, so it comes with the camera.")}
             </p>
-            <Button onClick={() => navigate("/athlete/upgrade")}>See plans</Button>
+            <Button onClick={() => navigate("/athlete/upgrade")}>{t("See plans")}</Button>
           </CardContent>
         </Card>
       </AppShell>

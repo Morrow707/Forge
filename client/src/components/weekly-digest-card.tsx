@@ -3,6 +3,7 @@ import { getJson } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Trophy, AlertTriangle, HeartPulse, Sparkles, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 type WeeklyDigest = {
   newPRs: number;
@@ -18,6 +19,7 @@ type WeeklyDigest = {
  * rather than a card full of zeros -- still present so the coach gets a
  * definite "nothing needs you" instead of the card just vanishing. */
 export function WeeklyDigestCard() {
+  const t = useT();
   const { data } = useQuery<WeeklyDigest>({
     queryKey: ["/api/coach/weekly-digest"],
     queryFn: () => getJson("/api/coach/weekly-digest"),
@@ -32,32 +34,32 @@ export function WeeklyDigestCard() {
   return (
     <Card className="shrink-0">
       <CardHeader className="p-3 md:p-4">
-        <CardTitle className="text-base md:text-lg">This Week</CardTitle>
-        <CardDescription>What changed across your roster this week.</CardDescription>
+        <CardTitle className="text-base md:text-lg">{t("This Week")}</CardTitle>
+        <CardDescription>{t("What changed across your roster this week.")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 p-3 pt-0 md:p-4 md:pt-0">
         {isQuiet ? (
           <p className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
             <Sparkles className="h-4 w-4 shrink-0 text-primary" />
-            Quiet week, no new PRs, missed workouts, or wellness flags.
+            {t("Quiet week, no new PRs, missed workouts, or wellness flags.")}
           </p>
         ) : (
           <>
             <DigestRow
               icon={Trophy}
-              label="New PRs this week"
+              label={t("New PRs this week")}
               value={newPRs}
               tone="success"
             />
             <DigestRow
               icon={AlertTriangle}
-              label="Missed workouts this week"
+              label={t("Missed workouts this week")}
               value={missedWorkouts}
               tone="primary"
             />
             <DigestRow
               icon={HeartPulse}
-              label="Wellness flags this week"
+              label={t("Wellness flags this week")}
               value={wellnessFlags}
               tone="destructive"
             />

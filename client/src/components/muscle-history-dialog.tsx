@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { MOVEMENT_FOR_GROUP } from "@shared/strength-score";
 import { convertWeight, formatWeight, type WeightUnit } from "@shared/weight-units";
+import { useT } from "@/i18n";
 
 export type MuscleHistoryRow = {
   date: string;
@@ -64,6 +65,7 @@ export function MuscleHistoryDialog({
   fetchUrl: string;
   onClose: () => void;
 }) {
+  const t = useT();
   const { user } = useAuth();
   const [unit, setUnit] = useState<WeightUnit>(user?.preferredWeightUnit ?? "lbs");
   const [windowId, setWindowId] = useState<(typeof WINDOWS)[number]["id"]>("all");
@@ -94,7 +96,7 @@ export function MuscleHistoryDialog({
         <DialogHeader>
           <DialogTitle className="capitalize">{movement}</DialogTitle>
           <DialogDescription>
-            Logged sets on Forge exercises for this area. Hand-logged weight and reps only.
+            {t("Logged sets on Forge exercises for this area. Hand-logged weight and reps only.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -134,15 +136,15 @@ export function MuscleHistoryDialog({
         </div>
 
         {isError ? (
-          <ReadFailed what="this lift history" onRetry={() => void refetch()} />
+          <ReadFailed what={t("this lift history")} onRetry={() => void refetch()} />
         ) : isLoading ? (
           <div className="h-24 w-full animate-pulse rounded-lg bg-surface" />
         ) : !data || data.length === 0 ? (
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
               {windowId === "all"
-                ? "Nothing logged here yet on a Forge exercise. Exercises your coach created aren't included, so this stays comparable with your strength profile."
-                : "Nothing in this window. Try All time."}
+                ? t("Nothing logged here yet on a Forge exercise. Exercises your coach created aren't included, so this stays comparable with your strength profile.")
+                : t("Nothing in this window. Try All time.")}
             </p>
             {windowId === "all" && group && (
               <Link
@@ -150,7 +152,7 @@ export function MuscleHistoryDialog({
                 className="inline-block text-sm text-primary underline underline-offset-4"
                 onClick={onClose}
               >
-                Find Forge exercises for this
+                {t("Find Forge exercises for this")}
               </Link>
             )}
           </div>
@@ -187,8 +189,7 @@ export function MuscleHistoryDialog({
         )}
 
         <p className="text-xs text-muted-foreground">
-          Forge exercises only — the same set your strength profile is scored from, so the two
-          always agree.
+          {t("Forge exercises only — the same set your strength profile is scored from, so the two always agree.")}
         </p>
       </DialogContent>
     </Dialog>

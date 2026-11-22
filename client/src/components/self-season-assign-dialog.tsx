@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { SeasonSetupStep, useSeasonSetup } from "@/components/season-setup-step";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { todayIso } from "@/lib/local-date";
+import { useT } from "@/i18n";
 
 export function SelfSeasonAssignDialog({
   programId,
@@ -25,6 +26,7 @@ export function SelfSeasonAssignDialog({
   programIds: number[];
   onClose: () => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const open = programId !== null;
   const [startDate, setStartDate] = useState(() => todayIso());
@@ -59,17 +61,17 @@ export function SelfSeasonAssignDialog({
       qc.invalidateQueries({ queryKey: ["/api/admin/my/calendar"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/my/calendar"] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/calendar"] });
-      toast.success(result.created.length > 1 ? `Added ${result.created.length} programs to your calendar` : "Added to your calendar");
+      toast.success(result.created.length > 1 ? t("Added {count} programs to your calendar", { count: result.created.length }) : t("Added to your calendar"));
       onClose();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not add to your calendar"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not add to your calendar")),
   });
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add to My Calendar</DialogTitle>
+          <DialogTitle>{t("Add to My Calendar")}</DialogTitle>
         </DialogHeader>
         <form
           onSubmit={(e) => {
@@ -80,7 +82,7 @@ export function SelfSeasonAssignDialog({
         >
           {!setup.planOn && (
             <div className="space-y-1.5">
-              <Label htmlFor="self-assign-date">Start date</Label>
+              <Label htmlFor="self-assign-date">{t("Start date")}</Label>
               <Input
                 id="self-assign-date"
                 type="date"
@@ -89,21 +91,21 @@ export function SelfSeasonAssignDialog({
                 required
                 className="h-12 text-base"
               />
-              <p className="text-xs text-muted-foreground">Day 1 of Week 1 lands on this date.</p>
+              <p className="text-xs text-muted-foreground">{t("Day 1 of Week 1 lands on this date.")}</p>
             </div>
           )}
           <SeasonSetupStep setup={setup} />
           {setup.blockReason && (
             <p className="text-xs text-muted-foreground" data-testid="text-season-block-reason">
-              {setup.blockReason}
+              {t(setup.blockReason)}
             </p>
           )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button type="submit" disabled={mutation.isPending || !!setup.blockReason || setup.request.programs.length === 0}>
-              {mutation.isPending ? "Adding…" : "Add to Calendar"}
+              {mutation.isPending ? t("Adding…") : t("Add to Calendar")}
             </Button>
           </DialogFooter>
         </form>

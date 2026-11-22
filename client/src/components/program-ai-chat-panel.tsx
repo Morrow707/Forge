@@ -10,6 +10,7 @@ import { Send, Sparkles, Lock, Loader2, Copy, Check, ChevronUp, ChevronDown } fr
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 import { useSwipeToDismissKeyboard } from "@/hooks/use-swipe-to-dismiss-keyboard";
+import { useT } from "@/i18n";
 
 type ProgramChatMessage = {
   id: number;
@@ -68,6 +69,7 @@ export function ProgramAiChatPanel({
    * answered. Undefined for every other entry point (manual "New Program",
    * an existing program), which is the common case. */
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [content, setContent] = useState("");
   const [copiedId, setCopiedId] = useState<number | null>(null);
@@ -100,10 +102,10 @@ export function ProgramAiChatPanel({
   async function handleCopy(message: ProgramChatMessage) {
     const copied = await copyToClipboard(message.content);
     if (!copied) {
-      toast.error("Couldn't copy, try selecting the text instead");
+      toast.error(t("Couldn't copy, try selecting the text instead"));
       return;
     }
-    toast.success("Message copied");
+    toast.success(t("Message copied"));
     setCopiedId(message.id);
     setTimeout(() => setCopiedId((current) => (current === message.id ? null : current)), 1500);
   }
@@ -137,7 +139,7 @@ export function ProgramAiChatPanel({
     }
     if (Date.now() - awaitingSince > AWAIT_LIMIT_MS) {
       setAwaitingSince(null);
-      toast.error("That's taking far longer than it should. Try sending it again.");
+      toast.error(t("That's taking far longer than it should. Try sending it again."));
     }
   }, [messages, awaitingSince, apiBase, resourcePath, programId, onApplied, AWAIT_LIMIT_MS]);
 
@@ -173,7 +175,7 @@ export function ProgramAiChatPanel({
     onMutate: () => setAwaitingSince(null),
     onError: (err) => {
       if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
-        toast.error(err.message || "Couldn't send that, try again");
+        toast.error(err.message || t("Couldn't send that, try again"));
         return;
       }
       setAwaitingSince(sendStartedRef.current ?? Date.now());
@@ -227,8 +229,7 @@ export function ProgramAiChatPanel({
         <CardContent className="flex flex-col items-center justify-center gap-3 py-10 text-center">
           <Lock className="h-8 w-8 text-muted-foreground" />
           <p className="max-w-xs text-sm text-muted-foreground">
-            The AI can't edit a Forge template directly. Duplicate it from your program list and
-            it can rewrite your copy.
+            {t("The AI can't edit a Forge template directly. Duplicate it from your program list and it can rewrite your copy.")}
           </p>
         </CardContent>
       </Card>
@@ -273,7 +274,7 @@ export function ProgramAiChatPanel({
         </button>
         {open && (
           <CardDescription>
-            Describe what you want, the AI rewrites the program and applies it immediately.
+            {t("Describe what you want, the AI rewrites the program and applies it immediately.")}
           </CardDescription>
         )}
       </CardHeader>
@@ -283,9 +284,7 @@ export function ProgramAiChatPanel({
           {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
           {!isLoading && !messages?.length && (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Tell me what you want to build: your main goal, how many days a week you can
-              train, your experience level, and any equipment limits. I'll ask if I need
-              anything else before building your program.
+              {t("Tell me what you want to build: your main goal, how many days a week you can train, your experience level, and any equipment limits. I'll ask if I need anything else before building your program.")}
             </p>
           )}
           {messages?.map((m) => (
@@ -304,8 +303,8 @@ export function ProgramAiChatPanel({
                 <button
                   type="button"
                   onClick={() => handleCopy(m)}
-                  aria-label="Copy message"
-                  title="Copy"
+                  aria-label={t("Copy message")}
+                  title={t("Copy")}
                   className={cn(
                     "absolute right-0.5 top-0.5 rounded p-2 opacity-70 transition-opacity hover:opacity-100",
                     m.role === "user" ? "text-primary-foreground" : "text-muted-foreground",
@@ -334,7 +333,7 @@ export function ProgramAiChatPanel({
               <div className="max-w-[85%] rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm" data-testid="text-ai-still-working">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                  Still working on it. Your program will appear here when it's ready.
+                  {t("Still working on it. Your program will appear here when it's ready.")}
                 </span>
               </div>
             </div>
@@ -362,7 +361,7 @@ export function ProgramAiChatPanel({
               onClick={() => textareaRef.current?.blur()}
               className="text-xs font-semibold text-primary"
             >
-              Done
+              {t("Done")}
             </button>
           </div>
         )}
@@ -380,7 +379,7 @@ export function ProgramAiChatPanel({
             onChange={(e) => setContent(e.target.value)}
             onFocus={() => setInputFocused(true)}
             onBlur={() => setInputFocused(false)}
-            placeholder="e.g. Add a 4th day focused on conditioning"
+            placeholder={t("e.g. Add a 4th day focused on conditioning")}
             className="min-h-[44px] flex-1 resize-none"
             maxLength={2000}
             onKeyDown={(e) => {

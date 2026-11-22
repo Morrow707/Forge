@@ -22,6 +22,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { ReadFailed } from "@/components/read-failed";
 import { useBrandExtras } from "@/hooks/use-brand-extras";
+import { useT } from "@/i18n";
 
 type NotificationItem = {
   id: number;
@@ -37,6 +38,7 @@ type NotificationItem = {
  * to hear about -- a comment/video reply, or a team announcement. Never
  * fires for program completions or routine team-wide activity. */
 export function NotificationBell() {
+  const t = useT();
   // The program's own words on Forge's notifications ("program" -> "block").
   const { words } = useBrandExtras();
   const { user } = useAuth();
@@ -84,7 +86,7 @@ export function NotificationBell() {
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={count > 0 ? `${count} unread notifications` : "Notifications"}
+          aria-label={count > 0 ? t("{count} unread notifications", { count }) : t("Notifications")}
           className="relative flex h-9 w-9 items-center justify-center rounded-md border border-border text-foreground hover:bg-surface-elevated"
         >
           <Bell className="h-4 w-4" />
@@ -97,7 +99,7 @@ export function NotificationBell() {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
         <div className="border-b border-border px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
-          Notifications
+          {t("Notifications")}
         </div>
         <div className="max-h-80 overflow-y-auto">
           {notificationsFailed ? (
@@ -105,7 +107,7 @@ export function NotificationBell() {
             // asking their coach a question about a set, or a guardian's reply, reads the same
             // as silence when the list does not load.
             <ReadFailed
-              what="your notifications"
+              what={t("your notifications")}
               onRetry={() => void refetchNotifications()}
               className="flex flex-col items-center gap-2 px-3 py-8 text-center"
             />
@@ -122,10 +124,10 @@ export function NotificationBell() {
                   participation waiver are missing when the email could not be sent, and until
                   2026-10-22 a guardian could not see it at all. */}
               {user?.role === "coach"
-                ? "Nothing yet. You'll see athlete comments and video uploads here."
+                ? t("Nothing yet. You'll see athlete comments and video uploads here.")
                 : user?.role === "guardian"
-                  ? "Nothing yet. You'll see requests for your athlete's paperwork here."
-                  : "Nothing yet. You'll see coach replies and team announcements here."}
+                  ? t("Nothing yet. You'll see requests for your athlete's paperwork here.")
+                  : t("Nothing yet. You'll see coach replies and team announcements here.")}
             </p>
           )}
           {notifications.map((n) => (

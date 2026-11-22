@@ -23,6 +23,7 @@ import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { todayIso } from "@/lib/local-date";
+import { useT } from "@/i18n";
 
 type RosterEntry = { id: number; name: string };
 
@@ -50,6 +51,7 @@ export function InjuryIntakeImportDialog({
   onOpenChange: (open: boolean) => void;
   roster: RosterEntry[];
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [step, setStep] = useState<PhotoImportStep>("capture");
   const [images, setImages] = useState<CapturedPhoto[]>([]);
@@ -72,7 +74,7 @@ export function InjuryIntakeImportDialog({
       setStep("review");
     },
     onError: (err: ApiError) => {
-      toast.error(err.message || "Couldn't read that photo");
+      toast.error(err.message || t("Couldn't read that photo"));
       setStep("capture");
     },
   });
@@ -92,11 +94,11 @@ export function InjuryIntakeImportDialog({
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
-      toast.success(`Logged ${data.applied} entr${data.applied === 1 ? "y" : "ies"}`);
+      toast.success(t.plural(data.applied, "Logged {count} entry", "Logged {count} entries"));
       onOpenChange(false);
       reset();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not apply entries"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not apply entries")),
   });
 
   function updateRow(i: number, patch: Partial<Row>) {
@@ -113,10 +115,9 @@ export function InjuryIntakeImportDialog({
     >
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Import Injury History Intake</DialogTitle>
+          <DialogTitle>{t("Import Injury History Intake")}</DialogTitle>
           <DialogDescription>
-            Photograph a pre-participation/injury intake form, this is medical information, so check every row
-            carefully before applying.
+            {t("Photograph a pre-participation/injury intake form, this is medical information, so check every row carefully before applying.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -129,14 +130,13 @@ export function InjuryIntakeImportDialog({
               disabled={images.length === 0 || analyzeMutation.isPending}
               onClick={() => analyzeMutation.mutate()}
             >
-              {analyzeMutation.isPending ? "Reading photo..." : "Read Photo"}
+              {analyzeMutation.isPending ? t("Reading photo...") : t("Read Photo")}
             </Button>
           </div>
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              {readyRows.length} of {rows.length} entr{rows.length === 1 ? "y" : "ies"} ready (matched, with body
-              part and date).
+              {t.plural(rows.length, "{ready} of {count} entry ready (matched, with body part and date).", "{ready} of {count} entries ready (matched, with body part and date).", { ready: readyRows.length })}
             </p>
             <div className="space-y-3">
               {rows.map((row, i) => (
@@ -146,10 +146,10 @@ export function InjuryIntakeImportDialog({
                     onValueChange={(v) => updateRow(i, { athleteId: v === "none" ? null : Number(v) })}
                   >
                     <SelectTrigger className="h-8 w-full text-xs">
-                      <SelectValue placeholder="Match athlete" />
+                      <SelectValue placeholder={t("Match athlete")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Unmatched ("{row.nameOnSheet}"), skip</SelectItem>
+                      <SelectItem value="none">{t("Unmatched (\"{name}\"), skip", { name: row.nameOnSheet })}</SelectItem>
                       {roster.map((a) => (
                         <SelectItem key={a.id} value={String(a.id)}>
                           {a.name}
@@ -159,7 +159,7 @@ export function InjuryIntakeImportDialog({
                   </Select>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="min-w-0 space-y-1">
-                      <label className="text-[10px] text-muted-foreground">Body part</label>
+                      <label className="text-[10px] text-muted-foreground">{t("Body part")}</label>
                       <Input
                         className="h-8 w-full min-w-0 text-xs"
                         value={row.bodyPart}
@@ -167,7 +167,7 @@ export function InjuryIntakeImportDialog({
                       />
                     </div>
                     <div className="min-w-0 space-y-1">
-                      <label className="text-[10px] text-muted-foreground">Date</label>
+                      <label className="text-[10px] text-muted-foreground">{t("Date")}</label>
                       <Input
                         type="date"
                         className="w-full min-w-0 text-xs"
@@ -177,7 +177,7 @@ export function InjuryIntakeImportDialog({
                     </div>
                   </div>
                   <div className="min-w-0 space-y-1">
-                    <label className="text-[10px] text-muted-foreground">Description (optional)</label>
+                    <label className="text-[10px] text-muted-foreground">{t("Description (optional)")}</label>
                     <Input
                       className="h-8 w-full text-xs"
                       value={row.description ?? ""}
@@ -189,7 +189,7 @@ export function InjuryIntakeImportDialog({
                       checked={row.resolved ?? false}
                       onCheckedChange={(c) => updateRow(i, { resolved: c === true })}
                     />
-                    Already resolved
+                    {t("Already resolved")}
                   </label>
                 </div>
               ))}
@@ -201,7 +201,7 @@ export function InjuryIntakeImportDialog({
           {step === "review" && (
             <>
               <Button type="button" variant="outline" onClick={() => setStep("capture")}>
-                Back
+                {t("Back")}
               </Button>
               <Button
                 type="button"
@@ -209,8 +209,8 @@ export function InjuryIntakeImportDialog({
                 onClick={() => applyMutation.mutate()}
               >
                 {applyMutation.isPending
-                  ? "Saving..."
-                  : `Log ${readyRows.length} Entr${readyRows.length === 1 ? "y" : "ies"}`}
+                  ? t("Saving...")
+                  : t.plural(readyRows.length, "Log {count} Entry", "Log {count} Entries")}
               </Button>
             </>
           )}

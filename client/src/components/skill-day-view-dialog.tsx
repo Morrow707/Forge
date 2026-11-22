@@ -10,6 +10,7 @@ import { externalLinkClick } from "@/lib/open-external";
 import { Target, MoonStar, Film } from "lucide-react";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type SkillDayInfo = {
   programName: string;
@@ -54,6 +55,7 @@ export function SkillDayViewDialog({
    * skill day and the coach could never see or answer it. */
   skillAssignmentId?: number;
 }) {
+  const t = useT();
   const { data: coachProgram, isError, refetch } = useQuery<any>({
     queryKey: ["/api/coach/skill-programs", source.skillProgramId],
     queryFn: () => getJson(`/api/coach/skill-programs/${source.skillProgramId}`),
@@ -92,23 +94,23 @@ export function SkillDayViewDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Target className="h-5 w-5 text-teal-400" />
-            {day?.title ?? "Skill Session"}
+            {day?.title ?? t("Skill Session")}
           </DialogTitle>
         </DialogHeader>
         {athleteName && <p className="-mt-2 text-sm text-muted-foreground">{athleteName}</p>}
         {/* Without this the dialog opens to a bare title and nothing else, which reads
             as a session with no drills in it rather than one we could not fetch. */}
-        {isError && <ReadFailed what="this skill session" onRetry={() => void refetch()} />}
+        {isError && <ReadFailed what={t("this skill session")} onRetry={() => void refetch()} />}
         {day && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">{day.programName}</p>
             {day.isRestDay ? (
               <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-6 text-sm text-muted-foreground">
                 <MoonStar className="h-4 w-4" />
-                Recovery day
+                {t("Recovery day")}
               </div>
             ) : day.exercises.length === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">No drills scheduled</p>
+              <p className="py-4 text-center text-sm text-muted-foreground">{t("No drills scheduled")}</p>
             ) : (
               <div className="space-y-2">
                 {day.exercises.map((ex) => (
@@ -120,8 +122,8 @@ export function SkillDayViewDialog({
                       </span>
                     </div>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {ex.sets} sets &times; {ex.reps}
-                      {ex.restSeconds ? ` · ${ex.restSeconds}s rest` : ""}
+                      {t("{sets} sets × {reps}", { sets: ex.sets, reps: ex.reps })}
+                      {ex.restSeconds ? ` · ${t("{seconds}s rest", { seconds: ex.restSeconds })}` : ""}
                     </p>
                     {ex.notes && <p className="mt-1 text-xs text-muted-foreground">{ex.notes}</p>}
                     {ex.videoUrl && (
@@ -132,7 +134,7 @@ export function SkillDayViewDialog({
                         onClick={externalLinkClick(ex.videoUrl)}
                         className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                       >
-                        <Film className="h-3 w-3" /> Watch demo
+                        <Film className="h-3 w-3" /> {t("Watch demo")}
                       </a>
                     )}
                   </div>

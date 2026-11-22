@@ -28,7 +28,8 @@ describe("the cohort chips", () => {
   });
 
   it("always offers the way back to the broadest group", () => {
-    expect(src).toContain('label="Everyone my age"');
+    // The label is drawn in the reader's language (client/src/i18n), so it is a t() call now.
+    expect(src).toContain('label={t("Everyone my age")}');
     expect(src).toContain("setCohort({ gender: false, sport: false })");
   });
 

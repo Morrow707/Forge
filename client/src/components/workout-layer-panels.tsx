@@ -6,6 +6,7 @@
  * position's extra care drills after the main work. Display only: nothing here is logged.
  */
 import { Badge } from "@/components/ui/badge";
+import { useT } from "@/i18n";
 
 export type DayLayers = { labels: string[]; positionNote: string | null; girlsTeamNote: string | null };
 
@@ -50,14 +51,15 @@ export function WorkoutLayerLabels({ layers }: { layers: DayLayers | null | unde
 }
 
 export function WorkoutLayerCare({ drills }: { drills: LayerCareDrill[] | null | undefined }) {
+  const t = useT();
   if (!drills || drills.length === 0) return null;
   return (
     <div className="space-y-2 rounded-md border p-3" data-testid="workout-layer-care">
-      <p className="text-sm font-medium">End-of-session care{drills[0].label ? ` (${drills[0].label})` : ""}</p>
+      <p className="text-sm font-medium">{drills[0].label ? t("End-of-session care ({label})", { label: drills[0].label }) : t("End-of-session care")}</p>
       <ul className="space-y-1 text-sm">
         {drills.map((d) => (
           <li key={d.exerciseId}>
-            {d.exercise.name}
+            {t.exercise(d.exercise.name)}
             <span className="text-muted-foreground">
               {" "}
               {[d.sets != null ? `${d.sets} × ${d.reps ?? ""}`.trim() : d.reps, d.load, restText(d.restSeconds)]

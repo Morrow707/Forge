@@ -4,6 +4,7 @@ import { SignupCta, SignupLink } from "@/components/signup-cta";
 import { EmailListSignup } from "@/components/email-list-signup";
 import { ForgeMark } from "@/components/forge-mark";
 import { Smartphone } from "lucide-react";
+import { useT } from "@/i18n";
 
 /** The nav and footer every public marketing page shares.
  *
@@ -26,6 +27,7 @@ const APP_STORE_URL = /^\d{6,}$/.test(APP_STORE_ID) ? `https://apps.apple.com/ap
  *  no App Store id is configured: a link to a store page that does not exist is worse than none.
  *  It is a plain button, not Apple's badge artwork, which has to come from Apple's own files. */
 export function AppStoreButton({ className }: { className?: string }) {
+  const t = useT();
   if (!APP_STORE_URL) return null;
   return (
     <a
@@ -34,12 +36,13 @@ export function AppStoreButton({ className }: { className?: string }) {
       data-testid="link-app-store-top"
     >
       <Smartphone className="h-4 w-4" />
-      Download on the App Store
+      {t("Download on the App Store")}
     </a>
   );
 }
 
 export function MarketingNav() {
+  const t = useT();
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-8">
@@ -49,18 +52,18 @@ export function MarketingNav() {
         </Link>
         <div className="flex items-center gap-1 md:gap-2">
           <Link href="/for-high-schools" className="hidden md:block">
-            <Button variant="ghost" size="sm">For Schools</Button>
+            <Button variant="ghost" size="sm">{t("For Schools")}</Button>
           </Link>
           <Link href="/for-athletes" className="hidden md:block">
-            <Button variant="ghost" size="sm">For Athletes</Button>
+            <Button variant="ghost" size="sm">{t("For Athletes")}</Button>
           </Link>
           <Link href="/pricing" className="hidden sm:block">
-            <Button variant="ghost" size="sm">Pricing</Button>
+            <Button variant="ghost" size="sm">{t("Pricing")}</Button>
           </Link>
           <Link href="/login">
-            <Button variant="ghost">Log In</Button>
+            <Button variant="ghost">{t("Log In")}</Button>
           </Link>
-          <SignupCta>Get Started</SignupCta>
+          <SignupCta>{t("Get Started")}</SignupCta>
         </div>
       </div>
     </header>
@@ -68,6 +71,7 @@ export function MarketingNav() {
 }
 
 export function MarketingFooter() {
+  const t = useT();
   return (
     <footer className="border-t border-border px-4 py-10 md:px-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 text-sm text-muted-foreground">
@@ -80,42 +84,42 @@ export function MarketingFooter() {
             {/* A middot, not "--": this footer renders on nine public routes and two hyphens
                 beside the wordmark read as a typo. The codebase already uses this separator in
                 159 places. */}
-            <span>· Coach. Program. Perform.</span>
+            <span>{t("· Coach. Program. Perform.")}</span>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link href="/for-high-schools" className="hover:text-foreground">For Schools</Link>
-            <Link href="/for-athletes" className="hover:text-foreground">For Athletes</Link>
-            <Link href="/pricing" className="hover:text-foreground">Pricing</Link>
-            <Link href="/camera-validation" className="hover:text-foreground">Camera accuracy</Link>
-            <Link href="/movements" className="hover:text-foreground">Movements</Link>
+            <Link href="/for-high-schools" className="hover:text-foreground">{t("For Schools")}</Link>
+            <Link href="/for-athletes" className="hover:text-foreground">{t("For Athletes")}</Link>
+            <Link href="/pricing" className="hover:text-foreground">{t("Pricing")}</Link>
+            <Link href="/camera-validation" className="hover:text-foreground">{t("Camera accuracy")}</Link>
+            <Link href="/movements" className="hover:text-foreground">{t("Movements")}</Link>
           </div>
         </div>
         <div className="flex flex-col items-center gap-2 border-t border-border pt-6 sm:flex-row sm:justify-between">
           {/* Forge is live (App Store, 2026-11-13), so this is news, not a launch list. */}
-          <span className="text-foreground">Get Forge news and offers</span>
+          <span className="text-foreground">{t("Get Forge news and offers")}</span>
           <EmailListSignup source="footer" compact className="w-full max-w-sm" />
         </div>
         {APP_STORE_URL && (
           <div className="flex flex-col items-center gap-2 border-t border-border pt-6 sm:flex-row sm:justify-between">
-            <span className="text-foreground">Forge is on the App Store</span>
+            <span className="text-foreground">{t("Forge is on the App Store")}</span>
             <a
               href={APP_STORE_URL}
               className="rounded-md border border-border px-4 py-2 font-semibold text-foreground hover:border-primary"
               data-testid="link-app-store"
             >
-              Get the iPhone app
+              {t("Get the iPhone app")}
             </a>
           </div>
         )}
         <div className="flex flex-col items-center justify-between gap-4 border-t border-border pt-6 sm:flex-row">
           <span>&copy; {new Date().getFullYear()} Forge Performance Systems LLC</span>
           <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link href="/login" className="hover:text-foreground">Log In</Link>
-            <SignupLink className="hover:text-foreground">Sign Up</SignupLink>
-            <Link href="/admin/login" className="hover:text-foreground">Admin</Link>
-            <Link href="/terms" className="hover:text-foreground">Terms</Link>
-            <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
-            <Link href="/legal" className="hover:text-foreground">Legal</Link>
+            <Link href="/login" className="hover:text-foreground">{t("Log In")}</Link>
+            <SignupLink className="hover:text-foreground">{t("Sign Up")}</SignupLink>
+            <Link href="/admin/login" className="hover:text-foreground">{t("Admin")}</Link>
+            <Link href="/terms" className="hover:text-foreground">{t("Terms")}</Link>
+            <Link href="/privacy" className="hover:text-foreground">{t("Privacy")}</Link>
+            <Link href="/legal" className="hover:text-foreground">{t("Legal")}</Link>
           </div>
         </div>
       </div>

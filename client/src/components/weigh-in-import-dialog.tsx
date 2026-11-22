@@ -22,6 +22,7 @@ import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { todayIso } from "@/lib/local-date";
+import { useT } from "@/i18n";
 
 type RosterEntry = { id: number; name: string };
 
@@ -45,6 +46,7 @@ export function WeighInImportDialog({
   onOpenChange: (open: boolean) => void;
   roster: RosterEntry[];
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [step, setStep] = useState<PhotoImportStep>("capture");
   const [images, setImages] = useState<CapturedPhoto[]>([]);
@@ -69,7 +71,7 @@ export function WeighInImportDialog({
       setStep("review");
     },
     onError: (err: ApiError) => {
-      toast.error(err.message || "Couldn't read that photo");
+      toast.error(err.message || t("Couldn't read that photo"));
       setStep("capture");
     },
   });
@@ -84,11 +86,11 @@ export function WeighInImportDialog({
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
-      toast.success(`Logged ${data.applied} weigh-in${data.applied === 1 ? "" : "s"}`);
+      toast.success(t.plural(data.applied, "Logged {count} weigh-in", "Logged {count} weigh-ins"));
       onOpenChange(false);
       reset();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not apply weigh-ins"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not apply weigh-ins")),
   });
 
   function updateRow(i: number, patch: Partial<Row>) {
@@ -107,9 +109,9 @@ export function WeighInImportDialog({
     >
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Import Weigh-In Sheet</DialogTitle>
+          <DialogTitle>{t("Import Weigh-In Sheet")}</DialogTitle>
           <DialogDescription>
-            Photograph the team's weigh-in sheet, review before it logs to anyone's history.
+            {t("Photograph the team's weigh-in sheet, review before it logs to anyone's history.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -122,13 +124,13 @@ export function WeighInImportDialog({
               disabled={images.length === 0 || analyzeMutation.isPending}
               onClick={() => analyzeMutation.mutate()}
             >
-              {analyzeMutation.isPending ? "Reading photo..." : "Read Photo"}
+              {analyzeMutation.isPending ? t("Reading photo...") : t("Read Photo")}
             </Button>
           </div>
         ) : (
           <div className="space-y-3">
             <div className="min-w-0 space-y-1.5">
-              <label className="text-xs text-muted-foreground">Weigh-in date</label>
+              <label className="text-xs text-muted-foreground">{t("Weigh-in date")}</label>
               <Input
                 type="date"
                 className="w-full min-w-0"
@@ -137,7 +139,7 @@ export function WeighInImportDialog({
               />
             </div>
             <p className="text-sm text-muted-foreground">
-              {matchedCount} of {rows.length} row{rows.length === 1 ? "" : "s"} matched.
+              {t.plural(rows.length, "{matched} of {count} row matched.", "{matched} of {count} rows matched.", { matched: matchedCount })}
             </p>
             <div className="space-y-2">
               {rows.map((row, i) => (
@@ -147,10 +149,10 @@ export function WeighInImportDialog({
                     onValueChange={(v) => updateRow(i, { athleteId: v === "none" ? null : Number(v) })}
                   >
                     <SelectTrigger className="h-8 flex-1 text-xs">
-                      <SelectValue placeholder="Match athlete" />
+                      <SelectValue placeholder={t("Match athlete")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Unmatched ("{row.nameOnSheet}"), skip</SelectItem>
+                      <SelectItem value="none">{t("Unmatched (\"{name}\"), skip", { name: row.nameOnSheet })}</SelectItem>
                       {roster.map((a) => (
                         <SelectItem key={a.id} value={String(a.id)}>
                           {a.name}
@@ -187,14 +189,14 @@ export function WeighInImportDialog({
           {step === "review" && (
             <>
               <Button type="button" variant="outline" onClick={() => setStep("capture")}>
-                Back
+                {t("Back")}
               </Button>
               <Button
                 type="button"
                 disabled={matchedCount === 0 || applyMutation.isPending}
                 onClick={() => applyMutation.mutate()}
               >
-                {applyMutation.isPending ? "Saving..." : `Log ${matchedCount} Weigh-In${matchedCount === 1 ? "" : "s"}`}
+                {applyMutation.isPending ? t("Saving...") : t.plural(matchedCount, "Log {count} Weigh-In", "Log {count} Weigh-Ins")}
               </Button>
             </>
           )}

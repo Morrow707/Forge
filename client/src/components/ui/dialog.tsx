@@ -2,6 +2,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -32,15 +33,25 @@ export function fullBleedStyle(
 ): React.CSSProperties | undefined {
   const classes = className ?? "";
   const style: React.CSSProperties = {};
+  // The class "top-0" as a whole word. Matches "fixed top-0 h-full"; rejects "top-0.5".
+  // https://regex101.com/?regex=(%5E%7C%5Cs)top-0(%5Cs%7C%24)&testString=fixed%20top-0%20h-full
   if (!/(^|\s)top-0(\s|$)/.test(classes)) {
     style.top = "calc(50% + (env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2)";
   }
+  // The class "max-h-none" as a whole word. Matches "h-full max-h-none"; rejects "sm:max-h-none".
+  // https://regex101.com/?regex=(%5E%7C%5Cs)max-h-none(%5Cs%7C%24)&testString=h-full%20max-h-none
   if (!/(^|\s)max-h-none(\s|$)/.test(classes)) {
     style.maxHeight =
       "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 2rem)";
   }
   const merged = { ...style, ...callerStyle };
   return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+/** The close button's screen-reader word, in the reader's language. */
+function DialogCloseLabel() {
+  const t = useT();
+  return <span className="sr-only">{t("Close")}</span>;
 }
 
 const DialogContent = React.forwardRef<
@@ -109,7 +120,7 @@ const DialogContent = React.forwardRef<
         // without moving where the X actually sits on screen.
         <DialogPrimitive.Close className="absolute right-2 top-2 rounded-sm p-2 opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
           <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
+          <DialogCloseLabel />
         </DialogPrimitive.Close>
       )}
     </DialogPrimitive.Content>

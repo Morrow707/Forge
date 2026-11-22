@@ -1,5 +1,6 @@
 import { Flame, Award } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useT } from "@/i18n";
 
 const MILESTONE_TIERS = [100, 50, 25, 10, 5];
 // Exported so other "is this athlete on a real streak" UI (e.g. the avatar
@@ -18,6 +19,7 @@ export function StreakBadges({
   currentStreak: number;
   totalCompleted: number;
 }) {
+  const t = useT();
   const milestone = MILESTONE_TIERS.find((t) => totalCompleted >= t);
   const streakTier = STREAK_TIERS.find((t) => currentStreak >= t);
 
@@ -28,13 +30,13 @@ export function StreakBadges({
       {streakTier && (
         <Badge variant="secondary" className="gap-1 text-[10px]">
           <Flame className="h-3 w-3" />
-          {currentStreak} Streak
+          {t("{count} Streak", { count: currentStreak })}
         </Badge>
       )}
       {milestone && (
         <Badge variant="outline" className="gap-1 text-[10px]">
           <Award className="h-3 w-3" />
-          {milestone}+ Workouts
+          {t("{count}+ Workouts", { count: milestone })}
         </Badge>
       )}
     </>

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { Textarea } from "@/components/ui/textarea";
 import { NotebookPen } from "lucide-react";
+import { useT } from "@/i18n";
 
 type Note = { pageIndex: number; body: string; updatedAt: string };
 
@@ -18,11 +19,12 @@ export function LessonPageNotes({ classId, lessonId, pageIndex }: { classId: num
 }
 
 function PageNote({ url, pageIndex, initial, onSaved }: { url: string; pageIndex: number; initial: string; onSaved: () => void }) {
+  const t = useT();
   return (
     <DebouncedNote
       initial={initial}
-      title="My notes on this page"
-      placeholder="What stood out, a question for your coach, a cue to remember…"
+      title={t("My notes on this page")}
+      placeholder={t("What stood out, a question for your coach, a cue to remember…")}
       savedLine="Saved. Your coach can read your notes."
       emptyLine="Only you and your coach can see these."
       save={async (text) => {
@@ -51,6 +53,7 @@ export function DebouncedNote({
   emptyLine: string;
   save: (text: string) => Promise<void>;
 }) {
+  const t = useT();
   const [body, setBody] = useState(initial);
   const [open, setOpen] = useState(initial.trim().length > 0);
   const latest = useRef(body);
@@ -91,7 +94,7 @@ export function DebouncedNote({
       >
         <NotebookPen className="h-3.5 w-3.5" />
         {title}
-        {!open && body.trim() && <span className="ml-auto font-normal">saved</span>}
+        {!open && body.trim() && <span className="ml-auto font-normal">{t("saved")}</span>}
       </button>
       {open && (
         <div className="space-y-1 px-3 pb-3">
@@ -104,7 +107,7 @@ export function DebouncedNote({
             className="text-sm"
           />
           <p className="text-[11px] text-muted-foreground">
-            {mutation.isPending ? "Saving…" : body !== saved.current ? "Unsaved" : body.trim() ? savedLine : emptyLine}
+            {mutation.isPending ? t("Saving…") : body !== saved.current ? t("Unsaved") : body.trim() ? savedLine : emptyLine}
           </p>
         </div>
       )}
