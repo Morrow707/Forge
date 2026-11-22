@@ -47,6 +47,7 @@ import { registerProgramImportRoutes } from "./program-import-routes";
 import { registerDeviceIntegrationRoutes } from "./device-integrations";
 import { registerCoachMessageRoutes } from "./coach-messages";
 import { registerWeightRoomRoutes } from "./weight-room";
+import { registerWeightRoomSheetRoutes } from "./weight-room-sheets";
 import { registerHardyRoutes, isKnownAdult } from "./hardy";
 import { mountFeatureUsageCounter, registerFeatureUsage } from "./feature-usage";
 import { hashPassword, comparePasswords } from "./auth-utils";
@@ -1839,6 +1840,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerAttendanceRoutes(app);
   registerParentWeeklySummaryRoutes(app);
   registerEquipmentProfileRoutes(app);
+  registerWeightRoomSheetRoutes(app, { requireActiveCoachPlan });
   registerProgramImportRoutes(app, { requireActiveCoachPlan, requireFreeAgent, requirePaidAiAccess });
   registerDeviceIntegrationRoutes(app);
   registerCoachMessageRoutes(app);

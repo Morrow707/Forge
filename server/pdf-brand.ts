@@ -50,6 +50,13 @@ export async function pdfBrandForAthlete(athleteId: number): Promise<PdfBrand | 
   };
 }
 
+/** A COACH's own program look, for a sheet the coach prints (the weight-room sheet). Read through
+ * the same getEffectiveBrandingForUser, which for a coach is already narrowed to what the
+ * program's plan allows, so a coach without Full Personalization gets Forge's band. */
+export async function pdfBrandForCoach(coachId: number): Promise<PdfBrand | null> {
+  return pdfBrandForAthlete(coachId);
+}
+
 const worded = new WeakSet<object>();
 
 /** Every line this document writes from here on is in the program's words. Once per document. */

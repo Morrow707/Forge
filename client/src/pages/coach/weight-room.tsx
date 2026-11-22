@@ -13,7 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ReadFailed } from "@/components/read-failed";
 import { apiRequest, getJson, queryClient } from "@/lib/queryClient";
 import { setStationLock, stationPath } from "@/lib/weight-room-lock";
-import { Dumbbell, Tv, Copy, Trash2 } from "lucide-react";
+import { Dumbbell, Tv, Copy, Trash2, FileText, Upload } from "lucide-react";
+import { WeightRoomSheetEditor } from "@/components/weight-room-sheet-editor";
+import { WeightRoomSheetUploadDialog } from "@/components/weight-room-sheet-upload-dialog";
 import { toast } from "sonner";
 
 type Team = { id: number; name: string; memberCount: number };
@@ -29,6 +31,7 @@ export default function CoachWeightRoomPage() {
   const [tvTeam, setTvTeam] = useState<string>("");
   const [tvLabel, setTvLabel] = useState("");
   const [newLink, setNewLink] = useState<string | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const makeDisplay = useMutation({
     mutationFn: async () => {
@@ -177,7 +180,28 @@ export default function CoachWeightRoomPage() {
             ) : null}
           </CardContent>
         </Card>
+
+        <Card>
+          <CardContent className="space-y-4 p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-semibold">Weight-room sheets</h2>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setUploadOpen(true)} disabled={teamList.length === 0} data-testid="button-upload-sheet">
+                <Upload className="mr-1 h-4 w-4" /> Upload a filled sheet
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Print the team's workout with every athlete's own numbers filled in: their max, today's target, last time and the
+              plates. Everything on it can be turned off, moved or typed over. Then photograph the filled sheet and Forge logs it,
+              without ever writing over a set an athlete already logged on their phone.
+            </p>
+            {teamList.length > 0 && <WeightRoomSheetEditor teams={teamList} />}
+          </CardContent>
+        </Card>
       </div>
+      <WeightRoomSheetUploadDialog open={uploadOpen} onOpenChange={setUploadOpen} teams={teamList} />
     </AppShell>
   );
 }

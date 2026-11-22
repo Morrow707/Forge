@@ -11793,3 +11793,84 @@ export const equipmentProfiles = pgTable(
   }),
 );
 export type EquipmentProfileRow = typeof equipmentProfiles.$inferSelect;
+// ---------------------------------------------------------------------------------------------
+// WEIGHT-ROOM SHEETS (2026-11-21). The printed team sheet and the upload of a filled one; see
+// server/weight-room-sheets.ts and shared/weight-room-sheet.ts.
+// ---------------------------------------------------------------------------------------------
+
+/** A coach's saved sheet layout for one team: the toggles, view, page, unit, order and the
+ * percentage per lift. One row per coach and team. No branding lives here. */
+export const weightRoomSheetLayouts = pgTable(
+  "weight_room_sheet_layouts",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    teamId: integer("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    layout: json("layout").$type<Record<string, unknown>>().notNull(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    coachTeamUnique: uniqueIndex("weight_room_sheet_layouts_coach_team_unique").on(table.coachId, table.teamId),
+  }),
+);
+export type WeightRoomSheetLayoutRow = typeof weightRoomSheetLayouts.$inferSelect;
+
+/** The day's prescription as it was printed, keyed by the version in the sheet code, so an upload
+ * of an old printout can show what changed since. Only lift ids and the prescription; no athlete. */
+export const weightRoomSheetPrints = pgTable(
+  "weight_room_sheet_prints",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    teamId: integer("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    programDayId: integer("program_day_id").notNull(),
+    version: text("version").notNull(),
+    lifts: json("lifts")
+      .$type<{ programExerciseId: number; exerciseId: number; name: string; sets: number; reps: string; weight: string | null; restSeconds: number | null }[]>()
+      .notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    printUnique: uniqueIndex("weight_room_sheet_prints_unique").on(table.teamId, table.date, table.programDayId, table.version),
+  }),
+);
+
+/** One logged upload of a filled sheet: who logged it, against which version, who was present
+ * (from the numbers alone), and the coach's own notes read off the sheet. The sets themselves are
+ * written through submitWorkoutLog and live on the athletes' days like any other set. */
+export const weightRoomSheetUploads = pgTable(
+  "weight_room_sheet_uploads",
+  {
+    id: serial("id").primaryKey(),
+    coachId: integer("coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    teamId: integer("team_id").references(() => teams.id, { onDelete: "set null" }),
+    date: date("date").notNull(),
+    programDayId: integer("program_day_id"),
+    version: text("version"),
+    loggedAgainst: text("logged_against").notNull().default("current"),
+    /** Per athlete id: "present" (a set was written) or "not_marked". Never "absent". */
+    attendance: json("attendance").$type<Record<string, "present" | "not_marked">>().notNull(),
+    /** The coach notes strip, read off the sheet. A note about the day, never a training number. */
+    coachNote: text("coach_note"),
+    /** Per athlete id: what was written in the coach's custom columns, by column header. */
+    athleteNotes: json("athlete_notes").$type<Record<string, Record<string, string>>>(),
+    /** Per athlete id: sets written, sets skipped because already logged, and why any row was not logged. */
+    summary: json("summary").$type<Record<string, { written: number; skipped: number; reason: string | null }>>().notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    teamDateIdx: index("weight_room_sheet_uploads_team_date_idx").on(table.teamId, table.date),
+  }),
+);
+export type WeightRoomSheetUpload = typeof weightRoomSheetUploads.$inferSelect;
