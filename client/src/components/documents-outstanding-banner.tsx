@@ -3,6 +3,7 @@ import { FileWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DocumentsRequiredDialog, useDocumentGate } from "@/components/document-gate";
+import { useT } from "@/i18n";
 
 /** THE FIRST THING THEY SEE WHEN THEY STILL OWE PAPERWORK.
  *
@@ -15,6 +16,7 @@ import { DocumentsRequiredDialog, useDocumentGate } from "@/components/document-
  * good standing never sees it at all.
  */
 export function DocumentsOutstandingBanner() {
+  const t = useT();
   const { blocked, missing } = useDocumentGate();
   const [open, setOpen] = useState(false);
   if (blocked !== true) return null;
@@ -26,15 +28,17 @@ export function DocumentsOutstandingBanner() {
             <FileWarning className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold">Your documents aren't done yet</p>
+            <p className="font-semibold">{t("Your documents aren't done yet")}</p>
             <p className="text-sm text-muted-foreground">
-              Look around as much as you like, training, skills and the camera stay locked
-              until {missing.length === 1 ? "one form is" : `${missing.length} forms are`} on
-              file.
+              {missing.length === 1
+                ? t("Look around as much as you like, training, skills and the camera stay locked until one form is on file.")
+                : t("Look around as much as you like, training, skills and the camera stay locked until {count} forms are on file.", {
+                    count: missing.length,
+                  })}
             </p>
           </div>
           <Button type="button" className="shrink-0" onClick={() => setOpen(true)}>
-            See what's missing
+            {t("See what's missing")}
           </Button>
         </CardContent>
       </Card>

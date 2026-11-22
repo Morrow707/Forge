@@ -11,6 +11,7 @@ import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Send, Sparkles, Loader2, Copy, Check, BookOpen, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 type KnowledgeMessage = {
   id: number;
@@ -55,6 +56,7 @@ export function AdminTeachChatPanel({
   guidelinesDescription: string;
   guidelinesEmptyHint: string;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [content, setContent] = useState("");
   // Same keyboard-dismiss gap as program-ai-chat-panel.tsx's own textarea -- Enter already means
@@ -92,7 +94,7 @@ export function AdminTeachChatPanel({
       setContent("");
       setProposal(result.proposal ?? null);
     },
-    onError: () => toast.error("Couldn't send that, try again"),
+    onError: () => toast.error(t("Couldn't send that, try again")),
   });
 
   const apply = useMutation({
@@ -103,18 +105,18 @@ export function AdminTeachChatPanel({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [fetchUrl] });
       setProposal(null);
-      toast.success("Applied");
+      toast.success(t("Applied"));
     },
-    onError: () => toast.error("Couldn't apply that, try again"),
+    onError: () => toast.error(t("Couldn't apply that, try again")),
   });
 
   async function handleCopy(message: KnowledgeMessage) {
     const copied = await copyToClipboard(message.content);
     if (!copied) {
-      toast.error("Couldn't copy, try selecting the text instead");
+      toast.error(t("Couldn't copy, try selecting the text instead"));
       return;
     }
-    toast.success("Message copied");
+    toast.success(t("Message copied"));
     setCopiedId(message.id);
     setTimeout(() => setCopiedId((current) => (current === message.id ? null : current)), 1500);
   }
@@ -136,7 +138,7 @@ export function AdminTeachChatPanel({
                 model something it already knows, into a panel that is not showing
                 them what is there. */}
             {isError && (
-              <ReadFailed what="what has been taught here" onRetry={() => void refetch()} />
+              <ReadFailed what={t("what has been taught here")} onRetry={() => void refetch()} />
             )}
             {!isError && !isLoading && messages.length === 0 && (
               <p className="py-8 text-center text-sm text-muted-foreground">{emptyStateHint}</p>
@@ -157,8 +159,8 @@ export function AdminTeachChatPanel({
                   <button
                     type="button"
                     onClick={() => handleCopy(m)}
-                    aria-label="Copy message"
-                    title="Copy"
+                    aria-label={t("Copy message")}
+                    title={t("Copy")}
                     className={cn(
                       "absolute right-0.5 top-0.5 rounded p-2 opacity-70 transition-opacity hover:opacity-100",
                       m.role === "admin" ? "text-primary-foreground" : "text-muted-foreground",
@@ -187,7 +189,7 @@ export function AdminTeachChatPanel({
                 <div className="max-w-[85%] rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
                   <span className="flex items-center gap-1.5 text-muted-foreground">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Thinking...
+                    {t("Thinking...")}
                   </span>
                 </div>
               </div>
@@ -199,7 +201,7 @@ export function AdminTeachChatPanel({
             <div className="shrink-0 space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
               <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
                 <Eye className="h-3.5 w-3.5" />
-                Review before this takes effect
+                {t("Review before this takes effect")}
               </p>
               <div className="max-h-40 overflow-y-auto rounded bg-background/60 p-2 font-mono text-xs leading-relaxed">
                 {proposal.diff.map((part, i) =>
@@ -220,11 +222,11 @@ export function AdminTeachChatPanel({
               </div>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" size="sm" onClick={() => setProposal(null)}>
-                  Discard
+                  {t("Discard")}
                 </Button>
                 <Button type="button" size="sm" onClick={() => apply.mutate()} disabled={apply.isPending}>
                   {apply.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                  Apply
+                  {t("Apply")}
                 </Button>
               </div>
             </div>
@@ -237,7 +239,7 @@ export function AdminTeachChatPanel({
                 onClick={() => textareaRef.current?.blur()}
                 className="text-xs font-semibold text-primary"
               >
-                Done
+                {t("Done")}
               </button>
             </div>
           )}

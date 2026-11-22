@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, MoonStar, Link2, Stethoscope, Copy, Clock, Repeat, LineChart } from "lucide-react";
 import type { Exercise } from "@shared/schema";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 // What the program's position and team layers do to this athlete's day (2026-11-22). The server's
 // answer for the athlete, described for the coach: GET .../days/:programDayId/layers.
@@ -45,32 +46,37 @@ type DayLayersForCoach = {
 };
 
 function AthleteLayersPanel({ layers, athleteName }: { layers: DayLayersForCoach | undefined; athleteName?: string }) {
+  const t = useT();
   if (!layers || layers.labels.length === 0) return null;
   const notes = [layers.positionNote, layers.girlsTeamNote].filter((n): n is string => !!n);
   return (
     <div className="space-y-2 rounded-md border p-3 text-sm" data-testid="coach-day-layers">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">For {athleteName ?? "this athlete"}:</span>
+        <span className="font-medium">{t("For {name}:", { name: athleteName ?? t("this athlete") })}</span>
         {layers.labels.map((label) => (
           <Badge key={label} variant="secondary">
-            {label}
+            {t(label)}
           </Badge>
         ))}
       </div>
       {layers.swaps.map((sw) => (
         <p key={`${sw.from}-${sw.to}`}>
-          {sw.to} in place of {sw.from}
-          {sw.reason ? <span className="text-muted-foreground">. {sw.reason}</span> : null}
+          {t("{to} in place of {from}", { to: t.exercise(sw.to), from: t.exercise(sw.from) })}
+          {sw.reason ? <span className="text-muted-foreground">. {t(sw.reason)}</span> : null}
         </p>
       ))}
       {layers.addWarmup.length > 0 && (
         <p>
-          Warm-up adds: {layers.addWarmup.map((w) => (w.prescription ? `${w.name} ${w.prescription}` : w.name)).join("; ")}
+          {t("Warm-up adds: {list}", {
+            list: layers.addWarmup.map((w) => (w.prescription ? `${t.exercise(w.name)} ${w.prescription}` : t.exercise(w.name))).join("; "),
+          })}
         </p>
       )}
       {layers.addCare.length > 0 && (
         <p>
-          End-of-session care adds: {layers.addCare.map((c) => (c.prescription ? `${c.name} ${c.prescription}` : c.name)).join("; ")}
+          {t("End-of-session care adds: {list}", {
+            list: layers.addCare.map((c) => (c.prescription ? `${t.exercise(c.name)} ${c.prescription}` : t.exercise(c.name))).join("; "),
+          })}
         </p>
       )}
       {notes.map((note) => (
@@ -194,6 +200,7 @@ export function CoachDayEditDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [, navigate] = useLocation();
   const { data, isLoading, isError, refetch } = useQuery<DayDetail>({
@@ -304,7 +311,7 @@ export function CoachDayEditDialog({
           .filter((d: any) => d.id !== programDayId)
           .map((d: any) => ({
             id: d.id,
-            label: `Week ${w.weekNumber} · Day ${d.dayNumber} — ${d.title}`,
+            label: t("Week {week} · Day {day} — {title}", { week: w.weekNumber, day: d.dayNumber, title: d.title }),
           })),
       )
     : [];
@@ -339,10 +346,10 @@ export function CoachDayEditDialog({
     },
     onSuccess: () => {
       invalidateCalendars();
-      toast.success("Workout updated — synced to the athlete's calendar");
+      toast.success(t("Workout updated — synced to the athlete's calendar"));
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save changes"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not save changes")),
   });
 
   const deleteMutation = useMutation({
@@ -356,11 +363,11 @@ export function CoachDayEditDialog({
     },
     onSuccess: () => {
       invalidateCalendars();
-      toast.success("Workout deleted — day cleared to rest");
+      toast.success(t("Workout deleted — day cleared to rest"));
       setDeleteConfirmOpen(false);
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not delete workout"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not delete workout")),
   });
 
   const updateDurationMutation = useMutation({
@@ -373,9 +380,9 @@ export function CoachDayEditDialog({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/assignments", assignmentId] });
       invalidateCalendars();
-      toast.success(`Duration updated for ${athleteName ?? "this athlete"}`);
+      toast.success(t("Duration updated for {name}", { name: athleteName ?? t("this athlete") }));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not update duration"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not update duration")),
   });
 
   const enableCorrectivesMutation = useMutation({
@@ -390,9 +397,9 @@ export function CoachDayEditDialog({
         queryKey: ["/api/coach/assignments", assignmentId, "days", programDayId, "correctives"],
       });
       invalidateCalendars();
-      toast.success(`Correctives turned on for ${athleteName ?? "this athlete"}`);
+      toast.success(t("Correctives turned on for {name}", { name: athleteName ?? t("this athlete") }));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not enable correctives"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not enable correctives")),
   });
 
   const saveCorrectivesMutation = useMutation({
@@ -415,9 +422,9 @@ export function CoachDayEditDialog({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/athletes", athleteId, "recent-correctives"] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/day"] });
-      toast.success(`Correctives saved for ${athleteName ?? "athlete"}`);
+      toast.success(t("Correctives saved for {name}", { name: athleteName ?? t("athlete") }));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save correctives"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not save correctives")),
   });
 
   const copyCorrectivesMutation = useMutation({
@@ -442,11 +449,11 @@ export function CoachDayEditDialog({
       }
       // The calendar summarises what each day holds, so it moves too.
       qc.invalidateQueries({ queryKey: ["/api/coach/calendar"] });
-      toast.success("Correctives copied to selected days");
+      toast.success(t("Correctives copied to selected days"));
       setCopyOpen(false);
       setCopyTargets(new Set());
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not copy correctives"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not copy correctives")),
   });
 
   return (
@@ -454,11 +461,14 @@ export function CoachDayEditDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>Edit Workout</DialogTitle>
+            <DialogTitle>{t("Edit Workout")}</DialogTitle>
             {data && (
               <DialogDescription>
-                {data.programName} · Week {data.weekNumber}, Day {data.dayNumber} — changes apply
-                to every athlete assigned to this program.
+                {t("{program} · Week {week}, Day {day} — changes apply to every athlete assigned to this program.", {
+                  program: data.programName,
+                  week: data.weekNumber,
+                  day: data.dayNumber,
+                })}
               </DialogDescription>
             )}
           </DialogHeader>
@@ -471,13 +481,13 @@ export function CoachDayEditDialog({
               failure here, which turns it into the other symptom: a spinner that never
               resolves. Both are fixed by refusing to open until the read lands. */}
           {isError ? (
-            <ReadFailed what="this day" onRetry={() => void refetch()} />
+            <ReadFailed what={t("this day")} onRetry={() => void refetch()} />
           ) : isLoading || !data ? (
             <div className="h-40 animate-pulse rounded-md bg-surface" />
           ) : (
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label>Title</Label>
+                <Label>{t("Title")}</Label>
                 <Input value={title} onChange={(e) => setTitle(e.target.value)} />
               </div>
               <label className="flex items-center gap-2 text-sm">
@@ -485,13 +495,13 @@ export function CoachDayEditDialog({
                   checked={isRestDay}
                   onCheckedChange={(checked) => setIsRestDay(checked === true)}
                 />
-                Rest day
+                {t("Rest day")}
               </label>
 
               {isRestDay ? (
                 <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-8 text-sm text-muted-foreground">
                   <MoonStar className="h-4 w-4" />
-                  Recovery day — no exercises
+                  {t("Recovery day — no exercises")}
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -508,11 +518,11 @@ export function CoachDayEditDialog({
                               {labels[ex.key]}
                             </span>
                             <span className="flex-1 truncate text-sm font-semibold">
-                              {ex.exerciseName}
+                              {t.exercise(ex.exerciseName)}
                             </span>
                             <button
                               type="button"
-                              aria-label={`Remove ${ex.exerciseName}`}
+                              aria-label={t("Remove {name}", { name: t.exercise(ex.exerciseName) })}
                               onClick={() =>
                                 setExercises((prev) => prev.filter((e) => e.key !== ex.key))
                               }
@@ -528,7 +538,7 @@ export function CoachDayEditDialog({
                             )}
                           >
                             <MiniField
-                              label="Sets"
+                              label={t("Sets")}
                               value={ex.sets}
                               type="number"
                               onChange={(v) =>
@@ -538,7 +548,7 @@ export function CoachDayEditDialog({
                               }
                             />
                             <MiniField
-                              label="Reps"
+                              label={t("Reps")}
                               inputMode="numeric"
                               value={ex.reps}
                               onChange={(v) =>
@@ -549,7 +559,7 @@ export function CoachDayEditDialog({
                             />
                             <div>
                               <label className="mb-0.5 block text-[10px] uppercase text-muted-foreground">
-                                Weight
+                                {t("Weight")}
                               </label>
                               <div className="flex items-center gap-1">
                                 <Input
@@ -581,7 +591,7 @@ export function CoachDayEditDialog({
                                 so it's set once per group on its last (or only) exercise. */}
                             {!ex.linkedToNext && (
                               <MiniField
-                                label="Rest (s)"
+                                label={t("Rest (s)")}
                                 value={ex.restSeconds}
                                 type="number"
                                 onChange={(v) =>
@@ -623,7 +633,7 @@ export function CoachDayEditDialog({
                                 className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline"
                               >
                                 <LineChart className="h-3.5 w-3.5" />
-                                View Analytics
+                                {t("View Analytics")}
                               </button>
                             )}
                           </div>
@@ -647,7 +657,7 @@ export function CoachDayEditDialog({
                                   ),
                                 )
                               }
-                              title={ex.linkedToNext ? "Unlink superset" : "Link into a superset"}
+                              title={ex.linkedToNext ? t("Unlink superset") : t("Link into a superset")}
                               className={cn(
                                 "flex items-center gap-1 rounded-full border-2 px-2.5 py-1 text-[11px] font-bold transition-colors",
                                 ex.linkedToNext
@@ -656,14 +666,14 @@ export function CoachDayEditDialog({
                               )}
                             >
                               <Link2 className="h-3 w-3" />
-                              {ex.linkedToNext ? "Linked" : "Link"}
+                              {ex.linkedToNext ? t("Linked") : t("Link")}
                             </button>
                           </div>
                         )}
                         {isEndOfLinkedGroup(exercises, i) && (
                           <div className="py-1 pl-3">
                             <RadioChipGroup
-                              label="Rest"
+                              label={t("Rest")}
                               options={["Between each", "After the group"]}
                               value={ex.restAfterGroupOnly ? "After the group" : "Between each"}
                               onChange={(v) => {
@@ -682,7 +692,7 @@ export function CoachDayEditDialog({
                   ))}
                   {exercises.length === 0 && (
                     <p className="py-2 text-center text-xs text-muted-foreground">
-                      No exercises yet
+                      {t("No exercises yet")}
                     </p>
                   )}
                   <Button
@@ -692,7 +702,7 @@ export function CoachDayEditDialog({
                     onClick={() => setPickerOpen(true)}
                   >
                     <Plus className="h-3.5 w-3.5" />
-                    Add Exercise
+                    {t("Add Exercise")}
                   </Button>
                 </div>
               )}
@@ -701,7 +711,7 @@ export function CoachDayEditDialog({
                 <div className="space-y-1.5 border-t border-border pt-4">
                   <Label className="flex items-center gap-1.5">
                     <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
-                    Duration for {athleteName ?? "this athlete"}
+                    {t("Duration for {name}", { name: athleteName ?? t("this athlete") })}
                   </Label>
                   <RadioChipGroup
                     label=""
@@ -716,8 +726,17 @@ export function CoachDayEditDialog({
                   {program?.weeks?.length > 0 && (
                     <p className="text-xs text-muted-foreground">
                       {program.weeks.length > 1
-                        ? `Runs this program's own ${program.weeks.length}-week pattern ${assignment.durationWeeks} time${assignment.durationWeeks === 1 ? "" : "s"} — ${program.weeks.length * assignment.durationWeeks} weeks total.`
-                        : `${assignment.durationWeeks} week${assignment.durationWeeks === 1 ? "" : "s"} total.`}
+                        ? assignment.durationWeeks === 1
+                          ? t("Runs this program's own {weeks}-week pattern once — {total} weeks total.", {
+                              weeks: program.weeks.length,
+                              total: program.weeks.length * assignment.durationWeeks,
+                            })
+                          : t("Runs this program's own {weeks}-week pattern {times} times — {total} weeks total.", {
+                              weeks: program.weeks.length,
+                              times: assignment.durationWeeks,
+                              total: program.weeks.length * assignment.durationWeeks,
+                            })
+                        : t.plural(assignment.durationWeeks, "{count} week total.", "{count} weeks total.")}
                     </p>
                   )}
                 </div>
@@ -728,11 +747,11 @@ export function CoachDayEditDialog({
                   <div className="flex items-center gap-1.5">
                     <Stethoscope className="h-4 w-4 text-cyan-400" />
                     <p className="text-sm font-semibold">
-                      Correctives are off for {athleteName ?? "this athlete"}
+                      {t("Correctives are off for {name}", { name: athleteName ?? t("this athlete") })}
                     </p>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Turn them on to add corrective exercises for this athlete on this day.
+                    {t("Turn them on to add corrective exercises for this athlete on this day.")}
                   </p>
                   <Button
                     type="button"
@@ -740,7 +759,7 @@ export function CoachDayEditDialog({
                     disabled={enableCorrectivesMutation.isPending}
                     onClick={() => enableCorrectivesMutation.mutate()}
                   >
-                    {enableCorrectivesMutation.isPending ? "Enabling…" : "Turn on Correctives"}
+                    {enableCorrectivesMutation.isPending ? t("Enabling…") : t("Turn on Correctives")}
                   </Button>
                 </div>
               )}
@@ -751,7 +770,7 @@ export function CoachDayEditDialog({
                     <div className="flex items-center gap-1.5">
                       <Stethoscope className="h-4 w-4 text-cyan-400" />
                       <p className="text-sm font-semibold">
-                        Correctives for {athleteName ?? "this athlete"}
+                        {t("Correctives for {name}", { name: athleteName ?? t("this athlete") })}
                       </p>
                     </div>
                     {otherDayOptions.length > 0 && correctives.length > 0 && (
@@ -762,19 +781,20 @@ export function CoachDayEditDialog({
                         onClick={() => setCopyOpen((v) => !v)}
                       >
                         <Copy className="h-3.5 w-3.5" />
-                        Copy to…
+                        {t("Copy to…")}
                       </Button>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Specific to {athleteName ?? "this athlete"} on this day — not shared with
-                    other athletes on this program.
+                    {t("Specific to {name} on this day — not shared with other athletes on this program.", {
+                      name: athleteName ?? t("this athlete"),
+                    })}
                   </p>
 
                   {copyOpen && (
                     <div className="space-y-2 rounded-md border border-border p-3">
                       <p className="text-xs font-semibold text-muted-foreground">
-                        Copy this athlete's correctives to:
+                        {t("Copy this athlete's correctives to:")}
                       </p>
                       <div className="max-h-32 space-y-1 overflow-y-auto">
                         {otherDayOptions.map((opt) => (
@@ -816,7 +836,9 @@ export function CoachDayEditDialog({
                           copyCorrectivesMutation.mutate(Array.from(copyTargets));
                         }}
                       >
-                        Copy to {copyTargets.size || ""} day{copyTargets.size === 1 ? "" : "s"}
+                        {copyTargets.size === 0
+                          ? t("Copy to days")
+                          : t.plural(copyTargets.size, "Copy to {count} day", "Copy to {count} days")}
                       </Button>
                     </div>
                   )}
@@ -825,7 +847,7 @@ export function CoachDayEditDialog({
                     <div className="space-y-1">
                       <p className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
                         <Clock className="h-3 w-3" />
-                        Recently used
+                        {t("Recently used")}
                       </p>
                       <div className="flex flex-wrap gap-1.5">
                         {recentCorrectives.map((ex) => (
@@ -862,11 +884,11 @@ export function CoachDayEditDialog({
                       >
                         <div className="mb-2 flex items-center gap-2">
                           <span className="flex-1 truncate text-sm font-semibold">
-                            {c.exerciseName}
+                            {t.exercise(c.exerciseName)}
                           </span>
                           <button
                             type="button"
-                            aria-label={`Remove ${c.exerciseName}`}
+                            aria-label={t("Remove {name}", { name: t.exercise(c.exerciseName) })}
                             onClick={() =>
                               setCorrectives((prev) => prev.filter((e) => e.key !== c.key))
                             }
@@ -877,7 +899,7 @@ export function CoachDayEditDialog({
                         </div>
                         <div className="grid grid-cols-3 gap-1.5">
                           <MiniField
-                            label="Sets"
+                            label={t("Sets")}
                             value={c.sets}
                             type="number"
                             onChange={(v) =>
@@ -887,7 +909,7 @@ export function CoachDayEditDialog({
                             }
                           />
                           <MiniField
-                            label="Reps"
+                            label={t("Reps")}
                             inputMode="numeric"
                             value={c.reps}
                             onChange={(v) =>
@@ -897,7 +919,7 @@ export function CoachDayEditDialog({
                             }
                           />
                           <MiniField
-                            label="Weight"
+                            label={t("Weight")}
                             value={c.weight}
                             onChange={(v) =>
                               setCorrectives((prev) =>
@@ -910,7 +932,7 @@ export function CoachDayEditDialog({
                     ))}
                     {correctives.length === 0 && (
                       <p className="py-1 text-center text-xs text-muted-foreground">
-                        No correctives assigned for this day
+                        {t("No correctives assigned for this day")}
                       </p>
                     )}
                   </div>
@@ -924,7 +946,7 @@ export function CoachDayEditDialog({
                       onClick={() => setCorrectivePickerOpen(true)}
                     >
                       <Plus className="h-3.5 w-3.5" />
-                      Add Corrective
+                      {t("Add Corrective")}
                     </Button>
                     <Button
                       type="button"
@@ -933,7 +955,7 @@ export function CoachDayEditDialog({
                       disabled={saveCorrectivesMutation.isPending}
                       onClick={() => saveCorrectivesMutation.mutate(correctives)}
                     >
-                      {saveCorrectivesMutation.isPending ? "Saving…" : "Save Correctives"}
+                      {saveCorrectivesMutation.isPending ? t("Saving…") : t("Save Correctives")}
                     </Button>
                   </div>
                 </div>
@@ -960,11 +982,11 @@ export function CoachDayEditDialog({
               disabled={!data || deleteMutation.isPending}
             >
               <Trash2 className="h-4 w-4" />
-              Delete Workout
+              {t("Delete Workout")}
             </Button>
             <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {t("Cancel")}
               </Button>
               <Button
                 onClick={() => {
@@ -982,7 +1004,7 @@ export function CoachDayEditDialog({
                 }}
                 disabled={!data || saveMutation.isPending}
               >
-                {saveMutation.isPending ? "Saving…" : "Save Changes"}
+                {saveMutation.isPending ? t("Saving…") : t("Save Changes")}
               </Button>
             </div>
           </DialogFooter>
@@ -1019,7 +1041,7 @@ export function CoachDayEditDialog({
         open={correctivePickerOpen}
         onOpenChange={setCorrectivePickerOpen}
         correctivesOnly
-        title="Add Corrective"
+        title={t("Add Corrective")}
         onSelect={(exercise) => {
           setCorrectives((prev) => [
             ...prev,
@@ -1038,9 +1060,9 @@ export function CoachDayEditDialog({
       <ConfirmDialog
         open={deleteConfirmOpen}
         onOpenChange={setDeleteConfirmOpen}
-        title="Delete this workout?"
-        description="It will be cleared to a rest day for every athlete on this program."
-        confirmLabel="Delete"
+        title={t("Delete this workout?")}
+        description={t("It will be cleared to a rest day for every athlete on this program.")}
+        confirmLabel={t("Delete")}
         isPending={deleteMutation.isPending}
         onConfirm={() => deleteMutation.mutate()}
       />

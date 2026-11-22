@@ -3,6 +3,7 @@ import { resolveApiUrl } from "@/lib/queryClient";
 import { POWERED_BY_FORGE_LABEL } from "@/lib/branding-copy";
 import { cn } from "@/lib/utils";
 import type { RememberedBrand } from "@/lib/remembered-brand";
+import { useT } from "@/i18n";
 
 /** The program's logo and name where the Forge flame and the word "Forge" used to be, with
  *  "Powered by Forge" under it. Draws the flame when there is no brand to wear. */
@@ -18,6 +19,7 @@ export function BrandedMark({
   tagline?: string;
   className?: string;
 }) {
+  const t = useT();
   const logo = brand?.brandLogoUrl ? resolveApiUrl(brand.brandLogoUrl) : null;
   const name = brand?.brandTeamName || null;
   // A program's wide wordmark stands in for the logo and the name (2026-11-19).
@@ -25,7 +27,7 @@ export function BrandedMark({
   if (wordmark) {
     return (
       <div className={cn("flex flex-col items-center gap-3 text-center", className)}>
-        <img src={wordmark} alt={name || "Team"} className={size === "lg" ? "h-16 max-w-[18rem] object-contain" : "h-12 max-w-[14rem] object-contain"} />
+        <img src={wordmark} alt={name || t("Team")} className={size === "lg" ? "h-16 max-w-[18rem] object-contain" : "h-12 max-w-[14rem] object-contain"} />
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{POWERED_BY_FORGE_LABEL}</p>
       </div>
     );
@@ -35,7 +37,7 @@ export function BrandedMark({
   return (
     <div className={cn("flex flex-col items-center gap-3 text-center", className)}>
       {logo ? (
-        <img src={logo} alt={name || "Team logo"} className={cn(box, "object-contain")} />
+        <img src={logo} alt={name || t("Team logo")} className={cn(box, "object-contain")} />
       ) : (
         <ForgeMark className={box} />
       )}

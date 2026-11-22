@@ -12,6 +12,7 @@ import { anvilRoutesFor } from "@shared/anvil-routes";
 import { estimatedLabel } from "@shared/anvil-tasks";
 import { localMinutesFrom, windowLabelFor } from "@shared/anvil-window";
 import type { AnvilReading } from "@shared/anvil-reading";
+import { translate, useT } from "@/i18n";
 
 /**
  * THE DASHBOARD CARD. One line of state and one button.
@@ -58,6 +59,7 @@ function hhmm(minutes: number): string {
  * holds every path in it against the router.
  */
 export function AnvilDailyCard() {
+  const t = useT();
   const { user } = useAuth();
   const { access, loading } = useAnvilAccess();
   const routes = anvilRoutesFor(user?.role ?? "");
@@ -82,7 +84,7 @@ export function AnvilDailyCard() {
           {/* A FAILED READ IS NOT A QUIET MORNING. Drawing "Today's check is open" over a read
               that never landed would send somebody to take a second check they had already done. */}
           <ReadFailed
-            what="today's Anvil check"
+            what={t("today's Anvil check")}
             onRetry={() => void today.refetch()}
             error={today.error}
           />
@@ -100,13 +102,13 @@ export function AnvilDailyCard() {
     <Card data-testid="anvil-daily-card">
       <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
         <div className="min-w-0 space-y-0.5">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">The Anvil</p>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">{t("The Anvil")}</p>
           <p className="font-medium">{headline(data, done, nowLabel)}</p>
           <p className="text-xs text-muted-foreground">{sub(data, done, nowLabel)}</p>
         </div>
         <Button asChild size="sm" variant={done ? "outline" : "default"}>
           <Link href={routes.check} data-testid="anvil-card-link">
-            {done ? "See it" : "Start"}
+            {done ? t("See it") : t("Start")}
           </Link>
         </Button>
       </CardContent>
@@ -117,9 +119,9 @@ export function AnvilDailyCard() {
 function headline(data: TodayResponse, done: boolean, nowLabel: string): string {
   if (done) {
     const ms = data.reading?.numbers.medianMs;
-    return ms == null ? "Taken today" : `Taken today · ${Math.round(ms)} ms`;
+    return ms == null ? translate("Taken today") : translate("Taken today · {ms} ms", { ms: Math.round(ms) });
   }
-  return nowLabel === "in_window" ? "Today's check" : "Today's check";
+  return nowLabel === "in_window" ? translate("Today's check") : translate("Today's check");
 }
 
 function sub(data: TodayResponse, done: boolean, nowLabel: string): string {
@@ -132,12 +134,12 @@ function sub(data: TodayResponse, done: boolean, nowLabel: string): string {
         data.reading!.numbers.medianMs <= c.bandHighMs;
       // A DESCRIPTION, NOT A VERDICT. The band is where this person's mornings usually land and
       // nothing fires at its edge; the week is the only place anything is asserted.
-      return inBand ? "In your normal band" : "Outside your normal band";
+      return inBand ? translate("In your normal band") : translate("Outside your normal band");
     }
-    if (c?.kind === "learning") return `Learning your normal — ${c.have} of ${c.need} mornings`;
-    return "Kept and shown; nothing to compare it with yet";
+    if (c?.kind === "learning") return translate("Learning your normal — {have} of {need} mornings", { have: c.have, need: c.need });
+    return translate("Kept and shown; nothing to compare it with yet");
   }
   return nowLabel === "in_window"
-    ? `${estimatedLabel()} · open until ${hhmm(data.window.closesMinutes)}`
-    : `Opens ${hhmm(data.window.opensMinutes)}–${hhmm(data.window.closesMinutes)}`;
+    ? translate("{estimate} · open until {time}", { estimate: estimatedLabel(), time: hhmm(data.window.closesMinutes) })
+    : translate("Opens {from}–{to}", { from: hhmm(data.window.opensMinutes), to: hhmm(data.window.closesMinutes) });
 }

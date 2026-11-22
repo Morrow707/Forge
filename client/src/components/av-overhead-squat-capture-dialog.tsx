@@ -8,6 +8,7 @@ import { AvCameraChrome } from "@/components/av-camera-chrome";
 import { visionJointsToWorldLandmarks, visionBody3DToWorldLandmarks } from "@/lib/vision-body-landmarks";
 import { assessOverheadSquat, type OverheadSquatAssessment } from "@/lib/movement-screen-vision";
 import type { PoseFrame } from "@/lib/pose-tracking";
+import { useT } from "@/i18n";
 
 // Record-first-analyze-later, same as every other dialog on this pipeline (see
 // use-av-body-tracking.ts's own comment) -- there's no live per-frame stream to gate a "Record"
@@ -30,6 +31,7 @@ export function AvOverheadSquatCaptureDialog({
   onOpenChange: (open: boolean) => void;
   onUseGrade: (grade: number) => void;
 }) {
+  const t = useT();
   const {
     containerRef,
     error,
@@ -106,7 +108,7 @@ export function AvOverheadSquatCaptureDialog({
             <AvCameraChrome containerRef={containerRef} active={open} />
             <button
               type="button"
-              aria-label="Close"
+              aria-label={t("Close")}
               onClick={closeDialog}
               className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
             >
@@ -126,7 +128,7 @@ export function AvOverheadSquatCaptureDialog({
 
             {!result && !recording && !analyzing && (
               <div className="absolute inset-x-4 top-14 rounded-md bg-black/60 px-3 py-2 text-center text-xs text-white backdrop-blur-sm">
-                Stand where your whole body is in frame, arms overhead, then record one rep.
+                {t("Stand where your whole body is in frame, arms overhead, then record one rep.")}
               </div>
             )}
 
@@ -142,14 +144,14 @@ export function AvOverheadSquatCaptureDialog({
             {analyzing && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
-                <p className="text-sm text-white">Scoring the rep...</p>
+                <p className="text-sm text-white">{t("Scoring the rep...")}</p>
               </div>
             )}
 
             {noReading && !recording && !analyzing && (
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
-                Couldn't get a clear enough read on that one. Record it again whenever you're ready.
+                {t("Couldn't get a clear enough read on that one. Record it again whenever you're ready.")}
               </div>
             )}
 
@@ -163,7 +165,7 @@ export function AvOverheadSquatCaptureDialog({
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
-                  Camera tracking isn't supported on this device.
+                  {t("Camera tracking isn't supported on this device.")}
                 </div>
                 {supportError && (
                   <p className="select-text break-all text-center text-xs opacity-90">{supportError}</p>
@@ -174,7 +176,7 @@ export function AvOverheadSquatCaptureDialog({
             {result && (
               <div className="absolute inset-x-4 bottom-4 space-y-3 rounded-lg border border-white/20 bg-black/70 p-3 backdrop-blur-sm">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-white">Suggested grade</p>
+                  <p className="text-sm font-semibold text-white">{t("Suggested grade")}</p>
                   <Badge variant={result.suggestedGrade >= 2 ? "default" : "destructive"} className="text-base">
                     {result.suggestedGrade}/3
                   </Badge>
@@ -182,11 +184,11 @@ export function AvOverheadSquatCaptureDialog({
                 {result.faults.length > 0 ? (
                   <ul className="space-y-1 text-xs text-white/70">
                     {result.faults.map((f) => (
-                      <li key={f.code}>&bull; {f.label}</li>
+                      <li key={f.code}>{`• ${t(f.label)}`}</li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-xs text-white/70">No compensations detected.</p>
+                  <p className="text-xs text-white/70">{t("No compensations detected.")}</p>
                 )}
               </div>
             )}
@@ -200,16 +202,16 @@ export function AvOverheadSquatCaptureDialog({
                 disabled={recording || analyzing || !!error || supported === false}
               >
                 {recording || analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Circle className="h-4 w-4 fill-current" />}
-                {recording ? "Recording..." : analyzing ? "Scoring..." : "Record Rep"}
+                {recording ? t("Recording...") : analyzing ? t("Scoring...") : t("Record Rep")}
               </Button>
             ) : (
               <>
                 <Button variant="outline" onClick={startCapture}>
-                  Retry
+                  {t("Retry")}
                 </Button>
                 <Button onClick={() => onUseGrade(result.suggestedGrade)}>
                   <Camera className="h-4 w-4" />
-                  Use This Grade
+                  {t("Use This Grade")}
                 </Button>
               </>
             )}

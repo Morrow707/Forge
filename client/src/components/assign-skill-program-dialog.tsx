@@ -23,6 +23,7 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Repeat } from "lucide-react";
 import { todayIso } from "@/lib/local-date";
+import { useT } from "@/i18n";
 
 const DURATION_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
 
@@ -47,6 +48,7 @@ export function AssignSkillProgramDialog({
   programs: SkillProgramSummary[];
   programId?: number;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [assignAthleteIds, setAssignAthleteIds] = useState<Set<number>>(new Set());
   const [selectedProgramId, setSelectedProgramId] = useState<string>(
@@ -80,24 +82,24 @@ export function AssignSkillProgramDialog({
       qc.invalidateQueries({ queryKey: ["/api/coach/skill-programs"] });
       if (result.created.length > 0) {
         toast.success(
-          `Assigned to ${result.created.length} athlete${result.created.length === 1 ? "" : "s"}`,
+          t.plural(result.created.length, "Assigned to {count} athlete", "Assigned to {count} athletes"),
         );
       }
       onOpenChange(false);
       setAssignAthleteIds(new Set());
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not assign skill program"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not assign skill program")),
   });
 
   const lockedProgramName = programId
-    ? (programs.find((p) => p.id === programId)?.name ?? "This skill program")
+    ? (programs.find((p) => p.id === programId)?.name ?? t("This skill program"))
     : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Assign Skill Program</DialogTitle>
+          <DialogTitle>{t("Assign Skill Program")}</DialogTitle>
         </DialogHeader>
         <form
           onSubmit={(e) => {
@@ -107,7 +109,7 @@ export function AssignSkillProgramDialog({
           className="space-y-4"
         >
           <div className="space-y-1.5">
-            <Label>Skill program</Label>
+            <Label>{t("Skill program")}</Label>
             {lockedProgramName ? (
               <div className="rounded-md border border-border bg-surface-elevated px-3 py-2 text-sm font-semibold">
                 {lockedProgramName}
@@ -115,7 +117,7 @@ export function AssignSkillProgramDialog({
             ) : (
               <Select value={selectedProgramId} onValueChange={setSelectedProgramId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a skill program" />
+                  <SelectValue placeholder={t("Select a skill program")} />
                 </SelectTrigger>
                 <SelectContent>
                   {programs.map((p) => (
@@ -128,7 +130,7 @@ export function AssignSkillProgramDialog({
             )}
           </div>
           <div className="space-y-1.5">
-            <Label>Start date</Label>
+            <Label>{t("Start date")}</Label>
             <Input
               type="date"
               value={startDate}
@@ -136,13 +138,13 @@ export function AssignSkillProgramDialog({
               required
             />
             <p className="text-xs text-muted-foreground">
-              Day 1 of Week 1 lands on this date.
+              {t("Day 1 of Week 1 lands on this date.")}
             </p>
           </div>
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5">
               <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
-              Repeat
+              {t("Repeat")}
             </Label>
             <RadioChipGroup
               label=""
@@ -153,7 +155,7 @@ export function AssignSkillProgramDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Athletes</Label>
+            <Label>{t("Athletes")}</Label>
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border p-2">
               {roster.map((a) => {
                 const selected = assignAthleteIds.has(a.id);
@@ -181,7 +183,7 @@ export function AssignSkillProgramDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               type="submit"
@@ -189,8 +191,7 @@ export function AssignSkillProgramDialog({
                 assignMutation.isPending || !selectedProgramId || assignAthleteIds.size === 0
               }
             >
-              Assign to {assignAthleteIds.size} athlete
-              {assignAthleteIds.size === 1 ? "" : "s"}
+              {t.plural(assignAthleteIds.size, "Assign to {count} athlete", "Assign to {count} athletes")}
             </Button>
           </DialogFooter>
         </form>

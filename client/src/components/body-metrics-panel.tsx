@@ -23,6 +23,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { todayIso } from "@/lib/local-date";
+import { useT } from "@/i18n";
 
 type BodyMetric = {
   id: number;
@@ -42,6 +43,7 @@ export function BodyMetricsPanel({
   athleteName: string;
   fetchUrl: string;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery<BodyMetric[]>({
     queryKey: [fetchUrl],
@@ -67,9 +69,9 @@ export function BodyMetricsPanel({
       qc.invalidateQueries({ queryKey: [fetchUrl] });
       setWeight("");
       setBodyFatPercent("");
-      toast.success("Logged");
+      toast.success(t("Logged"));
     },
-    onError: () => toast.error("Couldn't save that entry"),
+    onError: () => toast.error(t("Couldn't save that entry")),
   });
 
   const chartData = (data ?? []).map((m) => ({
@@ -80,14 +82,14 @@ export function BodyMetricsPanel({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Normally logged by {athleteName.split(" ")[0]}, add an entry yourself for a testing day.
+        {t("Normally logged by {name}, add an entry yourself for a testing day.", { name: athleteName.split(" ")[0] })}
       </p>
 
       <form
         onSubmit={(e) => {
           e.preventDefault();
           if (!weight) {
-            toast.error("Enter a weight");
+            toast.error(t("Enter a weight"));
             return;
           }
           addMetric.mutate();
@@ -95,7 +97,7 @@ export function BodyMetricsPanel({
         className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:items-end"
       >
         <div className="min-w-0 space-y-1.5">
-          <Label htmlFor="coach-metric-date">Date</Label>
+          <Label htmlFor="coach-metric-date">{t("Date")}</Label>
           <Input
             id="coach-metric-date"
             type="date"
@@ -106,7 +108,7 @@ export function BodyMetricsPanel({
           />
         </div>
         <div className="min-w-0 space-y-1.5">
-          <Label htmlFor="coach-metric-weight">Weight</Label>
+          <Label htmlFor="coach-metric-weight">{t("Weight")}</Label>
           <Input
             id="coach-metric-weight"
             type="number"
@@ -119,26 +121,26 @@ export function BodyMetricsPanel({
           />
         </div>
         <div className="min-w-0 space-y-1.5">
-          <Label htmlFor="coach-metric-unit">Unit</Label>
+          <Label htmlFor="coach-metric-unit">{t("Unit")}</Label>
           <Select value={weightUnit} onValueChange={(v) => setWeightUnit(v as "lbs" | "kg")}>
             <SelectTrigger id="coach-metric-unit">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="lbs">lbs</SelectItem>
-              <SelectItem value="kg">kg</SelectItem>
+              <SelectItem value="lbs">{t("lbs")}</SelectItem>
+              <SelectItem value="kg">{t("kg")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <Button type="submit" disabled={addMetric.isPending} className="w-full">
-          Log
+          {t("Log")}
         </Button>
       </form>
 
       {isLoading ? (
         <div className="h-40 animate-pulse rounded-md bg-surface" />
       ) : !data?.length ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">No entries logged yet.</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t("No entries logged yet.")}</p>
       ) : (
         <div className="space-y-4">
           {chartData.length >= 2 && (
@@ -176,7 +178,7 @@ export function BodyMetricsPanel({
                   {m.weight} {m.weightUnit}
                   {m.bodyFatPercent != null && (
                     <span className="ml-2 font-normal text-muted-foreground">
-                      {m.bodyFatPercent}% BF
+                      {t("{pct}% BF", { pct: m.bodyFatPercent })}
                     </span>
                   )}
                 </span>

@@ -14,6 +14,7 @@ import { eventColorStyle } from "@/lib/calendar-event-display";
 import { CALENDAR_EVENT_COLORS, DEFAULT_IMPORT_COLOR, IMPORT_NAME_MAX, IMPORT_URL_MAX } from "@shared/calendar-events";
 import { Copy, CalendarDays, CalendarPlus, Download, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { msg, useT } from "@/i18n";
 
 /** CALENDAR SYNC, BOTH DIRECTIONS (2026-11-22).
  *
@@ -52,34 +53,34 @@ const WHERE_TO_FIND = [
   {
     app: "Google Calendar",
     steps: [
-      "On a computer, open calendar.google.com (the phone app doesn't show this).",
-      "Click the gear, then Settings.",
-      "On the left, under Settings for my calendars, click the calendar you want.",
-      "Scroll to Integrate calendar and copy Secret address in iCal format.",
-      "Paste it here.",
+      msg("On a computer, open calendar.google.com (the phone app doesn't show this)."),
+      msg("Click the gear, then Settings."),
+      msg("On the left, under Settings for my calendars, click the calendar you want."),
+      msg("Scroll to Integrate calendar and copy Secret address in iCal format."),
+      msg("Paste it here."),
     ],
   },
   {
     app: "Apple / iCloud Calendar",
     steps: [
-      "On your iPhone, open Calendar and tap Calendars at the bottom.",
-      "Tap the (i) next to the calendar you want.",
-      "Turn on Public Calendar, then tap Share Link and Copy.",
-      "Paste it here.",
+      msg("On your iPhone, open Calendar and tap Calendars at the bottom."),
+      msg("Tap the (i) next to the calendar you want."),
+      msg("Turn on Public Calendar, then tap Share Link and Copy."),
+      msg("Paste it here."),
     ],
   },
   {
     app: "Outlook",
     steps: [
-      "Open Outlook on the web (outlook.com or outlook.office.com).",
-      "Go to Settings, then Calendar, then Shared calendars.",
-      "Under Publish a calendar, pick the calendar and Can view all details, then Publish.",
-      "Copy the ICS link and paste it here.",
+      msg("Open Outlook on the web (outlook.com or outlook.office.com)."),
+      msg("Go to Settings, then Calendar, then Shared calendars."),
+      msg("Under Publish a calendar, pick the calendar and Can view all details, then Publish."),
+      msg("Copy the ICS link and paste it here."),
     ],
   },
   {
-    app: "A school or league website",
-    steps: ["Look for Subscribe, iCal or Add to calendar on the schedule page.", "Copy that link (it often starts with webcal://) and paste it here."],
+    app: msg("A school or league website"),
+    steps: [msg("Look for Subscribe, iCal or Add to calendar on the schedule page."), msg("Copy that link (it often starts with webcal://) and paste it here.")],
   },
 ];
 
@@ -104,6 +105,7 @@ function ColorPicker({ value, onChange, label }: { value: string; onChange: (id:
 }
 
 function ShowForgeInYourCalendar({ open, fetchUrl }: { open: boolean; fetchUrl: string }) {
+  const t = useT();
   const [importing, setImporting] = useState(false);
   const { data, isLoading } = useQuery<{ token: string }>({
     queryKey: [fetchUrl],
@@ -125,9 +127,9 @@ function ShowForgeInYourCalendar({ open, fetchUrl }: { open: boolean; fetchUrl: 
   async function handleImportNow() {
     setImporting(true);
     try {
-      await shareOrDownloadFile(`/api/calendar/${data!.token}.ics`, "forge-calendar.ics", "Forge Training Calendar");
+      await shareOrDownloadFile(`/api/calendar/${data!.token}.ics`, "forge-calendar.ics", t("Forge Training Calendar"));
     } catch {
-      toast.error("Couldn't download the calendar file");
+      toast.error(t("Couldn't download the calendar file"));
     } finally {
       setImporting(false);
     }
@@ -135,29 +137,29 @@ function ShowForgeInYourCalendar({ open, fetchUrl }: { open: boolean; fetchUrl: 
 
   return (
     <section className="space-y-3">
-      <h3 className="font-semibold">Show Forge in your calendar</h3>
-      <p className="text-xs text-muted-foreground">Training days and your calendar events, in Google Calendar, Apple Calendar or Outlook. Rest days aren't included.</p>
+      <h3 className="font-semibold">{t("Show Forge in your calendar")}</h3>
+      <p className="text-xs text-muted-foreground">{t("Training days and your calendar events, in Google Calendar, Apple Calendar or Outlook. Rest days aren't included.")}</p>
       {isLoading || !url ? (
         <div className="h-16 animate-pulse rounded-md bg-surface" />
       ) : (
         <div className="space-y-2">
           <Button type="button" className="w-full" onClick={handleImportNow} disabled={importing}>
             <Download className="h-4 w-4" />
-            {importing ? "Preparing..." : "Import Events Now"}
+            {importing ? t("Preparing...") : t("Import Events Now")}
           </Button>
           <Button type="button" variant="outline" className="w-full" asChild>
             <a href={webcalUrl}>
               <CalendarPlus className="h-4 w-4" />
-              Subscribe to Calendar
+              {t("Subscribe to Calendar")}
             </a>
           </Button>
           <Button type="button" variant="outline" className="w-full" asChild>
             <a href={googleUrl} target="_blank" rel="noopener noreferrer" onClick={externalLinkClick(googleUrl)}>
               <CalendarDays className="h-4 w-4" />
-              Add to Google Calendar
+              {t("Add to Google Calendar")}
             </a>
           </Button>
-          <p className="text-xs text-muted-foreground">"Subscribe" keeps it updated automatically but can take a while to show new events.</p>
+          <p className="text-xs text-muted-foreground">{t("\"Subscribe\" keeps it updated automatically but can take a while to show new events.")}</p>
           <p className="break-all rounded bg-surface-elevated p-2 font-mono text-xs">{url}</p>
           <Button
             type="button"
@@ -165,14 +167,14 @@ function ShowForgeInYourCalendar({ open, fetchUrl }: { open: boolean; fetchUrl: 
             className="w-full"
             onClick={() => {
               navigator.clipboard.writeText(url);
-              toast.success("Link copied");
+              toast.success(t("Link copied"));
             }}
           >
             <Copy className="h-4 w-4" />
-            Copy Link Instead
+            {t("Copy Link Instead")}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Or paste this link manually: Outlook → Add calendar → Subscribe from web; Apple Calendar → File → New Calendar Subscription.
+            {t("Or paste this link manually: Outlook → Add calendar → Subscribe from web; Apple Calendar → File → New Calendar Subscription.")}
           </p>
         </div>
       )}
@@ -181,6 +183,7 @@ function ShowForgeInYourCalendar({ open, fetchUrl }: { open: boolean; fetchUrl: 
 }
 
 function ShowYourCalendarInForge({ open }: { open: boolean }) {
+  const t = useT();
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
   const [color, setColor] = useState<string>(DEFAULT_IMPORT_COLOR);
@@ -195,7 +198,7 @@ function ShowYourCalendarInForge({ open }: { open: boolean }) {
     void queryClient.invalidateQueries({ queryKey: [IMPORTS_KEY] });
     void queryClient.invalidateQueries({ queryKey: [EVENTS_KEY] });
   };
-  const fail = (err: Error) => toast.error(err.message || "Something went wrong");
+  const fail = (err: Error) => toast.error(err.message || t("Something went wrong"));
 
   const add = useMutation({
     mutationFn: async () =>
@@ -204,7 +207,7 @@ function ShowYourCalendarInForge({ open }: { open: boolean }) {
       setUrl("");
       setName("");
       refreshAll();
-      toast.success(`${cal.name} is on your Forge calendar (${cal.eventCount} events)`);
+      toast.success(t("{name} is on your Forge calendar ({count} events)", { name: cal.name, count: cal.eventCount }));
     },
     onError: fail,
   });
@@ -212,7 +215,7 @@ function ShowYourCalendarInForge({ open }: { open: boolean }) {
     mutationFn: async (id: number) => apiRequest("POST", `${IMPORTS_KEY}/${id}/refresh`),
     onSuccess: () => {
       refreshAll();
-      toast.success("Calendar refreshed");
+      toast.success(t("Calendar refreshed"));
     },
     onError: fail,
   });
@@ -225,17 +228,17 @@ function ShowYourCalendarInForge({ open }: { open: boolean }) {
     mutationFn: async (id: number) => apiRequest("DELETE", `${IMPORTS_KEY}/${id}`),
     onSuccess: () => {
       refreshAll();
-      toast.success("Calendar removed");
+      toast.success(t("Calendar removed"));
     },
     onError: fail,
   });
 
   return (
     <section className="space-y-3">
-      <h3 className="font-semibold">Show your calendar in Forge</h3>
-      <p className="text-xs text-muted-foreground">Paste a calendar's subscribe address and its events show here, read-only, refreshed every few hours.</p>
+      <h3 className="font-semibold">{t("Show your calendar in Forge")}</h3>
+      <p className="text-xs text-muted-foreground">{t("Paste a calendar's subscribe address and its events show here, read-only, refreshed every few hours.")}</p>
 
-      {isError && <p className="text-xs text-muted-foreground">We couldn't load the calendars you've added.</p>}
+      {isError && <p className="text-xs text-muted-foreground">{t("We couldn't load the calendars you've added.")}</p>}
       {imports.length > 0 && (
         <ul className="space-y-2">
           {imports.map((cal) => (
@@ -245,30 +248,32 @@ function ShowYourCalendarInForge({ open }: { open: boolean }) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{cal.name}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {cal.host} · {cal.eventCount} events
-                    {cal.lastFetchedAt ? ` · updated ${formatDistanceToNow(new Date(cal.lastFetchedAt), { addSuffix: true })}` : ""}
+                    {cal.host} · {t("{count} events", { count: cal.eventCount })}
+                    {cal.lastFetchedAt
+                      ? ` · ${t("updated {when}", { when: formatDistanceToNow(new Date(cal.lastFetchedAt), { addSuffix: true }) })}`
+                      : ""}
                   </p>
                 </div>
-                <Button size="icon" variant="ghost" aria-label={`Refresh ${cal.name}`} onClick={() => refresh.mutate(cal.id)} disabled={refresh.isPending}>
+                <Button size="icon" variant="ghost" aria-label={t("Refresh {name}", { name: cal.name })} onClick={() => refresh.mutate(cal.id)} disabled={refresh.isPending}>
                   <RefreshCw className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="ghost" aria-label={`Remove ${cal.name}`} onClick={() => remove.mutate(cal.id)} disabled={remove.isPending}>
+                <Button size="icon" variant="ghost" aria-label={t("Remove {name}", { name: cal.name })} onClick={() => remove.mutate(cal.id)} disabled={remove.isPending}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
-              {cal.lastError && <p className="text-xs text-destructive">Last refresh: {cal.lastError}</p>}
-              {cal.lastNote && <p className="text-xs text-muted-foreground">Note: {cal.lastNote}</p>}
-              <ColorPicker label={`Color for ${cal.name}`} value={cal.color} onChange={(c) => patch.mutate({ id: cal.id, body: { color: c } })} />
+              {cal.lastError && <p className="text-xs text-destructive">{t("Last refresh: {error}", { error: t(cal.lastError) })}</p>}
+              {cal.lastNote && <p className="text-xs text-muted-foreground">{t("Note: {note}", { note: t(cal.lastNote) })}</p>}
+              <ColorPicker label={t("Color for {name}", { name: cal.name })} value={cal.color} onChange={(c) => patch.mutate({ id: cal.id, body: { color: c } })} />
               {teams.length > 0 && (
                 <Select value={cal.teamId ? String(cal.teamId) : PERSONAL} onValueChange={(v) => patch.mutate({ id: cal.id, body: { teamId: v === PERSONAL ? null : Number(v) } })}>
-                  <SelectTrigger aria-label={`Who sees ${cal.name}`} className="h-8 text-xs">
+                  <SelectTrigger aria-label={t("Who sees {name}", { name: cal.name })} className="h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={PERSONAL}>Just me</SelectItem>
-                    {teams.map((t) => (
-                      <SelectItem key={t.id} value={String(t.id)}>
-                        Share with everyone on {t.name}
+                    <SelectItem value={PERSONAL}>{t("Just me")}</SelectItem>
+                    {teams.map((team) => (
+                      <SelectItem key={team.id} value={String(team.id)}>
+                        {t("Share with everyone on {team}", { team: team.name })}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -287,42 +292,42 @@ function ShowYourCalendarInForge({ open }: { open: boolean }) {
         }}
       >
         <div className="space-y-1">
-          <Label htmlFor="import-url">Calendar address</Label>
-          <Input id="import-url" value={url} maxLength={IMPORT_URL_MAX} onChange={(e) => setUrl(e.target.value)} placeholder="https://... or webcal://..." inputMode="url" autoComplete="off" />
+          <Label htmlFor="import-url">{t("Calendar address")}</Label>
+          <Input id="import-url" value={url} maxLength={IMPORT_URL_MAX} onChange={(e) => setUrl(e.target.value)} placeholder={t("https://... or webcal://...")} inputMode="url" autoComplete="off" />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="import-name">Name (optional)</Label>
-          <Input id="import-name" value={name} maxLength={IMPORT_NAME_MAX} onChange={(e) => setName(e.target.value)} placeholder="School athletics" />
+          <Label htmlFor="import-name">{t("Name (optional)")}</Label>
+          <Input id="import-name" value={name} maxLength={IMPORT_NAME_MAX} onChange={(e) => setName(e.target.value)} placeholder={t("School athletics")} />
         </div>
-        <ColorPicker label="Color" value={color} onChange={setColor} />
+        <ColorPicker label={t("Color")} value={color} onChange={setColor} />
         {teams.length > 0 && (
           <Select value={team} onValueChange={setTeam}>
-            <SelectTrigger aria-label="Who sees it">
+            <SelectTrigger aria-label={t("Who sees it")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={PERSONAL}>Just me</SelectItem>
-              {teams.map((t) => (
-                <SelectItem key={t.id} value={String(t.id)}>
-                  Share with everyone on {t.name}
+              <SelectItem value={PERSONAL}>{t("Just me")}</SelectItem>
+              {teams.map((team) => (
+                <SelectItem key={team.id} value={String(team.id)}>
+                  {t("Share with everyone on {team}", { team: team.name })}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         )}
         <Button type="submit" className="w-full" disabled={!url.trim() || add.isPending}>
-          {add.isPending ? "Reading the calendar..." : "Show in Forge"}
+          {add.isPending ? t("Reading the calendar...") : t("Show in Forge")}
         </Button>
       </form>
 
       <div className="space-y-1.5">
-        <p className="text-xs font-semibold">Where do I find this?</p>
+        <p className="text-xs font-semibold">{t("Where do I find this?")}</p>
         {WHERE_TO_FIND.map((w) => (
           <details key={w.app} className="rounded-md border border-border px-3 py-2 text-xs">
-            <summary className="cursor-pointer font-semibold">{w.app}</summary>
+            <summary className="cursor-pointer font-semibold">{t(w.app)}</summary>
             <ol className="mt-2 list-decimal space-y-1 pl-4 text-muted-foreground">
               {w.steps.map((s) => (
-                <li key={s}>{s}</li>
+                <li key={s}>{t(s)}</li>
               ))}
             </ol>
           </details>
@@ -346,6 +351,7 @@ export function CalendarLinkDialog({
   /** False where the calendar on screen is somebody else's (a coach exporting an athlete's). */
   showImport?: boolean;
 }) {
+  const t = useT();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn("max-h-[90dvh] overflow-y-auto", showImport ? "max-w-3xl" : "max-w-md")}>
@@ -355,7 +361,7 @@ export function CalendarLinkDialog({
             {title}
           </DialogTitle>
           <DialogDescription>
-            {showImport ? "Send Forge to your phone's calendar, or bring another calendar into Forge." : "Subscribe to this link to see this athlete's training days in your calendar app."}
+            {showImport ? t("Send Forge to your phone's calendar, or bring another calendar into Forge.") : t("Subscribe to this link to see this athlete's training days in your calendar app.")}
           </DialogDescription>
         </DialogHeader>
         <div className={cn("grid gap-6", showImport && "md:grid-cols-2")}>

@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Swords, CalendarClock } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 type TeamGameDay = {
   id: number;
@@ -51,6 +52,7 @@ type MicrocyclePlan = {
  * offset (GD-3, GD-1, Game Day, GD+1) so a coach can eyeball -- and adjust
  * -- the whole squad's taper-in/recovery-out structure at a glance. */
 export function GameDaysSection({ teamId, teamName }: { teamId: number; teamName: string }) {
+  const t = useT();
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [microcycleGameDay, setMicrocycleGameDay] = useState<TeamGameDay | null>(null);
@@ -69,20 +71,20 @@ export function GameDaysSection({ teamId, teamName }: { teamId: number; teamName
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/coach/team-game-days/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/team-game-days"] });
-      toast.success("Game day removed");
+      toast.success(t("Game day removed"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't remove that game day"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't remove that game day")),
   });
 
   return (
     <div className="mt-3 space-y-2 border-t border-border pt-3">
       <div className="flex items-center justify-between">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          <Swords className="h-3.5 w-3.5" /> Game Days
+          <Swords className="h-3.5 w-3.5" /> {t("Game Days")}
         </p>
         <Button size="sm" variant="ghost" onClick={() => setDialogOpen(true)}>
           <Plus className="h-3.5 w-3.5" />
-          Add Game Day
+          {t("Add Game Day")}
         </Button>
       </div>
       {gameDaysFailed ? (
@@ -90,13 +92,13 @@ export function GameDaysSection({ teamId, teamName }: { teamId: number; teamName
         // read invites them to add one that already exists, and quietly removes the fixture the
         // microcycle should have been built around.
         <ReadFailed
-          what="this team's game days"
+          what={t("this team's game days")}
           onRetry={() => void refetchGameDays()}
           className="flex flex-col items-start gap-2 py-2 text-left"
         />
       ) : teamGameDays.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          No games scheduled yet, add one to plan the week's training around it.
+          {t("No games scheduled yet, add one to plan the week's training around it.")}
         </p>
       ) : (
         <div className="space-y-1.5">
@@ -110,19 +112,19 @@ export function GameDaysSection({ teamId, teamName }: { teamId: number; teamName
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">
-                  {format(parseISO(g.date), "EEE, MMM d")}
-                  {g.opponent && <span className="font-normal text-muted-foreground"> vs {g.opponent}</span>}
+                  {t.date(parseISO(g.date), { weekday: "short", month: "short", day: "numeric" })}
+                  {g.opponent && <span className="font-normal text-muted-foreground">{` ${t("vs {opponent}", { opponent: g.opponent })}`}</span>}
                 </p>
                 {g.notes && <p className="truncate text-[11px] text-muted-foreground">{g.notes}</p>}
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <Button size="sm" variant="outline" onClick={() => setMicrocycleGameDay(g)}>
                   <CalendarClock className="h-3.5 w-3.5" />
-                  Microcycle
+                  {t("Microcycle")}
                 </Button>
                 <button
                   type="button"
-                  aria-label={`Delete game day ${g.date}`}
+                  aria-label={t("Delete game day {date}", { date: g.date })}
                   onClick={() => deleteMutation.mutate(g.id)}
                   className="shrink-0 p-1 text-muted-foreground hover:text-destructive"
                 >
@@ -155,6 +157,7 @@ function CreateGameDayDialog({
   teamId: number;
   teamName: string;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [opponent, setOpponent] = useState("");
@@ -171,50 +174,50 @@ function CreateGameDayDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/team-game-days"] });
-      toast.success("Game day added");
+      toast.success(t("Game day added"));
       onOpenChange(false);
       setOpponent("");
       setNotes("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't add that game day"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't add that game day")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New Game Day for {teamName}</DialogTitle>
+          <DialogTitle>{t("New Game Day for {team}", { team: teamName })}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="gd-date">Date</Label>
+            <Label htmlFor="gd-date">{t("Date")}</Label>
             <Input id="gd-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="gd-opponent">Opponent (optional)</Label>
+            <Label htmlFor="gd-opponent">{t("Opponent (optional)")}</Label>
             <Input
               id="gd-opponent"
               value={opponent}
               onChange={(e) => setOpponent(e.target.value)}
-              placeholder="e.g. Central High"
+              placeholder={t("e.g. Central High")}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="gd-notes">Notes (optional)</Label>
+            <Label htmlFor="gd-notes">{t("Notes (optional)")}</Label>
             <Input
               id="gd-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Away, early bus call"
+              placeholder={t("e.g. Away, early bus call")}
             />
           </div>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button type="button" onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
-            Add Game Day
+            {t("Add Game Day")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -229,6 +232,7 @@ function MicrocycleDialog({
   gameDay: TeamGameDay;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const { data: plan, isLoading, isError: planFailed, refetch: refetchPlan } = useQuery<MicrocyclePlan>({
     queryKey: [`/api/coach/teams/${gameDay.teamId}/game-days/${gameDay.id}/microcycle`],
     queryFn: () =>
@@ -240,17 +244,17 @@ function MicrocycleDialog({
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>
-            Microcycle: {format(parseISO(gameDay.date), "EEE, MMM d")}
-            {gameDay.opponent && ` vs ${gameDay.opponent}`}
+            {t("Microcycle: {date}", { date: t.date(parseISO(gameDay.date), { weekday: "short", month: "short", day: "numeric" }) })}
+            {gameDay.opponent && ` ${t("vs {opponent}", { opponent: gameDay.opponent })}`}
           </DialogTitle>
         </DialogHeader>
         {isLoading || !plan ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Loading...</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">{t("Loading...")}</p>
         ) : planFailed ? (
-          <ReadFailed what="this microcycle" onRetry={() => void refetchPlan()} />
+          <ReadFailed what={t("this microcycle")} onRetry={() => void refetchPlan()} />
         ) : plan.athletes.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            No athletes on this team yet.
+            {t("No athletes on this team yet.")}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -258,7 +262,7 @@ function MicrocycleDialog({
               <thead>
                 <tr className="border-b border-border">
                   <th className="sticky left-0 bg-background py-1.5 pr-3 text-[10px] uppercase text-muted-foreground">
-                    Athlete
+                    {t("Athlete")}
                   </th>
                   {plan.dates.map((d) => (
                     <th key={d.date} className="min-w-[92px] py-1.5 pr-2 text-center">
@@ -286,14 +290,15 @@ function MicrocycleDialog({
                         {d.title == null ? (
                           <span className="text-[11px] text-muted-foreground/60">-</span>
                         ) : d.isRestDay ? (
-                          <span className="text-[11px] text-muted-foreground">Rest</span>
+                          <span className="text-[11px] text-muted-foreground">{t("Rest")}</span>
                         ) : (
                           <div className="space-y-0.5">
                             <p className="truncate text-[11px] font-medium" title={d.title}>
                               {d.title}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
-                              {d.exerciseCount} ex{d.completed ? " · Done" : ""}
+                              {t("{count} ex", { count: d.exerciseCount })}
+                              {d.completed ? ` · ${t("Done")}` : ""}
                             </p>
                           </div>
                         )}
@@ -307,7 +312,7 @@ function MicrocycleDialog({
         )}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Close
+            {t("Close")}
           </Button>
         </DialogFooter>
       </DialogContent>

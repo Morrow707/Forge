@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { ColorField } from "@/components/color-field";
 import type { ColorSource } from "@/components/image-color-picker";
 import { cn } from "@/lib/utils";
+import { translate, useT } from "@/i18n";
 
 /** A pen color of the coach's own beside a video tool's preset swatches (2026-11-20), with the
  *  eyedropper able to take a color off the frame on screen (a jersey, a cone, the bar). It opens as
@@ -20,6 +21,7 @@ export function CustomPenColor({
   /** The video being drawn on; its current frame is offered to the eyedropper. */
   video: () => HTMLVideoElement | null;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const custom = !presets.includes(color);
 
@@ -31,7 +33,7 @@ export function CustomPenColor({
       canvas.width = v.videoWidth;
       canvas.height = v.videoHeight;
       canvas.getContext("2d")?.drawImage(v, 0, 0);
-      return [{ label: "This video frame", src: canvas.toDataURL("image/png") }];
+      return [{ label: translate("This video frame"), src: canvas.toDataURL("image/png") }];
     } catch {
       // A frame the browser will not let the page read: the logo and a chosen picture still work.
       return [];
@@ -42,9 +44,9 @@ export function CustomPenColor({
     <>
       <button
         type="button"
-        aria-label="Your own color"
+        aria-label={t("Your own color")}
         aria-expanded={open}
-        title="Your own color"
+        title={t("Your own color")}
         data-testid="custom-pen-color"
         onClick={() => setOpen((o) => !o)}
         className={cn(
@@ -57,7 +59,7 @@ export function CustomPenColor({
       </button>
       {open && (
         <div className="basis-full rounded-md border border-border p-3">
-          <ColorField label="Pen color" value={custom ? color : ""} extraSources={frame} onChange={(hex) => hex && onChange(hex)} />
+          <ColorField label={t("Pen color")} value={custom ? color : ""} extraSources={frame} onChange={(hex) => hex && onChange(hex)} />
         </div>
       )}
     </>

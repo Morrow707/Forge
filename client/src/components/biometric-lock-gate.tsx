@@ -9,6 +9,7 @@ import {
   authenticateWithBiometrics,
   BiometryError,
 } from "@/lib/biometric-lock";
+import { translate, useT } from "@/i18n";
 
 /**
  * Wraps the whole app. Starts locked whenever the setting is on (checked
@@ -19,6 +20,7 @@ import {
  * startup.
  */
 export function BiometricLockGate({ children }: { children: React.ReactNode }) {
+  const t = useT();
   const [locked, setLocked] = useState(() => isBiometricLockSupported() && isBiometricLockEnabled());
   const [authenticating, setAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +42,7 @@ export function BiometricLockGate({ children }: { children: React.ReactNode }) {
       setError(
         err instanceof BiometryError && err.code === "userCancel"
           ? null
-          : "Authentication failed. Try again.",
+          : translate("Authentication failed. Try again."),
       );
     } finally {
       authInFlightRef.current = false;
@@ -76,16 +78,16 @@ export function BiometricLockGate({ children }: { children: React.ReactNode }) {
       </div>
       <div className="text-center">
         <h1 className="font-display text-2xl font-extrabold uppercase tracking-wider">
-          Forge Locked
+          {t("Forge Locked")}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Authenticate to continue
+          {t("Authenticate to continue")}
         </p>
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button size="lg" onClick={tryUnlock} disabled={authenticating} className="gap-2">
         <ScanFace className="h-5 w-5" />
-        {authenticating ? "Authenticating…" : "Unlock"}
+        {authenticating ? t("Authenticating…") : t("Unlock")}
       </Button>
     </div>
   );

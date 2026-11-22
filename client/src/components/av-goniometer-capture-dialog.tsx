@@ -7,6 +7,7 @@ import { AvCameraChrome } from "@/components/av-camera-chrome";
 import { visionJointsToWorldLandmarks, visionBody3DToWorldLandmarks } from "@/lib/vision-body-landmarks";
 import { MEASURABLE_JOINTS, measureJoint } from "@/lib/joint-angles";
 import { cameraGoniometerJointFor, convertCameraAngle } from "@/lib/movement-screen-vision";
+import { useT } from "@/i18n";
 
 // This pipeline only ever runs Vision against a finished recording, never a live feed (see
 // use-av-body-tracking.ts's own comment on why -- avoiding the thermal throttling live 60fps ML
@@ -39,6 +40,7 @@ export function AvGoniometerCaptureDialog({
   movementLabel: string;
   onCapture: (angleDeg: number) => void;
 }) {
+  const t = useT();
   const {
     containerRef,
     error,
@@ -134,7 +136,7 @@ export function AvGoniometerCaptureDialog({
             <AvCameraChrome containerRef={containerRef} active={open} />
             <button
               type="button"
-              aria-label="Close"
+              aria-label={t("Close")}
               onClick={closeDialog}
               className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
             >
@@ -153,13 +155,15 @@ export function AvGoniometerCaptureDialog({
             </div>
 
             <div className="absolute inset-x-4 top-14 rounded-md bg-black/60 px-3 py-2 text-center text-xs text-white backdrop-blur-sm">
-              {jointLabel} &middot; {movementLabel}, hold the end-range position, then tap Record. An estimate,
-              not a clinical-grade reading; adjust the number if it looks off.
+              {t(
+                "{joint} · {movement}, hold the end-range position, then tap Record. An estimate, not a clinical-grade reading; adjust the number if it looks off.",
+                { joint: t(jointLabel), movement: t(movementLabel) },
+              )}
             </div>
 
             {recording && (
               <div className="absolute inset-x-8 top-1/2 flex -translate-y-1/2 flex-col items-center gap-2 rounded-md bg-black/60 px-3 py-3 text-center text-white backdrop-blur-sm">
-                <span className="text-sm font-semibold">Hold still...</span>
+                <span className="text-sm font-semibold">{t("Hold still...")}</span>
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/20">
                   <div
                     className="h-full bg-primary transition-[width] ease-linear"
@@ -172,14 +176,14 @@ export function AvGoniometerCaptureDialog({
             {analyzing && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
-                <p className="text-sm text-white">Measuring angle...</p>
+                <p className="text-sm text-white">{t("Measuring angle...")}</p>
               </div>
             )}
 
             {noReading && !recording && !analyzing && (
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
-                Couldn't get a clear reading on that one. Record it again whenever you're ready.
+                {t("Couldn't get a clear reading on that one. Record it again whenever you're ready.")}
               </div>
             )}
 
@@ -193,7 +197,7 @@ export function AvGoniometerCaptureDialog({
               <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 rounded-md bg-destructive/90 px-3 py-2 text-sm text-white">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
-                  Camera tracking isn't supported on this device.
+                  {t("Camera tracking isn't supported on this device.")}
                 </div>
                 {supportError && (
                   <p className="select-text break-all text-center text-xs opacity-90">{supportError}</p>
@@ -212,11 +216,11 @@ export function AvGoniometerCaptureDialog({
             {capturedAngle != null ? (
               <>
                 <Button variant="outline" onClick={recordAndMeasure} disabled={recording || analyzing}>
-                  Retry
+                  {t("Retry")}
                 </Button>
                 <Button size="lg" onClick={() => onCapture(capturedAngle)}>
                   <Check className="h-4 w-4" />
-                  Capture {capturedAngle}°
+                  {t("Capture {angle}°", { angle: capturedAngle })}
                 </Button>
               </>
             ) : (
@@ -225,7 +229,7 @@ export function AvGoniometerCaptureDialog({
                 onClick={recordAndMeasure}
                 disabled={recording || analyzing || !!error || supported === false}
               >
-                {recording ? "Recording..." : analyzing ? "Measuring..." : "Record"}
+                {recording ? t("Recording...") : analyzing ? t("Measuring...") : t("Record")}
               </Button>
             )}
           </div>

@@ -9,6 +9,7 @@ import { getJson, resolveApiUrl } from "@/lib/queryClient";
 import type { EffectiveBranding } from "@/lib/branding-style";
 import { TEAM_COLORS, normalizeHex, readRecentColors, rememberColor, shadesOf } from "@/lib/color-input";
 import { cn } from "@/lib/utils";
+import { msg, useT } from "@/i18n";
 
 /** EVERY COLOR IN THE APP IS SET HERE (Scott, 2026-11-20: "wherever there is a place to add color
  *  ... make there be a space to add colors, to change colors or to input colors, and the little
@@ -24,7 +25,7 @@ export function ColorField({
   value,
   onChange,
   allowEmpty = false,
-  emptyLabel = "Forge's color",
+  emptyLabel = msg("Forge's color"),
   extraSources,
   hideLabel = false,
   disabled = false,
@@ -43,6 +44,7 @@ export function ColorField({
   /** Named rows of colors to offer, e.g. "From your logo" and "Your saved palette". */
   suggested?: { label: string; colors: string[] }[];
 }) {
+  const t = useT();
   const [draft, setDraft] = useState(value);
   const [picking, setPicking] = useState(false);
   const [recent, setRecent] = useState<string[]>([]);
@@ -83,7 +85,7 @@ export function ColorField({
   }
 
   function openPicker() {
-    const own: ColorSource[] = branding?.brandLogoUrl ? [{ label: "Your logo", src: resolveApiUrl(branding.brandLogoUrl) }] : [];
+    const own: ColorSource[] = branding?.brandLogoUrl ? [{ label: t("Your logo"), src: resolveApiUrl(branding.brandLogoUrl) }] : [];
     setSources([...(extraSources?.() ?? []), ...own]);
     setPicking(true);
   }
@@ -105,8 +107,8 @@ export function ColorField({
           onKeyDown={(e) => {
             if (e.key === "Enter") commitDraft();
           }}
-          placeholder={allowEmpty ? emptyLabel : "#0B3D91"}
-          aria-label={`${label} color code`}
+          placeholder={allowEmpty ? t(emptyLabel) : "#0B3D91"}
+          aria-label={t("{label} color code", { label })}
           aria-invalid={draft.trim() !== "" && !valid}
           className={cn("min-w-0 font-mono uppercase", draft.trim() !== "" && !valid && "border-destructive")}
           maxLength={7}
@@ -114,7 +116,7 @@ export function ColorField({
         />
         <input
           type="color"
-          aria-label={`${label} color wheel`}
+          aria-label={t("{label} color wheel", { label })}
           value={(valid ?? current ?? "#000000").toLowerCase()}
           onChange={(e) => choose(e.target.value.toUpperCase())}
           disabled={disabled}
@@ -124,8 +126,8 @@ export function ColorField({
           type="button"
           variant="outline"
           size="icon"
-          aria-label={`Take ${label} from a picture`}
-          title="Take a color from a picture"
+          aria-label={t("Take {label} from a picture", { label })}
+          title={t("Take a color from a picture")}
           data-testid="color-field-eyedropper"
           onClick={openPicker}
           disabled={disabled}
@@ -134,7 +136,7 @@ export function ColorField({
         </Button>
       </div>
       {draft.trim() !== "" && !valid && (
-        <p className="text-xs text-destructive">Type a color code like #0B3D91 or 036.</p>
+        <p className="text-xs text-destructive">{t("Type a color code like #0B3D91 or 036.")}</p>
       )}
       {(quick.length > 0 || (allowEmpty && current)) && (
         <div className="flex flex-wrap items-center gap-1.5" data-testid="color-field-quick">
@@ -143,7 +145,7 @@ export function ColorField({
               key={c}
               type="button"
               disabled={disabled}
-              aria-label={`Use ${c}`}
+              aria-label={t("Use {color}", { color: c })}
               title={c}
               onClick={() => choose(c)}
               className={cn(
@@ -163,7 +165,7 @@ export function ColorField({
               }}
               className="ml-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
             >
-              Use {emptyLabel}
+              {t("Use {label}", { label: t(emptyLabel) })}
             </button>
           )}
         </div>
@@ -185,17 +187,17 @@ export function ColorField({
         className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
       >
         <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", more && "rotate-180")} />
-        {more ? "Fewer colors" : `More colors (${TEAM_COLORS.length} team colors and shades)`}
+        {more ? t("Fewer colors") : t("More colors ({count} team colors and shades)", { count: TEAM_COLORS.length })}
       </button>
       {more && (
         <div className="space-y-2 rounded-md border border-border p-2.5" data-testid="color-field-more-panel">
           <div className="space-y-1">
-            <p className="text-[11px] text-muted-foreground">Team colors</p>
+            <p className="text-[11px] text-muted-foreground">{t("Team colors")}</p>
             <SwatchRow colors={TEAM_COLORS} current={current} disabled={disabled} onPick={choose} />
           </div>
           {current && (
             <div className="space-y-1">
-              <p className="text-[11px] text-muted-foreground">Lighter and darker {current}</p>
+              <p className="text-[11px] text-muted-foreground">{t("Lighter and darker {color}", { color: current })}</p>
               <SwatchRow colors={shadesOf(current).map((hex) => ({ hex, name: hex }))} current={current} disabled={disabled} onPick={choose} />
             </div>
           )}
@@ -219,6 +221,7 @@ function SwatchRow({
   disabled: boolean;
   onPick: (hex: string) => void;
 }) {
+  const t = useT();
   return (
     <div className="flex flex-wrap gap-1.5">
       {colors.map((c) => {
@@ -228,7 +231,7 @@ function SwatchRow({
             key={hex}
             type="button"
             disabled={disabled}
-            aria-label={c.name === hex ? `Use ${hex}` : `Use ${c.name}, ${hex}`}
+            aria-label={c.name === hex ? t("Use {color}", { color: hex }) : t("Use {name}, {color}", { name: c.name, color: hex })}
             title={c.name === hex ? hex : `${c.name} ${hex}`}
             onClick={() => onPick(hex)}
             className={cn(

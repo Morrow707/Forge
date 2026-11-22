@@ -12,11 +12,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type Gap = { weekNumber: number; dayNumber: number; dayTitle: string; exercises: { programExerciseId: number; name: string; missing: string[] }[] };
 type Suggestion = { programExerciseId: number; dayTitle: string; from: { id: number; name: string }; missing: string[]; to: { id: number; name: string } | null; reason: string | null };
 
 export function EquipmentGapNotice({ programId, athleteIds }: { programId: number | null; athleteIds: number[] }) {
+  const t = useT();
   const qc = useQueryClient();
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
   const key = ["equipment-check", programId, [...athleteIds].sort((a, b) => a - b).join(",")];
@@ -29,7 +31,7 @@ export function EquipmentGapNotice({ programId, athleteIds }: { programId: numbe
     mutationFn: async () =>
       (await (await apiRequest("POST", `/api/coach/programs/${programId}/equipment-swaps`, { athleteIds })).json()) as { suggestions: Suggestion[] },
     onSuccess: (r) => setSuggestions(r.suggestions),
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't suggest swaps"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't suggest swaps")),
   });
   const apply = useMutation({
     mutationFn: async (swaps: { programExerciseId: number; exerciseId: number }[]) =>
@@ -38,26 +40,26 @@ export function EquipmentGapNotice({ programId, athleteIds }: { programId: numbe
       setSuggestions(null);
       qc.invalidateQueries({ queryKey: ["equipment-check"] });
       qc.invalidateQueries({ queryKey: [`/api/coach/programs/${programId}`] });
-      toast.success("Swapped. The program now fits these rooms.");
+      toast.success(t("Swapped. The program now fits these rooms."));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't apply the swaps"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't apply the swaps")),
   });
 
   // A failed check is said, never shown as "nothing missing".
-  if (isError) return <ReadFailed what="this program's equipment check" onRetry={() => void refetch()} />;
+  if (isError) return <ReadFailed what={t("this program's equipment check")} onRetry={() => void refetch()} />;
   if (!data || data.days.length === 0) return null;
   const applicable = (suggestions ?? []).filter((s) => s.to);
   return (
     <div className="space-y-2 rounded-md border border-amber-400/50 bg-amber-400/5 p-3 text-sm" data-testid="equipment-gap-notice">
       <p className="flex items-center gap-1.5 font-medium text-amber-500">
         <AlertTriangle className="h-4 w-4 shrink-0" />
-        Some exercises need equipment these athletes' weight room hasn't listed
+        {t("Some exercises need equipment these athletes' weight room hasn't listed")}
       </p>
       <ul className="space-y-1 text-xs">
         {data.days.map((d) => (
           <li key={`${d.weekNumber}-${d.dayNumber}`}>
             <span className="font-medium">
-              Week {d.weekNumber}, {d.dayTitle}:
+              {t("Week {week}, {day}:", { week: d.weekNumber, day: d.dayTitle })}
             </span>{" "}
             {d.exercises.map((e) => `${e.name} (needs ${e.missing.join(" and ")})`).join("; ")}
           </li>
@@ -66,17 +68,17 @@ export function EquipmentGapNotice({ programId, athleteIds }: { programId: numbe
       {data.canSwap ? (
         !suggestions && (
           <Button type="button" size="sm" variant="outline" disabled={suggest.isPending} onClick={() => suggest.mutate()} data-testid="button-suggest-swaps">
-            {suggest.isPending ? "Finding swaps..." : "Suggest swaps"}
+            {suggest.isPending ? t("Finding swaps...") : t("Suggest swaps")}
           </Button>
         )
       ) : (
-        <p className="text-xs text-muted-foreground">This is a Forge program. Duplicate it to swap exercises in your own copy.</p>
+        <p className="text-xs text-muted-foreground">{t("This is a Forge program. Duplicate it to swap exercises in your own copy.")}</p>
       )}
       {suggestions && (
         <div className="space-y-1.5" data-testid="equipment-swap-suggestions">
           {suggestions.map((s) => (
             <p key={s.programExerciseId} className="text-xs">
-              {s.dayTitle}: {s.from.name} {s.to ? <>&rarr; <span className="font-medium">{s.to.name}</span></> : "(no good swap in this room)"}
+              {s.dayTitle}: {t.exercise(s.from.name)} {s.to ? <>{"→ "}<span className="font-medium">{t.exercise(s.to.name)}</span></> : t("(no good swap in this room)")}
             </p>
           ))}
           <div className="flex gap-2">
@@ -87,10 +89,10 @@ export function EquipmentGapNotice({ programId, athleteIds }: { programId: numbe
               onClick={() => apply.mutate(applicable.map((s) => ({ programExerciseId: s.programExerciseId, exerciseId: s.to!.id })))}
               data-testid="button-apply-swaps"
             >
-              Apply {applicable.length} swap{applicable.length === 1 ? "" : "s"}
+              {t.plural(applicable.length, "Apply {count} swap", "Apply {count} swaps")}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setSuggestions(null)}>
-              Keep as is
+              {t("Keep as is")}
             </Button>
           </div>
         </div>

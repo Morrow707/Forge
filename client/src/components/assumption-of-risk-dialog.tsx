@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { LegalDocumentReader } from "@/components/legal-document-reader";
 import type { PublicUser } from "@shared/schema";
+import { useT } from "@/i18n";
 
 /** Shown once to an athlete, the first time they open their dashboard.
  *
@@ -42,6 +43,7 @@ export function AssumptionOfRiskDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
 
   const [readFullRelease, setReadFullRelease] = useState(false);
@@ -59,7 +61,7 @@ export function AssumptionOfRiskDialog({
       qc.setQueryData(["/api/auth/me"], user);
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save that right now"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save that right now")),
   });
 
   return (
@@ -75,33 +77,28 @@ export function AssumptionOfRiskDialog({
       <DialogContent className="sm:max-w-md" hideClose>
         <DialogHeader>
           <ShieldAlert className="h-7 w-7 text-primary" />
-          <DialogTitle>Before you train</DialogTitle>
+          <DialogTitle>{t("Before you train")}</DialogTitle>
           <DialogDescription asChild>
             <div className="space-y-3 text-left text-sm text-muted-foreground">
               <p>
-                Lifting, jumping and sprinting can injure you, sometimes seriously. That is true
-                of training itself, and no app changes it.
+                {t("Lifting, jumping and sprinting can injure you, sometimes seriously. That is true of training itself, and no app changes it.")}
               </p>
               <p>
-                <span className="font-semibold text-foreground">Nobody at Forge is watching.</span>{" "}
-                We don't check whether today's weight is right for you, spot you, or see your
-                position. A weight or a program here is a suggestion worked out from what you have
-                logged — not an instruction from someone who can see you.
+                <span className="font-semibold text-foreground">{t("Nobody at Forge is watching.")}</span>{" "}
+                {t("We don't check whether today's weight is right for you, spot you, or see your position. A weight or a program here is a suggestion worked out from what you have logged — not an instruction from someone who can see you.")}
               </p>
               <p>
-                Measurements from your camera are estimates from a phone. They are not safety
-                equipment: a set that looks good in Forge is not a set anyone has confirmed was
-                safe.
+                {t("Measurements from your camera are estimates from a phone. They are not safety equipment: a set that looks good in Forge is not a set anyone has confirmed was safe.")}
               </p>
               <p className="font-semibold text-foreground">
-                Stop if something hurts, even when the program says keep going.
+                {t("Stop if something hurts, even when the program says keep going.")}
               </p>
               {/* In place, for the same reason the biometric release is -- a
                   new-window link opens nothing inside WKWebView, so on iOS this
                   was a release nobody could read before accepting it. */}
               <LegalDocumentReader
                 docType="assumption_of_risk"
-                label="Read the full assumption of risk and release"
+                label={t("Read the full assumption of risk and release")}
                 onReadToEnd={() => setReadFullRelease(true)}
               />
             </div>
@@ -117,7 +114,7 @@ export function AssumptionOfRiskDialog({
               unopened document just invites hunting for the unlock. */}
           {!readFullRelease ? (
             <p className="text-sm text-muted-foreground">
-              Open the full release above and read to the end to continue.
+              {t("Open the full release above and read to the end to continue.")}
             </p>
           ) : (
             <>
@@ -125,7 +122,7 @@ export function AssumptionOfRiskDialog({
                 value={initials}
                 onChange={setInitials}
                 disabled={acknowledge.isPending}
-                label="Type your initials to sign"
+                label={t("Type your initials to sign")}
               />
               <Button
                 type="button"
@@ -133,7 +130,7 @@ export function AssumptionOfRiskDialog({
                 onClick={() => acknowledge.mutate()}
                 disabled={!initialsLookValid(initials) || acknowledge.isPending}
               >
-                {acknowledge.isPending ? "Saving..." : "I understand"}
+                {acknowledge.isPending ? t("Saving...") : t("I understand")}
               </Button>
             </>
           )}

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
+import { formatDate, useT } from "@/i18n";
 import { Film, Send, Clock, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +21,7 @@ type RequestRow = {
 
 function day(value: string): string {
   try {
-    return format(parseISO(value), "MMM d");
+    return formatDate(parseISO(value), { month: "short", day: "numeric" });
   } catch {
     return value;
   }
@@ -40,6 +41,7 @@ function day(value: string): string {
  * footage, and offering either would be an invitation to meet that refusal.
  */
 export function AskCoachForReview() {
+  const t = useT();
   const qc = useQueryClient();
   const [note, setNote] = useState("");
   const [chosen, setChosen] = useState<number | null>(null);
@@ -70,10 +72,10 @@ export function AskCoachForReview() {
       setNote("");
       setChosen(null);
       void qc.invalidateQueries({ queryKey: ["/api/athlete/video-review-requests"] });
-      toast.success("Sent to your coach — it's on their review queue.");
+      toast.success(t("Sent to your coach — it's on their review queue."));
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : "Couldn't send that. Please try again.");
+      toast.error(err instanceof Error ? err.message : t("Couldn't send that. Please try again."));
     },
   });
 
@@ -88,10 +90,10 @@ export function AskCoachForReview() {
   // are different things, and the second read as the first tells an athlete their footage is
   // gone.
   if (clips.isError) {
-    return <ReadFailed what="your clips" onRetry={() => void clips.refetch()} />;
+    return <ReadFailed what={t("your clips")} onRetry={() => void clips.refetch()} />;
   }
   if (asks.isError) {
-    return <ReadFailed what="what you've asked your coach" onRetry={() => void asks.refetch()} />;
+    return <ReadFailed what={t("what you've asked your coach")} onRetry={() => void asks.refetch()} />;
   }
   if (clips.isLoading || asks.isLoading) {
     return <div className="h-20 w-full animate-pulse rounded-lg bg-surface" />;
@@ -101,7 +103,7 @@ export function AskCoachForReview() {
   if (rows.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Film a set and you can ask your coach to break it down here.
+        {t("Film a set and you can ask your coach to break it down here.")}
       </p>
     );
   }
@@ -117,7 +119,9 @@ export function AskCoachForReview() {
               <Film className="h-4 w-4 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">
-                  {c.setNumber != null ? `${c.exerciseName} — Set ${c.setNumber}` : c.exerciseName}
+                  {c.setNumber != null
+                    ? t("{exercise} — Set {set}", { exercise: t.exercise(c.exerciseName), set: c.setNumber })
+                    : t.exercise(c.exerciseName)}
                 </span>
                 <span className="block truncate text-xs text-muted-foreground">{day(c.date)}</span>
               </span>
@@ -125,7 +129,7 @@ export function AskCoachForReview() {
                 <span className="flex items-center gap-2">
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Clock className="h-3.5 w-3.5" />
-                    Waiting since {day(open.createdAt)}
+                    {t("Waiting since {date}", { date: day(open.createdAt) })}
                   </span>
                   <Button
                     size="sm"
@@ -133,12 +137,12 @@ export function AskCoachForReview() {
                     disabled={withdraw.isPending}
                     onClick={() => withdraw.mutate(open.id)}
                   >
-                    Withdraw
+                    {t("Withdraw")}
                   </Button>
                 </span>
               ) : (
                 <Button size="sm" variant="outline" onClick={() => setChosen(isChosen ? null : c.id)}>
-                  {isChosen ? "Cancel" : "Ask my coach"}
+                  {isChosen ? t("Cancel") : t("Ask my coach")}
                 </Button>
               )}
             </div>
@@ -148,12 +152,12 @@ export function AskCoachForReview() {
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   maxLength={500}
-                  placeholder="What should they look at? (optional)"
-                  aria-label="What should your coach look at?"
+                  placeholder={t("What should they look at? (optional)")}
+                  aria-label={t("What should your coach look at?")}
                 />
                 <Button size="sm" disabled={ask.isPending} onClick={() => ask.mutate(c.id)}>
                   <Send className="h-4 w-4" />
-                  Send
+                  {t("Send")}
                 </Button>
               </div>
             )}
@@ -163,7 +167,7 @@ export function AskCoachForReview() {
       {(asks.data ?? []).some((a) => a.resolvedAt) && (
         <p className="flex items-center gap-1.5 pt-1 text-xs text-muted-foreground">
           <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-          Answered reviews appear under Coach reviews above.
+          {t("Answered reviews appear under Coach reviews above.")}
         </p>
       )}
     </div>

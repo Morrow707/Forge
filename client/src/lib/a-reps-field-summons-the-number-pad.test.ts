@@ -48,10 +48,10 @@ function strip(src: string): string {
     .join("\n");
 }
 
-/** Every JSX element whose props carry label="Reps", bounded by its own closing `/>` or `>`. */
+/** Every JSX element whose props carry label="Reps" (or label={t("Reps")} once translated), bounded by its own closing `/>` or `>`. */
 function repsElements(src: string): Array<{ file?: string; text: string }> {
   const out: Array<{ text: string }> = [];
-  const re = /label="Reps"/g;
+  const re = /label=(?:"Reps"|\{t\("Reps"\)\})/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(src))) {
     const start = src.lastIndexOf("<", m.index);
@@ -75,7 +75,7 @@ function repsElements(src: string): Array<{ file?: string; text: string }> {
 const files = walk(path.join(CLIENT, "pages")).concat(walk(path.join(CLIENT, "components")));
 const subjects = files
   .map((file) => ({ file: path.relative(CLIENT, file), src: strip(readFileSync(file, "utf8")) }))
-  .filter(({ src }) => src.includes('label="Reps"'));
+  .filter(({ src }) => /label=(?:"Reps"|\{t\("Reps"\)\})/.test(src));
 
 describe("a reps field summons the number pad", () => {
   it("finds the forms that draw a reps field (the premise of the rule)", () => {

@@ -8,6 +8,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { msg, useT } from "@/i18n";
 
 /** Shared "are you sure" step for a destructive action -- most of this app's
  * delete/remove buttons used to fire immediately (or fall back to the
@@ -20,7 +21,7 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmLabel = "Remove",
+  confirmLabel = msg("Remove"),
   onConfirm,
   isPending = false,
 }: {
@@ -32,6 +33,7 @@ export function ConfirmDialog({
   onConfirm: () => void;
   isPending?: boolean;
 }) {
+  const t = useT();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
@@ -42,11 +44,11 @@ export function ConfirmDialog({
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="outline">
-              Cancel
+              {t("Cancel")}
             </Button>
           </DialogClose>
           <Button type="button" variant="destructive" onClick={onConfirm} disabled={isPending}>
-            {isPending ? "Removing…" : confirmLabel}
+            {isPending ? t("Removing…") : t(confirmLabel)}
           </Button>
         </DialogFooter>
       </DialogContent>

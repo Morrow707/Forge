@@ -16,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ReadFailed } from "@/components/read-failed";
 import { CautionNote, ExerciseTagChips } from "@/components/exercise-tags";
+import { useT } from "@/i18n";
 
 export function CareDrillsDialog({
   apiBase,
@@ -32,6 +33,7 @@ export function CareDrillsDialog({
   program: CareProgramContext;
   onAccept: (chosen: Exercise[]) => void;
 }) {
+  const t = useT();
   // The same list (and cache entry) the exercise picker reads.
   const { data: library = [], isLoading, isError, refetch } = useQuery<Exercise[]>({
     queryKey: [`${apiBase}/exercises`],
@@ -54,23 +56,22 @@ export function CareDrillsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <HeartPulse className="h-4 w-4" />
-            Care drills for this day
+            {t("Care drills for this day")}
           </DialogTitle>
         </DialogHeader>
-        {isError && <ReadFailed what="the exercise library" onRetry={() => void refetch()} />}
-        {!isError && isLoading && <p className="text-sm text-muted-foreground">Loading the library…</p>}
+        {isError && <ReadFailed what={t("the exercise library")} onRetry={() => void refetch()} />}
+        {!isError && isLoading && <p className="text-sm text-muted-foreground">{t("Loading the library…")}</p>}
         {!isError && !isLoading && result.noneTagged && (
           <p className="text-sm text-muted-foreground" data-testid="text-no-care-drills">
-            No care drills tagged yet. Tag an exercise as "Joint care" in the exercise library and it will be
-            suggested here.
+            {t("No care drills tagged yet. Tag an exercise as \"Joint care\" in the exercise library and it will be suggested here.")}
           </p>
         )}
         {!isError && !isLoading && !result.noneTagged && result.suggestions.length === 0 && (
-          <p className="text-sm text-muted-foreground">Every care drill in the library is already on this day.</p>
+          <p className="text-sm text-muted-foreground">{t("Every care drill in the library is already on this day.")}</p>
         )}
         {!isError && !isLoading && result.suggestions.length > 0 && (
           <div className="space-y-2" data-testid="care-drill-suggestions">
-            <p className="text-xs text-muted-foreground">Suggestions only. Untick any you do not want; nothing is added until you tap Add.</p>
+            <p className="text-xs text-muted-foreground">{t("Suggestions only. Untick any you do not want; nothing is added until you tap Add.")}</p>
             {result.suggestions.map((s) => (
               <label
                 key={s.exercise.id}
@@ -101,7 +102,7 @@ export function CareDrillsDialog({
         )}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-dismiss-care-drills">
-            Dismiss
+            {t("Dismiss")}
           </Button>
           <Button
             disabled={chosen.length === 0}
@@ -111,7 +112,7 @@ export function CareDrillsDialog({
             }}
             data-testid="button-accept-care-drills"
           >
-            Add {chosen.length > 0 ? chosen.length : ""} to this day
+            {chosen.length > 0 ? t("Add {count} to this day", { count: chosen.length }) : t("Add to this day")}
           </Button>
         </DialogFooter>
       </DialogContent>

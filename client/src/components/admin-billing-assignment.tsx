@@ -29,6 +29,7 @@ import {
 import { VIDEO_STORAGE_ADD_ON } from "@shared/video-retention";
 import { FILMING_ROLES_WITHOUT_A_PLAN_PANEL_SET } from "@shared/roles-that-film-their-own-training";
 import type { AddOnStillBilling } from "@shared/add-on-terms";
+import { translate, useT } from "@/i18n";
 
 /**
  * Per-account billing assignment, on the admin user detail panel.
@@ -93,11 +94,13 @@ function reportStillBilling(stillBilling: AddOnStillBilling[] | undefined) {
       (BILLING_ADD_ONS as Record<string, { label: string }>)[entry.addOnId]?.label ??
       entry.addOnId;
     const handle = entry.stripeSubscriptionId
-      ? `Stripe subscription ${entry.stripeSubscriptionId}`
-      : `Apple subscription ${entry.appleOriginalTransactionId}`;
+      ? translate("Stripe subscription {id}", { id: entry.stripeSubscriptionId })
+      : translate("Apple subscription {id}", { id: entry.appleOriginalTransactionId });
     toast.warning(
-      `Access to ${label} is closed, but ${handle} is still billing. Cancel it at the ` +
-        `provider — saving here does not.`,
+      translate("Access to {label} is closed, but {handle} is still billing. Cancel it at the provider — saving here does not.", {
+        label,
+        handle,
+      }),
       { duration: 30000 },
     );
   }
@@ -122,10 +125,14 @@ function reportPlanStillBilling(plan: PlanStillBilling | undefined) {
   if (!plan) return;
   toast.warning(
     plan.provider === "apple"
-      ? `Plan cleared, but the App Store is still billing this account (${plan.handle}). ` +
-          `Only the account holder can stop it, in iOS Settings.`
-      : `Plan cleared, but Stripe is still billing this account (${plan.handle}). ` +
-          `Nothing was cancelled -- end it in the Stripe dashboard.`,
+      ? translate(
+          "Plan cleared, but the App Store is still billing this account ({handle}). Only the account holder can stop it, in iOS Settings.",
+          { handle: plan.handle },
+        )
+      : translate(
+          "Plan cleared, but Stripe is still billing this account ({handle}). Nothing was cancelled -- end it in the Stripe dashboard.",
+          { handle: plan.handle },
+        ),
     { duration: 30000 },
   );
 }
@@ -172,6 +179,7 @@ type OwnTrainingBilling = {
  * "inert today" is how a meaningless control becomes a meaningful one by accident. What is left
  * is the pair that really does decide something for this account -- what the video cap is. */
 function OwnTrainingBillingForm({ userId }: { userId: number }) {
+  const t = useT();
   const qc = useQueryClient();
   const key = [`/api/admin/accounts/${userId}/own-training-billing`];
   const { data, isLoading, isError, refetch } = useQuery<OwnTrainingBilling>({
@@ -198,9 +206,9 @@ function OwnTrainingBillingForm({ userId }: { userId: number }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: key });
       qc.invalidateQueries({ queryKey: ["/api/admin/users", userId] });
-      toast.success("Storage updated");
+      toast.success(t("Storage updated"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not update storage"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not update storage")),
   });
 
   if (isLoading) return <div className="h-20 animate-pulse rounded-md bg-surface" />;
@@ -211,11 +219,11 @@ function OwnTrainingBillingForm({ userId }: { userId: number }) {
     return (
       <div className="space-y-2 rounded-md border border-border p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Own-training storage
+          {t("Own-training storage")}
         </p>
-        <p className="text-xs text-muted-foreground">Couldn't load this account's storage.</p>
+        <p className="text-xs text-muted-foreground">{t("Couldn't load this account's storage.")}</p>
         <Button size="sm" variant="secondary" onClick={() => void refetch()}>
-          Try again
+          {t("Try again")}
         </Button>
       </div>
     );
@@ -224,11 +232,10 @@ function OwnTrainingBillingForm({ userId }: { userId: number }) {
   return (
     <div className="space-y-3 rounded-md border border-border p-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Own-training storage
+        {t("Own-training storage")}
       </p>
       <p className="text-xs text-muted-foreground">
-        This account films its own training, so the nightly retention sweep caps its clips like
-        any other. There is no plan to assign — these two are what lift the cap.
+        {t("This account films its own training, so the nightly retention sweep caps its clips like any other. There is no plan to assign — these two are what lift the cap.")}
       </p>
 
       <label className="flex items-center gap-1.5 text-xs">
@@ -236,20 +243,23 @@ function OwnTrainingBillingForm({ userId }: { userId: number }) {
           checked={videoStorage}
           onCheckedChange={(c) => setVideoStorage(c === true)}
         />
-        Extra video storage ({VIDEO_STORAGE_ADD_ON.totalCap} clips,{" "}
-        {formatCents(VIDEO_STORAGE_ADD_ON.monthlyPriceCents)}/mo)
+        {t("Extra video storage ({clips} clips, {price}/mo)", {
+          clips: VIDEO_STORAGE_ADD_ON.totalCap,
+          price: formatCents(VIDEO_STORAGE_ADD_ON.monthlyPriceCents),
+        })}
       </label>
 
       <BetaToggle beta={beta} setBeta={setBeta} />
 
       <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
-        {save.isPending ? "Saving…" : "Save storage"}
+        {save.isPending ? t("Saving…") : t("Save storage")}
       </Button>
     </div>
   );
 }
 
 function CoachBillingForm({ userId, email }: { userId: number; email: string }) {
+  const t = useT();
   const qc = useQueryClient();
   const lookupKey = [`/api/admin/coaches/lookup`, email];
   const { data, isLoading } = useQuery<CoachBilling>({
@@ -279,11 +289,11 @@ function CoachBillingForm({ userId, email }: { userId: number; email: string }) 
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: lookupKey });
       qc.invalidateQueries({ queryKey: ["/api/admin/users", userId] });
-      toast.success("Billing updated");
+      toast.success(t("Billing updated"));
       reportStillBilling(result.addOnsStillBilling);
       reportPlanStillBilling(result.planStillBilling);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not update billing"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not update billing")),
   });
 
   if (isLoading) return <div className="h-20 animate-pulse rounded-md bg-surface" />;
@@ -293,15 +303,14 @@ function CoachBillingForm({ userId, email }: { userId: number; email: string }) 
     <div className="space-y-3 rounded-md border border-border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Billing assignment
+          {t("Billing assignment")}
         </p>
         <p className="text-xs text-muted-foreground">
-          {data.rosterCount} on roster
           {data.institutionalAgreement.required && !data.institutionalAgreement.acceptedAt
-            ? " · service agreement outstanding"
+            ? t("{count} on roster · service agreement outstanding", { count: data.rosterCount })
             : data.institutionalAgreement.acceptedAt
-              ? " · service agreement accepted"
-              : ""}
+              ? t("{count} on roster · service agreement accepted", { count: data.rosterCount })
+              : t("{count} on roster", { count: data.rosterCount })}
         </p>
       </div>
 
@@ -310,18 +319,18 @@ function CoachBillingForm({ userId, email }: { userId: number; email: string }) 
           in and collect a 400. */}
       {!data.isPrimary ? (
         <p className="text-xs text-amber-500">
-          Staff member. Billing is assigned to the primary coach of the org.
+          {t("Staff member. Billing is assigned to the primary coach of the org.")}
         </p>
       ) : (
         <>
           <div className="space-y-1.5">
-            <Label className="text-xs">Org plan band</Label>
+            <Label className="text-xs">{t("Org plan band")}</Label>
             <Select value={tier} onValueChange={setTier}>
               <SelectTrigger className="h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NONE}>No plan (beta / unbilled)</SelectItem>
+                <SelectItem value={NONE}>{t("No plan (beta / unbilled)")}</SelectItem>
                 {BILLING_TIER_ORDER.map((id) => (
                   <SelectItem key={id} value={id}>
                     {BILLING_TIERS[id].label}
@@ -332,7 +341,7 @@ function CoachBillingForm({ userId, email }: { userId: number; email: string }) 
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Add-ons</Label>
+            <Label className="text-xs">{t("Add-ons")}</Label>
             <div className="flex flex-wrap gap-x-4 gap-y-1.5">
               {BILLING_ADD_ON_ORDER.map((id) => (
                 <label key={id} className="flex items-center gap-1.5 text-xs">
@@ -351,7 +360,7 @@ function CoachBillingForm({ userId, email }: { userId: number; email: string }) 
           <BetaToggle beta={beta} setBeta={setBeta} />
 
           <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
-            {save.isPending ? "Saving…" : "Save billing"}
+            {save.isPending ? t("Saving…") : t("Save billing")}
           </Button>
         </>
       )}
@@ -364,6 +373,7 @@ function CoachBillingForm({ userId, email }: { userId: number; email: string }) 
 // got a 400, and the whole panel rendered nothing -- no Free Agent tier could be assigned to
 // anybody. The `email` prop is kept so the call site's shape is unchanged; it is not read.
 function AthleteBillingForm({ userId }: { userId: number; email: string }) {
+  const t = useT();
   const qc = useQueryClient();
   const lookupKey = [`/api/admin/athletes`, userId, "billing"];
   const { data, isLoading } = useQuery<AthleteBilling>({
@@ -405,11 +415,11 @@ function AthleteBillingForm({ userId }: { userId: number; email: string }) {
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: lookupKey });
       qc.invalidateQueries({ queryKey: ["/api/admin/users", userId] });
-      toast.success("Billing updated");
+      toast.success(t("Billing updated"));
       reportStillBilling(result.addOnsStillBilling);
       reportPlanStillBilling(result.planStillBilling);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not update billing"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not update billing")),
   });
 
   if (isLoading) return <div className="h-20 animate-pulse rounded-md bg-surface" />;
@@ -418,17 +428,17 @@ function AthleteBillingForm({ userId }: { userId: number; email: string }) {
   return (
     <div className="space-y-3 rounded-md border border-border p-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Billing assignment
+        {t("Billing assignment")}
       </p>
 
       <div className="space-y-1.5">
-        <Label className="text-xs">Free Agent tier</Label>
+        <Label className="text-xs">{t("Free Agent tier")}</Label>
         <Select value={tier} onValueChange={setTier}>
           <SelectTrigger className="h-8 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={NONE}>None (coached, or unbilled)</SelectItem>
+            <SelectItem value={NONE}>{t("None (coached, or unbilled)")}</SelectItem>
             {/* ALL_FREE_AGENT_TIER_IDS, not the for-sale list. This is the one screen where a
                 withdrawn tier still has to appear: athletes are already on AI Coach + Video, an
                 admin has to be able to see that and to move somebody off it, and a dropdown that
@@ -436,9 +446,15 @@ function AthleteBillingForm({ userId }: { userId: number; email: string }) {
                 next save. Marked so nobody assigns it by accident. */}
             {ALL_FREE_AGENT_TIER_IDS.map((id) => (
               <SelectItem key={id} value={id}>
-                {FREE_AGENT_TIERS[id].label} —{" "}
-                {formatCents(FREE_AGENT_TIERS[id].monthlyPriceCents)}/mo
-                {WITHDRAWN_FREE_AGENT_TIERS.includes(id) ? " (withdrawn — not for sale)" : ""}
+                {WITHDRAWN_FREE_AGENT_TIERS.includes(id)
+                  ? t("{label} — {price}/mo (withdrawn — not for sale)", {
+                      label: FREE_AGENT_TIERS[id].label,
+                      price: formatCents(FREE_AGENT_TIERS[id].monthlyPriceCents),
+                    })
+                  : t("{label} — {price}/mo", {
+                      label: FREE_AGENT_TIERS[id].label,
+                      price: formatCents(FREE_AGENT_TIERS[id].monthlyPriceCents),
+                    })}
               </SelectItem>
             ))}
           </SelectContent>
@@ -446,7 +462,7 @@ function AthleteBillingForm({ userId }: { userId: number; email: string }) {
       </div>
 
       <div className="space-y-1.5">
-        <Label className="text-xs">Add-ons</Label>
+        <Label className="text-xs">{t("Add-ons")}</Label>
         <div className="flex flex-wrap gap-x-4 gap-y-1.5">
           {FREE_AGENT_ADD_ON_ORDER.map((id) => (
             <label key={id} className="flex items-center gap-1.5 text-xs">
@@ -467,13 +483,15 @@ function AthleteBillingForm({ userId }: { userId: number; email: string }) {
           checked={videoStorage}
           onCheckedChange={(c) => setVideoStorage(c === true)}
         />
-        Extra video storage ({VIDEO_STORAGE_ADD_ON.totalCap} clips,{" "}
-        {formatCents(VIDEO_STORAGE_ADD_ON.monthlyPriceCents)}/mo)
+        {t("Extra video storage ({clips} clips, {price}/mo)", {
+          clips: VIDEO_STORAGE_ADD_ON.totalCap,
+          price: formatCents(VIDEO_STORAGE_ADD_ON.monthlyPriceCents),
+        })}
       </label>
 
       {(sportsData?.sports.length ?? 0) > 0 && (
         <div className="space-y-1.5">
-          <Label className="text-xs">Skill Bank sports</Label>
+          <Label className="text-xs">{t("Skill Bank sports")}</Label>
           <div className="flex flex-wrap gap-x-4 gap-y-1.5">
             {sportsData!.sports.map((sport) => (
               <label key={sport} className="flex items-center gap-1.5 text-xs">
@@ -495,7 +513,7 @@ function AthleteBillingForm({ userId }: { userId: number; email: string }) {
       <BetaToggle beta={beta} setBeta={setBeta} />
 
       <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
-        {save.isPending ? "Saving…" : "Save billing"}
+        {save.isPending ? t("Saving…") : t("Save billing")}
       </Button>
     </div>
   );
@@ -504,13 +522,14 @@ function AthleteBillingForm({ userId }: { userId: number; email: string }) {
 /** isBetaAccount is the switch that exempts an account from every paywall, so it is
  * worth labelling as what it does rather than as a flag name. */
 function BetaToggle({ beta, setBeta }: { beta: boolean; setBeta: (v: boolean) => void }) {
+  const t = useT();
   return (
     <label className="flex items-start gap-1.5 text-xs">
       <Checkbox checked={beta} onCheckedChange={(c) => setBeta(c === true)} />
       <span>
-        Beta account
+        {t("Beta account")}
         <span className="block text-muted-foreground">
-          Exempt from every paywall, whatever the tier above says.
+          {t("Exempt from every paywall, whatever the tier above says.")}
         </span>
       </span>
     </label>

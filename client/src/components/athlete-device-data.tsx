@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReadFailed } from "@/components/read-failed";
 import { getJson } from "@/lib/queryClient";
 import type { ReadingNumbers } from "@shared/device-integrations";
+import { translate, useT } from "@/i18n";
 
 type Reading = {
   id: number;
@@ -26,25 +27,26 @@ const ZERO = 0;
 export function keyNumbers(n: ReadingNumbers): string[] {
   const parts: [number | null, (v: number) => string][] = [
     [n.loadKg, (v) => `${v.toFixed(ONE)} kg`],
-    [n.reps, (v) => `${v.toFixed(ZERO)} reps`],
-    [n.meanVelocityMps, (v) => `mean ${v.toFixed(TWO)} m/s`],
-    [n.peakVelocityMps, (v) => `peak ${v.toFixed(TWO)} m/s`],
+    [n.reps, (v) => translate("{n} reps", { n: v.toFixed(ZERO) })],
+    [n.meanVelocityMps, (v) => translate("mean {v} m/s", { v: v.toFixed(TWO) })],
+    [n.peakVelocityMps, (v) => translate("peak {v} m/s", { v: v.toFixed(TWO) })],
     [n.powerW, (v) => `${v.toFixed(ZERO)} W`],
-    [n.jumpHeightCm, (v) => `jump ${v.toFixed(ONE)} cm`],
+    [n.jumpHeightCm, (v) => translate("jump {v} cm", { v: v.toFixed(ONE) })],
   ];
   return parts.flatMap(([v, f]) => (v == null ? [] : [f(v)]));
 }
 
 export function AthleteDeviceData({ athleteId }: { athleteId: number }) {
+  const t = useT();
   const url = `/api/coach/roster/${athleteId}/device-readings`;
   const q = useQuery<{ readings: Reading[]; consentSentence: string | null }>({ queryKey: [url], queryFn: () => getJson(url) });
-  if (q.isError) return <ReadFailed what="this athlete's device data" onRetry={() => void q.refetch()} error={q.error} />;
+  if (q.isError) return <ReadFailed what={t("this athlete's device data")} onRetry={() => void q.refetch()} error={q.error} />;
   if (!q.data) return null;
   if (q.data.readings.length === 0 && !q.data.consentSentence) return null;
   return (
     <Card data-testid="athlete-device-data">
       <CardHeader>
-        <CardTitle className="text-base">Device data</CardTitle>
+        <CardTitle className="text-base">{t("Device data")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
         {q.data.consentSentence && <p className="text-sm text-muted-foreground">{q.data.consentSentence}</p>}
@@ -56,7 +58,7 @@ export function AthleteDeviceData({ athleteId }: { athleteId: number }) {
                 {new Date(r.recordedAt).toLocaleDateString()} · {r.deviceName}
               </span>
             </span>
-            <span className="text-xs">{keyNumbers(r.numbers).join(" · ") || "no numbers read"}</span>
+            <span className="text-xs">{keyNumbers(r.numbers).join(" · ") || t("no numbers read")}</span>
           </div>
         ))}
       </CardContent>

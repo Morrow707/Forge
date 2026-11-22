@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { LegalDocumentReader } from "@/components/legal-document-reader";
 import type { PublicUser } from "@shared/schema";
+import { useT } from "@/i18n";
 
 /** Asked once, before an adult athlete's first tracked set.
  *
@@ -40,6 +41,7 @@ export function BiometricReleaseDialog({
    * trying to do — being asked a question should not cost them the tap that prompted it. */
   onAgreed: () => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
 
   const agree = useMutation({
@@ -53,7 +55,7 @@ export function BiometricReleaseDialog({
       onOpenChange(false);
       onAgreed();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save that right now"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save that right now")),
   });
 
   return (
@@ -61,22 +63,17 @@ export function BiometricReleaseDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <ScanLine className="h-7 w-7 text-primary" />
-          <DialogTitle>Before we track this set</DialogTitle>
+          <DialogTitle>{t("Before we track this set")}</DialogTitle>
           <DialogDescription asChild>
             <div className="space-y-3 text-left text-sm text-muted-foreground">
               <p>
-                Tracking a set records video on your phone and measures your movement from it —
-                your joint positions frame by frame, and figures like bar speed, range of motion
-                and jump height.
+                {t("Tracking a set records video on your phone and measures your movement from it — your joint positions frame by frame, and figures like bar speed, range of motion and jump height.")}
               </p>
               <p>
-                The analysis runs on your own device. Your video and those measurements are
-                visible to you, your coach, and nobody else outside Forge. We never sell or trade
-                them.
+                {t("The analysis runs on your own device. Your video and those measurements are visible to you, your coach, and nobody else outside Forge. We never sell or trade them.")}
               </p>
               <p>
-                You can train without this. Say no and your sets still log normally — you just
-                won't get the camera measurements.
+                {t("You can train without this. Say no and your sets still log normally — you just won't get the camera measurements.")}
               </p>
               {/* Opens in place. This was a new-window link to
                   /biometric-release, which does nothing inside WKWebView --
@@ -85,7 +82,7 @@ export function BiometricReleaseDialog({
                   to read. */}
               <LegalDocumentReader
                 docType="biometric_waiver"
-                label="Read the full video and biometric consent"
+                label={t("Read the full video and biometric consent")}
               />
             </div>
           </DialogDescription>
@@ -94,10 +91,10 @@ export function BiometricReleaseDialog({
           {/* Listed first and styled quietly, but a real answer with no penalty — see this
               component's own comment on why refusing has to lead somewhere. */}
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-            Not now
+            {t("Not now")}
           </Button>
           <Button type="button" onClick={() => agree.mutate()} disabled={agree.isPending}>
-            {agree.isPending ? "Saving..." : "I agree — track my sets"}
+            {agree.isPending ? t("Saving...") : t("I agree — track my sets")}
           </Button>
         </DialogFooter>
       </DialogContent>

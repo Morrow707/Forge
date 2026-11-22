@@ -17,6 +17,7 @@ import { InjuryHistoryPanel } from "@/components/injury-history-panel";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
+import { useT } from "@/i18n";
 
 export function EditMyProfileDialog({
   user,
@@ -27,6 +28,7 @@ export function EditMyProfileDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [value, setValue] = useState<ProfileFieldsValue>(emptyProfileFields);
 
@@ -83,10 +85,10 @@ export function EditMyProfileDialog({
     },
     onSuccess: (updatedUser) => {
       qc.setQueryData(["/api/auth/me"], updatedUser);
-      toast.success("Profile updated");
+      toast.success(t("Profile updated"));
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not update profile"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not update profile")),
   });
 
   return (
@@ -101,10 +103,10 @@ export function EditMyProfileDialog({
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>My Profile</DialogTitle>
+          <DialogTitle>{t("My Profile")}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Your coach uses this to build the team leaderboard and get to know you.
+          {t("Your coach uses this to build the team leaderboard and get to know you.")}
         </p>
         <ProfileFieldsForm
           value={value}
@@ -116,14 +118,14 @@ export function EditMyProfileDialog({
         <InjuryHistoryPanel baseUrl="/api/athlete/injury-history" />
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
             type="button"
             onClick={() => saveMutation.mutate()}
             disabled={saveMutation.isPending}
           >
-            Save
+            {t("Save")}
           </Button>
         </DialogFooter>
       </DialogContent>

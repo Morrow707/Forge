@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { SCORABLE_MUSCLE_GROUPS } from "@shared/strength-score";
 import MANIFEST from "@/lib/body-map-manifest.json";
+import { useT } from "@/i18n";
 
 /**
  * ONE ANATOMICAL FIGURE, EVERYWHERE A MUSCLE IS DRAWN.
@@ -348,6 +349,7 @@ export function BodyMap({
    *  being tapped, gets the width instead (2026-11-17). */
   gutterShare?: number;
 }) {
+  const t = useT();
   // React's ids contain colons ("r:1:"), which are not safe inside a key used as an element id;
   // this drops every ":" -- ":r1:" becomes "r1", "r1" is left alone.
   // https://regex101.com/?regex=%3A&testString=%3Ar1%3A
@@ -464,7 +466,14 @@ export function BodyMap({
     });
   }, [labelled, leaders, fit, tile, size.h, rowGap]);
 
-  const ariaTitle = `${view === "front" ? "Front" : "Back"} of the body${interactive ? ", choose a muscle group" : ""}`;
+  const ariaTitle =
+    view === "front"
+      ? interactive
+        ? t("Front of the body, choose a muscle group")
+        : t("Front of the body")
+      : interactive
+        ? t("Back of the body, choose a muscle group")
+        : t("Back of the body");
   const groupsHere = MAN.groups.filter((g) => groupIsOnView(g, view, figure));
 
   return (
@@ -489,7 +498,7 @@ export function BodyMap({
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
         {failed && (
           <p className="absolute inset-0 flex items-center justify-center p-2 text-center text-xs text-muted-foreground">
-            The body map could not load.
+            {t("The body map could not load.")}
           </p>
         )}
         {labelled && fit && (
@@ -527,7 +536,7 @@ export function BodyMap({
                     fontSize={fontSize}
                     className={cn("tracking-wide", isSelected ? "fill-foreground" : "fill-muted-foreground")}
                   >
-                    {bodyMapLabel(l.group)}
+                    {t(bodyMapLabel(l.group))}
                   </text>
                   {caption && (
                     <text
@@ -559,7 +568,7 @@ export function BodyMap({
                 role="button"
                 tabIndex={0}
                 aria-pressed={selected === l.group}
-                aria-label={bodyMapLabel(l.group)}
+                aria-label={t(bodyMapLabel(l.group))}
                 className="absolute rounded outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 style={{
                   left: l.side === "left" ? 0 : size.w - width,
@@ -588,7 +597,7 @@ export function BodyMap({
               aria-pressed={selected === g}
               onClick={() => onSelect!(g)}
             >
-              {bodyMapLabel(g)}
+              {t(bodyMapLabel(g))}
             </button>
           ))}
         </div>
@@ -604,7 +613,7 @@ export function BodyMap({
           >
             {size.w < LAYOUT.narrowCredit ? BODY_MAP_CREDIT_SHORT : BODY_MAP_CREDIT}
           </span>
-          <span className="flex shrink-0 overflow-hidden rounded-md border border-border text-[11px]" role="group" aria-label="Figure">
+          <span className="flex shrink-0 overflow-hidden rounded-md border border-border text-[11px]" role="group" aria-label={t("Figure")}>
             {(["female", "male"] as const).map((f) => (
               <button
                 key={f}
@@ -616,7 +625,7 @@ export function BodyMap({
                 aria-pressed={figure === f}
                 className={cn("px-2 py-0.5", figure === f ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
               >
-                {f === "female" ? "Female" : "Male"}
+                {f === "female" ? t("Female") : t("Male")}
               </button>
             ))}
           </span>

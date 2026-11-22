@@ -18,15 +18,16 @@ import { todayIso } from "@/lib/local-date";
 import { FOOD_LOG_MEALS, FOOD_LOG_MEAL_LABEL, type FoodLogMeal } from "@shared/schema-constants";
 import { NutrientRings } from "@/components/nutrient-rings";
 import { ReadFailed } from "@/components/read-failed";
+import { msg, useT } from "@/i18n";
 
 const MICRO_FIELDS = [
-  ["calciumMg", "Calcium", "mg"],
-  ["ironMg", "Iron", "mg"],
-  ["vitaminDMcg", "Vitamin D", "mcg"],
-  ["potassiumMg", "Potassium", "mg"],
-  ["magnesiumMg", "Magnesium", "mg"],
-  ["vitaminB12Mcg", "Vitamin B12", "mcg"],
-  ["zincMg", "Zinc", "mg"],
+  ["calciumMg", msg("Calcium"), "mg"],
+  ["ironMg", msg("Iron"), "mg"],
+  ["vitaminDMcg", msg("Vitamin D"), "mcg"],
+  ["potassiumMg", msg("Potassium"), "mg"],
+  ["magnesiumMg", msg("Magnesium"), "mg"],
+  ["vitaminB12Mcg", msg("Vitamin B12"), "mcg"],
+  ["zincMg", msg("Zinc"), "mg"],
 ] as const;
 
 // Barcode scanning (@zxing/browser) and the photo-analysis path it drags in
@@ -105,26 +106,27 @@ type Targets = {
 // foodLogMealEnum in shared/schema.ts for why that bucket has to exist at all.
 const MEAL_SECTIONS: { key: FoodLogMeal | null; label: string }[] = [
   ...FOOD_LOG_MEALS.map((key) => ({ key: key as FoodLogMeal | null, label: FOOD_LOG_MEAL_LABEL[key] })),
-  { key: null, label: "Not sorted" },
+  { key: null, label: msg("Not sorted") },
 ];
 
 const MICRO_TARGET_FIELDS = [
-  ["calciumMg", "Calcium", "mg"],
-  ["ironMg", "Iron", "mg"],
-  ["vitaminDMcg", "Vitamin D", "mcg"],
-  ["potassiumMg", "Potassium", "mg"],
-  ["magnesiumMg", "Magnesium", "mg"],
-  ["sodiumMg", "Sodium", "mg"],
-  ["vitaminB12Mcg", "Vitamin B12", "mcg"],
-  ["zincMg", "Zinc", "mg"],
+  ["calciumMg", msg("Calcium"), "mg"],
+  ["ironMg", msg("Iron"), "mg"],
+  ["vitaminDMcg", msg("Vitamin D"), "mcg"],
+  ["potassiumMg", msg("Potassium"), "mg"],
+  ["magnesiumMg", msg("Magnesium"), "mg"],
+  ["sodiumMg", msg("Sodium"), "mg"],
+  ["vitaminB12Mcg", msg("Vitamin B12"), "mcg"],
+  ["zincMg", msg("Zinc"), "mg"],
 ] as const;
 
 export function ProgressBar({ label, value, target, unit }: { label: string; value: number; target: number | null; unit: string }) {
+  const t = useT();
   const pct = target ? Math.min(100, Math.round((value / target) * 100)) : null;
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between text-xs">
-        <span className="font-medium">{label}</span>
+        <span className="font-medium">{t(label)}</span>
         <span className="text-muted-foreground">
           {Math.round(value)}
           {target ? ` / ${target}` : ""} {unit}
@@ -164,6 +166,7 @@ export function FoodLogPanel({
   date: string;
   onDateChange: (updater: string | ((d: string) => string)) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [scannerOpen, setScannerOpen] = useState(false);
   // Sticky once true -- mounts the lazy dialog (and fetches its chunk) the
@@ -185,7 +188,7 @@ export function FoodLogPanel({
       await apiRequest("DELETE", `/api/athlete/food-log/${id}`);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey }),
-    onError: () => toast.error("Couldn't remove that entry"),
+    onError: () => toast.error(t("Couldn't remove that entry")),
   });
 
   function handleEntrySaved() {
@@ -220,7 +223,7 @@ export function FoodLogPanel({
   return (
     <div className="space-y-4 border-t border-border pt-4">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Food Log</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("Food Log")}</p>
         <div className="flex items-center gap-1">
           <Button
             type="button"
@@ -228,12 +231,12 @@ export function FoodLogPanel({
             variant="ghost"
             className="h-7 w-7"
             onClick={() => setDate((d) => format(addDays(parseISO(d), -1), "yyyy-MM-dd"))}
-            aria-label="Previous day"
+            aria-label={t("Previous day")}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="min-w-24 text-center text-xs text-muted-foreground">
-            {isToday ? "Today" : format(parseISO(date), "MMM d")}
+            {isToday ? t("Today") : format(parseISO(date), "MMM d")}
           </span>
           <Button
             type="button"
@@ -242,7 +245,7 @@ export function FoodLogPanel({
             className="h-7 w-7"
             disabled={isToday}
             onClick={() => setDate((d) => format(addDays(parseISO(d), 1), "yyyy-MM-dd"))}
-            aria-label="Next day"
+            aria-label={t("Next day")}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -254,7 +257,7 @@ export function FoodLogPanel({
       ) : isError ? (
         // Without this the rings render from a zeroed total, which reads as "you have eaten
         // nothing today" -- a claim about somebody's intake made by a request that never landed.
-        <ReadFailed what="today's food log" onRetry={() => void refetch()} />
+        <ReadFailed what={t("today's food log")} onRetry={() => void refetch()} />
       ) : (
         <>
           <NutrientRings
@@ -284,7 +287,7 @@ export function FoodLogPanel({
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
               >
                 <ChevronDown className={`h-3 w-3 transition-transform ${dayMicrosOpen ? "rotate-180" : ""}`} />
-                Micros
+                {t("Micros")}
               </button>
               {dayMicrosOpen && (
                 <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-muted-foreground sm:grid-cols-4">
@@ -292,7 +295,7 @@ export function FoodLogPanel({
                     const target = targets?.[key] ?? null;
                     return (
                       <div key={key} className="flex justify-between">
-                        <span>{label}</span>
+                        <span>{t(label)}</span>
                         <span>
                           {Math.round(totals[key])}
                           {target ? `/${target}` : ""} {unit}
@@ -312,7 +315,7 @@ export function FoodLogPanel({
               now lets them do. An empty meal renders nothing rather than an empty heading. */}
           <div className="space-y-3">
             {!data?.entries.length && (
-              <p className="py-3 text-center text-sm text-muted-foreground">Nothing logged yet.</p>
+              <p className="py-3 text-center text-sm text-muted-foreground">{t("Nothing logged yet.")}</p>
             )}
             {MEAL_SECTIONS.map(({ key, label }) => {
               const inMeal = (data?.entries ?? []).filter((e) => (e.meal ?? null) === key);
@@ -322,9 +325,9 @@ export function FoodLogPanel({
                 <div key={label} className="space-y-1.5">
                   <div className="flex items-baseline justify-between">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {label}
+                      {t(label)}
                     </p>
-                    <span className="text-xs text-muted-foreground">{Math.round(mealCalories)} kcal</span>
+                    <span className="text-xs text-muted-foreground">{t("{kcal} kcal", { kcal: Math.round(mealCalories) })}</span>
                   </div>
                   {inMeal.map((e) => {
                 const presentMicros = MICRO_FIELDS.filter(([key]) => e[key] != null);
@@ -336,8 +339,8 @@ export function FoodLogPanel({
                         <p className="truncate font-medium">{e.description}</p>
                         <p className="text-xs text-muted-foreground">
                           {e.servingDescription ? `${e.servingDescription}, ` : ""}
-                          {e.caloriesKcal ?? "?"} kcal
-                          {e.proteinG != null ? `, ${e.proteinG}g protein` : ""}
+                          {t("{kcal} kcal", { kcal: e.caloriesKcal ?? "?" })}
+                          {e.proteinG != null ? `, ${t("{grams}g protein", { grams: e.proteinG })}` : ""}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-0.5">
@@ -346,7 +349,7 @@ export function FoodLogPanel({
                             type="button"
                             variant="ghost"
                             size="icon"
-                            aria-label={microsOpen ? "Hide micros" : "Show micros"}
+                            aria-label={microsOpen ? t("Hide micros") : t("Show micros")}
                             onClick={() =>
                               setExpandedMicros((prev) => {
                                 const next = new Set(prev);
@@ -367,7 +370,7 @@ export function FoodLogPanel({
                               type="button"
                               variant="ghost"
                               size="icon"
-                              aria-label="Edit entry"
+                              aria-label={t("Edit entry")}
                               onClick={() => setEditingEntry(e)}
                             >
                               <Pencil className="h-3.5 w-3.5" />
@@ -376,7 +379,7 @@ export function FoodLogPanel({
                               type="button"
                               variant="ghost"
                               size="icon"
-                              aria-label="Remove entry"
+                              aria-label={t("Remove entry")}
                               onClick={() => deleteMutation.mutate(e.id)}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -389,7 +392,7 @@ export function FoodLogPanel({
                       <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-border pt-2 text-xs text-muted-foreground sm:grid-cols-3">
                         {presentMicros.map(([key, label, unit]) => (
                           <div key={key} className="flex justify-between">
-                            <span>{label}</span>
+                            <span>{t(label)}</span>
                             <span className="font-medium text-foreground">
                               {e[key]}
                               {unit}
@@ -418,7 +421,7 @@ export function FoodLogPanel({
           }}
         >
           <Plus className="h-4 w-4" />
-          Log Food
+          {t("Log Food")}
         </Button>
       )}
 
@@ -458,16 +461,17 @@ function WaterSection({
   date: string;
   onChanged: () => void;
 }) {
+  const t = useT();
   const addMutation = useMutation({
     mutationFn: (amountOz: number) =>
       apiRequest("POST", "/api/athlete/water-log", { date, amountOz }),
     onSuccess: onChanged,
-    onError: () => toast.error("Couldn't log that"),
+    onError: () => toast.error(t("Couldn't log that")),
   });
   const removeMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/athlete/water-log/${id}`),
     onSuccess: onChanged,
-    onError: () => toast.error("Couldn't remove that"),
+    onError: () => toast.error(t("Couldn't remove that")),
   });
   // CORRECTING A POUR RATHER THAN DELETING IT. Scott, 2026-09-23: "if I put in the wrong water
   // amount, there's no way to go back or edit it." Removing and re-tapping was the only route,
@@ -481,7 +485,7 @@ function WaterSection({
       setEditingId(null);
       onChanged();
     },
-    onError: () => toast.error("Couldn't change that"),
+    onError: () => toast.error(t("Couldn't change that")),
   });
   function commitEdit(id: number) {
     const oz = Number(draftOz);
@@ -512,7 +516,7 @@ function WaterSection({
               disabled={addMutation.isPending}
               onClick={() => addMutation.mutate(oz)}
             >
-              +{oz} oz
+              {t("+{oz} oz", { oz })}
             </Button>
           ))}
         </div>
@@ -545,9 +549,9 @@ function WaterSection({
                       if (e.key === "Escape") setEditingId(null);
                     }}
                     className="w-16 rounded border border-primary bg-transparent px-1.5 py-0.5 text-xs"
-                    aria-label="Amount in ounces"
+                    aria-label={t("Amount in ounces")}
                   />
-                  <span className="text-muted-foreground">oz</span>
+                  <span className="text-muted-foreground">{t("oz")}</span>
                 </span>
               ) : (
                 // The whole row is the control, not a pencil hiding in the corner: on a phone a
@@ -562,7 +566,7 @@ function WaterSection({
                   }}
                   className="text-left underline-offset-2 disabled:cursor-default hover:underline"
                 >
-                  {format(parseISO(entry.loggedAt), "h:mm a")} &middot; {entry.amountOz} oz
+                  {t("{time} · {oz} oz", { time: t.date(parseISO(entry.loggedAt), { hour: "numeric", minute: "2-digit" }), oz: entry.amountOz })}
                 </button>
               )}
               {editable && (
@@ -571,7 +575,7 @@ function WaterSection({
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6"
-                  aria-label={`Remove ${entry.amountOz} oz entry`}
+                  aria-label={t("Remove {oz} oz entry", { oz: entry.amountOz })}
                   disabled={removeMutation.isPending}
                   onClick={() => removeMutation.mutate(entry.id)}
                 >
@@ -587,12 +591,12 @@ function WaterSection({
 }
 
 const MACRO_FIELDS = [
-  ["caloriesKcal", "Calories", ""],
-  ["proteinG", "Protein", "g"],
-  ["carbsG", "Carbs", "g"],
-  ["fatG", "Fat", "g"],
-  ["fiberG", "Fiber", "g"],
-  ["sodiumMg", "Sodium", "mg"],
+  ["caloriesKcal", msg("Calories"), ""],
+  ["proteinG", msg("Protein"), "g"],
+  ["carbsG", msg("Carbs"), "g"],
+  ["fatG", msg("Fat"), "g"],
+  ["fiberG", msg("Fiber"), "g"],
+  ["sodiumMg", msg("Sodium"), "mg"],
 ] as const;
 
 type EditableField = (typeof MACRO_FIELDS)[number][0] | (typeof MICRO_FIELDS)[number][0];
@@ -610,6 +614,7 @@ function EditFoodEntryDialog({
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 }) {
+  const t = useT();
   const [description, setDescription] = useState("");
   const [values, setValues] = useState<Partial<Record<EditableField, string>>>({});
   const [micrasOpen, setMicrosOpen] = useState(false);
@@ -648,21 +653,21 @@ function EditFoodEntryDialog({
       await apiRequest("PATCH", `/api/athlete/food-log/${entry!.id}`, payload);
     },
     onSuccess: () => {
-      toast.success("Entry updated");
+      toast.success(t("Entry updated"));
       onSaved();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save changes"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save changes")),
   });
 
   return (
     <Dialog open={entry != null} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit Entry</DialogTitle>
+          <DialogTitle>{t("Edit Entry")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="edit-food-desc">Food</Label>
+            <Label htmlFor="edit-food-desc">{t("Food")}</Label>
             <Input
               id="edit-food-desc"
               value={description}
@@ -670,7 +675,7 @@ function EditFoodEntryDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <p className="label-xs">Meal</p>
+            <p className="label-xs">{t("Meal")}</p>
             <div className="flex flex-wrap gap-1">
               {MEAL_SECTIONS.map(({ key, label }) => (
                 <Button
@@ -681,7 +686,7 @@ function EditFoodEntryDialog({
                   className="h-7 px-2.5 text-xs"
                   onClick={() => setMeal(key)}
                 >
-                  {label}
+                  {t(label)}
                 </Button>
               ))}
             </div>
@@ -690,7 +695,7 @@ function EditFoodEntryDialog({
             {MACRO_FIELDS.map(([key, label, unit]) => (
               <div key={key} className="space-y-1">
                 <Label htmlFor={`edit-${key}`} className="text-xs">
-                  {label}
+                  {t(label)}
                   {unit ? ` (${unit})` : ""}
                 </Label>
                 <Input
@@ -711,14 +716,14 @@ function EditFoodEntryDialog({
             className="flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
           >
             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${micrasOpen ? "rotate-180" : ""}`} />
-            Micros (optional)
+            {t("Micros (optional)")}
           </button>
           {micrasOpen && (
             <div className="grid grid-cols-3 gap-2">
               {MICRO_FIELDS.map(([key, label, unit]) => (
                 <div key={key} className="space-y-1">
                   <Label htmlFor={`edit-${key}`} className="text-xs">
-                    {label} ({unit})
+                    {t(label)} ({unit})
                   </Label>
                   <Input
                     id={`edit-${key}`}
@@ -735,14 +740,14 @@ function EditFoodEntryDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
             type="button"
             disabled={!description.trim() || saveMutation.isPending}
             onClick={() => saveMutation.mutate()}
           >
-            {saveMutation.isPending ? "Saving…" : "Save Changes"}
+            {saveMutation.isPending ? t("Saving…") : t("Save Changes")}
           </Button>
         </DialogFooter>
       </DialogContent>
