@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COACHES_CORNER_TRACKS_2026_10, COACHES_CORNER_TRACKS_2026_10_04, ALL_REPO_COACHES_CORNER_TRACKS } from "./index";
+import { COACHES_CORNER_TRACKS_2026_10, COACHES_CORNER_TRACKS_2026_10_04, COACHES_CORNER_TRACKS_2026_11, ALL_REPO_COACHES_CORNER_TRACKS } from "./index";
 import { longestSharedRun } from "../../academy-draft-guard";
 
 /** The 2026-10-03 tracks: four lessons and eight questions each, one correct answer per
@@ -10,7 +10,8 @@ describe("the repo-written Coaches Corner tracks", () => {
   it("are complete and well formed", () => {
     expect(COACHES_CORNER_TRACKS_2026_10.length).toBe(6);
     expect(COACHES_CORNER_TRACKS_2026_10_04.length).toBe(11);
-    expect(new Set(ALL_REPO_COACHES_CORNER_TRACKS.map((t) => t.title)).size).toBe(17);
+    expect(COACHES_CORNER_TRACKS_2026_11.length).toBe(7);
+    expect(new Set(ALL_REPO_COACHES_CORNER_TRACKS.map((t) => t.title)).size).toBe(24);
     for (const t of ALL_REPO_COACHES_CORNER_TRACKS) {
       expect(t.lessons).toHaveLength(4);
       expect(t.quizQuestions).toHaveLength(8);

@@ -17,6 +17,13 @@ import { AEROBIC_PROGRAMMING_TRACK } from "./aerobic-programming";
 import { MIND_IN_PERFORMANCE_TRACK } from "./mind-in-performance";
 import { WOMEN_OLDER_RETURNING_TRACK } from "./women-older-returning";
 import { FACILITY_TRACK } from "./facility";
+import { WARMUPS_THAT_WORK_TRACK } from "./warmups-that-work";
+import { KEEPING_THROWERS_HEALTHY_TRACK } from "./keeping-throwers-healthy";
+import { LANDING_AND_CUTTING_TRACK } from "./landing-and-cutting";
+import { HAMSTRINGS_AND_GROINS_TRACK } from "./hamstrings-and-groins";
+import { RETURNING_AFTER_INJURY_TRACK } from "./returning-after-injury";
+import { COACHING_GIRLS_TEAMS_TRACK } from "./coaching-girls-teams";
+import { HEAT_SCHEDULES_LOAD_TRACK } from "./heat-schedules-load";
 
 /** The 2026-10-03 Coaches Corner tracks, appended after the original seven in server/seed.ts.
  * Order here is catalog order. */
@@ -47,8 +54,25 @@ export const COACHES_CORNER_TRACKS_2026_10_04: SeedAcademyTrack[] = [
   FACILITY_TRACK,
 ];
 
-/** Every repo-written track, both batches, for the tests and anything that needs the lot. */
-export const ALL_REPO_COACHES_CORNER_TRACKS: SeedAcademyTrack[] = [...COACHES_CORNER_TRACKS_2026_10, ...COACHES_CORNER_TRACKS_2026_10_04];
+/** The 2026-11-22 tracks, written from Forge's own research review of published studies
+ * (server/seed-data/research-review; Scott: "yes 11"). Forge's outline, Forge's words, studies
+ * described and never quoted, no textbook. Appended after the 2026-10-04 eleven. */
+export const COACHES_CORNER_TRACKS_2026_11: SeedAcademyTrack[] = [
+  WARMUPS_THAT_WORK_TRACK,
+  KEEPING_THROWERS_HEALTHY_TRACK,
+  LANDING_AND_CUTTING_TRACK,
+  HAMSTRINGS_AND_GROINS_TRACK,
+  RETURNING_AFTER_INJURY_TRACK,
+  COACHING_GIRLS_TEAMS_TRACK,
+  HEAT_SCHEDULES_LOAD_TRACK,
+];
+
+/** Every repo-written track, every batch, for the tests and anything that needs the lot. */
+export const ALL_REPO_COACHES_CORNER_TRACKS: SeedAcademyTrack[] = [
+  ...COACHES_CORNER_TRACKS_2026_10,
+  ...COACHES_CORNER_TRACKS_2026_10_04,
+  ...COACHES_CORNER_TRACKS_2026_11,
+];
 
 /** Every repo-written track, the original seven first: the order the seed creates them in. */
 export const ALL_COACHES_CORNER_TRACKS: SeedAcademyTrack[] = [...COACHES_CORNER_TRACKS_ORIGINAL, ...ALL_REPO_COACHES_CORNER_TRACKS];
@@ -84,6 +108,23 @@ export const COACHES_CORNER_PATHS_2026_10 = [
       "Training Women, Older Athletes and Athletes Coming Back",
       "Lifting Technique, Spotting & Weight Room Safety",
       "The Weight Room as a Facility",
+    ],
+  },
+  {
+    // 2026-11-22: the seven research-review tracks, in the order a coach would use them.
+    title: "Keeping Athletes Healthy",
+    audience: "A coach who wants fewer athletes on the sideline, with the evidence behind each habit.",
+    description:
+      "The warm-up that cuts injuries, the knee, ankle, hamstring and groin work with trials behind it, arm care for throwers, what is different about girls' teams, heat and in-season load, and the coach's part when an athlete comes back from an injury.",
+    orderIndex: 5,
+    trackTitles: [
+      "Warm-Ups That Work",
+      "Landing and Cutting: Reducing Knee and Ankle Injuries",
+      "Hamstrings and Groins: The Strength Work That Protects",
+      "Keeping Throwers Healthy",
+      "Coaching Girls' Teams: What the Injury Data Says",
+      "Heat, Schedules and In-Season Load",
+      "Returning to Training After an Injury: The Coach's Part",
     ],
   },
   {

@@ -1,0 +1,2505 @@
+{
+ "group": "B",
+ "generated": "2026-11-22",
+ "method": "PubMed E-utilities searches; every cited source's abstract was fetched in this session. Effect sizes are as reported in the abstract. Findings are paraphrased.",
+ "sports": [
+  {
+   "sport": "basketball",
+   "demands": [
+    {
+     "finding": "Basketball is intermittent and high-intensity: across a 40-minute game players cover roughly 5-6 km of live-time movement and spend much of it above lactate threshold and above 85% of maximal heart rate. Vigorous activity drops in the fourth quarter. Men and women at the same level face similar demands. (Mostly adult and elite samples.)",
+     "sources": [
+      "PMID:29039018"
+     ]
+    },
+    {
+     "finding": "In elite under-19 players, sprinting took about 5% of live time and jumping about 2%; mean heart rate was about 171 beats/min and blood lactate averaged about 5.5 mmol/L, higher at half time than at full time. So both the aerobic base and repeat-sprint/anaerobic capacity matter.",
+     "sources": [
+      "PMID:17138630"
+     ]
+    },
+    {
+     "finding": "Accelerations, decelerations, jumps and multidirectional shuffling make up the mechanical load. In elite junior female players (about 17 years old), acceleration-to-deceleration ratios rose with high-intensity efforts in close fourth quarters; the authors recommend eccentric strength and specific conditioning, especially before tournament-style congested schedules.",
+     "sources": [
+      "PMID:35565053"
+     ]
+    },
+    {
+     "finding": "In female basketball, accelerometer 'player load' rises with competitive level and is higher in games than practice. Small-sided games (3v3) produced more load and distance than 5v5, so coaches can use court size and player numbers to progress conditioning in practice.",
+     "sources": [
+      "PMID:37559766"
+     ]
+    },
+    {
+     "finding": "Key qualities, based on these profiles: repeated sprint and change-of-direction ability, vertical jump and landing capacity, eccentric braking strength for decelerations, and an aerobic base that supports recovery between bursts.",
+     "sources": [
+      "PMID:29039018",
+      "PMID:35565053",
+      "PMID:40453900"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "US high school surveillance (2005-2014): boys' time-loss injury rate was 1.55 per 1000 athlete-exposures (AEs) and girls' 1.82; game rates were about 2.4x (boys) and 3.0x (girls) practice rates. The commonest injuries were ligament sprains, muscle/tendon strains and concussions, mostly to the ankle, knee and head/face. Contact with another player and non-contact mechanisms caused most injuries.",
+     "sources": [
+      "PMID:30715912",
+      "PMID:30715913"
+     ]
+    },
+    {
+     "finding": "Meta-analysis across basketball studies: ACL injury rate was 0.20 per 1000 AEs in females vs 0.07 in males (about 3.3x higher in females), and about 8x higher in games than practice. Ankle sprains were the more common injury overall (about 0.8-0.9 per 1000 AEs), slightly more common in males, and also higher in games.",
+     "sources": [
+      "PMID:36752659"
+     ]
+    },
+    {
+     "finding": "In youth (11-18) soccer and basketball players in Canada, basketball carried about 1.8x the ankle-sprain risk of soccer, and a previous ankle sprain doubled the risk of another.",
+     "sources": [
+      "PMID:29864071"
+     ]
+    },
+    {
+     "finding": "In US high school sports, season- or career-ending injuries were about 1.6x more common in girls' than boys' basketball; the knee (most often the ACL) was the commonest site of these disqualifying injuries.",
+     "sources": [
+      "PMID:27166289"
+     ]
+    },
+    {
+     "finding": "Jumper's knee (patellar tendinopathy) was present in about 32% of Norwegian elite male basketball players, and basketball was among the sports with the highest prevalence in a Dutch survey of non-elite athletes.",
+     "sources": [
+      "PMID:15722279",
+      "PMID:21737835"
+     ]
+    },
+    {
+     "finding": "Among sex-comparable high school sports (including basketball and soccer), girls had about 2.2x the concussion rate of boys (2013-2018 surveillance).",
+     "sources": [
+      "PMID:31615955"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Guards",
+     "differences": [
+      "Spend more live time sprinting and in high-intensity shuffling, and less time standing/walking, than forwards and centers; they show higher heart rates and blood lactate.",
+      "Among male professionals they cover the most distance and perform the most accelerations and decelerations."
+     ],
+     "sources": [
+      "PMID:29039018",
+      "PMID:17138630",
+      "PMID:40453900"
+     ]
+    },
+    {
+     "position": "Forwards",
+     "differences": [
+      "Perform more high-speed and high-intensity running than other positions in male professional samples."
+     ],
+     "sources": [
+      "PMID:40453900"
+     ]
+    },
+    {
+     "position": "Centers (post)",
+     "differences": [
+      "Less live time in high-intensity activity than guards (about 14.7% vs 17.1% in elite U19); more rebounding and contact-heavy work. Some studies report higher heart rates in centers, so findings are mixed.",
+      "In elite junior females, centers showed more variable output across quarters, which the authors suggest needs position-specific conditioning."
+     ],
+     "sources": [
+      "PMID:17138630",
+      "PMID:40453900",
+      "PMID:35565053"
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "A coach-delivered 10-minute neuromuscular warm-up (SHRed Injuries Basketball) lowered ankle and knee injuries in youth players aged 11-18, and it worked as well unsupervised as supervised.",
+     "exercises": [
+      "aerobic running",
+      "agility",
+      "strength",
+      "balance (13 exercises total)"
+     ],
+     "dose": "10 minutes as the practice warm-up, every session, through a season",
+     "effect": "36% lower ankle and knee injury rate (IRR 0.64, 95% CI 0.51-0.79)",
+     "sources": [
+      "PMID:34972488"
+     ]
+    },
+    {
+     "finding": "A coach-led 20-minute neuromuscular warm-up in Chicago public high schools reduced non-contact lower-limb injuries in girls' soccer and basketball.",
+     "exercises": [
+      "strengthening",
+      "plyometrics",
+      "balance",
+      "agility"
+     ],
+     "dose": "20 minutes before practice; used in about 80% of practices",
+     "effect": "Non-contact lower-limb injuries IRR 0.33; non-contact ankle sprains 0.38; non-contact knee sprains 0.30; non-contact ACL 0.20",
+     "sources": [
+      "PMID:22065184"
+     ]
+    },
+    {
+     "finding": "A multicomponent warm-up in regional-level adult basketball players cut ankle sprains and non-contact lower-limb injuries.",
+     "exercises": [
+      "running drills",
+      "active stretching",
+      "plyometrics",
+      "balance",
+      "strength",
+      "agility"
+     ],
+     "dose": "Whole season, as the team warm-up",
+     "effect": "Ankle sprain IRR 0.26 (95% CI 0.05-0.98); trend toward fewer knee injuries",
+     "sources": [
+      "PMID:36208619"
+     ]
+    },
+    {
+     "finding": "Pooled youth soccer and basketball data: exposure to a neuromuscular warm-up was protective against ankle sprains.",
+     "exercises": [
+      "aerobic",
+      "strength",
+      "agility",
+      "balance"
+     ],
+     "dose": "Team warm-up",
+     "effect": "Ankle sprain IRR 0.68 (95% CI 0.46-0.99)",
+     "sources": [
+      "PMID:29864071"
+     ]
+    },
+    {
+     "finding": "Plyometric/landing training before the season reduced serious knee injuries in high school female basketball, soccer and volleyball players to about the male rate.",
+     "exercises": [
+      "jump and landing technique",
+      "plyometrics",
+      "strength",
+      "stretching"
+     ],
+     "dose": "Pre-season program",
+     "effect": "Knee injury 0.43 vs 0.12 per 1000 AEs (untrained vs trained girls); no non-contact knee injuries in trained girls",
+     "sources": [
+      "PMID:10569353"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "Neuromuscular training warm-ups are recommended as the minimum standard of practice in youth basketball by the SHRed trial authors; coach delivery without study staff gave the same benefit.",
+     "sources": [
+      "PMID:34972488"
+     ]
+    },
+    {
+     "finding": "Warm-ups that combine running, strength, plyometrics, balance and agility have the strongest evidence in high school girls' basketball.",
+     "sources": [
+      "PMID:22065184",
+      "PMID:32067546"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "High school game injury rates are 2-3x practice rates, so match play is when knee and ankle exposure peaks.",
+     "sources": [
+      "PMID:30715912",
+      "PMID:30715913"
+     ]
+    },
+    {
+     "finding": "Interventions aimed at middle and high school-aged athletes reduce ACL injuries more than those aimed at college or professional athletes (OR 0.38 vs 0.65).",
+     "sources": [
+      "PMID:30001501"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "volleyball",
+   "demands": [
+    {
+     "finding": "Volleyball is a short-burst, jump-dominated sport. A 2026 systematic review of match play found setters perform the most jumps overall, while middle blockers and outside/opposite hitters perform the most high (>50 cm) jumps. Female players jump more often but lower than males and report higher internal load.",
+     "sources": [
+      "PMID:41460726"
+     ]
+    },
+    {
+     "finding": "In NCAA Division I women, jump load was higher in practice than in matches, and about 75% of landings were two-footed. Practice volume, not just matches, is where most jump-landing load comes from.",
+     "sources": [
+      "PMID:31062948"
+     ]
+    },
+    {
+     "finding": "Key qualities: vertical jump and reach, repeated jump-landing tolerance, reactive agility for defense, and shoulder power and endurance for serving and attacking.",
+     "sources": [
+      "PMID:41460726",
+      "PMID:27385546",
+      "PMID:25713683"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "US high school girls' volleyball (2005-2014) time-loss injury rate was 1.11 per 1000 AEs, higher in games than practice (IRR 1.23) and higher in smaller schools. Ankle sprains were common; liberos had a notably high share of concussions.",
+     "sources": [
+      "PMID:30485148"
+     ]
+    },
+    {
+     "finding": "Common volleyball injuries across levels are ankle sprains, patellar tendinopathy, finger and thumb sprains, overuse shoulder problems and concussions.",
+     "sources": [
+      "PMID:37014607",
+      "PMID:28391750"
+     ]
+    },
+    {
+     "finding": "In youth (12-18) volleyball, mostly female, the ankle, then wrist/hand/fingers, then the knee were the most injured sites.",
+     "sources": [
+      "PMID:37789463"
+     ]
+    },
+    {
+     "finding": "In Dutch club players, ankle sprains were 41% of all injuries, and 75% of players who sprained an ankle had sprained it before. Overuse injuries were mainly back and shoulder.",
+     "sources": [
+      "PMID:15273190"
+     ]
+    },
+    {
+     "finding": "Mechanism: in world-class volleyball, most ankle injuries happened while blocking and landing on an opponent's foot under the net, or a back-row attacker landing on a front-row teammate; the ankle rolled into rapid inversion without much plantarflexion.",
+     "sources": [
+      "PMID:28655743"
+     ]
+    },
+    {
+     "finding": "Jumper's knee prevalence was about 45% in Norwegian elite male volleyball players and 14% in Dutch non-elite players, the highest of the sports surveyed; men had about twice the prevalence of women.",
+     "sources": [
+      "PMID:15722279",
+      "PMID:21737835"
+     ]
+    },
+    {
+     "finding": "In elite male university and professional players, average weekly prevalence of knee, low back and shoulder problems was 31%, 21% and 19%; most players reported some complaint during the season and many played with pain.",
+     "sources": [
+      "PMID:36913632"
+     ]
+    },
+    {
+     "finding": "Landing from a jump caused 57-82% of ACL injuries in overhead sports such as volleyball (video and case analyses).",
+     "sources": [
+      "PMID:40690162"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Setters",
+     "differences": [
+      "Highest total jump volume in match play.",
+      "Shorter and with lower jump output than middle blockers in some samples; greater shoulder extension range than other roles in one sensor study."
+     ],
+     "sources": [
+      "PMID:41460726",
+      "PMID:42346767",
+      "PMID:27385546"
+     ]
+    },
+    {
+     "position": "Middle blockers and outside/opposite hitters",
+     "differences": [
+      "Most high jumps (>50 cm); middle blockers are tallest with highest block and spike reach and best squat/countermovement jumps.",
+      "Blocking at the net is the main ankle-sprain situation."
+     ],
+     "sources": [
+      "PMID:41460726",
+      "PMID:25713683",
+      "PMID:42346767",
+      "PMID:28655743"
+     ]
+    },
+    {
+     "position": "Liberos",
+     "differences": [
+      "Defensive specialists with lower jump output but fast agility; high perceived exertion in matches.",
+      "High share of concussions in US high school and college surveillance (dives and collisions)."
+     ],
+     "sources": [
+      "PMID:41460726",
+      "PMID:27385546",
+      "PMID:30485148"
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "A proprioceptive balance-board program in volleyball players reduced ankle sprains, but only in players with a previous sprain; it raised overuse knee injuries in players with a previous knee injury.",
+     "exercises": [
+      "balance board drills",
+      "single-leg balance"
+     ],
+     "dose": "Season-long, during training",
+     "effect": "Risk difference 0.4 ankle sprains per 1000 playing hours",
+     "sources": [
+      "PMID:15310562"
+     ]
+    },
+    {
+     "finding": "Across volleyball prevention studies, programs aimed at the ankle reduced ankle injuries.",
+     "exercises": [
+      "balance",
+      "proprioceptive training",
+      "technique"
+     ],
+     "dose": "Varied",
+     "effect": "Ankle injuries fell from about 0.9 to 0.5 per 1000 player hours",
+     "sources": [
+      "PMID:28391750"
+     ]
+    },
+    {
+     "finding": "A shoulder-focused warm-up added twice a week reduced total injuries and injury severity in recreational volleyball players, with a significant shoulder-injury reduction in men.",
+     "exercises": [
+      "rotator cuff and scapular exercises in the warm-up"
+     ],
+     "dose": "Start of each training session, twice per week",
+     "effect": "Significant drop in total injuries; shoulder injuries lower (significant in males)",
+     "sources": [
+      "PMID:37812954"
+     ]
+    },
+    {
+     "finding": "For overhead athletes, three modifiable shoulder risk factors guide prevention: loss of internal rotation (GIRD), weak external rotators, and scapular dyskinesis.",
+     "exercises": [
+      "posterior shoulder stretching",
+      "external rotation strengthening",
+      "scapular stabilizer training"
+     ],
+     "dose": "Year-round maintenance",
+     "effect": "Narrative and systematic review evidence; range of motion, cuff weakness and training load are the key modifiable factors",
+     "sources": [
+      "PMID:26537804",
+      "PMID:32758080"
+     ]
+    },
+    {
+     "finding": "Neuromuscular training reduced ankle sprains in female court-sport athletes including volleyball; comprehensive programs (strength, balance, plyometrics, agility) gave the clearest effect.",
+     "exercises": [
+      "strength",
+      "balance",
+      "plyometric",
+      "agility"
+     ],
+     "dose": "Team warm-up or training block",
+     "effect": "2 of 7 studies significant, others trending; benefit greatest for non-contact sprains",
+     "sources": [
+      "PMID:32067546"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "A volleyball-specific shoulder warm-up is feasible and protective in recreational players, though compliance needs work.",
+     "sources": [
+      "PMID:37812954"
+     ]
+    },
+    {
+     "finding": "Neuromuscular warm-ups in high school girls including volleyball players reduced serious knee injuries.",
+     "sources": [
+      "PMID:10569353"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "Youth volleyball injury data are thin (5 studies, mostly girls), with ankle, hand/finger and knee as the main sites.",
+     "sources": [
+      "PMID:37789463"
+     ]
+    },
+    {
+     "finding": "Prospective screening of jump height, ankle dorsiflexion, balance and landing mechanics did not predict jumper's knee in elite men, so managing jump load is a more practical lever than screening.",
+     "sources": [
+      "PMID:30346313",
+      "PMID:31062948"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "soccer",
+   "demands": [
+    {
+     "finding": "Soccer is a mixed aerobic-anaerobic sport. Professional female players cover about 9.5 km per match, with roughly 580 m of high-speed running plus many sprints, accelerations and decelerations.",
+     "sources": [
+      "PMID:38188119"
+     ]
+    },
+    {
+     "finding": "High-intensity actions in elite soccer have increased over time and include not only straight sprints but curved sprints, changes of direction and jumps, which differ by position and tactical role.",
+     "sources": [
+      "PMID:37130547"
+     ]
+    },
+    {
+     "finding": "Key qualities: aerobic capacity, repeated sprint ability, acceleration and deceleration strength, change of direction, and eccentric hamstring and adductor strength (the two muscle groups most often strained).",
+     "sources": [
+      "PMID:37130547",
+      "PMID:30808663",
+      "PMID:29891614"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "US high school soccer (2005-2014): boys' time-loss injury rate 1.83 and girls' 2.33 per 1000 AEs; game rates were 3.6x (boys) and 4.9x (girls) practice rates. Most injuries were to the lower extremity (sprains and strains). Concussion made up more than a fifth of boys' and about 25% of girls' high school game injuries.",
+     "sources": [
+      "PMID:30372638",
+      "PMID:30372637"
+     ]
+    },
+    {
+     "finding": "Youth (19 and under) meta-analysis: about 5.7 injuries per 1000 hours in boys and 6.8 in girls; match rates (about 14-15 per 1000 h) far exceed training (about 2.6-2.8). Boys most often had muscle/tendon injuries, girls joint/ligament injuries; injury rates rose with age in boys.",
+     "sources": [
+      "PMID:34700052"
+     ]
+    },
+    {
+     "finding": "In young soccer players, the ankle and thigh are most injured in boys and the ankle and knee in girls; maturity status and age affect risk.",
+     "sources": [
+      "PMID:36636179"
+     ]
+    },
+    {
+     "finding": "US high school ACL injury rate was 13.2 per 100,000 AEs in girls vs 4.4 in boys (about 3x); competition rates were 15x (girls) and 9x (boys) practice rates; a smaller share of girls' ACL tears involved player contact (30% vs 49%).",
+     "sources": [
+      "PMID:32528989"
+     ]
+    },
+    {
+     "finding": "Across team ball sports, 55% of ACL injuries are non-contact (63% in females), and non-contact ACL incidence is nearly 3x higher in females (0.14 vs 0.05 per 1000 h).",
+     "sources": [
+      "PMID:35622227"
+     ]
+    },
+    {
+     "finding": "In girls' soccer and basketball, concussions are more common than in boys; soccer concussions mostly come from player contact rather than purposeful heading.",
+     "sources": [
+      "PMID:31615955",
+      "PMID:33005435",
+      "PMID:33141286"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Goalkeeper",
+     "differences": [
+      "Performance depends on sprint, jump, agility and mobility rather than long-distance aerobic capacity.",
+      "Injured less often than field players overall but with position-typical injuries (hands, shoulders, head).",
+      "More than one-third of competition injuries to US high school girls' goalkeepers were concussions; concussion was also common in college male goalkeepers."
+     ],
+     "sources": [
+      "PMID:35157536",
+      "PMID:30372637",
+      "PMID:30372638"
+     ]
+    },
+    {
+     "position": "Field players",
+     "differences": [
+      "Carry the running load (high-speed running, sprints, accelerations/decelerations), varying by tactical role; the main injury burden is lower-limb sprains and strains."
+     ],
+     "sources": [
+      "PMID:37130547",
+      "PMID:38188119",
+      "PMID:34700052"
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "FIFA 11+ reduced overall soccer injuries by 39% in recreational/subelite players; the older FIFA 11 showed no effect.",
+     "exercises": [
+      "running drills",
+      "strength (Nordic hamstrings, single-leg squats, planks)",
+      "plyometrics",
+      "balance"
+     ],
+     "dose": "About 20 minutes as the warm-up, at least 2x per week",
+     "effect": "Injury IRR 0.61 (95% CI 0.48-0.77)",
+     "sources": [
+      "PMID:28087568"
+     ]
+    },
+    {
+     "finding": "A comprehensive warm-up (the 11+ precursor) in Norwegian girls aged 13-17 reduced overall, overuse and severe injuries.",
+     "exercises": [
+      "strength",
+      "awareness",
+      "neuromuscular control drills"
+     ],
+     "dose": "Before training through an 8-month season",
+     "effect": "Overall RR 0.68; overuse 0.47; severe 0.55",
+     "sources": [
+      "PMID:19066253"
+     ]
+    },
+    {
+     "finding": "FIFA 11+ Kids in boys aged 7-13 cut injuries by more than half.",
+     "exercises": [
+      "age-adapted balance, strength, falling technique and agility"
+     ],
+     "dose": "At least twice a week as warm-up for 6 months",
+     "effect": "Risk ratio 0.43",
+     "sources": [
+      "PMID:35903029"
+     ]
+    },
+    {
+     "finding": "In NCAA men, FIFA 11+ lowered knee and ACL injuries.",
+     "exercises": [
+      "FIFA 11+ components"
+     ],
+     "dose": "15-20 minutes before every training and game for a season",
+     "effect": "Knee injury RR 0.42; about a 4-fold reduction in ACL injuries",
+     "sources": [
+      "PMID:28389864"
+     ]
+    },
+    {
+     "finding": "Network meta-analysis: FIFA 11+ was the most effective program for ACL risk in soccer overall; in females only Knäkontroll showed a significant effect.",
+     "exercises": [
+      "FIFA 11+",
+      "Knäkontroll (knee control program)"
+     ],
+     "dose": "Team warm-up",
+     "effect": "Ranked first overall for FIFA 11+; Knäkontroll best for females (low certainty)",
+     "sources": [
+      "PMID:38395699"
+     ]
+    },
+    {
+     "finding": "Adding the Nordic hamstring exercise to prevention programs halves hamstring injuries across sports and in soccer specifically.",
+     "exercises": [
+      "Nordic hamstring exercise"
+     ],
+     "dose": "Within warm-up/training programs (doses varied across trials)",
+     "effect": "Risk ratio about 0.49-0.52 (about 51% fewer)",
+     "sources": [
+      "PMID:30808663",
+      "PMID:27752982"
+     ]
+    },
+    {
+     "finding": "A single-exercise Copenhagen adduction program cut groin problems in semiprofessional men.",
+     "exercises": [
+      "Copenhagen adduction exercise (3 progression levels)"
+     ],
+     "dose": "3x/week for 6-8 weeks of preseason, then 1x/week in season",
+     "effect": "Groin problem prevalence 13.5% vs 21.3%; odds 41% lower",
+     "sources": [
+      "PMID:29891614"
+     ]
+    },
+    {
+     "finding": "In female athletes, ACL programs work best with landing stabilization and lower-body strength (Nordic hamstrings, lunges, calf raises) and trained implementers.",
+     "exercises": [
+      "jump/hop and hold",
+      "Nordic hamstrings",
+      "lunges",
+      "calf raises"
+     ],
+     "dose": "Average 24 minutes, 2.5x/week, about 18 hours total",
+     "effect": "ACL risk from 1 in 54 to 1 in 111 (OR 0.51)",
+     "sources": [
+      "PMID:30001501"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "Pooled FIFA 11+ trials show a protective effect in males of all ages; evidence in females is less certain in one 2025 meta-analysis.",
+     "sources": [
+      "PMID:39360984"
+     ]
+    },
+    {
+     "finding": "The 11+ Kids version is effective and practical for children's teams.",
+     "sources": [
+      "PMID:35903029"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "Faster growth in height and leg length was linked to more injury in elite male youth players, with peak risk around 92-95% of predicted adult height; large week-to-week jumps in training exposure added risk.",
+     "sources": [
+      "PMID:35285754"
+     ]
+    },
+    {
+     "finding": "A targeted program for academy players in the growth spurt (modified load, balance/coordination/landing drills and individual strength work) cut injury incidence in the highest-risk group (rate ratio 0.14).",
+     "sources": [
+      "PMID:37823577"
+     ]
+    },
+    {
+     "finding": "Youth heading frequency is low and rises with age; girls head less but sustain higher impact magnitudes, and stronger necks may help.",
+     "sources": [
+      "PMID:33141286"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "tennis",
+   "demands": [
+    {
+     "finding": "Meta-analysis of match play: average rally lasts about 5.5 s (men) to 6.4 s (women) with about 4 strokes; effective playing time is only about 19-20% of match time. International men run about 9.6 m per point and 2.3 km per best-of-five match.",
+     "sources": [
+      "PMID:36752978"
+     ]
+    },
+    {
+     "finding": "Work-to-rest ratios are roughly 1:3 to 1:5; competitive players need speed, agility and power on top of a good aerobic base (VO2max typically above 50 mL/kg/min in men). Fatigue reduces hitting accuracy.",
+     "sources": [
+      "PMID:17326695"
+     ]
+    },
+    {
+     "finding": "Mechanical load is dominated by frequent accelerations, decelerations and multidirectional changes of direction, with heart-rate peaks during rallies. Lower- and upper-limb strength-power, stretch-shortening ability and trunk control support performance and robustness.",
+     "sources": [
+      "PMID:42660526"
+     ]
+    },
+    {
+     "finding": "The serve is the most demanding stroke and makes up 45-60% of strokes; elite players hit about 40 serves per set, which gives a 'unit dose' for planning serve volume.",
+     "sources": [
+      "PMID:32827301",
+      "PMID:27370009"
+     ]
+    },
+    {
+     "finding": "Serving games cause higher oxygen uptake, heart rate and perceived exertion than returning, and longer rallies raise heart rate.",
+     "sources": [
+      "PMID:28149371"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "High-performance juniors: about 2.1-3.5 injuries per 1000 hours and 46-54% seasonal prevalence. Lower-limb injuries are about half; lumbar spine (12-39%) and shoulder overuse follow.",
+     "sources": [
+      "PMID:41150471"
+     ]
+    },
+    {
+     "finding": "Most tennis upper-limb injuries are overuse; risk factors include high exposure, scapular dyskinesis, fatigue, shoulder mechanics, skill level and technique.",
+     "sources": [
+      "PMID:32316156"
+     ]
+    },
+    {
+     "finding": "Lumbar MRI abnormalities are very common even in symptom-free elite juniors: 85% abnormal in one study, with pars (L5) stress lesions in about a quarter to a third of players and early facet joint changes.",
+     "sources": [
+      "PMID:17640926",
+      "PMID:33237502"
+     ]
+    },
+    {
+     "finding": "Rotator cuff injuries in younger players are usually partial-thickness overuse tears from repeated serving; shoulder range-of-motion deficits and scapular dyskinesis can appear right after a match.",
+     "sources": [
+      "PMID:32827301"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Not applicable (individual sport); serving vs returning roles within a match",
+     "differences": [
+      "Serving games are physiologically harder than return games.",
+      "Men serve more per set than women; professionals serve more per set than juniors."
+     ],
+     "sources": [
+      "PMID:28149371",
+      "PMID:27370009"
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "Load control: sudden spikes in workload (acute:chronic ratio of 1.3 or more in juniors) were the strongest extrinsic injury predictor; four-week ramp-up strategies reduced incidence.",
+     "exercises": [
+      "gradual training/match volume progression"
+     ],
+     "dose": "About 4-week ramp-up periods",
+     "effect": "Up to 21% fewer injuries",
+     "sources": [
+      "PMID:41150471"
+     ]
+    },
+    {
+     "finding": "Kinetic-chain conditioning (core stability plus eccentric rotator cuff training) reduced overuse injuries and kept shoulder mobility.",
+     "exercises": [
+      "core stability",
+      "eccentric rotator cuff exercises"
+     ],
+     "dose": "Ongoing conditioning",
+     "effect": "About 26% fewer overuse injuries",
+     "sources": [
+      "PMID:41150471"
+     ]
+    },
+    {
+     "finding": "Grip-size personalisation halved lateral elbow pain in one prevention cluster.",
+     "exercises": [
+      "racquet grip sizing"
+     ],
+     "dose": "Equipment adjustment",
+     "effect": "Lateral epicondylalgia about halved",
+     "sources": [
+      "PMID:41150471"
+     ]
+    },
+    {
+     "finding": "In elite juniors, previous injury, fewer years of experience (upper-limb), playing more than 6 hours/week and previous back injury (low back) were the risk factors with moderate evidence. No randomized prevention trials in juniors were found.",
+     "exercises": [
+      "load monitoring"
+     ],
+     "dose": "Not tested",
+     "effect": "Risk-factor evidence only",
+     "sources": [
+      "PMID:29912622"
+     ]
+    },
+    {
+     "finding": "Shoulder prevention in overhead athletes centres on internal-rotation range, external-rotator strength and scapular control.",
+     "exercises": [
+      "sleeper/cross-body stretching",
+      "external rotation strengthening",
+      "scapular exercises"
+     ],
+     "dose": "Year-round",
+     "effect": "Review-level recommendation",
+     "sources": [
+      "PMID:26537804",
+      "PMID:32758080"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "No tennis-specific warm-up trial was found in this search; the evidence base is load management and kinetic-chain conditioning (see riskReduction).",
+     "sources": [
+      "PMID:41150471",
+      "PMID:29912622"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "Expert review guidance for juniors: avoid single-sport specialization before about 12, train no more hours per week than age in years (maximum 16), cap organized tennis around 12 h/week, keep at least 2 h/week of injury-prevention training, no more than 2 tournaments a month, and be wary of more than 40 matches a year. (Low-to-moderate quality evidence.)",
+     "sources": [
+      "PMID:41272920"
+     ]
+    },
+    {
+     "finding": "Pars stress lesions are common in elite adolescents and linked to facet joint angle, so persistent low back pain in a junior player warrants assessment.",
+     "sources": [
+      "PMID:33237502",
+      "PMID:17640926"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "golf",
+   "demands": [
+    {
+     "finding": "Golf is low aerobic intensity but each swing is a high-speed rotational effort. In competitive youth golfers, peak power explained about 80% of the variation in clubhead speed and isometric peak force about 70-74% of carry distance; maturity status also strongly predicted clubhead speed.",
+     "sources": [
+      "PMID:38150377"
+     ]
+    },
+    {
+     "finding": "Strength and conditioning programs (strength, plyometrics, stretching, core) improved clubhead speed, ball speed and distance by about 4-6% on average where effects were significant.",
+     "sources": [
+      "PMID:32723013"
+     ]
+    },
+    {
+     "finding": "Key qualities: lower-body and rotational power, isometric strength, hip and trunk mobility, and trunk muscular endurance.",
+     "sources": [
+      "PMID:38150377",
+      "PMID:35783335"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "Lifetime injury prevalence is about 57% in amateurs and 74% in professionals; professionals have about 3x more hand/wrist and low back injuries. Soft-tissue injuries dominate. Playing more than 3-4 rounds a week raised amateur risk. (Mostly adult samples, mean age 47.)",
+     "sources": [
+      "PMID:38508702"
+     ]
+    },
+    {
+     "finding": "Pooled injury incidence is about 2.5 per 1000 rounds (18 holes), higher in professionals than amateurs.",
+     "sources": [
+      "PMID:39028411"
+     ]
+    },
+    {
+     "finding": "Low back pain is the most common golf complaint. Older age, higher body mass and previous back pain are associated; swing characteristics were not clearly linked in pooled data.",
+     "sources": [
+      "PMID:30130164"
+     ]
+    },
+    {
+     "finding": "Trunk muscle activation, hip strength and mobility, and pelvis/trunk rotation patterns are the biomechanical factors most associated with low back pain in golfers.",
+     "sources": [
+      "PMID:35783335"
+     ]
+    },
+    {
+     "finding": "In US emergency departments, 10-19 year olds made up about 11% of golf-related lower-limb injuries, and golf carts caused about 40%, so many youth golf injuries are not from swinging.",
+     "sources": [
+      "PMID:41281455"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Not applicable (individual sport)",
+     "differences": [
+      "Professional vs amateur differs mainly by volume: professionals have more wrist and back injuries."
+     ],
+     "sources": [
+      "PMID:38508702"
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "A pre-game golfers' low back pain prevention program in adolescents improved lead-hip external rotation strength compared with sham, without hurting golf performance (injury outcomes not yet reported).",
+     "exercises": [
+      "hip external rotation strengthening",
+      "trunk endurance",
+      "hip and trunk mobility"
+     ],
+     "dose": "Pre-game routine over 12 weeks",
+     "effect": "Greater lead-hip ER strength vs sham; hip ROM and trunk endurance improved in both groups",
+     "sources": [
+      "PMID:41272883"
+     ]
+    },
+    {
+     "finding": "Strength and conditioning for golf (strength, plyometrics, core) improves swing outputs; the same qualities (hip strength, trunk control) are those linked to back pain.",
+     "exercises": [
+      "resistance training",
+      "plyometrics",
+      "core exercise",
+      "mobility"
+     ],
+     "dose": "Varied; most programs several weeks",
+     "effect": "About 4-6% gains in clubhead/ball speed and distance",
+     "sources": [
+      "PMID:32723013",
+      "PMID:35783335"
+     ]
+    },
+    {
+     "finding": "A randomized trial of a 6-exercise, 10-minute golf injury prevention warm-up (GRIPP) is under way; no golf injury-prevention RCT result was available at protocol publication.",
+     "exercises": [
+      "6 warm-up exercises"
+     ],
+     "dose": "Up to 10 minutes before play",
+     "effect": "Not yet reported",
+     "sources": [
+      "PMID:35883102"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "Many golfers do not warm up or do very short warm-ups. Dynamic warm-ups and those with resistance exercise improved performance, static stretching did not and may hurt it; links between warm-up habits and injury were inconclusive.",
+     "sources": [
+      "PMID:31469762"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "A 2026 scoping review found adolescent golf injury data are sparse and often mixed with adults; no study linked training volume to injury risk in juniors.",
+     "sources": [
+      "PMID:41822760"
+     ]
+    },
+    {
+     "finding": "In youth golfers, maturity status explains much of clubhead speed, so comparisons between juniors of the same age should account for growth.",
+     "sources": [
+      "PMID:38150377"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "baseball",
+   "demands": [
+    {
+     "finding": "Baseball is power-dominant with long rests: short sprints, throws and swings. In 1157 professional players, lower-body power rose into the mid-20s while 10-yard sprint and agility stayed stable across ages and positions.",
+     "sources": [
+      "PMID:22505124"
+     ]
+    },
+    {
+     "finding": "Throwing velocity drives arm load: in high school pitchers (13-18), throwing harder in games and an in-season rise in velocity relative to preseason were injury risk factors.",
+     "sources": [
+      "PMID:38700088"
+     ]
+    },
+    {
+     "finding": "Key qualities: rotational and lower-body power, sprint acceleration, and shoulder range of motion and cuff/scapular strength to tolerate repeated throwing.",
+     "sources": [
+      "PMID:22505124",
+      "PMID:31937577",
+      "PMID:30828579"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "US high school baseball (2005-2014): 0.98 time-loss injuries per 1000 AEs, about 2.3x higher in games than practice. Upper-extremity injuries were most common, and many happened while fielding or pitching; being hit by pitched or batted balls is a recurring mechanism.",
+     "sources": [
+      "PMID:30951387"
+     ]
+    },
+    {
+     "finding": "Half of 9-14 year-old pitchers had elbow or shoulder pain in one season; more pitches per game and per season raised pain rates, and curveballs and sliders were associated with more shoulder and elbow pain.",
+     "sources": [
+      "PMID:12130397"
+     ]
+    },
+    {
+     "finding": "Over 10 years, 5% of youth pitchers had a serious throwing injury (surgery or retirement); pitching more than 100 innings in a calendar year raised risk 3.5x.",
+     "sources": [
+      "PMID:21098816"
+     ]
+    },
+    {
+     "finding": "In Japanese junior high players, 28% developed shoulder and/or elbow pain over a year; throwing 300 or more full-effort balls a week and 10 or more games a month were elbow-pain risk factors.",
+     "sources": [
+      "PMID:30638688"
+     ]
+    },
+    {
+     "finding": "Prospective-study review: in youth, history of elbow pain, being a pitcher or catcher, ages 9-11, more than 100 innings a year and over 16 training hours a week were elbow-injury risk factors; shoulder range and strength deficits predicted arm injury in high school and professional players.",
+     "sources": [
+      "PMID:30828579"
+     ]
+    },
+    {
+     "finding": "Hamstring strains were about 1.7x more common in college baseball/softball men than women; most strains overall were non-contact and preseason rates were about twice in-season rates.",
+     "sources": [
+      "PMID:26330571"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Pitcher",
+     "differences": [
+      "Highest throwing-arm load; pitchers report worse arm health scores and about 2x the odds of an upper-limb overuse injury compared with non-pitchers in high school.",
+      "Velocity, intensity, pitch counts and innings drive risk."
+     ],
+     "sources": [
+      "PMID:32381476",
+      "PMID:38700088",
+      "PMID:21098816"
+     ]
+    },
+    {
+     "position": "Catcher",
+     "differences": [
+      "Catchers share elevated elbow and shoulder pain risk with pitchers in youth surveys.",
+      "High school pitchers who also played catcher had 2.9x the shoulder/elbow injury risk (15% vs 5%)."
+     ],
+     "sources": [
+      "PMID:30638688",
+      "PMID:29771138",
+      "PMID:30828579"
+     ]
+    },
+    {
+     "position": "Position players",
+     "differences": [
+      "Lower arm load; injuries more often from fielding, base running and being struck by the ball."
+     ],
+     "sources": [
+      "PMID:30951387"
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "A warm-up of stretching, dynamic mobility and balance exercises cut shoulder and elbow throwing injuries in 9-11 year olds and tended to raise ball speed.",
+     "exercises": [
+      "5 stretches (including posterior shoulder and hip)",
+      "2 dynamic mobility drills",
+      "2 balance exercises"
+     ],
+     "dose": "During warm-up across a 12-month follow-up",
+     "effect": "1.7 vs 3.1 injuries per 1000 AEs (about 45% fewer)",
+     "sources": [
+      "PMID:31336051"
+     ]
+    },
+    {
+     "finding": "In high school pitchers, nightly external-rotation strength training was at least as good as sleeper stretching for preventing arm injuries (and had a lower observed rate).",
+     "exercises": [
+      "prone external rotation strengthening",
+      "sleeper stretch (comparison)"
+     ],
+     "dose": "Every night for 150 days",
+     "effect": "Injury rate 9.8% (strength) vs 22.6% (stretch); HR 0.49",
+     "sources": [
+      "PMID:36543874"
+     ]
+    },
+    {
+     "finding": "Screening shoulder rotation: insufficient external rotation (less than 5 degrees more than the other arm) roughly doubled shoulder-injury risk in professional pitchers; total rotation or flexion deficits of 5 degrees or more raised elbow-injury risk about 2.6-2.8x.",
+     "exercises": [
+      "preseason range-of-motion screening",
+      "targeted mobility work"
+     ],
+     "dose": "Preseason",
+     "effect": "Pooled OR 1.90 for ER insufficiency",
+     "sources": [
+      "PMID:26272516",
+      "PMID:24944295",
+      "PMID:31937577"
+     ]
+    },
+    {
+     "finding": "Workload rules: pitch-count limits work better than inning limits for controlling volume; parents who knew and followed Pitch Smart guidelines had children with fewer injuries, and showcase participation predicted injury.",
+     "exercises": [
+      "pitch counts",
+      "rest days",
+      "limit showcases",
+      "avoid pitching more than 100 innings/year"
+     ],
+     "dose": "Per game, per week and per year limits",
+     "effect": "Inning-limited and longer-mound leagues threw more pitches; guideline-aware families had fewer injuries",
+     "sources": [
+      "PMID:35859649",
+      "PMID:31205967",
+      "PMID:21098816"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "A structured mobility-and-balance warm-up reduced throwing injuries in youth players (Japanese RCT).",
+     "sources": [
+      "PMID:31336051"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "Highly specialized high school players had 3.8x the odds of an upper-limb overuse injury; playing more than 8 months a year doubled the odds.",
+     "sources": [
+      "PMID:32381476"
+     ]
+    },
+    {
+     "finding": "Proximal humeral and medial elbow growth-plate stress injuries occur in young baseball players (shoulder changes in up to about 37% in cross-sectional imaging); most heal with timely rest, but some cause growth disturbance when diagnosis is late.",
+     "sources": [
+      "PMID:34370212"
+     ]
+    },
+    {
+     "finding": "Pitch count guidelines were introduced in 1996 and revised in 2006; adherence by coaches, parents and players is often poor.",
+     "sources": [
+      "PMID:28742607"
+     ]
+    }
+   ]
+  },
+  {
+   "sport": "softball",
+   "demands": [
+    {
+     "finding": "Fastpitch softball shares baseball's short-burst power profile (sprinting, swinging, throwing). Bat swing velocity at a fixed bat load related to in-game batting statistics in NCAA Division I players.",
+     "sources": [
+      "PMID:38085624"
+     ]
+    },
+    {
+     "finding": "The windmill pitch produces shoulder and elbow loads similar to baseball pitching, with very high eccentric biceps activity (about double that of an overhand throw), especially at the 9 o'clock phase.",
+     "sources": [
+      "PMID:19174551",
+      "PMID:37852241"
+     ]
+    },
+    {
+     "finding": "Key qualities: hip, core and lower-body strength for the pitching and hitting kinetic chain, and shoulder/biceps endurance for pitchers.",
+     "sources": [
+      "PMID:37852241"
+     ]
+    }
+   ],
+   "injuries": [
+    {
+     "finding": "US high school softball (2005-2014): 1.16 time-loss injuries per 1000 AEs, about 2x higher in games. Ankle sprains and concussions were the commonest injuries, many while fielding or running bases.",
+     "sources": [
+      "PMID:30951383"
+     ]
+    },
+    {
+     "finding": "Softball was the one girls' high school sport where fracture was the most common season- or career-ending diagnosis.",
+     "sources": [
+      "PMID:27166289"
+     ]
+    },
+    {
+     "finding": "Windmill pitchers mainly get overuse injuries (anterior shoulder and biceps), though apparently at lower volume than baseball pitchers.",
+     "sources": [
+      "PMID:27618243",
+      "PMID:19174551"
+     ]
+    }
+   ],
+   "positions": [
+    {
+     "position": "Pitcher",
+     "differences": [
+      "High school pitchers' pain and fatigue rose over a single game and over the season, with falls in shoulder flexion, supraspinatus and external rotation strength as games pitched increased.",
+      "One study found more than 85 pitches per game raised season injury risk; no US or Canadian pitch-count rules existed as of 2023."
+     ],
+     "sources": [
+      "PMID:27385938",
+      "PMID:39584797",
+      "PMID:28742607"
+     ]
+    },
+    {
+     "position": "Fielders and base runners",
+     "differences": [
+      "Most injuries come from fielding, base running (ankle sprains) and being struck by the ball."
+     ],
+     "sources": [
+      "PMID:30951383"
+     ]
+    }
+   ],
+   "riskReduction": [
+    {
+     "finding": "Surveillance authors recommend strength training and ankle-sprain prevention programs plus protection from batted and pitched balls.",
+     "exercises": [
+      "ankle balance/strength work",
+      "protective equipment"
+     ],
+     "dose": "Not specified",
+     "effect": "Recommendation from surveillance data",
+     "sources": [
+      "PMID:30951383"
+     ]
+    },
+    {
+     "finding": "For windmill pitchers, prevention and rehabilitation should focus on mechanics, core, hip and lower-body strength, and recognising fatigue.",
+     "exercises": [
+      "core strengthening",
+      "hip/lower-body strength",
+      "pitch-volume monitoring"
+     ],
+     "dose": "Not specified",
+     "effect": "Review-level recommendation",
+     "sources": [
+      "PMID:37852241"
+     ]
+    },
+    {
+     "finding": "Multicomponent exercise programs reduce ankle injuries in high school athletes across sports (applicable to softball's ankle-sprain burden).",
+     "exercises": [
+      "balance",
+      "strengthening",
+      "agility"
+     ],
+     "dose": "High adherence; frequency and duration matter",
+     "effect": "About 26% fewer ankle injuries (IRR 0.74)",
+     "sources": [
+      "PMID:38406839"
+     ]
+    }
+   ],
+   "warmup": [
+    {
+     "finding": "No softball-specific warm-up trial was found; general high school multicomponent programs reduce ankle injuries.",
+     "sources": [
+      "PMID:38406839"
+     ]
+    }
+   ],
+   "adolescent": [
+    {
+     "finding": "Fatigue in high school pitchers builds across a season with no pitch limits in place, so coaches should track pitches and games and watch for pain.",
+     "sources": [
+      "PMID:27385938",
+      "PMID:39584797"
+     ]
+    }
+   ]
+  }
+ ],
+ "crossCutting": [
+  {
+   "finding": "In high-level team sports, females had about 2.2x the ACL rate of males while males had more upper-limb, hip/groin, thigh and foot injuries; ankle sprains and concussions did not differ significantly.",
+   "sources": [
+    "PMID:34052518"
+   ]
+  },
+  {
+   "finding": "In contact sports (which include basketball and soccer), females had 3x the ACL incidence of males.",
+   "sources": [
+    "PMID:31009238"
+   ]
+  },
+  {
+   "finding": "Across eight meta-analyses, ACL prevention programs halve ACL injuries in all athletes and cut non-contact ACL injuries in females by two-thirds.",
+   "sources": [
+    "PMID:29737024"
+   ]
+  },
+  {
+   "finding": "More neuromuscular training is better: longer and more frequent sessions gave larger ACL reductions in females (high volume OR 0.32 vs low 0.66).",
+   "sources": [
+    "PMID:24370992"
+   ]
+  },
+  {
+   "finding": "For female team athletes, compliance of 75% or more mattered most; sessions over 15 minutes, 2-3 times a week, with agility and running mechanics, reduced knee injuries (ACL risk halved).",
+   "sources": [
+    "PMID:41175154"
+   ]
+  },
+  {
+   "finding": "Exercise-based prevention reduced ankle injuries by 26% in high school athletes; best programs were multicomponent, emphasised strength and agility, and had high adherence and coach education.",
+   "sources": [
+    "PMID:38406839"
+   ]
+  },
+  {
+   "finding": "ACL injury situations by sport: change of direction (26-70% in team sports) and landing (57-82% in overhead sports such as volleyball) dominate.",
+   "sources": [
+    "PMID:40690162"
+   ]
+  },
+  {
+   "finding": "Highly specialized youth athletes had about 1.8x the overuse injury risk of low-specialization athletes.",
+   "sources": [
+    "PMID:30135085"
+   ]
+  },
+  {
+   "finding": "Specialization is usually defined as choosing a main sport, quitting others, and training more than 8 months a year; sports medicine bodies recommend multisport participation.",
+   "sources": [
+    "PMID:31633420"
+   ]
+  },
+  {
+   "finding": "In elite youth athletes, injury burden rises with maturity and growth-related injuries peak in the growth spurt; faster growth in height and leg length means more injury.",
+   "sources": [
+    "PMID:39209526"
+   ]
+  },
+  {
+   "finding": "Growth-plate (periphyseal) stress injuries appear across repetitive youth sports including baseball, tennis, volleyball and soccer; about 13% of reported cases caused growth disturbance, usually with delayed diagnosis or no rest.",
+   "sources": [
+    "PMID:34370212"
+   ]
+  },
+  {
+   "finding": "In US high school sex-comparable sports, girls' concussion rate was 2.2x boys'.",
+   "sources": [
+    "PMID:31615955"
+   ]
+  }
+ ],
+ "sources": [
+  {
+   "id": "PMID:30828579",
+   "doi": "10.1177/2325967119825557",
+   "firstAuthor": "Agresta CE",
+   "year": 2019,
+   "journal": "Orthop J Sports Med",
+   "title": "Risk Factors for Baseball-Related Arm Injuries: A Systematic Review.",
+   "population": "2426 youth, high school and professional baseball players, 14 prospective studies",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:27752982",
+   "doi": "10.1007/s40279-016-0638-2",
+   "firstAuthor": "Al Attar WSA",
+   "year": 2017,
+   "journal": "Sports Med",
+   "title": "Effect of Injury Prevention Programs that Include the Nordic Hamstring Exercise on Hamstring Injury Rates in Soccer Players: A Systematic Review and Meta-Analysis.",
+   "population": "Soccer players, 5 studies",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:35903029",
+   "doi": "10.1177/19417381221109224",
+   "firstAuthor": "Al Attar WSA",
+   "year": 2023,
+   "journal": "Sports Health",
+   "title": "The FIFA 11+ Kids Injury Prevention Program Reduces Injury Rates Among Male Children Soccer Players: A Clustered Randomized Controlled Trial.",
+   "population": "740 boys aged 7-13 playing club soccer",
+   "design": "Cluster randomized controlled trial"
+  },
+  {
+   "id": "PMID:32827301",
+   "doi": "10.1007/s12178-020-09675-3",
+   "firstAuthor": "Alrabaa RG",
+   "year": 2020,
+   "journal": "Curr Rev Musculoskelet Med",
+   "title": "Rotator Cuff Injuries in Tennis Players.",
+   "population": "Tennis players",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:39360984",
+   "doi": "10.23736/S0022-4707.24.15910-5",
+   "firstAuthor": "Althomali OW",
+   "year": 2025,
+   "journal": "J Sports Med Phys Fitness",
+   "title": "The FIFA 11+ injury prevention program reduces the incidence of lower extremity injuries in football players: a systematic review and meta-analysis.",
+   "population": "Male and female soccer players, 12 trials",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:17640926",
+   "doi": "10.1136/bjsm.2007.037747",
+   "firstAuthor": "Alyas F",
+   "year": 2007,
+   "journal": "Br J Sports Med",
+   "title": "MRI findings in the lumbar spines of asymptomatic, adolescent, elite tennis players.",
+   "population": "33 asymptomatic elite adolescent tennis players (mean 17.3 y)",
+   "design": "Observational MRI study"
+  },
+  {
+   "id": "PMID:41150471",
+   "doi": "10.3390/sports13100336",
+   "firstAuthor": "Amor-Salamanca MS",
+   "year": 2025,
+   "journal": "Sports (Basel)",
+   "title": "Risk Factors and Prevention of Musculoskeletal Injuries in Adolescent and Adult High-Performance Tennis Players: A Systematic Review.",
+   "population": "Adolescent and adult high-performance tennis players, 37 studies",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:30135085",
+   "doi": "10.1542/peds.2018-0657",
+   "firstAuthor": "Bell DR",
+   "year": 2018,
+   "journal": "Pediatrics",
+   "title": "Sport Specialization and Risk of Overuse Injuries: A Systematic Review With Meta-analysis.",
+   "population": "Athletes aged 18 or younger, 5 studies",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:17138630",
+   "doi": "10.1136/bjsm.2006.032318",
+   "firstAuthor": "Ben Abdelkrim N",
+   "year": 2007,
+   "journal": "Br J Sports Med",
+   "title": "Time-motion analysis and physiological data of elite under-19-year-old basketball players during competition.",
+   "population": "38 elite under-19 male basketball players",
+   "design": "Time-motion and physiological observational study"
+  },
+  {
+   "id": "PMID:38406839",
+   "doi": "10.1177/19417381241231588",
+   "firstAuthor": "Berkey R",
+   "year": 2024,
+   "journal": "Sports Health",
+   "title": "Ankle Injury Prevention Programs for Youth Sports: A Systematic Review and Meta-analysis.",
+   "population": "High school athletes aged 13-19, 10 RCTs",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:37852241",
+   "doi": "10.5435/JAAOS-D-22-00944",
+   "firstAuthor": "Boden SA",
+   "year": 2024,
+   "journal": "J Am Acad Orthop Surg",
+   "title": "Understanding Shoulder and Elbow Injuries in the Windmill Softball Pitcher.",
+   "population": "Windmill softball pitchers",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:34370212",
+   "doi": "10.1007/s40279-021-01511-z",
+   "firstAuthor": "Caine D",
+   "year": 2022,
+   "journal": "Sports Med",
+   "title": "Primary Periphyseal Stress Injuries in Young Athletes: A Systematic Review.",
+   "population": "Children and adolescents in youth sports, 128 studies",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:32067546",
+   "doi": "10.1080/00913847.2020.1732246",
+   "firstAuthor": "Caldemeyer LE",
+   "year": 2020,
+   "journal": "Phys Sportsmed",
+   "title": "Neuromuscular training for the prevention of ankle sprains in female athletes: a systematic review.",
+   "population": "5187 female athletes in basketball, handball, volleyball, soccer, floorball (7 studies)",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:35622227",
+   "doi": "10.1007/s40279-022-01697-w",
+   "firstAuthor": "Chia L",
+   "year": 2022,
+   "journal": "Sports Med",
+   "title": "Non-contact Anterior Cruciate Ligament Injury Epidemiology in Team-Ball Sports: A Systematic Review with Meta-analysis by Sex, Age, Sport, Participation Level, and Exposure Type.",
+   "population": "Team ball-sport athletes, 45 cohorts",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:30715913",
+   "doi": "10.4085/1062-6050-150-17",
+   "firstAuthor": "Clifton DR",
+   "year": 2018,
+   "journal": "J Athl Train",
+   "title": "The First Decade of Web-Based Sports Injury Surveillance: Descriptive Epidemiology of Injuries in US High School Girls' Basketball (2005-2006 Through 2013-2014) and National Collegiate Athletic Association Women's Basketball (2004-2005 Through 2013-2014).",
+   "population": "US high school girls' basketball (HS RIO) and NCAA women's basketball, 2004-2014",
+   "design": "Descriptive surveillance epidemiology"
+  },
+  {
+   "id": "PMID:30715912",
+   "doi": "10.4085/1062-6050-148-17",
+   "firstAuthor": "Clifton DR",
+   "year": 2018,
+   "journal": "J Athl Train",
+   "title": "The First Decade of Web-Based Sports Injury Surveillance: Descriptive Epidemiology of Injuries in US High School Boys' Basketball (2005-2006 Through 2013-2014) and National Collegiate Athletic Association Men's Basketball (2004-2005 Through 2013-2014).",
+   "population": "US high school boys' basketball (HS RIO, ~100 schools/yr) and NCAA men's basketball, 2004-2014",
+   "design": "Descriptive surveillance epidemiology"
+  },
+  {
+   "id": "PMID:33237502",
+   "doi": "10.1186/s40798-020-00285-4",
+   "firstAuthor": "Connolly M",
+   "year": 2020,
+   "journal": "Sports Med Open",
+   "title": "Lumbar spine abnormalities and facet joint angles in asymptomatic elite junior tennis players.",
+   "population": "25 asymptomatic elite junior tennis players",
+   "design": "Cross-sectional MRI study"
+  },
+  {
+   "id": "PMID:26537804",
+   "doi": "10.1590/bjpt-rbf.2014.0109",
+   "firstAuthor": "Cools AM",
+   "year": 2015,
+   "journal": "Braz J Phys Ther",
+   "title": "Prevention of shoulder injuries in overhead athletes: a science-based approach.",
+   "population": "Overhead athletes (baseball, tennis, handball, volleyball)",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:26330571",
+   "doi": "10.1177/0363546515599631",
+   "firstAuthor": "Dalton SL",
+   "year": 2015,
+   "journal": "Am J Sports Med",
+   "title": "Epidemiology of Hamstring Strains in 25 NCAA Sports in the 2009-2010 to 2013-2014 Academic Years.",
+   "population": "NCAA athletes in 25 sports, 2009-2014",
+   "design": "Descriptive surveillance epidemiology"
+  },
+  {
+   "id": "PMID:30372637",
+   "doi": "10.4085/1062-6050-156-17",
+   "firstAuthor": "DiStefano LJ",
+   "year": 2018,
+   "journal": "J Athl Train",
+   "title": "The First Decade of Web-Based Sports Injury Surveillance: Descriptive Epidemiology of Injuries in US High School Girls' Soccer (2005-2006 Through 2013-2014) and National Collegiate Athletic Association Women's Soccer (2004-2005 Through 2013-2014).",
+   "population": "US high school girls' soccer (HS RIO) and NCAA women's soccer, 2004-2014",
+   "design": "Descriptive surveillance epidemiology"
+  },
+  {
+   "id": "PMID:35783335",
+   "doi": "10.1016/j.smhs.2020.03.002",
+   "firstAuthor": "Edwards N",
+   "year": 2020,
+   "journal": "Sports Med Health Sci",
+   "title": "Low back pain and golf: A review of biomechanical risk factors.",
+   "population": "Golfers",
+   "design": "Narrative review of biomechanical risk factors"
+  },
+  {
+   "id": "PMID:31469762",
+   "doi": "10.1519/JSC.0000000000003329",
+   "firstAuthor": "Ehlert A",
+   "year": 2019,
+   "journal": "J Strength Cond Res",
+   "title": "A Systematic Review of Golf Warm-ups: Behaviors, Injury, and Performance.",
+   "population": "Golfers, 23 studies",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:32723013",
+   "doi": "10.1080/02640414.2020.1796470",
+   "firstAuthor": "Ehlert A MS",
+   "year": 2020,
+   "journal": "J Sports Sci",
+   "title": "The effects of strength and conditioning interventions on golf performance: A systematic review.",
+   "population": "Golfers of varied skill, 25 intervention studies",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:34972488",
+   "doi": "10.2519/jospt.2022.10959",
+   "firstAuthor": "Emery CA",
+   "year": 2022,
+   "journal": "J Orthop Sports Phys Ther",
+   "title": "The \"SHRed Injuries Basketball\" Neuromuscular Training Warm-up Program Reduces Ankle and Knee Injury Rates by 36% in Youth Basketball.",
+   "population": "Youth basketball players aged 11-18, Calgary high school/club teams (n=809 player-seasons)",
+   "design": "Quasi-experimental, teams randomized to supervised/unsupervised delivery"
+  },
+  {
+   "id": "PMID:37559766",
+   "doi": "10.5114/jhk/166881",
+   "firstAuthor": "Espasa-Labrador J",
+   "year": 2023,
+   "journal": "J Hum Kinet",
+   "title": "External Load Monitoring in Female Basketball: A Systematic Review.",
+   "population": "Healthy female basketball players, 40 studies",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:28742607",
+   "doi": "10.1097/JSM.0000000000000446",
+   "firstAuthor": "Feeley BT",
+   "year": 2018,
+   "journal": "Clin J Sport Med",
+   "title": "Pitch Counts in Youth Baseball and Softball: A Historical Review.",
+   "population": "Youth baseball and softball pitchers",
+   "design": "Historical narrative review"
+  },
+  {
+   "id": "PMID:42660526",
+   "doi": "10.1123/ijspp.2026-0148",
+   "firstAuthor": "Fernandez-Fernandez J",
+   "year": 2026,
+   "journal": "Int J Sports Physiol Perform",
+   "title": "Strength and Conditioning Practices in Tennis: A Narrative Review of Contemporary Evidence.",
+   "population": "Tennis players from academy to professional level",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:37130547",
+   "doi": "10.1055/a-2013-1661",
+   "firstAuthor": "Filter A",
+   "year": 2023,
+   "journal": "Int J Sports Med",
+   "title": "High-intensity Actions in Elite Soccer: Current Status and Future Perspectives.",
+   "population": "Elite soccer players",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:21098816",
+   "doi": "10.1177/0363546510384224",
+   "firstAuthor": "Fleisig GS",
+   "year": 2011,
+   "journal": "Am J Sports Med",
+   "title": "Risk of serious injury for young baseball pitchers: a 10-year prospective study.",
+   "population": "481 youth baseball pitchers aged 9-14 followed 10 years",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:35883102",
+   "doi": "10.1186/s13102-022-00511-4",
+   "firstAuthor": "Gladdines S",
+   "year": 2022,
+   "journal": "BMC Sports Sci Med Rehabil",
+   "title": "The effectiveness of a golf injury prevention program (GRIPP intervention) compared to the usual warm-up in Dutch golfers: protocol design of a randomized controlled trial.",
+   "population": "Dutch amateur golfers, 28 clubs (planned)",
+   "design": "RCT protocol"
+  },
+  {
+   "id": "PMID:41175154",
+   "doi": "10.1080/07853890.2025.2581891",
+   "firstAuthor": "Gu J",
+   "year": 2025,
+   "journal": "Ann Med",
+   "title": "Neuromuscular training for preventing knee injuries in female team athletes: a meta-analysis.",
+   "population": "Female team-sport athletes, RCTs to Dec 2024",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:32528989",
+   "doi": "10.1177/2325967120919178",
+   "firstAuthor": "Gupta AS",
+   "year": 2020,
+   "journal": "Orthop J Sports Med",
+   "title": "Sex-Based Differences in Anterior Cruciate Ligament Injuries Among United States High School Soccer Players: An Epidemiological Study.",
+   "population": "US high school soccer players (HS RIO), 2007-2017",
+   "design": "Descriptive surveillance epidemiology"
+  },
+  {
+   "id": "PMID:41272883",
+   "doi": "10.1186/s13102-025-01287-z",
+   "firstAuthor": "Hamada Y",
+   "year": 2025,
+   "journal": "BMC Sports Sci Med Rehabil",
+   "title": "Effects of a golfers' low back pain exercise prevention program on physical function and golf performance in adolescent golfers: a double-blind, randomized, sham-controlled trial.",
+   "population": "45 adolescent golfers",
+   "design": "Double-blind sham-controlled RCT"
+  },
+  {
+   "id": "PMID:29891614",
+   "doi": "10.1136/bjsports-2017-098937",
+   "firstAuthor": "Harøy J",
+   "year": 2019,
+   "journal": "Br J Sports Med",
+   "title": "The Adductor Strengthening Programme prevents groin problems among male football players: a cluster-randomised controlled trial.",
+   "population": "652 Norwegian semiprofessional male soccer players, 35 teams",
+   "design": "Cluster randomized controlled trial"
+  },
+  {
+   "id": "PMID:38085624",
+   "doi": "10.1519/JSC.0000000000004601",
+   "firstAuthor": "Herring CH",
+   "year": 2024,
+   "journal": "J Strength Cond Res",
+   "title": "Utility of Novel Rotational Load-Velocity Profiling Methods in Collegiate Softball Players.",
+   "population": "NCAA Division I softball players",
+   "design": "Reliability/correlational study"
+  },
+  {
+   "id": "PMID:10569353",
+   "doi": "10.1177/03635465990270060301",
+   "firstAuthor": "Hewett TE",
+   "year": 1999,
+   "journal": "Am J Sports Med",
+   "title": "The effect of neuromuscular training on the incidence of knee injury in female athletes. A prospective study.",
+   "population": "1263 high school soccer, volleyball and basketball athletes",
+   "design": "Prospective controlled cohort"
+  },
+  {
+   "id": "PMID:29771138",
+   "doi": "10.4085/1062-6050-322-16",
+   "firstAuthor": "Hibberd EE",
+   "year": 2018,
+   "journal": "J Athl Train",
+   "title": "Rate of Upper Extremity Injury in High School Baseball Pitchers Who Played Catcher as a Secondary Position.",
+   "population": "384 US high school baseball pitchers, 51 teams",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:31633420",
+   "doi": "10.4085/1062-6050-380-18",
+   "firstAuthor": "Jayanthi NA",
+   "year": 2019,
+   "journal": "J Athl Train",
+   "title": "Health Consequences of Youth Sport Specialization.",
+   "population": "Youth athletes",
+   "design": "Narrative review of evidence and position statements"
+  },
+  {
+   "id": "PMID:37823577",
+   "doi": "10.1080/03014460.2023.2261854",
+   "firstAuthor": "Johnson D",
+   "year": 2023,
+   "journal": "Ann Hum Biol",
+   "title": "Can we reduce injury risk during the adolescent growth spurt? An iterative sequence of prevention in male academy footballers.",
+   "population": "77 male academy soccer players across two seasons",
+   "design": "Prospective intervention (iterative before-after)"
+  },
+  {
+   "id": "PMID:35285754",
+   "doi": "10.1080/02640414.2022.2051380",
+   "firstAuthor": "Johnson DM",
+   "year": 2022,
+   "journal": "J Sports Sci",
+   "title": "The influence of exposure, growth and maturation on injury risk in male academy football players.",
+   "population": "49 elite male academy soccer players",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:32316156",
+   "doi": "10.3390/ijerph17082744",
+   "firstAuthor": "Kekelekis A",
+   "year": 2020,
+   "journal": "Int J Environ Res Public Health",
+   "title": "Risk Factors for Upper Limb Injury in Tennis Players: A Systematic Review.",
+   "population": "Tennis players",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:30485148",
+   "doi": "10.4085/1062-6050-162-17",
+   "firstAuthor": "Kerr ZY",
+   "year": 2018,
+   "journal": "J Athl Train",
+   "title": "The First Decade of Web-Based Sports Injury Surveillance: Descriptive Epidemiology of Injuries in US High School Girls' Volleyball (2005-2006 Through 2013-2014) and National Collegiate Athletic Association Women's Volleyball (2004-2005 Through 2013-2014).",
+   "population": "US high school girls' volleyball (HS RIO) and NCAA women's volleyball, 2004-2014",
+   "design": "Descriptive surveillance epidemiology"
+  },
+  {
+   "id": "PMID:30372638",
+   "doi": "10.4085/1062-6050-166-17",
+   "firstAuthor": "Kerr ZY",
+   "year": 2018,
+   "journal": "J Athl Train",
+   "title": "The First Decade of Web-Based Sports Injury Surveillance: Descriptive Epidemiology of Injuries in US High School Boys' Soccer (2005-2006 Through 2013-2014) and National Collegiate Athletic Association Men's Soccer (2004-2005 Through 2013-2014).",
+   "population": "US high school boys' soccer (HS RIO) and NCAA men's soccer, 2004-2014",
+   "design": "Descriptive surveillance epidemiology"
+  },
+  {
+   "id": "PMID:31615955",
+   "doi": "10.1542/peds.2019-2180",
+   "firstAuthor": "Kerr ZY",
+   "year": 2019,
+   "journal": "Pediatrics",
+   "title": "Concussion Incidence and Trends in 20 High School Sports.",
+   "population": "US high school athletes in 20 sports, 2013-2018 (HS RIO)",
+   "design": "Descriptive surveillance epidemiology"
+  },
+  {
+   "id": "PMID:28391750",
+   "doi": "10.1080/17461391.2017.1306114",
+   "firstAuthor": "Kilic O",
+   "year": 2017,
+   "journal": "Eur J Sport Sci",
+   "title": "Incidence, aetiology and prevention of musculoskeletal injuries in volleyball: A systematic review of the literature.",
+   "population": "Volleyball players, all levels",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:28149371",
+   "doi": "10.1515/hukin-2015-0173",
+   "firstAuthor": "Kilit B",
+   "year": 2016,
+   "journal": "J Hum Kinet",
+   "title": "Physiological responses and match characteristics in professional tennis players during a one-hour simulated tennis match.",
+   "population": "10 internationally ranked male professional tennis players",
+   "design": "Observational simulated-match study"
+  },
+  {
+   "id": "PMID:17326695",
+   "doi": "10.2165/00007256-200737030-00001",
+   "firstAuthor": "Kovacs MS",
+   "year": 2007,
+   "journal": "Sports Med",
+   "title": "Tennis physiology: training the competitive athlete.",
+   "population": "Competitive tennis players",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:39028411",
+   "doi": "10.1007/s11845-024-03759-6",
+   "firstAuthor": "Kuitunen I",
+   "year": 2024,
+   "journal": "Ir J Med Sci",
+   "title": "Injury incidence in golf-a systematic review and meta-analysis.",
+   "population": "Golfers, 7 studies, 269,754 exposures",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:22065184",
+   "doi": "10.1001/archpediatrics.2011.168",
+   "firstAuthor": "LaBella CR",
+   "year": 2011,
+   "journal": "Arch Pediatr Adolesc Med",
+   "title": "Effect of neuromuscular warm-up on injuries in female soccer and basketball athletes in urban public high schools: cluster randomized controlled trial.",
+   "population": "1492 female soccer and basketball athletes, Chicago urban public high schools",
+   "design": "Cluster randomized controlled trial"
+  },
+  {
+   "id": "PMID:27618243",
+   "doi": "10.1249/JSR.0000000000000293",
+   "firstAuthor": "Lear A",
+   "year": 2016,
+   "journal": "Curr Sports Med Rep",
+   "title": "Softball Pitching and Injury.",
+   "population": "Softball windmill pitchers",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:41822760",
+   "doi": "10.1002/hsr2.71818",
+   "firstAuthor": "Lee S",
+   "year": 2026,
+   "journal": "Health Sci Rep",
+   "title": "Golf-Related Injuries in Adolescent Golfers: A Scoping Review.",
+   "population": "Adolescent golfers aged 10-19, 14 studies",
+   "design": "Scoping review"
+  },
+  {
+   "id": "PMID:15722279",
+   "doi": "10.1177/0363546504270454",
+   "firstAuthor": "Lian OB",
+   "year": 2005,
+   "journal": "Am J Sports Med",
+   "title": "Prevalence of jumper's knee among elite athletes from different sports: a cross-sectional study.",
+   "population": "613 Norwegian national-level athletes in 9 sports",
+   "design": "Cross-sectional"
+  },
+  {
+   "id": "PMID:12130397",
+   "doi": "10.1177/03635465020300040201",
+   "firstAuthor": "Lyman S",
+   "year": 2002,
+   "journal": "Am J Sports Med",
+   "title": "Effect of pitch type, pitch count, and pitching mechanics on risk of elbow and shoulder pain in youth baseball pitchers.",
+   "population": "476 youth baseball pitchers aged 9-14",
+   "design": "Prospective cohort, one season"
+  },
+  {
+   "id": "PMID:30346313",
+   "doi": "10.1097/JSM.0000000000000638",
+   "firstAuthor": "MacDonald K",
+   "year": 2020,
+   "journal": "Clin J Sport Med",
+   "title": "Jumper's Knee: A Prospective Evaluation of Risk Factors in Volleyball Players Using a Novel Measure of Injury.",
+   "population": "60 elite adult male Canadian volleyball players",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:38395699",
+   "doi": "10.1016/j.jsams.2024.02.001",
+   "firstAuthor": "Magaña-Ramírez M",
+   "year": 2024,
+   "journal": "J Sci Med Sport",
+   "title": "What exercise programme is the most appropriate to mitigate anterior cruciate ligament injury risk in football (soccer) players? A systematic review and network meta-analysis.",
+   "population": "Soccer players, 11 RCTs",
+   "design": "Systematic review and network meta-analysis"
+  },
+  {
+   "id": "PMID:35859649",
+   "doi": "10.1177/23259671221110547",
+   "firstAuthor": "Mair H",
+   "year": 2022,
+   "journal": "Orthop J Sports Med",
+   "title": "Effect of Pitching Restrictions and Mound Distance on Youth Baseball Pitch Counts.",
+   "population": "Youth baseball pitchers aged 9-12 in 3 leagues",
+   "design": "Cohort study"
+  },
+  {
+   "id": "PMID:36636179",
+   "doi": "10.5114/biolsport.2023.109961",
+   "firstAuthor": "Mandorino M",
+   "year": 2023,
+   "journal": "Biol Sport",
+   "title": "Injury incidence and risk factors in youth soccer players: a systematic literature review. Part I: epidemiological analysis.",
+   "population": "Youth soccer players",
+   "design": "Systematic review (epidemiology part)"
+  },
+  {
+   "id": "PMID:22505124",
+   "doi": "10.1519/JSC.0b013e31825753cb",
+   "firstAuthor": "Mangine GT",
+   "year": 2013,
+   "journal": "J Strength Cond Res",
+   "title": "Effect of age on anthropometric and physical performance measures in professional baseball players.",
+   "population": "1157 professional baseball players",
+   "design": "Cross-sectional"
+  },
+  {
+   "id": "PMID:40453900",
+   "doi": "10.5114/jhk/203326",
+   "firstAuthor": "Martinho DV",
+   "year": 2025,
+   "journal": "J Hum Kinet",
+   "title": "Physical, Physiological, Technical and Tactical Responses According to the Playing Position in Male Basketball: A Systematic Scoping Review.",
+   "population": "Male professional/semiprofessional basketball players, 47 studies",
+   "design": "Systematic scoping review"
+  },
+  {
+   "id": "PMID:31009238",
+   "doi": "10.4085/1062-6050-407-16",
+   "firstAuthor": "Montalvo AM",
+   "year": 2019,
+   "journal": "J Athl Train",
+   "title": "Anterior Cruciate Ligament Injury Risk in Sport: A Systematic Review and Meta-Analysis of Injury Incidence by Sex and Sport Classification.",
+   "population": "Athletes across sports, ACL incidence by sex",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:33005435",
+   "doi": "10.2217/cnc-2020-0004",
+   "firstAuthor": "Mooney J",
+   "year": 2020,
+   "journal": "Concussion",
+   "title": "Concussion in soccer: a comprehensive review of the literature.",
+   "population": "Soccer players, 64 studies",
+   "design": "Comprehensive literature review"
+  },
+  {
+   "id": "PMID:27370009",
+   "doi": "10.1177/1941738116657074",
+   "firstAuthor": "Myers NL",
+   "year": 2016,
+   "journal": "Sports Health",
+   "title": "Volume-based Interval Training Program for Elite Tennis Players.",
+   "population": "Professional and junior players at the 2013-14 US Open and 2014 Orange Bowl",
+   "design": "Retrospective cohort of match statistics"
+  },
+  {
+   "id": "PMID:41281455",
+   "doi": "10.1177/23259671251385129",
+   "firstAuthor": "Nishi RH",
+   "year": 2025,
+   "journal": "Orthop J Sports Med",
+   "title": "Golf-Related Lower Extremity Injuries Presenting to United States Emergency Departments: A 10-Year Analysis (2013-2022).",
+   "population": "US emergency department visits for golf lower-extremity injuries, 2013-2022 (NEISS)",
+   "design": "Descriptive epidemiology"
+  },
+  {
+   "id": "PMID:29912622",
+   "doi": "10.1080/02640414.2018.1485620",
+   "firstAuthor": "Oosterhoff JHF",
+   "year": 2019,
+   "journal": "J Sports Sci",
+   "title": "Risk factors for musculoskeletal injuries in elite junior tennis players: a systematic review.",
+   "population": "Elite junior tennis players, 5 prospective cohorts",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:29864071",
+   "doi": "10.1097/JSM.0000000000000462",
+   "firstAuthor": "Owoeye OBA",
+   "year": 2018,
+   "journal": "Clin J Sport Med",
+   "title": "Prevention of Ankle Sprain Injuries in Youth Soccer and Basketball: Effectiveness of a Neuromuscular Training Program and Examining Risk Factors.",
+   "population": "2265 youth (11-18) soccer and basketball players, Alberta",
+   "design": "Secondary pooled analysis of 5 cohort/trial datasets"
+  },
+  {
+   "id": "PMID:25713683",
+   "doi": "10.2478/hukin-2014-0128",
+   "firstAuthor": "Palao JM",
+   "year": 2014,
+   "journal": "J Hum Kinet",
+   "title": "Anthropometric, physical, and age differences by the player position and the performance level in volleyball.",
+   "population": "2906 Olympic and World Championship volleyball players, 2000-2012",
+   "design": "Descriptive/longitudinal observational"
+  },
+  {
+   "id": "PMID:39209526",
+   "doi": "10.1136/bjsports-2024-108233",
+   "firstAuthor": "Parry GN",
+   "year": 2024,
+   "journal": "Br J Sports Med",
+   "title": "Associations between growth, maturation and injury in youth athletes engaged in elite pathways: a scoping review.",
+   "population": "Elite youth athletes, 30 studies",
+   "design": "Scoping review"
+  },
+  {
+   "id": "PMID:27385546",
+   "doi": "10.23736/S0022-4707.16.06471-9",
+   "firstAuthor": "Paz GA",
+   "year": 2017,
+   "journal": "J Sports Med Phys Fitness",
+   "title": "Physical performance and positional differences among young female volleyball players.",
+   "population": "43 young female volleyball players",
+   "design": "Cross-sectional"
+  },
+  {
+   "id": "PMID:35157536",
+   "doi": "10.1080/00913847.2022.2040889",
+   "firstAuthor": "Perez-Arroniz M",
+   "year": 2023,
+   "journal": "Phys Sportsmed",
+   "title": "The soccer goalkeeper profile: bibliographic review.",
+   "population": "Soccer goalkeepers, 56 studies",
+   "design": "Bibliographic review"
+  },
+  {
+   "id": "PMID:30001501",
+   "doi": "10.1177/0363546518782460",
+   "firstAuthor": "Petushek EJ",
+   "year": 2019,
+   "journal": "Am J Sports Med",
+   "title": "Evidence-Based Best-Practice Guidelines for Preventing Anterior Cruciate Ligament Injuries in Young Female Athletes: A Systematic Review and Meta-analysis.",
+   "population": "27,231 young female athletes, 18 controlled trials",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:36752978",
+   "doi": "10.1007/s40279-022-01807-8",
+   "firstAuthor": "Pluim BM",
+   "year": 2023,
+   "journal": "Sports Med",
+   "title": "Physical Demands of Tennis Across the Different Court Surfaces, Performance Levels and Sexes: A Systematic Review with Meta-analysis.",
+   "population": "Regional to international junior and adult tennis players, 64 studies",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:35565053",
+   "doi": "10.3390/ijerph19095658",
+   "firstAuthor": "Portes R",
+   "year": 2022,
+   "journal": "Int J Environ Res Public Health",
+   "title": "Physical Persistency across Game Quarters and during Consecutive Games in Elite Junior Basketball Players.",
+   "population": "48 female elite junior basketball players (mean age 16.8)",
+   "design": "Observational wearable-load study"
+  },
+  {
+   "id": "PMID:32381476",
+   "doi": "10.1016/j.jse.2020.01.092",
+   "firstAuthor": "Post EG",
+   "year": 2020,
+   "journal": "J Shoulder Elbow Surg",
+   "title": "Sport specialization is associated with upper-extremity overuse injury in high school baseball players.",
+   "population": "551 US high school baseball players (mean 15.9 y)",
+   "design": "Cross-sectional survey"
+  },
+  {
+   "id": "PMID:31937577",
+   "doi": "10.1136/bjsports-2019-100698",
+   "firstAuthor": "Pozzi F",
+   "year": 2020,
+   "journal": "Br J Sports Med",
+   "title": "Preseason shoulder range of motion screening and in-season risk of shoulder and elbow injuries in overhead athletes: systematic review and meta-analysis.",
+   "population": "3314 overhead athletes (75% baseball), 15 cohorts",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:38188119",
+   "doi": "10.5114/biolsport.2024.129476",
+   "firstAuthor": "Pérez Armendáriz ML",
+   "year": 2024,
+   "journal": "Biol Sport",
+   "title": "Match demands of female team sports: a scoping review.",
+   "population": "Professional female team-sport athletes, 86 studies",
+   "design": "Scoping review"
+  },
+  {
+   "id": "PMID:41460726",
+   "doi": "10.1080/02640414.2025.2609028",
+   "firstAuthor": "Rebelo A",
+   "year": 2026,
+   "journal": "J Sports Sci",
+   "title": "What are the demands of volleyball match-play? A systematic review of the external and internal loads encountered according to playing position, number of sets, and player sex.",
+   "population": "Indoor volleyball players of all ages/levels, 28 studies",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:34700052",
+   "doi": "10.1016/j.jshs.2021.10.002",
+   "firstAuthor": "Robles-Palazón FJ",
+   "year": 2022,
+   "journal": "J Sport Health Sci",
+   "title": "Epidemiology of injuries in male and female youth football players: A systematic review and meta-analysis.",
+   "population": "Male and female youth (<=19) soccer players, 43 studies",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:19174551",
+   "doi": "10.1177/0363546508328105",
+   "firstAuthor": "Rojas IL",
+   "year": 2009,
+   "journal": "Am J Sports Med",
+   "title": "Biceps activity during windmill softball pitching: injury implications and comparison with overhand throwing.",
+   "population": "7 female windmill pitchers",
+   "design": "Descriptive laboratory EMG/motion study"
+  },
+  {
+   "id": "PMID:31336051",
+   "doi": "10.1177/0363546519861378",
+   "firstAuthor": "Sakata J",
+   "year": 2019,
+   "journal": "Am J Sports Med",
+   "title": "Throwing Injuries in Youth Baseball Players: Can a Prevention Program Help? A Randomized Controlled Trial.",
+   "population": "237 Japanese youth baseball players aged 9-11, 16 teams",
+   "design": "Randomized controlled trial"
+  },
+  {
+   "id": "PMID:38150377",
+   "doi": "10.1080/02640414.2023.2293535",
+   "firstAuthor": "Shaw J",
+   "year": 2023,
+   "journal": "J Sports Sci",
+   "title": "Physical determinants of golf swing performance in competitive youth golfers.",
+   "population": "64 competitive youth golfers",
+   "design": "Cross-sectional"
+  },
+  {
+   "id": "PMID:36543874",
+   "doi": "10.1038/s41598-022-26682-1",
+   "firstAuthor": "Shitara H",
+   "year": 2022,
+   "journal": "Sci Rep",
+   "title": "Shoulder stretching versus shoulder muscle strength training for the prevention of baseball-related arm injuries: a randomized, active-controlled, open-label, non-inferiority study.",
+   "population": "113 Japanese high school baseball pitchers",
+   "design": "Randomized active-controlled non-inferiority trial"
+  },
+  {
+   "id": "PMID:28389864",
+   "doi": "10.1007/s11999-017-5342-5",
+   "firstAuthor": "Silvers-Granelli HJ",
+   "year": 2017,
+   "journal": "Clin Orthop Relat Res",
+   "title": "Does the FIFA 11+ Injury Prevention Program Reduce the Incidence of ACL Injury in Male Soccer Players?",
+   "population": "1525 NCAA Division I/II men's soccer players, 61 teams",
+   "design": "Cluster randomized controlled trial"
+  },
+  {
+   "id": "PMID:28655743",
+   "doi": "10.1136/bjsports-2016-097155",
+   "firstAuthor": "Skazalski C",
+   "year": 2018,
+   "journal": "Br J Sports Med",
+   "title": "Landing-related ankle injuries do not occur in plantarflexion as once thought: a systematic video analysis of ankle injuries in world-class volleyball.",
+   "population": "24 ankle injuries at major FIVB tournaments",
+   "design": "Systematic video analysis"
+  },
+  {
+   "id": "PMID:36913632",
+   "doi": "10.4085/1062-6050-0476.22",
+   "firstAuthor": "Skazalski C",
+   "year": 2024,
+   "journal": "J Athl Train",
+   "title": "Knee, Low Back, and Shoulder Problems Among University and Professional Volleyball Players: Playing With Pain.",
+   "population": "75 university and professional male volleyball players, 4 countries",
+   "design": "Prospective descriptive epidemiology (weekly OSTRC)"
+  },
+  {
+   "id": "PMID:30130164",
+   "doi": "10.1177/1941738118795425",
+   "firstAuthor": "Smith JA",
+   "year": 2018,
+   "journal": "Sports Health",
+   "title": "Risk Factors Associated With Low Back Pain in Golfers: A Systematic Review and Meta-analysis.",
+   "population": "Recreational and professional golfers, 19 studies",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:19066253",
+   "doi": "10.1136/bmj.a2469",
+   "firstAuthor": "Soligard T",
+   "year": 2008,
+   "journal": "BMJ",
+   "title": "Comprehensive warm-up programme to prevent injuries in young female footballers: cluster randomised controlled trial.",
+   "population": "1892 Norwegian female soccer players aged 13-17",
+   "design": "Cluster randomized controlled trial"
+  },
+  {
+   "id": "PMID:36752659",
+   "doi": "10.1111/sms.14328",
+   "firstAuthor": "Stojanović E",
+   "year": 2023,
+   "journal": "Scand J Med Sci Sports",
+   "title": "The incidence rate of ACL injuries and ankle sprains in basketball players: A systematic review and meta-analysis.",
+   "population": "Basketball players, 30 studies, all levels",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:36208619",
+   "doi": "10.1080/00913847.2022.2133978",
+   "firstAuthor": "Stojanović E",
+   "year": 2023,
+   "journal": "Phys Sportsmed",
+   "title": "A multicomponent neuromuscular warm-up program reduces lower-extremity injuries in trained basketball players: a cluster randomized controlled trial.",
+   "population": "112 regional-level adult male and female basketball players",
+   "design": "Cluster randomized controlled trial"
+  },
+  {
+   "id": "PMID:29039018",
+   "doi": "10.1007/s40279-017-0794-z",
+   "firstAuthor": "Stojanović E",
+   "year": 2018,
+   "journal": "Sports Med",
+   "title": "The Activity Demands and Physiological Responses Encountered During Basketball Match-Play: A Systematic Review.",
+   "population": "Male and female basketball players, 25 studies, multiple levels",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:24370992",
+   "doi": "10.1007/s40279-013-0135-9",
+   "firstAuthor": "Sugimoto D",
+   "year": 2014,
+   "journal": "Sports Med",
+   "title": "Dosage effects of neuromuscular training intervention to reduce anterior cruciate ligament injuries in female athletes: meta- and sub-group analyses.",
+   "population": "Female athletes, 14 trials",
+   "design": "Meta- and subgroup analysis"
+  },
+  {
+   "id": "PMID:40690162",
+   "doi": "10.1007/s40279-025-02271-w",
+   "firstAuthor": "Sundberg A",
+   "year": 2025,
+   "journal": "Sports Med",
+   "title": "Sport-Specific Injury Mechanisms and Situational Patterns of ACL Injuries: A Comprehensive Systematic Review.",
+   "population": "5612 ACL injury situations across 20 sports, 62 studies",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:42346767",
+   "doi": "10.3390/jfmk11020238",
+   "firstAuthor": "Taborri J",
+   "year": 2026,
+   "journal": "J Funct Morphol Kinesiol",
+   "title": "Functional Differences Across Playing Roles in Volleyball: A Sensor-Based Assessment.",
+   "population": "50 male Italian Serie C volleyball players across 5 roles",
+   "design": "Cross-sectional sensor-based assessment"
+  },
+  {
+   "id": "PMID:30638688",
+   "doi": "10.1016/j.jos.2018.12.018",
+   "firstAuthor": "Takagishi K",
+   "year": 2019,
+   "journal": "J Orthop Sci",
+   "title": "Shoulder and elbow pain in junior high school baseball players: Results of a nationwide survey.",
+   "population": "11,134 Japanese junior high school baseball players",
+   "design": "Nationwide survey (one-year follow-up)"
+  },
+  {
+   "id": "PMID:31062948",
+   "doi": "10.23736/S0022-4707.19.09650-6",
+   "firstAuthor": "Taylor JB",
+   "year": 2019,
+   "journal": "J Sports Med Phys Fitness",
+   "title": "Jump load and landing patterns of collegiate female volleyball players during practice and competition.",
+   "population": "14 NCAA Division I women's volleyball players",
+   "design": "Observational video analysis"
+  },
+  {
+   "id": "PMID:28087568",
+   "doi": "10.1136/bjsports-2016-097066",
+   "firstAuthor": "Thorborg K",
+   "year": 2017,
+   "journal": "Br J Sports Med",
+   "title": "Effect of specific exercise-based football injury prevention programmes on the overall injury rate in football: a systematic review and meta-analysis of the FIFA 11 and 11+ programmes.",
+   "population": "Recreational/subelite soccer players, 6 cluster RCTs",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:41272920",
+   "doi": "10.1177/19417381251393642",
+   "firstAuthor": "Thurber L",
+   "year": 2026,
+   "journal": "Sports Health",
+   "title": "Early Sport Specialization and Intense Training in Junior Tennis Players: A Sport-Specific Review.",
+   "population": "Junior tennis players",
+   "design": "Clinical (narrative) review"
+  },
+  {
+   "id": "PMID:27166289",
+   "doi": "10.1177/0363546516644604",
+   "firstAuthor": "Tirabassi J",
+   "year": 2016,
+   "journal": "Am J Sports Med",
+   "title": "Epidemiology of High School Sports-Related Injuries Resulting in Medical Disqualification: 2005-2006 Through 2013-2014 Academic Years.",
+   "population": "US high school athletes (HS RIO), 2005-2014",
+   "design": "Descriptive surveillance epidemiology"
+  },
+  {
+   "id": "PMID:37812954",
+   "doi": "10.1016/j.ptsp.2023.09.006",
+   "firstAuthor": "Tooth C",
+   "year": 2023,
+   "journal": "Phys Ther Sport",
+   "title": "Prevention of shoulder injuries in volleyball players: The usefulness and efficiency of a warm-up routine.",
+   "population": "93 recreational university volleyball players",
+   "design": "Prospective controlled study"
+  },
+  {
+   "id": "PMID:32758080",
+   "doi": "10.1177/1941738120931764",
+   "firstAuthor": "Tooth C",
+   "year": 2020,
+   "journal": "Sports Health",
+   "title": "Risk Factors of Overuse Shoulder Injuries in Overhead Athletes: A Systematic Review.",
+   "population": "Overhead athletes (volleyball, handball, basketball, swimming, water polo, badminton, baseball, tennis), 25 studies",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:15310562",
+   "doi": "10.1177/0363546503262177",
+   "firstAuthor": "Verhagen E",
+   "year": 2004,
+   "journal": "Am J Sports Med",
+   "title": "The effect of a proprioceptive balance board training program for the prevention of ankle sprains: a prospective controlled trial.",
+   "population": "1127 Dutch adult male and female volleyball players, 116 teams",
+   "design": "Prospective controlled trial (regional randomization)"
+  },
+  {
+   "id": "PMID:15273190",
+   "doi": "10.1136/bjsm.2003.005785",
+   "firstAuthor": "Verhagen EA",
+   "year": 2004,
+   "journal": "Br J Sports Med",
+   "title": "A one season prospective cohort study of volleyball injuries.",
+   "population": "486 Dutch second/third division volleyball players",
+   "design": "Prospective cohort, one season"
+  },
+  {
+   "id": "PMID:33141286",
+   "doi": "10.1007/s40279-020-01376-8",
+   "firstAuthor": "Wahlquist VE",
+   "year": 2021,
+   "journal": "Sports Med",
+   "title": "Purposeful Heading in Youth Soccer: A Review.",
+   "population": "Youth soccer players aged 13 or younger",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:30951383",
+   "doi": "10.4085/1062-6050-206-17",
+   "firstAuthor": "Wasserman EB",
+   "year": 2019,
+   "journal": "J Athl Train",
+   "title": "The First Decade of Web-Based Sports Injury Surveillance: Descriptive Epidemiology of Injuries in US High School Girls' Softball (2005-2006 Through 2013-2014) and National Collegiate Athletic Association Women's Softball (2004-2005 Through 2013-2014).",
+   "population": "US high school girls' softball (HS RIO) and NCAA women's softball, 2004-2014",
+   "design": "Descriptive surveillance epidemiology"
+  },
+  {
+   "id": "PMID:30951387",
+   "doi": "10.4085/1062-6050-239-17",
+   "firstAuthor": "Wasserman EB",
+   "year": 2019,
+   "journal": "J Athl Train",
+   "title": "The First Decade of Web-Based Sports Injury Surveillance: Descriptive Epidemiology of Injuries in US High School Boys' Baseball (2005-2006 Through 2013-2014) and National Collegiate Athletic Association Men's Baseball (2004-2005 Through 2013-2014).",
+   "population": "US high school boys' baseball (HS RIO) and NCAA men's baseball, 2004-2014",
+   "design": "Descriptive surveillance epidemiology"
+  },
+  {
+   "id": "PMID:29737024",
+   "doi": "10.1002/jor.24043",
+   "firstAuthor": "Webster KE",
+   "year": 2018,
+   "journal": "J Orthop Res",
+   "title": "Meta-analysis of meta-analyses of anterior cruciate ligament injury reduction training programs.",
+   "population": "Athletes in 8 meta-analyses of ACL prevention programs (mostly female)",
+   "design": "Meta-analysis of meta-analyses"
+  },
+  {
+   "id": "PMID:26272516",
+   "doi": "10.1177/0363546515594380",
+   "firstAuthor": "Wilk KE",
+   "year": 2015,
+   "journal": "Am J Sports Med",
+   "title": "Deficits in Glenohumeral Passive Range of Motion Increase Risk of Shoulder Injury in Professional Baseball Pitchers: A Prospective Study.",
+   "population": "296 professional baseball pitchers, 8 seasons",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:24944295",
+   "doi": "10.1177/0363546514538391",
+   "firstAuthor": "Wilk KE",
+   "year": 2014,
+   "journal": "Am J Sports Med",
+   "title": "Deficits in glenohumeral passive range of motion increase risk of elbow injury in professional baseball pitchers: a prospective study.",
+   "population": "296 professional baseball pitchers, 8 seasons",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:38508702",
+   "doi": "10.1136/bjsports-2023-107324",
+   "firstAuthor": "Williamson TR",
+   "year": 2024,
+   "journal": "Br J Sports Med",
+   "title": "Epidemiology of musculoskeletal injury in professional and amateur golfers: a systematic review and meta-analysis.",
+   "population": "9221 amateur and professional golfers (mean age 46.8), 20 studies",
+   "design": "Systematic review and meta-analysis"
+  },
+  {
+   "id": "PMID:27385938",
+   "doi": "10.1007/s11420-016-9499-3",
+   "firstAuthor": "Yang JS",
+   "year": 2016,
+   "journal": "HSS J",
+   "title": "Fast-Pitch Softball Pitchers Experience a Significant Increase in Pain and Fatigue During a Single High School Season.",
+   "population": "17 US high school fast-pitch softball pitchers",
+   "design": "Prospective observational, one season"
+  },
+  {
+   "id": "PMID:37014607",
+   "doi": "10.1007/s12178-023-09826-2",
+   "firstAuthor": "Young WK",
+   "year": 2023,
+   "journal": "Curr Rev Musculoskelet Med",
+   "title": "Epidemiology of Common Injuries in the Volleyball Athlete.",
+   "population": "Volleyball athletes, all levels",
+   "design": "Narrative review of epidemiology"
+  },
+  {
+   "id": "PMID:31205967",
+   "doi": "10.1177/2325967119846314",
+   "firstAuthor": "Zabawa L",
+   "year": 2019,
+   "journal": "Orthop J Sports Med",
+   "title": "Association Between Parental Understanding of Pitch Smart Guidelines and Youth Baseball Player Injuries.",
+   "population": "853 parents of youth baseball players (mean player age 11.4)",
+   "design": "Cross-sectional survey"
+  },
+  {
+   "id": "PMID:38700088",
+   "doi": "10.1177/03635465241246559",
+   "firstAuthor": "Zaremski JL",
+   "year": 2024,
+   "journal": "Am J Sports Med",
+   "title": "Workload Risk Factors for Pitching-Related Injuries in High School Baseball Pitchers.",
+   "population": "71 baseball pitchers aged 13-18",
+   "design": "Prospective cohort"
+  },
+  {
+   "id": "PMID:39584797",
+   "doi": "10.1177/19417381241297160",
+   "firstAuthor": "Zaremski JL",
+   "year": 2025,
+   "journal": "Sports Health",
+   "title": "A Narrative Review of Softball Pitching Workload and Pitch Counts in Relationship to Injury.",
+   "population": "Fastpitch softball pitchers",
+   "design": "Narrative review"
+  },
+  {
+   "id": "PMID:34052518",
+   "doi": "10.1016/j.jshs.2021.04.003",
+   "firstAuthor": "Zech A",
+   "year": 2022,
+   "journal": "J Sport Health Sci",
+   "title": "Sex differences in injury rates in team-sport athletes: A systematic review and meta-regression analysis.",
+   "population": "High-level (>=16 y) female and male team-sport players, 20 studies",
+   "design": "Systematic review and meta-regression"
+  },
+  {
+   "id": "PMID:21737835",
+   "doi": "10.1177/0363546511413370",
+   "firstAuthor": "Zwerver J",
+   "year": 2011,
+   "journal": "Am J Sports Med",
+   "title": "Prevalence of Jumper's knee among nonelite athletes from different sports: a cross-sectional survey.",
+   "population": "891 nonelite Dutch athletes in 7 sports",
+   "design": "Cross-sectional survey"
+  },
+  {
+   "id": "PMID:37789463",
+   "doi": "10.1186/s13018-023-04224-3",
+   "firstAuthor": "de Azevedo Sodré Silva A",
+   "year": 2023,
+   "journal": "J Orthop Surg Res",
+   "title": "Epidemiology of injuries in young volleyball athletes: a systematic review.",
+   "population": "3698 youth volleyball players aged 12-18, mostly female (5 cohorts)",
+   "design": "Systematic review"
+  },
+  {
+   "id": "PMID:30808663",
+   "doi": "10.1136/bjsports-2018-100045",
+   "firstAuthor": "van Dyk N",
+   "year": 2019,
+   "journal": "Br J Sports Med",
+   "title": "Including the Nordic hamstring exercise in injury prevention programmes halves the rate of hamstring injuries: a systematic review and meta-analysis of 8459 athletes.",
+   "population": "8459 athletes across sports, 15 studies",
+   "design": "Systematic review and meta-analysis"
+  }
+ ]
+}
