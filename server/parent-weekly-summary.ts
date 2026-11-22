@@ -46,6 +46,7 @@ import {
   workoutSetEntries,
 } from "@shared/schema";
 import { weekDates, type AttendanceStatus } from "@shared/attendance";
+import { sumWarmupCompletions, warmupFactsFor } from "./program-day-warmup";
 
 const ISO_DATE_LENGTH = 10;
 export { SEND_WINDOW_DAYS, buildParentWeeklySummaryEmail, isKnownMinorOn, lastCompletedWeek, type WeeklySummary };
@@ -109,10 +110,16 @@ export async function readWeeklySummary(athlete: { id: number; name: string }, w
     (acc, s) => ({ ...acc, [s]: (acc[s] ?? 0) + 1 }),
     {},
   );
+  const warmups = await warmupFactsFor(
+    calendar
+      .filter((e) => !e.isRestDay && e.kind === "exercise" && e.assignmentId != null && e.programDayId != null)
+      .map((e) => ({ athleteId: athlete.id, assignmentId: e.assignmentId as number, programDayId: e.programDayId as number, date: e.date })),
+  );
   return {
     athleteName: athlete.name,
     weekStart,
     weekEnd,
+    warmup: sumWarmupCompletions(warmups.values()),
     sessions: calendar
       .filter((e) => !e.isRestDay)
       .map((e) => ({ date: e.date, title: e.title, completed: e.completed }))

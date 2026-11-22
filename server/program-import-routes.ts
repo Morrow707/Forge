@@ -16,6 +16,8 @@ import { roomForActor } from "./equipment-room";
 import { roomAllows } from "@shared/exercise-needs";
 import type { EquipmentRoom } from "@shared/equipment-profile";
 import type { ImportMatch, LibraryExercise } from "@shared/program-import";
+import { fillMissingWarmups, resolveWarmupBlocks, warmupCandidatesFor } from "./program-day-warmup";
+import type { WarmupBlock, WarmupCandidate } from "@shared/program-day-warmup";
 
 function currentUser(req: Request) {
   return req.user as { id: number; role: "coach" | "athlete" | "admin" | "guardian"; email: string };
@@ -51,7 +53,10 @@ function toLibrary(rows: Array<{ id: number; name: string; category?: string | n
   }));
 }
 
-async function handleImport(req: Request, res: Response, library: LibraryExercise[]) {
+type FullLibraryRow = Parameters<typeof toLibrary>[0][number] & WarmupCandidate & { youthSafe?: boolean | null };
+
+async function handleImport(req: Request, res: Response, rows: FullLibraryRow[]) {
+  const library = toLibrary(rows);
   const file = req.file;
   if (!file) return res.status(400).json({ message: "Choose a file to import: an Excel file, a CSV, a PDF or a photo of the program." });
   const result = await draftProgramFromUpload(file.buffer, file.originalname ?? "", library);
@@ -59,7 +64,30 @@ async function handleImport(req: Request, res: Response, library: LibraryExercis
   // THE ROOM (2026-11-21): a row the coach wrote is kept as written whatever the room has (the
   // review dialog marks it); for a row that needs a decision, what the room can do is offered first.
   const room = await roomForActor(currentUser(req).id);
-  return res.json(suggestionsRoomFirst(result.draft, room));
+  return res.json(await withDraftedWarmups(suggestionsRoomFirst(result.draft, room), rows, room));
+}
+
+/**
+ * A WARM-UP ON EVERY IMPORTED TRAINING DAY (2026-11-22). The model only transcribes the file, so a
+ * warm-up is Forge's proposal, drafted from the reader's tagged warm-up drills this room can do,
+ * aimed at the day's matched rows. It arrives in the review dialog and the builder like every other
+ * row: nothing is saved until the coach's own Save Program, and the coach can change or clear it.
+ */
+export async function withDraftedWarmups<D extends { days: Array<{ isRestDay: boolean; exercises: Array<{ match: ImportMatch }> }> }>(
+  draft: D,
+  rows: readonly FullLibraryRow[],
+  room: EquipmentRoom | null,
+): Promise<D> {
+  const candidates = warmupCandidatesFor(rows, room, null);
+  if (candidates.length === 0) return draft;
+  const asDays = draft.days.map((d) => ({
+    isRestDay: d.isRestDay,
+    warmup: null as WarmupBlock | null,
+    exercises: d.exercises.flatMap((r) => (r.match.status === "matched" ? [{ exerciseId: r.match.exercise.id }] : [])),
+  }));
+  const filled = fillMissingWarmups(asDays, candidates, rows);
+  const resolved = await resolveWarmupBlocks(filled.map((d) => d.warmup ?? null));
+  return { ...draft, days: draft.days.map((d, i) => ({ ...d, warmup: resolved[i] })) };
 }
 
 export function suggestionsRoomFirst<D extends { days: Array<{ exercises: Array<{ match: ImportMatch }> }> }>(draft: D, room: EquipmentRoom | null): D {
@@ -91,13 +119,13 @@ export function registerProgramImportRoutes(app: Express, gates: ProgramImportGa
     receiveFile,
     async (req, res) => {
       const user = currentUser(req);
-      await handleImport(req, res, toLibrary(await storage.getVisibleExercisesForCoach(user.id)));
+      await handleImport(req, res, await storage.getVisibleExercisesForCoach(user.id));
     },
   );
 
   app.post("/api/admin/programs/import-draft", requireRole("admin"), receiveFile, async (req, res) => {
     const user = currentUser(req);
-    await handleImport(req, res, toLibrary(await storage.getExercisesByCoach(user.id, { includeAllAdmins: true })));
+    await handleImport(req, res, await storage.getExercisesByCoach(user.id, { includeAllAdmins: true }));
   });
 
   // A coached athlete is refused by requireFreeAgent (their coach builds their program); a Free
@@ -110,7 +138,7 @@ export function registerProgramImportRoutes(app: Express, gates: ProgramImportGa
     receiveFile,
     async (req, res) => {
       const user = currentUser(req);
-      await handleImport(req, res, toLibrary(await storage.getVisibleExercisesForCoach(user.id)));
+      await handleImport(req, res, await storage.getVisibleExercisesForCoach(user.id));
     },
   );
 }

@@ -113,6 +113,58 @@ for (const path of LESSON_SAVES) {
   });
 }
 
+/**
+ * THE WARM-UP (2026-11-22). A program day's own fields are held against programDayInputSchema
+ * in the reconciling save's dayValues (warmup among them), and every field of one warm-up item
+ * against normalizeWarmupBlock, the one place a parsed item becomes a stored one. A field added to
+ * the item schema and not written there would be accepted by the route and dropped on the floor.
+ */
+describe("updateProgramStructure writes every day field programDayInputSchema accepts", () => {
+  const fields = schemaFields("programDayInputSchema");
+  const block = valuesBlock("updateProgramStructure", "dayValues");
+  it("reads the schema's fields rather than a list", () => {
+    expect(fields).toContain("warmup");
+    expect(fields).toContain("isRestDay");
+  });
+  // A field written as a key at the start of a line: "    warmup: warmupColumn(" matches,
+  // "// warmup: ..." in a comment indented the same way would too, which is why each block here is
+  // the object literal itself and not the function around it.
+  // https://regex101.com/?regex=%5E%5Cs*warmup%3A&flags=m&testString=%20%20%20%20warmup%3A%20warmupColumn(day.warmup)
+  fields
+    .filter((field) => !["id", "exercises"].includes(field))
+    .forEach((field) => {
+      it(`writes ${field}`, () => {
+        expect(block).toMatch(new RegExp(`^\\s*${field}:`, "m"));
+      });
+    });
+  it("createProgramWithStructure and updateProgramDay write the warm-up too", () => {
+    const create = storageSrc.slice(storageSrc.indexOf("async createProgramWithStructure("));
+    // The insert's own warmup key: "      warmup: warmupColumn(day.warmup) ?? null," matches; a
+    // dayValues without it does not.
+    // https://regex101.com/?regex=%5E%5Cs*warmup%3A%20warmupColumn%5C(day%5C.warmup%5C)&flags=m
+    expect(create.slice(0, create.indexOf("\n  },\n"))).toMatch(/^\s*warmup: warmupColumn\(day\.warmup\)/m);
+    expect(inlineSetBlock("updateProgramDay", "programDays")).toContain("warmup: warmupColumn(input.warmup)");
+  });
+});
+
+describe("normalizeWarmupBlock writes every field programDayWarmupItemInputSchema accepts", () => {
+  const warmupSrc = fs.readFileSync(path.resolve(__dirname, "../shared/program-day-warmup.ts"), "utf8");
+  const fnStart = warmupSrc.indexOf("export function normalizeWarmupBlock(");
+  const fn = warmupSrc.slice(fnStart, warmupSrc.indexOf("\n}\n", fnStart));
+  const fields = schemaFields("programDayWarmupItemInputSchema");
+  it("reads the schema's fields rather than a list", () => {
+    expect(fnStart).toBeGreaterThan(-1);
+    expect(fields).toEqual(expect.arrayContaining(["exerciseId", "sets", "reps", "durationSeconds", "note"]));
+  });
+  // Same key-at-line-start rule as above: "        sets: positiveIntOrNull(" matches.
+  // https://regex101.com/?regex=%5E%5Cs*sets%3A&flags=m&testString=%20%20%20%20%20%20%20%20sets%3A%20positiveIntOrNull(item.sets)
+  fields.forEach((field) => {
+    it(`writes ${field}`, () => {
+      expect(fn).toMatch(new RegExp(`^\\s*${field}:`, "m"));
+    });
+  });
+});
+
 describe("the field that was missing", () => {
   it("updateProgramStructure writes restAfterGroupOnly from the input, defaulting to false", () => {
     expect(valuesBlock("updateProgramStructure", "exValues")).toContain(

@@ -22,6 +22,8 @@ import { db } from "./db";
 import { requireRole } from "./auth";
 import { storage } from "./storage";
 import { attendanceRecords, workoutLogs } from "@shared/schema";
+import { sumWarmupCompletions, warmupFactsFor } from "./program-day-warmup";
+import { warmupRatePercent, type WarmupCompletion } from "@shared/program-day-warmup";
 import {
   ATTENDANCE_STATUSES,
   dayStatus,
@@ -83,7 +85,7 @@ async function activeRoster(coachId: number, teamId: number | null | undefined):
  * state. Rest days are not sessions. */
 async function sessionsInRange(coachId: number, start: string, end: string, athleteIds: number[]) {
   const out = new Map<string, Array<{ title: string; status: SessionStatus }>>();
-  if (athleteIds.length === 0) return out;
+  if (athleteIds.length === 0) return { sessions: out, warmups: new Map<string, WarmupCompletion>() };
   const wanted = new Set(athleteIds);
   const [entries, logs] = await Promise.all([
     storage.getCalendarForCoach(coachId, start, end),
@@ -104,13 +106,18 @@ async function sessionsInRange(coachId: number, start: string, end: string, athl
     const started = e.kind === "exercise" && startedKeys.has(`${e.assignmentId}:${e.programDayId}:${e.date}`);
     return started ? "started" : "not_started";
   };
-  entries
-    .filter((e) => e.athleteId != null && wanted.has(e.athleteId) && !e.isRestDay)
-    .forEach((e) => {
-      const key = `${e.athleteId}:${e.date}`;
-      out.set(key, [...(out.get(key) ?? []), { title: e.title, status: statusOf(e) }]);
-    });
-  return out;
+  const sessionEntries = entries.filter((e) => e.athleteId != null && wanted.has(e.athleteId) && !e.isRestDay);
+  sessionEntries.forEach((e) => {
+    const key = `${e.athleteId}:${e.date}`;
+    out.set(key, [...(out.get(key) ?? []), { title: e.title, status: statusOf(e) }]);
+  });
+  // The warm-up mark (2026-11-22): per athlete-day, sessions with a warm-up and how many were ticked.
+  const warmups = await warmupFactsFor(
+    sessionEntries
+      .filter((e) => e.kind === "exercise" && e.assignmentId != null && e.programDayId != null)
+      .map((e) => ({ athleteId: e.athleteId as number, assignmentId: e.assignmentId as number, programDayId: e.programDayId as number, date: e.date })),
+  );
+  return { sessions: out, warmups };
 }
 
 async function marksInRange(programCoachId: number, athleteIds: number[], start: string, end: string) {
@@ -134,13 +141,15 @@ export async function todayForCoach(coachId: number, date: string, teamId: numbe
   if (!roster) return null;
   const ids = roster.athletes.map((a) => a.id);
   const programCoachId = await storage.getPrimaryCoachId(coachId);
-  const [sessions, marks] = await Promise.all([
+  const [{ sessions, warmups }, marks] = await Promise.all([
     sessionsInRange(coachId, date, date, ids),
     marksInRange(programCoachId, ids, date, date),
   ]);
   const athletes = roster.athletes.map((a) => {
     const list = sessions.get(`${a.id}:${date}`) ?? [];
     return {
+      // Null when none of today's sessions has a warm-up; otherwise done of with-warm-up.
+      warmup: warmups.get(`${a.id}:${date}`) ?? null,
       athleteId: a.id,
       name: a.name,
       teamIds: roster.teams.filter((t) => t.memberIds.includes(a.id)).map((t) => t.id),
@@ -184,17 +193,21 @@ export async function weekForCoach(coachId: number, anyDateInWeek: string, teamI
   const heldWithMarks = [...heldCandidates.values()].filter((a) => dates.some((d) => heldMarks.has(`${a.id}:${d}`)));
   const everyone = [...roster.athletes, ...heldWithMarks];
   const ids = everyone.map((a) => a.id);
-  const [sessions, marks] = await Promise.all([
+  const [{ sessions, warmups }, marks] = await Promise.all([
     sessionsInRange(coachId, start, end, ids),
     marksInRange(programCoachId, ids, start, end),
   ]);
+  const warmupOf = (athleteId: number) => sumWarmupCompletions(dates.map((d) => warmups.get(`${athleteId}:${d}`) ?? { withWarmup: 0, done: 0 }));
+  const team = sumWarmupCompletions(everyone.map((a) => warmupOf(a.id)));
   return {
     start,
     dates,
+    warmupTeam: { ...team, ratePercent: warmupRatePercent(team) },
     athletes: everyone.map((a) => ({
       athleteId: a.id,
       name: a.name,
       held: !activeIds.has(a.id),
+      warmup: warmupOf(a.id),
       days: dates.map((date) => {
         const list = sessions.get(`${a.id}:${date}`) ?? [];
         return {

@@ -152,6 +152,8 @@ import { CaraTimer } from "@/components/cara-timer";
 import { useIsFreeAgent } from "@/hooks/use-is-free-agent";
 import { ReadFailed } from "@/components/read-failed";
 import { CautionNote } from "@/components/exercise-tags";
+import { WorkoutWarmupBlock } from "@/components/workout-warmup-block";
+import { warmupHasItems, type ResolvedWarmupBlock } from "@shared/program-day-warmup";
 
 type ExerciseInfo = {
   id: number;
@@ -636,13 +638,15 @@ type DayDetail = {
     title: string;
     isRestDay: boolean;
     weekNumber: number;
+    // The day's warm-up block (2026-11-22), shown first; null when the day has none.
+    warmup?: ResolvedWarmupBlock | null;
     exercises: PrescribedExercise[];
   };
   correctives: PrescribedCorrective[];
   // revision is the optimistic-concurrency token -- see workoutLogs.revision in
   // shared/schema.ts. Every payload carries the revision it was built from, and a
   // save that no longer matches is refused instead of replacing the day.
-  log: { completed: boolean; entries: LogEntry[]; revision?: number } | null;
+  log: { completed: boolean; entries: LogEntry[]; revision?: number; warmupDone?: boolean } | null;
   // Body parts flagged in today's wellness check-in, and whether any
   // exercise currently shown (post-override) looks risky given them -- see
   // shared/injury-matching.ts. hasModifiableRisk stays true even after a
@@ -1186,6 +1190,11 @@ export function WorkoutPage({
 
   const [items, setItems] = useState<ItemState[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  // The day's one "Warm-up done" tick (2026-11-22). State for the screen, a ref for the payload
+  // builder (which runs from timers and beacons, not renders). Hydrated with everything else.
+  const [warmupDone, setWarmupDone] = useState(false);
+  const warmupDoneRef = useRef(false);
+  const dayHasWarmupRef = useRef(false);
   // THE SCREEN HYDRATES FROM A FETCH, NEVER FROM A CACHED PICTURE OF THE DAY.
   //
   // React Query hands `data` back synchronously from its cache on mount -- the in-memory copy
@@ -1322,6 +1331,9 @@ export function WorkoutPage({
         ),
       );
       setItems([...correctiveItems, ...exerciseItems]);
+      warmupDoneRef.current = data.log?.warmupDone === true;
+      setWarmupDone(warmupDoneRef.current);
+      dayHasWarmupRef.current = warmupHasItems(data.day.warmup);
       baseRevisionRef.current = data.log?.revision ?? null;
       const seeded = new Map<string, number>();
       for (const e of data.log?.entries ?? []) {
@@ -1405,6 +1417,8 @@ export function WorkoutPage({
       // treats an absent baseRevision as "no claim about what was there", which is
       // what a first save actually is.
       baseRevision: baseRevisionRef.current ?? undefined,
+      // Only a day with a warm-up sends the tick; otherwise it is omitted and left as stored.
+      ...(dayHasWarmupRef.current ? { warmupDone: warmupDoneRef.current } : {}),
       entries: itemsSnapshot.map((it) => ({
         programExerciseId: it.kind === "exercise" ? it.refId : undefined,
         exerciseId: it.exerciseId,
@@ -2876,6 +2890,19 @@ export function WorkoutPage({
                 todayPainParts={data.todayPainParts}
                 hasModifiableRisk={data.hasModifiableRisk}
                 isModified={data.isModified}
+              />
+            )}
+            {/* THE WARM-UP COMES FIRST (2026-11-22), with one tick for the block. It saves with the
+                day like any other edit and never holds back the main work below it. */}
+            {data.day.warmup && warmupHasItems(data.day.warmup) && (
+              <WorkoutWarmupBlock
+                warmup={data.day.warmup}
+                done={warmupDone}
+                onToggleDone={(next) => {
+                  warmupDoneRef.current = next;
+                  setWarmupDone(next);
+                  scheduleAutosave(itemsRef.current);
+                }}
               />
             )}
             {pages.length === 0 ? (

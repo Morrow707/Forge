@@ -4220,6 +4220,16 @@ CREATE TABLE IF NOT EXISTS "weight_room_sheet_uploads" (
 );
 CREATE INDEX IF NOT EXISTS "weight_room_sheet_uploads_team_date_idx"
   ON "weight_room_sheet_uploads" ("team_id", "date");
+-- ---- WARM-UPS (2026-11-22) ----
+-- A program day's warm-up block (null = none) and the athlete's one "Warm-up done" tick per
+-- logged day. See shared/program-day-warmup.ts.
+ALTER TABLE "program_days" ADD COLUMN IF NOT EXISTS "warmup" json;
+CREATE TABLE IF NOT EXISTS "workout_log_warmups" (
+  "id" serial PRIMARY KEY,
+  "workout_log_id" integer NOT NULL REFERENCES "workout_logs"("id") ON DELETE CASCADE,
+  "done_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "workout_log_warmups_log_unique" ON "workout_log_warmups" ("workout_log_id");
 `;
 
 async function main() {

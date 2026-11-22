@@ -13,6 +13,7 @@
  * the builder's own defaults.
  */
 import type { ImportDraft, LibraryExercise } from "@shared/program-import";
+import type { ResolvedWarmupBlock } from "@shared/program-day-warmup";
 import { deriveLinkedToNext } from "@/lib/supersets";
 
 export type RowDecision = { kind: "exercise"; exercise: LibraryExercise } | { kind: "skip" };
@@ -58,7 +59,14 @@ export type BuilderExercise = {
   videoEligible: boolean | null;
 };
 
-export type BuilderDay = { key: string; title: string; isRestDay: boolean; exercises: BuilderExercise[] };
+export type BuilderDay = {
+  key: string;
+  title: string;
+  isRestDay: boolean;
+  exercises: BuilderExercise[];
+  /** The warm-up Forge drafted for an imported day, if any (2026-11-22). */
+  warmup?: ResolvedWarmupBlock | null;
+};
 
 const DEFAULT_SETS = 3;
 const DEFAULT_REPS = "10";
@@ -103,6 +111,7 @@ export function draftToBuilderDays(
       title: day.title,
       isRestDay: day.isRestDay && exercises.length === 0,
       exercises,
+      warmup: day.warmup ?? null,
     };
   });
   return { ok: true, days };

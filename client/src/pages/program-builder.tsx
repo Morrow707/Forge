@@ -30,6 +30,7 @@ import { AssignProgramDialog } from "@/components/assign-program-dialog";
 import { RadioChipGroup } from "@/components/filter-chip-group";
 import { ProgramAiChatPanel } from "@/components/program-ai-chat-panel";
 import { ProgramImportDialog } from "@/components/program-import-dialog";
+import type { BuilderDay } from "@/lib/program-import-to-builder";
 import { ExerciseOwnershipBadge } from "@/components/exercise-ownership-badge";
 import { ProgressionButton } from "@/components/progression-button";
 import { VideoTrackingToggle } from "@/components/video-tracking-toggle";
@@ -89,6 +90,15 @@ import {
   type ProgramTagForm,
 } from "@/components/exercise-tags";
 import { CareDrillsDialog } from "@/components/care-drills-dialog";
+import {
+  DayWarmupSection,
+  WarmupProgramDialog,
+  emptyLocalWarmup,
+  localWarmupFrom,
+  localWarmupItemFrom,
+  warmupPayload,
+  type LocalWarmup,
+} from "@/components/day-warmup-editor";
 import { YOUTH_HELD_BACK_NOTE } from "@shared/exercise-tags";
 
 type RosterEntry = { id: number; name: string; email: string };
@@ -195,6 +205,10 @@ type LocalDay = {
   serverId?: number;
   title: string;
   isRestDay: boolean;
+  // The day's warm-up block (2026-11-22), edited above the main exercises. Undefined only on a
+  // draft restored from before warm-ups existed: then the save omits it and the server keeps
+  // whatever the day already has.
+  warmup?: LocalWarmup;
   exercises: LocalExercise[];
 };
 
@@ -279,7 +293,7 @@ function makeBlock(): LocalBlock {
 }
 
 function makeDay(): LocalDay {
-  return { key: uid(), title: "Training Day", isRestDay: false, exercises: [] };
+  return { key: uid(), title: "Training Day", isRestDay: false, warmup: emptyLocalWarmup(), exercises: [] };
 }
 
 // Weeks aren't something a coach manages directly anymore -- there's no
@@ -319,6 +333,7 @@ function stateFromProgram(program: any) {
         serverId: d.id,
         title: d.title,
         isRestDay: d.isRestDay,
+        warmup: localWarmupFrom(d.warmup),
         exercises: deriveLinkedToNext(
           d.exercises.map((pe: any) => ({
             key: uid(),
@@ -404,6 +419,8 @@ export function ProgramBuilderPage({
   const [tags, setTags] = useState<ProgramTagForm>(EMPTY_PROGRAM_TAG_FORM);
   const [pickerForDay, setPickerForDay] = useState<string | null>(null);
   const [careForDay, setCareForDay] = useState<string | null>(null);
+  const [warmupPickerForDay, setWarmupPickerForDay] = useState<string | null>(null);
+  const [warmupProgramForDay, setWarmupProgramForDay] = useState<string | null>(null);
   // Whether this program is for an athlete under 14 (shared/exercise-tags.ts). Flags, never blocks.
   const { data: youthAudience } = useQuery<{ forYouth: boolean }>({
     queryKey: [`${apiBase}/programs`, programId, "youth-audience"],
@@ -531,8 +548,8 @@ export function ProgramBuilderPage({
   // "Import a program": the reviewed draft's days go onto the END of what is on screen, the same
   // local state a hand-added day lands in. Nothing is saved here; Save Program does that, through
   // the same payload as every other edit (see program-import-dialog.tsx).
-  function handleImported(imported: LocalDay[], importedName: string | null) {
-    setDays((prev) => [...prev, ...imported]);
+  function handleImported(imported: BuilderDay[], importedName: string | null) {
+    setDays((prev) => [...prev, ...imported.map((d) => ({ ...d, warmup: localWarmupFrom(d.warmup) }))]);
     if (importedName) setName(importedName);
     toast.success(
       `Added ${imported.length} ${imported.length === 1 ? "day" : "days"} from your file. Check them, then Save Program.`,
@@ -618,6 +635,7 @@ export function ProgramBuilderPage({
             dayNumber: di + 1,
             title: d.title,
             isRestDay: d.isRestDay,
+            ...(d.warmup !== undefined ? { warmup: warmupPayload(d.warmup) } : {}),
             exercises: assignSupersetGroups(d.exercises).map((ex, i) => ({
               exerciseId: ex.exerciseId,
               orderIndex: i,
@@ -965,6 +983,8 @@ export function ProgramBuilderPage({
                           onChange={(updater) => updateDay(day.key, updater)}
                           onAddExercise={() => setPickerForDay(day.key)}
                           onAddCareDrills={() => setCareForDay(day.key)}
+                          onAddWarmupDrill={() => setWarmupPickerForDay(day.key)}
+                          onUseWarmupProgram={() => setWarmupProgramForDay(day.key)}
                           onRemove={() => removeDay(day.key)}
                           forYouth={forYouth}
                         />
@@ -1023,6 +1043,35 @@ export function ProgramBuilderPage({
             ...d,
             exercises: [...d.exercises, localExerciseFrom(exercise)],
           }));
+        }}
+      />
+
+      {/* The warm-up section's picker opens on "warmup" so tagged drills come first; any exercise
+          can still be chosen. */}
+      <ExercisePickerDialog
+        apiBase={apiBase}
+        title="Add a warm-up drill"
+        initialSearch="warmup"
+        open={warmupPickerForDay !== null}
+        onOpenChange={(open) => !open && setWarmupPickerForDay(null)}
+        forYouth={forYouth}
+        onSelect={(exercise: Exercise) => {
+          if (!warmupPickerForDay) return;
+          updateDay(warmupPickerForDay, (d) => {
+            const current = d.warmup ?? emptyLocalWarmup();
+            return { ...d, warmup: { ...current, items: [...current.items, localWarmupItemFrom(exercise)] } };
+          });
+        }}
+      />
+
+      <WarmupProgramDialog
+        apiBase={apiBase}
+        open={warmupProgramForDay !== null}
+        onOpenChange={(open) => !open && setWarmupProgramForDay(null)}
+        onPick={(warmup) => {
+          if (!warmupProgramForDay) return;
+          updateDay(warmupProgramForDay, (d) => ({ ...d, warmup }));
+          toast.success("Warm-up copied into this day. Save Program to keep it.");
         }}
       />
 
@@ -1181,6 +1230,8 @@ function DayCard({
   onChange,
   onAddExercise,
   onAddCareDrills,
+  onAddWarmupDrill,
+  onUseWarmupProgram,
   onRemove,
   forYouth = false,
 }: {
@@ -1190,6 +1241,10 @@ function DayCard({
   onAddExercise: () => void;
   /** Opens the care-drill suggestions for this day; nothing is added without the coach's tap. */
   onAddCareDrills: () => void;
+  /** Opens the picker for this day's warm-up section. */
+  onAddWarmupDrill: () => void;
+  /** Opens "Use a warm-up program" for this day. */
+  onUseWarmupProgram: () => void;
   onRemove: () => void;
   forYouth?: boolean;
 }) {
@@ -1247,6 +1302,15 @@ function DayCard({
           </div>
         ) : (
           <>
+            {/* THE WARM-UP, ABOVE THE MAIN WORK (2026-11-22). */}
+            <DayWarmupSection
+              warmup={day.warmup ?? emptyLocalWarmup()}
+              dayNumber={dayNumber}
+              onChange={(warmup) => onChange((d) => ({ ...d, warmup }))}
+              onAddDrill={onAddWarmupDrill}
+              onUseProgram={onUseWarmupProgram}
+            />
+            <p className="label-xs text-muted-foreground">Main work</p>
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}

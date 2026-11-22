@@ -21,6 +21,9 @@ export type WeeklySummary = {
   sessions: Array<{ date: string; title: string; completed: boolean }>;
   attendance: Partial<Record<AttendanceStatus, number>>;
   prs: Array<{ date: string; exercise: string; weight: string | null; unit: string | null; reps: string | null }>;
+  /** The week's warm-ups (2026-11-22): sessions that had one and how many were ticked done.
+   * Absent, or zero sessions with one, and the email says nothing about warm-ups. */
+  warmup?: { withWarmup: number; done: number };
 };
 
 const SHORT_DATE: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" };
@@ -66,6 +69,9 @@ export function buildParentWeeklySummaryEmail(summary: WeeklySummary): { subject
     p(`Here is ${name}'s training for the week of ${escapeHtml(range)}.`),
     p(`<strong>Sessions:</strong> ${done} of ${plural(summary.sessions.length, "assigned session")} completed.`),
     `<ul style="font-size:14px;line-height:1.5;margin:0 0 12px;padding-left:20px;">${sessionList}</ul>`,
+    ...(summary.warmup && summary.warmup.withWarmup > 0
+      ? [p(`<strong>Warm-up done</strong> ${summary.warmup.done} of ${summary.warmup.withWarmup}.`)]
+      : []),
     marks.length > 0
       ? p(`<strong>Attendance, as marked by the coach:</strong> ${marks.join(", ")}.`)
       : p("<strong>Attendance:</strong> the coach did not mark attendance this week."),
