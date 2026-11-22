@@ -5,10 +5,7 @@
    "name": "American Football Off-Season",
    "sport": "American Football",
    "seasonPhase": "off_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "linemen",
     "skill",
@@ -1656,10 +1653,7 @@
    "name": "American Football Pre-Season",
    "sport": "American Football",
    "seasonPhase": "pre_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "linemen",
     "skill",
@@ -2369,10 +2363,7 @@
    "name": "American Football In-Season",
    "sport": "American Football",
    "seasonPhase": "in_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "linemen",
     "skill",
@@ -2858,10 +2849,7 @@
    "name": "American Football Post-Season",
    "sport": "American Football",
    "seasonPhase": "post_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [],
    "joints": [],
    "weeks": 3,
@@ -3175,10 +3163,7 @@
    "name": "Rugby Off-Season",
    "sport": "Rugby",
    "seasonPhase": "off_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "forwards",
     "backs"
@@ -4407,10 +4392,7 @@
    "name": "Rugby Pre-Season",
    "sport": "Rugby",
    "seasonPhase": "pre_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "forwards",
     "backs"
@@ -5026,10 +5008,7 @@
    "name": "Rugby In-Season",
    "sport": "Rugby",
    "seasonPhase": "in_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "forwards",
     "backs"
@@ -5439,10 +5418,7 @@
    "name": "Rugby Post-Season",
    "sport": "Rugby",
    "seasonPhase": "post_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [],
    "joints": [],
    "weeks": 3,
@@ -5756,10 +5732,7 @@
    "name": "Wrestling Off-Season",
    "sport": "Wrestling",
    "seasonPhase": "off_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "lighter weight classes",
     "heavier weight classes"
@@ -6952,10 +6925,7 @@
    "name": "Wrestling Pre-Season",
    "sport": "Wrestling",
    "seasonPhase": "pre_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "lighter weight classes",
     "heavier weight classes"
@@ -7545,10 +7515,7 @@
    "name": "Wrestling In-Season",
    "sport": "Wrestling",
    "seasonPhase": "in_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "lighter weight classes",
     "heavier weight classes"
@@ -7921,10 +7888,7 @@
    "name": "Wrestling Post-Season",
    "sport": "Wrestling",
    "seasonPhase": "post_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [],
    "joints": [],
    "weeks": 3,
@@ -8238,10 +8202,7 @@
    "name": "Ice Hockey Off-Season",
    "sport": "Ice Hockey",
    "seasonPhase": "off_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "goalie",
     "skater"
@@ -9446,10 +9407,7 @@
    "name": "Ice Hockey Pre-Season",
    "sport": "Ice Hockey",
    "seasonPhase": "pre_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "goalie",
     "skater"
@@ -10046,10 +10004,7 @@
    "name": "Ice Hockey In-Season",
    "sport": "Ice Hockey",
    "seasonPhase": "in_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "goalie",
     "skater"
@@ -10463,10 +10418,7 @@
    "name": "Ice Hockey Post-Season",
    "sport": "Ice Hockey",
    "seasonPhase": "post_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [],
    "joints": [],
    "weeks": 3,
@@ -10780,10 +10732,7 @@
    "name": "Lacrosse Off-Season",
    "sport": "Lacrosse",
    "seasonPhase": "off_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "goalie",
     "field"
@@ -11988,10 +11937,7 @@
    "name": "Lacrosse Pre-Season",
    "sport": "Lacrosse",
    "seasonPhase": "pre_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "goalie",
     "field"
@@ -12602,10 +12548,7 @@
    "name": "Lacrosse In-Season",
    "sport": "Lacrosse",
    "seasonPhase": "in_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "goalie",
     "field"
@@ -13047,10 +12990,7 @@
    "name": "Lacrosse Post-Season",
    "sport": "Lacrosse",
    "seasonPhase": "post_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [],
    "joints": [],
    "weeks": 3,
@@ -13364,10 +13304,7 @@
    "name": "Field Hockey Off-Season",
    "sport": "Field Hockey",
    "seasonPhase": "off_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "goalkeeper",
     "field"
@@ -14556,10 +14493,7 @@
    "name": "Field Hockey Pre-Season",
    "sport": "Field Hockey",
    "seasonPhase": "pre_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "goalkeeper",
     "field"
@@ -15152,10 +15086,7 @@
    "name": "Field Hockey In-Season",
    "sport": "Field Hockey",
    "seasonPhase": "in_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "goalkeeper",
     "field"
@@ -15595,10 +15526,7 @@
    "name": "Field Hockey Post-Season",
    "sport": "Field Hockey",
    "seasonPhase": "post_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [],
    "joints": [],
    "weeks": 3,
@@ -15912,10 +15840,7 @@
    "name": "Cheer and Dance Off-Season",
    "sport": "Cheer and Dance",
    "seasonPhase": "off_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "flyer",
     "base",
@@ -17136,10 +17061,7 @@
    "name": "Cheer and Dance Pre-Season",
    "sport": "Cheer and Dance",
    "seasonPhase": "pre_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "flyer",
     "base",
@@ -17759,10 +17681,7 @@
    "name": "Cheer and Dance In-Season",
    "sport": "Cheer and Dance",
    "seasonPhase": "in_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [
     "flyer",
     "base",
@@ -18203,10 +18122,7 @@
    "name": "Cheer and Dance Post-Season",
    "sport": "Cheer and Dance",
    "seasonPhase": "post_season",
-   "purposes": [
-    "warmup",
-    "care"
-   ],
+   "purposes": [],
    "positions": [],
    "joints": [],
    "weeks": 3,
