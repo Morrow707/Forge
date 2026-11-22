@@ -9,6 +9,12 @@
  *                                    date, and record the setup on every assignment it made.
  *   POST /api/my/season-assignments  the same for the caller's own calendar (coach, admin, Free Agent).
  *   GET  /api/assignments/:id/restrictions   the clinician's restrictions for the day screens.
+ *   GET  /api/season-setup/games     the games already on the caller's calendar (shared/season-games.ts),
+ *                                    so the step can offer the first and last game. It reads through
+ *                                    calendarEventsFor, the calendar screen's own read, so it sees
+ *                                    exactly what the caller's calendar shows and nothing more: a
+ *                                    coach's own events and imports, and their teams'. An athlete's
+ *                                    personal event is never on a coach's calendar and so never here.
  *
  * What it REUSES rather than re-solves: every assignment is made by storage.createAssignment, the
  * same call the ordinary assign route makes, so the minor-needs-a-guardian check and the parked-seat
@@ -24,7 +30,9 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "./db";
 import { requireAuth, requireRole } from "./auth";
 import { storage } from "./storage";
-import { assignmentSeasonSetups, programWeeks, users } from "@shared/schema";
+import { assignmentSeasonSetups, programWeeks, teamMembers, users } from "@shared/schema";
+import { calendarEventsFor } from "./calendar-events";
+import { GAME_LOOKAHEAD_DAYS, isGameEvent, summarizeSeasonGames } from "@shared/season-games";
 import { PROGRAM_SEASON_PHASES, normalizePosition } from "@shared/exercise-tags";
 import { ageFromDateOfBirth } from "@shared/privacy-tiers";
 import {
@@ -57,6 +65,53 @@ type Me = { id: number; role: "coach" | "athlete" | "admin" | "guardian" };
 const currentUser = (req: Request) => req.user as Me;
 
 const isoDay = z.string().refine(isIsoDay, { message: "Send a date as YYYY-MM-DD." });
+
+const gamesQuerySchema = z.object({
+  /** The caller's own today, so the window starts on their day rather than the server's. */
+  start: isoDay.optional(),
+  /** Comma-separated athlete ids (coach mode): only games on those athletes' teams, or on no team. */
+  athleteIds: z
+    .string()
+    .optional()
+    .transform((v) =>
+      (v ?? "")
+        .split(",")
+        .map((x) => Number(x))
+        .filter((n) => Number.isInteger(n) && n > 0)
+        .slice(0, MAX_ATHLETES),
+    ),
+});
+
+/** One game as the step receives it. A timed imported game carries its instant, so the client
+ * can put it on the caller's own day rather than the UTC one. */
+export type SeasonGameRow = { date: string; startsAt: string | null; allDay: boolean; title: string; source: "forge" | "imported" };
+
+const ISO_DATE_LENGTH = 10;
+const MS_PER_DAY = 86_400_000;
+const addDaysIso = (iso: string, days: number) =>
+  new Date(Date.parse(`${iso}T00:00:00Z`) + days * MS_PER_DAY).toISOString().slice(0, ISO_DATE_LENGTH);
+
+/**
+ * The games on the caller's calendar from `start` for a year. For a coach naming athletes, a team
+ * event counts only when it is on a team one of those athletes is on; an event on no team (the
+ * coach's own, or a calendar they pasted in for themselves) always counts.
+ */
+export async function seasonGamesFor(user: Me, start: string, athleteIds: readonly number[]): Promise<SeasonGameRow[]> {
+  if (user.role === "guardian") return [];
+  const events = await calendarEventsFor(user, start, addDaysIso(start, GAME_LOOKAHEAD_DAYS));
+  let teamFilter: Set<number> | null = null;
+  if (user.role === "coach" && athleteIds.length > 0) {
+    const inScope = await coachAssignableIds(user.id);
+    const ids = athleteIds.filter((id) => inScope.has(id));
+    const rows = ids.length > 0 ? await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(inArray(teamMembers.athleteId, ids)) : [];
+    teamFilter = new Set(rows.map((r) => r.teamId));
+  }
+  return events
+    .filter((e) => e.teamId == null || !teamFilter || teamFilter.has(e.teamId))
+    .filter((e) => isGameEvent({ source: e.source, label: e.label, customLabel: e.customLabel, title: e.title }))
+    .map((e) => ({ date: e.date, startsAt: e.startsAt, allDay: e.allDay, title: e.title, source: e.source }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
 
 const contextSchema = z.object({
   programIds: z.array(z.number().int().positive()).max(MAX_CONTEXT_PROGRAMS).default([]),
@@ -345,6 +400,18 @@ export function registerSeasonSetupRoutes(app: Express) {
     }, Promise.resolve());
     await recordSetups(setups);
     res.status(HTTP.created).json({ created });
+  });
+
+  app.get("/api/season-setup/games", requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    if (!(await viewerIsFreeAgentOrStaff(user))) return refuse(res, HTTP.forbidden, "Your coach sets up your programs.");
+    const parsed = gamesQuerySchema.safeParse(req.query);
+    if (!parsed.success) return refuse(res, HTTP.badRequest, parsed.error.issues[0]?.message ?? "Bad request");
+    const start = parsed.data.start ?? new Date().toISOString().slice(0, ISO_DATE_LENGTH);
+    const games = await seasonGamesFor(user, start, parsed.data.athleteIds);
+    // The summary on the server's dates; the step recomputes it on the reader's own days.
+    const summary = summarizeSeasonGames(games.map((g) => ({ date: g.date, title: g.title })));
+    res.json({ games, firstGameDate: summary.firstGameDate, lastGameDate: summary.lastGameDate, count: summary.games.length, laterGames: summary.laterGames });
   });
 
   app.get("/api/assignments/:id/restrictions", requireAuth, async (req, res) => {
