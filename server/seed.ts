@@ -24,7 +24,7 @@ import { eq, isNull, and, asc, sql } from "drizzle-orm";
 import { normalizeInjuryRegion } from "@shared/injury-taxonomy";
 import { AMERICAN_HITTING_CHAPTERS } from "./seed-data/american-hitting-content";
 import { seedForgeClasses } from "./seed-forge-classes";
-import { postSeasonProgramsOnce, rewriteSeasonProgramAgeLinesOnce, seedSeasonPrograms } from "./seed-season-programs";
+import { fillSeasonBlockPhasesOnce, postSeasonProgramsOnce, rewriteSeasonProgramAgeLinesOnce, seedSeasonPrograms } from "./seed-season-programs";
 import { COACHES_CORNER_TRACKS_2026_10, COACHES_CORNER_TRACKS_2026_10_04, COACHES_CORNER_TRACKS_2026_11, COACHES_CORNER_PATHS_2026_10 } from "./seed-data/coaches-corner";
 import { seedResearchReview } from "./seed-research-review";
 import { COACHES_CORNER_TRACKS_ORIGINAL } from "./seed-data/coaches-corner/original-seven";
@@ -3425,6 +3425,9 @@ async function main() {
       `Season program age lines: rewrote ${ageLines.descriptions} description(s) and ${ageLines.layerNotes} layer note(s); left ${ageLines.leftAlone} edited text(s) alone.`,
     );
   }
+
+  const blockPhases = await fillSeasonBlockPhasesOnce(libraryOwner.id);
+  if (blockPhases !== null) console.log(`Season program block phases: filled ${blockPhases} block(s) (one time).`);
 
   // One-time production fixup: promote scott.morrow@live.com to admin and
   // hand over the exercise library so it becomes the official Forge-branded

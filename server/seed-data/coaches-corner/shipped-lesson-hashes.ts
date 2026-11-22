@@ -181,6 +181,7 @@ export const SHIPPED_LESSON_CONTENT_HASHES: ReadonlySet<string> = new Set([
   "97583790c550d8cfde66c1cf48e47f7e034ff976bf1c8b194cb67402d0d6b908", // Heat, Schedules and In-Season Load / 2 (2026-11-22)
   "6e5b14fd9959337f0bf7936e118f59cf6f47c457235d2594e9c834afe399a4be", // Heat, Schedules and In-Season Load / 3 (2026-11-22)
   "c4f3e9c5a2093e723bad6f015db04923625d480f99be9f9711e7ff70dd026127", // Heat, Schedules and In-Season Load / 4 (2026-11-22)
+  "50cdd2e15c7017f7ff1f73d93dabbb62f1f80f6122e3a9dde8000d1fd6b1c908", // Plyometrics & Power Development / 4 (2026-11-22)
 ]);
 
 export function lessonContentHash(content: string): string {
@@ -442,6 +443,7 @@ export const SHIPPED_QUIZ_QUESTION_HASHES: ReadonlySet<string> = new Set([
   "be317f151bedd18a65579a316b61e3acba917fb7818826bf7bbc895b9b2de2d6", // Heat, Schedules and In-Season Load / q5 (2026-11-22)
   "59acccfbc81c358fe4f2909569d7e95582764f1d3f9b0699ee1d1916b379bcaa", // Heat, Schedules and In-Season Load / q6 (2026-11-22)
   "5f79199e6df683ec16fe1732b3f30ec783be7ab6b002469a625b6d59ca550a5c", // Heat, Schedules and In-Season Load / q7 (2026-11-22)
+  "e4ce1dc50c480657f7f5cba875f57e839613b3eb500ff298d71b4384515196ab", // Plyometrics & Power Development / q6 (2026-11-22)
 ]);
 
 export function decideQuizQuestionResync(

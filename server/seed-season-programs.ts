@@ -19,9 +19,9 @@
  */
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "./db";
-import { exercises, programs } from "@shared/schema";
+import { exercises, programBlocks, programs } from "@shared/schema";
 import { storage } from "./storage";
-import { convertSeasonProgram, seasonProgramDescription, type FileProgram } from "./season-program-structure";
+import { convertSeasonProgram, seasonBlockPhase, seasonProgramDescription, type FileProgram } from "./season-program-structure";
 import { normalizePosition } from "@shared/exercise-tags";
 import type { ProgramLayers } from "@shared/season-program-layers";
 import { SEASON_PROGRAM_TEXT_BEFORE_2026_11_22 } from "./seed-data/season-program-text-before-2026-11-22";
@@ -174,4 +174,50 @@ export async function rewriteSeasonProgramAgeLinesOnce(
 
   await db.execute(sql`INSERT INTO applied_backfills (key) VALUES (${SEASON_PROGRAM_AGE_LINES_MARKER}) ON CONFLICT DO NOTHING`);
   return result;
+}
+
+
+export const SEASON_BLOCK_PHASES_MARKER = "season_program_block_phases_2026_11_22";
+
+/**
+ * The season programs were first created with every training block at "No phase". This fills the
+ * phase in on the programs already stored, once, behind an applied_backfills marker: only on the
+ * library owner's program of that exact name, only on a block that still has the file's own name
+ * and no phase, so an admin who renamed a block or picked a phase is never overridden.
+ */
+export async function fillSeasonBlockPhasesOnce(
+  libraryOwnerId: number,
+  files: string[] = seasonProgramFiles(),
+): Promise<number | null> {
+  const done = await db.execute(sql`SELECT 1 FROM applied_backfills WHERE key = ${SEASON_BLOCK_PHASES_MARKER}`);
+  if (done.rows.length > 0) return null;
+  let filled = 0;
+  for (const file of files) {
+    for (const program of readSeasonProgramFile(file).programs) {
+      const wanted: { name: string; phase: "accumulation" | "intensification" | "realization" | "deload" }[] = [];
+      if (program.postSeason) wanted.push({ name: "Active rest", phase: "deload" });
+      else {
+        (program.blocks ?? []).forEach((block, i) => {
+          const phase = seasonBlockPhase(program.seasonPhase, i);
+          if (phase) wanted.push({ name: block.name, phase });
+        });
+      }
+      if (wanted.length === 0) continue;
+      const [stored] = await db
+        .select({ id: programs.id })
+        .from(programs)
+        .where(and(eq(programs.coachId, libraryOwnerId), eq(programs.name, program.name)));
+      if (!stored) continue;
+      for (const w of wanted) {
+        const updated = await db
+          .update(programBlocks)
+          .set({ phase: w.phase })
+          .where(and(eq(programBlocks.programId, stored.id), eq(programBlocks.name, w.name), isNull(programBlocks.phase)))
+          .returning({ id: programBlocks.id });
+        filled += updated.length;
+      }
+    }
+  }
+  await db.execute(sql`INSERT INTO applied_backfills (key) VALUES (${SEASON_BLOCK_PHASES_MARKER}) ON CONFLICT DO NOTHING`);
+  return filled;
 }

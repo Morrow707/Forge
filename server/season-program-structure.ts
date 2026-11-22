@@ -237,7 +237,7 @@ export function convertSeasonProgram(program: FileProgram, resolve: Resolver): C
     // Converted once and shared by every week, so a missing name is reported once.
     const sessionDays = (program.postSeason.optionalSessions ?? []).map((sd, i) => day(sd, i + 1, `post-season session ${i + 1}`));
     const count = Math.max(1, program.postSeason.weeks ?? 1);
-    blocks.push({ name: "Active rest", notes: "Every session is optional. Easy effort; finish fresher than you started." });
+    blocks.push({ name: "Active rest", phase: "deload", notes: "Every session is optional. Easy effort; finish fresher than you started." });
     Array.from({ length: count }).forEach(() => {
       weekNumber += 1;
       weeks.push({
@@ -251,7 +251,7 @@ export function convertSeasonProgram(program: FileProgram, resolve: Resolver): C
     (program.blocks ?? []).forEach((block, blockIndex) => {
       const lighterNote = block.lighterWeek != null ? block.lighterWeekNote ?? DEFAULT_LIGHTER_WEEK_NOTE : null;
       const notes = [block.note?.trim(), lighterNote].filter((n): n is string => !!n).join(" ") || null;
-      blocks.push({ name: block.name, notes });
+      blocks.push({ name: block.name, phase: seasonBlockPhase(program.seasonPhase, blockIndex), notes });
       const blockWeeks = block.weeks && block.weeks.length > 0 ? block.weeks : null;
       // Converted once and shared by every week of the block, so a missing name is reported once.
       const blockDays = block.days.map((d, i) => day(d, i + 1, `${block.name}, ${d.title}`));
@@ -341,4 +341,22 @@ function convertLayers(
   const hasGirls = !!girlsTeam && (girlsTeam.addWarmup.length > 0 || girlsTeam.note != null);
   if (Object.keys(positions).length === 0 && !hasGirls) return null;
   return { positions, girlsTeam: hasGirls ? girlsTeam : null };
+}
+
+
+/**
+ * The periodization phase a season program's training block carries, so the builder never shows
+ * "No phase" on a Forge program. The off-season's first block builds muscle and work capacity
+ * (accumulation), its second builds strength (intensification); the pre-season turns strength into
+ * power and the in-season keeps it, both expressing what was built (realization); the post-season's
+ * active rest is a deload (set where that block is built). Warm-ups, game-day kits and
+ * return-to-training stages are not periodized blocks and carry none.
+ */
+export function seasonBlockPhase(
+  seasonPhase: string | null | undefined,
+  blockIndex: number,
+): "accumulation" | "intensification" | "realization" | null {
+  if (seasonPhase === "off_season") return blockIndex === 0 ? "accumulation" : "intensification";
+  if (seasonPhase === "pre_season" || seasonPhase === "in_season") return "realization";
+  return null;
 }

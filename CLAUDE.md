@@ -8615,6 +8615,13 @@ underage athlete."
   `rewriteSeasonProgramAgeLinesOnce` (marker `season_program_age_lines_2026_11_22`) rewrites a stored
   description or layer note only where it still equals the old text
   (`server/seed-data/season-program-text-before-2026-11-22.ts`, frozen); an admin's edit is left alone.
+- The Coaches Corner plyometrics lesson ("Strength Prerequisites, Young Athletes and Surfaces") and its
+  quiz question 6 now judge a young athlete by landings, pain-free jumping and strength, never by age;
+  recorded in `shipped-lesson-hashes.ts`. The other tracks' age mentions are research findings, not rules.
+- Every season program training block carries a periodization phase (off-season block 1 accumulation,
+  block 2 intensification, pre- and in-season realization, post-season active rest deload;
+  `seasonBlockPhase`), and `fillSeasonBlockPhasesOnce` (marker `season_program_block_phases_2026_11_22`)
+  fills it on stored programs where the block still has the file's name and no phase.
 
 **NOT changed, on purpose, because they are law about DATA, not the weight room:** the under-13
 guardian claim and card check, the date-of-birth gate, the privacy tiers and a minor's video retention,
