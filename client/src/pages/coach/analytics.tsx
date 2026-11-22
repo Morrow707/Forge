@@ -89,15 +89,18 @@ import { CameraMetricCaveat } from "@/components/camera-metric-caveat";
 import { GoalsPanel } from "@/components/goals-panel";
 import { Skeleton } from "@/components/skeleton";
 import { ReadFailed } from "@/components/read-failed";
+import { SideBalanceNote } from "@/components/side-balance-note";
 import { CsvExportButton } from "@/components/csv-export-button";
 import { CAMERA_ACCURACY_INLINE } from "@shared/camera-accuracy-copy";
 import { convertWeight } from "@/lib/progression";
 
 type RosterEntry = { id: number; name: string; email: string };
-type TrackedExercise = { id: number; name: string };
+type TrackedExercise = { id: number; name: string; purposes?: string[] | null };
 type AnalyticsPoint = {
   date: string;
   setNumber: number;
+  // Which side a one-side-at-a-time set was (workout_set_entries.side); null when not recorded.
+  side?: "left" | "right" | null;
   reps: string | null;
   weight: string | null;
   weightUnit: "lbs" | "kg" | null;
@@ -1167,6 +1170,7 @@ export default function CoachAnalytics() {
 
       {athleteId && exerciseId && chartData.length > 0 && (
         <div className="space-y-4">
+          <SideBalanceNote points={points} exercise={allExercises.find((e) => String(e.id) === exerciseId)} />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <h2 className="font-display text-xl font-bold uppercase">{selectedExerciseName}</h2>
