@@ -8,6 +8,7 @@ import { Link } from "wouter";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Check } from "lucide-react";
+import { useT } from "@/i18n";
 
 type Analytics = {
   tracks: {
@@ -31,6 +32,7 @@ type LessonFlag = { id: number; lessonId: number; reason: string; createdAt: str
 /** Completion analytics and the coach-submitted questions. Counts only; no coach is named.
  * A question most coaches miss is a bad question or a lesson that did not teach it. */
 export default function AdminCoachesCornerAnalytics() {
+  const t = useT();
   const qc = useQueryClient();
   const a = useQuery<Analytics>({ queryKey: ["/api/admin/coaches-corner/analytics"], queryFn: () => getJson("/api/admin/coaches-corner/analytics") });
   const q = useQuery<CoachQuestion[]>({ queryKey: ["/api/admin/coaches-corner/questions"], queryFn: () => getJson("/api/admin/coaches-corner/questions") });
@@ -40,7 +42,7 @@ export default function AdminCoachesCornerAnalytics() {
       await apiRequest("POST", `/api/admin/coaches-corner/lesson-flags/${id}/resolve`, {});
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/coaches-corner/lesson-flags"] }),
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't resolve"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't resolve")),
   });
   const resolve = useMutation({
     mutationFn: async (id: number) => {
@@ -50,22 +52,22 @@ export default function AdminCoachesCornerAnalytics() {
       qc.invalidateQueries({ queryKey: ["/api/admin/coaches-corner/questions"] });
       qc.invalidateQueries({ queryKey: ["/api/admin/coaches-corner/analytics"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't resolve"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't resolve")),
   });
   const pct = (n: number, d: number) => (d > 0 ? `${Math.round((n / d) * 100)}%` : "—");
 
   return (
-    <AppShell title="Coaches Corner analytics">
+    <AppShell title={t("Coaches Corner analytics")}>
       {a.isError ? (
-        <ReadFailed what="the analytics" onRetry={() => void a.refetch()} />
+        <ReadFailed what={t("the analytics")} onRetry={() => void a.refetch()} />
       ) : !a.data ? (
         <div className="h-32 animate-pulse rounded-lg bg-surface" />
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-3">
             {[
-              ["Tracks", a.data.tracks.length],
-              ["Open questions", a.data.openQuestions],
+              [t("Tracks"), a.data.tracks.length],
+              [t("Open questions"), a.data.openQuestions],
             ].map(([label, n]) => (
               <Card key={String(label)}>
                 <CardContent className="p-4">
@@ -78,34 +80,34 @@ export default function AdminCoachesCornerAnalytics() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Where coaches get to</CardTitle>
-              <CardDescription>Started is any lesson read. Finished is every lesson read. Pass rate is attempts, not coaches.</CardDescription>
+              <CardTitle className="text-base">{t("Where coaches get to")}</CardTitle>
+              <CardDescription>{t("Started is any lesson read. Finished is every lesson read. Pass rate is attempts, not coaches.")}</CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase text-muted-foreground">
                   <tr>
-                    <th className="py-1 pr-3">Track</th>
-                    <th className="py-1 pr-3">Started</th>
-                    <th className="py-1 pr-3">Finished</th>
-                    <th className="py-1 pr-3">Quiz attempts</th>
-                    <th className="py-1 pr-3">Pass rate</th>
-                    <th className="py-1">Drop-off</th>
+                    <th className="py-1 pr-3">{t("Track")}</th>
+                    <th className="py-1 pr-3">{t("Started")}</th>
+                    <th className="py-1 pr-3">{t("Finished")}</th>
+                    <th className="py-1 pr-3">{t("Quiz attempts")}</th>
+                    <th className="py-1 pr-3">{t("Pass rate")}</th>
+                    <th className="py-1">{t("Drop-off")}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {a.data.tracks.map((t) => {
-                    const first = t.lessons[0]?.readBy ?? 0;
-                    const last = t.lessons[t.lessons.length - 1]?.readBy ?? 0;
+                  {a.data.tracks.map((tr) => {
+                    const first = tr.lessons[0]?.readBy ?? 0;
+                    const last = tr.lessons[tr.lessons.length - 1]?.readBy ?? 0;
                     return (
-                      <tr key={t.trackId} className="border-t border-border">
-                        <td className="py-1.5 pr-3 font-medium">{t.title}</td>
-                        <td className="py-1.5 pr-3">{t.started}</td>
-                        <td className="py-1.5 pr-3">{t.allLessonsRead}</td>
-                        <td className="py-1.5 pr-3">{t.quizAttempts}</td>
-                        <td className="py-1.5 pr-3">{pct(t.quizPasses, t.quizAttempts)}</td>
+                      <tr key={tr.trackId} className="border-t border-border">
+                        <td className="py-1.5 pr-3 font-medium">{tr.title}</td>
+                        <td className="py-1.5 pr-3">{tr.started}</td>
+                        <td className="py-1.5 pr-3">{tr.allLessonsRead}</td>
+                        <td className="py-1.5 pr-3">{tr.quizAttempts}</td>
+                        <td className="py-1.5 pr-3">{pct(tr.quizPasses, tr.quizAttempts)}</td>
                         <td className="py-1.5 text-xs text-muted-foreground">
-                          {first > 0 ? `${first} read lesson 1, ${last} read lesson ${t.lessonCount}` : "nobody yet"}
+                          {first > 0 ? t("{first} read lesson 1, {last} read lesson {count}", { first, last, count: tr.lessonCount }) : t("nobody yet")}
                         </td>
                       </tr>
                     );
@@ -117,17 +119,17 @@ export default function AdminCoachesCornerAnalytics() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Questions most coaches miss</CardTitle>
-              <CardDescription>Three or more answers. A high miss rate is a bad question or a lesson that did not teach it.</CardDescription>
+              <CardTitle className="text-base">{t("Questions most coaches miss")}</CardTitle>
+              <CardDescription>{t("Three or more answers. A high miss rate is a bad question or a lesson that did not teach it.")}</CardDescription>
             </CardHeader>
             <CardContent>
               {a.data.hardestQuestions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Not enough quiz attempts yet.</p>
+                <p className="text-sm text-muted-foreground">{t("Not enough quiz attempts yet.")}</p>
               ) : (
                 <ul className="space-y-2">
                   {a.data.hardestQuestions.map((h) => (
                     <li key={h.questionId} className="text-sm">
-                      <span className="font-semibold">{pct(h.missed, h.answered)} missed</span> ({h.answered} answers), {h.trackTitle}: {h.questionText}
+                      <span className="font-semibold">{t("{percent} missed", { percent: pct(h.missed, h.answered) })}</span> {t("({count} answers)", { count: h.answered })}, {h.trackTitle}: {h.questionText}
                     </li>
                   ))}
                 </ul>
@@ -137,14 +139,14 @@ export default function AdminCoachesCornerAnalytics() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Flagged lessons</CardTitle>
-              <CardDescription>A coach said a lesson is wrong, out of date or unclear, and why. Fix the lesson in the builder, then mark it done.</CardDescription>
+              <CardTitle className="text-base">{t("Flagged lessons")}</CardTitle>
+              <CardDescription>{t("A coach said a lesson is wrong, out of date or unclear, and why. Fix the lesson in the builder, then mark it done.")}</CardDescription>
             </CardHeader>
             <CardContent>
               {flags.isError ? (
-                <ReadFailed what="the flags" onRetry={() => void flags.refetch()} />
+                <ReadFailed what={t("the flags")} onRetry={() => void flags.refetch()} />
               ) : (flags.data ?? []).length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nothing flagged.</p>
+                <p className="text-sm text-muted-foreground">{t("Nothing flagged.")}</p>
               ) : (
                 <ul className="space-y-3">
                   {flags.data!.map((f) => (
@@ -160,12 +162,12 @@ export default function AdminCoachesCornerAnalytics() {
                         <div className="flex gap-2">
                           {f.trackId != null && (
                             <Button asChild size="sm" variant="ghost">
-                              <Link href={`/admin/academy-tracks/${f.trackId}`}>Open in builder</Link>
+                              <Link href={`/admin/academy-tracks/${f.trackId}`}>{t("Open in builder")}</Link>
                             </Button>
                           )}
                           <Button size="sm" variant="outline" onClick={() => resolveFlag.mutate(f.id)} disabled={resolveFlag.isPending}>
                             <Check className="h-4 w-4" />
-                            Done
+                            {t("Done")}
                           </Button>
                         </div>
                       </div>
@@ -178,25 +180,25 @@ export default function AdminCoachesCornerAnalytics() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Questions the library couldn't answer</CardTitle>
-              <CardDescription>Filed by coaches from "This didn't answer my question". The next track comes from here.</CardDescription>
+              <CardTitle className="text-base">{t("Questions the library couldn't answer")}</CardTitle>
+              <CardDescription>{t("Filed by coaches from \"This didn't answer my question\". The next track comes from here.")}</CardDescription>
             </CardHeader>
             <CardContent>
               {q.isError ? (
-                <ReadFailed what="the questions" onRetry={() => void q.refetch()} />
+                <ReadFailed what={t("the questions")} onRetry={() => void q.refetch()} />
               ) : (q.data ?? []).length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nothing open.</p>
+                <p className="text-sm text-muted-foreground">{t("Nothing open.")}</p>
               ) : (
                 <ul className="space-y-3">
                   {q.data!.map((item) => (
                     <li key={item.id} className="rounded-md border border-border p-3">
                       <p className="text-sm font-semibold">{item.question}</p>
-                      {item.answerGiven && <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">Library said: {item.answerGiven}</p>}
+                      {item.answerGiven && <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{t("Library said: {answer}", { answer: item.answerGiven })}</p>}
                       <div className="mt-2 flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</span>
                         <Button size="sm" variant="outline" onClick={() => resolve.mutate(item.id)} disabled={resolve.isPending}>
                           <Check className="h-4 w-4" />
-                          Done
+                          {t("Done")}
                         </Button>
                       </div>
                     </li>

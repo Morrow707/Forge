@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { CAMERA_AI_DOMAINS, CAMERA_AI_MODEL_NOTE, type CameraAiDomain } from "@/lib/camera-ai-history";
 import { CircleCheck, CircleDashed } from "lucide-react";
+import { useT } from "@/i18n";
 
 /** Read-only view of what the on-device object detector actually knows, one row per
  * equipment/object -- explicit request: "create a camera AI field in the admins profile
@@ -31,6 +32,7 @@ export function CameraAiHistoryContent() {
 }
 
 function DomainCard({ domain, maxCount }: { domain: CameraAiDomain; maxCount: number }) {
+  const t = useT();
   const barPercent = Math.round((domain.trainingExampleCount / maxCount) * 100);
 
   return (
@@ -46,20 +48,20 @@ function DomainCard({ domain, maxCount }: { domain: CameraAiDomain; maxCount: nu
             {domain.label}
           </CardTitle>
           <Badge variant={domain.status === "active" ? "success" : "outline"}>
-            {domain.status === "active" ? "Learning" : "Not built"}
+            {domain.status === "active" ? t("Learning") : t("Not built")}
           </Badge>
         </div>
         <CardDescription>
           {domain.status === "active"
-            ? "Recognizes this by sight, verified against real photos before shipping."
-            : "No visual model yet, tracked by motion only, see note below."}
+            ? t("Recognizes this by sight, verified against real photos before shipping.")
+            : t("No visual model yet, tracked by motion only, see note below.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3">
         <div className="space-y-1">
           <div className="flex items-baseline justify-between text-xs">
             <span className="font-semibold uppercase tracking-wide text-muted-foreground">
-              Real learned examples
+              {t("Real learned examples")}
             </span>
             <span className="font-mono tabular-nums">{domain.trainingExampleCount}</span>
           </div>

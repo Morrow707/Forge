@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getJson } from "@/lib/queryClient";
 import { formatDistanceToNow } from "date-fns";
 import { Copy, Users, Video, VideoOff, Sparkles } from "lucide-react";
+import { useT } from "@/i18n";
 
 type Match = { id: number; name: string; coachName?: string; score: number };
 
@@ -42,6 +43,7 @@ type Response = {
 type Filter = "all" | "library_dupes" | "coach_dupes" | "original" | "filmable";
 
 function MatchList({ label, matches }: { label: string; matches: Match[] }) {
+  const t = useT();
   if (!matches.length) return null;
   return (
     <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2">
@@ -54,7 +56,7 @@ function MatchList({ label, matches }: { label: string; matches: Match[] }) {
             {m.name}
             {m.coachName ? <span className="text-muted-foreground"> · {m.coachName}</span> : null}
             <span className="ml-2 text-xs text-muted-foreground">
-              {Math.round(m.score * 100)}% match
+              {t("{percent}% match", { percent: Math.round(m.score * 100) })}
             </span>
           </li>
         ))}
@@ -75,6 +77,7 @@ function MatchList({ label, matches }: { label: string; matches: Match[] }) {
  * prompt is off-page: adding a genuinely new movement to the Forge library, or telling a coach
  * the thing they built already exists. */
 export default function AdminCoachExercisesPage() {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
 
@@ -105,12 +108,11 @@ export default function AdminCoachExercisesPage() {
     // no navigation at all -- the only way off it was the one link in its own toolbar, which
     // landed somewhere that DID have a nav bar and so read as being thrown back out to the rest
     // of the site.
-    <AppShell title="Coach builds">
+    <AppShell title={t("Coach builds")}>
       <div className="mx-auto max-w-5xl space-y-4">
       <div>
         <p className="text-sm text-muted-foreground">
-          Everything coaches have built outside the Forge library, with anything that looks like a
-          duplicate flagged. Read-only.
+          {t("Everything coaches have built outside the Forge library, with anything that looks like a duplicate flagged. Read-only.")}
         </p>
       </div>
 
@@ -118,11 +120,11 @@ export default function AdminCoachExercisesPage() {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {(
             [
-              ["all", "Total", counts.total, Users],
-              ["library_dupes", "Already in Forge", counts.duplicatesOfLibrary, Copy],
-              ["coach_dupes", "Built twice", counts.duplicatesOfEachOther, Copy],
-              ["original", "Original", counts.originals, Sparkles],
-              ["filmable", "Filmable", counts.filmable, counts.filmable ? Video : VideoOff],
+              ["all", t("Total"), counts.total, Users],
+              ["library_dupes", t("Already in Forge"), counts.duplicatesOfLibrary, Copy],
+              ["coach_dupes", t("Built twice"), counts.duplicatesOfEachOther, Copy],
+              ["original", t("Original"), counts.originals, Sparkles],
+              ["filmable", t("Filmable"), counts.filmable, counts.filmable ? Video : VideoOff],
             ] as const
           ).map(([key, label, value, Icon]) => (
             <button
@@ -148,25 +150,25 @@ export default function AdminCoachExercisesPage() {
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by exercise or coach name"
+          placeholder={t("Search by exercise or coach name")}
           className="max-w-xs"
         />
         {filter !== "all" && (
           <Button variant="ghost" size="sm" onClick={() => setFilter("all")}>
-            Clear filter
+            {t("Clear filter")}
           </Button>
         )}
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/admin/review">Reports & trending</Link>
+          <Link href="/admin/review">{t("Reports & trending")}</Link>
         </Button>
       </div>
 
-      {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {isLoading && <p className="text-sm text-muted-foreground">{t("Loading…")}</p>}
 
       {isError && (
         <Card>
           <CardContent className="p-6">
-            <ReadFailed what="the coach-built exercises" onRetry={() => void refetch()} />
+            <ReadFailed what={t("the coach-built exercises")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       )}
@@ -174,7 +176,7 @@ export default function AdminCoachExercisesPage() {
       {!isLoading && !isError && !visible.length && (
         <Card>
           <CardContent className="p-6 text-center text-sm text-muted-foreground">
-            Nothing matches that.
+            {t("Nothing matches that.")}
           </CardContent>
         </Card>
       )}
@@ -197,15 +199,15 @@ export default function AdminCoachExercisesPage() {
                   {ex.videoEligible !== false && (
                     <Badge variant="destructive" className="gap-1">
                       <Video className="h-3 w-3" />
-                      Filmable
+                      {t("Filmable")}
                     </Badge>
                   )}
                 </div>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              <MatchList label="Forge already has" matches={ex.matchesLibrary} />
-              <MatchList label="Another coach built" matches={ex.matchesOtherCoaches} />
+              <MatchList label={t("Forge already has")} matches={ex.matchesLibrary} />
+              <MatchList label={t("Another coach built")} matches={ex.matchesOtherCoaches} />
             </CardContent>
           </Card>
         ))}

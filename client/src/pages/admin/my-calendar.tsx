@@ -10,8 +10,10 @@ import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { ReadFailed } from "@/components/read-failed";
 import { Dumbbell, CalendarDays } from "lucide-react";
+import { useT } from "@/i18n";
 
 export default function AdminMyCalendar() {
+  const t = useT();
   const [, navigate] = useLocation();
   const [range, setRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
   const eventsLayer = useCalendarEventsLayer(range);
@@ -33,13 +35,13 @@ export default function AdminMyCalendar() {
 
   return (
     <AppShell
-      title="My Calendar"
+      title={t("My Calendar")}
       actions={
         <div className="flex flex-wrap items-center gap-2">
           {eventsLayer.addButton}
           <Button variant="outline" size="sm" onClick={() => setSyncOpen(true)}>
             <CalendarDays className="h-4 w-4" />
-            Calendar Sync
+            {t("Calendar Sync")}
           </Button>
         </div>
       }
@@ -61,7 +63,7 @@ export default function AdminMyCalendar() {
       {isError && (
         <Card className="mt-6">
           <CardContent className="py-14">
-            <ReadFailed what="your calendar" onRetry={() => void refetch()} />
+            <ReadFailed what={t("your calendar")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       )}
@@ -71,10 +73,10 @@ export default function AdminMyCalendar() {
           <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
             <Dumbbell className="h-8 w-8 text-muted-foreground" />
             <p className="text-muted-foreground">
-              Nothing on your calendar yet. Build a program and add it to your own calendar.
+              {t("Nothing on your calendar yet. Build a program and add it to your own calendar.")}
             </p>
             <Button asChild size="sm">
-              <Link href="/admin/programs">Go to Programs</Link>
+              <Link href="/admin/programs">{t("Go to Programs")}</Link>
             </Button>
           </CardContent>
         </Card>
@@ -83,7 +85,7 @@ export default function AdminMyCalendar() {
       <CalendarLinkDialog
         open={syncOpen}
         onOpenChange={setSyncOpen}
-        title="Sync Your Calendar"
+        title={t("Sync Your Calendar")}
         fetchUrl="/api/admin/my/calendar-link"
       />
       {eventsLayer.dialog}

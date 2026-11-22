@@ -11,9 +11,9 @@ import { apiRequest, getJson, resolveApiUrl, getNativeToken, ApiError } from "@/
 import { cn } from "@/lib/utils";
 import { KNOWLEDGE_DOMAINS } from "@shared/knowledge-domains";
 import { toast } from "sonner";
-import { format } from "date-fns";
 import { Upload, Trash2, Search, AlertTriangle, BookOpen, ScanText } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 // The assistants a source can serve. A source can carry several: an energy
 // availability chapter is honestly both nutrition and strength, and forcing
@@ -60,6 +60,7 @@ type Conflict = {
  * two that drift.
  */
 export function KnowledgeBaseContent() {
+  const t = useT();
   const qc = useQueryClient();
   const [title, setTitle] = useState("");
   const [citation, setCitation] = useState("");
@@ -139,20 +140,20 @@ export function KnowledgeBaseContent() {
           toast.error(body.message, {
             duration: 20000,
             action: {
-              label: "Replace it",
+              label: t("Replace it"),
               onClick: () => void upload(true),
             },
           });
           return;
         }
-        toast.error(body.message || "Upload failed");
+        toast.error(body.message || t("Upload failed"));
         return;
       }
       // Nothing has been read yet at this point -- the reply comes back as
       // soon as the file is stored, and whether the book is text or a scan
       // is not known until extraction runs. The source row says which, a
       // moment later, on the screen the admin is already looking at.
-      toast.success(body.message ?? "Uploaded.", { duration: 10000 });
+      toast.success(body.message ?? t("Uploaded."), { duration: 10000 });
       setTitle("");
       setCitation("");
       setLicenceNote("");
@@ -189,7 +190,7 @@ export function KnowledgeBaseContent() {
       });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-sources"] }),
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update the licence"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't update the licence")),
   });
   function toggleLicensed(s: { id: number; derivedContentLicensed: boolean; licenceNote: string | null }) {
     if (s.derivedContentLicensed) {
@@ -207,11 +208,11 @@ export function KnowledgeBaseContent() {
   const deleteSource = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/knowledge-sources/${id}`),
     onSuccess: () => {
-      toast.success("Source and all of its passages removed.");
+      toast.success(t("Source and all of its passages removed."));
       qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-sources"] });
       qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-conflicts"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not delete"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not delete")),
   });
 
   const transcribe = useMutation({
@@ -229,7 +230,7 @@ export function KnowledgeBaseContent() {
       );
       qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-sources"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not start transcription"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not start transcription")),
   });
 
   const detect = useMutation({
@@ -248,7 +249,7 @@ export function KnowledgeBaseContent() {
       qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-conflicts"] });
     },
     onError: (err: ApiError) => {
-      toast.error(err.message || "Could not run detection");
+      toast.error(err.message || t("Could not run detection"));
       // A stale row is the usual cause -- the source was replaced or deleted
       // and the screen still showed it. Refresh so the next tap is not the
       // same failure.
@@ -264,35 +265,33 @@ export function KnowledgeBaseContent() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" />
-              Upload a source
+              {t("Upload a source")}
             </CardTitle>
             <CardDescription>
-              A PDF of a book, manual or handout. The text is extracted on our own server and split
-              into passages that keep their page numbers, so anything the AI takes from it can cite
-              where it came from. Scanned pages are reported rather than silently ingested as blanks.
+              {t("A PDF of a book, manual or handout. The text is extracted on our own server and split into passages that keep their page numbers, so anything the AI takes from it can cite where it came from. Scanned pages are reported rather than silently ingested as blanks.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="kb-title">Title</Label>
+              <Label htmlFor="kb-title">{t("Title")}</Label>
               <Input
                 id="kb-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="NSCA CSCS Volume 4"
+                placeholder={t("NSCA CSCS Volume 4")}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="kb-citation">How it should be cited (optional)</Label>
+              <Label htmlFor="kb-citation">{t("How it should be cited (optional)")}</Label>
               <Input
                 id="kb-citation"
                 value={citation}
                 onChange={(e) => setCitation(e.target.value)}
-                placeholder="NSCA, Essentials of Strength Training, 4th ed."
+                placeholder={t("NSCA, Essentials of Strength Training, 4th ed.")}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Which assistants may use it</Label>
+              <Label>{t("Which assistants may use it")}</Label>
               <div className="grid grid-cols-2 gap-2">
                 {KNOWLEDGE_DOMAINS.map((d) => (
                   <label key={d.key} className="flex items-center gap-2 text-sm">
@@ -304,27 +303,25 @@ export function KnowledgeBaseContent() {
                         )
                       }
                     />
-                    {d.label}
+                    {t(d.label)}
                   </label>
                 ))}
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="kb-licence">What may Forge do with this? (optional)</Label>
+              <Label htmlFor="kb-licence">{t("What may Forge do with this? (optional)")}</Label>
               <Input
                 id="kb-licence"
                 value={licenceNote}
                 onChange={(e) => setLicenceNote(e.target.value)}
-                placeholder="e.g. purchased copy, internal use only"
+                placeholder={t("e.g. purchased copy, internal use only")}
               />
               <p className="text-xs text-muted-foreground">
-                Nothing computes on this. It is here for the day somebody asks whether a passage
-                from this source may be quoted to a customer's coach, or included in something
-                sold to an outside party.
+                {t("Nothing computes on this. It is here for the day somebody asks whether a passage from this source may be quoted to a customer's coach, or included in something sold to an outside party.")}
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="kb-file">PDF</Label>
+              <Label htmlFor="kb-file">{t("PDF")}</Label>
               {/* Both the MIME type and the extension. iOS decides which
                   sources to offer from `accept`, and some versions of the
                   document picker match on extension rather than MIME -- with
@@ -338,8 +335,7 @@ export function KnowledgeBaseContent() {
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
               <p className="text-xs text-muted-foreground">
-                On a phone this opens the document picker, choose Browse or Files to reach a PDF
-                saved on the device. Up to 60MB.
+                {t("On a phone this opens the document picker, choose Browse or Files to reach a PDF saved on the device. Up to 60MB.")}
               </p>
             </div>
             <Button
@@ -352,7 +348,7 @@ export function KnowledgeBaseContent() {
                   response and reports its own progress on the source below.
                   A button that names a phase it is no longer in is how
                   somebody concludes the app has hung. */}
-              {uploading ? "Uploading and reading…" : "Upload and ingest"}
+              {uploading ? t("Uploading and reading…") : t("Upload and ingest")}
             </Button>
           </CardContent>
         </Card>
@@ -361,7 +357,7 @@ export function KnowledgeBaseContent() {
             contradictions in it, which is the whole question this card exists to answer. */}
         {conflictsFailed && (
           <p className="text-sm text-muted-foreground">
-            We couldn't check for contradictions. That isn't the same as there being none.
+            {t("We couldn't check for contradictions. That isn't the same as there being none.")}
           </p>
         )}
         {conflicts.length > 0 && (
@@ -369,13 +365,10 @@ export function KnowledgeBaseContent() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-amber-500">
                 <AlertTriangle className="h-5 w-5" />
-                {conflicts.length} contradiction{conflicts.length === 1 ? "" : "s"} to rule on
+                {t.plural(conflicts.length, "{count} contradiction to rule on", "{count} contradictions to rule on")}
               </CardTitle>
               <CardDescription>
-                Two sources disagree. This is your review queue: a ruling is recorded here for
-                the record, and nothing about it reaches the assistants yet, retrieval still
-                quotes both passages exactly as before. Wiring a ruling into what the AI says is
-                a separate piece of work.
+                {t("Two sources disagree. This is your review queue: a ruling is recorded here for the record, and nothing about it reaches the assistants yet, retrieval still quotes both passages exactly as before. Wiring a ruling into what the AI says is a separate piece of work.")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -390,11 +383,10 @@ export function KnowledgeBaseContent() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Search className="h-5 w-5" />
-              Search what has been ingested
+              {t("Search what has been ingested")}
             </CardTitle>
             <CardDescription>
-              The same search the assistants use. Worth running before you trust a source to answer
-              something.
+              {t("The same search the assistants use. Worth running before you trust a source to answer something.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -402,7 +394,7 @@ export function KnowledgeBaseContent() {
               <Input
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                placeholder="hamstring strain return to play"
+                placeholder={t("hamstring strain return to play")}
                 onKeyDown={(e) =>
                   e.key === "Enter" && searchText.trim() && searchDomains.length > 0 && runSearch()
                 }
@@ -414,7 +406,7 @@ export function KnowledgeBaseContent() {
                 onClick={() => runSearch()}
                 disabled={!searchText.trim() || searchDomains.length === 0}
               >
-                Search
+                {t("Search")}
               </Button>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -428,7 +420,7 @@ export function KnowledgeBaseContent() {
                       )
                     }
                   />
-                  {d.label}
+                  {t(d.label)}
                 </label>
               ))}
             </div>
@@ -437,12 +429,12 @@ export function KnowledgeBaseContent() {
             ))}
             {searchDomains.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                Tick at least one subject area to search.
+                {t("Tick at least one subject area to search.")}
               </p>
             )}
             {searchHits && searchHits.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                Nothing matched. Try the words the book itself would use.
+                {t("Nothing matched. Try the words the book itself would use.")}
               </p>
             )}
           </CardContent>
@@ -454,11 +446,10 @@ export function KnowledgeBaseContent() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BookOpen className="h-5 w-5" />
-              Sources
+              {t("Sources")}
             </CardTitle>
             <CardDescription>
-              Deleting a source removes every passage taken from it and the stored file. That is the
-              clean undo for a bad ingest or a licence that lapsed.
+              {t("Deleting a source removes every passage taken from it and the stored file. That is the clean undo for a bad ingest or a licence that lapsed.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -467,12 +458,12 @@ export function KnowledgeBaseContent() {
                 and charges for it a second time. */}
             {sourcesFailed ? (
               <ReadFailed
-                what="the knowledge library"
+                what={t("the knowledge library")}
                 onRetry={() => void refetchSources()}
                 className="flex flex-col items-start gap-2 text-left"
               />
             ) : sources.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nothing ingested yet.</p>
+              <p className="text-sm text-muted-foreground">{t("Nothing ingested yet.")}</p>
             ) : (
               sources.map((s) => (
                 <div
@@ -491,14 +482,14 @@ export function KnowledgeBaseContent() {
                   <div className="min-w-[14rem] flex-1">
                     <p className="text-sm font-bold">{s.title}</p>
                     <p className="text-xs text-muted-foreground">
-                      {s.pageCount ?? 0} pages, {s.passageCount} passages,{" "}
-                      {s.domains.join(", ") || "no assistants"} —{" "}
-                      {format(new Date(s.createdAt), "MMM d, yyyy")}
+                      {t("{pages} pages, {passages} passages,", { pages: s.pageCount ?? 0, passages: s.passageCount })}{" "}
+                      {s.domains.join(", ") || t("no assistants")} —{" "}
+                      {t.date(s.createdAt, { month: "short", day: "numeric", year: "numeric" })}
                     </p>
                     {s.status === "needs_vision" && (
                       <p className="text-xs text-amber-500">
                         {s.statusDetail ??
-                          "No readable text was found. These pages are images, so Claude has to read them."}
+                          t("No readable text was found. These pages are images, so Claude has to read them.")}
                       </p>
                     )}
                     {(s.status === "transcribing" || s.status === "extracting") && (
@@ -514,7 +505,7 @@ export function KnowledgeBaseContent() {
                         disabled={setLicensed.isPending}
                       />
                       <span className={s.derivedContentLicensed ? "text-foreground" : "text-muted-foreground"}>
-                        Licensed for Forge-written content
+                        {t("Licensed for Forge-written content")}
                         {s.derivedContentLicensed && s.licenceNote ? `: ${s.licenceNote}` : ""}
                       </span>
                     </label>
@@ -526,7 +517,7 @@ export function KnowledgeBaseContent() {
                     disabled={s.passageCount === 0}
                   >
                     <BookOpen className="mr-1.5 h-4 w-4" />
-                    Read
+                    {t("Read")}
                   </Button>
                   {/* Also shown for a part-read source, not just needs_vision: the
                       first transcription pass that writes any passages flips the
@@ -545,7 +536,7 @@ export function KnowledgeBaseContent() {
                       disabled={transcribe.isPending}
                     >
                       <ScanText className="mr-1.5 h-4 w-4" />
-                      {s.status === "needs_vision" ? "Read the pages" : "Carry on reading"}
+                      {s.status === "needs_vision" ? t("Read the pages") : t("Carry on reading")}
                     </Button>
                   )}
                   <Button
@@ -554,7 +545,7 @@ export function KnowledgeBaseContent() {
                     onClick={() => detect.mutate(s.id)}
                     disabled={detect.isPending || s.status !== "ready"}
                   >
-                    Check for conflicts
+                    {t("Check for conflicts")}
                   </Button>
                   <Button
                     variant="ghost"
@@ -588,6 +579,7 @@ export function KnowledgeBaseContent() {
 }
 
 function ConflictRow({ conflict }: { conflict: Conflict }) {
+  const t = useT();
   const qc = useQueryClient();
   const [reason, setReason] = useState("");
   const [scopeSports, setScopeSports] = useState("");
@@ -596,10 +588,10 @@ function ConflictRow({ conflict }: { conflict: Conflict }) {
     mutationFn: (input: { status: string; reason?: string; scope?: Record<string, string[]> }) =>
       apiRequest("POST", `/api/admin/knowledge-conflicts/${conflict.id}/resolve`, input),
     onSuccess: () => {
-      toast.success("Ruling recorded.");
+      toast.success(t("Ruling recorded."));
       qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-conflicts"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not record that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not record that")),
   });
 
   const cite = (p: Conflict["passage"]) =>
@@ -623,12 +615,12 @@ function ConflictRow({ conflict }: { conflict: Conflict }) {
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         rows={2}
-        placeholder="Why, in your own words. Recorded with the ruling, not shown to coaches today."
+        placeholder={t("Why, in your own words. Recorded with the ruling, not shown to coaches today.")}
       />
       <Input
         value={scopeSports}
         onChange={(e) => setScopeSports(e.target.value)}
-        placeholder="Sports the first source wins for, comma separated (for a scoped ruling)"
+        placeholder={t("Sports the first source wins for, comma separated (for a scoped ruling)")}
       />
       <div className="flex flex-wrap gap-2">
         <Button
@@ -647,7 +639,7 @@ function ConflictRow({ conflict }: { conflict: Conflict }) {
           }
           disabled={resolve.isPending || !reason.trim() || !scopeSports.trim()}
         >
-          Both true, scoped
+          {t("Both true, scoped")}
         </Button>
         <Button
           size="sm"
@@ -655,7 +647,7 @@ function ConflictRow({ conflict }: { conflict: Conflict }) {
           onClick={() => resolve.mutate({ status: "prefer_new", reason })}
           disabled={resolve.isPending}
         >
-          Prefer the first
+          {t("Prefer the first")}
         </Button>
         <Button
           size="sm"
@@ -663,7 +655,7 @@ function ConflictRow({ conflict }: { conflict: Conflict }) {
           onClick={() => resolve.mutate({ status: "prefer_existing", reason })}
           disabled={resolve.isPending}
         >
-          Prefer the second
+          {t("Prefer the second")}
         </Button>
         <Button
           size="sm"
@@ -671,7 +663,7 @@ function ConflictRow({ conflict }: { conflict: Conflict }) {
           onClick={() => resolve.mutate({ status: "dismissed", reason })}
           disabled={resolve.isPending}
         >
-          Not a conflict
+          {t("Not a conflict")}
         </Button>
       </div>
     </div>
@@ -689,6 +681,7 @@ function ConflictRow({ conflict }: { conflict: Conflict }) {
  * both "1 source" and are nothing alike.
  */
 function CoverageCard() {
+  const t = useT();
   const { data: coverage = [], isError: coverageFailed, refetch: refetchCoverage } = useQuery<
     { domain: string; label: string; sources: number; passages: number; fromVision: number }[]
   >({
@@ -704,10 +697,9 @@ function CoverageCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Coverage</CardTitle>
+        <CardTitle>{t("Coverage")}</CardTitle>
         <CardDescription>
-          Which assistants have something behind them. An assistant with nothing still answers;
-          it just answers from general knowledge with nothing to cite.
+          {t("Which assistants have something behind them. An assistant with nothing still answers; it just answers from general knowledge with nothing to cite.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -715,7 +707,7 @@ function CoverageCard() {
           // An empty coverage table is read as "no assistant has anything behind it",
           // and the action that prompts is re-ingesting a book -- which is a real bill.
           <ReadFailed
-            what="the knowledge coverage"
+            what={t("the knowledge coverage")}
             onRetry={() => void refetchCoverage()}
             className="flex flex-col items-start gap-2 text-left"
           />
@@ -724,16 +716,16 @@ function CoverageCard() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs text-muted-foreground">
-                <th className="py-2 pr-4 font-medium">Area</th>
-                <th className="py-2 pr-4 text-right font-medium">Sources</th>
-                <th className="py-2 pr-4 text-right font-medium">Passages</th>
-                <th className="py-2 text-right font-medium">Transcribed</th>
+                <th className="py-2 pr-4 font-medium">{t("Area")}</th>
+                <th className="py-2 pr-4 text-right font-medium">{t("Sources")}</th>
+                <th className="py-2 pr-4 text-right font-medium">{t("Passages")}</th>
+                <th className="py-2 text-right font-medium">{t("Transcribed")}</th>
               </tr>
             </thead>
             <tbody className="tabular-nums">
               {coverage.map((c) => (
                 <tr key={c.domain} className="border-b last:border-0">
-                  <td className="py-2 pr-4">{c.label}</td>
+                  <td className="py-2 pr-4">{t(c.label)}</td>
                   <td className="py-2 pr-4 text-right">{c.sources}</td>
                   <td
                     className={cn(
@@ -752,13 +744,11 @@ function CoverageCard() {
         )}
         {!coverageFailed && empty.length > 0 && (
           <p className="text-xs text-amber-500">
-            Nothing behind {empty.map((c) => c.label).join(", ")}. Those assistants are running
-            on general knowledge alone.
+            {t("Nothing behind {names}. Those assistants are running on general knowledge alone.", { names: empty.map((c) => t(c.label)).join(", ") })}
           </p>
         )}
         <p className="text-xs text-muted-foreground">
-          Transcribed passages were read off a page image rather than extracted as text. Treat
-          their numbers as unverified until somebody has checked them against the page.
+          {t("Transcribed passages were read off a page image rather than extracted as text. Treat their numbers as unverified until somebody has checked them against the page.")}
         </p>
       </CardContent>
     </Card>
@@ -783,6 +773,7 @@ function TranscribeDialog({
   onClose: () => void;
   onStart: (input: { fromPage?: number; toPage?: number; restart?: boolean }) => void;
 }) {
+  const t = useT();
   const [fromPage, setFromPage] = useState("");
   const [toPage, setToPage] = useState("");
 
@@ -811,16 +802,15 @@ function TranscribeDialog({
   return (
     <Card className="border-primary/50">
       <CardHeader>
-        <CardTitle className="text-base">Read the pages of "{source.title}"</CardTitle>
+        <CardTitle className="text-base">{t("Read the pages of \"{title}\"", { title: source.title })}</CardTitle>
         <CardDescription>
-          Claude reads each page as an image and transcribes it. This runs in the background and
-          takes a while for a long book.
+          {t("Claude reads each page as an image and transcribes it. This runs in the background and takes a while for a long book.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="kb-from">First page</Label>
+            <Label htmlFor="kb-from">{t("First page")}</Label>
             <Input
               id="kb-from"
               inputMode="numeric"
@@ -830,7 +820,7 @@ function TranscribeDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="kb-to">Last page</Label>
+            <Label htmlFor="kb-to">{t("Last page")}</Label>
             <Input
               id="kb-to"
               inputMode="numeric"
@@ -853,25 +843,22 @@ function TranscribeDialog({
         />
 
         <p className="text-xs text-muted-foreground">
-          Skipping the index, the front matter and the reference list is usually the biggest
-          saving on a textbook. Nothing is lost by leaving them out; they answer no questions.
+          {t("Skipping the index, the front matter and the reference list is usually the biggest saving on a textbook. Nothing is lost by leaving them out; they answer no questions.")}
         </p>
 
         <div className="rounded-md border p-3">
-          <p className="text-xs text-muted-foreground">Estimated cost</p>
+          <p className="text-xs text-muted-foreground">{t("Estimated cost")}</p>
           <p className="text-2xl font-semibold tabular-nums">
             {estimate?.estimatedUsd != null ? `$${estimate.estimatedUsd.toFixed(2)}` : "--"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {estimate?.pages ?? 0} page(s) on {estimate?.model ?? "the cheap model"}. An estimate,
-            not a quote: a page's real cost depends on how dense it is.
+            {t("{count} page(s) on {model}. An estimate, not a quote: a page's real cost depends on how dense it is.", { count: estimate?.pages ?? 0, model: estimate?.model ?? t("the cheap model") })}
           </p>
         </div>
 
         {resumable && (
           <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">
-            This source already has {source.transcribedThroughPage} page(s) read. Starting again
-            carries on from there rather than paying for them twice.
+            {t("This source already has {count} page(s) read. Starting again carries on from there rather than paying for them twice.", { count: source.transcribedThroughPage })}
           </p>
         )}
 
@@ -884,7 +871,7 @@ function TranscribeDialog({
               })
             }
           >
-            {resumable ? "Carry on reading" : "Start reading"}
+            {resumable ? t("Carry on reading") : t("Start reading")}
           </Button>
           {resumable && (
             <Button
@@ -897,11 +884,11 @@ function TranscribeDialog({
                 })
               }
             >
-              Start over (pays again)
+              {t("Start over (pays again)")}
             </Button>
           )}
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("Cancel")}
           </Button>
         </div>
       </CardContent>
@@ -924,6 +911,7 @@ function TranscribeDialog({
  * somebody has checked trains people to ignore the warning.
  */
 function SearchHit({ hit }: { hit: any }) {
+  const t = useT();
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState<string>(hit.text ?? "");
@@ -935,11 +923,11 @@ function SearchHit({ hit }: { hit: any }) {
         fromVision: false,
       }),
     onSuccess: () => {
-      toast.success("Passage corrected. It is re-indexed straight away.");
+      toast.success(t("Passage corrected. It is re-indexed straight away."));
       setEditing(false);
       qc.invalidateQueries({ queryKey: ["knowledge-search"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save that")),
   });
 
   return (
@@ -948,7 +936,7 @@ function SearchHit({ hit }: { hit: any }) {
         <p className="text-xs font-bold text-muted-foreground">
           {hit.citation || hit.sourceTitle}, p. {hit.pageNumber}
           {hit.fromVision && (
-            <span className="ml-2 font-normal text-amber-500">read from an image</span>
+            <span className="ml-2 font-normal text-amber-500">{t("read from an image")}</span>
           )}
         </p>
         {!editing && (
@@ -957,7 +945,7 @@ function SearchHit({ hit }: { hit: any }) {
             onClick={() => setEditing(true)}
             className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
           >
-            Correct this
+            {t("Correct this")}
           </button>
         )}
       </div>
@@ -971,12 +959,11 @@ function SearchHit({ hit }: { hit: any }) {
             className="text-sm"
           />
           <p className="text-xs text-muted-foreground">
-            Fixes the passage in place and re-indexes it. Use this for a misread number or a chunk
-            that split mid-table, to remove content, delete the source.
+            {t("Fixes the passage in place and re-indexes it. Use this for a misread number or a chunk that split mid-table, to remove content, delete the source.")}
           </p>
           <div className="flex gap-2">
             <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending || !text.trim()}>
-              {save.isPending ? "Saving..." : "Save correction"}
+              {save.isPending ? t("Saving...") : t("Save correction")}
             </Button>
             <Button
               size="sm"
@@ -986,7 +973,7 @@ function SearchHit({ hit }: { hit: any }) {
                 setEditing(false);
               }}
             >
-              Cancel
+              {t("Cancel")}
             </Button>
           </div>
         </div>
@@ -999,8 +986,9 @@ function SearchHit({ hit }: { hit: any }) {
 
 /** The standalone page, for the direct link and the More menu. */
 export default function AdminKnowledgeBase() {
+  const t = useT();
   return (
-    <AppShell title="Knowledge Base">
+    <AppShell title={t("Knowledge Base")}>
       <KnowledgeBaseContent />
     </AppShell>
   );
@@ -1043,6 +1031,7 @@ function PagePicker({
   toPage: number;
   onPick: (page: number, edge: "start" | "end") => void;
 }) {
+  const t = useT();
   const [windowStart, setWindowStart] = useState(1);
   // Two-tap selection, and which tap comes next is explicit rather than
   // inferred from where the page sits relative to the current range. The
@@ -1054,8 +1043,7 @@ function PagePicker({
   if (pageCount <= 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        No page count on file for this source, so there is nothing to preview. The range boxes
-        above still work.
+        {t("No page count on file for this source, so there is nothing to preview. The range boxes above still work.")}
       </p>
     );
   }
@@ -1067,11 +1055,10 @@ function PagePicker({
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          Pages {windowStart}–{last} of {pageCount}. Next tap sets the{" "}
+          {t("Pages {from}–{to} of {total}.", { from: windowStart, to: last, total: pageCount })}{" "}
           <span className="font-semibold text-foreground">
-            {nextEdge === "start" ? "first" : "last"}
-          </span>{" "}
-          page.
+            {nextEdge === "start" ? t("Next tap sets the first page.") : t("Next tap sets the last page.")}
+          </span>
         </p>
         <div className="flex gap-1">
           <Button
@@ -1080,7 +1067,7 @@ function PagePicker({
             disabled={windowStart <= 1}
             onClick={() => setWindowStart(Math.max(1, windowStart - WINDOW))}
           >
-            Back
+            {t("Back")}
           </Button>
           <Button
             size="sm"
@@ -1088,7 +1075,7 @@ function PagePicker({
             disabled={last >= pageCount}
             onClick={() => setWindowStart(Math.min(pageCount, windowStart + WINDOW))}
           >
-            Forward
+            {t("Forward")}
           </Button>
         </div>
       </div>
@@ -1108,7 +1095,7 @@ function PagePicker({
                 "group relative overflow-hidden rounded-md border transition-colors",
                 inRange ? "border-primary" : "border-border opacity-50 hover:opacity-100",
               )}
-              title={`Page ${page}`}
+              title={t("Page {number}", { number: page })}
             >
               <PagePreview sourceId={sourceId} page={page} />
               <span
@@ -1125,8 +1112,7 @@ function PagePicker({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        A blank tile is a page with nothing the reader can pick up, it would transcribe to
-        nothing, so it is worth leaving out of the range.
+        {t("A blank tile is a page with nothing the reader can pick up, it would transcribe to nothing, so it is worth leaving out of the range.")}
       </p>
     </div>
   );
@@ -1147,6 +1133,7 @@ function PagePicker({
  * it.
  */
 function PagePreview({ sourceId, page }: { sourceId: number; page: number }) {
+  const t = useT();
   const [state, setState] = useState<"loading" | "empty" | "error">("loading");
   const [url, setUrl] = useState<string | null>(null);
 
@@ -1193,12 +1180,12 @@ function PagePreview({ sourceId, page }: { sourceId: number; page: number }) {
   }, [sourceId, page]);
 
   if (url) {
-    return <img src={url} alt={`Page ${page}`} className="aspect-[3/4] w-full bg-muted object-cover" />;
+    return <img src={url} alt={t("Page {number}", { number: page })} className="aspect-[3/4] w-full bg-muted object-cover" />;
   }
 
   return (
     <div className="flex aspect-[3/4] w-full items-center justify-center bg-muted px-1 text-center text-[9px] leading-tight text-muted-foreground">
-      {state === "loading" ? "…" : state === "empty" ? "nothing to read" : "couldn't load"}
+      {state === "loading" ? "…" : state === "empty" ? t("nothing to read") : t("couldn't load")}
     </div>
   );
 }
@@ -1216,6 +1203,7 @@ function PagePreview({ sourceId, page }: { sourceId: number; page: number }) {
  * moving. A percentage alone moves too slowly on a long run to look alive.
  */
 function IngestProgress({ source }: { source: Source }) {
+  const t = useT();
   const done = source.progressDone ?? 0;
   const total = source.progressTotal ?? 0;
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : null;
@@ -1224,11 +1212,11 @@ function IngestProgress({ source }: { source: Source }) {
   return (
     <div className="mt-1 space-y-1">
       <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-amber-500">
-        <span>{reading ? "Reading the pages" : "Filing passages by subject"}</span>
+        <span>{reading ? t("Reading the pages") : t("Filing passages by subject")}</span>
         {pct != null && <span className="font-semibold tabular-nums">{pct}%</span>}
         {total > 0 && (
           <span className="tabular-nums text-muted-foreground">
-            {done.toLocaleString()} of {total.toLocaleString()} {reading ? "pages" : "passages"}
+            {reading ? t("{done} of {total} pages", { done: t.number(done), total: t.number(total) }) : t("{done} of {total} passages", { done: t.number(done), total: t.number(total) })}
           </span>
         )}
       </div>
@@ -1245,7 +1233,7 @@ function IngestProgress({ source }: { source: Source }) {
         />
       </div>
       <p className="text-xs text-muted-foreground">
-        This runs on the server, you can leave this screen and come back.
+        {t("This runs on the server, you can leave this screen and come back.")}
       </p>
     </div>
   );
@@ -1266,6 +1254,7 @@ function IngestProgress({ source }: { source: Source }) {
  */
 /** One passage, short by default. Long ones open on request rather than filling the screen. */
 function PassageText({ text }: { text: string }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const LIMIT = 300;
   if (text.length <= LIMIT) return <p className="mt-1 whitespace-pre-wrap text-sm">{text}</p>;
@@ -1279,13 +1268,14 @@ function PassageText({ text }: { text: string }) {
         onClick={() => setOpen(!open)}
         className="mt-1 text-xs font-medium text-primary"
       >
-        {open ? "Show less" : `Show all ${text.length.toLocaleString()} characters`}
+        {open ? t("Show less") : t("Show all {count} characters", { count: t.number(text.length) })}
       </button>
     </div>
   );
 }
 
 function SourceReader({ source, onClose }: { source: Source; onClose: () => void }) {
+  const t = useT();
   const qc = useQueryClient();
   // Which page of the book is open. Null until the map arrives, then the first page that
   // produced anything -- so the reader opens on real content rather than on nothing.
@@ -1324,7 +1314,7 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
       }),
     onSuccess: async (res) => {
       const body = await res.json();
-      toast.success(`Removed ${body.removed} passage(s) from pages ${fromPage}-${toPage}.`);
+      toast.success(t("Removed {count} passage(s) from pages {from}-{to}.", { count: body.removed, from: fromPage, to: toPage }));
       setFromPage("");
       setToPage("");
       qc.invalidateQueries({ queryKey: ["knowledge-page-map", source.id] });
@@ -1332,7 +1322,7 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
       qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-sources"] });
       qc.invalidateQueries({ queryKey: ["/api/admin/knowledge-coverage"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't remove those pages"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't remove those pages")),
   });
 
   // Where a given page's passages start in the flat list the reader pages through.
@@ -1384,27 +1374,26 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
     <Card className="border-primary/50">
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-          <span>What came out of "{source.title}"</span>
+          <span>{t("What came out of \"{title}\"", { title: source.title })}</span>
           <Button size="sm" variant="ghost" onClick={onClose}>
-            Close
+            {t("Close")}
           </Button>
         </CardTitle>
         <CardDescription>
-          {source.passageCount.toLocaleString()} passage(s)
           {pageMapFailed
-            ? ". Couldn't load which pages they came from."
-            : `, from ${pageMap.length.toLocaleString()} page(s) that produced any text.`}
+            ? t("{count} passage(s). Couldn't load which pages they came from.", { count: t.number(source.passageCount) })
+            : t("{count} passage(s), from {pages} page(s) that produced any text.", { count: t.number(source.passageCount), pages: t.number(pageMap.length) })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Pages, by how much they produced
+            {t("Pages, by how much they produced")}
           </p>
           <div className="max-h-40 overflow-y-auto rounded-md border">
             {pageMapFailed && (
               <ReadFailed
-                what="the page map"
+                what={t("the page map")}
                 onRetry={() => void refetchPageMap()}
                 className="flex flex-col items-start gap-2 p-2 text-left"
               />
@@ -1415,7 +1404,7 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
                   type="button"
                   key={p.pageNumber}
                   onClick={() => jumpToPage(p.pageNumber)}
-                  title={`Page ${p.pageNumber}: ${p.passages} passage(s), ${p.characters} characters, tap to read it`}
+                  title={t("Page {number}: {passages} passage(s), {characters} characters, tap to read it", { number: p.pageNumber, passages: p.passages, characters: p.characters })}
                   className={cn(
                     "rounded px-1.5 py-0.5 text-[10px] tabular-nums transition-colors",
                     p.pageNumber === page
@@ -1431,13 +1420,12 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Tap a page to read it. Amber pages produced very little text, a run of them at the
-            front or the back is usually front matter, an index or a bibliography.
+            {t("Tap a page to read it. Amber pages produced very little text, a run of them at the front or the back is usually front matter, an index or a bibliography.")}
           </p>
           <div className="flex flex-wrap items-end gap-2">
             <div className="space-y-1">
               <Label htmlFor="goto-page" className="text-xs">
-                Go to page
+                {t("Go to page")}
               </Label>
               <Input
                 id="goto-page"
@@ -1453,17 +1441,17 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
               disabled={!gotoPage}
               onClick={() => jumpToPage(Number(gotoPage))}
             >
-              Go
+              {t("Go")}
             </Button>
           </div>
         </div>
 
         <div className="space-y-2 rounded-md border p-3">
-          <p className="text-sm font-medium">Remove a page range</p>
+          <p className="text-sm font-medium">{t("Remove a page range")}</p>
           <div className="flex flex-wrap items-end gap-2">
             <div className="space-y-1">
               <Label htmlFor="drop-from" className="text-xs">
-                From
+                {t("From")}
               </Label>
               <Input
                 id="drop-from"
@@ -1475,7 +1463,7 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
             </div>
             <div className="space-y-1">
               <Label htmlFor="drop-to" className="text-xs">
-                To
+                {t("To")}
               </Label>
               <Input
                 id="drop-to"
@@ -1491,12 +1479,11 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
               disabled={!canDrop || dropPages.isPending}
               onClick={() => dropPages.mutate()}
             >
-              {dropPages.isPending ? "Removing..." : "Remove these pages"}
+              {dropPages.isPending ? t("Removing...") : t("Remove these pages")}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Removes the passages from those pages and nothing else. The book stays, so you never
-            pay to ingest it again. A passage straddling the boundary goes with them.
+            {t("Removes the passages from those pages and nothing else. The book stays, so you never pay to ingest it again. A passage straddling the boundary goes with them.")}
           </p>
         </div>
 
@@ -1504,11 +1491,11 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                What is on this page
+                {t("What is on this page")}
               </p>
               {page != null && (
                 <p className="text-xs text-muted-foreground">
-                  Page {page} of {source.pageCount ?? 0}, {passages.length} passage(s) on it
+                  {t("Page {number} of {total}, {count} passage(s) on it", { number: page, total: source.pageCount ?? 0, count: passages.length })}
                 </p>
               )}
             </div>
@@ -1519,7 +1506,7 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
                 disabled={page == null || pagesWithText.indexOf(page) <= 0}
                 onClick={() => stepPage(-1)}
               >
-                Previous page
+                {t("Previous page")}
               </Button>
               <Button
                 size="sm"
@@ -1529,14 +1516,14 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
                 }
                 onClick={() => stepPage(1)}
               >
-                Next page
+                {t("Next page")}
               </Button>
             </div>
           </div>
 
           {page != null && passages.length === 0 && (
             <p className="rounded-md border px-3 py-4 text-center text-sm text-muted-foreground">
-              Nothing was extracted from page {page}.
+              {t("Nothing was extracted from page {number}.", { number: page })}
             </p>
           )}
 
@@ -1549,7 +1536,7 @@ function SourceReader({ source, onClose }: { source: Source; onClose: () => void
                   <span className="ml-2 font-normal">{p.topics.join(", ")}</span>
                 )}
                 {p.fromVision && (
-                  <span className="ml-2 font-normal text-amber-500">read from an image</span>
+                  <span className="ml-2 font-normal text-amber-500">{t("read from an image")}</span>
                 )}
               </p>
               {/* Collapsed by default. A passage is about 1,200 characters, which is the right

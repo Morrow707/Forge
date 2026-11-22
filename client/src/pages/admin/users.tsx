@@ -36,6 +36,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
+import { useT } from "@/i18n";
 
 /**
  * Athlete and guardian rows arrive without a name or an email -- the server
@@ -95,6 +96,7 @@ const ROLE_BADGE_CLASS: Record<UserRow["role"], string> = {
  * partial name/email. Capped at storage.USER_SEARCH_LIMIT rather than
  * paginated; narrow the search if you hit the cap. */
 export default function AdminUsers() {
+  const t = useT();
   const qc = useQueryClient();
   // Dashboard stat tiles (Coaches/Athletes) deep-link here with ?role=coach
   // or ?role=athlete so the tile actually lands on the filtered view it
@@ -149,10 +151,10 @@ export default function AdminUsers() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast.success("MFA reset, they can log in with just their password now");
+      toast.success(t("MFA reset, they can log in with just their password now"));
       setMfaResetTarget(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't reset MFA"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't reset MFA")),
   });
 
   const roleChangeMutation = useMutation({
@@ -161,16 +163,16 @@ export default function AdminUsers() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast.success("Role updated");
+      toast.success(t("Role updated"));
       setRoleChangeTarget(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't change that account's role"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't change that account's role")),
   });
 
   const users = data?.users ?? [];
 
   return (
-    <AppShell title="Users">
+    <AppShell title={t("Users")}>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative max-w-sm flex-1">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -178,13 +180,13 @@ export default function AdminUsers() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && setAppliedSearch(searchInput.trim())}
-            placeholder="Search by name or email..."
+            placeholder={t("Search by name or email...")}
             className="pl-8"
-            aria-label="Search users"
+            aria-label={t("Search users")}
           />
         </div>
         <Button size="sm" variant="outline" onClick={() => setAppliedSearch(searchInput.trim())}>
-          Search
+          {t("Search")}
         </Button>
         <div className="flex flex-wrap items-center gap-1.5">
           {ROLE_FILTERS.map((r) => (
@@ -199,7 +201,7 @@ export default function AdminUsers() {
                   : "border-border text-muted-foreground hover:text-foreground",
               )}
             >
-              {r}
+              {t(r)}
             </button>
           ))}
         </div>
@@ -213,11 +215,11 @@ export default function AdminUsers() {
             // "No accounts match that search" off a failed request is how an admin
             // concludes an account does not exist -- and the next thing they do is
             // create a duplicate of it.
-            <ReadFailed what="the account list" onRetry={() => void refetch()} className="flex flex-col items-center gap-2 py-16 text-center" />
+            <ReadFailed what={t("the account list")} onRetry={() => void refetch()} className="flex flex-col items-center gap-2 py-16 text-center" />
           ) : users.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-16 text-center">
               <UsersIcon className="h-10 w-10 text-muted-foreground" />
-              <p className="text-muted-foreground">No accounts match that search.</p>
+              <p className="text-muted-foreground">{t("No accounts match that search.")}</p>
             </div>
           ) : (
             users.map((u) => {
@@ -238,25 +240,25 @@ export default function AdminUsers() {
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="truncate text-sm font-semibold">{displayLabel(u)}</span>
                         <Badge className={cn("border-none text-[10px] capitalize", ROLE_BADGE_CLASS[u.role])}>
-                          {u.role}
+                          {t(u.role)}
                         </Badge>
                         {!u.emailVerified && (
-                          <MailWarning className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Email not verified" />
+                          <MailWarning className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label={t("Email not verified")} />
                         )}
                         {u.mfaEnabled && (
-                          <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-success" aria-label="MFA enabled" />
+                          <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-success" aria-label={t("MFA enabled")} />
                         )}
                       </div>
                       <p className="truncate text-xs text-muted-foreground">
-                        {u.email ?? "identity withheld from admins"}
+                        {u.email ?? t("identity withheld from admins")}
                       </p>
                     </div>
                     <div className="hidden shrink-0 text-right text-xs text-muted-foreground sm:block">
-                      <p>Joined {new Date(u.createdAt).toLocaleDateString()}</p>
+                      <p>{t("Joined {date}", { date: t.date(u.createdAt) })}</p>
                       <p>
                         {u.lastActivityAt
-                          ? `Active ${new Date(u.lastActivityAt).toLocaleDateString()}`
-                          : "No activity yet"}
+                          ? t("Active {date}", { date: t.date(u.lastActivityAt) })
+                          : t("No activity yet")}
                       </p>
                     </div>
                   </button>
@@ -267,7 +269,7 @@ export default function AdminUsers() {
                         // read, which reads as a slow panel rather than a broken one --
                         // so nobody retries it and nobody reports it.
                         <ReadFailed
-                          what="this account's details"
+                          what={t("this account's details")}
                           onRetry={() => void refetchDetail()}
                           className="flex flex-col items-start gap-2 text-left"
                         />
@@ -276,39 +278,39 @@ export default function AdminUsers() {
                       ) : (
                         <div className="space-y-3">
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3">
-                            <DetailField label="User ID" value={String(detail.id)} />
-                            <DetailField label="Email verified" value={detail.emailVerified ? "Yes" : "No"} />
-                            <DetailField label="MFA enabled" value={detail.mfaEnabled ? "Yes" : "No"} />
+                            <DetailField label={t("User ID")} value={String(detail.id)} />
+                            <DetailField label={t("Email verified")} value={detail.emailVerified ? "Yes" : "No"} />
+                            <DetailField label={t("MFA enabled")} value={detail.mfaEnabled ? "Yes" : "No"} />
                             {detail.role === "coach" && (
                               <>
-                                <DetailField label="Coach code" value={detail.coachCode ?? "--"} mono />
+                                <DetailField label={t("Coach code")} value={detail.coachCode ?? "--"} mono />
                                 <DetailField
-                                  label="Staff invite code"
+                                  label={t("Staff invite code")}
                                   value={detail.staffInviteCode ?? "withheld"}
                                   mono
                                 />
-                                <DetailField label="Billing tier" value={detail.billingTier ?? "none"} />
+                                <DetailField label={t("Billing tier")} value={detail.billingTier ?? "none"} />
                               </>
                             )}
                             {detail.role === "athlete" && (
                               <>
-                                <DetailField label="Sport / Position" value={[detail.sport, detail.position].filter(Boolean).join(" / ") || "--"} />
-                                <DetailField label="Free Agent tier" value={detail.freeAgentTier ?? "coached"} />
+                                <DetailField label={t("Sport / Position")} value={[detail.sport, detail.position].filter(Boolean).join(" / ") || "--"} />
+                                <DetailField label={t("Free Agent tier")} value={detail.freeAgentTier ?? "coached"} />
                                 <DetailField
-                                  label="Provisioned via coach consent"
-                                  value={detail.provisionedViaCoachConsent ? "Yes" : "No"}
+                                  label={t("Provisioned via coach consent")}
+                                  value={detail.provisionedViaCoachConsent ? t("Yes") : t("No")}
                                 />
                                 <DetailField
-                                  label="Requires guardian notice"
-                                  value={detail.requiresGuardianNotice ? "Yes" : "No"}
+                                  label={t("Requires guardian notice")}
+                                  value={detail.requiresGuardianNotice ? t("Yes") : t("No")}
                                 />
-                                <DetailField label="Tracking opted out" value={detail.trackingOptOut ? "Yes" : "No"} />
+                                <DetailField label={t("Tracking opted out")} value={detail.trackingOptOut ? "Yes" : "No"} />
                               </>
                             )}
-                            <DetailField label="Beta account" value={detail.isBetaAccount ? "Yes" : "No"} />
+                            <DetailField label={t("Beta account")} value={detail.isBetaAccount ? "Yes" : "No"} />
                             {detail.trialExpiresAt && (
                               <DetailField
-                                label="Trial expires"
+                                label={t("Trial expires")}
                                 value={new Date(detail.trialExpiresAt).toLocaleDateString()}
                               />
                             )}
@@ -321,11 +323,11 @@ export default function AdminUsers() {
                               disabled={!detail.mfaEnabled}
                             >
                               <KeyRound className="h-3.5 w-3.5" />
-                              Reset MFA
+                              {t("Reset MFA")}
                             </Button>
                             {detail.role !== "guardian" && (
                               <div className="flex items-center gap-1.5">
-                                <span className="text-xs text-muted-foreground">Change role:</span>
+                                <span className="text-xs text-muted-foreground">{t("Change role:")}</span>
                                 <Select
                                   value=""
                                   onValueChange={(role) =>
@@ -340,7 +342,7 @@ export default function AdminUsers() {
                                       .filter((r) => r !== detail.role)
                                       .map((r) => (
                                         <SelectItem key={r} value={r} className="capitalize">
-                                          {r}
+                                          {t(r)}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -377,22 +379,21 @@ export default function AdminUsers() {
       {data && users.length === data.limit && (
         <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
           <ShieldAlert className="h-3.5 w-3.5" />
-          Showing the first {data.limit} results, narrow your search to see more.
+          {t("Showing the first {count} results, narrow your search to see more.", { count: data.limit })}
         </p>
       )}
 
       <Dialog open={mfaResetTarget !== null} onOpenChange={(o) => !o && setMfaResetTarget(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Reset MFA?</DialogTitle>
+            <DialogTitle>{t("Reset MFA?")}</DialogTitle>
             <DialogDescription>
-              {mfaResetTarget?.name} will be able to log in with just their password until they set
-              up MFA again. Use this only when they're actually locked out.
+              {t("{name} will be able to log in with just their password until they set up MFA again. Use this only when they're actually locked out.", { name: mfaResetTarget?.name })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setMfaResetTarget(null)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               type="button"
@@ -400,7 +401,7 @@ export default function AdminUsers() {
               disabled={resetMfaMutation.isPending}
               onClick={() => mfaResetTarget && resetMfaMutation.mutate(mfaResetTarget.id)}
             >
-              {resetMfaMutation.isPending ? "Resetting..." : "Reset MFA"}
+              {resetMfaMutation.isPending ? t("Resetting...") : t("Reset MFA")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -409,16 +410,16 @@ export default function AdminUsers() {
       <Dialog open={roleChangeTarget !== null} onOpenChange={(o) => !o && setRoleChangeTarget(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Change role?</DialogTitle>
+            <DialogTitle>{t("Change role?")}</DialogTitle>
             <DialogDescription>
-              {roleChangeTarget?.name} will become a{roleChangeTarget?.role === "admin" ? "n" : ""}{" "}
-              <strong className="capitalize">{roleChangeTarget?.role}</strong>, effective immediately.
-              This changes what they can see and do the next time they load the app.
+              {roleChangeTarget?.role === "admin"
+                ? t("{name} will become an {role}, effective immediately. This changes what they can see and do the next time they load the app.", { name: roleChangeTarget?.name, role: t("admin") })
+                : t("{name} will become a {role}, effective immediately. This changes what they can see and do the next time they load the app.", { name: roleChangeTarget?.name, role: t(roleChangeTarget?.role ?? "") })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setRoleChangeTarget(null)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               type="button"
@@ -426,7 +427,7 @@ export default function AdminUsers() {
               disabled={roleChangeMutation.isPending}
               onClick={() => roleChangeTarget && roleChangeMutation.mutate(roleChangeTarget)}
             >
-              {roleChangeMutation.isPending ? "Changing..." : "Change Role"}
+              {roleChangeMutation.isPending ? t("Changing...") : t("Change Role")}
             </Button>
           </DialogFooter>
         </DialogContent>

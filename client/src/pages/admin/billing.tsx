@@ -18,6 +18,7 @@ import { FREE_AGENT_TIERS, FREE_AGENT_TIER_ORDER } from "@shared/free-agent-tier
 import { ReadFailed } from "@/components/read-failed";
 import { toast } from "sonner";
 import { Ticket, DollarSign, GraduationCap, ShieldCheck } from "lucide-react";
+import { useT } from "@/i18n";
 
 type RedeemCode = {
   id: number;
@@ -69,6 +70,7 @@ type ExemptEntry = {
  * comped: its account never meets a paywall, and an address with no account yet is comped the
  * moment it signs up. The addresses live in the database, never in the code. */
 function ExemptListCard() {
+  const t = useT();
   const qc = useQueryClient();
   const [email, setEmail] = useState("");
   const { data: entries = [], isError, refetch } = useQuery<ExemptEntry[]>({
@@ -99,34 +101,34 @@ function ExemptListCard() {
         const back = b.refunds.reduce((sum, r) => sum + r.amountCents, 0);
         toast.success(
           back > 0
-            ? `Their card plan is cancelled and $${(back / 100).toFixed(2)} (the most recent payment) is refunded.`
-            : "Their card plan is cancelled. There was no paid invoice to refund.",
+            ? t("Their card plan is cancelled and {amount} (the most recent payment) is refunded.", { amount: `$${(back / 100).toFixed(2)}` })
+            : t("Their card plan is cancelled. There was no paid invoice to refund."),
           { duration: 30000 },
         );
       }
       if (b && b.failed.length > 0) {
-        const what = { refund: "cancelled, refund failed", cancel: "not cancelled", read: "could not be read" };
+        const what = { refund: t("cancelled, refund failed"), cancel: t("not cancelled"), read: t("could not be read") };
         toast.error(
-          `Finish this in the Stripe dashboard: ${b.failed.map((f) => `${f.subscriptionId} (${what[f.step]})`).join(", ")}.`,
+          t("Finish this in the Stripe dashboard: {subscriptions}.", { subscriptions: b.failed.map((f) => `${f.subscriptionId} (${what[f.step]})`).join(", ") }),
           { duration: 60000 },
         );
       }
       if (b?.appStoreSubscription) {
         toast.error(
-          "This account pays through the App Store. Forge cannot stop or refund that: they cancel it in their iPhone settings and ask Apple for the refund.",
+          t("This account pays through the App Store. Forge cannot stop or refund that: they cancel it in their iPhone settings and ask Apple for the refund."),
           { duration: 60000 },
         );
       }
       toast.success(
         added.accountFound
-          ? `${added.email} now has full access and never pays. ${added.emailed ? "They have been emailed." : "The email telling them could not be sent."}`
-          : `${added.email} is on the list. No account uses that address yet; it gets full access the moment it signs up.`,
+          ? `${t("{email} now has full access and never pays.", { email: added.email })} ${added.emailed ? t("They have been emailed.") : t("The email telling them could not be sent.")}`
+          : t("{email} is on the list. No account uses that address yet; it gets full access the moment it signs up.", { email: added.email }),
         { duration: 10000 },
       );
       setEmail("");
       qc.invalidateQueries({ queryKey: ["/api/admin/exempt-emails"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't add that address"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't add that address")),
   });
   const remove = useMutation({
     mutationFn: async (id: number) => {
@@ -137,25 +139,22 @@ function ExemptListCard() {
       const told = !gone.accountFound
         ? ""
         : gone.emailed
-          ? " They have been emailed."
-          : " The email telling them could not be sent.";
-      toast.success(`${gone.email} is off the list and needs a plan like anybody else.${told}`, { duration: 10000 });
+          ? ` ${t("They have been emailed.")}`
+          : ` ${t("The email telling them could not be sent.")}`;
+      toast.success(`${t("{email} is off the list and needs a plan like anybody else.", { email: gone.email })}${told}`, { duration: 10000 });
       qc.invalidateQueries({ queryKey: ["/api/admin/exempt-emails"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't remove that address"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't remove that address")),
   });
   return (
     <Card data-testid="exempt-list">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <ShieldCheck className="h-4 w-4" />
-          Exempt list
+          {t("Exempt list")}
         </CardTitle>
         <CardDescription>
-          Accounts that never pay. Type the email an account uses and it gets everything, with no
-          plan and no subscription: the camera, skills, the AI coach, every class and add-on. Works
-          for an athlete or a coach. An address with no account yet gets full access when it signs
-          up. Removing an address puts its account back to needing a plan.
+          {t("Accounts that never pay. Type the email an account uses and it gets everything, with no plan and no subscription: the camera, skills, the AI coach, every class and add-on. Works for an athlete or a coach. An address with no account yet gets full access when it signs up. Removing an address puts its account back to needing a plan.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -171,18 +170,18 @@ function ExemptListCard() {
             inputMode="email"
             autoCapitalize="none"
             autoCorrect="off"
-            placeholder="name@example.com"
+            placeholder={t("name@example.com")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             data-testid="input-exempt-email"
           />
           <Button type="submit" disabled={add.isPending || !email.trim()} data-testid="button-add-exempt">
-            Add to exempt list
+            {t("Add to exempt list")}
           </Button>
         </form>
-        {isError && <ReadFailed what="the exempt list" onRetry={() => void refetch()} />}
+        {isError && <ReadFailed what={t("the exempt list")} onRetry={() => void refetch()} />}
         {!isError && entries.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nobody is on the list yet.</p>
+          <p className="text-sm text-muted-foreground">{t("Nobody is on the list yet.")}</p>
         )}
         {!isError && entries.length > 0 && (
           <div className="divide-y divide-border rounded-md border border-border">
@@ -192,19 +191,19 @@ function ExemptListCard() {
                   <p className="truncate text-sm font-medium">{entry.email}</p>
                   <p className="text-xs text-muted-foreground">
                     {entry.accountRole == null
-                      ? "No account yet. Full access starts when this address signs up."
+                      ? t("No account yet. Full access starts when this address signs up.")
                       : entry.accountExempt
-                        ? `${entry.accountRole === "coach" ? "Coach" : entry.accountRole === "athlete" ? "Athlete" : entry.accountRole} account, full access, never pays.`
-                        : "Has an account, but its Beta account switch was turned off under More, Users. Remove and add it again to restore full access."}
+                        ? entry.accountRole === "coach" ? t("Coach account, full access, never pays.") : entry.accountRole === "athlete" ? t("Athlete account, full access, never pays.") : t("{role} account, full access, never pays.", { role: entry.accountRole })
+                        : t("Has an account, but its Beta account switch was turned off under More, Users. Remove and add it again to restore full access.")}
                   </p>
                   {entry.paying?.appStore && (
                     <p className="text-xs font-semibold text-destructive" data-testid={`exempt-app-store-${entry.id}`}>
-                      Still paying through the App Store. Forge cannot stop it: they cancel it in their iPhone settings.
+                      {t("Still paying through the App Store. Forge cannot stop it: they cancel it in their iPhone settings.")}
                     </p>
                   )}
                   {entry.paying?.card && (
                     <p className="text-xs font-semibold text-destructive" data-testid={`exempt-card-${entry.id}`}>
-                      Still has a card plan. Add this address again to cancel and refund it.
+                      {t("Still has a card plan. Add this address again to cancel and refund it.")}
                     </p>
                   )}
                 </div>
@@ -214,12 +213,12 @@ function ExemptListCard() {
                   disabled={remove.isPending}
                   data-testid={`button-remove-exempt-${entry.id}`}
                   onClick={() => {
-                    if (window.confirm(`Take ${entry.email} off the exempt list? Its account will need a plan straight away, and they will be emailed to say so.`)) {
+                    if (window.confirm(t("Take {email} off the exempt list? Its account will need a plan straight away, and they will be emailed to say so.", { email: entry.email }))) {
                       remove.mutate(entry.id);
                     }
                   }}
                 >
-                  Remove
+                  {t("Remove")}
                 </Button>
               </div>
             ))}
@@ -264,6 +263,7 @@ function PriceRow({
    * read-only, since the table its edits wrote was read by nothing. */
   allowBlank?: boolean;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState(centsToInput(currentCents));
   const draftCents = dollarsToCents(draft);
   const draftIsBlank = draft.trim() === "";
@@ -285,11 +285,11 @@ function PriceRow({
           step="0.01"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={allowBlank ? "free" : undefined}
+          placeholder={allowBlank ? t("free") : undefined}
           className="w-24"
         />
         <Button size="sm" variant="secondary" disabled={!dirty || saving} onClick={() => onSave(draftIsBlank ? null : draftCents)}>
-          Save
+          {t("Save")}
         </Button>
       </div>
     </div>
@@ -309,6 +309,7 @@ function PriceRow({
  * users.billingTier and the Institutional Service Agreement banner could never fire
  * for anybody; see AdminBillingAssignment. */
 export default function AdminBilling() {
+  const t = useT();
   const qc = useQueryClient();
 
   const [newCode, setNewCode] = useState("");
@@ -356,17 +357,17 @@ export default function AdminBilling() {
       // Stripe is told at creation so a card subscription can be discounted and the web
       // checkout accepts the same code. When it could not be, say so now rather than at the
       // first redemption that needs it.
-      if (created.stripeCouponId) toast.success("Code created, and set up at Stripe");
+      if (created.stripeCouponId) toast.success(t("Code created, and set up at Stripe"));
       else if (created.stripe === "no_stripe_price_for_that_plan")
-        toast.success("Code created and locked to its plan here. Stripe has no price set for that plan yet, so the card checkout will not take this code until it does.", { duration: 15000 });
-      else toast.success(`Code created. Stripe wasn't reachable (${created.stripe ?? "not configured"}): free time on unbilled accounts works, card discounts won't until it is.`, { duration: 12000 });
+        toast.success(t("Code created and locked to its plan here. Stripe has no price set for that plan yet, so the card checkout will not take this code until it does."), { duration: 15000 });
+      else toast.success(t("Code created. Stripe wasn't reachable ({reason}): free time on unbilled accounts works, card discounts won't until it is.", { reason: created.stripe ?? t("not configured") }), { duration: 12000 });
       setNewCode("");
       setNewTrialDays("30");
       setNewMaxRedemptions("");
       setNewAppliesTo("any");
       qc.invalidateQueries({ queryKey: ["/api/admin/redeem-codes"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't create code"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't create code")),
   });
 
   const endCodeMutation = useMutation({
@@ -376,12 +377,12 @@ export default function AdminBilling() {
     },
     onSuccess: (ended) => {
       if (ended.stripeEnded || ended.stripe === "no_stripe_code")
-        toast.success(`${ended.code} is ended. Nobody new can use it; anyone who already did keeps what it gave them.`);
+        toast.success(t("{code} is ended. Nobody new can use it; anyone who already did keeps what it gave them.", { code: ended.code }));
       else
-        toast.success(`${ended.code} is ended on Forge. Stripe could not be told (${ended.stripe ?? "unknown"}), so turn the promotion code off in the Stripe dashboard too.`, { duration: 15000 });
+        toast.success(t("{code} is ended on Forge. Stripe could not be told ({reason}), so turn the promotion code off in the Stripe dashboard too.", { code: ended.code, reason: ended.stripe ?? t("unknown") }), { duration: 15000 });
       qc.invalidateQueries({ queryKey: ["/api/admin/redeem-codes"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't end that code"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't end that code")),
   });
 
   const saveLessonPriceMutation = useMutation({
@@ -389,10 +390,10 @@ export default function AdminBilling() {
       await apiRequest("PATCH", `/api/admin/pricing/class-lessons/${lessonId}`, { priceCents });
     },
     onSuccess: () => {
-      toast.success("Price updated");
+      toast.success(t("Price updated"));
       qc.invalidateQueries({ queryKey: ["/api/admin/pricing/class-lessons"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save price"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save price")),
   });
 
   const categories = Array.from(new Set(pricing.map((p) => p.category)));
@@ -403,23 +404,17 @@ export default function AdminBilling() {
   }
 
   return (
-    <AppShell title="Billing">
+    <AppShell title={t("Billing")}>
       <div className="mx-auto max-w-3xl space-y-4">
         <ExemptListCard />
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Ticket className="h-4 w-4" />
-              Redeem codes
+              {t("Redeem codes")}
             </CardTitle>
             <CardDescription>
-              Promo codes a head coach or Free Agent types in, at signup or later on their billing
-              page. Two choices: who it is for, and what it gives. For new accounts, free time counts
-              from the day the account was created (30 days from an October 17th signup runs to
-              November 17th, and a code typed after that window unlocks nothing); for everyone, it
-              counts from the day the code is typed. A percent-off code discounts a plan billed by
-              card, and the same code works on the web checkout. Plans billed through the App Store
-              can only be discounted by Apple: create the same code as an App Store offer code too.
+              {t("Promo codes a head coach or Free Agent types in, at signup or later on their billing page. Two choices: who it is for, and what it gives. For new accounts, free time counts from the day the account was created (30 days from an October 17th signup runs to November 17th, and a code typed after that window unlocks nothing); for everyone, it counts from the day the code is typed. A percent-off code discounts a plan billed by card, and the same code works on the web checkout. Plans billed through the App Store can only be discounted by Apple: create the same code as an App Store offer code too.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -427,48 +422,48 @@ export default function AdminBilling() {
               <Input
                 value={newCode}
                 onChange={(e) => setNewCode(e.target.value.toUpperCase())}
-                placeholder="LAUNCH30"
+                placeholder={t("LAUNCH30")}
                 className="col-span-2 font-mono uppercase sm:col-span-1"
-                aria-label="Code"
+                aria-label={t("Code")}
               />
               <Input
                 type="number"
                 min={1}
                 value={newMaxRedemptions}
                 onChange={(e) => setNewMaxRedemptions(e.target.value)}
-                placeholder="Max uses (blank = unlimited)"
+                placeholder={t("Max uses (blank = unlimited)")}
                 className="col-span-2 sm:col-span-1"
               />
               <Select value={newAudience} onValueChange={(v) => setNewAudience(v as PromoAudience)}>
-                <SelectTrigger aria-label="Who can redeem it">
+                <SelectTrigger aria-label={t("Who can redeem it")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="new_accounts">New accounts only</SelectItem>
-                  <SelectItem value="everyone">Everyone, new and existing</SelectItem>
+                  <SelectItem value="new_accounts">{t("New accounts only")}</SelectItem>
+                  <SelectItem value="everyone">{t("Everyone, new and existing")}</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={newKind} onValueChange={(v) => setNewKind(v as PromoKind)}>
-                <SelectTrigger aria-label="What it gives">
+                <SelectTrigger aria-label={t("What it gives")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="free_time">Free time</SelectItem>
-                  <SelectItem value="percent_off">Percent off</SelectItem>
+                  <SelectItem value="free_time">{t("Free time")}</SelectItem>
+                  <SelectItem value="percent_off">{t("Percent off")}</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={newAppliesTo} onValueChange={(v) => setNewAppliesTo(v as PromoTarget | "any")}>
-                <SelectTrigger aria-label="Which plan it works on" className="col-span-2" data-testid="select-code-plan">
+                <SelectTrigger aria-label={t("Which plan it works on")} className="col-span-2" data-testid="select-code-plan">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="any">Works on any plan</SelectItem>
+                  <SelectItem value="any">{t("Works on any plan")}</SelectItem>
                   {FREE_AGENT_TIER_ORDER.map((id) => (
                     <SelectItem key={id} value={id}>
-                      {FREE_AGENT_TIERS[id].label} plan only
+                      {t("{plan} plan only", { plan: t(FREE_AGENT_TIERS[id].label) })}
                     </SelectItem>
                   ))}
-                  <SelectItem value={PROMO_COACH_TARGET}>Coach plan only</SelectItem>
+                  <SelectItem value={PROMO_COACH_TARGET}>{t("Coach plan only")}</SelectItem>
                 </SelectContent>
               </Select>
               {newKind === "free_time" ? (
@@ -478,8 +473,8 @@ export default function AdminBilling() {
                   max={365}
                   value={newTrialDays}
                   onChange={(e) => setNewTrialDays(e.target.value)}
-                  placeholder="Free days (30 = one month)"
-                  aria-label="Free days"
+                  placeholder={t("Free days (30 = one month)")}
+                  aria-label={t("Free days")}
                   className="col-span-2"
                 />
               ) : (
@@ -490,8 +485,8 @@ export default function AdminBilling() {
                     max={100}
                     value={newPercentOff}
                     onChange={(e) => setNewPercentOff(e.target.value)}
-                    placeholder="Percent off"
-                    aria-label="Percent off"
+                    placeholder={t("Percent off")}
+                    aria-label={t("Percent off")}
                   />
                   <Input
                     type="number"
@@ -499,8 +494,8 @@ export default function AdminBilling() {
                     max={24}
                     value={newDiscountMonths}
                     onChange={(e) => setNewDiscountMonths(e.target.value)}
-                    placeholder="For how many months"
-                    aria-label="Discount months"
+                    placeholder={t("For how many months")}
+                    aria-label={t("Discount months")}
                   />
                 </>
               )}
@@ -525,13 +520,13 @@ export default function AdminBilling() {
                 createCodeMutation.isPending
               }
             >
-              Create code
+              {t("Create code")}
             </Button>
 
             {codesFailed && (
               <div className="border-t border-border pt-3">
                 <ReadFailed
-                  what="the existing redeem codes"
+                  what={t("the existing redeem codes")}
                   onRetry={() => void refetchCodes()}
                   className="flex flex-col items-start gap-2 text-left"
                 />
@@ -548,14 +543,14 @@ export default function AdminBilling() {
                     <span className="font-mono font-semibold">{c.code}</span>
                     <span className="text-xs text-muted-foreground">
                       {describePromoCodeWithPlan(c)} ·{" "}
-                      {c.stripeCouponId ? "" : "no Stripe coupon · "}
+                      {c.stripeCouponId ? "" : `${t("no Stripe coupon")} · `}
                       {c.maxRedemptions
-                        ? `${c.redemptionCount ?? 0} of ${c.maxRedemptions} used`
-                        : `${c.redemptionCount ?? 0} redeemed`}
+                        ? t("{used} of {max} used", { used: c.redemptionCount ?? 0, max: c.maxRedemptions })
+                        : t("{count} redeemed", { count: c.redemptionCount ?? 0 })}
                     </span>
                     {c.expiresAt && new Date(c.expiresAt).getTime() <= Date.now() ? (
                       <span className="ml-3 shrink-0 text-xs font-semibold text-muted-foreground" data-testid={`code-ended-${c.id}`}>
-                        Ended {new Date(c.expiresAt).toLocaleDateString()}
+                        {t("Ended {date}", { date: t.date(c.expiresAt) })}
                       </span>
                     ) : (
                       <Button
@@ -566,12 +561,12 @@ export default function AdminBilling() {
                         disabled={endCodeMutation.isPending}
                         data-testid={`button-end-code-${c.id}`}
                         onClick={() => {
-                          if (window.confirm(`End ${c.code}? Nobody new will be able to use it. This can't be undone.`)) {
+                          if (window.confirm(t("End {code}? Nobody new will be able to use it. This can't be undone.", { code: c.code }))) {
                             endCodeMutation.mutate(c.id);
                           }
                         }}
                       >
-                        End code
+                        {t("End code")}
                       </Button>
                     )}
                   </div>
@@ -585,7 +580,7 @@ export default function AdminBilling() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <DollarSign className="h-4 w-4" />
-              Pricing
+              {t("Pricing")}
             </CardTitle>
             {/* Read-only, and honest about it. This card used to offer an editable
                 field per row and claim to be "the source every price shown elsewhere
@@ -594,22 +589,17 @@ export default function AdminBilling() {
                 two shared tier files, so an operator could change a figure, see
                 "Price updated" and an "edited" badge, and change nothing at all. */}
             <CardDescription>
-              Every priced thing on the platform, the org/coach plan formula, personalization
-              add-ons, Free Agent tiers and sport add-ons, video storage, and Skill Bank unlocks.
-              These are set in code (shared/billing-tiers.ts and
-              shared/free-agent-tiers.ts) so the page, the checkout and the invoice cannot
-              disagree; this card is the one screen that says what Forge charges. Per-lesson
-              class prices below ARE editable, that number is the one actually charged.
+              {t("Every priced thing on the platform, the org/coach plan formula, personalization add-ons, Free Agent tiers and sport add-ons, video storage, and Skill Bank unlocks. These are set in code (shared/billing-tiers.ts and shared/free-agent-tiers.ts) so the page, the checkout and the invoice cannot disagree; this card is the one screen that says what Forge charges. Per-lesson class prices below ARE editable, that number is the one actually charged.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            {pricingLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+            {pricingLoading && <p className="text-sm text-muted-foreground">{t("Loading...")}</p>}
             {pricingFailed && (
               // An empty card under "every priced thing on the platform" reads as
               // "Forge charges for nothing", which is the opposite of what this card
               // is the one screen for.
               <ReadFailed
-                what="the price catalog"
+                what={t("the price catalog")}
                 onRetry={() => void refetchPricing()}
                 className="flex flex-col items-start gap-2 text-left"
               />
@@ -634,7 +624,7 @@ export default function AdminBilling() {
                           )}
                         </div>
                         <p className="shrink-0 font-mono text-sm font-semibold tabular-nums">
-                          {p.currentCents === 0 ? "free" : `$${(p.currentCents / 100).toFixed(2)}`}
+                          {p.currentCents === 0 ? t("free") : `$${(p.currentCents / 100).toFixed(2)}`}
                         </p>
                       </div>
                     ))}
@@ -648,7 +638,7 @@ export default function AdminBilling() {
           <Card>
             <CardContent className="p-5">
               <ReadFailed
-                what="the Forge Class lesson prices"
+                what={t("the Forge Class lesson prices")}
                 onRetry={() => void refetchClassLessons()}
                 className="flex flex-col items-start gap-2 text-left"
               />
@@ -661,11 +651,10 @@ export default function AdminBilling() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <GraduationCap className="h-4 w-4" />
-                Forge Class lesson prices
+                {t("Forge Class lesson prices")}
               </CardTitle>
               <CardDescription>
-                Per-lesson pricing only ever applies to a Forge-official class sold to a Free
-                Agent, a coach's own class is never priced to their own roster. Blank = free.
+                {t("Per-lesson pricing only ever applies to a Forge-official class sold to a Free Agent, a coach's own class is never priced to their own roster. Blank = free.")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -678,7 +667,7 @@ export default function AdminBilling() {
                     {lessons.map((l) => (
                       <PriceRow
                         key={l.lessonId}
-                        label={`Lesson ${l.lessonNumber}: ${l.lessonTitle}`}
+                        label={t("Lesson {number}: {title}", { number: l.lessonNumber, title: l.lessonTitle })}
                         currentCents={l.priceCents}
                         allowBlank
                         saving={saveLessonPriceMutation.isPending}

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { getJson } from "@/lib/queryClient";
 import { AlertTriangle } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type UsageRow = {
   day: string;
@@ -34,6 +35,7 @@ const num = (n: number) => n.toLocaleString();
  * a table nobody reads.
  */
 export default function AdminAiSpend() {
+  const t = useT();
   const [days, setDays] = useState(30);
   const { data, isLoading, isError, refetch } = useQuery<Usage>({
     queryKey: ["/api/admin/ai-usage", days],
@@ -69,14 +71,13 @@ export default function AdminAiSpend() {
   const features = [...byFeature.values()].sort((a, b) => b.usd - a.usd);
 
   return (
-    <AppShell title="AI Spend">
+    <AppShell title={t("AI Spend")}>
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>AI Spend</CardTitle>
+            <CardTitle>{t("AI Spend")}</CardTitle>
             <CardDescription>
-              Every model call the platform makes is recorded here, by feature. Figures are
-              estimates from published rates applied to real token counts, not a bill.
+              {t("Every model call the platform makes is recorded here, by feature. Figures are estimates from published rates applied to real token counts, not a bill.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -88,30 +89,29 @@ export default function AdminAiSpend() {
                   variant={days === w ? "default" : "outline"}
                   onClick={() => setDays(w)}
                 >
-                  {w} days
+                  {t("{days} days", { days: w })}
                 </Button>
               ))}
             </div>
 
             {isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading...</p>
+              <p className="text-sm text-muted-foreground">{t("Loading...")}</p>
             ) : isError ? (
               // "Either the AI has not been used, or this is a fresh install" is a
               // definite statement about the bill. A failed read is neither of those.
               <ReadFailed
-                what="AI usage"
+                what={t("AI usage")}
                 onRetry={() => void refetch()}
                 className="flex flex-col items-start gap-2 text-left"
               />
             ) : rows.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Nothing recorded in this window. Either the AI has not been used, or this is a
-                fresh install.
+                {t("Nothing recorded in this window. Either the AI has not been used, or this is a fresh install.")}
               </p>
             ) : (
               <>
                 <div className="rounded-md border p-4">
-                  <p className="text-xs text-muted-foreground">Estimated, last {days} days</p>
+                  <p className="text-xs text-muted-foreground">{t("Estimated, last {days} days", { days })}</p>
                   <p className="text-3xl font-semibold tabular-nums">
                     ${data?.totalUsd.toFixed(2)}
                   </p>
@@ -120,8 +120,7 @@ export default function AdminAiSpend() {
                 {(data?.unpricedModels.length ?? 0) > 0 && (
                   <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
-                    No published rate on file for {data?.unpricedModels.join(", ")}. Their tokens
-                    are counted but excluded from the total above, so the real figure is higher.
+                    {t("No published rate on file for {models}. Their tokens are counted but excluded from the total above, so the real figure is higher.", { models: data?.unpricedModels.join(", ") })}
                   </p>
                 )}
 
@@ -129,12 +128,12 @@ export default function AdminAiSpend() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left text-xs text-muted-foreground">
-                        <th className="py-2 pr-4 font-medium">Feature</th>
-                        <th className="py-2 pr-4 font-medium">Model</th>
-                        <th className="py-2 pr-4 text-right font-medium">Calls</th>
-                        <th className="py-2 pr-4 text-right font-medium">In</th>
-                        <th className="py-2 pr-4 text-right font-medium">Out</th>
-                        <th className="py-2 text-right font-medium">Est.</th>
+                        <th className="py-2 pr-4 font-medium">{t("Feature")}</th>
+                        <th className="py-2 pr-4 font-medium">{t("Model")}</th>
+                        <th className="py-2 pr-4 text-right font-medium">{t("Calls")}</th>
+                        <th className="py-2 pr-4 text-right font-medium">{t("In")}</th>
+                        <th className="py-2 pr-4 text-right font-medium">{t("Out")}</th>
+                        <th className="py-2 text-right font-medium">{t("Est.")}</th>
                       </tr>
                     </thead>
                     <tbody className="tabular-nums">
@@ -157,8 +156,7 @@ export default function AdminAiSpend() {
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  A feature listed as "unattributed" is a call site that never named itself. That
-                  is a gap in the instrumentation, not a feature.
+                  {t("A feature listed as \"unattributed\" is a call site that never named itself. That is a gap in the instrumentation, not a feature.")}
                 </p>
               </>
             )}

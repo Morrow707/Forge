@@ -14,6 +14,7 @@ import { ShieldAlert, Save, Mail } from "lucide-react";
 
 import type { LegalDocumentType as LegalDocType } from "@shared/schema";
 import { ReadFailed } from "@/components/read-failed";
+import { msg, useT } from "@/i18n";
 type LegalDocument = { docType: LegalDocType; content: string; updatedAt: string };
 
 type ComplianceReportData = {
@@ -28,10 +29,10 @@ type ComplianceReportData = {
 };
 
 const TIER_LABEL: Record<string, string> = {
-  tier1_under13: "Tier 1, Under 13",
-  tier2_teen_13_17: "Tier 2, Teen (13-17)",
-  tier3_adult_18plus: "Tier 3, Adult (18+)",
-  unknown: "Unknown (no date of birth on file)",
+  tier1_under13: msg("Tier 1, Under 13"),
+  tier2_teen_13_17: msg("Tier 2, Teen (13-17)"),
+  tier3_adult_18plus: msg("Tier 3, Adult (18+)"),
+  unknown: msg("Unknown (no date of birth on file)"),
 };
 
 const DOC_LABEL: Record<LegalDocType, string> = {
@@ -60,9 +61,10 @@ const CONSENT_LABEL: Record<string, string> = {
 };
 
 function LiveBadge() {
+  const t = useT();
   return (
     <Badge variant="success" className="text-[10px]">
-      LIVE, shown at signup
+      {t("LIVE, shown at signup")}
     </Badge>
   );
 }
@@ -74,9 +76,10 @@ function LiveBadge() {
  * Use is what people accept. Calling these DRAFT told an admin they were inert, which is how the
  * "not reviewed by a lawyer" banner sat on a public page for as long as it did. */
 function PublishedBadge({ at }: { at: string }) {
+  const t = useT();
   return (
     <Badge variant="outline" className="text-[10px]">
-      PUBLISHED at {at}
+      {t("PUBLISHED at {when}", { when: at })}
     </Badge>
   );
 }
@@ -97,6 +100,7 @@ function PublishedBadge({ at }: { at: string }) {
  * counts stay because "how many athletes have actually opted in" is the first thing anybody
  * asks, and it is a number, not a document. */
 function ResearchDataReviewCard() {
+  const t = useT();
   // Renders `?? "--"` below rather than `?? 0`, which is already the honest answer
   // for a failed read, so this one needs no isError branch.
   const { data } = useQuery<{ totalAthletes: number; consentedAthletes: number }>({
@@ -111,93 +115,82 @@ function ResearchDataReviewCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          Research Data Sharing
+          {t("Research Data Sharing")}
           <Badge variant="outline" className="text-[10px]">
-            REVIEWED
+            {t("REVIEWED")}
           </Badge>
         </CardTitle>
         <CardDescription>
-          What leaves the organisation when a research extract is sent, the documents that
-          describe it, and the rules every extract is built under.
+          {t("What leaves the organisation when a research extract is sent, the documents that describe it, and the rules every extract is built under.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-md border p-3">
-            <p className="text-xs text-muted-foreground">Athletes on the platform</p>
+            <p className="text-xs text-muted-foreground">{t("Athletes on the platform")}</p>
             <p className="text-2xl font-semibold tabular-nums">{data?.totalAthletes ?? "--"}</p>
           </div>
           <div className="rounded-md border p-3">
-            <p className="text-xs text-muted-foreground">Consented to research use</p>
+            <p className="text-xs text-muted-foreground">{t("Consented to research use")}</p>
             <p className="text-2xl font-semibold tabular-nums">{data?.consentedAthletes ?? "--"}</p>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Opt-in only. Everyone else is excluded from every extract.
+              {t("Opt-in only. Everyone else is excluded from every extract.")}
             </p>
           </div>
         </div>
 
         <div className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Documents
+            {t("Documents")}
           </p>
           <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
             <li>
               <a href="/research-consent" className="font-semibold text-primary hover:underline">
-                Research Consent and Data Use Authorization
+                {t("Research Consent and Data Use Authorization")}
               </a>
-              {" "}(version {consentDoc?.version ?? "--"}), the opt-in text an athlete or guardian
-              accepts. It is a code constant, not an editable document: the text is hashed into
-              every consent record, so a change is a new version that re-asks everyone.
+              {" "}{t("(version {version}), the opt-in text an athlete or guardian accepts. It is a code constant, not an editable document: the text is hashed into every consent record, so a change is a new version that re-asks everyone.", { version: consentDoc?.version ?? "--" })}
               <div className="mt-2">
                 <DownloadButton
                   url="/api/legal-documents/research_consent.pdf"
                   filename="forge-research-consent.pdf"
-                  shareTitle="Forge Research Consent"
-                  label="Download PDF"
+                  shareTitle={t("Forge Research Consent")}
+                  label={t("Download PDF")}
                 />
               </div>
             </li>
             <li>
-              <span className="text-foreground">Privacy Policy s7</span> and the{" "}
-              <span className="text-foreground">{BIOMETRIC_DOCUMENT_NAME}</span> describe research
-              sharing as it works. All three are attorney-reviewed; what is still open with
-              counsel is in docs/legal-open-questions.md.
+              <span className="text-foreground">{t("Privacy Policy s7")}</span> {t("and the")}{" "}
+              <span className="text-foreground">{BIOMETRIC_DOCUMENT_NAME}</span> {t("describe research sharing as it works. All three are attorney-reviewed; what is still open with counsel is in docs/legal-open-questions.md.")}
             </li>
           </ul>
         </div>
 
         <div className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Rules every extract is built under
+            {t("Rules every extract is built under")}
           </p>
           <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
             <li>
-              Built from the research mirror, never from live athlete rows. The identifying
-              columns are absent from the mirror rather than stripped on the way out.
+              {t("Built from the research mirror, never from live athlete rows. The identifying columns are absent from the mirror rather than stripped on the way out.")}
             </li>
             <li>
-              Group numbers only. No name, email, date of birth or user id leaves the platform;
-              rows carry a per-query pseudonym that maps nowhere.
+              {t("Group numbers only. No name, email, date of birth or user id leaves the platform; rows carry a per-query pseudonym that maps nowhere.")}
             </li>
             <li>
-              Any cell describing fewer than{" "}
-              <span className="text-foreground">{floor} athletes</span> is suppressed in anything
-              that leaves. The in-app floor is lower on purpose; the two are different questions.
+              {t("Any cell describing fewer than")}{" "}
+              <span className="text-foreground">{t("{count} athletes", { count: floor })}</span> {t("is suppressed in anything that leaves. The in-app floor is lower on purpose; the two are different questions.")}
             </li>
             <li>
-              Denominators report former athletes separately, so a retained-after-deletion
-              subject never makes a cohort read larger than the live roster.
+              {t("Denominators report former athletes separately, so a retained-after-deletion subject never makes a cohort read larger than the live roster.")}
             </li>
             <li>
-              A minor's consent comes from a guardian; a coach relaying it names who they are
-              relaying from. Withdrawal writes its own dated record and cannot reach an extract
-              already sent, the consent text says so.
+              {t("A minor's consent comes from a guardian; a coach relaying it names who they are relaying from. Withdrawal writes its own dated record and cannot reach an extract already sent, the consent text says so.")}
             </li>
           </ul>
         </div>
 
         <p className="text-xs text-muted-foreground">
-          The extract itself, and the log of every one produced, is on the Dataset Extracts page.
+          {t("The extract itself, and the log of every one produced, is on the Dataset Extracts page.")}
         </p>
       </CardContent>
     </Card>
@@ -216,6 +209,7 @@ function ResearchDataReviewCard() {
  * it's system data for the same "review before relying on it" purpose,
  * kept on this page rather than given their own nav slot. */
 export default function AdminDocuments() {
+  const t = useT();
   const {
     data: compliance,
     isLoading: complianceLoading,
@@ -226,25 +220,19 @@ export default function AdminDocuments() {
   });
 
   return (
-    <AppShell title="Legal & Compliance">
+    <AppShell title={t("Legal & Compliance")}>
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Legal & Compliance</CardTitle>
+            <CardTitle>{t("Legal & Compliance")}</CardTitle>
             <CardDescription>
-              Every legal document on the platform (labeled LIVE or PUBLISHED below), plus the
-              privacy/compliance data snapshot. Every document is attorney-reviewed; the snapshot
-              is system data, not a legal opinion.
+              {t("Every legal document on the platform (labeled LIVE or PUBLISHED below), plus the privacy/compliance data snapshot. Every document is attorney-reviewed; the snapshot is system data, not a legal opinion.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">
               <ShieldAlert className="h-4 w-4 shrink-0" />
-              Every document here is live: an edit changes what the next person reads or agrees
-              to, and an edit to the Terms re-asks every account to accept them. Treat a change as
-              a change to a contract. Tier thresholds and retention windows are real, current
-              system behavior, not a claim that the underlying approach is legally sound. What is
-              still open with counsel is in docs/legal-open-questions.md.
+              {t("Every document here is live: an edit changes what the next person reads or agrees to, and an edit to the Terms re-asks every account to accept them. Treat a change as a change to a contract. Tier thresholds and retention windows are real, current system behavior, not a claim that the underlying approach is legally sound. What is still open with counsel is in docs/legal-open-questions.md.")}
             </p>
           </CardContent>
         </Card>
@@ -254,13 +242,11 @@ export default function AdminDocuments() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              Signup Agreement
+              {t("Signup Agreement")}
               <LiveBadge />
             </CardTitle>
             <CardDescription>
-              Shown to every coach/athlete on the signup page, they must check a box agreeing
-              to this exact text before an account is created. Editing it only affects signups
-              from now on; nobody who already agreed sees their own record change.
+              {t("Shown to every coach/athlete on the signup page, they must check a box agreeing to this exact text before an account is created. Editing it only affects signups from now on; nobody who already agreed sees their own record change.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -270,15 +256,15 @@ export default function AdminDocuments() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Compliance Snapshot</CardTitle>
-            <CardDescription>Age-tier and consent-logging system, current state.</CardDescription>
+            <CardTitle className="text-base">{t("Compliance Snapshot")}</CardTitle>
+            <CardDescription>{t("Age-tier and consent-logging system, current state.")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <DownloadButton
               url="/api/admin/compliance-report.pdf"
               filename="forge-compliance-report.pdf"
-              shareTitle="Forge Compliance Report"
-              label="Download printable PDF"
+              shareTitle={t("Forge Compliance Report")}
+              label={t("Download printable PDF")}
             />
 
             {/* `!compliance` covered a failed read as well as a pending one, so a failure
@@ -286,41 +272,41 @@ export default function AdminDocuments() {
                 slow page, not a broken one, and nobody retries it. */}
             {complianceFailed ? (
               <ReadFailed
-                what="the compliance snapshot"
+                what={t("the compliance snapshot")}
                 onRetry={() => void refetchCompliance()}
                 className="flex flex-col items-start gap-2 py-4 text-left"
               />
             ) : complianceLoading || !compliance ? (
-              <p className="text-sm text-muted-foreground">Loading…</p>
+              <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <SubSection title="Privacy tiers, roster counts">
-                  {compliance.tierCounts.map((t) => (
-                    <Row key={t.tier} label={TIER_LABEL[t.tier] ?? t.tier} value={String(t.count)} />
+                <SubSection title={t("Privacy tiers, roster counts")}>
+                  {compliance.tierCounts.map((tr) => (
+                    <Row key={tr.tier} label={TIER_LABEL[tr.tier] ? t(TIER_LABEL[tr.tier]) : tr.tier} value={String(tr.count)} />
                   ))}
                 </SubSection>
-                <SubSection title="Video retention windows">
+                <SubSection title={t("Video retention windows")}>
                   {compliance.retentionWindows.map((r) => (
-                    <Row key={r.tier} label={TIER_LABEL[r.tier] ?? r.tier} value={`${r.days} days`} />
+                    <Row key={r.tier} label={TIER_LABEL[r.tier] ? t(TIER_LABEL[r.tier]) : r.tier} value={t("{days} days", { days: r.days })} />
                   ))}
-                  <Row label="Eligible for purge right now" value={String(compliance.videosEligibleForPurgeNow)} />
+                  <Row label={t("Eligible for purge right now")} value={String(compliance.videosEligibleForPurgeNow)} />
                 </SubSection>
-                <SubSection title="Consent records on file">
+                <SubSection title={t("Consent records on file")}>
                   {compliance.consentCounts.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">None logged yet.</p>
+                    <p className="text-sm text-muted-foreground">{t("None logged yet.")}</p>
                   ) : (
                     compliance.consentCounts.map((c) => (
                       <Row
                         key={c.consentType}
                         label={CONSENT_LABEL[c.consentType] ?? c.consentType}
-                        value={`${c.count}, latest ${c.mostRecent ? c.mostRecent.slice(0, 10) : "n/a"}`}
+                        value={t("{count}, latest {date}", { count: c.count, date: c.mostRecent ? c.mostRecent.slice(0, 10) : t("n/a") })}
                       />
                     ))
                   )}
                 </SubSection>
-                <SubSection title="Provisioning">
-                  <Row label="Via coach/program consent" value={String(compliance.provisionedViaCoachConsentCount)} />
-                  <Row label="Flagged for guardian notice" value={String(compliance.requiresGuardianNoticeCount)} />
+                <SubSection title={t("Provisioning")}>
+                  <Row label={t("Via coach/program consent")} value={String(compliance.provisionedViaCoachConsentCount)} />
+                  <Row label={t("Flagged for guardian notice")} value={String(compliance.requiresGuardianNoticeCount)} />
                 </SubSection>
               </div>
             )}
@@ -332,7 +318,7 @@ export default function AdminDocuments() {
               // that it is collected today and has been reviewed by counsel. A heading
               // saying those are unbuilt is how an hour went into regenerating a document
               // Forge already had; see CLAUDE.md, "Every legal document ALREADY EXISTS".
-              <SubSection title="Open items and caveats">
+              <SubSection title={t("Open items and caveats")}>
                 <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                   {compliance.notYetBuilt.map((item) => (
                     <li key={item}>{item}</li>
@@ -352,14 +338,11 @@ export default function AdminDocuments() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              Terms of Use
+              {t("Terms of Use")}
               <PublishedBadge at="/terms" />
             </CardTitle>
             <CardDescription>
-              The signup agreement is the one Terms now; edit it in the Signup agreement editor
-              above. Served at /terms, where anyone can read exactly what they accepted. The old
-              public Terms of Service is retired, its clauses were carried into the signup
-              agreement and the open questions are in docs/legal-open-questions.md.
+              {t("The signup agreement is the one Terms now; edit it in the Signup agreement editor above. Served at /terms, where anyone can read exactly what they accepted. The old public Terms of Service is retired, its clauses were carried into the signup agreement and the open questions are in docs/legal-open-questions.md.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -373,12 +356,11 @@ export default function AdminDocuments() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              Privacy Policy
+              {t("Privacy Policy")}
               <PublishedBadge at="/privacy" />
             </CardTitle>
             <CardDescription>
-              Admin-editable and served on a public page, and the one most likely to be read by
-              somebody deciding whether to let their child use this.
+              {t("Admin-editable and served on a public page, and the one most likely to be read by somebody deciding whether to let their child use this.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -393,15 +375,7 @@ export default function AdminDocuments() {
               <LiveBadge />
             </CardTitle>
             <CardDescription>
-              A standalone consent for the camera-tracked movement data Forge collects (see
-              Section 4 of the Privacy Policy), separate from it on purpose, since laws like
-              Illinois' BIPA expect a dedicated written consent, not a clause inside a longer
-              policy. Unlike the drafts above this one is LIVE: an adult agrees to it at signup or
-              at the camera, and a guardian agrees to it for a minor at claim time, and the text
-              below is snapshotted verbatim into each of those consent records. Editing it changes
-              what the next person agrees to, and this is the one document here that HAS been
-              reviewed: built with a lawyer and supplied 2026-09-17. Treat a change to it like a
-              change to a contract, not an edit to a draft.
+              {t("A standalone consent for the camera-tracked movement data Forge collects (see Section 4 of the Privacy Policy), separate from it on purpose, since laws like Illinois' BIPA expect a dedicated written consent, not a clause inside a longer policy. Unlike the drafts above this one is LIVE: an adult agrees to it at signup or at the camera, and a guardian agrees to it for a minor at claim time, and the text below is snapshotted verbatim into each of those consent records. Editing it changes what the next person agrees to, and this is the one document here that HAS been reviewed: built with a lawyer and supplied 2026-09-17. Treat a change to it like a change to a contract, not an edit to a draft.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -412,18 +386,11 @@ export default function AdminDocuments() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              Notice to Parent or Guardian
+              {t("Notice to Parent or Guardian")}
               <LiveBadge />
             </CardTitle>
             <CardDescription>
-              Addressed to a parent, not the athlete, what any minor athlete's parent or guardian
-              actually receives, whether the athlete signed themselves up or a coach created the
-              slot. For an under-13 athlete it is also the document their guardian's consent is
-              recorded against. This is the content half of the guardian-notice system (see
-              users.requiresGuardianNotice and GUARDIAN_NOTICE_LIVE in shared/privacy-tiers.ts);
-              its content is embedded and delivered today in the guardian-invite email sent at
-              signup (see issueGuardianInviteIfNeeded in server/auth.ts), every minor's parent
-              gets this text, so editing it changes what the next one reads.
+              {t("Addressed to a parent, not the athlete, what any minor athlete's parent or guardian actually receives, whether the athlete signed themselves up or a coach created the slot. For an under-13 athlete it is also the document their guardian's consent is recorded against. This is the content half of the guardian-notice system (see users.requiresGuardianNotice and GUARDIAN_NOTICE_LIVE in shared/privacy-tiers.ts); its content is embedded and delivered today in the guardian-invite email sent at signup (see issueGuardianInviteIfNeeded in server/auth.ts), every minor's parent gets this text, so editing it changes what the next one reads.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -447,14 +414,11 @@ export default function AdminDocuments() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              End User License Agreement
+              {t("End User License Agreement")}
               <PublishedBadge at="/eula" />
             </CardTitle>
             <CardDescription>
-              The SOFTWARE licence, distinct from the Terms of Use, which govern the service.
-              It carries the clauses Apple requires of an app that replaces the standard licence
-              with its own, Apple as a third-party beneficiary, and Apple disclaiming
-              maintenance and warranty, and App Store Connect's licence URL points at this page.
+              {t("The SOFTWARE licence, distinct from the Terms of Use, which govern the service. It carries the clauses Apple requires of an app that replaces the standard licence with its own, Apple as a third-party beneficiary, and Apple disclaiming maintenance and warranty, and App Store Connect's licence URL points at this page.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -465,15 +429,11 @@ export default function AdminDocuments() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              AI Terms of Use
+              {t("AI Terms of Use")}
               <PublishedBadge at="/ai-terms" />
             </CardTitle>
             <CardDescription>
-              The AI features specifically, program generation, form-check feedback, the coaching
-              assistant. A supplement to the Terms of Use, not a rival: its own "Service" is the AI
-              features and it points platform use back at the Terms. It was seeded, routed and
-              served at /ai-terms with no card here, so it was the one document an admin could
-              neither download nor email.
+              {t("The AI features specifically, program generation, form-check feedback, the coaching assistant. A supplement to the Terms of Use, not a rival: its own \"Service\" is the AI features and it points platform use back at the Terms. It was seeded, routed and served at /ai-terms with no card here, so it was the one document an admin could neither download nor email.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -484,16 +444,11 @@ export default function AdminDocuments() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              Assumption of Risk and Release
+              {t("Assumption of Risk and Release")}
               <LiveBadge />
             </CardTitle>
             <CardDescription>
-              Forge's only genuine liability waiver: every other document here grants a licence,
-              describes data handling, or takes a consent, and this one asks somebody to give up a
-              right. Section 8 says plainly what a guardian can and cannot waive on a child's
-              behalf, which is the part most templates get wrong by omission. Editing it changes
-              what the next person agrees to, and of everything on this page an edit weighs most
-              here, because an unenforceable release is not a weak release, it is no release.
+              {t("Forge's only genuine liability waiver: every other document here grants a licence, describes data handling, or takes a consent, and this one asks somebody to give up a right. Section 8 says plainly what a guardian can and cannot waive on a child's behalf, which is the part most templates get wrong by omission. Editing it changes what the next person agrees to, and of everything on this page an edit weighs most here, because an unenforceable release is not a weak release, it is no release.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -513,6 +468,7 @@ export default function AdminDocuments() {
 // (not folded into the LegalDocType union) rather than force it into a
 // shape built for documents that don't have this live/frozen behavior.
 function SignupAgreementEditor() {
+  const t = useT();
   const qc = useQueryClient();
   const { data, isLoading, isError, refetch } = useQuery<{ content: string }>({
     queryKey: ["/api/legal-agreement"],
@@ -545,18 +501,18 @@ function SignupAgreementEditor() {
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["/api/legal-agreement"] });
       if (!result.termsChanged) {
-        toast.success("Saved. The terms themselves did not change, so nobody is re-asked.");
+        toast.success(t("Saved. The terms themselves did not change, so nobody is re-asked."));
         return;
       }
       const emailed =
         result.guardiansEmailed > 0
-          ? ` ${result.guardiansEmailed} guardian${result.guardiansEmailed === 1 ? "" : "s"} emailed.`
+          ? ` ${t.plural(result.guardiansEmailed, "{count} guardian emailed.", "{count} guardians emailed.")}`
           : "";
       toast.success(
-        `Agreement updated. Every existing account will be asked to accept it again.${emailed}`,
+        `${t("Agreement updated. Every existing account will be asked to accept it again.")}${emailed}`,
       );
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not save")),
   });
 
   // NOT A DISPLAY BUG. On a failed read `data` is undefined, hydrated stays false and
@@ -567,7 +523,7 @@ function SignupAgreementEditor() {
   if (isError) {
     return (
       <ReadFailed
-        what="the current signup agreement"
+        what={t("the current signup agreement")}
         onRetry={() => void refetch()}
         className="flex flex-col items-start gap-2 py-4 text-left"
       />
@@ -582,7 +538,7 @@ function SignupAgreementEditor() {
         disabled={isLoading}
         rows={12}
         className="font-mono text-xs"
-        placeholder="Loading…"
+        placeholder={t("Loading…")}
       />
       <div className="flex flex-wrap items-center gap-2">
         <Button
@@ -591,13 +547,13 @@ function SignupAgreementEditor() {
           disabled={saveMutation.isPending || !content.trim() || isLoading}
         >
           <Save className="h-4 w-4" />
-          {saveMutation.isPending ? "Saving…" : "Save"}
+          {saveMutation.isPending ? t("Saving…") : t("Save")}
         </Button>
         <DownloadButton
           url="/api/admin/legal-agreement.pdf"
           filename="forge-signup-agreement.pdf"
-          shareTitle="Forge Signup Agreement"
-          label="Print / Download PDF"
+          shareTitle={t("Forge Signup Agreement")}
+          label={t("Print / Download PDF")}
         />
       </div>
     </div>
@@ -605,6 +561,7 @@ function SignupAgreementEditor() {
 }
 
 function LegalDocEditor({ docType }: { docType: LegalDocType }) {
+  const t = useT();
   const qc = useQueryClient();
   const {
     data: docs,
@@ -629,9 +586,9 @@ function LegalDocEditor({ docType }: { docType: LegalDocType }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/legal-documents"] });
-      toast.success("Saved");
+      toast.success(t("Saved"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not save")),
   });
 
   // Same as SignupAgreementEditor above, and this one had no loading guard at all: an
@@ -641,7 +598,7 @@ function LegalDocEditor({ docType }: { docType: LegalDocType }) {
   if (isError) {
     return (
       <ReadFailed
-        what={`the current ${DOC_LABEL[docType]}`}
+        what={t("the current {document}", { document: DOC_LABEL[docType] })}
         onRetry={() => void refetch()}
         className="flex flex-col items-start gap-2 py-4 text-left"
       />
@@ -656,7 +613,7 @@ function LegalDocEditor({ docType }: { docType: LegalDocType }) {
         disabled={docsLoading}
         rows={12}
         className="font-mono text-xs"
-        placeholder="Loading…"
+        placeholder={t("Loading…")}
       />
       <div className="flex flex-wrap items-center gap-2">
         <Button
@@ -665,7 +622,7 @@ function LegalDocEditor({ docType }: { docType: LegalDocType }) {
           disabled={saveMutation.isPending || docsLoading || !content.trim()}
         >
           <Save className="h-4 w-4" />
-          {saveMutation.isPending ? "Saving…" : "Save"}
+          {saveMutation.isPending ? t("Saving…") : t("Save")}
         </Button>
         <LegalDocSendRow docType={docType} />
       </div>
@@ -678,16 +635,17 @@ function LegalDocEditor({ docType }: { docType: LegalDocType }) {
  * The email route answers 502 with its own sentence when no provider is configured, and that
  * sentence is what the toast shows. */
 function LegalDocSendRow({ docType }: { docType: LegalDocType }) {
+  const t = useT();
   const [emailTo, setEmailTo] = useState("");
   const emailMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", `/api/admin/legal-documents/${docType}/email`, { to: emailTo });
     },
     onSuccess: () => {
-      toast.success(`Sent to ${emailTo}`);
+      toast.success(t("Sent to {email}", { email: emailTo }));
       setEmailTo("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not send"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not send")),
   });
   return (
     <>
@@ -695,14 +653,14 @@ function LegalDocSendRow({ docType }: { docType: LegalDocType }) {
         url={`/api/admin/legal-documents/${docType}.pdf`}
         filename={`forge-${docType.replace(/_/g, "-")}.pdf`}
         shareTitle={DOC_LABEL[docType]}
-        label="Print / Download PDF"
+        label={t("Print / Download PDF")}
       />
       <div className="flex items-center gap-1.5">
         <Input
           type="email"
           value={emailTo}
           onChange={(e) => setEmailTo(e.target.value)}
-          placeholder="Email to…"
+          placeholder={t("Email to…")}
           className="h-8 w-48"
         />
         <Button
@@ -712,7 +670,7 @@ function LegalDocSendRow({ docType }: { docType: LegalDocType }) {
           disabled={emailMutation.isPending || !emailTo.trim()}
         >
           <Mail className="h-4 w-4" />
-          Send
+          {t("Send")}
         </Button>
       </div>
     </>

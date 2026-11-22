@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { HARDY_GROUPS, HARDY_OUTCOME_LABEL, HARDY_OUTCOMES, HARDY_REPORT_FLOOR, type HardyOutcome, type HardyReport } from "@shared/hardy-vocabulary";
+import { useT } from "@/i18n";
 
 /* WHAT PEOPLE ASK HARDY (2026-11-11). Scott: "so then we can check and see oh they are looking at
  * training more, lets make that part of the app smarter". Counts across everyone: the kind of
@@ -25,9 +26,10 @@ const SHORT_MIN_PCT = 10;
 const SHORT_ROWS = 6;
 
 function Change({ now, before }: { now: number; before: number }) {
-  if (!before) return <span className="text-[11px] text-muted-foreground">new</span>;
+  const t = useT();
+  if (!before) return <span className="text-[11px] text-muted-foreground">{t("new")}</span>;
   const d = Math.round(((now - before) / before) * PERCENT);
-  if (Math.abs(d) < STEADY_PCT) return <span className="text-[11px] text-muted-foreground">steady</span>;
+  if (Math.abs(d) < STEADY_PCT) return <span className="text-[11px] text-muted-foreground">{t("steady")}</span>;
   return <span className={cn("text-[11px] font-semibold tabular-nums", d > 0 ? "text-primary" : "text-muted-foreground")}>{d > 0 ? "▲" : "▼"} {Math.abs(d)}%</span>;
 }
 
@@ -45,6 +47,7 @@ function Bar({ label, value, max, right }: { label: string; value: number; max: 
 }
 
 export default function AdminHardyUsage() {
+  const t = useT();
   const [days, setDays] = useState<number>(PERIODS[1]);
   const [group, setGroup] = useState<string>("");
   const [open, setOpen] = useState<string | null>(null);
@@ -60,38 +63,38 @@ export default function AdminHardyUsage() {
   const rising = (data?.kinds ?? []).filter((k) => k.key !== "Other" && k.before > 0).map((k) => ({ k: k.key, d: (k.questions - k.before) / k.before })).sort((a, b) => b.d - a.d)[0];
 
   return (
-    <AppShell title="What People Ask Hardy">
+    <AppShell title={t("What People Ask Hardy")}>
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>What people ask Hardy</CardTitle>
+            <CardTitle>{t("What people ask Hardy")}</CardTitle>
             <CardDescription>
-              Counts across everyone: the kind of question and which of Forge's own words it matched. Never what anybody typed, never who asked. A row shows only when {HARDY_REPORT_FLOOR} or more different people are behind it.
+              {t("Counts across everyone: the kind of question and which of Forge's own words it matched. Never what anybody typed, never who asked. A row shows only when {count} or more different people are behind it.", { count: HARDY_REPORT_FLOOR })}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             {PERIODS.map((d) => (
               <button key={d} type="button" onClick={() => setDays(d)} className={cn("rounded-full border px-3 py-1 text-xs font-semibold", days === d && "border-primary bg-primary text-primary-foreground")}>
-                Last {d} days
+                {t("Last {days} days", { days: d })}
               </button>
             ))}
             {["", ...HARDY_GROUPS].map((g) => (
               <button key={g || "all"} type="button" onClick={() => setGroup(g)} className={cn("rounded-full border px-3 py-1 text-xs font-semibold", group === g && "border-primary bg-primary text-primary-foreground")}>
-                {g || "Everyone"}
+                {g || t("Everyone")}
               </button>
             ))}
           </CardContent>
         </Card>
 
-        {isError && <ReadFailed what="Hardy's report" onRetry={() => void refetch()} />}
+        {isError && <ReadFailed what={t("Hardy's report")} onRetry={() => void refetch()} />}
         {data && (
           <>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               {[
-                ["Questions", data.questions.toLocaleString()],
-                ["People asked", data.people >= HARDY_REPORT_FLOOR ? data.people.toLocaleString() : `Fewer than ${HARDY_REPORT_FLOOR}`],
-                ["Answered", `${data.answeredPct}%`],
-                ["Couldn't answer", `${data.missedPct}%`],
+                [t("Questions"), t.number(data.questions)],
+                [t("People asked"), data.people >= HARDY_REPORT_FLOOR ? t.number(data.people) : t("Fewer than {count}", { count: HARDY_REPORT_FLOOR })],
+                [t("Answered"), `${data.answeredPct}%`],
+                [t("Couldn't answer"), `${data.missedPct}%`],
               ].map(([label, value]) => (
                 <Card key={label}>
                   <CardContent className="p-4">
@@ -103,24 +106,24 @@ export default function AdminHardyUsage() {
             </div>
 
             <Card>
-              <CardHeader><CardTitle className="text-lg">What they ask about</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-lg">{t("What they ask about")}</CardTitle></CardHeader>
               <CardContent>
                 {data.kinds.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Not enough people have asked yet to show anything.</p>
+                  <p className="text-sm text-muted-foreground">{t("Not enough people have asked yet to show anything.")}</p>
                 ) : (
                   data.kinds.map((k) => <Bar key={k.key} label={k.key} value={k.questions} max={maxKind} right={<Change now={k.questions} before={k.before} />} />)
                 )}
-                <p className="mt-2 text-xs text-muted-foreground">Change is against the {data.days} days before.</p>
+                <p className="mt-2 text-xs text-muted-foreground">{t("Change is against the {days} days before.", { days: data.days })}</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Top words</CardTitle>
-                <CardDescription>Forge's own words only. Tap one to see how Hardy did.</CardDescription>
+                <CardTitle className="text-lg">{t("Top words")}</CardTitle>
+                <CardDescription>{t("Forge's own words only. Tap one to see how Hardy did.")}</CardDescription>
               </CardHeader>
               <CardContent>
-                {data.words.length === 0 && <p className="text-sm text-muted-foreground">Not enough people have asked yet to show any word.</p>}
+                {data.words.length === 0 && <p className="text-sm text-muted-foreground">{t("Not enough people have asked yet to show any word.")}</p>}
                 <ol className="divide-y">
                   {data.words.map((w, i) => (
                     <li key={w.key}>
@@ -133,46 +136,46 @@ export default function AdminHardyUsage() {
                       {open === w.key && (
                         <div className="pb-3 pl-8 text-sm">
                           {HARDY_OUTCOMES.filter((o) => w.outcomes[o]).map((o: HardyOutcome) => (
-                            <div key={o} className="flex justify-between py-0.5"><span>{HARDY_OUTCOME_LABEL[o]}</span><span className="tabular-nums text-muted-foreground">{Math.round(((w.outcomes[o] ?? 0) / w.questions) * PERCENT)}%</span></div>
+                            <div key={o} className="flex justify-between py-0.5"><span>{t(HARDY_OUTCOME_LABEL[o])}</span><span className="tabular-nums text-muted-foreground">{Math.round(((w.outcomes[o] ?? 0) / w.questions) * PERCENT)}%</span></div>
                           ))}
-                          <p className="text-xs text-muted-foreground">{w.people} people asked.</p>
+                          <p className="text-xs text-muted-foreground">{t("{count} people asked.", { count: w.people })}</p>
                         </div>
                       )}
                     </li>
                   ))}
                 </ol>
-                {data.hiddenWords > 0 && <p className="mt-2 text-xs text-muted-foreground">{data.hiddenWords} word{data.hiddenWords === 1 ? "" : "s"} hidden: fewer than {HARDY_REPORT_FLOOR} people asked.</p>}
+                {data.hiddenWords > 0 && <p className="mt-2 text-xs text-muted-foreground">{t.plural(data.hiddenWords, "{count} word hidden: fewer than {floor} people asked.", "{count} words hidden: fewer than {floor} people asked.", { floor: HARDY_REPORT_FLOOR })}</p>}
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Where Hardy came up short</CardTitle>
-                <CardDescription>The words he most often couldn't answer: a page to make easier to find, or something he should learn.</CardDescription>
+                <CardTitle className="text-lg">{t("Where Hardy came up short")}</CardTitle>
+                <CardDescription>{t("The words he most often couldn't answer: a page to make easier to find, or something he should learn.")}</CardDescription>
               </CardHeader>
               <CardContent>
-                {short.length === 0 ? <p className="text-sm text-muted-foreground">Nothing above {SHORT_MIN_PCT}% yet.</p> : short.map((w) => <Bar key={w.key} label={w.key} value={w.miss} max={PERCENT} right={<span className="text-xs text-muted-foreground">{w.miss}%</span>} />)}
+                {short.length === 0 ? <p className="text-sm text-muted-foreground">{t("Nothing above {percent}% yet.", { percent: SHORT_MIN_PCT })}</p> : short.map((w) => <Bar key={w.key} label={w.key} value={w.miss} max={PERCENT} right={<span className="text-xs text-muted-foreground">{w.miss}%</span>} />)}
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-lg">Asked for, but not on their plan</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-lg">{t("Asked for, but not on their plan")}</CardTitle></CardHeader>
               <CardContent className="space-y-1 text-sm">
-                <div className="flex justify-between"><span>Asked for answers their plan doesn't include</span><span className="text-muted-foreground">{data.plan ? `${data.plan.questions} from ${data.plan.people} people` : `Fewer than ${HARDY_REPORT_FLOOR} people`}</span></div>
+                <div className="flex justify-between"><span>{t("Asked for answers their plan doesn't include")}</span><span className="text-muted-foreground">{data.plan ? t("{questions} from {people} people", { questions: data.plan.questions, people: data.plan.people }) : t("Fewer than {count} people", { count: HARDY_REPORT_FLOOR })}</span></div>
                 {data.plan?.words.map((w) => <div key={w.word} className="flex justify-between pl-3 text-muted-foreground"><span>· {w.word}</span><span>{w.questions}</span></div>)}
-                <div className="flex justify-between"><span>Coached athletes asking for answers (their coach's call)</span><span className="text-muted-foreground">{data.coach ? `${data.coach.questions} from ${data.coach.people} people` : `Fewer than ${HARDY_REPORT_FLOOR} people`}</span></div>
-                <div className="flex justify-between"><span>Pain or injury questions sent to a doctor or trainer</span><span className="text-muted-foreground">{data.medical}</span></div>
-                <p className="pt-1 text-xs text-muted-foreground">The first line is the upgrade signal: what people want enough to ask for.</p>
+                <div className="flex justify-between"><span>{t("Coached athletes asking for answers (their coach's call)")}</span><span className="text-muted-foreground">{data.coach ? t("{questions} from {people} people", { questions: data.coach.questions, people: data.coach.people }) : t("Fewer than {count} people", { count: HARDY_REPORT_FLOOR })}</span></div>
+                <div className="flex justify-between"><span>{t("Pain or injury questions sent to a doctor or trainer")}</span><span className="text-muted-foreground">{data.medical}</span></div>
+                <p className="pt-1 text-xs text-muted-foreground">{t("The first line is the upgrade signal: what people want enough to ask for.")}</p>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-lg">What this suggests</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-lg">{t("What this suggests")}</CardTitle></CardHeader>
               <CardContent className="space-y-1 text-sm">
-                {rising && rising.d > RISING_SHARE && <p>{rising.k} questions are up {Math.round(rising.d * PERCENT)}% on the {data.days} days before. That part of the app is getting more use; it's the one to make smarter next.</p>}
-                {short[0] && <p>Hardy couldn't answer {short[0].miss}% of "{short[0].key}" questions. Either the page is hard to find or he doesn't know that area yet.</p>}
-                {!(rising && rising.d > RISING_SHARE) && !short[0] && <p className="text-muted-foreground">Not enough questions yet to say anything.</p>}
-                <p className="text-xs text-muted-foreground">Patterns in what people ask, not reasons why.</p>
+                {rising && rising.d > RISING_SHARE && <p>{t("{kind} questions are up {percent}% on the {days} days before. That part of the app is getting more use; it's the one to make smarter next.", { kind: rising.k, percent: Math.round(rising.d * PERCENT), days: data.days })}</p>}
+                {short[0] && <p>{t("Hardy couldn't answer {percent}% of \"{word}\" questions. Either the page is hard to find or he doesn't know that area yet.", { percent: short[0].miss, word: short[0].key })}</p>}
+                {!(rising && rising.d > RISING_SHARE) && !short[0] && <p className="text-muted-foreground">{t("Not enough questions yet to say anything.")}</p>}
+                <p className="text-xs text-muted-foreground">{t("Patterns in what people ask, not reasons why.")}</p>
               </CardContent>
             </Card>
           </>

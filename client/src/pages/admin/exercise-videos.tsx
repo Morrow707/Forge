@@ -9,6 +9,7 @@ import { ReadFailed } from "@/components/read-failed";
 import { getJson, apiRequest } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { AlertTriangle, Check, Copy, Loader2, Play } from "lucide-react";
+import { msg, translate, useT } from "@/i18n";
 
 type Target = { kind: "exercise" | "skill"; id: number; name: string };
 
@@ -52,7 +53,7 @@ type Proposal = Target & {
  *  is a slice of a routine, and of which one, before approving it. */
 const matchLabel = (m: Proposal["match"]) =>
   m.startSeconds != null
-    ? `${m.title} (chapter ${mmss(m.startSeconds)} of "${m.videoTitle ?? "a longer video"}")`
+    ? translate("{title} (chapter {time} of \"{video}\")", { title: m.title, time: mmss(m.startSeconds), video: m.videoTitle ?? translate("a longer video") })
     : m.title;
 
 type ChannelSummary = {
@@ -144,7 +145,8 @@ const mmss = (s: number | null) =>
 /** Scott, 2026-09-28: "give me an easy copy and paste button on all fields too so i can stop
  *  taking photos of everything." Every card copies itself as plain text, and the run header
  *  copies the whole report. Text, not JSON: it is pasted into a chat, not a program. */
-function CopyButton({ text, label = "Copy" }: { text: () => string; label?: string }) {
+function CopyButton({ text, label = msg("Copy") }: { text: () => string; label?: string }) {
+  const t = useT();
   const [done, setDone] = useState(false);
   return (
     <Button
@@ -158,12 +160,12 @@ function CopyButton({ text, label = "Copy" }: { text: () => string; label?: stri
           setDone(true);
           setTimeout(() => setDone(false), 1500);
         } catch {
-          toast.error("Could not copy, the browser refused clipboard access.");
+          toast.error(t("Could not copy, the browser refused clipboard access."));
         }
       }}
     >
       {done ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-      {done ? "Copied" : label}
+      {done ? t("Copied") : t(label)}
     </Button>
   );
 }
@@ -171,62 +173,62 @@ function CopyButton({ text, label = "Copy" }: { text: () => string; label?: stri
 const REJECTION_GROUPS: Array<{ key: RejectReason; title: string; blurb: string }> = [
   {
     key: "head",
-    title: "Different movement",
+    title: msg("Different movement"),
     blurb:
-      "The title's movement word is not this exercise's. \"Squat Box Jump\" is a jump, so Box Squat cannot have it. Nothing to tune, these were never candidates.",
+      msg("The title's movement word is not this exercise's. \"Squat Box Jump\" is a jump, so Box Squat cannot have it. Nothing to tune, these were never candidates."),
   },
   {
     key: "combo",
-    title: "A complex or a sequence",
+    title: msg("A complex or a sequence"),
     blurb:
-      "The title names this lift and then goes on to another. \"Back Squat - Jerk Behind the Neck\" is a complex, and it auto-applied to Back Squat before this rule existed.",
+      msg("The title names this lift and then goes on to another. \"Back Squat - Jerk Behind the Neck\" is a complex, and it auto-applied to Back Squat before this rule existed."),
   },
   {
     key: "modifier",
-    title: "A word that changes the variation",
+    title: msg("A word that changes the variation"),
     blurb:
-      "Same movement, different version: the title adds or drops a modifier. \"Barbell Wrist Curl\" against Barbell Curl. Correct refusals, unless Forge is missing that variation as its own exercise.",
+      msg("Same movement, different version: the title adds or drops a modifier. \"Barbell Wrist Curl\" against Barbell Curl. Correct refusals, unless Forge is missing that variation as its own exercise."),
   },
   {
     key: "equipment",
-    title: "Different equipment",
+    title: msg("Different equipment"),
     blurb:
-      "A kettlebell sumo deadlift is not a barbell one. Worth reading: our equipment column defaults to Barbell, so an exercise that never had it set can refuse a correct video here.",
+      msg("A kettlebell sumo deadlift is not a barbell one. Worth reading: our equipment column defaults to Barbell, so an exercise that never had it set can refuse a correct video here."),
   },
   {
     key: "muscle-unexplained",
-    title: "Names a muscle this exercise does not train",
+    title: msg("Names a muscle this exercise does not train"),
     blurb:
-      "The title says a muscle that is not in this exercise's metadata, usually a sign it is a different movement, occasionally a sign our metadata is thin.",
+      msg("The title says a muscle that is not in this exercise's metadata, usually a sign it is a different movement, occasionally a sign our metadata is thin."),
   },
   {
     key: "unknown-count",
-    title: "A word the library has never seen",
+    title: msg("A word the library has never seen"),
     blurb:
-      "The strictest rule and the most productive one. An unrecognised word in the name is either a variation we have no word for or one that changes the movement. The words themselves are listed below, that list is what to fix.",
+      msg("The strictest rule and the most productive one. An unrecognised word in the name is either a variation we have no word for or one that changes the movement. The words themselves are listed below, that list is what to fix."),
   },
   {
     key: "red-flag",
-    title: "Not a demonstration",
+    title: msg("Not a demonstration"),
     blurb:
-      "A weight in the title, an emoji, shouting, a hashtag in the name, or a word like underrated or hack. \"Alyssa Back Squat 127 kg\" parses perfectly and is somebody's competition single.",
+      msg("A weight in the title, an emoji, shouting, a hashtag in the name, or a word like underrated or hack. \"Alyssa Back Squat 127 kg\" parses perfectly and is somebody's competition single."),
   },
   {
     key: "duration",
-    title: "Would have matched, too long",
+    title: msg("Would have matched, too long"),
     blurb:
-      "A clean match refused only for length. The one group a higher cap buys back, and the only place raising it helps.",
+      msg("A clean match refused only for length. The one group a higher cap buys back, and the only place raising it helps."),
   },
   {
     key: "no-head",
-    title: "No movement word at all",
+    title: msg("No movement word at all"),
     blurb:
-      "Either the title names nothing we recognise, or this exercise's own name has no head word, worth checking the name itself if a common lift lands here.",
+      msg("Either the title names nothing we recognise, or this exercise's own name has no head word, worth checking the name itself if a common lift lands here."),
   },
 ];
 
-const rejectionLine = (t: Unmatched) =>
-  [t.name, t.rejection?.title ? `-> ${t.rejection.title}` : "", t.rejection?.detail ? `(${t.rejection.detail})` : ""]
+const rejectionLine = (tr: Unmatched) =>
+  [tr.name, tr.rejection?.title ? `-> ${tr.rejection.title}` : "", tr.rejection?.detail ? `(${tr.rejection.detail})` : ""]
     .filter(Boolean)
     .join(" ");
 
@@ -269,10 +271,10 @@ function duplicatesText(report: Report): string {
 }
 
 function noMatchText(unmatched: Unmatched[]): string {
-  const lifts = unmatched.filter((t) => t.kind === "exercise");
+  const lifts = unmatched.filter((tr) => tr.kind === "exercise");
   const out = [`NO MATCH, ${unmatched.length} keep their search link (${lifts.length} lifts)`];
   for (const group of REJECTION_GROUPS) {
-    const rows = lifts.filter((t) => t.rejection?.reason === group.key);
+    const rows = lifts.filter((tr) => tr.rejection?.reason === group.key);
     if (rows.length === 0) continue;
     out.push("", `${group.title}, ${rows.length}`, ...rows.map(rejectionLine));
   }
@@ -294,6 +296,7 @@ function wholeReportText(report: Report): string {
 }
 
 export default function AdminExerciseVideos() {
+  const t = useT();
   const [report, setReport] = useState<Report | null>(null);
   const [mode, setMode] = useState<"dry-run" | "apply" | null>(null);
   const [cap, setCap] = useState("");
@@ -320,7 +323,7 @@ export default function AdminExerciseVideos() {
       return (await res.json()) as Report;
     },
     onSuccess: (data) => setReport(data),
-    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "Could not save that decision."),
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : t("Could not save that decision.")),
   });
 
   // A dry run talks to YouTube for minutes, so the button starts it and this reads how far it has
@@ -337,8 +340,8 @@ export default function AdminExerciseVideos() {
     if (wasRunning.current && !running) {
       setReport(null);
       latest.refetch();
-      if (status.data?.lastError) toast.error(`The run stopped early: ${status.data.lastError}`);
-      else toast.success("Dry run finished and saved.");
+      if (status.data?.lastError) toast.error(t("The run stopped early: {error}", { error: status.data.lastError }));
+      else toast.success(t("Dry run finished and saved."));
     }
     wasRunning.current = running;
   }, [status.data?.running]);
@@ -369,14 +372,14 @@ export default function AdminExerciseVideos() {
       if (which === "apply") {
         pending.refetch();
         toast.success(
-          `${data.written ?? 0} video${data.written === 1 ? "" : "s"} written, ${data.unmatched.length} left on a search link`,
+          t.plural(data.written ?? 0, "{count} video written, {left} left on a search link", "{count} videos written, {left} left on a search link", { left: data.unmatched.length }),
         );
       }
     },
     onError: (err: unknown) => {
       // The 503 for a missing key says so in its own words; anything else is shown as-is rather
       // than flattened into "something went wrong", because the reason is the useful part.
-      toast.error(err instanceof Error ? err.message : "The run did not finish.");
+      toast.error(err instanceof Error ? err.message : t("The run did not finish."));
     },
     onSettled: () => setMode(null),
   });
@@ -385,25 +388,23 @@ export default function AdminExerciseVideos() {
   const busy = run.isPending || dryRunGoing;
 
   return (
-    <AppShell title="Demo Videos">
+    <AppShell title={t("Demo Videos")}>
       <div className="mx-auto max-w-5xl space-y-4 p-4">
         <div>
-          <h1 className="text-2xl font-bold">Demo videos</h1>
+          <h1 className="text-2xl font-bold">{t("Demo videos")}</h1>
           <p className="text-sm text-muted-foreground">
-            Every seeded exercise carries a YouTube <em>search link</em>, not a video, so nothing
-            plays inside Forge. This replaces those with real clips, shortest match wins, and a
-            URL anybody chose by hand is never touched.
+            {t("Every seeded exercise carries a YouTube")} <em>{t("search link")}</em>{t(", not a video, so nothing plays inside Forge. This replaces those with real clips, shortest match wins, and a URL anybody chose by hand is never touched.")}
           </p>
         </div>
 
         {pending.isError ? (
-          <ReadFailed what="the demo-video status" onRetry={() => pending.refetch()} error={pending.error} />
+          <ReadFailed what={t("the demo-video status")} onRetry={() => pending.refetch()} error={pending.error} />
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Where it stands</CardTitle>
+              <CardTitle className="text-base">{t("Where it stands")}</CardTitle>
               <CardDescription>
-                This read spends no YouTube quota at all, so it is safe to refresh.
+                {t("This read spends no YouTube quota at all, so it is safe to refresh.")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
@@ -413,22 +414,18 @@ export default function AdminExerciseVideos() {
                 <>
                   <p>
                     <span className="text-2xl font-bold tabular-nums">{pending.data?.pending ?? 0}</span>{" "}
-                    exercises and skill drills still on a search link.
+                    {t("exercises and skill drills still on a search link.")}
                   </p>
                   {pending.data?.configured === false && (
                     <p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-destructive">
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                       <span>
-                        <strong>YOUTUBE_API_KEY is not set on this server.</strong> No catalogue can
-                        be read until it is, in Render's environment. That is an operator setting,
-                        not a fault in the app.
+                        <strong>{t("YOUTUBE_API_KEY is not set on this server.")}</strong> {t("No catalogue can be read until it is, in Render's environment. That is an operator setting, not a fault in the app.")}
                       </span>
                     </p>
                   )}
                   <p className="text-muted-foreground">
-                    Channels: {pending.data?.channels.join(", ")}. Cap{" "}
-                    {mmss(pending.data?.maxDurationSeconds ?? 0)} by default, most winners come in
-                    well under it, because a Short beats a breakdown of the same lift.
+                    {t("Channels: {channels}. Cap {cap} by default, most winners come in well under it, because a Short beats a breakdown of the same lift.", { channels: pending.data?.channels.join(", "), cap: mmss(pending.data?.maxDurationSeconds ?? 0) })}
                   </p>
                 </>
               )}
@@ -438,16 +435,15 @@ export default function AdminExerciseVideos() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Run it</CardTitle>
+            <CardTitle className="text-base">{t("Run it")}</CardTitle>
             <CardDescription>
-              Read the dry run's channel table before applying anything. A channel whose median
-              winning clip runs long is not supplying shorts and should come out of the list.
+              {t("Read the dry run's channel table before applying anything. A channel whose median winning clip runs long is not supplying shorts and should come out of the list.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground" htmlFor="cap">
-                Length cap, seconds (blank = {pending.data?.maxDurationSeconds ?? 180})
+                {t("Length cap, seconds (blank = {seconds})", { seconds: pending.data?.maxDurationSeconds ?? 180 })}
               </label>
               <Input
                 id="cap"
@@ -466,12 +462,8 @@ export default function AdminExerciseVideos() {
                 onChange={(e) => setSearchUnmatched(e.target.checked)}
               />
               <span>
-                <strong className="text-foreground">Search YouTube for the ones no channel has.</strong>{" "}
-                The long tail, stretches, mobility, odd equipment, is missing because no
-                channel in the pool films it at all, not because it was refused. This searches for
-                each one and takes the most watched result that still passes every rule. Costs 100
-                quota units per exercise against 10,000 a day, so a run covers about 90 and says
-                how many are left; run it again tomorrow to continue. Every result is Tier B.
+                <strong className="text-foreground">{t("Search YouTube for the ones no channel has.")}</strong>{" "}
+                {t("The long tail, stretches, mobility, odd equipment, is missing because no channel in the pool films it at all, not because it was refused. This searches for each one and takes the most watched result that still passes every rule. Costs 100 quota units per exercise against 10,000 a day, so a run covers about 90 and says how many are left; run it again tomorrow to continue. Every result is Tier B.")}
               </span>
             </label>
             <Button onClick={() => run.mutate("dry-run")} disabled={busy}>
@@ -480,40 +472,40 @@ export default function AdminExerciseVideos() {
               ) : (
                 <Play className="mr-2 h-4 w-4" />
               )}
-              Dry run
+              {t("Dry run")}
             </Button>
             <Button variant="outline" onClick={() => run.mutate("dry-run-skills")} disabled={busy}>
               <Play className="mr-2 h-4 w-4" />
-              Dry run skill drills
+              {t("Dry run skill drills")}
             </Button>
             <Button
               variant="secondary"
               onClick={() => run.mutate("apply")}
               disabled={busy || !shown?.runId}
-              title={shown?.runId ? undefined : "Run a dry run first; Apply writes a saved one."}
+              title={shown?.runId ? undefined : t("Run a dry run first; Apply writes a saved one.")}
             >
               {busy && mode === "apply" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {shown?.runId
-                ? `Apply ${shown.proposals.filter((p) => willWrite(p, shown.decisions)).length}`
-                : "Apply"}
+                ? t("Apply {count}", { count: shown.proposals.filter((p) => willWrite(p, shown.decisions)).length })
+                : t("Apply")}
             </Button>
             {dryRunGoing && (
               <span className="text-xs text-muted-foreground">
-                {status.data?.kind === "skill" ? "Searching YouTube for the skill drills" : "Running the lift dry run"}
+                {status.data?.kind === "skill" ? t("Searching YouTube for the skill drills") : t("Running the lift dry run")}
                 {status.data?.progress
-                  ? `: ${status.data.progress.done} of ${status.data.progress.total} checked, ${status.data.progress.searched} searched.`
-                  : ", starting."}{" "}
-                You can leave this page; the run keeps going and is saved when it finishes.
+                  ? t(": {done} of {total} checked, {searched} searched.", { done: status.data.progress.done, total: status.data.progress.total, searched: status.data.progress.searched })
+                  : t(", starting.")}{" "}
+                {t("You can leave this page; the run keeps going and is saved when it finishes.")}
               </span>
             )}
             {!dryRunGoing && run.isPending && (
-              <span className="text-xs text-muted-foreground">Working…</span>
+              <span className="text-xs text-muted-foreground">{t("Working…")}</span>
             )}
           </CardContent>
         </Card>
 
         {latest.isError && !report && (
-          <ReadFailed what="the saved dry run" onRetry={() => latest.refetch()} error={latest.error} />
+          <ReadFailed what={t("the saved dry run")} onRetry={() => latest.refetch()} error={latest.error} />
         )}
         {shown && (() => { const report = shown; return (
           <>
@@ -521,16 +513,16 @@ export default function AdminExerciseVideos() {
               <CardHeader>
                 <CardTitle className="flex flex-wrap items-center gap-2 text-base">
                   <span>
-                    {report.written == null ? "Dry run" : `Applied, ${report.written} written`}
+                    {report.written == null ? t("Dry run") : t("Applied, {count} written", { count: report.written })}
                     {report.createdAt && (
                       <span className="ml-2 text-xs font-normal text-muted-foreground">
-                        saved {new Date(report.createdAt).toLocaleString()}
+                        {t("saved {when}", { when: t.date(report.createdAt, { dateStyle: "medium", timeStyle: "short" }) })}
                       </span>
                     )}
                   </span>
                   <span className="ml-auto flex gap-1">
-                    <CopyButton text={() => summaryText(report)} label="Copy summary" />
-                    <CopyButton text={() => wholeReportText(report)} label="Copy whole report" />
+                    <CopyButton text={() => summaryText(report)} label={t("Copy summary")} />
+                    <CopyButton text={() => wholeReportText(report)} label={t("Copy whole report")} />
                   </span>
                 </CardTitle>
                 <CardDescription>
@@ -538,46 +530,38 @@ export default function AdminExerciseVideos() {
                       enough that no strength channel carries them, so folding them in buries how
                       well the lift library -- the part any decision rests on -- is covered. */}
                   <strong>
-                    Lifts: {report.byKind?.exercise.matched ?? 0} of{" "}
-                    {report.byKind?.exercise.considered ?? 0}
+                    {t("Lifts: {matched} of {considered}", { matched: report.byKind?.exercise.matched ?? 0, considered: report.byKind?.exercise.considered ?? 0 })}
                   </strong>
-                  . Skill drills: {report.byKind?.skill.matched ?? 0} of{" "}
-                  {report.byKind?.skill.considered ?? 0}, these are niche enough that no
-                  strength channel carries them, and a search link is the expected outcome.
+                  {". "}
+                  {t("Skill drills: {matched} of {considered}, these are niche enough that no strength channel carries them, and a search link is the expected outcome.", { matched: report.byKind?.skill.matched ?? 0, considered: report.byKind?.skill.considered ?? 0 })}
                   <br />
                   <br />
-                  <strong>Tier A {report.tierCounts?.A ?? 0}</strong>, applied without review:
-                  nothing unrecognised in the title, equipment stated rather than assumed, under
-                  two minutes, from a channel you have watched.{" "}
-                  <strong>Tier B {report.tierCounts?.B ?? 0}</strong>, a match nothing is wrong
-                  with that nobody has confirmed. Apply writes tier A unless you reject it, and tier
-                  B only when you approve it, from this saved run, with no YouTube call.
+                  <strong>{t("Tier A {count}", { count: report.tierCounts?.A ?? 0 })}</strong>{t(", applied without review: nothing unrecognised in the title, equipment stated rather than assumed, under two minutes, from a channel you have watched.")}{" "}
+                  <strong>{t("Tier B {count}", { count: report.tierCounts?.B ?? 0 })}</strong>{t(", a match nothing is wrong with that nobody has confirmed. Apply writes tier A unless you reject it, and tier B only when you approve it, from this saved run, with no YouTube call.")}
                   <br />
                   {report.searchFill && (
                     <>
                       <br />
-                      <strong>Searched {report.searchFill.searched}</strong> exercises no channel
-                      had: {report.searchFill.filled} filled, {report.searchFill.stillEmpty} found
-                      nothing that passed,{" "}
+                      <strong>{t("Searched {count}", { count: report.searchFill.searched })}</strong>{" "}
+                      {t("exercises no channel had: {filled} filled, {empty} found nothing that passed,", { filled: report.searchFill.filled, empty: report.searchFill.stillEmpty })}{" "}
                       {report.searchFill.remaining > 0
-                        ? `${report.searchFill.remaining} still waiting, run again to continue.`
-                        : "none left waiting."}
+                        ? t("{count} still waiting, run again to continue.", { count: report.searchFill.remaining })
+                        : t("none left waiting.")}
                     </>
                   )}
                   <br />
-                  Cap {mmss(report.maxDurationSeconds)}. {report.quota.units} quota units over{" "}
-                  {report.quota.calls} calls, out of 10,000 free a day
-                  {report.cacheHits ? `, plus ${report.cacheHits} answered from the day's cache for free` : ""}.
+                  {t("Cap {cap}. {units} quota units over {calls} calls, out of 10,000 free a day", { cap: mmss(report.maxDurationSeconds), units: report.quota.units, calls: report.quota.calls })}
+                  {report.cacheHits ? t(", plus {count} answered from the day's cache for free", { count: report.cacheHits }) : ""}.
                 </CardDescription>
               </CardHeader>
               <CardContent className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
-                      <th className="py-1 pr-3">Channel</th>
-                      <th className="py-1 pr-3 text-right">Catalogue</th>
-                      <th className="py-1 pr-3 text-right">Matches won</th>
-                      <th className="py-1 text-right">Median length</th>
+                      <th className="py-1 pr-3">{t("Channel")}</th>
+                      <th className="py-1 pr-3 text-right">{t("Catalogue")}</th>
+                      <th className="py-1 pr-3 text-right">{t("Matches won")}</th>
+                      <th className="py-1 text-right">{t("Median length")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -590,29 +574,28 @@ export default function AdminExerciseVideos() {
                               Opposite problems, opposite fixes. */}
                           {c.status === "handle_not_found" && (
                             <span className="ml-2 text-xs text-destructive">
-                              handle did not resolve, needs a UC... channel ID, not a verdict on
-                              the channel
+                              {t("handle did not resolve, needs a UC... channel ID, not a verdict on the channel")}
                             </span>
                           )}
                           {c.status === "error" && (
                             <span className="ml-2 text-xs text-destructive">
-                              API error{c.errorDetail ? ` (${c.errorDetail})` : ""}, nothing was read
+                              {c.errorDetail ? t("API error ({detail}), nothing was read", { detail: c.errorDetail }) : t("API error, nothing was read")}
                               {c.errorDetail && /quota/i.test(c.errorDetail)
-                                ? "; the day's YouTube allowance is spent"
-                                : "; a one-off failure, it loads next run"}
+                                ? t("; the day's YouTube allowance is spent")
+                                : t("; a one-off failure, it loads next run")}
                             </span>
                           )}
                         </td>
                         <td className="py-1 pr-3 text-right tabular-nums">
                           {c.catalogueSize}
                           {c.truncated && (
-                            <span className="ml-1 text-xs text-destructive" title="The read stopped at the ceiling; the oldest uploads were not seen.">
-                              + (capped)
+                            <span className="ml-1 text-xs text-destructive" title={t("The read stopped at the ceiling; the oldest uploads were not seen.")}>
+                              {t("+ (capped)")}
                             </span>
                           )}
                           {c.chaptersRead ? (
-                            <span className="ml-1 text-xs text-muted-foreground" title="Chapters read from video descriptions; each one is a Tier B candidate.">
-                              +{c.chaptersRead} chapters
+                            <span className="ml-1 text-xs text-muted-foreground" title={t("Chapters read from video descriptions; each one is a Tier B candidate.")}>
+                              {t("+{count} chapters", { count: c.chaptersRead })}
                             </span>
                           ) : null}
                         </td>
@@ -625,9 +608,7 @@ export default function AdminExerciseVideos() {
                   </tbody>
                 </table>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  A channel with a catalogue but few matches is a content verdict, it is not
-                  making short demonstrations. A catalogue of 0 is not: nothing was ever read, so
-                  the length cap never saw it.
+                  {t("A channel with a catalogue but few matches is a content verdict, it is not making short demonstrations. A catalogue of 0 is not: nothing was ever read, so the length cap never saw it.")}
                 </p>
               </CardContent>
             </Card>
@@ -635,17 +616,16 @@ export default function AdminExerciseVideos() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <span>Matches</span>
+                  <span>{t("Matches")}</span>
                   <span className="ml-auto"><CopyButton text={() => matchesText(report)} /></span>
                 </CardTitle>
                 <CardDescription>
-                  Open a few before applying. A wrong lift shown with the confidence of a chosen
-                  video is worse than the search box it replaced.
+                  {t("Open a few before applying. A wrong lift shown with the confidence of a chosen video is worse than the search box it replaced.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-1.5">
                 {report.proposals.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Nothing matched.</p>
+                  <p className="text-sm text-muted-foreground">{t("Nothing matched.")}</p>
                 ) : (
                   report.proposals.map((p) => (
                     <div
@@ -656,10 +636,10 @@ export default function AdminExerciseVideos() {
                         variant={p.match.tier === "A" ? "default" : "outline"}
                         className="shrink-0"
                       >
-                        {p.match.tier === "A" ? "A" : "B, review"}
+                        {p.match.tier === "A" ? "A" : t("B, review")}
                       </Badge>
                       <span className="font-medium">{p.name}</span>
-                      <span className="text-muted-foreground">&rarr;</span>
+                      <span className="text-muted-foreground">{"→"}</span>
                       <a
                         href={p.url}
                         target="_blank"
@@ -669,7 +649,7 @@ export default function AdminExerciseVideos() {
                         {matchLabel(p.match)}
                       </a>
                       <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">
-                        {p.match.channel} &middot; {mmss(p.match.durationSeconds)}
+                        {`${p.match.channel} · ${mmss(p.match.durationSeconds)}`}
                       </span>
                       {report.runId && (
                         <DecisionButtons
@@ -689,15 +669,11 @@ export default function AdminExerciseVideos() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <span>Words the library has never seen</span>
+                    <span>{t("Words the library has never seen")}</span>
                     <span className="ml-auto"><CopyButton text={() => unknownWordsText(report)} /></span>
                   </CardTitle>
                   <CardDescription>
-                    Each of these cost at least one match. Read them as a to-do list: a word that
-                    never changes a movement ("beginners", "gym") belongs in the filler table; a
-                    word that names a real variation ("scap", "anti", "tempo") belongs in the
-                    library as its own exercise, or in the modifier list. Both are code changes,
-                    the vocabulary stays in the repo under test rather than editable here.
+                    {t("Each of these cost at least one match. Read them as a to-do list: a word that never changes a movement (\"beginners\", \"gym\") belongs in the filler table; a word that names a real variation (\"scap\", \"anti\", \"tempo\") belongs in the library as its own exercise, or in the modifier list. Both are code changes, the vocabulary stays in the repo under test rather than editable here.")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-1">
@@ -716,13 +692,11 @@ export default function AdminExerciseVideos() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <span>Library names that mean the same thing, {report.duplicateSignatures.length}</span>
+                    <span>{t("Library names that mean the same thing, {count}", { count: report.duplicateSignatures.length })}</span>
                     <span className="ml-auto"><CopyButton text={() => duplicatesText(report)} /></span>
                   </CardTitle>
                   <CardDescription>
-                    These pairs parse identically, so no video can tell them apart. That is a
-                    library problem rather than a matching one: either they are duplicates worth
-                    merging, or one needs a word that says how it differs.
+                    {t("These pairs parse identically, so no video can tell them apart. That is a library problem rather than a matching one: either they are duplicates worth merging, or one needs a word that says how it differs.")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-0.5">
@@ -755,52 +729,52 @@ export default function AdminExerciseVideos() {
  * something to tune against.
  */
 function NoMatchCard({ unmatched }: { unmatched: Unmatched[] }) {
-  const lifts = unmatched.filter((t) => t.kind === "exercise");
+  const t = useT();
+  const lifts = unmatched.filter((tr) => tr.kind === "exercise");
   const groups = REJECTION_GROUPS;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-          <span>No match, {unmatched.length} keep their search link ({lifts.length} lifts)</span>
-          <span className="ml-auto"><CopyButton text={() => noMatchText(unmatched)} label="Copy all groups" /></span>
+          <span>{t("No match, {count} keep their search link ({lifts} lifts)", { count: unmatched.length, lifts: lifts.length })}</span>
+          <span className="ml-auto"><CopyButton text={() => noMatchText(unmatched)} label={t("Copy all groups")} /></span>
         </CardTitle>
         <CardDescription>
-          The search pill still works on every one of these. Grouped by the rule that turned each
-          away, because each rule wants a different fix.
+          {t("The search pill still works on every one of these. Grouped by the rule that turned each away, because each rule wants a different fix.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {groups.map((group) => {
-          const rows = lifts.filter((t) => t.rejection?.reason === group.key);
+          const rows = lifts.filter((tr) => tr.rejection?.reason === group.key);
           if (rows.length === 0) return null;
           return (
             <div key={group.key} className="space-y-1">
               <p className="flex items-center gap-2 text-sm font-semibold">
-                <span>{group.title}, {rows.length}</span>
+                <span>{t(group.title)}, {rows.length}</span>
                 <CopyButton
                   text={() => [`${group.title}, ${rows.length}`, ...rows.map(rejectionLine)].join("\n")}
                 />
               </p>
-              <p className="text-xs text-muted-foreground">{group.blurb}</p>
+              <p className="text-xs text-muted-foreground">{t(group.blurb)}</p>
               <div className="mt-1 space-y-0.5">
-                {rows.slice(0, 40).map((t) => (
-                  <div key={t.id} className="flex flex-wrap gap-x-2 text-xs">
-                    <span className="font-medium">{t.name}</span>
-                    {t.rejection?.title && (
+                {rows.slice(0, 40).map((tr) => (
+                  <div key={tr.id} className="flex flex-wrap gap-x-2 text-xs">
+                    <span className="font-medium">{tr.name}</span>
+                    {tr.rejection?.title && (
                       <>
-                        <span className="text-muted-foreground">&rarr;</span>
-                        <span className="text-muted-foreground">{t.rejection.title}</span>
+                        <span className="text-muted-foreground">{"→"}</span>
+                        <span className="text-muted-foreground">{tr.rejection.title}</span>
                       </>
                     )}
-                    {t.rejection?.detail && (
-                      <span className="text-muted-foreground">({t.rejection.detail})</span>
+                    {tr.rejection?.detail && (
+                      <span className="text-muted-foreground">({tr.rejection.detail})</span>
                     )}
                   </div>
                 ))}
                 {rows.length > 40 && (
                   <p className="text-xs text-muted-foreground">
-                    ...and {rows.length - 40} more of the same kind.
+                    {t("...and {count} more of the same kind.", { count: rows.length - 40 })}
                   </p>
                 )}
               </div>
@@ -826,6 +800,7 @@ function DecisionButtons({
   busy: boolean;
   onDecide: (d: Decision | null) => void;
 }) {
+  const t = useT();
   return (
     <span className="flex shrink-0 gap-1">
       {tier === "B" && (
@@ -837,7 +812,7 @@ function DecisionButtons({
           disabled={busy}
           onClick={() => onDecide(decision === "approve" ? null : "approve")}
         >
-          {decision === "approve" ? "Approved" : "Approve"}
+          {decision === "approve" ? t("Approved") : t("Approve")}
         </Button>
       )}
       <Button
@@ -848,7 +823,7 @@ function DecisionButtons({
         disabled={busy}
         onClick={() => onDecide(decision === "reject" ? null : "reject")}
       >
-        {decision === "reject" ? "Rejected" : "Reject"}
+        {decision === "reject" ? t("Rejected") : t("Reject")}
       </Button>
     </span>
   );

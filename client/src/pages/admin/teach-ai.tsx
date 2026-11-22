@@ -7,6 +7,7 @@ import { ForgeAiContent } from "./forge-ai";
 import { MovementKnowledgeContent } from "./movement-knowledge";
 import { KnowledgeBaseContent } from "./knowledge-base";
 import { cn } from "@/lib/utils";
+import { msg, useT } from "@/i18n";
 
 /**
  * Everything that teaches the AI, on one page.
@@ -39,15 +40,16 @@ import { cn } from "@/lib/utils";
 const TABS = new Set(["teach", "movement", "documents"]);
 
 export default function AdminTeachAi() {
+  const t = useT();
   // `?tab=documents` opens a tab directly; the old /admin/knowledge-base address arrives this way.
   const asked = new URLSearchParams(useSearch()).get("tab") ?? "";
   return (
-    <AppShell title="Teach AI">
+    <AppShell title={t("Teach AI")}>
       <Tabs defaultValue={TABS.has(asked) ? asked : "teach"}>
         <TabsList>
-          <TabsTrigger value="teach">Teach</TabsTrigger>
-          <TabsTrigger value="movement">Movement</TabsTrigger>
-          <TabsTrigger value="documents">Books & Documents</TabsTrigger>
+          <TabsTrigger value="teach">{t("Teach")}</TabsTrigger>
+          <TabsTrigger value="movement">{t("Movement")}</TabsTrigger>
+          <TabsTrigger value="documents">{t("Books & Documents")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="teach">
@@ -77,25 +79,26 @@ export default function AdminTeachAi() {
 const SCOPES = [
   {
     key: "everyone",
-    label: "Every assistant",
+    label: msg("Every assistant"),
     blurb:
-      "Read by every AI surface in Forge, program drafting, nutrition, form check, digests, the weakness report. Start here unless the rule genuinely only makes sense in one place.",
+      msg("Read by every AI surface in Forge, program drafting, nutrition, form check, digests, the weakness report. Start here unless the rule genuinely only makes sense in one place."),
   },
   {
     key: "program-builder",
-    label: "Program builder only",
+    label: msg("Program builder only"),
     blurb:
-      "Read only when the AI drafts a program. Use for sequencing, set and rep conventions, exercise selection, guidance that would be noise in a nutrition answer.",
+      msg("Read only when the AI drafts a program. Use for sequencing, set and rep conventions, exercise selection, guidance that would be noise in a nutrition answer."),
   },
   {
     key: "nutrition",
-    label: "Nutrition only",
+    label: msg("Nutrition only"),
     blurb:
-      "Read only by the nutrition assistant. Its safety rules always win: nothing taught here can turn it into individualized prescriptive advice.",
+      msg("Read only by the nutrition assistant. Its safety rules always win: nothing taught here can turn it into individualized prescriptive advice."),
   },
 ] as const;
 
 function TeachPanel() {
+  const t = useT();
   const [scope, setScope] = useState<(typeof SCOPES)[number]["key"]>("everyone");
   const active = SCOPES.find((s) => s.key === scope)!;
 
@@ -116,11 +119,11 @@ function TeachPanel() {
                   : "border-border text-muted-foreground hover:text-foreground",
               )}
             >
-              {s.label}
+              {t(s.label)}
             </button>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground">{active.blurb}</p>
+        <p className="text-xs text-muted-foreground">{t(active.blurb)}</p>
       </div>
 
       {scope === "everyone" && <ForgeAiContent />}
@@ -130,13 +133,13 @@ function TeachPanel() {
           fetchUrl="/api/admin/ai-knowledge"
           postUrl="/api/admin/ai-knowledge/chat"
           applyUrl="/api/admin/ai-knowledge/apply"
-          chatTitle="Teach the AI Program Builder"
-          chatDescription="Describe programming principles, corrections, or preferences, every AI-generated program on this platform (every coach and athlete) will follow them from now on."
-          emptyStateHint={'Nothing taught yet, try something like "Bulgarian split squats are a secondary lift on leg day, not a true accessory, sequence them right after the main squat or deadlift."'}
-          placeholder="Teach it something about how programs should be built..."
-          guidelinesTitle="Current Guidelines"
-          guidelinesDescription="The complete living document the AI follows right now, on top of its built-in programming rules."
-          guidelinesEmptyHint="Nothing taught yet, start a conversation to build this up."
+          chatTitle={t("Teach the AI Program Builder")}
+          chatDescription={t("Describe programming principles, corrections, or preferences, every AI-generated program on this platform (every coach and athlete) will follow them from now on.")}
+          emptyStateHint={t('Nothing taught yet, try something like "Bulgarian split squats are a secondary lift on leg day, not a true accessory, sequence them right after the main squat or deadlift."')}
+          placeholder={t("Teach it something about how programs should be built...")}
+          guidelinesTitle={t("Current Guidelines")}
+          guidelinesDescription={t("The complete living document the AI follows right now, on top of its built-in programming rules.")}
+          guidelinesEmptyHint={t("Nothing taught yet, start a conversation to build this up.")}
         />
       )}
 
@@ -145,13 +148,13 @@ function TeachPanel() {
           fetchUrl="/api/admin/nutrition-knowledge"
           postUrl="/api/admin/nutrition-knowledge/chat"
           applyUrl="/api/admin/nutrition-knowledge/apply"
-          chatTitle="Teach the Nutrition AI"
-          chatDescription="Describe nutrition standards, corrections, or preferences, every answer the nutrition education AI gives a Free Agent will follow them from now on. Its core safety rules (no individualized prescriptions, medical/disordered-eating redirects) always stay in place regardless of what's taught here."
-          emptyStateHint={'Nothing taught yet, try something like "For in-season team-sport athletes, emphasize same-day carb replenishment over strict daily totals."'}
-          placeholder="Teach it something about sports nutrition..."
-          guidelinesTitle="Current Guidelines"
-          guidelinesDescription="The complete living document the nutrition AI follows right now, on top of its built-in ISSN/ACSM/AND/DC/IOC-grounded knowledge base."
-          guidelinesEmptyHint="Nothing taught yet, start a conversation to build this up."
+          chatTitle={t("Teach the Nutrition AI")}
+          chatDescription={t("Describe nutrition standards, corrections, or preferences, every answer the nutrition education AI gives a Free Agent will follow them from now on. Its core safety rules (no individualized prescriptions, medical/disordered-eating redirects) always stay in place regardless of what's taught here.")}
+          emptyStateHint={t('Nothing taught yet, try something like "For in-season team-sport athletes, emphasize same-day carb replenishment over strict daily totals."')}
+          placeholder={t("Teach it something about sports nutrition...")}
+          guidelinesTitle={t("Current Guidelines")}
+          guidelinesDescription={t("The complete living document the nutrition AI follows right now, on top of its built-in ISSN/ACSM/AND/DC/IOC-grounded knowledge base.")}
+          guidelinesEmptyHint={t("Nothing taught yet, start a conversation to build this up.")}
         />
       )}
     </div>
