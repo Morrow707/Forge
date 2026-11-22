@@ -80,6 +80,7 @@ import type { CoachFeature } from "./team-features";
 import { COACH_FEATURES } from "./team-features";
 import type { CoachSection } from "./coach-sections";
 import { COACH_SECTIONS } from "./coach-sections";
+import { STAFF_KINDS, type StaffKind } from "./staff-kinds";
 
 // Owned and populated by connect-pg-simple at runtime, not by our own code --
 // declared here purely so drizzle-kit's live-diff sees it as an already-
@@ -1476,6 +1477,12 @@ export const coachStaff = pgTable(
     // "Strength Coach") -- purely cosmetic, doesn't change what they can
     // do or see. Null falls back to "Coach", same as today.
     staffTitle: text("staff_title"),
+    // WHAT KIND OF STAFF MEMBER THIS IS (2026-11-22): "coach" (the default, every row before
+    // this) or "athletic_trainer". NOT a fifth value on the role pgEnum: an athletic trainer is
+    // a coach account on this staff, scoped exactly as an assistant coach is (roster, teams,
+    // team_coaches narrowing), with the program-building, billing, branding and staff writes
+    // refused on the server. See shared/staff-kinds.ts and server/athletic-trainer-gate.ts.
+    staffKind: text("staff_kind").$type<StaffKind>().notNull().default("coach"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     // Which of the sections above this staff member does NOT get -- empty
     // (the default) means full access, same as before this existed, so a
@@ -8926,6 +8933,9 @@ export const signupSchema = z.object({
   // the signup handler. It is the staffInviteCode the primary hands out (users.staffInviteCode),
   // never coachCode, which is the athlete code and is public.
   staffInviteCode: z.string().trim().min(1).max(64).optional(),
+  // What kind of staff member the person joining is (shared/staff-kinds.ts). Only read with
+  // staffInviteCode; the head coach can change it afterwards on the staff screen.
+  staffKind: z.enum(STAFF_KINDS).optional(),
   agreedToTerms: z.literal(true, {
     message: "You must agree to the terms to create an account",
   }),
@@ -11227,6 +11237,8 @@ export type PublicUser = Omit<
 > & {
   staffTitle?: string | null;
   isPrimaryCoach?: boolean;
+  // Coaches only: true when this coach is on a staff as an athletic trainer (shared/staff-kinds.ts).
+  isAthleticTrainer?: boolean;
   // Not a users column -- computed per-request from this coach's own
   // coachStaff row (see getHiddenSectionsForCoach) and attached by
   // /api/auth/me. Always [] for a primary/non-staff coach, and absent

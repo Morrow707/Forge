@@ -392,6 +392,10 @@ async function toPublicUserWithSections(user: any): Promise<PublicUser> {
     publicUser.planCoveredByForge = user.isBetaAccount === true;
     (publicUser as any).hiddenSections = await storage.getHiddenSectionsForCoach(user.id);
     publicUser.staffTitle = await storage.getStaffTitleForCoach(user.id);
+    // An athletic trainer is a coach on the staff whose program-building writes are refused
+    // (shared/staff-kinds.ts); the client reads this to hide those controls and land them on the
+    // roster. The server gate is server/athletic-trainer-gate.ts, never this flag.
+    publicUser.isAthleticTrainer = await storage.isAthleticTrainer(user.id);
     const coachIds = await storage.getEffectiveCoachIds(user.id);
     publicUser.isPrimaryCoach = coachIds[0] === user.id;
     // Lazy backfill for any coach account created before staffInviteCode
@@ -685,6 +689,7 @@ export function setupAuth(app: Express) {
         agreedToAssumptionOfRisk,
         expectedAthletes,
         staffInviteCode,
+        staffKind,
         promoCode,
       } = parsed.data;
       const existing = await storage.getUserByEmail(email);
@@ -901,7 +906,7 @@ export function setupAuth(app: Express) {
       // the only way this returns null is the primary rotating their code in the same
       // second. Surface it rather than leave a coach who thinks they joined on their own.
       if (joiningStaff && staffInviteCode) {
-        const joined = await storage.joinCoachStaffByCode(user.id, staffInviteCode);
+        const joined = await storage.joinCoachStaffByCode(user.id, staffInviteCode, staffKind ?? "coach");
         if (!joined) {
           return res.status(400).json({
             message: "That staff invite code stopped working. Ask your head coach for a fresh one.",

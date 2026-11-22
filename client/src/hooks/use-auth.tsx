@@ -29,6 +29,8 @@ type SignupPayload = {
   // never send it.
   expectedAthletes?: number;
   staffInviteCode?: string;
+  /** With staffInviteCode: "coach" or "athletic_trainer" (shared/staff-kinds.ts). */
+  staffKind?: "coach" | "athletic_trainer";
   agreedToTerms: true;
   // Optional and unticked by default -- see the signup page's own comment
   // for why this is a separate box from the terms, and why the server

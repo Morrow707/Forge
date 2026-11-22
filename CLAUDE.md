@@ -8553,3 +8553,35 @@ All on main, not yet in a TestFlight build (Scott is holding the upload).
   logged set on a swapped slot snapshots the slot's original exercise id, exactly as an athlete's
   own swap already does. `season-programs.test.ts` (every name in every file against the visible
   library), `season-programs.itest.ts`. Client: `verify_build`.
+
+## 2026-11-22: THE ATHLETIC TRAINER IS A KIND OF STAFF MEMBER, NOT A FIFTH ROLE
+
+Scott approved it: a school's athletic trainer joins the program like an assistant coach (the head
+coach's staff invite code, at signup or in Coaching Staff, "I'm joining as the athletic trainer"),
+so the account is a `coach` on that staff and is scoped exactly as an assistant is (roster, team
+narrowing). `coach_staff.staff_kind` ("coach" default | "athletic_trainer") is what makes them a
+trainer; the head coach changes it in the Coaching Staff dialog (`PATCH /api/coach/staff/:id/kind`,
+primary only by its WHERE clause). The role pgEnum is untouched. `shared/staff-kinds.ts`.
+- **What a trainer may do:** read the roster and athlete pages (every coach GET), mark hurt or
+  healthy, set or clear an assignment's return-to-training clearance and restrictions
+  (`PATCH /api/coach/clearances/:assignmentId`, new, open to every coach on the staff, because the
+  clearance could only be ticked while ASSIGNING, which a trainer may not do; shown on the athlete
+  page as "Return-to-training clearance"), record injuries and range of motion, ask for and file
+  medical documents (`/api/waivers/:athleteId`, unchanged), and message athletes.
+- **THE GATE FAILS CLOSED** (`server/athletic-trainer-gate.ts`, the pure decision in
+  `server/athletic-trainer-policy.ts`, mounted right after `setupAuth`, before every route): any
+  POST/PUT/PATCH/DELETE under `/api/coach/`, `/api/billing/`, `/api/classes/` or
+  `/api/my/season-assignments` is refused to a trainer (403 with `ATHLETIC_TRAINER_REFUSAL`) unless
+  it is on `ATHLETIC_TRAINER_MAY_WRITE`, each entry with its reason. A coach write route added
+  later is refused to a trainer until somebody allows it on purpose. The path is lower-cased first,
+  because Express routes case-insensitively.
+- **The client only hides** (`ATHLETIC_TRAINER_HIDDEN_NAV_HREFS`: Library, Billing, Branding,
+  Devices, Weight Room, My Training) and lands a trainer on the roster instead of the dashboard;
+  `/api/auth/me` carries `isAthleticTrainer`. A trainer who LEAVES the staff is an ordinary solo
+  coach account again, same as an assistant who leaves.
+- `server/an-athletic-trainer-cannot-build-programs.test.ts` discovers every write route under the
+  gated prefixes and drives the decision against each, forbids the program, assignment, billing,
+  branding and staff families from ever being allowed, and pins the mount order (two mutations
+  caught: an allowed program route, the mount removed). `an-athletic-trainer-on-the-staff.itest.ts`
+  (9 cases, real Postgres). Counsel question 29 (HIPAA business associate, state law, the
+  documents); the feature is not held on it. Server plus client: `verify_build`.
