@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/notification-bell";
 import { GuardianCoachMessagesCard } from "@/components/guardian-coach-messages-card";
+import { GuardianWeeklySummaryCard } from "@/components/guardian-weekly-summary-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -469,6 +470,7 @@ export default function GuardianDashboardPage() {
                 <GuardianAgreementsCard athleteId={athlete.id} athleteName={athlete.name} />
                 <GuardianCoachConversationsCard athleteId={athlete.id} athleteName={athlete.name} />
                 <GuardianCoachMessagesCard athleteId={athlete.id} athleteName={athlete.name} />
+                <GuardianWeeklySummaryCard athleteId={athlete.id} athleteName={athlete.name} />
                 <GuardianBiometricConsentCard athleteId={athlete.id} athleteName={athlete.name} />
 
                 <Card>

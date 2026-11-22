@@ -4114,6 +4114,41 @@ CREATE TABLE IF NOT EXISTS "weight_room_display_tokens" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "weight_room_display_tokens_hash_unique" ON "weight_room_display_tokens" ("token_hash");
 CREATE INDEX IF NOT EXISTS "weight_room_display_tokens_coach_idx" ON "weight_room_display_tokens" ("coach_id");
+
+-- ---- ATTENDANCE AND PARENT SUMMARY (2026-11-21) ----
+-- A coach's attendance mark per athlete per day per program, and the guardian's weekly summary
+-- email (its per-child opt-out and its one-per-week send record). See server/attendance.ts and
+-- server/parent-weekly-summary-job.ts.
+CREATE TABLE IF NOT EXISTS "attendance_records" (
+  "id" serial PRIMARY KEY,
+  "program_coach_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "date" date NOT NULL,
+  "status" text NOT NULL,
+  "team_id" integer REFERENCES "teams"("id") ON DELETE SET NULL,
+  "marked_by_coach_id" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "attendance_records_program_athlete_date_unique"
+  ON "attendance_records" ("program_coach_id", "athlete_id", "date");
+CREATE INDEX IF NOT EXISTS "attendance_records_athlete_date_idx" ON "attendance_records" ("athlete_id", "date");
+CREATE TABLE IF NOT EXISTS "guardian_weekly_summary_opt_outs" (
+  "id" serial PRIMARY KEY,
+  "guardian_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "guardian_weekly_summary_opt_outs_unique"
+  ON "guardian_weekly_summary_opt_outs" ("guardian_id", "athlete_id");
+CREATE TABLE IF NOT EXISTS "guardian_weekly_summary_sends" (
+  "id" serial PRIMARY KEY,
+  "guardian_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "athlete_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "week_start" date NOT NULL,
+  "sent_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "guardian_weekly_summary_sends_unique"
+  ON "guardian_weekly_summary_sends" ("guardian_id", "athlete_id", "week_start");
 `;
 
 async function main() {

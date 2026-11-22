@@ -16,6 +16,7 @@ import { CoachDigestBanner } from "@/components/coach-digest-banner";
 import { WeeklyDigestCard } from "@/components/weekly-digest-card";
 import { TeamPrWallCard } from "@/components/team-pr-wall-card";
 import { BarSpeedWeekCard } from "@/components/bar-speed-week-card";
+import { CoachTodayAttendanceCard } from "@/components/coach-today-attendance-card";
 import { ReviewQueueCard } from "@/components/review-queue-card";
 import { ReengagementBanner } from "@/components/reengagement-banner";
 import { SortableHideableWidget } from "@/components/sortable-hideable-widget";
@@ -179,6 +180,8 @@ export default function CoachDashboard() {
     // Above the digest on purpose: somebody is waiting on these, and the oldest one is the
     // point of the whole queue.
     "review-queue",
+    // Who has a session today, whether they logged it, and attendance (server/attendance.ts).
+    "today-attendance",
     "weekly-digest",
     // Between This Week and Team PR Wall: only the athletes whose bar speed left their zone.
     "bar-speed",
@@ -224,6 +227,17 @@ export default function CoachDashboard() {
         onToggle={widgetVisibility.setHidden}
       >
         <ReviewQueueCard />
+      </SortableHideableWidget>
+    ),
+    "today-attendance": (
+      <SortableHideableWidget
+        id="today-attendance"
+        label="Today"
+        editMode={widgetVisibility.editMode}
+        isHidden={widgetVisibility.hidden.has("today-attendance")}
+        onToggle={widgetVisibility.setHidden}
+      >
+        <CoachTodayAttendanceCard />
       </SortableHideableWidget>
     ),
     "weekly-digest": (

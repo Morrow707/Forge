@@ -529,6 +529,32 @@ Forge's own camera numbers to improve the camera, under the consents as they sta
 
 ---
 
+## 27. A weekly training summary emailed to a minor's guardian
+
+Added 2026-11-21. Forge now sends one email a week, on Monday, to the guardian linked to an athlete
+who is under 18 (from the date of birth on file) and who is on an active roster. It lists that
+week's sessions the coach assigned and which were completed, the days the coach marked the athlete
+present, absent or excused, and any personal records the athlete logged by typing weight and reps.
+It carries no camera measurement. It is on by default; the guardian can switch it off for each child
+on the guardian dashboard, and every email says where. It is never sent about an adult athlete,
+never to anyone other than the linked guardian, not while the athlete's season is on hold, and not
+for a week with nothing assigned. It wears the program's branding like the other guardian emails.
+
+We would like counsel's view on these, in this order:
+
+**(a) Does the Notice to Parent or Guardian, or the Privacy Policy, need a line describing this
+email** (what it contains, that it is on by default, and how to turn it off), or is it covered by
+what those documents already say about a guardian's access to their child's training record?
+
+**(b) Is on-by-default the right setting** for a 13 to 17 year old's guardian, or should the athlete
+be told the email exists (or be able to see what it says) as they are for a guardian reading their
+coach messages?
+
+**(c) Does sending it require any consent beyond the guardian link itself**, given it repeats
+information the guardian can already read on their dashboard?
+
+---
+
 ## FORGE'S WORKING POSITION ON 15 TO 24, 2026-11-06 -- NOT COUNSEL'S ANSWER
 
 **An answer to all ten came back the same day through Rocket Lawyer, and WHICH ROCKET LAWYER

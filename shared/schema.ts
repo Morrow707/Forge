@@ -11687,3 +11687,80 @@ export const weightRoomDisplayTokens = pgTable(
   }),
 );
 export type WeightRoomDisplayToken = typeof weightRoomDisplayTokens.$inferSelect;
+
+// ---- ATTENDANCE AND PARENT SUMMARY (2026-11-21) ----
+/** A coach's attendance mark: one per athlete per day per PROGRAM. `programCoachId` is the primary
+ * coach (storage.getPrimaryCoachId), so the head coach and every assistant read and correct the same
+ * mark. `teamId` records which team view it was marked from and decides nothing: an athlete on two
+ * teams is one person in one room. `status` is one of ATTENDANCE_STATUSES (shared/attendance.ts);
+ * clearing a mark deletes the row. See server/attendance.ts. */
+export const attendanceRecords = pgTable(
+  "attendance_records",
+  {
+    id: serial("id").primaryKey(),
+    programCoachId: integer("program_coach_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    status: text("status").notNull(),
+    teamId: integer("team_id").references(() => teams.id, { onDelete: "set null" }),
+    markedByCoachId: integer("marked_by_coach_id").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    programAthleteDateUnique: uniqueIndex("attendance_records_program_athlete_date_unique").on(
+      table.programCoachId,
+      table.athleteId,
+      table.date,
+    ),
+    athleteDateIdx: index("attendance_records_athlete_date_idx").on(table.athleteId, table.date),
+  }),
+);
+export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
+
+/** A guardian who turned OFF the weekly summary email for one child. The email is on by default, so
+ * the absence of a row is "on"; the toggle on the guardian dashboard writes or deletes it. */
+export const guardianWeeklySummaryOptOuts = pgTable(
+  "guardian_weekly_summary_opt_outs",
+  {
+    id: serial("id").primaryKey(),
+    guardianId: integer("guardian_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    guardianAthleteUnique: uniqueIndex("guardian_weekly_summary_opt_outs_unique").on(table.guardianId, table.athleteId),
+  }),
+);
+
+/** One row per weekly summary email sent: guardian, child, and the Monday of the week it covered.
+ * The row is CLAIMED before the send (insert ... on conflict do nothing) and removed again if the
+ * send fails, so a rerun of the job the same week never sends twice and a mail outage retries. */
+export const guardianWeeklySummarySends = pgTable(
+  "guardian_weekly_summary_sends",
+  {
+    id: serial("id").primaryKey(),
+    guardianId: integer("guardian_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    athleteId: integer("athlete_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    weekStart: date("week_start").notNull(),
+    sentAt: timestamp("sent_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    guardianAthleteWeekUnique: uniqueIndex("guardian_weekly_summary_sends_unique").on(
+      table.guardianId,
+      table.athleteId,
+      table.weekStart,
+    ),
+  }),
+);

@@ -126,6 +126,8 @@ const READS_A_SEND_THAT_CANNOT_LAND_LATE: Record<string, string> = {
     "The approval mail is sent down an awaited chain in auth.ts (the login handler awaits the notifier, which awaits sendEmail) before the login response returns, which is what makes the test able to read its own approval link at all.",
   "institutional-agreement-sign.itest.ts":
     "The send is fire-and-forget (`void emailSignedCopy(...)`, so a mail outage cannot undo a filed signature) but deliberately UNBRANDED -- the file says 'Deliberately UNBRANDED by program (no brandForUserId)' because the recipient is a notice address -- so there is no await before the push and it lands synchronously.",
+  "parent-weekly-summary.itest.ts":
+    "The test calls runParentWeeklySummaries() itself and awaits it, and that job does `const result = await sendEmail(...)` for each guardian (brandForUserId included) before it records or releases the send, so the branding lookup is inside that await. Reads filter by the summary's subject, never by count, because each guardian's own sign-in email can land late.",
   "terms-reacceptance.itest.ts":
     "This file calls `await notifyGuardiansOfTermsChange()` directly rather than through a route, and that function awaits each sendEmail in turn, so every read -- including the five that assert ABSENCE, which would otherwise pass spuriously -- is fully ordered behind the send.",
 };

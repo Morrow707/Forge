@@ -216,6 +216,14 @@ export const NOT_A_SIGNAL_TABLE: Record<string, string> = {
   // starting with "weight" as a fitted number; this is a table name.
   "weight_room_station_entries":
     "An audit row saying a day was saved from a coach's shared weight-room tablet (server/weight-room.ts): which coach, which day, which revision. The sets themselves are ordinary workout_set_entries, which the Anvil already reads; this row records the device, not the athlete.",
+  // ATTENDANCE AND PARENT SUMMARY (2026-11-21). A coach's room mark, and the bookkeeping for a
+  // guardian's weekly email; none of it is a measurement of the athlete.
+  attendance_records:
+    "A coach's present / absent / excused mark per athlete per day (server/attendance.ts). It records who was in the room, which the coach decides; it measures nothing about the athlete, and the sessions it sits beside already reach the Anvil through workout_logs.",
+  guardian_weekly_summary_opt_outs:
+    "A guardian's switch turning off the weekly summary email for one child (server/parent-weekly-summary.ts). An email preference, not anything the athlete did or measured.",
+  guardian_weekly_summary_sends:
+    "A record that one week's summary email was sent to a guardian about one child, so a rerun never sends twice. Delivery bookkeeping, not anything the athlete did or measured.",
   // ---- the Anvil's own output, which is the one table here it WRITES ----
   anvil_checks:
     "THE ANVIL'S OWN TABLE, and the only one in this file it writes rather than reads. Its rows " +

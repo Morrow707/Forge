@@ -94,6 +94,7 @@ import { startDatabaseSizeJob } from "./database-size-job";
 import { startDeviceSyncJob } from "./device-sync-job";
 import { startTrialEndingJob } from "./trial-ending-job";
 import { startWeeklyRecapJob } from "./weekly-recap-job";
+import { startParentWeeklySummaryJob } from "./parent-weekly-summary-job";
 import { startSetTraceOffloadJob } from "./set-trace-offload-job";
 import { startSetEntriesVacuumFull } from "./set-entries-vacuum-full";
 import { startExerciseVideoApplyOnce } from "./exercise-video-apply-once";
@@ -570,6 +571,8 @@ app.get("/healthz", async (_req, res) => {
     // One email a few days before a trial ends, to the accounts the plan wall would then stop.
     startTrialEndingJob();
     startWeeklyRecapJob();
+    // A minor's weekly training summary to their linked guardian (parent-weekly-summary.ts).
+    startParentWeeklySummaryJob();
     // Which declared foreign keys the LIVE database is missing. BEFORE the cleanup below, so
     // the log reads in the order it happened: the drift that let the orphans accumulate, then
     // the orphans going. It repairs nothing -- see fk-drift-job.ts for why that restraint is
