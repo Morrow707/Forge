@@ -5,7 +5,8 @@ import { EntryPill, type CalendarEntry } from "@/components/calendar-view";
 import { cn } from "@/lib/utils";
 import { useBrandExtras } from "@/hooks/use-brand-extras";
 import { CalendarDays } from "lucide-react";
-import { format, formatISO, isToday } from "date-fns";
+import { formatISO, isToday } from "date-fns";
+import { useT } from "@/i18n";
 
 /** The "what's coming up in the next 3 days" card shared by the coach and
  * athlete dashboards -- was two hand-duplicated copies of the same markup
@@ -37,6 +38,7 @@ export function NextThreeDaysCard({
   compact?: boolean;
   onEntryClick: (entry: CalendarEntry) => void;
 }) {
+  const t = useT();
   // The program's own words for a day with nothing on it (shared/brand-extras.ts, 2026-11-19).
   const { extras: brandExtras } = useBrandExtras();
   return (
@@ -49,13 +51,13 @@ export function NextThreeDaysCard({
       >
         <div>
           <CardTitle className={compact ? "text-base md:text-lg" : undefined}>
-            Next 3 Days
+            {t("Next 3 Days")}
           </CardTitle>
           <CardDescription className="hidden sm:block">{description}</CardDescription>
         </div>
         <Link href={calendarHref}>
           <Button variant="outline" size="sm">
-            Full Calendar
+            {t("Full Calendar")}
           </Button>
         </Link>
       </CardHeader>
@@ -83,17 +85,17 @@ export function NextThreeDaysCard({
                       isToday(day) && "text-primary",
                     )}
                   >
-                    {isToday(day) ? "Today" : format(day, "EEEE")}
+                    {isToday(day) ? t("Today") : t.date(day, { weekday: "long" })}
                   </span>
                   <span className={cn("text-sm font-bold", isToday(day) && "text-primary")}>
-                    {format(day, "MMM d")}
+                    {t.date(day, { month: "short", day: "numeric" })}
                   </span>
                 </div>
                 <div className="space-y-1">
                   {shown.length === 0 && (
                     <p className="flex items-center justify-center gap-1.5 py-2 text-center text-xs text-muted-foreground">
                       <CalendarDays className="h-3.5 w-3.5" />
-                      {unavailable ? "Couldn't load" : brandExtras?.wording?.restDay?.trim() || "Nothing scheduled"}
+                      {unavailable ? t("Couldn't load") : brandExtras?.wording?.restDay?.trim() || t("Nothing scheduled")}
                     </p>
                   )}
                   {shown.map((e) => (
@@ -106,7 +108,7 @@ export function NextThreeDaysCard({
                   {overflow > 0 && (
                     <Link href={calendarHref}>
                       <span className="block px-1.5 text-[11px] font-semibold text-primary hover:underline">
-                        +{overflow} more
+                        {t("+{count} more", { count: overflow })}
                       </span>
                     </Link>
                   )}

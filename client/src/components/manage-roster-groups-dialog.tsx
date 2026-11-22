@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { ReadFailed } from "@/components/read-failed";
 import { X, Plus } from "lucide-react";
 import { DEFAULT_ROSTER_GROUPS, resolveRosterGroups, type RosterGroup } from "@shared/roster-groups";
+import { useT } from "@/i18n";
 
 type RosterGroupsResponse = { rosterGroups: RosterGroup[] | null };
 
@@ -33,6 +34,7 @@ export function ManageRosterGroupsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [groups, setGroups] = useState<RosterGroup[]>(DEFAULT_ROSTER_GROUPS);
   const [newLabel, setNewLabel] = useState("");
@@ -55,7 +57,7 @@ export function ManageRosterGroupsDialog({
       qc.invalidateQueries({ queryKey: ["/api/coach/roster-groups"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save")),
   });
 
   function commit(next: RosterGroup[]) {
@@ -86,10 +88,9 @@ export function ManageRosterGroupsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Manage roster groups</DialogTitle>
+          <DialogTitle>{t("Manage roster groups")}</DialogTitle>
           <DialogDescription>
-            Organize your roster however fits your program. Renaming a group keeps every athlete
-            already assigned to it; removing one just leaves those athletes Unassigned.
+            {t("Organize your roster however fits your program. Renaming a group keeps every athlete already assigned to it; removing one just leaves those athletes Unassigned.")}
           </DialogDescription>
         </DialogHeader>
         {/* WORSE THAN AN EMPTY STATE HERE. On a failed read `groups` stays at
@@ -97,7 +98,7 @@ export function ManageRosterGroupsDialog({
             coach's setup -- and the first rename or add PATCHes that default list over
             whatever they actually had. The editor does not open until the read lands. */}
         {isError ? (
-          <ReadFailed what="your roster groups" onRetry={() => void refetch()} />
+          <ReadFailed what={t("your roster groups")} onRetry={() => void refetch()} />
         ) : (
         <>
         <div className="space-y-2">
@@ -109,7 +110,7 @@ export function ManageRosterGroupsDialog({
                 onBlur={commitRename}
                 maxLength={40}
                 className="h-8 text-sm"
-                aria-label="Group name"
+                aria-label={t("Group name")}
               />
               <Button
                 type="button"
@@ -117,7 +118,7 @@ export function ManageRosterGroupsDialog({
                 variant="ghost"
                 className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                 onClick={() => removeGroup(g.id)}
-                aria-label={`Remove ${g.label}`}
+                aria-label={t("Remove {name}", { name: g.label })}
               >
                 <X className="h-3.5 w-3.5" />
               </Button>
@@ -125,8 +126,7 @@ export function ManageRosterGroupsDialog({
           ))}
           {groups.length === 0 && (
             <p className="text-xs text-muted-foreground">
-              No groups left, add one below, or close this and the default Group A/B/C split
-              comes back.
+              {t("No groups left, add one below, or close this and the default Group A/B/C split comes back.")}
             </p>
           )}
         </div>
@@ -140,10 +140,10 @@ export function ManageRosterGroupsDialog({
                 addGroup();
               }
             }}
-            placeholder="New group name..."
+            placeholder={t("New group name...")}
             maxLength={40}
             className="h-8 text-sm"
-            aria-label="New group name"
+            aria-label={t("New group name")}
           />
           <Button
             type="button"
@@ -153,13 +153,13 @@ export function ManageRosterGroupsDialog({
             disabled={!newLabel.trim()}
           >
             <Plus className="h-3.5 w-3.5" />
-            Add
+            {t("Add")}
           </Button>
         </div>
         </>
         )}
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-          Done
+          {t("Done")}
         </Button>
       </DialogContent>
     </Dialog>

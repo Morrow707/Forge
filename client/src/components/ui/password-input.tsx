@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Input, type InputProps } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 /** A SOLID EYE, AND A CLOSED ONE -- not one outline with a line through it.
  *
@@ -51,6 +52,7 @@ function EyeGlyph({ hidden }: { hidden: boolean }) {
 
 const PasswordInput = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, ...props }, ref) => {
+  const t = useT();
     const [visible, setVisible] = React.useState(false);
     return (
       <div className="relative">
@@ -71,7 +73,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, InputProps>(
           // buy that space was explicitly rejected ("last time all you did was shrink the
           // dimensions and I don't want that"), so the hit area grew instead.
           className="absolute right-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
-          aria-label={visible ? "Hide password" : "Show password"}
+          aria-label={visible ? t("Hide password") : t("Show password")}
         >
           <EyeGlyph hidden={!visible} />
         </button>

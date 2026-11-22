@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { Capacitor } from "@capacitor/core";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 /**
  * THE SENTENCE AND THE TWO LINKS APPLE REQUIRES BESIDE EVERY SUBSCRIPTION (Guideline 3.1.2,
@@ -20,36 +21,34 @@ import { cn } from "@/lib/utils";
  * without the links the first five were rejected for lacking.
  */
 export function SubscriptionLegalLinks({ compact = false, className }: { compact?: boolean; className?: string }) {
+  const t = useT();
   const ios = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
   const links = (
     <span className="whitespace-nowrap">
       <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">
-        Privacy Policy
+        {t("Privacy Policy")}
       </Link>
       <span aria-hidden="true"> · </span>
       <Link href="/eula" className="underline underline-offset-2 hover:text-foreground">
-        Terms of Use (EULA)
+        {t("Terms of Use (EULA)")}
       </Link>
     </span>
   );
   if (compact) {
     return (
       <p className={cn("text-xs text-muted-foreground", className)} data-testid="subscription-legal-links">
-        Monthly, renews until cancelled. {links}
+        {t("Monthly, renews until cancelled.")} {links}
       </p>
     );
   }
   return (
     <div className={cn("space-y-1 text-xs text-muted-foreground", className)} data-testid="subscription-legal-links">
       <p>
-        Every plan and add-on is a monthly subscription that renews automatically until you cancel
-        it.
+        {t("Every plan and add-on is a monthly subscription that renews automatically until you cancel it.")}
         {ios && (
           <>
             {" "}
-            Payment is charged to your Apple ID when you confirm the purchase. The subscription
-            renews unless it is cancelled at least 24 hours before the end of the current period,
-            and you can manage or cancel it in your App Store account settings.
+            {t("Payment is charged to your Apple ID when you confirm the purchase. The subscription renews unless it is cancelled at least 24 hours before the end of the current period, and you can manage or cancel it in your App Store account settings.")}
           </>
         )}
       </p>

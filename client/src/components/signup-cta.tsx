@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSignupAvailability } from "@/hooks/use-signup-availability";
+import { useT } from "@/i18n";
 
 /** EVERY WAY INTO /signup GOES THROUGH HERE.
  *
@@ -25,12 +26,13 @@ export function SignupCta({
   size?: ComponentProps<typeof Button>["size"];
   variant?: ComponentProps<typeof Button>["variant"];
 }) {
+  const t = useT();
   const { canSignUp } = useSignupAvailability();
   if (canSignUp === false) {
     return (
       <Button size={size} variant="outline" className={className} disabled aria-disabled="true">
         <Clock className="h-4 w-4" />
-        Coming soon
+        {t("Coming soon")}
       </Button>
     );
   }
@@ -52,8 +54,9 @@ export function SignupCta({
 
 /** The inline text form ("Don't have an account? Sign up"). Closed, it says "Coming soon". */
 export function SignupLink({ className, children }: { className?: string; children: ReactNode }) {
+  const t = useT();
   const { canSignUp } = useSignupAvailability();
-  if (canSignUp === false) return <span className={className}>Coming soon</span>;
+  if (canSignUp === false) return <span className={className}>{t("Coming soon")}</span>;
   if (canSignUp === undefined) return <span className={className}>{children}</span>;
   return (
     <Link href="/signup" className={className}>

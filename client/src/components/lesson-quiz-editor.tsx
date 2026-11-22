@@ -10,6 +10,7 @@ import { Plus, Trash2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { QUIZ_QUESTION_TYPES, type QuizQuestionType, type QuizQuestionPayload } from "@shared/class-quiz-grading";
 import type { ClassReadingLevel } from "@shared/class-reading-level";
+import { useT } from "@/i18n";
 
 /** THE ONE QUIZ AND FLASHCARD AUTHORING SURFACE (2026-10-04). Written for the class builder,
  * moved here the same day so the Coaches Corner track builder draws the same editors: four
@@ -119,6 +120,7 @@ export function FlashcardsEditor({
   onToggle?: (enabled: boolean) => void;
   onChange: (updater: (cards: LocalFlashcard[]) => LocalFlashcard[]) => void;
 }) {
+  const t = useT();
   const draft = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/classes/lesson-flashcards/draft", {
@@ -130,13 +132,13 @@ export function FlashcardsEditor({
     },
     onSuccess: ({ cards: drafted }) => {
       if (drafted.length === 0) {
-        toast.info("The pages are too short to draft cards from. Write the lesson first.");
+        toast.info(t("The pages are too short to draft cards from. Write the lesson first."));
         return;
       }
       onChange((prev) => [...prev, ...drafted.map((c) => ({ key: uid(), front: c.front, back: c.back }))]);
-      toast.success(`${drafted.length} cards drafted from this lesson. Read them before saving.`);
+      toast.success(t("{count} cards drafted from this lesson. Read them before saving.", { count: drafted.length }));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't draft cards"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't draft cards")),
   });
   const hasPages = pages.some((p) => p.body.trim().length > 0);
   return (
@@ -144,10 +146,10 @@ export function FlashcardsEditor({
       {onToggle ? (
         <label className="flex cursor-pointer items-center gap-2 text-sm">
           <Checkbox checked={Boolean(enabled)} onCheckedChange={(c) => onToggle(Boolean(c))} />
-          Give this lesson flashcards
+          {t("Give this lesson flashcards")}
         </label>
       ) : (
-        <p className="text-sm font-semibold">Flashcards</p>
+        <p className="text-sm font-semibold">{t("Flashcards")}</p>
       )}
       {(onToggle ? enabled : true) && (
         <>
@@ -161,7 +163,7 @@ export function FlashcardsEditor({
                     const val = e.target.value;
                     onChange((prev) => prev.map((x) => (x.key === c.key ? { ...x, front: val } : x)));
                   }}
-                  placeholder="Front: the prompt or question"
+                  placeholder={t("Front: the prompt or question")}
                   className="h-8 text-sm"
                   maxLength={300}
                 />
@@ -171,7 +173,7 @@ export function FlashcardsEditor({
                     const val = e.target.value;
                     onChange((prev) => prev.map((x) => (x.key === c.key ? { ...x, back: val } : x)));
                   }}
-                  placeholder="Back: the answer, a sentence or two"
+                  placeholder={t("Back: the answer, a sentence or two")}
                   rows={2}
                   className="text-xs"
                   maxLength={600}
@@ -179,7 +181,7 @@ export function FlashcardsEditor({
               </div>
               <button
                 type="button"
-                aria-label={`Remove card ${i + 1}`}
+                aria-label={t("Remove card {number}", { number: i + 1 })}
                 onClick={() => onChange((prev) => prev.filter((x) => x.key !== c.key))}
                 className="mt-2 text-muted-foreground hover:text-destructive"
               >
@@ -190,7 +192,7 @@ export function FlashcardsEditor({
           <div className="flex gap-2">
             <Button type="button" variant="secondary" size="sm" className="flex-1" onClick={() => onChange((prev) => [...prev, { key: uid(), front: "", back: "" }])}>
               <Plus className="h-3.5 w-3.5" />
-              Add card
+              {t("Add card")}
             </Button>
             <Button
               type="button"
@@ -199,13 +201,13 @@ export function FlashcardsEditor({
               className="flex-1"
               onClick={() => draft.mutate()}
               disabled={draft.isPending || !hasPages}
-              title={hasPages ? "Ten cards from this lesson's pages, for you to edit" : "Write the reading pages first"}
+              title={hasPages ? t("Ten cards from this lesson's pages, for you to edit") : t("Write the reading pages first")}
             >
               <Sparkles className="h-3.5 w-3.5" />
-              {draft.isPending ? "Drafting..." : "Draft from this lesson"}
+              {draft.isPending ? t("Drafting...") : t("Draft from this lesson")}
             </Button>
           </div>
-          {cards.length === 0 && <p className="text-[11px] text-muted-foreground">No cards yet. The reader sees no review step until there is at least one.</p>}
+          {cards.length === 0 && <p className="text-[11px] text-muted-foreground">{t("No cards yet. The reader sees no review step until there is at least one.")}</p>}
         </>
       )}
     </div>
@@ -230,6 +232,7 @@ export function QuizEditor({
   readingLevel: ClassReadingLevel | null;
   onChange: (updater: (questions: LocalQuizQuestion[]) => LocalQuizQuestion[]) => void;
 }) {
+  const t = useT();
   const patch = (key: string, p: Partial<LocalQuizQuestion>) =>
     onChange((prev) => prev.map((x) => (x.key === key ? { ...x, ...p } : x)));
   const draft = useMutation({
@@ -243,13 +246,13 @@ export function QuizEditor({
     },
     onSuccess: ({ questions: drafted }) => {
       if (drafted.length === 0) {
-        toast.info("The pages are too short to draft a quiz from. Write the lesson first.");
+        toast.info(t("The pages are too short to draft a quiz from. Write the lesson first."));
         return;
       }
       onChange((prev) => [...prev, ...drafted.map((q) => ({ ...localQuizQuestionFrom(q), id: undefined }))]);
-      toast.success(`${drafted.length} questions drafted from this lesson. Check every answer key before saving.`);
+      toast.success(t("{count} questions drafted from this lesson. Check every answer key before saving.", { count: drafted.length }));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't draft a quiz"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't draft a quiz")),
   });
   const hasPages = pages.some((p) => p.body.trim().length > 0);
   return (
@@ -258,7 +261,7 @@ export function QuizEditor({
         <div key={q.key} className="space-y-2 rounded-md border border-border p-2.5">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-semibold uppercase text-muted-foreground">
-              Question {qi + 1}
+              {t("Question {number}", { number: qi + 1 })}
             </span>
             <div className="flex items-center gap-2">
               <Select
@@ -279,7 +282,7 @@ export function QuizEditor({
                   );
                 }}
               >
-                <SelectTrigger className="h-7 w-[150px] text-xs" aria-label="Question type">
+                <SelectTrigger className="h-7 w-[150px] text-xs" aria-label={t("Question type")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -292,7 +295,7 @@ export function QuizEditor({
               </Select>
             <button
               type="button"
-              aria-label={`Remove question ${qi + 1}`}
+              aria-label={t("Remove question {number}", { number: qi + 1 })}
               onClick={() => onChange((prev) => prev.filter((x) => x.key !== q.key))}
               className="text-muted-foreground hover:text-destructive"
             >
@@ -307,7 +310,7 @@ export function QuizEditor({
               onChange((prev) => prev.map((x) => (x.key === q.key ? { ...x, questionText: val } : x)));
             }}
             rows={2}
-            placeholder={q.questionType === "fill_blank" ? "Question text, with the blank written as ___" : "Question text"}
+            placeholder={q.questionType === "fill_blank" ? t("Question text, with the blank written as ___") : t("Question text")}
             className="text-sm"
           />
           {q.questionType === "fill_blank" && (
@@ -315,7 +318,7 @@ export function QuizEditor({
               value={q.acceptedText}
               onChange={(e) => patch(q.key, { acceptedText: e.target.value })}
               rows={2}
-              placeholder={"Accepted answers, one per line (case and punctuation don't matter)"}
+              placeholder={t("Accepted answers, one per line (case and punctuation don't matter)")}
               className="text-xs"
             />
           )}
@@ -324,7 +327,7 @@ export function QuizEditor({
               value={q.itemsText}
               onChange={(e) => patch(q.key, { itemsText: e.target.value })}
               rows={4}
-              placeholder={"The steps in the CORRECT order, one per line. The athlete sees them shuffled."}
+              placeholder={t("The steps in the CORRECT order, one per line. The athlete sees them shuffled.")}
               className="text-xs"
             />
           )}
@@ -338,7 +341,7 @@ export function QuizEditor({
                       const val = e.target.value;
                       patch(q.key, { pairs: q.pairs.map((y) => (y.key === p.key ? { ...y, left: val } : y)) });
                     }}
-                    placeholder="Left"
+                    placeholder={t("Left")}
                     className="h-8 text-xs"
                   />
                   <span className="text-xs text-muted-foreground">→</span>
@@ -348,12 +351,12 @@ export function QuizEditor({
                       const val = e.target.value;
                       patch(q.key, { pairs: q.pairs.map((y) => (y.key === p.key ? { ...y, right: val } : y)) });
                     }}
-                    placeholder="Right"
+                    placeholder={t("Right")}
                     className="h-8 text-xs"
                   />
                   <button
                     type="button"
-                    aria-label={`Remove pair ${pi + 1}`}
+                    aria-label={t("Remove pair {number}", { number: pi + 1 })}
                     onClick={() => patch(q.key, { pairs: q.pairs.filter((y) => y.key !== p.key) })}
                     className="text-muted-foreground hover:text-destructive"
                   >
@@ -368,7 +371,7 @@ export function QuizEditor({
                 onClick={() => patch(q.key, { pairs: [...q.pairs, { key: uid(), left: "", right: "" }] })}
               >
                 <Plus className="h-3.5 w-3.5" />
-                Add pair
+                {t("Add pair")}
               </Button>
             </div>
           )}
@@ -376,7 +379,7 @@ export function QuizEditor({
             <Input
               value={q.explanation}
               onChange={(e) => patch(q.key, { explanation: e.target.value })}
-              placeholder="Explanation shown after the athlete answers (optional)"
+              placeholder={t("Explanation shown after the athlete answers (optional)")}
               className="h-8 text-xs"
             />
           )}
@@ -385,7 +388,7 @@ export function QuizEditor({
               <div key={a.key} className="flex items-start gap-2 rounded border border-border/60 p-1.5">
                 <button
                   type="button"
-                  aria-label="Mark this the correct answer"
+                  aria-label={t("Mark this the correct answer")}
                   aria-pressed={a.isCorrect}
                   onClick={() =>
                     onChange((prev) =>
@@ -419,7 +422,7 @@ export function QuizEditor({
                         ),
                       );
                     }}
-                    placeholder="Answer choice"
+                    placeholder={t("Answer choice")}
                     className="h-8 text-sm"
                   />
                   <Input
@@ -439,7 +442,7 @@ export function QuizEditor({
                         ),
                       );
                     }}
-                    placeholder="Explanation shown after the athlete answers"
+                    placeholder={t("Explanation shown after the athlete answers")}
                     className="h-8 text-xs"
                   />
                 </div>
@@ -457,7 +460,7 @@ export function QuizEditor({
           onClick={() => onChange((prev) => [...prev, makeQuizQuestion()])}
         >
           <Plus className="h-3.5 w-3.5" />
-          Add Question
+          {t("Add Question")}
         </Button>
         <Button
           type="button"
@@ -466,10 +469,10 @@ export function QuizEditor({
           className="flex-1"
           disabled={!hasPages || draft.isPending}
           onClick={() => draft.mutate()}
-          title={hasPages ? undefined : "Write the lesson's pages first"}
+          title={hasPages ? undefined : t("Write the lesson's pages first")}
         >
           <Sparkles className="h-3.5 w-3.5" />
-          {draft.isPending ? "Drafting..." : "Draft quiz from this lesson"}
+          {draft.isPending ? t("Drafting...") : t("Draft quiz from this lesson")}
         </Button>
       </div>
     </div>

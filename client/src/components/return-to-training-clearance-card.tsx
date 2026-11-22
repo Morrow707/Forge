@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ReadFailed } from "@/components/read-failed";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
 
 type Clearance = {
   assignmentId: number;
@@ -22,6 +23,7 @@ type Clearance = {
  *  athletic trainer included, can set or clear them; the restrictions show to coaches under every
  *  exercise of that assignment, as they always have. */
 export function ReturnToTrainingClearanceCard({ athleteId }: { athleteId: number }) {
+  const t = useT();
   const qc = useQueryClient();
   const queryKey = [`/api/coach/roster/${athleteId}/clearances`];
   const { data, isError, error, refetch } = useQuery<{ clearances: Clearance[] }>({ queryKey });
@@ -39,17 +41,17 @@ export function ReturnToTrainingClearanceCard({ athleteId }: { athleteId: number
       qc.invalidateQueries({ queryKey });
       setEditing(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save the clearance"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save the clearance")),
   });
 
   if (isError) {
-    return <ReadFailed what="this athlete's clearances" onRetry={() => refetch()} error={error} />;
+    return <ReadFailed what={t("this athlete's clearances")} onRetry={() => refetch()} error={error} />;
   }
   if (!data || data.clearances.length === 0) return null;
 
   return (
     <section className="space-y-2">
-      <h3 className="label-xs">Return-to-training clearance</h3>
+      <h3 className="label-xs">{t("Return-to-training clearance")}</h3>
       <Card>
         <CardContent className="space-y-3 p-4">
           {data.clearances.map((c) => (
@@ -58,18 +60,18 @@ export function ReturnToTrainingClearanceCard({ athleteId }: { athleteId: number
                 <span className="min-w-0 truncate font-medium">{c.programName}</span>
                 <span className={c.confirmed ? "flex items-center gap-1 text-xs text-success" : "text-xs text-muted-foreground"}>
                   {c.confirmed && <ShieldCheck className="h-3.5 w-3.5" />}
-                  {c.confirmed ? "Cleared" : "Not cleared"}
+                  {c.confirmed ? t("Cleared") : t("Not cleared")}
                 </span>
               </div>
               {c.restrictions && editing !== c.assignmentId && (
-                <p className="text-xs text-muted-foreground">Restrictions: {c.restrictions}</p>
+                <p className="text-xs text-muted-foreground">{t("Restrictions: {restrictions}", { restrictions: c.restrictions })}</p>
               )}
               {editing === c.assignmentId ? (
                 <div className="space-y-2">
                   <Textarea
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
-                    placeholder="Restrictions from the clinician, if any"
+                    placeholder={t("Restrictions from the clinician, if any")}
                     maxLength={1000}
                     className="text-xs"
                   />
@@ -79,7 +81,7 @@ export function ReturnToTrainingClearanceCard({ athleteId }: { athleteId: number
                       disabled={mutation.isPending}
                       onClick={() => mutation.mutate({ assignmentId: c.assignmentId, confirmed: true, restrictions: draft.trim() || null })}
                     >
-                      Save as cleared
+                      {t("Save as cleared")}
                     </Button>
                     {c.confirmed && (
                       <Button
@@ -88,11 +90,11 @@ export function ReturnToTrainingClearanceCard({ athleteId }: { athleteId: number
                         disabled={mutation.isPending}
                         onClick={() => mutation.mutate({ assignmentId: c.assignmentId, confirmed: false, restrictions: null })}
                       >
-                        Clear the clearance
+                        {t("Clear the clearance")}
                       </Button>
                     )}
                     <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
-                      Cancel
+                      {t("Cancel")}
                     </Button>
                   </div>
                 </div>
@@ -105,7 +107,7 @@ export function ReturnToTrainingClearanceCard({ athleteId }: { athleteId: number
                     setDraft(c.restrictions ?? "");
                   }}
                 >
-                  {c.confirmed ? "Edit clearance" : "Mark cleared"}
+                  {c.confirmed ? t("Edit clearance") : t("Mark cleared")}
                 </Button>
               )}
             </div>

@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 /** Counts `value` up from its previous value (0 on first render) over
  * `duration`ms using requestAnimationFrame with an ease-out curve -- no
@@ -143,6 +144,7 @@ export function StatTile({
   trend?: number[];
   unavailable?: boolean;
 }) {
+  const t = useT();
   const displayValue = useCountUp(unavailable ? 0 : value);
   const card = (
       <Card className={cn(href && "cursor-pointer transition-colors hover:border-primary/50")}>
@@ -165,7 +167,7 @@ export function StatTile({
               {!unavailable && trend && <Sparkline values={trend} className="mb-1 shrink-0" />}
             </div>
             <p className="truncate text-sm text-muted-foreground">
-              {unavailable ? `${label}, couldn't load` : label}
+              {unavailable ? t("{label}, couldn't load", { label }) : label}
             </p>
           </div>
         </CardContent>

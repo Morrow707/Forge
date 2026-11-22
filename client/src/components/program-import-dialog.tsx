@@ -43,6 +43,7 @@ import {
 import type { ImportDraft, ImportedExerciseRow, LibraryExercise } from "@shared/program-import";
 import type { Exercise } from "@shared/schema";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
 
 type ServerDraft = ImportDraft & { sourceNotice: string | null; library: LibraryExercise[] };
 
@@ -87,6 +88,7 @@ export function ProgramImportDialog({
   apiBase: string;
   onApply: (days: BuilderDay[], name: string | null) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [draft, setDraft] = useState<ServerDraft | null>(null);
   const { room } = useEquipmentRoom();
@@ -133,9 +135,9 @@ export function ProgramImportDialog({
     onSuccess: ({ key, exercise }) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/exercises`] });
       decide(key, { kind: "exercise", exercise: { id: exercise.id, name: exercise.name, category: exercise.category ?? null, videoEligible: exercise.videoEligible ?? null } });
-      toast.success(`Added "${exercise.name}" to your exercise library`);
+      toast.success(t("Added \"{name}\" to your exercise library", { name: exercise.name }));
     },
-    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "Couldn't create that exercise"),
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : t("Couldn't create that exercise")),
   });
 
   function decide(key: string, decision: RowDecision | null) {
@@ -169,10 +171,9 @@ export function ProgramImportDialog({
     >
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Import a program</DialogTitle>
+          <DialogTitle>{t("Import a program")}</DialogTitle>
           <DialogDescription>
-            Upload an Excel file, a CSV, a PDF or a photo of the program (a whiteboard or a printed sheet). Forge drafts it
-            here for you to check. Nothing is saved until you press Save Program.
+            {t("Upload an Excel file, a CSV, a PDF or a photo of the program (a whiteboard or a printed sheet). Forge drafts it here for you to check. Nothing is saved until you press Save Program.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -185,13 +186,13 @@ export function ProgramImportDialog({
               {readMutation.isPending ? (
                 <>
                   <Loader2 className="h-6 w-6 animate-spin" />
-                  Reading your program. A long one can take a minute.
+                  {t("Reading your program. A long one can take a minute.")}
                 </>
               ) : (
                 <>
                   <FileUp className="h-6 w-6" />
-                  Choose a file or take a photo
-                  <span className="text-xs">.xlsx, .csv, .pdf, or a photo (up to 15 MB)</span>
+                  {t("Choose a file or take a photo")}
+                  <span className="text-xs">{t(".xlsx, .csv, .pdf, or a photo (up to 15 MB)")}</span>
                 </>
               )}
               <input
@@ -215,7 +216,7 @@ export function ProgramImportDialog({
                   <>
                     {" "}
                     <Link href="/athlete/upgrade" className="font-medium underline">
-                      See plans
+                      {t("See plans")}
                     </Link>
                   </>
                 )}
@@ -229,22 +230,22 @@ export function ProgramImportDialog({
             {draft.sourceNotice && (
               <p className="rounded-md bg-amber-400/10 p-3 text-sm text-amber-500">{draft.sourceNotice}</p>
             )}
-            {draft.note && <p className="rounded-md bg-surface p-3 text-sm">Forge's note: {draft.note}</p>}
+            {draft.note && <p className="rounded-md bg-surface p-3 text-sm">{t("Forge's note: {note}", { note: draft.note })}</p>}
             <p className="text-sm text-muted-foreground" data-testid="text-import-summary">
-              {draft.days.length} {draft.days.length === 1 ? "day" : "days"}, {rowCount} {rowCount === 1 ? "row" : "rows"}.{" "}
+              {t.plural(draft.days.length, "{count} day", "{count} days")}, {t.plural(rowCount, "{count} row", "{count} rows")}.{" "}
               {waiting > 0
-                ? `${waiting} ${waiting === 1 ? "row needs" : "rows need"} you to choose the exercise.`
-                : "Every row has an exercise."}
+                ? t.plural(waiting, "{count} row needs you to choose the exercise.", "{count} rows need you to choose the exercise.")
+                : t("Every row has an exercise.")}
             </p>
 
             {draft.days.map((day, di) => (
               <div key={di} className="rounded-lg border border-border p-3">
                 <div className="mb-2 flex items-center gap-2 font-medium">
                   {day.title}
-                  {day.isRestDay && <Badge variant="secondary">Rest day</Badge>}
+                  {day.isRestDay && <Badge variant="secondary">{t("Rest day")}</Badge>}
                 </div>
                 {day.exercises.length === 0 && !day.isRestDay && (
-                  <p className="text-sm text-muted-foreground">No exercises on this day.</p>
+                  <p className="text-sm text-muted-foreground">{t("No exercises on this day.")}</p>
                 )}
                 <div className="space-y-2">
                   {day.exercises.map((row, ri) => {
@@ -270,21 +271,21 @@ export function ProgramImportDialog({
                               {missingEquipmentSentence(decision.exercise, room)}
                             </span>
                           )}
-                          {decision?.kind === "skip" && <span className="text-muted-foreground">Left out</span>}
+                          {decision?.kind === "skip" && <span className="text-muted-foreground">{t("Left out")}</span>}
                           {!decision && (
                             <span className="flex items-center gap-1 text-amber-500">
                               <AlertTriangle className="h-3.5 w-3.5" />
-                              Not matched to an exercise
+                              {t("Not matched to an exercise")}
                             </span>
                           )}
                           {decision && (flagged || decision.kind === "skip") && (
                             <button type="button" className="text-xs underline" onClick={() => decide(key, null)}>
-                              Change
+                              {t("Change")}
                             </button>
                           )}
                           {decision && !flagged && decision.kind === "exercise" && (
                             <button type="button" className="text-xs underline" onClick={() => setPickerFor(key)}>
-                              Change
+                              {t("Change")}
                             </button>
                           )}
                         </div>
@@ -303,7 +304,7 @@ export function ProgramImportDialog({
                             ))}
                             <Button size="sm" variant="outline" onClick={() => setPickerFor(key)}>
                               <Search className="h-3.5 w-3.5" />
-                              Search the library
+                              {t("Search the library")}
                             </Button>
                             {canCreate && (
                               <Button
@@ -313,12 +314,12 @@ export function ProgramImportDialog({
                                 onClick={() => createMutation.mutate({ key, name: row.nameAsWritten })}
                               >
                                 <Plus className="h-3.5 w-3.5" />
-                                Create "{row.nameAsWritten}"
+                                {t("Create \"{name}\"", { name: row.nameAsWritten })}
                               </Button>
                             )}
                             <Button size="sm" variant="ghost" onClick={() => decide(key, { kind: "skip" })}>
                               <X className="h-3.5 w-3.5" />
-                              Leave out
+                              {t("Leave out")}
                             </Button>
                           </div>
                         )}
@@ -331,7 +332,7 @@ export function ProgramImportDialog({
 
             {draft.notPlaced.length > 0 && (
               <div className="rounded-md border border-border p-3 text-sm">
-                <p className="font-medium">Forge saw these and couldn't place them. Add them by hand if they belong:</p>
+                <p className="font-medium">{t("Forge saw these and couldn't place them. Add them by hand if they belong:")}</p>
                 <ul className="mt-1 list-disc pl-5 text-muted-foreground">
                   {draft.notPlaced.map((t, i) => (
                     <li key={i}>{t}</li>
@@ -343,7 +344,7 @@ export function ProgramImportDialog({
             {draft.name && (
               <div className="flex items-center gap-2">
                 <Checkbox id="import-use-name" checked={useName} onCheckedChange={(v) => setUseName(v === true)} />
-                <Label htmlFor="import-use-name">Name the program "{draft.name}"</Label>
+                <Label htmlFor="import-use-name">{t("Name the program \"{name}\"", { name: draft.name })}</Label>
               </div>
             )}
           </div>
@@ -352,12 +353,12 @@ export function ProgramImportDialog({
         <DialogFooter className="gap-2">
           {draft && (
             <Button variant="outline" onClick={reset}>
-              Choose another file
+              {t("Choose another file")}
             </Button>
           )}
           {draft && (
             <Button onClick={apply} disabled={waiting > 0} data-testid="button-import-apply">
-              {waiting > 0 ? `Choose an exercise for ${waiting} ${waiting === 1 ? "row" : "rows"} first` : "Put this in the builder"}
+              {waiting > 0 ? t.plural(waiting, "Choose an exercise for {count} row first", "Choose an exercise for {count} rows first") : t("Put this in the builder")}
             </Button>
           )}
         </DialogFooter>

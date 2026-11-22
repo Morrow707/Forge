@@ -13,6 +13,7 @@ import {
   type MuscleLoadBreakdown,
 } from "@shared/muscle-map";
 import { BODY_MAP_LEADERS } from "@/components/body-map";
+import { useT } from "@/i18n";
 
 const MUSCLE_LOAD_WINDOW_OPTIONS = [
   { label: "28d", days: 28 },
@@ -86,6 +87,7 @@ function fillsForBodyMap(colorByRegion: Map<MuscleRegion, string>): Record<strin
  * their own real hot/cold spots rather than one washed out next to the
  * other (see muscleHeatColor). */
 export function MuscleHeatMap({ athleteId }: { athleteId?: string }) {
+  const t = useT();
   const [windowDays, setWindowDays] = useState(28);
   // Two callers, two endpoints. With an athleteId this is a coach reading one
   // athlete on their roster; without one it is the athlete reading themselves,
@@ -121,11 +123,11 @@ export function MuscleHeatMap({ athleteId }: { athleteId?: string }) {
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>Muscle Load Map</CardTitle>
+            <CardTitle>{t("Muscle Load Map")}</CardTitle>
             <CardDescription>
-              Last {windowDays} days of logged sets by muscle group, weighted by primary vs.
-              secondary role in each exercise. Color is relative to{" "}
-              {athleteId ? "this athlete's" : "your"} own busiest region.
+              {athleteId
+                ? t("Last {days} days of logged sets by muscle group, weighted by primary vs. secondary role in each exercise. Color is relative to this athlete's own busiest region.", { days: windowDays })
+                : t("Last {days} days of logged sets by muscle group, weighted by primary vs. secondary role in each exercise. Color is relative to your own busiest region.", { days: windowDays })}
             </CardDescription>
           </div>
           <RadioChipGroup
@@ -149,10 +151,10 @@ export function MuscleHeatMap({ athleteId }: { athleteId?: string }) {
           // been resting. Saying it when the request failed turns a loading problem into a
           // training-history claim, on the screen a coach uses to see what an athlete has
           // already hammered this week.
-          <ReadFailed what="this training load" onRetry={() => void refetch()} />
+          <ReadFailed what={t("this training load")} onRetry={() => void refetch()} />
         ) : entries.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No sets logged in the last {windowDays} days, try a wider window.
+            {t("No sets logged in the last {days} days, try a wider window.", { days: windowDays })}
           </p>
         ) : (
           <>
@@ -240,10 +242,11 @@ function MuscleExerciseList({
   rows: { name: string; role: "primary" | "secondary"; sets: number }[];
   windowDays: number;
 }) {
+  const t = useT();
   if (!group) {
     return (
       <p className="mt-3 rounded-md border border-border bg-surface-elevated px-3 py-3 text-center text-xs text-muted-foreground">
-        Tap a muscle or a name to see what has been training it.
+        {t("Tap a muscle or a name to see what has been training it.")}
       </p>
     );
   }
@@ -253,12 +256,12 @@ function MuscleExerciseList({
         <span className="h-2.5 w-2.5 shrink-0 self-center rounded-sm" style={{ background: colour ?? GRAY }} />
         <h4 className="text-sm font-semibold">{region ? MUSCLE_REGION_LABEL[region] : group}</h4>
         <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">
-          {sets ? `${Math.round(sets)} sets` : "none logged"} &middot; last {windowDays} days
+          {sets ? t("{count} sets", { count: Math.round(sets) }) : t("none logged")} · {t("last {days} days", { days: windowDays })}
         </span>
       </div>
       {rows.length === 0 ? (
         <p className="px-3 py-3 text-xs text-muted-foreground">
-          Nothing logged for this one in the last {windowDays} days.
+          {t("Nothing logged for this one in the last {days} days.", { days: windowDays })}
         </p>
       ) : (
         <ul>
@@ -267,12 +270,12 @@ function MuscleExerciseList({
               key={`${r.role}-${r.name}`}
               className="flex items-baseline gap-2 px-3 py-2 text-sm [&+li]:border-t [&+li]:border-border"
             >
-              <span className="min-w-0 truncate">{r.name}</span>
+              <span className="min-w-0 truncate">{t.exercise(r.name)}</span>
               <span className="shrink-0 rounded border border-border px-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                 {r.role}
               </span>
               <span className="ml-auto shrink-0 tabular-nums text-xs text-muted-foreground">
-                {r.sets} sets
+                {t("{count} sets", { count: r.sets })}
               </span>
             </li>
           ))}

@@ -21,6 +21,7 @@ import { HeartPulse } from "lucide-react";
 import { READINESS_LABEL, BODY_PAIN_PARTS, type ReadinessLevel } from "@shared/wellness";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type WellnessEntry = {
   id: number;
@@ -56,6 +57,7 @@ export function WellnessHistoryDialog({
   athleteName: string;
   fetchUrl: string;
 }) {
+  const t = useT();
   const { data = [], isLoading, isError, refetch } = useQuery<WellnessEntry[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
@@ -82,20 +84,20 @@ export function WellnessHistoryDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <HeartPulse className="h-5 w-5" />
-            {athleteName}'s Wellness
+            {t("{name}'s Wellness", { name: athleteName })}
           </DialogTitle>
           <DialogDescription>
-            Self-reported every day before {athleteName.split(" ")[0]} can see their training.
+            {t("Self-reported every day before {name} can see their training.", { name: athleteName.split(" ")[0] })}
           </DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
           <div className="h-40 animate-pulse rounded-md bg-surface" />
         ) : isError ? (
-          <ReadFailed what="these check-ins" onRetry={() => void refetch()} />
+          <ReadFailed what={t("these check-ins")} onRetry={() => void refetch()} />
         ) : data.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No check-ins recorded yet.
+            {t("No check-ins recorded yet.")}
           </p>
         ) : (
           <div className="space-y-4">
@@ -138,21 +140,24 @@ export function WellnessHistoryDialog({
                         READINESS_CLASSNAME[e.level],
                       )}
                     >
-                      {e.score}/100 · {READINESS_LABEL[e.level]}
+                      {e.score}/100 · {t(READINESS_LABEL[e.level])}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {e.sleepHours}h sleep
-                      {e.restingHeartRate != null && ` · ${Math.round(e.restingHeartRate)}bpm RHR`}
-                      {e.hrv != null && ` · ${Math.round(e.hrv)}ms HRV`} · Soreness {e.soreness}/5 ·
-                      Stress {e.stress}/5 · Hydration {e.hydration}/5 · Focus {e.mentalFocus}/5
+                      {t("{hours}h sleep", { hours: e.sleepHours })}
+                      {e.restingHeartRate != null && ` · ${t("{count}bpm RHR", { count: Math.round(e.restingHeartRate) })}`}
+                      {e.hrv != null && ` · ${t("{count}ms HRV", { count: Math.round(e.hrv) })}`} ·{" "}
+                      {t("Soreness {soreness}/5 · Stress {stress}/5 · Hydration {hydration}/5 · Focus {focus}/5", { soreness: e.soreness, stress: e.stress, hydration: e.hydration, focus: e.mentalFocus })}
                       {e.bodyPainMap.length > 0 &&
-                        ` · Pain: ${e.bodyPainMap
-                          .map((k) => BODY_PAIN_PARTS.find((p) => p.key === k)?.label ?? k)
-                          .join(", ")}`}
+                        ` · ${t("Pain: {parts}", { parts: e.bodyPainMap
+                          .map((k) => {
+                            const label = BODY_PAIN_PARTS.find((p) => p.key === k)?.label;
+                            return label ? t(label) : k;
+                          })
+                          .join(", ") })}`}
                     </span>
                   </div>
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {format(parseISO(e.date), "MMM d")}
+                    {t.date(parseISO(e.date), { month: "short", day: "numeric" })}
                   </span>
                 </div>
               ))}
@@ -161,7 +166,7 @@ export function WellnessHistoryDialog({
         )}
         {programAnswers.length > 0 && (
           <div className="space-y-1.5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your questions</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("Your questions")}</p>
             {programAnswers.map((a) => (
               <div key={a.id} className="flex items-start justify-between gap-2 rounded-md border border-border/60 px-2.5 py-1.5 text-xs">
                 <span>

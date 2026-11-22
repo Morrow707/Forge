@@ -25,6 +25,7 @@ import { format, parseISO } from "date-fns";
 import type { TrophyCategory, TrophyTier, TrophyDefinition } from "@shared/achievements";
 import { ALL_TROPHY_DEFINITIONS, TROPHY_CATEGORY_LABEL } from "@shared/achievements";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 export type AthleteTrophyView = {
   id: number;
@@ -132,6 +133,7 @@ export function TrophyCase({
   programTrophies?: TrophyDefinition[];
   programName?: string | null;
 }) {
+  const t = useT();
   const earnedByKey = new Map(trophies.map((t) => [t.key, t]));
   // A program trophy the coach has since removed stays in the case once earned.
   const programKeys = new Set(programTrophies.map((d) => d.key));
@@ -149,7 +151,7 @@ export function TrophyCase({
         key={def.key}
         title={
           earned
-            ? `Unlocked ${format(parseISO(earned.unlockedAt), "MMM d, yyyy")}`
+            ? t("Unlocked {date}", { date: t.date(parseISO(earned.unlockedAt), { month: "short", day: "numeric", year: "numeric" }) })
             : criteriaText(def)
         }
         className={cn(
@@ -202,13 +204,13 @@ export function TrophyCase({
     <div className="space-y-5">
       {trophies.length === 0 && (
         <p className="text-sm text-muted-foreground">
-          {emptyHint ?? "No trophies unlocked yet, log workouts to start earning them."}
+          {emptyHint ?? t("No trophies unlocked yet, log workouts to start earning them.")}
         </p>
       )}
       {programList.length > 0 && (
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {programName ? `${programName} trophies` : "Your program's trophies"}
+            {programName ? t("{program} trophies", { program: programName }) : t("Your program's trophies")}
           </p>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7">{programList.map(renderBadge)}</div>
         </div>

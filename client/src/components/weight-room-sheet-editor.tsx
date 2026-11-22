@@ -46,6 +46,7 @@ import {
   type SheetSource,
   type SheetSourceLift,
 } from "@shared/weight-room-sheet";
+import { useT } from "@/i18n";
 
 type DayChoice = { programDayId: number; title: string; programName: string; athletes: number };
 type SheetDayData = { source: SheetSource | null; days: DayChoice[]; layout: SheetLayout; brand: SheetBrand };
@@ -67,16 +68,18 @@ const sheetKey = (teamId: number, date: string, day: number | null) => ["/api/co
 
 function SortableLift({ lift, index, total, onMove }: { lift: SheetSourceLift; index: number; total: number; onMove: (dir: -1 | 1) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: lift.exerciseId });
+  const t = useT();
+  const name = t.exercise(lift.name);
   return (
     <li ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="flex items-center gap-2 rounded border bg-background px-2 py-1 text-sm">
-      <button type="button" className="cursor-grab touch-none text-muted-foreground" aria-label={`Drag ${lift.name}`} {...attributes} {...listeners}>
+      <button type="button" className="cursor-grab touch-none text-muted-foreground" aria-label={t("Drag {name}", { name })} {...attributes} {...listeners}>
         <GripVertical className="h-4 w-4" />
       </button>
-      <span className="flex-1 truncate">{lift.name}</span>
-      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={index === 0} onClick={() => onMove(-1)} aria-label={`Move ${lift.name} up`}>
+      <span className="flex-1 truncate">{name}</span>
+      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={index === 0} onClick={() => onMove(-1)} aria-label={t("Move {name} up", { name })}>
         <ChevronUp className="h-4 w-4" />
       </Button>
-      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={index === total - 1} onClick={() => onMove(1)} aria-label={`Move ${lift.name} down`}>
+      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={index === total - 1} onClick={() => onMove(1)} aria-label={t("Move {name} down", { name })}>
         <ChevronDown className="h-4 w-4" />
       </Button>
     </li>
@@ -85,17 +88,18 @@ function SortableLift({ lift, index, total, onMove }: { lift: SheetSourceLift; i
 
 function SortableAthlete({ id, name, index, total, onMove, included, onToggle }: { id: number; name: string; index: number; total: number; onMove: (dir: -1 | 1) => void; included: boolean; onToggle: (on: boolean) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+  const t = useT();
   return (
     <li ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="flex items-center gap-2 rounded border bg-background px-2 py-1 text-sm">
-      <button type="button" className="cursor-grab touch-none text-muted-foreground" aria-label={`Drag ${name}`} {...attributes} {...listeners}>
+      <button type="button" className="cursor-grab touch-none text-muted-foreground" aria-label={t("Drag {name}", { name })} {...attributes} {...listeners}>
         <GripVertical className="h-4 w-4" />
       </button>
-      <Checkbox checked={included} onCheckedChange={(v) => onToggle(v === true)} aria-label={`Print ${name}`} />
+      <Checkbox checked={included} onCheckedChange={(v) => onToggle(v === true)} aria-label={t("Print {name}", { name })} />
       <span className="flex-1 truncate">{name}</span>
-      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={index === 0} onClick={() => onMove(-1)} aria-label={`Move ${name} up`}>
+      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={index === 0} onClick={() => onMove(-1)} aria-label={t("Move {name} up", { name })}>
         <ChevronUp className="h-4 w-4" />
       </Button>
-      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={index === total - 1} onClick={() => onMove(1)} aria-label={`Move ${name} down`}>
+      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={index === total - 1} onClick={() => onMove(1)} aria-label={t("Move {name} down", { name })}>
         <ChevronDown className="h-4 w-4" />
       </Button>
     </li>
@@ -103,6 +107,7 @@ function SortableAthlete({ id, name, index, total, onMove, included, onToggle }:
 }
 
 export function WeightRoomSheetEditor({ teams }: { teams: { id: number; name: string }[] }) {
+  const t = useT();
   const [teamId, setTeamId] = useState<number | null>(teams[0]?.id ?? null);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, ISO_DATE_LENGTH));
   const [programDayId, setProgramDayId] = useState<number | null>(null);
@@ -177,7 +182,7 @@ export function WeightRoomSheetEditor({ teams }: { teams: { id: number; name: st
   const save = useMutation({
     mutationFn: async () => apiRequest("PUT", `/api/coach/weight-room/sheets/${teamId}/layout`, { layout }),
     onSuccess: () => {
-      toast.success("Saved as this team's default sheet.");
+      toast.success(t("Saved as this team's default sheet."));
       void queryClient.invalidateQueries({ queryKey: ["/api/coach/weight-room/sheets", teamId] });
       setLayoutDraft(null);
     },
@@ -205,21 +210,21 @@ export function WeightRoomSheetEditor({ teams }: { teams: { id: number; name: st
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1">
-          <Label>Team</Label>
+          <Label>{t("Team")}</Label>
           <Select value={teamId ? String(teamId) : ""} onValueChange={(v) => { setTeamId(Number(v)); setLayoutDraft(null); setEdits(EMPTY_DAY_EDITS); setProgramDayId(null); }}>
-            <SelectTrigger data-testid="select-sheet-team"><SelectValue placeholder="Pick a team" /></SelectTrigger>
+            <SelectTrigger data-testid="select-sheet-team"><SelectValue placeholder={t("Pick a team")} /></SelectTrigger>
             <SelectContent>
               {teams.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1">
-          <Label htmlFor="sheet-date">Date</Label>
+          <Label htmlFor="sheet-date">{t("Date")}</Label>
           <Input id="sheet-date" type="date" value={date} onChange={(e) => { setDate(e.target.value); setProgramDayId(null); setEdits(EMPTY_DAY_EDITS); }} />
         </div>
         {sheet.data && sheet.data.days.length > 1 && (
           <div className="space-y-1">
-            <Label>Workout</Label>
+            <Label>{t("Workout")}</Label>
             <Select value={String(source?.programDayId ?? "")} onValueChange={(v) => { setProgramDayId(Number(v)); setEdits(EMPTY_DAY_EDITS); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -234,10 +239,10 @@ export function WeightRoomSheetEditor({ teams }: { teams: { id: number; name: st
         )}
       </div>
 
-      {state === "failed" && <ReadFailed what="this team's sheet" onRetry={() => sheet.refetch()} error={sheet.error} />}
-      {state === "loading" && <p className="text-sm text-muted-foreground">Loading the sheet…</p>}
+      {state === "failed" && <ReadFailed what={t("this team's sheet")} onRetry={() => sheet.refetch()} error={sheet.error} />}
+      {state === "loading" && <p className="text-sm text-muted-foreground">{t("Loading the sheet…")}</p>}
       {state === "empty" && (
-        <p className="text-sm text-muted-foreground">Nobody on this team has a workout from your program on {date}. Assign the team a program, or pick another date.</p>
+        <p className="text-sm text-muted-foreground">{t("Nobody on this team has a workout from your program on {date}. Assign the team a program, or pick another date.", { date })}</p>
       )}
       {state === "ready" && model && layout && source && sheet.data && (
         <>
@@ -249,11 +254,11 @@ export function WeightRoomSheetEditor({ teams }: { teams: { id: number; name: st
               </Select>
               <Select value={layout.page.size} onValueChange={(v) => change({ page: { ...layout.page, size: v as "letter" | "a4" } })}>
                 <SelectTrigger className="w-auto"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="letter">Letter</SelectItem><SelectItem value="a4">A4</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="letter">{t("Letter")}</SelectItem><SelectItem value="a4">A4</SelectItem></SelectContent>
               </Select>
               <Select value={model.orientation} onValueChange={(v) => change({ page: { ...layout.page, orientation: v as "portrait" | "landscape" } })}>
                 <SelectTrigger className="w-auto"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="portrait">Portrait</SelectItem><SelectItem value="landscape">Landscape</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="portrait">{t("Portrait")}</SelectItem><SelectItem value="landscape">{t("Landscape")}</SelectItem></SelectContent>
               </Select>
               <Select value={model.unit} onValueChange={(v) => change({ unit: v as "lbs" | "kg", bar: null, plates: null })}>
                 <SelectTrigger className="w-auto"><SelectValue /></SelectTrigger>
@@ -283,18 +288,18 @@ export function WeightRoomSheetEditor({ teams }: { teams: { id: number; name: st
             {layout.toggles.plates && (
               <div className="flex flex-wrap items-end gap-2 text-sm">
                 <div className="space-y-1">
-                  <Label htmlFor="sheet-bar">Bar ({model.unit === "kg" ? "kg" : "lb"})</Label>
+                  <Label htmlFor="sheet-bar">{t("Bar ({unit})", { unit: model.unit === "kg" ? "kg" : "lb" })}</Label>
                   <Input id="sheet-bar" className="w-20" inputMode="decimal" defaultValue={String(model.bar)} onBlur={(e) => { const n = Number(e.target.value); if (Number.isFinite(n) && n >= 0) change({ bar: n }); }} />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="sheet-plates">Plates</Label>
+                  <Label htmlFor="sheet-plates">{t("Plates")}</Label>
                   <Input id="sheet-plates" className="w-56" defaultValue={model.plates.join(", ")} onBlur={(e) => { const list = e.target.value.split(",").map((p) => Number(p.trim())).filter((p) => p > 0); if (list.length > 0) change({ plates: list }); }} />
                 </div>
               </div>
             )}
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
-                <p className="text-sm font-medium">Lifts (drag, or use the arrows)</p>
+                <p className="text-sm font-medium">{t("Lifts (drag, or use the arrows)")}</p>
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => {
                   const from = liftOrder.findIndex((l) => l.exerciseId === e.active.id);
                   const to = liftOrder.findIndex((l) => l.exerciseId === e.over?.id);
@@ -304,7 +309,7 @@ export function WeightRoomSheetEditor({ teams }: { teams: { id: number; name: st
                     <ol className="space-y-1">
                       {liftOrder.map((lift, i) => (
                         <div key={lift.exerciseId} className="flex items-center gap-1">
-                          <Checkbox checked={!layout.hiddenLifts.includes(lift.exerciseId)} onCheckedChange={(v) => change({ hiddenLifts: v === true ? layout.hiddenLifts.filter((id) => id !== lift.exerciseId) : [...layout.hiddenLifts, lift.exerciseId] })} aria-label={`Show ${lift.name}`} />
+                          <Checkbox checked={!layout.hiddenLifts.includes(lift.exerciseId)} onCheckedChange={(v) => change({ hiddenLifts: v === true ? layout.hiddenLifts.filter((id) => id !== lift.exerciseId) : [...layout.hiddenLifts, lift.exerciseId] })} aria-label={t("Show {name}", { name: t.exercise(lift.name) })} />
                           <div className="flex-1"><SortableLift lift={lift} index={i} total={liftOrder.length} onMove={(dir) => moveLift(i, i + dir)} /></div>
                         </div>
                       ))}
@@ -313,7 +318,7 @@ export function WeightRoomSheetEditor({ teams }: { teams: { id: number; name: st
                 </DndContext>
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-medium">Athletes ({athleteOrder.length - edits.excludedAthletes.length} printed)</p>
+                <p className="text-sm font-medium">{t("Athletes ({count} printed)", { count: athleteOrder.length - edits.excludedAthletes.length })}</p>
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => {
                   const from = athleteOrder.indexOf(Number(e.active.id));
                   const to = athleteOrder.indexOf(Number(e.over?.id));
@@ -340,63 +345,63 @@ export function WeightRoomSheetEditor({ teams }: { teams: { id: number; name: st
             </div>
             <div className="flex flex-wrap items-end gap-2">
               <div className="space-y-1">
-                <Label htmlFor="sheet-new-column">Your own column</Label>
-                <Input id="sheet-new-column" className="w-40" placeholder="Hurt? / Bar #" value={newColumn} maxLength={40} onChange={(e) => setNewColumn(e.target.value)} />
+                <Label htmlFor="sheet-new-column">{t("Your own column")}</Label>
+                <Input id="sheet-new-column" className="w-40" placeholder={t("Hurt? / Bar #")} value={newColumn} maxLength={40} onChange={(e) => setNewColumn(e.target.value)} />
               </div>
               <Button variant="outline" size="sm" disabled={!newColumn.trim()} onClick={() => { change({ customColumns: [...layout.customColumns, { id: newId(), header: newColumn.trim() }] }); setNewColumn(""); }}>
-                <Plus className="mr-1 h-4 w-4" />Add column
+                <Plus className="mr-1 h-4 w-4" />{t("Add column")}
               </Button>
               <div className="space-y-1">
-                <Label htmlFor="sheet-new-block">Your own text</Label>
-                <Input id="sheet-new-block" className="w-56" placeholder="e.g. Hydrate between supersets" value={newBlock} maxLength={300} onChange={(e) => setNewBlock(e.target.value)} />
+                <Label htmlFor="sheet-new-block">{t("Your own text")}</Label>
+                <Input id="sheet-new-block" className="w-56" placeholder={t("e.g. Hydrate between supersets")} value={newBlock} maxLength={300} onChange={(e) => setNewBlock(e.target.value)} />
               </div>
               <Button variant="outline" size="sm" disabled={!newBlock.trim()} onClick={() => { change({ customBlocks: [...layout.customBlocks, { id: newId(), text: newBlock.trim(), beforeExerciseId: liftOrder[0]?.exerciseId ?? null }] }); setNewBlock(""); }}>
-                <Plus className="mr-1 h-4 w-4" />Add text
+                <Plus className="mr-1 h-4 w-4" />{t("Add text")}
               </Button>
             </div>
             {(layout.customColumns.length > 0 || layout.customBlocks.length > 0) && (
               <ul className="space-y-1 text-sm">
                 {layout.customColumns.map((c) => (
                   <li key={c.id} className="flex items-center gap-2">
-                    Column: {c.header}
-                    <Button size="icon" variant="ghost" className="h-6 w-6" aria-label={`Remove ${c.header}`} onClick={() => change({ customColumns: layout.customColumns.filter((x) => x.id !== c.id) })}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    {t("Column: {header}", { header: c.header })}
+                    <Button size="icon" variant="ghost" className="h-6 w-6" aria-label={t("Remove {name}", { name: c.header })} onClick={() => change({ customColumns: layout.customColumns.filter((x) => x.id !== c.id) })}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </li>
                 ))}
                 {layout.customBlocks.map((b) => (
                   <li key={b.id} className="flex flex-wrap items-center gap-2">
-                    Text: “{b.text}” before
+                    {t("Text: “{text}” before", { text: b.text })}
                     <Select value={String(b.beforeExerciseId ?? "end")} onValueChange={(v) => change({ customBlocks: layout.customBlocks.map((x) => (x.id === b.id ? { ...x, beforeExerciseId: v === "end" ? null : Number(v) } : x)) })}>
                       <SelectTrigger className="h-7 w-auto"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {liftOrder.map((l) => <SelectItem key={l.exerciseId} value={String(l.exerciseId)}>{l.name}</SelectItem>)}
-                        <SelectItem value="end">the end</SelectItem>
+                        <SelectItem value="end">{t("the end")}</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button size="icon" variant="ghost" className="h-6 w-6" aria-label="Remove text" onClick={() => change({ customBlocks: layout.customBlocks.filter((x) => x.id !== b.id) })}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6" aria-label={t("Remove text")} onClick={() => change({ customBlocks: layout.customBlocks.filter((x) => x.id !== b.id) })}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </li>
                 ))}
               </ul>
             )}
             <div className="flex flex-wrap gap-2">
               <Button onClick={() => print.mutate()} disabled={print.isPending} data-testid="button-print-sheet">
-                <Printer className="mr-1 h-4 w-4" />Print sheet
+                <Printer className="mr-1 h-4 w-4" />{t("Print sheet")}
               </Button>
               <Button variant="outline" onClick={() => save.mutate()} disabled={save.isPending || layoutDraft == null}>
-                <Save className="mr-1 h-4 w-4" />Save as team default
+                <Save className="mr-1 h-4 w-4" />{t("Save as team default")}
               </Button>
               <Button variant="ghost" disabled={!changedSomething} onClick={() => { setLayoutDraft(null); setEdits(EMPTY_DAY_EDITS); }} data-testid="button-undo-sheet">
-                <Undo2 className="mr-1 h-4 w-4" />Undo my changes
+                <Undo2 className="mr-1 h-4 w-4" />{t("Undo my changes")}
               </Button>
             </div>
           </div>
 
           {model.orderNote && !orderNoteDismissed && (
             <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-sm" role="note">
-              <span className="flex-1">{model.orderNote} This tip is not printed.</span>
-              <Button size="icon" variant="ghost" className="h-6 w-6" aria-label="Dismiss" onClick={() => setOrderNoteDismissed(true)}><X className="h-3.5 w-3.5" /></Button>
+              <span className="flex-1">{model.orderNote} {t("This tip is not printed.")}</span>
+              <Button size="icon" variant="ghost" className="h-6 w-6" aria-label={t("Dismiss")} onClick={() => setOrderNoteDismissed(true)}><X className="h-3.5 w-3.5" /></Button>
             </div>
           )}
-          <p className="text-xs text-muted-foreground">Click any number to type over it. Tab and Enter move on, the arrow keys move between cells, Escape cancels. What you see is what prints.</p>
+          <p className="text-xs text-muted-foreground">{t("Click any number to type over it. Tab and Enter move on, the arrow keys move between cells, Escape cancels. What you see is what prints.")}</p>
           <WeightRoomSheetPreview model={model} brand={sheet.data.brand} onEdit={onEdit} />
         </>
       )}

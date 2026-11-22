@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
+import { msg, useT } from "@/i18n";
 
 type DraftSet = { programExerciseId: number; setNumber: number; reps: string; weight: string | null; weightUnit: "lbs" | "kg"; side: "left" | "right" | null; uncertain: boolean; alreadyLogged: boolean };
 type DraftLift = {
@@ -58,12 +59,12 @@ const LEAVE_OUT = "leave-out";
 const SIDE_LETTER: Record<"left" | "right", string> = { left: "L", right: "R" };
 const ISO_DATE_LENGTH = 10;
 const STATUS_SENTENCE: Record<string, string> = {
-  logged: "logged",
-  nothing_new: "nothing new to log",
-  needs_assignment: "has no workout on that day; assign one, then upload again",
-  blocked: "training is locked until their documents are on file",
-  not_on_team: "is not on this team",
-  conflict: "their day changed while saving; upload again",
+  logged: msg("{name} logged"),
+  nothing_new: msg("{name}: nothing new to log"),
+  needs_assignment: msg("{name} has no workout on that day; assign one, then upload again"),
+  blocked: msg("{name}: training is locked until their documents are on file"),
+  not_on_team: msg("{name} is not on this team"),
+  conflict: msg("{name}: their day changed while saving; upload again"),
 };
 
 /** The coach's decisions on a draft: who each row is, which lift each written lift is, and the sets. */
@@ -76,6 +77,7 @@ function initialDecisions(draft: SheetDraft): Record<string, Decision> {
 }
 
 export function WeightRoomSheetUploadDialog({ open, onOpenChange, teams }: { open: boolean; onOpenChange: (open: boolean) => void; teams: { id: number; name: string }[] }) {
+  const t = useT();
   const [teamId, setTeamId] = useState<string>("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, ISO_DATE_LENGTH));
   const [draft, setDraft] = useState<SheetDraft | null>(null);
@@ -139,7 +141,7 @@ export function WeightRoomSheetUploadDialog({ open, onOpenChange, teams }: { ope
     },
     onSuccess: ({ results: r }) => {
       setResults(r);
-      toast.success(`Logged ${r.reduce((n, x) => n + x.written, 0)} sets.`);
+      toast.success(t("Logged {count} sets.", { count: r.reduce((n, x) => n + x.written, 0) }));
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -156,9 +158,9 @@ export function WeightRoomSheetUploadDialog({ open, onOpenChange, teams }: { ope
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) reset(); }}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Upload a filled sheet</DialogTitle>
+          <DialogTitle>{t("Upload a filled sheet")}</DialogTitle>
           <DialogDescription>
-            A photo or PDF of any filled sheet: Forge's own, a whiteboard, a notebook page. Several pages in any order are fine. Nothing is saved until you press Log.
+            {t("A photo or PDF of any filled sheet: Forge's own, a whiteboard, a notebook page. Several pages in any order are fine. Nothing is saved until you press Log.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -166,20 +168,20 @@ export function WeightRoomSheetUploadDialog({ open, onOpenChange, teams }: { ope
           <div className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <Label>Team (if the sheet has no Forge code)</Label>
+                <Label>{t("Team (if the sheet has no Forge code)")}</Label>
                 <Select value={teamId} onValueChange={setTeamId}>
-                  <SelectTrigger><SelectValue placeholder="Pick a team" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("Pick a team")} /></SelectTrigger>
                   <SelectContent>{teams.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label htmlFor="upload-date">Date</Label>
+                <Label htmlFor="upload-date">{t("Date")}</Label>
                 <Input id="upload-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
             </div>
             <Label htmlFor="sheet-files" className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed p-6 text-sm">
               <Upload className="h-4 w-4" />
-              {read.isPending ? "Reading…" : "Choose photos or a PDF"}
+              {read.isPending ? t("Reading…") : t("Choose photos or a PDF")}
             </Label>
             <input id="sheet-files" type="file" accept="image/*,application/pdf,.csv,.xlsx" multiple className="sr-only" onChange={(e) => e.target.files?.length && read.mutate(e.target.files)} data-testid="input-sheet-files" />
           </div>
@@ -188,23 +190,23 @@ export function WeightRoomSheetUploadDialog({ open, onOpenChange, teams }: { ope
         {draft && (
           <div className="space-y-4 text-sm">
             <p>
-              <span className="font-semibold">{draft.teamName}</span> · {draft.date} {draft.fromCode ? "(from the sheet's code)" : "(as you picked)"}
+              <span className="font-semibold">{draft.teamName}</span> · {draft.date} {draft.fromCode ? t("(from the sheet's code)") : t("(as you picked)")}
             </p>
             {draft.version.changed && (
               <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
-                <p className="flex items-center gap-1 font-medium"><AlertTriangle className="h-4 w-4" />The workout was edited after this sheet was printed.</p>
+                <p className="flex items-center gap-1 font-medium"><AlertTriangle className="h-4 w-4" />{t("The workout was edited after this sheet was printed.")}</p>
                 {draft.version.changes.length > 0 ? (
                   <ul className="list-disc pl-5">{draft.version.changes.map((c) => <li key={c}>{c}</li>)}</ul>
                 ) : (
-                  <p>Forge doesn't have the printed version on file, so it can't list what changed.</p>
+                  <p>{t("Forge doesn't have the printed version on file, so it can't list what changed.")}</p>
                 )}
                 <div className="flex items-center gap-2">
-                  Log against
+                  {t("Log against")}
                   <Select value={logAgainst} onValueChange={(v) => setLogAgainst(v as "current" | "printed")}>
                     <SelectTrigger className="h-8 w-auto"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="current">today's version</SelectItem>
-                      <SelectItem value="printed">the printed version</SelectItem>
+                      <SelectItem value="current">{t("today's version")}</SelectItem>
+                      <SelectItem value="printed">{t("the printed version")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -217,22 +219,22 @@ export function WeightRoomSheetUploadDialog({ open, onOpenChange, teams }: { ope
               return (
                 <div key={row.key} className="space-y-2 rounded-md border p-3" data-testid="sheet-review-row">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-muted-foreground">Written: “{row.written.join("”, “")}”</span>
+                    <span className="text-muted-foreground">{t("Written: “{names}”", { names: row.written.join("”, “") })}</span>
                     <Select value={d?.athleteId ? String(d.athleteId) : LEAVE_OUT} onValueChange={(v) => setDecision(row.key, { athleteId: v === LEAVE_OUT ? null : Number(v) })}>
                       <SelectTrigger className="h-8 w-auto"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={LEAVE_OUT}>Leave out</SelectItem>
+                        <SelectItem value={LEAVE_OUT}>{t("Leave out")}</SelectItem>
                         {(row.match.candidates.length > 0 ? row.match.candidates : draft.roster).map((a) => (
                           <SelectItem key={a.athleteId} value={String(a.athleteId)}>{a.displayName}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    {row.match.status === "ambiguous" && <span className="text-amber-600">Could be more than one athlete; choose.</span>}
-                    {row.match.status === "unmatched" && <span className="text-amber-600">No one on this team by that name; choose or leave out.</span>}
-                    {row.blocked && <span className="text-destructive">Locked until on file: {row.blocked.join(", ")}</span>}
-                    {d?.athleteId && !row.assignmentId && row.match.athleteId === d.athleteId && <span className="text-amber-600">No workout assigned that day.</span>}
-                    <span className="text-xs text-muted-foreground">{row.attendance === "present" ? "Present (sets written)" : "Not marked"}</span>
-                    {result && <span className="flex items-center gap-1 text-xs"><Check className="h-3.5 w-3.5" />{nameOf(d?.athleteId ?? null)} {STATUS_SENTENCE[result.status]}</span>}
+                    {row.match.status === "ambiguous" && <span className="text-amber-600">{t("Could be more than one athlete; choose.")}</span>}
+                    {row.match.status === "unmatched" && <span className="text-amber-600">{t("No one on this team by that name; choose or leave out.")}</span>}
+                    {row.blocked && <span className="text-destructive">{t("Locked until on file: {documents}", { documents: row.blocked.join(", ") })}</span>}
+                    {d?.athleteId && !row.assignmentId && row.match.athleteId === d.athleteId && <span className="text-amber-600">{t("No workout assigned that day.")}</span>}
+                    <span className="text-xs text-muted-foreground">{row.attendance === "present" ? t("Present (sets written)") : t("Not marked")}</span>
+                    {result && <span className="flex items-center gap-1 text-xs"><Check className="h-3.5 w-3.5" />{STATUS_SENTENCE[result.status] ? t(STATUS_SENTENCE[result.status], { name: nameOf(d?.athleteId ?? null) }) : nameOf(d?.athleteId ?? null)}</span>}
                   </div>
                   {row.lifts.map((lift, li) => (
                     <div key={li} className="space-y-1 pl-3">
@@ -241,24 +243,24 @@ export function WeightRoomSheetUploadDialog({ open, onOpenChange, teams }: { ope
                         <Select value={d?.lifts[li]?.programExerciseId ? String(d.lifts[li].programExerciseId) : LEAVE_OUT} onValueChange={(v) => setDecision(row.key, { lifts: d.lifts.map((l, i) => (i === li ? { ...l, programExerciseId: v === LEAVE_OUT ? null : Number(v) } : l)) })}>
                           <SelectTrigger className="h-8 w-auto"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value={LEAVE_OUT}>Leave out</SelectItem>
-                            {draft.dayLifts.map((l) => <SelectItem key={l.programExerciseId} value={String(l.programExerciseId)}>{l.name}</SelectItem>)}
+                            <SelectItem value={LEAVE_OUT}>{t("Leave out")}</SelectItem>
+                            {draft.dayLifts.map((l) => <SelectItem key={l.programExerciseId} value={String(l.programExerciseId)}>{t.exercise(l.name)}</SelectItem>)}
                           </SelectContent>
                         </Select>
-                        {lift.match.status !== "matched" && <span className="text-amber-600">Choose which lift this is.</span>}
-                        {lift.unreadCells.length > 0 && <span className="text-amber-600">Couldn't read: {lift.unreadCells.join(", ")}</span>}
+                        {lift.match.status !== "matched" && <span className="text-amber-600">{t("Choose which lift this is.")}</span>}
+                        {lift.unreadCells.length > 0 && <span className="text-amber-600">{t("Couldn't read: {cells}", { cells: lift.unreadCells.join(", ") })}</span>}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {(d?.lifts[li]?.sets ?? []).map((s, si) => (
                           <div key={si} className={`flex items-center gap-1 rounded border px-1 ${s.uncertain ? "border-amber-500" : ""}`}>
                             <span className="text-xs text-muted-foreground">{s.setNumber}{s.side ? SIDE_LETTER[s.side] : ""}</span>
                             {s.alreadyLogged ? (
-                              <span className="text-xs text-muted-foreground">already logged on the phone, skipped</span>
+                              <span className="text-xs text-muted-foreground">{t("already logged on the phone, skipped")}</span>
                             ) : (
                               <>
-                                <Input className="h-7 w-16" aria-label={`Weight, set ${s.setNumber}`} value={s.weight ?? ""} onChange={(e) => setSet(row.key, li, si, { weight: e.target.value || null })} />
+                                <Input className="h-7 w-16" aria-label={t("Weight, set {number}", { number: s.setNumber })} value={s.weight ?? ""} onChange={(e) => setSet(row.key, li, si, { weight: e.target.value || null })} />
                                 ×
-                                <Input className="h-7 w-12" aria-label={`Reps, set ${s.setNumber}`} value={s.reps} onChange={(e) => setSet(row.key, li, si, { reps: e.target.value })} />
+                                <Input className="h-7 w-12" aria-label={t("Reps, set {number}", { number: s.setNumber })} value={s.reps} onChange={(e) => setSet(row.key, li, si, { reps: e.target.value })} />
                               </>
                             )}
                           </div>
@@ -267,19 +269,19 @@ export function WeightRoomSheetUploadDialog({ open, onOpenChange, teams }: { ope
                     </div>
                   ))}
                   {Object.keys(row.notes).length > 0 && (
-                    <p className="pl-3 text-xs">Coach note for this day: {Object.entries(row.notes).map(([h, t]) => `${h}: ${t}`).join("; ")}</p>
+                    <p className="pl-3 text-xs">{t("Coach note for this day: {notes}", { notes: Object.entries(row.notes).map(([h, v]) => `${h}: ${v}`).join("; ") })}</p>
                   )}
                 </div>
               );
             })}
-            {draft.notPlaced.length > 0 && <p className="text-xs text-muted-foreground">Also on the sheet, not placed: {draft.notPlaced.join("; ")}</p>}
+            {draft.notPlaced.length > 0 && <p className="text-xs text-muted-foreground">{t("Also on the sheet, not placed: {items}", { items: draft.notPlaced.join("; ") })}</p>}
             <div className="space-y-1">
-              <Label htmlFor="sheet-coach-note">Coach notes (saved as a note on the day, never as numbers)</Label>
+              <Label htmlFor="sheet-coach-note">{t("Coach notes (saved as a note on the day, never as numbers)")}</Label>
               <Textarea id="sheet-coach-note" value={coachNote} onChange={(e) => setCoachNote(e.target.value)} />
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => log.mutate()} disabled={log.isPending || !draft.programDayId} data-testid="button-log-sheet">Log</Button>
-              <Button variant="outline" onClick={reset}>Read another sheet</Button>
+              <Button onClick={() => log.mutate()} disabled={log.isPending || !draft.programDayId} data-testid="button-log-sheet">{t("Log")}</Button>
+              <Button variant="outline" onClick={reset}>{t("Read another sheet")}</Button>
             </div>
           </div>
         )}

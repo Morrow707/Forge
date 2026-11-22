@@ -27,6 +27,7 @@ import {
   type ChallengeMetric,
   type TeamChallenge,
 } from "@/lib/team-challenges";
+import { useT } from "@/i18n";
 
 /** Lives inside a team's card on the roster page -- team-scoped, not
  * individual, so it sits alongside the existing per-athlete leaderboard
@@ -39,6 +40,7 @@ export function TeamChallengesSection({
   teamId: number;
   teamName: string;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const { data: challenges = [], isError, refetch } = useQuery<TeamChallenge[]>({
@@ -51,30 +53,30 @@ export function TeamChallengesSection({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/coach/team-challenges/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/team-challenges"] });
-      toast.success("Quest removed");
+      toast.success(t("Quest removed"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't remove that quest"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't remove that quest")),
   });
 
   return (
     <div className="mt-3 space-y-2 border-t border-border pt-3">
       <div className="flex items-center justify-between">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          <Trophy className="h-3.5 w-3.5" /> Squad Quests
+          <Trophy className="h-3.5 w-3.5" /> {t("Squad Quests")}
         </p>
         <Button size="sm" variant="ghost" onClick={() => setDialogOpen(true)}>
           <Plus className="h-3.5 w-3.5" />
-          New Quest
+          {t("New Quest")}
         </Button>
       </div>
       {isError ? (
         <ReadFailed
-          what="this team's quests"
+          what={t("this team's quests")}
           onRetry={() => void refetch()}
           className="flex flex-col items-start gap-2 text-left"
         />
       ) : teamChallenges.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No active quests for this team yet.</p>
+        <p className="text-xs text-muted-foreground">{t("No active quests for this team yet.")}</p>
       ) : (
         <div className="space-y-2">
           {teamChallenges.map((c) => (
@@ -89,7 +91,7 @@ export function TeamChallengesSection({
                 </div>
                 <button
                   type="button"
-                  aria-label={`Delete ${c.title}`}
+                  aria-label={t("Delete {name}", { name: c.title })}
                   onClick={() => deleteMutation.mutate(c.id)}
                   className="shrink-0 text-muted-foreground hover:text-destructive"
                 >
@@ -103,7 +105,7 @@ export function TeamChallengesSection({
                   </span>
                   {c.progress.target != null && (
                     <span className="text-xs text-muted-foreground">
-                      of {c.progress.target.toLocaleString()} goal
+                      {t("of {target} goal", { target: c.progress.target.toLocaleString() })}
                     </span>
                   )}
                 </div>
@@ -158,6 +160,7 @@ function CreateChallengeDialog({
   teamId: number;
   teamName: string;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [title, setTitle] = useState("");
   const [metric, setMetric] = useState<ChallengeMetric>("total_reps");
@@ -178,57 +181,57 @@ function CreateChallengeDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/team-challenges"] });
-      toast.success("Quest created");
+      toast.success(t("Quest created"));
       onOpenChange(false);
       setTitle("");
       setTargetValue("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't create that quest"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't create that quest")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New Squad Quest for {teamName}</DialogTitle>
+          <DialogTitle>{t("New Squad Quest for {team}", { team: teamName })}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="quest-title">Title</Label>
+            <Label htmlFor="quest-title">{t("Title")}</Label>
             <Input
               id="quest-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. August Volume Quest"
+              placeholder={t("e.g. August Volume Quest")}
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Metric</Label>
+            <Label>{t("Metric")}</Label>
             <Select value={metric} onValueChange={(v) => setMetric(v as ChallengeMetric)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="workouts_completed">Workouts Completed</SelectItem>
-                <SelectItem value="total_reps">Total Reps</SelectItem>
-                <SelectItem value="total_volume">Total Volume (lbs)</SelectItem>
+                <SelectItem value="workouts_completed">{t("Workouts Completed")}</SelectItem>
+                <SelectItem value="total_reps">{t("Total Reps")}</SelectItem>
+                <SelectItem value="total_volume">{t("Total Volume (lbs)")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="quest-target">Team Goal (optional)</Label>
+            <Label htmlFor="quest-target">{t("Team Goal (optional)")}</Label>
             <Input
               id="quest-target"
               type="number"
               min={1}
               value={targetValue}
               onChange={(e) => setTargetValue(e.target.value)}
-              placeholder="Leave blank to just track the running total"
+              placeholder={t("Leave blank to just track the running total")}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="min-w-0 space-y-1.5">
-              <Label htmlFor="quest-start">Start</Label>
+              <Label htmlFor="quest-start">{t("Start")}</Label>
               <Input
                 id="quest-start"
                 type="date"
@@ -238,7 +241,7 @@ function CreateChallengeDialog({
               />
             </div>
             <div className="min-w-0 space-y-1.5">
-              <Label htmlFor="quest-end">End</Label>
+              <Label htmlFor="quest-end">{t("End")}</Label>
               <Input
                 id="quest-end"
                 type="date"
@@ -251,14 +254,14 @@ function CreateChallengeDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
             type="button"
             onClick={() => createMutation.mutate()}
             disabled={!title.trim() || createMutation.isPending}
           >
-            Create Quest
+            {t("Create Quest")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
 import { MAX_CHECKIN_TEXT_ANSWER, type CheckinQuestionKind } from "@shared/brand-extras";
+import { useT } from "@/i18n";
 
 /**
  * A PROGRAM'S OWN CHECK-IN QUESTIONS (2026-11-19). Asked under Forge's five on the daily
@@ -52,11 +53,12 @@ export function useProgramCheckin(date: string, enabled: boolean) {
 }
 
 export function ProgramCheckinFields({ program }: { program: ReturnType<typeof useProgramCheckin> }) {
-  if (program.failed) return <ReadFailed what="your coach's questions" onRetry={program.retry} />;
+  const t = useT();
+  if (program.failed) return <ReadFailed what={t("your coach's questions")} onRetry={program.retry} />;
   if (program.questions.length === 0) return null;
   return (
     <div className="space-y-3 rounded-md border border-border/60 p-2.5">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">From your coach</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t("From your coach")}</p>
       {program.questions.map((q) => {
         const value = program.answers[q.id] ?? "";
         return (
@@ -66,7 +68,7 @@ export function ProgramCheckinFields({ program }: { program: ReturnType<typeof u
               <Input
                 value={value}
                 maxLength={MAX_CHECKIN_TEXT_ANSWER}
-                placeholder="Optional"
+                placeholder={t("Optional")}
                 onChange={(e) => program.setAnswer(q.id, e.target.value)}
               />
             ) : (

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getJson } from "@/lib/queryClient";
 import { X } from "lucide-react";
+import { useT } from "@/i18n";
 
 function dismissKey(date: string) {
   return `forge:readiness-banner-dismissed:${date}`;
@@ -18,6 +19,7 @@ function dismissKey(date: string) {
  * than permanently -- tomorrow's briefing is different content and should
  * still show. */
 export function ReadinessBanner({ date }: { date: string }) {
+  const t = useT();
   const { data } = useQuery<{ briefing: string } | null>({
     queryKey: ["/api/athlete/readiness", date],
     queryFn: () => getJson(`/api/athlete/readiness?date=${date}`),
@@ -33,7 +35,7 @@ export function ReadinessBanner({ date }: { date: string }) {
     <div className="relative rounded-lg border border-primary/25 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4 pr-10">
       <button
         type="button"
-        aria-label="Dismiss Coach's Brief"
+        aria-label={t("Dismiss Coach's Brief")}
         onClick={() => {
           window.localStorage.setItem(dismissKey(date), "1");
           setDismissed(true);
@@ -43,7 +45,7 @@ export function ReadinessBanner({ date }: { date: string }) {
         <X className="h-4 w-4" />
       </button>
       <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
-        Coach's Brief
+        {t("Coach's Brief")}
       </p>
       <p className="mt-2 border-l-2 border-primary/50 pl-3 font-display text-lg font-semibold leading-snug tracking-wide text-foreground sm:text-xl">
         {data.briefing}

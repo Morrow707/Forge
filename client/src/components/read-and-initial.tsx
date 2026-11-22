@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useT } from "@/i18n";
 
 /**
  * READING IS A THING THE SOFTWARE CAN SEE, AND SIGNING IS A THING THE READER DOES.
@@ -82,6 +83,7 @@ export function InitialsField({
   label?: string;
   id?: string;
 }) {
+  const t = useT();
   const touched = value.trim().length > 0;
   const invalid = touched && !initialsLookValid(value);
   return (
@@ -99,19 +101,20 @@ export function InitialsField({
         autoComplete="off"
         spellCheck={false}
         maxLength={5}
-        placeholder="AB"
+        placeholder={t("AB")}
         aria-invalid={invalid || undefined}
       />
-      {invalid && <p className="text-xs text-destructive">Initials only, two to five letters.</p>}
+      {invalid && <p className="text-xs text-destructive">{t("Initials only, two to five letters.")}</p>}
     </div>
   );
 }
 
 /** The one line shown where the button will be, before the reader has got there. */
 export function ScrollToEndHint() {
+  const t = useT();
   return (
     <p className="text-sm text-muted-foreground">
-      Scroll to the end of the document to continue.
+      {t("Scroll to the end of the document to continue.")}
     </p>
   );
 }

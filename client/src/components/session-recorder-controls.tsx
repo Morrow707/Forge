@@ -9,6 +9,7 @@ import {
   startSessionRecording,
   stopSessionRecording,
 } from "@/lib/session-recorder";
+import { useT } from "@/i18n";
 
 /** THE ONLY THING THAT SURVIVES A WORKBENCH SESSION.
  *
@@ -21,6 +22,7 @@ import {
  * choice and losing work.
  */
 export function SessionRecorderControls() {
+  const t = useT();
   const [support, setSupport] = useState<{ supported: boolean; reason: string } | null>(null);
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -44,7 +46,7 @@ export function SessionRecorderControls() {
       setRecording(true);
       setTake(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't start recording");
+      toast.error(err instanceof Error ? err.message : t("Couldn't start recording"));
     } finally {
       setBusy(false);
     }
@@ -58,7 +60,7 @@ export function SessionRecorderControls() {
       setTake(result);
     } catch (err) {
       setRecording(false);
-      toast.error(err instanceof Error ? err.message : "Couldn't finish the recording");
+      toast.error(err instanceof Error ? err.message : t("Couldn't finish the recording"));
     } finally {
       setBusy(false);
     }
@@ -72,9 +74,9 @@ export function SessionRecorderControls() {
       // Cleared only on success. A failed save that dropped the take would lose the session
       // outright, which is the one outcome this whole control exists to prevent.
       setTake(null);
-      toast.success("Saved to your Photos");
+      toast.success(t("Saved to your Photos"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't save to Photos");
+      toast.error(err instanceof Error ? err.message : t("Couldn't save to Photos"));
     } finally {
       setBusy(false);
     }
@@ -89,14 +91,13 @@ export function SessionRecorderControls() {
     return (
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[11px] text-white/70">
-          Take ready, {(take.sizeBytes / 1_000_000).toFixed(1)} MB. Save it to your phone or it
-          is gone.
+          {t("Take ready, {size} MB. Save it to your phone or it is gone.", { size: (take.sizeBytes / 1_000_000).toFixed(1) })}
         </span>
         <Button size="sm" className="ml-auto" onClick={() => void save()} disabled={busy}>
-          <Download className="h-3.5 w-3.5" /> Save to Photos
+          <Download className="h-3.5 w-3.5" /> {t("Save to Photos")}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => void discard()} disabled={busy}>
-          <Trash2 className="h-3.5 w-3.5" /> Discard
+          <Trash2 className="h-3.5 w-3.5" /> {t("Discard")}
         </Button>
       </div>
     );
@@ -106,16 +107,16 @@ export function SessionRecorderControls() {
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-[11px] text-white/50">
         {recording
-          ? "Recording this session, everything on screen, and your voice."
-          : "Nothing here is saved to Forge. Record the session to keep it."}
+          ? t("Recording this session, everything on screen, and your voice.")
+          : t("Nothing here is saved to Forge. Record the session to keep it.")}
       </span>
       {recording ? (
         <Button size="sm" variant="destructive" className="ml-auto" onClick={() => void stop()} disabled={busy}>
-          <Square className="h-3.5 w-3.5" /> Stop
+          <Square className="h-3.5 w-3.5" /> {t("Stop")}
         </Button>
       ) : (
         <Button size="sm" className="ml-auto" onClick={() => void start()} disabled={busy}>
-          <Circle className="h-3.5 w-3.5" /> Record
+          <Circle className="h-3.5 w-3.5" /> {t("Record")}
         </Button>
       )}
     </div>

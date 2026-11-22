@@ -2,6 +2,7 @@ import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { ListChecks, Dumbbell, ClipboardList, Target, GraduationCap } from "lucide-react";
 import type { CoachSection } from "@shared/coach-sections";
+import { useT } from "@/i18n";
 
 /** Tab strip shown under the page title on the coach's Programs, Exercise
  * Bank, Skill Programs, Skill Bank, and (coach-only) Classes list pages --
@@ -41,6 +42,7 @@ export function LibraryTabs({
   showBanks?: boolean;
   hiddenSections?: CoachSection[];
 }) {
+  const t = useT();
   const [, navigate] = useLocation();
   const hidden = new Set(hiddenSections);
 
@@ -55,13 +57,13 @@ export function LibraryTabs({
       {!hidden.has("programs") && (
         <button type="button" onClick={() => navigate(programsHref)} className={tabClass(active === "programs")}>
           <ListChecks className="h-3.5 w-3.5" />
-          Programs
+          {t("Programs")}
         </button>
       )}
       {showBanks && !hidden.has("exercises") && (
         <button type="button" onClick={() => navigate(exercisesHref)} className={tabClass(active === "exercises")}>
           <Dumbbell className="h-3.5 w-3.5" />
-          Exercise Bank
+          {t("Exercise Bank")}
         </button>
       )}
       {!hidden.has("skillPrograms") && (
@@ -71,7 +73,7 @@ export function LibraryTabs({
           className={tabClass(active === "skill-programs", "bg-teal-500 text-white")}
         >
           <ClipboardList className="h-3.5 w-3.5" />
-          Skill Programs
+          {t("Skill Programs")}
         </button>
       )}
       {showBanks && !hidden.has("skillBank") && (
@@ -81,7 +83,7 @@ export function LibraryTabs({
           className={tabClass(active === "skill-bank", "bg-teal-500 text-white")}
         >
           <Target className="h-3.5 w-3.5" />
-          Skill Bank
+          {t("Skill Bank")}
         </button>
       )}
       {classesHref && !hidden.has("classes") && (
@@ -91,7 +93,7 @@ export function LibraryTabs({
           className={tabClass(active === "classes", "bg-teal-500 text-white")}
         >
           <GraduationCap className="h-3.5 w-3.5" />
-          Classes
+          {t("Classes")}
         </button>
       )}
     </div>

@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 // A curated, always-present set of quick-access tabs spanning the major
 // movement patterns (squat, hinge, press, pull, Olympic, plyo) a college
@@ -47,6 +48,7 @@ export function PinnedExercisePicker({
   value: string;
   onChange: (name: string) => void;
 }) {
+  const t = useT();
   const [search, setSearch] = useState("");
   const trackedSet = new Set(options);
   const otherOptions = options.filter((o) => !MAJOR_LIFTS.includes(o));
@@ -88,17 +90,17 @@ export function PinnedExercisePicker({
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search other exercises…"
+              placeholder={t("Search other exercises…")}
               className="h-8 pl-8 text-sm"
             />
           </div>
           <Select value={selectedIsOther ? value : ""} onValueChange={onChange}>
             <SelectTrigger className="h-8 w-56 text-sm">
-              <SelectValue placeholder="More exercises…" />
+              <SelectValue placeholder={t("More exercises…")} />
             </SelectTrigger>
             <SelectContent>
               {filteredOthers.length === 0 ? (
-                <p className="px-2 py-1.5 text-sm text-muted-foreground">No matches</p>
+                <p className="px-2 py-1.5 text-sm text-muted-foreground">{t("No matches")}</p>
               ) : (
                 filteredOthers.map((o) => (
                   <SelectItem key={o} value={o}>

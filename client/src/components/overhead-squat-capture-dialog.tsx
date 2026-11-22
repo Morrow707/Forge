@@ -8,6 +8,7 @@ import { assessOverheadSquat, type OverheadSquatAssessment } from "@/lib/movemen
 import { Camera, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import type { PoseLandmarker } from "@mediapipe/tasks-vision";
 import { WebCameraChrome } from "@/components/web-camera-chrome";
+import { useT } from "@/i18n";
 
 const RECORD_MS = 4000;
 
@@ -26,6 +27,7 @@ export function OverheadSquatCaptureDialog({
   onOpenChange: (open: boolean) => void;
   onUseGrade: (grade: number) => void;
 }) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const videoTrackRef = useRef<MediaStreamTrack | null>(null);
@@ -144,11 +146,10 @@ export function OverheadSquatCaptureDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Camera className="h-5 w-5 text-primary" />
-            Camera-Assisted Overhead Squat
+            {t("Camera-Assisted Overhead Squat")}
           </DialogTitle>
           <DialogDescription>
-            Stand where your whole body is in frame, arms overhead, then record one rep. This is an estimate from a
-            2D camera view, review the suggested grade before using it.
+            {t("Stand where your whole body is in frame, arms overhead, then record one rep. This is an estimate from a 2D camera view, review the suggested grade before using it.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -159,7 +160,7 @@ export function OverheadSquatCaptureDialog({
             <div className="absolute inset-0 flex items-center justify-center bg-black/70 p-4 text-center text-sm text-white">
               {cameraError ?? (
                 <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading camera and pose model...
+                  <Loader2 className="h-4 w-4 animate-spin" /> {t("Loading camera and pose model...")}
                 </span>
               )}
             </div>
@@ -168,7 +169,7 @@ export function OverheadSquatCaptureDialog({
             <div className="absolute left-2 top-2">
               <Badge variant={poseVisible ? "default" : "outline"} className="flex items-center gap-1 bg-black/60 text-white">
                 {poseVisible ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-                {poseVisible ? "Full body in frame" : "Step back until your whole body is visible"}
+                {poseVisible ? t("Full body in frame") : t("Step back until your whole body is visible")}
               </Badge>
             </div>
           )}
@@ -182,12 +183,12 @@ export function OverheadSquatCaptureDialog({
         {!result ? (
           <Button type="button" onClick={startRecording} disabled={!poseVisible || recording || !!cameraError}>
             {recording ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-            {recording ? "Recording..." : "Record Rep"}
+            {recording ? t("Recording...") : t("Record Rep")}
           </Button>
         ) : (
           <div className="space-y-3 rounded-lg border border-border p-3">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold">Suggested grade</p>
+              <p className="text-sm font-semibold">{t("Suggested grade")}</p>
               <Badge variant={result.suggestedGrade >= 2 ? "default" : "destructive"} className="text-base">
                 {result.suggestedGrade}/3
               </Badge>
@@ -195,18 +196,18 @@ export function OverheadSquatCaptureDialog({
             {result.faults.length > 0 ? (
               <ul className="space-y-1 text-xs text-muted-foreground">
                 {result.faults.map((f) => (
-                  <li key={f.code}>&bull; {f.label}</li>
+                  <li key={f.code}>• {f.label}</li>
                 ))}
               </ul>
             ) : (
-              <p className="text-xs text-muted-foreground">No compensations detected.</p>
+              <p className="text-xs text-muted-foreground">{t("No compensations detected.")}</p>
             )}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" size="sm" onClick={startRecording}>
-                Retry
+                {t("Retry")}
               </Button>
               <Button type="button" size="sm" onClick={() => onUseGrade(result.suggestedGrade)}>
-                Use This Grade
+                {t("Use This Grade")}
               </Button>
             </div>
           </div>

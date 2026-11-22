@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { Pencil, Wand2 } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type SkillSession = {
   id: number;
@@ -34,6 +35,7 @@ export function SkillSessionsPanel({
   athleteName: string;
   athleteId: number;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const url = `/api/coach/roster/${athleteId}/skill-sessions`;
   const { data: sessions = [], isLoading, isError, refetch } = useQuery<SkillSession[]>({
@@ -50,9 +52,9 @@ export function SkillSessionsPanel({
         imageUrl,
       });
       qc.invalidateQueries({ queryKey: [url] });
-      toast.success("Annotation saved");
+      toast.success(t("Annotation saved"));
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Couldn't save the annotation");
+      toast.error(err instanceof ApiError ? err.message : t("Couldn't save the annotation"));
     } finally {
       setAnnotating(null);
     }
@@ -61,16 +63,15 @@ export function SkillSessionsPanel({
   return (
     <>
       <p className="mb-3 text-sm text-muted-foreground">
-        Saved swing/throw clips {athleteName.split(" ")[0]} chose to share, draw on a frame to
-        leave feedback.
+        {t("Saved swing/throw clips {name} chose to share, draw on a frame to leave feedback.", { name: athleteName.split(" ")[0] })}
       </p>
 
       {isLoading ? (
         <div className="h-16 animate-pulse rounded-md bg-surface" />
       ) : isError ? (
-        <ReadFailed what="these sessions" onRetry={() => void refetch()} />
+        <ReadFailed what={t("these sessions")} onRetry={() => void refetch()} />
       ) : sessions.length === 0 ? (
-        <p className="py-4 text-center text-sm text-muted-foreground">No saved clips yet.</p>
+        <p className="py-4 text-center text-sm text-muted-foreground">{t("No saved clips yet.")}</p>
       ) : (
         <div className="max-h-[60vh] space-y-3 overflow-y-auto">
           {sessions.map((s) => (
@@ -85,18 +86,18 @@ export function SkillSessionsPanel({
               {s.coachAnnotationUrl && (
                 <img
                   src={resolveApiUrl(s.coachAnnotationUrl)}
-                  alt="Your annotation"
+                  alt={t("Your annotation")}
                   className="mb-2 w-full rounded-md border border-border"
                 />
               )}
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => setAnnotating(s)}>
                   <Pencil className="h-3.5 w-3.5" />
-                  {s.coachAnnotationUrl ? "Redo annotation" : "Annotate"}
+                  {s.coachAnnotationUrl ? t("Redo annotation") : t("Annotate")}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => setAnalyzing(s)}>
                   <Wand2 className="h-3.5 w-3.5" />
-                  Analysis Tools
+                  {t("Analysis Tools")}
                 </Button>
               </div>
             </div>

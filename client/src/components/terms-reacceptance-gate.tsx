@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ReadFailed } from "@/components/read-failed";
 import { ScrollText } from "lucide-react";
 import { useFirstRunDialogSlot } from "@/hooks/use-first-run-dialogs";
+import { useT } from "@/i18n";
 
 export type TermsStatus = {
   needsAcceptance: boolean;
@@ -41,6 +42,7 @@ export type TermsStatus = {
  * section of CLAUDE.md).
  */
 export function TermsReacceptanceGate() {
+  const t = useT();
   const { user, logoutMutation } = useAuth();
   const qc = useQueryClient();
   const [agreed, setAgreed] = useState(false);
@@ -76,7 +78,7 @@ export function TermsReacceptanceGate() {
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
       qc.invalidateQueries({ queryKey: ["/api/auth/terms-status"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't record that right now"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't record that right now")),
   });
 
   // FIRST in the first-run queue, ahead of both camera notices: this one is a contract and is
@@ -111,14 +113,14 @@ export function TermsReacceptanceGate() {
       >
         <DialogHeader>
           <ScrollText className="h-7 w-7 text-primary" />
-          <DialogTitle>Forge's Terms of Use have changed</DialogTitle>
+          <DialogTitle>{t("Forge's Terms of Use have changed")}</DialogTitle>
         </DialogHeader>
         {isError || !status ? (
-          <ReadFailed what="the updated Terms of Use" error={error} onRetry={() => void refetch()} />
+          <ReadFailed what={t("the updated Terms of Use")} error={error} onRetry={() => void refetch()} />
         ) : (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Please read the updated terms and accept them to keep using Forge.
+              {t("Please read the updated terms and accept them to keep using Forge.")}
             </p>
             <div
               ref={termsRef}
@@ -141,7 +143,7 @@ export function TermsReacceptanceGate() {
                     onCheckedChange={(v) => setAgreed(v === true)}
                     className="mt-0.5"
                   />
-                  <span>I have read the updated Terms of Use and agree to them</span>
+                  <span>{t("I have read the updated Terms of Use and agree to them")}</span>
                 </label>
                 <InitialsField value={initials} onChange={setInitials} disabled={accept.isPending} />
               </>
@@ -153,7 +155,7 @@ export function TermsReacceptanceGate() {
                 className="text-sm text-muted-foreground underline underline-offset-4"
                 onClick={() => logoutMutation.mutate()}
               >
-                Sign out instead
+                {t("Sign out instead")}
               </button>
               {reachedEnd && (
                 <Button
@@ -161,7 +163,7 @@ export function TermsReacceptanceGate() {
                   disabled={!canAccept || accept.isPending}
                   onClick={() => accept.mutate()}
                 >
-                  {accept.isPending ? "Saving..." : "Accept"}
+                  {accept.isPending ? t("Saving...") : t("Accept")}
                 </Button>
               )}
             </div>

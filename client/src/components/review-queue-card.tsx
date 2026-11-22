@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { differenceInCalendarDays, format, parseISO } from "date-fns";
+import { differenceInCalendarDays, parseISO } from "date-fns";
 import { Film, VideoOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ReadFailed } from "@/components/read-failed";
 import { getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n";
 
 type QueueRow = {
   id: number;
@@ -40,6 +41,7 @@ function ageInDays(iso: string): number | null {
  * request that silently vanished would be the longest-waiting one.
  */
 export function ReviewQueueCard() {
+  const t = useT();
   const queue = useQuery<QueueRow[]>({
     queryKey: ["/api/coach/video-review-requests"],
     queryFn: () => getJson("/api/coach/video-review-requests"),
@@ -51,7 +53,7 @@ export function ReviewQueueCard() {
     return (
       <Card>
         <CardContent className="py-6">
-          <ReadFailed what="your review queue" onRetry={() => void queue.refetch()} />
+          <ReadFailed what={t("your review queue")} onRetry={() => void queue.refetch()} />
         </CardContent>
       </Card>
     );
@@ -64,9 +66,9 @@ export function ReviewQueueCard() {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">
-          Clips waiting for you{rows.length > 0 ? ` (${rows.length})` : ""}
+          {rows.length > 0 ? t("Clips waiting for you ({count})", { count: rows.length }) : t("Clips waiting for you")}
         </CardTitle>
-        <CardDescription>Oldest first — your athletes asked you to look at these.</CardDescription>
+        <CardDescription>{t("Oldest first — your athletes asked you to look at these.")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
         {queue.isLoading ? (
@@ -87,16 +89,16 @@ export function ReviewQueueCard() {
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">
-                    {r.athleteName} — {r.exerciseName}
-                    {r.setNumber != null ? ` · Set ${r.setNumber}` : ""}
+                    {r.athleteName} — {t.exercise(r.exerciseName)}
+                    {r.setNumber != null ? ` · ${t("Set {number}", { number: r.setNumber })}` : ""}
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">
                     {r.note
                       ? r.note
                       : r.date
-                        ? `Filmed ${format(parseISO(r.date), "MMM d")}`
-                        : "Asked for a look"}
-                    {r.clipAvailable ? "" : " · clip no longer available"}
+                        ? t("Filmed {date}", { date: t.date(parseISO(r.date), { month: "short", day: "numeric" }) })
+                        : t("Asked for a look")}
+                    {r.clipAvailable ? "" : ` · ${t("clip no longer available")}`}
                   </span>
                 </span>
                 {age != null && (
@@ -106,7 +108,7 @@ export function ReviewQueueCard() {
                       age >= 7 ? "text-destructive" : "text-muted-foreground",
                     )}
                   >
-                    {age === 0 ? "today" : age === 1 ? "1 day" : `${age} days`}
+                    {age === 0 ? t("today") : age === 1 ? t("1 day") : t("{count} days", { count: age })}
                   </span>
                 )}
               </Link>

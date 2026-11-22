@@ -40,6 +40,7 @@ import {
   disableHealthSync,
   nativeHealthName,
 } from "@/lib/native-health";
+import { useT } from "@/i18n";
 
 export function NotificationSettingsDialog({
   user,
@@ -50,6 +51,7 @@ export function NotificationSettingsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [notifyEmail, setNotifyEmail] = useState(true);
   // Push is per-device, not part of the account -- tracked separately from
@@ -100,7 +102,7 @@ export function NotificationSettingsDialog({
   function toggleBiometricLock(next: boolean) {
     setBiometricLockEnabled(next);
     setBioLockEnabled(next);
-    toast.success(next ? "Face ID/Touch ID lock enabled" : "Lock screen turned off");
+    toast.success(next ? t("Face ID/Touch ID lock enabled") : t("Lock screen turned off"));
   }
 
   async function toggleHealthSync(next: boolean) {
@@ -108,14 +110,14 @@ export function NotificationSettingsDialog({
     try {
       if (next) {
         await enableHealthSync(user.id);
-        toast.success(`${nativeHealthName()} sync enabled, your check-in will pre-fill when available`);
+        toast.success(t("{health} sync enabled, your check-in will pre-fill when available", { health: nativeHealthName() }));
       } else {
         disableHealthSync(user.id);
-        toast.success(`${nativeHealthName()} sync turned off`);
+        toast.success(t("{health} sync turned off", { health: nativeHealthName() }));
       }
       setHealthSyncEnabledState(next);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not update Health sync");
+      toast.error(err instanceof Error ? err.message : t("Could not update Health sync"));
     } finally {
       setHealthSyncBusy(false);
     }
@@ -136,18 +138,18 @@ export function NotificationSettingsDialog({
         apns: { configured: boolean; devices: number; delivered: boolean };
       };
       const describe = (label: string, r: { configured: boolean; devices: number; delivered: boolean }) => {
-        if (!r.configured) return `${label}: not set up on the server`;
-        if (r.devices === 0) return `${label}: no device registered`;
-        return r.delivered ? `${label}: sent` : `${label}: rejected by the push service`;
+        if (!r.configured) return t("{label}: not set up on the server", { label });
+        if (r.devices === 0) return t("{label}: no device registered", { label });
+        return r.delivered ? t("{label}: sent", { label }) : t("{label}: rejected by the push service", { label });
       };
       const lines = [describe("Web", result.web), describe("Apple", result.apns)];
       if (result.web.delivered || result.apns.delivered) {
-        toast.success(`Test sent, ${lines.join(", ")}`);
+        toast.success(t("Test sent, {details}", { details: lines.join(", ") }));
       } else {
-        toast.error(`Nothing was sent, ${lines.join(", ")}`);
+        toast.error(t("Nothing was sent, {details}", { details: lines.join(", ") }));
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not send a test notification");
+      toast.error(err instanceof Error ? err.message : t("Could not send a test notification"));
     } finally {
       setTestBusy(false);
     }
@@ -158,14 +160,14 @@ export function NotificationSettingsDialog({
     try {
       if (next) {
         await (isNativePushSupported() ? subscribeToNativePush() : subscribeToPush());
-        toast.success("Push notifications enabled on this device");
+        toast.success(t("Push notifications enabled on this device"));
       } else {
         await (isNativePushSupported() ? unsubscribeFromNativePush() : unsubscribeFromPush());
-        toast.success("Push notifications turned off on this device");
+        toast.success(t("Push notifications turned off on this device"));
       }
       setPushSubscribed(next);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not update push notifications");
+      toast.error(err instanceof Error ? err.message : t("Could not update push notifications"));
     } finally {
       setPushBusy(false);
     }
@@ -177,7 +179,7 @@ export function NotificationSettingsDialog({
       return (await res.json()) as PublicUser;
     },
     onSuccess: (updatedUser) => qc.setQueryData(["/api/auth/me"], updatedUser),
-    onError: (err: ApiError) => toast.error(err.message || "Could not save that preference"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not save that preference")),
   });
 
   function toggleCategory(key: string, enabled: boolean) {
@@ -194,21 +196,20 @@ export function NotificationSettingsDialog({
     },
     onSuccess: (updatedUser) => {
       qc.setQueryData(["/api/auth/me"], updatedUser);
-      toast.success("Notification settings saved");
+      toast.success(t("Notification settings saved"));
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save settings"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not save settings")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Notification Settings</DialogTitle>
+          <DialogTitle>{t("Notification Settings")}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Choose which categories reach you by push, on top of enabling push itself below. An
-          urgent team announcement always gets through regardless of what you mute here.
+          {t("Choose which categories reach you by push, on top of enabling push itself below. An urgent team announcement always gets through regardless of what you mute here.")}
         </p>
         <div className="space-y-4">
           {pushSupported && (
@@ -220,10 +221,10 @@ export function NotificationSettingsDialog({
               />
               <span>
                 <span className="flex items-center gap-1.5 font-semibold">
-                  <Bell className="h-3.5 w-3.5" /> Push notifications
+                  <Bell className="h-3.5 w-3.5" /> {t("Push notifications")}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Sent to this device/browser only, enable on each one you want alerts on.
+                  {t("Sent to this device/browser only, enable on each one you want alerts on.")}
                 </span>
               </span>
             </label>
@@ -256,11 +257,10 @@ export function NotificationSettingsDialog({
               onClick={sendTestNotification}
             >
               <Send className="mr-1.5 h-3.5 w-3.5" />
-              {testBusy ? "Sending..." : "Send a test notification"}
+              {testBusy ? t("Sending...") : t("Send a test notification")}
             </Button>
             <p className="mt-1 text-xs text-muted-foreground">
-              Goes to your own devices only, and tells you which of web and Apple push actually
-              took it, the quickest way to tell "set up wrong" from "nothing has happened yet".
+              {t("Goes to your own devices only, and tells you which of web and Apple push actually took it, the quickest way to tell \"set up wrong\" from \"nothing has happened yet\".")}
             </p>
           </div>
           {bioLockAvailable && (
@@ -271,11 +271,10 @@ export function NotificationSettingsDialog({
               />
               <span>
                 <span className="flex items-center gap-1.5 font-semibold">
-                  <ScanFace className="h-3.5 w-3.5" /> Require Face ID / Touch ID
+                  <ScanFace className="h-3.5 w-3.5" /> {t("Require Face ID / Touch ID")}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Lock the app on this device until you authenticate, on top of
-                  staying signed in, not instead of it.
+                  {t("Lock the app on this device until you authenticate, on top of staying signed in, not instead of it.")}
                 </span>
               </span>
             </label>
@@ -289,12 +288,10 @@ export function NotificationSettingsDialog({
               />
               <span>
                 <span className="flex items-center gap-1.5 font-semibold">
-                  <Watch className="h-3.5 w-3.5" /> Sync {nativeHealthName()}
+                  <Watch className="h-3.5 w-3.5" /> {t("Sync {health}", { health: nativeHealthName() })}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Pre-fills sleep, resting heart rate, and heart rate variability on
-                  your daily check-in from your watch or tracker, always editable
-                  before you submit. {APPLE_HEALTH_DISCLOSURE}
+                  {t("Pre-fills sleep, resting heart rate, and heart rate variability on your daily check-in from your watch or tracker, always editable before you submit.")} {APPLE_HEALTH_DISCLOSURE}
                 </span>
               </span>
             </label>
@@ -306,10 +303,10 @@ export function NotificationSettingsDialog({
             />
             <span>
               <span className="flex items-center gap-1.5 font-semibold">
-                <Mail className="h-3.5 w-3.5" /> Email notifications
+                <Mail className="h-3.5 w-3.5" /> {t("Email notifications")}
               </span>
               <span className="text-xs text-muted-foreground">
-                Sent to your account email.
+                {t("Sent to your account email.")}
               </span>
             </span>
           </label>
@@ -322,14 +319,14 @@ export function NotificationSettingsDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
             type="button"
             onClick={() => saveMutation.mutate()}
             disabled={saveMutation.isPending}
           >
-            Save
+            {t("Save")}
           </Button>
         </DialogFooter>
       </DialogContent>

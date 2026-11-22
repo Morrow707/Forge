@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Send, MessagesSquare, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
+import { useT } from "@/i18n";
 
 /** How much of a coach's post rides along to the private reply as a quote. */
 const QUOTE_LENGTH = 200;
@@ -30,6 +31,7 @@ type TeamPost = {
  * `canAnnounce` (coach-only) shows the push-notification opt-in checkbox --
  * off by default on every new post so it's never left on by accident. */
 export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; canAnnounce?: boolean }) {
+  const t = useT();
   const qc = useQueryClient();
   const canReplyPrivately = baseUrl.startsWith("/api/athlete/");
   const [body, setBody] = useState("");
@@ -63,7 +65,7 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
       setBody("");
       setIsAnnouncement(false);
     },
-    onError: () => toast.error("Couldn't post that"),
+    onError: () => toast.error(t("Couldn't post that")),
   });
 
   return (
@@ -71,11 +73,10 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <MessagesSquare className="h-5 w-5 text-primary" />
-          Team Board
+          {t("Team Board")}
         </CardTitle>
         <CardDescription>
-          One shared board for the whole team, everyone on the roster and the coach can see
-          every question and answer here.
+          {t("One shared board for the whole team, everyone on the roster and the coach can see every question and answer here.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -91,13 +92,13 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
             <Textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Ask a question or post an update the whole team can see..."
+              placeholder={t("Ask a question or post an update the whole team can see...")}
               className="min-h-[44px] flex-1 resize-none"
               maxLength={2000}
             />
             <Button type="submit" disabled={post.isPending || !body.trim()}>
               <Send className="h-4 w-4" />
-              Post
+              {t("Post")}
             </Button>
           </div>
           {canAnnounce && (
@@ -107,8 +108,7 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
                 onCheckedChange={(checked) => setIsAnnouncement(checked === true)}
               />
               <Megaphone className="h-3.5 w-3.5" />
-              Send as a push notification to the whole team (emergencies only, reaches
-              everyone regardless of their notification settings)
+              {t("Send as a push notification to the whole team (emergencies only, reaches everyone regardless of their notification settings)")}
             </label>
           )}
         </form>
@@ -120,14 +120,14 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
             // invitation to repeat a question the board already answered. The composer above
             // stays: posting still works when only the read failed.
             <ReadFailed
-              what="the board"
+              what={t("the board")}
               onRetry={() => void refetchPosts()}
               className="flex flex-col items-center gap-2 py-8 text-center"
             />
           )}
           {!isLoading && !postsFailed && !posts?.length && (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              No posts yet, be the first to ask something.
+              {t("No posts yet, be the first to ask something.")}
             </p>
           )}
           {posts?.map((p) => (
@@ -143,13 +143,13 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
                   <span className="font-semibold">{p.author.name}</span>
                   {p.author.role === "coach" && (
                     <Badge variant="secondary" className="text-[10px] uppercase">
-                      Coach
+                      {t("Coach")}
                     </Badge>
                   )}
                   {p.isAnnouncement && (
                     <Badge className="gap-1 bg-primary text-primary-foreground hover:bg-primary">
                       <Megaphone className="h-3 w-3" />
-                      Announcement
+                      {t("Announcement")}
                     </Badge>
                   )}
                 </div>
@@ -166,7 +166,7 @@ export function TeamBoard({ baseUrl, canAnnounce = false }: { baseUrl: string; c
                   className="mt-2 inline-block text-xs text-primary underline"
                   data-testid={`link-reply-privately-${p.id}`}
                 >
-                  Reply privately to {p.author.name}
+                  {t("Reply privately to {name}", { name: p.author.name })}
                 </Link>
               )}
             </div>

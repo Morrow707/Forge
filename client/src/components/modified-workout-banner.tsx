@@ -4,6 +4,7 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, RotateCcw, Sparkles } from "lucide-react";
 import { BODY_PAIN_PARTS } from "@shared/wellness";
+import { useT } from "@/i18n";
 
 const LABEL_BY_PART = new Map<string, string>(BODY_PAIN_PARTS.map((p) => [p.key, p.label]));
 
@@ -32,6 +33,7 @@ export function ModifiedWorkoutBanner({
   hasModifiableRisk: boolean;
   isModified: boolean;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const dayQueryKey = [`${apiBase}/day`, assignmentId, programDayId, date];
 
@@ -48,7 +50,7 @@ export function ModifiedWorkoutBanner({
       qc.invalidateQueries({ queryKey: dayQueryKey });
       toast.success(result.summary);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't modify today's workout"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't modify today's workout")),
   });
 
   const revertMutation = useMutation({
@@ -56,14 +58,14 @@ export function ModifiedWorkoutBanner({
       apiRequest("DELETE", `${apiBase}/assignments/${assignmentId}/days/${programDayId}/modified-workout`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: dayQueryKey });
-      toast.success("Reverted to the original session");
+      toast.success(t("Reverted to the original session"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't revert this workout"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't revert this workout")),
   });
 
   if (todayPainParts.length === 0) return null;
 
-  const painLabels = todayPainParts.map((p) => LABEL_BY_PART.get(p) ?? p).join(", ");
+  const painLabels = todayPainParts.map((p) => { const label = LABEL_BY_PART.get(p); return label ? t(label) : p; }).join(", ");
 
   if (hasModifiableRisk) {
     return (
@@ -72,10 +74,10 @@ export function ModifiedWorkoutBanner({
         <div className="min-w-0 flex-1 space-y-2">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-500">
-              Pain flagged today
+              {t("Pain flagged today")}
             </p>
             <p className="text-sm text-foreground">
-              You reported {painLabels} in today's check-in, part of this session may aggravate it.
+              {t("You reported {pain} in today's check-in, part of this session may aggravate it.", { pain: painLabels })}
             </p>
           </div>
           <Button
@@ -85,7 +87,7 @@ export function ModifiedWorkoutBanner({
             disabled={generateMutation.isPending}
           >
             <Sparkles className="h-3.5 w-3.5" />
-            Generate Modified Workout
+            {t("Generate Modified Workout")}
           </Button>
         </div>
       </div>
@@ -98,7 +100,7 @@ export function ModifiedWorkoutBanner({
         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
         <div className="min-w-0 flex-1 space-y-2">
           <p className="text-sm text-foreground">
-            Modified for today's reported {painLabels} pain.
+            {t("Modified for today's reported {pain} pain.", { pain: painLabels })}
           </p>
           <Button
             size="sm"
@@ -107,7 +109,7 @@ export function ModifiedWorkoutBanner({
             disabled={revertMutation.isPending}
           >
             <RotateCcw className="h-3.5 w-3.5" />
-            Revert to Original
+            {t("Revert to Original")}
           </Button>
         </div>
       </div>

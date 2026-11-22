@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { playRestOverAlarm } from "@/lib/audio-cues";
 import { hapticLight } from "@/lib/haptics";
 import { apiRequest } from "@/lib/queryClient";
+import { useT } from "@/i18n";
 
 // Backs up the in-page countdown with a real OS push notification so a
 // locked phone (whose JS timers get throttled/suspended) still gets a "rest
@@ -53,6 +54,7 @@ export type RestTimerHandle = {
  * repeatedly (not a single chime-and-forget) until the athlete dismisses it. */
 export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: number | null }>(
   function RestTimerControl({ defaultSeconds }, ref) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [ringing, setRinging] = useState(false);
@@ -136,21 +138,21 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
           className="flex animate-pulse items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-sm font-bold text-primary-foreground"
         >
           <BellRing className="h-4 w-4" />
-          Rest over
+          {t("Rest over")}
         </button>
         {createPortal(
           <div
             role="alertdialog"
-            aria-label="Rest time is up"
+            aria-label={t("Rest time is up")}
             onClick={() => setRinging(false)}
             className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-primary px-6 text-center"
           >
             <BellRing className="h-20 w-20 text-primary-foreground" />
             <p className="font-display text-6xl font-extrabold leading-none text-primary-foreground">
-              Rest Over
+              {t("Rest Over")}
             </p>
             <p className="text-lg font-semibold text-primary-foreground/80">
-              Time to get back to it
+              {t("Time to get back to it")}
             </p>
             <button
               type="button"
@@ -160,7 +162,7 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
               }}
               className="mt-4 rounded-full bg-primary-foreground px-10 py-4 text-lg font-bold text-primary shadow-lg"
             >
-              Dismiss
+              {t("Dismiss")}
             </button>
           </div>,
           document.body,
@@ -188,7 +190,7 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
             <div className="pointer-events-auto flex flex-col items-center gap-2 rounded-3xl border border-primary/40 bg-surface/95 px-10 py-8 text-center shadow-2xl backdrop-blur">
               <Timer className="h-8 w-8 text-primary" />
               <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Resting
+                {t("Resting")}
               </p>
               {/* Heartbeat glow quickens as the clock runs low -- a "get
                   ready" cue that doesn't need eyes on the screen to notice
@@ -214,7 +216,7 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
                 }}
                 className="mt-2 text-sm font-semibold text-muted-foreground underline"
               >
-                Skip
+                {t("Skip")}
               </button>
             </div>
           </div>,
@@ -235,11 +237,11 @@ export const RestTimerControl = forwardRef<RestTimerHandle, { defaultSeconds?: n
           className="flex items-center gap-1.5 text-sm font-semibold text-primary"
         >
           <Timer className="h-4 w-4" />
-          Select Timer
+          {t("Select Timer")}
         </button>
       </PopoverTrigger>
       <PopoverContent side="top" align="center" className="w-48">
-        <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Rest timer</p>
+        <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">{t("Rest timer")}</p>
         <div className="grid grid-cols-3 gap-1.5">
           {presets.map((s) => (
             <button

@@ -13,6 +13,7 @@ import { FoodLogPanel } from "@/components/food-log-panel";
 import { NutritionTrendPanel } from "@/components/nutrition-trend-panel";
 import { NUTRITION_GOALS, NUTRITION_GOAL_LABEL, type NutritionGoal } from "@shared/schema-constants";
 import { todayIso } from "@/lib/local-date";
+import { useT } from "@/i18n";
 
 type NutritionGoalState = { nutritionGoal: NutritionGoal | null; nutritionGoalNote: string | null };
 
@@ -112,6 +113,7 @@ export function NutritionPanel({
    * has gotten a matching trend endpoint (yet). */
   trendUrl?: string;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [form, setForm] = useState<FormState>(emptyForm());
   // Lifted out of FoodLogPanel so a day tapped in the 7-day trend chart can
@@ -162,9 +164,9 @@ export function NutritionPanel({
     },
     onSuccess: (result) => {
       qc.setQueryData([goalUrl], result);
-      toast.success("Goal saved");
+      toast.success(t("Goal saved"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save your goal"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save your goal")),
   });
 
   const resetGoalMutation = useMutation({
@@ -177,7 +179,7 @@ export function NutritionPanel({
       setGoalChoice("");
       setGoalNote("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't reset your goal"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't reset your goal")),
   });
 
   const saveMutation = useMutation({
@@ -198,9 +200,9 @@ export function NutritionPanel({
       // targetsExpanded still falls back to open until the macros are actually complete, so a
       // partial save leaves the fields where the athlete can finish them.
       setTargetsOpen(false);
-      toast.success("Nutrition targets saved");
+      toast.success(t("Nutrition targets saved"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save")),
   });
 
   const [, navigate] = useLocation();
@@ -229,10 +231,10 @@ export function NutritionPanel({
     onError: (err: ApiError) =>
       err.status === 402
         ? // It is on sale now, so the answer names the plan and offers the way to it (2026-11-17).
-          toast.info(err.message || "The nutrition assistant is included in AI Coach.", {
+          toast.info(err.message || t("The nutrition assistant is included in AI Coach."), {
             action: { label: "See plans", onClick: () => navigate("/athlete/upgrade") },
           })
-        : toast.error(err.message || "Couldn't get an answer"),
+        : toast.error(err.message || t("Couldn't get an answer")),
   });
 
   if (isLoading) {
@@ -245,7 +247,7 @@ export function NutritionPanel({
       return (
         <div key={f.key} className="rounded-md border border-border p-2.5">
           <p className="text-xs text-muted-foreground">{f.label}</p>
-          <p className="font-semibold">{value != null ? `${value} ${f.unit}` : "Not set"}</p>
+          <p className="font-semibold">{value != null ? `${value} ${f.unit}` : t("Not set")}</p>
         </div>
       );
     }
@@ -331,7 +333,7 @@ export function NutritionPanel({
       )}
       {!editable && !hasAnyTarget && (
         <p className="py-4 text-center text-sm text-muted-foreground">
-          No nutrition targets set yet, your coach hasn't added a plan here.
+          {t("No nutrition targets set yet, your coach hasn't added a plan here.")}
         </p>
       )}
 
@@ -342,13 +344,13 @@ export function NutritionPanel({
           className="flex w-full items-center justify-between rounded-md border border-border p-3 text-left text-sm"
         >
           <span>
-            <span className="font-semibold">Your targets are set.</span>{" "}
+            <span className="font-semibold">{t("Your targets are set.")}</span>{" "}
             <span className="text-muted-foreground">
-              {data?.caloriesKcal != null ? `${data.caloriesKcal} kcal` : "--"}
-              {data?.proteinG != null ? ` - ${data.proteinG}g protein` : ""}
+              {data?.caloriesKcal != null ? t("{count} kcal", { count: data.caloriesKcal }) : "--"}
+              {data?.proteinG != null ? ` - ${t("{count}g protein", { count: data.proteinG })}` : ""}
             </span>
           </span>
-          <span className="shrink-0 font-semibold text-primary">Edit</span>
+          <span className="shrink-0 font-semibold text-primary">{t("Edit")}</span>
         </button>
       )}
 
@@ -358,19 +360,18 @@ export function NutritionPanel({
             // The heads-up, so the fields disappearing later reads as designed rather than as
             // the app having lost them.
             <p className="rounded-md border border-border bg-surface-elevated p-3 text-xs text-muted-foreground">
-              Fill these in and save, and they tuck away into a single line, your daily rings
-              move to the top. You can reopen them any time to change a number.
+              {t("Fill these in and save, and they tuck away into a single line, your daily rings move to the top. You can reopen them any time to change a number.")}
             </p>
           )}
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Macros
+              {t("Macros")}
             </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">{MACRO_FIELDS.map(renderField)}</div>
           </div>
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Micros
+              {t("Micros")}
             </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">{MICRO_FIELDS.map(renderField)}</div>
           </div>
@@ -379,19 +380,19 @@ export function NutritionPanel({
 
       {editable && targetsExpanded ? (
         <div className="space-y-1.5">
-          <Label htmlFor="nutrition-notes">Notes</Label>
+          <Label htmlFor="nutrition-notes">{t("Notes")}</Label>
           <Textarea
             id="nutrition-notes"
             value={form.notes}
             onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-            placeholder="e.g. per team RD's plan, reviewed 3/1"
+            placeholder={t("e.g. per team RD's plan, reviewed 3/1")}
             rows={2}
           />
         </div>
       ) : (
         data?.notes && (
           <div className="rounded-md border border-border p-2.5 text-sm">
-            <p className="text-xs text-muted-foreground">Notes</p>
+            <p className="text-xs text-muted-foreground">{t("Notes")}</p>
             <p>{data.notes}</p>
           </div>
         )
@@ -403,7 +404,7 @@ export function NutritionPanel({
           onClick={() => saveMutation.mutate()}
           disabled={saveMutation.isPending}
         >
-          Save Targets
+          {t("Save Targets")}
         </Button>
       )}
 
@@ -413,14 +414,13 @@ export function NutritionPanel({
             <div className="space-y-3">
               <Label className="flex items-center gap-1.5">
                 <Target className="h-3.5 w-3.5 text-primary" />
-                What's your main nutrition goal right now?
+                {t("What's your main nutrition goal right now?")}
               </Label>
               <p className="text-xs text-muted-foreground">
-                One-time, the nutrition AI remembers this so it doesn't ask again. You can
-                change it anytime with "Set new goal."
+                {t("One-time, the nutrition AI remembers this so it doesn't ask again. You can change it anytime with \"Set new goal.\"")}
               </p>
               <RadioChipGroup
-                label="Goal"
+                label={t("Goal")}
                 options={NUTRITION_GOALS.map((g) => NUTRITION_GOAL_LABEL[g])}
                 value={goalChoice}
                 onChange={setGoalChoice}
@@ -428,7 +428,7 @@ export function NutritionPanel({
               <Textarea
                 value={goalNote}
                 onChange={(e) => setGoalNote(e.target.value)}
-                placeholder="Anything else? (optional)"
+                placeholder={t("Anything else? (optional)")}
                 rows={2}
                 maxLength={300}
               />
@@ -438,7 +438,7 @@ export function NutritionPanel({
                 disabled={!goalChoice || setGoalMutation.isPending}
                 onClick={() => setGoalMutation.mutate()}
               >
-                Save Goal
+                {t("Save Goal")}
               </Button>
             </div>
           )}
@@ -447,7 +447,7 @@ export function NutritionPanel({
             <div className="flex items-center justify-between gap-2 text-sm">
               <span className="flex items-center gap-1.5">
                 <Target className="h-3.5 w-3.5 text-primary" />
-                Nutrition goal:{" "}
+                {t("Nutrition goal:")}{" "}
                 <span className="font-semibold">
                   {NUTRITION_GOAL_LABEL[goalData.nutritionGoal]}
                 </span>
@@ -459,7 +459,7 @@ export function NutritionPanel({
                 disabled={resetGoalMutation.isPending}
                 onClick={() => resetGoalMutation.mutate()}
               >
-                Set new goal
+                {t("Set new goal")}
               </Button>
             </div>
           )}
@@ -468,18 +468,17 @@ export function NutritionPanel({
             <div className="space-y-2">
               <Label htmlFor="nutrition-ask" className="flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5 text-primary" />
-                Ask about nutrition
+                {t("Ask about nutrition")}
               </Label>
               <p className="text-xs text-muted-foreground">
-                General sports-nutrition education, not a personal plan. For an individualized
-                number, talk to a coach or a registered dietitian.
+                {t("General sports-nutrition education, not a personal plan. For an individualized number, talk to a coach or a registered dietitian.")}
               </p>
               <div className="flex gap-2">
                 <Input
                   id="nutrition-ask"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
-                  placeholder="e.g. How much protein do athletes usually need?"
+                  placeholder={t("e.g. How much protein do athletes usually need?")}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && question.trim() && !askMutation.isPending) {
                       setAnswer(null);
@@ -496,7 +495,7 @@ export function NutritionPanel({
                     askMutation.mutate();
                   }}
                 >
-                  {askMutation.isPending ? "Thinking..." : "Ask"}
+                  {askMutation.isPending ? t("Thinking...") : t("Ask")}
                 </Button>
               </div>
               {pendingQuestion && (

@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { BellRing, Check, X } from "lucide-react";
+import { useT } from "@/i18n";
 
 interface InactiveAthlete {
   id: number;
@@ -24,6 +25,7 @@ const DISMISS_KEY = "forge-coach-reengagement-dismissed";
  * soon as that set changes (someone new goes quiet, or drops off the list)
  * it pops back up since that's new information. */
 export function ReengagementBanner() {
+  const t = useT();
   const [sentIds, setSentIds] = useState<Set<number>>(new Set());
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISS_KEY));
 
@@ -38,10 +40,10 @@ export function ReengagementBanner() {
       apiRequest("POST", `/api/coach/roster/${athleteId}/nudge`),
     onSuccess: (_data, athleteId) => {
       setSentIds((prev) => new Set(prev).add(athleteId));
-      toast.success("Nudge sent");
+      toast.success(t("Nudge sent"));
     },
     onError: () => {
-      toast.error("Couldn't send nudge");
+      toast.error(t("Couldn't send nudge"));
     },
   });
 
@@ -67,13 +69,13 @@ export function ReengagementBanner() {
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">
-                Athletes Haven't Logged a Workout Recently
+                {t("Athletes Haven't Logged a Workout Recently")}
               </p>
               <Button
                 size="icon"
                 variant="ghost"
                 className="-mr-1.5 -mt-1.5 h-6 w-6 shrink-0"
-                aria-label="Dismiss"
+                aria-label={t("Dismiss")}
                 onClick={() => {
                   localStorage.setItem(DISMISS_KEY, currentKey);
                   setDismissed(currentKey);
@@ -94,8 +96,8 @@ export function ReengagementBanner() {
                       <p className="truncate text-sm font-medium text-foreground">{athlete.name}</p>
                       <p className="text-xs text-muted-foreground">
                         {athlete.daysSinceActive == null
-                          ? "No activity on record"
-                          : `${athlete.daysSinceActive} day${athlete.daysSinceActive === 1 ? "" : "s"} inactive`}
+                          ? t("No activity on record")
+                          : t.plural(athlete.daysSinceActive, "{count} day inactive", "{count} days inactive")}
                       </p>
                     </div>
                     <Button
@@ -107,10 +109,10 @@ export function ReengagementBanner() {
                     >
                       {sent ? (
                         <>
-                          <Check className="mr-1 h-3.5 w-3.5" /> Sent
+                          <Check className="mr-1 h-3.5 w-3.5" /> {t("Sent")}
                         </>
                       ) : (
-                        "Send Nudge"
+                        t("Send Nudge")
                       )}
                     </Button>
                   </div>

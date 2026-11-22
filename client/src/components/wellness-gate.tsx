@@ -45,6 +45,7 @@ import {
 } from "@/lib/native-health";
 import { useAuth } from "@/hooks/use-auth";
 import { APPLE_HEALTH_DISCLOSURE } from "@shared/apple-health-disclosure";
+import { useT } from "@/i18n";
 
 type WellnessCheckin = {
   id: number;
@@ -87,6 +88,7 @@ type WellnessCheckin = {
  * readiness for a day that has passed would quietly rewrite the trend
  * chart, the ACWR windows, and the coach's flagged-today count. */
 export function WellnessGate({ date, editable }: { date: string; editable: boolean }) {
+  const t = useT();
   // Health sync is remembered per account, not per device -- see
   // native-health.ts's own comment on why a shared phone made that matter.
   const { user } = useAuth();
@@ -109,8 +111,9 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
     queryKey: ["/api/branding/me"],
     queryFn: () => getJson("/api/branding/me"),
   });
+  // A program's own word for the check-in is shown as typed; Forge's default is translated.
   const checkinTerm =
-    branding?.navLabelOverrides?.[DAILY_CHECKIN_TERM_KEY] || DEFAULT_DAILY_CHECKIN_TERM;
+    branding?.navLabelOverrides?.[DAILY_CHECKIN_TERM_KEY] || t(DEFAULT_DAILY_CHECKIN_TERM);
 
   const [editing, setEditing] = useState(false);
   const [sleepHours, setSleepHours] = useState("");
@@ -201,9 +204,9 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
     try {
       await enableHealthSync(healthUserId);
       await syncFromHealth();
-      toast.success(`Synced with ${nativeHealthName()}`);
+      toast.success(t("Synced with {health}", { health: nativeHealthName() }));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't sync with Health");
+      toast.error(err instanceof Error ? err.message : t("Couldn't sync with Health"));
     } finally {
       setManualSyncing(false);
     }
@@ -222,9 +225,9 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
     setManualSyncing(true);
     try {
       await syncFromHealth();
-      toast.success(`Synced with ${nativeHealthName()}`);
+      toast.success(t("Synced with {health}", { health: nativeHealthName() }));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't sync with Health");
+      toast.error(err instanceof Error ? err.message : t("Couldn't sync with Health"));
     } finally {
       setManualSyncing(false);
     }
@@ -298,7 +301,7 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
       const saved = await res.json();
       // The program's own questions are saved after Forge's five; a failure there never loses
       // the check-in that already landed.
-      await program.save().catch(() => toast.error("Your coach's questions didn't save, try again"));
+      await program.save().catch(() => toast.error(t("Your coach's questions didn't save, try again")));
       return saved;
     },
     onSuccess: (checkin) => {
@@ -308,10 +311,10 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
       // picks it up immediately instead of waiting up to 30s for its own
       // poll.
       qc.invalidateQueries({ queryKey: ["/api/athlete/cara/status"] });
-      toast.success(data ? "Check-in updated" : "Thanks, have a great session");
+      toast.success(data ? t("Check-in updated") : t("Thanks, have a great session"));
       setEditing(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save your check-in"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save your check-in")),
   });
 
   if (isLoading) return null;
@@ -340,43 +343,41 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
                 {score}/100
-                <span className="font-semibold text-muted-foreground">{READINESS_LABEL[level]}</span>
+                <span className="font-semibold text-muted-foreground">{t(READINESS_LABEL[level])}</span>
               </span>
               <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                <Moon className="h-3.5 w-3.5 shrink-0" /> {data.sleepHours}h sleep
+                <Moon className="h-3.5 w-3.5 shrink-0" /> {t("{hours}h sleep", { hours: data.sleepHours })}
               </span>
               {data.restingHeartRate != null && (
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                  <HeartPulse className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.restingHeartRate)} bpm
-                  RHR
+                  <HeartPulse className="h-3.5 w-3.5 shrink-0" /> {t("{count} bpm RHR", { count: Math.round(data.restingHeartRate) })}
                 </span>
               )}
               {data.hrv != null && (
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                  <Watch className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.hrv)}ms HRV
+                  <Watch className="h-3.5 w-3.5 shrink-0" /> {t("{count}ms HRV", { count: Math.round(data.hrv) })}
                 </span>
               )}
               {data.heartRateRecovery != null && (
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                  <Gauge className="h-3.5 w-3.5 shrink-0" /> {Math.round(data.heartRateRecovery)} bpm
-                  HRR
+                  <Gauge className="h-3.5 w-3.5 shrink-0" /> {t("{count} bpm HRR", { count: Math.round(data.heartRateRecovery) })}
                 </span>
               )}
               <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                 <Activity className="h-3.5 w-3.5 shrink-0" />
-                {SORENESS_SCALE.find((s) => s.value === data.soreness)?.label}
+                {t(SORENESS_SCALE.find((s) => s.value === data.soreness)?.label ?? "")}
               </span>
               <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                 <Brain className="h-3.5 w-3.5 shrink-0" />
-                {STRESS_SCALE.find((s) => s.value === data.stress)?.label}
+                {t(STRESS_SCALE.find((s) => s.value === data.stress)?.label ?? "")}
               </span>
               <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                 <Droplets className="h-3.5 w-3.5 shrink-0" />
-                {HYDRATION_SCALE.find((s) => s.value === data.hydration)?.label}
+                {t(HYDRATION_SCALE.find((s) => s.value === data.hydration)?.label ?? "")}
               </span>
               <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                 <Focus className="h-3.5 w-3.5 shrink-0" />
-                {MENTAL_FOCUS_SCALE.find((s) => s.value === data.mentalFocus)?.label}
+                {t(MENTAL_FOCUS_SCALE.find((s) => s.value === data.mentalFocus)?.label ?? "")}
               </span>
             </div>
     );
@@ -401,13 +402,13 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
         >
           {summary}
           <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary">
-            <Pencil className="h-3 w-3" /> Edit
+            <Pencil className="h-3 w-3" /> {t("Edit")}
           </span>
         </button>
         {isNativeHealthSupported() && (
           <button
             type="button"
-            aria-label="Sync from Health"
+            aria-label={t("Sync from Health")}
             disabled={manualSyncing}
             onClick={() => {
               setEditing(true);
@@ -430,7 +431,7 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
             {checkinTerm}
           </p>
           <p className="text-xs text-muted-foreground">
-            Takes 20 seconds and helps your coach see how you're recovering.
+            {t("Takes 20 seconds and helps your coach see how you're recovering.")}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -442,13 +443,13 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
               className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground disabled:opacity-50"
             >
               <RefreshCw className={cn("h-3.5 w-3.5", manualSyncing && "animate-spin")} />
-              Sync
+              {t("Sync")}
             </button>
           )}
           {data && (
             <button
               type="button"
-              aria-label="Cancel editing"
+              aria-label={t("Cancel editing")}
               onClick={() => setEditing(false)}
               className="text-muted-foreground transition-colors hover:text-foreground"
             >
@@ -460,18 +461,17 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
       {healthAsk && healthUserId != null && (
         <div className="space-y-2 rounded-md border border-border bg-background p-3" data-testid="health-disclosure">
           <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-            <Watch className="h-3.5 w-3.5" /> Sync {nativeHealthName()}?
+            <Watch className="h-3.5 w-3.5" /> {t("Sync {health}?", { health: nativeHealthName() })}
           </p>
           <p className="text-xs text-muted-foreground">
-            Pre-fills sleep, resting heart rate and heart rate variability on this check-in, always
-            editable before you submit. {APPLE_HEALTH_DISCLOSURE}
+            {t("Pre-fills sleep, resting heart rate and heart rate variability on this check-in, always editable before you submit.")} {APPLE_HEALTH_DISCLOSURE}
           </p>
           <div className="flex gap-2">
             <Button type="button" size="sm" onClick={() => void acceptHealthAsk()}>
-              Turn on
+              {t("Turn on")}
             </Button>
             <Button type="button" size="sm" variant="outline" onClick={declineHealthAsk}>
-              Not now
+              {t("Not now")}
             </Button>
           </div>
         </div>
@@ -479,7 +479,7 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="space-y-1.5">
           <Label htmlFor="wellness-sleep" className="flex items-center gap-1.5 text-xs">
-            <Moon className="h-3.5 w-3.5" /> Sleep (hrs)
+            <Moon className="h-3.5 w-3.5" /> {t("Sleep (hrs)")}
           </Label>
           <Input
             id="wellness-sleep"
@@ -493,33 +493,33 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
           />
           {lastSyncedSleep.current != null && sleepHours === lastSyncedSleep.current && (
             <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Watch className="h-3 w-3" /> Synced from Health, edit if this looks off
+              <Watch className="h-3 w-3" /> {t("Synced from Health, edit if this looks off")}
             </p>
           )}
         </div>
         <ScaleField
-          label="Soreness"
+          label={t("Soreness")}
           icon={Activity}
           scale={SORENESS_SCALE}
           value={soreness}
           onChange={setSoreness}
         />
         <ScaleField
-          label="Stress"
+          label={t("Stress")}
           icon={Brain}
           scale={STRESS_SCALE}
           value={stress}
           onChange={setStress}
         />
         <ScaleField
-          label="Hydration"
+          label={t("Hydration")}
           icon={Droplets}
           scale={HYDRATION_SCALE}
           value={hydration}
           onChange={setHydration}
         />
         <ScaleField
-          label="Mental Focus"
+          label={t("Mental Focus")}
           icon={Focus}
           scale={MENTAL_FOCUS_SCALE}
           value={mentalFocus}
@@ -529,27 +529,26 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
       {(restingHeartRate != null || hrv != null || heartRateRecovery != null) && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md bg-background px-2.5 py-2">
           <span className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
-            <Watch className="h-3 w-3" /> From your watch:
+            <Watch className="h-3 w-3" /> {t("From your watch:")}
           </span>
           {restingHeartRate != null && (
             <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-              <HeartPulse className="h-3.5 w-3.5 shrink-0" /> {Math.round(restingHeartRate)} bpm
-              resting HR
+              <HeartPulse className="h-3.5 w-3.5 shrink-0" /> {t("{count} bpm resting HR", { count: Math.round(restingHeartRate) })}
             </span>
           )}
           {hrv != null && (
-            <span className="text-xs font-semibold text-foreground">{Math.round(hrv)}ms HRV</span>
+            <span className="text-xs font-semibold text-foreground">{t("{count}ms HRV", { count: Math.round(hrv) })}</span>
           )}
           {heartRateRecovery != null && (
             <span className="text-xs font-semibold text-foreground">
-              {Math.round(heartRateRecovery)} bpm HRR
+              {t("{count} bpm HRR", { count: Math.round(heartRateRecovery) })}
             </span>
           )}
         </div>
       )}
       <ProgramCheckinFields program={program} />
       <div className="space-y-1.5">
-        <Label className="text-xs">Anything hurting today? (optional)</Label>
+        <Label className="text-xs">{t("Anything hurting today? (optional)")}</Label>
         <div className="flex flex-wrap gap-1.5">
           {BODY_PAIN_PARTS.map((part) => {
             const active = bodyPainMap.includes(part.key);
@@ -570,7 +569,7 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
                     : "border-border text-muted-foreground hover:border-primary/50",
                 )}
               >
-                {active ? `${part.label} ✓` : part.label}
+                {active ? `${t(part.label)} ✓` : t(part.label)}
               </button>
             );
           })}
@@ -581,7 +580,7 @@ export function WellnessGate({ date, editable }: { date: string; editable: boole
         disabled={!canSubmit || submitMutation.isPending}
         onClick={() => submitMutation.mutate()}
       >
-        {data ? `Update ${checkinTerm}` : `Submit ${checkinTerm}`}
+        {data ? t("Update {term}", { term: checkinTerm }) : t("Submit {term}", { term: checkinTerm })}
       </Button>
     </div>
   );
@@ -600,6 +599,7 @@ function ScaleField({
   value: number | null;
   onChange: (v: number) => void;
 }) {
+  const t = useT();
   return (
     <div className="space-y-1.5">
       <Label className="flex items-center gap-1.5 text-xs">
@@ -612,8 +612,8 @@ function ScaleField({
             type="button"
             onClick={() => onChange(opt.value)}
             aria-pressed={value === opt.value}
-            aria-label={opt.label}
-            title={opt.label}
+            aria-label={t(opt.label)}
+            title={t(opt.label)}
             className={cn(
               "flex-1 rounded-md border py-2 text-xs font-semibold transition-colors",
               value === opt.value
@@ -626,7 +626,7 @@ function ScaleField({
         ))}
       </div>
       <p className="h-4 text-xs text-muted-foreground">
-        {value != null ? scale.find((s) => s.value === value)?.label : " "}
+        {value != null ? t(scale.find((s) => s.value === value)?.label ?? "") : " "}
       </p>
     </div>
   );

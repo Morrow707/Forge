@@ -17,6 +17,7 @@ import {
   type FirstSet,
   type ZoneVerdict,
 } from "@shared/velocity-zones";
+import { useT } from "@/i18n";
 
 /* THE ZONE LINE ON A CAMERA-TRACKED EXERCISE (2026-11-11). Sits inside the open exercise card on the
  * workout page, under "Prescribed", for an exercise whose tracking level is "full" (bar speed).
@@ -60,6 +61,7 @@ export function useMyZones(enabled = true) {
 }
 
 export function VelocityZonePanel({ exerciseId, exerciseName, speeds }: { exerciseId: number; exerciseName: string; speeds: (number | null)[] }) {
+  const t = useT();
   const { data } = useMyZones();
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
@@ -86,7 +88,7 @@ export function VelocityZonePanel({ exerciseId, exerciseName, speeds }: { exerci
   const editor = editing && (
     <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2">
       <label className="grid gap-1 text-[11px] text-muted-foreground">
-        Goal
+        {t("Goal")}
         <select
           className="h-8 rounded-md border bg-background px-2 text-xs text-foreground"
           value={draft.goal}
@@ -96,13 +98,13 @@ export function VelocityZonePanel({ exerciseId, exerciseName, speeds }: { exerci
           }}
         >
           {VELOCITY_GOALS.map((g) => (
-            <option key={g.id} value={g.id}>{g.label}</option>
+            <option key={g.id} value={g.id}>{t(g.label)}</option>
           ))}
         </select>
       </label>
       {(["lowMps", "highMps"] as const).map((k) => (
         <label key={k} className="grid gap-1 text-[11px] text-muted-foreground">
-          {k === "lowMps" ? "Low m/s" : "High m/s"}
+          {k === "lowMps" ? t("Low m/s") : t("High m/s")}
           <input
             type="number"
             step="0.01"
@@ -115,10 +117,10 @@ export function VelocityZonePanel({ exerciseId, exerciseName, speeds }: { exerci
       ))}
       <div className="col-span-3 flex flex-wrap items-center gap-2">
         <button type="button" className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground" onClick={() => save.mutate()} disabled={save.isPending}>
-          {save.isPending ? "Saving..." : "Save zone"}
+          {save.isPending ? t("Saving...") : t("Save zone")}
         </button>
-        <button type="button" className="rounded-md border px-3 py-1.5 text-xs font-semibold" onClick={() => setEditing(false)}>Cancel</button>
-        {save.isError && <span className="text-xs text-destructive">{save.error instanceof Error ? save.error.message : "Couldn't save the zone."}</span>}
+        <button type="button" className="rounded-md border px-3 py-1.5 text-xs font-semibold" onClick={() => setEditing(false)}>{t("Cancel")}</button>
+        {save.isError && <span className="text-xs text-destructive">{save.error instanceof Error ? save.error.message : t("Couldn't save the zone.")}</span>}
       </div>
     </div>
   );
@@ -128,7 +130,7 @@ export function VelocityZonePanel({ exerciseId, exerciseName, speeds }: { exerci
       <div className="mt-2 grid gap-2">
         {!editing && (
           <button type="button" onClick={open} className="flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground">
-            <Gauge className="h-3.5 w-3.5" /> Set a bar-speed zone
+            <Gauge className="h-3.5 w-3.5" /> {t("Set a bar-speed zone")}
           </button>
         )}
         {editor}
@@ -150,17 +152,19 @@ export function VelocityZonePanel({ exerciseId, exerciseName, speeds }: { exerci
   const weight = data.suggestions ? weightSuggestion(data.firstSets[String(exerciseId)] ?? [], zone) : null;
   const dropSuggestion =
     drop != null && drop > SPEED_DROP_SHARE
-      ? { key: `drop-${filmed.length}`, title: `Speed is down ${Math.round(drop * PERCENT)}% from your first set`, body: `${mps(first ?? 0)} to ${mps(last?.v ?? 0)} m/s. A lot of lifters stop around a 20% drop and save the rest. Your call.` }
+      ? { key: `drop-${filmed.length}`, title: t("Speed is down {percent}% from your first set", { percent: Math.round(drop * PERCENT) }), body: t("{from} to {to} m/s. A lot of lifters stop around a 20% drop and save the rest. Your call.", { from: mps(first ?? 0), to: mps(last?.v ?? 0) }) }
       : null;
   const above = weight?.kind === "add_weight";
   const weightCopy = weight && {
     key: weight.kind,
-    title: above ? `Your ${exerciseName.toLowerCase()} may be ready for more weight` : `Your ${exerciseName.toLowerCase()} has been slow 3 sessions running`,
-    body: `First sets: ${weight.sessions.map((s) => `${mps(s.speedMps)} m/s${s.load ? ` at ${s.load}` : ""}`).join(", ")}, all ${above ? "above" : "below"} your zone. ${above ? "Adding a little weight next session would bring you back into it." : "Holding the weight, or easing off a little, is worth considering."}`,
+    title: above ? t("Your {exercise} may be ready for more weight", { exercise: t.exercise(exerciseName).toLowerCase() }) : t("Your {exercise} has been slow 3 sessions running", { exercise: t.exercise(exerciseName).toLowerCase() }),
+    body: above
+      ? t("First sets: {sets}, all above your zone. Adding a little weight next session would bring you back into it.", { sets: weight.sessions.map((s) => (s.load ? t("{speed} m/s at {load}", { speed: mps(s.speedMps), load: s.load }) : `${mps(s.speedMps)} m/s`)).join(", ") })
+      : t("First sets: {sets}, all below your zone. Holding the weight, or easing off a little, is worth considering.", { sets: weight.sessions.map((s) => (s.load ? t("{speed} m/s at {load}", { speed: mps(s.speedMps), load: s.load }) : `${mps(s.speedMps)} m/s`)).join(", ") }),
   };
   const suggestion = data.suggestions ? (dropSuggestion ?? weightCopy ?? null) : null;
-  const ownHint = data.canEdit ? "Tap to change" : "";
-  const zoneHint = zone.setBy === "coach" ? "Set by your coach" : ownHint;
+  const ownHint = data.canEdit ? t("Tap to change") : "";
+  const zoneHint = zone.setBy === "coach" ? t("Set by your coach") : ownHint;
 
   return (
     <div className="mt-2 grid gap-2" data-testid="velocity-zone-panel">
@@ -172,12 +176,12 @@ export function VelocityZonePanel({ exerciseId, exerciseName, speeds }: { exerci
           className="flex items-center gap-1.5 rounded-full border bg-secondary px-2.5 py-1 text-xs font-semibold disabled:cursor-default"
         >
           <Gauge className="h-3.5 w-3.5 text-primary" />
-          Zone{goalLabel ? ` · ${goalLabel}` : ""} <span className="tabular-nums">{mps(zone.lowMps)}–{mps(zone.highMps)} m/s</span>
+          {t("Zone")}{goalLabel ? ` · ${t(goalLabel)}` : ""} <span className="tabular-nums">{mps(zone.lowMps)}–{mps(zone.highMps)} m/s</span>
         </button>
         <span className="text-[11px] text-muted-foreground">{zoneHint}</span>
       </div>
       {editor}
-      <div className="relative h-2.5 rounded-full bg-secondary" role="img" aria-label={`Today's sets against the ${mps(zone.lowMps)} to ${mps(zone.highMps)} m/s zone`}>
+      <div className="relative h-2.5 rounded-full bg-secondary" role="img" aria-label={t("Today's sets against the {low} to {high} m/s zone", { low: mps(zone.lowMps), high: mps(zone.highMps) })}>
         <div className="absolute inset-y-0 rounded-full bg-success/20 ring-1 ring-inset ring-success" style={{ left: `${pos(zone.lowMps)}%`, width: `${pos(zone.highMps) - pos(zone.lowMps)}%` }} />
         {filmed.map((s) => (
           <span key={s.set} className={cn("absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card", DOT_CLASS[zoneVerdict(s.v, zone)])} style={{ left: `${pos(s.v)}%` }} />
@@ -191,8 +195,8 @@ export function VelocityZonePanel({ exerciseId, exerciseName, speeds }: { exerci
             const d = s.set > 1 ? speedDropShare(first, s.v) : null;
             return (
               <span key={s.set} className="flex items-center gap-1 text-[11px] tabular-nums">
-                <span className="text-muted-foreground">Set {s.set}</span>
-                <span className={cn("rounded-full px-2 py-0.5 font-semibold", TAG_CLASS[v])}>{ZONE_VERDICT_LABEL[v]}</span>
+                <span className="text-muted-foreground">{t("Set {number}", { number: s.set })}</span>
+                <span className={cn("rounded-full px-2 py-0.5 font-semibold", TAG_CLASS[v])}>{t(ZONE_VERDICT_LABEL[v])}</span>
                 {d != null && d > SPEED_DROP_SHARE && <span className="rounded-full bg-primary/15 px-2 py-0.5 font-semibold text-primary">−{Math.round(d * PERCENT)}%</span>}
               </span>
             );
@@ -205,7 +209,7 @@ export function VelocityZonePanel({ exerciseId, exerciseName, speeds }: { exerci
           <div className="text-xs">
             <p className="font-semibold">{suggestion.title}</p>
             <p className="text-muted-foreground">{suggestion.body}</p>
-            <button type="button" className="mt-1.5 rounded-md border px-2.5 py-1 font-semibold" onClick={() => setDismissed(suggestion.key)}>Got it</button>
+            <button type="button" className="mt-1.5 rounded-md border px-2.5 py-1 font-semibold" onClick={() => setDismissed(suggestion.key)}>{t("Got it")}</button>
           </div>
         </div>
       )}

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { downscalePhotoFile, type CapturedPhoto } from "@/lib/photo-capture";
 import { Camera, X } from "lucide-react";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
 
 /** Shared photo-capture UI for every "photograph a sheet, extract it with
  * AI" import feature (testing day, weigh-in, nutrition sheet, injury
@@ -24,13 +25,14 @@ export function PhotoUploadField({
   maxImages?: number;
   document?: boolean;
 }) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     const room = maxImages - images.length;
     if (room <= 0) {
-      toast.error(`You can add up to ${maxImages} photos`);
+      toast.error(t("You can add up to {count} photos", { count: maxImages }));
       return;
     }
     const picked = Array.from(files).slice(0, room);
@@ -38,7 +40,7 @@ export function PhotoUploadField({
       const captured = await Promise.all(picked.map((f) => downscalePhotoFile(f, { document })));
       onChange([...images, ...captured]);
     } catch {
-      toast.error("Couldn't read that photo, try a different one");
+      toast.error(t("Couldn't read that photo, try a different one"));
     }
   }
 
@@ -49,12 +51,12 @@ export function PhotoUploadField({
           <div key={i} className="relative h-20 w-20 overflow-hidden rounded-md border border-border">
             <img
               src={`data:${img.mediaType};base64,${img.data}`}
-              alt={`Page ${i + 1}`}
+              alt={t("Page {number}", { number: i + 1 })}
               className="h-full w-full object-cover"
             />
             <button
               type="button"
-              aria-label="Remove photo"
+              aria-label={t("Remove photo")}
               onClick={() => onChange(images.filter((_, idx) => idx !== i))}
               className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
             >
@@ -69,7 +71,7 @@ export function PhotoUploadField({
             className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary"
           >
             <Camera className="h-5 w-5" />
-            <span className="text-[10px]">Add photo</span>
+            <span className="text-[10px]">{t("Add photo")}</span>
           </button>
         )}
       </div>
@@ -86,7 +88,7 @@ export function PhotoUploadField({
         }}
       />
       {images.length > 1 && (
-        <p className="text-xs text-muted-foreground">{images.length} photos, multiple pages are combined</p>
+        <p className="text-xs text-muted-foreground">{t("{count} photos, multiple pages are combined", { count: images.length })}</p>
       )}
     </div>
   );
@@ -109,9 +111,10 @@ export function AnalyzeButton({
   onClick: () => void;
   label?: string;
 }) {
+  const t = useT();
   return (
     <Button type="button" onClick={onClick} disabled={disabled || loading} className="w-full">
-      {loading ? "Reading..." : label}
+      {loading ? t("Reading...") : label}
     </Button>
   );
 }

@@ -20,6 +20,7 @@ import {
 } from "recharts";
 import { TESTING_METRICS, type TestingMetricKey } from "@shared/testing-metrics";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type TestingResult = {
   id: number;
@@ -37,6 +38,7 @@ type TestingResult = {
 /** Read-only -- history is built automatically whenever a coach edits an
  * athlete's testing fields on their profile, so there's nothing to add here. */
 export function TestingHistoryPanel({ fetchUrl }: { fetchUrl: string }) {
+  const t = useT();
   const [metric, setMetric] = useState<TestingMetricKey>("fortyYardDash");
 
   const { data = [], isLoading, isError, refetch } = useQuery<TestingResult[]>({
@@ -54,8 +56,7 @@ export function TestingHistoryPanel({ fetchUrl }: { fetchUrl: string }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Snapshots are recorded automatically whenever testing fields change on this athlete's
-        profile.
+        {t("Snapshots are recorded automatically whenever testing fields change on this athlete's profile.")}
       </p>
 
       <Select value={metric} onValueChange={(v) => setMetric(v as TestingMetricKey)}>
@@ -65,7 +66,7 @@ export function TestingHistoryPanel({ fetchUrl }: { fetchUrl: string }) {
         <SelectContent>
           {TESTING_METRICS.map((m) => (
             <SelectItem key={m.key} value={m.key}>
-              {m.label}
+              {t(m.label)}
             </SelectItem>
           ))}
         </SelectContent>
@@ -74,10 +75,10 @@ export function TestingHistoryPanel({ fetchUrl }: { fetchUrl: string }) {
       {isLoading ? (
         <div className="h-40 animate-pulse rounded-md bg-surface" />
       ) : isError ? (
-        <ReadFailed what="these results" onRetry={() => void refetch()} />
+        <ReadFailed what={t("these results")} onRetry={() => void refetch()} />
       ) : points.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          No {activeMetric.label.toLowerCase()} entries recorded yet.
+          {t("No {metric} entries recorded yet.", { metric: t(activeMetric.label).toLowerCase() })}
         </p>
       ) : (
         <div className="space-y-4">
@@ -93,12 +94,12 @@ export function TestingHistoryPanel({ fetchUrl }: { fetchUrl: string }) {
                       background: "hsl(var(--card))",
                       border: "1px solid hsl(var(--border))",
                     }}
-                    formatter={(value: unknown) => [`${value} ${activeMetric.unit}`, activeMetric.label]}
+                    formatter={(value: unknown) => [`${value} ${activeMetric.unit}`, t(activeMetric.label)]}
                   />
                   <Line
                     type="monotone"
                     dataKey="value"
-                    name={activeMetric.label}
+                    name={t(activeMetric.label)}
                     stroke="hsl(var(--primary))"
                     strokeWidth={2}
                     dot={{ r: 3 }}

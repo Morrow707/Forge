@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getJson } from "@/lib/queryClient";
+import { useT } from "@/i18n";
 
 type InstitutionalAgreementStatus = {
   required: boolean;
@@ -30,6 +31,7 @@ type InstitutionalAgreementStatus = {
  * gates none now. It is a persistent reminder, not a gate.
  */
 export function InstitutionalAgreementBanner() {
+  const t = useT();
   const { data: status } = useQuery<InstitutionalAgreementStatus>({
     queryKey: ["/api/coach/institutional-agreement"],
     queryFn: () => getJson("/api/coach/institutional-agreement"),
@@ -42,8 +44,8 @@ export function InstitutionalAgreementBanner() {
       <span className="flex items-center gap-1.5">
         <Building2 className="h-3.5 w-3.5 shrink-0" />
         {status.reviewPending
-          ? "Your signed Service Agreement has been uploaded and is waiting to be reviewed."
-          : "Your organization's signed Service Agreement isn't on file yet."}
+          ? t("Your signed Service Agreement has been uploaded and is waiting to be reviewed.")
+          : t("Your organization's signed Service Agreement isn't on file yet.")}
       </span>
       {/* Nothing to review in the app -- the document is signed on paper and the only action here
           is filing the copy. Hidden once it is uploaded, since there is nothing left to do. */}
@@ -54,7 +56,7 @@ export function InstitutionalAgreementBanner() {
           size="sm"
           className="h-6 px-2 text-amber-500 hover:text-amber-500"
         >
-          <Link href="/documents">Upload it</Link>
+          <Link href="/documents">{t("Upload it")}</Link>
         </Button>
       )}
     </div>

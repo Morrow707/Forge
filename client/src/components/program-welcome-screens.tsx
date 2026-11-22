@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useT } from "@/i18n";
 
 /**
  * A PROGRAM'S WELCOME SCREENS (2026-11-19): up to three screens the coach writes, shown once to a
@@ -12,6 +13,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 type Screen = { title: string; body: string };
 
 export function ProgramWelcomeScreens({ screens, programName }: { screens: Screen[]; programName: string | null }) {
+  const t = useT();
   const [open, setOpen] = useState(true);
   const [index, setIndex] = useState(0);
   const markSeen = useMutation({
@@ -36,9 +38,9 @@ export function ProgramWelcomeScreens({ screens, programName }: { screens: Scree
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
             {programName ? `${programName} · ` : ""}
-            {index + 1} of {screens.length}
+            {t("{current} of {count}", { current: index + 1, count: screens.length })}
           </p>
-          <Button onClick={() => (last ? close() : setIndex(index + 1))}>{last ? "Let's go" : "Next"}</Button>
+          <Button onClick={() => (last ? close() : setIndex(index + 1))}>{last ? t("Let's go") : t("Next")}</Button>
         </div>
       </DialogContent>
     </Dialog>

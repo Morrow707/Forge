@@ -44,7 +44,7 @@ export function ProblemReportsContent() {
     mutationFn: (id: number) => apiRequest("POST", `/api/admin/problem-reports/${id}/resolve`, {}),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/problem-reports"] });
-      toast.success(t("Cleared"));
+      toast.success(t("Resolved"));
     },
     onError: (err: ApiError) => toast.error(err.message || t("Couldn't clear that report")),
   });
@@ -86,7 +86,7 @@ export function ProblemReportsContent() {
                 <span className="flex items-center gap-3">
                   <span>{new Date(report.createdAt).toLocaleString()}</span>
                   {report.resolvedAt ? (
-                    <span className="font-semibold text-primary">{t("Cleared")}</span>
+                    <span className="font-semibold text-primary">{t("Resolved")}</span>
                   ) : (
                     <Button
                       size="sm"

@@ -149,7 +149,9 @@ describe("a staff coach reads the signed agreement and can do nothing to it", ()
   it("has a read-only branch for the primary's agreement", () => {
     expect(view, "StaffAgreementView not found").toBeTruthy();
     expect(view![0]).toContain("Your organisation's Service Agreement");
-    expect(view![0]).toContain("Signed by {signature.signerName}");
+    // The sentence is one translated key now (client/src/i18n), with the signer's name as a value.
+    expect(view![0]).toContain('t("Signed by {name} on {date} for {institution}."');
+    expect(view![0]).toContain("name: signature.signerName");
     expect(view![0]).toContain("primaryCoachName");
     expect(view![0]).toContain("Download signed copy");
     expect(view![0]).toContain("downloadSignedCopy");

@@ -9,6 +9,7 @@ import { MuscleHistoryDialog } from "@/components/muscle-history-dialog";
 import { getJson } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { bandForScore, balanceHint, overallScore, MOVEMENT_FOR_GROUP } from "@shared/strength-score";
+import { useT } from "@/i18n";
 
 type GroupRow = {
   group: string;
@@ -68,6 +69,7 @@ function CohortChip({
 }
 
 export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"front" | "back">("front");
   // Which muscle's lift history is open. The map in the card was a readout until now; tapping
@@ -95,7 +97,7 @@ export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
     return (
       <Card>
         <CardContent className="py-6">
-          <ReadFailed what="your strength profile" onRetry={() => void refetch()} />
+          <ReadFailed what={t("your strength profile")} onRetry={() => void refetch()} />
         </CardContent>
       </Card>
     );
@@ -137,13 +139,13 @@ export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
             <BodyMap view="front" fills={fills} />
           </div>
           <span className="min-w-0 flex-1">
-            <span className="block font-semibold">Strength profile</span>
+            <span className="block font-semibold">{t("Strength profile")}</span>
             <span className="block text-xs text-muted-foreground">
               {overall != null
-                ? `Ahead of ${overall}% of athletes your age, on average`
+                ? t("Ahead of {percent}% of athletes your age, on average", { percent: overall })
                 : hasOwnLifts
-                  ? "Not enough athletes your age on Forge yet to compare"
-                  : "Log a few lifts to see where you stand"}
+                  ? t("Not enough athletes your age on Forge yet to compare")
+                  : t("Log a few lifts to see where you stand")}
             </span>
           </span>
           <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", open && "rotate-180")} />
@@ -157,22 +159,22 @@ export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
                 control that undoes it would strand the athlete there. */}
             {(data.available.gender || data.available.sport) && (
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">Compare against</span>
+                <span className="text-xs text-muted-foreground">{t("Compare against")}</span>
                 <CohortChip
-                  label="Everyone my age"
+                  label={t("Everyone my age")}
                   active={!cohort.gender && !cohort.sport}
                   onClick={() => setCohort({ gender: false, sport: false })}
                 />
                 {data.available.gender && (
                   <CohortChip
-                    label="My gender"
+                    label={t("My gender")}
                     active={cohort.gender}
                     onClick={() => setCohort((c) => ({ ...c, gender: !c.gender }))}
                   />
                 )}
                 {data.available.sport && (
                   <CohortChip
-                    label="My sport"
+                    label={t("My sport")}
                     active={cohort.sport}
                     onClick={() => setCohort((c) => ({ ...c, sport: !c.sport }))}
                   />
@@ -184,12 +186,10 @@ export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
               // Said plainly, with the reason. A blank card reads as "you have done nothing".
               <p className="text-sm text-muted-foreground">
                 {data.ageBand == null
-                  ? "Add your date of birth to compare against athletes your age."
-                  : `Not enough ${data.cohortLabel} on Forge yet to compare fairly.${
-                      cohort.gender || cohort.sport
-                        ? " Widen the comparison above to see where you stand."
-                        : " Your lifts are still being recorded."
-                    }`}
+                  ? t("Add your date of birth to compare against athletes your age.")
+                  : cohort.gender || cohort.sport
+                    ? t("Not enough {cohort} on Forge yet to compare fairly. Widen the comparison above to see where you stand.", { cohort: data.cohortLabel })
+                    : t("Not enough {cohort} on Forge yet to compare fairly. Your lifts are still being recorded.", { cohort: data.cohortLabel })}
               </p>
             ) : (
               <>
@@ -261,9 +261,7 @@ export function StrengthProfileCard({ fetchUrl }: { fetchUrl: string }) {
                     statistics lesson -- and the sample size, because a percentile without one
                     is a claim with its uncertainty hidden. */}
                 <p className="text-xs text-muted-foreground">
-                  Compared with {data.cohortSize} {data.cohortLabel} on Forge, using your best
-                  logged lift on each movement relative to your bodyweight. Names are never
-                  shown or ranked — only where you sit in the spread.
+                  {t("Compared with {count} {cohort} on Forge, using your best logged lift on each movement relative to your bodyweight. Names are never shown or ranked — only where you sit in the spread.", { count: data.cohortSize, cohort: data.cohortLabel })}
                 </p>
               </>
             )}

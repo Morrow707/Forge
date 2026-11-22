@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { shareOrDownloadFile } from "@/lib/share-file";
 import { toast } from "sonner";
 import { FileSpreadsheet, FileText } from "lucide-react";
+import { useT } from "@/i18n";
 
 interface TrainingHistoryExportDialogProps {
   athleteName: string;
@@ -29,6 +30,7 @@ export function TrainingHistoryExportDialog({
   open,
   onOpenChange,
 }: TrainingHistoryExportDialogProps) {
+  const t = useT();
   const [downloading, setDownloading] = useState<"csv" | "pdf" | null>(null);
 
   async function handleDownload(format: "csv" | "pdf") {
@@ -42,7 +44,7 @@ export function TrainingHistoryExportDialog({
       );
       onOpenChange(false);
     } catch {
-      toast.error("Couldn't generate that export");
+      toast.error(t("Couldn't generate that export"));
     } finally {
       setDownloading(null);
     }
@@ -52,9 +54,9 @@ export function TrainingHistoryExportDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Export Training History</DialogTitle>
+          <DialogTitle>{t("Export Training History")}</DialogTitle>
           <DialogDescription>
-            Every logged workout for {athleteName}, in your choice of format.
+            {t("Every logged workout for {name}, in your choice of format.", { name: athleteName })}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2">
@@ -65,7 +67,7 @@ export function TrainingHistoryExportDialog({
             onClick={() => handleDownload("csv")}
           >
             <FileSpreadsheet className="h-4 w-4" />
-            {downloading === "csv" ? "Generating..." : "Download as CSV"}
+            {downloading === "csv" ? t("Generating...") : t("Download as CSV")}
           </Button>
           <Button
             variant="outline"
@@ -74,7 +76,7 @@ export function TrainingHistoryExportDialog({
             onClick={() => handleDownload("pdf")}
           >
             <FileText className="h-4 w-4" />
-            {downloading === "pdf" ? "Generating..." : "Download as PDF"}
+            {downloading === "pdf" ? t("Generating...") : t("Download as PDF")}
           </Button>
         </div>
       </DialogContent>

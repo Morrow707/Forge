@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useReadToEnd } from "@/components/read-and-initial";
+import { useT } from "@/i18n";
 
 /** An in-place reader for a live legal document, for the places that ask
  * someone to agree to one.
@@ -49,6 +50,7 @@ export function LegalDocumentReader({
    *  nothing and the reader behaves exactly as it always has. */
   onReadToEnd?: () => void;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const { ref: scrollRef, reachedEnd, onScroll } = useReadToEnd();
   useEffect(() => {
@@ -81,13 +83,13 @@ export function LegalDocumentReader({
           className="mt-2 max-h-64 overflow-y-auto rounded-md border border-border bg-surface-elevated p-3"
         >
           {isLoading ? (
-            <p className="text-xs text-muted-foreground">Loading…</p>
+            <p className="text-xs text-muted-foreground">{t("Loading…")}</p>
           ) : isError || !data?.content ? (
             // Fails visibly. Someone who could not load the document should be
             // able to tell that apart from a document that is genuinely blank,
             // because one of those is a reason not to agree yet.
             <p className="text-xs text-muted-foreground">
-              Couldn't load this document right now, close this and try again in a moment.
+              {t("Couldn't load this document right now, close this and try again in a moment.")}
             </p>
           ) : (
             <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground">

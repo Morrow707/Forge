@@ -18,12 +18,14 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, GripVertical, X } from "lucide-react";
 import { shuffled, type QuizQuestionPayload, type QuizQuestionType, type QuizSubmission } from "@shared/class-quiz-grading";
+import { useT } from "@/i18n";
 
 /** The three non-multiple-choice question inputs (2026-10-04). Each one works by touch and by
  * pointer: ordering and matching drag with dnd-kit and also take taps and buttons, because a
  * phone in a gym is where most of these get answered. None of them knows the answer key. */
 
 export function FillBlankInput({ questionText, value, onChange, disabled }: { questionText: string; value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  const t = useT();
   const [before, after] = questionText.split("___");
   return (
     <div className="space-y-2 text-sm">
@@ -34,7 +36,7 @@ export function FillBlankInput({ questionText, value, onChange, disabled }: { qu
             value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
-            placeholder="type the answer"
+            placeholder={t("type the answer")}
             className="h-7 border-0 bg-transparent px-1 text-sm shadow-none focus-visible:ring-0"
             maxLength={200}
             autoCapitalize="none"
@@ -48,6 +50,7 @@ export function FillBlankInput({ questionText, value, onChange, disabled }: { qu
 }
 
 function SortableRow({ id, index, total, onMove, disabled }: { id: string; index: number; total: number; onMove: (dir: -1 | 1) => void; disabled?: boolean }) {
+  const t = useT();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
   return (
     <li
@@ -55,15 +58,15 @@ function SortableRow({ id, index, total, onMove, disabled }: { id: string; index
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn("flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-2 text-sm", isDragging && "border-primary shadow-md")}
     >
-      <button type="button" className="cursor-grab touch-none text-muted-foreground" aria-label="Drag to reorder" disabled={disabled} {...attributes} {...listeners}>
+      <button type="button" className="cursor-grab touch-none text-muted-foreground" aria-label={t("Drag to reorder")} disabled={disabled} {...attributes} {...listeners}>
         <GripVertical className="h-4 w-4" />
       </button>
       <span className="w-5 shrink-0 text-xs font-semibold text-muted-foreground">{index + 1}.</span>
       <span className="flex-1">{id}</span>
-      <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label="Move up" onClick={() => onMove(-1)} disabled={disabled || index === 0}>
+      <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={t("Move up")} onClick={() => onMove(-1)} disabled={disabled || index === 0}>
         <ChevronUp className="h-4 w-4" />
       </Button>
-      <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label="Move down" onClick={() => onMove(1)} disabled={disabled || index === total - 1}>
+      <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={t("Move down")} onClick={() => onMove(1)} disabled={disabled || index === total - 1}>
         <ChevronDown className="h-4 w-4" />
       </Button>
     </li>
@@ -73,6 +76,7 @@ function SortableRow({ id, index, total, onMove, disabled }: { id: string; index
 /** The athlete arranges a shuffled copy of the items. `value` is their current order; the
  * first render shuffles once and reports it so Submit has something to send. */
 export function OrderingInput({ payload, value, onChange, disabled }: { payload: QuizQuestionPayload | null; value: string[] | null | undefined; onChange: (order: string[]) => void; disabled?: boolean }) {
+  const t = useT();
   const items = payload?.items ?? [];
   useEffect(() => {
     if (!value || value.length !== items.length) {
@@ -99,7 +103,7 @@ export function OrderingInput({ payload, value, onChange, disabled }: { payload:
   }
   return (
     <div className="space-y-2">
-      <p className="text-xs text-muted-foreground">Put these in the right order. Drag, or use the arrows.</p>
+      <p className="text-xs text-muted-foreground">{t("Put these in the right order. Drag, or use the arrows.")}</p>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
           <ol className="space-y-1.5">
@@ -141,6 +145,7 @@ function Chip({ id, label, disabled }: { id: string; label: string; disabled?: b
 }
 
 function Slot({ id, left, chosen, selectedRight, onTap, onClear, disabled }: { id: string; left: string; chosen: string | undefined; selectedRight: string | null; onTap: () => void; onClear: () => void; disabled?: boolean }) {
+  const t = useT();
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
     <div ref={setNodeRef} className={cn("flex items-center gap-2 rounded-md border p-2 text-sm", isOver ? "border-primary bg-primary/5" : "border-border bg-surface")}>
@@ -149,7 +154,7 @@ function Slot({ id, left, chosen, selectedRight, onTap, onClear, disabled }: { i
         <span className="flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
           {chosen}
           {!disabled && (
-            <button type="button" aria-label="Clear" onClick={onClear} className="ml-0.5">
+            <button type="button" aria-label={t("Clear")} onClick={onClear} className="ml-0.5">
               <X className="h-3 w-3" />
             </button>
           )}
@@ -161,7 +166,7 @@ function Slot({ id, left, chosen, selectedRight, onTap, onClear, disabled }: { i
           disabled={disabled || !selectedRight}
           className={cn("rounded-full border border-dashed px-3 py-1 text-xs", selectedRight ? "border-primary text-primary" : "border-border text-muted-foreground")}
         >
-          {selectedRight ? `Place "${selectedRight}"` : "drop here"}
+          {selectedRight ? t("Place \"{item}\"", { item: selectedRight }) : t("drop here")}
         </button>
       )}
     </div>
@@ -170,6 +175,7 @@ function Slot({ id, left, chosen, selectedRight, onTap, onClear, disabled }: { i
 
 /** Drag a right-column chip onto its left-column slot, or tap a chip then tap a slot. */
 export function MatchingInput({ payload, value, onChange, disabled }: { payload: QuizQuestionPayload | null; value: Record<string, string> | null | undefined; onChange: (m: Record<string, string>) => void; disabled?: boolean }) {
+  const t = useT();
   const pairs = payload?.pairs ?? [];
   const rights = useMemo(() => shuffled(pairs.map((p) => p.right)), [pairs.map((p) => p.right).join("\u0000")]);
   const matches = value ?? {};
@@ -196,14 +202,14 @@ export function MatchingInput({ payload, value, onChange, disabled }: { payload:
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
       <div className="space-y-3">
-        <p className="text-xs text-muted-foreground">Match each item on the left with the right one. Drag a chip onto it, or tap a chip then tap the row.</p>
+        <p className="text-xs text-muted-foreground">{t("Match each item on the left with the right one. Drag a chip onto it, or tap a chip then tap the row.")}</p>
         <div className="flex flex-wrap gap-2">
           {rights.filter((r) => !used.has(r)).map((r) => (
             <div key={r} onClick={() => !disabled && setSelectedRight((s) => (s === r ? null : r))} className={cn("rounded-full", selectedRight === r && "ring-2 ring-primary ring-offset-2 ring-offset-background")}>
               <Chip id={`chip:${r}`} label={r} disabled={disabled} />
             </div>
           ))}
-          {rights.every((r) => used.has(r)) && <span className="text-xs text-muted-foreground">All placed.</span>}
+          {rights.every((r) => used.has(r)) && <span className="text-xs text-muted-foreground">{t("All placed.")}</span>}
         </div>
         <div className="space-y-1.5">
           {pairs.map((p) => (
@@ -239,6 +245,7 @@ export type QuizKeyResultProps = {
   isCorrect: boolean;
 };
 export function QuizKeyResult({ result: r }: { result: QuizKeyResultProps }) {
+  const t = useT();
   const payload = r.payload ?? null;
   const sub = r.submitted ?? null;
   const explanation = payload?.explanation?.trim();
@@ -247,12 +254,12 @@ export function QuizKeyResult({ result: r }: { result: QuizKeyResultProps }) {
       {r.questionType === "fill_blank" && (
         <>
           <p>
-            <span className="text-muted-foreground">Your answer: </span>
-            <span className={cn("font-medium", r.isCorrect ? "text-success" : "text-destructive")}>{sub?.text?.trim() || "(blank)"}</span>
+            <span className="text-muted-foreground">{t("Your answer:")} </span>
+            <span className={cn("font-medium", r.isCorrect ? "text-success" : "text-destructive")}>{sub?.text?.trim() || t("(blank)")}</span>
           </p>
           {!r.isCorrect && (payload?.accepted?.length ?? 0) > 0 && (
             <p>
-              <span className="text-muted-foreground">Accepted: </span>
+              <span className="text-muted-foreground">{t("Accepted:")} </span>
               <span className="font-medium">{payload!.accepted!.join(", ")}</span>
             </p>
           )}
@@ -261,7 +268,7 @@ export function QuizKeyResult({ result: r }: { result: QuizKeyResultProps }) {
       {r.questionType === "ordering" && (
         <div className="grid gap-2 sm:grid-cols-2">
           <div>
-            <p className="mb-1 text-muted-foreground">Your order</p>
+            <p className="mb-1 text-muted-foreground">{t("Your order")}</p>
             <ol className="list-decimal space-y-0.5 pl-4">
               {(sub?.order ?? []).map((it, i) => (
                 <li key={i} className={cn(payload?.items?.[i] === it ? "text-success" : "text-destructive")}>{it}</li>
@@ -270,7 +277,7 @@ export function QuizKeyResult({ result: r }: { result: QuizKeyResultProps }) {
           </div>
           {!r.isCorrect && (
             <div>
-              <p className="mb-1 text-muted-foreground">Correct order</p>
+              <p className="mb-1 text-muted-foreground">{t("Correct order")}</p>
               <ol className="list-decimal space-y-0.5 pl-4">
                 {(payload?.items ?? []).map((it, i) => (
                   <li key={i}>{it}</li>
@@ -289,10 +296,10 @@ export function QuizKeyResult({ result: r }: { result: QuizKeyResultProps }) {
               <p key={p.left}>
                 <span className="font-medium">{p.left}</span>
                 <span className="text-muted-foreground"> → </span>
-                <span className={cn(ok ? "text-success" : "text-destructive")}>{given ?? "(none)"}</span>
+                <span className={cn(ok ? "text-success" : "text-destructive")}>{given ?? t("(none)")}</span>
                 {!ok && (
                   <>
-                    <span className="text-muted-foreground"> · correct: </span>
+                    <span className="text-muted-foreground"> {t("· correct:")} </span>
                     <span>{p.right}</span>
                   </>
                 )}

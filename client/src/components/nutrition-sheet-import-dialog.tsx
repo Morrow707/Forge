@@ -22,6 +22,7 @@ import { PhotoUploadField, type PhotoImportStep } from "@/components/photo-uploa
 import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
 
 type RosterEntry = { id: number; name: string };
 
@@ -54,6 +55,7 @@ export function NutritionSheetImportDialog({
   onOpenChange: (open: boolean) => void;
   roster: RosterEntry[];
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [step, setStep] = useState<PhotoImportStep>("capture");
   const [images, setImages] = useState<CapturedPhoto[]>([]);
@@ -76,7 +78,7 @@ export function NutritionSheetImportDialog({
       setStep("review");
     },
     onError: (err: ApiError) => {
-      toast.error(err.message || "Couldn't read that photo");
+      toast.error(err.message || t("Couldn't read that photo"));
       setStep("capture");
     },
   });
@@ -91,11 +93,11 @@ export function NutritionSheetImportDialog({
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
-      toast.success(`Set targets for ${data.applied} athlete${data.applied === 1 ? "" : "s"}`);
+      toast.success(t.plural(data.applied, "Set targets for {count} athlete", "Set targets for {count} athletes"));
       onOpenChange(false);
       reset();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not apply targets"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not apply targets")),
   });
 
   function updateRow(i: number, patch: Partial<Row>) {
@@ -117,9 +119,9 @@ export function NutritionSheetImportDialog({
     >
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Import Nutrition Sheet</DialogTitle>
+          <DialogTitle>{t("Import Nutrition Sheet")}</DialogTitle>
           <DialogDescription>
-            Photograph a macro/target sheet, review the numbers before they become an athlete's targets.
+            {t("Photograph a macro/target sheet, review the numbers before they become an athlete's targets.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -132,13 +134,13 @@ export function NutritionSheetImportDialog({
               disabled={images.length === 0 || analyzeMutation.isPending}
               onClick={() => analyzeMutation.mutate()}
             >
-              {analyzeMutation.isPending ? "Reading photo..." : "Read Photo"}
+              {analyzeMutation.isPending ? t("Reading photo...") : t("Read Photo")}
             </Button>
           </div>
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              {matchedCount} of {rows.length} row{rows.length === 1 ? "" : "s"} matched to a roster athlete.
+              {t.plural(rows.length, "{matched} of {count} row matched to a roster athlete.", "{matched} of {count} rows matched to a roster athlete.", { matched: matchedCount })}
             </p>
             <div className="space-y-3">
               {rows.map((row, i) => (
@@ -148,10 +150,10 @@ export function NutritionSheetImportDialog({
                     onValueChange={(v) => updateRow(i, { athleteId: v === "none" ? null : Number(v) })}
                   >
                     <SelectTrigger className="h-8 w-full text-xs">
-                      <SelectValue placeholder="Match athlete" />
+                      <SelectValue placeholder={t("Match athlete")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Unmatched ("{row.nameOnSheet}"), skip</SelectItem>
+                      <SelectItem value="none">{t("Unmatched (\"{name}\"), skip", { name: row.nameOnSheet })}</SelectItem>
                       {roster.map((a) => (
                         <SelectItem key={a.id} value={String(a.id)}>
                           {a.name}
@@ -185,14 +187,14 @@ export function NutritionSheetImportDialog({
           {step === "review" && (
             <>
               <Button type="button" variant="outline" onClick={() => setStep("capture")}>
-                Back
+                {t("Back")}
               </Button>
               <Button
                 type="button"
                 disabled={matchedCount === 0 || applyMutation.isPending}
                 onClick={() => applyMutation.mutate()}
               >
-                {applyMutation.isPending ? "Saving..." : `Apply to ${matchedCount} Athlete${matchedCount === 1 ? "" : "s"}`}
+                {applyMutation.isPending ? t("Saving...") : t.plural(matchedCount, "Apply to {count} Athlete", "Apply to {count} Athletes")}
               </Button>
             </>
           )}

@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { Flag, ImagePlus, X } from "lucide-react";
+import { useT } from "@/i18n";
 
 /** Available from every role's account menu (see AppShell) -- free text plus
  * an optional screenshot, sent straight to the Forge team rather than the
@@ -28,6 +29,7 @@ export function ReportProblemDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const [location] = useLocation();
   const [message, setMessage] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
@@ -56,11 +58,11 @@ export function ReportProblemDialog({
       await apiRequest("POST", "/api/report-problem", form);
     },
     onSuccess: () => {
-      toast.success("Thanks, we got your report.");
+      toast.success(t("Thanks, we got your report."));
       reset();
       onOpenChange(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't send that report"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't send that report")),
   });
 
   return (
@@ -75,18 +77,17 @@ export function ReportProblemDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Flag className="h-5 w-5" />
-            Report a problem
+            {t("Report a problem")}
           </DialogTitle>
           <DialogDescription>
-            Tell us what happened, a screenshot helps but isn't required. This goes straight to
-            the Forge team, not your coach.
+            {t("Tell us what happened, a screenshot helps but isn't required. This goes straight to the Forge team, not your coach.")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <Textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="What went wrong?"
+            placeholder={t("What went wrong?")}
             rows={4}
             maxLength={2000}
           />
@@ -112,13 +113,13 @@ export function ReportProblemDialog({
               <div className="relative w-fit">
                 <img
                   src={photoPreview}
-                  alt="Attached screenshot"
+                  alt={t("Attached screenshot")}
                   className="max-h-40 rounded-md border border-border object-contain"
                 />
                 <button
                   type="button"
                   onClick={clearPhoto}
-                  aria-label="Remove photo"
+                  aria-label={t("Remove photo")}
                   className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -127,17 +128,17 @@ export function ReportProblemDialog({
             ) : (
               <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
                 <ImagePlus className="h-3.5 w-3.5" />
-                Attach a screenshot
+                {t("Attach a screenshot")}
               </Button>
             )}
           </div>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button onClick={() => submitMutation.mutate()} disabled={!message.trim() || submitMutation.isPending}>
-            {submitMutation.isPending ? "Sending…" : "Send report"}
+            {submitMutation.isPending ? t("Sending…") : t("Send report")}
           </Button>
         </DialogFooter>
       </DialogContent>

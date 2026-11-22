@@ -14,6 +14,7 @@ import { borderTintForLabel, colorForLabel } from "@/lib/supersets";
 import { Star } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { BOX_HINT, type SheetBlock, type SheetModel } from "@shared/weight-room-sheet";
+import { useT } from "@/i18n";
 
 export type SheetCellEdit =
   | { kind: "sets"; exerciseId: number; value: string }
@@ -76,6 +77,7 @@ function EditableCell({
   label: string;
   bold?: boolean;
 }) {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const self = useRef<HTMLButtonElement | null>(null);
@@ -124,7 +126,7 @@ function EditableCell({
       data-sheet-cell=""
       data-col={col}
       data-row={row}
-      aria-label={`${label}: ${value || "empty"}. Press Enter to edit.`}
+      aria-label={t("{label}: {value}. Press Enter to edit.", { label, value: value || t("empty") })}
       className={cn("relative w-full rounded px-1 py-0.5 text-left hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary", bold && "font-bold", className)}
       onClick={() => {
         setDraft(value);
@@ -145,7 +147,7 @@ function EditableCell({
       }}
     >
       {value || <span className="text-muted-foreground">—</span>}
-      {changed && <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="changed" data-testid="cell-changed" />}
+      {changed && <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" aria-label={t("changed")} data-testid="cell-changed" />}
     </button>
   );
 }
@@ -171,6 +173,7 @@ function setHeaders(block: SheetBlock, rpe: SheetModel["rpe"]): string[] {
 }
 
 function BlockHeader({ model, block, index, onEdit, handle }: { model: SheetModel; block: SheetBlock; index: number; onEdit?: Props["onEdit"]; handle?: ReactNode }) {
+  const t = useT();
   const edit = (kind: "sets" | "percent" | "goal" | "rest" | "effort") => (onEdit ? (value: string) => onEdit({ kind, exerciseId: block.exerciseId, value }) : undefined);
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -181,25 +184,25 @@ function BlockHeader({ model, block, index, onEdit, handle }: { model: SheetMode
         </span>
       )}
       <span className="font-semibold">{block.name}</span>
-      {block.superset?.first && <span className="text-xs uppercase tracking-wide text-muted-foreground">Superset</span>}
+      {block.superset?.first && <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("Superset")}</span>}
       <span className="flex items-center gap-1 text-xs text-muted-foreground">
-        <EditableCell value={String(block.sets)} changed={block.setsChanged} onCommit={edit("sets")} col={`sets-${index}`} row={0} label={`${block.name} sets`} className="w-10" />
+        <EditableCell value={String(block.sets)} changed={block.setsChanged} onCommit={edit("sets")} col={`sets-${index}`} row={0} label={t("{exercise} sets", { exercise: block.name })} className="w-10" />
         × {block.reps}
-        {block.sides ? " each side" : ""}
+        {block.sides ? ` ${t("each side")}` : ""}
         {block.kind !== "load" ? ` (${BOX_HINT[block.kind]})` : ""}
       </span>
       {!block.bodyweight && block.kind === "load" && (
         <span className="flex items-center gap-1 text-xs text-muted-foreground">
           %
-          <EditableCell value={block.percent != null ? String(block.percent) : ""} changed={block.percentChanged} onCommit={edit("percent")} col={`pct-${index}`} row={0} label={`${block.name} percent`} className="w-12" />
+          <EditableCell value={block.percent != null ? String(block.percent) : ""} changed={block.percentChanged} onCommit={edit("percent")} col={`pct-${index}`} row={0} label={t("{exercise} percent", { exercise: block.name })} className="w-12" />
         </span>
       )}
-      {block.effort != null && <EditableCell value={block.effort} changed={block.effortChanged} onCommit={edit("effort")} col={`effort-${index}`} row={0} label={`${block.name} effort`} className="w-auto text-xs" />}
-      {block.goal != null && <EditableCell value={block.goal} changed={block.goalChanged} onCommit={edit("goal")} col={`goal-${index}`} row={0} label={`${block.name} goal`} className="w-auto text-xs" />}
+      {block.effort != null && <EditableCell value={block.effort} changed={block.effortChanged} onCommit={edit("effort")} col={`effort-${index}`} row={0} label={t("{exercise} effort", { exercise: block.name })} className="w-auto text-xs" />}
+      {block.goal != null && <EditableCell value={block.goal} changed={block.goalChanged} onCommit={edit("goal")} col={`goal-${index}`} row={0} label={t("{exercise} goal", { exercise: block.name })} className="w-auto text-xs" />}
       {block.rest != null && (block.rest || !block.superset) && (
         <span className="flex items-center gap-1 text-xs text-muted-foreground">
-          {block.superset ? "" : "Rest"}
-          <EditableCell value={block.rest} changed={block.restChanged} onCommit={edit("rest")} col={`rest-${index}`} row={0} label={`${block.name} rest`} className="w-auto" />
+          {block.superset ? "" : t("Rest")}
+          <EditableCell value={block.rest} changed={block.restChanged} onCommit={edit("rest")} col={`rest-${index}`} row={0} label={t("{exercise} rest", { exercise: block.name })} className="w-auto" />
         </span>
       )}
       {block.cues && <p className="w-full text-xs italic text-muted-foreground">{block.cues}</p>}
@@ -208,6 +211,7 @@ function BlockHeader({ model, block, index, onEdit, handle }: { model: SheetMode
 }
 
 function TargetCell({ model, block, row, rowIndex, onEdit, blockIndex }: { model: SheetModel; block: SheetBlock; row: SheetModel["groups"][number]["rows"][number]; rowIndex: number; onEdit?: Props["onEdit"]; blockIndex: number }) {
+  const t = useT();
   const cell = row.cells[blockIndex];
   return (
     <td className="border px-1">
@@ -219,16 +223,17 @@ function TargetCell({ model, block, row, rowIndex, onEdit, blockIndex }: { model
           className={model.boldTargets ? "text-base" : "text-sm"}
           col={`target-${blockIndex}`}
           row={rowIndex}
-          label={`${row.displayName} ${block.name} target`}
+          label={t("{athlete} {exercise} target", { athlete: row.displayName, exercise: block.name })}
           onCommit={onEdit ? (value) => onEdit({ kind: "target", exerciseId: block.exerciseId, athleteId: row.athleteId, value }) : undefined}
         />
-        {cell.pr && <Star className="h-3 w-3 shrink-0 fill-current" aria-label="would be a new best" data-testid="sheet-pr" />}
+        {cell.pr && <Star className="h-3 w-3 shrink-0 fill-current" aria-label={t("would be a new best")} data-testid="sheet-pr" />}
       </div>
     </td>
   );
 }
 
 function TeamView({ model, onEdit, liftHandle }: Props) {
+  const t = useT();
   const showMax = model.layout.toggles.max;
   const showTarget = model.layout.toggles.target;
   return (
@@ -249,11 +254,11 @@ function TeamView({ model, onEdit, liftHandle }: Props) {
                   <table className="mt-2 w-full border-collapse text-sm">
                     <thead className="bg-[var(--sheet-tint)] text-left text-xs">
                       <tr>
-                        <th className="border px-1 py-1">Athlete</th>
-                        {showMax && <th className="border px-1" data-testid="col-max">Max</th>}
-                        {showTarget && <th className="border px-1" data-testid="col-target">Target</th>}
-                        {showLast && <th className="border px-1" data-testid="col-last">Last</th>}
-                        {showPlates && <th className="border px-1" data-testid="col-plates">Plates</th>}
+                        <th className="border px-1 py-1">{t("Athlete")}</th>
+                        {showMax && <th className="border px-1" data-testid="col-max">{t("Max")}</th>}
+                        {showTarget && <th className="border px-1" data-testid="col-target">{t("Target")}</th>}
+                        {showLast && <th className="border px-1" data-testid="col-last">{t("Last")}</th>}
+                        {showPlates && <th className="border px-1" data-testid="col-plates">{t("Plates")}</th>}
                         {setHeaders(block, model.rpe).map((h) => (
                           <th key={h} className="border px-1 text-center">{h}</th>
                         ))}
@@ -267,7 +272,7 @@ function TeamView({ model, onEdit, liftHandle }: Props) {
                         <tr key={row.athleteId}>
                           <td className="whitespace-nowrap border px-1">
                             {row.displayName}
-                            {!row.onDay && <span className="ml-1 text-xs text-muted-foreground">(not on this day)</span>}
+                            {!row.onDay && <span className="ml-1 text-xs text-muted-foreground">{t("(not on this day)")}</span>}
                           </td>
                           {showMax && <td className="border px-1 text-muted-foreground">{row.cells[bi].max}</td>}
                           {showTarget && <TargetCell model={model} block={block} row={row} rowIndex={ri} onEdit={onEdit} blockIndex={bi} />}
@@ -295,6 +300,7 @@ function TeamView({ model, onEdit, liftHandle }: Props) {
 }
 
 function AcrossView({ model, onEdit }: Props) {
+  const t = useT();
   return (
     <div className="space-y-6">
       {[...model.blocks.flatMap((b) => b.textBefore), ...model.textAfter].map((t, i) => (
@@ -322,11 +328,11 @@ function AcrossView({ model, onEdit }: Props) {
                 ))}
               </tr>
               <tr>
-                <th className="border px-1 text-left">Athlete</th>
+                <th className="border px-1 text-left">{t("Athlete")}</th>
                 {model.blocks.map((block, bi) => (
                   <Fragment key={block.programExerciseId}>
-                    {model.layout.toggles.target && <th className="border px-1">Target</th>}
-                    {group.rows.some((r) => r.cells[bi].last != null) && <th className="border px-1">Last</th>}
+                    {model.layout.toggles.target && <th className="border px-1">{t("Target")}</th>}
+                    {group.rows.some((r) => r.cells[bi].last != null) && <th className="border px-1">{t("Last")}</th>}
                     {setHeaders(block, model.rpe).map((h) => (
                       <th key={`${bi}-${h}`} className="border px-1">{h}</th>
                     ))}
@@ -359,6 +365,7 @@ function AcrossView({ model, onEdit }: Props) {
 }
 
 function CardsView({ model, onEdit }: Props) {
+  const t = useT();
   const rows = model.groups.flatMap((g) => g.rows.map((row) => ({ row, group: g.label })));
   return (
     <div className="grid gap-3 sm:grid-cols-2">
@@ -380,13 +387,13 @@ function CardsView({ model, onEdit }: Props) {
                     bold={model.boldTargets}
                     col={`target-${bi}`}
                     row={ri}
-                    label={`${row.displayName} ${block.name} target`}
+                    label={t("{athlete} {exercise} target", { athlete: row.displayName, exercise: block.name })}
                     className="w-auto"
                     onCommit={onEdit ? (value) => onEdit({ kind: "target", exerciseId: block.exerciseId, athleteId: row.athleteId, value }) : undefined}
                   />
                 )}
-                {row.cells[bi].pr && <Star className="h-3 w-3 fill-current" aria-label="would be a new best" />}
-                {row.cells[bi].last && <span className="text-xs text-muted-foreground">last {row.cells[bi].last}</span>}
+                {row.cells[bi].pr && <Star className="h-3 w-3 fill-current" aria-label={t("would be a new best")} />}
+                {row.cells[bi].last && <span className="text-xs text-muted-foreground">{t("last {value}", { value: row.cells[bi].last })}</span>}
                 {row.cells[bi].plates && <span className="text-xs text-muted-foreground">{row.cells[bi].plates}</span>}
               </div>
               <div className="mt-1 flex gap-1">
@@ -404,6 +411,7 @@ function CardsView({ model, onEdit }: Props) {
 
 /** The whole sheet as the coach will print it. */
 export function WeightRoomSheetPreview(props: Props) {
+  const t = useT();
   const { model, brand, onEdit } = props;
   const primary = brand.primaryColor || "#F65B23";
   const views = { team: TeamView, across: AcrossView, cards: CardsView };
@@ -415,8 +423,8 @@ export function WeightRoomSheetPreview(props: Props) {
           {brand.logoUrl && <img src={brand.logoUrl} alt="" className="h-10 w-10 object-contain" />}
           <div>
             <p className="text-lg font-bold leading-tight">{brand.teamName || "FORGE"}</p>
-            <p className="text-xs opacity-90">Weight-room sheet · {model.date}</p>
-            {brand.teamName && <p className="text-[10px] opacity-80">Powered by Forge</p>}
+            <p className="text-xs opacity-90">{t("Weight-room sheet · {date}", { date: model.date })}</p>
+            {brand.teamName && <p className="text-[10px] opacity-80">{t("Powered by Forge")}</p>}
           </div>
         </div>
         <div className="flex items-start justify-between gap-3 px-4 pt-3">
@@ -425,19 +433,19 @@ export function WeightRoomSheetPreview(props: Props) {
               {model.dayTitle} · {model.programName}
             </p>
             <p className="text-xs text-neutral-500">
-              {model.teamName} · {model.date} · Coach {model.coachName}
+              {model.teamName} · {model.date} · {t("Coach {name}", { name: model.coachName })}
             </p>
             {model.phaseLine && (
               <p className="text-xs text-neutral-500" data-testid="sheet-phase">
                 {model.phaseLine}
-                {model.lighterWeek ? " · lighter week" : ""}
+                {model.lighterWeek ? ` · ${t("lighter week")}` : ""}
               </p>
             )}
-            {model.warmup && <p className="text-xs" data-testid="sheet-warmup">Warm-up: {model.warmup.join(", ")}</p>}
+            {model.warmup && <p className="text-xs" data-testid="sheet-warmup">{t("Warm-up: {drills}", { drills: model.warmup.join(", ") })}</p>}
             {model.note != null && (
               <div className="flex items-center gap-1 text-xs font-semibold" data-testid="sheet-note">
-                Note:
-                <EditableCell value={model.note} col="note" row={0} label="Note line" className="min-w-[12rem]" onCommit={onEdit ? (value) => onEdit({ kind: "note", value }) : undefined} />
+                {t("Note:")}
+                <EditableCell value={model.note} col="note" row={0} label={t("Note line")} className="min-w-[12rem]" onCommit={onEdit ? (value) => onEdit({ kind: "note", value }) : undefined} />
               </div>
             )}
           </div>
@@ -448,11 +456,11 @@ export function WeightRoomSheetPreview(props: Props) {
         </div>
         {model.coachNotes && (
           <div className="mx-4 mb-3 h-14 rounded border p-1 text-[10px] text-neutral-500" data-testid="sheet-coach-notes">
-            Coach notes
+            {t("Coach notes")}
           </div>
         )}
         <div className="flex justify-between px-4 pb-3 text-[10px] text-neutral-500">
-          <span>{brand.teamName ? `Generated by ${brand.teamName} via Forge` : "Generated by Forge"}</span>
+          <span>{brand.teamName ? t("Generated by {team} via Forge", { team: brand.teamName }) : t("Generated by Forge")}</span>
           {model.code && <span className="font-mono font-bold text-neutral-800" data-testid="sheet-code">{model.code}</span>}
         </div>
       </div>

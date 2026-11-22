@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { speakableText } from "@shared/read-aloud-text";
 import { Pause, Play, Square, Volume2 } from "lucide-react";
+import { useT } from "@/i18n";
 
 /** Listen to a lesson page (2026-10-04). Two voices, one control: when Forge has a narrator
  * configured (server/read-aloud.ts), the page's narration is fetched, made once and cached,
@@ -23,6 +24,7 @@ export function ReadAloud({
   /** Asks the server for this text's narration URL; resolves null when there is no narrator. */
   fetchNarration?: () => Promise<string | null>;
 }) {
+  const t = useT();
   const { data: status } = useQuery<{ available: boolean }>({
     queryKey: ["/api/read-aloud/status"],
     queryFn: () => getJson("/api/read-aloud/status"),
@@ -105,24 +107,24 @@ export function ReadAloud({
       {state === "idle" || state === "loading" ? (
         <Button size="sm" variant="outline" onClick={() => void play()} disabled={state === "loading"}>
           <Volume2 className="h-3.5 w-3.5" />
-          {state === "loading" ? "Getting the narration…" : "Listen"}
+          {state === "loading" ? t("Getting the narration…") : t("Listen")}
         </Button>
       ) : (
         <>
           <Button size="sm" variant="outline" onClick={() => (state === "playing" ? pause() : void play())}>
             {state === "playing" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-            {state === "playing" ? "Pause" : "Resume"}
+            {state === "playing" ? t("Pause") : t("Resume")}
           </Button>
           <Button size="sm" variant="ghost" onClick={stop}>
             <Square className="h-3.5 w-3.5" />
-            Stop
+            {t("Stop")}
           </Button>
         </>
       )}
       {state !== "idle" && (
-        <span>{usingDevice ? "Read by your device's voice." : "Narrated."}</span>
+        <span>{usingDevice ? t("Read by your device's voice.") : t("Narrated.")}</span>
       )}
-      {state === "idle" && !narrated && <span>Read by your device's voice.</span>}
+      {state === "idle" && !narrated && <span>{t("Read by your device's voice.")}</span>}
     </div>
   );
 }

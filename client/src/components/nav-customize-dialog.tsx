@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import type { LucideIcon } from "lucide-react";
 import { DAILY_CHECKIN_TERM_KEY, DEFAULT_DAILY_CHECKIN_TERM } from "@shared/wellness";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 export type NavCustomizeItem = { href: string; label: string; icon: LucideIcon };
 
@@ -39,6 +40,7 @@ export function NavCustomizeDialog({
   onOpenChange: (open: boolean) => void;
   items: NavCustomizeItem[];
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [labels, setLabels] = useState<Record<string, string>>({});
@@ -70,7 +72,7 @@ export function NavCustomizeDialog({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/nav-prefs"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save")),
   });
 
   function toggle(href: string) {
@@ -89,10 +91,9 @@ export function NavCustomizeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Customize navigation</DialogTitle>
+          <DialogTitle>{t("Customize navigation")}</DialogTitle>
           <DialogDescription>
-            Hide tabs your program doesn't use, or rename the ones you keep. Hiding applies to
-            you and your whole staff; a new name also shows on your athletes' matching tab.
+            {t("Hide tabs your program doesn't use, or rename the ones you keep. Hiding applies to you and your whole staff; a new name also shows on your athletes' matching tab.")}
           </DialogDescription>
         </DialogHeader>
         {/* HYDRATE-IN-AN-EFFECT, SAVE-THE-WHOLE-STATE -- see CLAUDE.md. On a failed read the
@@ -101,7 +102,7 @@ export function NavCustomizeDialog({
             every other hidden tab and every rename this coach's whole staff shares. The editor
             does not open until the read lands. */}
         {isError ? (
-          <ReadFailed what="your navigation settings" onRetry={() => void refetch()} />
+          <ReadFailed what={t("your navigation settings")} onRetry={() => void refetch()} />
         ) : (
         <div className="space-y-2">
           {items.map((item) => {
@@ -117,7 +118,7 @@ export function NavCustomizeDialog({
                   value={labels[item.href] ?? ""}
                   onChange={(e) => setLabels({ ...labels, [item.href]: e.target.value })}
                   onBlur={commitLabel}
-                  placeholder={`Rename "${item.label}" (optional)`}
+                  placeholder={t("Rename \"{name}\" (optional)", { name: t(item.label) })}
                   className="ml-6 h-7 w-[calc(100%-1.5rem)] text-xs"
                   maxLength={30}
                 />
@@ -129,12 +130,12 @@ export function NavCustomizeDialog({
              an href in the same navLabelOverrides map (see wellness-gate.tsx,
              which reads this same key back out via /api/branding/me). */}
           <div className="space-y-1.5 rounded-md border border-border p-2.5">
-            <p className="text-sm">{DEFAULT_DAILY_CHECKIN_TERM}</p>
+            <p className="text-sm">{t(DEFAULT_DAILY_CHECKIN_TERM)}</p>
             <Input
               value={labels[DAILY_CHECKIN_TERM_KEY] ?? ""}
               onChange={(e) => setLabels({ ...labels, [DAILY_CHECKIN_TERM_KEY]: e.target.value })}
               onBlur={commitLabel}
-              placeholder={`Rename "${DEFAULT_DAILY_CHECKIN_TERM}" (optional, e.g. "Daily Readiness")`}
+              placeholder={t("Rename \"{name}\" (optional, e.g. \"Daily Readiness\")", { name: t(DEFAULT_DAILY_CHECKIN_TERM) })}
               className="h-7 text-xs"
               maxLength={30}
             />
@@ -142,7 +143,7 @@ export function NavCustomizeDialog({
         </div>
         )}
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-          Done
+          {t("Done")}
         </Button>
       </DialogContent>
     </Dialog>
