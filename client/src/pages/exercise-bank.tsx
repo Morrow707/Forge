@@ -46,6 +46,8 @@ import { toast } from "sonner";
 import { ApiError } from "@/lib/queryClient";
 import { ReadFailed } from "@/components/read-failed";
 import { exerciseMatchScore, searchExercises } from "@shared/exercise-search";
+import { roomAllows } from "@shared/exercise-needs";
+import { useEquipmentRoom } from "@/hooks/use-equipment-room";
 
 const CATEGORIES = [
   "strength",
@@ -96,6 +98,10 @@ export function ExerciseBankPage({
   const [search, setSearch] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [recentlyUsedOnly, setRecentlyUsedOnly] = useState(false);
+  // "ONLY WHAT MY ROOM HAS" (2026-11-21), the picker's toggle: on once a room is set, never stored.
+  const { room, hasProfile } = useEquipmentRoom();
+  const [roomOnlyChoice, setRoomOnlyChoice] = useState<boolean | null>(null);
+  const roomOnly = roomOnlyChoice ?? hasProfile;
   // Accordion state -- see shared/exercise-family.ts and the identical
   // pattern in exercise-picker-dialog.tsx (the reference implementation
   // this was ported from).
@@ -197,7 +203,9 @@ export function ExerciseBankPage({
       const matchesCorrective = !correctivesOnly || ex.isCorrective;
       const matchesFavorite = !favoritesOnly || !!ex.isFavorite;
       const matchesRecentlyUsed = !recentlyUsedOnly || ex.lastUsedAt != null;
+      const matchesRoom = !roomOnly || !room || roomAllows(ex, room);
       return (
+        matchesRoom &&
         matchesSearch &&
         matchesFamily &&
         matchesEquipment &&
@@ -232,6 +240,8 @@ export function ExerciseBankPage({
     correctivesOnly,
     favoritesOnly,
     recentlyUsedOnly,
+    roomOnly,
+    room,
   ]);
 
   // Only reorders (never re-filters) -- most-recently-used first, so
@@ -323,6 +333,20 @@ export function ExerciseBankPage({
               Recently Used
             </button>
           </div>
+        )}
+        {hasProfile && (
+          <button
+            type="button"
+            onClick={() => setRoomOnlyChoice(!roomOnly)}
+            aria-pressed={roomOnly}
+            data-testid="toggle-room-only"
+            className={cn(
+              "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+              roomOnly ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:border-primary/50",
+            )}
+          >
+            Only what my room has
+          </button>
         )}
         {/* isBrowsing hides the family/equipment/more-filters accordion once
             the coach is typing a direct search -- see the identical pattern

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { EquipmentGapNotice } from "@/components/equipment-gap-notice";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -426,6 +427,11 @@ export function AssignProgramDialog({
                 })}
               </div>
             </div>
+            {/* THE ROOM (2026-11-21): a warning and swaps, never a block. */}
+            <EquipmentGapNotice
+              programId={selectedProgramId ? Number(selectedProgramId) : null}
+              athleteIds={Array.from(assignAthletes.keys())}
+            />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel

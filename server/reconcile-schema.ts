@@ -4114,6 +4114,23 @@ CREATE TABLE IF NOT EXISTS "weight_room_display_tokens" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "weight_room_display_tokens_hash_unique" ON "weight_room_display_tokens" ("token_hash");
 CREATE INDEX IF NOT EXISTS "weight_room_display_tokens_coach_idx" ON "weight_room_display_tokens" ("coach_id");
+
+-- ---- EQUIPMENT PROFILE (2026-11-21) ----
+-- What a weight room has, per program team / program default / one person's own training. No
+-- row means everything is available. See server/equipment-room.ts.
+CREATE TABLE IF NOT EXISTS "equipment_profiles" (
+  "id" serial PRIMARY KEY,
+  "scope_key" text NOT NULL,
+  "kind" text NOT NULL,
+  "owner_id" integer NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "team_id" integer REFERENCES "teams"("id") ON DELETE CASCADE,
+  "items" json NOT NULL DEFAULT '[]'::json,
+  "dumbbell_max_lbs" integer,
+  "updated_by" integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "updated_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "equipment_profiles_scope_key_unique" ON "equipment_profiles" ("scope_key");
+CREATE INDEX IF NOT EXISTS "equipment_profiles_owner_idx" ON "equipment_profiles" ("owner_id");
 `;
 
 async function main() {

@@ -12,7 +12,10 @@ import multer from "multer";
 import { requireRole } from "./auth";
 import { storage } from "./storage";
 import { MAX_IMPORT_BYTES, draftProgramFromUpload } from "./program-import";
-import type { LibraryExercise } from "@shared/program-import";
+import { roomForActor } from "./equipment-room";
+import { roomAllows } from "@shared/exercise-needs";
+import type { EquipmentRoom } from "@shared/equipment-profile";
+import type { ImportMatch, LibraryExercise } from "@shared/program-import";
 
 function currentUser(req: Request) {
   return req.user as { id: number; role: "coach" | "athlete" | "admin" | "guardian"; email: string };
@@ -53,7 +56,25 @@ async function handleImport(req: Request, res: Response, library: LibraryExercis
   if (!file) return res.status(400).json({ message: "Choose a file to import: an Excel file, a CSV, a PDF or a photo of the program." });
   const result = await draftProgramFromUpload(file.buffer, file.originalname ?? "", library);
   if (!result.ok) return res.status(result.status).json({ message: result.message, importRefused: true });
-  return res.json(result.draft);
+  // THE ROOM (2026-11-21): a row the coach wrote is kept as written whatever the room has (the
+  // review dialog marks it); for a row that needs a decision, what the room can do is offered first.
+  const room = await roomForActor(currentUser(req).id);
+  return res.json(suggestionsRoomFirst(result.draft, room));
+}
+
+export function suggestionsRoomFirst<D extends { days: Array<{ exercises: Array<{ match: ImportMatch }> }> }>(draft: D, room: EquipmentRoom | null): D {
+  if (!room) return draft;
+  return {
+    ...draft,
+    days: draft.days.map((day) => ({
+      ...day,
+      exercises: day.exercises.map((row) =>
+        row.match.status === "flagged"
+          ? { ...row, match: { ...row.match, suggestions: [...row.match.suggestions].sort((a, b) => Number(roomAllows(b, room)) - Number(roomAllows(a, room))) } }
+          : row,
+      ),
+    })),
+  };
 }
 
 export type ProgramImportGates = {

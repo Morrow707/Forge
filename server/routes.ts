@@ -40,6 +40,7 @@ import { setupAuth, requireAuth, requireRole, toPublicUser, toPublicUserWithSect
 import { registerInstitutionalAgreementRoutes } from "./institutional-agreement-routes";
 import { registerEmailListRoutes } from "./email-list";
 import { registerVelocityZoneRoutes } from "./velocity-zones";
+import { registerEquipmentProfileRoutes } from "./equipment-profile-routes";
 import { registerProgramImportRoutes } from "./program-import-routes";
 import { registerDeviceIntegrationRoutes } from "./device-integrations";
 import { registerCoachMessageRoutes } from "./coach-messages";
@@ -1833,6 +1834,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerInstitutionalAgreementRoutes(app);
   registerEmailListRoutes(app);
   registerVelocityZoneRoutes(app);
+  registerEquipmentProfileRoutes(app);
   registerProgramImportRoutes(app, { requireActiveCoachPlan, requireFreeAgent, requirePaidAiAccess });
   registerDeviceIntegrationRoutes(app);
   registerCoachMessageRoutes(app);

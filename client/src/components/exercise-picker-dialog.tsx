@@ -32,6 +32,8 @@ import {
 import { FilterChipGroup, toggleInSet } from "@/components/filter-chip-group";
 import { ReadFailed } from "@/components/read-failed";
 import { exerciseMatchScore, searchExercises } from "@shared/exercise-search";
+import { roomAllows } from "@shared/exercise-needs";
+import { useEquipmentRoom } from "@/hooks/use-equipment-room";
 import {
   CATEGORY_FILTER_ACTIVE_CLASS,
   MOVEMENT_FILTER_ACTIVE_CLASS,
@@ -98,6 +100,11 @@ export function ExercisePickerDialog({
   const [sportFilter, setSportFilter] = useState<Set<string>>(new Set());
   const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
   const [onlyCorrectives, setOnlyCorrectives] = useState(correctivesOnly);
+  // "ONLY WHAT MY ROOM HAS" (2026-11-21): on by default once a room is set, one tap to see the
+  // whole library again, and never stored -- it narrows a list and hides nothing for good.
+  const { room, hasProfile } = useEquipmentRoom();
+  const [roomOnlyChoice, setRoomOnlyChoice] = useState<boolean | null>(null);
+  const roomOnly = roomOnlyChoice ?? hasProfile;
 
   useEffect(() => {
     if (open) setOnlyCorrectives(correctivesOnly);
@@ -187,7 +194,9 @@ export function ExercisePickerDialog({
         const matchesCorrective = !onlyCorrectives || ex.isCorrective;
         const matchesFavorite = !favoritesOnly || !!ex.isFavorite;
         const matchesRecentlyUsed = !recentlyUsedOnly || ex.lastUsedAt != null;
+        const matchesRoom = !roomOnly || !room || roomAllows(ex, room);
         return (
+          matchesRoom &&
           matchesSearch &&
           matchesFamily &&
           matchesEquipment &&
@@ -222,6 +231,8 @@ export function ExercisePickerDialog({
       onlyCorrectives,
       favoritesOnly,
       recentlyUsedOnly,
+      roomOnly,
+      room,
     ],
   );
 
@@ -371,6 +382,23 @@ export function ExercisePickerDialog({
             </div>
           )}
         </div>
+        {hasProfile && (
+          <div className="shrink-0 border-b border-border px-4 py-2 sm:px-6">
+            <button
+              type="button"
+              onClick={() => setRoomOnlyChoice(!roomOnly)}
+              aria-pressed={roomOnly}
+              data-testid="toggle-room-only"
+              className={cn(
+                "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                roomOnly ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:border-primary/50",
+              )}
+            >
+              <Dumbbell className="h-3.5 w-3.5" />
+              Only what my room has
+            </button>
+          </div>
+        )}
         {/* Filters and results now share ONE scrollable region instead of
             two (a fixed-height filter panel above a separately-scrolling
             results list) -- with nine filter groups (Sport alone runs 30+

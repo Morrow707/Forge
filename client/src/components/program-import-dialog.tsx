@@ -11,6 +11,8 @@
  * Save Program is what writes. Creating a missing exercise is the one write, and only on the
  * coach's tap, through the library's own create route.
  */
+import { useEquipmentRoom } from "@/hooks/use-equipment-room";
+import { missingEquipmentSentence } from "@shared/exercise-needs";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -87,6 +89,7 @@ export function ProgramImportDialog({
 }) {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<ServerDraft | null>(null);
+  const { room } = useEquipmentRoom();
   const [decisions, setDecisions] = useState<Map<string, RowDecision>>(new Map());
   const [error, setError] = useState<{ message: string; paywall: boolean } | null>(null);
   const [useName, setUseName] = useState(true);
@@ -260,6 +263,11 @@ export function ProgramImportDialog({
                             <span className="flex items-center gap-1 text-emerald-500">
                               <Check className="h-3.5 w-3.5" />
                               {decision.exercise.name}
+                            </span>
+                          )}
+                          {decision?.kind === "exercise" && room && missingEquipmentSentence(decision.exercise, room) && (
+                            <span className="text-xs text-amber-500" data-testid={`room-marker-import-${di}-${ri}`}>
+                              {missingEquipmentSentence(decision.exercise, room)}
                             </span>
                           )}
                           {decision?.kind === "skip" && <span className="text-muted-foreground">Left out</span>}
