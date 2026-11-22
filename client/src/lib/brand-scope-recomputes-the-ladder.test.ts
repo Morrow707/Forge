@@ -53,8 +53,8 @@ describe("the brand preview's colors", () => {
     expect(style["--neutral-sat"]).toBe("0");
     expect(style["--light-tint"]).toBe("0");
     const page = readFileSync(join(__dirname, "..", "pages", "coach", "branding.tsx"), "utf8");
-    expect(page).toMatch(/label: "Charcoal", hue: \d+, strength: 0 \}/);
-    expect(page).not.toMatch(/label: "Charcoal", hue: 0\b/);
+    expect(page).toMatch(/label: msg\("Charcoal"\), hue: \d+, strength: 0 \}/);
+    expect(page).not.toMatch(/label: (msg\()?"Charcoal"\)?, hue: 0\b/);
   });
 
   it("the branding page's previews carry the scope", () => {

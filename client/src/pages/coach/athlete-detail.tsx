@@ -3,7 +3,6 @@ import { ReturnToTrainingClearanceCard } from "@/components/return-to-training-c
 import { athleteTabInteraction } from "@shared/feature-usage";
 import { SingleSportYearNote, ThrowingWorkloadPanel } from "@/components/athlete-workload-notes";
 import { countInteraction } from "@/lib/feature-usage";
-import { format } from "date-fns";
 import { useState } from "react";
 import { useParams, useLocation, useSearch } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -65,6 +64,8 @@ import {
   PauseCircle,
   RotateCcw,
 } from "lucide-react";
+import { msg, useT } from "@/i18n";
+import { TranslatableText } from "@/components/translatable-text";
 
 type Athlete = {
   id: number;
@@ -97,23 +98,24 @@ type Athlete = {
 };
 
 const GENDER_LABEL: Record<string, string> = {
-  male: "Male",
-  female: "Female",
-  non_binary: "Non-binary",
-  prefer_not_to_say: "Prefer not to say",
+  male: msg("Male"),
+  female: msg("Female"),
+  non_binary: msg("Non-binary"),
+  prefer_not_to_say: msg("Prefer not to say"),
 };
 
 const SEASON_PHASE_LABEL: Record<string, string> = {
-  off_season: "Off-season",
-  pre_season: "Pre-season",
-  in_season: "In-season",
-  taper: "Taper / playoffs",
+  off_season: msg("Off-season"),
+  pre_season: msg("Pre-season"),
+  in_season: msg("In-season"),
+  taper: msg("Taper / playoffs"),
 };
 
 /** Read-only trophy view, embedded straight in the Trophies tab -- no dialog,
  * just the fetch the old TrophyCaseDialog used to do plus the shared
  * TrophyCase renderer. */
 function AthleteTrophiesTab({ fetchUrl }: { fetchUrl: string }) {
+  const t = useT();
   const { data = [], isLoading, isError, refetch } = useQuery<AthleteTrophyView[]>({
     queryKey: [fetchUrl],
     queryFn: () => getJson(fetchUrl),
@@ -126,7 +128,7 @@ function AthleteTrophiesTab({ fetchUrl }: { fetchUrl: string }) {
     queryFn: () => getJson(programUrl),
   });
   if (isLoading) return <div className="h-24 animate-pulse rounded-lg bg-surface" />;
-  if (isError) return <ReadFailed what="this athlete's trophies" onRetry={() => void refetch()} />;
+  if (isError) return <ReadFailed what={t("this athlete's trophies")} onRetry={() => void refetch()} />;
   return <TrophyCase trophies={data} programTrophies={programTrophies} emptyHint="No trophies unlocked yet." />;
 }
 
@@ -144,6 +146,7 @@ function AthleteTrophiesTab({ fetchUrl }: { fetchUrl: string }) {
  * as "did not film". Renders nothing when there is nothing to say, including on a read failure,
  * which is the right answer for an informational aside rather than a spinner or an error box. */
 function UnattachedClipsNote({ athleteId }: { athleteId: number }) {
+  const t = useT();
   const route = `/api/coach/roster/${athleteId}/unattached-videos`;
   const { data } = useQuery<{ id: number; label: string | null; date: string | null; createdAt: string }[]>({
     queryKey: [route],
@@ -154,21 +157,19 @@ function UnattachedClipsNote({ athleteId }: { athleteId: number }) {
     <Card className="border-amber-500/40" data-testid="coach-unattached-clips">
       <CardContent className="space-y-1.5 p-4">
         <p className="text-sm font-medium">
-          {data.length === 1 ? "1 clip uploaded but not linked to a set" : `${data.length} clips uploaded but not linked to a set`}
+          {data.length === 1 ? t("1 clip uploaded but not linked to a set") : t("{count} clips uploaded but not linked to a set", { count: data.length })}
         </p>
         <p className="text-xs text-muted-foreground">
-          The athlete filmed these, the upload landed, and the set had changed by the time it did. They
-          can link each one from their Video Bank; until then a day with no video may still have been
-          filmed.
+          {t("The athlete filmed these, the upload landed, and the set had changed by the time it did. They can link each one from their Video Bank; until then a day with no video may still have been filmed.")}
         </p>
         <ul className="space-y-0.5 text-xs text-muted-foreground">
           {data.slice(0, 5).map((c) => (
             <li key={c.id} className="truncate">
-              {c.label ?? "Form check clip"}
-              {c.date ? ` · filmed ${c.date}` : ""}
+              {c.label ?? t("Form check clip")}
+              {c.date ? ` · ${t("filmed {date}", { date: c.date })}` : ""}
             </li>
           ))}
-          {data.length > 5 && <li>…and {data.length - 5} more</li>}
+          {data.length > 5 && <li>{t("…and {count} more", { count: data.length - 5 })}</li>}
         </ul>
       </CardContent>
     </Card>
@@ -180,6 +181,7 @@ const VideoCompareDialog = lazyDialog(() =>
 );
 
 export default function AthleteDetailPage() {
+  const t = useT();
   const { athleteId } = useParams<{ athleteId: string }>();
   const id = Number(athleteId);
   const [, navigate] = useLocation();
@@ -234,14 +236,14 @@ export default function AthleteDetailPage() {
     },
     onSuccess: (result) => {
       if (result.sent) {
-        toast.success("Progress report emailed");
+        toast.success(t("Progress report emailed"));
       } else if (result.error === "not_configured") {
-        toast.info("Email sending isn't set up yet, ask your Forge admin to configure it.");
+        toast.info(t("Email sending isn't set up yet, ask your Forge admin to configure it."));
       } else {
-        toast.error("Couldn't send that report, try again in a bit.");
+        toast.error(t("Couldn't send that report, try again in a bit."));
       }
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't send that report"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't send that report")),
   });
 
   const removeAthleteMutation = useMutation({
@@ -253,10 +255,10 @@ export default function AthleteDetailPage() {
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/roster-wellness"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/roster-acwr"] });
-      toast.success(`${athlete?.name ?? "Athlete"} removed from your roster`);
+      toast.success(t("{name} removed from your roster", { name: athlete?.name ?? t("Athlete") }));
       navigate("/coach/roster");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not remove that athlete"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not remove that athlete")),
   });
 
   /* PARK THIS SEAT, OR BRING IT BACK. The gentler sibling of the removal below, and the one a
@@ -271,9 +273,9 @@ export default function AthleteDetailPage() {
       qc.invalidateQueries({ queryKey: [`/api/coach/roster/${id}`] });
       qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/plan"] });
-      toast.success(`${athlete?.name ?? "Athlete"} is on hold`);
+      toast.success(t("{name} is on hold", { name: athlete?.name ?? t("Athlete") }));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't put them on hold"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't put them on hold")),
   });
 
   const unholdMutation = useMutation({
@@ -284,9 +286,9 @@ export default function AthleteDetailPage() {
       qc.invalidateQueries({ queryKey: [`/api/coach/roster/${id}`] });
       qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/plan"] });
-      toast.success(`${athlete?.name ?? "Athlete"} is back on your roster`);
+      toast.success(t("{name} is back on your roster", { name: athlete?.name ?? t("Athlete") }));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't bring them back"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't bring them back")),
   });
 
   // "Pinned" reads straight off the logged-in coach's own /api/auth/me
@@ -305,11 +307,11 @@ export default function AthleteDetailPage() {
       );
       toast.success(
         result.pinned
-          ? `${athlete?.name ?? "Athlete"} pinned for quick access`
-          : `${athlete?.name ?? "Athlete"} unpinned`,
+          ? t("{name} pinned for quick access", { name: athlete?.name ?? t("Athlete") })
+          : t("{name} unpinned", { name: athlete?.name ?? t("Athlete") }),
       );
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update pin"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't update pin")),
   });
 
   async function handleShareRecruitingProfile() {
@@ -322,7 +324,7 @@ export default function AthleteDetailPage() {
         `${athlete.name}'s Forge Recruiting Profile`,
       );
     } catch {
-      toast.error("Couldn't generate that recruiting profile");
+      toast.error(t("Couldn't generate that recruiting profile"));
     } finally {
       setSharingProfile(false);
     }
@@ -330,7 +332,7 @@ export default function AthleteDetailPage() {
 
   if (isLoading) {
     return (
-      <AppShell title="Loading…">
+      <AppShell title={t("Loading…")}>
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       </AppShell>
     );
@@ -340,10 +342,10 @@ export default function AthleteDetailPage() {
   // athlete had been removed on the strength of a dropped request.
   if (isError) {
     return (
-      <AppShell title="Athlete">
+      <AppShell title={t("Athlete")}>
         <Card>
           <CardContent className="py-12">
-            <ReadFailed what="this athlete's profile" error={error} onRetry={() => void refetch()} />
+            <ReadFailed what={t("this athlete's profile")} error={error} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       </AppShell>
@@ -352,16 +354,16 @@ export default function AthleteDetailPage() {
 
   if (!athlete) {
     return (
-      <AppShell title="Athlete Not Found">
+      <AppShell title={t("Athlete Not Found")}>
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Users className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">
-              This athlete isn't on your roster (or was removed).
+              {t("This athlete isn't on your roster (or was removed).")}
             </p>
             <Button onClick={() => navigate("/coach/roster")}>
               <ArrowLeft className="h-4 w-4" />
-              Back to Roster
+              {t("Back to Roster")}
             </Button>
           </CardContent>
         </Card>
@@ -370,25 +372,25 @@ export default function AthleteDetailPage() {
   }
 
   const profileStats: { label: string; value: string }[] = [];
-  if (athlete.age != null) profileStats.push({ label: "Age", value: `${athlete.age}` });
-  if (athlete.gender) profileStats.push({ label: "Gender", value: GENDER_LABEL[athlete.gender] ?? athlete.gender });
+  if (athlete.age != null) profileStats.push({ label: t("Age"), value: `${athlete.age}` });
+  if (athlete.gender) profileStats.push({ label: t("Gender"), value: GENDER_LABEL[athlete.gender] ? t(GENDER_LABEL[athlete.gender]) : athlete.gender });
   if (athlete.heightIn != null) {
     const h = formatHeight(athlete.heightIn);
-    if (h) profileStats.push({ label: "Height", value: h });
+    if (h) profileStats.push({ label: t("Height"), value: h });
   }
   if (athlete.bodyWeightLbs != null) {
-    profileStats.push({ label: "Weight", value: `${athlete.bodyWeightLbs} lbs` });
+    profileStats.push({ label: t("Weight"), value: `${athlete.bodyWeightLbs} lbs` });
   }
   if (athlete.seasonPhase) {
     profileStats.push({
-      label: "Season Phase",
-      value: SEASON_PHASE_LABEL[athlete.seasonPhase] ?? athlete.seasonPhase,
+      label: t("Season Phase"),
+      value: SEASON_PHASE_LABEL[athlete.seasonPhase] ? t(SEASON_PHASE_LABEL[athlete.seasonPhase]) : athlete.seasonPhase,
     });
   }
 
   const testingStats: { label: string; value: string }[] = TESTING_METRICS.flatMap((m) => {
     const raw = athlete[m.key];
-    return raw == null ? [] : [{ label: m.label as string, value: `${raw} ${m.unit}` }];
+    return raw == null ? [] : [{ label: t(m.label as string), value: `${raw} ${m.unit}` }];
   });
 
   return (
@@ -403,8 +405,8 @@ export default function AthleteDetailPage() {
             className="h-8 w-8 shrink-0"
             disabled={pinMutation.isPending}
             onClick={() => pinMutation.mutate()}
-            aria-label={isPinned ? `Unpin ${athlete.name} from quick access` : `Pin ${athlete.name} for quick access`}
-            title={isPinned ? "Unpin from quick access" : "Pin for quick access"}
+            aria-label={isPinned ? t("Unpin {name} from quick access", { name: athlete.name }) : t("Pin {name} for quick access", { name: athlete.name })}
+            title={isPinned ? t("Unpin from quick access") : t("Pin for quick access")}
           >
             <Pin className={cn("h-3.5 w-3.5", isPinned && "fill-current")} />
           </Button>
@@ -414,7 +416,7 @@ export default function AthleteDetailPage() {
       actions={
         <Button variant="outline" onClick={() => navigate("/coach/roster")}>
           <ArrowLeft className="h-4 w-4" />
-          Roster
+          {t("Roster")}
         </Button>
       }
     >
@@ -445,12 +447,12 @@ export default function AthleteDetailPage() {
                 <div className="flex flex-wrap gap-1">
                   <Button size="sm" variant="ghost" onClick={() => setEditOpen(true)}>
                     <Pencil className="h-3.5 w-3.5" />
-                    Edit Profile
+                    {t("Edit Profile")}
                   </Button>
                   {/* A private thread with this athlete; the server decides whether it is open. */}
                   <Button size="sm" variant="ghost" onClick={() => navigate(`/coach/messages?athlete=${athlete.id}`)} data-testid="button-message-athlete">
                     <Mail className="h-3.5 w-3.5" />
-                    Message
+                    {t("Message")}
                   </Button>
                 </div>
               </CardContent>
@@ -464,7 +466,7 @@ export default function AthleteDetailPage() {
 
             <section className="space-y-2">
               <h3 className="label-xs">
-                Profile Details
+                {t("Profile Details")}
               </h3>
               <Card>
                 <CardContent className="p-5">
@@ -474,14 +476,14 @@ export default function AthleteDetailPage() {
                         <Pencil className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="font-semibold">No profile details yet</p>
+                        <p className="font-semibold">{t("No profile details yet")}</p>
                         <p className="text-sm text-muted-foreground">
-                          Add age, height, weight, and testing numbers to fill this out.
+                          {t("Add age, height, weight, and testing numbers to fill this out.")}
                         </p>
                       </div>
                       <Button size="sm" onClick={() => setEditOpen(true)}>
                         <Pencil className="h-3.5 w-3.5" />
-                        Edit Profile
+                        {t("Edit Profile")}
                       </Button>
                     </div>
                   ) : (
@@ -501,7 +503,7 @@ export default function AthleteDetailPage() {
                       {testingStats.length > 0 && (
                         <div>
                           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Testing Maxes
+                            {t("Testing Maxes")}
                           </p>
                           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                             {testingStats.map(({ label, value }) => (
@@ -523,7 +525,7 @@ export default function AthleteDetailPage() {
 
             <section className="space-y-2">
               <h3 className="label-xs">
-                Communication &amp; Sharing
+                {t("Communication & Sharing")}
               </h3>
               <div className="grid grid-cols-2 gap-2">
                 <Button
@@ -532,19 +534,19 @@ export default function AthleteDetailPage() {
                   onClick={() => sendReportMutation.mutate()}
                 >
                   <Mail className="h-3.5 w-3.5" />
-                  Email Report
+                  {t("Email Report")}
                 </Button>
                 <Button variant="outline" disabled={sharingProfile} onClick={handleShareRecruitingProfile}>
                   <Share2 className="h-3.5 w-3.5" />
-                  Share Profile
+                  {t("Share Profile")}
                 </Button>
                 <Button variant="outline" onClick={() => setExportOpen(true)}>
                   <FileDown className="h-3.5 w-3.5" />
-                  Export History
+                  {t("Export History")}
                 </Button>
                 <Button variant="outline" onClick={() => setCalendarOpen(true)}>
                   <CalendarDays className="h-3.5 w-3.5" />
-                  Export Calendar
+                  {t("Export Calendar")}
                 </Button>
               </div>
             </section>
@@ -553,19 +555,18 @@ export default function AthleteDetailPage() {
                 nothing is deleted, the coach undoes it alone, and it is what somebody reaching
                 for Remove in June actually wants. */}
             <section className="space-y-2">
-              <h3 className="label-xs">Off-season</h3>
+              <h3 className="label-xs">{t("Off-season")}</h3>
               <Card>
                 <CardContent className="space-y-3 p-4">
                   {athlete.heldAt ? (
                     <>
                       <div>
-                        <p className="text-sm font-medium">On hold</p>
+                        <p className="text-sm font-medium">{t("On hold")}</p>
                         <p className="text-xs text-muted-foreground">
                           {athlete.heldUntil
-                            ? `Expected back ${athlete.heldUntil}. `
-                            : "No return date set. "}
-                          You aren't billed for this seat and nothing new can be assigned to it.
-                          Everything they've logged is still here.
+                            ? `${t("Expected back {date}.", { date: athlete.heldUntil })} `
+                            : `${t("No return date set.")} `}
+                          {t("You aren't billed for this seat and nothing new can be assigned to it. Everything they've logged is still here.")}
                         </p>
                       </div>
                       <Button
@@ -575,18 +576,15 @@ export default function AthleteDetailPage() {
                         onClick={() => unholdMutation.mutate()}
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
-                        {unholdMutation.isPending ? "Bringing back..." : "Bring back on roster"}
+                        {unholdMutation.isPending ? t("Bringing back...") : t("Bring back on roster")}
                       </Button>
                     </>
                   ) : (
                     <>
                       <div>
-                        <p className="text-sm font-medium">Put on hold</p>
+                        <p className="text-sm font-medium">{t("Put on hold")}</p>
                         <p className="text-xs text-muted-foreground">
-                          For an athlete coming back next season. You stop being billed for the
-                          seat, nothing new can be assigned, and everything they've logged stays
-                          yours to read. You bring them back yourself -- they don't re-enter your
-                          coach code.
+                          {t("For an athlete coming back next season. You stop being billed for the seat, nothing new can be assigned, and everything they've logged stays yours to read. You bring them back yourself -- they don't re-enter your coach code.")}
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -595,7 +593,7 @@ export default function AthleteDetailPage() {
                           value={holdUntilInput}
                           onChange={(e) => setHoldUntilInput(e.target.value)}
                           className="h-9 w-40"
-                          aria-label="Expected return date (optional)"
+                          aria-label={t("Expected return date (optional)")}
                         />
                         <Button
                           variant="secondary"
@@ -604,7 +602,7 @@ export default function AthleteDetailPage() {
                           onClick={() => holdMutation.mutate(holdUntilInput || null)}
                         >
                           <PauseCircle className="h-3.5 w-3.5" />
-                          {holdMutation.isPending ? "Holding..." : "Put on hold"}
+                          {holdMutation.isPending ? t("Holding...") : t("Put on hold")}
                         </Button>
                       </div>
                     </>
@@ -615,22 +613,19 @@ export default function AthleteDetailPage() {
 
             <section className="space-y-2">
               <h3 className="label-xs text-destructive">
-                Danger Zone
+                {t("Danger Zone")}
               </h3>
               <Card className="border-destructive/40">
                 <CardContent className="space-y-3 p-4">
                   <div>
-                    <p className="text-sm font-medium">Remove from your roster</p>
+                    <p className="text-sm font-medium">{t("Remove from your roster")}</p>
                     <p className="text-xs text-muted-foreground">
-                      For an athlete who isn't coming back. {athlete.name} reverts to Free Agent
-                      status; their account and training history stay intact, but you won't be
-                      able to open any of it, and only they can rejoin. Coming back next season?
-                      Put them on hold instead.
+                      {t("For an athlete who isn't coming back. {name} reverts to Free Agent status; their account and training history stay intact, but you won't be able to open any of it, and only they can rejoin. Coming back next season? Put them on hold instead.", { name: athlete.name })}
                     </p>
                   </div>
                   <Button variant="destructive" className="w-full" onClick={() => setRemoveOpen(true)}>
                     <UserMinus className="h-3.5 w-3.5" />
-                    Remove
+                    {t("Remove")}
                   </Button>
                 </CardContent>
               </Card>
@@ -648,18 +643,18 @@ export default function AthleteDetailPage() {
               }}
             >
               <TabsList className="h-auto flex-wrap justify-start">
-                <TabsTrigger value="metrics">Body Metrics</TabsTrigger>
-                <TabsTrigger value="testing">Testing History</TabsTrigger>
-                <TabsTrigger value="bar-speed">Bar Speed</TabsTrigger>
-                <TabsTrigger value="throwing">Throwing</TabsTrigger>
-                <TabsTrigger value="rom">Goniometer</TabsTrigger>
-                <TabsTrigger value="movement-screen">Movement Screen</TabsTrigger>
-                <TabsTrigger value="weakness">Weakness Report</TabsTrigger>
-                <TabsTrigger value="goals">Goals</TabsTrigger>
-                <TabsTrigger value="skills">Skill Clips</TabsTrigger>
-                <TabsTrigger value="trophies">Trophies</TabsTrigger>
-                <TabsTrigger value="nutrition">Nutrition</TabsTrigger>
-                <TabsTrigger value="chat">AI Chat</TabsTrigger>
+                <TabsTrigger value="metrics">{t("Body Metrics")}</TabsTrigger>
+                <TabsTrigger value="testing">{t("Testing History")}</TabsTrigger>
+                <TabsTrigger value="bar-speed">{t("Bar Speed")}</TabsTrigger>
+                <TabsTrigger value="throwing">{t("Throwing")}</TabsTrigger>
+                <TabsTrigger value="rom">{t("Goniometer")}</TabsTrigger>
+                <TabsTrigger value="movement-screen">{t("Movement Screen")}</TabsTrigger>
+                <TabsTrigger value="weakness">{t("Weakness Report")}</TabsTrigger>
+                <TabsTrigger value="goals">{t("Goals")}</TabsTrigger>
+                <TabsTrigger value="skills">{t("Skill Clips")}</TabsTrigger>
+                <TabsTrigger value="trophies">{t("Trophies")}</TabsTrigger>
+                <TabsTrigger value="nutrition">{t("Nutrition")}</TabsTrigger>
+                <TabsTrigger value="chat">{t("AI Chat")}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="metrics">
@@ -752,11 +747,11 @@ export default function AthleteDetailPage() {
                   <CardContent className="space-y-4 p-5">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm text-muted-foreground">
-                        Put any two of {athlete.name}'s clips side by side, or against a teammate's.
+                        {t("Put any two of {name}'s clips side by side, or against a teammate's.", { name: athlete.name })}
                       </p>
                       <Button size="sm" variant="secondary" onClick={() => setComparing(true)}>
                         <GitCompare className="h-3.5 w-3.5" />
-                        Compare clips
+                        {t("Compare clips")}
                       </Button>
                     </div>
                     <SkillSessionsPanel athleteName={athlete.name} athleteId={athlete.id} />
@@ -783,7 +778,7 @@ export default function AthleteDetailPage() {
                     {/* Saved reviews for this athlete. Lives beside the clips they were made
                         from, which is where a coach goes looking for them. */}
                     <div className="space-y-2 border-t border-border pt-4">
-                      <p className="text-sm font-semibold">Saved reviews</p>
+                      <p className="text-sm font-semibold">{t("Saved reviews")}</p>
                       <VideoReviewList
                         mode="coach"
                         fetchUrl={`/api/coach/video-reviews?athleteId=${athlete.id}`}
@@ -838,7 +833,7 @@ export default function AthleteDetailPage() {
       <CalendarLinkDialog
         open={calendarOpen}
         onOpenChange={setCalendarOpen}
-        title={`${athlete.name}'s Calendar`}
+        title={t("{name}'s Calendar", { name: athlete.name })}
         fetchUrl={`/api/coach/roster/${athlete.id}/calendar-link`}
         showImport={false}
       />
@@ -865,7 +860,7 @@ export default function AthleteDetailPage() {
         open={comparing}
         onOpenChange={setComparing}
         subject={{ kind: "roster", athleteId: athlete.id, athleteName: athlete.name }}
-        title={`Compare ${athlete.name}'s clips`}
+        title={t("Compare {name}'s clips", { name: athlete.name })}
       />
 
       <TrainingHistoryExportDialog
@@ -884,21 +879,17 @@ export default function AthleteDetailPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Remove {athlete.name} from your roster?</DialogTitle>
+            <DialogTitle>{t("Remove {name} from your roster?", { name: athlete.name })}</DialogTitle>
           </DialogHeader>
           {/* THE OLD COPY PROMISED SOMETHING THE COACH CANNOT DO: "you can always re-add them
               later with your coach code". The coach HAS no way to re-add them -- sendFreeAgentRequest
               needs the athlete's acceptance and the code is theirs to type, so in August that is
               a chase. Saying so is the whole reason the hold above exists. */}
           <p className="text-sm text-muted-foreground">
-            Their training history and account stay intact, but you'll no longer be able to open
-            any of it -- their sessions, numbers and videos all go dark to you. Rejoining is theirs
-            to do: they'd have to enter your coach code again, you can't put them back yourself.
+            {t("Their training history and account stay intact, but you'll no longer be able to open any of it -- their sessions, numbers and videos all go dark to you. Rejoining is theirs to do: they'd have to enter your coach code again, you can't put them back yourself.")}
           </p>
           <p className="text-sm text-muted-foreground">
-            If they're coming back next season, close this and use <strong>Put on hold</strong>
-            {" "}instead -- you stop paying for the seat, you keep reading everything they've
-            logged, and one tap brings them back.
+            {t("If they're coming back next season, close this and use Put on hold instead -- you stop paying for the seat, you keep reading everything they've logged, and one tap brings them back.")}
           </p>
           <DialogFooter>
             <Button
@@ -907,7 +898,7 @@ export default function AthleteDetailPage() {
               onClick={() => setRemoveOpen(false)}
               disabled={removeAthleteMutation.isPending}
             >
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               type="button"
@@ -915,7 +906,7 @@ export default function AthleteDetailPage() {
               disabled={removeAthleteMutation.isPending}
               onClick={() => removeAthleteMutation.mutate()}
             >
-              {removeAthleteMutation.isPending ? "Removing..." : "Remove Athlete"}
+              {removeAthleteMutation.isPending ? t("Removing...") : t("Remove Athlete")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -939,6 +930,7 @@ export default function AthleteDetailPage() {
  * calls, and most visits to this tab are not about correctives.
  */
 function SuggestedCorrectives({ athleteId }: { athleteId: number }) {
+  const t = useT();
   const [result, setResult] = useState<{
     summary: string;
     correctives: { exerciseId: number; exerciseName: string; sets: number; reps: string; why: string }[];
@@ -950,21 +942,20 @@ function SuggestedCorrectives({ athleteId }: { athleteId: number }) {
       return res.json();
     },
     onSuccess: (data) => setResult(data),
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't draft correctives"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't draft correctives")),
   });
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="font-bold">Suggested correctives</p>
+          <p className="font-bold">{t("Suggested correctives")}</p>
           <p className="text-xs text-muted-foreground">
-            Drafted from this athlete's repeated soreness, screen findings and unresolved
-            injuries. Nothing is applied, add what you agree with in the corrective editor.
+            {t("Drafted from this athlete's repeated soreness, screen findings and unresolved injuries. Nothing is applied, add what you agree with in the corrective editor.")}
           </p>
         </div>
         <Button size="sm" onClick={() => suggest.mutate()} disabled={suggest.isPending}>
-          {suggest.isPending ? "Thinking..." : "Draft suggestions"}
+          {suggest.isPending ? t("Thinking...") : t("Draft suggestions")}
         </Button>
       </div>
 
@@ -973,13 +964,13 @@ function SuggestedCorrectives({ athleteId }: { athleteId: number }) {
           <p className="text-sm">{result.summary}</p>
           {result.correctives.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              Nothing on file suggests corrective work right now.
+              {t("Nothing on file suggests corrective work right now.")}
             </p>
           ) : (
             result.correctives.map((c) => (
               <div key={c.exerciseId} className="rounded-md border px-3 py-2">
                 <p className="text-sm font-medium">
-                  {c.exerciseName} — {c.sets} x {c.reps}
+                  {t.exercise(c.exerciseName)} — {c.sets} x {c.reps}
                 </p>
                 <p className="text-xs text-muted-foreground">{c.why}</p>
               </div>
@@ -999,6 +990,7 @@ function SuggestedCorrectives({ athleteId }: { athleteId: number }) {
  * Renders nothing when there is nothing to show, so it costs a quiet roster no
  * space at all. */
 function ExerciseRegressionsCard({ athleteId }: { athleteId: number }) {
+  const t = useT();
   const { data: regressions = [], isError: regressionsFailed, refetch: refetchRegressions } = useQuery<
     {
       id: number;
@@ -1024,7 +1016,7 @@ function ExerciseRegressionsCard({ athleteId }: { athleteId: number }) {
       <Card>
         <CardContent className="p-5">
           <ReadFailed
-            what="whether this athlete has asked for something easier"
+            what={t("whether this athlete has asked for something easier")}
             onRetry={() => void refetchRegressions()}
           />
         </CardContent>
@@ -1036,22 +1028,22 @@ function ExerciseRegressionsCard({ athleteId }: { athleteId: number }) {
 
   return (
     <section className="space-y-2">
-      <h3 className="label-xs">Asked for something easier</h3>
+      <h3 className="label-xs">{t("Asked for something easier")}</h3>
       <Card>
         <CardContent className="space-y-2.5 p-5">
           {regressions.slice(0, 8).map((r) => (
             <div key={r.id} className="border-l-2 border-amber-500/60 pl-2.5">
               <p className="text-sm font-semibold">
-                {r.exerciseName}{" "}
+                {t.exercise(r.exerciseName)}{" "}
                 <span className="font-normal text-muted-foreground">
-                  · {format(new Date(`${r.date}T00:00:00`), "MMM d")}
+                  · {t.date(new Date(`${r.date}T00:00:00`), { month: "short", day: "numeric" })}
                 </span>
               </p>
               <p className="text-xs text-muted-foreground">
                 {r.prescribedSets} x {r.prescribedReps} &rarr; {r.sets} x {r.reps} · {r.loadHint}
               </p>
               {r.athleteNote && (
-                <p className="mt-0.5 text-xs italic text-foreground">"{r.athleteNote}"</p>
+                <TranslatableText className="mt-0.5 text-xs italic text-foreground" text={`"${r.athleteNote}"`} />
               )}
             </div>
           ))}

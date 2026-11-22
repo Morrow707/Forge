@@ -91,34 +91,35 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
+import { msg, useT } from "@/i18n";
 
 type PhotoImportKind = "testing-day" | "weigh-in" | "nutrition" | "injury" | "testing-data" | "player-intake";
 
 const PHOTO_IMPORT_OPTIONS: { kind: PhotoImportKind; label: string; description: string; icon: typeof Camera }[] = [
   {
     kind: "testing-day",
-    label: "Testing Day Results",
-    description: "40yd, vertical, broad jump, bench/squat/deadlift maxes",
+    label: msg("Testing Day Results"),
+    description: msg("40yd, vertical, broad jump, bench/squat/deadlift maxes"),
     icon: ClipboardList,
   },
-  { kind: "weigh-in", label: "Weigh-In Sheet", description: "Team body weights, all at once", icon: Scale },
-  { kind: "nutrition", label: "Nutrition Sheet", description: "Macro/target sheet from a coach or RD", icon: Apple },
+  { kind: "weigh-in", label: msg("Weigh-In Sheet"), description: msg("Team body weights, all at once"), icon: Scale },
+  { kind: "nutrition", label: msg("Nutrition Sheet"), description: msg("Macro/target sheet from a coach or RD"), icon: Apple },
   {
     kind: "injury",
-    label: "Injury History Intake",
-    description: "Pre-participation physical / injury form",
+    label: msg("Injury History Intake"),
+    description: msg("Pre-participation physical / injury form"),
     icon: Stethoscope,
   },
   {
     kind: "testing-data",
-    label: "OVR / Perch Printout",
-    description: "Velocity-based training device output",
+    label: msg("OVR / Perch Printout"),
+    description: msg("Velocity-based training device output"),
     icon: Gauge,
   },
   {
     kind: "player-intake",
-    label: "Player Intake Sheet",
-    description: "New tryout/sign-up sheet, creates claim codes",
+    label: msg("Player Intake Sheet"),
+    description: msg("New tryout/sign-up sheet, creates claim codes"),
     icon: UserPlus2,
   },
 ];
@@ -163,11 +164,11 @@ type RosterSortColumn = "name" | "sport" | "position" | "health" | "email";
 const PULL_REFRESH_THRESHOLD = 60;
 
 const ROSTER_SORT_COLUMNS: { column: RosterSortColumn; label: string }[] = [
-  { column: "name", label: "Name" },
-  { column: "sport", label: "Sport" },
-  { column: "position", label: "Position" },
-  { column: "health", label: "Health" },
-  { column: "email", label: "Email" },
+  { column: "name", label: msg("Name") },
+  { column: "sport", label: msg("Sport") },
+  { column: "position", label: msg("Position") },
+  { column: "health", label: msg("Health") },
+  { column: "email", label: msg("Email") },
 ];
 
 // Sentinel used for both the group filter chips and the group-select's own
@@ -206,6 +207,7 @@ function rosterSortValue(a: RosterEntry, column: RosterSortColumn): string {
 }
 
 export default function CoachRoster() {
+  const t = useT();
   const qc = useQueryClient();
   const [, navigate] = useLocation();
   const {
@@ -417,9 +419,9 @@ export default function CoachRoster() {
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
       setTeamDialogOpen(false);
       setNewTeamName("");
-      toast.success("Team created");
+      toast.success(t("Team created"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not create team"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not create team")),
   });
 
   const addFreeAgentMutation = useMutation({
@@ -432,9 +434,9 @@ export default function CoachRoster() {
     onSuccess: (result: { athleteName: string }) => {
       setAddFreeAgentOpen(false);
       setFreeAgentEmail("");
-      toast.success(`Invite sent to ${result.athleteName}, they'll show up on your roster once they accept`);
+      toast.success(t("Invite sent to {name}, they'll show up on your roster once they accept", { name: result.athleteName }));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not send that invite"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not send that invite")),
   });
 
   // One-click bulk nudge -- pings every roster athlete missing today's
@@ -449,11 +451,11 @@ export default function CoachRoster() {
     onSuccess: ({ nudged }) => {
       toast.success(
         nudged > 0
-          ? `Nudged ${nudged} athlete${nudged === 1 ? "" : "s"} to check in`
-          : "Everyone's already checked in today",
+          ? t.plural(nudged, "Nudged {count} athlete to check in", "Nudged {count} athletes to check in")
+          : t("Everyone's already checked in today"),
       );
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't send nudges"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't send nudges")),
   });
 
   const addToTeamMutation = useMutation({
@@ -462,13 +464,13 @@ export default function CoachRoster() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
-      toast.success("Added to team");
+      toast.success(t("Added to team"));
     },
     // The one mutation here that had no onError, and the one whose failure a coach
     // most needs to read: a join refused at the plan ceiling answers with the
     // "move up a plan" message, which silently went nowhere -- the athlete simply
     // did not appear and nothing said why.
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't add that athlete to the team"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't add that athlete to the team")),
   });
 
   const bulkAddToTeamMutation = useMutation({
@@ -477,10 +479,10 @@ export default function CoachRoster() {
     },
     onSuccess: (_, { athleteIds }) => {
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
-      toast.success(`Added ${athleteIds.length} athlete${athleteIds.length === 1 ? "" : "s"} to team`);
+      toast.success(t.plural(athleteIds.length, "Added {count} athlete to team", "Added {count} athletes to team"));
       exitSelectMode();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't add everyone to that team"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't add everyone to that team")),
   });
 
   /* PARK A COHORT, AND BRING ONE BACK. The roster screen already had multi-select and a bulk
@@ -506,7 +508,7 @@ export default function CoachRoster() {
       exitSelectMode();
       setHoldUntilInput("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't put those athletes on hold"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't put those athletes on hold")),
   });
 
   const unholdMutation = useMutation({
@@ -518,11 +520,11 @@ export default function CoachRoster() {
       qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/plan"] });
       toast.success(
-        `${broughtBack} athlete${broughtBack === 1 ? "" : "s"} back on your roster` +
-          (skipped > 0 ? `, ${skipped} couldn't be` : ""),
+        t.plural(broughtBack, "{count} athlete back on your roster", "{count} athletes back on your roster") +
+          (skipped > 0 ? `, ${t("{count} couldn't be", { count: skipped })}` : ""),
       );
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't bring those athletes back"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't bring those athletes back")),
   });
 
   // Moves one athlete from their current team straight to another --
@@ -546,9 +548,9 @@ export default function CoachRoster() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
-      toast.success("Moved to new team");
+      toast.success(t("Moved to new team"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't move that athlete"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't move that athlete")),
   });
 
   // One mutation shared by every row's group <Select>, rather than one
@@ -561,7 +563,7 @@ export default function CoachRoster() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update group"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't update group")),
   });
 
   function exportRosterCsv(rows: RosterEntry[]) {
@@ -581,7 +583,7 @@ export default function CoachRoster() {
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
       setRemoveTarget(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't remove that athlete"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't remove that athlete")),
   });
   const [removeTarget, setRemoveTarget] = useState<{
     teamId: number;
@@ -598,10 +600,10 @@ export default function CoachRoster() {
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
       // The roster rows carry each athlete's team label, so they go stale too.
       qc.invalidateQueries({ queryKey: ["/api/coach/roster"] });
-      toast.success("Team deleted");
+      toast.success(t("Team deleted"));
       setDeleteTeamTarget(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't delete that team"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't delete that team")),
   });
   const [deleteTeamTarget, setDeleteTeamTarget] = useState<{
     id: number;
@@ -617,7 +619,7 @@ export default function CoachRoster() {
   return (
     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
       <AppShell
-        title="Roster & Teams"
+        title={t("Roster & Teams")}
         actions={
           <div className="flex flex-wrap gap-2">
             {activeTab === "roster" && roster.length > 0 && (
@@ -628,7 +630,7 @@ export default function CoachRoster() {
                   onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
                 >
                   <CheckSquare className="h-3.5 w-3.5" />
-                  {selectMode ? "Cancel Select" : "Select"}
+                  {selectMode ? t("Cancel Select") : t("Select")}
                 </Button>
                 <Button
                   size="sm"
@@ -636,7 +638,7 @@ export default function CoachRoster() {
                   onClick={() => exportRosterCsv(selectedIds.size > 0 ? sortedRoster.filter((a) => selectedIds.has(a.id)) : sortedRoster)}
                 >
                   <Download className="h-3.5 w-3.5" />
-                  Export CSV
+                  {t("Export CSV")}
                 </Button>
                 {missingWellnessCount > 0 && (
                   <Button
@@ -647,32 +649,32 @@ export default function CoachRoster() {
                   >
                     <BellRing className="h-3.5 w-3.5" />
                     {nudgeWellnessMutation.isPending
-                      ? "Nudging..."
-                      : `Nudge ${missingWellnessCount} athlete${missingWellnessCount === 1 ? "" : "s"}`}
+                      ? t("Nudging...")
+                      : t.plural(missingWellnessCount, "Nudge {count} athlete", "Nudge {count} athletes")}
                   </Button>
                 )}
               </>
             )}
             <Button size="sm" variant="outline" onClick={() => setAddFreeAgentOpen(true)}>
               <UserPlus className="h-3.5 w-3.5" />
-              Add Free Agent
+              {t("Add Free Agent")}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setPhotoImportPickerOpen(true)}>
               <Camera className="h-3.5 w-3.5" />
-              Import Photo
+              {t("Import Photo")}
             </Button>
             <Button size="sm" onClick={() => openAssignFor([])}>
               <Send className="h-3.5 w-3.5" />
-              Assign Program
+              {t("Assign Program")}
             </Button>
           </div>
         }
         subheader={
           <div className="flex flex-wrap items-center gap-2">
             <TabsList>
-              <TabsTrigger value="roster">Roster ({roster.length})</TabsTrigger>
-              <TabsTrigger value="teams">Teams ({teams.length})</TabsTrigger>
-              <TabsTrigger value="compliance">Compliance</TabsTrigger>
+              <TabsTrigger value="roster">{t("Roster ({count})", { count: roster.length })}</TabsTrigger>
+              <TabsTrigger value="teams">{t("Teams ({count})", { count: teams.length })}</TabsTrigger>
+              <TabsTrigger value="compliance">{t("Compliance")}</TabsTrigger>
             </TabsList>
             {activeTab === "roster" && roster.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
@@ -686,7 +688,7 @@ export default function CoachRoster() {
                       : "border-border text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  All ({roster.length})
+                  {t("All ({count})", { count: roster.length })}
                 </button>
                 <button
                   type="button"
@@ -699,7 +701,7 @@ export default function CoachRoster() {
                   )}
                 >
                   <HeartPulse className="h-3 w-3" />
-                  Healthy ({healthyCount})
+                  {t("Healthy ({count})", { count: healthyCount })}
                 </button>
                 <button
                   type="button"
@@ -712,7 +714,7 @@ export default function CoachRoster() {
                   )}
                 >
                   <HeartCrack className="h-3 w-3" />
-                  Hurt ({hurtCount})
+                  {t("Hurt ({count})", { count: hurtCount })}
                 </button>
               </div>
             )}
@@ -762,7 +764,7 @@ export default function CoachRoster() {
           ) : rosterFailed ? (
             <Card>
               <CardContent className="py-16">
-                <ReadFailed what="your roster" onRetry={() => void refetchRoster()} />
+                <ReadFailed what={t("your roster")} onRetry={() => void refetchRoster()} />
               </CardContent>
             </Card>
           ) : roster.length === 0 ? (
@@ -770,7 +772,7 @@ export default function CoachRoster() {
               <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
                 <Users className="h-10 w-10 text-muted-foreground" />
                 <p className="text-muted-foreground">
-                  No athletes yet. Share your coach code from the dashboard so athletes can join.
+                  {t("No athletes yet. Share your coach code from the dashboard so athletes can join.")}
                 </p>
               </CardContent>
             </Card>
@@ -781,9 +783,9 @@ export default function CoachRoster() {
                 <Input
                   value={rosterSearch}
                   onChange={(e) => setRosterSearch(e.target.value)}
-                  placeholder="Search athletes by name, sport, position..."
+                  placeholder={t("Search athletes by name, sport, position...")}
                   className="pl-8"
-                  aria-label="Search athletes"
+                  aria-label={t("Search athletes")}
                 />
               </div>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -799,7 +801,7 @@ export default function CoachRoster() {
                         : "border-border text-muted-foreground hover:text-foreground",
                     )}
                   >
-                    All groups
+                    {t("All groups")}
                   </button>
                   {groups.map((g) => {
                     const active = groupFilter.has(g.id);
@@ -839,20 +841,20 @@ export default function CoachRoster() {
                             : "border-border text-muted-foreground hover:text-foreground",
                         )}
                       >
-                        Unassigned ({unassignedCount})
+                        {t("Unassigned ({count})", { count: unassignedCount })}
                       </button>
                     );
                   })()}
                 </div>
                 <Button size="sm" variant="ghost" onClick={() => setManageGroupsOpen(true)}>
                   <Tags className="h-3.5 w-3.5" />
-                  Manage groups
+                  {t("Manage groups")}
                 </Button>
               </div>
               {selectMode && (
                 <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5">
                   <span className="text-xs font-semibold text-muted-foreground">
-                    {selectedIds.size} selected
+                    {t("{count} selected", { count: selectedIds.size })}
                   </span>
                   <Button
                     size="sm"
@@ -861,12 +863,12 @@ export default function CoachRoster() {
                     onClick={() => openAssignFor(Array.from(selectedIds))}
                   >
                     <Send className="h-3.5 w-3.5" />
-                    Assign Program
+                    {t("Assign Program")}
                   </Button>
                   <div className="flex items-center gap-1.5">
                     <Select value={bulkAddTeamId} onValueChange={setBulkAddTeamId}>
                       <SelectTrigger className="h-8 w-40 text-xs">
-                        <SelectValue placeholder="Add to team..." />
+                        <SelectValue placeholder={t("Add to team...")} />
                       </SelectTrigger>
                       <SelectContent>
                         {teams.map((t) => (
@@ -887,7 +889,7 @@ export default function CoachRoster() {
                         })
                       }
                     >
-                      Add
+                      {t("Add")}
                     </Button>
                   </div>
                   {/* PUT ON HOLD sits beside Add to team because it is the same selection with a
@@ -900,7 +902,7 @@ export default function CoachRoster() {
                       value={holdUntilInput}
                       onChange={(e) => setHoldUntilInput(e.target.value)}
                       className="h-8 w-36 text-xs"
-                      aria-label="Expected return date (optional)"
+                      aria-label={t("Expected return date (optional)")}
                     />
                     <Button
                       size="sm"
@@ -914,7 +916,7 @@ export default function CoachRoster() {
                       }
                     >
                       <PauseCircle className="h-3.5 w-3.5" />
-                      {bulkHoldMutation.isPending ? "Holding..." : "Put on hold"}
+                      {bulkHoldMutation.isPending ? t("Holding...") : t("Put on hold")}
                     </Button>
                   </div>
                   <Button
@@ -922,20 +924,22 @@ export default function CoachRoster() {
                     variant="ghost"
                     onClick={() => setSelectedIds(new Set(sortedRoster.map((a) => a.id)))}
                   >
-                    Select all ({filteredRoster.length})
+                    {t("Select all ({count})", { count: filteredRoster.length })}
                   </Button>
                   <Button size="sm" variant="ghost" onClick={exitSelectMode}>
-                    Done
+                    {t("Done")}
                   </Button>
                 </div>
               )}
               {filteredRoster.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
                   {rosterSearch
-                    ? `No athletes match "${rosterSearch}".`
-                    : healthFilter !== "all"
-                      ? `No ${healthFilter} athletes match your filters.`
-                      : "No athletes match your filters."}
+                    ? t("No athletes match \"{search}\".", { search: rosterSearch })
+                    : healthFilter === "healthy"
+                      ? t("No healthy athletes match your filters.")
+                      : healthFilter === "hurt"
+                        ? t("No hurt athletes match your filters.")
+                      : t("No athletes match your filters.")}
                 </p>
               ) : (
                 // Wrapped in its own overflow-x-auto container (per AppShell's
@@ -980,9 +984,15 @@ export default function CoachRoster() {
                                   "label-xs flex items-center gap-1 whitespace-nowrap transition-colors hover:text-foreground",
                                   active && "text-foreground",
                                 )}
-                                aria-label={`Sort by ${label}${active ? `, currently ${sortDir === "asc" ? "ascending" : "descending"}` : ""}`}
+                                aria-label={
+                                  active
+                                    ? sortDir === "asc"
+                                      ? t("Sort by {column}, currently ascending", { column: t(label) })
+                                      : t("Sort by {column}, currently descending", { column: t(label) })
+                                    : t("Sort by {column}", { column: t(label) })
+                                }
                               >
-                                {label}
+                                {t(label)}
                                 {active ? (
                                   sortDir === "asc" ? (
                                     <ChevronUp className="h-3 w-3" />
@@ -1001,21 +1011,21 @@ export default function CoachRoster() {
                           className="sticky z-10 border-b border-white/10 bg-card/85 px-3 py-2 shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
                           style={{ top: 0 }}
                         >
-                          <span className="label-xs">Group</span>
+                          <span className="label-xs">{t("Group")}</span>
                         </th>
                         <th
                           scope="col"
                           className="sticky z-10 border-b border-white/10 bg-card/85 px-3 py-2 shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
                           style={{ top: 0 }}
                         >
-                          <span className="label-xs">7-Day Load</span>
+                          <span className="label-xs">{t("7-Day Load")}</span>
                         </th>
                         <th
                           scope="col"
                           className="sticky z-10 border-b border-white/10 bg-card/85 px-3 py-2 text-right shadow-[0_1px_0_0_rgba(255,255,255,0.06),0_8px_20px_-16px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150"
                           style={{ top: 0 }}
                         >
-                          <span className="label-xs">Actions</span>
+                          <span className="label-xs">{t("Actions")}</span>
                         </th>
                       </tr>
                     </thead>
@@ -1039,7 +1049,7 @@ export default function CoachRoster() {
                                   checked={isSelected}
                                   onCheckedChange={() => toggleSelected(a.id)}
                                   onClick={(e) => e.stopPropagation()}
-                                  aria-label={`Select ${a.name}`}
+                                  aria-label={t("Select {name}", { name: a.name })}
                                 />
                               </td>
                             )}
@@ -1080,12 +1090,12 @@ export default function CoachRoster() {
                               >
                                 <SelectTrigger
                                   className="h-7 w-32 text-xs"
-                                  aria-label={`Set ${a.name}'s group`}
+                                  aria-label={t("Set {name}'s group", { name: a.name })}
                                 >
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value={UNASSIGNED_GROUP_KEY}>Unassigned</SelectItem>
+                                  <SelectItem value={UNASSIGNED_GROUP_KEY}>{t("Unassigned")}</SelectItem>
                                   {groups.map((g) => (
                                     <SelectItem key={g.id} value={g.id}>
                                       {g.label}
@@ -1112,7 +1122,7 @@ export default function CoachRoster() {
                                   }}
                                 >
                                   <Send className="h-3.5 w-3.5" />
-                                  Assign
+                                  {t("Assign")}
                                 </Button>
                               )}
                             </td>
@@ -1128,7 +1138,7 @@ export default function CoachRoster() {
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base">
                       <PauseCircle className="h-4 w-4 text-muted-foreground" />
-                      On hold ({heldSeats.length})
+                      {t("On hold ({count})", { count: heldSeats.length })}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -1137,16 +1147,12 @@ export default function CoachRoster() {
                         third sentence is the one that is easy to get wrong -- their own camera and
                         skills follow their own plan while they are parked (question 4). */}
                     <p className="text-sm text-muted-foreground">
-                      You aren't billed for these seats and nothing new can be assigned to them.
-                      Every number, video and session they've logged is still here, and bringing
-                      them back is one tap -- they don't have to re-enter your coach code. While
-                      they're on hold their own camera and skills follow whatever plan they have.
+                      {t("You aren't billed for these seats and nothing new can be assigned to them. Every number, video and session they've logged is still here, and bringing them back is one tap -- they don't have to re-enter your coach code. While they're on hold their own camera and skills follow whatever plan they have.")}
                     </p>
                     {dueBack.length > 0 && (
                       <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5">
                         <span className="text-sm font-medium">
-                          {dueBack.length} {dueBack.length === 1 ? "athlete is" : "athletes are"} due
-                          back
+                          {t.plural(dueBack.length, "{count} athlete is due back", "{count} athletes are due back")}
                         </span>
                         <Button
                           size="sm"
@@ -1155,7 +1161,7 @@ export default function CoachRoster() {
                           onClick={() => unholdMutation.mutate(dueBack.map((a) => a.id))}
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
-                          Bring {dueBack.length === 1 ? "them" : "all"} back
+                          {dueBack.length === 1 ? t("Bring them back") : t("Bring all back")}
                         </Button>
                       </div>
                     )}
@@ -1173,7 +1179,7 @@ export default function CoachRoster() {
                               {a.name}
                             </Link>
                             <p className="text-xs text-muted-foreground">
-                              {a.heldUntil ? `Back ${a.heldUntil}` : "No return date set"}
+                              {a.heldUntil ? t("Back {date}", { date: a.heldUntil }) : t("No return date set")}
                             </p>
                           </div>
                           <Button
@@ -1183,7 +1189,7 @@ export default function CoachRoster() {
                             onClick={() => unholdMutation.mutate([a.id])}
                           >
                             <RotateCcw className="h-3.5 w-3.5" />
-                            Bring back
+                            {t("Bring back")}
                           </Button>
                         </div>
                       ))}
@@ -1199,7 +1205,7 @@ export default function CoachRoster() {
           <div className="mb-4">
             <Button size="sm" variant="secondary" onClick={() => setTeamDialogOpen(true)}>
               <Plus className="h-4 w-4" />
-              New Team
+              {t("New Team")}
             </Button>
           </div>
           {teams.length === 0 && (
@@ -1207,10 +1213,9 @@ export default function CoachRoster() {
             // opened onto a single button floating in whitespace.
             <Card className="mb-4">
               <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
-                <p className="text-muted-foreground">No teams yet.</p>
+                <p className="text-muted-foreground">{t("No teams yet.")}</p>
                 <p className="max-w-sm text-sm text-muted-foreground">
-                  Teams group athletes for scheduling and the leaderboard, and each one gets its
-                  own join code. Athletes on your roster don't need one.
+                  {t("Teams group athletes for scheduling and the leaderboard, and each one gets its own join code. Athletes on your roster don't need one.")}
                 </p>
               </CardContent>
             </Card>
@@ -1236,7 +1241,7 @@ export default function CoachRoster() {
                       <CardTitle className="truncate">{team.name}</CardTitle>
                       {(team.brandPrimaryColor || team.brandSecondaryColor) && (
                         <span
-                          title="This team has its own branding override"
+                          title={t("This team has its own branding override")}
                           className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-border"
                           style={{ backgroundColor: team.brandPrimaryColor || team.brandSecondaryColor! }}
                         />
@@ -1259,7 +1264,7 @@ export default function CoachRoster() {
                     <Button
                       size="sm"
                       variant="outline"
-                      aria-label={`Edit ${team.name}'s branding`}
+                      aria-label={t("Edit {name}'s branding", { name: team.name })}
                       onClick={() => setBrandingTeamId(team.id)}
                     >
                       <Palette className="h-3.5 w-3.5" />
@@ -1271,7 +1276,7 @@ export default function CoachRoster() {
                       disabled={team.members.length === 0}
                     >
                       <Send className="h-3.5 w-3.5" />
-                      Assign to Team
+                      {t("Assign to Team")}
                     </Button>
                     {/* DELETE /api/coach/teams/:id has always existed, ownership-checked,
                         with no caller -- so a coach who made a team to try the feature
@@ -1282,7 +1287,7 @@ export default function CoachRoster() {
                     <Button
                       size="sm"
                       variant="outline"
-                      aria-label={`Delete ${team.name}`}
+                      aria-label={t("Delete {name}", { name: team.name })}
                       className="text-muted-foreground hover:text-destructive"
                       onClick={() =>
                         setDeleteTeamTarget({
@@ -1304,7 +1309,7 @@ export default function CoachRoster() {
                   />
                   <div className="mb-3 space-y-1.5">
                     {team.members.length === 0 && (
-                      <p className="text-sm text-muted-foreground">No members yet.</p>
+                      <p className="text-sm text-muted-foreground">{t("No members yet.")}</p>
                     )}
                     {team.members.map((m) => (
                       <div
@@ -1355,10 +1360,10 @@ export default function CoachRoster() {
                           >
                             <SelectTrigger
                               className="h-7 w-28 shrink-0 gap-1 px-2 text-[11px]"
-                              aria-label={`Move ${m.athlete.name} to another team`}
+                              aria-label={t("Move {name} to another team", { name: m.athlete.name })}
                             >
                               <ArrowRightLeft className="h-3 w-3 shrink-0 text-muted-foreground" />
-                              <SelectValue placeholder="Move to..." />
+                              <SelectValue placeholder={t("Move to...")} />
                             </SelectTrigger>
                             <SelectContent>
                               {teams
@@ -1373,7 +1378,7 @@ export default function CoachRoster() {
                         )}
                         <button
                           type="button"
-                          aria-label={`Remove ${m.athlete.name} from ${team.name}`}
+                          aria-label={t("Remove {name} from {team}", { name: m.athlete.name, team: team.name })}
                           onClick={() =>
                             setRemoveTarget({
                               teamId: team.id,
@@ -1393,7 +1398,7 @@ export default function CoachRoster() {
                     <div className="mb-3 flex items-center justify-between rounded-md bg-surface-elevated px-3 py-2">
                       <div>
                         <p className="label-xs">
-                          Team invite code
+                          {t("Team invite code")}
                         </p>
                         <p className="font-display text-lg font-bold tracking-widest text-primary">
                           {team.code}
@@ -1402,10 +1407,10 @@ export default function CoachRoster() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        aria-label={`Copy ${team.name} invite code`}
+                        aria-label={t("Copy {name} invite code", { name: team.name })}
                         onClick={() => {
                           navigator.clipboard.writeText(team.code!);
-                          toast.success("Team code copied");
+                          toast.success(t("Team code copied"));
                         }}
                       >
                         <Copy className="h-4 w-4" />
@@ -1435,7 +1440,7 @@ export default function CoachRoster() {
       <Dialog open={teamDialogOpen} onOpenChange={setTeamDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Team</DialogTitle>
+            <DialogTitle>{t("New Team")}</DialogTitle>
           </DialogHeader>
           <form
             onSubmit={(e) => {
@@ -1445,20 +1450,20 @@ export default function CoachRoster() {
             className="space-y-4"
           >
             <div className="space-y-1.5">
-              <Label>Team name</Label>
+              <Label>{t("Team name")}</Label>
               <Input
                 required
                 value={newTeamName}
                 onChange={(e) => setNewTeamName(e.target.value)}
-                placeholder="e.g. Varsity Squad"
+                placeholder={t("e.g. Varsity Squad")}
               />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setTeamDialogOpen(false)}>
-                Cancel
+                {t("Cancel")}
               </Button>
               <Button type="submit" disabled={createTeamMutation.isPending}>
-                Create
+                {t("Create")}
               </Button>
             </DialogFooter>
           </form>
@@ -1468,12 +1473,10 @@ export default function CoachRoster() {
       <Dialog open={addFreeAgentOpen} onOpenChange={setAddFreeAgentOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Free Agent</DialogTitle>
+            <DialogTitle>{t("Add Free Agent")}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Send an existing athlete account an invite by email, they have to accept it before
-            they show up on your roster, and it only works for athletes who aren't already
-            coached by someone else.
+            {t("Send an existing athlete account an invite by email, they have to accept it before they show up on your roster, and it only works for athletes who aren't already coached by someone else.")}
           </p>
           <form
             onSubmit={(e) => {
@@ -1483,21 +1486,21 @@ export default function CoachRoster() {
             className="space-y-4"
           >
             <div className="space-y-1.5">
-              <Label>Athlete's email</Label>
+              <Label>{t("Athlete's email")}</Label>
               <Input
                 required
                 type="email"
                 value={freeAgentEmail}
                 onChange={(e) => setFreeAgentEmail(e.target.value)}
-                placeholder="athlete@example.com"
+                placeholder={t("athlete@example.com")}
               />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setAddFreeAgentOpen(false)}>
-                Cancel
+                {t("Cancel")}
               </Button>
               <Button type="submit" disabled={addFreeAgentMutation.isPending}>
-                {addFreeAgentMutation.isPending ? "Sending..." : "Send Invite"}
+                {addFreeAgentMutation.isPending ? t("Sending...") : t("Send Invite")}
               </Button>
             </DialogFooter>
           </form>
@@ -1539,7 +1542,7 @@ export default function CoachRoster() {
       <Dialog open={photoImportPickerOpen} onOpenChange={setPhotoImportPickerOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Import from Photo</DialogTitle>
+            <DialogTitle>{t("Import from Photo")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
             {PHOTO_IMPORT_OPTIONS.map(({ kind, label, description, icon: Icon }) => (
@@ -1554,8 +1557,8 @@ export default function CoachRoster() {
               >
                 <Icon className="h-5 w-5 shrink-0 text-primary" />
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">{label}</p>
-                  <p className="truncate text-xs text-muted-foreground">{description}</p>
+                  <p className="text-sm font-medium">{t(label)}</p>
+                  <p className="truncate text-xs text-muted-foreground">{t(description)}</p>
                 </div>
               </button>
             ))}
@@ -1596,13 +1599,18 @@ export default function CoachRoster() {
       <ConfirmDialog
         open={deleteTeamTarget !== null}
         onOpenChange={(o) => !o && setDeleteTeamTarget(null)}
-        title="Delete this team?"
+        title={t("Delete this team?")}
         description={
           deleteTeamTarget
-            ? `${deleteTeamTarget.name} will be deleted, along with its ${deleteTeamTarget.memberCount} membership${deleteTeamTarget.memberCount === 1 ? "" : "s"}, any team challenges and any game days. The athletes themselves stay on your roster with all of their training and history, only the grouping goes.`
+            ? t.plural(
+                deleteTeamTarget.memberCount,
+                "{name} will be deleted, along with its {count} membership, any team challenges and any game days. The athletes themselves stay on your roster with all of their training and history, only the grouping goes.",
+                "{name} will be deleted, along with its {count} memberships, any team challenges and any game days. The athletes themselves stay on your roster with all of their training and history, only the grouping goes.",
+                { name: deleteTeamTarget.name },
+              )
             : ""
         }
-        confirmLabel="Delete team"
+        confirmLabel={t("Delete team")}
         isPending={deleteTeamMutation.isPending}
         onConfirm={() => deleteTeamTarget && deleteTeamMutation.mutate(deleteTeamTarget.id)}
       />
@@ -1610,13 +1618,13 @@ export default function CoachRoster() {
       <ConfirmDialog
         open={removeTarget !== null}
         onOpenChange={(o) => !o && setRemoveTarget(null)}
-        title="Remove from team?"
+        title={t("Remove from team?")}
         description={
           removeTarget
-            ? `${removeTarget.athleteName} will be removed from ${removeTarget.teamName}. They'll stay on your overall roster.`
+            ? t("{name} will be removed from {team}. They'll stay on your overall roster.", { name: removeTarget.athleteName, team: removeTarget.teamName })
             : ""
         }
-        confirmLabel="Remove"
+        confirmLabel={t("Remove")}
         isPending={removeFromTeamMutation.isPending}
         onConfirm={() => removeTarget && removeFromTeamMutation.mutate(removeTarget)}
       />
@@ -1639,6 +1647,7 @@ function TeamCoachAssignment({
   staff: StaffResponse | undefined;
   isPrimaryCoach: boolean;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<number[] | null>(null);
@@ -1653,10 +1662,10 @@ function TeamCoachAssignment({
       qc.invalidateQueries({ queryKey: ["/api/coach/teams"] });
       setOpen(false);
       setDraft(null);
-      toast.success("Coach assignments saved");
+      toast.success(t("Coach assignments saved"));
     },
     onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : "Could not save assignments"),
+      toast.error(err instanceof ApiError ? err.message : t("Could not save assignments")),
   });
 
   // The primary coach plus every staff member -- the primary can be
@@ -1664,7 +1673,7 @@ function TeamCoachAssignment({
   // the card without changing what they can see.
   const assignable = staff
     ? [
-        { id: staff.primaryCoachId, name: "Me (primary)", staffTitle: null as string | null },
+        { id: staff.primaryCoachId, name: t("Me (primary)"), staffTitle: null as string | null },
         ...staff.staff,
       ]
     : [];
@@ -1673,10 +1682,10 @@ function TeamCoachAssignment({
     <div className="mb-3 rounded-md bg-surface-elevated px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="label-xs">Coaches</p>
+          <p className="label-xs">{t("Coaches")}</p>
           <p className="truncate text-sm">
             {team.coaches.length === 0 ? (
-              <span className="text-muted-foreground">All staff</span>
+              <span className="text-muted-foreground">{t("All staff")}</span>
             ) : (
               team.coaches
                 .map((c) => (c.staffTitle ? `${c.name} (${c.staffTitle})` : c.name))
@@ -1691,7 +1700,7 @@ function TeamCoachAssignment({
             className="shrink-0"
             onClick={() => setOpen((v) => !v)}
           >
-            {open ? "Cancel" : "Assign"}
+            {open ? t("Cancel") : t("Assign")}
           </Button>
         )}
       </div>
@@ -1716,7 +1725,7 @@ function TeamCoachAssignment({
             </label>
           ))}
           <p className="text-xs text-muted-foreground">
-            With nobody selected, every coach on the staff sees this team.
+            {t("With nobody selected, every coach on the staff sees this team.")}
           </p>
           <Button
             size="sm"
@@ -1724,7 +1733,7 @@ function TeamCoachAssignment({
             disabled={saveMutation.isPending}
             onClick={() => saveMutation.mutate(selected)}
           >
-            Save
+            {t("Save")}
           </Button>
         </div>
       )}
@@ -1781,6 +1790,7 @@ function AddMemberSelect({
   roster: RosterEntry[];
   onAdd: (athleteId: number) => void;
 }) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   if (roster.length === 0) return null;
@@ -1799,14 +1809,14 @@ function AddMemberSelect({
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
-          placeholder="Search to add athlete..."
+          placeholder={t("Search to add athlete...")}
           className="h-8 pl-8 text-xs"
         />
       </div>
       {open && (
         <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-border bg-surface shadow-md">
           {matches.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-muted-foreground">No matching athletes</p>
+            <p className="px-3 py-2 text-xs text-muted-foreground">{t("No matching athletes")}</p>
           ) : (
             matches.map((r) => (
               <button
@@ -1848,6 +1858,7 @@ function AddMemberSelect({
  * always present trains people to ignore the space it occupies.
  */
 function PainEscalations() {
+  const t = useT();
   const { data: escalations = [] } = useQuery<
     { athleteId: number; athleteName: string; region: string; flags: number; isMinor: boolean }[]
   >({
@@ -1862,7 +1873,7 @@ function PainEscalations() {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base text-amber-500">
           <AlertTriangle className="h-4 w-4" />
-          Repeated soreness worth a conversation
+          {t("Repeated soreness worth a conversation")}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -1872,18 +1883,16 @@ function PainEscalations() {
             className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
           >
             <span>
-              <span className="font-medium">{e.athleteName}</span> flagged{" "}
-              <span className="font-medium">{e.region}</span> on {e.flags} of the last 14 check-ins
-              {e.isMinor && <span className="ml-1 text-amber-500">(under 18)</span>}
+              {t("{name} flagged {region} on {count} of the last 14 check-ins", { name: e.athleteName, region: e.region, count: e.flags })}
+              {e.isMinor && <span className="ml-1 text-amber-500">{t("(under 18)")}</span>}
             </span>
             <Button size="sm" variant="outline" asChild>
-              <Link href={`/coach/roster/${e.athleteId}`}>Open</Link>
+              <Link href={`/coach/roster/${e.athleteId}`}>{t("Open")}</Link>
             </Button>
           </div>
         ))}
         <p className="text-xs text-muted-foreground">
-          Sessions are already being adjusted around these. That is not the same as anyone having
-          looked at why.
+          {t("Sessions are already being adjusted around these. That is not the same as anyone having looked at why.")}
         </p>
       </CardContent>
     </Card>

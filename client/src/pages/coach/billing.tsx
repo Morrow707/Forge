@@ -21,6 +21,7 @@ import { CreditCard, Users } from "lucide-react";
 import { bandForAthleteCount, coachMonthlyCents, formatCents, ORG_PER_ATHLETE_CENTS } from "@shared/billing-tiers";
 import { useAuth } from "@/hooks/use-auth";
 import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
+import { useT } from "@/i18n";
 
 /** GET /api/coach/entitlements, the add-on half. purchasableAddOns is derived
  * server-side from COACH_PURCHASABLE_ADD_ON_ORDER, so this page never holds its
@@ -65,6 +66,7 @@ type CoachPlan = {
  * app says where to go instead of linking a checkout the server would
  * refuse anyway. */
 export default function CoachBilling() {
+  const t = useT();
   const isNative = Capacitor.isNativePlatform();
   // THE PROGRAM'S MONEY IS THE PRIMARY COACH'S, AND THIS PAGE NEVER ASKED (2026-10-11).
   //
@@ -167,15 +169,15 @@ export default function CoachBilling() {
     setBuyingAddOn(addOnId);
     try {
       await purchaseCoachAddOn(addOnId);
-      toast.success("Purchased. Thank you.");
+      toast.success(t("Purchased. Thank you."));
       queryClient.invalidateQueries({ queryKey: ["/api/coach/entitlements"] });
     } catch (err) {
       if (err instanceof ApplePurchaseCancelledError) return;
       if (err instanceof ApplePurchasePendingError) {
-        toast.info("Waiting on approval from the App Store. It unlocks on its own once approved.");
+        toast.info(t("Waiting on approval from the App Store. It unlocks on its own once approved."));
         return;
       }
-      toast.error(err instanceof Error ? err.message : "The purchase didn't go through, try again");
+      toast.error(err instanceof Error ? err.message : t("The purchase didn't go through, try again"));
     } finally {
       setBuyingAddOn(null);
     }
@@ -185,10 +187,10 @@ export default function CoachBilling() {
     setRestoring(true);
     try {
       await restoreFreeAgentPurchases();
-      toast.success("Purchases restored");
+      toast.success(t("Purchases restored"));
       queryClient.invalidateQueries({ queryKey: ["/api/coach/entitlements"] });
     } catch {
-      toast.error("Couldn't restore purchases, try again");
+      toast.error(t("Couldn't restore purchases, try again"));
     } finally {
       setRestoring(false);
     }
@@ -201,7 +203,7 @@ export default function CoachBilling() {
       const { url } = await res.json();
       window.location.href = url;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't start checkout, try again");
+      toast.error(err instanceof Error ? err.message : t("Couldn't start checkout, try again"));
       setBuyingAddOn(null);
     }
   }
@@ -225,7 +227,7 @@ export default function CoachBilling() {
       const { url } = await res.json();
       window.location.href = url;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't start checkout, try again");
+      toast.error(err instanceof Error ? err.message : t("Couldn't start checkout, try again"));
       setStarting(false);
     }
   }
@@ -233,7 +235,7 @@ export default function CoachBilling() {
   async function savePlan() {
     const n = Number(planDraft);
     if (!Number.isInteger(n) || n < 1 || n > 5000) {
-      toast.error("Enter a whole number of athletes between 1 and 5000.");
+      toast.error(t("Enter a whole number of athletes between 1 and 5000."));
       return;
     }
     setSavingPlan(true);
@@ -241,14 +243,14 @@ export default function CoachBilling() {
       await apiRequest("PUT", "/api/coach/plan", { expectedAthletes: n });
       await queryClient.invalidateQueries({ queryKey: ["/api/coach/plan"] });
       setPlanDraft("");
-      toast.success("Plan updated.");
+      toast.success(t("Plan updated."));
     } catch (err) {
       const status = err instanceof ApiError ? err.status : 0;
       if (status === 403) {
         setPlanForbidden(true);
-        toast.error("Only the primary coach can change the plan.");
+        toast.error(t("Only the primary coach can change the plan."));
       } else {
-        toast.error(err instanceof Error ? err.message : "Couldn't update the plan, try again");
+        toast.error(err instanceof Error ? err.message : t("Couldn't update the plan, try again"));
       }
     } finally {
       setSavingPlan(false);
@@ -262,49 +264,49 @@ export default function CoachBilling() {
       const { url } = await res.json();
       window.location.href = url;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't open billing settings");
+      toast.error(err instanceof Error ? err.message : t("Couldn't open billing settings"));
       setOpeningPortal(false);
     }
   }
 
   return (
-    <AppShell title="Billing">
+    <AppShell title={t("Billing")}>
       {covered && (
         <Card className="mt-6 max-w-xl border-primary/40" data-testid="covered-by-forge-banner">
           <CardContent className="p-5">
             <p className="text-sm font-semibold">
-              Your account is covered by Forge. You do not need a plan and there is nothing to buy.
+              {t("Your account is covered by Forge. You do not need a plan and there is nothing to buy.")}
             </p>
           </CardContent>
         </Card>
       )}
       <Card className="mt-6 max-w-xl">
         <CardContent className="flex flex-col gap-4 p-6">
-          <p className="label-xs">Your plan size</p>
+          <p className="label-xs">{t("Your plan size")}</p>
           {planError ? (
             // Never render the editor over a failed read: an empty box saved
             // back would overwrite the school's real planned count. See the
             // "Hydrate-in-an-effect" note in CLAUDE.md.
-            <ReadFailed what="your plan" onRetry={() => void refetchPlan()} />
+            <ReadFailed what={t("your plan")} onRetry={() => void refetchPlan()} />
           ) : planIsForbidden && !plan ? (
             <p className="text-sm text-muted-foreground">
-              Only the primary coach can see and change the plan size.
+              {t("Only the primary coach can see and change the plan size.")}
             </p>
           ) : !plan ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
           ) : (
             <>
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Athletes you planned for</span>
-                  <span>{plan.plannedAthleteCount ?? "Not set yet"}</span>
+                  <span className="text-muted-foreground">{t("Athletes you planned for")}</span>
+                  <span>{plan.plannedAthleteCount ?? t("Not set yet")}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Athletes on your roster now</span>
+                  <span className="text-muted-foreground">{t("Athletes on your roster now")}</span>
                   <span>{plan.rosterCount}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Billed for</span>
+                  <span className="text-muted-foreground">{t("Billed for")}</span>
                   {/* NO PRICE FOR THE COACH PLAN INSIDE THE APP (fixed 2026-10-14). The plan is
                       sold to programs on the web only, which App Store guideline 3.1.3(c) allows
                       -- on the condition that the app does not price it (3.1.1). This row printed
@@ -317,8 +319,8 @@ export default function CoachBilling() {
                     {plan.band
                       ? isNative
                         ? plan.band.label
-                        : `${plan.billedCount} athletes · ${formatCents(plan.band.monthlyPriceCents)}/month`
-                      : `${plan.billedCount} athletes`}
+                        : t("{count} athletes · {price}/month", { count: plan.billedCount, price: formatCents(plan.band.monthlyPriceCents) })
+                      : t("{count} athletes", { count: plan.billedCount })}
                   </span>
                 </div>
                 {/* THE QUOTE AND THE PURCHASE ARE TWO FACTS, and until 2026-10-11 they were one
@@ -329,7 +331,7 @@ export default function CoachBilling() {
                     ordinary case -- reads one number and not two. */}
                 {plan.paidBand && plan.paidBand.id !== plan.band?.id && (
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Your subscription covers</span>
+                    <span className="text-muted-foreground">{t("Your subscription covers")}</span>
                     <span>{plan.paidBand.label}</span>
                   </div>
                 )}
@@ -337,7 +339,7 @@ export default function CoachBilling() {
 
               {planIsForbidden ? (
                 <p className="text-xs text-muted-foreground">
-                  Only the primary coach can change the plan size.
+                  {t("Only the primary coach can change the plan size.")}
                 </p>
               ) : isNative ? (
                 /* AND THE EDITOR ITSELF IS NOT REACHABLE FROM INSIDE THE APP. Update calls
@@ -349,12 +351,12 @@ export default function CoachBilling() {
                    the phone, which is the same cost already accepted for Subscribe below and the
                    same answer: the program's money is handled on the web. */
                 <p className="text-xs text-muted-foreground">
-                  Your program's plan size is changed outside the app.
+                  {t("Your program's plan size is changed outside the app.")}
                 </p>
               ) : (
                 <div className="flex flex-col gap-2 border-t border-border pt-4">
                   <Label htmlFor="planDraft" className="text-sm">
-                    Change how many athletes you plan for
+                    {t("Change how many athletes you plan for")}
                   </Label>
                   <div className="flex gap-2">
                     <Input
@@ -370,17 +372,19 @@ export default function CoachBilling() {
                       placeholder={String(plan.plannedAthleteCount ?? plan.rosterCount)}
                     />
                     <Button onClick={savePlan} disabled={savingPlan || !planDraft.trim()}>
-                      {savingPlan ? "Updating…" : "Update"}
+                      {savingPlan ? t("Updating…") : t("Update")}
                     </Button>
                   </div>
                   {planDraft.trim() !== "" && Number.isInteger(Number(planDraft)) && Number(planDraft) > 0 && (
                     <p className="text-xs text-muted-foreground">
-                      {Number(planDraft)} athletes ·{" "}
-                      {formatCents(coachMonthlyCents(Number(planDraft)))}/month
+                      {t("{count} athletes · {price}/month", {
+                        count: Number(planDraft),
+                        price: formatCents(coachMonthlyCents(Number(planDraft))),
+                      })}
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Change it any time.
+                    {t("Change it any time.")}
                   </p>
                 </div>
               )}
@@ -391,7 +395,7 @@ export default function CoachBilling() {
 
       <Card className="mt-6 max-w-xl">
         <CardContent className="flex flex-col gap-4 p-6">
-          <p className="label-xs">Add-ons</p>
+          <p className="label-xs">{t("Add-ons")}</p>
           {entitlements?.purchasableAddOns.map((addOn) => {
             // Status is three-valued on purpose -- owned, included (a comp, a trial, a band
             // that carries it, or for Coaches Corner a roster of 100+), and for sale -- because
@@ -401,20 +405,20 @@ export default function CoachBilling() {
             const unlocked = addOn.unlocked === true;
             const owned = addOn.owned === true;
             const status = owned
-              ? "Owned"
+              ? t("Owned")
               : unlocked
                 ? addOn.id === "coaches_corner" && entitlements.coachesCorner.compedForRoster
-                  ? "Included with your roster size"
-                  : "Included with your account"
+                  ? t("Included with your roster size")
+                  : t("Included with your account")
                 : entitlements.billingOpen
-                  ? "Available"
-                  : "Not available yet";
+                  ? t("Available")
+                  : t("Not available yet");
             return (
               <div key={addOn.id} className="flex flex-col gap-1 border-t border-border pt-4 first:border-0 first:pt-0">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold">{addOn.label}</span>
                   <span className="text-sm text-muted-foreground">
-                    {formatCents(addOn.monthlyPriceCents)}/mo
+                    {t("{price}/mo", { price: formatCents(addOn.monthlyPriceCents) })}
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">{addOn.description}</p>
@@ -430,7 +434,7 @@ export default function CoachBilling() {
                     assistant from paying for the program by accident. */}
                 {!unlocked && !isPrimaryCoach ? (
                   <p className="text-xs text-muted-foreground">
-                    Your head coach looks after the program's add-ons.
+                    {t("Your head coach looks after the program's add-ons.")}
                   </p>
                 ) : null}
                 {!unlocked && isPrimaryCoach && entitlements.billingOpen && !covered && !isNative && (
@@ -441,7 +445,7 @@ export default function CoachBilling() {
                     disabled={buyingAddOn !== null}
                     onClick={() => void buyAddOn(addOn.id)}
                   >
-                    {buyingAddOn === addOn.id ? "Opening checkout..." : `Get ${addOn.label}`}
+                    {buyingAddOn === addOn.id ? t("Opening checkout...") : t("Get {name}", { name: addOn.label })}
                   </Button>
                 )}
                 {!unlocked && !covered && isPrimaryCoach && appleSupported && applePrices[addOn.id] && (
@@ -452,7 +456,7 @@ export default function CoachBilling() {
                     disabled={buyingAddOn !== null}
                     onClick={() => void buyAddOnWithApple(addOn.id)}
                   >
-                    {buyingAddOn === addOn.id ? "Purchasing..." : `Get ${addOn.label} (${applePrices[addOn.id]}/mo)`}
+                    {buyingAddOn === addOn.id ? t("Purchasing...") : t("Get {name} ({price}/mo)", { name: addOn.label, price: applePrices[addOn.id] })}
                   </Button>
                 )}
               </div>
@@ -467,10 +471,10 @@ export default function CoachBilling() {
               disabled={restoring}
               onClick={() => void restoreApplePurchases()}
             >
-              {restoring ? "Restoring..." : "Restore Purchases"}
+              {restoring ? t("Restoring...") : t("Restore Purchases")}
             </Button>
           )}
-          {!entitlements && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {!entitlements && <p className="text-sm text-muted-foreground">{t("Loading…")}</p>}
           <SubscriptionLegalLinks />
         </CardContent>
       </Card>
@@ -478,10 +482,10 @@ export default function CoachBilling() {
       <Card className="mt-6 max-w-xl">
         <CardContent className="flex flex-col gap-4 p-6">
           <div>
-            <p className="label-xs">Your plan</p>
+            <p className="label-xs">{t("Your plan")}</p>
             <p className="mt-1 font-display text-3xl font-bold">
               {formatCents(monthlyCents)}
-              <span className="text-base font-normal text-muted-foreground">/mo</span>
+              <span className="text-base font-normal text-muted-foreground">{t("/mo")}</span>
             </p>
           </div>
 
@@ -489,9 +493,9 @@ export default function CoachBilling() {
             <div className="flex justify-between">
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <Users className="h-3.5 w-3.5" />
-                {roster.length} {roster.length === 1 ? "athlete" : "athletes"}
+                {t.plural(roster.length, "{count} athlete", "{count} athletes")}
               </span>
-              <span>{formatCents(ORG_PER_ATHLETE_CENTS)} each</span>
+              <span>{t("{price} each", { price: formatCents(ORG_PER_ATHLETE_CENTS) })}</span>
             </div>
           </div>
 
@@ -501,10 +505,10 @@ export default function CoachBilling() {
               ceiling does change what you pay, and saying otherwise set up exactly
               the surprise this sentence was meant to prevent. */}
           <p className="text-xs text-muted-foreground">
-            ${(ORG_PER_ATHLETE_CENTS / 100).toFixed(2)} for every athlete, the same rate at every
-            roster size and no limit. Adding an athlete adds{" "}
-            ${(ORG_PER_ATHLETE_CENTS / 100).toFixed(2)}; removing one or putting them on hold takes
-            it off.
+            {t(
+              "{price} for every athlete, the same rate at every roster size and no limit. Adding an athlete adds {price}; removing one or putting them on hold takes it off.",
+              { price: `$${(ORG_PER_ATHLETE_CENTS / 100).toFixed(2)}` },
+            )}
           </p>
 
           {isNative ? (
@@ -513,29 +517,28 @@ export default function CoachBilling() {
                   is sold to programs on the web only (App Store guideline 3.1.3(c)); the app
                   may show what the program has and must not tell a coach where to go and buy
                   it. The old sentence here did exactly that. */}
-              Your program's plan is set up outside the app. This screen shows what it covers.
+              {t("Your program's plan is set up outside the app. This screen shows what it covers.")}
             </p>
           ) : !isPrimaryCoach ? (
             <p className="rounded-md bg-surface-elevated p-3 text-sm text-muted-foreground">
-              Your head coach looks after the program's plan. The band above is what this roster
-              costs.
+              {t("Your head coach looks after the program's plan. The band above is what this roster costs.")}
             </p>
           ) : covered ? (
             <p className="rounded-md bg-surface-elevated p-3 text-sm text-muted-foreground">
-              Your account is covered by Forge, so there is no plan to buy.
+              {t("Your account is covered by Forge, so there is no plan to buy.")}
             </p>
           ) : !billingOpen ? (
             <p className="rounded-md bg-surface-elevated p-3 text-sm text-muted-foreground">
-              Billing is not open here yet. The band above is what this roster costs.
+              {t("Billing is not open here yet. The band above is what this roster costs.")}
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">
               <Button onClick={subscribe} disabled={starting}>
                 <CreditCard className="h-4 w-4" />
-                {starting ? "Opening checkout..." : "Subscribe"}
+                {starting ? t("Opening checkout...") : t("Subscribe")}
               </Button>
               <Button variant="outline" onClick={openPortal} disabled={openingPortal}>
-                {openingPortal ? "Opening..." : "Manage billing"}
+                {openingPortal ? t("Opening...") : t("Manage billing")}
               </Button>
             </div>
           )}

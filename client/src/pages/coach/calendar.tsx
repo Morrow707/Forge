@@ -21,10 +21,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { getJson } from "@/lib/queryClient";
 import { ReadFailed } from "@/components/read-failed";
 import { CalendarDays } from "lucide-react";
+import { useT } from "@/i18n";
 
 type RosterEntry = { id: number; name: string };
 
 export default function CoachCalendar() {
+  const t = useT();
   const [, setLocation] = useLocation();
   const { data: roster = [], isError: rosterFailed } = useQuery<RosterEntry[]>({
     queryKey: ["/api/coach/roster"],
@@ -122,20 +124,20 @@ export default function CoachCalendar() {
 
   return (
     <AppShell
-      title="Calendar"
+      title={t("Calendar")}
       actions={
         <div className="flex flex-wrap items-center gap-2">
         {eventsLayer.addButton}
         <Button variant="outline" size="sm" onClick={() => setSyncOpen(true)}>
           <CalendarDays className="h-4 w-4" />
-          Calendar Sync
+          {t("Calendar Sync")}
         </Button>
         <Select value={athleteId} onValueChange={setAthleteId}>
           <SelectTrigger className="w-48">
-            <SelectValue placeholder="All athletes" />
+            <SelectValue placeholder={t("All athletes")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All athletes</SelectItem>
+            <SelectItem value="all">{t("All athletes")}</SelectItem>
             {roster.map((a) => (
               <SelectItem key={a.id} value={String(a.id)}>
                 {a.name}
@@ -166,14 +168,14 @@ export default function CoachCalendar() {
           leaving a coach wondering where their athletes went. */}
       {rosterFailed && (
         <p className="mt-2 text-sm text-muted-foreground">
-          We couldn't load your roster, so the athlete filter is unavailable.
+          {t("We couldn't load your roster, so the athlete filter is unavailable.")}
         </p>
       )}
 
       {isError && (
         <Card className="mt-6">
           <CardContent className="py-14">
-            <ReadFailed what="this calendar" onRetry={() => void refetch()} />
+            <ReadFailed what={t("this calendar")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       )}
@@ -184,11 +186,13 @@ export default function CoachCalendar() {
             <CalendarDays className="h-8 w-8 text-muted-foreground" />
             <p className="text-muted-foreground">
               {athleteId === "all"
-                ? "Nothing scheduled in this view."
-                : `Nothing scheduled for ${roster.find((a) => String(a.id) === athleteId)?.name ?? "this athlete"} in this view.`}
+                ? t("Nothing scheduled in this view.")
+                : t("Nothing scheduled for {name} in this view.", {
+                    name: roster.find((a) => String(a.id) === athleteId)?.name ?? t("this athlete"),
+                  })}
             </p>
             <p className="text-sm text-muted-foreground">
-              Try another date range, or assign a program from Roster &amp; Teams.
+              {t("Try another date range, or assign a program from Roster & Teams.")}
             </p>
           </CardContent>
         </Card>
@@ -224,7 +228,7 @@ export default function CoachCalendar() {
         onEntryClick={openEntry}
       />
       {eventsLayer.dialog}
-      <CalendarLinkDialog open={syncOpen} onOpenChange={setSyncOpen} title="Calendar Sync" fetchUrl="/api/coach/my/calendar-link" />
+      <CalendarLinkDialog open={syncOpen} onOpenChange={setSyncOpen} title={t("Calendar Sync")} fetchUrl="/api/coach/my/calendar-link" />
     </AppShell>
   );
 }

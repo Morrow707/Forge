@@ -16,6 +16,7 @@ import {
   type AnvilDayContext,
 } from "@shared/anvil-day-context";
 import type { AnvilReading } from "@shared/anvil-reading";
+import { plural, translate, useT } from "@/i18n";
 
 /**
  * THE COACH'S WEEK: A DAILY VIEW AND A WEEKLY LINE, AND THE DIFFERENCE BETWEEN THEM IS THE POINT.
@@ -62,6 +63,7 @@ type RosterWeek = {
 const RANGES = [7, 14, 28] as const;
 
 export default function CoachAnvilWeek() {
+  const t = useT();
   const [days, setDays] = useState<number>(7);
   const { data, isLoading, isError, refetch, error } = useQuery<RosterWeek>({
     queryKey: ["/api/coach/anvil/week", days],
@@ -69,7 +71,7 @@ export default function CoachAnvilWeek() {
   });
 
   return (
-    <AppShell title="The Anvil">
+    <AppShell title={t("The Anvil")}>
       <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6">
         <div className="flex flex-wrap items-center gap-2">
           {RANGES.map((n) => (
@@ -80,7 +82,7 @@ export default function CoachAnvilWeek() {
               onClick={() => setDays(n)}
               data-testid={`anvil-range-${n}`}
             >
-              {n} days
+              {t("{n} days", { n })}
             </Button>
           ))}
           <div className="ml-auto">
@@ -89,20 +91,20 @@ export default function CoachAnvilWeek() {
                 thing with it; reading it into memory to re-offer it as a blob is work that buys
                 nothing and breaks the filename. */}
             <Button asChild size="sm" variant="outline" data-testid="anvil-print">
-              <a href={resolveApiUrl(`/api/coach/anvil/week.pdf?days=${days}`)}>Print or email</a>
+              <a href={resolveApiUrl(`/api/coach/anvil/week.pdf?days=${days}`)}>{t("Print or email")}</a>
             </Button>
           </div>
         </div>
 
         <p className="text-xs leading-relaxed text-muted-foreground">
-          {ANVIL_ACCURACY_CAVEAT} {ANVIL_NOT_A_MEDICAL_TEST} Every figure is one person against
-          their own earlier mornings, never against another athlete.
+          {t(ANVIL_ACCURACY_CAVEAT)} {t(ANVIL_NOT_A_MEDICAL_TEST)}{" "}
+          {t("Every figure is one person against their own earlier mornings, never against another athlete.")}
         </p>
 
         {isLoading && <Skeleton className="h-64 w-full" />}
         {isError && (
           <ReadFailed
-            what="your athletes' checks"
+            what={t("your athletes' checks")}
             onRetry={() => void refetch()}
             error={error}
           />
@@ -111,8 +113,7 @@ export default function CoachAnvilWeek() {
         {data && data.athletes.length === 0 && data.noChecks.length === 0 && (
           <Card>
             <CardContent className="pt-6 text-sm text-muted-foreground">
-              Nobody on your roster has taken the Anvil yet. It is adults-only while its paperwork
-              is being reviewed, and each person accepts it on their own account.
+              {t("Nobody on your roster has taken the Anvil yet. It is adults-only while its paperwork is being reviewed, and each person accepts it on their own account.")}
             </CardContent>
           </Card>
         )}
@@ -134,8 +135,8 @@ export default function CoachAnvilWeek() {
                   </span>
                   <span className="font-medium tabular-nums">
                     {day.reading.numbers.medianMs == null
-                      ? "no trials"
-                      : `${Math.round(day.reading.numbers.medianMs)} ms`}
+                      ? t("no trials")
+                      : t("{ms} ms", { ms: Math.round(day.reading.numbers.medianMs) })}
                   </span>
                   <span className="text-xs text-muted-foreground">{dayDetail(day)}</span>
                   {/* WHAT ELSE FORGE HAD ABOUT THAT MORNING. Facts in their own units, under the
@@ -149,13 +150,13 @@ export default function CoachAnvilWeek() {
                       className="basis-full text-xs text-muted-foreground sm:pl-24"
                       data-testid={`anvil-beside-${day.id}`}
                     >
-                      beside it: {besideLine(day.context)}
+                      {t("beside it: {facts}", { facts: besideLine(day.context) })}
                     </span>
                   )}
                 </div>
               ))}
               {entry.week.days.length === 0 && (
-                <p className="text-sm text-muted-foreground">No check in this window.</p>
+                <p className="text-sm text-muted-foreground">{t("No check in this window.")}</p>
               )}
               {/* WHAT IS TRUE OF THE WHOLE WEEK, once per athlete and above the blanks. A growth
                   rate spans four months at least, so it holds one value across any week -- and on
@@ -169,7 +170,7 @@ export default function CoachAnvilWeek() {
                   className="pt-2 text-xs text-muted-foreground"
                   data-testid={`anvil-week-beside-${entry.athleteId}-${b.signalId}`}
                 >
-                  This week: {formatBeside(b)}
+                  {t("This week: {fact}", { fact: formatBeside(b) })}
                 </p>
               ))}
               {/* A BLANK SOMEBODY CAN CLOSE SAYS SO -- ONCE PER ATHLETE, not once per morning.
@@ -199,7 +200,7 @@ export default function CoachAnvilWeek() {
         {data && data.noChecks.length > 0 && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">No check in this window</CardTitle>
+              <CardTitle className="text-sm font-medium">{t("No check in this window")}</CardTitle>
             </CardHeader>
             <CardContent>
               {/* NAMED RATHER THAN LEFT OUT. A short list and a roster where nobody has set the
@@ -217,32 +218,35 @@ export default function CoachAnvilWeek() {
 
 function verdictLine(verdict: AthleteWeek["week"]["verdict"]): string {
   if (verdict.kind === "finding") {
-    return `A change showed up on ${(verdict.witnesses ?? []).join(" and ")} (${(verdict.z ?? 0).toFixed(2)} SD on the weaker of them). Worth a conversation.`;
+    return translate("A change showed up on {witnesses} ({z} SD on the weaker of them). Worth a conversation.", {
+      witnesses: (verdict.witnesses ?? []).join(` ${translate("and")} `),
+      z: (verdict.z ?? 0).toFixed(2),
+    });
   }
-  if (verdict.kind === "quiet") return "Nothing stood out this week.";
+  if (verdict.kind === "quiet") return translate("Nothing stood out this week.");
   // NOT THE SAME SENTENCE AS "quiet", and never drawn as one. "nothing was wrong" and "nothing
   // could be judged" being one blank is the distinction the 2026-10-04 box jump lost.
-  return `Not enough to judge on — ${verdict.reason ?? "fewer channels than the rule requires"}.`;
+  return translate("Not enough to judge on — {reason}.", { reason: verdict.reason ?? translate("fewer channels than the rule requires") });
 }
 
 function dayDetail(day: Day): string {
   const bits: string[] = [];
   const c = day.reading.comparison;
   if (c.kind === "compared") {
-    bits.push(`${c.medianZ >= 0 ? "+" : ""}${c.medianZ.toFixed(2)} SD vs own normal`);
-    bits.push(`${c.lapses} slow ${c.lapses === 1 ? "trial" : "trials"}`);
+    bits.push(translate("{z} SD vs own normal", { z: `${c.medianZ >= 0 ? "+" : ""}${c.medianZ.toFixed(2)}` }));
+    bits.push(plural(c.lapses, "{count} slow trial", "{count} slow trials"));
   } else if (c.kind === "learning") {
-    bits.push(`learning their normal (${c.have} of ${c.need})`);
+    bits.push(translate("learning their normal ({have} of {need})", { have: c.have, need: c.need }));
   } else {
-    bits.push("no spread in their own history yet");
+    bits.push(translate("no spread in their own history yet"));
   }
   const n = day.reading.numbers;
-  if (n.driftMs != null) bits.push(`${n.driftMs >= 0 ? "+" : ""}${Math.round(n.driftMs)} ms drift`);
-  if (n.sequenceBest != null) bits.push(`span ${n.sequenceBest}`);
-  if (n.tapCount != null) bits.push(`${n.tapCount} taps`);
+  if (n.driftMs != null) bits.push(translate("{ms} ms drift", { ms: `${n.driftMs >= 0 ? "+" : ""}${Math.round(n.driftMs)}` }));
+  if (n.sequenceBest != null) bits.push(translate("span {n}", { n: n.sequenceBest }));
+  if (n.tapCount != null) bits.push(translate("{count} taps", { count: n.tapCount }));
   if (day.window !== "in_window") {
-    bits.push(day.window === "practice" ? "practice run" : "outside the morning window");
+    bits.push(day.window === "practice" ? translate("practice run") : translate("outside the morning window"));
   }
-  if (!day.counts && day.window === "in_window") bits.push("second attempt, does not count");
+  if (!day.counts && day.window === "in_window") bits.push(translate("second attempt, does not count"));
   return bits.join(" · ");
 }

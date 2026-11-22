@@ -42,6 +42,7 @@ import {
 } from "@/lib/station-save-rules";
 import { ArrowLeft, Lock, CheckCircle2, Video, FileWarning, CloudOff, Clock } from "lucide-react";
 import { toast } from "sonner";
+import { msg, plural, useT } from "@/i18n";
 
 type Tile = {
   athleteId: number;
@@ -99,12 +100,12 @@ type TileStatus = { tone: string; text: string };
 /** The line under an athlete's name. A save waiting on this tablet is said first, plainly. */
 function tileStatus(tile: Tile, waiting: boolean, held: boolean): TileStatus {
   const rules: { when: boolean; status: TileStatus }[] = [
-    { when: held, status: { tone: "text-amber-500", text: "Waiting to send: the server has not taken it yet, the tablet keeps trying" } },
-    { when: waiting, status: { tone: "text-amber-500", text: "Waiting to send: saved on this tablet" } },
-    { when: tile.workoutsToday === 0, status: { tone: "text-muted-foreground", text: "Nothing scheduled today" } },
-    { when: tile.completedToday >= tile.workoutsToday, status: { tone: "text-emerald-500", text: "Done today" } },
+    { when: held, status: { tone: "text-amber-500", text: msg("Waiting to send: the server has not taken it yet, the tablet keeps trying") } },
+    { when: waiting, status: { tone: "text-amber-500", text: msg("Waiting to send: saved on this tablet") } },
+    { when: tile.workoutsToday === 0, status: { tone: "text-muted-foreground", text: msg("Nothing scheduled today") } },
+    { when: tile.completedToday >= tile.workoutsToday, status: { tone: "text-emerald-500", text: msg("Done today") } },
   ];
-  const workouts = tile.workoutsToday === 1 ? "1 workout today" : `${tile.workoutsToday} workouts today`;
+  const workouts = plural(tile.workoutsToday, "{count} workout today", "{count} workouts today");
   return rules.find((r) => r.when)?.status ?? { tone: "text-primary", text: workouts };
 }
 
@@ -126,6 +127,7 @@ function draftsFrom(day: AthleteDay, keep: Record<string, Draft> = {}): Record<s
 }
 
 export default function WeightRoomStationPage() {
+  const t = useT();
   const params = useParams<{ teamId: string }>();
   const teamId = Number(params.teamId);
   const [, setLocation] = useLocation();
@@ -161,7 +163,7 @@ export default function WeightRoomStationPage() {
         setRosterError(null);
         return;
       }
-      setRosterError(err instanceof Error ? err.message : "Could not load the team.");
+      setRosterError(err instanceof Error ? err.message : t("Could not load the team."));
     }
   }, [teamId]);
   useEffect(() => {
@@ -257,7 +259,7 @@ export default function WeightRoomStationPage() {
     try {
       await loadDay(tile.athleteId);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not load today's workout.");
+      toast.error(err instanceof Error ? err.message : t("Could not load today's workout."));
       setOpenAthlete(null);
     }
   };
@@ -292,26 +294,28 @@ export default function WeightRoomStationPage() {
       // It reached the server, so anything older still waiting on the tablet for this day is moot.
       clearStationSave(teamId, athleteId, payload);
       refreshQueued();
-      toast.success(finish ? `${day?.displayName ?? "Workout"} finished. Nice work.` : "Sets saved.");
+      toast.success(finish ? t("{name} finished. Nice work.", { name: day?.displayName ?? t("Workout") }) : t("Sets saved."));
       backToTiles();
     } catch (err) {
       if (err instanceof ApiError && err.status === CONFLICT) {
-        toast.message("This workout changed on another device. It has been reloaded; check the sets and save again.");
+        toast.message(t("This workout changed on another device. It has been reloaded; check the sets and save again."));
         await loadDay(athleteId, drafts);
       } else if (stationSaveShouldQueue(err)) {
         // NEVER "SAVED" FOR SOMETHING THAT ONLY LIVES ON THE TABLET. Say where it is.
         if (await queueStationSave(teamId, athleteId, payload)) {
           refreshQueued();
           toast.message(
-            `No connection. ${day?.displayName ? `${day.displayName}'s` : "These"} sets are saved on this tablet and will send when the connection is back.`,
+            day?.displayName
+              ? t("No connection. {name}'s sets are saved on this tablet and will send when the connection is back.", { name: day.displayName })
+              : t("No connection. These sets are saved on this tablet and will send when the connection is back."),
             { duration: QUEUED_TOAST_MS },
           );
           backToTiles();
         } else {
-          toast.error("No connection, and this tablet could not keep these sets. Write them down and save again when the connection is back.");
+          toast.error(t("No connection, and this tablet could not keep these sets. Write them down and save again when the connection is back."));
         }
       } else {
-        toast.error(err instanceof Error ? err.message : "Could not save.");
+        toast.error(err instanceof Error ? err.message : t("Could not save."));
       }
     } finally {
       setSaving(false);
@@ -325,7 +329,7 @@ export default function WeightRoomStationPage() {
       clearStationLock();
       setLocation("/coach/weight-room");
     } catch (err) {
-      setUnlockError(err instanceof Error ? err.message : "That password is not right.");
+      setUnlockError(err instanceof Error ? err.message : t("That password is not right."));
     }
   };
 
@@ -338,11 +342,11 @@ export default function WeightRoomStationPage() {
     <div className="min-h-screen bg-background text-foreground" data-testid="weight-room-station">
       <header className="flex items-center justify-between gap-4 border-b px-6 py-4">
         <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Weight room station</p>
-          <h1 className="text-2xl font-bold">{roster?.teamName ?? "Loading team..."}</h1>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("Weight room station")}</p>
+          <h1 className="text-2xl font-bold">{roster?.teamName ?? t("Loading team...")}</h1>
         </div>
         <Button variant="outline" size="lg" onClick={() => setLeaving(true)} data-testid="button-leave-station">
-          <Lock className="mr-2 h-5 w-5" /> Leave station
+          <Lock className="mr-2 h-5 w-5" /> {t("Leave station")}
         </Button>
       </header>
 
@@ -362,9 +366,9 @@ export default function WeightRoomStationPage() {
 
         {openAthlete == null && roster && (
           <>
-            <p className="mb-4 text-muted-foreground">Tap your name to log today's workout. Filming stays on your own phone.</p>
+            <p className="mb-4 text-muted-foreground">{t("Tap your name to log today's workout. Filming stays on your own phone.")}</p>
             {roster.athletes.length === 0 ? (
-              <p className="text-lg">Nobody on this team is training in season right now.</p>
+              <p className="text-lg">{t("Nobody on this team is training in season right now.")}</p>
             ) : (
               <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
                 {roster.athletes.map((tile) => (
@@ -380,7 +384,7 @@ export default function WeightRoomStationPage() {
                     {tile.blocked && (
                       <span className="flex items-start gap-1 text-sm text-amber-500">
                         <FileWarning className="mt-0.5 h-4 w-4 shrink-0" />
-                        Locked until on file: {tile.blocked.missing.join(", ")}
+                        {t("Locked until on file: {documents}", { documents: tile.blocked.missing.join(", ") })}
                       </span>
                     )}
                     {(!tile.blocked || queued.athleteIds.includes(tile.athleteId)) && (() => {
@@ -393,7 +397,7 @@ export default function WeightRoomStationPage() {
                         >
                           {waiting && <Clock className="h-4 w-4 shrink-0" />}
                           {!waiting && status.text === "Done today" && <CheckCircle2 className="h-4 w-4" />}
-                          {status.text}
+                          {t(status.text)}
                         </span>
                       );
                     })()}
@@ -408,29 +412,29 @@ export default function WeightRoomStationPage() {
           <div onPointerDown={bumpIdle}>
             <div className="mb-6 flex items-center justify-between gap-4">
               <Button variant="ghost" size="lg" onClick={backToTiles} data-testid="button-back-to-tiles">
-                <ArrowLeft className="mr-2 h-5 w-5" /> Everyone
+                <ArrowLeft className="mr-2 h-5 w-5" /> {t("Everyone")}
               </Button>
               <h2 className="text-3xl font-bold">{day?.displayName ?? ""}</h2>
             </div>
-            {!day && <p className="text-lg text-muted-foreground">Loading today's workout...</p>}
+            {!day && <p className="text-lg text-muted-foreground">{t("Loading today's workout...")}</p>}
             {day && showingSaved && (
               <p className="mb-4 flex items-center gap-2 text-base text-amber-500" data-testid="station-day-from-tablet">
-                <CloudOff className="h-4 w-4 shrink-0" /> No connection. This is the workout as this tablet last loaded it.
+                <CloudOff className="h-4 w-4 shrink-0" /> {t("No connection. This is the workout as this tablet last loaded it.")}
               </p>
             )}
-            {day && day.workouts.length === 0 && <p className="text-lg">Nothing is scheduled for today.</p>}
+            {day && day.workouts.length === 0 && <p className="text-lg">{t("Nothing is scheduled for today.")}</p>}
             {day?.workouts.map((w) => (
               <section key={`${w.assignmentId}-${w.programDayId}`} className="mb-8 space-y-4">
                 <div>
                   <p className="text-sm text-muted-foreground">{w.programName}</p>
                   <h3 className="text-xl font-semibold">
-                    {w.title} {w.completed && <span className="text-sm text-emerald-500">(finished)</span>}
+                    {w.title} {w.completed && <span className="text-sm text-emerald-500">{t("(finished)")}</span>}
                   </h3>
                 </div>
                 {w.exercises.map((ex) => (
                   <div key={ex.programExerciseId} className="rounded-xl border bg-card p-4" data-testid={`station-exercise-${ex.programExerciseId}`}>
                     <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                      <h4 className="text-xl font-bold">{ex.name}</h4>
+                      <h4 className="text-xl font-bold">{t.exercise(ex.name)}</h4>
                       <p className="text-base">
                         {ex.sets} × {ex.reps}
                         {ex.prescribedWeight ? ` @ ${ex.prescribedWeight}` : ""}
@@ -438,8 +442,11 @@ export default function WeightRoomStationPage() {
                     </div>
                     <p className="mb-3 text-sm text-muted-foreground">
                       {ex.lastTime
-                        ? `Last time (${ex.lastTime.date}): ${ex.lastTime.sets} × ${ex.lastTime.reps ?? "?"}${ex.lastTime.weight ? ` @ ${ex.lastTime.weight} ${ex.lastTime.weightUnit ?? "lbs"}` : ""}`
-                        : "First time logging this one."}
+                        ? t("Last time ({date}): {summary}", {
+                            date: ex.lastTime.date,
+                            summary: `${ex.lastTime.sets} × ${ex.lastTime.reps ?? "?"}${ex.lastTime.weight ? ` @ ${ex.lastTime.weight} ${ex.lastTime.weightUnit ?? "lbs"}` : ""}`,
+                          })
+                        : t("First time logging this one.")}
                     </p>
                     <div className="space-y-2">
                       {Array.from({ length: Math.max(ex.sets, ex.logged.length) }, (_, i) => i + 1).map((setNumber) => {
@@ -448,19 +455,22 @@ export default function WeightRoomStationPage() {
                         if (stored?.filmed) {
                           return (
                             <div key={key} className="flex items-center gap-3 rounded-lg bg-muted/40 px-3 py-3 text-base">
-                              <span className="w-16 font-semibold">Set {setNumber}</span>
+                              <span className="w-16 font-semibold">{t("Set {n}", { n: setNumber })}</span>
                               <Video className="h-4 w-4" />
                               <span>
-                                {stored.reps ?? "?"} reps{stored.weight ? ` @ ${stored.weight}` : ""}, filmed on their phone
+                                {t("{reps} reps{weight}, filmed on their phone", {
+                                  reps: stored.reps ?? "?",
+                                  weight: stored.weight ? ` @ ${stored.weight}` : "",
+                                })}
                               </span>
                             </div>
                           );
                         }
                         return (
                           <div key={key} className="flex items-center gap-3">
-                            <span className="w-16 text-base font-semibold">Set {setNumber}</span>
+                            <span className="w-16 text-base font-semibold">{t("Set {n}", { n: setNumber })}</span>
                             <Input
-                              aria-label={`Set ${setNumber} reps`}
+                              aria-label={t("Set {n} reps", { n: setNumber })}
                               inputMode="numeric"
                               placeholder={ex.reps}
                               value={drafts[key]?.reps ?? ""}
@@ -468,9 +478,9 @@ export default function WeightRoomStationPage() {
                               className="h-14 w-28 text-2xl"
                               data-testid={`input-reps-${ex.programExerciseId}-${setNumber}`}
                             />
-                            <span className="text-muted-foreground">reps</span>
+                            <span className="text-muted-foreground">{t("reps")}</span>
                             <Input
-                              aria-label={`Set ${setNumber} weight`}
+                              aria-label={t("Set {n} weight", { n: setNumber })}
                               inputMode="decimal"
                               placeholder={ex.prescribedWeight ?? ex.lastTime?.weight ?? ""}
                               value={drafts[key]?.weight ?? ""}
@@ -487,10 +497,10 @@ export default function WeightRoomStationPage() {
                 ))}
                 <div className="flex flex-wrap gap-3">
                   <Button size="lg" className="h-14 px-8 text-lg" disabled={saving} onClick={() => void save(w, false)} data-testid="button-station-save">
-                    Save sets
+                    {t("Save sets")}
                   </Button>
                   <Button size="lg" variant="secondary" className="h-14 px-8 text-lg" disabled={saving} onClick={() => void save(w, true)} data-testid="button-station-finish">
-                    Save and finish
+                    {t("Save and finish")}
                   </Button>
                 </div>
               </section>
@@ -502,10 +512,9 @@ export default function WeightRoomStationPage() {
       <Dialog open={leaving} onOpenChange={(o) => { setLeaving(o); setPassword(""); setUnlockError(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Leave the station</DialogTitle>
+            <DialogTitle>{t("Leave the station")}</DialogTitle>
             <DialogDescription>
-              Enter your password to go back to your account on this device. On a school iPad, iOS Guided Access keeps the
-              tablet on this screen too.
+              {t("Enter your password to go back to your account on this device. On a school iPad, iOS Guided Access keeps the tablet on this screen too.")}
             </DialogDescription>
           </DialogHeader>
           {leaveWithUnsentWarning(waitingCount) && (
@@ -529,7 +538,7 @@ export default function WeightRoomStationPage() {
           {unlockError && <p className="text-sm text-destructive">{unlockError}</p>}
           <DialogFooter>
             <Button onClick={() => void unlock()} disabled={!password} data-testid="button-unlock">
-              Leave station
+              {t("Leave station")}
             </Button>
           </DialogFooter>
         </DialogContent>

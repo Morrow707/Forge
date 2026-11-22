@@ -2,15 +2,17 @@ import { SkillProgramListPage } from "@/pages/skill-program-list";
 import { LibraryTabs } from "@/components/library-tabs";
 import { CoachSectionGate } from "@/components/coach-section-gate";
 import { useAuth } from "@/hooks/use-auth";
+import { useT } from "@/i18n";
 
 export default function CoachSkillPrograms() {
+  const t = useT();
   const { user } = useAuth();
   return (
     <CoachSectionGate section="skillPrograms">
       <SkillProgramListPage
         apiBase="/api/coach"
         routeBase="/coach/skill-programs"
-        title="Skill Programs"
+        title={t("Skill Programs")}
         emptyStateText="No skill programs yet. Build one to start assigning skill work to athletes."
         libraryTabs={
           <LibraryTabs

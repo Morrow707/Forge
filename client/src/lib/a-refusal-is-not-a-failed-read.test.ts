@@ -38,11 +38,11 @@ describe("what a refused read says", () => {
 
 describe("the screens the crawl hit hand the error to ReadFailed", () => {
   const sites: [string, string][] = [
-    ["client/src/pages/coach/coaches-corner-certificate.tsx", 'what="the certificate"'],
+    ["client/src/pages/coach/coaches-corner-certificate.tsx", 'what={t("the certificate")}'],
     ["client/src/pages/athlete/class-certificate.tsx", 'what="the certificate"'],
     ["client/src/pages/athlete/class-detail.tsx", 'what="this class"'],
     ["client/src/pages/workout.tsx", 'what="this workout"'],
-    ["client/src/pages/coach/athlete-detail.tsx", "what=\"this athlete's profile\""],
+    ["client/src/pages/coach/athlete-detail.tsx", "what={t(\"this athlete's profile\")}"],
     ["client/src/pages/documents.tsx", 'what={forSomeoneElse ? "these forms" : "your documents"}'],
   ];
   it.each(sites)("%s", (file, what) => {

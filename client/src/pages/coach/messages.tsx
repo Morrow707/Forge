@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ReadFailed } from "@/components/read-failed";
 import { CoachMessageThread, ThreadList, type ThreadSummary } from "@/components/coach-message-thread";
 import { getJson } from "@/lib/queryClient";
+import { useT } from "@/i18n";
 
 /* A COACH'S MESSAGES (2026-11-21): one private thread per athlete they coach, and nobody else.
  * The list is the server's: every athlete in this coach's scope (an assistant narrowed to teams
@@ -16,6 +17,7 @@ const LIST_URL = "/api/coach/messages";
 type CoachThreadRow = Omit<ThreadSummary, "id"> & { athleteId: number };
 
 export default function CoachMessagesPage() {
+  const t = useT();
   const asked = Number(new URLSearchParams(useSearch()).get("athlete")) || null;
   const [selected, setSelected] = useState<number | null>(asked);
   const { data, isLoading, isError, error, refetch } = useQuery<{ threads: CoachThreadRow[] }>({
@@ -26,20 +28,19 @@ export default function CoachMessagesPage() {
   const current = selected ?? threads[0]?.id ?? null;
 
   return (
-    <AppShell title="Messages">
+    <AppShell title={t("Messages")}>
       <Card>
         <CardHeader>
-          <CardTitle>Messages</CardTitle>
+          <CardTitle>{t("Messages")}</CardTitle>
           <CardDescription>
-            Private messages between you and each athlete you coach. For an athlete under 18, their
-            parent or guardian can read the conversation.
+            {t("Private messages between you and each athlete you coach. For an athlete under 18, their parent or guardian can read the conversation.")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading && <div className="h-40 animate-pulse rounded-md bg-surface" />}
-          {isError && <ReadFailed what="your messages" error={error} onRetry={() => void refetch()} />}
+          {isError && <ReadFailed what={t("your messages")} error={error} onRetry={() => void refetch()} />}
           {!isLoading && !isError && threads.length === 0 && (
-            <p className="py-6 text-center text-sm text-muted-foreground">No athletes on your roster yet, so there is nobody to message.</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">{t("No athletes on your roster yet, so there is nobody to message.")}</p>
           )}
           {!isLoading && !isError && threads.length > 0 && (
             <div className="grid gap-4 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">

@@ -15,6 +15,7 @@ import { shareOrDownloadFile } from "@/lib/share-file";
 import { toast } from "sonner";
 import { Copy, Printer, Trash2, ArrowUp, ArrowDown, Plus, X, ClipboardCheck, Loader2 } from "lucide-react";
 import { inferMovementScreenScoreType } from "@shared/movement-screen";
+import { useT } from "@/i18n";
 
 type Battery = {
   id: number;
@@ -39,6 +40,7 @@ function slugify(label: string) {
 }
 
 export default function MovementScreensPage() {
+  const t = useT();
   const qc = useQueryClient();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Battery | null>(null);
@@ -55,10 +57,10 @@ export default function MovementScreensPage() {
     },
     onSuccess: (battery) => {
       qc.invalidateQueries({ queryKey: ["/api/coach/movement-screens/batteries"] });
-      toast.success(`Saved as "${battery.name}", edit it freely`);
+      toast.success(t("Saved as \"{name}\", edit it freely", { name: battery.name }));
       setEditingId(battery.id);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't duplicate that battery"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't duplicate that battery")),
   });
 
   const remove = useMutation({
@@ -67,10 +69,10 @@ export default function MovementScreensPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/movement-screens/batteries"] });
-      toast.success("Deleted");
+      toast.success(t("Deleted"));
       setDeleteTarget(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't delete that battery"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't delete that battery")),
   });
 
   async function print(battery: Battery) {
@@ -81,12 +83,12 @@ export default function MovementScreensPage() {
         battery.name,
       );
     } catch {
-      toast.error("Couldn't generate that PDF");
+      toast.error(t("Couldn't generate that PDF"));
     }
   }
 
   return (
-    <AppShell title="Movement Screens">
+    <AppShell title={t("Movement Screens")}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {isLoading ? (
           <div className="h-32 animate-pulse rounded-md bg-surface sm:col-span-2 lg:col-span-3" />
@@ -95,7 +97,7 @@ export default function MovementScreensPage() {
           // already exists, or leave them assuming this athlete has never been screened.
           <Card className="sm:col-span-2 lg:col-span-3">
             <CardContent className="py-16">
-              <ReadFailed what="the movement screens" onRetry={() => void refetch()} />
+              <ReadFailed what={t("the movement screens")} onRetry={() => void refetch()} />
             </CardContent>
           </Card>
         ) : batteries.length === 0 ? (
@@ -105,11 +107,10 @@ export default function MovementScreensPage() {
           <Card className="sm:col-span-2 lg:col-span-3">
             <CardContent className="flex flex-col items-center gap-2 py-16 text-center">
               <p className="text-muted-foreground">
-                No movement screens available yet.
+                {t("No movement screens available yet.")}
               </p>
               <p className="max-w-sm text-sm text-muted-foreground">
-                Forge's screening batteries load here once they're published. Nothing to do in the
-                meantime.
+                {t("Forge's screening batteries load here once they're published. Nothing to do in the meantime.")}
               </p>
             </CardContent>
           </Card>
@@ -118,8 +119,8 @@ export default function MovementScreensPage() {
             <Card key={b.id}>
               <CardHeader>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {b.isForgeOfficial && <Badge>FORGE</Badge>}
-                  {b.forkedFromId != null && <Badge variant="outline">customized</Badge>}
+                  {b.isForgeOfficial && <Badge>{t("FORGE")}</Badge>}
+                  {b.forkedFromId != null && <Badge variant="outline">{t("customized")}</Badge>}
                 </div>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <ClipboardCheck className="h-4 w-4 text-primary" />
@@ -130,17 +131,17 @@ export default function MovementScreensPage() {
               <CardContent className="flex flex-wrap gap-2">
                 {b.editable ? (
                   <Button size="sm" variant="outline" onClick={() => setEditingId(b.id)}>
-                    Edit
+                    {t("Edit")}
                   </Button>
                 ) : (
                   <Button size="sm" variant="outline" onClick={() => fork.mutate(b.id)} disabled={fork.isPending}>
                     <Copy className="h-3.5 w-3.5" />
-                    Duplicate to edit
+                    {t("Duplicate to edit")}
                   </Button>
                 )}
                 <Button size="sm" variant="outline" onClick={() => print(b)}>
                   <Printer className="h-3.5 w-3.5" />
-                  Print
+                  {t("Print")}
                 </Button>
                 {b.editable && !b.isForgeOfficial && (
                   <Button
@@ -163,11 +164,11 @@ export default function MovementScreensPage() {
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="Delete battery?"
+        title={t("Delete battery?")}
         description={
-          deleteTarget ? `Delete "${deleteTarget.name}"? This reverts to any Forge default.` : ""
+          deleteTarget ? t("Delete \"{name}\"? This reverts to any Forge default.", { name: deleteTarget.name }) : ""
         }
-        confirmLabel="Delete"
+        confirmLabel={t("Delete")}
         isPending={remove.isPending}
         onConfirm={() => deleteTarget && remove.mutate(deleteTarget.id)}
       />
@@ -176,6 +177,7 @@ export default function MovementScreensPage() {
 }
 
 function BatteryEditorDialog({ batteryId, onClose }: { batteryId: number; onClose: () => void }) {
+  const t = useT();
   const qc = useQueryClient();
   const { data, isLoading, isError, refetch } = useQuery<{ battery: Battery; tests: Test[] }>({
     queryKey: [`/api/coach/movement-screens/batteries/${batteryId}`],
@@ -205,10 +207,10 @@ function BatteryEditorDialog({ batteryId, onClose }: { batteryId: number; onClos
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/coach/movement-screens/batteries"] });
-      toast.success("Saved");
+      toast.success(t("Saved"));
       onClose();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save that battery"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't save that battery")),
   });
 
   function updateTest(i: number, patch: Partial<Test>) {
@@ -228,35 +230,35 @@ function BatteryEditorDialog({ batteryId, onClose }: { batteryId: number; onClos
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Battery</DialogTitle>
-          <DialogDescription>Your own copy, editing this never touches Forge's version.</DialogDescription>
+          <DialogTitle>{t("Edit Battery")}</DialogTitle>
+          <DialogDescription>{t("Your own copy, editing this never touches Forge's version.")}</DialogDescription>
         </DialogHeader>
         {isError ? (
           // The editor would otherwise sit on a shimmer forever, so a coach waits on a battery
           // that is never going to arrive.
-          <ReadFailed what="this battery" onRetry={() => void refetch()} />
+          <ReadFailed what={t("this battery")} onRetry={() => void refetch()} />
         ) : isLoading || !data ? (
           <div className="h-40 animate-pulse rounded-md bg-surface" />
         ) : (
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Name</Label>
+              <Label>{t("Name")}</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Description (optional)</Label>
+              <Label>{t("Description (optional)")}</Label>
               <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
             </div>
 
             <div className="space-y-2">
-              {tests.map((t, i) => (
+              {tests.map((test, i) => (
                 <div key={i} className="space-y-2 rounded-md border border-border p-3">
                   <div className="flex items-center gap-2">
                     <Input
                       className="flex-1"
-                      value={t.label}
+                      value={test.label}
                       onChange={(e) => updateTest(i, { label: e.target.value, testKey: slugify(e.target.value) })}
-                      placeholder="Test name"
+                      placeholder={t("Test name")}
                     />
                     <button type="button" onClick={() => move(i, -1)} className="text-muted-foreground hover:text-foreground">
                       <ArrowUp className="h-4 w-4" />
@@ -274,51 +276,51 @@ function BatteryEditorDialog({ batteryId, onClose }: { batteryId: number; onClos
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_auto]">
                     <div className="space-y-1">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Category</Label>
+                      <Label className="text-[10px] uppercase text-muted-foreground">{t("Category")}</Label>
                       <Input
-                        value={t.category}
+                        value={test.category}
                         onChange={(e) => updateTest(i, { category: e.target.value })}
-                        placeholder="e.g. Mobility"
+                        placeholder={t("e.g. Mobility")}
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Scored in</Label>
+                      <Label className="text-[10px] uppercase text-muted-foreground">{t("Scored in")}</Label>
                       <Input
-                        value={t.unitLabel ?? ""}
+                        value={test.unitLabel ?? ""}
                         onChange={(e) =>
                           updateTest(i, { unitLabel: e.target.value, scoreType: inferMovementScreenScoreType(e.target.value) })
                         }
-                        placeholder="e.g. 0-3, in, sec, reps"
+                        placeholder={t("e.g. 0-3, in, sec, reps")}
                       />
                     </div>
                     <div className="col-span-2 space-y-1 sm:col-span-1">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Side</Label>
+                      <Label className="text-[10px] uppercase text-muted-foreground">{t("Side")}</Label>
                       <div className="flex gap-1.5">
                         <Button
                           type="button"
                           size="sm"
-                          variant={t.side === "bilateral" ? "default" : "outline"}
+                          variant={test.side === "bilateral" ? "default" : "outline"}
                           className="flex-1"
                           onClick={() => updateTest(i, { side: "bilateral" })}
                         >
-                          One score
+                          {t("One score")}
                         </Button>
                         <Button
                           type="button"
                           size="sm"
-                          variant={t.side === "unilateral" ? "default" : "outline"}
+                          variant={test.side === "unilateral" ? "default" : "outline"}
                           className="flex-1"
                           onClick={() => updateTest(i, { side: "unilateral" })}
                         >
-                          Left / Right
+                          {t("Left / Right")}
                         </Button>
                       </div>
                     </div>
                   </div>
                   <Textarea
-                    value={t.instructions ?? ""}
+                    value={test.instructions ?? ""}
                     onChange={(e) => updateTest(i, { instructions: e.target.value })}
-                    placeholder="Instructions shown on the print sheet"
+                    placeholder={t("Instructions shown on the print sheet")}
                     rows={2}
                     autoResize
                     className="text-xs"
@@ -334,7 +336,7 @@ function BatteryEditorDialog({ batteryId, onClose }: { batteryId: number; onClos
                     ...ts,
                     {
                       testKey: `test_${ts.length + 1}`,
-                      label: "New test",
+                      label: t("New test"),
                       category: "",
                       scoreType: "distance_in",
                       unitLabel: "",
@@ -345,17 +347,17 @@ function BatteryEditorDialog({ batteryId, onClose }: { batteryId: number; onClos
                 }
               >
                 <Plus className="h-3.5 w-3.5" />
-                Add test
+                {t("Add test")}
               </Button>
             </div>
 
             <div className="flex justify-end gap-2 border-t border-border pt-3">
               <Button type="button" variant="ghost" onClick={onClose}>
-                Cancel
+                {t("Cancel")}
               </Button>
               <Button type="button" onClick={() => save.mutate()} disabled={save.isPending || !name.trim() || tests.length === 0}>
                 {save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                Save
+                {t("Save")}
               </Button>
             </div>
           </div>

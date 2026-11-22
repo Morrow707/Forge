@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ArrowLeft, Lock, GraduationCap, CheckCircle2, Circle, Unlock, Award, Flag, Users, Play } from "lucide-react";
-import { format, differenceInDays } from "date-fns";
+import { differenceInDays } from "date-fns";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CoachesCornerCertificates } from "@/components/coaches-corner-certificates";
@@ -31,6 +31,7 @@ import { ReadAloud, fetchTrackLessonNarration } from "@/components/read-aloud";
 import { formatCents } from "@shared/billing-tiers";
 import { SubscriptionLegalLinks } from "@/components/subscription-legal-links";
 import { useAuth } from "@/hooks/use-auth";
+import { msg, useT } from "@/i18n";
 
 /** The Coaches Corner half of GET /api/coach/entitlements. `unlocked` is the same
  * answer the catalog routes gate on; the rest is only there so this page can tell
@@ -103,11 +104,12 @@ type TrackDetail = {
  * lesson content only comes through once unlocked. */
 type TrackSort = "unlocked" | "title";
 const TRACK_SORT_OPTIONS: { value: TrackSort; label: string }[] = [
-  { value: "unlocked", label: "Unlocked first" },
-  { value: "title", label: "Title" },
+  { value: "unlocked", label: msg("Unlocked first") },
+  { value: "title", label: msg("Title") },
 ];
 
 export default function CoachesCorner() {
+  const t = useT();
   const qc = useQueryClient();
   const { user: authUser } = useAuth();
   const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
@@ -186,7 +188,7 @@ export default function CoachesCorner() {
     try {
       if (appleSupported) {
         await purchaseCoachAddOn("coaches_corner");
-        toast.success("Coaches Corner is open.");
+        toast.success(t("Coaches Corner is open."));
         qc.invalidateQueries({ queryKey: ["/api/coach/entitlements"] });
         qc.invalidateQueries({ queryKey: ["/api/coach/academy/tracks"] });
         setBuying(false);
@@ -201,9 +203,9 @@ export default function CoachesCorner() {
       if (err instanceof ApplePurchaseCancelledError) {
         // Backed out of the sheet: not an error.
       } else if (err instanceof ApplePurchasePendingError) {
-        toast("Waiting on approval from the App Store. It unlocks on its own once approved.");
+        toast(t("Waiting on approval from the App Store. It unlocks on its own once approved."));
       } else {
-        toast.error(err instanceof Error ? err.message : "Couldn't start checkout, try again");
+        toast.error(err instanceof Error ? err.message : t("Couldn't start checkout, try again"));
       }
       setBuying(false);
     }
@@ -218,7 +220,7 @@ export default function CoachesCorner() {
       qc.invalidateQueries({ queryKey: ["/api/coach/academy/tracks"] });
     },
     onError: (err: ApiError) => {
-      toast.error(err.message || "Could not update lesson");
+      toast.error(err.message || t("Could not update lesson"));
     },
   });
 
@@ -236,14 +238,14 @@ export default function CoachesCorner() {
     onSuccess: () => {
       setFlagOpen(false);
       setFlagReason("");
-      toast.success("Sent to Forge with your reason. Thank you.");
+      toast.success(t("Sent to Forge with your reason. Thank you."));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't send that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't send that")),
   });
 
   if (isLoading) {
     return (
-      <AppShell title="Coaches Corner">
+      <AppShell title={t("Coaches Corner")}>
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       </AppShell>
     );
@@ -255,10 +257,10 @@ export default function CoachesCorner() {
   // already have access.
   if (isError) {
     return (
-      <AppShell title="Coaches Corner">
+      <AppShell title={t("Coaches Corner")}>
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="Coaches Corner" onRetry={() => void refetch()} />
+            <ReadFailed what={t("Coaches Corner")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       </AppShell>
@@ -270,17 +272,17 @@ export default function CoachesCorner() {
   if (selectedTrackId != null && trackFailed) {
     return (
       <AppShell
-        title="Coaches Corner"
+        title={t("Coaches Corner")}
         actions={
           <Button variant="outline" onClick={() => setSelectedTrackId(null)}>
             <ArrowLeft className="h-4 w-4" />
-            Back to Coaches Corner
+            {t("Back to Coaches Corner")}
           </Button>
         }
       >
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="this track" onRetry={() => void refetchTrack()} />
+            <ReadFailed what={t("this track")} onRetry={() => void refetchTrack()} />
           </CardContent>
         </Card>
       </AppShell>
@@ -297,14 +299,14 @@ export default function CoachesCorner() {
         actions={
           <Button variant="outline" onClick={() => setSelectedLessonId(null)}>
             <ArrowLeft className="h-4 w-4" />
-            Back to {trackDetail.title}
+            {t("Back to {title}", { title: trackDetail.title })}
           </Button>
         }
       >
         <div className="mx-auto max-w-2xl space-y-4">
           {selectedLesson.estMinutes != null && (
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              ~{selectedLesson.estMinutes} min read
+              {t("~{minutes} min read", { minutes: selectedLesson.estMinutes })}
             </p>
           )}
           <ReadAloud
@@ -322,13 +324,13 @@ export default function CoachesCorner() {
             // teaching comes from, for a coach who wants the long version.
             <div className="rounded-md border border-border bg-surface px-4 py-3">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Further reading
+                {t("Further reading")}
               </p>
               <ul className="space-y-1 text-sm">
                 {selectedLesson.sources!.map((s, i) => (
                   <li key={i}>
                     {s.citation || s.sourceTitle},{" "}
-                    {s.pageStart === s.pageEnd ? `p. ${s.pageStart}` : `pp. ${s.pageStart}-${s.pageEnd}`}
+                    {s.pageStart === s.pageEnd ? t("p. {page}", { page: s.pageStart }) : t("pp. {start}-{end}", { start: s.pageStart, end: s.pageEnd })}
                   </li>
                 ))}
               </ul>
@@ -345,8 +347,8 @@ export default function CoachesCorner() {
           <DebouncedNote
             key={selectedLesson.id}
             initial={selectedLesson.note ?? ""}
-            title="My notes on this lesson"
-            placeholder="How this applies to your program, a cue to try, a question to bring to your staff…"
+            title={t("My notes on this lesson")}
+            placeholder={t("How this applies to your program, a cue to try, a question to bring to your staff…")}
             savedLine="Saved. Only you can see this."
             emptyLine="Private to you. No one else, Forge included, reads these."
             save={async (text) => {
@@ -362,21 +364,20 @@ export default function CoachesCorner() {
                   completeMutation.mutate({ lessonId: selectedLesson.id, completed: !!checked })
                 }
               />
-              Mark as read
+              {t("Mark as read")}
             </label>
             {/* A flag needs a reason (Scott, 2026-10-04: "flagging is useless if they can't say why"). */}
             <Button variant="ghost" size="sm" onClick={() => setFlagOpen(true)}>
               <Flag className="h-4 w-4" />
-              Flag this lesson
+              {t("Flag this lesson")}
             </Button>
           </div>
           <Dialog open={flagOpen} onOpenChange={setFlagOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Flag this lesson</DialogTitle>
+                <DialogTitle>{t("Flag this lesson")}</DialogTitle>
                 <DialogDescription>
-                  Wrong, out of date, unclear, or missing something? Say what, and Forge reads it. A flag without a
-                  reason can't be acted on, so the reason is required.
+                  {t("Wrong, out of date, unclear, or missing something? Say what, and Forge reads it. A flag without a reason can't be acted on, so the reason is required.")}
                 </DialogDescription>
               </DialogHeader>
               <Textarea
@@ -384,17 +385,17 @@ export default function CoachesCorner() {
                 onChange={(e) => setFlagReason(e.target.value)}
                 rows={4}
                 maxLength={2000}
-                placeholder="What's wrong with it, and what would make it right?"
+                placeholder={t("What's wrong with it, and what would make it right?")}
               />
               <DialogFooter>
                 <Button variant="outline" onClick={() => setFlagOpen(false)}>
-                  Cancel
+                  {t("Cancel")}
                 </Button>
                 <Button
                   onClick={() => flagMutation.mutate({ lessonId: selectedLesson.id, reason: flagReason.trim() })}
                   disabled={flagMutation.isPending || flagReason.trim().length < 10}
                 >
-                  {flagMutation.isPending ? "Sending..." : "Send"}
+                  {flagMutation.isPending ? t("Sending...") : t("Send")}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -414,26 +415,27 @@ export default function CoachesCorner() {
         actions={
           <Button variant="outline" onClick={() => setSelectedTrackId(null)}>
             <ArrowLeft className="h-4 w-4" />
-            Back to Coaches Corner
+            {t("Back to Coaches Corner")}
           </Button>
         }
       >
         <p className="mb-4 max-w-2xl text-sm text-muted-foreground">{trackDetail.description}</p>
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <p className="text-xs font-semibold uppercase text-muted-foreground">
-            {completedCount}/{trackDetail.lessons.length} read
+            {t("{done}/{total} read", { done: completedCount, total: trackDetail.lessons.length })}
           </p>
           {trackDone ? (
             <Button asChild size="sm" variant="outline">
               <Link href={`/coach/coaches-corner/certificate/${trackDetail.id}`}>
                 <Award className="h-4 w-4" />
-                Certificate
+                {t("Certificate")}
               </Link>
             </Button>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Read every lesson{(trackDetail.quizQuestions?.length ?? 0) > 0 ? " and pass the quiz" : ""} to earn a
-              certificate.
+              {(trackDetail.quizQuestions?.length ?? 0) > 0
+                ? t("Read every lesson and pass the quiz to earn a certificate.")
+                : t("Read every lesson to earn a certificate.")}
             </p>
           )}
         </div>
@@ -456,7 +458,7 @@ export default function CoachesCorner() {
                 </span>
               </span>
               {lesson.estMinutes != null && (
-                <span className="shrink-0 text-xs text-muted-foreground">{lesson.estMinutes} min</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{t("{minutes} min", { minutes: lesson.estMinutes })}</span>
               )}
             </button>
           ))}
@@ -488,11 +490,10 @@ export default function CoachesCorner() {
             <div className="flex flex-col items-start gap-2">
               <Button onClick={() => setApplyTrackId(trackDetail.id)}>
                 <Users className="h-4 w-4" />
-                Apply this to my roster
+                {t("Apply this to my roster")}
               </Button>
               <p className="text-xs text-muted-foreground">
-                Asks the library how this track fits the athletes you actually have. Sends counts, sports, positions and
-                ages, never a name.
+                {t("Asks the library how this track fits the athletes you actually have. Sends counts, sports, positions and ages, never a name.")}
               </p>
             </div>
           )}
@@ -502,20 +503,18 @@ export default function CoachesCorner() {
   }
 
   return (
-    <AppShell title="Coaches Corner">
+    <AppShell title={t("Coaches Corner")}>
       {!anyUnlocked && (
         <Card className="mb-6 border-primary/30 bg-primary/5">
           <CardContent className="flex flex-col items-start gap-3 p-6">
             <div className="flex items-center gap-2">
               <GraduationCap className="h-5 w-5 text-primary" />
               <h2 className="font-display text-lg font-bold uppercase tracking-wide">
-                Level up your own coaching
+                {t("Level up your own coaching")}
               </h2>
             </div>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              The strength and conditioning science the major certifications test, Olympic lift coaching progressions, youth development,
-              sport-specific arm care, reading Forge's own analytics, season planning, and team
-              culture, a real coach-education curriculum, for coaches who want to go deeper.
+              {t("The strength and conditioning science the major certifications test, Olympic lift coaching progressions, youth development, sport-specific arm care, reading Forge's own analytics, season planning, and team culture, a real coach-education curriculum, for coaches who want to go deeper.")}
             </p>
             {/* THE OLD COPY NAMED A PLAN THAT DOES NOT EXIST. "Included with a Pro
                 coaching plan" described a tier the org pricing model has no room for
@@ -526,34 +525,36 @@ export default function CoachesCorner() {
             {appleSellable ? (
               <div className="flex flex-col items-start gap-2">
                 <p className="text-sm font-semibold">
-                  {applePrice ? `${applePrice}/month` : "A paid add-on"}, on top of your plan. Free
-                  for rosters of 100+ athletes.
+                  {applePrice
+                    ? t("{price}/month, on top of your plan. Free for rosters of 100+ athletes.", { price: applePrice })
+                    : t("A paid add-on, on top of your plan. Free for rosters of 100+ athletes.")}
                 </p>
                 <Button onClick={buyCoachesCorner} disabled={buying}>
-                  {buying ? "Purchasing..." : "Get Coaches Corner"}
+                  {buying ? t("Purchasing...") : t("Get Coaches Corner")}
                 </Button>
                 <SubscriptionLegalLinks compact />
               </div>
             ) : !isPrimaryCoach ? (
               <p className="text-sm font-semibold">
-                A paid add-on{corner ? ` (${formatCents(corner.monthlyPriceCents)}/month)` : ""} for
-                the program. Your head coach is the one who can add it.
+                {corner
+                  ? t("A paid add-on ({price}/month) for the program. Your head coach is the one who can add it.", { price: formatCents(corner.monthlyPriceCents) })
+                  : t("A paid add-on for the program. Your head coach is the one who can add it.")}
               </p>
             ) : !appleSupported && corner?.billingOpen ? (
               <div className="flex flex-col items-start gap-2">
                 <p className="text-sm font-semibold">
-                  {formatCents(corner.monthlyPriceCents)}/month, on top of your plan. Free for
-                  rosters of 100+ athletes.
+                  {t("{price}/month, on top of your plan. Free for rosters of 100+ athletes.", { price: formatCents(corner.monthlyPriceCents) })}
                 </p>
                 <Button onClick={buyCoachesCorner} disabled={buying}>
-                  {buying ? "Opening checkout..." : "Get Coaches Corner"}
+                  {buying ? t("Opening checkout...") : t("Get Coaches Corner")}
                 </Button>
                 <SubscriptionLegalLinks compact />
               </div>
             ) : (
               <p className="text-sm font-semibold text-amber-500">
-                A paid add-on{corner ? ` (${formatCents(corner.monthlyPriceCents)}/month)` : ""},
-                purchasable once billing opens. Free for rosters of 100+ athletes.
+                {corner
+                  ? t("A paid add-on ({price}/month), purchasable once billing opens. Free for rosters of 100+ athletes.", { price: formatCents(corner.monthlyPriceCents) })
+                  : t("A paid add-on, purchasable once billing opens. Free for rosters of 100+ athletes.")}
               </p>
             )}
           </CardContent>
@@ -568,24 +569,28 @@ export default function CoachesCorner() {
           <div className="mb-6">
             <h2 className="mb-1 flex items-center gap-2 font-display text-lg font-bold uppercase tracking-wide">
               <Play className="h-5 w-5 text-primary" />
-              Continue
+              {t("Continue")}
             </h2>
-            <p className="mb-3 text-sm text-muted-foreground">Where you left off, most recent first.</p>
+            <p className="mb-3 text-sm text-muted-foreground">{t("Where you left off, most recent first.")}</p>
             <div className="flex gap-3 overflow-x-auto pb-1">
-              {inProgress.slice(0, 6).map((t) => (
+              {inProgress.slice(0, 6).map((tr) => (
                 <button
-                  key={t.id}
+                  key={tr.id}
                   type="button"
                   onClick={() => {
-                    setSelectedTrackId(t.id);
+                    setSelectedTrackId(tr.id);
                     setOpenFirstUnread(true);
                   }}
                   className="w-64 shrink-0 rounded-lg border border-border bg-surface p-4 text-left hover:border-primary/50"
                 >
-                  <p className="truncate text-sm font-semibold">{t.title}</p>
-                  <ProgressBar value={t.lessonsRead ?? 0} max={t.lessonCount} className="my-2" />
+                  <p className="truncate text-sm font-semibold">{tr.title}</p>
+                  <ProgressBar value={tr.lessonsRead ?? 0} max={tr.lessonCount} className="my-2" />
                   <p className="text-xs text-muted-foreground">
-                    {t.lessonsRead}/{t.lessonCount} read · next: lesson {(t.lessonsRead ?? 0) + 1}
+                    {t("{done}/{total} read · next: lesson {next}", {
+                      done: tr.lessonsRead ?? 0,
+                      total: tr.lessonCount,
+                      next: (tr.lessonsRead ?? 0) + 1,
+                    })}
                   </p>
                 </button>
               ))}
@@ -616,7 +621,7 @@ export default function CoachesCorner() {
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           ))}
         </div>
@@ -647,7 +652,7 @@ export default function CoachesCorner() {
                 {track.unlocked ? (
                   <Badge variant="success" className="shrink-0 gap-1 text-[10px]">
                     <Unlock className="h-2.5 w-2.5" />
-                    UNLOCKED
+                    {t("UNLOCKED")}
                   </Badge>
                 ) : (
                   <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -659,25 +664,25 @@ export default function CoachesCorner() {
               )}
               <div className="flex flex-wrap items-center gap-1.5">
                 <Badge variant="secondary" className="w-fit">
-                  {track.lessonCount} lessons
+                  {t.plural(track.lessonCount, "{count} lesson", "{count} lessons")}
                 </Badge>
                 {track.releasedAt && differenceInDays(new Date(), new Date(track.releasedAt)) <= NEW_TRACK_DAYS && (
-                  <Badge className="w-fit">New</Badge>
+                  <Badge className="w-fit">{t("New")}</Badge>
                 )}
                 {track.unlocked && track.completed && (
                   <Badge variant="success" className="gap-1">
                     <Award className="h-3 w-3" />
-                    Completed
+                    {t("Completed")}
                   </Badge>
                 )}
                 {track.unlocked && !track.completed && (track.lessonsRead ?? 0) > 0 && (
                   <Badge variant="outline">
-                    {track.lessonsRead}/{track.lessonCount} read
+                    {t("{done}/{total} read", { done: track.lessonsRead ?? 0, total: track.lessonCount })}
                   </Badge>
                 )}
               </div>
               {track.releasedAt && (
-                <p className="text-[11px] text-muted-foreground">Released {format(new Date(track.releasedAt), "MMM d, yyyy")}</p>
+                <p className="text-[11px] text-muted-foreground">{t("Released {date}", { date: t.date(new Date(track.releasedAt), { month: "short", day: "numeric", year: "numeric" }) })}</p>
               )}
             </CardContent>
           </Card>
@@ -685,8 +690,7 @@ export default function CoachesCorner() {
       </div>
       {tracks.length > 0 && (
         <p className="mt-3 text-xs text-muted-foreground">
-          Every track shows the date it was released. New tracks wear a New badge for a month, and the monthly Coaches
-          Corner email names each one.
+          {t("Every track shows the date it was released. New tracks wear a New badge for a month, and the monthly Coaches Corner email names each one.")}
         </p>
       )}
       {/* The certificate wall, at the bottom on purpose (Scott, 2026-10-04). */}

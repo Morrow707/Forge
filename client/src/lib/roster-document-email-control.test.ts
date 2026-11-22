@@ -25,7 +25,7 @@ describe("coach/athlete-documents.tsx", () => {
   });
 
   it("the request toast counts what was emailed and what was in-app only, with the reason", () => {
-    expect(page).toContain("emailed`");
+    expect(page).toContain("{count} emailed");
     expect(page).toContain("in-app only");
     expect(page).toContain("no email address");
     expect(page).toContain("not_configured");

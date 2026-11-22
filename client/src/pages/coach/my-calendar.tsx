@@ -10,6 +10,7 @@ import { CalendarLinkDialog } from "@/components/calendar-link-dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { ReadFailed } from "@/components/read-failed";
 import { Dumbbell, CalendarDays } from "lucide-react";
+import { useT } from "@/i18n";
 
 // A coach's own training calendar reuses the exact same CalendarView as
 // every athlete's -- same orange --primary throughout -- which made it easy
@@ -25,6 +26,7 @@ const SELF_TRAINING_ACCENT_STYLE: CSSProperties = {
 };
 
 export default function CoachMyCalendar() {
+  const t = useT();
   const [, navigate] = useLocation();
   const [range, setRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
   const eventsLayer = useCalendarEventsLayer(range);
@@ -46,13 +48,13 @@ export default function CoachMyCalendar() {
 
   return (
     <AppShell
-      title="My Training"
+      title={t("My Training")}
       actions={
         <div className="flex flex-wrap items-center gap-2">
           {eventsLayer.addButton}
           <Button variant="outline" size="sm" onClick={() => setSyncOpen(true)}>
             <CalendarDays className="h-4 w-4" />
-            Calendar Sync
+            {t("Calendar Sync")}
           </Button>
         </div>
       }
@@ -69,7 +71,7 @@ export default function CoachMyCalendar() {
         {isError && (
           <Card className="mt-6">
             <CardContent className="py-14">
-              <ReadFailed what="your calendar" onRetry={() => void refetch()} />
+              <ReadFailed what={t("your calendar")} onRetry={() => void refetch()} />
             </CardContent>
           </Card>
         )}
@@ -79,11 +81,10 @@ export default function CoachMyCalendar() {
             <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
               <Dumbbell className="h-8 w-8 text-muted-foreground" />
               <p className="text-muted-foreground">
-                Nothing on your calendar yet. Assign one of your programs to yourself from the
-                program library.
+                {t("Nothing on your calendar yet. Assign one of your programs to yourself from the program library.")}
               </p>
               <Button asChild size="sm">
-                <Link href="/coach/programs">Go to Programs</Link>
+                <Link href="/coach/programs">{t("Go to Programs")}</Link>
               </Button>
             </CardContent>
           </Card>
@@ -93,7 +94,7 @@ export default function CoachMyCalendar() {
       <CalendarLinkDialog
         open={syncOpen}
         onOpenChange={setSyncOpen}
-        title="Sync Your Calendar"
+        title={t("Sync Your Calendar")}
         fetchUrl="/api/coach/my/calendar-link"
       />
       {eventsLayer.dialog}
