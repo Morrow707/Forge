@@ -12,6 +12,7 @@ import { computeBrandingStyle } from "@/lib/branding-style";
 import { useAuth } from "@/hooks/use-auth";
 import { todayIso } from "@/lib/local-date";
 import type { PublicUser } from "@shared/schema";
+import { useT } from "@/i18n";
 
 /** The other half of the minor gate (see the guardian gate in server/routes.ts).
  *
@@ -25,6 +26,7 @@ import type { PublicUser } from "@shared/schema";
  * in moves to the guardian-pending screen instead, which is the honest next step for them.
  */
 export default function DateOfBirthRequiredPage() {
+  const t = useT();
   const qc = useQueryClient();
   const { logoutMutation } = useAuth();
   const [dateOfBirth, setDateOfBirth] = useState("");
@@ -39,9 +41,9 @@ export default function DateOfBirthRequiredPage() {
     // on the guardian screen without a second round trip.
     onSuccess: (user) => {
       qc.setQueryData(["/api/auth/me"], user);
-      toast.success("Date of birth saved");
+      toast.success(t("Date of birth saved"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't save that"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Couldn't save that")),
   });
 
   const brand = useRememberedBrand();
@@ -52,12 +54,10 @@ export default function DateOfBirthRequiredPage() {
         <div className="space-y-3">
           <CalendarClock className="mx-auto h-8 w-8 text-primary" />
           <h1 className="font-display text-2xl font-extrabold uppercase tracking-wide">
-            One more step
+            {t("One more step")}
           </h1>
           <p className="text-sm text-muted-foreground">
-            We need your date of birth before you can use Forge. It decides which privacy
-            protections apply to your account, and if you're under 18 it's what tells us to ask a
-            parent or guardian to set up their own linked account.
+            {t("We need your date of birth before you can use Forge. It decides which privacy protections apply to your account, and if you're under 18 it's what tells us to ask a parent or guardian to set up their own linked account.")}
           </p>
         </div>
         <form
@@ -67,7 +67,7 @@ export default function DateOfBirthRequiredPage() {
             if (dateOfBirth) submit.mutate();
           }}
         >
-          <Label htmlFor="dob-required">Date of birth</Label>
+          <Label htmlFor="dob-required">{t("Date of birth")}</Label>
           <Input
             id="dob-required"
             type="date"
@@ -77,7 +77,7 @@ export default function DateOfBirthRequiredPage() {
             required
           />
           <Button type="submit" className="w-full" disabled={!dateOfBirth || submit.isPending}>
-            {submit.isPending ? "Saving..." : "Save and continue"}
+            {submit.isPending ? t("Saving...") : t("Save and continue")}
           </Button>
         </form>
         <Button
@@ -87,7 +87,7 @@ export default function DateOfBirthRequiredPage() {
           onClick={() => logoutMutation.mutate()}
           disabled={logoutMutation.isPending}
         >
-          Sign out
+          {t("Sign out")}
         </Button>
       </div>
     </div>

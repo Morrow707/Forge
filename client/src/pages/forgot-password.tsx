@@ -11,8 +11,10 @@ import { BrandedMark } from "@/components/branded-mark";
 import { useRememberedBrand } from "@/lib/remembered-brand";
 import { computeBrandingStyle } from "@/lib/branding-style";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
 
 export default function ForgotPasswordPage() {
+  const t = useT();
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
@@ -24,10 +26,10 @@ export default function ForgotPasswordPage() {
       // Already true after the first submit -- setting it again is a no-op for the
       // resend click, but the toast below is the only feedback a resend click gets,
       // since the card's own copy doesn't change.
-      if (submitted) toast.success("Link resent.");
+      if (submitted) toast.success(t("Link resent."));
       setSubmitted(true);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Something went wrong"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Something went wrong")),
   });
 
   function handleSubmit(e: FormEvent) {
@@ -50,18 +52,18 @@ export default function ForgotPasswordPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Reset Password</CardTitle>
+            <CardTitle>{t("Reset Password")}</CardTitle>
             <CardDescription>
               {submitted
-                ? "Check your inbox for the reset link."
-                : "Enter your account email and we'll get you a reset link."}
+                ? t("Check your inbox for the reset link.")
+                : t("Enter your account email and we'll get you a reset link.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {!submitted ? (
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">{t("Email")}</Label>
                   <Input
                     id="email"
                     type="email"
@@ -69,7 +71,7 @@ export default function ForgotPasswordPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
+                    placeholder={t("you@example.com")}
                   />
                 </div>
                 <Button
@@ -78,15 +80,13 @@ export default function ForgotPasswordPage() {
                   className="w-full"
                   disabled={mutation.isPending}
                 >
-                  {mutation.isPending ? "Sending…" : "Send Reset Link"}
+                  {mutation.isPending ? t("Sending…") : t("Send Reset Link")}
                 </Button>
               </form>
             ) : (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  If an account exists for that email, we've sent a link to reset your password.
-                  It expires in an hour, check your inbox (and spam folder), or try again if you
-                  mistyped the email.
+                  {t("If an account exists for that email, we've sent a link to reset your password. It expires in an hour, check your inbox (and spam folder), or try again if you mistyped the email.")}
                 </p>
                 <Button
                   type="button"
@@ -96,7 +96,7 @@ export default function ForgotPasswordPage() {
                   disabled={mutation.isPending}
                   onClick={() => mutation.mutate()}
                 >
-                  {mutation.isPending ? "Sending…" : "Resend Link"}
+                  {mutation.isPending ? t("Sending…") : t("Resend Link")}
                 </Button>
               </div>
             )}
@@ -105,7 +105,7 @@ export default function ForgotPasswordPage() {
               className="mt-5 flex items-center justify-center gap-1.5 text-center text-sm font-semibold text-primary hover:underline"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back to log in
+              {t("Back to log in")}
             </Link>
           </CardContent>
         </Card>

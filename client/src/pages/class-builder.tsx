@@ -63,6 +63,8 @@ import {
   type LocalFlashcard,
   type LocalQuizQuestion,
 } from "@/components/lesson-quiz-editor";
+import { msg, useT } from "@/i18n";
+import { TranslatableText } from "@/components/translatable-text";
 
 type RosterEntry = { id: number; name: string; email: string };
 type SkillTrackingLevel = "none" | "sprint" | "mechanics";
@@ -240,11 +242,11 @@ function stateFromClass(cls: any) {
 }
 
 const UNLOCK_RULE_OPTIONS: { value: UnlockRule; label: string; unit: string | null }[] = [
-  { value: "immediate", label: "Immediately", unit: null },
-  { value: "time_elapsed", label: "Days since previous lesson started", unit: "days" },
-  { value: "sessions_logged", label: "Camera-tracked sessions logged", unit: "sessions" },
-  { value: "reps_logged", label: "Camera-tracked reps logged", unit: "reps" },
-  { value: "manual", label: "Coach unlocks manually", unit: null },
+  { value: "immediate", label: msg("Immediately"), unit: null },
+  { value: "time_elapsed", label: msg("Days since previous lesson started"), unit: "days" },
+  { value: "sessions_logged", label: msg("Camera-tracked sessions logged"), unit: "sessions" },
+  { value: "reps_logged", label: msg("Camera-tracked reps logged"), unit: "reps" },
+  { value: "manual", label: msg("Coach unlocks manually"), unit: null },
 ];
 
 /** Class builder -- an ordered list of Lessons, each a single hidden
@@ -332,6 +334,7 @@ export function ClassBuilderPage({
   showPricing?: boolean;
   showEnroll?: boolean;
 }) {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const qc = useQueryClient();
@@ -371,9 +374,9 @@ export function ClassBuilderPage({
     },
     onSuccess: (data) => {
       setCoverImageUrl(data.url);
-      toast.success("Cover image uploaded");
+      toast.success(t("Cover image uploaded"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not upload cover image"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not upload cover image")),
   });
 
   const { data: otherClasses = [] } = useQuery<{ id: number; name: string }[]>({
@@ -400,14 +403,14 @@ export function ClassBuilderPage({
       // with a stale local one would be its own kind of data loss.
       const draft = loadClassDraft(apiBase, classId);
       if (draft) {
-        toast("Unsaved changes from your last session are still on this device.", {
+        toast(t("Unsaved changes from your last session are still on this device."), {
           duration: 30000,
           action: {
-            label: "Restore",
+            label: t("Restore"),
             onClick: () => {
               const restored = draft.state;
               if (!restored || !Array.isArray(restored.lessons)) {
-                toast.error("Those changes could not be read back.");
+                toast.error(t("Those changes could not be read back."));
                 clearClassDraft(apiBase, classId);
                 return;
               }
@@ -418,11 +421,11 @@ export function ClassBuilderPage({
               setPrerequisiteClassId(restored.prerequisiteClassId);
               setIsDraft(restored.isDraft);
               setLessons(restored.lessons);
-              toast.success("Restored. Save the class to keep them.");
+              toast.success(t("Restored. Save the class to keep them."));
             },
           },
           cancel: {
-            label: "Discard",
+            label: t("Discard"),
             onClick: () => clearClassDraft(apiBase, classId),
           },
         });
@@ -583,9 +586,9 @@ export function ClassBuilderPage({
       setLessons(state.lessons);
       setAutosaveState("idle");
       clearClassDraft(apiBase, classId);
-      toast.success("Class saved");
+      toast.success(t("Class saved"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save class"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not save class")),
   });
 
   // Everything above lives purely in local state until this PUT succeeds --
@@ -712,15 +715,15 @@ export function ClassBuilderPage({
   // forever -- which reads as a slow page, not a broken one, and nobody retries it.
   if (isError) {
     return (
-      <AppShell title="Class">
-        <ReadFailed what="this class" onRetry={() => void refetch()} />
+      <AppShell title={t("Class")}>
+        <ReadFailed what={t("this class")} onRetry={() => void refetch()} />
       </AppShell>
     );
   }
 
   if (isLoading || !hydrated) {
     return (
-      <AppShell title="Loading Class…">
+      <AppShell title={t("Loading Class…")}>
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       </AppShell>
     );
@@ -728,18 +731,18 @@ export function ClassBuilderPage({
 
   return (
     <AppShell
-      title="Class Builder"
+      title={t("Class Builder")}
       actions={
         <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => navigate(routeBase)}>
               <ArrowLeft className="h-4 w-4" />
-              Back
+              {t("Back")}
             </Button>
             {showEnroll && (
               <Button variant="secondary" onClick={() => setEnrollOpen(true)}>
                 <UserPlus className="h-4 w-4" />
-                Enroll Athletes
+                {t("Enroll Athletes")}
               </Button>
             )}
           </div>
@@ -748,12 +751,12 @@ export function ClassBuilderPage({
               {!saveMutation.isPending && (
                 <span className="text-xs text-muted-foreground">
                   {autosaveState === "saving"
-                    ? "Autosaving…"
+                    ? t("Autosaving…")
                     : autosaveState === "pending"
-                      ? "Unsaved changes"
+                      ? t("Unsaved changes")
                       : autosaveState === "error"
-                        ? "Autosave failed, click Save Class"
-                        : "All changes saved"}
+                        ? t("Autosave failed, click Save Class")
+                        : t("All changes saved")}
                 </span>
               )}
               <Button
@@ -769,7 +772,7 @@ export function ClassBuilderPage({
                 disabled={saveMutation.isPending}
               >
                 <Save className="h-4 w-4" />
-                {saveMutation.isPending ? "Saving…" : "Save Class"}
+                {saveMutation.isPending ? t("Saving…") : t("Save Class")}
               </Button>
             </div>
           )}
@@ -782,12 +785,12 @@ export function ClassBuilderPage({
           {!editable && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Lock className="h-3 w-3" />
-              Forge official — read-only
+              {t("Forge official — read-only")}
             </span>
           )}
           {editable && (
             <>
-              <Badge variant={isDraft ? "secondary" : "default"}>{isDraft ? "DRAFT" : "PUBLISHED"}</Badge>
+              <Badge variant={isDraft ? "secondary" : "default"}>{isDraft ? t("DRAFT") : t("PUBLISHED")}</Badge>
               <Button
                 type="button"
                 variant="outline"
@@ -795,7 +798,7 @@ export function ClassBuilderPage({
                 className="h-7 px-2 text-xs"
                 onClick={() => setIsDraft((v) => !v)}
               >
-                {isDraft ? "Publish" : "Unpublish"}
+                {isDraft ? t("Publish") : t("Unpublish")}
               </Button>
             </>
           )}
@@ -803,7 +806,7 @@ export function ClassBuilderPage({
       )}
       {editable && isDraft && (
         <p className="mb-4 -mt-2 text-xs text-muted-foreground">
-          This class is a draft — hidden from browse and enrollment until you publish it and save.
+          {t("This class is a draft — hidden from browse and enrollment until you publish it and save.")}
         </p>
       )}
 
@@ -818,14 +821,13 @@ export function ClassBuilderPage({
         <Card className="mb-6">
           <CardContent className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Class name</Label>
+              <Label>{t("Class name")}</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label>Cover image (optional)</Label>
+              <Label>{t("Cover image (optional)")}</Label>
               <p className="text-[11px] text-muted-foreground">
-                Shown at the top of this class's card on "My Classes" and the browse catalog. A card with
-                none just renders text-only, like it always has.
+                {t("Shown at the top of this class's card on \"My Classes\" and the browse catalog. A card with none just renders text-only, like it always has.")}
               </p>
               <div className="flex items-center gap-3">
                 {coverImageUrl && (
@@ -844,14 +846,14 @@ export function ClassBuilderPage({
                 >
                   <ImagePlus className="h-3.5 w-3.5" />
                   {uploadCoverImageMutation.isPending
-                    ? "Uploading…"
+                    ? t("Uploading…")
                     : coverImageUrl
-                      ? "Replace image"
-                      : "Upload image"}
+                      ? t("Replace image")
+                      : t("Upload image")}
                 </Button>
                 {coverImageUrl && (
                   <Button type="button" variant="ghost" size="sm" onClick={() => setCoverImageUrl("")}>
-                    Remove
+                    {t("Remove")}
                   </Button>
                 )}
               </div>
@@ -868,21 +870,21 @@ export function ClassBuilderPage({
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Category (optional)</Label>
+              <Label>{t("Category (optional)")}</Label>
               <Input
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                placeholder="e.g. Hitting, Pitching, Strength"
+                placeholder={t("e.g. Hitting, Pitching, Strength")}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Written for</Label>
+              <Label>{t("Written for")}</Label>
               <Select value={readingLevel ?? "unset"} onValueChange={(v) => setReadingLevel(v === "unset" ? null : (v as ClassReadingLevel))}>
-                <SelectTrigger aria-label="Reading level">
+                <SelectTrigger aria-label={t("Reading level")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="unset">Not set (drafts read as high school)</SelectItem>
+                  <SelectItem value="unset">{t("Not set (drafts read as high school)")}</SelectItem>
                   {CLASS_READING_LEVELS.map((lvl) => (
                     <SelectItem key={lvl} value={lvl}>
                       {CLASS_READING_LEVEL_LABELS[lvl]}
@@ -890,14 +892,14 @@ export function ClassBuilderPage({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-muted-foreground">Shown on the catalog card. Every AI draft for this class writes at this level.</p>
+              <p className="text-[11px] text-muted-foreground">{t("Shown on the catalog card. Every AI draft for this class writes at this level.")}</p>
             </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label>Description</Label>
+              <Label>{t("Description")}</Label>
               <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={1} />
             </div>
             <div className="space-y-1.5">
-              <Label>Prerequisite class (optional)</Label>
+              <Label>{t("Prerequisite class (optional)")}</Label>
               <Select
                 value={prerequisiteClassId != null ? String(prerequisiteClassId) : "none"}
                 onValueChange={(v) => setPrerequisiteClassId(v === "none" ? null : Number(v))}
@@ -906,7 +908,7 @@ export function ClassBuilderPage({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="none">{t("None")}</SelectItem>
                   {otherClasses
                     .filter((oc) => oc.id !== classId)
                     .map((oc) => (
@@ -917,7 +919,7 @@ export function ClassBuilderPage({
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground">
-                Athletes can't enroll in this class until they've completed the one you pick here.
+                {t("Athletes can't enroll in this class until they've completed the one you pick here.")}
               </p>
             </div>
           </CardContent>
@@ -927,16 +929,16 @@ export function ClassBuilderPage({
             written so nobody is surprised by it after publishing. */}
         <p className="mb-4 rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
           {apiBase === "/api/coach"
-            ? "Your roster reads every chapter of your own classes. If you enroll athletes in a Forge class, chapter 1 is free to them and the rest comes with the camera plan, which a coached athlete already has."
-            : "Every Forge class: chapter 1 is free to any athlete; every chapter after it comes with the plan that has the camera. Lead with the chapter you want someone to read before they pay."}
+            ? t("Your roster reads every chapter of your own classes. If you enroll athletes in a Forge class, chapter 1 is free to them and the rest comes with the camera plan, which a coached athlete already has.")
+            : t("Every Forge class: chapter 1 is free to any athlete; every chapter after it comes with the plan that has the camera. Lead with the chapter you want someone to read before they pay.")}
         </p>
         {lessons.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
             <GraduationCap className="h-8 w-8" />
-            <p>No lessons yet. Add lesson 1 to start the curriculum.</p>
+            <p>{t("No lessons yet. Add lesson 1 to start the curriculum.")}</p>
             <Button onClick={addLesson}>
               <Plus className="h-4 w-4" />
-              Add Lesson
+              {t("Add Lesson")}
             </Button>
           </div>
         ) : (
@@ -965,7 +967,7 @@ export function ClassBuilderPage({
         {lessons.length > 0 && (
           <Button variant="outline" className="mt-4" onClick={addLesson}>
             <Plus className="h-4 w-4" />
-            Add Lesson
+            {t("Add Lesson")}
           </Button>
         )}
       </fieldset>
@@ -1031,6 +1033,7 @@ export function ClassBuilderPage({
 // default the class's author set for every lesson-to-lesson transition on
 // this coach's roster. See classCoachSettings in shared/schema.ts.
 function CoachPacingSettings({ apiBase, classId }: { apiBase: string; classId: number }) {
+  const t = useT();
   const qc = useQueryClient();
   const settingsKey = [`${apiBase}/classes`, classId, "coach-settings"];
   const { data } = useQuery<{ minSessionsRequired: number | null; minDaysElapsed: number | null }>({
@@ -1065,9 +1068,9 @@ function CoachPacingSettings({ apiBase, classId }: { apiBase: string; classId: n
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: settingsKey });
-      toast.success("Pacing saved");
+      toast.success(t("Pacing saved"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save pacing"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not save pacing")),
   });
 
   if (!hydrated) {
@@ -1079,12 +1082,10 @@ function CoachPacingSettings({ apiBase, classId }: { apiBase: string; classId: n
       <CardContent className="space-y-3 p-5">
         <div className="flex items-center gap-1.5">
           <Timer className="h-4 w-4 text-muted-foreground" />
-          <p className="text-sm font-semibold">Your pacing for this class</p>
+          <p className="text-sm font-semibold">{t("Your pacing for this class")}</p>
         </div>
         <p className="text-xs text-muted-foreground">
-          Overrides the class's own default unlock rule for your roster only, combine a real
-          "effort drip" (logged reps) with a "time drip" (minimum wait), or leave both off to use
-          the class's own defaults.
+          {t("Overrides the class's own default unlock rule for your roster only, combine a real \"effort drip\" (logged reps) with a \"time drip\" (minimum wait), or leave both off to use the class's own defaults.")}
         </p>
         <label className="flex flex-wrap items-center gap-2 text-sm">
           <input
@@ -1092,7 +1093,7 @@ function CoachPacingSettings({ apiBase, classId }: { apiBase: string; classId: n
             checked={sessionsEnabled}
             onChange={(e) => setSessionsEnabled(e.target.checked)}
           />
-          Require at least
+          {t("Require at least")}
           <Input
             type="number"
             min={1}
@@ -1101,7 +1102,7 @@ function CoachPacingSettings({ apiBase, classId }: { apiBase: string; classId: n
             disabled={!sessionsEnabled}
             className="h-8 w-20"
           />
-          logged sessions of a lesson's drills before the next lesson unlocks
+          {t("logged sessions of a lesson's drills before the next lesson unlocks")}
         </label>
         <label className="flex flex-wrap items-center gap-2 text-sm">
           <input
@@ -1109,7 +1110,7 @@ function CoachPacingSettings({ apiBase, classId }: { apiBase: string; classId: n
             checked={daysEnabled}
             onChange={(e) => setDaysEnabled(e.target.checked)}
           />
-          Require at least
+          {t("Require at least")}
           <Input
             type="number"
             min={1}
@@ -1118,11 +1119,11 @@ function CoachPacingSettings({ apiBase, classId }: { apiBase: string; classId: n
             disabled={!daysEnabled}
             className="h-8 w-20"
           />
-          days between lessons
+          {t("days between lessons")}
         </label>
         <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
           <Save className="h-3.5 w-3.5" />
-          {saveMutation.isPending ? "Saving…" : "Save Pacing"}
+          {saveMutation.isPending ? t("Saving…") : t("Save Pacing")}
         </Button>
       </CardContent>
     </Card>
@@ -1155,6 +1156,7 @@ type RosterProgressEntry = {
  * coach's own class and a Forge class they've enrolled athletes into
  * (enrollment is a per-coach concept independent of who authored it). */
 function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: number }) {
+  const t = useT();
   const qc = useQueryClient();
   const rosterQueryKey = [`${apiBase}/classes`, classId, "roster"];
   const { data: roster = [], isLoading } = useQuery<RosterProgressEntry[]>({
@@ -1173,11 +1175,11 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
     },
     onSuccess: (updatedRoster) => {
       qc.setQueryData(rosterQueryKey, updatedRoster);
-      toast.success("Progress reset");
+      toast.success(t("Progress reset"));
       setResetClassTarget(null);
       setResetLessonTarget(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not reset progress"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not reset progress")),
   });
 
   // The coach half of the "Coach unlocks manually" unlock rule. The class builder
@@ -1199,10 +1201,10 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
     // refetches rather than writing the response into the roster cache.
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: rosterQueryKey });
-      toast.success("Lesson unlocked");
+      toast.success(t("Lesson unlocked"));
       setUnlockTarget(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not unlock that lesson"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not unlock that lesson")),
   });
 
   const [unlockTarget, setUnlockTarget] = useState<{
@@ -1246,11 +1248,11 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
         <CardContent className="space-y-3 p-5">
           <div className="flex items-center gap-1.5">
             <Users className="h-4 w-4 text-muted-foreground" />
-            <p className="text-sm font-semibold">Your roster's progress</p>
+            <p className="text-sm font-semibold">{t("Your roster's progress")}</p>
             {roster.length > 1 && (
               <span className="ml-auto flex items-center gap-1 text-[11px] font-normal text-muted-foreground">
                 <Medal className="h-3.5 w-3.5" />
-                Ranked by quiz points
+                {t("Ranked by quiz points")}
               </span>
             )}
           </div>
@@ -1264,14 +1266,14 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
                     ) : (
                       <span className="w-3.5 text-center">#{i + 1}</span>
                     )}
-                    {score} pt{score === 1 ? "" : "s"}
+                    {t.plural(score, "{count} pt", "{count} pts")}
                   </div>
                 )}
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <p className="flex items-center gap-1.5 text-sm font-semibold">
                     {entry.athleteName}
                     {entry.completedAt && (
-                      <span title="Class completed">
+                      <span title={t("Class completed")}>
                         <Trophy className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
                       </span>
                     )}
@@ -1279,8 +1281,8 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
                   <div className="flex items-center gap-2">
                     <p className="text-xs text-muted-foreground">
                       {entry.completedAt
-                        ? "Completed"
-                        : `${entry.lessonsStarted} of ${entry.lessonsTotal} lessons active`}
+                        ? t("Completed")
+                        : t("{started} of {total} lessons active", { started: entry.lessonsStarted, total: entry.lessonsTotal })}
                     </p>
                     <Button
                       type="button"
@@ -1293,7 +1295,7 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
                       }
                     >
                       <RotateCcw className="h-3 w-3" />
-                      Reset class
+                      {t("Reset class")}
                     </Button>
                   </div>
                 </div>
@@ -1311,21 +1313,22 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
                           resetMutation.isPending ||
                           unlockMutation.isPending
                         }
-                        title={`Lesson ${l.lessonNumber}: ${l.title} — ${
-                          l.quizPerfectAt
-                            ? "perfect quiz score"
+                        title={t("Lesson {number}: {title} — {status}{hint}", {
+                          number: l.lessonNumber,
+                          title: l.title,
+                          status: l.quizPerfectAt
+                            ? t("perfect quiz score")
                             : l.quizPassedAt
-                              ? "quiz passed"
+                              ? t("quiz passed")
                               : l.contentCompletedAt
-                                ? "content read, quiz not yet passed"
-                                : l.state
-                        }${
-                          hasProgress
-                            ? " (click to reset this lesson)"
+                                ? t("content read, quiz not yet passed")
+                                : l.state,
+                          hint: hasProgress
+                            ? t(" (click to reset this lesson)")
                             : unlockable
-                              ? " (click to unlock it for them)"
-                              : ""
-                        }`}
+                              ? t(" (click to unlock it for them)")
+                              : "",
+                        })}
                         onClick={() => {
                           const target = {
                             athleteId: entry.athleteId,
@@ -1372,13 +1375,13 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
       <ConfirmDialog
         open={unlockTarget !== null}
         onOpenChange={(o) => !o && setUnlockTarget(null)}
-        title="Unlock this lesson?"
+        title={t("Unlock this lesson?")}
         description={
           unlockTarget
-            ? `Open Lesson ${unlockTarget.lessonNumber} (${unlockTarget.lessonTitle}) for ${unlockTarget.athleteName} now, ahead of the class's pacing rules. A priced lesson still has to be bought from their own account.`
+            ? t("Open Lesson {number} ({title}) for {name} now, ahead of the class's pacing rules. A priced lesson still has to be bought from their own account.", { number: unlockTarget.lessonNumber, title: unlockTarget.lessonTitle, name: unlockTarget.athleteName })
             : ""
         }
-        confirmLabel="Unlock"
+        confirmLabel={t("Unlock")}
         isPending={unlockMutation.isPending}
         onConfirm={() =>
           unlockTarget &&
@@ -1392,13 +1395,13 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
       <ConfirmDialog
         open={resetClassTarget !== null}
         onOpenChange={(o) => !o && setResetClassTarget(null)}
-        title="Reset class progress?"
+        title={t("Reset class progress?")}
         description={
           resetClassTarget
-            ? `Reset ALL of ${resetClassTarget.athleteName}'s progress in this class? They'll need to re-read and re-pass every lesson to be marked done again. Their calendar assignments and logged training stay untouched.`
+            ? t("Reset ALL of {name}'s progress in this class? They'll need to re-read and re-pass every lesson to be marked done again. Their calendar assignments and logged training stay untouched.", { name: resetClassTarget.athleteName })
             : ""
         }
-        confirmLabel="Reset"
+        confirmLabel={t("Reset")}
         isPending={resetMutation.isPending}
         onConfirm={() => resetClassTarget && resetMutation.mutate({ athleteId: resetClassTarget.athleteId })}
       />
@@ -1406,13 +1409,13 @@ function ClassRosterProgress({ apiBase, classId }: { apiBase: string; classId: n
       <ConfirmDialog
         open={resetLessonTarget !== null}
         onOpenChange={(o) => !o && setResetLessonTarget(null)}
-        title="Reset lesson progress?"
+        title={t("Reset lesson progress?")}
         description={
           resetLessonTarget
-            ? `Reset ${resetLessonTarget.athleteName}'s progress on Lesson ${resetLessonTarget.lessonNumber}: "${resetLessonTarget.lessonTitle}"? They'll need to re-read and re-pass it to be marked done again.`
+            ? t("Reset {name}'s progress on Lesson {number}: \"{title}\"? They'll need to re-read and re-pass it to be marked done again.", { name: resetLessonTarget.athleteName, number: resetLessonTarget.lessonNumber, title: resetLessonTarget.lessonTitle })
             : ""
         }
-        confirmLabel="Reset"
+        confirmLabel={t("Reset")}
         isPending={resetMutation.isPending}
         onConfirm={() =>
           resetLessonTarget &&
@@ -1452,6 +1455,7 @@ function LessonCard({
   canMoveDown: boolean;
   onPreview: () => void;
 }) {
+  const t = useT();
   const ruleMeta = UNLOCK_RULE_OPTIONS.find((r) => r.value === lesson.unlockRule);
 
   return (
@@ -1459,11 +1463,11 @@ function LessonCard({
       <CardContent className="space-y-3 p-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Badge variant="outline">Lesson {lessonNumber}</Badge>
+            <Badge variant="outline">{t("Lesson {number}", { number: lessonNumber })}</Badge>
             <div className="flex flex-col">
               <button
                 type="button"
-                aria-label="Move lesson up"
+                aria-label={t("Move lesson up")}
                 disabled={!canMoveUp}
                 onClick={onMoveUp}
                 className="text-muted-foreground hover:text-foreground disabled:opacity-30"
@@ -1472,7 +1476,7 @@ function LessonCard({
               </button>
               <button
                 type="button"
-                aria-label="Move lesson down"
+                aria-label={t("Move lesson down")}
                 disabled={!canMoveDown}
                 onClick={onMoveDown}
                 className="text-muted-foreground hover:text-foreground disabled:opacity-30"
@@ -1502,11 +1506,11 @@ function LessonCard({
               className="flex cursor-pointer items-center gap-1 text-xs font-semibold text-primary hover:underline"
             >
               <BookOpen className="h-3.5 w-3.5" />
-              Preview
+              {t("Preview")}
             </span>
             <button
               type="button"
-              aria-label={`Remove Lesson ${lessonNumber}`}
+              aria-label={t("Remove Lesson {number}", { number: lessonNumber })}
               onClick={onRemove}
               className="text-muted-foreground hover:text-destructive"
             >
@@ -1522,7 +1526,7 @@ function LessonCard({
             onChange((l) => ({ ...l, title: val }));
           }}
           className="font-semibold"
-          placeholder="Lesson title"
+          placeholder={t("Lesson title")}
         />
         <Textarea
           value={lesson.description}
@@ -1531,13 +1535,13 @@ function LessonCard({
             onChange((l) => ({ ...l, description: val }));
           }}
           rows={2}
-          placeholder="Shown to the athlete even before this lesson unlocks."
+          placeholder={t("Shown to the athlete even before this lesson unlocks.")}
         />
 
         {!isFirst && (
           <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label className="text-xs">Unlocks when previous lesson's...</Label>
+              <Label className="text-xs">{t("Unlocks when previous lesson's...")}</Label>
               <Select
                 value={lesson.unlockRule}
                 onValueChange={(v) => onChange((l) => ({ ...l, unlockRule: v as UnlockRule }))}
@@ -1548,7 +1552,7 @@ function LessonCard({
                 <SelectContent>
                   {UNLOCK_RULE_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
+                      {t(opt.label)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1556,7 +1560,7 @@ function LessonCard({
             </div>
             {ruleMeta?.unit && (
               <div className="space-y-1.5">
-                <Label className="text-xs">Threshold ({ruleMeta.unit})</Label>
+                <Label className="text-xs">{t("Threshold ({unit})", { unit: t(ruleMeta.unit) })}</Label>
                 <Input
                   type="number"
                   min={1}
@@ -1574,7 +1578,7 @@ function LessonCard({
 
         {showPricing && (
           <div className="space-y-1.5">
-            <Label className="text-xs">Price to unlock ($, blank = free)</Label>
+            <Label className="text-xs">{t("Price to unlock ($, blank = free)")}</Label>
             <Input
               type="number"
               min={0}
@@ -1597,7 +1601,7 @@ function LessonCard({
                 <span className="flex-1 truncate text-sm font-semibold">{ex.skillExerciseName}</span>
                 <button
                   type="button"
-                  aria-label={`Remove ${ex.skillExerciseName}`}
+                  aria-label={t("Remove {name}", { name: t.exercise(ex.skillExerciseName) })}
                   onClick={() =>
                     onChange((l) => ({
                       ...l,
@@ -1611,7 +1615,7 @@ function LessonCard({
               </div>
               <div className="grid grid-cols-3 gap-1.5">
                 <FieldInput
-                  label="Sets"
+                  label={t("Sets")}
                   value={String(ex.sets)}
                   type="number"
                   onChange={(v) =>
@@ -1624,7 +1628,7 @@ function LessonCard({
                   }
                 />
                 <FieldInput
-                  label="Reps"
+                  label={t("Reps")}
                   inputMode="numeric"
                   value={ex.reps}
                   onChange={(v) =>
@@ -1635,7 +1639,7 @@ function LessonCard({
                   }
                 />
                 <FieldInput
-                  label="Rest (sec)"
+                  label={t("Rest (sec)")}
                   value={ex.restSeconds}
                   type="number"
                   onChange={(v) =>
@@ -1657,7 +1661,7 @@ function LessonCard({
                     exercises: l.exercises.map((x) => (x.key === ex.key ? { ...x, videoUrl: val } : x)),
                   }));
                 }}
-                placeholder="Demo clip for this drill (YouTube or Vimeo link), plays on the drill day. Blank uses the drill's own video."
+                placeholder={t("Demo clip for this drill (YouTube or Vimeo link), plays on the drill day. Blank uses the drill's own video.")}
                 className="h-8 text-xs"
               />
               {/* Hidden entirely for an admin-restricted drill -- unless it's
@@ -1680,11 +1684,11 @@ function LessonCard({
           ))}
         </div>
         {lesson.exercises.length === 0 && (
-          <p className="py-2 text-center text-xs text-muted-foreground">No drills yet</p>
+          <p className="py-2 text-center text-xs text-muted-foreground">{t("No drills yet")}</p>
         )}
         <Button variant="secondary" size="sm" className="w-full" onClick={onAddDrill}>
           <Plus className="h-3.5 w-3.5" />
-          Add Drill
+          {t("Add Drill")}
         </Button>
 
         <LessonContentAndQuiz lesson={lesson} readingLevel={readingLevel} onChange={onChange} />
@@ -1705,6 +1709,7 @@ function LessonContentAndQuiz({
   readingLevel: ClassReadingLevel | null;
   onChange: (updater: (lesson: LocalLesson) => LocalLesson) => void;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(
     () => lesson.content.length > 0 || lesson.quizQuestions.length > 0,
   );
@@ -1718,11 +1723,11 @@ function LessonContentAndQuiz({
       >
         <span className="flex items-center gap-1.5">
           <BookOpen className="h-3.5 w-3.5" />
-          Lesson Content & Quiz
+          {t("Lesson Content & Quiz")}
           {(lesson.content.length > 0 || lesson.quizQuestions.length > 0) && (
             <Badge variant="outline" className="ml-1 text-[10px]">
-              {lesson.content.length} page{lesson.content.length === 1 ? "" : "s"} ·{" "}
-              {lesson.quizQuestions.length} question{lesson.quizQuestions.length === 1 ? "" : "s"}
+              {t.plural(lesson.content.length, "{count} page", "{count} pages")} ·{" "}
+              {t.plural(lesson.quizQuestions.length, "{count} question", "{count} questions")}
             </Badge>
           )}
         </span>
@@ -1733,7 +1738,7 @@ function LessonContentAndQuiz({
           <div className="space-y-2">
             <Label className="flex items-center gap-1.5 text-xs">
               <BookOpen className="h-3.5 w-3.5" />
-              Reading pages (click/tap through, in order)
+              {t("Reading pages (click/tap through, in order)")}
             </Label>
             <ContentPagesEditor
               pages={lesson.content}
@@ -1743,7 +1748,7 @@ function LessonContentAndQuiz({
           <div className="space-y-2">
             <Label className="flex items-center gap-1.5 text-xs">
               <Layers className="h-3.5 w-3.5" />
-              Flashcards (a review step between the reading and the quiz)
+              {t("Flashcards (a review step between the reading and the quiz)")}
             </Label>
             <FlashcardsEditor
               enabled={lesson.flashcardsEnabled}
@@ -1757,7 +1762,7 @@ function LessonContentAndQuiz({
           <div className="space-y-2">
             <Label className="flex items-center gap-1.5 text-xs">
               <HelpCircle className="h-3.5 w-3.5" />
-              End-of-chapter quiz
+              {t("End-of-chapter quiz")}
             </Label>
             <QuizEditor
               questions={lesson.quizQuestions}
@@ -1768,8 +1773,7 @@ function LessonContentAndQuiz({
           </div>
           {lesson.quizQuestions.length > 0 && (
             <p className="text-[11px] text-muted-foreground">
-              A lesson with a quiz doesn't auto-activate, the athlete must read every page, pass the
-              quiz, then tap "Add to Calendar" themselves.
+              {t("A lesson with a quiz doesn't auto-activate, the athlete must read every page, pass the quiz, then tap \"Add to Calendar\" themselves.")}
             </p>
           )}
         </div>
@@ -1785,6 +1789,7 @@ function ContentPagesEditor({
   pages: LocalContentPage[];
   onChange: (updater: (pages: LocalContentPage[]) => LocalContentPage[]) => void;
 }) {
+  const t = useT();
   return (
     <div className="space-y-2">
       {pages.map((page, i) => (
@@ -1819,7 +1824,7 @@ function ContentPagesEditor({
         }
       >
         <Plus className="h-3.5 w-3.5" />
-        Add Page
+        {t("Add Page")}
       </Button>
     </div>
   );
@@ -1836,6 +1841,7 @@ function ContentPageRow({
   onUpdate: (updater: (page: LocalContentPage) => LocalContentPage) => void;
   onRemove: () => void;
 }) {
+  const t = useT();
   const videoInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -1849,9 +1855,9 @@ function ContentPageRow({
     },
     onSuccess: (data) => {
       onUpdate((p) => ({ ...p, videoUrl: data.url }));
-      toast.success("Video uploaded");
+      toast.success(t("Video uploaded"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not upload video"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not upload video")),
   });
 
   const uploadAttachmentMutation = useMutation({
@@ -1863,9 +1869,9 @@ function ContentPageRow({
     },
     onSuccess: (data) => {
       onUpdate((p) => ({ ...p, attachmentUrl: data.url, attachmentName: data.name }));
-      toast.success("Attachment uploaded");
+      toast.success(t("Attachment uploaded"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not upload attachment"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not upload attachment")),
   });
 
   const uploadImageMutation = useMutation({
@@ -1880,9 +1886,9 @@ function ContentPageRow({
         ...p,
         imageUrlsText: p.imageUrlsText.trim() ? `${p.imageUrlsText}\n${data.url}` : data.url,
       }));
-      toast.success("Image uploaded");
+      toast.success(t("Image uploaded"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not upload image"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not upload image")),
   });
 
   const isUploadedVideo = page.videoUrl.startsWith("/uploads/");
@@ -1891,11 +1897,11 @@ function ContentPageRow({
     <div className="space-y-1.5 rounded-md border border-border p-2.5">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] font-semibold uppercase text-muted-foreground">
-          Page {index + 1}
+          {t("Page {number}", { number: index + 1 })}
         </span>
         <button
           type="button"
-          aria-label={`Remove page ${index + 1}`}
+          aria-label={t("Remove page {number}", { number: index + 1 })}
           onClick={onRemove}
           className="text-muted-foreground hover:text-destructive"
         >
@@ -1908,7 +1914,7 @@ function ContentPageRow({
           const val = e.target.value;
           onUpdate((p) => ({ ...p, title: val }));
         }}
-        placeholder="Page title (optional)"
+        placeholder={t("Page title (optional)")}
         className="h-8 text-sm"
       />
       <Textarea
@@ -1918,13 +1924,11 @@ function ContentPageRow({
           onUpdate((p) => ({ ...p, body: val }));
         }}
         rows={4}
-        placeholder="What the athlete reads on this page…"
+        placeholder={t("What the athlete reads on this page…")}
         className="text-sm"
       />
       <p className="text-xs text-muted-foreground">
-        Wrap text in **double asterisks** to bold it. A block of lines each starting with "- " becomes a
-        bulleted list. A line reading "Key points:" followed by "- " lines becomes a boxed summary, and
-        lines starting with "&gt; " become a pull-quote. Leave a blank line between paragraphs.
+        {t('Wrap text in **double asterisks** to bold it. A block of lines each starting with "- " becomes a bulleted list. A line reading "Key points:" followed by "- " lines becomes a boxed summary, and lines starting with "> " become a pull-quote. Leave a blank line between paragraphs.')}
       </p>
 
       <div className="space-y-1">
@@ -1935,7 +1939,7 @@ function ContentPageRow({
               const val = e.target.value;
               onUpdate((p) => ({ ...p, videoUrl: val }));
             }}
-            placeholder="Video link, or upload a file, e.g. a YouTube search or watch URL"
+            placeholder={t("Video link, or upload a file, e.g. a YouTube search or watch URL")}
             className="h-8 flex-1 text-sm"
           />
           <Button
@@ -1947,7 +1951,7 @@ function ContentPageRow({
             disabled={uploadVideoMutation.isPending}
           >
             <Upload className="h-3.5 w-3.5" />
-            {uploadVideoMutation.isPending ? "Uploading…" : "Upload"}
+            {uploadVideoMutation.isPending ? t("Uploading…") : t("Upload")}
           </Button>
           <input
             ref={videoInputRef}
@@ -1964,7 +1968,7 @@ function ContentPageRow({
         {isUploadedVideo && (
           <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Video className="h-3 w-3" />
-            Uploaded video attached
+            {t("Uploaded video attached")}
           </p>
         )}
       </div>
@@ -1977,7 +1981,7 @@ function ContentPageRow({
             onUpdate((p) => ({ ...p, imageUrlsText: val }));
           }}
           rows={2}
-          placeholder="Image URLs (optional), one per line, or upload a file below"
+          placeholder={t("Image URLs (optional), one per line, or upload a file below")}
           className="text-xs"
         />
         <Button
@@ -1989,7 +1993,7 @@ function ContentPageRow({
           disabled={uploadImageMutation.isPending}
         >
           <ImagePlus className="h-3.5 w-3.5" />
-          {uploadImageMutation.isPending ? "Uploading…" : "Upload image"}
+          {uploadImageMutation.isPending ? t("Uploading…") : t("Upload image")}
         </Button>
         <input
           ref={imageInputRef}
@@ -2008,10 +2012,10 @@ function ContentPageRow({
         {page.attachmentUrl ? (
           <div className="flex flex-1 items-center gap-1.5 rounded-md border border-border bg-surface-elevated px-2 py-1.5 text-xs">
             <FileText className="h-3.5 w-3.5 shrink-0 text-primary" />
-            <span className="flex-1 truncate">{page.attachmentName || "Worksheet.pdf"}</span>
+            <span className="flex-1 truncate">{page.attachmentName || t("Worksheet.pdf")}</span>
             <button
               type="button"
-              aria-label="Remove attachment"
+              aria-label={t("Remove attachment")}
               onClick={() => onUpdate((p) => ({ ...p, attachmentUrl: "", attachmentName: "" }))}
               className="text-muted-foreground hover:text-destructive"
             >
@@ -2028,7 +2032,7 @@ function ContentPageRow({
             disabled={uploadAttachmentMutation.isPending}
           >
             <FileText className="h-3.5 w-3.5" />
-            {uploadAttachmentMutation.isPending ? "Uploading…" : "Attach worksheet (PDF)"}
+            {uploadAttachmentMutation.isPending ? t("Uploading…") : t("Attach worksheet (PDF)")}
           </Button>
         )}
         <input
@@ -2062,6 +2066,7 @@ type ClassInsightsPayload = {
 /** Quiz results per athlete and per question, and each athlete's notes (2026-10-04). Coach
  * only, same scope as the roster. Drawn only once somebody has sat a quiz or written a note. */
 function ClassInsights({ classId }: { classId: number }) {
+  const t = useT();
   const url = `/api/coach/classes/${classId}/insights`;
   const { data, isError, refetch } = useQuery<ClassInsightsPayload>({ queryKey: [url], queryFn: () => getJson(url) });
   const [openAthlete, setOpenAthlete] = useState<number | null>(null);
@@ -2069,7 +2074,7 @@ function ClassInsights({ classId }: { classId: number }) {
     return (
       <Card className="mb-6">
         <CardContent className="p-5">
-          <ReadFailed what="quiz results and notes" onRetry={() => void refetch()} />
+          <ReadFailed what={t("quiz results and notes")} onRetry={() => void refetch()} />
         </CardContent>
       </Card>
     );
@@ -2084,18 +2089,18 @@ function ClassInsights({ classId }: { classId: number }) {
       <CardContent className="space-y-4 p-5">
         <div className="flex items-center gap-1.5">
           <HelpCircle className="h-4 w-4 text-muted-foreground" />
-          <p className="text-sm font-semibold">Quiz results and notes</p>
+          <p className="text-sm font-semibold">{t("Quiz results and notes")}</p>
         </div>
         {hardest.length > 0 && (
           <div className="space-y-1.5">
-            <p className="text-xs font-semibold uppercase text-muted-foreground">Questions the roster misses most</p>
+            <p className="text-xs font-semibold uppercase text-muted-foreground">{t("Questions the roster misses most")}</p>
             {hardest.map((q) => (
               <div key={q.questionId} className="flex items-start justify-between gap-3 rounded-md border border-border p-2 text-xs">
                 <p>
-                  <span className="font-semibold">Lesson {q.lessonNumber}:</span> {q.questionText}
+                  <span className="font-semibold">{t("Lesson {number}:", { number: q.lessonNumber })}</span> {q.questionText}
                 </p>
                 <span className="shrink-0 text-muted-foreground">
-                  missed {q.missed} of {q.attempts}
+                  {t("missed {missed} of {attempts}", { missed: q.missed, attempts: q.attempts })}
                 </span>
               </div>
             ))}
@@ -2116,22 +2121,22 @@ function ClassInsights({ classId }: { classId: number }) {
                   >
                     <span className="font-semibold">{a.athleteName}</span>
                     <span className="text-xs text-muted-foreground">
-                      {a.attempts.length} attempt{a.attempts.length === 1 ? "" : "s"} · {a.notes.length} note{a.notes.length === 1 ? "" : "s"}
+                      {t.plural(a.attempts.length, "{count} attempt", "{count} attempts")} · {t.plural(a.notes.length, "{count} note", "{count} notes")}
                     </span>
                   </button>
                   {open && (
                     <div className="space-y-3 border-t border-border p-3 text-xs">
                       {a.attempts.length > 0 && (
                         <div className="space-y-1.5">
-                          {a.attempts.map((t, i) => (
+                          {a.attempts.map((att, i) => (
                             <div key={i} className="rounded border border-border/60 p-2">
-                              <p className={cn("font-semibold", t.passed ? "text-success" : "text-destructive")}>
-                                Lesson {t.lessonNumber ?? "?"}: {t.correctCount}/{t.totalQuestions} {t.passed ? "passed" : "not yet"}
-                                <span className="ml-2 font-normal text-muted-foreground">{new Date(t.createdAt).toLocaleDateString()}</span>
+                              <p className={cn("font-semibold", att.passed ? "text-success" : "text-destructive")}>
+                                {t("Lesson {number}:", { number: att.lessonNumber ?? "?" })} {att.correctCount}/{att.totalQuestions} {att.passed ? t("passed") : t("not yet")}
+                                <span className="ml-2 font-normal text-muted-foreground">{new Date(att.createdAt).toLocaleDateString()}</span>
                               </p>
-                              {t.missed.length > 0 && (
+                              {att.missed.length > 0 && (
                                 <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
-                                  {t.missed.map((m) => (
+                                  {att.missed.map((m) => (
                                     <li key={m.questionId}>{m.questionText}</li>
                                   ))}
                                 </ul>
@@ -2142,13 +2147,13 @@ function ClassInsights({ classId }: { classId: number }) {
                       )}
                       {a.notes.length > 0 && (
                         <div className="space-y-1.5">
-                          <p className="font-semibold uppercase text-muted-foreground">Notes</p>
+                          <p className="font-semibold uppercase text-muted-foreground">{t("Notes")}</p>
                           {a.notes.map((n, i) => (
                             <div key={i} className="rounded border border-border/60 p-2">
                               <p className="text-muted-foreground">
-                                Lesson {n.lessonNumber ?? "?"}, page {n.pageIndex + 1}
+                                {t("Lesson {number}, page {page}", { number: n.lessonNumber ?? "?", page: n.pageIndex + 1 })}
                               </p>
-                              <p className="whitespace-pre-wrap">{n.body}</p>
+                              <TranslatableText text={n.body} className="whitespace-pre-wrap" />
                             </div>
                           ))}
                         </div>
@@ -2165,9 +2170,9 @@ function ClassInsights({ classId }: { classId: number }) {
 }
 
 const TRACKING_OPTIONS: { value: SkillTrackingLevel; label: string }[] = [
-  { value: "none", label: "No Tracking" },
-  { value: "sprint", label: "Sprint Timing" },
-  { value: "mechanics", label: "Mechanics" },
+  { value: "none", label: msg("No Tracking") },
+  { value: "sprint", label: msg("Sprint Timing") },
+  { value: "mechanics", label: msg("Mechanics") },
 ];
 
 function TrackingToggle({
@@ -2177,6 +2182,7 @@ function TrackingToggle({
   trackingLevel: SkillTrackingLevel;
   onChange: (trackingLevel: SkillTrackingLevel) => void;
 }) {
+  const t = useT();
   return (
     <div className="mt-1.5 flex items-center gap-1.5">
       <Timer className="h-3.5 w-3.5 text-muted-foreground" />
@@ -2197,7 +2203,7 @@ function TrackingToggle({
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {opt.label}
+            {t(opt.label)}
           </button>
         );
       })}

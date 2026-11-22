@@ -3,6 +3,7 @@ import { BIOMETRIC_DOCUMENT_NAME } from "@shared/contact";
 import { Link } from "wouter";
 import { LegalPageChrome } from "@/components/legal-page-chrome";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 /**
  * Public, unauthenticated page for the same document signup's clickwrap
@@ -27,16 +28,17 @@ const PUBLIC_DOCUMENT_LINKS: { href: string; label: string }[] = [
 ];
 
 export default function LegalPage() {
+  const t = useT();
   const { data, isLoading, isError, refetch } = useQuery<{ content: string }>({
     queryKey: ["/api/legal-agreement"],
   });
 
   return (
-    <LegalPageChrome title="Terms & Privacy">
+    <LegalPageChrome title={t("Terms & Privacy")}>
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
       ) : isError ? (
-        <ReadFailed what="these terms" onRetry={() => void refetch()} />
+        <ReadFailed what={t("these terms")} onRetry={() => void refetch()} />
       ) : (
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
           {data?.content}
@@ -46,7 +48,7 @@ export default function LegalPage() {
             research consent was the one with none until 2026-09-20. */}
       <nav className="mt-10 border-t pt-6">
         <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          All documents
+          {t("All documents")}
         </p>
         <ul className="space-y-2 text-sm">
           {PUBLIC_DOCUMENT_LINKS.map((doc) => (

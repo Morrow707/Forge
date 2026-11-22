@@ -6,6 +6,7 @@ import { Check, X, AlertTriangle, ArrowRight, Camera } from "lucide-react";
 import { MarketingShell } from "@/components/marketing-shell";
 import { usePageMeta } from "@/lib/page-meta";
 import { CAMERA_ACCURACY_LONG } from "@shared/camera-accuracy-copy";
+import { msg, useT } from "@/i18n";
 
 /** THE PAGE THAT SAYS WHAT HAS ACTUALLY BEEN TESTED.
  *
@@ -34,31 +35,32 @@ type Movement = {
 // Straight from docs/camera-tracking-notes.md, "What has actually been field-tested". Four, and
 // the honest framing is that four is not many.
 const MOVEMENTS: Movement[] = [
-  { name: "Back squat", mode: "Bar path", status: "validated", note: "Filmed from behind" },
-  { name: "Pendlay row", mode: "Bar path", status: "validated" },
+  { name: msg("Back squat"), mode: msg("Bar path"), status: "validated", note: msg("Filmed from behind") },
+  { name: msg("Pendlay row"), mode: msg("Bar path"), status: "validated" },
   {
-    name: "Bench press",
-    mode: "Bar path",
+    name: msg("Bench press"),
+    mode: msg("Bar path"),
     status: "validated",
-    note: "The hardest case, calibration needs the full body in frame, and a lying athlete often is not",
+    note: msg("The hardest case, calibration needs the full body in frame, and a lying athlete often is not"),
   },
-  { name: "Box jump", mode: "Jump", status: "validated" },
-  { name: "Deadlift", mode: "Bar path", status: "unvalidated", note: "Next in line" },
-  { name: "Med ball throws", mode: "Med ball", status: "unvalidated", note: "Next in line" },
-  { name: "Sprint", mode: "Sprint", status: "unvalidated" },
-  { name: "Sled push / horizontal load", mode: "Horizontal load", status: "unvalidated" },
-  { name: "Kettlebell swing", mode: "KB swing", status: "unvalidated" },
-  { name: "Golf / baseball swing", mode: "Rotation", status: "unvalidated" },
-  { name: "Running mechanics", mode: "Mechanics", status: "unvalidated" },
+  { name: msg("Box jump"), mode: msg("Jump"), status: "validated" },
+  { name: msg("Deadlift"), mode: msg("Bar path"), status: "unvalidated", note: msg("Next in line") },
+  { name: msg("Med ball throws"), mode: msg("Med ball"), status: "unvalidated", note: msg("Next in line") },
+  { name: msg("Sprint"), mode: msg("Sprint"), status: "unvalidated" },
+  { name: msg("Sled push / horizontal load"), mode: msg("Horizontal load"), status: "unvalidated" },
+  { name: msg("Kettlebell swing"), mode: msg("KB swing"), status: "unvalidated" },
+  { name: msg("Golf / baseball swing"), mode: msg("Rotation"), status: "unvalidated" },
+  { name: msg("Running mechanics"), mode: msg("Mechanics"), status: "unvalidated" },
   {
-    name: "Olympic lifts",
-    mode: "None yet",
+    name: msg("Olympic lifts"),
+    mode: msg("None yet"),
     status: "unvalidated",
-    note: "Deliberately not offered, needs its own path model, see below",
+    note: msg("Deliberately not offered, needs its own path model, see below"),
   },
 ];
 
 export default function CameraValidationPage() {
+  const t = useT();
   usePageMeta({
     title: "What the camera has actually been tested on",
     description:
@@ -75,16 +77,13 @@ export default function CameraValidationPage() {
         <div className="mx-auto max-w-3xl">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
             <Camera className="h-3.5 w-3.5" />
-            Camera tracking
+            {t("Camera tracking")}
           </span>
           <h1 className="mt-6 font-display text-4xl font-extrabold uppercase leading-tight tracking-wide md:text-5xl">
-            What the camera has actually been tested on
+            {t("What the camera has actually been tested on")}
           </h1>
           <p className="mt-6 text-lg text-muted-foreground">
-            Forge films a set and derives numbers from it, bar speed, range of motion, jump
-            height, bar path. Four movements have been checked against real lifts. The rest have
-            not. This page says which is which, because a number you cannot audit is not worth
-            training on.
+            {t("Forge films a set and derives numbers from it, bar speed, range of motion, jump height, bar path. Four movements have been checked against real lifts. The rest have not. This page says which is which, because a number you cannot audit is not worth training on.")}
           </p>
 
           {/* The same disclosure the app itself carries, from the same module, so the two cannot
@@ -93,8 +92,8 @@ export default function CameraValidationPage() {
             <CardContent className="flex gap-3 p-5">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
               <div>
-                <p className="font-semibold text-foreground">Right now, the numbers are not accurate.</p>
-                <p className="mt-2 text-sm text-muted-foreground">{CAMERA_ACCURACY_LONG}</p>
+                <p className="font-semibold text-foreground">{t("Right now, the numbers are not accurate.")}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{t(CAMERA_ACCURACY_LONG)}</p>
               </div>
             </CardContent>
           </Card>
@@ -104,41 +103,43 @@ export default function CameraValidationPage() {
       <section className="border-t border-border px-4 py-14 md:px-8">
         <div className="mx-auto max-w-3xl">
           <h2 className="font-display text-2xl font-bold uppercase tracking-wide">
-            Movement by movement
+            {t("Movement by movement")}
           </h2>
           <p className="mt-3 text-sm text-muted-foreground">
-            {validated.length} of {MOVEMENTS.length} tracked movements have been validated against
-            real footage.
+            {t("{done} of {total} tracked movements have been validated against real footage.", {
+              done: validated.length,
+              total: MOVEMENTS.length,
+            })}
           </p>
           <div className="mt-6 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
-                  <th className="py-3 pr-4 font-semibold">Movement</th>
-                  <th className="py-3 pr-4 font-semibold">Mode</th>
-                  <th className="py-3 font-semibold">Tested on real lifts</th>
+                  <th className="py-3 pr-4 font-semibold">{t("Movement")}</th>
+                  <th className="py-3 pr-4 font-semibold">{t("Mode")}</th>
+                  <th className="py-3 font-semibold">{t("Tested on real lifts")}</th>
                 </tr>
               </thead>
               <tbody>
                 {MOVEMENTS.map((m) => (
                   <tr key={m.name} className="border-b border-border/60 align-top">
                     <td className="py-3 pr-4 font-medium text-foreground">
-                      {m.name}
+                      {t(m.name)}
                       {m.note && (
                         <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                          {m.note}
+                          {t(m.note)}
                         </span>
                       )}
                     </td>
-                    <td className="py-3 pr-4 text-muted-foreground">{m.mode}</td>
+                    <td className="py-3 pr-4 text-muted-foreground">{t(m.mode)}</td>
                     <td className="py-3">
                       {m.status === "validated" ? (
                         <span className="inline-flex items-center gap-1.5 text-emerald-500">
-                          <Check className="h-4 w-4" /> Yes
+                          <Check className="h-4 w-4" /> {t("Yes")}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                          <X className="h-4 w-4" /> Not yet
+                          <X className="h-4 w-4" /> {t("Not yet")}
                         </span>
                       )}
                     </td>
@@ -153,46 +154,31 @@ export default function CameraValidationPage() {
       <section className="border-t border-border px-4 py-14 md:px-8">
         <div className="mx-auto max-w-3xl space-y-10">
           <h2 className="font-display text-2xl font-bold uppercase tracking-wide">
-            Three things a camera cannot do, whatever the software claims
+            {t("Three things a camera cannot do, whatever the software claims")}
           </h2>
 
           <div>
-            <h3 className="font-display text-lg font-bold">The angle decides which numbers exist</h3>
+            <h3 className="font-display text-lg font-bold">{t("The angle decides which numbers exist")}</h3>
             <p className="mt-2 text-muted-foreground">
-              One camera sees two dimensions. Depth is estimated, and it is the least reliable
-              number in the pipeline. Filming a squat from behind puts forward-and-back drift on
-              exactly that estimated axis, so the reading most coaches want from that angle is
-              the one the setup is worst at. Forge records the angle a set was filmed from and
-              says so next to the number, rather than presenting all three axes as equals.
+              {t("One camera sees two dimensions. Depth is estimated, and it is the least reliable number in the pipeline. Filming a squat from behind puts forward-and-back drift on exactly that estimated axis, so the reading most coaches want from that angle is the one the setup is worst at. Forge records the angle a set was filmed from and says so next to the number, rather than presenting all three axes as equals.")}
             </p>
           </div>
 
           <div>
             <h3 className="font-display text-lg font-bold">
-              Olympic lifts need a different model, so we do not offer them
+              {t("Olympic lifts need a different model, so we do not offer them")}
             </h3>
             <p className="mt-2 text-muted-foreground">
-              Bar path deviation measures departure from a straight vertical line, and peak
-              velocity is computed on the vertical component alone. That is right for a squat,
-              bench, row or deadlift, where sideways bar movement is error. A correct clean or
-              snatch has a deliberate S-curve. Under a bar-path model, a technically perfect lift
-              reports large deviation, a lift with no curve at all reports clean, and peak
-              velocity understates the bar at exactly the moment that matters. Switching bar-path
-              tracking on for Olympic lifts would produce confident, wrong numbers, so it is off.
+              {t("Bar path deviation measures departure from a straight vertical line, and peak velocity is computed on the vertical component alone. That is right for a squat, bench, row or deadlift, where sideways bar movement is error. A correct clean or snatch has a deliberate S-curve. Under a bar-path model, a technically perfect lift reports large deviation, a lift with no curve at all reports clean, and peak velocity understates the bar at exactly the moment that matters. Switching bar-path tracking on for Olympic lifts would produce confident, wrong numbers, so it is off.")}
             </p>
           </div>
 
           <div>
             <h3 className="font-display text-lg font-bold">
-              Scale comes from the body, and bench is where that breaks
+              {t("Scale comes from the body, and bench is where that breaks")}
             </h3>
             <p className="mt-2 text-muted-foreground">
-              Turning pixels into centimetres needs a known real-world length in frame, and Forge
-              calibrates from the athlete's own height. An athlete lying flat with their feet out
-              of frame cannot produce that measurement. So on bench specifically, a wrong number
-              is more likely to be a calibration failure than a tracking failure, and from
-              outside, the two look identical. A capture that cannot trust its scale is saved with
-              a record of why rather than quietly reported as a result.
+              {t("Turning pixels into centimetres needs a known real-world length in frame, and Forge calibrates from the athlete's own height. An athlete lying flat with their feet out of frame cannot produce that measurement. So on bench specifically, a wrong number is more likely to be a calibration failure than a tracking failure, and from outside, the two look identical. A capture that cannot trust its scale is saved with a record of why rather than quietly reported as a result.")}
             </p>
           </div>
         </div>
@@ -201,20 +187,17 @@ export default function CameraValidationPage() {
       <section className="border-t border-border px-4 py-14 md:px-8">
         <div className="mx-auto max-w-3xl">
           <h2 className="font-display text-2xl font-bold uppercase tracking-wide">
-            What happens when a capture fails
+            {t("What happens when a capture fails")}
           </h2>
           <p className="mt-3 text-muted-foreground">
-            It is kept. A take the tracker could not read is not thrown away, the video is saved
-            for the coach, the set is recorded with whatever could be counted, and the failure is
-            stored with the reason. An empty result and a set nobody filmed are different things,
-            and a system that cannot tell them apart cannot be debugged or improved.
+            {t("It is kept. A take the tracker could not read is not thrown away, the video is saved for the coach, the set is recorded with whatever could be counted, and the failure is stored with the reason. An empty result and a set nobody filmed are different things, and a system that cannot tell them apart cannot be debugged or improved.")}
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <SignupCta>
-              Try Forge <ArrowRight className="ml-1.5 h-4 w-4" />
+              {t("Try Forge")} <ArrowRight className="ml-1.5 h-4 w-4" />
             </SignupCta>
             <Link href="/for-high-schools">
-              <Button variant="outline">For schools and clubs</Button>
+              <Button variant="outline">{t("For schools and clubs")}</Button>
             </Link>
           </div>
         </div>

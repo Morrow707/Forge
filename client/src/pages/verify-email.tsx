@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { ForgeMark } from "@/components/forge-mark";
+import { useT } from "@/i18n";
 
 /** Lands here from the link in verify-email-email.ts -- may be opened on a
  * different device/browser than the one someone signed up in (a phone's
@@ -16,6 +17,7 @@ import { ForgeMark } from "@/components/forge-mark";
  * button tap -- there's nothing else useful for a person to do with a
  * bare token in a URL. */
 export default function VerifyEmailPage() {
+  const t = useT();
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const token = new URLSearchParams(window.location.search).get("token") ?? "";
@@ -50,8 +52,8 @@ export default function VerifyEmailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Confirm your email</CardTitle>
-            {!token && <CardDescription>This link is missing its token.</CardDescription>}
+            <CardTitle>{t("Confirm your email")}</CardTitle>
+            {!token && <CardDescription>{t("This link is missing its token.")}</CardDescription>}
           </CardHeader>
           <CardContent>
             <div className="flex flex-col items-center gap-3 py-4 text-center">
@@ -61,22 +63,22 @@ export default function VerifyEmailPage() {
                   <p className="font-semibold">
                     {mutation.error instanceof ApiError
                       ? mutation.error.message
-                      : "This verification link is invalid or has expired."}
+                      : t("This verification link is invalid or has expired.")}
                   </p>
                 </>
               ) : mutation.isSuccess ? (
                 <>
                   <CheckCircle2 className="h-10 w-10 text-success" />
-                  <p className="font-semibold">Email confirmed.</p>
+                  <p className="font-semibold">{t("Email confirmed.")}</p>
                 </>
               ) : (
                 <>
                   <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Confirming…</p>
+                  <p className="text-sm text-muted-foreground">{t("Confirming…")}</p>
                 </>
               )}
               <Button className="w-full" onClick={() => navigate(user ? "/" : "/login")}>
-                {user ? "Continue" : "Log In"}
+                {user ? t("Continue") : t("Log In")}
               </Button>
             </div>
           </CardContent>

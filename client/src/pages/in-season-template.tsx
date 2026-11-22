@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { MarketingShell } from "@/components/marketing-shell";
 import { usePageMeta } from "@/lib/page-meta";
+import { useT } from "@/i18n";
 
 const PDF = "/downloads/in-season-2-day-lift.pdf";
 const PREVIEW = "/downloads/in-season-2-day-lift.png"; // the share card: scrapers cannot read webp
@@ -24,6 +25,7 @@ const PREVIEW_WEBP = "/downloads/in-season-2-day-lift.webp"; // what the page it
  * client/public/downloads. A starting point a coach adjusts, never a prescription.
  */
 export default function InSeasonTemplatePage() {
+  const t = useT();
   usePageMeta({
     title: "Free in-season lifting template",
     description:
@@ -54,36 +56,33 @@ export default function InSeasonTemplatePage() {
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
               <ClipboardList className="h-3.5 w-3.5" />
-              Free for coaches
+              {t("Free for coaches")}
             </span>
             <h1 className="mt-6 font-display text-4xl font-extrabold uppercase leading-tight tracking-wide md:text-5xl">
-              A 2-day in-season lift you can run this week
+              {t("A 2-day in-season lift you can run this week")}
             </h1>
             <p className="mt-6 text-lg text-muted-foreground">
-              Two sessions a week, about 45 minutes, built around games. Jumps, a squat and a hinge,
-              upper push and pull, and the rules that keep legs fresh for game day. One printable
-              page for the weight room wall.
+              {t("Two sessions a week, about 45 minutes, built around games. Jumps, a squat and a hinge, upper push and pull, and the rules that keep legs fresh for game day. One printable page for the weight room wall.")}
             </p>
 
             <div className="mt-8">
               {joined ? (
                 <div role="status" className="space-y-3">
-                  <p className="font-semibold">You're on the list. Here's your template.</p>
+                  <p className="font-semibold">{t("You're on the list. Here's your template.")}</p>
                   <a href={PDF} download>
                     <Button>
                       <Download className="mr-1.5 h-4 w-4" />
-                      Download the PDF
+                      {t("Download the PDF")}
                     </Button>
                   </a>
                   <p className="text-sm text-muted-foreground">
-                    Print it, put it up, and adjust it for your athletes.
+                    {t("Print it, put it up, and adjust it for your athletes.")}
                   </p>
                 </div>
               ) : (
                 <form onSubmit={onSubmit} className="space-y-2">
                   <p className="text-sm text-muted-foreground">
-                    Leave your email and the PDF is yours. You'll also be on the Forge launch list,
-                    so you hear when the app opens.
+                    {t("Leave your email and the PDF is yours. You'll also be on the Forge launch list, so you hear when the app opens.")}
                   </p>
                   <div className="flex gap-2">
                     <Input
@@ -93,21 +92,21 @@ export default function InSeasonTemplatePage() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="coach@school.org"
-                      aria-label="Email address for the template and launch updates"
+                      placeholder={t("coach@school.org")}
+                      aria-label={t("Email address for the template and launch updates")}
                     />
                     <Button type="submit" disabled={mutation.isPending || !email.trim()}>
                       <Mail className="mr-1.5 h-4 w-4" />
-                      {mutation.isPending ? "Sending…" : "Send it to me"}
+                      {mutation.isPending ? t("Sending…") : t("Send it to me")}
                     </Button>
                   </div>
                   {mutation.isError && (
                     <p className="text-sm text-destructive">
-                      {mutation.error instanceof ApiError ? mutation.error.message : "That didn't go through. Try again."}
+                      {mutation.error instanceof ApiError ? mutation.error.message : t("That didn't go through. Try again.")}
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Launch news only. Every email has an unsubscribe link.
+                    {t("Launch news only. Every email has an unsubscribe link.")}
                   </p>
                 </form>
               )}
@@ -116,7 +115,7 @@ export default function InSeasonTemplatePage() {
 
           <img
             src={PREVIEW_WEBP}
-            alt="The 2-day in-season lift: Day A and Day B with sets and reps, and five rules for the season"
+            alt={t("The 2-day in-season lift: Day A and Day B with sets and reps, and five rules for the season")}
             width={1275}
             height={1650}
             loading="lazy"
@@ -129,28 +128,25 @@ export default function InSeasonTemplatePage() {
         <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-3">
           <Card>
             <CardContent className="p-6">
-              <h2 className="font-display text-xl font-bold uppercase tracking-wide">Day A</h2>
+              <h2 className="font-display text-xl font-bold uppercase tracking-wide">{t("Day A")}</h2>
               <p className="mt-3 text-muted-foreground">
-                Early in the week, two or more days before the next game. A jump, a squat, a hinge,
-                single-leg work, a press and a pull.
+                {t("Early in the week, two or more days before the next game. A jump, a squat, a hinge, single-leg work, a press and a pull.")}
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-6">
-              <h2 className="font-display text-xl font-bold uppercase tracking-wide">Day B</h2>
+              <h2 className="font-display text-xl font-bold uppercase tracking-wide">{t("Day B")}</h2>
               <p className="mt-3 text-muted-foreground">
-                Midweek, never the day before a game. A jump, a trap bar pull, a press, a row,
-                lateral work and carries.
+                {t("Midweek, never the day before a game. A jump, a trap bar pull, a press, a row, lateral work and carries.")}
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-6">
-              <h2 className="font-display text-xl font-bold uppercase tracking-wide">The rules</h2>
+              <h2 className="font-display text-xl font-bold uppercase tracking-wide">{t("The rules")}</h2>
               <p className="mt-3 text-muted-foreground">
-                Leave reps in the tank, cut volume and keep the weight, no new lifts once games
-                start. A starting point, not a prescription: adjust it for your athletes.
+                {t("Leave reps in the tank, cut volume and keep the weight, no new lifts once games start. A starting point, not a prescription: adjust it for your athletes.")}
               </p>
             </CardContent>
           </Card>

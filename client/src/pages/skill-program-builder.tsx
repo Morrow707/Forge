@@ -19,6 +19,7 @@ import { Plus, Trash2, Save, ArrowLeft, MoonStar, Send, Lock, ChevronUp, Chevron
 import { cn } from "@/lib/utils";
 import type { SkillExercise } from "@shared/schema";
 import { ReadFailed } from "@/components/read-failed";
+import { msg, useT } from "@/i18n";
 
 type RosterEntry = { id: number; name: string; email: string };
 
@@ -174,6 +175,7 @@ export function SkillProgramBuilderPage({
   showAssign?: boolean;
   showAiChat?: boolean;
 }) {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const qc = useQueryClient();
@@ -207,11 +209,11 @@ export function SkillProgramBuilderPage({
       setWeekNames(state.weekNames);
       setHydrated(true);
       if (draft) {
-        toast.info("Restored unsaved changes from your last session here", {
-          description: "Save Program to keep them, or Discard to go back to the last saved version.",
+        toast.info(t("Restored unsaved changes from your last session here"), {
+          description: t("Save Program to keep them, or Discard to go back to the last saved version."),
           duration: 10000,
           action: {
-            label: "Discard",
+            label: t("Discard"),
             onClick: () => {
               clearSkillProgramDraft(apiBase, programId);
               const fresh = stateFromProgram(program);
@@ -301,24 +303,24 @@ export function SkillProgramBuilderPage({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/skill-programs`] });
       clearSkillProgramDraft(apiBase, programId);
-      toast.success("Skill program saved");
+      toast.success(t("Skill program saved"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save skill program"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not save skill program")),
   });
 
   // `!hydrated` never clears on a failed read, so this used to be a spinner that spins
   // forever -- which reads as a slow page, not a broken one, and nobody retries it.
   if (isError) {
     return (
-      <AppShell title="Skill Program">
-        <ReadFailed what="this skill program" onRetry={() => void refetch()} />
+      <AppShell title={t("Skill Program")}>
+        <ReadFailed what={t("this skill program")} onRetry={() => void refetch()} />
       </AppShell>
     );
   }
 
   if (isLoading || !hydrated) {
     return (
-      <AppShell title="Loading Skill Program…">
+      <AppShell title={t("Loading Skill Program…")}>
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       </AppShell>
     );
@@ -326,13 +328,13 @@ export function SkillProgramBuilderPage({
 
   return (
     <AppShell
-      title="Skill Program Builder"
+      title={t("Skill Program Builder")}
       actions={
         <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => navigate(routeBase)}>
               <ArrowLeft className="h-4 w-4" />
-              Back
+              {t("Back")}
             </Button>
             {showAssign && (
               <Button
@@ -358,7 +360,7 @@ export function SkillProgramBuilderPage({
                 }}
               >
                 <Send className="h-4 w-4" />
-                Assign Program
+                {t("Assign Program")}
               </Button>
             )}
           </div>
@@ -369,7 +371,7 @@ export function SkillProgramBuilderPage({
               disabled={saveMutation.isPending}
             >
               <Save className="h-4 w-4" />
-              {saveMutation.isPending ? "Saving…" : "Save Program"}
+              {saveMutation.isPending ? t("Saving…") : t("Save Program")}
             </Button>
           )}
         </div>
@@ -384,7 +386,7 @@ export function SkillProgramBuilderPage({
           {!editable && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Lock className="h-3 w-3" />
-              Forge official — read-only
+              {t("Forge official — read-only")}
             </span>
           )}
         </div>
@@ -396,11 +398,11 @@ export function SkillProgramBuilderPage({
             <Card className="mb-6">
               <CardContent className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label>Skill program name</Label>
+                  <Label>{t("Skill program name")}</Label>
                   <Input value={name} onChange={(e) => setName(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Description</Label>
+                  <Label>{t("Description")}</Label>
                   <Textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -412,10 +414,10 @@ export function SkillProgramBuilderPage({
 
             {days.length === 0 ? (
               <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
-                <p>No days yet. Add skill sessions one at a time.</p>
+                <p>{t("No days yet. Add skill sessions one at a time.")}</p>
                 <Button onClick={addDay}>
                   <Plus className="h-4 w-4" />
-                  Add Day
+                  {t("Add Day")}
                 </Button>
               </div>
             ) : (
@@ -449,7 +451,7 @@ export function SkillProgramBuilderPage({
             {days.length > 0 && (
               <Button variant="outline" className="mt-4" onClick={addDay}>
                 <Plus className="h-4 w-4" />
-                Add Day
+                {t("Add Day")}
               </Button>
             )}
           </div>
@@ -462,7 +464,7 @@ export function SkillProgramBuilderPage({
               programId={programId}
               onApplied={handleChatApplied}
               resourcePath="skill-programs"
-              title="AI Skill Builder"
+              title={t("AI Skill Builder")}
             />
           </div>
         )}
@@ -521,6 +523,7 @@ function DayCard({
   onAddExercise: () => void;
   onRemove: () => void;
 }) {
+  const t = useT();
   function moveExercise(index: number, direction: -1 | 1) {
     onChange((d) => {
       const next = [...d.exercises];
@@ -535,7 +538,7 @@ function DayCard({
     <Card className={day.isRestDay ? "opacity-70" : ""}>
       <CardContent className="space-y-3 p-4">
         <div className="flex items-center justify-between gap-2">
-          <Badge variant="outline">Day {dayNumber}</Badge>
+          <Badge variant="outline">{t("Day {number}", { number: dayNumber })}</Badge>
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <Checkbox
@@ -544,11 +547,11 @@ function DayCard({
                   onChange((d) => ({ ...d, isRestDay: checked === true }))
                 }
               />
-              Rest day
+              {t("Rest day")}
             </label>
             <button
               type="button"
-              aria-label={`Remove Day ${dayNumber}`}
+              aria-label={t("Remove Day {number}", { number: dayNumber })}
               onClick={onRemove}
               className="text-muted-foreground hover:text-destructive"
             >
@@ -568,7 +571,7 @@ function DayCard({
         {day.isRestDay ? (
           <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-3 text-sm text-muted-foreground">
             <MoonStar className="h-4 w-4" />
-            Recovery day
+            {t("Recovery day")}
           </div>
         ) : (
           <>
@@ -582,7 +585,7 @@ function DayCard({
                     <div className="flex flex-col">
                       <button
                         type="button"
-                        aria-label={`Move ${ex.skillExerciseName} up`}
+                        aria-label={t("Move {name} up", { name: t.exercise(ex.skillExerciseName) })}
                         disabled={i === 0}
                         onClick={() => moveExercise(i, -1)}
                         className="text-muted-foreground hover:text-foreground disabled:opacity-30"
@@ -591,7 +594,7 @@ function DayCard({
                       </button>
                       <button
                         type="button"
-                        aria-label={`Move ${ex.skillExerciseName} down`}
+                        aria-label={t("Move {name} down", { name: t.exercise(ex.skillExerciseName) })}
                         disabled={i === day.exercises.length - 1}
                         onClick={() => moveExercise(i, 1)}
                         className="text-muted-foreground hover:text-foreground disabled:opacity-30"
@@ -604,7 +607,7 @@ function DayCard({
                     </span>
                     <button
                       type="button"
-                      aria-label={`Remove ${ex.skillExerciseName}`}
+                      aria-label={t("Remove {name}", { name: t.exercise(ex.skillExerciseName) })}
                       onClick={() =>
                         onChange((d) => ({
                           ...d,
@@ -618,7 +621,7 @@ function DayCard({
                   </div>
                   <div className="grid grid-cols-3 gap-1.5">
                     <FieldInput
-                      label="Sets"
+                      label={t("Sets")}
                       value={String(ex.sets)}
                       type="number"
                       onChange={(v) =>
@@ -640,7 +643,7 @@ function DayCard({
                       }
                     />
                     <FieldInput
-                      label="Reps"
+                      label={t("Reps")}
                       inputMode="numeric"
                       value={ex.reps}
                       onChange={(v) =>
@@ -653,7 +656,7 @@ function DayCard({
                       }
                     />
                     <FieldInput
-                      label="Rest (sec)"
+                      label={t("Rest (sec)")}
                       value={ex.restSeconds}
                       type="number"
                       onChange={(v) =>
@@ -672,7 +675,7 @@ function DayCard({
                   {ex.trackingLevel !== "sprint" && (
                     <div className="mt-1.5 space-y-1.5">
                       <p className="text-[11px] text-muted-foreground">
-                        What the athlete will see:{" "}
+                        {t("What the athlete will see:")}{" "}
                         <span className="font-medium text-foreground">
                           {Array.from(
                             { length: ex.sets },
@@ -698,14 +701,14 @@ function DayCard({
                             }))
                           }
                         />
-                        Customize per set
+                        {t("Customize per set")}
                       </label>
                       {ex.perSetReps != null && (
                         <div className="flex flex-wrap gap-1.5">
                           {Array.from({ length: ex.sets }, (_, i) => i).map((i) => (
                             <div key={i} className="flex flex-col items-center gap-0.5">
                               <span className="text-[9px] font-semibold uppercase text-muted-foreground">
-                                Set {i + 1}
+                                {t("Set {number}", { number: i + 1 })}
                               </span>
                               <Input
                                 type="number"
@@ -764,11 +767,11 @@ function DayCard({
               ))}
             </div>
             {day.exercises.length === 0 && (
-              <p className="py-2 text-center text-xs text-muted-foreground">No drills yet</p>
+              <p className="py-2 text-center text-xs text-muted-foreground">{t("No drills yet")}</p>
             )}
             <Button variant="secondary" size="sm" className="w-full" onClick={onAddExercise}>
               <Plus className="h-3.5 w-3.5" />
-              Add Skill Drill
+              {t("Add Skill Drill")}
             </Button>
           </>
         )}
@@ -794,6 +797,7 @@ function SprintTrackingToggle({
   trackingLevel: SkillTrackingLevel;
   onChange: (trackingLevel: SkillTrackingLevel) => void;
 }) {
+  const t = useT();
   return (
     <div className="mt-1.5 flex items-center gap-1.5">
       <Timer className="h-3.5 w-3.5 text-muted-foreground" />
@@ -814,7 +818,7 @@ function SprintTrackingToggle({
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {opt.label}
+            {t(opt.label)}
           </button>
         );
       })}

@@ -43,6 +43,7 @@ import {
 import { ProgramPhotoImportDialog } from "@/components/program-photo-import-dialog";
 import { SelfSeasonAssignDialog } from "@/components/self-season-assign-dialog";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type ProgramSummary = {
   id: number;
@@ -109,6 +110,7 @@ export function ProgramListPage({
    * BEFORE asking the questions, and it should create the program only once the AI has
    * actually answered -- never the other way round. */
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [, navigate] = useLocation();
   const { data: programs = [], isLoading, isError, refetch } = useQuery<ProgramSummary[]>({
@@ -148,13 +150,13 @@ export function ProgramListPage({
     },
     onSuccess: ({ program }) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
-      toast.success("Program created — start adding days");
+      toast.success(t("Program created — start adding days"));
       setDialogOpen(false);
       setName("");
       setDescription("");
       navigate(`${routeBase}/${program.id}`);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not create program"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not create program")),
   });
 
   // Admin only: post a program for everybody, or take it back so only the admin sees it.
@@ -166,9 +168,9 @@ export function ProgramListPage({
     },
     onSuccess: (vars) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
-      toast.success(vars.published ? "Posted. Everyone can see it now." : "Unposted. Only you can see it now.");
+      toast.success(vars.published ? t("Posted. Everyone can see it now.") : t("Unposted. Only you can see it now."));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not change who sees this program"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not change who sees this program")),
   });
 
   const deleteMutation = useMutation({
@@ -177,10 +179,10 @@ export function ProgramListPage({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
-      toast.success("Program deleted");
+      toast.success(t("Program deleted"));
       setDeleteTarget(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not delete program"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not delete program")),
   });
 
   // Clones a program's full week/day/exercise structure under a new name --
@@ -224,10 +226,10 @@ export function ProgramListPage({
     },
     onSuccess: (program) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
-      toast.success("Program duplicated");
+      toast.success(t("Program duplicated"));
       navigate(`${routeBase}/${program.id}`);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not duplicate program"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not duplicate program")),
   });
 
   // Two steps in one mutation so the button shows a single loading state:
@@ -249,11 +251,11 @@ export function ProgramListPage({
     },
     onSuccess: (result) => {
       if (!result?.program) {
-        toast.error("AI assist isn't available right now");
+        toast.error(t("AI assist isn't available right now"));
         return;
       }
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
-      toast.success("Draft created, review it before assigning to anyone");
+      toast.success(t("Draft created, review it before assigning to anyone"));
       if (result.note) {
         toast.info(result.note, { duration: 10000 });
       }
@@ -262,7 +264,7 @@ export function ProgramListPage({
       setAiAthleteId(null);
       navigate(`${routeBase}/${result.program.id}`);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not generate a draft"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not generate a draft")),
   });
 
   return (
@@ -274,13 +276,13 @@ export function ProgramListPage({
           {showAiAssist && (
             <Button size="sm" variant="outline" onClick={() => setAiDialogOpen(true)}>
               <Sparkles className="h-3.5 w-3.5" />
-              AI Assist
+              {t("AI Assist")}
             </Button>
           )}
           {showAiAssist && (
             <Button size="sm" variant="outline" onClick={() => setPhotoImportOpen(true)}>
               <Camera className="h-3.5 w-3.5" />
-              Import Photo
+              {t("Import Photo")}
             </Button>
           )}
           <Button
@@ -288,7 +290,7 @@ export function ProgramListPage({
             onClick={() => setDialogOpen(true)}
           >
             <Plus className="h-3.5 w-3.5" />
-            New Program
+            {t("New Program")}
           </Button>
         </>
       }
@@ -298,7 +300,7 @@ export function ProgramListPage({
       {isError && (
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="your programs" onRetry={() => void refetch()} />
+            <ReadFailed what={t("your programs")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       )}
@@ -312,7 +314,7 @@ export function ProgramListPage({
               onClick={() => setDialogOpen(true)}
             >
               <Plus className="h-4 w-4" />
-              New Program
+              {t("New Program")}
             </Button>
           </CardContent>
         </Card>
@@ -324,7 +326,7 @@ export function ProgramListPage({
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search programs: soccer preseason, pitcher, knee return…"
+            placeholder={t("Search programs: soccer preseason, pitcher, knee return…")}
             className="pl-9"
             data-testid="input-program-search"
           />
@@ -332,7 +334,7 @@ export function ProgramListPage({
       )}
       {!isError && programs.length > 0 && shown.length === 0 && (
         <p className="mb-4 text-sm text-muted-foreground" data-testid="text-no-program-match">
-          No programs match "{search}".
+          {t("No programs match \"{search}\".", { search })}
         </p>
       )}
 
@@ -363,7 +365,7 @@ export function ProgramListPage({
                 <div className="flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <CalendarRange className="h-3.5 w-3.5" />
-                    {p.weekCount} wk · {p.dayCount} days
+                    {t("{weeks} wk · {days} days", { weeks: p.weekCount, days: p.dayCount })}
                   </span>
                   <span className="flex items-center gap-1">
                     <Users className="h-3.5 w-3.5" />
@@ -373,8 +375,8 @@ export function ProgramListPage({
                     <Button
                       size="icon"
                       variant="ghost"
-                      aria-label={`Duplicate ${p.name}`}
-                      title="Duplicate as a new editable program"
+                      aria-label={t("Duplicate {name}", { name: p.name })}
+                      title={t("Duplicate as a new editable program")}
                       disabled={duplicateMutation.isPending}
                       onClick={() => duplicateMutation.mutate(p)}
                     >
@@ -384,7 +386,7 @@ export function ProgramListPage({
                       <Button
                         size="icon"
                         variant="ghost"
-                        aria-label={`Delete ${p.name}`}
+                        aria-label={t("Delete {name}", { name: p.name })}
                         onClick={() => setDeleteTarget(p)}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
@@ -395,7 +397,7 @@ export function ProgramListPage({
                 {canPost && p.editable !== false && typeof p.isPublished === "boolean" && (
                   <div className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
                     <span className="text-xs text-muted-foreground" data-testid={`program-posted-state-${p.id}`}>
-                      {p.isPublished ? "Posted: everyone can see it" : "Not posted: only you can see it"}
+                      {p.isPublished ? t("Posted: everyone can see it") : t("Not posted: only you can see it")}
                     </span>
                     <Button
                       size="sm"
@@ -403,7 +405,7 @@ export function ProgramListPage({
                       disabled={publishMutation.isPending}
                       onClick={() => publishMutation.mutate({ id: p.id, published: !p.isPublished })}
                     >
-                      {p.isPublished ? "Unpost" : "Post"}
+                      {p.isPublished ? t("Unpost") : t("Post")}
                     </Button>
                   </div>
                 )}
@@ -415,7 +417,7 @@ export function ProgramListPage({
                     onClick={() => setAssignProgramId(p.id)}
                   >
                     <Send className="h-3.5 w-3.5" />
-                    Assign
+                    {t("Assign")}
                   </Button>
                 )}
                 {showSelfAssign && (
@@ -426,7 +428,7 @@ export function ProgramListPage({
                     onClick={() => setSelfAssignProgramId(p.id)}
                   >
                     <CalendarPlus className="h-3.5 w-3.5" />
-                    Add to My Calendar
+                    {t("Add to My Calendar")}
                   </Button>
                 )}
               </div>
@@ -438,7 +440,7 @@ export function ProgramListPage({
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Program</DialogTitle>
+            <DialogTitle>{t("New Program")}</DialogTitle>
           </DialogHeader>
           <form
             onSubmit={(e) => {
@@ -448,30 +450,30 @@ export function ProgramListPage({
             className="space-y-4"
           >
             <div className="space-y-1.5">
-              <Label htmlFor="prog-name">Program name</Label>
+              <Label htmlFor="prog-name">{t("Program name")}</Label>
               <Input
                 id="prog-name"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Off-Season Strength Block"
+                placeholder={t("e.g. Off-Season Strength Block")}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="prog-desc">Description (optional)</Label>
+              <Label htmlFor="prog-desc">{t("Description (optional)")}</Label>
               <Textarea
                 id="prog-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="What is this program for?"
+                placeholder={t("What is this program for?")}
               />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancel
+                {t("Cancel")}
               </Button>
               <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? "Creating…" : "Create & Build"}
+                {createMutation.isPending ? t("Creating…") : t("Create & Build")}
               </Button>
             </DialogFooter>
           </form>
@@ -502,7 +504,7 @@ export function ProgramListPage({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
-                AI Program Draft
+                {t("AI Program Draft")}
               </DialogTitle>
             </DialogHeader>
             <form
@@ -514,41 +516,39 @@ export function ProgramListPage({
               className="space-y-4"
             >
               <div className="space-y-1.5">
-                <Label htmlFor="ai-prompt">Describe the program you want</Label>
+                <Label htmlFor="ai-prompt">{t("Describe the program you want")}</Label>
                 <Textarea
                   id="ai-prompt"
                   required
                   value={aiPrompt}
                   onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder="e.g. 4-week off-season strength block for a high school basketball team, 4 days a week, minimal equipment"
+                  placeholder={t("e.g. 4-week off-season strength block for a high school basketball team, 4 days a week, minimal equipment")}
                   rows={3}
                   maxLength={500}
                 />
                 <p className="text-xs text-muted-foreground">
-                  This only creates a draft using exercises already in your bank, you'll land
-                  in the full builder to review and change anything before assigning it to
-                  anyone.
+                  {t("This only creates a draft using exercises already in your bank, you'll land in the full builder to review and change anything before assigning it to anyone.")}
                 </p>
               </div>
               {showAssign && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="ai-athlete">Building for (optional)</Label>
+                  <Label htmlFor="ai-athlete">{t("Building for (optional)")}</Label>
                   <Select
                     value={aiAthleteId != null ? String(aiAthleteId) : "none"}
                     onValueChange={(v) => setAiAthleteId(v === "none" ? null : Number(v))}
                   >
                     <SelectTrigger id="ai-athlete">
-                      <SelectValue placeholder="No specific athlete" />
+                      <SelectValue placeholder={t("No specific athlete")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">No specific athlete</SelectItem>
+                      <SelectItem value="none">{t("No specific athlete")}</SelectItem>
                       {/* A failed roster read leaves only "No specific athlete", and the
                           copy below promises the AI reads a real profile. Silently
                           building a generic program under that promise is the failure
                           worth naming. */}
                       {rosterFailed && (
                         <SelectItem value="none" disabled>
-                          Couldn't load your roster
+                          {t("Couldn't load your roster")}
                         </SelectItem>
                       )}
                       {roster.map((a) => (
@@ -559,18 +559,16 @@ export function ProgramListPage({
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Pick one roster athlete and the AI reads their real profile (sport, position,
-                    age, season) instead of guessing. Leave blank for a reusable program you'll
-                    assign to multiple athletes later.
+                    {t("Pick one roster athlete and the AI reads their real profile (sport, position, age, season) instead of guessing. Leave blank for a reusable program you'll assign to multiple athletes later.")}
                   </p>
                 </div>
               )}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setAiDialogOpen(false)}>
-                  Cancel
+                  {t("Cancel")}
                 </Button>
                 <Button type="submit" disabled={aiDraftMutation.isPending || !aiPrompt.trim()}>
-                  {aiDraftMutation.isPending ? "Generating…" : "Generate Draft"}
+                  {aiDraftMutation.isPending ? t("Generating…") : t("Generate Draft")}
                 </Button>
               </DialogFooter>
             </form>
@@ -590,9 +588,9 @@ export function ProgramListPage({
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="Delete program?"
-        description={deleteTarget ? `Delete "${deleteTarget.name}"? This cannot be undone.` : ""}
-        confirmLabel="Delete"
+        title={t("Delete program?")}
+        description={deleteTarget ? t("Delete \"{name}\"? This cannot be undone.", { name: deleteTarget.name }) : ""}
+        confirmLabel={t("Delete")}
         isPending={deleteMutation.isPending}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
       />

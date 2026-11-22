@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { TeamBrandingDialog } from "@/components/team-branding-dialog";
 import { Palette, Mail } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type Branding = {
   brandTeamName?: string | null;
@@ -28,6 +29,7 @@ type TeamRoster = {
  * what the program's about, how to reach them. Coach and athlete share
  * the same component; only the primary coach gets an edit affordance. */
 export default function TeamAboutPage() {
+  const t = useT();
   const { user } = useAuth();
   const isCoach = user?.role === "coach";
   const [brandingOpen, setBrandingOpen] = useState(false);
@@ -46,12 +48,12 @@ export default function TeamAboutPage() {
 
   return (
     <AppShell
-      title="About the Team"
+      title={t("About the Team")}
       actions={
         isCoach && user?.isPrimaryCoach ? (
           <Button variant="outline" size="sm" onClick={() => setBrandingOpen(true)}>
             <Palette className="h-3.5 w-3.5" />
-            Edit branding
+            {t("Edit branding")}
           </Button>
         ) : undefined
       }
@@ -76,7 +78,7 @@ export default function TeamAboutPage() {
         {branding?.brandMission && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">About</CardTitle>
+              <CardTitle className="text-base">{t("About")}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="whitespace-pre-wrap text-sm text-muted-foreground">
@@ -89,14 +91,14 @@ export default function TeamAboutPage() {
         {roster && (roster.primaryCoachName || roster.staff.length > 0) && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Coaching Staff</CardTitle>
+              <CardTitle className="text-base">{t("Coaching Staff")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {roster.primaryCoachName && (
                 <div className="rounded-md bg-surface-elevated px-3 py-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{roster.primaryCoachName}</span>
-                    <span className="text-xs text-muted-foreground">Head Coach</span>
+                    <span className="text-xs text-muted-foreground">{t("Head Coach")}</span>
                   </div>
                   {roster.primaryCoachPhilosophy && (
                     <p className="mt-1 text-xs italic text-muted-foreground">
@@ -109,7 +111,7 @@ export default function TeamAboutPage() {
                 <div key={s.name} className="rounded-md bg-surface-elevated px-3 py-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{s.name}</span>
-                    <span className="text-xs text-muted-foreground">{s.staffTitle || "Coach"}</span>
+                    <span className="text-xs text-muted-foreground">{s.staffTitle || t("Coach")}</span>
                   </div>
                   {s.coachingPhilosophy && (
                     <p className="mt-1 text-xs italic text-muted-foreground">"{s.coachingPhilosophy}"</p>
@@ -135,7 +137,7 @@ export default function TeamAboutPage() {
             Neither read landing is a statement about anything. */}
         {(brandingFailed || rosterFailed) && (
           <ReadFailed
-            what="this team's page"
+            what={t("this team's page")}
             onRetry={() => {
               if (brandingFailed) void refetchBranding();
               if (rosterFailed) void refetchRoster();
@@ -150,8 +152,8 @@ export default function TeamAboutPage() {
           (!roster || roster.staff.length === 0) && (
           <p className="py-6 text-center text-sm text-muted-foreground">
             {isCoach
-              ? "Add a motto, mission, and contact email from Branding to fill out this page."
-              : "Your coach hasn't set up a team page yet."}
+              ? t("Add a motto, mission, and contact email from Branding to fill out this page.")
+              : t("Your coach hasn't set up a team page yet.")}
           </p>
         )}
       </div>

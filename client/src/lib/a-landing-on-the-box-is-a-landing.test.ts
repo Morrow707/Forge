@@ -68,7 +68,7 @@ describe("a landing on the box is a landing", () => {
       }
     }
     const screen = readFileSync(join(__dirname, "../pages/workout.tsx"), "utf8");
-    expect(screen).toContain("j.takeoffVelocityMps != null ? ` · ${j.takeoffVelocityMps} m/s takeoff` : \"\"");
+    expect(screen).toContain('j.takeoffVelocityMps != null ? t(" · {speed} m/s takeoff", { speed: j.takeoffVelocityMps }) : ""');
   });
 
   it("counts all five at the 1.40x the box ruler has measured on a paired take", () => {

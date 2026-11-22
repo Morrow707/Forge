@@ -9,12 +9,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ShieldCheck } from "lucide-react";
 import { MfaLoginStep } from "@/components/mfa-login-step";
 import { DeviceApprovalStep } from "@/components/device-approval-step";
+import { useT } from "@/i18n";
 
 /** A dedicated, shareable login link for admins -- functionally identical
  * to /login (same auth endpoint, same role-based redirect), just framed
  * for someone who's landing directly on this URL rather than the general
  * coach/athlete login. */
 export default function AdminLoginPage() {
+  const t = useT();
   const { user, isLoading, loginMutation, deviceApprovalCompleteMutation } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -66,9 +68,9 @@ export default function AdminLoginPage() {
             <ShieldCheck className="h-8 w-8" />
           </div>
           <h1 className="font-display text-4xl font-extrabold uppercase tracking-wider">
-            Forge Admin
+            {t("Forge Admin")}
           </h1>
-          <p className="text-sm text-muted-foreground">Curate the official exercise library.</p>
+          <p className="text-sm text-muted-foreground">{t("Curate the official exercise library.")}</p>
         </div>
 
         {devicePending ? (
@@ -99,13 +101,13 @@ export default function AdminLoginPage() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle>Admin Log In</CardTitle>
-              <CardDescription>For Forge library administrators only.</CardDescription>
+              <CardTitle>{t("Admin Log In")}</CardTitle>
+              <CardDescription>{t("For Forge library administrators only.")}</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">{t("Email")}</Label>
                   <Input
                     id="email"
                     type="email"
@@ -113,17 +115,17 @@ export default function AdminLoginPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin@example.com"
+                    placeholder={t("admin@example.com")}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="password">{t("Password")}</Label>
                     <Link
                       href="/forgot-password"
                       className="text-xs font-semibold text-primary hover:underline"
                     >
-                      Forgot password?
+                      {t("Forgot password?")}
                     </Link>
                   </div>
                   <PasswordInput
@@ -141,13 +143,13 @@ export default function AdminLoginPage() {
                   className="w-full"
                   disabled={loginMutation.isPending}
                 >
-                  {loginMutation.isPending ? "Logging in…" : "Log In"}
+                  {loginMutation.isPending ? t("Logging in…") : t("Log In")}
                 </Button>
               </form>
               <p className="mt-5 text-center text-sm text-muted-foreground">
-                Not an admin?{" "}
+                {t("Not an admin?")}{" "}
                 <Link href="/login" className="font-semibold text-primary hover:underline">
-                  Log in here
+                  {t("Log in here")}
                 </Link>
               </p>
             </CardContent>
@@ -161,7 +163,7 @@ export default function AdminLoginPage() {
             username to aim credential-stuffing or MFA-brute-force attempts at. */}
         {import.meta.env.DEV && (
           <div className="mt-6 rounded-md border border-border bg-surface p-4 text-xs text-muted-foreground">
-            <p className="mb-1 font-semibold text-foreground">Demo admin account</p>
+            <p className="mb-1 font-semibold text-foreground">{t("Demo admin account")}</p>
             <p>admin@forge.app / admin123</p>
           </div>
         )}

@@ -8,6 +8,7 @@ import { BrandedMark } from "@/components/branded-mark";
 import { useRememberedBrand } from "@/lib/remembered-brand";
 import { computeBrandingStyle } from "@/lib/branding-style";
 import { Trash2 } from "lucide-react";
+import { useT } from "@/i18n";
 
 /** Public, unauthenticated-reachable page describing account deletion --
  * Google Play requires a public URL for this even though the real action
@@ -16,6 +17,7 @@ import { Trash2 } from "lucide-react";
  * offers the real dialog when there's an active session instead of only
  * ever describing the steps). */
 export default function DeleteAccountPage() {
+  const t = useT();
   const { user, isLoading } = useAuth();
   const [open, setOpen] = useState(false);
 
@@ -24,34 +26,34 @@ export default function DeleteAccountPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10" style={computeBrandingStyle(brand)}>
       <div className="w-full max-w-md space-y-6">
         <BrandedMark brand={brand} size="md" />
-        <h1 className="text-center font-display text-2xl font-bold uppercase tracking-wide">Delete Your Account</h1>
+        <h1 className="text-center font-display text-2xl font-bold uppercase tracking-wide">{t("Delete Your Account")}</h1>
 
         <Card>
           <CardHeader>
-            <CardTitle>What gets deleted</CardTitle>
+            <CardTitle>{t("What gets deleted")}</CardTitle>
             <CardDescription>
-              Deleting your Forge account is permanent and cannot be undone.
+              {t("Deleting your Forge account is permanent and cannot be undone.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>Deleting your account removes your profile, logged workouts and programs, and any video you recorded (form-check clips and skill drills). Numeric performance history tied only to your account goes with it.</p>
-            <p>If you coach a roster, deleting your account does not delete your athletes' own accounts or data, only your coach account and the content you own.</p>
+            <p>{t("Deleting your account removes your profile, logged workouts and programs, and any video you recorded (form-check clips and skill drills). Numeric performance history tied only to your account goes with it.")}</p>
+            <p>{t("If you coach a roster, deleting your account does not delete your athletes' own accounts or data, only your coach account and the content you own.")}</p>
           </CardContent>
         </Card>
 
         {isLoading ? (
-          <p className="text-center text-sm text-muted-foreground">Loading…</p>
+          <p className="text-center text-sm text-muted-foreground">{t("Loading…")}</p>
         ) : user ? (
           <Button variant="destructive" className="w-full" onClick={() => setOpen(true)}>
             <Trash2 className="h-4 w-4" />
-            Delete my account
+            {t("Delete my account")}
           </Button>
         ) : (
           <Card>
             <CardContent className="space-y-3 pt-6 text-sm text-muted-foreground">
-              <p>You'll need to log in first, account deletion has to be confirmed with your password.</p>
+              <p>{t("You'll need to log in first, account deletion has to be confirmed with your password.")}</p>
               <Button asChild className="w-full">
-                <Link href="/login">Log in to delete my account</Link>
+                <Link href="/login">{t("Log in to delete my account")}</Link>
               </Button>
             </CardContent>
           </Card>

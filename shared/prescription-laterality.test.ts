@@ -16,8 +16,14 @@ describe("a unilateral prescription says each side", () => {
     // open card's "Prescribed:" line -- and a fix applied to one of them is the bug still
     // live on the other.
     const src = readFileSync(join(process.cwd(), "client/src/pages/workout.tsx"), "utf8");
-    const lines = src.split("\n").filter((l) => l.includes("prescribedSets} × {item.prescribedReps}"));
+    // A line is either the JSX itself or the translated sentence's key (client/src/i18n), whose
+    // values follow on the next few lines; the suffix must be read within that call.
+    const all = src.split("\n");
+    const lines = all
+      .map((l, i) => ({ l, i }))
+      .filter(({ l }) => l.includes("prescribedSets} × {item.prescribedReps}") || l.includes('"Prescribed: {sets} × {reps}{side}"'));
     expect(lines.length).toBeGreaterThanOrEqual(2);
-    for (const line of lines) expect(line).toContain("eachSideSuffix");
+    const CALL_LINES = 5;
+    for (const { i } of lines) expect(all.slice(i, i + CALL_LINES).join("\n")).toContain("eachSideSuffix");
   });
 });

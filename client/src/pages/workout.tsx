@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type TouchEvent } from "react";
-import { useT } from "@/i18n";
+import { msg, useT } from "@/i18n";
 import { TranslatableText } from "@/components/translatable-text";
 import { eachSideSuffix } from "@shared/prescription-laterality";
 import { filmSideLabel, isUnilateral, pairIndexFor, rowsPerSet, setPills, setRowCountFor, setStartIndex, sideForNewSet, sideLabel, type BodySide } from "@shared/unilateral-sides";
@@ -863,16 +863,16 @@ export function isSetComplete(item: ItemState, set: SetRow) {
 // RIR only really means something once a set gets challenging, so it's left
 // off the very easy end rather than claiming false precision there.
 const RPE_SCALE: { value: number; label: string; rir: string }[] = [
-  { value: 1, label: "Very Easy", rir: "9+ in reserve" },
-  { value: 2, label: "Easy", rir: "8+ in reserve" },
-  { value: 3, label: "Easy+", rir: "7+ in reserve" },
-  { value: 4, label: "Moderate", rir: "6 in reserve" },
-  { value: 5, label: "Moderate+", rir: "5 in reserve" },
-  { value: 6, label: "Somewhat Hard", rir: "4 in reserve" },
-  { value: 7, label: "Hard", rir: "3 in reserve" },
-  { value: 8, label: "Very Hard", rir: "2 in reserve" },
-  { value: 9, label: "Near Max", rir: "1 in reserve" },
-  { value: 10, label: "Max Effort", rir: "0 in reserve" },
+  { value: 1, label: msg("Very Easy"), rir: msg("9+ in reserve") },
+  { value: 2, label: msg("Easy"), rir: msg("8+ in reserve") },
+  { value: 3, label: msg("Easy+"), rir: msg("7+ in reserve") },
+  { value: 4, label: msg("Moderate"), rir: msg("6 in reserve") },
+  { value: 5, label: msg("Moderate+"), rir: msg("5 in reserve") },
+  { value: 6, label: msg("Somewhat Hard"), rir: msg("4 in reserve") },
+  { value: 7, label: msg("Hard"), rir: msg("3 in reserve") },
+  { value: 8, label: msg("Very Hard"), rir: msg("2 in reserve") },
+  { value: 9, label: msg("Near Max"), rir: msg("1 in reserve") },
+  { value: 10, label: msg("Max Effort"), rir: msg("0 in reserve") },
 ];
 
 function formatLastPerformance(lp: NonNullable<LastPerformance>, displayUnit: WeightUnit) {
@@ -1801,7 +1801,7 @@ export function WorkoutPage({
       qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
       if (synced) {
         hapticLight();
-        toast.success(payload.completed ? "Workout marked complete" : "Progress saved");
+        toast.success(payload.completed ? t("Workout marked complete") : t("Progress saved"));
         qc.invalidateQueries({ queryKey: ["/api/athlete/trophies"] });
         for (const trophy of data?.newlyUnlockedTrophies ?? []) {
           // A "streak" trophy is checkAndAwardTrophies newly crossing one of
@@ -1817,8 +1817,8 @@ export function WorkoutPage({
           } else {
             playSuccessChime();
           }
-          toast.success(`🏆 New trophy: ${trophy.label}`, {
-            description: `${trophy.tier[0].toUpperCase()}${trophy.tier.slice(1)}`,
+          toast.success(t("🏆 New trophy: {name}", { name: t(trophy.label) }), {
+            description: t(`${trophy.tier[0].toUpperCase()}${trophy.tier.slice(1)}`),
           });
         }
         // A distinct (stronger) haptic than the generic save confirmation
@@ -1831,13 +1831,13 @@ export function WorkoutPage({
           // the toast and its color edges it. Forge's when none is set.
           const celebration = brandExtras?.celebration;
           const cheer = celebration?.message?.trim();
-          toast.success(cheer ? `${cheer} New PR — ${pr.exerciseName}` : `New PR — ${pr.exerciseName}`, {
+          toast.success(cheer ? t("{cheer} New PR — {name}", { cheer, name: t.exercise(pr.exerciseName) }) : t("New PR — {name}", { name: t.exercise(pr.exerciseName) }), {
             description: `${pr.weight} ${pr.unit} × ${pr.reps}`,
             ...(celebration?.color ? { style: { borderLeft: `6px solid ${celebration.color}` } } : {}),
           });
         }
       } else {
-        toast.info("You're offline — saved on this device, will sync automatically");
+        toast.info(t("You're offline — saved on this device, will sync automatically"));
       }
     },
     onError: (err: ApiError, { silent, replay }) => {
@@ -1868,7 +1868,7 @@ export function WorkoutPage({
         setHydrated(false);
         baseRevisionRef.current = null;
         qc.invalidateQueries({ queryKey: [`${apiBase}/day`] });
-        toast.info("Catching up with the saved version of this workout, one moment.", {
+        toast.info(t("Catching up with the saved version of this workout, one moment."), {
           duration: 6000,
         });
         return;
@@ -1879,7 +1879,7 @@ export function WorkoutPage({
         // put the button back to actionable rather than leaving it stuck
         // showing "Completed" for a save that never landed.
         setJustCompleted(false);
-        toast.error(err.message || "Could not save workout");
+        toast.error(err.message ? t(err.message) : t("Could not save workout"));
         return;
       }
       // A silent autosave failure (expired session, a server-side rejection)
@@ -1889,7 +1889,7 @@ export function WorkoutPage({
       // that loudly once it's clearly not transient, rather than never.
       consecutiveAutosaveFailuresRef.current += 1;
       if (consecutiveAutosaveFailuresRef.current === 3) {
-        toast.error("Your sets aren't saving, reload this page and log back in if needed.", {
+        toast.error(t("Your sets aren't saving, reload this page and log back in if needed."), {
           duration: 15000,
         });
       }
@@ -2506,7 +2506,7 @@ export function WorkoutPage({
         prev ? { ...prev, preferredWeightUnit: updated.preferredWeightUnit } : prev,
       );
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't change the unit"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Couldn't change the unit")),
   });
 
   // THE WORST PLACE IN THE APP TO SPIN FOREVER. `!data` covered the failed read as
@@ -2520,8 +2520,8 @@ export function WorkoutPage({
   // loud: by this point something is genuinely wrong, and waiting will not fix it.
   if (isError) {
     return (
-      <AppShell title="Workout">
-        <ReadFailed what="this workout" error={error} onRetry={() => void refetch()} />
+      <AppShell title={t("Workout")}>
+        <ReadFailed what={t("this workout")} error={error} onRetry={() => void refetch()} />
       </AppShell>
     );
   }
@@ -2531,7 +2531,7 @@ export function WorkoutPage({
   // exactly the picture a stale save is built from.
   if (isLoading || !data || !hydrated) {
     return (
-      <AppShell title="Loading Workout…">
+      <AppShell title={t("Loading Workout…")}>
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       </AppShell>
     );
@@ -2568,7 +2568,7 @@ export function WorkoutPage({
       });
       await shareOrDownloadBlob(blob, `${data.day.title}-workout.png`, "Workout Complete");
     } catch {
-      toast.error("Couldn't generate that share card");
+      toast.error(t("Couldn't generate that share card"));
     } finally {
       setSharingWorkout(false);
     }
@@ -2629,7 +2629,7 @@ export function WorkoutPage({
     autosaveNow(items);
     const missing = incompleteExerciseNames([{ kind: page.kind, items: [item], labels: page.labels }]);
     if (missing.length > 0) {
-      toast.warning(`Saved, but not fully logged: ${missing.join(", ")}.`);
+      toast.warning(t("Saved, but not fully logged: {names}.", { names: missing.map((n) => t.exercise(n)).join(", ") }));
     }
   }
 
@@ -2748,12 +2748,16 @@ export function WorkoutPage({
                 autosaveNow(items);
                 navigate(routeBase);
               }}
-              aria-label="Back to calendar"
+              aria-label={t("Back to calendar")}
               className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
             >
               <ArrowLeft className="h-6 w-6 md:h-7 md:w-7" />
             </button>
-            <span>{format(parseISO(date), "EEEE, MMM d")}</span>
+            <span>
+              {t.language === "en"
+                ? format(parseISO(date), "EEEE, MMM d")
+                : t.date(parseISO(date), { weekday: "long", month: "short", day: "numeric" })}
+            </span>
           </div>
         }
       actions={
@@ -2776,12 +2780,12 @@ export function WorkoutPage({
           {offline ? (
             <>
               <WifiOff className="h-4 w-4 shrink-0" />
-              You're offline — showing your last saved workout.
+              {t("You're offline — showing your last saved workout.")}
             </>
           ) : (
             <>
               <CloudUpload className="h-4 w-4 shrink-0" />
-              Saved on this device — will sync once you're back online.
+              {t("Saved on this device — will sync once you're back online.")}
             </>
           )}
         </div>
@@ -2814,7 +2818,7 @@ export function WorkoutPage({
         {data.log?.completed && (
           <Badge variant="success" className="ml-auto">
             <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-            Completed
+            {t("Completed")}
           </Badge>
         )}
       </div>
@@ -2824,7 +2828,7 @@ export function WorkoutPage({
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <MoonStar className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">
-              Recovery day. Take it easy, hydrate, and stretch.
+              {t("Recovery day. Take it easy, hydrate, and stretch.")}
             </p>
           </CardContent>
         </Card>
@@ -2838,7 +2842,7 @@ export function WorkoutPage({
                     {stats.totalReps}
                   </p>
                   <p className="label-xs mt-1">
-                    Reps
+                    {t("Reps")}
                   </p>
                 </div>
                 <div>
@@ -2873,7 +2877,7 @@ export function WorkoutPage({
                     onClick={handleShareWorkout}
                   >
                     <Share2 className="h-4 w-4" />
-                    Share
+                    {t("Share")}
                   </Button>
                 )}
               </div>
@@ -2921,13 +2925,13 @@ export function WorkoutPage({
             )}
             {pages.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">
-                Nothing prescribed for this day yet.
+                {t("Nothing prescribed for this day yet.")}
               </p>
             ) : (
               <>
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-muted-foreground">
-                    Everything for today, A to Z — tap an exercise to expand it and log your sets.
+                    {t("Everything for today, A to Z — tap an exercise to expand it and log your sets.")}
                   </p>
                   <RestTimerControl ref={restTimerRef} defaultSeconds={pages[0]?.items[0]?.restSeconds} />
                 </div>
@@ -2964,10 +2968,10 @@ export function WorkoutPage({
                         {page.kind === "corrective" && (
                           <p className="label-xs flex items-center gap-1.5 text-cyan-400">
                             <Stethoscope className="h-3.5 w-3.5 shrink-0" />
-                            Correctives
+                            {t("Correctives")}
                           </p>
                         )}
-                        {isSuperset && <p className="label-xs text-muted-foreground">Superset</p>}
+                        {isSuperset && <p className="label-xs text-muted-foreground">{t("Superset")}</p>}
                         {page.items.map((item) => {
                           const expanded = expandedKey === item.key;
                           const label = page.labels[item.key];
@@ -2999,12 +3003,12 @@ export function WorkoutPage({
                                     <span className="truncate">{t.exercise(item.exerciseName)}</span>
                                     {item.trackingLevel === "none" && (
                                       <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
-                                        No video needed
+                                        {t("No video needed")}
                                       </span>
                                     )}
                                   </button>
                                   <p className="text-xs font-semibold text-muted-foreground">
-                                    {item.prescribedSets} × {item.prescribedReps}{eachSideSuffix(item.laterality)}
+                                    {item.prescribedSets} × {item.prescribedReps}{t(eachSideSuffix(item.laterality))}
                                     {item.prescribedWeight ? ` @ ${item.prescribedWeight}` : ""}
                                   </p>
                                   {/* The set pager -- its own tap target (jumpToSet),
@@ -3020,14 +3024,14 @@ export function WorkoutPage({
                                       {/* One pill per prescribed SET, even on a unilateral lift whose
                                           set is two rows (left, right): the two sides are filmed from
                                           inside the set, not paged between (setPills). */}
-                                      {setPills(item.sets.length, item.laterality).map((pill) => {
+                                      {setPills(item.sets.length, item.laterality).map((pill, pillIndex) => {
                                         const showing = pill.rowIndexes.includes(visibleSetIndex);
                                         const done = pill.rowIndexes.every((i) => isSetComplete(item, item.sets[i]));
                                         return (
                                           <button
                                             key={pill.label}
                                             type="button"
-                                            aria-label={`Show ${pill.label}`}
+                                            aria-label={t("Show {label}", { label: t("Set {number}", { number: pillIndex + 1 }) })}
                                             aria-pressed={showing}
                                             onClick={() => jumpToSet(item, pill.rowIndexes[0])}
                                             className={cn(
@@ -3036,7 +3040,7 @@ export function WorkoutPage({
                                               showing && "ring-2 ring-orange-400 ring-offset-1 ring-offset-background",
                                             )}
                                           >
-                                            {pill.label}
+                                            {t("Set {number}", { number: pillIndex + 1 })}
                                           </button>
                                         );
                                       })}
@@ -3045,7 +3049,7 @@ export function WorkoutPage({
                                 </div>
                                 <button
                                   type="button"
-                                  aria-label={expanded ? "Collapse exercise" : "Expand exercise"}
+                                  aria-label={expanded ? t("Collapse exercise") : t("Expand exercise")}
                                   onClick={() => toggleExercise(item, page)}
                                   className="shrink-0"
                                 >
@@ -3105,7 +3109,7 @@ export function WorkoutPage({
                     className="flex-1"
                     onClick={() => setExpandedKey(pages[0].items[0].key)}
                   >
-                    Start with {pages[0].kind === "corrective" ? "Correctives" : pages[0].labels[pages[0].items[0].key]}
+                    {t("Start with {first}", { first: pages[0].kind === "corrective" ? t("Correctives") : pages[0].labels[pages[0].items[0].key] })}
                   </Button>
                   <Button
                     className="flex-1"
@@ -3113,7 +3117,7 @@ export function WorkoutPage({
                       markWorkoutComplete(items);
                       const missing = incompleteExerciseNames(pages);
                       if (missing.length > 0) {
-                        toast.warning(`Marked complete, but not fully logged: ${missing.join(", ")}.`);
+                        toast.warning(t("Marked complete, but not fully logged: {names}.", { names: missing.map((n) => t.exercise(n)).join(", ") }));
                       } else if (brandExtras?.wording?.workoutDone?.trim()) {
                         // The program's own sign-off (shared/brand-extras.ts, 2026-11-19).
                         toast.success(brandExtras.wording.workoutDone.trim());
@@ -3122,7 +3126,9 @@ export function WorkoutPage({
                     disabled={justCompleted}
                   >
                     <CheckCircle2 className="h-4 w-4" />
-                    {programWords(justCompleted ? "Workout Complete" : "Mark Workout Complete")}
+                    {((label: string) => (programWords(label) === label ? t(label) : programWords(label)))(
+                      justCompleted ? msg("Workout Complete") : msg("Mark Workout Complete"),
+                    )}
                   </Button>
                 </div>
               </>
@@ -3163,6 +3169,7 @@ function ProcessingPhaseBar({
   percent: number | undefined;
   done: boolean;
 }) {
+  const t = useT();
   const shown = done ? 100 : percent;
   // THE LAST STRETCH IS A WAIT, AND IT SAYS SO.
   //
@@ -3174,7 +3181,7 @@ function ProcessingPhaseBar({
   const finishing = !done && shown != null && shown >= 99;
   return (
     <span className="flex items-center gap-1.5">
-      <span className="w-[58px] shrink-0 text-left">{finishing ? "Finishing" : label}</span>
+      <span className="w-[58px] shrink-0 text-left">{finishing ? t("Finishing") : label}</span>
       <span className="relative h-1 w-16 overflow-hidden rounded-full bg-primary/20">
         <span
           className={`absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] duration-200${finishing ? " animate-pulse" : ""}`}
@@ -3492,9 +3499,9 @@ function ExerciseLogContent({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [commentsPath] });
-      toast.success("Form check video sent to your coach");
+      toast.success(t("Form check video sent to your coach"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not attach video"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not attach video")),
   });
 
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
@@ -3547,7 +3554,7 @@ function ExerciseLogContent({
       qc.invalidateQueries({ queryKey: [`${programsApiBase}/programs/${programId}/chat`] });
       setAiFeedback(result.assistantMessage.content);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not get AI feedback on that video"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not get AI feedback on that video")),
   });
 
   /** WHERE A FORM-CHECK VIDEO GOES, FOR ALL THREE ANSWERS (2026-10-24).
@@ -3582,7 +3589,7 @@ function ExerciseLogContent({
       case "saved_to_set_only":
         // Saved against the set, with nobody to send it to. The athlete asked for a form check
         // and deserves to know the video is kept -- silence here would read as a failed upload.
-        toast.success("Form check video saved to this set");
+        toast.success(t("Form check video saved to this set"));
         return;
     }
   }
@@ -3648,7 +3655,7 @@ function ExerciseLogContent({
       setRegressNote("");
     },
     onError: (err: ApiError) =>
-      toast.error(err.message || "Could not work out an easier version just now"),
+      toast.error(err.message ? t(err.message) : t("Could not work out an easier version just now")),
   });
 
   const [swapOpen, setSwapOpen] = useState(false);
@@ -3671,7 +3678,7 @@ function ExerciseLogContent({
       setSwapReason(null);
       setSwapNotes("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not ask the AI to swap that"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not ask the AI to swap that")),
   });
 
   return (
@@ -3689,27 +3696,37 @@ function ExerciseLogContent({
               <Badge
                 variant="secondary"
                 className="shrink-0 text-[10px]"
-                title={`${item.layerSwappedFrom.label ?? "Position"}: in place of ${item.layerSwappedFrom.name}${item.layerSwappedFrom.reason ? `. ${item.layerSwappedFrom.reason}` : ""}`}
+                title={t("{label}: in place of {name}{reason}", {
+                  label: item.layerSwappedFrom.label ?? t("Position"),
+                  name: t.exercise(item.layerSwappedFrom.name),
+                  reason: item.layerSwappedFrom.reason ? `. ${item.layerSwappedFrom.reason}` : "",
+                })}
               >
-                {item.layerSwappedFrom.label ?? "Position swap"}
+                {item.layerSwappedFrom.label ?? t("Position swap")}
               </Badge>
             )}
             {item.substitutedFrom && (
               <Badge
                 variant="secondary"
                 className="shrink-0 text-[10px]"
-                title={`Swapped in for ${item.substitutedFrom} due to today's flagged pain`}
+                title={t("Swapped in for {name} due to today's flagged pain", { name: t.exercise(item.substitutedFrom) })}
               >
-                Swapped
+                {t("Swapped")}
               </Badge>
             )}
             {item.regression && (
               <Badge
                 variant="secondary"
                 className="shrink-0 text-[10px] text-amber-600 dark:text-amber-400"
-                title={`You asked for an easier version today. Prescribed ${item.regression.prescribedSets} x ${item.regression.prescribedReps}; scaled to ${item.regression.sets} x ${item.regression.reps}. ${item.regression.loadHint}`}
+                title={t("You asked for an easier version today. Prescribed {sets} x {reps}; scaled to {newSets} x {newReps}. {hint}", {
+                  sets: item.regression.prescribedSets,
+                  reps: item.regression.prescribedReps,
+                  newSets: item.regression.sets,
+                  newReps: item.regression.reps,
+                  hint: item.regression.loadHint,
+                })}
               >
-                Scaled down
+                {t("Scaled down")}
               </Badge>
             )}
             {linked && <Link2 className="h-4 w-4 shrink-0 text-primary" />}
@@ -3741,8 +3758,8 @@ function ExerciseLogContent({
             {canSubstituteExercise && !isCorrective && (
               <button
                 type="button"
-                aria-label={`Ask AI to swap ${item.exerciseName}`}
-                title="Ask AI to swap this exercise"
+                aria-label={t("Ask AI to swap {name}", { name: t.exercise(item.exerciseName) })}
+                title={t("Ask AI to swap this exercise")}
                 onClick={() => setSwapOpen(true)}
                 className="text-muted-foreground transition-colors hover:text-primary"
               >
@@ -3756,8 +3773,8 @@ function ExerciseLogContent({
             {user?.role === "athlete" && mayAskForEasier === true && !isCorrective && (
               <button
                 type="button"
-                aria-label={`Ask for an easier version of ${item.exerciseName}`}
-                title="This is too hard, ask for an easier version"
+                aria-label={t("Ask for an easier version of {name}", { name: t.exercise(item.exerciseName) })}
+                title={t("This is too hard, ask for an easier version")}
                 onClick={() => setRegressOpen(true)}
                 className="text-muted-foreground transition-colors hover:text-amber-500"
               >
@@ -3767,13 +3784,17 @@ function ExerciseLogContent({
           </div>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          Prescribed: {item.prescribedSets} × {item.prescribedReps}{eachSideSuffix(item.laterality)}
+          {t("Prescribed: {sets} × {reps}{side}", {
+            sets: item.prescribedSets,
+            reps: item.prescribedReps,
+            side: t(eachSideSuffix(item.laterality)),
+          })}
           {item.prescribedWeight ? ` @ ${item.prescribedWeight}` : ""}
           {suggestedFromOneRm != null ? ` (≈ ${suggestedFromOneRm} ${unit})` : ""}
           {suggestedFromOneRm == null && suggestedFromProgression != null
             ? ` (≈ ${suggestedFromProgression} ${unit})`
             : ""}
-          {item.restSeconds ? ` · Rest ${item.restSeconds}s` : ""}
+          {item.restSeconds ? t(" · Rest {seconds}s", { seconds: item.restSeconds }) : ""}
         </p>
         {item.kind === "exercise" && item.trackingLevel === "full" && (
           <VelocityZonePanel exerciseId={item.exerciseId} exerciseName={item.exerciseName} speeds={item.sets.map((s) => s.meanVelocityMps ?? null)} />
@@ -3783,15 +3804,20 @@ function ExerciseLogContent({
             <div className="mt-0.5 flex items-center gap-1.5 text-xs">
               <Calculator className="h-3 w-3 shrink-0 text-blue-500" />
               <span className="font-medium text-blue-600 dark:text-blue-400">
-                {percentOfOneRm}% of your {estimatedOneRm} {unit} 1RM ≈ {suggestedFromOneRm} {unit}
-                {progression && ` (Week ${item.weekNumber}, +${progressionIncrementLabel}/week)`}
+                {t("{percent}% of your {oneRm} {unit} 1RM ≈ {suggested} {unit}", {
+                  percent: percentOfOneRm,
+                  oneRm: estimatedOneRm,
+                  unit,
+                  suggested: suggestedFromOneRm,
+                })}
+                {progression && t(" (Week {week}, +{increment}/week)", { week: item.weekNumber, increment: progressionIncrementLabel })}
               </span>
               <button
                 type="button"
                 onClick={() => fillSuggestedWeight(String(suggestedFromOneRm))}
                 className="font-semibold text-primary hover:underline"
               >
-                Use
+                {t("Use")}
               </button>
             </div>
           )}
@@ -3799,15 +3825,19 @@ function ExerciseLogContent({
             <div className="mt-0.5 flex items-center gap-1.5 text-xs">
               <CalendarRange className="h-3 w-3 shrink-0 text-blue-500" />
               <span className="font-medium text-blue-600 dark:text-blue-400">
-                Week {item.weekNumber} progression (+{progressionIncrementLabel}/week) ≈{" "}
-                {suggestedFromProgression} {unit}
+                {t("Week {week} progression (+{increment}/week) ≈ {suggested} {unit}", {
+                  week: item.weekNumber,
+                  increment: progressionIncrementLabel,
+                  suggested: suggestedFromProgression,
+                  unit,
+                })}
               </span>
               <button
                 type="button"
                 onClick={() => fillSuggestedWeight(String(suggestedFromProgression))}
                 className="font-semibold text-primary hover:underline"
               >
-                Use
+                {t("Use")}
               </button>
             </div>
           )}
@@ -3826,7 +3856,7 @@ function ExerciseLogContent({
                     }
                     className="font-semibold text-primary hover:underline"
                   >
-                    Use
+                    {t("Use")}
                   </button>
                 )}
             </div>
@@ -3843,7 +3873,7 @@ function ExerciseLogContent({
                   onClick={() => fillSuggestedWeight(String(item.autoregulation!.suggestedWeight))}
                   className="font-semibold text-primary hover:underline"
                 >
-                  Use
+                  {t("Use")}
                 </button>
               )}
             </div>
@@ -3857,8 +3887,11 @@ function ExerciseLogContent({
             {item.regression.summary}
           </p>
           <p className="mt-0.5 text-muted-foreground">
-            {item.regression.loadHint} · prescribed {item.regression.prescribedSets} x{" "}
-            {item.regression.prescribedReps}
+            {t("{hint} · prescribed {sets} x {reps}", {
+              hint: item.regression.loadHint,
+              sets: item.regression.prescribedSets,
+              reps: item.regression.prescribedReps,
+            })}
           </p>
         </div>
       )}
@@ -3889,12 +3922,12 @@ function ExerciseLogContent({
       {item.trackingLevel !== "none" && cameraAccess.reason === "coach_plan_inactive" && (
         <p className="py-2 text-sm text-muted-foreground" data-testid="camera-paused-plan-inactive">
           {user?.role === "athlete"
-            ? "The camera is paused because your coach's Forge plan isn't active. You can still log this set by hand."
-            : "The camera is paused because your program's Forge plan isn't active. You can still log this set by hand."}
+            ? t("The camera is paused because your coach's Forge plan isn't active. You can still log this set by hand.")
+            : t("The camera is paused because your program's Forge plan isn't active. You can still log this set by hand.")}
         </p>
       )}
       {item.trackingLevel !== "none" && cameraAccess.failed && (
-        <ReadFailed what="whether the camera is available to you" onRetry={cameraAccess.retry} className="flex flex-col items-start gap-2 py-2" />
+        <ReadFailed what={t("whether the camera is available to you")} onRetry={cameraAccess.retry} className="flex flex-col items-start gap-2 py-2" />
       )}
       {/* Rendered beside the sets rather than at the dialog stack below, because it has to open
           BEFORE any tracker does -- it is the question asked instead of starting the camera. */}
@@ -3928,19 +3961,19 @@ function ExerciseLogContent({
                 reference, a 45cm plate or the athlete's own height. So: weight
                 first, then record, and only where there are metrics to be had. */}
             {videoCheckMode === "ai"
-              ? "Record each set for full AI analytics, velocity, bar path, and form."
-              : "Your coach wants a video, record each set below."}
+              ? t("Record each set for full AI analytics, velocity, bar path, and form.")
+              : t("Your coach wants a video, record each set below.")}
             {/* Only where there are tracked numbers to lose. A video check with
                 trackingLevel "none" computes no metrics at all, so weight order
                 genuinely does not matter there and saying otherwise is noise. */}
             {mergedTracking && item.materials.usesWeight
-              ? " Enter the weight before you record, or power can't be calculated."
+              ? t(" Enter the weight before you record, or power can't be calculated.")
               : ""}
           </span>
           {flaggedSetVideos.length > 1 && (
             <Button size="sm" variant="secondary" onClick={() => setCompareOpen(true)}>
               <GitCompare className="h-3.5 w-3.5" />
-              Compare Sets
+              {t("Compare Sets")}
             </Button>
           )}
         </div>
@@ -3951,7 +3984,7 @@ function ExerciseLogContent({
           <History className="h-4 w-4 shrink-0 text-primary" />
           <p className="text-sm font-bold sm:text-base">
             <span className="mr-1.5 text-[10px] font-extrabold uppercase tracking-wide text-primary">
-              Last time
+              {t("Last time")}
             </span>
             {formatLastPerformance(item.lastPerformance, item.weightUnit)}
           </p>
@@ -3963,11 +3996,11 @@ function ExerciseLogContent({
           className="grid items-center gap-2 px-0.5 pb-1"
           style={{ gridTemplateColumns: gridTemplate }}
         >
-          <span className="label-xs">Set</span>
-          <span className="label-xs">Reps</span>
+          <span className="label-xs">{t("Set")}</span>
+          <span className="label-xs">{t("Reps")}</span>
           {isBodyweightOnly ? (
             <span className="label-xs">
-              Bodyweight
+              {t("Bodyweight")}
             </span>
           ) : (
             valueColumns.map((col) => (
@@ -4010,7 +4043,7 @@ function ExerciseLogContent({
             // load, so it draws no inputs of its own: only its Film button and its results.
             const sharesInputs = rowIndex !== setStart;
             const filmSide = filmSideLabel(set.side, item.laterality);
-            const sidePrefix = filmSide && set.side ? `${sideLabel(set.side)}: ` : "";
+            const sidePrefix = filmSide && set.side ? `${t(sideLabel(set.side))}: ` : "";
             const complete = isSetComplete(item, set);
             const tracked =
               set.peakVelocityMps != null || set.barPathDeviationCm != null || set.jumpHeightCm != null;
@@ -4052,14 +4085,14 @@ function ExerciseLogContent({
                     {pairIndexFor(set.setNumber, item.laterality)}
                   </span>
                   <Input
-                    placeholder={item.lastPerformance?.reps || "Reps"}
+                    placeholder={item.lastPerformance?.reps || t("Reps")}
                     value={set.reps}
                     onChange={(e) => updateWholeSet(set.setNumber, { reps: e.target.value })}
                     className="h-9 text-sm"
                   />
                   {isBodyweightOnly ? (
                     <div className="flex h-9 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
-                      Bodyweight
+                      {t("Bodyweight")}
                     </div>
                   ) : (
                     valueColumns.map((col) =>
@@ -4076,7 +4109,7 @@ function ExerciseLogContent({
                       ) : col.type === "band" ? (
                         <Input
                           key="band"
-                          placeholder="e.g. Green"
+                          placeholder={t("e.g. Green")}
                           value={set.bandColor}
                           onChange={(e) => updateWholeSet(set.setNumber, { bandColor: e.target.value })}
                           className="h-9 text-sm"
@@ -4086,7 +4119,7 @@ function ExerciseLogContent({
                           key="box"
                           type="number"
                           inputMode="decimal"
-                          placeholder="Height"
+                          placeholder={t("Height")}
                           value={set.boxHeight}
                           onChange={(e) => updateWholeSet(set.setNumber, { boxHeight: e.target.value })}
                           className="h-9 text-sm"
@@ -4115,7 +4148,7 @@ function ExerciseLogContent({
                           }
                         : undefined
                     }
-                    title={isPR ? "New PR!" : undefined}
+                    title={isPR ? t("New PR!") : undefined}
                   >
                     {isPR ? (
                       <Crown className="h-4 w-4" />
@@ -4127,7 +4160,7 @@ function ExerciseLogContent({
                 )}
                 {!sharesInputs && historyMatch && !isPR && (
                   <p className="mt-0.5 pl-9 text-[10px] text-muted-foreground">
-                    Last @ {set.reps} reps: {formatLoad(historyMatch, item.weightUnit)}
+                    {t("Last @ {reps} reps: {load}", { reps: set.reps, load: formatLoad(historyMatch, item.weightUnit) })}
                   </p>
                 )}
                 {(item.trackingLevel !== "none" || videoRequired || (usesPlateCalc && !sharesInputs) || canQuickFillSame) && (
@@ -4139,7 +4172,7 @@ function ExerciseLogContent({
                         className="flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
                       >
                         <Copy className="h-3 w-3" />
-                        Same as Set {pairIndexFor(prevSet!.setNumber, item.laterality)} ({prevSet!.weight} {unit})
+                        {t("Same as Set {number} ({weight} {unit})", { number: pairIndexFor(prevSet!.setNumber, item.laterality), weight: prevSet!.weight, unit })}
                       </button>
                     )}
                     {item.trackingLevel !== "none" && cameraAllowed && !user?.trackingOptOut && processingSets.has(set.setNumber) && (
@@ -4158,7 +4191,7 @@ function ExerciseLogContent({
                             use-av-body-tracking's onAnalysisProgress), so both waits are
                             visible and the athlete can see which one they are in. */}
                         <ProcessingPhaseBar
-                          label="Processing"
+                          label={t("Processing")}
                           percent={analysisProgress[set.setNumber]}
                           // Analysis is finished the moment the upload starts reporting: the
                           // two run concurrently, but a save cannot begin before the blob
@@ -4166,7 +4199,7 @@ function ExerciseLogContent({
                           // 99% for the whole upload.
                           done={processingProgress[set.setNumber] != null}
                         />
-                        <ProcessingPhaseBar label="Saving" percent={processingProgress[set.setNumber]} done={false} />
+                        <ProcessingPhaseBar label={t("Saving")} percent={processingProgress[set.setNumber]} done={false} />
                       </span>
                     )}
                     {item.trackingLevel !== "none" && cameraAllowed && !user?.trackingOptOut && !processingSets.has(set.setNumber) && (
@@ -4195,24 +4228,24 @@ function ExerciseLogContent({
                         {weightMissingForTracking
                           ? // Says what to do, not just that it is off. A greyed control with
                             // its usual label reads as broken.
-                            `Enter ${unit} to record`
+                            t("Enter {unit} to record", { unit })
                           : tracked
                           ? sidePrefix + (item.trackingLevel === "jump" && set.jumpHeightCm != null
-                            ? `${formatDistanceCm(set.jumpHeightCm, distanceUnit)} jump — retake`
+                            ? t("{height} jump — retake", { height: formatDistanceCm(set.jumpHeightCm, distanceUnit) })
                             : item.trackingLevel === "full" && set.meanVelocityMps != null
                               ? // Average (mean concentric) velocity, not peak -- this is the
                                 // number VBT athletes actually train against (e.g. "stay above
                                 // 0.5 m/s"), and it's the first thing shown back to them after
                                 // a tracked set, right here on the set row.
-                                `${set.meanVelocityMps} m/s avg — retake`
-                              : `Path ${set.barPathDeviationCm} cm — retake`)
+                                t("{speed} m/s avg — retake", { speed: set.meanVelocityMps })
+                              : t("Path {cm} cm — retake", { cm: set.barPathDeviationCm }))
                           : filmSide
-                            ? filmSide
+                            ? t(filmSide)
                           : item.trackingLevel === "jump"
-                            ? "Track this jump"
+                            ? t("Track this jump")
                             : mergedTracking
-                              ? "Record & Analyze"
-                              : "Track this set"}
+                              ? t("Record & Analyze")
+                              : t("Track this set")}
                       </button>
                     )}
                     {/* When trackingLevel also applies, the button above already
@@ -4245,11 +4278,11 @@ function ExerciseLogContent({
                         <Video className="h-3 w-3" />
                         {set.formCheckVideoUrl
                           ? sidePrefix + (set.formCheckFlag === "best"
-                            ? "Best set video"
+                            ? t("Best set video")
                             : set.formCheckFlag === "worst"
-                              ? "Worst set video"
-                              : "View video")
-                          : filmSide ?? "Record & Analyze"}
+                              ? t("Worst set video")
+                              : t("View video"))
+                          : filmSide ? t(filmSide) : t("Record & Analyze")}
                       </button>
                     )}
                     {mergedTracking && set.formCheckVideoUrl && (
@@ -4261,10 +4294,10 @@ function ExerciseLogContent({
                         <Video className="h-3 w-3" />
                         {sidePrefix}
                         {set.formCheckFlag === "best"
-                          ? "Best set video"
+                          ? t("Best set video")
                           : set.formCheckFlag === "worst"
-                            ? "Worst set video"
-                            : "View video"}
+                            ? t("Worst set video")
+                            : t("View video")}
                       </button>
                     )}
                     {usesPlateCalc && (
@@ -4274,7 +4307,7 @@ function ExerciseLogContent({
                         className="flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
                       >
                         <Dumbbell className="h-3 w-3" />
-                        Plate Calculator
+                        {t("Plate Calculator")}
                       </button>
                     )}
                   </div>
@@ -4307,14 +4340,14 @@ function ExerciseLogContent({
                     <ShieldAlert className="h-3 w-3 shrink-0" />
                     <span>
                       {set.trustScores.some((t) => t.label === "low")
-                        ? "Tracking was shaky on at least one rep, take those numbers with a grain of salt"
-                        : "Tracking mostly solid, a couple reps less certain"}
+                        ? t("Tracking was shaky on at least one rep, take those numbers with a grain of salt")
+                        : t("Tracking mostly solid, a couple reps less certain")}
                     </span>
                   </div>
                 )}
                 {set.repBreakdown && set.repBreakdown.length > 1 && (
                   <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
-                    <span className="font-semibold uppercase tracking-wide">Rep by rep</span>
+                    <span className="font-semibold uppercase tracking-wide">{t("Rep by rep")}</span>
                     {set.repBreakdown.map((r) => {
                       const trust = set.trustScores?.find((t) => t.repNumber === r.repNumber);
                       return (
@@ -4343,7 +4376,7 @@ function ExerciseLogContent({
                     cannot. */}
                 {set.jumpBreakdown && set.jumpBreakdown.length >= 1 && (
                   <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
-                    <span className="font-semibold uppercase tracking-wide">Jump by jump</span>
+                    <span className="font-semibold uppercase tracking-wide">{t("Jump by jump")}</span>
                     {set.jumpBreakdown.map((j) => (
                       <span
                         key={j.repNumber}
@@ -4353,33 +4386,33 @@ function ExerciseLogContent({
                         )}
                         title={
                           j.likelyTrackingGlitch
-                            ? "Way off from this set's other jumps, likely a tracking glitch"
+                            ? t("Way off from this set's other jumps, likely a tracking glitch")
                             : undefined
                         }
                       >
                         {formatDistanceCm(j.jumpHeightCm, distanceUnit)}
-                        {j.takeoffVelocityMps != null ? ` · ${j.takeoffVelocityMps} m/s takeoff` : ""}
-                        {j.groundContactSeconds != null ? ` · ${j.groundContactSeconds}s on the ground` : ""}
+                        {j.takeoffVelocityMps != null ? t(" · {speed} m/s takeoff", { speed: j.takeoffVelocityMps }) : ""}
+                        {j.groundContactSeconds != null ? t(" · {seconds}s on the ground", { seconds: j.groundContactSeconds }) : ""}
                       </span>
                     ))}
                   </div>
                 )}
                 {(set.swingSeparationDeg != null || set.swingTempoRatio != null) && (
                   <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
-                    <span className="font-semibold uppercase tracking-wide">Swing</span>
+                    <span className="font-semibold uppercase tracking-wide">{t("Swing")}</span>
                     {set.swingSeparationDeg != null && (
                       <span className="rounded bg-secondary px-1.5 py-0.5">
-                        X-Factor {Math.abs(set.swingSeparationDeg)}°
+                        {t("X-Factor {degrees}°", { degrees: Math.abs(set.swingSeparationDeg) })}
                       </span>
                     )}
                     {set.swingTempoRatio != null && (
                       <span className="rounded bg-secondary px-1.5 py-0.5">
-                        Tempo {set.swingTempoRatio}:1
+                        {t("Tempo {ratio}:1", { ratio: set.swingTempoRatio })}
                       </span>
                     )}
                     {set.swingHeadSwayCm != null && (
                       <span className="rounded bg-secondary px-1.5 py-0.5">
-                        Head sway {set.swingHeadSwayCm}cm
+                        {t("Head sway {cm}cm", { cm: set.swingHeadSwayCm })}
                       </span>
                     )}
                     {set.swingTrustScore && set.swingTrustScore.label !== "high" && (
@@ -4388,14 +4421,14 @@ function ExerciseLogContent({
                         title={set.swingTrustScore.notes.join("; ")}
                       >
                         <ShieldAlert className="h-3 w-3 shrink-0" />
-                        Cross-check uncertain
+                        {t("Cross-check uncertain")}
                       </span>
                     )}
                   </div>
                 )}
                 {(set.medBallPeakSpeedMps != null || set.medBallReleaseHeightCm != null) && (
                   <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
-                    <span className="font-semibold uppercase tracking-wide">Throw</span>
+                    <span className="font-semibold uppercase tracking-wide">{t("Throw")}</span>
                     {set.medBallRepBreakdown.length > 1 ? (
                       // One number per detected throw, not one blended number for the whole
                       // take -- "if i do 10 reps, it only shows one average m/s not 10
@@ -4407,12 +4440,12 @@ function ExerciseLogContent({
                       ))
                     ) : set.medBallPeakSpeedMps != null ? (
                       <span className="rounded bg-secondary px-1.5 py-0.5">
-                        Peak speed {set.medBallPeakSpeedMps} m/s
+                        {t("Peak speed {speed} m/s", { speed: set.medBallPeakSpeedMps })}
                       </span>
                     ) : null}
                     {set.medBallReleaseHeightCm != null && (
                       <span className="rounded bg-secondary px-1.5 py-0.5">
-                        Release {set.medBallReleaseHeightCm}cm
+                        {t("Release {cm}cm", { cm: set.medBallReleaseHeightCm })}
                       </span>
                     )}
                     {set.medBallTrustScore && set.medBallTrustScore.label !== "high" && (
@@ -4421,22 +4454,22 @@ function ExerciseLogContent({
                         title={set.medBallTrustScore.notes.join("; ")}
                       >
                         <ShieldAlert className="h-3 w-3 shrink-0" />
-                        Cross-check uncertain
+                        {t("Cross-check uncertain")}
                       </span>
                     )}
                   </div>
                 )}
                 {(set.kbSwingPeakSpeedMps != null || set.kbSwingPeakHeightCm != null) && (
                   <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
-                    <span className="font-semibold uppercase tracking-wide">Swing</span>
+                    <span className="font-semibold uppercase tracking-wide">{t("Swing")}</span>
                     {set.kbSwingPeakSpeedMps != null && (
                       <span className="rounded bg-secondary px-1.5 py-0.5">
-                        Peak speed {set.kbSwingPeakSpeedMps} m/s
+                        {t("Peak speed {speed} m/s", { speed: set.kbSwingPeakSpeedMps })}
                       </span>
                     )}
                     {set.kbSwingPeakHeightCm != null && (
                       <span className="rounded bg-secondary px-1.5 py-0.5">
-                        Height {set.kbSwingPeakHeightCm}cm
+                        {t("Height {cm}cm", { cm: set.kbSwingPeakHeightCm })}
                       </span>
                     )}
                     {set.kbSwingTrustScore && set.kbSwingTrustScore.label !== "high" && (
@@ -4445,14 +4478,14 @@ function ExerciseLogContent({
                         title={set.kbSwingTrustScore.notes.join("; ")}
                       >
                         <ShieldAlert className="h-3 w-3 shrink-0" />
-                        Cross-check uncertain
+                        {t("Cross-check uncertain")}
                       </span>
                     )}
                   </div>
                 )}
                 {set.horizontalLoadElapsedSeconds != null && (
                   <div className="mt-1 flex flex-wrap items-center gap-1 pl-9 text-[9px] text-muted-foreground">
-                    <span className="font-semibold uppercase tracking-wide">Load</span>
+                    <span className="font-semibold uppercase tracking-wide">{t("Load")}</span>
                     <span className="rounded bg-secondary px-1.5 py-0.5">
                       {set.horizontalLoadElapsedSeconds}s
                     </span>
@@ -5165,15 +5198,15 @@ function ExerciseLogContent({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              AI Form Check: {item.exerciseName}
+              {t("AI Form Check: {name}", { name: t.exercise(item.exerciseName) })}
             </DialogTitle>
           </DialogHeader>
           <p className="whitespace-pre-wrap text-sm">{aiFeedback}</p>
           <p className="text-xs text-muted-foreground">
-            Saved to your AI Program Builder chat for this program too.
+            {t("Saved to your AI Program Builder chat for this program too.")}
           </p>
           <DialogFooter>
-            <Button onClick={() => setAiFeedback(null)}>Got it</Button>
+            <Button onClick={() => setAiFeedback(null)}>{t("Got it")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -5183,25 +5216,23 @@ function ExerciseLogContent({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <TrendingDown className="h-5 w-5 text-amber-500" />
-              Make {item.exerciseName} easier
+              {t("Make {name} easier", { name: t.exercise(item.exerciseName) })}
             </DialogTitle>
             <DialogDescription>
-              Same movement, less of it, fewer sets or reps, or less load. Your coach sees that
-              you asked, which is the point: training lighter for weeks without them knowing is
-              the thing this avoids.
+              {t("Same movement, less of it, fewer sets or reps, or less load. Your coach sees that you asked, which is the point: training lighter for weeks without them knowing is the thing this avoids.")}
             </DialogDescription>
           </DialogHeader>
           <Input
             value={regressNote}
             onChange={(e) => setRegressNote(e.target.value)}
-            placeholder="Anything they should know? (optional)"
+            placeholder={t("Anything they should know? (optional)")}
           />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setRegressOpen(false)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button onClick={() => regressMutation.mutate()} disabled={regressMutation.isPending}>
-              {regressMutation.isPending ? "Working it out…" : "Scale it down"}
+              {regressMutation.isPending ? t("Working it out…") : t("Scale it down")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -5212,12 +5243,12 @@ function ExerciseLogContent({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <RefreshCw className="h-5 w-5 text-primary" />
-              Swap {item.exerciseName}
+              {t("Swap {name}", { name: t.exercise(item.exerciseName) })}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="flex flex-wrap gap-1.5">
-              {["No equipment today", "Aggravates an injury", "Too easy", "Too hard"].map(
+              {[msg("No equipment today"), msg("Aggravates an injury"), msg("Too easy"), msg("Too hard")].map(
                 (reason) => (
                   <button
                     key={reason}
@@ -5230,7 +5261,7 @@ function ExerciseLogContent({
                         : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary",
                     )}
                   >
-                    {reason}
+                    {t(reason)}
                   </button>
                 ),
               )}
@@ -5238,15 +5269,15 @@ function ExerciseLogContent({
             <Input
               value={swapNotes}
               onChange={(e) => setSwapNotes(e.target.value)}
-              placeholder="Add any details (optional)"
+              placeholder={t("Add any details (optional)")}
             />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setSwapOpen(false)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button onClick={() => swapMutation.mutate()} disabled={swapMutation.isPending}>
-              {swapMutation.isPending ? "Asking AI…" : "Ask AI to Swap"}
+              {swapMutation.isPending ? t("Asking AI…") : t("Ask AI to Swap")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -5271,16 +5302,16 @@ function ExerciseLogContent({
             type="button"
             onClick={onRemoveSet}
             disabled={item.sets.length <= rowsPerSet(item.laterality)}
-            aria-label="Remove set"
+            aria-label={t("Remove set")}
             className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
           >
             <Minus className="h-4 w-4" />
           </button>
-          <span className="text-xs font-semibold text-muted-foreground">Set</span>
+          <span className="text-xs font-semibold text-muted-foreground">{t("Set")}</span>
           <button
             type="button"
             onClick={onAddSet}
-            aria-label="Add set"
+            aria-label={t("Add set")}
             className="flex h-8 w-8 items-center justify-center rounded-full border border-primary text-primary transition-colors hover:bg-primary/10"
           >
             <Plus className="h-4 w-4" />
@@ -5290,7 +5321,7 @@ function ExerciseLogContent({
 
       <div className="space-y-2 rounded-lg border border-border bg-surface-elevated p-3">
         <p className="label-xs">
-          How did that set feel? (RPE / RIR)
+          {t("How did that set feel? (RPE / RIR)")}
         </p>
         <div className="grid grid-cols-5 gap-1.5">
           {RPE_SCALE.map((opt) => (
@@ -5299,8 +5330,8 @@ function ExerciseLogContent({
               type="button"
               onClick={() => onUpdateItem({ rpe: String(opt.value) })}
               aria-pressed={Number(item.rpe) === opt.value}
-              aria-label={`RPE ${opt.value}, ${opt.label}`}
-              title={opt.label}
+              aria-label={t("RPE {value}, {label}", { value: opt.value, label: t(opt.label) })}
+              title={t(opt.label)}
               className={cn(
                 "rounded-md border py-2 text-sm font-bold transition-colors",
                 Number(item.rpe) === opt.value
@@ -5314,13 +5345,13 @@ function ExerciseLogContent({
         </div>
         <p className="h-4 text-xs text-muted-foreground">
           {item.rpe && Number(item.rpe) >= 1 && Number(item.rpe) <= 10
-            ? `${RPE_SCALE[Number(item.rpe) - 1].label} · ${RPE_SCALE[Number(item.rpe) - 1].rir}`
-            : "1 = very easy, 10 = max effort"}
+            ? `${t(RPE_SCALE[Number(item.rpe) - 1].label)} · ${t(RPE_SCALE[Number(item.rpe) - 1].rir)}`
+            : t("1 = very easy, 10 = max effort")}
         </p>
         <Input
           value={item.athleteNotes}
           onChange={(e) => onUpdateItem({ athleteNotes: e.target.value })}
-          placeholder="Add exercise note"
+          placeholder={t("Add exercise note")}
         />
       </div>
     </div>

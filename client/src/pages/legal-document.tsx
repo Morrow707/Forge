@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import { LegalPageChrome } from "@/components/legal-page-chrome";
 import { ReadFailed } from "@/components/read-failed";
 import { DownloadButton } from "@/components/download-button";
+import { useT } from "@/i18n";
 
 /**
  * Public, unauthenticated pages for Forge's legal documents (shared/schema.ts
@@ -50,6 +51,7 @@ function LegalDocumentPage({
   otherHref: string;
   otherLabel: string;
 }) {
+  const t = useT();
   const { data, isLoading, isError, refetch } = useQuery<{
     content: string;
     updatedAt: string | null;
@@ -63,19 +65,19 @@ function LegalDocumentPage({
     <LegalPageChrome title={title}>
       {data?.updatedAt && (
         <p className="mb-6 text-xs text-muted-foreground">
-          Last updated {new Date(data.updatedAt).toLocaleDateString()}
+          {t("Last updated {date}", { date: new Date(data.updatedAt).toLocaleDateString() })}
         </p>
       )}
       {data?.version && (
         <p className="mb-6 text-xs text-muted-foreground">
-          Version {data.version}
+          {t("Version {version}", { version: data.version })}
         </p>
       )}
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
       ) : isError ? (
         <ReadFailed
-          what={`the ${title}`}
+          what={t("the {document}", { document: title })}
           onRetry={() => void refetch()}
           className="mb-8 flex flex-col items-start gap-2"
         />
@@ -94,7 +96,7 @@ function LegalDocumentPage({
             url={`/api/legal-documents/${docType}.pdf`}
             filename={`forge-${docType.replace(/_/g, "-")}.pdf`}
             shareTitle={`Forge ${title}`}
-            label="Download PDF"
+            label={t("Download PDF")}
           />
         </div>
       )}

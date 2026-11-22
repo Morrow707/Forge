@@ -5,11 +5,13 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ForgeMark } from "@/components/forge-mark";
+import { useT } from "@/i18n";
 
 /** The page the unsubscribe link in every launch email opens. One button; only the POST acts,
  * because mail scanners fetch every link and a GET that unsubscribed would empty the list on
  * delivery. Same rule as the new-device approval email. server/email-list.ts. */
 export default function UnsubscribePage() {
+  const t = useT();
   const [token] = useState(() => {
     try {
       return new URLSearchParams(window.location.search).get("token")?.trim() ?? "";
@@ -32,23 +34,23 @@ export default function UnsubscribePage() {
         </Link>
         <Card>
           <CardHeader>
-            <CardTitle>Unsubscribe from Forge emails</CardTitle>
+            <CardTitle>{t("Unsubscribe from Forge emails")}</CardTitle>
             <CardDescription>
               {mutation.isSuccess
-                ? "Done. You won't get any more emails from the Forge list."
+                ? t("Done. You won't get any more emails from the Forge list.")
                 : !token
-                  ? "This link is missing its code. Open the unsubscribe link from the email itself."
-                  : "Press the button and you're off the list. You can join again from the website any time."}
+                  ? t("This link is missing its code. Open the unsubscribe link from the email itself.")
+                  : t("Press the button and you're off the list. You can join again from the website any time.")}
             </CardDescription>
           </CardHeader>
           {!mutation.isSuccess && token && (
             <CardContent className="space-y-3">
               <Button className="w-full" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-                {mutation.isPending ? "Working…" : "Unsubscribe"}
+                {mutation.isPending ? t("Working…") : t("Unsubscribe")}
               </Button>
               {mutation.isError && (
                 <p className="text-sm text-destructive">
-                  {mutation.error instanceof ApiError ? mutation.error.message : "That didn't go through. Try again."}
+                  {mutation.error instanceof ApiError ? mutation.error.message : t("That didn't go through. Try again.")}
                 </p>
               )}
             </CardContent>

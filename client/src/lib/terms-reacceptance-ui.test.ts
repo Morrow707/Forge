@@ -96,7 +96,7 @@ describe("the guardian's copy of the question", () => {
     expect(guardian).toContain(
       'apiRequest("POST", "/api/guardian/terms-reacceptance", { athleteId, agreed: true })',
     );
-    expect(guardian).toContain("Accept for {p.athleteName}");
+    expect(guardian).toContain('t("Accept for {name}", { name: p.athleteName })');
     expect(guardian).toContain(
       'qc.invalidateQueries({ queryKey: ["/api/guardian/terms-reacceptance"] })',
     );

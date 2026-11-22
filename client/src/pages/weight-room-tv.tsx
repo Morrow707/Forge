@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "wouter";
 import { resolveApiUrl } from "@/lib/queryClient";
 import { Trophy, Flame, CalendarCheck } from "lucide-react";
+import { useT } from "@/i18n";
 
 type Boards = {
   teamName: string;
@@ -35,6 +36,7 @@ function useNoIndex() {
 }
 
 export default function WeightRoomTvPage() {
+  const t = useT();
   useNoIndex();
   const { token } = useParams<{ token: string }>();
   const [boards, setBoards] = useState<Boards | null>(null);
@@ -71,7 +73,7 @@ export default function WeightRoomTvPage() {
     const lifts: Slide[] = boards.topLifts.map((b) => ({
       key: `lift-${b.exercise}`,
       render: () => (
-        <Board icon={<Trophy className="h-12 w-12" />} title={b.exercise} subtitle="Top estimated 1RM, hand-logged">
+        <Board icon={<Trophy className="h-12 w-12" />} title={b.exercise} subtitle={t("Top estimated 1RM, hand-logged")}>
           <ol className="space-y-3">
             {b.rows.map((r) => (
               <li key={r.rank} className="flex items-baseline justify-between gap-8 text-5xl">
@@ -91,9 +93,9 @@ export default function WeightRoomTvPage() {
     const prs: Slide = {
       key: "prs",
       render: () => (
-        <Board icon={<Flame className="h-12 w-12" />} title="PRs this week" subtitle={`Week of ${boards.weekOf}`}>
+        <Board icon={<Flame className="h-12 w-12" />} title={t("PRs this week")} subtitle={t("Week of {date}", { date: boards.weekOf })}>
           {boards.prsThisWeek.length === 0 ? (
-            <p className="text-5xl text-muted-foreground">No PRs yet this week. Somebody go get one.</p>
+            <p className="text-5xl text-muted-foreground">{t("No PRs yet this week. Somebody go get one.")}</p>
           ) : (
             <ul className="space-y-3">
               {boards.prsThisWeek.map((p, i) => (
@@ -114,18 +116,18 @@ export default function WeightRoomTvPage() {
     const completion: Slide = {
       key: "completion",
       render: () => (
-        <Board icon={<CalendarCheck className="h-12 w-12" />} title="This week's training" subtitle={`Week of ${boards.weekOf}`}>
+        <Board icon={<CalendarCheck className="h-12 w-12" />} title={t("This week's training")} subtitle={t("Week of {date}", { date: boards.weekOf })}>
           {boards.completion.percent == null ? (
-            <p className="text-5xl text-muted-foreground">Nothing scheduled yet this week.</p>
+            <p className="text-5xl text-muted-foreground">{t("Nothing scheduled yet this week.")}</p>
           ) : (
             <div className="space-y-8">
               <p className="text-8xl font-bold tabular-nums">{boards.completion.percent}%</p>
               <p className="text-4xl text-muted-foreground">
-                {boards.completion.completed} of {boards.completion.scheduled} sessions done so far
+                {t("{done} of {total} sessions done so far", { done: boards.completion.completed, total: boards.completion.scheduled })}
               </p>
               {boards.completion.everySessionDone.length > 0 && (
                 <p className="text-4xl">
-                  Every session done: <span className="font-semibold">{boards.completion.everySessionDone.join(", ")}</span>
+                  {t("Every session done:")} <span className="font-semibold">{boards.completion.everySessionDone.join(", ")}</span>
                 </p>
               )}
             </div>
@@ -145,14 +147,14 @@ export default function WeightRoomTvPage() {
   if (gone) {
     return (
       <Screen>
-        <p className="text-5xl text-muted-foreground">This display link has been turned off.</p>
+        <p className="text-5xl text-muted-foreground">{t("This display link has been turned off.")}</p>
       </Screen>
     );
   }
   if (!boards) {
     return (
       <Screen>
-        <p className="text-5xl text-muted-foreground">Loading the boards...</p>
+        <p className="text-5xl text-muted-foreground">{t("Loading the boards...")}</p>
       </Screen>
     );
   }

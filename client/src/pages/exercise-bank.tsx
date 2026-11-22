@@ -48,6 +48,7 @@ import { ReadFailed } from "@/components/read-failed";
 import { exerciseMatchScore, searchExercises } from "@shared/exercise-search";
 import { roomAllows } from "@shared/exercise-needs";
 import { useEquipmentRoom } from "@/hooks/use-equipment-room";
+import { useT } from "@/i18n";
 
 const CATEGORIES = [
   "strength",
@@ -83,6 +84,7 @@ export function ExerciseBankPage({
    * editable: false for a Free Agent. */
   showCreate?: boolean;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [, navigate] = useLocation();
   // THE FORGE LIBRARY ALSO LISTS WHAT IS HIDDEN (2026-11-22 library review), and only there: the
@@ -273,10 +275,10 @@ export function ExerciseBankPage({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/exercises`] });
-      toast.success("Exercise deleted");
+      toast.success(t("Exercise deleted"));
       setDeleteTarget(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not delete exercise"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not delete exercise")),
   });
 
   const restoreMutation = useMutation({
@@ -285,9 +287,9 @@ export function ExerciseBankPage({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/exercises`] });
-      toast.success("Exercise restored to the library");
+      toast.success(t("Exercise restored to the library"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not restore exercise"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not restore exercise")),
   });
 
   const favoriteMutation = useMutation({
@@ -295,7 +297,7 @@ export function ExerciseBankPage({
       await apiRequest(next ? "POST" : "DELETE", `${apiBase}/exercises/${id}/favorite`);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [`${apiBase}/exercises`] }),
-    onError: () => toast.error("Couldn't update favorite"),
+    onError: () => toast.error(t("Couldn't update favorite")),
   });
 
   const isBrowsing = !search.trim();
@@ -308,7 +310,7 @@ export function ExerciseBankPage({
         showCreate && (
           <Button onClick={() => navigate(`${routeBase}/new`)}>
             <Plus className="h-4 w-4" />
-            New Exercise
+            {t("New Exercise")}
           </Button>
         )
       }
@@ -317,7 +319,7 @@ export function ExerciseBankPage({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search exercises, body part, or sport…"
+            placeholder={t("Search exercises, body part, or sport…")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -337,7 +339,7 @@ export function ExerciseBankPage({
               )}
             >
               <Star className={cn("h-3.5 w-3.5", favoritesOnly && "fill-amber-400")} />
-              Favorites
+              {t("Favorites")}
             </button>
             <button
               type="button"
@@ -351,7 +353,7 @@ export function ExerciseBankPage({
               )}
             >
               <Clock className="h-3.5 w-3.5" />
-              Recently Used
+              {t("Recently Used")}
             </button>
           </div>
         )}
@@ -366,7 +368,7 @@ export function ExerciseBankPage({
               hiddenOnly ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:border-primary/50",
             )}
           >
-            Hidden <span className="opacity-70">{hiddenCount}</span>
+            {t("Hidden")} <span className="opacity-70">{hiddenCount}</span>
           </button>
         )}
         {hasProfile && (
@@ -380,7 +382,7 @@ export function ExerciseBankPage({
               roomOnly ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:border-primary/50",
             )}
           >
-            Only what my room has
+            {t("Only what my room has")}
           </button>
         )}
         {/* isBrowsing hides the family/equipment/more-filters accordion once
@@ -416,7 +418,7 @@ export function ExerciseBankPage({
             {activeFamily && (
               <div className="rounded-md border border-border/60 bg-surface p-2.5">
                 <p className="label-xs mb-1.5">
-                  Equipment
+                  {t("Equipment")}
                 </p>
                 <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
                   {EQUIPMENT_ORDER.map((eq) => {
@@ -449,7 +451,7 @@ export function ExerciseBankPage({
               className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-primary"
             >
               <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showMoreFilters && "rotate-180")} />
-              More filters
+              {t("More filters")}
             </button>
             {showMoreFilters && (
               <div className="space-y-2">
@@ -461,14 +463,14 @@ export function ExerciseBankPage({
                     naturally. */}
                 <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-3">
                   <FilterChipGroup
-                    label="Category"
+                    label={t("Category")}
                     options={[...CATEGORIES]}
                     selected={categoryFilter}
                     onToggle={(v) => toggleInSet(setCategoryFilter, v)}
                     optionColorClass={(v) => CATEGORY_FILTER_ACTIVE_CLASS[v]}
                   />
                   <FilterChipGroup
-                    label="Movement"
+                    label={t("Movement")}
                     options={MOVEMENT_TYPES}
                     selected={movementFilter}
                     onToggle={(v) => toggleInSet(setMovementFilter, v)}
@@ -476,7 +478,7 @@ export function ExerciseBankPage({
                   />
                   <div className="space-y-2">
                     <FilterChipGroup
-                      label="Laterality"
+                      label={t("Laterality")}
                       options={["bilateral", "unilateral"]}
                       selected={lateralityFilter}
                       onToggle={(v) => toggleInSet(setLateralityFilter, v)}
@@ -494,32 +496,32 @@ export function ExerciseBankPage({
                       )}
                     >
                       <Stethoscope className="h-3 w-3" />
-                      Correctives only
+                      {t("Correctives only")}
                     </button>
                   </div>
                   <FilterChipGroup
-                    label="Created By"
+                    label={t("Created By")}
                     options={ownerOptions}
                     selected={ownerFilter}
                     onToggle={(v) => toggleInSet(setOwnerFilter, v)}
                     colorClass={OWNER_FILTER_ACTIVE_CLASS}
                   />
                   <FilterChipGroup
-                    label="Body Region"
+                    label={t("Body Region")}
                     options={BODY_REGIONS}
                     selected={bodyRegionFilter}
                     onToggle={(v) => toggleInSet(setBodyRegionFilter, v)}
                     colorClass={BODY_REGION_FILTER_ACTIVE_CLASS}
                   />
                   <FilterChipGroup
-                    label="Plane"
+                    label={t("Plane")}
                     options={PLANES}
                     selected={planeFilter}
                     onToggle={(v) => toggleInSet(setPlaneFilter, v)}
                     colorClass={PLANE_FILTER_ACTIVE_CLASS}
                   />
                   <FilterChipGroup
-                    label="Complexity"
+                    label={t("Complexity")}
                     options={MOVEMENT_COMPLEXITIES}
                     selected={complexityFilter}
                     onToggle={(v) => toggleInSet(setComplexityFilter, v)}
@@ -527,14 +529,14 @@ export function ExerciseBankPage({
                   />
                 </div>
                 <FilterChipGroup
-                  label="Muscle"
+                  label={t("Muscle")}
                   options={bodyParts}
                   selected={muscleGroupFilter}
                   onToggle={(v) => toggleInSet(setMuscleGroupFilter, v)}
                   colorClass={MUSCLE_FILTER_ACTIVE_CLASS}
                 />
                 <FilterChipGroup
-                  label="Sport"
+                  label={t("Sport")}
                   options={sportOptions}
                   selected={sportFilter}
                   onToggle={(v) => toggleInSet(setSportFilter, v)}
@@ -551,7 +553,7 @@ export function ExerciseBankPage({
       {isError && (
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="the exercise library" onRetry={() => void refetch()} />
+            <ReadFailed what={t("the exercise library")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       )}
@@ -561,12 +563,12 @@ export function ExerciseBankPage({
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Dumbbell className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">
-              {exercises.length === 0 ? emptyStateText : "No exercises match your filters."}
+              {exercises.length === 0 ? emptyStateText : t("No exercises match your filters.")}
             </p>
             {exercises.length === 0 && showCreate && (
               <Button onClick={() => navigate(`${routeBase}/new`)}>
                 <Plus className="h-4 w-4" />
-                Add Exercise
+                {t("Add Exercise")}
               </Button>
             )}
           </CardContent>
@@ -584,7 +586,7 @@ export function ExerciseBankPage({
                       {canFavorite && (
                         <button
                           type="button"
-                          aria-label={ex.isFavorite ? `Unfavorite ${ex.name}` : `Favorite ${ex.name}`}
+                          aria-label={ex.isFavorite ? t("Unfavorite {name}", { name: t.exercise(ex.name) }) : t("Favorite {name}", { name: t.exercise(ex.name) })}
                           aria-pressed={!!ex.isFavorite}
                           onClick={(e) => {
                             e.preventDefault();
@@ -619,7 +621,7 @@ export function ExerciseBankPage({
                       {ex.isCorrective && (
                         <Badge variant="secondary" className="gap-1">
                           <Stethoscope className="h-3 w-3" />
-                          Corrective
+                          {t("Corrective")}
                         </Badge>
                       )}
                     </div>
@@ -630,7 +632,7 @@ export function ExerciseBankPage({
                   {ex.retiredAt != null && (
                     <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 p-2 text-xs">
                       <span className="text-muted-foreground">
-                        {ex.mergedIntoName ? `Hidden: merged into ${ex.mergedIntoName}` : "Hidden: retired"}
+                        {ex.mergedIntoName ? t("Hidden: merged into {name}", { name: t.exercise(ex.mergedIntoName) }) : t("Hidden: retired")}
                       </span>
                       <Button
                         size="sm"
@@ -643,7 +645,7 @@ export function ExerciseBankPage({
                           restoreMutation.mutate(ex.id);
                         }}
                       >
-                        Restore
+                        {t("Restore")}
                       </Button>
                     </div>
                   )}
@@ -656,7 +658,7 @@ export function ExerciseBankPage({
                       <Button
                         size="icon"
                         variant="ghost"
-                        aria-label={`Delete ${ex.name}`}
+                        aria-label={t("Delete {name}", { name: t.exercise(ex.name) })}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -687,9 +689,9 @@ export function ExerciseBankPage({
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="Delete exercise?"
-        description={deleteTarget ? `Delete "${deleteTarget.name}"?` : ""}
-        confirmLabel="Delete"
+        title={t("Delete exercise?")}
+        description={deleteTarget ? t("Delete \"{name}\"?", { name: t.exercise(deleteTarget.name) }) : ""}
+        confirmLabel={t("Delete")}
         isPending={deleteMutation.isPending}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
       />

@@ -9,6 +9,7 @@ import { ShieldCheck, MailCheck, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, ApiError } from "@/lib/queryClient";
+import { useT } from "@/i18n";
 
 /** What a minor athlete sees instead of the app until a parent or guardian
  * finishes setting up their linked account.
@@ -27,6 +28,7 @@ import { apiRequest, ApiError } from "@/lib/queryClient";
  * one promise this screen makes is the one it could not keep.
  */
 export default function GuardianPendingPage() {
+  const t = useT();
   const { user, logoutMutation } = useAuth();
   const qc = useQueryClient();
   // The second hold, under 13 only: the parent has claimed and still has one step to do.
@@ -53,9 +55,9 @@ export default function GuardianPendingPage() {
     },
     onSuccess: () => {
       setSent(true);
-      toast.success("We've sent it again.");
+      toast.success(t("We've sent it again."));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't send that right now"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Couldn't send that right now")),
   });
 
   const brand = useRememberedBrand();
@@ -66,28 +68,24 @@ export default function GuardianPendingPage() {
         <div className="space-y-3">
           <ShieldCheck className="mx-auto h-8 w-8 text-primary" />
           <h1 className="font-display text-2xl font-extrabold uppercase tracking-wide">
-            One more step
+            {t("One more step")}
           </h1>
           {verifying ? (
             <>
               <p className="text-sm text-muted-foreground">
-                Your parent or guardian has set up their account. Because you're under 13, the law
-                asks them to confirm it's really them with a quick card check on their Forge
-                guardian page. It costs nothing: the 50 cents is refunded straight away.
+                {t("Your parent or guardian has set up their account. Because you're under 13, the law asks them to confirm it's really them with a quick card check on their Forge guardian page. It costs nothing: the 50 cents is refunded straight away.")}
               </p>
               <p className="text-sm text-muted-foreground">
-                As soon as they finish, everything here unlocks for you.
+                {t("As soon as they finish, everything here unlocks for you.")}
               </p>
             </>
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                Because you're under 18, a parent or guardian has to set up their own linked account
-                before you can start training on Forge. We emailed them when you signed up.
+                {t("Because you're under 18, a parent or guardian has to set up their own linked account before you can start training on Forge. We emailed them when you signed up.")}
               </p>
               <p className="text-sm text-muted-foreground">
-                Ask them to open that email and follow the link. As soon as they finish, everything
-                here unlocks for you.
+                {t("Ask them to open that email and follow the link. As soon as they finish, everything here unlocks for you.")}
               </p>
             </>
           )}
@@ -98,7 +96,7 @@ export default function GuardianPendingPage() {
           <div className="flex items-start gap-3">
             <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <p className="text-sm text-muted-foreground">
-              Can't find it? We'll send it again to the same address you gave us at signup.
+              {t("Can't find it? We'll send it again to the same address you gave us at signup.")}
             </p>
           </div>
           <Button
@@ -107,7 +105,7 @@ export default function GuardianPendingPage() {
             disabled={resend.isPending}
             onClick={() => resend.mutate()}
           >
-            {resend.isPending ? "Sending..." : sent ? "Send it one more time" : "Resend the email"}
+            {resend.isPending ? t("Sending...") : sent ? t("Send it one more time") : t("Resend the email")}
           </Button>
         </div>
         )}
@@ -120,7 +118,7 @@ export default function GuardianPendingPage() {
           className="text-muted-foreground"
         >
           <LogOut className="h-3.5 w-3.5" />
-          Sign out
+          {t("Sign out")}
         </Button>
       </div>
     </div>

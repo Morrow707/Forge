@@ -14,6 +14,7 @@ import { ForgeMark } from "@/components/forge-mark";
 import { LegalDocumentReader } from "@/components/legal-document-reader";
 import { toast } from "sonner";
 import type { PublicUser } from "@shared/schema";
+import { useT } from "@/i18n";
 
 type InvitePreview = { athleteName: string; email: string; accountExists: boolean };
 
@@ -29,6 +30,7 @@ type InvitePreview = { athleteName: string; email: string; accountExists: boolea
  * password field below switches from "set a password" to "confirm your
  * existing password" for that case. */
 export default function GuardianClaimPage() {
+  const t = useT();
   const token = new URLSearchParams(window.location.search).get("token") ?? "";
   const { user, isLoading, logoutMutation } = useAuth();
   const qc = useQueryClient();
@@ -78,7 +80,7 @@ export default function GuardianClaimPage() {
       // that had succeeded. Scott, 2026-10-15, screenshot in hand: "It did work but."
       setLocation("/guardian");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not set up this account"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not set up this account")),
   });
 
   // A SIGNED-IN PERSON OPENING THIS LINK IS SHOWN THE INVITE, NEVER BOUNCED. This used to
@@ -100,15 +102,14 @@ export default function GuardianClaimPage() {
         <Card className="w-full max-w-sm" data-testid="guardian-claim-already-guardian">
           <CardHeader className="items-center text-center">
             <ForgeMark className="mb-2 h-8 w-8" />
-            <CardTitle>Guardian access is set up</CardTitle>
+            <CardTitle>{t("Guardian access is set up")}</CardTitle>
             <CardDescription>
-              You're signed in as {user.email}. Anything still to do for your athlete is on your
-              dashboard.
+              {t("You're signed in as {email}. Anything still to do for your athlete is on your dashboard.", { email: user.email })}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button className="w-full" onClick={() => setLocation("/guardian")}>
-              Go to my dashboard
+              {t("Go to my dashboard")}
             </Button>
           </CardContent>
         </Card>
@@ -122,12 +123,12 @@ export default function GuardianClaimPage() {
         <Card className="w-full max-w-sm" data-testid="guardian-claim-signed-in">
           <CardHeader className="items-center text-center">
             <ForgeMark className="mb-2 h-8 w-8" />
-            <CardTitle>You're signed in as someone else</CardTitle>
+            <CardTitle>{t("You're signed in as someone else")}</CardTitle>
             <CardDescription>
               {preview
-                ? `This guardian invite for ${preview.athleteName} is for ${preview.email}. You're signed in as ${user.email}.`
-                : `This guardian invite is for a different account. You're signed in as ${user.email}.`}{" "}
-              Sign out and the invite opens right here.
+                ? t("This guardian invite for {athlete} is for {email}. You're signed in as {current}.", { athlete: preview.athleteName, email: preview.email, current: user.email })
+                : t("This guardian invite is for a different account. You're signed in as {current}.", { current: user.email })}{" "}
+              {t("Sign out and the invite opens right here.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -136,7 +137,7 @@ export default function GuardianClaimPage() {
               onClick={() => logoutMutation.mutate()}
               disabled={logoutMutation.isPending}
             >
-              {logoutMutation.isPending ? "Signing out..." : "Sign out and set up guardian access"}
+              {logoutMutation.isPending ? t("Signing out...") : t("Sign out and set up guardian access")}
             </Button>
           </CardContent>
         </Card>
@@ -149,10 +150,9 @@ export default function GuardianClaimPage() {
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <Card className="w-full max-w-sm">
           <CardHeader>
-            <CardTitle>Link not valid</CardTitle>
+            <CardTitle>{t("Link not valid")}</CardTitle>
             <CardDescription>
-              This invite has already been used or has expired. The athlete can send a new one
-              from their account page, or their coach or program can.
+              {t("This invite has already been used or has expired. The athlete can send a new one from their account page, or their coach or program can.")}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -171,17 +171,20 @@ export default function GuardianClaimPage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
           <ForgeMark className="mb-2 h-8 w-8" />
-          <CardTitle>{preview ? `Guardian access for ${preview.athleteName}` : "Set Up Your Account"}</CardTitle>
+          <CardTitle>{preview ? t("Guardian access for {name}", { name: preview.athleteName }) : t("Set Up Your Account")}</CardTitle>
           <CardDescription>
             {preview?.accountExists
-              ? `${preview.email} already has a Forge account. Enter its password to link ${preview.athleteName} to it.`
-              : `Set a password for ${preview?.email ?? "your account"} to see ${preview?.athleteName ?? "their"} training activity.`}
+              ? t("{email} already has a Forge account. Enter its password to link {athlete} to it.", { email: preview.email, athlete: preview.athleteName })
+              : t("Set a password for {email} to see {athlete} training activity.", {
+                  email: preview?.email ?? t("your account"),
+                  athlete: preview?.athleteName ?? t("their"),
+                })}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="guardian-claim-password">Password</Label>
+              <Label htmlFor="guardian-claim-password">{t("Password")}</Label>
               <PasswordInput
                 id="guardian-claim-password"
                 required
@@ -212,7 +215,7 @@ export default function GuardianClaimPage() {
             <div className="space-y-1">
               <label className="flex items-start gap-2 text-xs text-muted-foreground">
                 <Checkbox checked={agreedToTerms} onCheckedChange={(c) => setAgreedToTerms(c === true)} />
-                <span>I agree to the Terms of Use</span>
+                <span>{t("I agree to the Terms of Use")}</span>
               </label>
               {/* The signup agreement, not the retired legalDocuments row: the two Terms were
                   merged on 2026-09-19 and this is the document the guardian's consent record
@@ -220,7 +223,7 @@ export default function GuardianClaimPage() {
                   uses. */}
               <LegalDocumentReader
                 docType="signup_agreement"
-                label="Read the Terms of Use"
+                label={t("Read the Terms of Use")}
                 className="pl-6 text-xs"
               />
             </div>
@@ -231,13 +234,12 @@ export default function GuardianClaimPage() {
                   onCheckedChange={(c) => setAgreedToPrivacyPolicy(c === true)}
                 />
                 <span>
-                  I have read the privacy policy and understand what Forge collects about my child
-                  and who can see it
+                  {t("I have read the privacy policy and understand what Forge collects about my child and who can see it")}
                 </span>
               </label>
               <LegalDocumentReader
                 docType="privacy_policy"
-                label="Read the privacy policy"
+                label={t("Read the privacy policy")}
                 className="pl-6 text-xs"
               />
             </div>
@@ -248,13 +250,12 @@ export default function GuardianClaimPage() {
                   onCheckedChange={(c) => setAgreedToMinorMediaRelease(c === true)}
                 />
                 <span>
-                  I consent to my child being recorded on video for coaching, and to measurements
-                  being taken from that footage, as set out in the video and biometric consent
+                  {t("I consent to my child being recorded on video for coaching, and to measurements being taken from that footage, as set out in the video and biometric consent")}
                 </span>
               </label>
               <LegalDocumentReader
                 docType="biometric_waiver"
-                label="Read the video and biometric consent"
+                label={t("Read the video and biometric consent")}
                 className="pl-6 text-xs"
               />
             </div>
@@ -265,14 +266,12 @@ export default function GuardianClaimPage() {
                   onCheckedChange={(c) => setAgreedToAssumptionOfRisk(c === true)}
                 />
                 <span>
-                  I understand that athletic training carries a risk of injury, that nobody at
-                  Forge supervises my child's training, and I accept those risks as set out in the
-                  assumption of risk and release
+                  {t("I understand that athletic training carries a risk of injury, that nobody at Forge supervises my child's training, and I accept those risks as set out in the assumption of risk and release")}
                 </span>
               </label>
               <LegalDocumentReader
                 docType="assumption_of_risk"
-                label="Read the assumption of risk and release"
+                label={t("Read the assumption of risk and release")}
                 className="pl-6 text-xs"
               />
             </div>
@@ -283,11 +282,11 @@ export default function GuardianClaimPage() {
               }>
               {claimMutation.isPending
                 ? preview?.accountExists
-                  ? "Linking…"
-                  : "Creating account..."
+                  ? t("Linking…")
+                  : t("Creating account...")
                 : preview?.accountExists
-                  ? "Link Account"
-                  : "Create Account"}
+                  ? t("Link Account")
+                  : t("Create Account")}
             </Button>
           </form>
         </CardContent>

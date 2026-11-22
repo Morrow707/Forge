@@ -99,6 +99,7 @@ import {
   warmupPayload,
   type LocalWarmup,
 } from "@/components/day-warmup-editor";
+import { useT } from "@/i18n";
 
 type RosterEntry = { id: number; name: string; email: string };
 type ScheduleDay = {
@@ -385,6 +386,7 @@ export function ProgramBuilderPage({
   showSelfAssign?: boolean;
   showAiChat?: boolean;
 }) {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const qc = useQueryClient();
@@ -467,8 +469,8 @@ export function ProgramBuilderPage({
       setTags(programTagFormFrom(draft?.tags ?? program));
       setHydrated(true);
       if (draft) {
-        toast.info("Restored unsaved changes from your last session here", {
-          description: "Save Program to keep them, or Discard to go back to the last saved version.",
+        toast.info(t("Restored unsaved changes from your last session here"), {
+          description: t("Save Program to keep them, or Discard to go back to the last saved version."),
           duration: 10000,
           action: {
             label: "Discard",
@@ -541,7 +543,7 @@ export function ProgramBuilderPage({
     setDays((prev) => [...prev, ...imported.map((d) => ({ ...d, warmup: localWarmupFrom(d.warmup) }))]);
     if (importedName) setName(importedName);
     toast.success(
-      `Added ${imported.length} ${imported.length === 1 ? "day" : "days"} from your file. Check them, then Save Program.`,
+      t.plural(imported.length, "Added {count} day from your file. Check them, then Save Program.", "Added {count} days from your file. Check them, then Save Program."),
     );
   }
 
@@ -653,13 +655,13 @@ export function ProgramBuilderPage({
       qc.invalidateQueries({ queryKey: [`${apiBase}/programs`] });
       clearProgramDraft(apiBase, programId);
       if (saved?.savedAsCopy && saved.id) {
-        toast.success("Saved as your own copy. The Forge original is unchanged.");
+        toast.success(t("Saved as your own copy. The Forge original is unchanged."));
         navigate(`${routeBase}/${saved.id}`);
         return;
       }
-      toast.success("Program saved");
+      toast.success(t("Program saved"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save program"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not save program")),
   });
 
   // Self-assignment: coachId === athleteId -- lands straight on the
@@ -696,25 +698,25 @@ export function ProgramBuilderPage({
       qc.invalidateQueries({ queryKey: ["/api/admin/my/calendar"] });
       qc.invalidateQueries({ queryKey: ["/api/coach/my/calendar"] });
       qc.invalidateQueries({ queryKey: ["/api/athlete/calendar"] });
-      toast.success("Added to your calendar");
+      toast.success(t("Added to your calendar"));
       setSelfAssignOpen(false);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not add to your calendar"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not add to your calendar")),
   });
 
   // `!hydrated` never clears on a failed read, so this used to be a spinner that spins
   // forever -- which reads as a slow page, not a broken one, and nobody retries it.
   if (isError) {
     return (
-      <AppShell title="Program">
-        <ReadFailed what="this program" onRetry={() => void refetch()} />
+      <AppShell title={t("Program")}>
+        <ReadFailed what={t("this program")} onRetry={() => void refetch()} />
       </AppShell>
     );
   }
 
   if (isLoading || !hydrated) {
     return (
-      <AppShell title="Loading Program…">
+      <AppShell title={t("Loading Program…")}>
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       </AppShell>
     );
@@ -722,7 +724,7 @@ export function ProgramBuilderPage({
 
   return (
     <AppShell
-      title="Program Builder"
+      title={t("Program Builder")}
       actions={
         <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
           {/* flex-wrap + justify-end -- Back/Assign Program/Add to My Calendar together are
@@ -734,7 +736,7 @@ export function ProgramBuilderPage({
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button variant="outline" onClick={() => navigate(routeBase)}>
               <ArrowLeft className="h-4 w-4" />
-              Back
+              {t("Back")}
             </Button>
             {showAssign && (
               <Button
@@ -760,7 +762,7 @@ export function ProgramBuilderPage({
                 }}
               >
                 <Send className="h-4 w-4" />
-                Assign Program
+                {t("Assign Program")}
               </Button>
             )}
             {showSelfAssign && (
@@ -783,7 +785,7 @@ export function ProgramBuilderPage({
                 }}
               >
                 <CalendarPlus className="h-4 w-4" />
-                Add to My Calendar
+                {t("Add to My Calendar")}
               </Button>
             )}
           </div>
@@ -795,7 +797,7 @@ export function ProgramBuilderPage({
               data-testid="button-save-program"
             >
               <Save className="h-4 w-4" />
-              {saveMutation.isPending ? "Saving…" : ownsProgram ? "Save Program" : "Save as my copy"}
+              {saveMutation.isPending ? t("Saving…") : ownsProgram ? t("Save Program") : t("Save as my copy")}
             </Button>
           )}
         </div>
@@ -810,7 +812,7 @@ export function ProgramBuilderPage({
           {!ownsProgram && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground" data-testid="text-forge-copy-note">
               <Lock className="h-3 w-3" />
-              Forge program. Change anything you need; saving makes your own copy and leaves the original as it is.
+              {t("Forge program. Change anything you need; saving makes your own copy and leaves the original as it is.")}
             </span>
           )}
         </div>
@@ -822,11 +824,11 @@ export function ProgramBuilderPage({
             <Card className="mb-6">
               <CardContent className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label>Program name</Label>
+                  <Label>{t("Program name")}</Label>
                   <Input value={name} onChange={(e) => setName(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Description</Label>
+                  <Label>{t("Description")}</Label>
                   <Textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -842,17 +844,16 @@ export function ProgramBuilderPage({
                 <div className="flex items-center justify-between">
                   <Label className="flex items-center gap-1.5">
                     <Layers className="h-4 w-4" />
-                    Training Blocks
+                    {t("Training Blocks")}
                   </Label>
                   <Button size="sm" variant="outline" onClick={addBlock}>
                     <Plus className="h-4 w-4" />
-                    Add Block
+                    {t("Add Block")}
                   </Button>
                 </div>
                 {blocks.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    Optional, group weeks into named phases (Hypertrophy, Peaking, Deload...) to
-                    plan periodization. Assign a block to each week below once you've added one.
+                    {t("Optional, group weeks into named phases (Hypertrophy, Peaking, Deload...) to plan periodization. Assign a block to each week below once you've added one.")}
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -882,7 +883,7 @@ export function ProgramBuilderPage({
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="none">No phase</SelectItem>
+                            <SelectItem value="none">{t("No phase")}</SelectItem>
                             {PERIODIZATION_PHASES.map((p) => (
                               <SelectItem key={p} value={p}>
                                 {PERIODIZATION_PHASE_LABEL[p]}
@@ -897,7 +898,7 @@ export function ProgramBuilderPage({
                         )}
                         <button
                           type="button"
-                          aria-label={`Remove ${block.name} block`}
+                          aria-label={t("Remove {name} block", { name: block.name })}
                           onClick={() => removeBlock(block.key)}
                           className="ml-auto text-muted-foreground hover:text-destructive"
                         >
@@ -912,19 +913,19 @@ export function ProgramBuilderPage({
 
             {days.length === 0 ? (
               <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-16 text-center text-muted-foreground">
-                <p>No days yet. Add training days one at a time, no need to plan whole weeks.</p>
+                <p>{t("No days yet. Add training days one at a time, no need to plan whole weeks.")}</p>
                 <div className="flex flex-wrap justify-center gap-2">
                   <Button onClick={addDay}>
                     <Plus className="h-4 w-4" />
-                    Add Day
+                    {t("Add Day")}
                   </Button>
                   <Button variant="outline" onClick={() => setImportOpen(true)} data-testid="button-import-program">
                     <FileUp className="h-4 w-4" />
-                    Import a program
+                    {t("Import a program")}
                   </Button>
                 </div>
                 <p className="max-w-md text-xs">
-                  Already have it in Excel, a PDF or on a whiteboard? Import the file or a photo and check it before saving.
+                  {t("Already have it in Excel, a PDF or on a whiteboard? Import the file or a photo and check it before saving.")}
                 </p>
               </div>
             ) : (
@@ -945,10 +946,10 @@ export function ProgramBuilderPage({
                           onValueChange={(val) => setWeekBlock(wi, val === "none" ? null : val)}
                         >
                           <SelectTrigger className="h-7 w-[160px] text-xs">
-                            <SelectValue placeholder="No block" />
+                            <SelectValue placeholder={t("No block")} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="none">No block</SelectItem>
+                            <SelectItem value="none">{t("No block")}</SelectItem>
                             {blocks.map((b) => (
                               <SelectItem key={b.key} value={b.key}>
                                 {b.name}
@@ -988,11 +989,11 @@ export function ProgramBuilderPage({
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button variant="outline" onClick={addDay}>
                   <Plus className="h-4 w-4" />
-                  Add Day
+                  {t("Add Day")}
                 </Button>
                 <Button variant="outline" onClick={() => setImportOpen(true)} data-testid="button-import-program-more">
                   <FileUp className="h-4 w-4" />
-                  Import a program
+                  {t("Import a program")}
                 </Button>
               </div>
             )}
@@ -1037,7 +1038,7 @@ export function ProgramBuilderPage({
           can still be chosen. */}
       <ExercisePickerDialog
         apiBase={apiBase}
-        title="Add a warm-up drill"
+        title={t("Add a warm-up drill")}
         initialSearch="warmup"
         open={warmupPickerForDay !== null}
         onOpenChange={(open) => !open && setWarmupPickerForDay(null)}
@@ -1057,7 +1058,7 @@ export function ProgramBuilderPage({
         onPick={(warmup) => {
           if (!warmupProgramForDay) return;
           updateDay(warmupProgramForDay, (d) => ({ ...d, warmup }));
-          toast.success("Warm-up copied into this day. Save Program to keep it.");
+          toast.success(t("Warm-up copied into this day. Save Program to keep it."));
         }}
       />
 
@@ -1095,7 +1096,7 @@ export function ProgramBuilderPage({
         <Dialog open={selfAssignOpen} onOpenChange={setSelfAssignOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add to My Calendar</DialogTitle>
+              <DialogTitle>{t("Add to My Calendar")}</DialogTitle>
             </DialogHeader>
             <form
               onSubmit={(e) => {
@@ -1105,7 +1106,7 @@ export function ProgramBuilderPage({
               className="space-y-4"
             >
               <div className="space-y-1.5">
-                <Label htmlFor="self-assign-date">Start date</Label>
+                <Label htmlFor="self-assign-date">{t("Start date")}</Label>
                 <Input
                   id="self-assign-date"
                   type="date"
@@ -1121,7 +1122,7 @@ export function ProgramBuilderPage({
                   longer note there for why the weekday pattern went rather than being hidden. */}
               {selfAssignSchedule.length > 0 && (
                 <div className="space-y-1.5">
-                  <Label>When is each day?</Label>
+                  <Label>{t("When is each day?")}</Label>
                   <div className="max-h-72 min-w-0 space-y-1.5 overflow-y-auto rounded-md border border-border p-2">
                     {selfAssignSchedule.map((day, i) => (
                       <div
@@ -1132,17 +1133,17 @@ export function ProgramBuilderPage({
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
-                                Day {i + 1}
+                                {t("Day {number}", { number: i + 1 })}
                               </span>
                               {selfAssignWeekCount > 1 && (
                                 <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                  Wk {day.weekNumber}
+                                  {t("Wk {number}", { number: day.weekNumber })}
                                 </span>
                               )}
                               <span className="text-xs font-semibold">{day.title}</span>
                               {day.isRestDay && (
                                 <span className="shrink-0 rounded-full border border-border px-1.5 py-0 text-[9px] font-bold uppercase text-muted-foreground">
-                                  Rest
+                                  {t("Rest")}
                                 </span>
                               )}
                             </div>
@@ -1156,7 +1157,7 @@ export function ProgramBuilderPage({
                           </div>
                           <Input
                             type="date"
-                            aria-label={`Date for day ${i + 1}, ${day.title}`}
+                            aria-label={t("Date for day {number}, {title}", { number: i + 1, title: day.title })}
                             value={selfAssignDateOverrides.get(day.programDayId) ?? day.defaultDate}
                             onChange={(e) =>
                               setSelfAssignDateOverrides((prev) => {
@@ -1172,18 +1173,17 @@ export function ProgramBuilderPage({
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Each day starts out the day after the one before it. Set any date to fit
-                    games, practice or rest.
+                    {t("Each day starts out the day after the one before it. Set any date to fit games, practice or rest.")}
                   </p>
                 </div>
               )}
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setSelfAssignOpen(false)}>
-                  Cancel
+                  {t("Cancel")}
                 </Button>
                 <Button type="submit" disabled={selfAssignMutation.isPending}>
-                  {selfAssignMutation.isPending ? "Adding…" : "Add to Calendar"}
+                  {selfAssignMutation.isPending ? t("Adding…") : t("Add to Calendar")}
                 </Button>
               </DialogFooter>
             </form>
@@ -1232,6 +1232,7 @@ function DayCard({
   onUseWarmupProgram: () => void;
   onRemove: () => void;
 }) {
+  const t = useT();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const exerciseLabels = computeExerciseLabels(day.exercises);
 
@@ -1249,7 +1250,7 @@ function DayCard({
     <Card className={day.isRestDay ? "opacity-70" : ""}>
       <CardContent className="space-y-3 p-4">
         <div className="flex items-center justify-between gap-2">
-          <Badge variant="outline">Day {dayNumber}</Badge>
+          <Badge variant="outline">{t("Day {number}", { number: dayNumber })}</Badge>
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <Checkbox
@@ -1258,11 +1259,11 @@ function DayCard({
                   onChange((d) => ({ ...d, isRestDay: checked === true }))
                 }
               />
-              Rest day
+              {t("Rest day")}
             </label>
             <button
               type="button"
-              aria-label={`Remove Day ${dayNumber}`}
+              aria-label={t("Remove Day {number}", { number: dayNumber })}
               onClick={onRemove}
               className="text-muted-foreground hover:text-destructive"
             >
@@ -1282,7 +1283,7 @@ function DayCard({
         {day.isRestDay ? (
           <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-3 text-sm text-muted-foreground">
             <MoonStar className="h-4 w-4" />
-            Recovery day
+            {t("Recovery day")}
           </div>
         ) : (
           <>
@@ -1294,7 +1295,7 @@ function DayCard({
               onAddDrill={onAddWarmupDrill}
               onUseProgram={onUseWarmupProgram}
             />
-            <p className="label-xs text-muted-foreground">Main work</p>
+            <p className="label-xs text-muted-foreground">{t("Main work")}</p>
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -1350,7 +1351,7 @@ function DayCard({
                       {isEndOfLinkedGroup(day.exercises, i) && (
                         <div className="pl-3">
                           <RadioChipGroup
-                            label="Rest"
+                            label={t("Rest")}
                             options={["Between each", "After the group"]}
                             value={ex.restAfterGroupOnly ? "After the group" : "Between each"}
                             onChange={(v) => {
@@ -1373,14 +1374,14 @@ function DayCard({
             </DndContext>
             {day.exercises.length === 0 && (
               <p className="py-2 text-center text-xs text-muted-foreground">
-                No exercises yet
+                {t("No exercises yet")}
               </p>
             )}
             {/* Stacked: a day card is narrow in the week grid, too narrow for two buttons abreast. */}
             <div className="flex flex-col gap-2">
               <Button variant="secondary" size="sm" className="w-full" onClick={onAddExercise}>
                 <Plus className="h-3.5 w-3.5" />
-                Add Exercise
+                {t("Add Exercise")}
               </Button>
               <Button
                 variant="outline"
@@ -1390,7 +1391,7 @@ function DayCard({
                 data-testid={`button-add-care-drills-${dayNumber}`}
               >
                 <HeartPulse className="h-3.5 w-3.5" />
-                Add care drills
+                {t("Add care drills")}
               </Button>
             </div>
           </>
@@ -1407,13 +1408,14 @@ function SupersetConnector({
   linked: boolean;
   onToggle: () => void;
 }) {
+  const t = useT();
   return (
     <div className="flex items-center gap-1.5 pl-3">
       <div className={cn("h-2.5 w-px", linked ? "bg-blue-500" : "bg-transparent")} />
       <button
         type="button"
         onClick={onToggle}
-        title={linked ? "Unlink superset" : "Link into a superset"}
+        title={linked ? t("Unlink superset") : t("Link into a superset")}
         className={cn(
           "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold transition-colors",
           linked
@@ -1422,7 +1424,7 @@ function SupersetConnector({
         )}
       >
         <Link2 className="h-2.5 w-2.5" />
-        {linked ? "Linked" : "Link"}
+        {linked ? t("Linked") : t("Link")}
       </button>
     </div>
   );
@@ -1439,6 +1441,7 @@ function SortableExerciseRow({
   onUpdate: (patch: Partial<LocalExercise>) => void;
   onRemove: () => void;
 }) {
+  const t = useT();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: exercise.key });
   // THE ROOM (2026-11-21): an exercise the coach placed by hand is theirs and stays; if their
@@ -1464,7 +1467,7 @@ function SortableExerciseRow({
       <div className="mb-2 flex items-center gap-2">
         <button
           type="button"
-          aria-label={`Reorder ${exercise.exerciseName}`}
+          aria-label={t("Reorder {name}", { name: t.exercise(exercise.exerciseName) })}
           {...attributes}
           {...listeners}
           className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
@@ -1484,7 +1487,7 @@ function SortableExerciseRow({
         </span>
         <button
           type="button"
-          aria-label={`Remove ${exercise.exerciseName}`}
+          aria-label={t("Remove {name}", { name: t.exercise(exercise.exerciseName) })}
           onClick={onRemove}
           className="text-muted-foreground hover:text-destructive"
         >
@@ -1499,15 +1502,15 @@ function SortableExerciseRow({
       <CautionNote note={exercise.cautionNote} className="mb-2" />
       <div className={cn("grid gap-1.5", exercise.linkedToNext ? "grid-cols-3" : "grid-cols-4")}>
         <FieldInput
-          label="Sets"
+          label={t("Sets")}
           value={String(exercise.sets)}
           onChange={(v) => onUpdate({ sets: Number(v) || 0 })}
           type="number"
         />
-        <FieldInput label="Reps" inputMode="numeric" value={exercise.reps} onChange={(v) => onUpdate({ reps: v })} />
+        <FieldInput label={t("Reps")} inputMode="numeric" value={exercise.reps} onChange={(v) => onUpdate({ reps: v })} />
         <div>
           <label className="mb-0.5 block text-[10px] uppercase text-muted-foreground">
-            Weight
+            {t("Weight")}
           </label>
           <div className="flex items-center gap-1">
             <Input
@@ -1526,7 +1529,7 @@ function SortableExerciseRow({
             that's the value workout.tsx's auto-start rest timer reads on set completion. */}
         {!exercise.linkedToNext && (
           <FieldInput
-            label="Rest (s)"
+            label={t("Rest (s)")}
             value={exercise.restSeconds}
             onChange={(v) => onUpdate({ restSeconds: v })}
             type="number"

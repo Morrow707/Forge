@@ -36,6 +36,9 @@ import { join } from "node:path";
  * season-setup games line) the eager JS read 177,004 bytes gzipped against 176,128. The raw size stayed
  * inside 568 kB. Which of those put the 876 bytes on the first paint was not isolated; the next raise
  * must name its cause.
+ * RAISED again the same day, 568 -> 572 kB (172 -> 174 kB gzipped), for the t() calls in the eager public
+ * pages (landing, pricing, for-high-schools, for-athletes, camera-validation, movement, the legal
+ * index): +0.7 kB on the entry, +1.1 kB gzipped. The words are the same English; only how they are produced moved.
  *
  * Runs only when dist/public exists (CI builds after `npm test`; a developer who has not built
  * sees it skipped, not failed). scripts/check-first-paint.mjs is the build-time twin that always
@@ -43,8 +46,8 @@ import { join } from "node:path";
 const DIST = join(__dirname, "..", "..", "..", "dist", "public");
 const built = existsSync(join(DIST, "index.html"));
 
-const EAGER_BUDGET_BYTES = 568 * 1024;
-const EAGER_BUDGET_GZIP_BYTES = 173 * 1024;
+const EAGER_BUDGET_BYTES = 572 * 1024;
+const EAGER_BUDGET_GZIP_BYTES = 174 * 1024;
 
 /** Chunks that must never be on the first paint, and what each one is. */
 const MUST_BE_LAZY: Array<[string, string]> = [

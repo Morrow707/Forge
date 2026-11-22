@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { SPORTS } from "@shared/exercise-taxonomy";
 import { todayIso } from "@/lib/local-date";
+import { useT } from "@/i18n";
 
 type ProvisionalPreview = {
   name: string;
@@ -46,6 +47,7 @@ type ProvisionalPreview = {
  * unauthenticated for the same reason signup.tsx is -- there's no account
  * yet to authenticate as. */
 export default function ClaimPage() {
+  const t = useT();
   const { code } = useParams<{ code: string }>();
   const { user, isLoading } = useAuth();
   const qc = useQueryClient();
@@ -83,7 +85,7 @@ export default function ClaimPage() {
       setNativeToken(nativeToken);
       qc.setQueryData(["/api/auth/me"], claimedUser);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not claim this slot"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not claim this slot")),
   });
 
   if (!isLoading && user) {
@@ -107,9 +109,9 @@ export default function ClaimPage() {
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <Card className="w-full max-w-sm">
           <CardHeader>
-            <CardTitle>Link not valid</CardTitle>
+            <CardTitle>{t("Link not valid")}</CardTitle>
             <CardDescription>
-              This claim link has already been used or doesn't exist, ask your coach for a new one.
+              {t("This claim link has already been used or doesn't exist, ask your coach for a new one.")}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -128,17 +130,19 @@ export default function ClaimPage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
           <ForgeMark className="mb-2 h-8 w-8" />
-          <CardTitle>{preview ? `Welcome, ${preview.name}` : "Claim Your Account"}</CardTitle>
+          <CardTitle>{preview ? t("Welcome, {name}", { name: preview.name }) : t("Claim Your Account")}</CardTitle>
           <CardDescription>
             {preview?.sport
-              ? `Set up your login to finish joining ${preview.sport}${preview.position ? ` (${preview.position})` : ""}.`
-              : "Set up your login to finish joining your team."}
+              ? preview.position
+                ? t("Set up your login to finish joining {sport} ({position}).", { sport: preview.sport, position: preview.position })
+                : t("Set up your login to finish joining {sport}.", { sport: preview.sport })
+              : t("Set up your login to finish joining your team.")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="claim-email">Email</Label>
+              <Label htmlFor="claim-email">{t("Email")}</Label>
               <Input
                 id="claim-email"
                 type="email"
@@ -150,7 +154,7 @@ export default function ClaimPage() {
             </div>
             {preview?.needsDateOfBirth && (
               <div className="space-y-1.5">
-                <Label htmlFor="claim-dob">Date of birth</Label>
+                <Label htmlFor="claim-dob">{t("Date of birth")}</Label>
                 <Input
                   id="claim-dob"
                   type="date"
@@ -164,10 +168,10 @@ export default function ClaimPage() {
             )}
             {preview?.needsSport && (
               <div className="space-y-1.5">
-                <Label htmlFor="claim-sport">Sport</Label>
+                <Label htmlFor="claim-sport">{t("Sport")}</Label>
                 <Select value={sport} onValueChange={setSport}>
                   <SelectTrigger id="claim-sport">
-                    <SelectValue placeholder="Select your sport" />
+                    <SelectValue placeholder={t("Select your sport")} />
                   </SelectTrigger>
                   <SelectContent>
                     {SPORTS.map((s) => (
@@ -181,13 +185,13 @@ export default function ClaimPage() {
             )}
             {preview?.needsPosition && (
               <div className="space-y-1.5">
-                <Label htmlFor="claim-position">Position</Label>
+                <Label htmlFor="claim-position">{t("Position")}</Label>
                 <Input
                   id="claim-position"
                   required
                   value={position}
                   onChange={(e) => setPosition(e.target.value)}
-                  placeholder="e.g. Linebacker"
+                  placeholder={t("e.g. Linebacker")}
                 />
               </div>
             )}
@@ -198,7 +202,7 @@ export default function ClaimPage() {
                 )}
                 {preview?.needsWeight && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="claim-weight">Weight (lbs)</Label>
+                    <Label htmlFor="claim-weight">{t("Weight (lbs)")}</Label>
                     <Input
                       id="claim-weight"
                       type="number"
@@ -213,14 +217,13 @@ export default function ClaimPage() {
                   </div>
                 )}
                 <p className="col-span-2 text-xs text-muted-foreground">
-                  Required for camera tracking, your height is how the app converts what it sees
-                  into real distances and speeds.
+                  {t("Required for camera tracking, your height is how the app converts what it sees into real distances and speeds.")}
                 </p>
               </div>
             )}
             {(preview?.needsDateOfBirth || preview?.needsGuardianEmail) && (
               <div className="space-y-1.5">
-                <Label htmlFor="claim-guardian-email">Parent/guardian email</Label>
+                <Label htmlFor="claim-guardian-email">{t("Parent/guardian email")}</Label>
                 <Input
                   id="claim-guardian-email"
                   type="email"
@@ -230,13 +233,12 @@ export default function ClaimPage() {
                   autoComplete="email"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Athletes under 18 need a parent or guardian's account linked before a coach can
-                  assign anything. We'll email them to set it up.
+                  {t("Athletes under 18 need a parent or guardian's account linked before a coach can assign anything. We'll email them to set it up.")}
                 </p>
               </div>
             )}
             <div className="space-y-1.5">
-              <Label htmlFor="claim-password">Password</Label>
+              <Label htmlFor="claim-password">{t("Password")}</Label>
               <PasswordInput
                 id="claim-password"
                 required
@@ -249,7 +251,7 @@ export default function ClaimPage() {
             </div>
             <label className="flex items-start gap-2 text-xs text-muted-foreground">
               <Checkbox checked={agreedToTerms} onCheckedChange={(c) => setAgreedToTerms(c === true)} />
-              <span>I agree to the Terms of Use</span>
+              <span>{t("I agree to the Terms of Use")}</span>
             </label>
             {/* The checkbox is mandatory and this page carried no terms text --
                 agreeing to something you cannot read is not a clickwrap. It was a
@@ -259,7 +261,7 @@ export default function ClaimPage() {
                 opening the terms would have ticked "I agree" by itself. */}
             <LegalDocumentReader
               docType="signup_agreement"
-              label="Read the Terms of Use"
+              label={t("Read the Terms of Use")}
               className="pl-6 text-xs"
             />
             <Button
@@ -275,7 +277,7 @@ export default function ClaimPage() {
                 (!!preview?.needsWeight && !bodyWeightLbs.trim())
               }
             >
-              {claimMutation.isPending ? "Creating account..." : "Create Account"}
+              {claimMutation.isPending ? t("Creating account...") : t("Create Account")}
             </Button>
           </form>
         </CardContent>

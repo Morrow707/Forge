@@ -24,6 +24,7 @@ import {
 import { toast } from "sonner";
 import { ApiError } from "@/lib/queryClient";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 /** Skill Bank list -- deliberately separate from ExerciseBankPage, its own
  * table/API/route, with a trimmed filter set (Skill Type, Sport, Created By
@@ -49,6 +50,7 @@ export function SkillBankPage({
    * showCreate, for a Free Agent browsing the Skill Bank read-only. */
   showCreate?: boolean;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [, navigate] = useLocation();
   const [faultSettingsOpen, setFaultSettingsOpen] = useState(false);
@@ -163,10 +165,10 @@ export function SkillBankPage({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/skill-exercises`] });
-      toast.success("Skill drill deleted");
+      toast.success(t("Skill drill deleted"));
       setDeleteTarget(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not delete skill drill"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not delete skill drill")),
   });
 
   const restoreMutation = useMutation({
@@ -175,9 +177,9 @@ export function SkillBankPage({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/skill-exercises`] });
-      toast.success("Skill drill restored to the library");
+      toast.success(t("Skill drill restored to the library"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not restore skill drill"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not restore skill drill")),
   });
 
   const favoriteMutation = useMutation({
@@ -185,7 +187,7 @@ export function SkillBankPage({
       await apiRequest(next ? "POST" : "DELETE", `${apiBase}/skill-exercises/${id}/favorite`);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [`${apiBase}/skill-exercises`] }),
-    onError: () => toast.error("Couldn't update favorite"),
+    onError: () => toast.error(t("Couldn't update favorite")),
   });
 
   const isBrowsing = !search.trim();
@@ -200,7 +202,7 @@ export function SkillBankPage({
             <Button
               variant="outline"
               size="icon"
-              aria-label="Fault detection sensitivity"
+              aria-label={t("Fault detection sensitivity")}
               onClick={() => setFaultSettingsOpen(true)}
             >
               <SlidersHorizontal className="h-4 w-4" />
@@ -209,7 +211,7 @@ export function SkillBankPage({
           {showCreate && (
             <Button onClick={() => navigate(`${routeBase}/new`)}>
               <Plus className="h-4 w-4" />
-              New Skill Drill
+              {t("New Skill Drill")}
             </Button>
           )}
         </div>
@@ -222,7 +224,7 @@ export function SkillBankPage({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search drills, skill type, or sport…"
+            placeholder={t("Search drills, skill type, or sport…")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -242,7 +244,7 @@ export function SkillBankPage({
               )}
             >
               <Star className={cn("h-3.5 w-3.5", favoritesOnly && "fill-amber-400")} />
-              Favorites
+              {t("Favorites")}
             </button>
             <button
               type="button"
@@ -256,7 +258,7 @@ export function SkillBankPage({
               )}
             >
               <Clock className="h-3.5 w-3.5" />
-              Recently Used
+              {t("Recently Used")}
             </button>
           </div>
         )}
@@ -293,14 +295,14 @@ export function SkillBankPage({
             {activeSport && (
               <div className="space-y-2 rounded-md border border-border/60 bg-surface p-2.5">
                 <FilterChipGroup
-                  label="Skill Type"
+                  label={t("Skill Type")}
                   options={skillTypeOptions}
                   selected={skillTypeFilter}
                   onToggle={(v) => toggleInSet(setSkillTypeFilter, v)}
                   colorClass={SKILL_FILTER_ACTIVE_CLASS}
                 />
                 <FilterChipGroup
-                  label="Created By"
+                  label={t("Created By")}
                   options={ownerOptions}
                   selected={ownerFilter}
                   onToggle={(v) => toggleInSet(setOwnerFilter, v)}
@@ -315,7 +317,7 @@ export function SkillBankPage({
       {isError && (
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="the skill drill library" onRetry={() => void refetch()} />
+            <ReadFailed what={t("the skill drill library")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       )}
@@ -325,12 +327,12 @@ export function SkillBankPage({
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Target className="h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">
-              {skills.length === 0 ? emptyStateText : "No skill drills match your filters."}
+              {skills.length === 0 ? emptyStateText : t("No skill drills match your filters.")}
             </p>
             {skills.length === 0 && showCreate && (
               <Button onClick={() => navigate(`${routeBase}/new`)}>
                 <Plus className="h-4 w-4" />
-                Add Skill Drill
+                {t("Add Skill Drill")}
               </Button>
             )}
           </CardContent>
@@ -352,7 +354,7 @@ export function SkillBankPage({
                     {canFavorite && (
                       <button
                         type="button"
-                        aria-label={sk.isFavorite ? `Unfavorite ${sk.name}` : `Favorite ${sk.name}`}
+                        aria-label={sk.isFavorite ? t("Unfavorite {name}", { name: t.exercise(sk.name) }) : t("Favorite {name}", { name: t.exercise(sk.name) })}
                         aria-pressed={!!sk.isFavorite}
                         onClick={(e) => {
                           e.preventDefault();
@@ -384,7 +386,7 @@ export function SkillBankPage({
                 {sk.retiredAt != null && (
                   <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 p-2 text-xs">
                     <span className="text-muted-foreground">
-                      {sk.mergedIntoName ? `Hidden: merged into ${sk.mergedIntoName}` : "Hidden: retired"}
+                      {sk.mergedIntoName ? t("Hidden: merged into {name}", { name: t.exercise(sk.mergedIntoName) }) : t("Hidden: retired")}
                     </span>
                     <Button
                       size="sm"
@@ -397,7 +399,7 @@ export function SkillBankPage({
                         restoreMutation.mutate(sk.id);
                       }}
                     >
-                      Restore
+                      {t("Restore")}
                     </Button>
                   </div>
                 )}
@@ -410,7 +412,7 @@ export function SkillBankPage({
                       // is "nothing" reads as a broken Buy button.
                       <span className="flex items-center gap-1 font-medium text-muted-foreground">
                         <Lock className="h-3.5 w-3.5" />
-                        Not in your plan
+                        {t("Not in your plan")}
                       </span>
                     ) : (
                       <>
@@ -423,7 +425,7 @@ export function SkillBankPage({
                     <Button
                       size="icon"
                       variant="ghost"
-                      aria-label={`Delete ${sk.name}`}
+                      aria-label={t("Delete {name}", { name: t.exercise(sk.name) })}
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -443,9 +445,9 @@ export function SkillBankPage({
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="Delete skill drill?"
-        description={deleteTarget ? `Delete "${deleteTarget.name}"?` : ""}
-        confirmLabel="Delete"
+        title={t("Delete skill drill?")}
+        description={deleteTarget ? t("Delete \"{name}\"?", { name: t.exercise(deleteTarget.name) }) : ""}
+        confirmLabel={t("Delete")}
         isPending={deleteMutation.isPending}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
       />

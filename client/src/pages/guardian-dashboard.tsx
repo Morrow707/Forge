@@ -1,5 +1,6 @@
 import { format } from "date-fns";
-import { msg, useT } from "@/i18n";
+import { msg, useT, type T } from "@/i18n";
+import { TranslatableText } from "@/components/translatable-text";
 import { LanguageFlipButton } from "@/components/language-flip-button";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
@@ -47,6 +48,11 @@ import { ReportProblemDialog } from "@/components/report-problem-dialog";
 import { localIsoDate } from "@/lib/local-date";
 import { ReadFailed } from "@/components/read-failed";
 import { PasswordInput } from "@/components/ui/password-input";
+
+/** A date as this page has always printed it in English, and in the reader's locale otherwise. */
+function dayLabel(t: T, date: Date, englishPattern: string, options: Intl.DateTimeFormatOptions): string {
+  return t.language === "en" ? format(date, englishPattern) : t.date(date, options);
+}
 
 type GuardianAthlete = {
   id: number;
@@ -277,9 +283,9 @@ export default function GuardianDashboardPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/guardian/athletes", activeId, "removal-requests"] });
-      toast.success("We've passed that on. You'll see it below until it's answered.");
+      toast.success(t("We've passed that on. You'll see it below until it's answered."));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't send that request"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Couldn't send that request")),
   });
 
   const trackingMutation = useMutation({
@@ -294,10 +300,10 @@ export default function GuardianDashboardPage() {
         prev?.map((a) => (a.id === activeId ? { ...a, trackingOptOut: result.trackingOptOut } : a)),
       );
       toast.success(
-        result.trackingOptOut ? "Camera tracking turned off" : "Camera tracking turned back on",
+        result.trackingOptOut ? t("Camera tracking turned off") : t("Camera tracking turned back on"),
       );
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not update"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not update")),
   });
 
   function switchAthlete(id: number) {
@@ -428,11 +434,11 @@ export default function GuardianDashboardPage() {
       <ResearchConsentRequests />
         <TermsReacceptanceRequests />
         {athletesFailed ? (
-          <ReadFailed what="your athletes" onRetry={() => void refetchAthletes()} />
+          <ReadFailed what={t("your athletes")} onRetry={() => void refetchAthletes()} />
         ) : athletesLoading || !athletes ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
         ) : athletes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No athlete linked to this account.</p>
+          <p className="text-sm text-muted-foreground">{t("No athlete linked to this account.")}</p>
         ) : (
           <>
             {athletes.length > 1 && (
@@ -454,19 +460,19 @@ export default function GuardianDashboardPage() {
                     <div>
                       <CardTitle>{athlete.name}</CardTitle>
                       <CardDescription>
-                        {athlete.sport || "No sport set"}
+                        {athlete.sport || t("No sport set")}
                         {athlete.position ? ` · ${athlete.position}` : ""}
                       </CardDescription>
                     </div>
                   </CardHeader>
                   <CardContent>
                       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                        <dt className="text-muted-foreground">Height</dt>
-                        <dd>{athlete.heightIn ? `${athlete.heightIn} in` : "—"}</dd>
-                        <dt className="text-muted-foreground">Weight</dt>
-                        <dd>{athlete.bodyWeightLbs ? `${athlete.bodyWeightLbs} lbs` : "—"}</dd>
-                        <dt className="text-muted-foreground">Season phase</dt>
-                        <dd>{athlete.seasonPhase?.replace(/_/g, " ") ?? "—"}</dd>
+                        <dt className="text-muted-foreground">{t("Height")}</dt>
+                        <dd>{athlete.heightIn ? t("{value} in", { value: athlete.heightIn }) : "—"}</dd>
+                        <dt className="text-muted-foreground">{t("Weight")}</dt>
+                        <dd>{athlete.bodyWeightLbs ? t("{value} lbs", { value: athlete.bodyWeightLbs }) : "—"}</dd>
+                        <dt className="text-muted-foreground">{t("Season phase")}</dt>
+                        <dd>{athlete.seasonPhase ? t(athlete.seasonPhase.replace(/_/g, " ")) : "—"}</dd>
                       </dl>
                   </CardContent>
                 </Card>
@@ -480,19 +486,16 @@ export default function GuardianDashboardPage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base">Camera tracking</CardTitle>
+                    <CardTitle className="text-base">{t("Camera tracking")}</CardTitle>
                     <CardDescription>
                       {athlete.trackingOptOut
-                        ? "Off, no new tracked video, bar speed, jump height, or swing/sprint mechanics are being recorded for " +
-                          athlete.name +
-                          "."
-                        : athlete.name + " can use Forge's camera-tracking features during workouts."}
+                        ? t("Off, no new tracked video, bar speed, jump height, or swing/sprint mechanics are being recorded for {name}.", { name: athlete.name })
+                        : t("{name} can use Forge's camera-tracking features during workouts.", { name: athlete.name })}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="flex items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">
-                      This only affects future collection, it doesn't delete anything already
-                      recorded, and doesn't affect the rest of {athlete.name}'s account.
+                      {t("This only affects future collection, it doesn't delete anything already recorded, and doesn't affect the rest of {name}'s account.", { name: athlete.name })}
                     </p>
                     <Button
                       variant={athlete.trackingOptOut ? "outline" : "secondary"}
@@ -507,10 +510,10 @@ export default function GuardianDashboardPage() {
                         <VideoOff className="h-4 w-4" />
                       )}
                       {trackingMutation.isPending
-                        ? "Saving…"
+                        ? t("Saving…")
                         : athlete.trackingOptOut
-                          ? "Turn back on"
-                          : "Turn off"}
+                          ? t("Turn back on")
+                          : t("Turn off")}
                     </Button>
                   </CardContent>
                 </Card>
@@ -526,12 +529,12 @@ export default function GuardianDashboardPage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base">Recent training</CardTitle>
-                    <CardDescription>Last 14 days, view only.</CardDescription>
+                    <CardTitle className="text-base">{t("Recent training")}</CardTitle>
+                    <CardDescription>{t("Last 14 days, view only.")}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {recent.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Nothing logged in this window yet.</p>
+                      <p className="text-sm text-muted-foreground">{t("Nothing logged in this window yet.")}</p>
                     ) : (
                       <ul className="space-y-2">
                         {recent.map((e, i) => (
@@ -561,25 +564,25 @@ export default function GuardianDashboardPage() {
                     picks the clip rather than describing it. */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base">Training</CardTitle>
-                    <CardDescription>How much {athlete.name} is actually doing.</CardDescription>
+                    <CardTitle className="text-base">{t("Training")}</CardTitle>
+                    <CardDescription>{t("How much {name} is actually doing.", { name: athlete.name })}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <dl className="grid grid-cols-3 gap-3 text-sm">
                       <div>
-                        <dt className="text-muted-foreground">All time</dt>
+                        <dt className="text-muted-foreground">{t("All time")}</dt>
                         <dd className="font-display text-xl font-bold">
                           {progress?.totalWorkoutsCompleted ?? "—"}
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-muted-foreground">This month</dt>
+                        <dt className="text-muted-foreground">{t("This month")}</dt>
                         <dd className="font-display text-xl font-bold">
                           {progress?.workoutsThisMonth ?? "—"}
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-muted-foreground">Last 7 days</dt>
+                        <dt className="text-muted-foreground">{t("Last 7 days")}</dt>
                         <dd className="font-display text-xl font-bold">
                           {progress?.last7DaysCompleted ?? "—"}
                         </dd>
@@ -588,14 +591,14 @@ export default function GuardianDashboardPage() {
                     {(progress?.recentPRs ?? []).length > 0 && (
                       <div className="space-y-1.5">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Recent personal records
+                          {t("Recent personal records")}
                         </p>
                         <ul className="space-y-1">
                           {(progress?.recentPRs ?? []).slice(0, 5).map((pr, i) => (
                             <li key={i} className="flex justify-between gap-3 text-sm">
-                              <span className="truncate">{pr.exerciseName}</span>
+                              <span className="truncate">{t.exercise(pr.exerciseName)}</span>
                               <span className="shrink-0 text-muted-foreground">
-                                {pr.weight ? `${pr.weight} lbs` : ""}
+                                {pr.weight ? t("{value} lbs", { value: pr.weight }) : ""}
                                 {pr.reps ? ` x ${pr.reps}` : ""}
                               </span>
                             </li>
@@ -616,9 +619,9 @@ export default function GuardianDashboardPage() {
                 {goals.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Goals</CardTitle>
+                      <CardTitle className="text-base">{t("Goals")}</CardTitle>
                       <CardDescription>
-                        What {athlete.name} is working towards, and where they are now.
+                        {t("What {name} is working towards, and where they are now.", { name: athlete.name })}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-2">
@@ -628,12 +631,12 @@ export default function GuardianDashboardPage() {
                           className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-2.5 py-2 text-sm"
                         >
                           <span className="font-semibold">
-                            {g.exerciseName ?? g.skillExerciseName ?? g.testingMetric ?? "Goal"}
+                            {g.exerciseName ? t.exercise(g.exerciseName) : g.skillExerciseName ? t.exercise(g.skillExerciseName) : g.testingMetric ?? t("Goal")}
                           </span>
                           <span className="text-xs text-muted-foreground">
                             {g.currentValue != null ? `${g.currentValue} / ` : ""}
                             {g.targetValue} {g.targetUnit}
-                            {g.achieved ? " · done" : ""}
+                            {g.achieved ? t(" · done") : ""}
                           </span>
                         </div>
                       ))}
@@ -644,10 +647,9 @@ export default function GuardianDashboardPage() {
                 {wellness.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Daily check-ins</CardTitle>
+                      <CardTitle className="text-base">{t("Daily check-ins")}</CardTitle>
                       <CardDescription>
-                        What {athlete.name} reported about sleep, soreness and stress. Their own
-                        words about how they feel, not a measurement.
+                        {t("What {name} reported about sleep, soreness and stress. Their own words about how they feel, not a measurement.", { name: athlete.name })}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-1.5">
@@ -657,10 +659,10 @@ export default function GuardianDashboardPage() {
                           className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 text-xs"
                         >
                           <span className="font-semibold">
-                            {format(new Date(`${w.date}T00:00:00`), "EEE d MMM")}
+                            {dayLabel(t, new Date(`${w.date}T00:00:00`), "EEE d MMM", { weekday: "short", day: "numeric", month: "short" })}
                           </span>
                           <span className="text-muted-foreground">
-                            {w.sleepHours}h sleep · soreness {w.soreness}/5 · stress {w.stress}/5
+                            {t("{sleep}h sleep · soreness {soreness}/5 · stress {stress}/5", { sleep: w.sleepHours, soreness: w.soreness, stress: w.stress })}
                           </span>
                         </div>
                       ))}
@@ -671,9 +673,9 @@ export default function GuardianDashboardPage() {
                 {injuries.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Injuries</CardTitle>
+                      <CardTitle className="text-base">{t("Injuries")}</CardTitle>
                       <CardDescription>
-                        Everything on {athlete.name}'s record, open or resolved.
+                        {t("Everything on {name}'s record, open or resolved.", { name: athlete.name })}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-2">
@@ -686,18 +688,18 @@ export default function GuardianDashboardPage() {
                           )}
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-semibold capitalize">{i.bodyPart}</span>
+                            <TranslatableText as="span" text={i.bodyPart} className="font-semibold capitalize" />
                             <span className="text-xs text-muted-foreground">
-                              {format(new Date(`${i.occurredOn}T00:00:00`), "d MMM yyyy")}
+                              {dayLabel(t, new Date(`${i.occurredOn}T00:00:00`), "d MMM yyyy", { day: "numeric", month: "short", year: "numeric" })}
                               {i.resolved
                                 ? i.resolvedOn
-                                  ? ` · resolved ${format(new Date(`${i.resolvedOn}T00:00:00`), "d MMM")}`
-                                  : " · resolved"
-                                : " · still open"}
+                                  ? t(" · resolved {date}", { date: dayLabel(t, new Date(`${i.resolvedOn}T00:00:00`), "d MMM", { day: "numeric", month: "short" }) })
+                                  : t(" · resolved")
+                                : t(" · still open")}
                             </span>
                           </div>
                           {i.description && (
-                            <p className="mt-0.5 text-xs text-muted-foreground">{i.description}</p>
+                            <TranslatableText text={i.description} className="mt-0.5 text-xs text-muted-foreground" />
                           )}
                         </div>
                       ))}
@@ -708,42 +710,41 @@ export default function GuardianDashboardPage() {
                 {(nutritionTargets || (foodLog?.entries.length ?? 0) > 0) && (
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Eating and drinking</CardTitle>
+                      <CardTitle className="text-base">{t("Eating and drinking")}</CardTitle>
                       <CardDescription>
-                        Today's log against whatever targets are set. Forge is not a nutritionist,
-                        targets are guidance, and the log is only what {athlete.name} wrote down.
+                        {t("Today's log against whatever targets are set. Forge is not a nutritionist, targets are guidance, and the log is only what {name} wrote down.", { name: athlete.name })}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-2 text-sm">
                       {foodLog && (
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
                           <NutritionStat
-                            label="Calories"
+                            label={t("Calories")}
                             value={Math.round(foodLog.totals.caloriesKcal)}
                             target={nutritionTargets?.caloriesKcal ?? null}
                           />
                           <NutritionStat
-                            label="Protein (g)"
+                            label={t("Protein (g)")}
                             value={Math.round(foodLog.totals.proteinG)}
                             target={nutritionTargets?.proteinG ?? null}
                           />
                           <NutritionStat
-                            label="Carbs (g)"
+                            label={t("Carbs (g)")}
                             value={Math.round(foodLog.totals.carbsG)}
                             target={nutritionTargets?.carbsG ?? null}
                           />
                           <NutritionStat
-                            label="Fat (g)"
+                            label={t("Fat (g)")}
                             value={Math.round(foodLog.totals.fatG)}
                             target={nutritionTargets?.fatG ?? null}
                           />
                           <NutritionStat
-                            label="Fiber (g)"
+                            label={t("Fiber (g)")}
                             value={Math.round(foodLog.totals.fiberG)}
                             target={nutritionTargets?.fiberG ?? null}
                           />
                           <NutritionStat
-                            label="Water (oz)"
+                            label={t("Water (oz)")}
                             value={Math.round(foodLog.waterOz)}
                             target={nutritionTargets?.waterOz ?? null}
                           />
@@ -755,7 +756,7 @@ export default function GuardianDashboardPage() {
                             <li key={e.id} className="flex justify-between gap-2">
                               <span className="truncate">{e.description}</span>
                               <span className="shrink-0 tabular-nums">
-                                {e.caloriesKcal != null ? `${Math.round(e.caloriesKcal)} kcal` : ""}
+                                {e.caloriesKcal != null ? t("{value} kcal", { value: Math.round(e.caloriesKcal) }) : ""}
                               </span>
                             </li>
                           ))}
@@ -767,11 +768,9 @@ export default function GuardianDashboardPage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base">Videos</CardTitle>
+                    <CardTitle className="text-base">{t("Videos")}</CardTitle>
                     <CardDescription>
-                      Every video on {athlete.name}'s record. You can ask us to take one down,
-                      we'll review it and remove it. You can't delete it yourself, and neither can
-                      anyone else on the account without us seeing the request.
+                      {t("Every video on {name}'s record. You can ask us to take one down, we'll review it and remove it. You can't delete it yourself, and neither can anyone else on the account without us seeing the request.", { name: athlete.name })}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -779,12 +778,12 @@ export default function GuardianDashboardPage() {
                       // Never "no videos" on a failed load. This card promises every video on
                       // the athlete's record, and an empty list is the answer a parent would
                       // act on -- so a request that did not arrive has to say so.
-                      <ReadFailed what="this list" onRetry={() => void refetchVideos()} />
+                      <ReadFailed what={t("this list")} onRetry={() => void refetchVideos()} />
                     ) : !videos ? (
-                      <p className="text-sm text-muted-foreground">Loading…</p>
+                      <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
                     ) : videos.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
-                        No videos have been recorded for {athlete.name}.
+                        {t("No videos have been recorded for {name}.", { name: athlete.name })}
                       </p>
                     ) : (
                       <ul className="space-y-2">
@@ -809,7 +808,7 @@ export default function GuardianDashboardPage() {
                                 disabled={pending || requestRemoval.isPending}
                                 onClick={() => requestRemoval.mutate(v)}
                               >
-                                {pending ? "Requested" : "Request removal"}
+                                {pending ? t("Requested") : t("Request removal")}
                               </Button>
                             </li>
                           );
@@ -822,8 +821,8 @@ export default function GuardianDashboardPage() {
                 {(removalRequests ?? []).length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Your removal requests</CardTitle>
-                      <CardDescription>What you've asked for, and what came of it.</CardDescription>
+                      <CardTitle className="text-base">{t("Your removal requests")}</CardTitle>
+                      <CardDescription>{t("What you've asked for, and what came of it.")}</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <ul className="space-y-2">
@@ -839,10 +838,10 @@ export default function GuardianDashboardPage() {
                                 className="shrink-0"
                               >
                                 {r.status === "open"
-                                  ? "Waiting on us"
+                                  ? t("Waiting on us")
                                   : r.status === "approved"
-                                    ? "Removed"
-                                    : "Not removed"}
+                                    ? t("Removed")
+                                    : t("Not removed")}
                               </Badge>
                             </div>
                             {r.resolutionNote && (
@@ -890,6 +889,7 @@ export default function GuardianDashboardPage() {
  * chose to give.
  */
 function ResearchReConsent() {
+  const t = useT();
   const qc = useQueryClient();
   const { data: athletes = [], isError, refetch } = useQuery<
     { athleteId: number; athleteName: string | null; grantedAt: string | null }[]
@@ -901,9 +901,9 @@ function ResearchReConsent() {
     },
     onSuccess: (_d, input) => {
       qc.invalidateQueries({ queryKey: ["/api/guardian/research-re-consent"] });
-      toast.success(input.granted ? "Recorded, thank you" : "Withdrawn");
+      toast.success(input.granted ? t("Recorded, thank you") : t("Withdrawn"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't record that"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Couldn't record that")),
   });
 
   // A failed read here must not render as "nothing to answer" -- that is the whole shape this
@@ -912,7 +912,7 @@ function ResearchReConsent() {
     return (
       <Card>
         <CardContent className="py-6">
-          <ReadFailed what="anything waiting for your answer" onRetry={() => void refetch()} />
+          <ReadFailed what={t("anything waiting for your answer")} onRetry={() => void refetch()} />
         </CardContent>
       </Card>
     );
@@ -923,22 +923,17 @@ function ResearchReConsent() {
   return (
     <Card className="border-amber-500/50">
       <CardHeader>
-        <CardTitle>What you agreed to has changed</CardTitle>
+        <CardTitle>{t("What you agreed to has changed")}</CardTitle>
         <CardDescription>
-          When you agreed your athlete's numbers could be used for research, the only limit we
-          named was that a report already sent can't be recalled. We've added one: if the account
-          is deleted, the group numbers stay, age, sport, position and the training numbers,
-          with nothing in them that points back to your athlete. The account, the videos and
-          anything identifying still go. Until you answer, the version you agreed to is the one
-          that applies.
+          {t("When you agreed your athlete's numbers could be used for research, the only limit we named was that a report already sent can't be recalled. We've added one: if the account is deleted, the group numbers stay, age, sport, position and the training numbers, with nothing in them that points back to your athlete. The account, the videos and anything identifying still go. Until you answer, the version you agreed to is the one that applies.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {athletes.map((a) => (
           <div key={a.athleteId} className="rounded-md border border-border p-3">
             <p className="text-sm">
-              <span className="font-semibold">{a.athleteName ?? "Your athlete"}</span>, agreed{" "}
-              {a.grantedAt ? new Date(a.grantedAt).toLocaleDateString() : "previously"}.
+              <span className="font-semibold">{a.athleteName ?? t("Your athlete")}</span>{t(", agreed")}{" "}
+              {a.grantedAt ? new Date(a.grantedAt).toLocaleDateString() : t("previously")}.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Button
@@ -946,7 +941,7 @@ function ResearchReConsent() {
                 disabled={answer.isPending}
                 onClick={() => answer.mutate({ athleteId: a.athleteId, granted: true })}
               >
-                I still agree
+                {t("I still agree")}
               </Button>
               <Button
                 size="sm"
@@ -954,7 +949,7 @@ function ResearchReConsent() {
                 disabled={answer.isPending}
                 onClick={() => answer.mutate({ athleteId: a.athleteId, granted: false })}
               >
-                Withdraw instead
+                {t("Withdraw instead")}
               </Button>
             </div>
           </div>
@@ -976,6 +971,7 @@ function ResearchReConsent() {
  * Fetched only when somebody opens the expander, because most visits are not this.
  */
 function TermsReacceptanceRequests() {
+  const t = useT();
   const qc = useQueryClient();
   const [readingFor, setReadingFor] = useState<number | null>(null);
 
@@ -1002,9 +998,9 @@ function TermsReacceptanceRequests() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/guardian/terms-reacceptance"] });
-      toast.success("Thanks — that's recorded.");
+      toast.success(t("Thanks — that's recorded."));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't record that"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Couldn't record that")),
   });
 
   if (pending.length === 0) return null;
@@ -1012,17 +1008,16 @@ function TermsReacceptanceRequests() {
   return (
     <Card className="border-primary/40">
       <CardHeader>
-        <CardTitle>Updated Terms of Use</CardTitle>
+        <CardTitle>{t("Updated Terms of Use")}</CardTitle>
         <CardDescription>
-          Forge's Terms of Use have changed. Your athlete can keep training while you read them,
-          but they are bound by the new version only once you accept it for them.
+          {t("Forge's Terms of Use have changed. Your athlete can keep training while you read them, but they are bound by the new version only once you accept it for them.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {pending.map((p) => (
           <div key={p.athleteId} className="rounded-md border border-border p-3">
             <p className="text-sm">
-              <span className="font-semibold">{p.athleteName}</span> — version {p.version}
+              <span className="font-semibold">{p.athleteName}</span> {t("— version {version}", { version: p.version })}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Button
@@ -1030,25 +1025,25 @@ function TermsReacceptanceRequests() {
                 variant="outline"
                 onClick={() => setReadingFor(readingFor === p.athleteId ? null : p.athleteId)}
               >
-                {readingFor === p.athleteId ? "Hide the terms" : "Read the terms"}
+                {readingFor === p.athleteId ? t("Hide the terms") : t("Read the terms")}
               </Button>
               <Button
                 size="sm"
                 disabled={accept.isPending}
                 onClick={() => accept.mutate(p.athleteId)}
               >
-                Accept for {p.athleteName}
+                {t("Accept for {name}", { name: p.athleteName })}
               </Button>
             </div>
             {readingFor === p.athleteId &&
               (termsFailed ? (
                 <ReadFailed
-                  what="the updated Terms of Use"
+                  what={t("the updated Terms of Use")}
                   onRetry={() => void refetchTerms()}
                   className="py-4"
                 />
               ) : !terms ? (
-                <p className="mt-2 text-sm text-muted-foreground">Loading…</p>
+                <p className="mt-2 text-sm text-muted-foreground">{t("Loading…")}</p>
               ) : (
                 <div className="mt-2 max-h-[60vh] overflow-y-auto rounded-md border border-border bg-background/40 p-3 text-sm whitespace-pre-wrap">
                   {terms.text}
@@ -1072,6 +1067,7 @@ function TermsReacceptanceRequests() {
  * first thing a guardian should see on opening this page, not something to find under a tab.
  */
 function ResearchConsentRequests() {
+  const t = useT();
   const qc = useQueryClient();
   const { data: requests = [] } = useQuery<
     {
@@ -1091,9 +1087,9 @@ function ResearchConsentRequests() {
     },
     onSuccess: (_d, input) => {
       qc.invalidateQueries({ queryKey: ["/api/guardian/research-consent-requests"] });
-      toast.success(input.approve ? "Approved" : "Declined");
+      toast.success(input.approve ? t("Approved") : t("Declined"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't record that"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Couldn't record that")),
   });
 
   if (requests.length === 0) return null;
@@ -1101,24 +1097,21 @@ function ResearchConsentRequests() {
   return (
     <Card className="border-primary/40">
       <CardHeader>
-        <CardTitle>Waiting on you</CardTitle>
+        <CardTitle>{t("Waiting on you")}</CardTitle>
         <CardDescription>
-          Your athlete has asked to change whether their training numbers can be included, without
-          their name, in anything Forge prepares for an outside party. Nothing changes unless you
-          approve it.
+          {t("Your athlete has asked to change whether their training numbers can be included, without their name, in anything Forge prepares for an outside party. Nothing changes unless you approve it.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {requests.map((r) => (
           <div key={r.id} className="rounded-md border border-border p-3">
             <p className="text-sm">
-              <span className="font-semibold">{r.athleteName ?? "Your athlete"}</span> wants
-              research data sharing turned{" "}
-              <span className="font-semibold">{r.requestedGranted ? "on" : "off"}</span>.
+              <span className="font-semibold">{r.athleteName ?? t("Your athlete")}</span> {t("wants research data sharing turned")}{" "}
+              <span className="font-semibold">{r.requestedGranted ? t("on") : t("off")}</span>.
             </p>
-            {r.note && <p className="mt-1 text-sm text-muted-foreground">{r.note}</p>}
+            {r.note && <TranslatableText text={r.note} className="mt-1 text-sm text-muted-foreground" />}
             <p className="mt-1 text-xs text-muted-foreground">
-              Asked {new Date(r.createdAt).toLocaleDateString()}
+              {t("Asked {date}", { date: new Date(r.createdAt).toLocaleDateString() })}
             </p>
             <div className="mt-2 flex gap-2">
               <Button
@@ -1126,7 +1119,7 @@ function ResearchConsentRequests() {
                 disabled={decide.isPending}
                 onClick={() => decide.mutate({ id: r.id, approve: true })}
               >
-                Approve
+                {t("Approve")}
               </Button>
               <Button
                 size="sm"
@@ -1134,7 +1127,7 @@ function ResearchConsentRequests() {
                 disabled={decide.isPending}
                 onClick={() => decide.mutate({ id: r.id, approve: false })}
               >
-                Decline
+                {t("Decline")}
               </Button>
             </div>
           </div>
@@ -1178,6 +1171,7 @@ function NutritionStat({
  * notification pointed at it, and the dashboard did not.
  */
 function GuardianAgreementsCard({ athleteId, athleteName }: { athleteId: number; athleteName: string }) {
+  const t = useT();
   const { data, isLoading, isError, refetch } = useQuery<ConsentSummaryRow[]>({
     queryKey: ["/api/guardian/athletes", athleteId, "consents"],
     queryFn: () => getJson(`/api/guardian/athletes/${athleteId}/consents`),
@@ -1190,32 +1184,32 @@ function GuardianAgreementsCard({ athleteId, athleteName }: { athleteId: number;
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <FileCheck2 className="h-4 w-4 text-primary" />
-          Agreements and documents
+          {t("Agreements and documents")}
         </CardTitle>
         <CardDescription>
-          What has been accepted for {athleteName} in Forge, and the forms on file.
+          {t("What has been accepted for {name} in Forge, and the forms on file.", { name: athleteName })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {isError ? (
-          <ReadFailed what="their agreements" onRetry={() => void refetch()} />
+          <ReadFailed what={t("their agreements")} onRetry={() => void refetch()} />
         ) : isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
         ) : (
           <div className="flex flex-wrap gap-2 text-sm">
             <Badge variant="secondary">
-              {agreed.length} current
+              {t("{count} current", { count: agreed.length })}
             </Badge>
             {stale.length > 0 && (
               <Badge variant="destructive">
-                {stale.length} {stale.length === 1 ? "needs" : "need"} re-accepting
+                {t.plural(stale.length, "{count} needs re-accepting", "{count} need re-accepting")}
               </Badge>
             )}
-            {rows.length === 0 && <span className="text-muted-foreground">Nothing recorded yet.</span>}
+            {rows.length === 0 && <span className="text-muted-foreground">{t("Nothing recorded yet.")}</span>}
           </div>
         )}
         <Button asChild size="sm" variant="outline">
-          <Link href={`/documents/${athleteId}`}>Open {athleteName}'s documents</Link>
+          <Link href={`/documents/${athleteId}`}>{t("Open {name}'s documents", { name: athleteName })}</Link>
         </Button>
       </CardContent>
     </Card>
@@ -1241,6 +1235,7 @@ const COMMENTS_SHOWN_AT_FIRST = 5;
  * for an athlete under 18 the linked guardian reads every one of them here. Nothing is written
  * from this card. For an athlete who is 18 or over the server refuses and the card says why. */
 function GuardianCoachConversationsCard({ athleteId, athleteName }: { athleteId: number; athleteName: string }) {
+  const t = useT();
   const [showAll, setShowAll] = useState(false);
   const { data, isLoading, isError, error, refetch } = useQuery<CoachComment[]>({
     queryKey: ["/api/guardian/athletes", athleteId, "coach-comments"],
@@ -1254,20 +1249,19 @@ function GuardianCoachConversationsCard({ athleteId, athleteName }: { athleteId:
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <MessagesSquare className="h-4 w-4 text-primary" />
-          Messages with coaches
+          {t("Messages with coaches")}
         </CardTitle>
         <CardDescription>
-          Every comment between {athleteName} and their coaches on a workout or skill day, newest
-          first. You can read all of it here, and the private messages below too.
+          {t("Every comment between {name} and their coaches on a workout or skill day, newest first. You can read all of it here, and the private messages below too.", { name: athleteName })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {isError ? (
-          <ReadFailed what="these messages" error={error} onRetry={() => void refetch()} />
+          <ReadFailed what={t("these messages")} error={error} onRetry={() => void refetch()} />
         ) : isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
         ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No messages yet.</p>
+          <p className="text-sm text-muted-foreground">{t("No messages yet.")}</p>
         ) : (
           <>
             <ul className="space-y-3">
@@ -1276,21 +1270,21 @@ function GuardianCoachConversationsCard({ athleteId, athleteName }: { athleteId:
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="font-medium">
                       {c.author.name}
-                      <span className="ml-2 text-xs uppercase text-muted-foreground">{c.author.role}</span>
+                      <span className="ml-2 text-xs uppercase text-muted-foreground">{t(c.author.role)}</span>
                     </span>
-                    <span className="text-xs text-muted-foreground">{format(new Date(c.createdAt), "MMM d, h:mm a")}</span>
+                    <span className="text-xs text-muted-foreground">{dayLabel(t, new Date(c.createdAt), "MMM d, h:mm a", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap">{c.body}</p>
+                  <TranslatableText text={c.body} className="mt-1 whitespace-pre-wrap" />
                   {(c.videoUrl || c.imageUrl) && (
                     <div className="mt-2 flex gap-3 text-xs">
                       {c.videoUrl && (
                         <a className="text-primary underline" href={c.videoUrl} target="_blank" rel="noreferrer">
-                          Open the video
+                          {t("Open the video")}
                         </a>
                       )}
                       {c.imageUrl && (
                         <a className="text-primary underline" href={c.imageUrl} target="_blank" rel="noreferrer">
-                          Open the drawing
+                          {t("Open the drawing")}
                         </a>
                       )}
                     </div>
@@ -1300,7 +1294,7 @@ function GuardianCoachConversationsCard({ athleteId, athleteName }: { athleteId:
             </ul>
             {rows.length > COMMENTS_SHOWN_AT_FIRST && (
               <Button size="sm" variant="outline" onClick={() => setShowAll((v) => !v)}>
-                {showAll ? "Show fewer" : `Show all ${rows.length}`}
+                {showAll ? t("Show fewer") : t("Show all {count}", { count: rows.length })}
               </Button>
             )}
           </>
@@ -1353,6 +1347,7 @@ function GuardianParentalVerificationCard({
   athleteId: number;
   athleteName: string;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const statusKey = ["/api/guardian/athletes", athleteId, "parental-verification"];
   const returned = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("checkout") === "success";
@@ -1377,7 +1372,7 @@ function GuardianParentalVerificationCard({
     onSuccess: ({ url }) => {
       window.location.href = url;
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't start the verification"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Couldn't start the verification")),
   });
   useEffect(() => {
     if (status?.verified) qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
@@ -1387,7 +1382,7 @@ function GuardianParentalVerificationCard({
     return (
       <Card>
         <CardContent className="pt-6">
-          <ReadFailed what="the verification status" onRetry={() => void refetch()} />
+          <ReadFailed what={t("the verification status")} onRetry={() => void refetch()} />
         </CardContent>
       </Card>
     );
@@ -1399,12 +1394,10 @@ function GuardianParentalVerificationCard({
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <ShieldCheck className="h-4 w-4 text-primary" />
-          Parental consent verification
+          {t("Parental consent verification")}
         </CardTitle>
         <CardDescription>
-          {athleteName} is under 13. Federal law (COPPA) asks us to confirm a parent's consent
-          with a card transaction, not just an email. The ${dollars} charge is refunded
-          automatically.
+          {t("{name} is under 13. Federal law (COPPA) asks us to confirm a parent's consent with a card transaction, not just an email. The ${amount} charge is refunded automatically.", { name: athleteName, amount: dollars })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -1412,22 +1405,22 @@ function GuardianParentalVerificationCard({
           <p className="flex items-start gap-2 text-sm">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
             <span>
-              Verified on {status.verifiedAt ? new Date(status.verifiedAt).toLocaleDateString() : "record"}.
-              {athleteName}'s account is open.
+              {t("Verified on {date}.{name}'s account is open.", {
+                date: status.verifiedAt ? new Date(status.verifiedAt).toLocaleDateString() : t("record"),
+                name: athleteName,
+              })}
             </span>
           </p>
         ) : (
           <>
             <p className="text-sm">
-              <span className="font-semibold">{athleteName}'s account is on hold</span> until this
-              is done. It takes about a minute on Stripe's secure page, and the charge comes
-              straight back to your card.
+              <span className="font-semibold">{t("{name}'s account is on hold", { name: athleteName })}</span> {t("until this is done. It takes about a minute on Stripe's secure page, and the charge comes straight back to your card.")}
             </p>
             {returned && (
-              <p className="text-sm text-muted-foreground">Checking with the card processor…</p>
+              <p className="text-sm text-muted-foreground">{t("Checking with the card processor…")}</p>
             )}
             <Button type="button" disabled={start.isPending} onClick={() => start.mutate()}>
-              {start.isPending ? "Opening…" : `Verify with a card (${dollars}, refunded)`}
+              {start.isPending ? t("Opening…") : t("Verify with a card ({amount}, refunded)", { amount: dollars })}
             </Button>
           </>
         )}
@@ -1452,6 +1445,7 @@ function GuardianWithdrawCard({
   athleteName: string;
   onAthleteGone: () => void;
 }) {
+  const t = useT();
   const [mode, setMode] = useState<"idle" | "withdraw" | "delete">("idle");
   const [confirmName, setConfirmName] = useState("");
   const [password, setPassword] = useState("");
@@ -1465,10 +1459,10 @@ function GuardianWithdrawCard({
       return (await res.json()) as { videosPurged: number };
     },
     onSuccess: (r) => {
-      toast.success(`Consent withdrawn. ${r.videosPurged} video${r.videosPurged === 1 ? "" : "s"} deleted.`);
+      toast.success(t.plural(r.videosPurged, "Consent withdrawn. {count} video deleted.", "Consent withdrawn. {count} videos deleted."));
       onAthleteGone();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't withdraw consent"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Couldn't withdraw consent")),
   });
   const remove = useMutation({
     mutationFn: async () => {
@@ -1478,39 +1472,36 @@ function GuardianWithdrawCard({
       });
     },
     onSuccess: () => {
-      toast.success(`${athleteName}'s account and everything it held are deleted.`);
+      toast.success(t("{name}'s account and everything it held are deleted.", { name: athleteName }));
       onAthleteGone();
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't delete the account"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Couldn't delete the account")),
   });
   const busy = withdraw.isPending || remove.isPending;
 
   return (
     <Card className="border-destructive/40" data-testid="guardian-withdraw-card">
       <CardHeader>
-        <CardTitle className="text-base">Withdraw consent or delete the account</CardTitle>
+        <CardTitle className="text-base">{t("Withdraw consent or delete the account")}</CardTitle>
         <CardDescription>
-          Withdrawing consent marks everything you agreed to as withdrawn, deletes every video of{" "}
-          {athleteName}, ends any research participation, and removes your link to the account.
-          Deleting the account removes the account itself and everything it holds. Neither can be
-          undone.
+          {t("Withdrawing consent marks everything you agreed to as withdrawn, deletes every video of {name}, ends any research participation, and removes your link to the account. Deleting the account removes the account itself and everything it holds. Neither can be undone.", { name: athleteName })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {mode === "idle" ? (
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => setMode("withdraw")}>
-              Withdraw consent
+              {t("Withdraw consent")}
             </Button>
             <Button variant="destructive" size="sm" className="gap-1.5" onClick={() => setMode("delete")}>
               <Trash2 className="h-4 w-4" />
-              Delete {athleteName}'s account
+              {t("Delete {name}'s account", { name: athleteName })}
             </Button>
           </div>
         ) : (
           <>
             <div className="space-y-1.5">
-              <Label htmlFor="guardian-confirm-name">Type {athleteName}'s name to confirm</Label>
+              <Label htmlFor="guardian-confirm-name">{t("Type {name}'s name to confirm", { name: athleteName })}</Label>
               <Input
                 id="guardian-confirm-name"
                 value={confirmName}
@@ -1521,7 +1512,7 @@ function GuardianWithdrawCard({
             </div>
             {mode === "delete" && (
               <div className="space-y-1.5">
-                <Label htmlFor="guardian-confirm-password">Your password</Label>
+                <Label htmlFor="guardian-confirm-password">{t("Your password")}</Label>
                 <PasswordInput
                   id="guardian-confirm-password"
                   value={password}
@@ -1538,10 +1529,10 @@ function GuardianWithdrawCard({
                 onClick={() => (mode === "delete" ? remove.mutate() : withdraw.mutate())}
               >
                 {busy
-                  ? "Working…"
+                  ? t("Working…")
                   : mode === "delete"
-                    ? `Delete ${athleteName}'s account`
-                    : "Withdraw consent and delete videos"}
+                    ? t("Delete {name}'s account", { name: athleteName })
+                    : t("Withdraw consent and delete videos")}
               </Button>
               <Button
                 variant="ghost"
@@ -1553,7 +1544,7 @@ function GuardianWithdrawCard({
                   setPassword("");
                 }}
               >
-                Cancel
+                {t("Cancel")}
               </Button>
             </div>
           </>
@@ -1570,6 +1561,7 @@ function GuardianBiometricConsentCard({
   athleteId: number;
   athleteName: string;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [agreed, setAgreed] = useState(false);
   const statusKey = ["/api/guardian/athletes", athleteId, "biometric-consent"];
@@ -1604,9 +1596,9 @@ function GuardianBiometricConsentCard({
       setAgreed(false);
       qc.invalidateQueries({ queryKey: statusKey });
       qc.invalidateQueries({ queryKey: ["/api/guardian/athletes", athleteId, "consents"] });
-      toast.success(`Recorded. ${athleteName} can use the camera now.`);
+      toast.success(t("Recorded. {name} can use the camera now.", { name: athleteName }));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't record that"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Couldn't record that")),
   });
 
   return (
@@ -1614,22 +1606,20 @@ function GuardianBiometricConsentCard({
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <ScanLine className="h-4 w-4 text-primary" />
-          Video and Biometric Consent
+          {t("Video and Biometric Consent")}
         </CardTitle>
         <CardDescription>
-          Whether {athleteName} may film a set and have their movement measured from the video.
-          Without it their sets still log; the camera measurements are not stored.
+          {t("Whether {name} may film a set and have their movement measured from the video. Without it their sets still log; the camera measurements are not stored.", { name: athleteName })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {isError ? (
-          <ReadFailed what="the consent status" onRetry={() => void refetch()} />
+          <ReadFailed what={t("the consent status")} onRetry={() => void refetch()} />
         ) : isLoading || !status ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
         ) : !status.guardianDecides ? (
           <p className="text-sm text-muted-foreground">
-            {athleteName} is an adult and gives this consent for themselves, from their own
-            workout screen.
+            {t("{name} is an adult and gives this consent for themselves, from their own workout screen.", { name: athleteName })}
           </p>
         ) : (
           <>
@@ -1637,40 +1627,44 @@ function GuardianBiometricConsentCard({
               <p className="flex items-start gap-2 text-sm">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
                 <span>
-                  Given {status.givenByGuardian ? "by a guardian " : ""}on{" "}
-                  {status.givenAt ? new Date(status.givenAt).toLocaleDateString() : "record"}, under
-                  the current text. Nothing to do.
+                  {status.givenByGuardian
+                    ? t("Given by a guardian on {date}, under the current text. Nothing to do.", {
+                        date: status.givenAt ? new Date(status.givenAt).toLocaleDateString() : t("record"),
+                      })
+                    : t("Given on {date}, under the current text. Nothing to do.", {
+                        date: status.givenAt ? new Date(status.givenAt).toLocaleDateString() : t("record"),
+                      })}
                 </span>
               </p>
             )}
             {status.given && status.stale && (
               <p className="text-sm">
-                <span className="font-semibold">The consent text has changed</span> since it was
-                given on {status.givenAt ? new Date(status.givenAt).toLocaleDateString() : "record"}.
-                The earlier consent still stands; read the current version and accept it again so
-                the record matches what {athleteName} is actually consented to.
+                <span className="font-semibold">{t("The consent text has changed")}</span>{" "}
+                {t("since it was given on {date}. The earlier consent still stands; read the current version and accept it again so the record matches what {name} is actually consented to.", {
+                  date: status.givenAt ? new Date(status.givenAt).toLocaleDateString() : t("record"),
+                  name: athleteName,
+                })}
               </p>
             )}
             {!status.given && (
               <p className="text-sm">
-                <span className="font-semibold">Not on file.</span>{" "}
+                <span className="font-semibold">{t("Not on file.")}</span>{" "}
                 {status.withdrawnAt
-                  ? `Withdrawn on ${new Date(status.withdrawnAt).toLocaleDateString()}. `
+                  ? t("Withdrawn on {date}. ", { date: new Date(status.withdrawnAt).toLocaleDateString() })
                   : ""}
-                {athleteName} cannot give this themselves. Read it and, if you agree, accept it
-                for them here.
+                {t("{name} cannot give this themselves. Read it and, if you agree, accept it for them here.", { name: athleteName })}
               </p>
             )}
             {asking && (
               <>
                 {documentFailed ? (
                   <ReadFailed
-                    what="the Video and Biometric Consent"
+                    what={t("the Video and Biometric Consent")}
                     onRetry={() => void refetchDocument()}
                     className="py-4"
                   />
                 ) : !document ? (
-                  <p className="text-sm text-muted-foreground">Loading the document…</p>
+                  <p className="text-sm text-muted-foreground">{t("Loading the document…")}</p>
                 ) : (
                   <div
                     className="max-h-[60vh] overflow-y-auto rounded-md border border-border bg-background/40 p-3 text-xs leading-relaxed whitespace-pre-wrap"
@@ -1687,8 +1681,7 @@ function GuardianBiometricConsentCard({
                     disabled={!document}
                   />
                   <span>
-                    I am {athleteName}'s parent or legal guardian, I have read this consent and I
-                    agree to it on their behalf
+                    {t("I am {name}'s parent or legal guardian, I have read this consent and I agree to it on their behalf", { name: athleteName })}
                   </span>
                 </label>
                 <Button
@@ -1696,7 +1689,7 @@ function GuardianBiometricConsentCard({
                   disabled={!agreed || !document || give.isPending}
                   onClick={() => give.mutate()}
                 >
-                  {give.isPending ? "Recording…" : `Accept for ${athleteName}`}
+                  {give.isPending ? t("Recording…") : t("Accept for {name}", { name: athleteName })}
                 </Button>
               </>
             )}

@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { todayIso } from "@/lib/local-date";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type SkillProgramSummary = {
   id: number;
@@ -73,6 +74,7 @@ export function SkillProgramListPage({
   /** REMOVED: aiFirstCreate. Nothing ever passed it on either list page -- see
    * ProgramListPage for the full reasoning and for what rebuilding it would need. */
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [, navigate] = useLocation();
   const { data: programs = [], isLoading, isError, refetch } = useQuery<SkillProgramSummary[]>({
@@ -104,13 +106,13 @@ export function SkillProgramListPage({
     },
     onSuccess: (program) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/skill-programs`] });
-      toast.success("Skill program created — start adding days");
+      toast.success(t("Skill program created — start adding days"));
       setDialogOpen(false);
       setName("");
       setDescription("");
       navigate(`${routeBase}/${program.id}`);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not create skill program"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not create skill program")),
   });
 
   // AI Assist, the skills twin of ProgramListPage's own. Two steps in one
@@ -139,17 +141,17 @@ export function SkillProgramListPage({
     },
     onSuccess: (result) => {
       if (!result?.program) {
-        toast.error("AI assist isn't available right now");
+        toast.error(t("AI assist isn't available right now"));
         return;
       }
       qc.invalidateQueries({ queryKey: [`${apiBase}/skill-programs`] });
-      toast.success("Draft created, review it before assigning it to anything");
+      toast.success(t("Draft created, review it before assigning it to anything"));
       if (result.note) toast.info(result.note, { duration: 10000 });
       setAiDialogOpen(false);
       setAiPrompt("");
       navigate(`${routeBase}/${result.program.id}`);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not generate a draft"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not generate a draft")),
   });
 
   // Self-assignment: coachId === athleteId -- lands the skill program on the
@@ -165,10 +167,10 @@ export function SkillProgramListPage({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/athlete/calendar"] });
-      toast.success("Added to your calendar");
+      toast.success(t("Added to your calendar"));
       setSelfAssignProgramId(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not add to your calendar"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not add to your calendar")),
   });
 
   const deleteMutation = useMutation({
@@ -177,10 +179,10 @@ export function SkillProgramListPage({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/skill-programs`] });
-      toast.success("Skill program deleted");
+      toast.success(t("Skill program deleted"));
       setDeleteTarget(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not delete skill program"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not delete skill program")),
   });
 
   const duplicateMutation = useMutation({
@@ -212,10 +214,10 @@ export function SkillProgramListPage({
     },
     onSuccess: (program) => {
       qc.invalidateQueries({ queryKey: [`${apiBase}/skill-programs`] });
-      toast.success("Skill program duplicated");
+      toast.success(t("Skill program duplicated"));
       navigate(`${routeBase}/${program.id}`);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not duplicate skill program"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not duplicate skill program")),
   });
 
   return (
@@ -227,12 +229,12 @@ export function SkillProgramListPage({
           {aiDraftEnabled && (
             <Button variant="outline" onClick={() => setAiDialogOpen(true)}>
               <Sparkles className="h-4 w-4" />
-              AI Assist
+              {t("AI Assist")}
             </Button>
           )}
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="h-4 w-4" />
-            New Skill Program
+            {t("New Skill Program")}
           </Button>
         </div>
       }
@@ -240,7 +242,7 @@ export function SkillProgramListPage({
       {isError && (
         <Card>
           <CardContent className="py-16">
-            <ReadFailed what="your skill programs" onRetry={() => void refetch()} />
+            <ReadFailed what={t("your skill programs")} onRetry={() => void refetch()} />
           </CardContent>
         </Card>
       )}
@@ -252,7 +254,7 @@ export function SkillProgramListPage({
             <p className="text-muted-foreground">{emptyStateText}</p>
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="h-4 w-4" />
-              New Skill Program
+              {t("New Skill Program")}
             </Button>
           </CardContent>
         </Card>
@@ -285,7 +287,7 @@ export function SkillProgramListPage({
                 <div className="flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <CalendarRange className="h-3.5 w-3.5" />
-                    {p.weekCount} wk · {p.dayCount} days
+                    {t("{weeks} wk · {days} days", { weeks: p.weekCount, days: p.dayCount })}
                   </span>
                   <span className="flex items-center gap-1">
                     <Users className="h-3.5 w-3.5" />
@@ -295,8 +297,8 @@ export function SkillProgramListPage({
                     <Button
                       size="icon"
                       variant="ghost"
-                      aria-label={`Duplicate ${p.name}`}
-                      title="Duplicate as a new editable skill program"
+                      aria-label={t("Duplicate {name}", { name: p.name })}
+                      title={t("Duplicate as a new editable skill program")}
                       disabled={duplicateMutation.isPending}
                       onClick={() => duplicateMutation.mutate(p)}
                     >
@@ -306,7 +308,7 @@ export function SkillProgramListPage({
                       <Button
                         size="icon"
                         variant="ghost"
-                        aria-label={`Delete ${p.name}`}
+                        aria-label={t("Delete {name}", { name: p.name })}
                         onClick={() => setDeleteTarget(p)}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
@@ -322,7 +324,7 @@ export function SkillProgramListPage({
                     onClick={() => setAssignProgramId(p.id)}
                   >
                     <Send className="h-3.5 w-3.5" />
-                    Assign
+                    {t("Assign")}
                   </Button>
                 )}
                 {showSelfAssign && (
@@ -336,7 +338,7 @@ export function SkillProgramListPage({
                     }}
                   >
                     <CalendarPlus className="h-3.5 w-3.5" />
-                    Add to My Calendar
+                    {t("Add to My Calendar")}
                   </Button>
                 )}
               </div>
@@ -350,32 +352,31 @@ export function SkillProgramListPage({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              AI skill program draft
+              {t("AI skill program draft")}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-1.5">
-            <Label htmlFor="skill-ai-prompt">What do you want to work on?</Label>
+            <Label htmlFor="skill-ai-prompt">{t("What do you want to work on?")}</Label>
             <Textarea
               id="skill-ai-prompt"
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
               rows={4}
-              placeholder="e.g. eight weeks of pitching mechanics, three sessions a week, mostly command work and a long-toss progression"
+              placeholder={t("e.g. eight weeks of pitching mechanics, three sessions a week, mostly command work and a long-toss progression")}
             />
             <p className="text-xs text-muted-foreground">
-              You get an editable draft to review, nothing is assigned to your calendar until you
-              say so.
+              {t("You get an editable draft to review, nothing is assigned to your calendar until you say so.")}
             </p>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setAiDialogOpen(false)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               onClick={() => aiDraftMutation.mutate()}
               disabled={aiDraftMutation.isPending || aiPrompt.trim().length === 0}
             >
-              {aiDraftMutation.isPending ? "Drafting…" : "Draft it"}
+              {aiDraftMutation.isPending ? t("Drafting…") : t("Draft it")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -384,7 +385,7 @@ export function SkillProgramListPage({
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Skill Program</DialogTitle>
+            <DialogTitle>{t("New Skill Program")}</DialogTitle>
           </DialogHeader>
           <form
             onSubmit={(e) => {
@@ -394,30 +395,30 @@ export function SkillProgramListPage({
             className="space-y-4"
           >
             <div className="space-y-1.5">
-              <Label htmlFor="skprog-name">Skill program name</Label>
+              <Label htmlFor="skprog-name">{t("Skill program name")}</Label>
               <Input
                 id="skprog-name"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Preseason Hitting Progression"
+                placeholder={t("e.g. Preseason Hitting Progression")}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="skprog-desc">Description (optional)</Label>
+              <Label htmlFor="skprog-desc">{t("Description (optional)")}</Label>
               <Textarea
                 id="skprog-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="What is this skill program for?"
+                placeholder={t("What is this skill program for?")}
               />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancel
+                {t("Cancel")}
               </Button>
               <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? "Creating…" : "Create & Build"}
+                {createMutation.isPending ? t("Creating…") : t("Create & Build")}
               </Button>
             </DialogFooter>
           </form>
@@ -441,7 +442,7 @@ export function SkillProgramListPage({
         >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add to My Calendar</DialogTitle>
+              <DialogTitle>{t("Add to My Calendar")}</DialogTitle>
             </DialogHeader>
             <form
               onSubmit={(e) => {
@@ -451,7 +452,7 @@ export function SkillProgramListPage({
               className="space-y-4"
             >
               <div className="space-y-1.5">
-                <Label htmlFor="skill-self-assign-date">Start date</Label>
+                <Label htmlFor="skill-self-assign-date">{t("Start date")}</Label>
                 <Input
                   id="skill-self-assign-date"
                   type="date"
@@ -460,7 +461,7 @@ export function SkillProgramListPage({
                   required
                 />
                 <p className="text-xs text-muted-foreground">
-                  Day 1 of Week 1 lands on this date.
+                  {t("Day 1 of Week 1 lands on this date.")}
                 </p>
               </div>
               <DialogFooter>
@@ -469,10 +470,10 @@ export function SkillProgramListPage({
                   variant="outline"
                   onClick={() => setSelfAssignProgramId(null)}
                 >
-                  Cancel
+                  {t("Cancel")}
                 </Button>
                 <Button type="submit" disabled={selfAssignMutation.isPending}>
-                  {selfAssignMutation.isPending ? "Adding…" : "Add to Calendar"}
+                  {selfAssignMutation.isPending ? t("Adding…") : t("Add to Calendar")}
                 </Button>
               </DialogFooter>
             </form>
@@ -483,9 +484,9 @@ export function SkillProgramListPage({
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="Delete skill program?"
-        description={deleteTarget ? `Delete "${deleteTarget.name}"? This cannot be undone.` : ""}
-        confirmLabel="Delete"
+        title={t("Delete skill program?")}
+        description={deleteTarget ? t("Delete \"{name}\"? This cannot be undone.", { name: deleteTarget.name }) : ""}
+        confirmLabel={t("Delete")}
         isPending={deleteMutation.isPending}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
       />

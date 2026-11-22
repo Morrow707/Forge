@@ -16,8 +16,8 @@ const hook = readFileSync(resolve(__dirname, "./use-av-body-tracking.ts"), "utf-
  */
 describe("both halves of the wait have their own bar", () => {
   it("draws a phase bar for each of the two waits", () => {
-    expect(workout).toContain('<ProcessingPhaseBar\n                          label="Processing"');
-    expect(workout).toContain('<ProcessingPhaseBar label="Saving"');
+    expect(workout).toContain('<ProcessingPhaseBar\n                          label={t("Processing")}');
+    expect(workout).toContain('<ProcessingPhaseBar label={t("Saving")}');
   });
 
   it("feeds them from two different sources", () => {
@@ -72,7 +72,7 @@ describe("the saving bar cannot claim 100% early", () => {
   });
 
   it("renames the last stretch instead of parking on a number", () => {
-    expect(workout).toContain('finishing ? "Finishing" : label');
+    expect(workout).toContain('finishing ? t("Finishing") : label');
     expect(workout).toContain("shown >= 99");
   });
 });

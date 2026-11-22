@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ForgeMark } from "@/components/forge-mark";
 import { CheckCircle2, ShieldAlert, Laptop } from "lucide-react";
 import { toast } from "sonner";
+import { useT } from "@/i18n";
 
 type Review = {
   status: "pending" | "approved" | "denied" | "expired";
@@ -26,6 +27,7 @@ type Review = {
  * here on the new-password screen with a fresh reset token -- because a denial means somebody
  * else has the password, and choosing a new one is the only thing left to do. */
 export default function DeviceApprovalPage() {
+  const t = useT();
   const [, navigate] = useLocation();
   const token = new URLSearchParams(window.location.search).get("token") ?? "";
   const [done, setDone] = useState<"approved" | null>(null);
@@ -47,14 +49,14 @@ export default function DeviceApprovalPage() {
         setDone("approved");
         return;
       }
-      toast.error("Every device has been signed out. Choose a new password now.");
+      toast.error(t("Every device has been signed out. Choose a new password now."));
       navigate(`/reset-password?token=${encodeURIComponent(result.resetToken ?? "")}`);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't record that"),
+    onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Couldn't record that")),
   });
 
   const state = review.data?.status;
-  const when = review.data ? new Date(review.data.createdAt).toLocaleString() : "";
+  const when = review.data ? new Date(review.data.createdAt).toLocaleString(t.locale) : "";
 
   return (
     <div
@@ -70,20 +72,20 @@ export default function DeviceApprovalPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               {done ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <ShieldAlert className="h-5 w-5" />}
-              {done ? "Device approved" : "Was this you?"}
+              {done ? t("Device approved") : t("Was this you?")}
             </CardTitle>
             <CardDescription>
               {!token
-                ? "This link is missing its token. Open it from the email again."
+                ? t("This link is missing its token. Open it from the email again.")
                 : done
-                  ? "You can go back to the other device; it is signing in now and will be trusted for 30 days."
-                  : "Somebody signed in to your Forge account with your password from a device you haven't used before."}
+                  ? t("You can go back to the other device; it is signing in now and will be trusted for 30 days.")
+                  : t("Somebody signed in to your Forge account with your password from a device you haven't used before.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {token && review.isLoading && <div className="h-16 animate-pulse rounded-md bg-surface" />}
             {token && review.isError && (
-              <p className="text-sm text-muted-foreground">This link is invalid or has already been used.</p>
+              <p className="text-sm text-muted-foreground">{t("This link is invalid or has already been used.")}</p>
             )}
             {review.data && !done && (
               <>
@@ -92,14 +94,14 @@ export default function DeviceApprovalPage() {
                   <div className="text-sm">
                     <p className="font-medium">{review.data.deviceLabel}</p>
                     <p className="text-xs text-muted-foreground">
-                      {review.data.location ?? "Unknown location"} (approximate) · {when}
+                      {t("{location} (approximate) · {when}", { location: review.data.location ?? t("Unknown location"), when })}
                     </p>
                   </div>
                 </div>
                 {state === "pending" ? (
                   <div className="grid grid-cols-2 gap-3">
                     <Button type="button" onClick={() => decide.mutate("approve")} disabled={decide.isPending}>
-                      Yes, that was me
+                      {t("Yes, that was me")}
                     </Button>
                     <Button
                       type="button"
@@ -107,21 +109,20 @@ export default function DeviceApprovalPage() {
                       onClick={() => decide.mutate("deny")}
                       disabled={decide.isPending}
                     >
-                      No, deny it
+                      {t("No, deny it")}
                     </Button>
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     {state === "approved"
-                      ? "This sign-in was already approved."
+                      ? t("This sign-in was already approved.")
                       : state === "denied"
-                        ? "This sign-in was already denied."
-                        : "This link has expired. The sign-in did not go through; nothing else has changed."}
+                        ? t("This sign-in was already denied.")
+                        : t("This link has expired. The sign-in did not go through; nothing else has changed.")}
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Denying signs every device out of your account and takes you straight to choosing a
-                  new password.
+                  {t("Denying signs every device out of your account and takes you straight to choosing a new password.")}
                 </p>
               </>
             )}
