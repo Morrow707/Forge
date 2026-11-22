@@ -10,6 +10,7 @@ import { DownloadButton } from "@/components/download-button";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { RefreshCw, FileText, Copy, ChevronDown, ChevronUp, BookOpen, AlertTriangle } from "lucide-react";
+import { useT } from "@/i18n";
 
 type ReportField = { label: string; value: string };
 type TrackingReportEntry = {
@@ -38,6 +39,7 @@ function trustBadgeClass(value: string): string {
 }
 
 function EntryCard({ entry }: { entry: TrackingReportEntry }) {
+  const t = useT();
   const [showDevice, setShowDevice] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const failureReason = entry.diagnostics.find((f) => f.label === "Why this set has no data");
@@ -52,8 +54,8 @@ function EntryCard({ entry }: { entry: TrackingReportEntry }) {
               {entry.athleteLabel} <span className="text-muted-foreground">--</span> {entry.exerciseName}
             </p>
             <p className="text-xs text-muted-foreground">
-              Set {entry.setNumber}
-              {entry.reps ? `, ${entry.reps} reps` : ""}
+              {t("Set {number}", { number: entry.setNumber })}
+              {entry.reps ? `, ${t("{count} reps", { count: entry.reps })}` : ""}
               {entry.weight ? `, ${entry.weight}${entry.weightUnit ? ` ${entry.weightUnit}` : ""}` : ""}
             </p>
           </div>
@@ -62,7 +64,7 @@ function EntryCard({ entry }: { entry: TrackingReportEntry }) {
               className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${trustBadgeClass(
                 entry.overallConfidence >= 0.7 ? "high" : entry.overallConfidence >= 0.4 ? "medium" : "low",
               )}`}
-              title="Average of every confidence signal this set produced (wrist, implement tracker, CoreML detection, trust scores)"
+              title={t("Average of every confidence signal this set produced (wrist, implement tracker, CoreML detection, trust scores)")}
             >
               {Math.round(entry.overallConfidence * 100)}%
             </span>
@@ -96,7 +98,7 @@ function EntryCard({ entry }: { entry: TrackingReportEntry }) {
         </div>
 
         {entry.dataPoints.length === 0 ? (
-          <p className="text-xs italic text-muted-foreground">No data points recorded for this set.</p>
+          <p className="text-xs italic text-muted-foreground">{t("No data points recorded for this set.")}</p>
         ) : (
           <dl className="grid grid-cols-2 gap-x-4">
             {entry.dataPoints.map((f) => (
@@ -124,13 +126,13 @@ function EntryCard({ entry }: { entry: TrackingReportEntry }) {
 
         {entry.trust.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
-            {entry.trust.map((t, i) => (
+            {entry.trust.map((tr, i) => (
               <span
                 key={i}
-                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${trustBadgeClass(t.value)}`}
-                title={`${t.label}: ${t.value}`}
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${trustBadgeClass(tr.value)}`}
+                title={`${tr.label}: ${tr.value}`}
               >
-                {t.label}: {t.value.split(" ")[0]}
+                {tr.label}: {tr.value.split(" ")[0]}
               </span>
             ))}
           </div>
@@ -144,7 +146,7 @@ function EntryCard({ entry }: { entry: TrackingReportEntry }) {
               className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
             >
               {showDevice ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              Device &amp; capture info
+              {t("Device & capture info")}
             </button>
             {showDevice && (
               <dl className="mt-1.5 space-y-1 rounded-md bg-muted/30 p-2 text-[11px]">
@@ -167,7 +169,7 @@ function EntryCard({ entry }: { entry: TrackingReportEntry }) {
               className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
             >
               {showDiagnostics ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              Pipeline diagnostics
+              {t("Pipeline diagnostics")}
             </button>
             {showDiagnostics && (
               <dl className="mt-1.5 space-y-1 rounded-md bg-muted/30 p-2 text-[11px]">
@@ -194,6 +196,7 @@ function EntryCard({ entry }: { entry: TrackingReportEntry }) {
  * version on demand for pasting elsewhere (e.g. to Claude) without needing to select across a
  * scrolling <pre> block. */
 export default function AdminTrackingReport() {
+  const t = useT();
   const [limit, setLimit] = useState("20");
   const [appliedLimit, setAppliedLimit] = useState("20");
   const [showGlossary, setShowGlossary] = useState(false);
@@ -225,9 +228,9 @@ export default function AdminTrackingReport() {
       const res = await apiRequest("GET", `/api/admin/tracking-report?limit=${appliedLimit}`);
       const text = await res.text();
       await navigator.clipboard.writeText(text);
-      toast.success("Copied, paste it wherever you need it");
+      toast.success(t("Copied, paste it wherever you need it"));
     } catch {
-      toast.error("Couldn't copy the report");
+      toast.error(t("Couldn't copy the report"));
     }
   }
 
@@ -237,23 +240,22 @@ export default function AdminTrackingReport() {
   }
 
   return (
-    <AppShell title="AR Diagnosis">
+    <AppShell title={t("AR Diagnosis")}>
       <div className="mx-auto max-w-[1800px] space-y-4 p-4">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              AR Diagnosis
+              {t("AR Diagnosis")}
             </CardTitle>
             <CardDescription>
-              Every camera-tracked set's data points, methodology, confidence, and the device/AI
-              context that captured it, most recent first.
+              {t("Every camera-tracked set's data points, methodology, confidence, and the device/AI context that captured it, most recent first.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap items-end gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="report-limit">Sets to show</Label>
+                <Label htmlFor="report-limit">{t("Sets to show")}</Label>
                 <Input
                   id="report-limit"
                   type="number"
@@ -273,11 +275,11 @@ export default function AdminTrackingReport() {
                 disabled={isFetching}
               >
                 <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-                Refresh
+                {t("Refresh")}
               </Button>
               <Button variant="outline" onClick={copyRawReport}>
                 <Copy className="h-4 w-4" />
-                Copy as text
+                {t("Copy as text")}
               </Button>
               {/* THE TRACE ITSELF, NOT THE SUMMARY OF IT.
                 *
@@ -292,14 +294,14 @@ export default function AdminTrackingReport() {
               <DownloadButton
                 url={`/api/admin/capture-export.json?limit=${appliedLimit}`}
                 filename="forge-captures.json"
-                shareTitle="Forge camera captures"
-                label="Download traces"
+                shareTitle={t("Forge camera captures")}
+                label={t("Download traces")}
               />
             </div>
 
             <div className="flex flex-wrap items-end gap-3 border-t border-border pt-3">
               <div className="space-y-1.5">
-                <Label htmlFor="report-max-confidence">Max confidence %</Label>
+                <Label htmlFor="report-max-confidence">{t("Max confidence %")}</Label>
                 <Input
                   id="report-max-confidence"
                   type="number"
@@ -312,7 +314,7 @@ export default function AdminTrackingReport() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="report-date-from">From date</Label>
+                <Label htmlFor="report-date-from">{t("From date")}</Label>
                 <Input
                   id="report-date-from"
                   type="date"
@@ -322,7 +324,7 @@ export default function AdminTrackingReport() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="report-date-to">To date</Label>
+                <Label htmlFor="report-date-to">{t("To date")}</Label>
                 <Input
                   id="report-date-to"
                   type="date"
@@ -340,20 +342,20 @@ export default function AdminTrackingReport() {
                     setDateTo("");
                   }}
                 >
-                  Clear filters
+                  {t("Clear filters")}
                 </Button>
               )}
               {entries && (
                 <p className="text-xs text-muted-foreground">
-                  Showing {filteredEntries.length} of {entries.length} fetched
+                  {t("Showing {shown} of {total} fetched", { shown: filteredEntries.length, total: entries.length })}
                 </p>
               )}
             </div>
 
-            {isLoading && <p className="text-sm text-muted-foreground">Loading report...</p>}
+            {isLoading && <p className="text-sm text-muted-foreground">{t("Loading report...")}</p>}
             {isError && (
               <p className="text-sm text-destructive">
-                Couldn't load the report: {error instanceof Error ? error.message : "unknown error"}
+                {t("Couldn't load the report: {error}", { error: error instanceof Error ? error.message : t("unknown error") })}
               </p>
             )}
           </CardContent>
@@ -367,7 +369,7 @@ export default function AdminTrackingReport() {
             >
               <CardTitle className="flex items-center gap-2 text-sm">
                 <BookOpen className="h-4 w-4" />
-                How these {glossary.size} tracking method{glossary.size === 1 ? "" : "s"} work
+                {t.plural(glossary.size, "How this {count} tracking method works", "How these {count} tracking methods work")}
               </CardTitle>
               <Button variant="ghost" size="sm">
                 {showGlossary ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -390,13 +392,13 @@ export default function AdminTrackingReport() {
 
         {entries && entries.length === 0 && (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No tracked sets yet, nothing has been recorded with a camera tracking mode enabled.
+            {t("No tracked sets yet, nothing has been recorded with a camera tracking mode enabled.")}
           </p>
         )}
 
         {entries && entries.length > 0 && filteredEntries.length === 0 && (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No sets match the current filters.
+            {t("No sets match the current filters.")}
           </p>
         )}
 

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { ReadFailed } from "@/components/read-failed";
 import { GraduationCap, Users, Trophy, ChevronDown, ChevronUp, Lock } from "lucide-react";
+import { useT } from "@/i18n";
 
 type LessonFunnelRow = {
   lessonNumber: number;
@@ -37,6 +38,7 @@ function pct(n: number) {
 }
 
 function ClassFunnelRow({ row }: { row: ClassAnalyticsRow }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-md border border-border">
@@ -50,17 +52,17 @@ function ClassFunnelRow({ row }: { row: ClassAnalyticsRow }) {
             <span className="truncate">{row.name}</span>
             {row.isDraft && (
               <Badge variant="secondary" className="shrink-0 text-[10px]">
-                DRAFT
+                {t("DRAFT")}
               </Badge>
             )}
             {row.isForgeOfficial && (
               <Badge variant="outline" className="shrink-0 text-[10px]">
-                FORGE
+                {t("FORGE")}
               </Badge>
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            {row.lessonCount} lesson{row.lessonCount === 1 ? "" : "s"}
+            {t.plural(row.lessonCount, "{count} lesson", "{count} lessons")}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-4 text-xs">
@@ -92,10 +94,10 @@ function ClassFunnelRow({ row }: { row: ClassAnalyticsRow }) {
           {row.suppressed ? (
             <p className="flex items-center justify-center gap-1.5 py-2 text-center text-xs text-muted-foreground">
               <Lock className="h-3.5 w-3.5" />
-              Fewer than 5 athletes enrolled, withheld so no individual's progress is isolable.
+              {t("Fewer than 5 athletes enrolled, withheld so no individual's progress is isolable.")}
             </p>
           ) : row.enrolledCount === 0 ? (
-            <p className="py-2 text-center text-xs text-muted-foreground">No enrollments yet.</p>
+            <p className="py-2 text-center text-xs text-muted-foreground">{t("No enrollments yet.")}</p>
           ) : (
             <div className="space-y-1.5">
               {row.lessons.map((l) => {
@@ -117,15 +119,13 @@ function ClassFunnelRow({ row }: { row: ClassAnalyticsRow }) {
                       />
                     </div>
                     <span className="w-24 shrink-0 text-right text-muted-foreground">
-                      {l.suppressed ? "< 5, withheld" : `${l.started} read / ${l.passed} passed`}
+                      {l.suppressed ? t("< 5, withheld") : t("{read} read / {passed} passed", { read: l.started, passed: l.passed })}
                     </span>
                   </div>
                 );
               })}
               <p className="pt-1 text-[11px] text-muted-foreground">
-                Lighter bar = read the content, solid bar = passed the quiz, out of{" "}
-                {row.enrolledCount} enrolled. Any lesson fewer than 5 athletes have reached is
-                withheld the same way.
+                {t("Lighter bar = read the content, solid bar = passed the quiz, out of {count} enrolled. Any lesson fewer than 5 athletes have reached is withheld the same way.", { count: row.enrolledCount })}
               </p>
             </div>
           )}
@@ -136,18 +136,19 @@ function ClassFunnelRow({ row }: { row: ClassAnalyticsRow }) {
 }
 
 export default function AdminClassesAnalytics() {
+  const t = useT();
   const { data, isLoading, isError, refetch } = useQuery<ClassAnalytics>({
     queryKey: ["/api/admin/classes/analytics"],
   });
 
   return (
-    <AppShell title="Class Analytics">
+    <AppShell title={t("Class Analytics")}>
       <div className="space-y-6">
-        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+        {isLoading && <p className="text-sm text-muted-foreground">{t("Loading...")}</p>}
 
         {/* Without this the page renders completely blank on a failed read -- no error,
             no explanation, just an empty Class Analytics screen. */}
-        {isError && <ReadFailed what="class analytics" onRetry={() => void refetch()} />}
+        {isError && <ReadFailed what={t("class analytics")} onRetry={() => void refetch()} />}
 
         {data && (
           <>
@@ -160,7 +161,7 @@ export default function AdminClassesAnalytics() {
                     </div>
                     <div>
                       <p className="font-display text-3xl font-bold">{data.totalClasses}</p>
-                      <p className="text-sm text-muted-foreground">Classes on the platform</p>
+                      <p className="text-sm text-muted-foreground">{t("Classes on the platform")}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -173,7 +174,7 @@ export default function AdminClassesAnalytics() {
                     </div>
                     <div>
                       <p className="font-display text-3xl font-bold">{data.totalEnrollments}</p>
-                      <p className="text-sm text-muted-foreground">Total enrollments</p>
+                      <p className="text-sm text-muted-foreground">{t("Total enrollments")}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -191,7 +192,7 @@ export default function AdminClassesAnalytics() {
                           : "–"}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        Overall completion rate ({data.totalCompletions} finished)
+                        {t("Overall completion rate ({count} finished)", { count: data.totalCompletions })}
                       </p>
                     </div>
                   </CardContent>
@@ -201,19 +202,15 @@ export default function AdminClassesAnalytics() {
 
             <Card id="per-class-breakdown">
               <CardHeader>
-                <CardTitle>Per-Class Enrollment &amp; Drop-off</CardTitle>
+                <CardTitle>{t("Per-Class Enrollment & Drop-off")}</CardTitle>
                 <CardDescription>
-                  Every class on Forge, Forge-official and coach-authored alike, no names, no
-                  athlete-level detail, ever. Expand a class to see where athletes stall lesson by
-                  lesson. A class (or a single lesson within one) with fewer than 5 athletes
-                  enrolled/reached shows its enrollment count but withholds completion numbers
-                  entirely, so no individual's outcome is ever isolable.
+                  {t("Every class on Forge, Forge-official and coach-authored alike, no names, no athlete-level detail, ever. Expand a class to see where athletes stall lesson by lesson. A class (or a single lesson within one) with fewer than 5 athletes enrolled/reached shows its enrollment count but withholds completion numbers entirely, so no individual's outcome is ever isolable.")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {data.classes.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
-                    No classes have been created yet.
+                    {t("No classes have been created yet.")}
                   </p>
                 ) : (
                   <div className="space-y-2">

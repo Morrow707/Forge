@@ -19,6 +19,7 @@ import {
   Cell,
 } from "recharts";
 import { Users, ShieldAlert, Sparkles, Lock, Search } from "lucide-react";
+import { msg, translate, useT } from "@/i18n";
 
 type Bucket = { bucket: string; count: number };
 type SportRow = {
@@ -93,20 +94,20 @@ type CohortQueryResult = {
 };
 
 const GENDER_DISPLAY: Record<string, string> = {
-  male: "Male",
-  female: "Female",
-  non_binary: "Non-binary",
-  prefer_not_to_say: "Prefer not to say",
+  male: msg("Male"),
+  female: msg("Female"),
+  non_binary: msg("Non-binary"),
+  prefer_not_to_say: msg("Prefer not to say"),
 };
 
 function describeFilters(f: CohortQueryFilters): string[] {
   const chips: string[] = [];
-  if (f.ageMin != null || f.ageMax != null) chips.push(`Age ${f.ageMin ?? "any"}–${f.ageMax ?? "any"}`);
-  f.genders?.forEach((g) => chips.push(GENDER_DISPLAY[g] ?? g));
+  if (f.ageMin != null || f.ageMax != null) chips.push(translate("Age {min}–{max}", { min: f.ageMin ?? translate("any"), max: f.ageMax ?? translate("any") }));
+  f.genders?.forEach((g) => chips.push(GENDER_DISPLAY[g] ? translate(GENDER_DISPLAY[g]) : g));
   f.sports?.forEach((s) => chips.push(s));
   f.positions?.forEach((p) => chips.push(p));
   f.exerciseNames?.forEach((e) => chips.push(e));
-  if (f.groupBy) chips.push(`broken down by ${f.groupBy === "ageBracket" ? "age bracket" : f.groupBy}`);
+  if (f.groupBy) chips.push(f.groupBy === "ageBracket" ? translate("broken down by age bracket") : translate("broken down by {field}", { field: f.groupBy }));
   return chips;
 }
 
@@ -129,6 +130,7 @@ type CohortQueryHistoryEntry = {
  * of why athlete data was queried, which is the question that gets asked months later and had
  * no answer stored anywhere. */
 function CohortQueryHistory() {
+  const t = useT();
   const { data = [], isError, refetch } = useQuery<CohortQueryHistoryEntry[]>({
     queryKey: ["/api/admin/cohort-query-history"],
   });
@@ -139,10 +141,10 @@ function CohortQueryHistory() {
     return (
       <div className="space-y-2 border-t border-border pt-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Previous cuts
+          {t("Previous cuts")}
         </p>
         <ReadFailed
-          what="the record of previous cuts"
+          what={t("the record of previous cuts")}
           onRetry={() => void refetch()}
           className="flex flex-col items-start gap-2 text-left"
         />
@@ -153,15 +155,15 @@ function CohortQueryHistory() {
   return (
     <div className="space-y-2 border-t border-border pt-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Previous cuts
+        {t("Previous cuts")}
       </p>
       {data.map((row) => (
         <div key={row.id} className="rounded-md border border-border p-3 text-sm">
           <p className="font-medium">{row.queryText}</p>
           {row.purpose && <p className="mt-1 text-muted-foreground">{row.purpose}</p>}
           <p className="mt-1 text-xs text-muted-foreground">
-            {row.requestedFor ? `For ${row.requestedFor} — ` : ""}
-            {row.adminName ?? "Unknown"} on {new Date(row.viewedAt).toLocaleString()}
+            {row.requestedFor ? `${t("For {name}", { name: row.requestedFor })} — ` : ""}
+            {t("{name} on {when}", { name: row.adminName ?? t("Unknown"), when: t.date(row.viewedAt, { dateStyle: "medium", timeStyle: "short" }) })}
           </p>
         </div>
       ))}
@@ -170,6 +172,7 @@ function CohortQueryHistory() {
 }
 
 function CohortQueryCard() {
+  const t = useT();
   const [text, setText] = useState("");
   const [purpose, setPurpose] = useState("");
   const [requestedFor, setRequestedFor] = useState("");
@@ -197,12 +200,10 @@ function CohortQueryCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
-          Ask for a data cut
+          {t("Ask for a data cut")}
         </CardTitle>
         <CardDescription>
-          Describe the cohort in plain English, age, gender, sport, position, a specific lift.
-          Same anonymity floor as everything else on this page: an answer with fewer than{" "}
-          {mutation.data?.minCohortSize ?? 5} matching athletes is withheld, never shown small.
+          {t("Describe the cohort in plain English, age, gender, sport, position, a specific lift. Same anonymity floor as everything else on this page: an answer with fewer than {count} matching athletes is withheld, never shown small.", { count: mutation.data?.minCohortSize ?? 5 })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -211,12 +212,12 @@ function CohortQueryCard() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && run()}
-            placeholder="e.g. 15-17 year old female track athletes, bar velocity on back squats"
+            placeholder={t("e.g. 15-17 year old female track athletes, bar velocity on back squats")}
             className="flex-1"
           />
           <Button onClick={run} disabled={!canRun || mutation.isPending}>
             <Search className="h-4 w-4" />
-            {mutation.isPending ? "Asking..." : "Ask"}
+            {mutation.isPending ? t("Asking...") : t("Ask")}
           </Button>
         </div>
         {/* Why, and for whom. Required, because a cut with no stated reason is exactly the one
@@ -226,20 +227,20 @@ function CohortQueryCard() {
           <Input
             value={purpose}
             onChange={(e) => setPurpose(e.target.value)}
-            placeholder="Why are you pulling this? (required)"
+            placeholder={t("Why are you pulling this? (required)")}
             className="flex-1"
           />
           <Input
             value={requestedFor}
             onChange={(e) => setRequestedFor(e.target.value)}
-            placeholder="Who asked for it? e.g. a university research lab"
+            placeholder={t("Who asked for it? e.g. a university research lab")}
             className="sm:w-64"
           />
         </div>
 
         {mutation.isError && (
           <p className="text-sm text-destructive">
-            {(mutation.error as any)?.message || "Couldn't run that query, try again."}
+            {(mutation.error as any)?.message || t("Couldn't run that query, try again.")}
           </p>
         )}
 
@@ -249,11 +250,11 @@ function CohortQueryCard() {
           <div className="space-y-4 border-t border-border pt-4">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Understood as:
+                {t("Understood as:")}
               </span>
               {describeFilters(mutation.data.filters).length === 0 ? (
                 <Badge variant="secondary" className="font-normal">
-                  whole platform
+                  {t("whole platform")}
                 </Badge>
               ) : (
                 describeFilters(mutation.data.filters).map((c) => (
@@ -263,7 +264,7 @@ function CohortQueryCard() {
                 ))
               )}
               <span className="ml-1 text-xs text-muted-foreground">
-                &middot; {mutation.data.cohortSize} athlete{mutation.data.cohortSize === 1 ? "" : "s"} matched
+                {"· "}{t.plural(mutation.data.cohortSize, "{count} athlete matched", "{count} athletes matched")}
               </span>
             </div>
 
@@ -274,27 +275,24 @@ function CohortQueryCard() {
                   {r.suppressed ? (
                     <div className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
                       <Lock className="h-3.5 w-3.5 shrink-0" />
-                      Only {r.n} athlete{r.n === 1 ? "" : "s"} match, below the anonymity floor,
-                      suppressed.
+                      {t.plural(r.n, "Only {count} athlete matches, below the anonymity floor, suppressed.", "Only {count} athletes match, below the anonymity floor, suppressed.")}
                     </div>
                   ) : (
                     <>
                       <p className="font-display text-2xl font-bold">
                         {formatMetricStat(r.mean, r.unit)}{" "}
                         <span className="text-xs font-normal text-muted-foreground">
-                          mean, n={r.n}
+                          {t("mean, n={count}", { count: r.n })}
                         </span>
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        P25 {formatMetricStat(r.p25, r.unit)} &middot; P75{" "}
-                        {formatMetricStat(r.p75, r.unit)} &middot; range {formatMetricStat(r.min, r.unit)}
+                        {`P25 ${formatMetricStat(r.p25, r.unit)} · P75 ${formatMetricStat(r.p75, r.unit)} · `}{t("range")} {formatMetricStat(r.min, r.unit)}
                         {"–"}
                         {formatMetricStat(r.max, r.unit)}
                       </p>
                       {r.source === "tracked" && !mutation.data!.filters.exerciseNames?.length && (
                         <p className="mt-1 text-[11px] italic text-muted-foreground">
-                          No specific lift named, pooled across every tracked exercise for this
-                          metric.
+                          {t("No specific lift named, pooled across every tracked exercise for this metric.")}
                         </p>
                       )}
                     </>
@@ -308,12 +306,12 @@ function CohortQueryCard() {
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-border text-[10px] uppercase text-muted-foreground">
-                      <th className="py-1.5 pr-3">{mutation.data.filters.groupBy === "ageBracket" ? "Age bracket" : mutation.data.filters.groupBy}</th>
-                      <th className="py-1.5 pr-3">Athletes</th>
-                      <th className="py-1.5 pr-3">Mean</th>
+                      <th className="py-1.5 pr-3">{mutation.data.filters.groupBy === "ageBracket" ? t("Age bracket") : mutation.data.filters.groupBy}</th>
+                      <th className="py-1.5 pr-3">{t("Athletes")}</th>
+                      <th className="py-1.5 pr-3">{t("Mean")}</th>
                       <th className="py-1.5 pr-3">P25</th>
                       <th className="py-1.5 pr-3">P75</th>
-                      <th className="py-1.5">Range</th>
+                      <th className="py-1.5">{t("Range")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -325,7 +323,7 @@ function CohortQueryCard() {
                           <td className="py-1.5 pr-3">{row.n}</td>
                           {row.suppressed ? (
                             <td className="py-1.5 text-muted-foreground italic" colSpan={4}>
-                              below floor, suppressed
+                              {t("below floor, suppressed")}
                             </td>
                           ) : (
                             <>
@@ -358,9 +356,9 @@ const ACWR_COLOR: Record<string, string> = {
 };
 
 const ACWR_LABEL: Record<string, string> = {
-  green: "Low risk",
-  yellow: "Watch",
-  red: "High risk",
+  green: msg("Low risk"),
+  yellow: msg("Watch"),
+  red: msg("High risk"),
 };
 
 function stat(value: number | null | undefined, unit = "") {
@@ -368,11 +366,11 @@ function stat(value: number | null | undefined, unit = "") {
 }
 
 function BucketBarChart({ data, unit = "" }: { data: Bucket[]; unit?: string }) {
+  const t = useT();
   if (data.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
-        Not enough athletes in any single group yet to show this without risking identifying
-        someone.
+        {t("Not enough athletes in any single group yet to show this without risking identifying someone.")}
       </p>
     );
   }
@@ -394,33 +392,31 @@ function BucketBarChart({ data, unit = "" }: { data: Bucket[]; unit?: string }) 
 }
 
 export default function AdminPlatformTrends() {
+  const t = useT();
   const { data, isLoading, isError, refetch } = useQuery<PlatformTrends>({
     queryKey: ["/api/admin/platform-trends"],
   });
 
   return (
-    <AppShell title="Cohort Explorer">
+    <AppShell title={t("Cohort Explorer")}>
       <div className="space-y-6">
         <Card className="border-primary/30 bg-primary/5">
           <CardContent className="flex items-start gap-3 p-4 text-sm text-muted-foreground">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <p>
-              Anonymized and aggregated across every athlete on Forge, no names, emails, or
-              individual records ever appear here. Any group smaller than{" "}
-              {data?.minCohortSize ?? 5} athletes is left out of a breakdown entirely rather than
-              shown small, so no single athlete's data is ever isolable from these numbers.
+              {t("Anonymized and aggregated across every athlete on Forge, no names, emails, or individual records ever appear here. Any group smaller than {count} athletes is left out of a breakdown entirely rather than shown small, so no single athlete's data is ever isolable from these numbers.", { count: data?.minCohortSize ?? 5 })}
             </p>
           </CardContent>
         </Card>
 
         <CohortQueryCard />
 
-        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+        {isLoading && <p className="text-sm text-muted-foreground">{t("Loading...")}</p>}
 
         {isError && (
           // Without this the whole page below the banner is simply absent, with
           // nothing saying why -- indistinguishable from a platform with no athletes.
-          <ReadFailed what="the platform trends" onRetry={() => void refetch()} />
+          <ReadFailed what={t("the platform trends")} onRetry={() => void refetch()} />
         )}
 
         {data && (
@@ -432,7 +428,7 @@ export default function AdminPlatformTrends() {
                 </div>
                 <div>
                   <p className="font-display text-3xl font-bold">{data.totalAthletes}</p>
-                  <p className="text-sm text-muted-foreground">Total athletes on Forge</p>
+                  <p className="text-sm text-muted-foreground">{t("Total athletes on Forge")}</p>
                 </div>
               </CardContent>
             </Card>
@@ -440,8 +436,8 @@ export default function AdminPlatformTrends() {
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <Card>
                 <CardHeader>
-                  <CardTitle>By Sport</CardTitle>
-                  <CardDescription>Self-reported, grouped case-insensitively.</CardDescription>
+                  <CardTitle>{t("By Sport")}</CardTitle>
+                  <CardDescription>{t("Self-reported, grouped case-insensitively.")}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <BucketBarChart data={data.demographics.bySport} />
@@ -449,8 +445,8 @@ export default function AdminPlatformTrends() {
               </Card>
               <Card>
                 <CardHeader>
-                  <CardTitle>By Age</CardTitle>
-                  <CardDescription>Bracketed, not exact ages.</CardDescription>
+                  <CardTitle>{t("By Age")}</CardTitle>
+                  <CardDescription>{t("Bracketed, not exact ages.")}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <BucketBarChart data={data.demographics.byAgeBracket} />
@@ -458,8 +454,8 @@ export default function AdminPlatformTrends() {
               </Card>
               <Card>
                 <CardHeader>
-                  <CardTitle>By Gender</CardTitle>
-                  <CardDescription>Self-reported.</CardDescription>
+                  <CardTitle>{t("By Gender")}</CardTitle>
+                  <CardDescription>{t("Self-reported.")}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <BucketBarChart data={data.demographics.byGender} />
@@ -469,25 +465,22 @@ export default function AdminPlatformTrends() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Training Load Risk (ACWR)</CardTitle>
+                <CardTitle>{t("Training Load Risk (ACWR)")}</CardTitle>
                 <CardDescription>
-                  Acute:chronic workload ratio band, snapshotted across every athlete with logged
-                  training in the last 28 days, not broken out by sport, since that would shrink
-                  the "high risk" count small enough to risk pointing at one athlete.
+                  {t("Acute:chronic workload ratio band, snapshotted across every athlete with logged training in the last 28 days, not broken out by sport, since that would shrink the \"high risk\" count small enough to risk pointing at one athlete.")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {data.acwrDistribution.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
-                    Fewer than {data.minCohortSize} athletes have logged training in the last 28
-                    days, not enough for a platform-wide risk snapshot yet.
+                    {t("Fewer than {count} athletes have logged training in the last 28 days, not enough for a platform-wide risk snapshot yet.", { count: data.minCohortSize })}
                   </p>
                 ) : (
                   <div className="h-56">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={data.acwrDistribution.map((d) => ({
-                          label: ACWR_LABEL[d.level],
+                          label: t(ACWR_LABEL[d.level]),
                           count: d.count,
                           level: d.level,
                         }))}
@@ -516,38 +509,35 @@ export default function AdminPlatformTrends() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Benchmarks by Sport</CardTitle>
+                <CardTitle>{t("Benchmarks by Sport")}</CardTitle>
                 <CardDescription>
-                  Group averages only, each column requires at least {data.minCohortSize}{" "}
-                  athletes contributing a value for that specific field, so some cells show a dash
-                  even for an otherwise-eligible sport.
+                  {t("Group averages only, each column requires at least {count} athletes contributing a value for that specific field, so some cells show a dash even for an otherwise-eligible sport.", { count: data.minCohortSize })}
                 </CardDescription>
               </CardHeader>
               <CardContent className="overflow-x-auto">
                 {data.bySport.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
-                    No sport has {data.minCohortSize}+ athletes yet, this table fills in as the
-                    roster grows.
+                    {t("No sport has {count}+ athletes yet, this table fills in as the roster grows.", { count: data.minCohortSize })}
                   </p>
                 ) : (
                   <table className="w-full text-left text-sm">
                     <thead>
                       <tr className="border-b border-border text-[10px] uppercase text-muted-foreground">
-                        <th className="py-1.5 pr-3">Sport</th>
-                        <th className="py-1.5 pr-3"># Athletes</th>
-                        <th className="py-1.5 pr-3">Height</th>
-                        <th className="py-1.5 pr-3">Weight</th>
-                        <th className="py-1.5 pr-3">40-Yd</th>
-                        <th className="py-1.5 pr-3">Vertical</th>
-                        <th className="py-1.5 pr-3">Broad</th>
-                        <th className="py-1.5 pr-3">Agility</th>
-                        <th className="py-1.5 pr-3">Bench</th>
-                        <th className="py-1.5 pr-3">Squat</th>
-                        <th className="py-1.5 pr-3">Deadlift</th>
-                        <th className="py-1.5 pr-3">Est. 1RM</th>
-                        <th className="py-1.5 pr-3">Peak m/s</th>
-                        <th className="py-1.5 pr-3">Power (W)</th>
-                        <th className="py-1.5">Readiness</th>
+                        <th className="py-1.5 pr-3">{t("Sport")}</th>
+                        <th className="py-1.5 pr-3">{t("# Athletes")}</th>
+                        <th className="py-1.5 pr-3">{t("Height")}</th>
+                        <th className="py-1.5 pr-3">{t("Weight")}</th>
+                        <th className="py-1.5 pr-3">{t("40-Yd")}</th>
+                        <th className="py-1.5 pr-3">{t("Vertical")}</th>
+                        <th className="py-1.5 pr-3">{t("Broad")}</th>
+                        <th className="py-1.5 pr-3">{t("Agility")}</th>
+                        <th className="py-1.5 pr-3">{t("Bench")}</th>
+                        <th className="py-1.5 pr-3">{t("Squat")}</th>
+                        <th className="py-1.5 pr-3">{t("Deadlift")}</th>
+                        <th className="py-1.5 pr-3">{t("Est. 1RM")}</th>
+                        <th className="py-1.5 pr-3">{t("Peak m/s")}</th>
+                        <th className="py-1.5 pr-3">{t("Power (W)")}</th>
+                        <th className="py-1.5">{t("Readiness")}</th>
                       </tr>
                     </thead>
                     <tbody>

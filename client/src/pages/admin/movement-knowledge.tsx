@@ -8,10 +8,11 @@ import { RadioChipGroup } from "@/components/filter-chip-group";
 import { apiRequest, getJson } from "@/lib/queryClient";
 import { ReadFailed } from "@/components/read-failed";
 import { MOVEMENT_TYPES } from "@shared/exercise-taxonomy";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Send, Sparkles, Loader2, Camera, Eye, Video, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { msg, useT } from "@/i18n";
 
 // "jump" isn't a movementType in exercise-taxonomy.ts (jump tracking is its
 // own trackingLevel, not a movement pattern), but it gets taught and
@@ -51,13 +52,13 @@ type ChatState = { activeProfile: ActiveProfile | null; messages: KnowledgeMessa
 type NumericFieldKey = Exclude<keyof ProfileFields, "cameraFramingNotes">;
 
 const FIELD_META: { key: NumericFieldKey; label: string; unit: string }[] = [
-  { key: "minKneeAngleDeg", label: "Min bottom-position knee angle", unit: "°" },
-  { key: "valgusRatioMin", label: "Min knee/ankle valgus ratio", unit: "" },
-  { key: "maxTorsoLeanDeg", label: "Max forward torso lean", unit: "°" },
-  { key: "barPathDeviationMaxCm", label: "Max bar-path deviation", unit: "cm" },
-  { key: "barTiltMaxDeg", label: "Max bar tilt", unit: "°" },
-  { key: "jumpHeightOutlierPercent", label: "Jump-height outlier threshold", unit: "%" },
-  { key: "positionScaleCorrection", label: "Position/velocity/power scale correction", unit: "×" },
+  { key: "minKneeAngleDeg", label: msg("Min bottom-position knee angle"), unit: "°" },
+  { key: "valgusRatioMin", label: msg("Min knee/ankle valgus ratio"), unit: "" },
+  { key: "maxTorsoLeanDeg", label: msg("Max forward torso lean"), unit: "°" },
+  { key: "barPathDeviationMaxCm", label: msg("Max bar-path deviation"), unit: "cm" },
+  { key: "barTiltMaxDeg", label: msg("Max bar tilt"), unit: "°" },
+  { key: "jumpHeightOutlierPercent", label: msg("Jump-height outlier threshold"), unit: "%" },
+  { key: "positionScaleCorrection", label: msg("Position/velocity/power scale correction"), unit: "×" },
 ];
 
 function formatValue(value: number | null, unit: string): string {
@@ -72,6 +73,7 @@ function formatValue(value: number | null, unit: string): string {
  * freeform document. Nothing here affects a live tracked set until the
  * admin explicitly applies a proposal -- see storage.applyMovementProfileProposal. */
 export function MovementKnowledgeContent() {
+  const t = useT();
   const qc = useQueryClient();
   const [movementType, setMovementType] = useState<string>(MOVEMENT_TYPES[0]);
   const [content, setContent] = useState("");
@@ -107,7 +109,7 @@ export function MovementKnowledgeContent() {
       setContent("");
       setProposal(result.proposal ?? null);
     },
-    onError: () => toast.error("Couldn't send that, try again"),
+    onError: () => toast.error(t("Couldn't send that, try again")),
   });
 
   // Reads the uploaded library for this movement instead of waiting to be typed at. Same
@@ -122,7 +124,7 @@ export function MovementKnowledgeContent() {
       qc.invalidateQueries({ queryKey: [fetchUrl] });
       setProposal(result.proposal ?? null);
     },
-    onError: () => toast.error("Couldn't read the library, try again"),
+    onError: () => toast.error(t("Couldn't read the library, try again")),
   });
 
   const apply = useMutation({
@@ -133,9 +135,9 @@ export function MovementKnowledgeContent() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [fetchUrl] });
       setProposal(null);
-      toast.success("Applied");
+      toast.success(t("Applied"));
     },
-    onError: () => toast.error("Couldn't apply that, try again"),
+    onError: () => toast.error(t("Couldn't apply that, try again")),
   });
 
   const canSend = !!content.trim() && !send.isPending;
@@ -150,7 +152,7 @@ export function MovementKnowledgeContent() {
     <>
       <div className="mb-4">
         <RadioChipGroup
-          label="Movement"
+          label={t("Movement")}
           options={PROFILE_MOVEMENT_TYPES}
           value={movementType}
           onChange={(v) => v && setMovementType(v)}
@@ -163,12 +165,10 @@ export function MovementKnowledgeContent() {
           <CardHeader className="shrink-0">
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              Teach the Tracker: {movementType}
+              {t("Teach the Tracker: {movement}", { movement: movementType })}
             </CardTitle>
             <CardDescription>
-              Describe cues, corrections, or paste a URL about {movementType.toLowerCase()} mechanics,
-              the camera tracker's form-fault checks for this movement will use it from the moment you
-              apply it.
+              {t("Describe cues, corrections, or paste a URL about {movement} mechanics, the camera tracker's form-fault checks for this movement will use it from the moment you apply it.", { movement: movementType.toLowerCase() })}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
@@ -176,15 +176,13 @@ export function MovementKnowledgeContent() {
               {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
               {isError && (
                 <ReadFailed
-                  what={`what has been taught for ${movementType}`}
+                  what={t("what has been taught for {movement}", { movement: movementType })}
                   onRetry={() => void refetch()}
                 />
               )}
               {!isError && !isLoading && messages.length === 0 && (
                 <p className="py-8 text-center text-sm text-muted-foreground">
-                  Nothing taught yet for {movementType}, try something like "knees should break
-                  parallel, don't let the threshold get more lenient than 95 degrees" or paste a URL
-                  to an article on the movement.
+                  {t("Nothing taught yet for {movement}, try something like \"knees should break parallel, don't let the threshold get more lenient than 95 degrees\" or paste a URL to an article on the movement.", { movement: movementType })}
                 </p>
               )}
               {messages.map((m) => (
@@ -204,7 +202,7 @@ export function MovementKnowledgeContent() {
                         m.role === "admin" ? "text-primary-foreground/70" : "text-muted-foreground",
                       )}
                     >
-                      {format(parseISO(m.createdAt), "MMM d, h:mm a")}
+                      {t.date(parseISO(m.createdAt), { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                     </p>
                   </div>
                 </div>
@@ -214,7 +212,7 @@ export function MovementKnowledgeContent() {
                   <div className="max-w-[85%] rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
                     <span className="flex items-center gap-1.5 text-muted-foreground">
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Thinking...
+                      {t("Thinking...")}
                     </span>
                   </div>
                 </div>
@@ -226,17 +224,17 @@ export function MovementKnowledgeContent() {
               <div className="shrink-0 space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
                 <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
                   <Eye className="h-3.5 w-3.5" />
-                  Review before this takes effect
+                  {t("Review before this takes effect")}
                 </p>
                 {changedFields.length === 0 && !cameraNotesChanged ? (
                   <p className="text-xs text-muted-foreground">
-                    No threshold changes in this proposal, just the note below.
+                    {t("No threshold changes in this proposal, just the note below.")}
                   </p>
                 ) : (
                   <div className="space-y-1 rounded bg-background/60 p-2 font-mono text-xs">
                     {changedFields.map((f) => (
                       <div key={f.key} className="flex items-center justify-between gap-2">
-                        <span className="text-muted-foreground">{f.label}</span>
+                        <span className="text-muted-foreground">{t(f.label)}</span>
                         <span>
                           {formatValue(activeProfile?.[f.key] ?? null, f.unit)}
                           {" → "}
@@ -248,9 +246,9 @@ export function MovementKnowledgeContent() {
                     ))}
                     {cameraNotesChanged && (
                       <div className="pt-1">
-                        <span className="text-muted-foreground">Camera framing notes:</span>
+                        <span className="text-muted-foreground">{t("Camera framing notes:")}</span>
                         <p className="mt-0.5 whitespace-pre-wrap text-emerald-600 dark:text-emerald-400">
-                          {proposal.cameraFramingNotes || "(cleared)"}
+                          {proposal.cameraFramingNotes || t("(cleared)")}
                         </p>
                       </div>
                     )}
@@ -258,11 +256,11 @@ export function MovementKnowledgeContent() {
                 )}
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="ghost" size="sm" onClick={() => setProposal(null)}>
-                    Discard
+                    {t("Discard")}
                   </Button>
                   <Button type="button" size="sm" onClick={() => apply.mutate()} disabled={apply.isPending}>
                     {apply.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                    Apply
+                    {t("Apply")}
                   </Button>
                 </div>
               </div>
@@ -278,7 +276,7 @@ export function MovementKnowledgeContent() {
               <Textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="Teach it something about this movement's mechanics..."
+                placeholder={t("Teach it something about this movement's mechanics...")}
                 className="min-h-[44px] resize-none"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -300,7 +298,7 @@ export function MovementKnowledgeContent() {
                   onClick={() => learnFromLibrary.mutate()}
                 >
                   <BookOpen className="h-4 w-4" />
-                  {learnFromLibrary.isPending ? "Reading..." : "Learn from library"}
+                  {learnFromLibrary.isPending ? t("Reading...") : t("Learn from library")}
                 </Button>
                 <Button type="submit" disabled={!canSend}>
                   <Send className="h-4 w-4" />
@@ -314,12 +312,12 @@ export function MovementKnowledgeContent() {
           <CardHeader className="shrink-0">
             <CardTitle className="flex items-center gap-2">
               <Camera className="h-5 w-5 text-primary" />
-              Active Profile
+              {t("Active Profile")}
             </CardTitle>
             <CardDescription>
               {activeProfile
-                ? `Version ${activeProfile.version}, live for every ${movementType} set tracked right now.`
-                : "Nothing applied yet, the tracker is using its built-in hardcoded defaults for this movement."}
+                ? t("Version {version}, live for every {movement} set tracked right now.", { version: activeProfile.version, movement: movementType })
+                : t("Nothing applied yet, the tracker is using its built-in hardcoded defaults for this movement.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="min-h-0 flex-1 overflow-y-auto">
@@ -330,20 +328,20 @@ export function MovementKnowledgeContent() {
                 <div className="space-y-1.5 text-sm">
                   {FIELD_META.map((f) => (
                     <div key={f.key} className="flex items-center justify-between gap-2 border-b border-border/50 py-1">
-                      <span className="text-muted-foreground">{f.label}</span>
+                      <span className="text-muted-foreground">{t(f.label)}</span>
                       <span className="font-mono text-xs">{formatValue(activeProfile?.[f.key] ?? null, f.unit)}</span>
                     </div>
                   ))}
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">Camera framing</p>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">{t("Camera framing")}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {activeProfile?.cameraFramingNotes || "Nothing taught yet."}
+                    {activeProfile?.cameraFramingNotes || t("Nothing taught yet.")}
                   </p>
                 </div>
                 {activeProfile?.sourceSummary && (
                   <div>
-                    <p className="text-xs font-semibold uppercase text-muted-foreground">Taught from</p>
+                    <p className="text-xs font-semibold uppercase text-muted-foreground">{t("Taught from")}</p>
                     <p className="mt-1 text-sm text-muted-foreground">{activeProfile.sourceSummary}</p>
                   </div>
                 )}

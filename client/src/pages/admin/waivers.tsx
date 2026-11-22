@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ApiError, apiRequest, resolveApiUrl } from "@/lib/queryClient";
 import { ReadFailed } from "@/components/read-failed";
 import { DOCUMENT_LABEL, type DocumentKind } from "@shared/required-documents";
+import { useT } from "@/i18n";
 
 /** The review queue for documents uploaded from outside Forge.
  *
@@ -42,6 +43,7 @@ type Row = {
 };
 
 export default function AdminWaiversPage() {
+  const t = useT();
   const qc = useQueryClient();
   const [lookupId, setLookupId] = useState("");
   const [lookupFor, setLookupFor] = useState("");
@@ -59,43 +61,36 @@ export default function AdminWaiversPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: key });
-      toast.success("Recorded.");
+      toast.success(t("Recorded."));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't record that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't record that")),
   });
 
   return (
-    <AppShell title="Uploaded Documents">
+    <AppShell title={t("Uploaded Documents")}>
       <div className="mx-auto max-w-3xl space-y-4 p-4">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Documents from schools, clubs and clinics</CardTitle>
+            <CardTitle className="text-base">{t("Documents from schools, clubs and clinics")}</CardTitle>
             <CardDescription>
-              Only the ones the automatic read could not clear reach this queue, a document it
-              accepted was never seen by anybody here. Confirm each one below arrived, is legible,
-              and is what it says it is. That is the whole claim: accepting a form signed with a
-              school does not make it cover Forge, which takes the institution signing our own
-              agreement.
-              {" "}The file is kept after either decision (accepted, it is the proof the document
-              exists; rejected, it is what an appeal argues over). Opening it again later goes
-              through the athlete lookup below, with a reason, and is logged.
+              {t("Only the ones the automatic read could not clear reach this queue, a document it accepted was never seen by anybody here. Confirm each one below arrived, is legible, and is what it says it is. That is the whole claim: accepting a form signed with a school does not make it cover Forge, which takes the institution signing our own agreement.")}
+              {" "}{t("The file is kept after either decision (accepted, it is the proof the document exists; rejected, it is what an appeal argues over). Opening it again later goes through the athlete lookup below, with a reason, and is logged.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-xs text-muted-foreground">
-              There is no list of accepted documents. To produce one, look up the athlete below,
-              you'll be asked what it's for, and the document opens once.
+              {t("There is no list of accepted documents. To produce one, look up the athlete below, you'll be asked what it's for, and the document opens once.")}
             </p>
             <div className="flex gap-2">
               <Input
-                placeholder="Athlete id"
+                placeholder={t("Athlete id")}
                 value={lookupId}
                 onChange={(e) => setLookupId(e.target.value)}
                 className="h-9 max-w-[10rem] text-sm"
               />
               <Button size="sm" variant="secondary" onClick={() => setLookupFor(lookupId.trim())}>
                 <Search className="h-3.5 w-3.5" />
-                Look up
+                {t("Look up")}
               </Button>
             </div>
           </CardContent>
@@ -104,13 +99,13 @@ export default function AdminWaiversPage() {
         {lookupFor && <AthleteDocuments athleteId={Number(lookupFor)} />}
 
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
         ) : isError ? (
           // "Nothing waiting" on a failed read is how a review queue empties itself. Every
           // document in it is a minor's paperwork somebody is waiting on.
-          <ReadFailed what="the review queue" onRetry={() => void refetch()} />
+          <ReadFailed what={t("the review queue")} onRetry={() => void refetch()} />
         ) : (data ?? []).length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing waiting.</p>
+          <p className="text-sm text-muted-foreground">{t("Nothing waiting.")}</p>
         ) : (
           (data ?? []).map(({ waiver, athleteName, athleteId }) => (
             <Card key={waiver.id}>
@@ -123,9 +118,9 @@ export default function AdminWaiversPage() {
                       {waiver.issuingOrganization ? ` · ${waiver.issuingOrganization}` : ""}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Uploaded {new Date(waiver.createdAt).toLocaleDateString()}
-                      {waiver.signedOn ? ` · signed ${waiver.signedOn}` : ""}
-                      {waiver.expiresOn ? ` · expires ${waiver.expiresOn}` : ""}
+                      {t("Uploaded {date}", { date: t.date(waiver.createdAt) })}
+                      {waiver.signedOn ? ` · ${t("signed {date}", { date: waiver.signedOn })}` : ""}
+                      {waiver.expiresOn ? ` · ${t("expires {date}", { date: waiver.expiresOn })}` : ""}
                     </p>
                   </div>
                   <a
@@ -135,14 +130,14 @@ export default function AdminWaiversPage() {
                     className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
                   >
                     <FileText className="h-3.5 w-3.5" />
-                    Open
+                    {t("Open")}
                   </a>
                 </div>
 
                 {waiver.reviewStatus === "pending_review" ? (
                   <div className="space-y-2">
                     <Input
-                      placeholder="Reason, if rejecting, they'll see it"
+                      placeholder={t("Reason, if rejecting, they'll see it")}
                       value={notes[waiver.id] ?? ""}
                       onChange={(e) => setNotes((n) => ({ ...n, [waiver.id]: e.target.value }))}
                       className="h-9 text-sm"
@@ -154,7 +149,7 @@ export default function AdminWaiversPage() {
                         disabled={review.isPending}
                       >
                         <Check className="h-3.5 w-3.5" />
-                        Accept
+                        {t("Accept")}
                       </Button>
                       <Button
                         size="sm"
@@ -169,7 +164,7 @@ export default function AdminWaiversPage() {
                         disabled={review.isPending}
                       >
                         <X className="h-3.5 w-3.5" />
-                        Reject
+                        {t("Reject")}
                       </Button>
                     </div>
                   </div>
@@ -217,6 +212,7 @@ export default function AdminWaiversPage() {
  * in the log below -- the control is that an open is never silent, not that it is impossible.
  */
 function AthleteDocuments({ athleteId }: { athleteId: number }) {
+  const t = useT();
   const qc = useQueryClient();
   const [reasonFor, setReasonFor] = useState<number | null>(null);
   const [reason, setReason] = useState("");
@@ -252,16 +248,16 @@ function AthleteDocuments({ athleteId }: { athleteId: number }) {
       // background fetch whose response nobody rendered would be the worst of both.
       window.open(resolveApiUrl(`/api/admin/waivers/view/${token}`), "_blank", "noreferrer");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't open that"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't open that")),
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <p className="text-sm text-muted-foreground">{t("Loading…")}</p>;
   if (isError) {
     return (
       <Card>
         <CardContent className="pt-5">
           <ReadFailed
-            what="this athlete's documents"
+            what={t("this athlete's documents")}
             onRetry={() => void refetch()}
             className="flex flex-col items-start gap-2 text-left"
           />
@@ -273,15 +269,14 @@ function AthleteDocuments({ athleteId }: { athleteId: number }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Athlete {athleteId}</CardTitle>
+        <CardTitle className="text-base">{t("Athlete {id}", { id: athleteId })}</CardTitle>
         <CardDescription>
-          Opening a document records who you are, when, and the reason you give. It opens once,
-          you can ask again, and that is another line in the log.
+          {t("Opening a document records who you are, when, and the reason you give. It opens once, you can ask again, and that is another line in the log.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {(data?.documents ?? []).length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing decided on file.</p>
+          <p className="text-sm text-muted-foreground">{t("Nothing decided on file.")}</p>
         ) : (
           (data?.documents ?? []).map((d) => (
             <div key={d.id} className="space-y-2 rounded-md border border-border p-3">
@@ -290,25 +285,25 @@ function AthleteDocuments({ athleteId }: { athleteId: number }) {
                   <p className="text-sm font-medium">{DOCUMENT_LABEL[d.kind]}</p>
                   <p className="text-xs text-muted-foreground">
                     {d.reviewStatus.replace("_", " ")}
-                    {d.reviewSource ? ` · by ${d.reviewSource}` : ""}
+                    {d.reviewSource ? ` · ${t("by {source}", { source: d.reviewSource })}` : ""}
                     {d.issuingOrganization ? ` · ${d.issuingOrganization}` : ""}
-                    {d.expiresOn ? ` · expires ${d.expiresOn}` : ""}
+                    {d.expiresOn ? ` · ${t("expires {date}", { date: d.expiresOn })}` : ""}
                   </p>
                 </div>
                 {d.hasFile ? (
                   <Button size="sm" variant="secondary" onClick={() => setReasonFor(d.id)}>
                     <Eye className="h-3.5 w-3.5" />
-                    Open once
+                    {t("Open once")}
                   </Button>
                 ) : (
-                  <span className="shrink-0 text-xs text-muted-foreground">file deleted</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{t("file deleted")}</span>
                 )}
               </div>
               {reasonFor === d.id && (
                 <div className="flex gap-2">
                   <Input
                     autoFocus
-                    placeholder="What do you need it for?"
+                    placeholder={t("What do you need it for?")}
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     className="h-9 text-sm"
@@ -318,7 +313,7 @@ function AthleteDocuments({ athleteId }: { athleteId: number }) {
                     disabled={reason.trim().length < 8 || openOnce.isPending}
                     onClick={() => openOnce.mutate(d.id)}
                   >
-                    Open
+                    {t("Open")}
                   </Button>
                 </div>
               )}
@@ -329,13 +324,13 @@ function AthleteDocuments({ athleteId }: { athleteId: number }) {
         {(data?.views ?? []).length > 0 && (
           <details className="text-xs">
             <summary className="cursor-pointer font-semibold text-primary">
-              Who has opened these ({data!.views.length})
+              {t("Who has opened these ({count})", { count: data!.views.length })}
             </summary>
             <ul className="mt-2 space-y-1 text-muted-foreground">
               {data!.views.map((v) => (
                 <li key={v.grant.id}>
                   {new Date(v.grant.createdAt).toLocaleString()} · {v.adminName} ·{" "}
-                  {DOCUMENT_LABEL[v.kind]} · {v.grant.usedAt ? "opened" : "not opened"} · "
+                  {DOCUMENT_LABEL[v.kind]} · {v.grant.usedAt ? t("opened") : t("not opened")} · "
                   {v.grant.reason}"
                 </li>
               ))}

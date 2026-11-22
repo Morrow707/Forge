@@ -7,6 +7,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ShieldCheck, MailX, MailWarning, Clock } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type BlockedAthlete = {
   id: number;
@@ -37,6 +38,7 @@ type BlockedAthlete = {
  * the athlete about an email nobody ever received is the one response
  * guaranteed not to work. */
 export default function AdminBlockedAthletesPage() {
+  const t = useT();
   // PAGED, BECAUSE THIS LIST IS NOT SMALL.
   //
   // The route used to return every blocked athlete in one array. Against a 500k-user load seed
@@ -65,10 +67,10 @@ export default function AdminBlockedAthletesPage() {
   function state(a: BlockedAthlete) {
     if (!a.inviteSentAt) {
       return {
-        label: "No invite on file",
+        label: t("No invite on file"),
         icon: <MailX className="h-3.5 w-3.5" />,
         tone: "destructive" as const,
-        detail: "Nothing was ever sent to a guardian. This account can't clear itself.",
+        detail: t("Nothing was ever sent to a guardian. This account can't clear itself."),
       };
     }
     // Ahead of the expiry check: an invite that never left the server is
@@ -76,25 +78,27 @@ export default function AdminBlockedAthletesPage() {
     // failure.
     if (a.inviteDelivered === false) {
       return {
-        label: "Email never delivered",
+        label: t("Email never delivered"),
         icon: <MailX className="h-3.5 w-3.5" />,
         tone: "destructive" as const,
-        detail: `We could not send the invite to ${a.inviteEmail}${a.inviteError ? ` (${a.inviteError})` : ""}. Check the address, then reissue it.`,
+        detail: a.inviteError
+          ? t("We could not send the invite to {email} ({error}). Check the address, then reissue it.", { email: a.inviteEmail, error: a.inviteError })
+          : t("We could not send the invite to {email}. Check the address, then reissue it.", { email: a.inviteEmail }),
       };
     }
     if (a.inviteExpired) {
       return {
-        label: "Invite expired",
+        label: t("Invite expired"),
         icon: <MailWarning className="h-3.5 w-3.5" />,
         tone: "outline" as const,
-        detail: `Sent ${formatDistanceToNow(new Date(a.inviteSentAt), { addSuffix: true })} to ${a.inviteEmail}. The link no longer works.`,
+        detail: t("Sent {when} to {email}. The link no longer works.", { when: formatDistanceToNow(new Date(a.inviteSentAt), { addSuffix: true }), email: a.inviteEmail }),
       };
     }
     return {
-      label: "Waiting on the parent",
+      label: t("Waiting on the parent"),
       icon: <Clock className="h-3.5 w-3.5" />,
       tone: "secondary" as const,
-      detail: `Sent ${formatDistanceToNow(new Date(a.inviteSentAt), { addSuffix: true })} to ${a.inviteEmail}, not opened yet.`,
+      detail: t("Sent {when} to {email}, not opened yet.", { when: formatDistanceToNow(new Date(a.inviteSentAt), { addSuffix: true }), email: a.inviteEmail }),
     };
   }
 
@@ -104,20 +108,19 @@ export default function AdminBlockedAthletesPage() {
   // they had a nav entry they opened into a screen with no nav to get back out
   // of, and on device the heading sat under the Dynamic Island.
   return (
-    <AppShell title="Blocked Athletes">
+    <AppShell title={t("Blocked Athletes")}>
       <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-8">
       <div className="space-y-1">
         <h1 className="font-display text-2xl font-extrabold uppercase tracking-wide">
-          Blocked athletes
+          {t("Blocked athletes")}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Under-18 accounts with no guardian linked. Each one is locked out of Forge until a
-          parent finishes signing up.
+          {t("Under-18 accounts with no guardian linked. Each one is locked out of Forge until a parent finishes signing up.")}
         </p>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
       ) : isError ? (
         // The green tick below states, as a fact, that every minor on the platform has a
         // guardian. Rendering that off a failed request is the most confident wrong thing in
@@ -125,7 +128,7 @@ export default function AdminBlockedAthletesPage() {
         <Card>
           <CardContent className="py-8">
             <ReadFailed
-              what="the blocked-athlete list"
+              what={t("the blocked-athlete list")}
               onRetry={() => void refetch()}
               className="flex flex-col items-start gap-2 text-left"
             />
@@ -135,17 +138,17 @@ export default function AdminBlockedAthletesPage() {
         <Card>
           <CardContent className="flex items-center gap-3 py-8 text-sm text-muted-foreground">
             <ShieldCheck className="h-5 w-5 shrink-0 text-success" />
-            Nobody is blocked. Every minor on the platform has a guardian linked.
+            {t("Nobody is blocked. Every minor on the platform has a guardian linked.")}
           </CardContent>
         </Card>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
-              { label: "No invite on file", value: noInvite.length },
-              { label: "Email never delivered", value: undelivered.length },
-              { label: "Invite expired", value: expired.length },
-              { label: "Waiting on the parent", value: waiting.length },
+              { label: t("No invite on file"), value: noInvite.length },
+              { label: t("Email never delivered"), value: undelivered.length },
+              { label: t("Invite expired"), value: expired.length },
+              { label: t("Waiting on the parent"), value: waiting.length },
             ].map((s) => (
               <div key={s.label} className="rounded-lg border border-border px-4 py-3">
                 <p className="font-display text-2xl font-extrabold">{s.value}</p>
@@ -177,8 +180,7 @@ export default function AdminBlockedAthletesPage() {
                   <CardContent className="space-y-1 pt-0 text-sm text-muted-foreground">
                     <p>{s.detail}</p>
                     <p className="text-xs">
-                      Born {a.dateOfBirth} · signed up{" "}
-                      {formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })}
+                      {t("Born {date} · signed up {when}", { date: a.dateOfBirth, when: formatDistanceToNow(new Date(a.createdAt), { addSuffix: true }) })}
                     </p>
                   </CardContent>
                 </Card>
@@ -190,8 +192,7 @@ export default function AdminBlockedAthletesPage() {
           {total > PAGE_SIZE && (
             <div className="mt-4 flex items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground tabular-nums">
-                {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of{" "}
-                {total.toLocaleString()} blocked
+                {t("{from}-{to} of {total} blocked", { from: page * PAGE_SIZE + 1, to: Math.min((page + 1) * PAGE_SIZE, total), total: t.number(total) })}
               </span>
               <div className="flex gap-2">
                 <button
@@ -200,7 +201,7 @@ export default function AdminBlockedAthletesPage() {
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0}
                 >
-                  Previous
+                  {t("Previous")}
                 </button>
                 <button
                   type="button"
@@ -208,7 +209,7 @@ export default function AdminBlockedAthletesPage() {
                   onClick={() => setPage((p) => p + 1)}
                   disabled={(page + 1) * PAGE_SIZE >= total}
                 >
-                  Next
+                  {t("Next")}
                 </button>
               </div>
             </div>

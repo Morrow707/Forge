@@ -10,6 +10,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type RemovalRequest = {
   id: number;
@@ -30,6 +31,7 @@ type RemovalRequest = {
  * disk would be the worst of both worlds. Denying is a real option and
  * carries a note, because the parent sees whatever is written here. */
 export default function AdminRemovalRequestsPage() {
+  const t = useT();
   const qc = useQueryClient();
   const [notes, setNotes] = useState<Record<number, string>>({});
 
@@ -50,13 +52,13 @@ export default function AdminRemovalRequestsPage() {
       qc.invalidateQueries({ queryKey: ["/api/admin/removal-requests"] });
       toast.success(
         variables.status === "denied"
-          ? "Marked as not removed."
+          ? t("Marked as not removed.")
           : result.deleted
-            ? "Video deleted."
-            : "Marked removed, the file was already gone.",
+            ? t("Video deleted.")
+            : t("Marked removed, the file was already gone."),
       );
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't update that request"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't update that request")),
   });
 
   // Wrapped in AppShell: it is the only thing that renders navigation, and the
@@ -65,20 +67,19 @@ export default function AdminRemovalRequestsPage() {
   // they had a nav entry they opened into a screen with no nav to get back out
   // of, and on device the heading sat under the Dynamic Island.
   return (
-    <AppShell title="Removal Requests">
+    <AppShell title={t("Removal Requests")}>
       <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-8">
       <div className="space-y-1">
         <h1 className="font-display text-2xl font-extrabold uppercase tracking-wide">
-          Removal requests
+          {t("Removal requests")}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Guardians asking for a video of their athlete to be taken down. Approving deletes the
-          file. Nothing here happens on its own.
+          {t("Guardians asking for a video of their athlete to be taken down. Approving deletes the file. Nothing here happens on its own.")}
         </p>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
       ) : isError ? (
         // "Nothing is waiting on you" is a poor thing to tell somebody when the list did not
         // load. Every row here is a guardian asking for a video of their child to be taken
@@ -86,7 +87,7 @@ export default function AdminRemovalRequestsPage() {
         <Card>
           <CardContent className="py-8">
             <ReadFailed
-              what="the open removal requests"
+              what={t("the open removal requests")}
               onRetry={() => void refetch()}
               className="flex flex-col items-start gap-2 text-left"
             />
@@ -96,7 +97,7 @@ export default function AdminRemovalRequestsPage() {
         <Card>
           <CardContent className="flex items-center gap-3 py-8 text-sm text-muted-foreground">
             <ShieldAlert className="h-5 w-5 shrink-0" />
-            No open requests. Nothing is waiting on you.
+            {t("No open requests. Nothing is waiting on you.")}
           </CardContent>
         </Card>
       ) : (
@@ -108,7 +109,7 @@ export default function AdminRemovalRequestsPage() {
                   <div className="min-w-0">
                     <CardTitle className="text-base">{r.label}</CardTitle>
                     <CardDescription>
-                      {r.guardianName} asked, on behalf of athlete #{r.athleteId}
+                      {t("{name} asked, on behalf of athlete #{id}", { name: r.guardianName, id: r.athleteId })}
                     </CardDescription>
                   </div>
                   <Badge variant="outline" className="shrink-0">
@@ -124,7 +125,7 @@ export default function AdminRemovalRequestsPage() {
                 )}
                 <div className="space-y-1.5">
                   <Input
-                    placeholder="Note back to the guardian (optional)"
+                    placeholder={t("Note back to the guardian (optional)")}
                     value={notes[r.id] ?? ""}
                     onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
                   />
@@ -136,14 +137,14 @@ export default function AdminRemovalRequestsPage() {
                     disabled={resolve.isPending}
                     onClick={() => resolve.mutate({ id: r.id, status: "denied" })}
                   >
-                    Don't remove
+                    {t("Don't remove")}
                   </Button>
                   <Button
                     size="sm"
                     disabled={resolve.isPending}
                     onClick={() => resolve.mutate({ id: r.id, status: "approved" })}
                   >
-                    Delete the video
+                    {t("Delete the video")}
                   </Button>
                 </div>
               </CardContent>

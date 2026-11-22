@@ -14,6 +14,7 @@ import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { toast } from "sonner";
 import { ArrowLeft, CheckCircle2, Circle, Pencil, Plus } from "lucide-react";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type Lesson = {
   id: number;
@@ -51,6 +52,7 @@ type Track = {
  * (lessons + quiz) happens on academy-track-builder.tsx, reached via the
  * New Track / pencil buttons below. */
 export default function AdminCoachesCorner() {
+  const t = useT();
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
@@ -69,19 +71,19 @@ export default function AdminCoachesCorner() {
       qc.invalidateQueries({ queryKey: ["/api/admin/academy/tracks"] });
     },
     onError: (err: ApiError) => {
-      toast.error(err.message || "Could not update lesson");
+      toast.error(err.message || t("Could not update lesson"));
     },
   });
 
   if (isLoading) {
     return (
-      <AppShell title="Coaches Corner">
+      <AppShell title={t("Coaches Corner")}>
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       </AppShell>
     );
   }
 
-  const selectedTrack = tracks.find((t) => t.id === selectedTrackId) ?? null;
+  const selectedTrack = tracks.find((tr) => tr.id === selectedTrackId) ?? null;
   const selectedLesson = selectedTrack?.lessons.find((l) => l.id === selectedLessonId) ?? null;
 
   if (selectedLesson && selectedTrack) {
@@ -91,14 +93,14 @@ export default function AdminCoachesCorner() {
         actions={
           <Button variant="outline" onClick={() => setSelectedLessonId(null)}>
             <ArrowLeft className="h-4 w-4" />
-            Back to {selectedTrack.title}
+            {t("Back to {title}", { title: selectedTrack.title })}
           </Button>
         }
       >
         <div className="mx-auto max-w-2xl space-y-4">
           {selectedLesson.estMinutes != null && (
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              ~{selectedLesson.estMinutes} min read
+              {t("~{minutes} min read", { minutes: selectedLesson.estMinutes })}
             </p>
           )}
           <div className="space-y-4 text-sm leading-relaxed text-foreground">
@@ -118,7 +120,7 @@ export default function AdminCoachesCorner() {
                 completeMutation.mutate({ lessonId: selectedLesson.id, checked: !!checked })
               }
             />
-            Mark as read
+            {t("Mark as read")}
           </label>
         </div>
       </AppShell>
@@ -133,11 +135,11 @@ export default function AdminCoachesCorner() {
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => navigate(`/admin/academy-tracks/${selectedTrack.id}`)}>
               <Pencil className="h-4 w-4" />
-              Edit
+              {t("Edit")}
             </Button>
             <Button variant="outline" onClick={() => setSelectedTrackId(null)}>
               <ArrowLeft className="h-4 w-4" />
-              Back to Coaches Corner
+              {t("Back to Coaches Corner")}
             </Button>
           </div>
         }
@@ -148,11 +150,11 @@ export default function AdminCoachesCorner() {
             skimming -- saw a page whose only titled section was the quiz, and read it as a
             track that could not be read. An empty state says which of the two it is. */}
         <h2 className="mb-2 font-display text-lg font-bold uppercase tracking-wide">
-          Lessons ({selectedTrack.lessons.length})
+          {t("Lessons ({count})", { count: selectedTrack.lessons.length })}
         </h2>
         {selectedTrack.lessons.length === 0 && (
           <p className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted-foreground">
-            This track has no lessons yet. Add them with Edit.
+            {t("This track has no lessons yet. Add them with Edit.")}
           </p>
         )}
         <div className="space-y-2">
@@ -174,7 +176,7 @@ export default function AdminCoachesCorner() {
                 </span>
               </span>
               {lesson.estMinutes != null && (
-                <span className="shrink-0 text-xs text-muted-foreground">{lesson.estMinutes} min</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{t("{minutes} min", { minutes: lesson.estMinutes })}</span>
               )}
             </button>
           ))}
@@ -186,26 +188,24 @@ export default function AdminCoachesCorner() {
 
   return (
     <AppShell
-      title="Coaches Corner"
+      title={t("Coaches Corner")}
       actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => navigate("/admin/coaches-corner/analytics")}>
-            Analytics
+            {t("Analytics")}
           </Button>
           <Button onClick={() => navigate("/admin/academy-tracks/new")}>
             <Plus className="h-4 w-4" />
-            New Lesson
+            {t("New Lesson")}
           </Button>
         </div>
       }
     >
       <p className="mb-6 max-w-2xl text-sm text-muted-foreground">
-        Coach-education content, what a regular coach sees as a locked, paywalled catalog (see the
-        Coaches Corner nav item next to the account menu). Click a track to read it, or the pencil to
-        edit its lessons and quiz.
+        {t("Coach-education content, what a regular coach sees as a locked, paywalled catalog (see the Coaches Corner nav item next to the account menu). Click a track to read it, or the pencil to edit its lessons and quiz.")}
       </p>
-      {isError && <ReadFailed what="the coach-education tracks" onRetry={() => void refetch()} />}
-      <AdminAcademyPathsEditor tracks={tracks.map((t) => ({ id: t.id, title: t.title }))} />
+      {isError && <ReadFailed what={t("the coach-education tracks")} onRetry={() => void refetch()} />}
+      <AdminAcademyPathsEditor tracks={tracks.map((tr) => ({ id: tr.id, title: tr.title }))} />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {tracks.map((track) => (
           // The whole card opens the track, not just the words in its title. The card already
@@ -229,7 +229,7 @@ export default function AdminCoachesCorner() {
                     e.stopPropagation();
                     navigate(`/admin/academy-tracks/${track.id}`);
                   }}
-                  aria-label={`Edit ${track.title}`}
+                  aria-label={t("Edit {title}", { title: track.title })}
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
@@ -237,10 +237,10 @@ export default function AdminCoachesCorner() {
               <p className="text-sm text-muted-foreground">{track.description}</p>
               <div className="flex gap-1.5">
                 <Badge variant="secondary" className="w-fit">
-                  {track.lessons.length} lessons
+                  {t.plural(track.lessons.length, "{count} lesson", "{count} lessons")}
                 </Badge>
                 <Badge variant="outline" className="w-fit">
-                  {track.quizQuestions.length} quiz Qs
+                  {t("{count} quiz Qs", { count: track.quizQuestions.length })}
                 </Badge>
               </div>
             </CardContent>

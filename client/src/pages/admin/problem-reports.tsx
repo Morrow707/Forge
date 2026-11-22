@@ -6,6 +6,7 @@ import { apiRequest, ApiError, getJson, resolveApiUrl } from "@/lib/queryClient"
 import { toast } from "sonner";
 import { ReadFailed } from "@/components/read-failed";
 import { Flag, Check } from "lucide-react";
+import { useT } from "@/i18n";
 
 type ProblemReport = {
   id: number;
@@ -23,6 +24,7 @@ type ProblemReport = {
  * tab inside admin/reports.tsx alongside ReviewQueueContent -- a general, not-tied-to-any-record
  * bug inbox, unlike that one's per-exercise moderation workflow. */
 export function ProblemReportsContent() {
+  const t = useT();
   const qc = useQueryClient();
   const [showCleared, setShowCleared] = useState(false);
   const { data, isLoading, isError, refetch } = useQuery<ProblemReport[]>({
@@ -42,9 +44,9 @@ export function ProblemReportsContent() {
     mutationFn: (id: number) => apiRequest("POST", `/api/admin/problem-reports/${id}/resolve`, {}),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/problem-reports"] });
-      toast.success("Cleared");
+      toast.success(t("Cleared"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't clear that report"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't clear that report")),
   });
 
   return (
@@ -53,15 +55,14 @@ export function ProblemReportsContent() {
         <div>
           <CardTitle className="flex items-center gap-2">
             <Flag className="h-5 w-5" />
-            Reported problems
+            {t("Reported problems")}
           </CardTitle>
           <CardDescription>
-            Sent from any coach/athlete/admin's account menu, newest first. Reports stay here
-            until you clear them.
+            {t("Sent from any coach/athlete/admin's account menu, newest first. Reports stay here until you clear them.")}
           </CardDescription>
         </div>
         <Button variant="outline" size="sm" onClick={() => setShowCleared((v) => !v)}>
-          {showCleared ? "Open only" : "Show cleared"}
+          {showCleared ? t("Open only") : t("Show cleared")}
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -70,22 +71,22 @@ export function ProblemReportsContent() {
         ) : isError ? (
           // "Nothing open" is the sentence that makes somebody close the tab. These are the
           // reports users sent because something was broken enough to stop and write about.
-          <ReadFailed what="the problem reports" onRetry={() => void refetch()} />
+          <ReadFailed what={t("the problem reports")} onRetry={() => void refetch()} />
         ) : !Array.isArray(data) || data.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {showCleared ? "No reports yet." : "Nothing open."}
+            {showCleared ? t("No reports yet.") : t("Nothing open.")}
           </p>
         ) : (
           data.map((report) => (
             <div key={report.id} className="rounded-md border border-border p-4">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span className="font-semibold text-foreground">
-                  {report.userRole ? `${report.userRole} #${report.userId}` : "Unknown user"}
+                  {report.userRole ? `${report.userRole} #${report.userId}` : t("Unknown user")}
                 </span>
                 <span className="flex items-center gap-3">
                   <span>{new Date(report.createdAt).toLocaleString()}</span>
                   {report.resolvedAt ? (
-                    <span className="font-semibold text-primary">Cleared</span>
+                    <span className="font-semibold text-primary">{t("Cleared")}</span>
                   ) : (
                     <Button
                       size="sm"
@@ -94,14 +95,14 @@ export function ProblemReportsContent() {
                       onClick={() => resolveMutation.mutate(report.id)}
                     >
                       <Check className="h-3.5 w-3.5" />
-                      Clear
+                      {t("Clear")}
                     </Button>
                   )}
                 </span>
               </div>
               <p className="whitespace-pre-wrap text-sm">{report.message}</p>
               {report.path && (
-                <p className="mt-1.5 text-xs text-muted-foreground">On: {report.path}</p>
+                <p className="mt-1.5 text-xs text-muted-foreground">{t("On: {path}", { path: report.path })}</p>
               )}
               {report.imageUrl && (
                 // Screenshots are served through a signed, expiring URL, because a "here's
@@ -112,7 +113,7 @@ export function ProblemReportsContent() {
                 // being something a person has to manage.
                 <img
                   src={resolveApiUrl(report.imageUrl)}
-                  alt="Reported screenshot"
+                  alt={t("Reported screenshot")}
                   onError={() => qc.invalidateQueries({ queryKey: ["/api/admin/problem-reports"] })}
                   className="mt-3 max-h-64 rounded-md border border-border object-contain"
                 />

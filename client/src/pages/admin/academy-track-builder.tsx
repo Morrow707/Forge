@@ -31,6 +31,7 @@ import {
   type LocalFlashcard,
   type LocalQuizQuestion,
 } from "@/components/lesson-quiz-editor";
+import { useT } from "@/i18n";
 
 type LessonForm = {
   id?: number;
@@ -62,6 +63,7 @@ function emptyLesson(lessonNumber: number): LessonForm {
  * mistake (missing blank line between paragraphs, etc.) is visible before
  * saving instead of only after a coach opens it. */
 function LessonPreviewRow({ lesson, index }: { lesson: LessonForm; index: number }) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   return (
     <div className="rounded-md border border-border">
@@ -71,10 +73,10 @@ function LessonPreviewRow({ lesson, index }: { lesson: LessonForm; index: number
         className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm"
       >
         <span className="min-w-0 flex-1 truncate font-semibold">
-          {index + 1}. {lesson.title.trim() || "Untitled lesson"}
+          {index + 1}. {lesson.title.trim() || t("Untitled lesson")}
         </span>
         <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-          {lesson.estMinutes != null && `${lesson.estMinutes} min`}
+          {lesson.estMinutes != null && t("{minutes} min", { minutes: lesson.estMinutes })}
           {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
         </span>
       </button>
@@ -83,7 +85,7 @@ function LessonPreviewRow({ lesson, index }: { lesson: LessonForm; index: number
           {lesson.content.trim() ? (
             lesson.content.split("\n\n").map((para, i) => <p key={i}>{para}</p>)
           ) : (
-            <p className="italic">No content yet.</p>
+            <p className="italic">{t("No content yet.")}</p>
           )}
         </div>
       )}
@@ -98,6 +100,7 @@ function LessonPreviewRow({ lesson, index }: { lesson: LessonForm; index: number
  * (new tracks, edits, retiring old content) goes through this page instead
  * of a code change. */
 export default function AdminAcademyTrackBuilder() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const isNew = id === "new";
   const trackId = isNew ? null : Number(id);
@@ -167,10 +170,10 @@ export default function AdminAcademyTrackBuilder() {
     },
     onSuccess: (saved) => {
       qc.invalidateQueries({ queryKey: ["/api/admin/academy/tracks"] });
-      toast.success("Saved");
+      toast.success(t("Saved"));
       if (isNew) navigate(`/admin/academy-tracks/${saved.id}`);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not save")),
   });
 
   const deleteMutation = useMutation({
@@ -179,10 +182,10 @@ export default function AdminAcademyTrackBuilder() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/academy/tracks"] });
-      toast.success("Lesson deleted");
+      toast.success(t("Lesson deleted"));
       navigate("/admin/coaches-corner");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not delete"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not delete")),
   });
 
   // Further reading for every lesson that has none, from the licensed library. Retrieval
@@ -210,14 +213,14 @@ export default function AdminAcademyTrackBuilder() {
           return { ...l, sources: next };
         });
       });
-      toast.success(attached > 0 ? `Further reading added to ${attached} lesson${attached === 1 ? "" : "s"}` : "The licensed library has nothing close to these lessons");
+      toast.success(attached > 0 ? t.plural(attached, "Further reading added to {count} lesson", "Further reading added to {count} lessons") : t("The licensed library has nothing close to these lessons"));
     },
-    onError: (err: ApiError) => toast.error(err.message || "Couldn't find citations"),
+    onError: (err: ApiError) => toast.error(err.message || t("Couldn't find citations")),
   });
 
   if (!isNew && isLoading) {
     return (
-      <AppShell title="Loading…">
+      <AppShell title={t("Loading…")}>
         <div className="h-40 animate-pulse rounded-lg bg-surface" />
       </AppShell>
     );
@@ -231,8 +234,8 @@ export default function AdminAcademyTrackBuilder() {
   // lands.
   if (!isNew && isError) {
     return (
-      <AppShell title="Coaches Corner Lesson">
-        <ReadFailed what="this track" onRetry={() => void refetch()} />
+      <AppShell title={t("Coaches Corner Lesson")}>
+        <ReadFailed what={t("this track")} onRetry={() => void refetch()} />
       </AppShell>
     );
   }
@@ -292,30 +295,30 @@ export default function AdminAcademyTrackBuilder() {
 
   return (
     <AppShell
-      title={isNew ? "New Coaches Corner Lesson" : "Edit Coaches Corner Lesson"}
+      title={isNew ? t("New Coaches Corner Lesson") : t("Edit Coaches Corner Lesson")}
       actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => navigate("/admin/coaches-corner")}>
             <ArrowLeft className="h-4 w-4" />
-            Back
+            {t("Back")}
           </Button>
           {!isNew && (
             <Button
               variant="outline"
               className="text-destructive"
               onClick={() => {
-                if (window.confirm(`Delete "${title}"? This removes all its lessons and quiz questions.`)) {
+                if (window.confirm(t("Delete \"{title}\"? This removes all its lessons and quiz questions.", { title }))) {
                   deleteMutation.mutate();
                 }
               }}
             >
               <Trash2 className="h-4 w-4" />
-              Delete
+              {t("Delete")}
             </Button>
           )}
           <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
             <Save className="h-4 w-4" />
-            Save
+            {t("Save")}
           </Button>
         </div>
       }
@@ -326,15 +329,15 @@ export default function AdminAcademyTrackBuilder() {
           <CardContent className="space-y-4 p-5">
             <div className="flex gap-3">
               <div className="flex-1 space-y-1.5">
-                <label className="text-xs font-semibold uppercase text-muted-foreground">Title</label>
+                <label className="text-xs font-semibold uppercase text-muted-foreground">{t("Title")}</label>
                 <Input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Sports Nutrition Literacy for Coaches"
+                  placeholder={t("e.g. Sports Nutrition Literacy for Coaches")}
                 />
               </div>
               <div className="w-24 space-y-1.5">
-                <label className="text-xs font-semibold uppercase text-muted-foreground">Order</label>
+                <label className="text-xs font-semibold uppercase text-muted-foreground">{t("Order")}</label>
                 <Input
                   type="number"
                   value={orderIndex}
@@ -344,24 +347,24 @@ export default function AdminAcademyTrackBuilder() {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase text-muted-foreground">
-                Description
+                {t("Description")}
               </label>
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
-                placeholder="Shown on the catalog card, coach- and admin-facing."
+                placeholder={t("Shown on the catalog card, coach- and admin-facing.")}
               />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase text-muted-foreground">
-                Key principles for AI
+                {t("Key principles for AI")}
               </label>
               <Textarea
                 value={keyPrinciplesForAi}
                 onChange={(e) => setKeyPrinciplesForAi(e.target.value)}
                 rows={3}
-                placeholder="A concise distillation injected into every AI coach's system prompt alongside every other track's, not the full lesson text, just the core takeaways."
+                placeholder={t("A concise distillation injected into every AI coach's system prompt alongside every other track's, not the full lesson text, just the core takeaways.")}
               />
             </div>
           </CardContent>
@@ -369,17 +372,17 @@ export default function AdminAcademyTrackBuilder() {
 
         <div>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-lg font-bold uppercase tracking-wide">Lessons</h2>
+            <h2 className="font-display text-lg font-bold uppercase tracking-wide">{t("Lessons")}</h2>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => citeMutation.mutate()}
                 disabled={citeMutation.isPending || lessons.every((l) => !l.content.trim())}
-                title="Attach further reading from the licensed library to lessons that have none"
+                title={t("Attach further reading from the licensed library to lessons that have none")}
               >
                 <BookMarked className="h-4 w-4" />
-                {citeMutation.isPending ? "Finding..." : "Find citations"}
+                {citeMutation.isPending ? t("Finding...") : t("Find citations")}
               </Button>
               <Button
                 size="sm"
@@ -387,7 +390,7 @@ export default function AdminAcademyTrackBuilder() {
                 onClick={() => setLessons((prev) => [...prev, emptyLesson(prev.length + 1)])}
               >
                 <Plus className="h-4 w-4" />
-                Add Lesson
+                {t("Add Lesson")}
               </Button>
             </div>
           </div>
@@ -404,7 +407,7 @@ export default function AdminAcademyTrackBuilder() {
                           prev.map((l, li) => (li === i ? { ...l, title: e.target.value } : l)),
                         )
                       }
-                      placeholder="Lesson title"
+                      placeholder={t("Lesson title")}
                       className="flex-1"
                     />
                     <Input
@@ -417,13 +420,13 @@ export default function AdminAcademyTrackBuilder() {
                           ),
                         )
                       }
-                      placeholder="min"
+                      placeholder={t("min")}
                       className="w-20"
                     />
                     <Button
                       size="icon"
                       variant="ghost"
-                      aria-label="Move lesson up"
+                      aria-label={t("Move lesson up")}
                       onClick={() => moveLesson(i, -1)}
                       disabled={i === 0}
                     >
@@ -432,7 +435,7 @@ export default function AdminAcademyTrackBuilder() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      aria-label="Move lesson down"
+                      aria-label={t("Move lesson down")}
                       onClick={() => moveLesson(i, 1)}
                       disabled={i === lessons.length - 1}
                     >
@@ -442,7 +445,7 @@ export default function AdminAcademyTrackBuilder() {
                       size="icon"
                       variant="ghost"
                       className="text-destructive"
-                      aria-label="Remove lesson"
+                      aria-label={t("Remove lesson")}
                       onClick={() => setLessons((prev) => prev.filter((_, li) => li !== i))}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -456,7 +459,7 @@ export default function AdminAcademyTrackBuilder() {
                       )
                     }
                     rows={6}
-                    placeholder="Lesson content, separate paragraphs with a blank line."
+                    placeholder={t("Lesson content, separate paragraphs with a blank line.")}
                   />
                   <FlashcardsEditor
                     cards={lesson.flashcards}
@@ -468,14 +471,14 @@ export default function AdminAcademyTrackBuilder() {
                   />
                   {lesson.sources.length > 0 && (
                     <div className="space-y-1">
-                      <p className="text-[10px] font-semibold uppercase text-muted-foreground">Further reading</p>
+                      <p className="text-[10px] font-semibold uppercase text-muted-foreground">{t("Further reading")}</p>
                       <ul className="space-y-1">
                         {lesson.sources.map((src, si) => (
                           <li key={si} className="flex items-center gap-2 text-xs">
                             <span className="min-w-0 flex-1 truncate">{formatLessonSource(src)}</span>
                             <button
                               type="button"
-                              aria-label="Remove this source"
+                              aria-label={t("Remove this source")}
                               className="text-muted-foreground hover:text-destructive"
                               onClick={() =>
                                 setLessons((prev) =>
@@ -495,14 +498,14 @@ export default function AdminAcademyTrackBuilder() {
                 </CardContent>
               </Card>
             ))}
-            {lessons.length === 0 && <p className="text-sm text-muted-foreground">No lessons yet.</p>}
+            {lessons.length === 0 && <p className="text-sm text-muted-foreground">{t("No lessons yet.")}</p>}
           </div>
         </div>
 
         <div>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-lg font-bold uppercase tracking-wide">Quiz</h2>
-            <p className="text-xs text-muted-foreground">Four shapes: multiple choice, fill in the blank, put in order, match the pairs.</p>
+            <h2 className="font-display text-lg font-bold uppercase tracking-wide">{t("Quiz")}</h2>
+            <p className="text-xs text-muted-foreground">{t("Four shapes: multiple choice, fill in the blank, put in order, match the pairs.")}</p>
           </div>
           {/* The same editor the class builder uses, drafting against this track's own lessons. */}
           <QuizEditor
@@ -511,7 +514,7 @@ export default function AdminAcademyTrackBuilder() {
             readingLevel={null}
             onChange={(updater) => setQuestions(updater)}
           />
-          {questions.length === 0 && <p className="mt-2 text-sm text-muted-foreground">No quiz questions yet.</p>}
+          {questions.length === 0 && <p className="mt-2 text-sm text-muted-foreground">{t("No quiz questions yet.")}</p>}
         </div>
       </div>
 
@@ -523,30 +526,30 @@ export default function AdminAcademyTrackBuilder() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Eye className="h-4 w-4" />
-              Preview
+              {t("Preview")}
             </CardTitle>
-            <CardDescription>What a coach sees, updates as you edit.</CardDescription>
+            <CardDescription>{t("What a coach sees, updates as you edit.")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
               <p className="font-display text-sm font-bold uppercase tracking-wide">
-                {title.trim() || "Untitled Lesson"}
+                {title.trim() || t("Untitled Lesson")}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {description.trim() || "No description yet."}
+                {description.trim() || t("No description yet.")}
               </p>
             </div>
             <div className="flex gap-1.5">
               <Badge variant="secondary" className="text-[10px]">
-                {lessons.length} lesson{lessons.length === 1 ? "" : "s"}
+                {t.plural(lessons.length, "{count} lesson", "{count} lessons")}
               </Badge>
               <Badge variant="outline" className="text-[10px]">
-                {questions.length} quiz Qs
+                {t("{count} quiz Qs", { count: questions.length })}
               </Badge>
             </div>
             <div className="space-y-1.5">
               {lessons.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No lessons yet.</p>
+                <p className="text-xs text-muted-foreground">{t("No lessons yet.")}</p>
               ) : (
                 lessons.map((lesson, i) => (
                   <LessonPreviewRow key={lesson.id ?? `new-${i}`} lesson={lesson} index={i} />

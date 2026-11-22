@@ -14,6 +14,7 @@ import { apiRequest, ApiError, getJson } from "@/lib/queryClient";
 import { shareOrDownloadBlob } from "@/lib/share-file";
 import { cn } from "@/lib/utils";
 import { Search, Sparkles, Download, Save, Trash2, ShieldCheck } from "lucide-react";
+import { msg, useT } from "@/i18n";
 
 /**
  * The Admin Query Engine.
@@ -46,61 +47,62 @@ type Range = { min?: number; max?: number };
 /** Grouped the way an admin thinks about them, not the way the schema lists them. */
 const RANGE_GROUPS: { group: string; fields: { key: string; label: string }[] }[] = [
   {
-    group: "Profile",
+    group: msg("Profile"),
     fields: [
-      { key: "age", label: "Age" },
-      { key: "bodyWeightLbs", label: "Body weight (lbs)" },
+      { key: "age", label: msg("Age") },
+      { key: "bodyWeightLbs", label: msg("Body weight (lbs)") },
     ],
   },
   {
-    group: "Testing",
+    group: msg("Testing"),
     fields: [
-      { key: "fortyYardDash", label: "40-yard dash (s)" },
-      { key: "proAgilitySeconds", label: "Pro agility (s)" },
-      { key: "threeConeSeconds", label: "3-cone (s)" },
-      { key: "verticalJumpIn", label: "Vertical jump (in)" },
-      { key: "broadJumpIn", label: "Broad jump (in)" },
-      { key: "benchMaxLbs", label: "Bench max (lbs)" },
-      { key: "squatMaxLbs", label: "Squat max (lbs)" },
-      { key: "deadliftMaxLbs", label: "Deadlift max (lbs)" },
+      { key: "fortyYardDash", label: msg("40-yard dash (s)") },
+      { key: "proAgilitySeconds", label: msg("Pro agility (s)") },
+      { key: "threeConeSeconds", label: msg("3-cone (s)") },
+      { key: "verticalJumpIn", label: msg("Vertical jump (in)") },
+      { key: "broadJumpIn", label: msg("Broad jump (in)") },
+      { key: "benchMaxLbs", label: msg("Bench max (lbs)") },
+      { key: "squatMaxLbs", label: msg("Squat max (lbs)") },
+      { key: "deadliftMaxLbs", label: msg("Deadlift max (lbs)") },
     ],
   },
   {
-    group: "Wellness (latest in window)",
+    group: msg("Wellness (latest in window)"),
     fields: [
-      { key: "soreness", label: "Soreness" },
-      { key: "stress", label: "Stress" },
-      { key: "sleepHours", label: "Sleep (h)" },
-      { key: "hydration", label: "Hydration" },
-      { key: "mentalFocus", label: "Mental focus" },
+      { key: "soreness", label: msg("Soreness") },
+      { key: "stress", label: msg("Stress") },
+      { key: "sleepHours", label: msg("Sleep (h)") },
+      { key: "hydration", label: msg("Hydration") },
+      { key: "mentalFocus", label: msg("Mental focus") },
     ],
   },
   {
-    group: "Tracked sets (in window)",
+    group: msg("Tracked sets (in window)"),
     fields: [
-      { key: "peakVelocityMps", label: "Best peak velocity (m/s)" },
-      { key: "meanVelocityMps", label: "Avg mean velocity (m/s)" },
-      { key: "romCm", label: "Avg ROM (cm)" },
-      { key: "velocityLossPercent", label: "Avg velocity loss (%)" },
-      { key: "minTrustScorePct", label: "Lowest trust score (%)" },
+      { key: "peakVelocityMps", label: msg("Best peak velocity (m/s)") },
+      { key: "meanVelocityMps", label: msg("Avg mean velocity (m/s)") },
+      { key: "romCm", label: msg("Avg ROM (cm)") },
+      { key: "velocityLossPercent", label: msg("Avg velocity loss (%)") },
+      { key: "minTrustScorePct", label: msg("Lowest trust score (%)") },
     ],
   },
   {
-    group: "Compliance",
-    fields: [{ key: "caraCapUsagePercent", label: "CARA cap used (%, trailing 7d)" }],
+    group: msg("Compliance"),
+    fields: [{ key: "caraCapUsagePercent", label: msg("CARA cap used (%, trailing 7d)") }],
   },
 ];
 
 const LIST_FIELDS: { key: string; label: string; placeholder: string }[] = [
-  { key: "sport", label: "Sport", placeholder: "Football, Baseball" },
-  { key: "position", label: "Position", placeholder: "QB, WR" },
-  { key: "seasonPhase", label: "Season phase", placeholder: "in-season, off-season" },
-  { key: "gender", label: "Gender", placeholder: "male, female" },
-  { key: "formFaultCodes", label: "Form fault codes", placeholder: "knee_valgus" },
-  { key: "skillFaultCodes", label: "Skill fault codes", placeholder: "early_hip_rotation" },
+  { key: "sport", label: msg("Sport"), placeholder: "Football, Baseball" },
+  { key: "position", label: msg("Position"), placeholder: "QB, WR" },
+  { key: "seasonPhase", label: msg("Season phase"), placeholder: "in-season, off-season" },
+  { key: "gender", label: msg("Gender"), placeholder: "male, female" },
+  { key: "formFaultCodes", label: msg("Form fault codes"), placeholder: "knee_valgus" },
+  { key: "skillFaultCodes", label: msg("Skill fault codes"), placeholder: "early_hip_rotation" },
 ];
 
 export default function AdminQueryEngine() {
+  const t = useT();
   const qc = useQueryClient();
   const [lookbackDays, setLookbackDays] = useState("30");
   const [ranges, setRanges] = useState<Record<string, Range>>({});
@@ -169,14 +171,14 @@ export default function AdminQueryEngine() {
       setRows(result);
       if (result.length === 0) {
         // Empty has two meanings here and the difference matters, so say both.
-        toast.info("No rows. Either nothing matched, or too few athletes did to report.");
+        toast.info(t("No rows. Either nothing matched, or too few athletes did to report."));
       }
     },
     onError: (err: ApiError) =>
       toast.error(
         err.status === 429
-          ? err.message || "Daily query budget reached."
-          : err.message || "Could not run that query",
+          ? err.message || t("Daily query budget reached.")
+          : err.message || t("Could not run that query"),
       ),
   });
 
@@ -195,8 +197,8 @@ export default function AdminQueryEngine() {
     onError: (err: ApiError) =>
       toast.error(
         err.status === 429
-          ? err.message || "Daily query budget reached."
-          : err.message || "Couldn't understand that search",
+          ? err.message || t("Daily query budget reached.")
+          : err.message || t("Couldn't understand that search"),
       ),
   });
 
@@ -209,10 +211,10 @@ export default function AdminQueryEngine() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/saved-views"] });
-      toast.success("View saved");
+      toast.success(t("View saved"));
       setSaveName("");
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not save that view"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not save that view")),
   });
 
   const deleteView = useMutation({
@@ -221,10 +223,10 @@ export default function AdminQueryEngine() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/saved-views"] });
-      toast.success("View deleted");
+      toast.success(t("View deleted"));
       setDeleteTarget(null);
     },
-    onError: (err: ApiError) => toast.error(err.message || "Could not delete that view"),
+    onError: (err: ApiError) => toast.error(err.message || t("Could not delete that view")),
   });
 
   const [exporting, setExporting] = useState(false);
@@ -238,7 +240,7 @@ export default function AdminQueryEngine() {
         "Forge query results",
       );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not export those rows");
+      toast.error(err instanceof Error ? err.message : t("Could not export those rows"));
     } finally {
       setExporting(false);
     }
@@ -247,7 +249,7 @@ export default function AdminQueryEngine() {
   const columns = rows && rows.length > 0 ? Object.keys(rows[0]) : [];
 
   return (
-    <AppShell title="Query Engine">
+    <AppShell title={t("Query Engine")}>
       <div className="mt-4 space-y-4">
         {/* Five of the selectable fields -- peak and mean velocity, ROM, velocity loss, trust
             score -- are camera-derived, and an operator querying a cohort on them is further
@@ -261,17 +263,13 @@ export default function AdminQueryEngine() {
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
             <div className="space-y-1 text-xs text-muted-foreground">
               <p>
-                <span className="font-semibold text-foreground">Rows identify nobody.</span> Each
-                carries a subject code derived under a salt generated fresh for this query, stable
-                within one result, different in the next, and mapped nowhere.
+                <span className="font-semibold text-foreground">{t("Rows identify nobody.")}</span> {t("Each carries a subject code derived under a salt generated fresh for this query, stable within one result, different in the next, and mapped nowhere.")}
               </p>
               <p>
                 <span className="font-semibold text-foreground">
-                  A result too small to report comes back empty,
+                  {t("A result too small to report comes back empty,")}
                 </span>{" "}
-                not partial, so a filter cannot be narrowed until one athlete matches. Each query
-                also spends one of a rolling 24-hour budget, which is what stops the same answer
-                being recovered by subtracting two queries that each passed the floor.
+                {t("not partial, so a filter cannot be narrowed until one athlete matches. Each query also spends one of a rolling 24-hour budget, which is what stops the same answer being recovered by subtracting two queries that each passed the floor.")}
               </p>
             </div>
           </CardContent>
@@ -281,11 +279,10 @@ export default function AdminQueryEngine() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Sparkles className="h-4 w-4" />
-              Ask in words
+              {t("Ask in words")}
             </CardTitle>
             <CardDescription>
-              Translated into the same filters as the panel below, which is the only thing it can
-              produce. Check what it understood before you trust the rows.
+              {t("Translated into the same filters as the panel below, which is the only thing it can produce. Check what it understood before you trust the rows.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -293,17 +290,17 @@ export default function AdminQueryEngine() {
               <Input
                 value={nlq}
                 onChange={(e) => setNlq(e.target.value)}
-                placeholder="football athletes under 18 with high soreness and a flagged movement screen"
+                placeholder={t("football athletes under 18 with high soreness and a flagged movement screen")}
                 onKeyDown={(e) => e.key === "Enter" && nlq.trim() && runNlq.mutate()}
               />
               <Button onClick={() => runNlq.mutate()} disabled={runNlq.isPending || !nlq.trim()}>
-                {runNlq.isPending ? "Asking…" : "Ask"}
+                {runNlq.isPending ? t("Asking…") : t("Ask")}
               </Button>
             </div>
             {nlqUnderstood && (
               <div className="rounded-md bg-surface-elevated p-2">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Understood as
+                  {t("Understood as")}
                 </p>
                 <pre className="overflow-x-auto whitespace-pre-wrap text-[11px] text-muted-foreground">
                   {JSON.stringify(nlqUnderstood, null, 1)}
@@ -315,18 +312,16 @@ export default function AdminQueryEngine() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Filters</CardTitle>
+            <CardTitle className="text-base">{t("Filters")}</CardTitle>
             <CardDescription>
-              Leave anything blank to ignore it. The window applies to repeated measures, sets,
-              wellness check-ins, skill captures, not to profile values or an unresolved injury,
-              which are true today whenever they were recorded.
+              {t("Leave anything blank to ignore it. The window applies to repeated measures, sets, wellness check-ins, skill captures, not to profile values or an unresolved injury, which are true today whenever they were recorded.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap items-end gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="lookback" className="text-xs">
-                  Window (days)
+                  {t("Window (days)")}
                 </Label>
                 <Input
                   id="lookback"
@@ -339,7 +334,7 @@ export default function AdminQueryEngine() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Health status</Label>
+                <Label className="text-xs">{t("Health status")}</Label>
                 <div className="flex gap-3">
                   {(["healthy", "hurt"] as const).map((s) => (
                     <label key={s} className="flex items-center gap-1.5 text-xs capitalize">
@@ -361,21 +356,21 @@ export default function AdminQueryEngine() {
                   checked={hasUnresolvedInjury}
                   onCheckedChange={(c) => setHasUnresolvedInjury(c === true)}
                 />
-                Unresolved injury
+                {t("Unresolved injury")}
               </label>
               <label className="flex items-center gap-1.5 text-xs">
                 <Checkbox
                   checked={hasFlaggedMovementScreen}
                   onCheckedChange={(c) => setHasFlaggedMovementScreen(c === true)}
                 />
-                Flagged movement screen
+                {t("Flagged movement screen")}
               </label>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {LIST_FIELDS.map((f) => (
                 <div key={f.key} className="space-y-1.5">
-                  <Label className="text-xs">{f.label}</Label>
+                  <Label className="text-xs">{t(f.label)}</Label>
                   <Input
                     value={lists[f.key] ?? ""}
                     onChange={(e) => setLists((prev) => ({ ...prev, [f.key]: e.target.value }))}
@@ -389,18 +384,18 @@ export default function AdminQueryEngine() {
             {RANGE_GROUPS.map((group) => (
               <div key={group.group}>
                 <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {group.group}
+                  {t(group.group)}
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {group.fields.map((f) => (
                     <div key={f.key} className="flex items-center gap-1.5">
                       <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                        {f.label}
+                        {t(f.label)}
                       </span>
                       <Input
                         type="number"
-                        aria-label={`${f.label} minimum`}
-                        placeholder="min"
+                        aria-label={t("{field} minimum", { field: t(f.label) })}
+                        placeholder={t("min")}
                         value={ranges[f.key]?.min ?? ""}
                         onChange={(e) =>
                           setRanges((prev) => ({
@@ -415,8 +410,8 @@ export default function AdminQueryEngine() {
                       />
                       <Input
                         type="number"
-                        aria-label={`${f.label} maximum`}
-                        placeholder="max"
+                        aria-label={t("{field} maximum", { field: t(f.label) })}
+                        placeholder={t("max")}
                         value={ranges[f.key]?.max ?? ""}
                         onChange={(e) =>
                           setRanges((prev) => ({
@@ -438,17 +433,17 @@ export default function AdminQueryEngine() {
             <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
               <Button onClick={() => runQuery.mutate()} disabled={runQuery.isPending}>
                 <Search className="h-4 w-4" />
-                {runQuery.isPending ? "Running…" : "Run query"}
+                {runQuery.isPending ? t("Running…") : t("Run query")}
               </Button>
               <Button variant="outline" onClick={exportCsv} disabled={exporting}>
                 <Download className="h-4 w-4" />
-                {exporting ? "Exporting…" : "Export CSV"}
+                {exporting ? t("Exporting…") : t("Export CSV")}
               </Button>
               <div className="ml-auto flex items-center gap-1.5">
                 <Input
                   value={saveName}
                   onChange={(e) => setSaveName(e.target.value)}
-                  placeholder="Save these filters as…"
+                  placeholder={t("Save these filters as…")}
                   className="w-48 text-xs"
                 />
                 <Button
@@ -458,7 +453,7 @@ export default function AdminQueryEngine() {
                   onClick={() => saveView.mutate()}
                 >
                   <Save className="h-3.5 w-3.5" />
-                  Save
+                  {t("Save")}
                 </Button>
               </div>
             </div>
@@ -471,17 +466,16 @@ export default function AdminQueryEngine() {
             and a failure silently removes it, so a saved view looks deleted. */}
         {savedViewsFailed && (
           <p className="text-sm text-muted-foreground">
-            We couldn't load your saved views. They haven't been deleted.
+            {t("We couldn't load your saved views. They haven't been deleted.")}
           </p>
         )}
 
         {savedViews.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Saved views</CardTitle>
+              <CardTitle className="text-base">{t("Saved views")}</CardTitle>
               <CardDescription>
-                Filter combinations worth re-running. Loading one fills the panel above; it does
-                not run until you say so, since every run spends budget.
+                {t("Filter combinations worth re-running. Loading one fills the panel above; it does not run until you say so, since every run spends budget.")}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
@@ -495,14 +489,14 @@ export default function AdminQueryEngine() {
                     className="py-1 font-semibold hover:text-primary"
                     onClick={() => {
                       applyFilters(v.filters as Record<string, any>);
-                      toast.success(`Loaded "${v.name}"`);
+                      toast.success(t("Loaded \"{name}\"", { name: v.name }));
                     }}
                   >
                     {v.name}
                   </button>
                   <button
                     type="button"
-                    aria-label={`Delete ${v.name}`}
+                    aria-label={t("Delete {name}", { name: v.name })}
                     className="rounded-full p-1 text-muted-foreground hover:text-destructive"
                     onClick={() => setDeleteTarget(v)}
                   >
@@ -518,13 +512,12 @@ export default function AdminQueryEngine() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                Results
+                {t("Results")}
                 <Badge variant="secondary">{rows.length}</Badge>
               </CardTitle>
               {rows.length === 0 && (
                 <CardDescription>
-                  Nothing to show. That means either no athlete matched, or too few did to report,
-                  the two are deliberately indistinguishable from here.
+                  {t("Nothing to show. That means either no athlete matched, or too few did to report, the two are deliberately indistinguishable from here.")}
                 </CardDescription>
               )}
             </CardHeader>
@@ -558,8 +551,8 @@ export default function AdminQueryEngine() {
                                 ? "--"
                                 : typeof row[c] === "boolean"
                                   ? row[c]
-                                    ? "yes"
-                                    : "no"
+                                    ? t("yes")
+                                    : t("no")
                                   : String(row[c])}
                             </td>
                           ))}
@@ -577,11 +570,11 @@ export default function AdminQueryEngine() {
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="Delete this saved view?"
+        title={t("Delete this saved view?")}
         description={
-          deleteTarget ? `"${deleteTarget.name}" will be removed for every admin.` : ""
+          deleteTarget ? t("\"{name}\" will be removed for every admin.", { name: deleteTarget.name }) : ""
         }
-        confirmLabel="Delete"
+        confirmLabel={t("Delete")}
         isPending={deleteView.isPending}
         onConfirm={() => deleteTarget && deleteView.mutate(deleteTarget.id)}
       />

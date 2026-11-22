@@ -7,11 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { PhotoUploadField } from "@/components/photo-upload-field";
 import type { CapturedPhoto } from "@/lib/photo-capture";
 import { apiRequest, getJson } from "@/lib/queryClient";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Send, Sparkles, Loader2, BookOpen, Eye, X, AlertTriangle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "@/components/read-failed";
+import { useT } from "@/i18n";
 
 type ForgeAiMessage = { id: number; role: "admin" | "assistant"; content: string; createdAt: string };
 
@@ -52,6 +53,7 @@ function scopeLabel(e: EntryTags): string {
  * knowledge base every AI feature reads from until the admin reviews a
  * proposal card and explicitly applies it. */
 export function ForgeAiContent() {
+  const t = useT();
   const qc = useQueryClient();
   const [content, setContent] = useState("");
   const [attachedImage, setAttachedImage] = useState<CapturedPhoto | null>(null);
@@ -101,7 +103,7 @@ export function ForgeAiContent() {
       setAttachedImage(null);
       setProposal(result.proposal ?? null);
     },
-    onError: () => toast.error("Couldn't send that, try again"),
+    onError: () => toast.error(t("Couldn't send that, try again")),
   });
 
   const apply = useMutation({
@@ -112,9 +114,9 @@ export function ForgeAiContent() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/forge-ai"] });
       setProposal(null);
-      toast.success("Applied, Forge AI knows this now");
+      toast.success(t("Applied, Forge AI knows this now"));
     },
-    onError: () => toast.error("Couldn't apply that, try again"),
+    onError: () => toast.error(t("Couldn't apply that, try again")),
   });
 
   const retire = useMutation({
@@ -125,9 +127,9 @@ export function ForgeAiContent() {
       qc.invalidateQueries({ queryKey: ["/api/admin/forge-ai"] });
       setRetiringId(null);
       setRetireReason("");
-      toast.success("Retired");
+      toast.success(t("Retired"));
     },
-    onError: () => toast.error("Couldn't retire that, a reason is required"),
+    onError: () => toast.error(t("Couldn't retire that, a reason is required")),
   });
 
   return (
@@ -137,22 +139,21 @@ export function ForgeAiContent() {
           <CardHeader className="shrink-0">
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              Talk with Forge AI
+              {t("Talk with Forge AI")}
             </CardTitle>
             <CardDescription>
-              A real conversation, not an intake form, discuss ideas, ask questions, paste research. When something's
-              concrete enough to teach, it'll propose an entry for you to review below.
+              {t("A real conversation, not an intake form, discuss ideas, ask questions, paste research. When something's concrete enough to teach, it'll propose an entry for you to review below.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
               {isLoading && <div className="h-24 animate-pulse rounded-md bg-surface" />}
               {isError && (
-                <ReadFailed what="this conversation" onRetry={() => void refetch()} />
+                <ReadFailed what={t("this conversation")} onRetry={() => void refetch()} />
               )}
               {!isError && !isLoading && messages.length === 0 && (
                 <p className="py-8 text-center text-sm text-muted-foreground">
-                  Nothing taught yet, paste an idea, a quote, a link, or just ask a question to start.
+                  {t("Nothing taught yet, paste an idea, a quote, a link, or just ask a question to start.")}
                 </p>
               )}
               {messages.map((m) => (
@@ -165,7 +166,7 @@ export function ForgeAiContent() {
                   >
                     <p className="whitespace-pre-wrap">{m.content}</p>
                     <p className={cn("mt-1 text-[10px]", m.role === "admin" ? "text-primary-foreground/70" : "text-muted-foreground")}>
-                      {format(parseISO(m.createdAt), "MMM d, h:mm a")}
+                      {t.date(parseISO(m.createdAt), { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                     </p>
                   </div>
                 </div>
@@ -175,7 +176,7 @@ export function ForgeAiContent() {
                   <div className="max-w-[85%] rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
                     <span className="flex items-center gap-1.5 text-muted-foreground">
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Thinking...
+                      {t("Thinking...")}
                     </span>
                   </div>
                 </div>
@@ -187,7 +188,7 @@ export function ForgeAiContent() {
               <div className="shrink-0 space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
                 <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
                   <Eye className="h-3.5 w-3.5" />
-                  {proposal.updatesEntryId ? `Review update to entry #${proposal.updatesEntryId}` : "Review new entry"}
+                  {proposal.updatesEntryId ? t("Review update to entry #{id}", { id: proposal.updatesEntryId }) : t("Review new entry")}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   <Badge variant={proposal.maturity === "established" ? "default" : "secondary"}>
@@ -198,27 +199,27 @@ export function ForgeAiContent() {
                   {proposal.gender && <Badge variant="outline">{proposal.gender}</Badge>}
                   {(proposal.ageMin != null || proposal.ageMax != null) && (
                     <Badge variant="outline">
-                      age {proposal.ageMin ?? "any"}-{proposal.ageMax ?? "any"}
+                      {t("age {min}-{max}", { min: proposal.ageMin ?? t("any"), max: proposal.ageMax ?? t("any") })}
                     </Badge>
                   )}
-                  {proposal.isCorrection && <Badge variant="destructive">correction</Badge>}
-                  {proposal.sourceType === "image" && <Badge variant="outline">from photo</Badge>}
-                  {proposal.sourceType === "url" && <Badge variant="outline">from a link</Badge>}
+                  {proposal.isCorrection && <Badge variant="destructive">{t("correction")}</Badge>}
+                  {proposal.sourceType === "image" && <Badge variant="outline">{t("from photo")}</Badge>}
+                  {proposal.sourceType === "url" && <Badge variant="outline">{t("from a link")}</Badge>}
                 </div>
                 <p className="rounded bg-background/60 p-2 text-sm">{proposal.content}</p>
                 {proposal.changeReason && (
-                  <p className="text-xs text-muted-foreground">Why: {proposal.changeReason}</p>
+                  <p className="text-xs text-muted-foreground">{t("Why: {reason}", { reason: proposal.changeReason })}</p>
                 )}
                 {proposal.sourceType === "url" && proposal.sourceExcerpt && (
-                  <p className="truncate text-xs text-muted-foreground">Source: {proposal.sourceExcerpt}</p>
+                  <p className="truncate text-xs text-muted-foreground">{t("Source: {source}", { source: proposal.sourceExcerpt })}</p>
                 )}
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="ghost" size="sm" onClick={() => setProposal(null)}>
-                    Discard
+                    {t("Discard")}
                   </Button>
                   <Button type="button" size="sm" onClick={() => apply.mutate()} disabled={apply.isPending}>
                     {apply.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                    Apply
+                    {t("Apply")}
                   </Button>
                 </div>
               </div>
@@ -242,7 +243,7 @@ export function ForgeAiContent() {
                 <Textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder="Teach it something, paste an article, attach a photo, or just ask a question..."
+                  placeholder={t("Teach it something, paste an article, attach a photo, or just ask a question...")}
                   className="min-h-[44px] flex-1 resize-none"
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -263,9 +264,9 @@ export function ForgeAiContent() {
           <CardHeader className="shrink-0">
             <CardTitle className="flex items-center gap-2">
               <BookOpen className="h-5 w-5 text-primary" />
-              What it knows ({entries.length})
+              {t("What it knows ({count})", { count: entries.length })}
             </CardTitle>
-            <CardDescription>Every active taught entry, most recent first.</CardDescription>
+            <CardDescription>{t("Every active taught entry, most recent first.")}</CardDescription>
           </CardHeader>
           <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto">
             {isLoading ? (
@@ -274,9 +275,9 @@ export function ForgeAiContent() {
               // The header counts entries off the same read, so a failure renders
               // "What it knows (0)" above "Nothing taught yet" -- twice as confident,
               // and wrong both times.
-              <ReadFailed what="what it knows" onRetry={() => void refetch()} />
+              <ReadFailed what={t("what it knows")} onRetry={() => void refetch()} />
             ) : entries.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">Nothing taught yet.</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">{t("Nothing taught yet.")}</p>
             ) : (
               entries.map((e) => (
                 <div key={e.id} className="rounded-md border border-border p-2.5">
@@ -286,7 +287,7 @@ export function ForgeAiContent() {
                     </Badge>
                     <span className="text-[10px] text-muted-foreground">{scopeLabel(e)}</span>
                     <span className="text-[10px] text-muted-foreground">
-                      · {usageCounts[e.id] ? `used ${usageCounts[e.id]}x this week` : "unused this week"}
+                      · {usageCounts[e.id] ? t("used {count}x this week", { count: usageCounts[e.id] }) : t("unused this week")}
                     </span>
                   </div>
                   <p className="text-sm">{e.content}</p>
@@ -295,7 +296,7 @@ export function ForgeAiContent() {
                       <Textarea
                         value={retireReason}
                         onChange={(ev) => setRetireReason(ev.target.value)}
-                        placeholder="Why is this being retired?"
+                        placeholder={t("Why is this being retired?")}
                         className="min-h-[32px] flex-1 resize-none text-xs"
                       />
                       <Button
@@ -305,7 +306,7 @@ export function ForgeAiContent() {
                         disabled={!retireReason.trim() || retire.isPending}
                         onClick={() => retire.mutate(e.id)}
                       >
-                        Confirm
+                        {t("Confirm")}
                       </Button>
                       <Button type="button" size="sm" variant="ghost" onClick={() => setRetiringId(null)}>
                         <X className="h-3.5 w-3.5" />
@@ -317,7 +318,7 @@ export function ForgeAiContent() {
                       onClick={() => setRetiringId(e.id)}
                       className="mt-1 text-[10px] font-semibold text-muted-foreground hover:text-destructive"
                     >
-                      This was wrong, retire it
+                      {t("This was wrong, retire it")}
                     </button>
                   )}
                 </div>
@@ -331,11 +332,9 @@ export function ForgeAiContent() {
         <div className="px-4 pb-4 lg:px-8">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Reflection findings</CardTitle>
+              <CardTitle className="text-base">{t("Reflection findings")}</CardTitle>
               <CardDescription>
-                Patterns the background reflection job found in the injury/training-load data and the roster itself,
-                weighed against what's been taught. Every finding carries its own sample size, read the number, not
-                just the headline.
+                {t("Patterns the background reflection job found in the injury/training-load data and the roster itself, weighed against what's been taught. Every finding carries its own sample size, read the number, not just the headline.")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -345,18 +344,18 @@ export function ForgeAiContent() {
                     {f.tier === "safety" ? (
                       <Badge variant="destructive" className="flex items-center gap-1 text-[10px]">
                         <AlertTriangle className="h-3 w-3" />
-                        safety
+                        {t("safety")}
                       </Badge>
                     ) : (
                       <Badge variant="secondary" className="flex items-center gap-1 text-[10px]">
                         <Info className="h-3 w-3" />
-                        informational
+                        {t("informational")}
                       </Badge>
                     )}
                     <Badge variant="outline" className="text-[10px]">
-                      n={f.sampleSize} · {f.confidence} confidence
+                      {t("n={count} · {level} confidence", { count: f.sampleSize, level: t(f.confidence) })}
                     </Badge>
-                    <span className="text-[10px] text-muted-foreground">{format(parseISO(f.createdAt), "MMM d")}</span>
+                    <span className="text-[10px] text-muted-foreground">{t.date(parseISO(f.createdAt), { month: "short", day: "numeric" })}</span>
                   </div>
                   <p className="text-sm font-medium">{f.summary}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{f.detail}</p>

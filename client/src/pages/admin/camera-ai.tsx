@@ -2,6 +2,7 @@ import { AppShell } from "@/components/app-shell";
 import { CameraAiHistoryContent } from "./camera-ai-history";
 import { DetectorTrainingFrames } from "@/components/detector-training-frames";
 import { CalibrationEvidence } from "@/components/calibration-evidence";
+import { useT } from "@/i18n";
 
 /**
  * The camera AI's own page.
@@ -12,8 +13,9 @@ import { CalibrationEvidence } from "@/components/calibration-evidence";
  * tab on it.
  */
 export default function AdminCameraAi() {
+  const t = useT();
   return (
-    <AppShell title="Camera AI">
+    <AppShell title={t("Camera AI")}>
       <div className="space-y-4">
         <CalibrationEvidence />
         <DetectorTrainingFrames />

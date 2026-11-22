@@ -9,9 +9,9 @@ import { getJson, resolveApiUrl, getNativeToken } from "@/lib/queryClient";
 import { ReadFailed } from "@/components/read-failed";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { format } from "date-fns";
 import { FileDown, ShieldCheck, AlertTriangle } from "lucide-react";
 import { shareOrDownloadBlob } from "@/lib/share-file";
+import { useT } from "@/i18n";
 
 type ConsentCounts = { totalAthletes: number; consentedAthletes: number };
 
@@ -32,6 +32,7 @@ type ExportLogRow = {
  * separate (the mirror, the higher suppression floor, the PDF), and folding the markup into the
  * trends page would have hidden that rather than simplified it. */
 export function ResearchExportsContent() {
+  const t = useT();
   const qc = useQueryClient();
   const [cohortText, setCohortText] = useState("");
   const [recipient, setRecipient] = useState("");
@@ -75,7 +76,7 @@ export function ResearchExportsContent() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        toast.error(body.message || "Could not generate that extract.");
+        toast.error(body.message || t("Could not generate that extract."));
         return;
       }
 
@@ -87,10 +88,10 @@ export function ResearchExportsContent() {
       // file to disk and hands it to the share sheet on native, and does the
       // plain download on web.
       await shareOrDownloadBlob(await res.blob(), "forge-dataset-extract.pdf", "Forge dataset extract");
-      toast.success("Extract generated and logged.");
+      toast.success(t("Extract generated and logged."));
       qc.invalidateQueries({ queryKey: ["/api/admin/research-exports"] });
     } catch {
-      toast.error("Could not reach the server.");
+      toast.error(t("Could not reach the server."));
     } finally {
       setGenerating(false);
     }
@@ -105,12 +106,10 @@ export function ResearchExportsContent() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5" />
-              Who can be included
+              {t("Who can be included")}
             </CardTitle>
             <CardDescription>
-              An extract is built only from athletes whose guardian or who themselves agreed to
-              research use. Consent is off by default, so this number starts at zero and only grows
-              by someone actively saying yes.
+              {t("An extract is built only from athletes whose guardian or who themselves agreed to research use. Consent is off by default, so this number starts at zero and only grows by someone actively saying yes.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -119,7 +118,7 @@ export function ResearchExportsContent() {
                 about whether athletes agreed, made without asking anybody. */}
             {consentFailed ? (
               <ReadFailed
-                what="the consent counts"
+                what={t("the consent counts")}
                 onRetry={() => void refetchConsent()}
                 className="flex flex-col items-start gap-2 text-left"
               />
@@ -128,14 +127,13 @@ export function ResearchExportsContent() {
             <p className="font-display text-3xl font-bold">
               {consented}
               <span className="ml-2 text-base font-normal text-muted-foreground">
-                of {total} athletes
+                {t("of {count} athletes", { count: total })}
               </span>
             </p>
             {consented < 10 && (
               <p className="mt-2 flex items-start gap-2 text-sm text-amber-500">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                Below 10 consenting athletes nothing can be reported at all, so no extract will
-                generate until more people agree.
+                {t("Below 10 consenting athletes nothing can be reported at all, so no extract will generate until more people agree.")}
               </p>
             )}
             </>
@@ -145,55 +143,52 @@ export function ResearchExportsContent() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Generate an extract</CardTitle>
+            <CardTitle>{t("Generate an extract")}</CardTitle>
             <CardDescription>
-              Describe the cohort in plain English. The document contains group statistics only, and
-              any figure describing fewer than 10 athletes is printed as suppressed rather than as a
-              value.
+              {t("Describe the cohort in plain English. The document contains group statistics only, and any figure describing fewer than 10 athletes is printed as suppressed rather than as a value.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="cohort">Cohort</Label>
+              <Label htmlFor="cohort">{t("Cohort")}</Label>
               <Input
                 id="cohort"
                 value={cohortText}
                 onChange={(e) => setCohortText(e.target.value)}
-                placeholder="17 year old football athletes with hamstring injuries, vertical jump"
+                placeholder={t("17 year old football athletes with hamstring injuries, vertical jump")}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="recipient">Prepared for (optional)</Label>
+              <Label htmlFor="recipient">{t("Prepared for (optional)")}</Label>
               <Input
                 id="recipient"
                 value={recipient}
                 onChange={(e) => setRecipient(e.target.value)}
-                placeholder="Who is receiving this, for the export log"
+                placeholder={t("Who is receiving this, for the export log")}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="notes">Notes for the reader (optional, one per line)</Label>
+              <Label htmlFor="notes">{t("Notes for the reader (optional, one per line)")}</Label>
               <Textarea
                 id="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
-                placeholder="Anything the recipient should know about this extract"
+                placeholder={t("Anything the recipient should know about this extract")}
               />
             </div>
             <Button onClick={generate} disabled={generating || !cohortText.trim()}>
               <FileDown className="h-4 w-4" />
-              {generating ? "Generating…" : "Generate PDF"}
+              {generating ? t("Generating…") : t("Generate PDF")}
             </Button>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Every extract ever generated</CardTitle>
+            <CardTitle>{t("Every extract ever generated")}</CardTitle>
             <CardDescription>
-              Written before each PDF is produced, so a document always has a record behind it. This
-              is the answer to "what did we send them, and when".
+              {t("Written before each PDF is produced, so a document always has a record behind it. This is the answer to \"what did we send them, and when\".")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -202,23 +197,22 @@ export function ResearchExportsContent() {
                 answer it can give. */}
             {logFailed ? (
               <ReadFailed
-                what="the extract log"
+                what={t("the extract log")}
                 onRetry={() => void refetchLog()}
                 className="flex flex-col items-start gap-2 text-left"
               />
             ) : log.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No extracts have been generated yet.</p>
+              <p className="text-sm text-muted-foreground">{t("No extracts have been generated yet.")}</p>
             ) : (
               log.map((row) => (
                 <div key={row.id} className="rounded-md border border-border px-3 py-2">
                   <p className="text-sm">{row.cohortDescription}</p>
                   <p className="text-xs text-muted-foreground">
-                    {format(new Date(row.createdAt), "MMM d, yyyy h:mm a")} by {row.adminName}
-                    {row.recipient ? ` — for ${row.recipient}` : ""}
+                    {t("{when} by {name}", { when: t.date(row.createdAt, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }), name: row.adminName })}
+                    {row.recipient ? ` — ${t("for {name}", { name: row.recipient })}` : ""}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {row.consentedCount} consenting athlete{row.consentedCount === 1 ? "" : "s"}{" "}
-                    reported, {row.cohortSize} matched the filters overall
+                    {t.plural(row.consentedCount, "{count} consenting athlete reported, {matched} matched the filters overall", "{count} consenting athletes reported, {matched} matched the filters overall", { matched: row.cohortSize })}
                   </p>
                 </div>
               ))
