@@ -1,43 +1,41 @@
-import { useState } from "react";
-import { Play } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Play, RotateCcw } from "lucide-react";
 import { extractYouTubeId } from "@/components/exercise-video";
 import { clipWindowFromUrl } from "@shared/exercise-video-match";
-import { externalLinkClick } from "@/lib/open-external";
+import { youTubePlayerState } from "@/lib/youtube-player-state";
 
-import { useT } from "@/i18n";
+import { msg, useT } from "@/i18n";
 /**
- * THE DEMO VIDEO PLAYS INSIDE FORGE, NOT IN SOMEBODY ELSE'S APP.
+ * THE DEMO VIDEO PLAYS INSIDE FORGE, AND THAT IS ALL IT DOES.
  *
- * "Watch Demo" was an <a target="_blank"> that handed the athlete to Capacitor's external
- * browser sheet, which on a phone means leaving Forge mid-set to look at a squat and finding
- * their own way back. The parts to do better were already here -- extractYouTubeId sits in
- * exercise-video.tsx and class-lesson-reader-dialog.tsx has been building youtube.com/embed
- * iframes for lesson videos the whole time. The exercise card was the one surface that never
- * got it.
+ * Scott, 2026-11-23: "I don't want a way for them to search either only to play or replay our
+ * video, nothing else." So:
+ * - A link with no video in it (a seeded youtube.com/results search page, an unknown host) draws
+ *   NOTHING. There is no "Find a demo" and no way to search from Forge.
+ * - A YouTube video plays in YouTube's own player (we stream it, we never store it: the video is
+ *   the uploader's, shown in their player with their attribution), with its own controls OFF and
+ *   a Forge layer over the whole frame. YouTube's title, logo, "more videos" strip and end screen
+ *   are all links out to YouTube; the layer takes every tap, so none of them can be reached. Our
+ *   layer has exactly three things: play, pause, and replay at the end.
+ * - A video whose owner refused embedding says so in one sentence, with no link out.
  *
- * WHY AN EMBED AND NOT A COPY OF THE FILE. Forge sells the exercises, not the videos -- the
- * demo is somebody else's work shown alongside our programming, and it stays that way. An
- * official YouTube iframe serves the video from YouTube under the uploader's own terms, with
- * their ads and their attribution intact, which is what makes showing it legitimate. Pulling
- * the stream down and re-hosting it would be a copy, whatever the intent. So the iframe is not
- * a shortcut here, it is the correct shape: their content, their player, our page.
+ * nocookie, and click-to-load: an athlete who never presses play never touches Google, which
+ * matters on a platform with thirteen-year-olds on it. playsinline keeps iOS from throwing it
+ * into the system fullscreen player.
  *
- * NOCOOKIE, BECAUSE THIRTEEN-YEAR-OLDS USE THIS. youtube-nocookie.com does not set tracking
- * cookies until somebody actually presses play, and combined with the click-to-load below it
- * means an athlete who never opens a demo never touches Google at all. That is worth one CSP
- * line on a platform with children on it.
- *
- * CLICK TO LOAD, NOT AUTOLOAD. An exercise page can list a dozen movements; a dozen iframes on
- * mount is a dozen third-party connections and a visibly slower page for a video most athletes
- * will not open. The thumbnail is a plain image (img.youtube.com, already allowed by the CSP)
- * and the player is created on the first tap.
- *
- * AND IT FALLS BACK RATHER THAN FAILING. Every seeded URL today is a youtube.com/results
- * SEARCH link with no video id in it, so there is nothing to embed -- those keep the old
- * out-to-YouTube link, unchanged, until real ids are backfilled. A video whose owner disabled
- * embedding shows YouTube's own refusal inside the frame, so the external link stays offered
- * underneath: an athlete is never left looking at a dead black box.
+ * Driven through YouTube's documented iframe postMessage commands (enablejsapi=1), so no script
+ * from YouTube is loaded into Forge's page.
  */
+type PlayerState = "playing" | "paused" | "ended" | "error" | "loading";
+
+/** What the layer over the frame says in each state; `word` null draws no label. */
+const LAYER: Record<Exclude<PlayerState, "error">, { label: string; word: string | null }> = {
+  loading: { label: msg("Play {name} demo video"), word: msg("Play") },
+  playing: { label: msg("Pause {name} demo video"), word: null },
+  paused: { label: msg("Play {name} demo video"), word: msg("Play") },
+  ended: { label: msg("Replay {name} demo video"), word: msg("Replay") },
+};
+
 export function ExerciseVideoPlayer({
   url,
   name,
@@ -48,58 +46,87 @@ export function ExerciseVideoPlayer({
   className?: string;
 }) {
   const t = useT();
-  const [playing, setPlaying] = useState(false);
-  if (!url) return null;
+  const [started, setStarted] = useState(false);
+  const [state, setState] = useState<PlayerState>("loading");
+  const frame = useRef<HTMLIFrameElement>(null);
+  const videoId = url ? extractYouTubeId(url) : null;
 
-  const videoId = extractYouTubeId(url);
+  useEffect(() => {
+    if (!started) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.source !== frame.current?.contentWindow) return;
+      const next = youTubePlayerState(e.data);
+      if (next) setState(next);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [started]);
+
+  if (!url || !videoId) return null;
+
   // A demo cut from a chapter of a routine plays only its own chapter (see parseChapters).
   const clip = clipWindowFromUrl(url);
   const clipParams = `${clip.start != null ? `&start=${clip.start}` : ""}${clip.end != null ? `&end=${clip.end}` : ""}`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
 
-  // No id means a search link (every seeded URL today) or a non-YouTube host. Nothing to embed,
-  // so this behaves exactly as it did before -- see the file comment.
-  if (!videoId) {
-    return (
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={externalLinkClick(url)}
-        aria-label={t("Find a {name} demo video", { name })}
-        className="inline-flex items-center gap-1.5 self-start rounded-full border border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
-      >
-        <Play className="h-3 w-3" />
-        {t("Find a demo")}
-      </a>
-    );
-  }
+  const send = (func: string, args: unknown[] = []) =>
+    frame.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), "*");
+  // Ask the player to report its state changes to this page.
+  const listen = () => frame.current?.contentWindow?.postMessage(JSON.stringify({ event: "listening", id: videoId }), "*");
+
+  const onLayerTap = () => {
+    if (state === "playing") send("pauseVideo");
+    else if (state === "ended") {
+      send("seekTo", [clip.start ?? 0, true]);
+      send("playVideo");
+    } else send("playVideo");
+  };
 
   return (
     <div className={className}>
-      <div className="aspect-video w-full overflow-hidden rounded-md border border-border bg-black">
-        {playing ? (
-          <iframe
-            // nocookie, and playsinline so iOS plays it in the card rather than throwing it
-            // into the system fullscreen player, which is the same "don't leave our app"
-            // problem in a different costume.
-            src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1${clipParams}`}
-            title={t("{name} demo video", { name })}
-            className="h-full w-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
+      <div className="relative aspect-video w-full overflow-hidden rounded-md border border-border bg-black">
+        {started ? (
+          <>
+            <iframe
+              ref={frame}
+              onLoad={listen}
+              src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&controls=0&disablekb=1&fs=0&iv_load_policy=3&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(origin)}${clipParams}`}
+              title={t("{name} demo video", { name })}
+              className="pointer-events-none h-full w-full"
+              allow="autoplay; encrypted-media; picture-in-picture"
+            />
+            {state === "error" ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-black p-4 text-center text-sm text-white/80">
+                {t("This video can't play in Forge.")}
+              </div>
+            ) : (
+              // Covers the whole frame, so nothing of YouTube's can be tapped.
+              <button
+                type="button"
+                onClick={onLayerTap}
+                aria-label={t(LAYER[state].label, { name })}
+                className={`absolute inset-0 flex items-center justify-center transition-colors ${state === "playing" ? "bg-transparent" : "bg-black/60"}`}
+              >
+                {LAYER[state].word && (
+                  <span className="flex items-center gap-2 rounded-full bg-black/70 px-4 py-2 text-sm font-semibold text-white">
+                    {state === "ended" ? <RotateCcw className="h-5 w-5" /> : <Play className="h-5 w-5 fill-white" />}
+                    {t(LAYER[state].word!)}
+                  </span>
+                )}
+              </button>
+            )}
+          </>
         ) : (
           <button
             type="button"
-            onClick={() => setPlaying(true)}
+            onClick={() => setStarted(true)}
             aria-label={t("Play {name} demo video", { name })}
             className="group relative h-full w-full"
           >
             <img
               src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
               alt=""
-              // Decorative: the button's aria-label already names the video, and a second
-              // announcement of the same thing is noise to a screen reader.
+              // Decorative: the button's aria-label already names the video.
               aria-hidden="true"
               className="h-full w-full object-cover"
               loading="lazy"
@@ -112,18 +139,6 @@ export function ExerciseVideoPlayer({
           </button>
         )}
       </div>
-      {/* Kept underneath on purpose. A video whose owner disabled embedding shows YouTube's own
-          refusal inside the frame, and without this the athlete would be looking at a dead box
-          with no way through to the video that does exist. */}
-      <a
-        href={`https://www.youtube.com/watch?v=${videoId}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={externalLinkClick(`https://www.youtube.com/watch?v=${videoId}`)}
-        className="mt-1 inline-block text-[11px] text-muted-foreground hover:text-primary hover:underline"
-      >
-        {t("Open on YouTube")}
-      </a>
     </div>
   );
 }

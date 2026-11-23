@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Play } from "lucide-react";
-import { externalLinkClick } from "@/lib/open-external";
+import { isUploadedVideo } from "@/lib/video-embed";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DemoVideo } from "@/components/demo-video";
 
@@ -33,9 +33,8 @@ export function extractYouTubeId(url: string): string | null {
  * card", it is to keep the small control and open the player over it. The full-width inline
  * player lives on the exercise and skill DETAIL pages, which have the room for it.
  *
- * A URL with no video id in it -- which is every seeded one today, they are all
- * youtube.com/results search links -- keeps the old out-to-YouTube behaviour, because there is
- * nothing to embed and a dialog containing nothing helps no one.
+ * A URL with no video in it (a seeded youtube.com/results search page) draws nothing: Forge
+ * plays or replays a demo and never sends anybody off to search for one.
  *
  * `accentColor`: a coach's Personal Page override (see shared/schema.ts's
  * ExercisePageTheme.watchDemoColor) -- an explicit hex, applied as an inline style so it wins
@@ -58,23 +57,9 @@ export function ExerciseVideoThumb({
     "inline-flex items-center gap-1.5 self-start rounded-full border border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary";
   const style = accentColor ? { borderColor: accentColor, color: accentColor } : undefined;
 
-  // Nothing to embed -- see the comment above.
-  if (!extractYouTubeId(url)) {
-    return (
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={externalLinkClick(url)}
-        aria-label={t("Find a {name} demo video", { name })}
-        className={pill}
-        style={style}
-      >
-        <Play className="h-3 w-3" />
-        {t("Find a demo")}
-      </a>
-    );
-  }
+  // Nothing to play (a search page, an unknown host): no button at all. Forge only ever plays
+  // or replays a demo, never sends anybody to search for one (Scott, 2026-11-23).
+  if (!extractYouTubeId(url) && !isUploadedVideo(url)) return null;
 
   return (
     <>

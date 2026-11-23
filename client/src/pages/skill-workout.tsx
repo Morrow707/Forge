@@ -18,7 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { apiRequest, getJson, ApiError, resolveApiUrl } from "@/lib/queryClient";
 import { externalLinkClick } from "@/lib/open-external";
-import { getEmbedUrl, isUploadedVideo } from "@/lib/video-embed";
+import { isUploadedVideo } from "@/lib/video-embed";
+import { ExerciseVideoPlayer } from "@/components/exercise-video-player";
 import { extractVideoFrames } from "@/lib/video-frames";
 import { cn } from "@/lib/utils";
 import { colorForLabel, borderTintForLabel } from "@/lib/supersets";
@@ -419,9 +420,9 @@ function SkillWorkoutPageInner() {
                             {t("Coach note:")} <TranslatableText as="span" text={ex.notes} />
                           </p>
                         )}
-                        {/* The drill's demo plays here on the drill day (2026-10-04): an
-                            uploaded clip or a YouTube/Vimeo link inline, anything else
-                            (a search page, an unknown host) as the link it always was. */}
+                        {/* The drill's demo plays here on the drill day: an uploaded clip, or a
+                            YouTube video in the play-and-replay player. Anything else (a search
+                            page, an unknown host) draws nothing (Scott, 2026-11-23). */}
                         {ex.videoUrl &&
                           (isUploadedVideo(ex.videoUrl) ? (
                             <video
@@ -431,26 +432,8 @@ function SkillWorkoutPageInner() {
                               src={ex.videoUrl}
                               className="w-full rounded-md border border-border bg-black"
                             />
-                          ) : getEmbedUrl(ex.videoUrl) ? (
-                            <div className="aspect-video w-full overflow-hidden rounded-md border border-border bg-black">
-                              <iframe
-                                src={getEmbedUrl(ex.videoUrl)!}
-                                title={t("{name} demo", { name: t.exercise(ex.name) })}
-                                className="h-full w-full"
-                                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                              />
-                            </div>
                           ) : (
-                            <a
-                              href={ex.videoUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={externalLinkClick(ex.videoUrl)}
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-                            >
-                              <Film className="h-3 w-3" /> {t("Watch demo")}
-                            </a>
+                            <ExerciseVideoPlayer url={ex.videoUrl} name={t.exercise(ex.name)} />
                           ))}
 
                         {ex.trackingLevel !== "none" && cameraAccess.failed && (

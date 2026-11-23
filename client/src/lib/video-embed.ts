@@ -36,7 +36,7 @@ export function getEmbedUrl(url: string): string | null {
   }
   if (host === "vimeo.com") {
     const id = u.pathname.match(/^\/(\d+)/);
-    return id ? `https://player.vimeo.com/video/${id[1]}` : null;
+    return id ? `https://player.vimeo.com/video/${id[1]}?title=0&byline=0&portrait=0` : null;
   }
   return null;
 }

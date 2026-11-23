@@ -13,7 +13,6 @@ import {
   XCircle,
   CalendarPlus,
   BookOpen,
-  PlayCircle,
   Lightbulb,
   Clock,
   Trophy,
@@ -24,6 +23,8 @@ import { cn } from "@/lib/utils";
 import { CLASS_QUIZ_PASS_THRESHOLD } from "@shared/class-quiz";
 import { ReadFailed } from "@/components/read-failed";
 import { getEmbedUrl } from "@/lib/video-embed";
+import { ExerciseVideoPlayer } from "@/components/exercise-video-player";
+import { extractYouTubeId } from "@/components/exercise-video";
 import { estimateReadingMinutes } from "@/lib/lesson-reading";
 import { LessonPageNotes } from "@/components/lesson-page-notes";
 import { LessonFlashcards, type Flashcard } from "@/components/lesson-flashcards";
@@ -606,31 +607,20 @@ export function ClassLessonReaderDialog({
                       >
                         {t("Your browser doesn't support inline video playback.")}
                       </video>
+                    ) : extractYouTubeId(pages[pageIndex].videoUrl!) ? (
+                      // A YouTube video: the play-and-replay player, nothing that leaves Forge.
+                      <ExerciseVideoPlayer url={pages[pageIndex].videoUrl!} name={t("Instructional video")} />
                     ) : getEmbedUrl(pages[pageIndex].videoUrl!) ? (
-                      // A YouTube/Vimeo link -- embed it the same way an
-                      // uploaded clip plays, instead of sending the athlete
-                      // away from the lesson to watch it.
+                      // A Vimeo link, with its title, byline and portrait (its links out) off.
                       <div className="aspect-video w-full overflow-hidden rounded-md border border-border bg-black">
                         <iframe
                           src={getEmbedUrl(pages[pageIndex].videoUrl!)!}
                           title={t("Instructional video")}
                           className="h-full w-full"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
+                          allow="autoplay; encrypted-media; picture-in-picture"
                         />
                       </div>
-                    ) : (
-                      <a
-                        href={pages[pageIndex].videoUrl!}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={externalLinkClick(pages[pageIndex].videoUrl!)}
-                        className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm font-medium text-primary hover:bg-primary/10"
-                      >
-                        <PlayCircle className="h-5 w-5 shrink-0" />
-                        {t("Watch instructional video")}
-                      </a>
-                    ))}
+                    ) : null)}
                   <div className="space-y-3 text-sm leading-relaxed text-foreground/90">
                     {pages[pageIndex]?.body ? renderFormattedBody(pages[pageIndex].body) : null}
                   </div>

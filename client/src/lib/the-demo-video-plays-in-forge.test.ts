@@ -49,7 +49,7 @@ describe("the demo video plays inside Forge", () => {
     // An exercise page lists a dozen movements. A dozen iframes on mount is a dozen
     // third-party connections for videos most athletes never open.
     const player = read("client/src/components/exercise-video-player.tsx");
-    expect(player).toContain("playing ? (");
+    expect(player).toContain("started ? (");
     expect(player).toContain("img.youtube.com/vi/");
   });
 
@@ -58,15 +58,17 @@ describe("the demo video plays inside Forge", () => {
     expect(read("client/src/components/exercise-video-player.tsx")).toContain("playsinline=1");
   });
 
-  it("still offers a way out when the owner disabled embedding", () => {
-    // YouTube shows its own refusal inside the frame; without this the athlete is looking at a
-    // dead black box with no route to the video that does exist.
-    expect(read("client/src/components/exercise-video-player.tsx")).toContain("Open on YouTube");
+  it("offers no way out to YouTube, even when the owner disabled embedding", () => {
+    // Scott, 2026-11-23: "only to play or replay our video, nothing else". A refused video says
+    // so in one sentence and links nowhere (this reversed the 'Open on YouTube' link).
+    const player = read("client/src/components/exercise-video-player.tsx");
+    expect(player).not.toMatch(/href=/);
+    expect(player).toContain("This video can't play in Forge.");
   });
 
-  it("leaves today's SEARCH urls exactly as they were", () => {
-    // Every seeded url is youtube.com/results?search_query=... with no video id in it. There is
-    // nothing to embed, so this ships safely before the ids exist and lights up as they land.
+  it("finds no video in a SEARCH url, so nothing is drawn for one", () => {
+    // A seeded placeholder is youtube.com/results?search_query=... with no video id in it; the
+    // player and the demo button draw nothing for it, never a search.
     expect(
       extractYouTubeId("https://www.youtube.com/results?search_query=Bench%20Press"),
     ).toBeNull();

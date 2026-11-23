@@ -6824,5 +6824,9 @@
   "…and {count} more": "…y {count} más",
   "← Movement library": "← Biblioteca de movimientos",
   "🏆 New trophy: {name}": "🏆 Nuevo trofeo: {name}",
-  "🏆 New trophy: {trophy}": "🏆 Nuevo trofeo: {trophy}"
+  "🏆 New trophy: {trophy}": "🏆 Nuevo trofeo: {trophy}",
+  "Pause {name} demo video": "Pausar el video de demostración de {name}",
+  "Replay {name} demo video": "Volver a ver el video de demostración de {name}",
+  "Replay": "Volver a ver",
+  "This video can't play in Forge.": "Este video no se puede reproducir en Forge."
 }
