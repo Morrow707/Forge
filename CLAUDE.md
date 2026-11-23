@@ -4104,6 +4104,16 @@ halves before splitting anything else:
   choice). And a one-arm lift's live take is re-read from the file when its working wrist was unseen
   past 1.0s (`wristGaps`, `maxLiveWorkingWristGapSeconds`); the hook also stopped dropping
   `arbiterTunables` at Record (inert: every lift holds the defaults). Native: `verify_build`, beta.
+- **ROUND TWENTY-FIVE, 2026-11-23: SQUAT, RDL, BOX JUMP ON BUILD 827, FILMED FROM BEHIND.** Bugs
+  first: a squat rep that stood a whole second at lockout counted the stand (rep 5 read 0.43 vs
+  0.73; `restArrivalAfterPeak` now cuts it on the reporting end); a box-jump step-down read as a
+  takeoff that never landed and swallowed jump 5; a step-down spike became a 21.6cm "jump" onto a
+  61cm box (`short_of_box`). The jump tracker now reads and teaches the body memory. One step per
+  lift: squat height ruler 0.13 -> 0.14, RDL 3D pose 0.2 -> 0.16, box jump height ruler 0.08 ->
+  0.07 (as-filmed averages better; the sealed replay reads squat and RDL slightly worse -- both in
+  the evidence). **The Anthropic API account hit its spending limit: every AI feature is off until
+  2026-12-01 unless Scott raises it.** The form check blamed the angle for it; fixed (Rule #1).
+  See docs/camera-tracking-notes.md, STATUS BOARD.
 - **ROUND TWENTY-FOUR, 2026-11-20: SET 3 ON BUILD 809, IN SHORTS.** Squat height ruler 0.14 ->
   0.13 (range +4.0% -> ~+3.2%); a squat window under 0.01 was refused because it brings back the
   11-09 lockout-stand bug. Box jump height ruler 0.1 -> 0.08 (mean +10.0% -> ~+7.9%). RDL set 3

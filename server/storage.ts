@@ -21379,14 +21379,14 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
           .join("\n")
       : null;
 
-    const system = `You are a strength coach reviewing still frames captured from someone's own training video, sent directly to you for feedback with no other coach in the loop -- you are their only coach for this. Give a direct, specific, encouraging critique of their technique on "${exerciseName}": what looks solid, and 1-3 concrete cues to fix anything that doesn't.${metricsText ? " You're also given real motion-tracking numbers from the same set -- ground your critique in those over what you merely see in the frames when they'd disagree." : " Base everything strictly on what's visible in the frames -- if the images don't show enough to say anything useful (bad angle, too blurry, wrong exercise), say so plainly instead of guessing."} You're also given their profile/analytics -- use height/build to judge proportions correctly (e.g. what a deep squat looks like scales with limb length) and let any flagged joint ROM restriction or leg-drive asymmetry sharpen which cues you give, but some of that profile is coach-only analytics they don't see on their own dashboard, so never name those specific coach-only labels/numbers back to them directly. Keep it to 3-5 sentences, talk to them as "you", no preamble.`;
+    const system = `You are a strength coach reviewing still frames captured from someone's own training video, sent directly to you for feedback with no other coach in the loop -- you are their only coach for this. Give a direct, specific, encouraging critique of their technique on "${exerciseName}": what looks solid, and 1-3 concrete cues to fix anything that doesn't.${metricsText ? " You're also given real motion-tracking numbers from the same set -- ground your critique in those over what you merely see in the frames when they'd disagree." : " Base everything strictly on what's visible in the frames -- if the images don't show enough to say anything useful (too blurry, wrong exercise, the movement out of frame), say what you could and could not see instead of guessing. Never tell them where to film from, where to put the camera or where to stand: they film from any angle (Forge rule)."} You're also given their profile/analytics -- use height/build to judge proportions correctly (e.g. what a deep squat looks like scales with limb length) and let any flagged joint ROM restriction or leg-drive asymmetry sharpen which cues you give, but some of that profile is coach-only analytics they don't see on their own dashboard, so never name those specific coach-only labels/numbers back to them directly. Keep it to 3-5 sentences, talk to them as "you", no preamble.`;
 
     const userText = `${metricsText ? `Here are frames from a set of ${exerciseName}.\n\n${metricsText}` : `Here are frames from a set of ${exerciseName}. What do you see?`}\n\nAthlete profile and analytics:\n${athleteContext}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}`;
 
     const text = await askClaudeVision(system, userText, images, { maxTokens: 600, feature: "form-check" });
 
     return reply(
-      text?.trim() ?? "Couldn't get a read on that video -- try again with a clearer angle.",
+      text?.trim() ?? "The AI coach couldn't look at this video right now. Your clip and your numbers are saved.",
     );
   },
 
@@ -23950,14 +23950,14 @@ ${entriesText}${libraryReference ? `\n\n${libraryReference}` : ""}`;
     ]);
     const forgeAiContext = await this.buildForgeAiContext(skillFormCheckAthleteProfile ?? undefined, "skill_form_check");
 
-    const system = `You are a skills coach reviewing still frames captured from someone's own training video, sent directly to you for feedback with no other coach in the loop -- you are their only coach for this. Give a direct, specific, encouraging critique of their technique on "${exerciseName}": what looks solid, and 1-3 concrete cues to fix anything that doesn't. Base everything strictly on what's visible in the frames -- if the images don't show enough to say anything useful (bad angle, too blurry, wrong drill), say so plainly instead of guessing. You're also given their profile/analytics -- use height/build to judge proportions correctly, but some of that profile is coach-only analytics they don't see on their own dashboard, so never name those specific coach-only labels/numbers back to them directly. Keep it to 3-5 sentences, talk to them as "you", no preamble.`;
+    const system = `You are a skills coach reviewing still frames captured from someone's own training video, sent directly to you for feedback with no other coach in the loop -- you are their only coach for this. Give a direct, specific, encouraging critique of their technique on "${exerciseName}": what looks solid, and 1-3 concrete cues to fix anything that doesn't. Base everything strictly on what's visible in the frames -- if the images don't show enough to say anything useful (too blurry, wrong drill, the movement out of frame), say what you could and could not see instead of guessing. Never tell them where to film from, where to put the camera or where to stand: they film from any angle (Forge rule). You're also given their profile/analytics -- use height/build to judge proportions correctly, but some of that profile is coach-only analytics they don't see on their own dashboard, so never name those specific coach-only labels/numbers back to them directly. Keep it to 3-5 sentences, talk to them as "you", no preamble.`;
 
     const userText = `Here are frames from a rep of ${exerciseName}. What do you see?\n\nAthlete profile and analytics:\n${athleteContext}${forgeAiContext ? `\n\n${forgeAiContext}` : ""}`;
 
     const text = await askClaudeVision(system, userText, images, { feature: "skill-form-check", maxTokens: 600 });
 
     return reply(
-      text?.trim() ?? "Couldn't get a read on that video -- try again with a clearer angle.",
+      text?.trim() ?? "The AI coach couldn't look at this video right now. Your clip and your numbers are saved.",
     );
   },
 

@@ -4994,6 +4994,7 @@ function ExerciseLogContent({
             return (
               <AvJumpTrackerDialog
                 exerciseName={item.exerciseName}
+                bodyModel={(user as { bodyModel?: any })?.bodyModel ?? null}
                 open={trackingSet !== null}
                 onOpenChange={(open) => !open && setTrackingSet(null)}
                 heightIn={user?.heightIn}

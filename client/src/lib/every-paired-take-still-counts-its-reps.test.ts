@@ -14,7 +14,7 @@ import { romBucketForExercise, firstMoveForExercise } from "./exercise-camera-pr
  * disagreed (gate off, counted); today it agreed (gate on, two of five). A take added to the
  * fixtures is covered the day it is added. */
 const load = (n: string) => JSON.parse(readFileSync(join(__dirname, "__fixtures__", n), "utf8")) as any[];
-const jumps = [...load("ovr-2026-11-05-export.json"), ...load("ovr-2026-11-09-export.json"), ...load("ovr-2026-11-16-export.json")]
+const jumps = [...load("ovr-2026-11-05-export.json"), ...load("ovr-2026-11-09-export.json"), ...load("ovr-2026-11-16-export.json"), ...load("ovr-2026-11-20-set-3-export.json"), ...load("ovr-2026-11-23-export.json")]
   .filter((f) => f.exerciseName === "Box Jump");
 const toPoints = (f: any) => f.barPathTrace.map((p: any) => ({ t: p.t, x: p.x / 100, y: p.y / 100, z: 0, confidence: p.c ?? 1 }));
 /** Real jumps onto the box: a net rise of at least half the box. A stray hop is not one. */

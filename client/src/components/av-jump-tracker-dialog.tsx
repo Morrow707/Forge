@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { readBodyModel, type StoredBodyModel, type AthleteBodyModel } from "@shared/athlete-body-model";
+import { measureLimbSpansInUnits, measureLimbsInMetres } from "@/lib/measure-limbs";
 import { declareObjectSystem } from "@shared/capture-object-system";
 import { logDebug } from "@/lib/debug-console";
 import { cameraTunablesFor, TRACKER_FOR_TRACKING_LEVEL } from "@shared/camera-tunables-by-lift";
@@ -103,6 +105,7 @@ export function AvJumpTrackerDialog({
   videoContext,
   formFaultThresholds,
   jumpHeightOutlierPercent,
+  bodyModel,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -112,6 +115,10 @@ export function AvJumpTrackerDialog({
    *  dialog read for its whole life before 2026-10-20, so a caller that forgets the prop loses
    *  the separation and nothing else. */
   exerciseName?: string | null;
+  /** The athlete's remembered bones (users.bodyModel). Read back on every take and taught when
+   *  the take's rulers agree -- the jump tracker never did either before 2026-11-23, so a jump
+   *  could not learn a single limb. */
+  bodyModel?: AthleteBodyModel | null;
   heightIn?: number | null;
   movementType?: string | null;
   equipment?: string | null;
@@ -405,6 +412,35 @@ export function AvJumpTrackerDialog({
     );
     const jumpVerdict = reconcileScaleEstimates(jumpScalesKept, t.maxScaleAgreementTolerance);
     const scaleFactor = jumpVerdict.scale ?? bodyScale ?? bodyFallbacks.candidates[0]?.scale ?? null;
+
+    // THE ATHLETE'S REMEMBERED BONES ON A JUMP (2026-11-23). Scott: the body camera "should be
+    // learning limb length". The bar tracker has read and taught the per-lift bones since
+    // 2026-11-16; the jump tracker did neither, so every jump worked its scale out cold and taught
+    // nothing. Same rules as the bar tracker (shared/athlete-body-model.ts): read on every take
+    // and written into the diagnostics, voting only on a lift in LIFTS_WHERE_THE_BODY_MODEL_VOTES
+    // (none yet), and taught only when the take's other rulers agreed ("consensus"), from the
+    // same raw-unit landmarks the reading uses.
+    const limbSpansUnits = measureLimbSpansInUnits(rawFrames);
+    const bodyModelReading = exerciseName
+      ? readBodyModel((bodyModel as StoredBodyModel | null | undefined)?.byLift?.[exerciseName] ?? null, limbSpansUnits)
+      : null;
+    const bodyModelDiagnostics = bodyModelReading
+      ? {
+          scale: bodyModelReading.scale,
+          uncertaintyFraction: bodyModelReading.uncertaintyFraction,
+          limbsVoting: bodyModelReading.limbsVoting,
+          limbs: bodyModelReading.limbs as Record<string, number>,
+          voted: false,
+        }
+      : null;
+    const teachesLimbs = exerciseName != null && jumpVerdict.corroborated && jumpVerdict.scale != null;
+    const limbTeaching = teachesLimbs
+      ? {
+          limbMeasurementsM: measureLimbsInMetres(rawFrames, jumpVerdict.scale),
+          limbMeasurementSource: "consensus",
+          limbMeasurementLift: exerciseName,
+        }
+      : {};
 
     // What each source said, and what was thrown out. Same two lines the barbell report carries,
     // for the same reason: a jump that comes back wrong should say which half was wrong instead
@@ -742,7 +778,8 @@ export function AvJumpTrackerDialog({
         message: "Couldn't get a clean read on this take. The clip is saved.",
         rawFrames: nativeRawFrames,
         recording: recordingStats,
-        calibration: { scaleFactor, ...jumpCalibrationDiagnostics, ...calibrationFrames, ...boxTopDiagnostics },
+        calibration: { scaleFactor, ...jumpCalibrationDiagnostics, ...calibrationFrames, ...boxTopDiagnostics, bodyModel: bodyModelDiagnostics },
+        ...limbTeaching,
         jumpEvents,
       });
       const emptyMetrics: JumpSetMetrics = { ...EMPTY_JUMP_METRICS, captureDeviceInfo, trackingDiagnostics: diagnostics };
@@ -821,7 +858,8 @@ export function AvJumpTrackerDialog({
       outcome: "tracked",
       rawFrames: nativeRawFrames,
       recording: recordingStats,
-      calibration: { scaleFactor, ...jumpCalibrationDiagnostics, ...calibrationFrames, ...boxTopDiagnostics },
+      calibration: { scaleFactor, ...jumpCalibrationDiagnostics, ...calibrationFrames, ...boxTopDiagnostics, bodyModel: bodyModelDiagnostics },
+      ...limbTeaching,
       // THE GRAVITY RULER, SAVED RATHER THAN DISCARDED. summarizeJumpSet computes it and it was
       // being dropped on the floor -- a measurement nothing records is a measurement nobody has.
       // See gravity-ruler.ts: a flat jump's flight time gives a height that depends on nothing

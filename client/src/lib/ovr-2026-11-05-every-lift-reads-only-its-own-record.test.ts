@@ -185,7 +185,7 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     expect(own.values.driveOnsetFraction).toBe(0);
     expect(own.sources.driveOnsetFraction).toBe("fitted");
     expect(own.values.velocitySmoothingMs).toBe(VELOCITY_SMOOTHING_MS);
-    expect(Object.keys(FITTED_OVERRIDES["Romanian Deadlift"]).sort()).toEqual(["biacromialToleranceFraction", "depthRulerUncertainty", "driveOnsetFraction", "maxPeakToMeanRatio"]);
+    expect(Object.keys(FITTED_OVERRIDES["Romanian Deadlift"]).sort()).toEqual(["biacromialToleranceFraction", "body3DCorrectedUncertainty", "depthRulerUncertainty", "driveOnsetFraction", "maxPeakToMeanRatio"]);
     const s = OVR_ROMANIAN_DEADLIFT_2026_11_05.sensor.reported;
     const m = replay(byId(RDL));
     expect(m.meanVelocityMps! / s.meanVelocityMps - 1).toBeCloseTo(0.161, 2);
@@ -221,7 +221,7 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
   it("the RDL's scale was +3.6% over its eight pulls; the shoulder floor step (0.3, round eighteen, RULE #6) reads it -0.4%", () => {
     const row = ledgerRow("2026-11-05-romanian-deadlift");
     expect(row.reportedRomCm).toBe(63.4);
-    expect(row.liveErrorPct).toBeCloseTo(0.23, 1); // -0.39 at 0.3; +0.23 at the 0.28 floor (round twenty-three)
+    expect(row.liveErrorPct).toBeCloseTo(-2.36, 1); // -0.39 at 0.3; +0.23 at the 0.28 floor (round twenty-three); -2.36 with the 3D-pose 0.16 (round twenty-five)
     expect(cameraTunablesFor("Romanian Deadlift", "deadlift").values.biacromialToleranceFraction).toBe(0.28); // 0.3 until round twenty-three
     expect(cameraTunablesFor("Romanian Deadlift", "deadlift").sources.biacromialToleranceFraction).toBe("fitted");
   });
@@ -281,7 +281,7 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     });
     // the scale step: 0.11 -> 0.12 on the squat's record (round ten), then 0.13 (round eighteen,
     // RULE #6), one point each on this take, and it reaches no other lift
-    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.13); // 0.14 in round twenty-two, 0.13 since round twenty-four
+    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.14); // 0.14 in round twenty-two, 0.13 in round twenty-four, 0.14 since round twenty-five
     expect(cameraTunablesFor("Front Squat", "squat").values.heightRulerUncertainty).toBe(HEIGHT_RULER_UNCERTAINTY);
     const voters = f.trackingDiagnostics.calibration.scaleBlend.voters;
     const at = (u: number) => reconcileScaleEstimates(voters.map((c: any) => ({ source: c.source, scale: c.scale, uncertaintyFraction: c.source === "height" ? u : c.uncertaintyFraction }))).scale!;

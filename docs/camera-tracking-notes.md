@@ -14,7 +14,66 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-20, round twenty-four)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-23, round twenty-five)
+
+**ROUND TWENTY-FIVE, 2026-11-23 (set 1 each, build 827, FILMED FROM BEHIND; Thursday's were more
+from the side).** OVR reps 2-6 on the box jump ("Jump Squat"). Bugs first, then one step per lift.
+
+| lift | Forge as filmed | OVR | error | after this round |
+|---|---|---|---|---|
+| Squat range / mean / peak | 75.2cm / 0.65 / 1.06 | 31.3in (79.50) / 0.75 / 1.12 | -5.4% / -13% / -5.4% | mean 0.74 (stand bug fixed); range about -4.6% (height ruler 0.13 -> 0.14) |
+| RDL range / mean / peak | 65.1cm / 0.97 / 1.59 | 23.8in (60.45) / 0.85 / 1.44 | +7.7% / +14% / +10% | range about +5.7% (3D pose 0.2 -> 0.16) |
+| Box jump rise / mean / peak (4 jumps kept) | 70.9 avg / 1.55 / 2.84 | 27.6in (70.05) / 1.45 / 2.72 | +1.6% / +7.1% / +3.1% | 5 of 5 jumps now (2 bugs fixed); about +0.7% / +6.1% / +2.2% (height ruler 0.08 -> 0.07) |
+
+- **Squat bug: a stand of a second or more at lockout counted as part of the rep.** Rep 5 reached
+  lockout 0.27s after its peak and stood 1.0s before its phase closed; `restArrivalAfterPeak`
+  cut a stand of 0.4-1.0s but returned "no cut" once the stand reached a full second, so the
+  longer the athlete stood the slower the rep read (0.43 against 0.73). The reporting end now
+  cuts it at the arrival too (`cutStandThePhaseEndsIn`); the rep-deciding end is untouched, so
+  no rep count moves. Replayed on all 65 stored bar takes: only this squat changes (0.68 -> 0.74).
+- **Box jump bug 1: a step down read as a takeoff that never landed.** The foot lifted off the box
+  edge cleared the takeoff trigger; the step never reached flight height, so the landing test
+  never ran and the tracker stayed "airborne" until jump 5 landed inside that false flight and
+  was thrown out as flight_too_long. Settling clearly below the takeoff level is now a step down
+  (back to the ground, no rep).
+- **Box jump bug 2: a 21.6cm "jump" onto a 61cm box.** A landmark spike in the middle of the step
+  down after jump 1. On a box set a landing under half the box is not a box jump
+  (`short_of_box`), the same half-box share the box ruler already uses. Two older takes (11-16,
+  11-20 set 3) lose a fake -1.1cm jump the same way and now count exactly 5. Every box jump on
+  record replayed; nothing else changed.
+- **Squat step, height ruler 0.13 -> 0.14.** As filmed (shoulder ruler grip-loosened to 0.375):
+  today -5.4 -> -4.6%, average over 14 squat takes 3.61 -> 3.21%. The SEALED replay (shoulder at
+  its 0.2 floor) reads the opposite, 2.50 -> 3.15%; on a wide-grip squat read the as-filmed one.
+- **RDL step, 3D pose 0.2 -> 0.16.** The 3D torso read 3.987e-3 against the 3.988e-3 the OVR
+  requires; the shoulder ruler read +18% at 33.8% weight. As filmed: today +7.7 -> +5.7%, average
+  9.36 -> 8.40%. Sealed: 6.55 -> 6.87%, the low takes (11-20 set 2 -5.8 -> -7.5) pay.
+- **Box jump step, height ruler 0.08 -> 0.07.** Re-blended: scale x0.991. The rest of its mean is
+  the rise-to-apex window, ~5% shorter than the OVR's (0.46s vs 0.49s): next box-jump lever.
+- **RDL, next:** its phases read 6-8% shorter than the OVR's on reps 3-7 (window, not scale) and
+  its driveOnsetFraction is already 0. From behind, much of the pull runs along the lens.
+- **Body memory: NOT wiped.** Squat read 7 remembered bones today (3.40e-3, -4% of the OVR). The
+  RDL read only its torso: its 2D bones were taught 0.56/0.78/0.59/0.65m (upper arm) across four
+  takes filmed from different angles, never inside the 8% that lets a bone be read. 2D spans
+  change with the camera angle; the 3D torso did not. Not tuned (learning model). Open, Scott's
+  call: teach the memory from 3D bone lengths instead of 2D spans.
+- **The jump tracker now reads and teaches the body memory** (it did neither, so jumps never
+  learned a bone). Taught only from a corroborated take, as the bar tracker is.
+- **Overwatch is learning, not forgetting.** Today's squat (666 boxes) and RDL (84) are the first
+  sensor-paired takes with its per-frame record: 1 of the 3 each lift needs before a version can
+  ship (`scripts/overwatch-learn.ts`). The box jump has no CoreML lock (rectangle box detector), so
+  nothing to learn there yet.
+- **Detector:** the squat's "plate" was a wide flat box at the frame's left edge (aspect 3.3, 0.35x
+  a plate's size) and the RDL's a tall narrow one (aspect 0.37, 1.66x): both refused, correctly.
+  Read `objectGate` on the next take.
+- **The AI is OFF until 2026-12-01: the Anthropic account hit its spending limit** (Render log
+  18:49:40, "You have reached your specified API usage limits"). Scott raises it in the console.
+  The form check's fallback said "try again with a clearer angle" (Rule #1); it now says the AI
+  did not look and the clip and numbers are saved, and both prompts forbid telling the athlete
+  where to film from.
+- Ledger rows `2026-11-23-back-squat`, `2026-11-23-romanian-deadlift`; fixture
+  `ovr-2026-11-23-export.json`; tests `round-twenty-five.test.ts`,
+  `the-jump-tracker-learns-limbs.test.ts`, `an-ai-form-check-never-blames-the-angle.test.ts`.
+
 
 **ROUND TWENTY-FOUR, 2026-11-20 (set 3, build 809, in shorts).** OVR reps 2-6 on the box jump.
 

@@ -1453,6 +1453,8 @@ export function restArrivalAfterPeak(
   margin: number,
   restSeconds: number = REST_AT_TOP_SECONDS,
   minRestSeconds: number = REST_AT_TOP_MIN_SECONDS,
+  /** Cut a whole-second stand that the phase ENDS in, at its arrival (the reporting end). */
+  cutStandThePhaseEndsIn = false,
 ): number | null {
   if (!(peakIdx >= 0 && peakIdx < endIdx) || !(margin > 0) || !(restSeconds > 0)) return null;
   // "At rest" is the bar moving less than two margins in a whole second -- an EXTENT over the
@@ -1507,7 +1509,18 @@ export function restArrivalAfterPeak(
     // deceleration before the top, and a rep that reverses out of a paused lockout must read to
     // its top and stay whole.
     const restTop = towardTop > 0 ? hi : lo;
-    return (positions[endIdx] - restTop) * towardTop > margin ? r : null;
+    if ((positions[endIdx] - restTop) * towardTop > margin) return r;
+    // THE PHASE ENDS IN A WHOLE-SECOND STAND (2026-11-23, the squat's rep 5: at lockout 0.27s after
+    // its peak, then standing still 1.0s until the phase closed, so its mean read 0.43-0.51 against
+    // the OVR's 0.73). A stand shorter than a second is cut by the branch above; a longer one fell
+    // through to "no cut", so the longer the athlete stood the slower the rep read. For the
+    // REPORTING end it is cut the same way, at the arrival; the rep-DECIDING call leaves this off,
+    // so which reps exist does not move.
+    if (!cutStandThePhaseEndsIn) return null;
+    for (let j = r; j <= endIdx; j++) {
+      if (Math.abs(positions[j] - restTop) <= margin) return j;
+    }
+    return r;
   }
   return null;
 }
@@ -2052,7 +2065,7 @@ export function summarizeTrackedSet(
     // of the lift, and the reported mean is the number that says so.
     const restIdx = restArrivalAfterPeak(rawY, rawT, restPeak.peakIdx, phase.endIdx, tune.travelOnsetMarginM, REST_AT_TOP_SECONDS, REST_AT_TOP_SECONDS);
     const repEndIdx = restIdx ?? phase.endIdx;
-    const reportEndIdx = restArrivalAfterPeak(rawY, rawT, restPeak.peakIdx, phase.endIdx, tune.travelOnsetMarginM) ?? repEndIdx;
+    const reportEndIdx = restArrivalAfterPeak(rawY, rawT, restPeak.peakIdx, phase.endIdx, tune.travelOnsetMarginM, REST_AT_TOP_SECONDS, REST_AT_TOP_MIN_SECONDS, true) ?? repEndIdx;
     const heldAtTopSeconds = restIdx == null ? 0 : (points[phase.endIdx].t - points[restIdx].t) / 1000;
     /** Seconds the REPORTED window would otherwise have spent standing at the top -- the short
      *  rest above, which `heldAtTopSeconds` cannot show because it only ever counts the confirmed

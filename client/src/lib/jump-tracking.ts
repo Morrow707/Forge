@@ -493,6 +493,7 @@ export type JumpSegmentationEvent = {
     | "floating_above_box"
     | "recovery_valve"
     | "flight_too_long"
+    | "short_of_box"
     | "baseline_reanchored"
     | "best_effort";
   /** A number that explains the decision: net rise in cm for a rep or dismount, the new
@@ -666,6 +667,26 @@ export function summarizeJumpSet(
       }
       if (ySmoothed[i] < ySmoothed[peakIdx]) peakIdx = i;
 
+      // A STEP DOWN THAT NEVER LEFT THE GROUND (2026-11-23). Stepping off the box lifts a foot
+      // first, which clears the takeoff trigger; the step itself never reaches the flight
+      // amplitude, so the landing test below never ran and the state stayed "airborne" through
+      // the whole step down -- the next real jump then landed inside that false flight and was
+      // thrown away as flight_too_long (the 11-23 set lost its fifth jump this way). Settling
+      // clearly BELOW where it took off is a step down whatever its height: back to the ground,
+      // the new stand as the baseline, no rep.
+      if (i - (SETTLE_FRAMES - 1) > takeoffIdx) {
+        const stepWindow = ySmoothed.slice(i - SETTLE_FRAMES + 1, i + 1);
+        const stepSettled = Math.max(...stepWindow) - Math.min(...stepWindow) < settleToleranceM;
+        const stepLevel = stepWindow.reduce((a, b) => a + b, 0) / stepWindow.length;
+        if (stepSettled && stepLevel - baseline > NET_DESCENT_TOLERANCE_M && baseline - ySmoothed[peakIdx] < minAmplitudeM) {
+          events?.push({ t: rawPoints[i].t, kind: "dismount_rejected", value: Math.round((baseline - stepLevel) * 1000) / 10 });
+          state = "grounded";
+          baseline = stepLevel;
+          baselineIdx = i;
+          continue;
+        }
+      }
+
       // Landing doesn't have to return to the pre-jump baseline -- a box
       // jump lands higher (on the box), a depth jump lands lower. So
       // instead of waiting for a specific return height, this watches for
@@ -777,6 +798,18 @@ export function summarizeJumpSet(
             // happens to fall AT OR below the box top rather than above it.
             if (takeoffVelocityMps <= 0 || netRiseM < -NET_DESCENT_TOLERANCE_M) {
               events?.push({ t: landingT, kind: "dismount_rejected", value: Math.round(netRiseM * 1000) / 10 });
+              state = "grounded";
+              baseline = window.reduce((a, b) => a + b, 0) / window.length;
+              baselineIdx = i;
+              continue;
+            }
+
+            // A BOX SET'S "JUMP" THAT DID NOT REACH THE BOX IS NOT A BOX JUMP (2026-11-23): the
+            // 11-23 set's second "rep" rose 21.6cm onto a 61cm box, made of a landmark spike in the
+            // middle of a step down. The same half-box share the box ruler already refuses as a
+            // rise (applyBoxRiseCorrection) refuses it as a rep; the take still keeps every other.
+            if (options?.usesBox && options.boxHeightCm != null && options.boxHeightCm > 0 && netRiseM * 100 < options.boxHeightCm * BOX_RISE_MIN_SHARE) {
+              events?.push({ t: landingT, kind: "short_of_box", value: Math.round(netRiseM * 1000) / 10 });
               state = "grounded";
               baseline = window.reduce((a, b) => a + b, 0) / window.length;
               baselineIdx = i;
