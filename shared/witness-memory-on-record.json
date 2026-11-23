@@ -387,19 +387,19 @@
     }
   },
   "Romanian Deadlift": {
-    "takes": 14,
+    "takes": 15,
     "rulers": {
       "body_3d": {
-        "takes": 14,
-        "leanPct": -8.6,
-        "rmsPct": 9.7,
+        "takes": 15,
+        "leanPct": -8.3,
+        "rmsPct": 9.4,
         "timesWorst": 1
       },
       "depth": {
-        "takes": 14,
-        "leanPct": 21.7,
-        "rmsPct": 27.7,
-        "timesWorst": 6
+        "takes": 15,
+        "leanPct": 21.9,
+        "rmsPct": 27.9,
+        "timesWorst": 7
       },
       "height": {
         "takes": 2,
@@ -414,9 +414,9 @@
         "timesWorst": 6
       },
       "shoulder_width": {
-        "takes": 14,
-        "leanPct": 13.1,
-        "rmsPct": 17.4,
+        "takes": 15,
+        "leanPct": 13.2,
+        "rmsPct": 17.6,
         "timesWorst": 0
       }
     },

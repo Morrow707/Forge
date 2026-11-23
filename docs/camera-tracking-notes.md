@@ -22,12 +22,21 @@ on Scott's word "fix those now but don't ship").** OVR reps 2-6 on the box jump.
 | lift | Forge as filmed | OVR | error | after set 3's step |
 |---|---|---|---|---|
 | Squat range / mean / peak | 73.1 / 0.83 / 1.18 | 30.2in (76.71) / 0.83 / 1.22 | -4.7% / 0.0% / -3.3% | range about -3.9% (height ruler 0.15 -> 0.16) |
-| RDL | not in the export | 24.5in / 0.89 / 1.56 | -- | waits on a fresh export |
+| RDL range / mean / peak | 67.2 / 1.05 / 1.64 | 24.5in (62.23) / 0.89 / 1.56 | +8.0% / +18% / +5.1% | replays +11.79% (3D pose 0.16 -> 0.155; +11.91% on today's pipeline, body memory voting) |
 | Box jump rise / mean / peak | 74.4 / 1.50 / 3.05 | 27.96in (71.02) / 1.506 / 2.89 | +4.7% / -0.4% / +5.5% | rise about +3.3% (height ruler 0.06 -> 0.05) |
 
-- **RDL set 3 is missing from the export, and it is not a refusal.** The clip uploaded at 20:15:33,
-  the export was downloaded at 20:15:57, and the save that carries the set landed at 20:16:08
-  (Render log). Same as round twenty-four's set 3: download the export again.
+- **RDL set 3 arrived in the second export with `hasVideo: false`, and THAT is the bug Scott saw.**
+  The clip uploaded (201 at 20:15:33); the set saved at 20:16:08 without it. The camera dialog hands
+  a take up twice (numbers, then the clip's url), its analysis finishes after the athlete has left
+  the screen, and the workout screen's save queue only advanced on an `onSettled` passed to
+  `mutate()`, which TanStack skips once nothing is mounted. So the first save went and the one
+  carrying the url waited in `pendingSaveRef` forever. The queue now advances on the `mutateAsync`
+  promise (`a-save-queue-outlives-the-screen.test.ts`, the library premise driven on the real
+  MutationObserver, mutation caught). That clip is on the server, unattached; it is in the Video Bank.
+- **The RDL's remembered bones read +13% on set 3**, the first RDL set where they sat further from
+  the sensor than the blend (they were closer on the three before). They vote on the RDL now, so
+  the take replays +11.9% rather than the +8.0% the phone showed. Recorded, not tuned (a learning
+  model). RDL standing 6.50% -> 6.92% over 15 sets.
 - **The ledger now replays what the phone does on two things it could not see.** Each back squat
   row carries its grip-loosened shoulder ruler (`shoulderGripFloorFraction`, 0.34-0.56 as filmed,
   where the replay had stated the bare 0.2 floor), and the RDL rows carry the body memory's reading

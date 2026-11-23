@@ -383,7 +383,7 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // SCALE numbers (ruler uncertainties) survive 2026-11-05; every VELOCITY number fitted before
   // it was fitted on the lowering and is gone -- see VELOCITY_OVERRIDES_REMOVED_2026_11_05 and
   // the-concentric-is-the-way-up.test.ts.
-  "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0, maxPeakToMeanRatio: 1.66, biacromialToleranceFraction: 0.28, body3DCorrectedUncertainty: 0.16 },
+  "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0, maxPeakToMeanRatio: 1.66, biacromialToleranceFraction: 0.28, body3DCorrectedUncertainty: 0.155 },
   "Back Squat": { heightRulerUncertainty: 0.16, driveOnsetFraction: 0.01, velocitySmoothingMs: 130 },
   "Box Jump": { boxRulerUncertainty: 0.07, heightRulerUncertainty: 0.05 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
@@ -575,6 +575,13 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "high ones, about +0.8% on the blend, replayed on all six squat ledger rows and no other lift's. " +
     "Not a refit of HEIGHT_RULER_UNCERTAINTY, which is shared and was fitted on a squat AND an RDL.",
   "Romanian Deadlift":
+    "2026-11-23, round twenty-five (RULE #6), set 3 on build 833, filmed from behind. " +
+    "body3DCorrectedUncertainty 0.16 -> 0.155. OVR 24.5in (62.23cm), mean 0.89, peak 1.56; Forge " +
+    "read 67.2cm (+8.0%), mean 1.05, peak 1.64. Every ruler read high (3D torso +2.2%, shoulder " +
+    "+20%) and the remembered bones +13%, so on today's pipeline (body memory voting) the take " +
+    "replays +11.91%; at 0.155 it replays +11.79%, the smallest step that moves it toward the OVR. " +
+    "Ledger replay on the other 14 RDL sets: average 6.86% -> 6.92% (the sets that read low move " +
+    "further low by about 0.3 points). Reported, not a veto (RULE #6). " +
     "2026-11-23, round twenty-five (RULE #6), set 1 on build 827, filmed from behind. " +
     "body3DCorrectedUncertainty 0.2 -> 0.16 (its first entry). Range +7.7% (65.1 vs 23.8in), " +
     "mean +14%, peak +10%. The 3D torso read 3.987e-3 against the 3.988e-3 the OVR requires; " +

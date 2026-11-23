@@ -2027,16 +2027,31 @@ export function WorkoutPage({
       args.replay || baseRevisionRef.current == null
         ? args
         : { ...args, payload: { ...args.payload, baseRevision: baseRevisionRef.current } };
-    submitMutation.mutate(stamped, {
-      onSettled: () => {
+    // THE QUEUE ADVANCES ON THE PROMISE, NEVER ON A mutate() CALLBACK (2026-11-23).
+    //
+    // TanStack only calls the callbacks handed to mutate() while the component still has a
+    // listener, so once this screen unmounted the chain stopped: saveInFlightRef stayed true and
+    // the next save sat in pendingSaveRef for good. The camera dialog outlives this screen on
+    // purpose (its analysis finishes after the athlete has moved on) and hands a take up TWICE,
+    // numbers first and the clip's url a moment later, so the second call is exactly the save
+    // that waited. Round 25, RDL set 3: the clip uploaded (201), the set saved without it, and
+    // the set read hasVideo false. mutateAsync's promise settles whether or not anything is
+    // mounted; the hook-level onSuccess/onError still run as before. The catch is only so a
+    // failure the hook already handled is not an unhandled rejection.
+    void (async () => {
+      try {
+        await submitMutation.mutateAsync(stamped);
+      } catch {
+        // Handled by the hook's own onError; swallowed here only to settle the chain.
+      } finally {
         saveInFlightRef.current = false;
         const next = pendingSaveRef.current;
         if (next) {
           pendingSaveRef.current = null;
           runQueuedSave(next);
         }
-      },
-    });
+      }
+    })();
   }
 
   // Operates on an already-built payload rather than itemsSnapshot/completed
