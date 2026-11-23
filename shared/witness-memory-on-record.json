@@ -1,77 +1,77 @@
 {
   "Back Squat": {
-    "takes": 16,
+    "takes": 17,
     "rulers": {
       "body_3d": {
-        "takes": 16,
+        "takes": 17,
         "leanPct": 5.6,
         "rmsPct": 7,
         "timesWorst": 0
       },
       "depth": {
-        "takes": 16,
-        "leanPct": 16.9,
-        "rmsPct": 22.8,
-        "timesWorst": 8
+        "takes": 17,
+        "leanPct": 17,
+        "rmsPct": 22.9,
+        "timesWorst": 9
       },
       "height": {
-        "takes": 16,
-        "leanPct": -10.5,
-        "rmsPct": 11.1,
+        "takes": 17,
+        "leanPct": -10.1,
+        "rmsPct": 10.9,
         "timesWorst": 0
       },
       "shoulder_width": {
-        "takes": 16,
-        "leanPct": 17.2,
+        "takes": 17,
+        "leanPct": 18,
         "rmsPct": 18.8,
         "timesWorst": 8
       }
     },
     "bones": {
       "femur": {
-        "takes": 8,
+        "takes": 9,
         "leanPct": 9,
-        "rmsPct": 8.6,
+        "rmsPct": 9.1,
         "timesWorst": 0
       },
       "forearm": {
-        "takes": 8,
-        "leanPct": 8.9,
-        "rmsPct": 9.2,
-        "timesWorst": 0
+        "takes": 9,
+        "leanPct": 9.2,
+        "rmsPct": 10.9,
+        "timesWorst": 1
       },
       "shin": {
-        "takes": 8,
-        "leanPct": 13.5,
-        "rmsPct": 11.5,
+        "takes": 9,
+        "leanPct": 13.1,
+        "rmsPct": 11,
         "timesWorst": 5
       },
       "shoulderWidth": {
-        "takes": 8,
-        "leanPct": -7,
-        "rmsPct": 7.8,
+        "takes": 9,
+        "leanPct": -6.3,
+        "rmsPct": 7.4,
         "timesWorst": 1
       },
       "torso": {
-        "takes": 8,
+        "takes": 9,
         "leanPct": -9.3,
-        "rmsPct": 8.6,
+        "rmsPct": 8.2,
         "timesWorst": 2
       },
       "upperArm": {
-        "takes": 8,
-        "leanPct": 5.6,
-        "rmsPct": 6.7,
+        "takes": 9,
+        "leanPct": 6.9,
+        "rmsPct": 7.4,
         "timesWorst": 0
       }
     },
     "object": {
-      "takesWithTelemetry": 8,
+      "takesWithTelemetry": 9,
       "asked": [
         "plate"
       ],
-      "takesSeen": 3,
-      "takesLocked": 3,
+      "takesSeen": 4,
+      "takesLocked": 4,
       "takesVoted": 0,
       "medianLockShare": 0
     }
@@ -387,19 +387,19 @@
     }
   },
   "Romanian Deadlift": {
-    "takes": 15,
+    "takes": 16,
     "rulers": {
       "body_3d": {
-        "takes": 15,
-        "leanPct": -8.3,
-        "rmsPct": 9.4,
+        "takes": 16,
+        "leanPct": -5.3,
+        "rmsPct": 9.1,
         "timesWorst": 1
       },
       "depth": {
-        "takes": 15,
-        "leanPct": 21.9,
-        "rmsPct": 27.9,
-        "timesWorst": 7
+        "takes": 16,
+        "leanPct": 23.8,
+        "rmsPct": 27.8,
+        "timesWorst": 8
       },
       "height": {
         "takes": 2,
@@ -414,59 +414,59 @@
         "timesWorst": 6
       },
       "shoulder_width": {
-        "takes": 15,
-        "leanPct": 13.2,
-        "rmsPct": 17.6,
+        "takes": 16,
+        "leanPct": 13.6,
+        "rmsPct": 17.5,
         "timesWorst": 0
       }
     },
     "bones": {
       "femur": {
-        "takes": 6,
-        "leanPct": 2.5,
-        "rmsPct": 7.5,
+        "takes": 7,
+        "leanPct": 3,
+        "rmsPct": 7,
         "timesWorst": 0
       },
       "forearm": {
-        "takes": 6,
+        "takes": 7,
         "leanPct": -8.8,
-        "rmsPct": 9.5,
+        "rmsPct": 8.9,
         "timesWorst": 1
       },
       "shin": {
-        "takes": 6,
-        "leanPct": 11.2,
-        "rmsPct": 11.3,
+        "takes": 7,
+        "leanPct": 10.4,
+        "rmsPct": 10.5,
         "timesWorst": 3
       },
       "shoulderWidth": {
-        "takes": 6,
-        "leanPct": -9.4,
-        "rmsPct": 10.8,
+        "takes": 7,
+        "leanPct": -9.3,
+        "rmsPct": 10.2,
         "timesWorst": 1
       },
       "torso": {
-        "takes": 6,
-        "leanPct": -9.1,
-        "rmsPct": 10.3,
+        "takes": 7,
+        "leanPct": -7.8,
+        "rmsPct": 9.5,
         "timesWorst": 1
       },
       "upperArm": {
-        "takes": 6,
-        "leanPct": -7.3,
-        "rmsPct": 7.3,
-        "timesWorst": 0
+        "takes": 7,
+        "leanPct": -5.8,
+        "rmsPct": 7,
+        "timesWorst": 1
       }
     },
     "object": {
-      "takesWithTelemetry": 6,
+      "takesWithTelemetry": 7,
       "asked": [
         "plate"
       ],
-      "takesSeen": 5,
+      "takesSeen": 6,
       "takesLocked": 3,
       "takesVoted": 6,
-      "medianLockShare": 0.21
+      "medianLockShare": 0
     }
   },
   "Single-Arm Dumbbell Row": {

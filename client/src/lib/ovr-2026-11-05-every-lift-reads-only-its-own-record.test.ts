@@ -223,7 +223,7 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
   it("the RDL's scale was +3.6% over its eight pulls; the shoulder floor step (0.3, round eighteen, RULE #6) reads it -0.4%", () => {
     const row = ledgerRow("2026-11-05-romanian-deadlift");
     expect(row.reportedRomCm).toBe(63.4);
-    expect(row.liveErrorPct).toBeCloseTo(-2.69, 1); // -0.39 at 0.3; +0.23 at the 0.28 floor (round twenty-three); -2.36 with the 3D-pose 0.16 (round twenty-five); -2.69 at 0.155 (its set 3)
+    expect(row.liveErrorPct).toBeCloseTo(-3.02, 1); // -3.02 at the 3D-pose 0.15 (round twenty-five set 4);-0.39 at 0.3; +0.23 at the 0.28 floor (round twenty-three); -2.36 with the 3D-pose 0.16 (round twenty-five); -2.69 at 0.155 (its set 3)
     expect(cameraTunablesFor("Romanian Deadlift", "deadlift").values.biacromialToleranceFraction).toBe(0.28); // 0.3 until round twenty-three
     expect(cameraTunablesFor("Romanian Deadlift", "deadlift").sources.biacromialToleranceFraction).toBe("fitted");
   });

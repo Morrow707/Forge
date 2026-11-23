@@ -103,6 +103,10 @@ export type LedgerRow = {
    *  LIFTS_WHERE_THE_BODY_MODEL_VOTES, because that is what the phone does now (2026-11-23: the
    *  RDL votes, and without this field the ledger could not see the vote at all). */
   readonly bodyModel?: { readonly scaleX1000: number; readonly uncertaintyFraction: number };
+  /** TRUE ON A TAKE WHOSE REMEMBERED BONES ACTUALLY VOTED ON THE PHONE (`calibration.bodyModel.voted`),
+   *  so the as-filmed replay blends them in at the uncertainty they stated and reproduces the scale
+   *  that shipped. First on the 2026-11-23 RDL set 4 (build 834). */
+  readonly bodyModelVotedAsFilmed?: boolean;
   /** THE DETECTOR'S OWN MEAN CONFIDENCE ON THIS TAKE, where a plate joined the vote
    *  (`objectDetection.avgCoreMlConfidence`). A property of the TAKE, like the span's spread
    *  above, and for the identical reason: since 2026-10-31 the plate's uncertainty is FLOORED by
@@ -157,6 +161,14 @@ export function candidatesAsFilmed(row: LedgerRow): readonly LedgerCandidate[] {
   ).filter((c) => !refused.has(c.source));
 }
 
+/** The as-filmed candidates plus the remembered bones where they voted on the phone. */
+export function candidatesAsFilmedWithBodyModel(row: LedgerRow): readonly { source: string; scaleX1000: number }[] {
+  const base = candidatesAsFilmed(row);
+  return row.bodyModelVotedAsFilmed && row.bodyModel
+    ? [...base, { source: "body_model", scaleX1000: row.bodyModel.scaleX1000 }]
+    : base;
+}
+
 /* THE ROWS.
  *
  * Four, reconstructed on 2026-10-23 from the two pinned guards' own fixtures -- which are real
@@ -209,7 +221,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.6547947529533787,
     reportedRomCm: 68.0,
     sensorRomCm: 73.9,
-    liveErrorPct: 0.12,
+    liveErrorPct: -0.1,
     notes:
       "The take HEIGHT_RULER_UNCERTAINTY was refit on: at 0.05 the height ruler held 400 units " +
       "of inverse-variance weight against the 3D ruler's 25, so the blend WAS the height ruler " +
@@ -236,7 +248,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.43338517946498,
     reportedRomCm: 54.7,
     sensorRomCm: 59.4,
-    liveErrorPct: -4.48,
+    liveErrorPct: -4.71,
     notes:
       "Read 7.9% low as filmed. Today's pipeline admits NO height ruler here -- the hinge is " +
       "bent_over since 2026-10-05 -- and that relabel plus the shoulder floor take it to +3.6%, " +
@@ -261,7 +273,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 4.460001794224457,
     reportedRomCm: 78.1,
     sensorRomCm: 73.7,
-    liveErrorPct: 6.01,
+    liveErrorPct: 5.44,
     notes:
       "The control for the hinge fix: a standing lift keeps its height ruler, so dropping that " +
       "ruler reads 24% HIGH and the fix had to leave this take alone. Read +6.0% as filmed and " +
@@ -287,7 +299,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.7870913839708666,
     reportedRomCm: 60.0,
     sensorRomCm: 64.5,
-    liveErrorPct: -11.53,
+    liveErrorPct: -11.79,
     notes:
       "The take the hinge fix was made on: the height ruler read 16% below the scale the sensor " +
       "requires while carrying 44.4% of the weight, and dropping it took the take from -7.0% to " +
@@ -322,7 +334,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.4534573167314636,
     reportedRomCm: 70.6,
     sensorRomCm: 74.6,
-    liveErrorPct: -0.47,
+    liveErrorPct: -0.56,
     notes:
       "First session with a height on file (75in). Read -5.3% as filmed. The height ruler carried " +
       "75% of the weight and read 7.5% LOW against the sensor's scale; body_3d read +12.9% and " +
@@ -348,7 +360,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.5823291387545777,
     reportedRomCm: 72.6,
     sensorRomCm: 73.7,
-    liveErrorPct: 2.92,
+    liveErrorPct: 2.65,
     notes:
       "The best standing result on record: -1.5% on range of motion and 0.00 m/s on the mean " +
       "(0.84 against 0.84). The height ruler alone was within 1.5% of the sensor's scale on this " +
@@ -372,7 +384,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.915452007948545,
     reportedRomCm: 65.2,
     sensorRomCm: 56.0,
-    liveErrorPct: 4.87,
+    liveErrorPct: 4.59,
     notes:
       "Read +16.4% as filmed, and the whole error is the 3D-pose collapse: body_3d alone was " +
       "-0.8% of the sensor's scale and depth +35.3%, they vote once at their geometric mean " +
@@ -399,7 +411,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 4.0295695742386135,
     reportedRomCm: 64.3,
     sensorRomCm: 57.4,
-    liveErrorPct: 3.14,
+    liveErrorPct: 2.93,
     notes:
       "Read +12.0% as filmed. The one take of the four with a plate in the vote -- 2.06 against a " +
       "required 3.59, i.e. the box 1.75x too big -- and the lone-plate rule correctly stepped it " +
@@ -429,7 +441,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.452992524721314,
     reportedRomCm: 71.8,
     sensorRomCm: 73.2,
-    liveErrorPct: 4.96,
+    liveErrorPct: 4.56,
     notes:
       "Read -1.9% as filmed, 5 of 5 reps, cadence held, no dropouts: the control. Against the " +
       "sensor's scale the height ruler read -10.1% at 74.8% of the weight, body_3d +13.4%, " +
@@ -453,7 +465,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.449596630517205,
     reportedRomCm: 81.2,
     sensorRomCm: 62.2,
-    liveErrorPct: 20.75,
+    liveErrorPct: 20.51,
     notes:
       "Read +30.5% as filmed, the worst RDL on record, and this time EVERY ruler is high: body_3d " +
       "+15.7%, shoulder_width +32.0% (grip/shoulder 1.77, spread 0.12 -- the span foreshortened on " +
@@ -481,7 +493,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.6255637866370203,
     reportedRomCm: 74.7,
     sensorRomCm: 75.7,
-    liveErrorPct: 3.13,
+    liveErrorPct: 2.94,
     notes:
       "Read -1.3% as filmed, 5 of 5 reps, cadence 0.991, one dropout, the second squat of the day " +
       "an hour after the first and the best squat on record. Mean +6.0% (0.89 against 0.84) and " +
@@ -514,7 +526,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
       "a plate admitted into the body rulers' cluster from the anchor's end only (0.653 of body_3d " +
       "is inside 0.4; body_3d is 1.53x the plate and is not), at 85.8% of the blend; fixed in " +
       "scalesAgree, 2026-10-29",
-    liveErrorPct: -5.47,
+    liveErrorPct: -5.68,
     notes:
       "THE FIRST RDL FILMED SQUARE-ON WITH THE LIFT'S OWN RECORD, and it read -34.2% (41.1 against " +
       "62.5) because the barbell plate took the scale: boxed at 175.8px where the body consensus " +
@@ -880,7 +892,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     // -1.91% as filmed; the live replay reads +1.07% because a sealed row has no frames, so it can
     // only state the shoulder ruler's floor (0.2) and not the 0.378 the grip floor loosened it to
     // on the phone -- the limit the ledger's own header records.
-    liveErrorPct: 1.87,
+    liveErrorPct: 1.72,
     notes:
       "135x5 beside the OVR, filmed from the front of the rack (shoulders carried the bar, 708 " +
       "shoulder points), analysed on the FILE path (live coverage 0.84 fell under the gate). 5 of 5. " +
@@ -918,7 +930,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     // error is the eight pulls', so that is the range this row holds the scale against.
     reportedRomCm: 63.4,
     sensorRomCm: 61.21,
-    liveErrorPct: -2.69,
+    liveErrorPct: -3.02,
     notes:
       "135x8 beside the OVR, square to the side, live path (cadence 0.939, 18 dropouts, 99 wrist " +
       "frames under the visibility floor, 43 points carried from a lone hand). 8 of 8 since round " +
@@ -960,7 +972,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 3.790943613931826,
     reportedRomCm: 71.9,
     sensorRomCm: 73.91,
-    liveErrorPct: 2.3,
+    liveErrorPct: 2.05,
     notes:
       "135x5 beside the OVR, the afternoon's set 2, file path, cadence 1.0 and no dropouts (the " +
       "cleanest squat trace in the corpus). 5 of 5. Range of motion -2.7% as filmed at the squat's " +
@@ -998,7 +1010,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     // eighth deleted as a re-rack behind its 2.2s stand at lockout (restArrivalAfterPeak).
     reportedRomCm: 66.6,
     sensorRomCm: 64.26,
-    liveErrorPct: -2.08,
+    liveErrorPct: -2.39,
     notes:
       "135x8 beside the OVR, square to the side, live path (cadence 0.937, 18 dropouts, 123 wrist " +
       "frames under the visibility floor). The phone printed 7 of 8 -- the eighth pull merged with a " +
@@ -1356,7 +1368,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     sensorRomCm: 76.58,
     // The sealed replay knows the shoulder ruler only at its 0.2 floor, not the 0.562 the grip
     // loosened it to on the phone, so it reads this take -1.49% where the phone shipped -7.16%.
-    liveErrorPct: -4.03,
+    liveErrorPct: -4.22,
     notes:
       "135x5 beside the OVR; the phone analysed 15.6s of a 33.0s clip (readerStatus failed, " +
       "'Operation Interrupted', 512 frames) because the app was left for the sensor's screen the " +
@@ -1385,7 +1397,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     shippedScaleX1000: 4.26493537408294,
     reportedRomCm: 64,
     sensorRomCm: 62.74,
-    liveErrorPct: -3.15,
+    liveErrorPct: -3.42,
     notes:
       "135x8 beside the OVR, live path (cadence 0.978, 5 dropouts), 8 of 8. Range 64.0cm against " +
       "24.7in: +2.0%. The plate was boxed 2.24x too big and carried nothing; the 3D torso and the " +
@@ -1415,7 +1427,7 @@ export const ACCURACY_LEDGER: readonly LedgerRow[] = [
     sensorRomCm: 75.18,
         // The sealed replay knows the shoulder ruler only at its 0.2 floor, not the 0.436 the grip
     // loosened it to on the phone, so it reads +0.82% where the phone (at 0.13) reads -2.5%.
-liveErrorPct: -0.85,
+liveErrorPct: -0.89,
     notes:
       "135x5 beside the OVR on build 769, file path, readerStatus completed with no interruption, " +
       "5 of 5 reps. Range 72.9cm against the sensor's 29.6in (75.2cm): -3.1%; mean 0.82 against " +
@@ -1439,7 +1451,7 @@ liveErrorPct: -0.85,
     shippedScaleX1000: 4.519706691956185,
     reportedRomCm: 75.7,
     sensorRomCm: 61.72,
-    liveErrorPct: 16.22,
+    liveErrorPct: 15.86,
     notes:
       "135x7 beside the OVR on build 769, file path. Scott did 7 and logged 8, so the count-trim " +
       "kept the pickup off the floor as rep 1 (1.5s at 0.55 m/s, already sample-starved and out of " +
@@ -1468,7 +1480,7 @@ liveErrorPct: -0.85,
     shippedScaleX1000: 3.711246735068609,
     reportedRomCm: 77.8,
     sensorRomCm: 79.5,
-    liveErrorPct: -0.42,
+    liveErrorPct: -0.51,
     notes:
       "135x5 beside the OVR on build 797, 5 of 5 reps, in sweatpants (Scott: the camera could not " +
       "see the legs unless bent, nor the ankles). Range 77.8cm against the sensor's 31.3in (79.5cm): " +
@@ -1494,7 +1506,7 @@ liveErrorPct: -0.85,
     shippedScaleX1000: 4.1921454606503395,
     reportedRomCm: 59.5,
     sensorRomCm: 59.69,
-    liveErrorPct: -2.52,
+    liveErrorPct: -2.84,
     notes:
       "135x8 beside the OVR on build 797 (the OVR calls it Deadlift), 8 of 8 pulls, in sweatpants. " +
       "Range 59.5cm against the sensor's 23.5in (59.7cm): -0.3%, the best RDL range on record; mean " +
@@ -1520,7 +1532,7 @@ liveErrorPct: -0.85,
     shippedScaleX1000: 3.701831302579659,
     reportedRomCm: 77.8,
     sensorRomCm: 77.98,
-    liveErrorPct: 1.68,
+    liveErrorPct: 1.34,
     notes:
       "Set 2, 135x5 beside the OVR on build 807 (round twenty-two's 0.14 in), 5 of 5. Range 77.8cm " +
       "against the sensor's 30.7in (77.98cm): -0.2%. Mean 0.91 against 0.86 (+5.8%), peak 1.43 " +
@@ -1545,7 +1557,7 @@ liveErrorPct: -0.85,
     shippedScaleX1000: 4.290861142132063,
     reportedRomCm: 57.2,
     sensorRomCm: 60.96,
-    liveErrorPct: -7.76,
+    liveErrorPct: -7.98,
     notes:
       "Set 2, 135x8 beside the OVR on build 807 (round twenty-two's peak cap 1.66 in), 8 of 8. " +
       "Range 57.2cm against the sensor's 24.0in (60.96cm): -6.2%; mean 0.89 against 0.89 (0.0%); " +
@@ -1572,7 +1584,7 @@ liveErrorPct: -0.85,
     shippedScaleX1000: 3.887349028213025,
     reportedRomCm: 81.6,
     sensorRomCm: 78.49,
-    liveErrorPct: 5.4,
+    liveErrorPct: 5.08,
     notes:
       "Set 3, 135x5 beside the OVR on build 809, in shorts, 5 of 5. Range 81.6cm against the " +
       "sensor's 30.9in (78.49cm): +4.0%; mean 0.87 against 0.80 (+8.8%); peak 1.33 against 1.23 " +
@@ -1816,7 +1828,7 @@ liveErrorPct: -0.85,
     shippedScaleX1000: 3.3500448357602496,
     reportedRomCm: 75.2,
     sensorRomCm: 79.502,
-    liveErrorPct: -2.92,
+    liveErrorPct: -3.16,
     notes:
       "135x5 beside the OVR on build 827, 5 of 5. Range 75.2cm against the sensor's 31.3in " +
       "(79.50cm): -5.4%; mean 0.65 against 0.75 (rep 5 read 0.43 over a 1.77s window: the bar " +
@@ -1840,7 +1852,7 @@ liveErrorPct: -0.85,
     shippedScaleX1000: 4.291634600609054,
     reportedRomCm: 65.1,
     sensorRomCm: 60.452,
-    liveErrorPct: 2.41,
+    liveErrorPct: 2.38,
     notes:
       "135x8 beside the OVR (labelled Deadlift) on build 827, 8 of 8. Range 65.1cm against " +
       "23.8in (60.45cm): +7.7%; mean 0.97 against 0.85; peak 1.59 against 1.44. The torso bone " +
@@ -1865,7 +1877,7 @@ liveErrorPct: -0.85,
     shippedScaleX1000: 3.915955520369844,
     reportedRomCm: 71.5,
     sensorRomCm: 75.184,
-    liveErrorPct: -3.48,
+    liveErrorPct: -3.58,
     notes:
       "Set 2, 135x5 beside the OVR on build 833 (round twenty-five's fixes in), filmed from behind, " +
       "5 of 5. Range 71.5cm against 29.6in (75.18cm): -4.9%, every rep about 4.5% short; mean 0.78 " +
@@ -1892,7 +1904,7 @@ liveErrorPct: -0.85,
     shippedScaleX1000: 3.7742803481688876,
     reportedRomCm: 73.1,
     sensorRomCm: 76.708,
-    liveErrorPct: -3.88,
+    liveErrorPct: -3.83,
     notes:
       "Set 3 (round twenty-five's third), 135x5 beside the OVR on build 833, filmed from behind, 5 " +
       "of 5. Range 73.1cm against 30.2in (76.71cm): -4.7%; mean 0.83 against 0.83 (0.0%); peak " +
@@ -1917,7 +1929,7 @@ liveErrorPct: -0.85,
     shippedScaleX1000: 4.1200171797347975,
     reportedRomCm: 72.5,
     sensorRomCm: 64.008,
-    liveErrorPct: 5,
+    liveErrorPct: 5.04,
     notes:
       "Set 2, 135x8 on build 833, filmed from behind, someone walked behind twice on purpose: reps " +
       "4 and 7 read 119 and 88cm through the half-second gaps and were left out of the set's " +
@@ -1942,15 +1954,66 @@ liveErrorPct: -0.85,
     shippedScaleX1000: 4.102615521281547,
     reportedRomCm: 67.2,
     sensorRomCm: 62.23,
-    liveErrorPct: 11.79,
+    liveErrorPct: 11.67,
     notes:
       "Set 3, 135x8 on build 833, filmed from behind. OVR 24.5in (25.9, 24.1, 23.8, 23.6, 24.3, " +
       "24.7, 24.9, 24.9), mean 0.89, peak 1.56. Every ruler read high again (3D torso +2.2%, " +
       "shoulder +20%); this time the remembered bones read +13%, the first RDL set where they sat " +
-      "further from the sensor than the blend. The body-model vote was not on the phone yet (no " +
-      "beta since round twenty-five set 2). The set's clip uploaded and never reached the row: the " +
+      "further from the sensor than the blend. The body-model vote was not on the phone yet (it " +
+      "reached it in build 834, after this set). The set's clip uploaded and never reached the row: the " +
       "save that carried its url waited behind a save queue that only advanced on a mutate() " +
       "callback, which TanStack skips once the workout screen has unmounted.",
+  },
+  {
+    id: "2026-11-23-back-squat-set-4",
+    date: "2026-11-23",
+    build: 834,
+    exercise: "Back Squat",
+    filmedOnCommit: "0df0c5e8",
+    candidates: [
+      { source: "body_3d", scaleX1000: 3.74727 },
+      { source: "depth", scaleX1000: 4.34065 },
+      { source: "height", scaleX1000: 3.26351 },
+      { source: "shoulder_width", scaleX1000: 4.12739 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.2, depth: 0.2, height: 0.15, shoulder_width: 0.3880144164815129 },
+    shoulderGripFloorFraction: 0.3880144164815129,
+    heightRulerVotedAsFilmed: true,
+    bodyModel: { scaleX1000: 3.4295406917020446, uncertaintyFraction: 0.08 },
+    shippedScaleX1000: 3.59177680906438,
+    reportedRomCm: 78.8,
+    sensorRomCm: 76.2,
+    liveErrorPct: 3.85,
+    notes:
+      "Set 4, 135x5 on build 834, filmed from behind, 5 of 5. Range 78.8cm against 30.0in " +
+      "(76.2cm): +3.4%; mean 0.85 against 0.85 (0.0%); peak 1.22 against 1.21 (+0.8%). The first " +
+      "squat of the day to read HIGH: set 3 read -4.7% at the height ruler's 0.14, set 4 +3.4% at " +
+      "0.15, with the height ruler (3.264e-3) the lowest voter both times.",
+  },
+  {
+    id: "2026-11-23-romanian-deadlift-set-4",
+    date: "2026-11-23",
+    build: 834,
+    exercise: "Romanian Deadlift",
+    filmedOnCommit: "0df0c5e8",
+    candidates: [
+      { source: "body_3d", scaleX1000: 3.88176 },
+      { source: "depth", scaleX1000: 4.99664 },
+      { source: "shoulder_width", scaleX1000: 4.56251 },
+    ],
+    uncertaintiesAsFilmed: { body_3d: 0.16, depth: 0.6, shoulder_width: 0.28 },
+    heightRulerVotedAsFilmed: false,
+    bodyModel: { scaleX1000: 4.374741917029833, uncertaintyFraction: 0.08 },
+    bodyModelVotedAsFilmed: true,
+    shippedScaleX1000: 4.306018009588907,
+    reportedRomCm: 69.4,
+    sensorRomCm: 64.008,
+    liveErrorPct: 8.16,
+    notes:
+      "Set 4, 135x8 on build 834, 8 of 8; the first take on which the remembered bones voted. " +
+      "OVR 25.2in (64.01cm), mean 0.95, peak 1.61; Forge 69.4cm (+8.4%), 1.01 (+6.3%), 1.62 " +
+      "(+0.6%). 3D torso -0.6% of the scale the sensor requires, shoulder +14.9%, bones +10.2% at " +
+      "0.08 with only 2 limbs voting; the bones carried most of the weight.",
   },
 ];
 

@@ -25,9 +25,9 @@ describe("round twenty-five", () => {
   it("each lift's step is its own", () => {
     // set 1 moved them 0.13 -> 0.14 and 0.08 -> 0.07; set 2 one more step each
     expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.16); // 0.15 until round twenty-five set 3
-    expect(cameraTunablesFor("Box Jump").values.heightRulerUncertainty).toBe(0.05); // 0.06 until round twenty-five set 3
-    expect(cameraTunablesFor("Romanian Deadlift", "deadlift").values.body3DCorrectedUncertainty).toBe(0.155); // 0.16 until round twenty-five set 3
-    expect(cameraTunablesFor("Conventional Deadlift", "deadlift").values.body3DCorrectedUncertainty).not.toBe(0.155);
+    expect(cameraTunablesFor("Box Jump").values.heightRulerUncertainty).toBe(0.055); // 0.06 until round twenty-five set 3, 0.05 until its set 4
+    expect(cameraTunablesFor("Romanian Deadlift", "deadlift").values.body3DCorrectedUncertainty).toBe(0.15); // 0.16 until round twenty-five set 3, 0.155 until its set 4
+    expect(cameraTunablesFor("Conventional Deadlift", "deadlift").values.body3DCorrectedUncertainty).not.toBe(0.15);
     expect(cameraTunablesFor("Depth Jump").values.heightRulerUncertainty).not.toBe(0.06);
   });
 

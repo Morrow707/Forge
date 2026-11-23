@@ -16,6 +16,33 @@ See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
 ## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-23, round twenty-five)
 
+**ROUND TWENTY-FIVE SET 4, 2026-11-23 (filmed on build 834, from behind; not shipped).** OVR reps
+2-6 on the box jump. All three counted right (squat 5/5, RDL 8/8, box jump 5/5 with the setup jump
+set aside as short of the box).
+
+| lift | Forge as filmed | OVR | error | step |
+|---|---|---|---|---|
+| Squat range / mean / peak | 78.8 / 0.85 / 1.22 | 30.0in (76.2) / 0.85 / 1.21 | +3.4% / 0.0% / +0.8% | depth ruler 0.2 -> 0.22 (replays +4.13 -> +3.85%; set 3 also closer) |
+| RDL range / mean / peak | 69.4 / 1.01 / 1.62 | 25.2in (64.0) / 0.95 / 1.61 | +8.4% / +6.3% / +0.6% | 3D pose 0.155 -> 0.15 (+8.30 -> +8.16%) |
+| Box jump rise / mean / peak | 68.0 / 1.49 / 2.82 | 27.2in (69.1) / 1.476 / 2.84 | -1.6% / +0.9% / -0.6% | height ruler 0.05 -> 0.055 (about -2.4 -> -2.0% on today's record) |
+
+- **The first RDL take on which the remembered bones voted** (2 limbs, uncertainty 0.08, +10.2% of
+  the scale the OVR requires). They carried most of the weight. The ledger now records a vote that
+  happened on the phone (`bodyModelVotedAsFilmed`) so the as-filmed replay reproduces 834's scale.
+- **Open, not fixed: the held last rep of an RDL reads fast.** Rep 8 on set 3 (1.31 vs 0.90) and set
+  4 (1.23 vs 0.86) is the rep held about 2s at the top. Its window is 0.567s where the OVR implies
+  about 0.70s: it starts ~0.1s after the real bottom (low-confidence samples at the bottom of the
+  pull, one marked lost) and the rest rule ends it while the bar is still rising slowly
+  (`closeSpeedFraction` 0.12; other reps 0.02-0.06). A sealed take cannot replay this rule, so no
+  change was guessed. Next: replay `restArrivalAfterPeak` on these two traces from the fixture.
+- **Open, not fixed: box jump set 4 has numbers and a clip and no stored trace**
+  (`traceAbsentBecause: no_trace_stored`, live analysis path, 610 samples measured). Its save landed
+  at 20:55:46 (200) and its clip at 20:55:49 (201). The other live-path jumps today kept their
+  traces, so the path alone is not the cause. Not reproduced; the next export with a traceless take
+  should be read beside the debug console's SAVE lines for that set.
+- **Squat scatter across today's four sets:** -0.2, -3.5, -4.7, +3.4% as filmed (height ruler at
+  0.14-0.15). Rule #5: the steps chase a spread about as wide as the bias.
+
 **ROUND TWENTY-FIVE SET 3, 2026-11-23 (filmed on build 833, from behind; fixed and NOT shipped,
 on Scott's word "fix those now but don't ship").** OVR reps 2-6 on the box jump.
 

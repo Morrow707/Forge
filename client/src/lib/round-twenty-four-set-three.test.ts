@@ -20,7 +20,7 @@ describe("round twenty-four", () => {
     // 0.13 and 0.08 this round; 0.15 and 0.06 since round twenty-five (2026-11-23).
     expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.16); // 0.15 until round twenty-five set 3
     expect(cameraTunablesFor("Back Squat", "squat").values.driveOnsetFraction).toBe(0.01);
-    expect(cameraTunablesFor("Box Jump").values.heightRulerUncertainty).toBe(0.05); // 0.06 until round twenty-five set 3
+    expect(cameraTunablesFor("Box Jump").values.heightRulerUncertainty).toBe(0.055); // 0.06 until round twenty-five set 3, 0.05 until its set 4
     expect(cameraTunablesFor("Depth Jump").values.heightRulerUncertainty).not.toBe(0.08);
     expect(cameraTunablesFor("Front Squat", "squat").values.heightRulerUncertainty).not.toBe(0.13);
   });

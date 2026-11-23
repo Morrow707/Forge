@@ -119,7 +119,7 @@ describe("the 2026-10-29 export replays through each lift's own record", () => {
   });
 
   it("the squat's own numbers reach the squat traces and not the RDL's", () => {
-    expect(Object.keys(FITTED_OVERRIDES["Back Squat"]).sort()).toEqual(["driveOnsetFraction", "heightRulerUncertainty", "velocitySmoothingMs"]);
+    expect(Object.keys(FITTED_OVERRIDES["Back Squat"]).sort()).toEqual(["depthRulerUncertainty", "driveOnsetFraction", "heightRulerUncertainty", "velocitySmoothingMs"]); // depth since round twenty-five set 4
     const squat = cameraTunablesFor("Back Squat", "squat");
     expect(squat.values.driveOnsetFraction).toBe(0.01); // 0.02 until round twenty-three (2026-11-20)
     expect(squat.sources.driveOnsetFraction).toBe("fitted");

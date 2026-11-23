@@ -1,6 +1,6 @@
 import { LIFTS_WHERE_THE_BODY_MODEL_VOTES } from "@shared/athlete-body-model";
 import {
-  candidatesAsFilmed,
+  candidatesAsFilmedWithBodyModel,
   errorPctAgainstSensor,
   type LedgerRow,
 } from "@shared/accuracy-ledger";
@@ -90,7 +90,8 @@ export function blendX1000(
 
 /** The take as the build that filmed it saw it. */
 export function asFilmedX1000(row: LedgerRow): number {
-  return blendX1000(candidatesAsFilmed(row), (s) => {
+  return blendX1000(candidatesAsFilmedWithBodyModel(row), (s) => {
+    if (s === "body_model" && row.bodyModel) return row.bodyModel.uncertaintyFraction;
     const u = row.uncertaintiesAsFilmed[s];
     if (u == null) throw new Error(`${row.id}: no as-filmed uncertainty for "${s}"`);
     return u;

@@ -4123,7 +4123,11 @@ halves before splitting anything else:
   fixed, at least one fix per lift): squat height ruler 0.16 (range -4.7% -> about -3.9%), box jump
   height ruler 0.05 (rise +4.7% -> about +3.3%). RDL set 3 (fresh export): +8.0% range as filmed, 3D pose 0.16 -> 0.155;
   its clip uploaded and never reached the row because the workout screen's save queue only advanced
-  on a mutate() callback, which TanStack skips after unmount (now advances on the promise). Bugs fixed: the box ruler was handed in
+  on a mutate() callback, which TanStack skips after unmount (now advances on the promise).
+  **Set 4 (on 834), fixed and NOT shipped:** squat +3.4% range, mean 0.0%; RDL +8.4% range (the
+  first take the remembered bones voted on, +10%); box jump rise -1.6%. Steps: squat depth ruler
+  0.22, RDL 3D pose 0.15, box jump height ruler 0.055. Open: the RDL's held last rep reads ~40% fast
+  on sets 3 and 4 (its window starts late and ends early around the hold). Bugs fixed: the box ruler was handed in
   as "plate" (now `"box"`); the ledger replay now carries each squat take's grip-loosened shoulder
   ruler and the RDL's body-memory vote, so it agrees with the phone (squat average 3.57 -> 2.78%,
   RDL 7.32 -> 6.50%); drive and rise-to-apex window ends are read between frames (half a frame at

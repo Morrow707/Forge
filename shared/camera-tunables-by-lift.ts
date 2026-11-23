@@ -383,9 +383,9 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // SCALE numbers (ruler uncertainties) survive 2026-11-05; every VELOCITY number fitted before
   // it was fitted on the lowering and is gone -- see VELOCITY_OVERRIDES_REMOVED_2026_11_05 and
   // the-concentric-is-the-way-up.test.ts.
-  "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0, maxPeakToMeanRatio: 1.66, biacromialToleranceFraction: 0.28, body3DCorrectedUncertainty: 0.155 },
-  "Back Squat": { heightRulerUncertainty: 0.16, driveOnsetFraction: 0.01, velocitySmoothingMs: 130 },
-  "Box Jump": { boxRulerUncertainty: 0.07, heightRulerUncertainty: 0.05 },
+  "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0, maxPeakToMeanRatio: 1.66, biacromialToleranceFraction: 0.28, body3DCorrectedUncertainty: 0.15 },
+  "Back Squat": { heightRulerUncertainty: 0.16, depthRulerUncertainty: 0.22, driveOnsetFraction: 0.01, velocitySmoothingMs: 130 },
+  "Box Jump": { boxRulerUncertainty: 0.07, heightRulerUncertainty: 0.055 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
   "Dumbbell Shoulder Press": {
     biacromialToleranceFraction: 0.4,
@@ -429,6 +429,12 @@ export const VELOCITY_OVERRIDES_REMOVED_2026_11_05: Record<string, string[]> = {
  *  an override with no evidence here is a number somebody guessed, and the test refuses it. */
 export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
   "Box Jump":
+    "2026-11-23, round twenty-five set 4 (RULE #6), build 834 (filmed at 0.06), OVR reps 2-6 (27.2in, " +
+    "1.476, 2.84). heightRulerUncertainty 0.05 -> 0.055. Set 4 read rise-to-apex -1.6% (68.0 against " +
+    "69.1cm), mean +0.9%, peak -0.6%, 5 of 5 (the setup jump set aside as short of the box). The box " +
+    "ruler stepped out (32% under the body rulers). At 0.05 the blend's scale drops 0.84% and the " +
+    "rise would read about -2.4%; at 0.055 about -2.0%. Set 3 (+4.7% at 0.07) pulls the other way: " +
+    "Rule #5 scatter, half a step back toward set 4. " +
     "2026-11-23, round twenty-five set 3 (RULE #6), build 833, file path, OVR reps 2-6. " +
     "heightRulerUncertainty 0.06 -> 0.05. Set 3 read rise-to-apex +4.7% (74.4 against 71.0cm), " +
     "mean -0.4% (1.50 against 1.506), peak +5.5% (3.05 against 2.89): scale high, at 0.07 as filmed. " +
@@ -466,6 +472,12 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "about -0.1%, peak -7.3%. Set 1 is unchanged (its box ruler stepped out of the cluster). 0.08 is " +
     "the next step. No box-jump ledger row exists yet; the next filmed box jump is its test.",
   "Back Squat":
+    "2026-11-23, round twenty-five set 4 (RULE #6), build 834 (filmed at height 0.15). " +
+    "depthRulerUncertainty 0.2 -> 0.22 (its first entry). Set 4 read range +3.4% (78.8 against " +
+    "30.0in, 76.2cm), mean 0.0% (0.85), peak +0.8%. On today's record (height 0.16) it replays " +
+    "+4.13%; at depth 0.22, +3.85%, and set 3 also moves closer (-3.88 -> -3.83%). Squat average " +
+    "over 17 sets 2.86% -> 2.73%. The height ruler step back (0.155) was the other candidate and " +
+    "would have undone part of set 3's. " +
     "2026-11-23, round twenty-five set 3 (RULE #6), build 833 (filmed at 0.14). heightRulerUncertainty " +
     "0.15 -> 0.16. Set 3 read range -4.7% (73.1 against 30.2in, 76.7cm), mean 0.0% (0.83), peak -3.3%. " +
     "As filmed, all three of today's sets read low; 0.15 -> 0.16 moves set 3 -4.3 -> -3.9%, set 2 " +
@@ -575,6 +587,10 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "high ones, about +0.8% on the blend, replayed on all six squat ledger rows and no other lift's. " +
     "Not a refit of HEIGHT_RULER_UNCERTAINTY, which is shared and was fitted on a squat AND an RDL.",
   "Romanian Deadlift":
+    "2026-11-23, round twenty-five set 4 (RULE #6), build 834, the first RDL where the remembered " +
+    "bones voted (2 limbs, 0.08, +10.2%). body3DCorrectedUncertainty 0.155 -> 0.15. OVR 25.2in " +
+    "(64.01cm), 0.95, 1.61; Forge 69.4cm (+8.4%), 1.01 (+6.3%), 1.62 (+0.6%). Replays +8.30% -> " +
+    "+8.16% (set 3 +11.79% -> +11.67%); RDL average over 16 sets 7.01% -> 7.06%, reported. " +
     "2026-11-23, round twenty-five (RULE #6), set 3 on build 833, filmed from behind. " +
     "body3DCorrectedUncertainty 0.16 -> 0.155. OVR 24.5in (62.23cm), mean 0.89, peak 1.56; Forge " +
     "read 67.2cm (+8.0%), mean 1.05, peak 1.64. Every ruler read high (3D torso +2.2%, shoulder " +
