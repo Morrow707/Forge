@@ -840,7 +840,7 @@ export const MAX_SHOULDER_SPAN_SPREAD = 0.4;
  * the old refusal that was right.
  */
 export type ScaleEstimate = {
-  source: "plate" | "grip_width" | "depth" | "body_3d" | "body_model" | "height" | "shoulder_width";
+  source: "plate" | "box" | "grip_width" | "depth" | "body_3d" | "body_model" | "height" | "shoulder_width";
   scale: number;
   /** How wrong this source can be even when it is working correctly. */
   uncertaintyFraction: number;
@@ -993,9 +993,17 @@ function agreementTolerance(
  * is shared; replayed on the accuracy ledger and the capture corpus, where no take without a
  * plate can move by construction.
  */
+/** A ruler that is an object of known size: a bumper plate the detector boxed, or a box jump's
+ *  box (its typed height over the gap Vision read). Until 2026-11-23 the box ruler was handed
+ *  in as "plate", so the plate rules below reached it by accident and every diagnostic named a
+ *  plate on a box jump; it has its own name now and the rules reach it on purpose. */
+export function isKnownSizeObjectRuler(source: ScaleEstimate["source"]): boolean {
+  return source === "plate" || source === "box";
+}
+
 function scalesAgree(anchor: ScaleEstimate, other: ScaleEstimate, tolerance: number): boolean {
   const fromAnchor = Math.abs(other.scale / anchor.scale - 1) <= tolerance;
-  if (other.source !== "plate") return fromAnchor;
+  if (!isKnownSizeObjectRuler(other.source)) return fromAnchor;
   return fromAnchor && Math.abs(anchor.scale / other.scale - 1) <= tolerance;
 }
 
@@ -1215,6 +1223,9 @@ export function reconcileScaleEstimates(
 
   const TRUST: Record<ScaleEstimate["source"], number> = {
     plate: 0,
+    // A box jump's box: an object of known size, ranked as the plate always ranked it (it was
+    // handed in under the plate's name until 2026-11-23).
+    box: 0,
     // A grip the athlete MEASURED sits above height, and the ordering is the point of the
     // feature. Height is exact too, but a lying athlete's length points at the lens and a
     // standing one's needs their whole body in frame; a stated grip is a known distance between
@@ -1368,10 +1379,10 @@ export function reconcileScaleEstimates(
   // plate by 2.5x are not "one against one, a tie rank may break". So the count is taken on the
   // independent non-plate READINGS, before the collapse. One non-plate ruler still leaves the
   // plate its rank, which is the tie the original comment meant to protect.
-  const nonPlateReadings = usable.filter((e) => e.source !== "plate").length;
+  const nonPlateReadings = usable.filter((e) => !isKnownSizeObjectRuler(e.source)).length;
   let plateSteppedOut = false;
-  if (best.length === 1 && best[0].source === "plate" && nonPlateReadings >= 2) {
-    const withoutPlate = voters.filter((e) => e.source !== "plate");
+  if (best.length === 1 && isKnownSizeObjectRuler(best[0].source) && nonPlateReadings >= 2) {
+    const withoutPlate = voters.filter((e) => !isKnownSizeObjectRuler(e.source));
     const rerankedWithoutPlate = [...withoutPlate].sort((a, b) => rank(a) - rank(b));
     let bestWithoutPlate: ScaleEstimate[] = [rerankedWithoutPlate[0]];
     for (const anchor of rerankedWithoutPlate) {

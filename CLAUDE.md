@@ -4119,6 +4119,17 @@ halves before splitting anything else:
   Steps: squat height ruler 0.15, box jump height ruler 0.06, and **the body memory now VOTES on
   the Romanian Deadlift** (`LIFTS_WHERE_THE_BODY_MODEL_VOTES`), the first lift, because it sat
   closer to the OVR than the blend on all three RDL sets with a reading (+2.2% vs +13.3% today).
+  **Set 3 (on 833), fixed and NOT shipped** (Scott: "fix those now but don't ship"; every found bug
+  fixed, at least one fix per lift): squat height ruler 0.16 (range -4.7% -> about -3.9%), box jump
+  height ruler 0.05 (rise +4.7% -> about +3.3%). RDL set 3 is not in the export because its save
+  landed 11 seconds after the download: get a fresh export. Bugs fixed: the box ruler was handed in
+  as "plate" (now `"box"`); the ledger replay now carries each squat take's grip-loosened shoulder
+  ruler and the RDL's body-memory vote, so it agrees with the phone (squat average 3.57 -> 2.78%,
+  RDL 7.32 -> 6.50%); drive and rise-to-apex window ends are read between frames (half a frame at
+  most); a walk-by hole of 10+ frames holding a quarter of a rep starves it; an admin or guardian
+  account no longer has another account's App Store purchases replayed at every launch (409 when
+  another account holds them). Recorded, not fixed: the box detector reads the box top about 1.0m
+  up on a 0.61m box from behind, and the squat plate is boxed at half size (both need frames).
 - **ROUND TWENTY-FOUR, 2026-11-20: SET 3 ON BUILD 809, IN SHORTS.** Squat height ruler 0.14 ->
   0.13 (range +4.0% -> ~+3.2%); a squat window under 0.01 was refused because it brings back the
   11-09 lockout-stand bug. Box jump height ruler 0.1 -> 0.08 (mean +10.0% -> ~+7.9%). RDL set 3

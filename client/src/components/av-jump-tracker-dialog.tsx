@@ -398,7 +398,9 @@ export function AvJumpTrackerDialog({
         // tightest uncertainty any ruler in this pipeline states, so it decides a box jump's
         // scale almost by itself. It is `boxRulerUncertainty` in this jump's own record now; see
         // that field's comment for what is and is not known about where 0.05 came from.
-        ? [{ source: "plate" as const, scale: boxScale, uncertaintyFraction: t.boxRulerUncertainty }]
+        // "box", not "plate" (2026-11-23): it was handed in as a plate, so every export named a
+        // plate on a box jump and the replay priced it at the detector's uncertainty.
+        ? [{ source: "box" as const, scale: boxScale, uncertaintyFraction: t.boxRulerUncertainty }]
         : []),
       ...(bodyScale != null
         ? [{ source: "height" as const, scale: bodyScale, uncertaintyFraction: t.heightRulerUncertainty }]
@@ -446,17 +448,10 @@ export function AvJumpTrackerDialog({
     // for the same reason: a jump that comes back wrong should say which half was wrong instead
     // of leaving it to be reconstructed from the one number on the card.
     const jumpCalibrationDiagnostics = {
-      // Renamed here for the same reason the three lists below are renamed: the box arrives
-      // under the "plate" slot, and leaving THIS field alone made the report's headline
-      // sentence say "plate was used because it is the most trustworthy of them" on a box jump
-      // with no plate anywhere in frame -- while the very next line listed the sources as
-      // "box" and "height". The reader is left to work out that the two names are the same
-      // measurement, which is precisely the kind of thing a diagnostics page exists to stop.
-      scaleSource: (jumpVerdict.agreedSources.length > 1
-        ? "both"
-        : jumpVerdict.agreedSources[0] === "plate"
-          ? "box"
-          : (jumpVerdict.agreedSources[0] ?? null)) as
+      // The box ruler has carried its own name since 2026-11-23. Before that it was handed in as
+      // "plate" and renamed here, field by field, for the reader -- which missed scaleBlend, so
+      // the export named a plate on every box jump.
+      scaleSource: (jumpVerdict.agreedSources.length > 1 ? "both" : (jumpVerdict.agreedSources[0] ?? null)) as
         | "height"
         | "plate"
         | "box"
@@ -465,22 +460,19 @@ export function AvJumpTrackerDialog({
         | "body_3d"
         | null,
       scaleCandidates: jumpScaleCandidates.map((c) => ({
-        // The box arrives under the "plate" name because that is the slot the schema has for a
-        // known-size reference object. Renamed for the reader here so a jump report does not
-        // claim a plate was in frame.
-        source: c.source === "plate" ? "box" : c.source,
+        source: c.source,
         scale: c.scale,
         measured: null,
         samples: null,
       })),
       scaleOutliers: jumpVerdict.outliers.map((o) => ({
-        source: o.source === "plate" ? "box" : o.source,
+        source: o.source,
         ratioToChosen: o.ratioToChosen,
       })),
       scaleCorroborated: jumpVerdict.corroborated,
       body3DRuler: bodyFallbacks.body3DRuler,
       scalesRejectedAsImplausible: jumpScalesRejected.map((r) => ({
-        source: r.source === "plate" ? "box" : r.source,
+        source: r.source,
         impliedHeightIn: r.impliedHeightIn,
       })),
       // EVERY STEP THIS JUMP'S SCALE BLEND TOOK, AND WHOSE NUMBERS IT WAS HANDED. The bar tracker

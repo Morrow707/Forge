@@ -16,6 +16,42 @@ See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
 ## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-23, round twenty-five)
 
+**ROUND TWENTY-FIVE SET 3, 2026-11-23 (filmed on build 833, from behind; fixed and NOT shipped,
+on Scott's word "fix those now but don't ship").** OVR reps 2-6 on the box jump.
+
+| lift | Forge as filmed | OVR | error | after set 3's step |
+|---|---|---|---|---|
+| Squat range / mean / peak | 73.1 / 0.83 / 1.18 | 30.2in (76.71) / 0.83 / 1.22 | -4.7% / 0.0% / -3.3% | range about -3.9% (height ruler 0.15 -> 0.16) |
+| RDL | not in the export | 24.5in / 0.89 / 1.56 | -- | waits on a fresh export |
+| Box jump rise / mean / peak | 74.4 / 1.50 / 3.05 | 27.96in (71.02) / 1.506 / 2.89 | +4.7% / -0.4% / +5.5% | rise about +3.3% (height ruler 0.06 -> 0.05) |
+
+- **RDL set 3 is missing from the export, and it is not a refusal.** The clip uploaded at 20:15:33,
+  the export was downloaded at 20:15:57, and the save that carries the set landed at 20:16:08
+  (Render log). Same as round twenty-four's set 3: download the export again.
+- **The ledger now replays what the phone does on two things it could not see.** Each back squat
+  row carries its grip-loosened shoulder ruler (`shoulderGripFloorFraction`, 0.34-0.56 as filmed,
+  where the replay had stated the bare 0.2 floor), and the RDL rows carry the body memory's reading
+  (`bodyModel`), which votes on the RDL since set 2. Squat average over its sets 3.57 -> 2.78%
+  (16 sets); RDL 7.32 -> 6.50%. The sealed squat rows now read centred (lean about +1%): the older
+  side-on takes high, today's three from-behind takes 3-4% low.
+- **The box ruler was named "plate".** The jump dialog handed the box in under the plate's name;
+  every diagnostic renamed it except `scaleBlend`, so the export named a plate on every box jump.
+  It is `"box"` now (`isKnownSizeObjectRuler` keeps the plate's two rules on it on purpose).
+- **The rectangle detector put the box top about 1.0m up on a 0.61m box on all three of today's
+  sets** (`boxTopFromDetectorM` 0.986 / 0.977 / 1.022, uncorroborated), so the box ruler read
+  35-40% low and stepped out of the vote each time. No number moved for it; the detector is
+  finding something else from behind. Next: the frames.
+- **Drive window ends read between frames** (`client/src/lib/turning-point.ts`, at most half a
+  frame): the jump's rise-to-apex window and the bar's drive window. 31 of 67 stored bar takes move,
+  none by 0.03 m/s or more.
+- **A walk-by hole of 10+ frames holding a quarter of a rep starves it**
+  (`SAMPLE_STARVED_LONG_GAP_MULTIPLE`): set 2's rep 4 (0.634s, 42% of its 119cm) is out of the set
+  now, as rep 7 already was; one 11-10 press rep goes with it.
+- **Overwatch has no record on jumps**: the box comes from the rectangle detector, not the CoreML
+  object tracker, so there is no lock for overwatch to judge. Recorded, not built.
+- **The squat's plate was boxed at 0.52 of a plate's size again** (61.7 against 119.2px) and
+  refused. Labelled images of a plate from behind are what fix it.
+
 **ROUND TWENTY-FIVE SET 2, 2026-11-23 (build 833, every set-1 fix live, still from behind).** OVR
 reps 2-6 on the box jump. For the RDL, Scott had someone walk behind him twice on purpose.
 

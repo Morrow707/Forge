@@ -1,4 +1,5 @@
 // Type-only -- see bar-tracking.ts's own comment on why this import is safe (erased at
+import { turningPointT as turningPointTimes } from "./turning-point";
 // compile time, no runtime Capacitor dependency pulled into this pure module).
 import { gravityReadingFromJump, gravityVerdictForSet } from "./gravity-ruler";
 import type { CaptureDeviceInfo } from "./native-av-preview";
@@ -182,6 +183,11 @@ export const COUNTERMOVEMENT_MAX_SECONDS = 2.5;
  *  then while it was higher earlier (the eccentric), each with 1cm of hysteresis; the window is
  *  bounded by windowStartT (the previous landing) and COUNTERMOVEMENT_MAX_SECONDS. Null when
  *  there is no dip of at least the hysteresis before takeoff. Never changes the rep. */
+/** Kept as a jump-shaped wrapper; the rule lives in turning-point.ts. */
+export function turningPointT(points: TrackedPoint[], ys: number[], idx: number): number {
+  return turningPointTimes(points.map((p) => p.t), ys, idx);
+}
+
 export function measureCountermovement(
   hipPoints: TrackedPoint[],
   hipYSmoothed: number[],
@@ -266,7 +272,15 @@ export function measureCountermovement(
     }
   }
   const riseToApexM = apexFound ? hipYSmoothed[bottomIdx] - hipYSmoothed[apexIdx] : null;
-  const riseToApexSeconds = apexFound ? (hipPoints[apexIdx].t - hipPoints[bottomIdx].t) / 1000 : null;
+  // THE TURNING POINTS ARE READ BETWEEN FRAMES (2026-11-23, round twenty-five). The bottom and
+  // the apex are each the sample nearest the turn, and the hip was sampled every ~59ms on the
+  // 11-23 box jumps, so either end could sit up to half a frame off. Read from samples alone the
+  // rise read 6.2% shorter than the OVR's on average over set 2's five jumps; the vertex of the
+  // parabola through each turning sample and its two neighbours read -0.8%. Timing only: the
+  // distance stays the sampled one.
+  const riseToApexSeconds = apexFound
+    ? (turningPointT(hipPoints, hipYSmoothed, apexIdx) - turningPointT(hipPoints, hipYSmoothed, bottomIdx)) / 1000
+    : null;
   const r2 = (v: number) => Math.round(v * 100) / 100;
   const r1 = (v: number) => Math.round(v * 10) / 10;
   return {

@@ -120,8 +120,11 @@ describe("the sensor's window on a jump runs to the hip's apex", () => {
     expect(cm.dipDepthCm).toBeCloseTo(30, 0);
     expect(cm.concentricRiseCm).toBeCloseTo(40, 0);
     expect(cm.riseToApexCm).toBeCloseTo(75, 0);
-    expect(cm.riseToApexSeconds).toBeCloseTo(0.9, 2); // the dip bottoms at index 15, the apex at 33
-    expect(cm.riseToApexMeanVelocityMps).toBeCloseTo(0.83, 2);
+    // the dip bottoms at index 15, the apex at 33; since round twenty-five the time is read between
+    // frames (turningPointT), so this synthetic's sharp corners read a few hundredths shorter
+    expect(cm.riseToApexSeconds).toBeGreaterThan(0.85);
+    expect(cm.riseToApexSeconds).toBeLessThanOrEqual(0.9);
+    expect(cm.riseToApexMeanVelocityMps).toBeCloseTo(0.75 / cm.riseToApexSeconds!, 1);
     expect(cm.apexT).toBe(hip[10 + 6 + 7 + 10].t);
     expect(cm.riseToApexMeanVelocityMps!).toBeLessThan(cm.concentricMeanVelocityMps);
   });

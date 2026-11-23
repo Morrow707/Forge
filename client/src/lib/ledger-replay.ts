@@ -1,3 +1,4 @@
+import { LIFTS_WHERE_THE_BODY_MODEL_VOTES } from "@shared/athlete-body-model";
 import {
   candidatesAsFilmed,
   errorPctAgainstSensor,
@@ -49,8 +50,10 @@ export function liveUncertainty(source: string, exercise: string, row?: LedgerRo
   if (source === "height") return t.heightRulerUncertainty;
   // The floor is the constant; the span's own spread on the day is a fact about the take, and the
   // phone states the larger of the two (the 10-30 row set 2 shipped at 0.317 over a 0.2 floor).
-  if (source === "shoulder_width") return Math.max(t.biacromialToleranceFraction, row?.shoulderSpanSpreadFraction ?? 0);
+  // And the grip's loosening, a property of the take the row records since 2026-11-23.
+  if (source === "shoulder_width") return Math.max(t.biacromialToleranceFraction, row?.shoulderSpanSpreadFraction ?? 0, row?.shoulderGripFloorFraction ?? 0);
   if (source === "depth") return t.depthRulerUncertainty;
+  if (source === "box") return t.boxRulerUncertainty;
   if (source === "plate") {
     // What `computeReferenceObjectScale` states for a bumper plate the detector boxed: the casting
     // tolerance over the nominal diameter, in quadrature with the detector's own measured noise.
@@ -110,7 +113,11 @@ export function liveX1000(row: LedgerRow, patch: LedgerSettingsPatch = {}): numb
     ? row.candidates
     : row.candidates.filter((c) => c.source !== "height")
   ).filter((c) => !stillRefused.has(c.source));
-  return blendX1000(candidates, (s) => liveUncertainty(s, row.exercise, row, patch));
+  // The remembered bones vote where the phone lets them (LIFTS_WHERE_THE_BODY_MODEL_VOTES), at
+  // the uncertainty they stated on the take.
+  const bodyModel = row.bodyModel && LIFTS_WHERE_THE_BODY_MODEL_VOTES.includes(row.exercise) ? row.bodyModel : null;
+  const withBodyModel = bodyModel ? [...candidates, { source: "body_model", scaleX1000: bodyModel.scaleX1000 }] : candidates;
+  return blendX1000(withBodyModel, (s) => (s === "body_model" && bodyModel ? bodyModel.uncertaintyFraction : liveUncertainty(s, row.exercise, row, patch)));
 }
 
 /** The take's error against its sensor, in per cent, through the live pipeline with an optional

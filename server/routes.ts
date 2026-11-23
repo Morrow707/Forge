@@ -12217,6 +12217,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const coachedAthlete =
       user.role === "athlete" && (await storage.getCoachesForAthlete(user.id)).length > 0;
     if (user.role !== "athlete" && user.role !== "coach") {
+      // AN ADMIN OR GUARDIAN IS SOLD NOTHING, BUT THE PHONE'S APPLE ID MAY HAVE BOUGHT SOMETHING
+      // ON ANOTHER FORGE ACCOUNT (2026-11-23). StoreKit replays every unfinished transaction of
+      // the device's Apple ID to whoever is signed in, and the bare 403 here is not finishable, so
+      // the admin account met ten sandbox purchases made on its Free Agent account at EVERY launch
+      // (Render log, 20:11:57). When another account already holds the transaction it is the
+      // same final answer as the 409 below -- bound to another account, finishable -- and the
+      // phone stops re-sending it. A transaction nobody holds stays a 403: that one is unexplained
+      // and is left open for the account it belongs to.
+      const verifiedHere = await verifyAppleTransaction(parsed.data.signedTransactionInfo);
+      if (verifiedHere.ok) {
+        const holders = await storage.accountsHoldingAppleTransaction(verifiedHere.transaction.originalTransactionId, user.id);
+        if (holders.length > 0) {
+          return res.status(409).json({ message: "This purchase belongs to another Forge account.", alreadyBoundElsewhere: true });
+        }
+      }
       return res.status(403).json({ message: "Nothing is sold to this account in the app." });
     }
     const verified = await verifyAppleTransaction(parsed.data.signedTransactionInfo);

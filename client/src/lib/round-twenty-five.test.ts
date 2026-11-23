@@ -24,8 +24,8 @@ const byName = (name: string) => fixtures.find((x) => x.exerciseName === name)!;
 describe("round twenty-five", () => {
   it("each lift's step is its own", () => {
     // set 1 moved them 0.13 -> 0.14 and 0.08 -> 0.07; set 2 one more step each
-    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.15);
-    expect(cameraTunablesFor("Box Jump").values.heightRulerUncertainty).toBe(0.06);
+    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.16); // 0.15 until round twenty-five set 3
+    expect(cameraTunablesFor("Box Jump").values.heightRulerUncertainty).toBe(0.05); // 0.06 until round twenty-five set 3
     expect(cameraTunablesFor("Romanian Deadlift", "deadlift").values.body3DCorrectedUncertainty).toBe(0.16);
     expect(cameraTunablesFor("Conventional Deadlift", "deadlift").values.body3DCorrectedUncertainty).not.toBe(0.16);
     expect(cameraTunablesFor("Depth Jump").values.heightRulerUncertainty).not.toBe(0.06);
@@ -68,5 +68,17 @@ describe("round twenty-five", () => {
     expect(rdl.repBreakdown).toHaveLength(8);
     // reps 4 and 7 ran through the walk-bys (119 and 88cm); the set's range leaves them out
     expect(rdl.romCm).toBeLessThan(75);
+  });
+});
+
+describe("round twenty-five, the remaining fixes", () => {
+  it("a jump's turning point is read between frames", async () => {
+    const { turningPointT } = await import("./jump-tracking");
+    // y = (t - 0.53)^2 sampled every 0.1s: the vertex lies between the samples at 0.5 and 0.6
+    const pts = [0.3, 0.4, 0.5, 0.6, 0.7].map((t) => ({ t: t * 1000, x: 0, y: (t - 0.53) ** 2, z: 0 }));
+    const ys = pts.map((p) => p.y);
+    expect(turningPointT(pts, ys, 2)).toBeCloseTo(530, 0);
+    // a flat run or an end sample keeps the sample's own time
+    expect(turningPointT(pts, ys, 0)).toBe(300);
   });
 });

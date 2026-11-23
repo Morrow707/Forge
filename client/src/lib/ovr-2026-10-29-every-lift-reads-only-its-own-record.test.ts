@@ -65,7 +65,9 @@ const CORRECTED: Record<string, { reps: number; romCm: number; mean: number; pea
   // at lockout lands inside the rep (-40.3% on the 11-09 take). These two takes pay for it: set 1
   // 0.80 -> 0.81 and the 10-19 set 0.83 -> 0.86, both against sensors the notes record as
   // scale-faulted anyway. See FITTED_OVERRIDE_EVIDENCE["Back Squat"].
-  "2026-10-29 Back Squat set 1": { reps: 5, romCm: 71.8, mean: 0.81, peak: 1.16 },
+  // Round twenty-five (2026-11-23): the drive window's ends are read between frames (half a frame
+  // at most), 0.81 -> 0.79 against the sensor's 0.80 -- the same distance on the other side.
+  "2026-10-29 Back Squat set 1": { reps: 5, romCm: 71.8, mean: 0.79, peak: 1.16 },
   "2026-10-19 Back Squat set 2": { reps: 5, romCm: 71.8, mean: 0.86, peak: 1.19 },
   // Round ten (2026-11-05): the RDL's window is 0 and the rest-at-top rule gives the 10-19 take
   // its eighth rep (the last drive, merged with the stand-and-hold before the bar went down).

@@ -45,7 +45,9 @@ describe("Coaches Corner on the App Store", () => {
     // rather than at the answer it used to give.
     expect(routes).toMatch(/const coachedAthlete =\s*\n?\s*user\.role === "athlete" && \(await storage\.getCoachesForAthlete\(user\.id\)\)\.length > 0;/);
     // And a role with nothing to buy at all is still refused, which is the 403 that stays.
-    expect(routes).toMatch(/user\.role !== "athlete" && user\.role !== "coach"\) \{\s*\n\s*return res\.status\(403\)/);
+    // Since 2026-11-23 the branch first answers the finishable 409 when another account holds the
+    // transaction (an-admin-is-not-replayed-a-purchase-forever.test.ts); otherwise it is still 403.
+    expect(routes).toMatch(/user\.role !== "athlete" && user\.role !== "coach"\) \{[\s\S]*?return res\.status\(403\)\.json\(\{ message: "Nothing is sold to this account in the app\." \}\);/);
     expect(client).toContain('"/api/account/apple-iap/verify"');
     expect(client).toContain("export async function purchaseCoachAddOn(");
   });

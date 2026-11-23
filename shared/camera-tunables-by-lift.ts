@@ -384,8 +384,8 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
   // it was fitted on the lowering and is gone -- see VELOCITY_OVERRIDES_REMOVED_2026_11_05 and
   // the-concentric-is-the-way-up.test.ts.
   "Romanian Deadlift": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0, maxPeakToMeanRatio: 1.66, biacromialToleranceFraction: 0.28, body3DCorrectedUncertainty: 0.16 },
-  "Back Squat": { heightRulerUncertainty: 0.15, driveOnsetFraction: 0.01, velocitySmoothingMs: 130 },
-  "Box Jump": { boxRulerUncertainty: 0.07, heightRulerUncertainty: 0.06 },
+  "Back Squat": { heightRulerUncertainty: 0.16, driveOnsetFraction: 0.01, velocitySmoothingMs: 130 },
+  "Box Jump": { boxRulerUncertainty: 0.07, heightRulerUncertainty: 0.05 },
   "Pendlay Row": { depthRulerUncertainty: 0.6 },
   "Dumbbell Shoulder Press": {
     biacromialToleranceFraction: 0.4,
@@ -429,6 +429,14 @@ export const VELOCITY_OVERRIDES_REMOVED_2026_11_05: Record<string, string[]> = {
  *  an override with no evidence here is a number somebody guessed, and the test refuses it. */
 export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
   "Box Jump":
+    "2026-11-23, round twenty-five set 3 (RULE #6), build 833, file path, OVR reps 2-6. " +
+    "heightRulerUncertainty 0.06 -> 0.05. Set 3 read rise-to-apex +4.7% (74.4 against 71.0cm), " +
+    "mean -0.4% (1.50 against 1.506), peak +5.5% (3.05 against 2.89): scale high, at 0.07 as filmed. " +
+    "Re-blended at 0.06 (build 834) x0.993, at 0.05 x0.993 again: rise about +3.3%. Every other " +
+    "box jump on file moves about 0.8% lower (11-20 set 2 about 0.9% higher). The box ruler read " +
+    "35-40% low on all three sets today (the rectangle detector put the box top about 1.0m up on a " +
+    "0.61m box, uncorroborated) and stepped out of the vote each time; recorded, and the box ruler " +
+    "is named \"box\" now instead of \"plate\". " +
     "2026-11-23, round twenty-five set 2 (RULE #6), build 833, OVR reps 2-6. heightRulerUncertainty " +
     "0.07 -> 0.06. Set 2 counted 5 of 5 (both jump fixes live) and read rise +7.5%, mean +14.5%, " +
     "peak +8.9%; even the height ruler alone (3.375e-3) sat above the 3.26e-3 the OVR requires. " +
@@ -458,6 +466,12 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "about -0.1%, peak -7.3%. Set 1 is unchanged (its box ruler stepped out of the cluster). 0.08 is " +
     "the next step. No box-jump ledger row exists yet; the next filmed box jump is its test.",
   "Back Squat":
+    "2026-11-23, round twenty-five set 3 (RULE #6), build 833 (filmed at 0.14). heightRulerUncertainty " +
+    "0.15 -> 0.16. Set 3 read range -4.7% (73.1 against 30.2in, 76.7cm), mean 0.0% (0.83), peak -3.3%. " +
+    "As filmed, all three of today's sets read low; 0.15 -> 0.16 moves set 3 -4.3 -> -3.9%, set 2 " +
+    "-4.2 -> -3.5%, set 1 -3.7 -> -2.9%. The ledger now carries each squat take's grip-loosened shoulder ruler " +
+    "(shoulderGripFloorFraction); with it the 15 sealed squat sets average 2.55% at 0.15 and 2.70% " +
+    "at 0.16 (lean +0.3 -> +1.1%): the older side-on takes read high, today's from-behind takes low. " +
     "2026-11-23, round twenty-five set 2 (RULE #6), build 833. heightRulerUncertainty 0.14 -> " +
     "0.15. Set 2 read range -4.9% (71.5 vs 29.6in, every rep about 4.5% short), mean +1.3% (the " +
     "stand fix live), peak -2.7%; the height ruler (3.572e-3) again the lowest voter at 61.8%. As " +

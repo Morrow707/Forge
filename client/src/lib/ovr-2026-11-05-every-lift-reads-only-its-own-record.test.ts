@@ -66,7 +66,8 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     // only the 0.02 window of round eight does that, so this is 710 and not 707 -- the question
     // the export's new calibration.liftRecord answers directly from the next take on.
     const shipped = byId(SQUAT).shipped;
-    expect(replay(byId(SQUAT), { driveOnsetFraction: 0.02, velocitySmoothingMs: 165 }).meanVelocityMps).toBe(shipped.meanVelocityMps);
+    // within a hundredth since round twenty-five read the drive window's ends between frames
+    expect(Math.abs(replay(byId(SQUAT), { driveOnsetFraction: 0.02, velocitySmoothingMs: 165 }).meanVelocityMps! - shipped.meanVelocityMps!)).toBeLessThanOrEqual(0.011);
     expect(replay(byId(SQUAT), { driveOnsetFraction: 0.02, velocitySmoothingMs: 165 }).peakVelocityMps).toBe(shipped.peakVelocityMps);
     expect(byId(SQUAT).trackingDiagnostics.recording.analysisPath).toBe("file");
     expect(byId(RDL).trackingDiagnostics.recording.analysisPath).toBe("live");
@@ -91,9 +92,10 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     // 0.85 / +2.4% at round nine's 0 window; 0.87 / +4.6% at round twelve's 0.02. The range of
     // motion and the peak are untouched by the window, which is the property that says a window
     // moves the mean and a smoothing moves the peak.
-    expect(m.meanVelocityMps).toBe(0.87);
+    // 0.86 / +3.4% since round twenty-five read the window's ends between frames
+    expect(m.meanVelocityMps).toBe(0.86);
     expect(m.peakVelocityMps).toBe(1.22);
-    expect(m.meanVelocityMps! / s.reported.meanVelocityMps - 1).toBeCloseTo(0.046, 2);
+    expect(m.meanVelocityMps! / s.reported.meanVelocityMps - 1).toBeCloseTo(0.034, 2);
     expect(m.peakVelocityMps! / s.reported.peakVelocityMps - 1).toBeCloseTo(-0.039, 2);
     m.repBreakdown.forEach((r: any, i: number) => {
       // 0.11 rather than round nine's 0.07, and the loosening is the round-twelve window's cost
@@ -111,8 +113,8 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     // The step's size, so nobody re-derives it: at 0.02 / 165 (round eight's record, what the
     // phone shipped) the take read +4.8% / -5.5%; between 0.02 and 0 nothing moves, because the
     // only samples the trim removes at any positive fraction are the zero-speed turnaround ones.
-    for (const onset of [0.015, 0.01, 0.005]) expect(replay(byId(SQUAT), { driveOnsetFraction: onset, velocitySmoothingMs: 165 }).meanVelocityMps, `onset ${onset}`).toBe(0.87);
-    expect(replay(byId(SQUAT), { driveOnsetFraction: 0, velocitySmoothingMs: 165 }).meanVelocityMps).toBe(0.85);
+    for (const onset of [0.015, 0.01, 0.005]) expect(replay(byId(SQUAT), { driveOnsetFraction: onset, velocitySmoothingMs: 165 }).meanVelocityMps, `onset ${onset}`).toBe(0.86); // 0.87 before round twenty-five
+    expect(replay(byId(SQUAT), { driveOnsetFraction: 0, velocitySmoothingMs: 165 }).meanVelocityMps).toBe(0.84); // 0.85 before round twenty-five
     // and the smoothing is a time window over 33ms samples: 140 and 150 read as 165, 100 as 130
     for (const sm of [140, 150]) expect(replay(byId(SQUAT), { velocitySmoothingMs: sm }).peakVelocityMps, `smoothing ${sm}`).toBe(1.20);
     expect(replay(byId(SQUAT), { velocitySmoothingMs: 100 }).peakVelocityMps).toBe(1.22);
@@ -189,11 +191,11 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     const s = OVR_ROMANIAN_DEADLIFT_2026_11_05.sensor.reported;
     const m = replay(byId(RDL));
     expect(m.meanVelocityMps! / s.meanVelocityMps - 1).toBeCloseTo(0.161, 2);
-    expect(m.peakVelocityMps! / s.peakVelocityMps - 1).toBeCloseTo(0.13, 2); // +29.8% at the shared cap of 2, +18.6% at 1.75 (2026-11-16), +13.0% at 1.66 (round twenty-two)
+    expect(m.peakVelocityMps! / s.peakVelocityMps - 1).toBeCloseTo(0.12, 2); // +12.0% since round twenty-five read the window's ends between frames; +29.8% at the shared cap of 2, +18.6% at 1.75 (2026-11-16), +13.0% at 1.66 (round twenty-two)
     const step = replay(byId(RDL), { driveOnsetFraction: 0.02 });
-    expect(step.meanVelocityMps! / s.meanVelocityMps - 1).toBeCloseTo(0.258, 2);
+    expect(step.meanVelocityMps! / s.meanVelocityMps - 1).toBeCloseTo(0.247, 2); // +25.8% before round twenty-five
     const shared = replay(byId(RDL), { driveOnsetFraction: DRIVE_ONSET_FRACTION });
-    expect(shared.meanVelocityMps! / s.meanVelocityMps - 1).toBeCloseTo(0.333, 2);
+    expect(shared.meanVelocityMps! / s.meanVelocityMps - 1).toBeCloseTo(0.323, 2); // +33.3% before round twenty-five
     for (const other of [step, shared]) {
       expect(other.repBreakdown.length).toBe(m.repBreakdown.length);
       expect(other.romCm).toBe(m.romCm);
@@ -270,7 +272,8 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
       // reps 1, 2 and 5 by a sample and leaves 3 and 4 alone (0.834/0.868, 0.767/0.800,
       // 0.867/0.867, 0.901/0.901, 0.934/0.967), which is the whole of the mean's +2.4% -> +3.7%.
       expect(r.windows.phaseSeconds - r.windows.driveSeconds, `rep ${i + 1}`).toBeLessThan(0.035);
-      expect(r.windows.driveSeconds, `rep ${i + 1}`).toBeLessThanOrEqual(r.windows.phaseSeconds);
+      // half a frame past the phase at most: the window's ends are read between frames (round twenty-five)
+      expect(r.windows.driveSeconds, `rep ${i + 1}`).toBeLessThanOrEqual(r.windows.phaseSeconds + 0.017);
       const sensorSeconds = (s.reps[i].romIn * 0.0254) / s.reps[i].meanVelocityMps;
       expect(sensorSeconds - r.windows.driveSeconds, `rep ${i + 1} window`).toBeGreaterThanOrEqual(-0.001);
       expect(sensorSeconds - r.windows.driveSeconds, `rep ${i + 1} window`).toBeLessThan(0.05);
@@ -281,7 +284,7 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     });
     // the scale step: 0.11 -> 0.12 on the squat's record (round ten), then 0.13 (round eighteen,
     // RULE #6), one point each on this take, and it reaches no other lift
-    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.15); // 0.14 in round twenty-two, 0.13 in round twenty-four, 0.15 since round twenty-five
+    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.16); // 0.14 in round twenty-two, 0.13 in round twenty-four, 0.15 in round twenty-five set 2, 0.16 since its set 3
     expect(cameraTunablesFor("Front Squat", "squat").values.heightRulerUncertainty).toBe(HEIGHT_RULER_UNCERTAINTY);
     const voters = f.trackingDiagnostics.calibration.scaleBlend.voters;
     const at = (u: number) => reconcileScaleEstimates(voters.map((c: any) => ({ source: c.source, scale: c.scale, uncertaintyFraction: c.source === "height" ? u : c.uncertaintyFraction }))).scale!;
@@ -309,8 +312,8 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
     // mean +15.8%, peak +13.9% (+19.0% at the shared cap of 2)
     expect(m.romCm).toBe(66.6);
     expect(m.romCm! / sensorRomCm(s.reported.romIn) - 1).toBeCloseTo(0.036, 2);
-    expect(m.meanVelocityMps! / s.reported.meanVelocityMps - 1).toBeCloseTo(0.158, 2);
-    expect(m.peakVelocityMps! / s.reported.peakVelocityMps - 1).toBeCloseTo(0.101, 2); // +13.9% at cap 1.75, +10.1% at 1.66 (round twenty-two)
+    expect(m.meanVelocityMps! / s.reported.meanVelocityMps - 1).toBeCloseTo(0.147, 2); // +15.8% before round twenty-five
+    expect(m.peakVelocityMps! / s.reported.peakVelocityMps - 1).toBeCloseTo(0.108, 2); // +13.9% at cap 1.75, +10.1% at 1.66 (round twenty-two), +10.8% since round twenty-five read the window's ends between frames
     expect(replay(f, { driveOnsetFraction: 0.02 }).meanVelocityMps! / s.reported.meanVelocityMps - 1).toBeCloseTo(0.2, 2);
     // the set-up phase (89cm from the floor, 0.9s of travel, a 1.6s stand) is cut at its rest
     // too and the athlete's count trims it; with no count it is a ninth rep, not the eighth lost
@@ -351,8 +354,10 @@ describe("the 2026-11-05 export replays through each lift's own record", () => {
       expect(c.uncorrectedRiseToApexCm, `rep ${i + 1}`).toBeGreaterThan(c.riseToApexCm);
       expect(Math.abs(c.riseToApexCm / sensorRomCm(gt.sensor.reps[i].romIn) - 1), `rep ${i + 1} apex rise`).toBeLessThan(0.06);
     });
-    // the set: +3.1% against the sensor's mean where the drive-to-takeoff mean reads +24%
-    expect(m.hipRiseToApexMeanVelocityMps! / gt.sensor.reportedOverOurReps.meanVelocityMps - 1).toBeCloseTo(0.031, 2);
+    // the set: +3.1% against the sensor's mean where the drive-to-takeoff mean reads +24%; +4.8%
+    // since round twenty-five reads the turning points between frames (the 11-23 set 2 went
+    // -6.2% -> -0.8% on its windows, this take +1.7 points the other way: reported, not a veto)
+    expect(m.hipRiseToApexMeanVelocityMps! / gt.sensor.reportedOverOurReps.meanVelocityMps - 1).toBeCloseTo(0.048, 2);
     expect(m.hipDriveMeanVelocityMps! / gt.sensor.reportedOverOurReps.meanVelocityMps - 1).toBeGreaterThan(0.08);
     // and with no hip trace there is no apex and the fields are null, as before
     const noHip = summarizeJumpSet(points, f.heightIn, 35, null, 0.025, [], { usesBox: true, boxHeightCm: 61 })!;

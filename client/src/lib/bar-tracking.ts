@@ -11,6 +11,7 @@
 // Type-only -- erased at compile time, so this doesn't actually pull native-av-preview.ts's
 // real Capacitor bridge code (or its runtime dependency on a native platform) into this module.
 import type { CaptureDeviceInfo } from "./native-av-preview";
+import { turningPointT } from "./turning-point";
 import type { TrackingDiagnostics } from "./tracking-diagnostics";
 
 import { cameraTunablesFor, type ResolvedCameraTunables } from "@shared/camera-tunables-by-lift";
@@ -1312,6 +1313,13 @@ export const SAMPLE_STARVED_GAP_MULTIPLE = 3;
  *  phase inside its one hole. The line is half the phase's distance; it catches that rep and a
  *  09-29 bench rep (0.1s, 32.2 of 57.2cm) and no rep on a sensor-paired take. */
 export const SAMPLE_STARVED_MIN_DISTANCE_SHARE = 0.5;
+/** AND A LONG HOLE STARVES A REP ON LESS (2026-11-23). The RDL set 2 of round twenty-five had
+ *  somebody walk between the camera and the bar twice, on purpose; rep 4 lost 0.634s (19 of its
+ *  own frames) holding 42% of its distance, read 119cm against the sensor's 25.7in, and stayed
+ *  "whole" because 42% is under half. A hole that long is not a blink: past this many median
+ *  intervals, a quarter of the phase's distance inside it is enough. */
+export const SAMPLE_STARVED_LONG_GAP_MULTIPLE = 10;
+export const SAMPLE_STARVED_LONG_GAP_MIN_DISTANCE_SHARE = 0.25;
 
 export function trimPhaseToDrive(
   speeds: number[],
@@ -2084,8 +2092,10 @@ export function summarizeTrackedSet(
     const distanceInLargestGapShare = phaseDistanceM > 0 ? distanceInLargestGapM / phaseDistanceM : 0;
     const sampleStarved =
       phaseSampleIntervalSeconds > 0 &&
-      largestGapInPhaseSeconds > SAMPLE_STARVED_GAP_MULTIPLE * phaseSampleIntervalSeconds &&
-      distanceInLargestGapShare >= SAMPLE_STARVED_MIN_DISTANCE_SHARE;
+      ((largestGapInPhaseSeconds > SAMPLE_STARVED_GAP_MULTIPLE * phaseSampleIntervalSeconds &&
+        distanceInLargestGapShare >= SAMPLE_STARVED_MIN_DISTANCE_SHARE) ||
+        (largestGapInPhaseSeconds > SAMPLE_STARVED_LONG_GAP_MULTIPLE * phaseSampleIntervalSeconds &&
+          distanceInLargestGapShare >= SAMPLE_STARVED_LONG_GAP_MIN_DISTANCE_SHARE));
     // Timing comes from the moving part of the phase; displacement still comes from the phase's
     // own endpoints -- see trimPhaseToMovement for why those are two different windows, and for
     // the calibration run that separated them. startIdx/endIdx below stay untrimmed on purpose:
@@ -2113,7 +2123,12 @@ export function summarizeTrackedSet(
       ? moving
       : trimPhaseToTravel(ySmoothed, phase.startIdx, reportEndIdx, reportPeak.peakIdx, tune.travelOnsetMarginM);
     const drive = trimPhaseToDrive(speedsMps, phase.startIdx, reportEndIdx, reportPeak.peakIdx, tune.driveOnsetFraction) ?? movingReport;
-    const driveDuration = (points[drive.endIdx].t - points[drive.startIdx].t) / 1000;
+    // Where an edge of the drive window IS a turning point of the bar (the phase's own start, or
+    // its own end when no rest cut it), its time is read between frames -- turning-point.ts.
+    // Timing only, and only the reported window: which reps exist does not move.
+    const driveStartT = drive.startIdx === phase.startIdx ? turningPointT(rawT, rawY, drive.startIdx) : points[drive.startIdx].t;
+    const driveEndT = drive.endIdx === phase.endIdx && reportEndIdx === phase.endIdx ? turningPointT(rawT, rawY, drive.endIdx) : points[drive.endIdx].t;
+    const driveDuration = (driveEndT - driveStartT) / 1000;
     // RANGE OF MOTION OVER THE TIME THE BAR WAS TRAVELLING -- a bar sensor's definition of mean
     // concentric velocity, and the one this is calibrated against. The sample mean of the
     // smoothed speeds it replaced sat at 0.42x of the sensor on the same reps: a mean of
