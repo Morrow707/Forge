@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Play, RotateCcw } from "lucide-react";
+import { Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import { extractYouTubeId } from "@/components/exercise-video";
 import { clipWindowFromUrl } from "@shared/exercise-video-match";
 import { youTubePlayerState } from "@/lib/youtube-player-state";
@@ -48,6 +48,7 @@ export function ExerciseVideoPlayer({
   const t = useT();
   const [started, setStarted] = useState(false);
   const [state, setState] = useState<PlayerState>("loading");
+  const [muted, setMuted] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
   const videoId = url ? extractYouTubeId(url) : null;
 
@@ -82,6 +83,11 @@ export function ExerciseVideoPlayer({
     } else send("playVideo");
   };
 
+  const toggleSound = () => {
+    send(muted ? "unMute" : "mute");
+    setMuted(!muted);
+  };
+
   return (
     <div className={className}>
       <div className="relative aspect-video w-full overflow-hidden rounded-md border border-border bg-black">
@@ -113,6 +119,17 @@ export function ExerciseVideoPlayer({
                     {t(LAYER[state].word!)}
                   </span>
                 )}
+              </button>
+            )}
+            {state !== "error" && (
+              // Sound on and off. The phone's own volume buttons set how loud it plays.
+              <button
+                type="button"
+                onClick={toggleSound}
+                aria-label={muted ? t("Turn the sound on") : t("Turn the sound off")}
+                className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white"
+              >
+                {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
               </button>
             )}
           </>

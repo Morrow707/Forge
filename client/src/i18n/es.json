@@ -6828,5 +6828,7 @@
   "Pause {name} demo video": "Pausar el video de demostración de {name}",
   "Replay {name} demo video": "Volver a ver el video de demostración de {name}",
   "Replay": "Volver a ver",
-  "This video can't play in Forge.": "Este video no se puede reproducir en Forge."
+  "This video can't play in Forge.": "Este video no se puede reproducir en Forge.",
+  "Turn the sound on": "Activar el sonido",
+  "Turn the sound off": "Silenciar el sonido"
 }

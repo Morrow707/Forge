@@ -48,3 +48,11 @@ describe("a demo only plays or replays", () => {
     expect(src).toMatch(/absolute inset-0/);
   });
 });
+
+describe("sound", () => {
+  it("the player can turn the sound off and on", () => {
+    const src = strip(readFileSync("client/src/components/exercise-video-player.tsx", "utf8"));
+    expect(src).toMatch(/"unMute"/);
+    expect(src).toMatch(/"mute"/);
+  });
+});
