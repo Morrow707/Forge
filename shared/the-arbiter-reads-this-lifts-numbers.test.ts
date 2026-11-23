@@ -83,9 +83,18 @@ describe("the native arbiter reads this lift's numbers", () => {
   });
 
   it("builds what it sends from the LIFT's record, not from the shared template", () => {
-    const memo = dialog.slice(dialog.indexOf("const arbiterTunables = useMemo("));
-    expect(memo.slice(0, 700)).toContain("cameraTunablesFor(exerciseName");
-    for (const name of PLUMBED) expect(memo.slice(0, 900)).toContain(`${name}: values.${name}`);
+    // Since 2026-11-23 the memo hands the lift's record to overwatchSettingsFor, which returns the
+    // newest LEARNED version for the lift or, with none, the record's own values field by field
+    // (shared/overwatch-learning.ts). Bounded by the memo's own dependency list, not a character
+    // count.
+    const start = dialog.indexOf("const { arbiterTunables, overwatchVersion } = useMemo(");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const memo = dialog.slice(start, dialog.indexOf("}, [exerciseName]);", start));
+    expect(memo).toContain("cameraTunablesFor(exerciseName");
+    expect(memo).toContain("overwatchSettingsFor(exerciseName, values)");
+    const learning = fs.readFileSync(`${process.cwd()}/shared/overwatch-learning.ts`, "utf8");
+    const fallback = learning.slice(learning.indexOf("export function overwatchSettingsFor("));
+    for (const name of PLUMBED) expect(fallback.slice(0, 1200)).toContain(`${name}: registryValues.${name}`);
   });
 
   it("leaves overwatch itself one referee, owning no sensor", () => {

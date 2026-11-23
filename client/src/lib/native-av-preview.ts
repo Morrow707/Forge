@@ -306,6 +306,8 @@ export type AvObjectLockTelemetry = {
   maxAcceptedDistanceInYardsticks?: number;
   /** Which body span supplied the yardstick: "grip", or "shoulders" when a wrist dropped out. */
   yardstickSource?: string;
+  /** What overwatch measured per box (AvOverwatchFrameLog in Swift). */
+  frames?: import("@shared/overwatch-learning").OverwatchFrameLog;
 };
 
 interface AvBodyTrackingPlugin {

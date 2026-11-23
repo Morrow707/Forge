@@ -4461,7 +4461,69 @@ private struct AvObjectLockTelemetry {
             out["maxAcceptedDistanceInYardsticks"] = (d * 100).rounded() / 100
         }
         if let s = yardstickSource { out["yardstickSource"] = s }
+        if !frameLog.isEmpty { out["frames"] = frameLog.dictionary }
         return out
+    }
+
+    /// The per-frame record overwatch learns from. See AvOverwatchFrameLog.
+    var frameLog = AvOverwatchFrameLog()
+}
+
+/// WHAT OVERWATCH SAW ON EACH FRAME, SO ITS SETTINGS CAN BE LEARNED BETWEEN TAKES.
+///
+/// Scott, 2026-11-23: "how does the overwatch learn and get better if its wiping its memory
+/// between takes? a 1000 takes later and we can make the over watch a master videographer."
+/// Overwatch's three thresholds (lock distance, plate size, body-span change, all in grip
+/// widths) were admitted guesses that nothing could ever revise, because no take recorded what
+/// each check MEASURED -- only how often it fired. This records the measurement, per box, so
+/// shared/overwatch-learning.ts can replay the same checks at other settings on every past take
+/// and score each setting against the OVR. It RECORDS and GATES NOTHING (Rule #1): no decision
+/// below reads it, and judge() and track() decide exactly as they did.
+///
+/// Columns, one entry per box considered (or per abstained frame): f frame index, k kind
+/// (0 held, 1 fresh pick, 2 re-classify pick, 3 broken by the distance gate, 4 broken by the
+/// jump check, 5 broken by the motion check, 6 candidate considered by a fresh search, 7 a
+/// low-confidence fallback pick, 8 abstained on a suspect body read), e the box's long edge in
+/// pixels, s that edge in grip widths, d distance from the hands in grip widths, r the body
+/// span's change against its recent history (1.0 = unchanged), c confidence, y the yardstick
+/// source (0 grip, 1 shoulders). -1 is "not measurable on this frame". Capped so one long take
+/// cannot bloat its row; `dropped` says how many were left out.
+struct AvOverwatchFrameLog {
+    static let cap = 2500
+    var f: [Int] = []
+    var k: [Int] = []
+    var e: [Double] = []
+    var s: [Double] = []
+    var d: [Double] = []
+    var r: [Double] = []
+    var c: [Double] = []
+    var y: [Int] = []
+    var dropped = 0
+
+    var isEmpty: Bool { f.isEmpty }
+
+    private static func round3(_ v: Double?) -> Double {
+        guard let v, v.isFinite else { return -1 }
+        return (v * 1000).rounded() / 1000
+    }
+
+    mutating func add(
+        frame: Int, kind: Int, edgePx: Double?, sizeInYardsticks: Double?,
+        distanceInYardsticks: Double?, spanRatio: Double?, confidence: Float, source: String?
+    ) {
+        if f.count >= AvOverwatchFrameLog.cap { dropped += 1; return }
+        f.append(frame)
+        k.append(kind)
+        e.append(AvOverwatchFrameLog.round3(edgePx))
+        s.append(AvOverwatchFrameLog.round3(sizeInYardsticks))
+        d.append(AvOverwatchFrameLog.round3(distanceInYardsticks))
+        r.append(AvOverwatchFrameLog.round3(spanRatio))
+        c.append((Double(confidence) * 100).rounded() / 100)
+        y.append(source == "grip" ? 0 : source == "shoulders" ? 1 : -1)
+    }
+
+    var dictionary: [String: Any] {
+        ["v": 1, "f": f, "k": k, "e": e, "s": s, "d": d, "r": r, "c": c, "y": y, "dropped": dropped]
     }
 }
 
@@ -4644,6 +4706,37 @@ private final class AvCoreMlImplementDetector {
     /// read is trustworthy -- and when it is not, no fresh detection happens at all. Re-running
     /// the body check per candidate would ask the same question once per plate in the room and
     /// answer it identically every time.
+    /// This frame's body-span change against its own recent history (1.0 = unchanged), measured
+    /// whether or not the frame was judged suspect. Set at the top of track(); read only by
+    /// logFrame, so it decides nothing.
+    private var frameSpanRatio: Double?
+
+    /// One entry in the per-frame record overwatch learns from (AvOverwatchFrameLog). Measures
+    /// the box the same way the gates do -- long edge against the yardstick, centre against the
+    /// hands -- and decides nothing.
+    private func logFrame(_ kind: Int, box: CGRect?, confidence: Float, body: BodyContext, distance: Double? = nil) {
+        var edgePx: Double?
+        var size: Double?
+        var dist = distance
+        if let box, body.frameWidth > 0, body.frameHeight > 0 {
+            let edge = max(Double(box.width) * body.frameWidth, Double(box.height) * body.frameHeight)
+            edgePx = edge
+            if let yardstick = body.yardstick, yardstick.px > 0 { size = edge / yardstick.px }
+            if dist == nil {
+                dist = AvTrackerArbiter.lockDistanceVerdict(
+                    objectCenter: (x: Double(box.midX), y: Double(box.midY)),
+                    anchor: body.anchor, yardstick: body.yardstick,
+                    frameWidth: body.frameWidth, frameHeight: body.frameHeight
+                ).distanceInYardsticks
+            }
+        }
+        telemetry.frameLog.add(
+            frame: telemetry.framesTracked, kind: kind, edgePx: edgePx, sizeInYardsticks: size,
+            distanceInYardsticks: dist, spanRatio: frameSpanRatio, confidence: confidence,
+            source: body.yardstick?.source
+        )
+    }
+
     private func objectIsPlausible(_ box: CGRect, body: BodyContext) -> Bool {
         AvTrackerArbiter.lockDistanceVerdict(
             objectCenter: (x: Double(box.midX), y: Double(box.midY)),
@@ -4909,6 +5002,7 @@ private final class AvCoreMlImplementDetector {
         guard visionModel != nil else { return nil }
 
         telemetry.framesTracked += 1
+        frameSpanRatio = nil
         if let source = body.yardstick?.source { telemetry.yardstickSource = source }
 
         // THE BODY IS CHECKED BEFORE ANYTHING ELSE HAPPENS THIS FRAME, INCLUDING A FRESH
@@ -4937,6 +5031,7 @@ private final class AvCoreMlImplementDetector {
             let stability = AvTrackerArbiter.bodyReadIsStable(
                 currentPx: yardstick.px, recentPx: recentYardstickPx
             )
+            frameSpanRatio = stability.ratio
             if stability.stable {
                 // Only stable spans join the history -- see recentYardstickPx's own comment on
                 // why letting a rejected reading in would dissolve the guard.
@@ -4969,6 +5064,10 @@ private final class AvCoreMlImplementDetector {
         //
         // This is the asymmetry the architecture asks for, applied in the direction it was
         // missing: neither tracker may be made useless by the other being unreliable.
+        if bodySuspectThisFrame, trackingRequest != nil {
+            // Overwatch's per-frame record: an abstention, with the span change that caused it.
+            logFrame(8, box: nil, confidence: 0, body: body)
+        }
         if bodySuspectThisFrame {
             if trackingRequest != nil { return nil }
             // No lock to protect. Fall through to a fresh detection, unseeded -- see the
@@ -5028,6 +5127,7 @@ private final class AvCoreMlImplementDetector {
                 // rule in one place rather than letting a second, subtly different copy grow.
                 let call = arbitration(for: newBox, body: body)
                 if call.breakLock {
+                    logFrame(3, box: newBox, confidence: observation.confidence, body: body, distance: call.distanceInYardsticks)
                     trackingRequest = nil
                     recentBoxes = []
                     telemetry.breaksWristGate += 1
@@ -5041,6 +5141,7 @@ private final class AvCoreMlImplementDetector {
                 // one legitimately moving -- force a fresh classification next frame instead
                 // of trusting it.
                 if let lastBox = recentBoxes.last, isImplausibleJump(from: lastBox, to: newBox) {
+                    logFrame(4, box: newBox, confidence: observation.confidence, body: body, distance: call.distanceInYardsticks)
                     trackingRequest = nil
                     recentBoxes = []
                     telemetry.breaksImplausibleJump += 1
@@ -5096,6 +5197,7 @@ private final class AvCoreMlImplementDetector {
                             frameWidth: body.frameWidth, frameHeight: body.frameHeight
                         )
                         if !motion.agree {
+                            logFrame(5, box: newBox, confidence: observation.confidence, body: body, distance: call.distanceInYardsticks)
                             trackingRequest = nil
                             recentBoxes = []
                             motionWindow = []
@@ -5179,6 +5281,7 @@ private final class AvCoreMlImplementDetector {
                         // a lock that in fact held all take read as holding ~97% of it.
                         telemetry.framesLockHeld += 1
                         lastReportedConfidence = fresh.confidence
+                        logFrame(2, box: fresh.box, confidence: fresh.confidence, body: body)
                         return (fresh.box, fresh.confidence, false)
                     }
                 }
@@ -5186,6 +5289,7 @@ private final class AvCoreMlImplementDetector {
                 request.inputObservation = observation
                 telemetry.framesLockHeld += 1
                 lastReportedConfidence = observation.confidence
+                logFrame(0, box: newBox, confidence: observation.confidence, body: body, distance: call.distanceInYardsticks)
                 return (newBox, observation.confidence, false)
             } catch {
                 trackingRequest = nil
@@ -5250,6 +5354,7 @@ private final class AvCoreMlImplementDetector {
         telemetry.freshDetections += 1
         seedTracking(on: best.box)
         lastReportedConfidence = best.confidence
+        logFrame(best.confidence >= minDetectionConfidence ? 1 : 7, box: best.box, confidence: best.confidence, body: body)
         return (best.box, best.confidence, false)
     }
 
@@ -5296,6 +5401,11 @@ private final class AvCoreMlImplementDetector {
         telemetry.candidatesOtherClass += results.count - ofTargetLabel.count
         let allOfThisClass = ofTargetLabel.filter { $0.confidence >= minDetectionConfidence }
         telemetry.candidatesRejectedByConfidence += ofTargetLabel.count - allOfThisClass.count
+        // Every candidate this search weighed, passed or refused, into overwatch's per-frame
+        // record -- the size and distance gates are replayed against these between takes.
+        for candidate in allOfThisClass {
+            logFrame(6, box: candidate.boundingBox, confidence: candidate.confidence, body: body)
+        }
         if let bestSeen = ofTargetLabel.max(by: { $0.confidence < $1.confidence }) {
             telemetry.bestCandidateConfidence = max(telemetry.bestCandidateConfidence, bestSeen.confidence)
         }

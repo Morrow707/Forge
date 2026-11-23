@@ -32,6 +32,8 @@ type CaptureDeviceInfo = {
 // Mirrors client/src/lib/tracking-diagnostics.ts's TrackingDiagnostics -- kept in sync by hand,
 // same pattern CaptureDeviceInfo above already uses.
 type ObjectLockLine = {
+  /** What overwatch measured per box (shared/overwatch-learning.ts); only its size is printed. */
+  frames?: { f: number[]; dropped: number } | null;
   framesTracked: number;
   framesLockHeld: number;
   freshDetections: number;
@@ -191,6 +193,8 @@ type TrackingDiagnostics = {
     largestGapSeconds?: number | null;
   } | null;
   calibration?: {
+    /** Which overwatch the take ran on (shared/overwatch-learning.ts). */
+    overwatch?: { version: string; settings: Record<string, number> } | null;
     scaleFactor: number | null;
     // Which source produced the number, what each source actually measured, and whether anything
     // agreed with the winner -- see the "Scale sources" line in buildCaptureLines for why a
@@ -750,7 +754,22 @@ function formatTrackingDiagnostics(r: TrackedSetRow): ReportField[] {
           : "") +
         ((lock.framesFrozen ?? 0) > 0
           ? `. ${lock.framesFrozen} frozen frame${lock.framesFrozen === 1 ? "" : "s"} (camera repeated the image) held without advancing the lock`
+          : "") +
+        // OVERWATCH'S PER-FRAME RECORD, the evidence its settings are learned from between takes.
+        (lock.frames
+          ? `. Overwatch recorded ${lock.frames.f.length} box${lock.frames.f.length === 1 ? "" : "es"} for learning` +
+            (lock.frames.dropped > 0 ? ` (${lock.frames.dropped} past the cap not kept)` : "")
           : ""),
+    });
+  }
+  if (d.calibration?.overwatch) {
+    const o = d.calibration.overwatch;
+    lines.push({
+      label: "Overwatch settings",
+      value:
+        `${o.version === "registry" ? "registry defaults (no learned version for this lift yet)" : `learned version ${o.version}`}: ` +
+        `lock within ${o.settings.maxLockDistanceInYardsticks} grip widths, plate up to ${o.settings.maxPlateSizeInYardsticks} grip widths, ` +
+        `body span change up to ${o.settings.maxYardstickDeviationRatio}x`,
     });
   }
 

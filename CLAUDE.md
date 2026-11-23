@@ -8665,3 +8665,31 @@ of the app converts page by page against a ratchet.
   in `es.json`), exercise instructions, and searching the library by a Spanish name. The AI
   translation path has not run against the real model here (no key in the sandbox). Client and
   server: `verify_build`.
+
+## 2026-11-23: OVERWATCH LEARNS ITS SETTINGS BETWEEN TAKES, AND THE DETECTOR'S PHOTOS ARE ON ROBOFLOW
+
+Scott: "a 1000 takes later and we can make the over watch a master videographer why aren't we?"
+then "yes build it, and set up roboflow too".
+- **During a take nothing changed**: overwatch judges each frame from that take alone with fixed
+  settings, so a take still replays the same and it still owns no sensor (Rule #2).
+- **Its three settings are now learned between takes, per lift** (`shared/overwatch-learning.ts`).
+  The phone records, per box, what each object check measured (`AvOverwatchFrameLog` in the Swift
+  plugin, shipped as `objectLock.frames` / `objectLockSecondary.frames`, declared in the schema).
+  `npx tsx --tsconfig tsconfig.json scripts/overwatch-learn.ts [--write]` replays the lock-distance,
+  plate-size and body-span checks on every sensor-paired take that carries a record, rebuilds the
+  plate's scale, re-runs the real scale blend and scores it against the OVR
+  (`client/src/lib/overwatch-learning-score.ts`). A lift gets a new numbered version in
+  `shared/overwatch-versions-on-record.json` only with 3+ recorded takes and a setting that lowers
+  the mean error on all of them AND held out. The bar dialog sends the newest version for its lift
+  (registry values when none) and every capture records `calibration.overwatch.version`; the
+  tracking report prints it. Run the script with `scripts/camera-memory.ts` each round.
+- **What the replay cannot see**, stated in the module: what Vision would have tracked after a lock
+  the phone broke, and the box on an abstained frame (counted as `unreplayable`). Only the plate
+  votes in the scale, so dumbbell and bar takes are recorded, not scored.
+- **Today: 0 takes carry the record**, so every lift reads "recording, not deciding yet". The first
+  build with the Swift change is where it starts. Native: `verify_build`, then `beta`.
+- **Roboflow**: private project "Forge Equipment Detector" (scotts-workspace-gnykq), all 266 photos
+  from `prepare_dataset.py` uploaded with their YOLO boxes (244 labelled + 22 deliberate empty
+  photos; 51 boxes running past the photo edge were trimmed by Roboflow). Training and the CoreML
+  export stay as they are; Roboflow is for adding and correcting labels. Only Scott's own takes go
+  there, never an athlete's or a minor's footage.

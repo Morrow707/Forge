@@ -1,0 +1,8 @@
+{
+  "grid": {
+    "maxLockDistanceInYardsticks": [1.5, 2, 2.5, 3, 3.5],
+    "maxPlateSizeInYardsticks": [1.6, 1.8, 2, 2.2, 2.5],
+    "maxYardstickDeviationRatio": [1.5, 1.75, 2, 2.5]
+  },
+  "versions": []
+}

@@ -2,6 +2,7 @@ import { measureFrameSampling, measureTraceSampling, type TraceSampling } from "
 import type { PoseFrame as NativePoseFrame } from "@/lib/native-av-preview";
 import { estimateImplementDiameterM, isPlausibleMedBallSize } from "@/lib/pose-tracking";
 import type { CaptureObjectSystem } from "@shared/capture-object-system";
+import type { OverwatchFrameLog } from "@shared/overwatch-learning";
 
 // Client-side mirror of trackingDiagnosticsSchema in shared/schema.ts -- kept in sync by hand,
 // same pattern CaptureDeviceInfo (native-av-preview.ts) already uses rather than importing the
@@ -169,6 +170,8 @@ export type ObjectLockDiagnostics = {
   framesFrozen: number;
   maxAcceptedDistanceInYardsticks?: number;
   yardstickSource?: string;
+  /** What overwatch measured per box this take (AvOverwatchFrameLog), learned from between takes. */
+  frames?: OverwatchFrameLog;
 };
 
 export type TrackingDiagnostics = {
@@ -455,6 +458,16 @@ export type TrackingDiagnostics = {
       romBucket: string | null;
       values: Record<string, number>;
       sources: Record<string, string>;
+    } | null;
+    // Which overwatch the take ran on (shared/overwatch-learning.ts): a learned version id or
+    // "registry", and the three settings the phone was handed.
+    overwatch?: {
+      version: string;
+      settings: {
+        maxLockDistanceInYardsticks: number;
+        maxPlateSizeInYardsticks: number;
+        maxYardstickDeviationRatio: number;
+      };
     } | null;
     traceTravelAlongCm?: number;
     traceTravelAcrossCm?: number;

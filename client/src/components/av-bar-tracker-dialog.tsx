@@ -134,6 +134,7 @@ import { videoFilenameForBlob } from "@/lib/video-recording";
 import type { Landmark } from "@mediapipe/tasks-vision";
 
 import { cameraTunablesFor } from "@shared/camera-tunables-by-lift";
+import { overwatchSettingsFor } from "@shared/overwatch-learning";
 
 import { setRangeOfMotionProvenance } from "@/lib/bar-tracking";
 import type { FormFaultEvidence } from "@/lib/pose-tracking";
@@ -809,13 +810,16 @@ export function AvBarTrackerDialog({
   // Overwatch itself is untouched and stays ONE referee across every movement (Rule #2); only
   // the thresholds it compares against are the lift's own. Absent, the native side uses the same
   // defaults it always has (AvTrackerArbiter.reset).
-  const arbiterTunables = useMemo(() => {
+  //
+  // AND SINCE 2026-11-23 THEY ARE THE NEWEST LEARNED VERSION FOR THIS LIFT, when one exists
+  // (shared/overwatch-learning.ts): overwatch's settings are learned between takes from every
+  // recorded take scored against the OVR, and fixed during a take so it replays the same. With no
+  // learned version these are the registry's values exactly as before. `overwatchVersion` is
+  // written into the take's diagnostics so every capture says which overwatch it ran on.
+  const { arbiterTunables, overwatchVersion } = useMemo(() => {
     const { values } = cameraTunablesFor(exerciseName, romBucketForExercise(exerciseName));
-    return {
-      maxLockDistanceInYardsticks: values.maxLockDistanceInYardsticks,
-      maxPlateSizeInYardsticks: values.maxPlateSizeInYardsticks,
-      maxYardstickDeviationRatio: values.maxYardstickDeviationRatio,
-    };
+    const { settings, version } = overwatchSettingsFor(exerciseName, values);
+    return { arbiterTunables: settings, overwatchVersion: version };
   }, [exerciseName]);
 
   useEffect(() => {
@@ -1642,6 +1646,7 @@ export function AvBarTrackerDialog({
       traceDisplacementCm?: number;
       velocitySmoothingMs?: number;
       liftRecord?: NonNullable<TrackingDiagnostics["calibration"]>["liftRecord"];
+      overwatch?: NonNullable<TrackingDiagnostics["calibration"]>["overwatch"];
       traceTravelAcrossCm?: number;
       tracePointsDroppedOffAxis?: number;
       posture?: string;
@@ -2540,6 +2545,8 @@ export function AvBarTrackerDialog({
           values: { ...record.values },
           sources: { ...record.sources },
         };
+        // WHICH OVERWATCH THIS TAKE RAN ON, and the three numbers the phone was handed.
+        calibrationDiagnostics.overwatch = { version: overwatchVersion, settings: { ...arbiterTunables } };
       }
       if (scaleFactor && scaleFactor > 0) {
         calibrationDiagnostics.traceTravelAlongPx = (maxAlong - minAlong) / scaleFactor;

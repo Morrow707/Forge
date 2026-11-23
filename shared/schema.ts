@@ -10029,6 +10029,20 @@ export const NON_CAMERA_SET_COLUMNS = [
  * client actually sends, and AvObjectLockTelemetry in ios/App/App/AvBodyTrackingPlugin.swift,
  * which produces it. Declared as its own schema because the primary and secondary detectors ship
  * the identical shape and a copy-paste of twelve fields is a copy-paste of the next bug. */
+// AvOverwatchFrameLog's columns, one entry per box (shared/overwatch-learning.ts names them).
+const overwatchFrameLogSchema = z.object({
+  v: z.number(),
+  f: z.array(z.number()),
+  k: z.array(z.number()),
+  e: z.array(z.number()),
+  s: z.array(z.number()),
+  d: z.array(z.number()),
+  r: z.array(z.number()),
+  c: z.array(z.number()),
+  y: z.array(z.number()),
+  dropped: z.number(),
+});
+
 const objectLockDiagnosticsSchema = z.object({
   framesTracked: z.number(),
   framesLockHeld: z.number(),
@@ -10061,6 +10075,11 @@ const objectLockDiagnosticsSchema = z.object({
   framesFrozen: z.number(),
   maxAcceptedDistanceInYardsticks: z.number().optional(),
   yardstickSource: z.string().optional(),
+  // WHAT OVERWATCH MEASURED ON EACH FRAME (2026-11-23), so its settings can be learned between
+  // takes -- see AvOverwatchFrameLog in AvBodyTrackingPlugin.swift and shared/overwatch-learning.ts.
+  // Declared the day it was added: zod strips what it does not declare, silently. Records and
+  // gates nothing (Rule #1).
+  frames: overwatchFrameLogSchema.optional(),
 });
 
 export const trackingDiagnosticsSchema = z.object({
@@ -10778,6 +10797,19 @@ export const trackingDiagnosticsSchema = z.object({
           romBucket: z.string().max(60).nullable(),
           values: z.record(z.string(), z.number()),
           sources: z.record(z.string(), z.string().max(20)),
+        })
+        .optional()
+        .nullable(),
+      // WHICH OVERWATCH THIS TAKE RAN ON (2026-11-23): the learned version id for the lift, or
+      // "registry", and the three numbers the phone was handed. See shared/overwatch-learning.ts.
+      overwatch: z
+        .object({
+          version: z.string().max(120),
+          settings: z.object({
+            maxLockDistanceInYardsticks: z.number(),
+            maxPlateSizeInYardsticks: z.number(),
+            maxYardstickDeviationRatio: z.number(),
+          }),
         })
         .optional()
         .nullable(),
