@@ -6,8 +6,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getJson } from "@/lib/queryClient";
-import { externalLinkClick } from "@/lib/open-external";
-import { Target, MoonStar, Film } from "lucide-react";
+import { ExerciseVideoThumb } from "@/components/exercise-video";
+import { Target, MoonStar } from "lucide-react";
 import { WorkoutCommentThread } from "@/components/workout-comment-thread";
 import { ReadFailed } from "@/components/read-failed";
 import { useT } from "@/i18n";
@@ -126,16 +126,12 @@ export function SkillDayViewDialog({
                       {ex.restSeconds ? ` · ${t("{seconds}s rest", { seconds: ex.restSeconds })}` : ""}
                     </p>
                     {ex.notes && <p className="mt-1 text-xs text-muted-foreground">{ex.notes}</p>}
+                    {/* Plays in place (an in-app sheet), never a trip out to YouTube; a
+                        search placeholder still links out, having nothing to play. */}
                     {ex.videoUrl && (
-                      <a
-                        href={ex.videoUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={externalLinkClick(ex.videoUrl)}
-                        className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-                      >
-                        <Film className="h-3 w-3" /> {t("Watch demo")}
-                      </a>
+                      <div className="mt-1.5">
+                        <ExerciseVideoThumb url={ex.videoUrl} name={t.exercise(ex.name)} />
+                      </div>
                     )}
                   </div>
                 ))}
