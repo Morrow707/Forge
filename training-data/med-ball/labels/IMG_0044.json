@@ -16,20 +16,6 @@
       "height": 0.267
     },
     {
-      "class": "med_ball",
-      "x_center": 0.099,
-      "y_center": 0.68,
-      "width": 0.096,
-      "height": 0.072
-    },
-    {
-      "class": "med_ball",
-      "x_center": 0.099,
-      "y_center": 0.75,
-      "width": 0.096,
-      "height": 0.078
-    },
-    {
       "class": "barbell",
       "x_center": 0.47,
       "y_center": 0.617,

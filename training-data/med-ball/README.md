@@ -40,3 +40,9 @@ every one.
 dumbbells. `dumbbell` is not an implement any capture mode tracks -- plate,
 barbell, med_ball and kettlebell are the ones the scale pipeline reads -- so the
 care went there. Re-tightening the dumbbell racks is open work.
+
+**Corrected 2026-11-23:** the two yellow objects tucked behind the plates in
+IMG_0043 and IMG_0044 are the tops of standing cones, not med balls. They were
+labelled `med_ball` here (two boxes in each file) and the shipped detector was
+trained with them; those four boxes are removed. A cone is none of the eight
+classes, so it is left unlabelled. The next retrain is the first without them.
