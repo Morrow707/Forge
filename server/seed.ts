@@ -44,6 +44,8 @@ import { REQUIRED_DOCUMENTS, documentAudienceFor } from "@shared/required-docume
 import { AI_TERMS_OF_USE, nextAiTermsOfUse } from "./seed-data/ai-terms-of-use-draft";
 import { mergeNamedDuplicateExercises } from "./merge-duplicate-exercises";
 import { LIBRARY_REVIEW_EXERCISES, LIBRARY_REVIEW_SKILL_DRILLS } from "./seed-data/library-review-2026-11-22";
+import { EXLIB_EXERCISES } from "./seed-data/exlib-2026-11-23";
+import { applyExLibVideosOnce } from "./exlib-videos";
 import {
   correctReviewedSkillInstructions,
   describeLibraryReviewChanges,
@@ -3169,6 +3171,20 @@ async function main() {
       exerciseMap[ex.name] = row.id;
     }
 
+    // The ExLib additions (2026-11-23): every exercise the outside library Scott handed over has
+    // and Forge did not, with the sheet's own demo video (server/seed-data/exlib-2026-11-23.ts). A
+    // fifth list, named in videoRestrictedNames and forgeLibraryNames below like the other four.
+    const exlibExercises = EXLIB_EXERCISES;
+    for (const ex of exlibExercises) {
+      if (existingExerciseNames.has(ex.name)) continue;
+      const row = await storage.createExercise(libraryOwner.id, {
+        ...ex,
+        ...deriveMaterials(ex.equipment, ex.name),
+        videoUrl: ex.videoUrl ?? videoSearchUrl(ex.name),
+      });
+      exerciseMap[ex.name] = row.id;
+    }
+
     // One-time backfill for exercises that already existed before the
     // materials columns were added -- only touches rows still at the
     // just-added default (usesWeight true, everything else false), so it
@@ -3297,7 +3313,7 @@ async function main() {
       "Squat Jump", "Tuck Jump", "Lateral Bound",
     ]);
     const videoRestrictedNames = new Set(
-      [...seedExercises, ...combinationExercises, ...expansionExercises, ...libraryReviewExercises]
+      [...seedExercises, ...combinationExercises, ...expansionExercises, ...libraryReviewExercises, ...exlibExercises]
         .map((ex) => ex.name)
         .filter((name) => !CANONICAL_VIDEO_ELIGIBLE_NAMES.has(name)),
     );
@@ -3376,6 +3392,7 @@ async function main() {
       ...combinationExercises.map((e) => e.name),
       ...expansionExercises.map((e) => e.name),
       ...libraryReviewExercises.map((e) => e.name),
+      ...exlibExercises.map((e) => e.name),
     ];
     const newlyOfficial = await storage.markSeededExercisesForgeOfficial(
       libraryOwner.id,
@@ -5554,6 +5571,16 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
     ],
   ] as const) {
     if (next) await storage.updateLegalDocument(type, next);
+  }
+
+  // The ExLib videos (2026-11-23) go onto the exercises and skill drills Forge already had, once.
+  // At the end of the seed because the skill drills are created after the exercises, so a fresh
+  // database ends up the same. A video somebody set by hand is never replaced (exlib-videos.ts).
+  const exlibVideos = await applyExLibVideosOnce(libraryOwner.id);
+  if (exlibVideos !== null) {
+    console.log(
+      `ExLib videos: wrote ${exlibVideos.written}; kept ${exlibVideos.keptHandChosen.length} chosen by hand; ${exlibVideos.notFound.length} not in this library.`,
+    );
   }
 
   // The demo accounts' paperwork is filed inside ensureDemoAccounts, beside the accounts.

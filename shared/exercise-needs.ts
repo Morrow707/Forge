@@ -13,7 +13,7 @@
  * [[barbell], [plates], [squat_rack], [flat_bench, adjustable_bench]].
  *
  * An equipment word this module does not know resolves to NO needs and `recognised: false`, so a
- * coach's "Rings" exercise is never filtered out by a rule that never heard of rings (the room
+ * coach's "Parallettes" exercise is never filtered out by a rule that never heard of parallettes (the room
  * filter only ever removes what it is sure about). shared/exercise-needs.test.ts holds every
  * library exercise to `recognised: true`.
  *
@@ -66,6 +66,16 @@ const BY_EQUIPMENT: Record<string, EquipmentNeed[]> = {
   bench: [BENCH],
   "pull-up bar": [["pullup_bar"]],
   box: [["plyo_box"]],
+  // The ExLib additions (2026-11-23) brought these words into the library.
+  "smith machine": [["machines"]],
+  "safety squat bar": [["specialty_bars"], ["plates"]],
+  flywheel: [["machines"]],
+  ghd: [["machines"]],
+  "stability ball": [["small_gear"]],
+  slider: [["small_gear"]],
+  hurdle: [["small_gear"]],
+  trx: [["small_gear"]],
+  rings: [["pullup_bar"], ["small_gear"]],
   bodyweight: [],
   none: [],
 };

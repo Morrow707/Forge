@@ -8705,3 +8705,20 @@ tops are unlabelled. **`COREML_BOX_LONG_EDGE_RELATIVE_MAD` stays 0.056 on purpos
 split leaks frames of training videos, so no camera number moves until a filmed take's
 `objectGate.plateBoxToExpectedRatio` earns a lower one. Read that field first on the next
 filmed set. Details: `scripts/med-ball-detector/README.md`.
+
+## 2026-11-23: THE EXLIB SHEET IS IN THE LIBRARY: 1,106 NEW EXERCISES AND 153 VIDEOS
+
+Scott handed over "ExLib 1.0" (1,471 strength and conditioning rows, each with a YouTube demo):
+"if we have it great works done, copy the video over ... add the exercises we are missing such as
+the iso holds, and their videos". `server/seed-data/exlib-2026-11-23.ts` is GENERATED from it
+(regenerate, never hand-edit): `EXLIB_EXERCISES` (1,106, created once by name, Forge-official,
+not camera-eligible, Spanish names in `exercise-es.json`) and `EXLIB_VIDEOS_FOR_EXISTING` (146
+exercises and 7 skill drills). `server/exlib-videos.ts` writes those videos ONCE (marker
+`exlib_videos_2026_11_23`, at the very end of the seed because skill drills are created late),
+replacing only a search placeholder or the channel backfill's own write, never a hand-set URL.
+The matching rule: loading equipment (barbell, dumbbell, kettlebell, bodyweight) is the same
+exercise when Forge has one plain entry; a bracketed variation (isometric hold, eccentric, chains,
+banded ...) and equipment that changes the movement (landmine, Smith machine, flywheel, machine,
+GHD ...) are their own exercises. Left out: the Testing sheet (49 protocols), 9 rows that are not
+one exercise, and Sissy Squat and Decline Bench Press (retired by the 11-22 review). The room now
+knows Smith Machine, Safety Squat Bar, Flywheel, GHD, Stability Ball, Slider, Hurdle, TRX, Rings.

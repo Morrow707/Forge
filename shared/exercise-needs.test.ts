@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { EQUIPMENT_IDS, type EquipmentId, type EquipmentRoom } from "./equipment-profile";
 import { exerciseNeeds, keepForRoom, missingEquipmentSentence, roomAllows } from "./exercise-needs";
+import { EXLIB_EXERCISES } from "../server/seed-data/exlib-2026-11-23";
 
 /**
  * Scott, 2026-11-21: "they don't have a bench so every sort of seated press is out, but we can
@@ -40,6 +41,11 @@ describe("what an exercise needs", () => {
 
   it("every library exercise resolves to a requirement set", () => {
     const unresolved = LIBRARY.filter((ex) => !exerciseNeeds(ex).recognised).map((ex) => `${ex.name} [${ex.equipment}]`);
+    expect(unresolved).toEqual([]);
+  });
+
+  it("every exercise the ExLib additions bring in resolves too", () => {
+    const unresolved = EXLIB_EXERCISES.filter((ex) => !exerciseNeeds(ex).recognised).map((ex) => `${ex.name} [${ex.equipment}]`);
     expect(unresolved).toEqual([]);
   });
 
@@ -85,7 +91,7 @@ describe("what an exercise needs", () => {
   });
 
   it("an equipment word nobody taught it is never filtered out", () => {
-    const rings = { name: "Ring Muscle-Up Transition", equipment: "Rings" };
+    const rings = { name: "Parallette L-Sit", equipment: "Parallettes" };
     expect(exerciseNeeds(rings).recognised).toBe(false);
     expect(roomAllows(rings, { items: [], dumbbellMaxLbs: null })).toBe(true);
   });

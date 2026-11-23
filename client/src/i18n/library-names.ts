@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { REPO_ROOT } from "./source-files";
 import { LIBRARY_REVIEW_EXERCISES, LIBRARY_REVIEW_SKILL_DRILLS } from "../../../server/seed-data/library-review-2026-11-22";
+import { EXLIB_EXERCISES } from "../../../server/seed-data/exlib-2026-11-23";
 import { HIDDEN_EXERCISE_NAMES, HIDDEN_SKILL_DRILL_NAMES } from "../../../shared/library-review-2026-11-22";
 import { BULLPEN_EXERCISE, CATCHING_GAME_EXERCISE, PITCHING_GAME_EXERCISE } from "../../../shared/throwing-workload";
 
@@ -42,6 +43,7 @@ export function libraryNamesToTranslate(): string[] {
   const exercises = [
     ...namesIn(seed, EXERCISE_ARRAYS).filter((n) => !HIDDEN_EXERCISE_NAMES.has(n)),
     ...LIBRARY_REVIEW_EXERCISES.map((e) => e.name),
+    ...EXLIB_EXERCISES.map((e) => e.name),
     PITCHING_GAME_EXERCISE,
     BULLPEN_EXERCISE,
     CATCHING_GAME_EXERCISE,
