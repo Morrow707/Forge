@@ -16,6 +16,35 @@ See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
 ## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-23, round twenty-five)
 
+**ROUND TWENTY-FIVE SET 2, 2026-11-23 (build 833, every set-1 fix live, still from behind).** OVR
+reps 2-6 on the box jump. For the RDL, Scott had someone walk behind him twice on purpose.
+
+| lift | Forge as filmed | OVR | error | after set 2's step |
+|---|---|---|---|---|
+| Squat range / mean / peak | 71.5 / 0.78 / 1.09 | 29.6in (75.18) / 0.77 / 1.12 | -4.9% / +1.3% / -2.7% | range about -4.2% (height ruler 0.14 -> 0.15) |
+| RDL range / mean / peak | 72.5 / 0.98 / 1.58 | 25.2in (64.01) / 0.83 / 1.39 | +13.3% / +17% / +14% | scale about +5.0% (the body memory votes) |
+| Box jump rise / mean / peak | 70.2 / 1.53 / 2.72 | 25.7in (65.33) / 1.33 / 2.50 | +7.5% / +14.5% / +8.9% | rise about +6.6% (height ruler 0.07 -> 0.06) |
+
+- **The set-1 fixes held on the phone.** Squat mean +1.3% (the stand cut); box jump 5 of 5 with no
+  fake jump and no lost one; the jump tracker taught its bones for the first time ("consensus").
+- **The walk-bys were absorbed, not refused.** The hands were lost for about half a second twice;
+  the gap-filled bottoms made reps 4 and 7 read 119 and 88cm. Rep 4 was flagged an outlier and rep
+  7 sample-starved, and the set's range, mean and peak leave both out. All 8 rows kept (Rule #1).
+- **RDL: the remembered bones vote now** (`LIFTS_WHERE_THE_BODY_MODEL_VOTES = ["Romanian
+  Deadlift"]`, the first lift). On every RDL set with a reading they sat closer to the OVR than the
+  blend: 11-20 set 3 -12.8 vs -17.3%, 11-23 set 1 +1.4 vs +7.7%, set 2 +2.2 vs +13.3%. Re-blended
+  with them voting: -14.9%, +2.6%, +5.0%. One peer among the rulers, never alone. The sealed
+  ledger cannot replay a remembered bone, so the RDL rows there do not show this step.
+- **Squat: height ruler 0.15** (as filmed: set 2 -4.9 -> -4.2%, set 1 -5.4 -> -3.7%, average over
+  15 takes 3.70 -> 3.53%; the sealed replay reads 3.15 -> 3.57%, the known wide-grip limit).
+  Squat set 2's plate: found on 569 frames but boxed at 0.52 of a plate's size, stepped out.
+- **Box jump: height ruler 0.06** (a shoulder-floor step to 0.3 gave the same total and costs the
+  11-20 sets more). Its rise-to-apex window read short on both sets (5.7%, 5%): systematic, next.
+- **Overwatch: 2 of 3 sensor-paired takes on the squat and the RDL.** One more set of each and the
+  learner may publish a version (`scripts/overwatch-learn.ts`).
+- Ledger rows `2026-11-23-back-squat-set-2`, `2026-11-23-romanian-deadlift-set-2`; fixture
+  `ovr-2026-11-23-set-2-export.json`; set-2 case in `round-twenty-five.test.ts`.
+
 **ROUND TWENTY-FIVE, 2026-11-23 (set 1 each, build 827, FILMED FROM BEHIND; Thursday's were more
 from the side).** OVR reps 2-6 on the box jump ("Jump Squat"). Bugs first, then one step per lift.
 

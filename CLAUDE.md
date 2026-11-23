@@ -4114,6 +4114,11 @@ halves before splitting anything else:
   the evidence). **The Anthropic API account hit its spending limit: every AI feature is off until
   2026-12-01 unless Scott raises it.** The form check blamed the angle for it; fixed (Rule #1).
   See docs/camera-tracking-notes.md, STATUS BOARD.
+  **Set 2 the same day on build 833:** the fixes held (squat mean +1.3%, box jump 5 of 5). The
+  RDL's two walk-bys (Scott, on purpose) were left out of the set's numbers by the existing rules.
+  Steps: squat height ruler 0.15, box jump height ruler 0.06, and **the body memory now VOTES on
+  the Romanian Deadlift** (`LIFTS_WHERE_THE_BODY_MODEL_VOTES`), the first lift, because it sat
+  closer to the OVR than the blend on all three RDL sets with a reading (+2.2% vs +13.3% today).
 - **ROUND TWENTY-FOUR, 2026-11-20: SET 3 ON BUILD 809, IN SHORTS.** Squat height ruler 0.14 ->
   0.13 (range +4.0% -> ~+3.2%); a squat window under 0.01 was refused because it brings back the
   11-09 lockout-stand bug. Box jump height ruler 0.1 -> 0.08 (mean +10.0% -> ~+7.9%). RDL set 3

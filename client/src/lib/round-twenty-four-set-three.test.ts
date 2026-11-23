@@ -17,10 +17,10 @@ const byName = (name: string) => fixtures.find((x) => x.exerciseName === name)!;
 
 describe("round twenty-four", () => {
   it("each lift's step is its own", () => {
-    // 0.13 and 0.08 this round; 0.14 and 0.07 since round twenty-five (2026-11-23).
-    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.14);
+    // 0.13 and 0.08 this round; 0.15 and 0.06 since round twenty-five (2026-11-23).
+    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.15);
     expect(cameraTunablesFor("Back Squat", "squat").values.driveOnsetFraction).toBe(0.01);
-    expect(cameraTunablesFor("Box Jump").values.heightRulerUncertainty).toBe(0.07);
+    expect(cameraTunablesFor("Box Jump").values.heightRulerUncertainty).toBe(0.06);
     expect(cameraTunablesFor("Depth Jump").values.heightRulerUncertainty).not.toBe(0.08);
     expect(cameraTunablesFor("Front Squat", "squat").values.heightRulerUncertainty).not.toBe(0.13);
   });

@@ -75,7 +75,13 @@ export const RULERS_THAT_MAY_TEACH_A_LIMB = ["plate", "gravity", "grip_width", "
  * it would have read, and it joins the blend only on a lift named in
  * LIFTS_WHERE_THE_BODY_MODEL_VOTES, which a lift enters when its recorded readings sit closer to
  * the sensor than the blend did across that lift's sets. */
-export const LIFTS_WHERE_THE_BODY_MODEL_VOTES: readonly string[] = [];
+/* THE FIRST LIFT IN (2026-11-23, round twenty-five, Scott: "it should be learning to get
+ * smarter"). The Romanian Deadlift's remembered bones sat closer to the OVR than the blend on every
+ * RDL set that carried a reading: 11-20 set 3 -12.8% against -17.3%, 11-23 set 1 +1.4% against
+ * +7.7%, 11-23 set 2 +2.2% against +13.3% (filmed from behind, where every ruler read high).
+ * Re-blended with it voting at its own uncertainty: -18.6 -> -14.9%, +6.3 -> +2.6%, +13.3 -> +5.0%.
+ * It votes as one peer among the rulers (Rule #2), never alone. */
+export const LIFTS_WHERE_THE_BODY_MODEL_VOTES: readonly string[] = ["Romanian Deadlift"];
 
 /** The model's stated uncertainty never goes under this. The stored bone may be steady to 2%,
  *  but the take still has to MEASURE the same bone in pixels, and that reading is the noisy half. */

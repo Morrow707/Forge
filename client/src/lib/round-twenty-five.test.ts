@@ -23,11 +23,12 @@ const byName = (name: string) => fixtures.find((x) => x.exerciseName === name)!;
 
 describe("round twenty-five", () => {
   it("each lift's step is its own", () => {
-    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.14);
-    expect(cameraTunablesFor("Box Jump").values.heightRulerUncertainty).toBe(0.07);
+    // set 1 moved them 0.13 -> 0.14 and 0.08 -> 0.07; set 2 one more step each
+    expect(cameraTunablesFor("Back Squat", "squat").values.heightRulerUncertainty).toBe(0.15);
+    expect(cameraTunablesFor("Box Jump").values.heightRulerUncertainty).toBe(0.06);
     expect(cameraTunablesFor("Romanian Deadlift", "deadlift").values.body3DCorrectedUncertainty).toBe(0.16);
     expect(cameraTunablesFor("Conventional Deadlift", "deadlift").values.body3DCorrectedUncertainty).not.toBe(0.16);
-    expect(cameraTunablesFor("Depth Jump").values.heightRulerUncertainty).not.toBe(0.07);
+    expect(cameraTunablesFor("Depth Jump").values.heightRulerUncertainty).not.toBe(0.06);
   });
 
   it("a squat rep that stands a whole second at lockout reads its push, not the stand", () => {
@@ -51,5 +52,21 @@ describe("round twenty-five", () => {
     // every one of them a jump onto the 61cm box (the old second "rep" rose 21.6cm)
     expect(Math.min(...reps)).toBeGreaterThan(30.5);
     expect(ev.some((e) => e.kind === "flight_too_long")).toBe(false);
+  });
+
+  it("set 2 (build 833): the squat reads its mean, the box jump counts five, the RDL's walk-bys stay out of the set", () => {
+    const set2: Fixture[] = JSON.parse(readFileSync(join(__dirname, "__fixtures__", "ovr-2026-11-23-set-2-export.json"), "utf8"));
+    const squat = replayCapture(set2.find((x) => x.exerciseName === "Back Squat")!).metrics!;
+    expect(squat.repBreakdown).toHaveLength(5);
+    expect(squat.meanVelocityMps).toBeGreaterThan(0.74); // OVR 0.77
+    const box = set2.find((x) => x.exerciseName === "Box Jump")!;
+    const points = box.barPathTrace.map((p) => ({ t: p.t, x: p.x / 100, y: p.y / 100, z: 0, confidence: p.c ?? 1 }));
+    const ev: JumpSegmentationEvent[] = [];
+    summarizeJumpSet(points, box.heightIn, 35, null, 1 / 30, ev, { usesBox: true, boxHeightCm: 61 });
+    expect(ev.filter((e) => e.kind === "rep")).toHaveLength(5);
+    const rdl = replayCapture(set2.find((x) => x.exerciseName === "Romanian Deadlift")!).metrics!;
+    expect(rdl.repBreakdown).toHaveLength(8);
+    // reps 4 and 7 ran through the walk-bys (119 and 88cm); the set's range leaves them out
+    expect(rdl.romCm).toBeLessThan(75);
   });
 });

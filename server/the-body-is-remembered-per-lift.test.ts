@@ -74,8 +74,10 @@ describe("the body is remembered per lift", () => {
     expect(BODY_MODEL_UNCERTAINTY_FLOOR).toBeGreaterThanOrEqual(0.08);
   });
 
-  it("votes on no lift until one has earned it, and the tracker asks the list", () => {
-    expect(LIFTS_WHERE_THE_BODY_MODEL_VOTES).toEqual([]);
+  it("votes only on a lift that has earned it, and the tracker asks the list", () => {
+    // The RDL earned it on 2026-11-23 (round twenty-five): closer to the OVR than the blend on
+    // every RDL set with a reading. Adding a lift needs the same evidence in that comment.
+    expect(LIFTS_WHERE_THE_BODY_MODEL_VOTES).toEqual(["Romanian Deadlift"]);
     const dialog = strip(readFileSync(join(__dirname, "../client/src/components/av-bar-tracker-dialog.tsx"), "utf8"));
     expect(dialog).toMatch(/LIFTS_WHERE_THE_BODY_MODEL_VOTES\.includes\(exerciseName\)/);
     expect(dialog).toMatch(/bodyModelReading && bodyModelVotes/);

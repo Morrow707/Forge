@@ -1,27 +1,27 @@
 {
   "Back Squat": {
-    "sets": 14,
-    "meanAbsPct": 3.15
+    "sets": 15,
+    "meanAbsPct": 3.57
   },
-  "Barbell Shoulder Press": {
-    "sets": 3,
-    "meanAbsPct": 4.14
+  "Romanian Deadlift": {
+    "sets": 14,
+    "meanAbsPct": 7.32
   },
   "Bench Press": {
     "sets": 6,
     "meanAbsPct": 7.37
   },
-  "Dumbbell Shoulder Press": {
-    "sets": 7,
-    "meanAbsPct": 8.53
-  },
   "Pendlay Row": {
     "sets": 3,
     "meanAbsPct": 8.07
   },
-  "Romanian Deadlift": {
-    "sets": 13,
-    "meanAbsPct": 6.87
+  "Barbell Shoulder Press": {
+    "sets": 3,
+    "meanAbsPct": 4.14
+  },
+  "Dumbbell Shoulder Press": {
+    "sets": 7,
+    "meanAbsPct": 8.53
   },
   "Single-Arm Dumbbell Row": {
     "sets": 10,
