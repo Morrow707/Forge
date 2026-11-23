@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { searchPrograms } from "@shared/program-search";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -124,6 +124,16 @@ export function ProgramListPage({
   // One search box over the whole list: name, description, sport and tags, with the nicknames and
   // typo tolerance the exercise search has ("soccer preseason", "pitcher", "knee return").
   const [search, setSearch] = useState("");
+  // The search bar is pinned, so a search typed halfway down the list would show its results
+  // from the middle; each change of the search starts the list from the top instead.
+  const searchTyped = useRef(false);
+  useEffect(() => {
+    if (!searchTyped.current) {
+      searchTyped.current = true;
+      return;
+    }
+    window.scrollTo({ top: 0 });
+  }, [search]);
   const shown = useMemo(() => searchPrograms(programs, search), [programs, search]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState("");
@@ -267,10 +277,33 @@ export function ProgramListPage({
     onError: (err: ApiError) => toast.error(err.message ? t(err.message) : t("Could not generate a draft")),
   });
 
+  // The search bar rides in the shell's pinned header, under the buttons, so it stays on screen
+  // while the list scrolls (Scott, 2026-11-23: "permanent, no scroll").
+  const searchBar =
+    !isError && programs.length > 0 ? (
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t("Search programs: soccer preseason, pitcher, knee return…")}
+          className="pl-9"
+          data-testid="input-program-search"
+        />
+      </div>
+    ) : null;
+
   return (
     <AppShell
       title={title}
-      subheader={libraryTabs}
+      subheader={
+        libraryTabs || searchBar ? (
+          <div className="space-y-2">
+            {libraryTabs}
+            {searchBar}
+          </div>
+        ) : undefined
+      }
       actions={
         <>
           {showAiAssist && (
@@ -320,18 +353,6 @@ export function ProgramListPage({
         </Card>
       )}
 
-      {!isError && programs.length > 0 && (
-        <div className="relative mb-4">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("Search programs: soccer preseason, pitcher, knee return…")}
-            className="pl-9"
-            data-testid="input-program-search"
-          />
-        </div>
-      )}
       {!isError && programs.length > 0 && shown.length === 0 && (
         <p className="mb-4 text-sm text-muted-foreground" data-testid="text-no-program-match">
           {t("No programs match \"{search}\".", { search })}
