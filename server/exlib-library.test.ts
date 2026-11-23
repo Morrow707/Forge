@@ -84,3 +84,20 @@ describe("which video the sheet may replace", () => {
     expect(mayReplaceVideo("https://www.youtube.com/watch?v=abcdefghijk", "skill:7", backfill)).toBe(false);
   });
 });
+
+describe("the demo videos found for the rest (2026-11-23)", () => {
+  it("each names a visible library row once, with a single YouTube video", async () => {
+    const { DEMO_VIDEOS_2026_11_23 } = await import("./seed-data/demo-videos-2026-11-23");
+    const visible = new Set(libraryNamesToTranslate());
+    const names = DEMO_VIDEOS_2026_11_23.map((v) => `${v.kind}:${v.name}`);
+    expect(DEMO_VIDEOS_2026_11_23.length).toBeGreaterThan(250);
+    expect(DEMO_VIDEOS_2026_11_23.filter((v) => !visible.has(v.name)).map((v) => v.name)).toEqual([]);
+    expect(new Set(names).size).toBe(names.length);
+    expect(DEMO_VIDEOS_2026_11_23.filter((v) => !YOUTUBE_VIDEO.test(v.url)).map((v) => v.name)).toEqual([]);
+  });
+
+  it("does not give the Snatch a film trailer", async () => {
+    const { DEMO_VIDEOS_2026_11_23 } = await import("./seed-data/demo-videos-2026-11-23");
+    expect(DEMO_VIDEOS_2026_11_23.filter((v) => /trailer|movie|madden/i.test(v.from)).map((v) => v.name)).toEqual([]);
+  });
+});

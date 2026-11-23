@@ -45,7 +45,8 @@ import { AI_TERMS_OF_USE, nextAiTermsOfUse } from "./seed-data/ai-terms-of-use-d
 import { mergeNamedDuplicateExercises } from "./merge-duplicate-exercises";
 import { LIBRARY_REVIEW_EXERCISES, LIBRARY_REVIEW_SKILL_DRILLS } from "./seed-data/library-review-2026-11-22";
 import { EXLIB_EXERCISES } from "./seed-data/exlib-2026-11-23";
-import { applyExLibVideosOnce } from "./exlib-videos";
+import { applyExLibVideosOnce, applyVideoMappingsOnce, DEMO_VIDEOS_MARKER } from "./exlib-videos";
+import { DEMO_VIDEOS_2026_11_23 } from "./seed-data/demo-videos-2026-11-23";
 import {
   correctReviewedSkillInstructions,
   describeLibraryReviewChanges,
@@ -5581,6 +5582,12 @@ And what we don't have yet, stated plainly: no signed BAAs with our hosting or i
     console.log(
       `ExLib videos: wrote ${exlibVideos.written}; kept ${exlibVideos.keptHandChosen.length} chosen by hand; ${exlibVideos.notFound.length} not in this library.`,
     );
+  }
+  // Demo videos found for the rest (2026-11-23): onto a search placeholder only, once, never over a
+  // video already there (seed-data/demo-videos-2026-11-23.ts says how each was chosen).
+  const demoVideos = await applyVideoMappingsOnce(DEMO_VIDEOS_MARKER, libraryOwner.id, DEMO_VIDEOS_2026_11_23, true);
+  if (demoVideos !== null) {
+    console.log(`Demo videos: wrote ${demoVideos.written}; kept ${demoVideos.keptHandChosen.length} that already had one; ${demoVideos.notFound.length} not in this library.`);
   }
 
   // The demo accounts' paperwork is filed inside ensureDemoAccounts, beside the accounts.

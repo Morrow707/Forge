@@ -27,6 +27,7 @@ import { isSeededSearchPlaceholder } from "@shared/exercise-video-match";
 import { EXLIB_VIDEOS_FOR_EXISTING, type ExLibVideoForExisting } from "./seed-data/exlib-2026-11-23";
 
 export const EXLIB_VIDEOS_MARKER = "exlib_videos_2026_11_23";
+export const DEMO_VIDEOS_MARKER = "demo_videos_2026_11_23";
 
 export type ExLibVideoResult = { written: number; keptHandChosen: string[]; notFound: string[] };
 
@@ -54,10 +55,21 @@ export async function applyExLibVideosOnce(
   libraryOwnerId: number,
   mappings: readonly ExLibVideoForExisting[] = EXLIB_VIDEOS_FOR_EXISTING,
 ): Promise<ExLibVideoResult | null> {
+  return applyVideoMappingsOnce(EXLIB_VIDEOS_MARKER, libraryOwnerId, mappings);
+}
+
+/** The same narrow write for any once-only list of videos, behind its own marker.
+ *  `placeholdersOnly` leaves a channel-backfill video alone too (a list that only fills gaps). */
+export async function applyVideoMappingsOnce(
+  marker: string,
+  libraryOwnerId: number,
+  mappings: readonly ExLibVideoForExisting[],
+  placeholdersOnly = false,
+): Promise<ExLibVideoResult | null> {
   const { db } = await import("./db");
-  const done = await db.execute(sql`SELECT 1 FROM applied_backfills WHERE key = ${EXLIB_VIDEOS_MARKER}`);
+  const done = await db.execute(sql`SELECT 1 FROM applied_backfills WHERE key = ${marker}`);
   if (done.rows.length > 0) return null;
-  const written = await backfillWrittenUrls();
+  const written = placeholdersOnly ? new Set<string>() : await backfillWrittenUrls();
   const result: ExLibVideoResult = { written: 0, keptHandChosen: [], notFound: [] };
 
   // One row at a time, in order, so the counts are exact and no two writes race.
@@ -81,6 +93,6 @@ export async function applyExLibVideosOnce(
     await db.update(table).set({ videoUrl: m.url }).where(eq(table.id, row.id));
     result.written += 1;
   }, Promise.resolve());
-  await db.execute(sql`INSERT INTO applied_backfills (key) VALUES (${EXLIB_VIDEOS_MARKER}) ON CONFLICT DO NOTHING`);
+  await db.execute(sql`INSERT INTO applied_backfills (key) VALUES (${marker}) ON CONFLICT DO NOTHING`);
   return result;
 }
