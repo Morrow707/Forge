@@ -8693,3 +8693,15 @@ then "yes build it, and set up roboflow too".
   photos; 51 boxes running past the photo edge were trimmed by Roboflow). Training and the CoreML
   export stay as they are; Roboflow is for adding and correcting labels. Only Scott's own takes go
   there, never an athlete's or a minor's footage.
+
+## 2026-11-23: BUILD 827 CARRIES THE DETECTOR RETRAINED ON OUTLINES
+
+Run 826 was its `verify_build`, 827 the beta, both on `5cf37430`. Every training label is now the
+tight box around an object's outline (`training-data/med-ball/outlines.coco.json`, from the
+Roboflow project "Forge Equipment Outlines", cleaned and checked by eye). Val box size: plate
+0.994 / relMAD 0.030, barbell 1.013 / 0.022 (old model: plate 1.011 / 0.056). The plate-tree
+pole is no longer a barbell, the coloured balls in the ball rows are weighted baseballs, the cone
+tops are unlabelled. **`COREML_BOX_LONG_EDGE_RELATIVE_MAD` stays 0.056 on purpose**: the val
+split leaks frames of training videos, so no camera number moves until a filmed take's
+`objectGate.plateBoxToExpectedRatio` earns a lower one. Read that field first on the next
+filmed set. Details: `scripts/med-ball-detector/README.md`.
