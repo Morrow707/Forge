@@ -3,17 +3,17 @@
   "boxes": [
     {
       "class": "med_ball",
-      "x_center": 0.474,
-      "y_center": 0.394,
-      "width": 0.207,
-      "height": 0.167
+      "x_center": 0.4868,
+      "y_center": 0.5005,
+      "width": 0.2,
+      "height": 0.1552
     },
     {
       "class": "med_ball",
-      "x_center": 0.81,
-      "y_center": 0.447,
-      "width": 0.2,
-      "height": 0.161
+      "x_center": 0.8146,
+      "y_center": 0.5417,
+      "width": 0.1764,
+      "height": 0.125
     }
   ]
 }

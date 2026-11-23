@@ -2,25 +2,130 @@
   "image": "IMG_0012_frame1.jpg",
   "boxes": [
     {
-      "class": "plate",
-      "x_center": 0.4905,
-      "y_center": 0.3982,
-      "width": 0.3136,
-      "height": 0.2433
-    },
-    {
-      "class": "plate",
-      "x_center": 0.5305,
-      "y_center": 0.5548,
-      "width": 0.2799,
-      "height": 0.2324
-    },
-    {
       "class": "barbell",
-      "x_center": 0.2124,
-      "y_center": 0.7757,
-      "width": 0.4249,
-      "height": 0.2298
+      "x_center": 0.1611,
+      "y_center": 0.8315,
+      "width": 0.3222,
+      "height": 0.3359
+    },
+    {
+      "class": "plate",
+      "x_center": 0.5312,
+      "y_center": 0.3951,
+      "width": 0.3792,
+      "height": 0.2839
+    },
+    {
+      "class": "plate",
+      "x_center": 0.3851,
+      "y_center": 0.6617,
+      "width": 0.309,
+      "height": 0.2141
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4337,
+      "y_center": 0.6094,
+      "width": 0.3118,
+      "height": 0.2073
+    },
+    {
+      "class": "plate",
+      "x_center": 0.6031,
+      "y_center": 0.3482,
+      "width": 0.2632,
+      "height": 0.2047
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4267,
+      "y_center": 0.6146,
+      "width": 0.2826,
+      "height": 0.1854
+    },
+    {
+      "class": "plate",
+      "x_center": 0.8108,
+      "y_center": 0.2117,
+      "width": 0.1215,
+      "height": 0.1297
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.7892,
+      "y_center": 0.3365,
+      "width": 0.1104,
+      "height": 0.1333
+    },
+    {
+      "class": "plate",
+      "x_center": 0.7465,
+      "y_center": 0.1997,
+      "width": 0.1056,
+      "height": 0.1255
+    },
+    {
+      "class": "plate",
+      "x_center": 0.7424,
+      "y_center": 0.3542,
+      "width": 0.0611,
+      "height": 0.1083
+    },
+    {
+      "class": "plate",
+      "x_center": 0.5531,
+      "y_center": 0.3234,
+      "width": 0.0799,
+      "height": 0.0479
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.6896,
+      "y_center": 0.268,
+      "width": 0.0625,
+      "height": 0.0422
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.9431,
+      "y_center": 0.3068,
+      "width": 0.0597,
+      "height": 0.0437
+    },
+    {
+      "class": "plate",
+      "x_center": 0.6847,
+      "y_center": 0.3073,
+      "width": 0.0292,
+      "height": 0.0281
+    },
+    {
+      "class": "plate",
+      "x_center": 0.7139,
+      "y_center": 0.3469,
+      "width": 0.0194,
+      "height": 0.0354
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4267,
+      "y_center": 0.3784,
+      "width": 0.0174,
+      "height": 0.0318
+    },
+    {
+      "class": "plate",
+      "x_center": 0.6899,
+      "y_center": 0.2987,
+      "width": 0.0271,
+      "height": 0.0193
+    },
+    {
+      "class": "plate",
+      "x_center": 0.6562,
+      "y_center": 0.2896,
+      "width": 0.0208,
+      "height": 0.0208
     }
   ]
 }

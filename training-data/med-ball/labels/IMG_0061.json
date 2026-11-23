@@ -1,6 +1,26 @@
 {
   "image": "IMG_0061.jpg",
   "boxes": [
-    { "class": "med_ball", "x_center": 0.4908, "y_center": 0.4816, "width": 0.1903, "height": 0.1428 }
+    {
+      "class": "med_ball",
+      "x_center": 0.4856,
+      "y_center": 0.4784,
+      "width": 0.1898,
+      "height": 0.1423
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.9611,
+      "y_center": 0.4648,
+      "width": 0.0768,
+      "height": 0.1373
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.3674,
+      "y_center": 0.0119,
+      "width": 0.1158,
+      "height": 0.0238
+    }
   ]
 }

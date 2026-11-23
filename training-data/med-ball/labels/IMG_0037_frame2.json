@@ -3,87 +3,143 @@
   "boxes": [
     {
       "class": "kettlebell",
-      "x_center": 0.1056,
-      "y_center": 0.4466,
-      "width": 0.2111,
-      "height": 0.2282
+      "x_center": 0.6986,
+      "y_center": 0.425,
+      "width": 0.2292,
+      "height": 0.2073
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.8222,
+      "y_center": 0.7826,
+      "width": 0.1958,
+      "height": 0.2328
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.9052,
+      "y_center": 0.7768,
+      "width": 0.1771,
+      "height": 0.2516
     },
     {
       "class": "kettlebell",
-      "x_center": 0.6753,
-      "y_center": 0.4227,
-      "width": 0.1852,
-      "height": 0.2264
+      "x_center": 0.1219,
+      "y_center": 0.4536,
+      "width": 0.2271,
+      "height": 0.1812
     },
     {
       "class": "dumbbell",
-      "x_center": 0.2119,
-      "y_center": 0.7728,
-      "width": 0.1591,
-      "height": 0.1288
+      "x_center": 0.7073,
+      "y_center": 0.774,
+      "width": 0.1729,
+      "height": 0.2302
     },
     {
       "class": "dumbbell",
-      "x_center": 0.3707,
-      "y_center": 0.7645,
-      "width": 0.1512,
-      "height": 0.1272
+      "x_center": 0.5955,
+      "y_center": 0.7924,
+      "width": 0.1437,
+      "height": 0.2422
     },
     {
       "class": "dumbbell",
-      "x_center": 0.5267,
-      "y_center": 0.7564,
-      "width": 0.146,
-      "height": 0.1257
+      "x_center": 0.4795,
+      "y_center": 0.7958,
+      "width": 0.1257,
+      "height": 0.2437
     },
     {
       "class": "dumbbell",
-      "x_center": 0.6863,
-      "y_center": 0.7481,
-      "width": 0.1448,
-      "height": 0.1241
+      "x_center": 0.1837,
+      "y_center": 0.8063,
+      "width": 0.1285,
+      "height": 0.224
     },
     {
       "class": "dumbbell",
-      "x_center": 0.8423,
-      "y_center": 0.7399,
-      "width": 0.1447,
-      "height": 0.1226
+      "x_center": 0.3604,
+      "y_center": 0.8018,
+      "width": 0.1042,
+      "height": 0.2307
     },
     {
       "class": "dumbbell",
-      "x_center": 0.9604,
-      "y_center": 0.732,
-      "width": 0.0792,
-      "height": 0.1211
+      "x_center": 0.2649,
+      "y_center": 0.8042,
+      "width": 0.1035,
+      "height": 0.224
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.1635,
+      "y_center": 0.3904,
+      "width": 0.1938,
+      "height": 0.1057
     },
     {
       "class": "dumbbell",
-      "x_center": 0.2781,
-      "y_center": 0.9504,
-      "width": 0.1668,
-      "height": 0.0992
+      "x_center": 0.9552,
+      "y_center": 0.9479,
+      "width": 0.0799,
+      "height": 0.0698
+    },
+    {
+      "class": "plate",
+      "x_center": 0.0354,
+      "y_center": 0.2625,
+      "width": 0.0708,
+      "height": 0.076
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.1253,
+      "y_center": 0.424,
+      "width": 0.1229,
+      "height": 0.0437
     },
     {
       "class": "dumbbell",
-      "x_center": 0.4901,
-      "y_center": 0.9437,
-      "width": 0.1578,
-      "height": 0.1126
+      "x_center": 0.9622,
+      "y_center": 0.687,
+      "width": 0.059,
+      "height": 0.0781
     },
     {
       "class": "dumbbell",
-      "x_center": 0.6963,
-      "y_center": 0.9334,
-      "width": 0.1551,
-      "height": 0.1182
+      "x_center": 0.8472,
+      "y_center": 0.9521,
+      "width": 0.0556,
+      "height": 0.0667
+    },
+    {
+      "class": "plate",
+      "x_center": 0.0243,
+      "y_center": 0.1854,
+      "width": 0.0486,
+      "height": 0.0656
     },
     {
       "class": "dumbbell",
-      "x_center": 0.8945,
-      "y_center": 0.9199,
-      "width": 0.1544,
-      "height": 0.1163
+      "x_center": 0.7191,
+      "y_center": 0.9568,
+      "width": 0.0493,
+      "height": 0.0615
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.5851,
+      "y_center": 0.9633,
+      "width": 0.0368,
+      "height": 0.063
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.3778,
+      "y_center": 0.9711,
+      "width": 0.0319,
+      "height": 0.0516
     }
   ]
 }

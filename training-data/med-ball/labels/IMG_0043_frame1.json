@@ -3,31 +3,94 @@
   "boxes": [
     {
       "class": "barbell",
-      "x_center": 0.1973,
-      "y_center": 0.2752,
-      "width": 0.3947,
-      "height": 0.0778
+      "x_center": 0.5625,
+      "y_center": 0.4589,
+      "width": 0.2014,
+      "height": 0.7083
     },
     {
       "class": "plate",
-      "x_center": 0.3238,
-      "y_center": 0.5957,
-      "width": 0.3637,
-      "height": 0.2218
+      "x_center": 0.2243,
+      "y_center": 0.6773,
+      "width": 0.125,
+      "height": 0.1859
     },
     {
       "class": "plate",
-      "x_center": 0.1204,
-      "y_center": 0.6025,
-      "width": 0.1219,
-      "height": 0.1222
+      "x_center": 0.3208,
+      "y_center": 0.6615,
+      "width": 0.1319,
+      "height": 0.175
     },
     {
       "class": "barbell",
-      "x_center": 0.4913,
-      "y_center": 0.4576,
-      "width": 0.0739,
-      "height": 0.4991
+      "x_center": 0.1906,
+      "y_center": 0.2815,
+      "width": 0.3812,
+      "height": 0.0516
+    },
+    {
+      "class": "plate",
+      "x_center": 0.3747,
+      "y_center": 0.6404,
+      "width": 0.0951,
+      "height": 0.1609
+    },
+    {
+      "class": "plate",
+      "x_center": 0.5556,
+      "y_center": 0.5951,
+      "width": 0.1083,
+      "height": 0.1401
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4573,
+      "y_center": 0.6151,
+      "width": 0.0813,
+      "height": 0.1479
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4156,
+      "y_center": 0.6333,
+      "width": 0.0674,
+      "height": 0.1562
+    },
+    {
+      "class": "plate",
+      "x_center": 0.5281,
+      "y_center": 0.6096,
+      "width": 0.0576,
+      "height": 0.138
+    },
+    {
+      "class": "plate",
+      "x_center": 0.3674,
+      "y_center": 0.6609,
+      "width": 0.0444,
+      "height": 0.1552
+    },
+    {
+      "class": "plate",
+      "x_center": 0.2812,
+      "y_center": 0.7013,
+      "width": 0.0389,
+      "height": 0.1453
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4698,
+      "y_center": 0.5557,
+      "width": 0.0285,
+      "height": 0.0396
+    },
+    {
+      "class": "tennis_ball",
+      "x_center": 0.1635,
+      "y_center": 0.7331,
+      "width": 0.0201,
+      "height": 0.0234
     }
   ]
 }

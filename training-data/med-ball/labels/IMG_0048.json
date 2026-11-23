@@ -1,7 +1,26 @@
 {
   "image": "IMG_0048.jpg",
   "boxes": [
-    { "class": "golf_ball", "x_center": 0.3660, "y_center": 0.5220, "width": 0.0619, "height": 0.0464 },
-    { "class": "golf_ball", "x_center": 0.5543, "y_center": 0.5173, "width": 0.0603, "height": 0.0453 }
+    {
+      "class": "baseball",
+      "x_center": 0.0294,
+      "y_center": 0.5245,
+      "width": 0.0588,
+      "height": 0.0816
+    },
+    {
+      "class": "golf_ball",
+      "x_center": 0.3659,
+      "y_center": 0.5213,
+      "width": 0.0609,
+      "height": 0.0457
+    },
+    {
+      "class": "golf_ball",
+      "x_center": 0.5543,
+      "y_center": 0.5174,
+      "width": 0.0605,
+      "height": 0.0457
+    }
   ]
 }

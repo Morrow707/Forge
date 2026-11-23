@@ -2,109 +2,172 @@
   "image": "IMG_0038_frame0.jpg",
   "boxes": [
     {
+      "class": "dumbbell",
+      "x_center": 0.892,
+      "y_center": 0.9201,
+      "width": 0.2146,
+      "height": 0.1589
+    },
+    {
       "class": "kettlebell",
-      "x_center": 0.151,
-      "y_center": 0.486,
+      "x_center": 0.1465,
+      "y_center": 0.5047,
+      "width": 0.1625,
+      "height": 0.1448
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.6979,
+      "y_center": 0.6557,
+      "width": 0.1583,
+      "height": 0.1354
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.3635,
+      "y_center": 0.7055,
+      "width": 0.1354,
+      "height": 0.1568
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.6194,
+      "y_center": 0.6656,
+      "width": 0.1542,
+      "height": 0.1365
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.4524,
+      "y_center": 0.6914,
       "width": 0.141,
-      "height": 0.161
+      "height": 0.1453
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.2601,
+      "y_center": 0.7214,
+      "width": 0.1243,
+      "height": 0.1625
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.7663,
+      "y_center": 0.6411,
+      "width": 0.1562,
+      "height": 0.124
     },
     {
       "class": "kettlebell",
-      "x_center": 0.314,
-      "y_center": 0.486,
+      "x_center": 0.3149,
+      "y_center": 0.4922,
+      "width": 0.1424,
+      "height": 0.1344
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.1583,
+      "y_center": 0.7362,
+      "width": 0.1111,
+      "height": 0.1693
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.5316,
+      "y_center": 0.6781,
       "width": 0.141,
-      "height": 0.161
+      "height": 0.1313
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.6875,
+      "y_center": 0.9406,
+      "width": 0.1556,
+      "height": 0.1177
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.1861,
+      "y_center": 0.8974,
+      "width": 0.1208,
+      "height": 0.1427
     },
     {
       "class": "kettlebell",
-      "x_center": 0.459,
-      "y_center": 0.486,
-      "width": 0.133,
-      "height": 0.161
+      "x_center": 0.4424,
+      "y_center": 0.4815,
+      "width": 0.1278,
+      "height": 0.1255
     },
     {
       "class": "kettlebell",
-      "x_center": 0.6,
-      "y_center": 0.486,
-      "width": 0.133,
-      "height": 0.161
+      "x_center": 0.6729,
+      "y_center": 0.4635,
+      "width": 0.1194,
+      "height": 0.1229
     },
     {
       "class": "kettlebell",
-      "x_center": 0.726,
-      "y_center": 0.486,
-      "width": 0.133,
-      "height": 0.161
+      "x_center": 0.7802,
+      "y_center": 0.4529,
+      "width": 0.1174,
+      "height": 0.1245
     },
     {
       "class": "kettlebell",
-      "x_center": 0.83,
-      "y_center": 0.486,
-      "width": 0.119,
-      "height": 0.161
+      "x_center": 0.5507,
+      "y_center": 0.4695,
+      "width": 0.1139,
+      "height": 0.1266
     },
     {
       "class": "dumbbell",
-      "x_center": 0.163,
-      "y_center": 0.689,
-      "width": 0.148,
-      "height": 0.133
+      "x_center": 0.3937,
+      "y_center": 0.8659,
+      "width": 0.1111,
+      "height": 0.1203
     },
     {
       "class": "dumbbell",
-      "x_center": 0.326,
-      "y_center": 0.689,
-      "width": 0.148,
-      "height": 0.133
+      "x_center": 0.2913,
+      "y_center": 0.874,
+      "width": 0.0993,
+      "height": 0.1156
     },
     {
       "class": "dumbbell",
-      "x_center": 0.489,
-      "y_center": 0.689,
-      "width": 0.148,
-      "height": 0.133
+      "x_center": 0.4875,
+      "y_center": 0.8456,
+      "width": 0.0986,
+      "height": 0.1109
     },
     {
       "class": "dumbbell",
-      "x_center": 0.652,
-      "y_center": 0.689,
-      "width": 0.148,
-      "height": 0.133
+      "x_center": 0.6083,
+      "y_center": 0.8221,
+      "width": 0.0986,
+      "height": 0.1068
     },
     {
       "class": "dumbbell",
-      "x_center": 0.793,
-      "y_center": 0.689,
-      "width": 0.133,
-      "height": 0.133
+      "x_center": 0.774,
+      "y_center": 0.7867,
+      "width": 0.0993,
+      "height": 0.1047
     },
     {
       "class": "dumbbell",
-      "x_center": 0.2,
-      "y_center": 0.833,
-      "width": 0.163,
-      "height": 0.133
+      "x_center": 0.6986,
+      "y_center": 0.8031,
+      "width": 0.0972,
+      "height": 0.1052
     },
     {
       "class": "dumbbell",
-      "x_center": 0.378,
-      "y_center": 0.833,
-      "width": 0.163,
-      "height": 0.133
-    },
-    {
-      "class": "dumbbell",
-      "x_center": 0.556,
-      "y_center": 0.833,
-      "width": 0.163,
-      "height": 0.133
-    },
-    {
-      "class": "dumbbell",
-      "x_center": 0.711,
-      "y_center": 0.833,
-      "width": 0.148,
-      "height": 0.133
+      "x_center": 0.5017,
+      "y_center": 0.9596,
+      "width": 0.1146,
+      "height": 0.0797
     }
   ]
 }

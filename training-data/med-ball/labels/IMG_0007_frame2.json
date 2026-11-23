@@ -2,46 +2,172 @@
   "image": "IMG_0007_frame2.jpg",
   "boxes": [
     {
-      "class": "plate",
-      "x_center": 0.5142,
-      "y_center": 0.4705,
-      "width": 0.0845,
-      "height": 0.0755
-    },
-    {
-      "class": "plate",
-      "x_center": 0.3624,
-      "y_center": 0.4462,
-      "width": 0.057,
-      "height": 0.0534
+      "class": "barbell",
+      "x_center": 0.7424,
+      "y_center": 0.3586,
+      "width": 0.1875,
+      "height": 0.5599
     },
     {
       "class": "barbell",
-      "x_center": 0.4527,
-      "y_center": 0.4725,
-      "width": 0.2327,
-      "height": 0.0916
+      "x_center": 0.4618,
+      "y_center": 0.4536,
+      "width": 0.2194,
+      "height": 0.0896
     },
     {
       "class": "plate",
-      "x_center": 0.8018,
-      "y_center": 0.3629,
-      "width": 0.1045,
-      "height": 0.0841
+      "x_center": 0.8938,
+      "y_center": 0.3508,
+      "width": 0.1264,
+      "height": 0.1182
     },
     {
       "class": "plate",
-      "x_center": 0.8022,
-      "y_center": 0.4599,
-      "width": 0.1045,
-      "height": 0.088
+      "x_center": 0.8997,
+      "y_center": 0.4794,
+      "width": 0.116,
+      "height": 0.112
     },
     {
       "class": "plate",
-      "x_center": 0.8103,
-      "y_center": 0.6004,
-      "width": 0.0901,
-      "height": 0.085
+      "x_center": 0.8823,
+      "y_center": 0.594,
+      "width": 0.1201,
+      "height": 0.1057
+    },
+    {
+      "class": "plate",
+      "x_center": 0.6837,
+      "y_center": 0.6562,
+      "width": 0.1507,
+      "height": 0.0677
+    },
+    {
+      "class": "plate",
+      "x_center": 0.8319,
+      "y_center": 0.5818,
+      "width": 0.1,
+      "height": 0.099
+    },
+    {
+      "class": "plate",
+      "x_center": 0.8517,
+      "y_center": 0.35,
+      "width": 0.0771,
+      "height": 0.1125
+    },
+    {
+      "class": "plate",
+      "x_center": 0.8531,
+      "y_center": 0.4721,
+      "width": 0.0826,
+      "height": 0.1036
+    },
+    {
+      "class": "plate",
+      "x_center": 0.5222,
+      "y_center": 0.4617,
+      "width": 0.0972,
+      "height": 0.0745
+    },
+    {
+      "class": "plate",
+      "x_center": 0.6851,
+      "y_center": 0.6878,
+      "width": 0.1535,
+      "height": 0.0443
+    },
+    {
+      "class": "plate",
+      "x_center": 0.774,
+      "y_center": 0.3591,
+      "width": 0.0743,
+      "height": 0.0839
+    },
+    {
+      "class": "plate",
+      "x_center": 0.7792,
+      "y_center": 0.5708,
+      "width": 0.0611,
+      "height": 0.0969
+    },
+    {
+      "class": "plate",
+      "x_center": 0.784,
+      "y_center": 0.3594,
+      "width": 0.0542,
+      "height": 0.0833
+    },
+    {
+      "class": "plate",
+      "x_center": 0.8122,
+      "y_center": 0.4854,
+      "width": 0.059,
+      "height": 0.0719
+    },
+    {
+      "class": "plate",
+      "x_center": 0.3778,
+      "y_center": 0.438,
+      "width": 0.0514,
+      "height": 0.0594
+    },
+    {
+      "class": "plate",
+      "x_center": 0.7545,
+      "y_center": 0.4354,
+      "width": 0.0646,
+      "height": 0.0437
+    },
+    {
+      "class": "plate",
+      "x_center": 0.783,
+      "y_center": 0.4372,
+      "width": 0.0576,
+      "height": 0.0453
+    },
+    {
+      "class": "plate",
+      "x_center": 0.8514,
+      "y_center": 0.438,
+      "width": 0.0306,
+      "height": 0.0396
+    },
+    {
+      "class": "plate",
+      "x_center": 0.784,
+      "y_center": 0.4945,
+      "width": 0.0319,
+      "height": 0.037
+    },
+    {
+      "class": "plate",
+      "x_center": 0.7434,
+      "y_center": 0.4818,
+      "width": 0.0465,
+      "height": 0.0177
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.3587,
+      "y_center": 0.4724,
+      "width": 0.0271,
+      "height": 0.0292
+    },
+    {
+      "class": "plate",
+      "x_center": 0.8219,
+      "y_center": 0.3034,
+      "width": 0.0312,
+      "height": 0.0151
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4198,
+      "y_center": 0.431,
+      "width": 0.0076,
+      "height": 0.0224
     }
   ]
 }

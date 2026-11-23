@@ -3,80 +3,101 @@
   "boxes": [
     {
       "class": "med_ball",
-      "x_center": 0.274,
-      "y_center": 0.144,
-      "width": 0.326,
-      "height": 0.211
+      "x_center": 0.2726,
+      "y_center": 0.1526,
+      "width": 0.3271,
+      "height": 0.2396
     },
     {
       "class": "med_ball",
-      "x_center": 0.588,
-      "y_center": 0.141,
-      "width": 0.304,
-      "height": 0.217
+      "x_center": 0.5677,
+      "y_center": 0.1557,
+      "width": 0.284,
+      "height": 0.2302
     },
     {
       "class": "med_ball",
-      "x_center": 0.274,
-      "y_center": 0.413,
-      "width": 0.296,
-      "height": 0.217
+      "x_center": 0.2778,
+      "y_center": 0.4091,
+      "width": 0.3014,
+      "height": 0.2109
     },
     {
       "class": "med_ball",
-      "x_center": 0.593,
-      "y_center": 0.411,
-      "width": 0.267,
-      "height": 0.2
+      "x_center": 0.2976,
+      "y_center": 0.6391,
+      "width": 0.2701,
+      "height": 0.1802
     },
     {
       "class": "med_ball",
-      "x_center": 0.319,
-      "y_center": 0.628,
-      "width": 0.252,
-      "height": 0.189
+      "x_center": 0.5781,
+      "y_center": 0.4042,
+      "width": 0.2521,
+      "height": 0.1927
     },
     {
       "class": "med_ball",
-      "x_center": 0.6,
-      "y_center": 0.617,
-      "width": 0.252,
-      "height": 0.189
+      "x_center": 0.3288,
+      "y_center": 0.8307,
+      "width": 0.2285,
+      "height": 0.1802
     },
     {
       "class": "med_ball",
-      "x_center": 0.563,
-      "y_center": 0.789,
-      "width": 0.222,
-      "height": 0.156
+      "x_center": 0.5635,
+      "y_center": 0.6016,
+      "width": 0.2188,
+      "height": 0.175
     },
     {
       "class": "med_ball",
-      "x_center": 0.151,
-      "y_center": 0.822,
-      "width": 0.156,
-      "height": 0.111
+      "x_center": 0.5576,
+      "y_center": 0.7771,
+      "width": 0.2056,
+      "height": 0.1646
     },
     {
       "class": "med_ball",
-      "x_center": 0.341,
-      "y_center": 0.822,
-      "width": 0.207,
-      "height": 0.156
-    },
-    {
-      "class": "med_ball",
-      "x_center": 0.618,
-      "y_center": 0.861,
-      "width": 0.156,
-      "height": 0.078
+      "x_center": 0.1521,
+      "y_center": 0.9357,
+      "width": 0.2611,
+      "height": 0.1276
     },
     {
       "class": "plate",
-      "x_center": 0.87,
-      "y_center": 0.478,
-      "width": 0.096,
-      "height": 0.156
+      "x_center": 0.8816,
+      "y_center": 0.4576,
+      "width": 0.1521,
+      "height": 0.1047
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.6222,
+      "y_center": 0.857,
+      "width": 0.1333,
+      "height": 0.1089
+    },
+    {
+      "class": "plate",
+      "x_center": 0.9316,
+      "y_center": 0.3945,
+      "width": 0.0896,
+      "height": 0.0672
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.2573,
+      "y_center": 0.2745,
+      "width": 0.1576,
+      "height": 0.0375
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.5142,
+      "y_center": 0.6958,
+      "width": 0.0535,
+      "height": 0.0219
     }
   ]
 }

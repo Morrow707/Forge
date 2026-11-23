@@ -2,67 +2,109 @@
   "image": "IMG_0011_frame2.jpg",
   "boxes": [
     {
-      "class": "plate",
-      "x_center": 0.5042,
-      "y_center": 0.4427,
-      "width": 0.086,
-      "height": 0.0639
-    },
-    {
       "class": "barbell",
-      "x_center": 0.4976,
-      "y_center": 0.4557,
-      "width": 0.208,
-      "height": 0.0638
+      "x_center": 0.5632,
+      "y_center": 0.4466,
+      "width": 0.2069,
+      "height": 0.113
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.0674,
+      "y_center": 0.5359,
+      "width": 0.1347,
+      "height": 0.1313
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.0736,
+      "y_center": 0.6562,
+      "width": 0.1472,
+      "height": 0.1146
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.0632,
+      "y_center": 0.3951,
+      "width": 0.1264,
+      "height": 0.1286
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.0493,
+      "y_center": 0.2417,
+      "width": 0.0986,
+      "height": 0.1437
     },
     {
       "class": "plate",
-      "x_center": 0.6572,
-      "y_center": 0.3502,
-      "width": 0.0825,
-      "height": 0.1014
+      "x_center": 0.5125,
+      "y_center": 0.4622,
+      "width": 0.1056,
+      "height": 0.0818
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.1313,
+      "y_center": 0.724,
+      "width": 0.1056,
+      "height": 0.0802
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.9365,
+      "y_center": 0.8224,
+      "width": 0.066,
+      "height": 0.125
     },
     {
       "class": "plate",
-      "x_center": 0.6595,
-      "y_center": 0.2508,
-      "width": 0.0909,
-      "height": 0.0996
+      "x_center": 0.6253,
+      "y_center": 0.4214,
+      "width": 0.0826,
+      "height": 0.0625
     },
     {
-      "class": "med_ball",
-      "x_center": 0.062,
-      "y_center": 0.233,
-      "width": 0.126,
-      "height": 0.111
+      "class": "plate",
+      "x_center": 0.6649,
+      "y_center": 0.3255,
+      "width": 0.084,
+      "height": 0.0531
     },
     {
-      "class": "med_ball",
-      "x_center": 0.081,
-      "y_center": 0.356,
-      "width": 0.163,
-      "height": 0.111
+      "class": "plate",
+      "x_center": 0.6601,
+      "y_center": 0.3805,
+      "width": 0.0854,
+      "height": 0.0495
     },
     {
-      "class": "med_ball",
-      "x_center": 0.07,
-      "y_center": 0.489,
-      "width": 0.141,
-      "height": 0.111
+      "class": "kettlebell",
+      "x_center": 0.9708,
+      "y_center": 0.5833,
+      "width": 0.0569,
+      "height": 0.0656
     },
     {
-      "class": "med_ball",
-      "x_center": 0.067,
-      "y_center": 0.611,
-      "width": 0.133,
-      "height": 0.111
+      "class": "kettlebell",
+      "x_center": 0.9757,
+      "y_center": 0.6208,
+      "width": 0.0472,
+      "height": 0.0719
     },
     {
-      "class": "med_ball",
-      "x_center": 0.133,
-      "y_center": 0.7,
-      "width": 0.104,
-      "height": 0.089
+      "class": "plate",
+      "x_center": 0.666,
+      "y_center": 0.4328,
+      "width": 0.0639,
+      "height": 0.049
+    },
+    {
+      "class": "plate",
+      "x_center": 0.742,
+      "y_center": 0.4635,
+      "width": 0.0688,
+      "height": 0.0302
     }
   ]
 }

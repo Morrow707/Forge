@@ -2,18 +2,46 @@
   "image": "IMG_0042.jpg",
   "boxes": [
     {
+      "class": "plate",
+      "x_center": 0.4883,
+      "y_center": 0.5098,
+      "width": 0.3077,
+      "height": 0.2062
+    },
+    {
       "class": "dumbbell",
-      "x_center": 0.4956,
-      "y_center": 0.5082,
-      "width": 0.2764,
-      "height": 0.1485
+      "x_center": 0.495,
+      "y_center": 0.5106,
+      "width": 0.2747,
+      "height": 0.1626
     },
     {
       "class": "plate",
-      "x_center": 0.4859,
-      "y_center": 0.5103,
-      "width": 0.3196,
-      "height": 0.2041
+      "x_center": 0.7073,
+      "y_center": 0.0681,
+      "width": 0.1648,
+      "height": 0.1362
+    },
+    {
+      "class": "barbell",
+      "x_center": 0.9613,
+      "y_center": 0.0916,
+      "width": 0.0766,
+      "height": 0.1833
+    },
+    {
+      "class": "plate",
+      "x_center": 0.8971,
+      "y_center": 0.046,
+      "width": 0.1485,
+      "height": 0.0919
+    },
+    {
+      "class": "plate",
+      "x_center": 0.8115,
+      "y_center": 0.0558,
+      "width": 0.1137,
+      "height": 0.1115
     }
   ]
 }

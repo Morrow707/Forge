@@ -1,6 +1,33 @@
 {
   "image": "IMG_0062.jpg",
   "boxes": [
-    { "class": "med_ball", "x_center": 0.4311, "y_center": 0.4814, "width": 0.1774, "height": 0.1331 }
+    {
+      "class": "med_ball",
+      "x_center": 0.4307,
+      "y_center": 0.4777,
+      "width": 0.1755,
+      "height": 0.129
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.0472,
+      "y_center": 0.4195,
+      "width": 0.0943,
+      "height": 0.159
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.8895,
+      "y_center": 0.0202,
+      "width": 0.159,
+      "height": 0.0404
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.9751,
+      "y_center": 0.4807,
+      "width": 0.0488,
+      "height": 0.1217
+    }
   ]
 }

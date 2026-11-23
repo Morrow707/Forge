@@ -1,4 +1,12 @@
 {
   "image": "IMG_0046_frame0.jpg",
-  "boxes": []
+  "boxes": [
+    {
+      "class": "med_ball",
+      "x_center": 0.975,
+      "y_center": 0.2703,
+      "width": 0.0486,
+      "height": 0.0469
+    }
+  ]
 }

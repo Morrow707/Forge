@@ -2,32 +2,67 @@
   "image": "IMG_0010_frame0.jpg",
   "boxes": [
     {
-      "class": "plate",
-      "x_center": 0.544,
-      "y_center": 0.406,
-      "width": 0.156,
-      "height": 0.144
+      "class": "barbell",
+      "x_center": 0.6351,
+      "y_center": 0.4227,
+      "width": 0.3104,
+      "height": 0.1859
     },
     {
       "class": "barbell",
-      "x_center": 0.548,
-      "y_center": 0.411,
-      "width": 0.385,
-      "height": 0.178
+      "x_center": 0.8455,
+      "y_center": 0.2437,
+      "width": 0.1104,
+      "height": 0.3531
     },
     {
       "class": "plate",
-      "x_center": 0.77,
-      "y_center": 0.267,
-      "width": 0.089,
-      "height": 0.111
+      "x_center": 0.5618,
+      "y_center": 0.4529,
+      "width": 0.1653,
+      "height": 0.1266
     },
     {
       "class": "plate",
-      "x_center": 0.785,
-      "y_center": 0.344,
-      "width": 0.089,
-      "height": 0.044
+      "x_center": 0.7424,
+      "y_center": 0.3753,
+      "width": 0.1,
+      "height": 0.0911
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.1115,
+      "y_center": 0.7714,
+      "width": 0.0743,
+      "height": 0.1167
+    },
+    {
+      "class": "plate",
+      "x_center": 0.7684,
+      "y_center": 0.2362,
+      "width": 0.0979,
+      "height": 0.0745
+    },
+    {
+      "class": "plate",
+      "x_center": 0.7573,
+      "y_center": 0.3096,
+      "width": 0.0965,
+      "height": 0.062
+    },
+    {
+      "class": "plate",
+      "x_center": 0.8486,
+      "y_center": 0.4263,
+      "width": 0.0958,
+      "height": 0.0411
+    },
+    {
+      "class": "plate",
+      "x_center": 0.6722,
+      "y_center": 0.3677,
+      "width": 0.0333,
+      "height": 0.0542
     }
   ]
 }

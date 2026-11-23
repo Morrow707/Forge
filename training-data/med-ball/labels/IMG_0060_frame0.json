@@ -3,24 +3,31 @@
   "boxes": [
     {
       "class": "med_ball",
-      "x_center": 0.047,
-      "y_center": 0.108,
-      "width": 0.096,
-      "height": 0.094
+      "x_center": 0.5097,
+      "y_center": 0.5674,
+      "width": 0.1819,
+      "height": 0.1453
     },
     {
       "class": "med_ball",
-      "x_center": 0.059,
-      "y_center": 0.522,
-      "width": 0.119,
-      "height": 0.133
+      "x_center": 0.0427,
+      "y_center": 0.5714,
+      "width": 0.0854,
+      "height": 0.1323
     },
     {
       "class": "med_ball",
-      "x_center": 0.511,
-      "y_center": 0.539,
-      "width": 0.193,
-      "height": 0.144
+      "x_center": 0.0323,
+      "y_center": 0.0977,
+      "width": 0.0646,
+      "height": 0.1099
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.2674,
+      "y_center": 0.0146,
+      "width": 0.1375,
+      "height": 0.0292
     }
   ]
 }

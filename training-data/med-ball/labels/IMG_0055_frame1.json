@@ -2,32 +2,32 @@
   "image": "IMG_0055_frame1.jpg",
   "boxes": [
     {
-      "class": "tennis_ball",
-      "x_center": 0.173,
-      "y_center": 0.502,
-      "width": 0.126,
-      "height": 0.094
+      "class": "baseball",
+      "x_center": 0.1653,
+      "y_center": 0.5323,
+      "width": 0.1194,
+      "height": 0.0875
     },
     {
-      "class": "golf_ball",
-      "x_center": 0.492,
-      "y_center": 0.502,
-      "width": 0.096,
-      "height": 0.072
+      "class": "baseball",
+      "x_center": 0.4934,
+      "y_center": 0.5323,
+      "width": 0.0951,
+      "height": 0.076
     },
     {
-      "class": "golf_ball",
-      "x_center": 0.744,
-      "y_center": 0.502,
-      "width": 0.081,
-      "height": 0.061
+      "class": "baseball",
+      "x_center": 0.9135,
+      "y_center": 0.5247,
+      "width": 0.0854,
+      "height": 0.0661
     },
     {
-      "class": "golf_ball",
-      "x_center": 0.919,
-      "y_center": 0.5,
-      "width": 0.089,
-      "height": 0.067
+      "class": "baseball",
+      "x_center": 0.7354,
+      "y_center": 0.5299,
+      "width": 0.0708,
+      "height": 0.0578
     }
   ]
 }

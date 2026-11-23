@@ -3,87 +3,143 @@
   "boxes": [
     {
       "class": "dumbbell",
-      "x_center": 0.074,
-      "y_center": 0.433,
-      "width": 0.148,
-      "height": 0.156
+      "x_center": 0.7424,
+      "y_center": 0.524,
+      "width": 0.2403,
+      "height": 0.3417
     },
     {
       "class": "dumbbell",
-      "x_center": 0.244,
-      "y_center": 0.422,
-      "width": 0.163,
-      "height": 0.178
+      "x_center": 0.2253,
+      "y_center": 0.5195,
+      "width": 0.2424,
+      "height": 0.3339
     },
     {
       "class": "dumbbell",
-      "x_center": 0.452,
-      "y_center": 0.422,
-      "width": 0.193,
-      "height": 0.2
+      "x_center": 0.4771,
+      "y_center": 0.5208,
+      "width": 0.2222,
+      "height": 0.3438
     },
     {
       "class": "dumbbell",
-      "x_center": 0.696,
-      "y_center": 0.422,
-      "width": 0.207,
-      "height": 0.2
+      "x_center": 0.1215,
+      "y_center": 0.875,
+      "width": 0.2125,
+      "height": 0.249
     },
     {
       "class": "dumbbell",
-      "x_center": 0.081,
-      "y_center": 0.628,
-      "width": 0.163,
-      "height": 0.144
+      "x_center": 0.0774,
+      "y_center": 0.5182,
+      "width": 0.1549,
+      "height": 0.3375
     },
     {
       "class": "dumbbell",
-      "x_center": 0.259,
-      "y_center": 0.628,
-      "width": 0.163,
-      "height": 0.167
+      "x_center": 0.4736,
+      "y_center": 0.8716,
+      "width": 0.1694,
+      "height": 0.2557
     },
     {
       "class": "dumbbell",
-      "x_center": 0.474,
-      "y_center": 0.633,
-      "width": 0.207,
-      "height": 0.178
+      "x_center": 0.3372,
+      "y_center": 0.7156,
+      "width": 0.1729,
+      "height": 0.1896
     },
     {
       "class": "dumbbell",
-      "x_center": 0.711,
-      "y_center": 0.633,
-      "width": 0.207,
-      "height": 0.178
+      "x_center": 0.6882,
+      "y_center": 0.9044,
+      "width": 0.1611,
+      "height": 0.1901
     },
     {
       "class": "dumbbell",
-      "x_center": 0.096,
-      "y_center": 0.772,
-      "width": 0.133,
-      "height": 0.1
+      "x_center": 0.6969,
+      "y_center": 0.7521,
+      "width": 0.1743,
+      "height": 0.1333
     },
     {
       "class": "dumbbell",
-      "x_center": 0.311,
-      "y_center": 0.772,
-      "width": 0.148,
-      "height": 0.1
+      "x_center": 0.1073,
+      "y_center": 0.7346,
+      "width": 0.1715,
+      "height": 0.1234
     },
     {
       "class": "dumbbell",
-      "x_center": 0.519,
-      "y_center": 0.772,
-      "width": 0.148,
-      "height": 0.1
+      "x_center": 0.5361,
+      "y_center": 0.7451,
+      "width": 0.1667,
+      "height": 0.1161
     },
     {
       "class": "dumbbell",
-      "x_center": 0.726,
-      "y_center": 0.772,
-      "width": 0.148,
-      "height": 0.1
+      "x_center": 0.2941,
+      "y_center": 0.9477,
+      "width": 0.1715,
+      "height": 0.1036
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.9486,
+      "y_center": 0.7607,
+      "width": 0.1014,
+      "height": 0.1599
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.1299,
+      "y_center": 0.5503,
+      "width": 0.1139,
+      "height": 0.0276
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.3021,
+      "y_center": 0.843,
+      "width": 0.0264,
+      "height": 0.0786
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.2618,
+      "y_center": 0.7932,
+      "width": 0.0417,
+      "height": 0.0219
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.3385,
+      "y_center": 0.5586,
+      "width": 0.0563,
+      "height": 0.0109
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.2003,
+      "y_center": 0.5529,
+      "width": 0.016,
+      "height": 0.0214
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.5833,
+      "y_center": 0.6219,
+      "width": 0.0069,
+      "height": 0.0219
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.5993,
+      "y_center": 0.806,
+      "width": 0.0111,
+      "height": 0.0089
     }
   ]
 }

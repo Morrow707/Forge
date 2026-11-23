@@ -3,17 +3,45 @@
   "boxes": [
     {
       "class": "plate",
-      "x_center": 0.5371,
-      "y_center": 0.6,
-      "width": 0.8523,
-      "height": 0.6495
+      "x_center": 0.6458,
+      "y_center": 0.3995,
+      "width": 0.6972,
+      "height": 0.6031
     },
     {
-      "class": "barbell",
-      "x_center": 0.3961,
-      "y_center": 0.6589,
-      "width": 0.1478,
-      "height": 0.177
+      "class": "plate",
+      "x_center": 0.3913,
+      "y_center": 0.7753,
+      "width": 0.6146,
+      "height": 0.2443
+    },
+    {
+      "class": "plate",
+      "x_center": 0.3726,
+      "y_center": 0.8034,
+      "width": 0.5729,
+      "height": 0.1807
+    },
+    {
+      "class": "plate",
+      "x_center": 0.3375,
+      "y_center": 0.9271,
+      "width": 0.6458,
+      "height": 0.1448
+    },
+    {
+      "class": "plate",
+      "x_center": 0.3552,
+      "y_center": 0.8273,
+      "width": 0.5229,
+      "height": 0.1214
+    },
+    {
+      "class": "plate",
+      "x_center": 0.6715,
+      "y_center": 0.8719,
+      "width": 0.0069,
+      "height": 0.0219
     }
   ]
 }

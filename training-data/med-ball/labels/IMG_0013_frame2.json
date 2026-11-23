@@ -2,32 +2,95 @@
   "image": "IMG_0013_frame2.jpg",
   "boxes": [
     {
-      "class": "plate",
-      "x_center": 0.5036,
-      "y_center": 0.405,
-      "width": 0.159,
-      "height": 0.1299
-    },
-    {
-      "class": "plate",
-      "x_center": 0.4737,
-      "y_center": 0.5201,
-      "width": 0.1238,
-      "height": 0.119
-    },
-    {
-      "class": "plate",
-      "x_center": 0.688,
-      "y_center": 0.4146,
-      "width": 0.0895,
-      "height": 0.111
+      "class": "barbell",
+      "x_center": 0.2108,
+      "y_center": 0.7609,
+      "width": 0.416,
+      "height": 0.4771
     },
     {
       "class": "barbell",
-      "x_center": 0.3686,
-      "y_center": 0.549,
-      "width": 0.1639,
-      "height": 0.0517
+      "x_center": 0.8167,
+      "y_center": 0.112,
+      "width": 0.2931,
+      "height": 0.0865
+    },
+    {
+      "class": "plate",
+      "x_center": 0.5219,
+      "y_center": 0.3979,
+      "width": 0.1618,
+      "height": 0.1292
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4528,
+      "y_center": 0.537,
+      "width": 0.1486,
+      "height": 0.1219
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4868,
+      "y_center": 0.5221,
+      "width": 0.1458,
+      "height": 0.1224
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4833,
+      "y_center": 0.5237,
+      "width": 0.1292,
+      "height": 0.1224
+    },
+    {
+      "class": "plate",
+      "x_center": 0.5594,
+      "y_center": 0.3904,
+      "width": 0.0882,
+      "height": 0.1161
+    },
+    {
+      "class": "plate",
+      "x_center": 0.6219,
+      "y_center": 0.4414,
+      "width": 0.0743,
+      "height": 0.0786
+    },
+    {
+      "class": "plate",
+      "x_center": 0.7076,
+      "y_center": 0.3148,
+      "width": 0.0569,
+      "height": 0.0745
+    },
+    {
+      "class": "plate",
+      "x_center": 0.7017,
+      "y_center": 0.4099,
+      "width": 0.0493,
+      "height": 0.0646
+    },
+    {
+      "class": "plate",
+      "x_center": 0.0306,
+      "y_center": 0.4451,
+      "width": 0.0611,
+      "height": 0.0432
+    },
+    {
+      "class": "barbell",
+      "x_center": 0.3844,
+      "y_center": 0.6029,
+      "width": 0.0632,
+      "height": 0.0391
+    },
+    {
+      "class": "plate",
+      "x_center": 0.6663,
+      "y_center": 0.3948,
+      "width": 0.0368,
+      "height": 0.0427
     }
   ]
 }

@@ -46,3 +46,13 @@ IMG_0043 and IMG_0044 are the tops of standing cones, not med balls. They were
 labelled `med_ball` here (two boxes in each file) and the shipped detector was
 trained with them; those four boxes are removed. A cone is none of the eight
 classes, so it is left unlabelled. The next retrain is the first without them.
+
+**Relabelled 2026-11-23 from outlines.** Every `labels/*.json` is now the tight
+box around an object's outline, generated from `outlines.coco.json` (the
+cleaned Roboflow instance-segmentation export, project "Forge Equipment
+Outlines"). The hand boxes above are in git history. What changed besides the
+fit: the plate tree's pole is no longer a `barbell`, the coloured balls in the
+ball-row photos are weighted baseballs and labelled `baseball`, objects the
+hand boxes missed (balls in the blurry rows, the IMG_0005 plate cut by the tape
+measure, 14 photos the hand labels left empty) are labelled, and 8 photos stay
+true negatives. Objects cut off at the photo's edge are deliberately left out.

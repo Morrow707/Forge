@@ -2,67 +2,95 @@
   "image": "IMG_0011.jpg",
   "boxes": [
     {
+      "class": "barbell",
+      "x_center": 0.5593,
+      "y_center": 0.4571,
+      "width": 0.2059,
+      "height": 0.1131
+    },
+    {
       "class": "med_ball",
-      "x_center": 0.047,
-      "y_center": 0.224,
-      "width": 0.096,
-      "height": 0.083
+      "x_center": 0.0658,
+      "y_center": 0.5467,
+      "width": 0.1317,
+      "height": 0.1289
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.0717,
+      "y_center": 0.6682,
+      "width": 0.1433,
+      "height": 0.1155
     },
     {
       "class": "med_ball",
       "x_center": 0.062,
-      "y_center": 0.389,
-      "width": 0.126,
-      "height": 0.089
+      "y_center": 0.4093,
+      "width": 0.1239,
+      "height": 0.1303
     },
     {
       "class": "med_ball",
-      "x_center": 0.055,
-      "y_center": 0.547,
-      "width": 0.111,
-      "height": 0.083
+      "x_center": 0.0481,
+      "y_center": 0.2574,
+      "width": 0.0962,
+      "height": 0.1404
     },
     {
       "class": "med_ball",
-      "x_center": 0.052,
-      "y_center": 0.7,
-      "width": 0.104,
-      "height": 0.089
+      "x_center": 0.1269,
+      "y_center": 0.7369,
+      "width": 0.1062,
+      "height": 0.0812
     },
     {
-      "class": "med_ball",
-      "x_center": 0.136,
-      "y_center": 0.75,
-      "width": 0.096,
-      "height": 0.078
+      "class": "dumbbell",
+      "x_center": 0.938,
+      "y_center": 0.8341,
+      "width": 0.0647,
+      "height": 0.1266
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.969,
+      "y_center": 0.6131,
+      "width": 0.0612,
+      "height": 0.1071
+    },
+    {
+      "class": "dumbbell",
+      "x_center": 0.9821,
+      "y_center": 0.8469,
+      "width": 0.0348,
+      "height": 0.1325
     },
     {
       "class": "plate",
-      "x_center": 0.674,
-      "y_center": 0.344,
-      "width": 0.074,
-      "height": 0.067
+      "x_center": 0.6586,
+      "y_center": 0.3361,
+      "width": 0.0843,
+      "height": 0.0532
     },
     {
       "class": "plate",
-      "x_center": 0.67,
-      "y_center": 0.422,
-      "width": 0.081,
-      "height": 0.067
+      "x_center": 0.6544,
+      "y_center": 0.3902,
+      "width": 0.0843,
+      "height": 0.0469
     },
     {
       "class": "plate",
-      "x_center": 0.63,
-      "y_center": 0.467,
-      "width": 0.074,
-      "height": 0.067
+      "x_center": 0.6623,
+      "y_center": 0.4414,
+      "width": 0.0619,
+      "height": 0.0506
     },
     {
-      "class": "barbell",
-      "x_center": 0.563,
-      "y_center": 0.467,
-      "width": 0.207,
-      "height": 0.044
+      "class": "plate",
+      "x_center": 0.7373,
+      "y_center": 0.4737,
+      "width": 0.0693,
+      "height": 0.0306
     }
   ]
 }

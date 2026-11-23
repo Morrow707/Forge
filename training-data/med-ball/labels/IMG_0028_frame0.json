@@ -3,59 +3,66 @@
   "boxes": [
     {
       "class": "plate",
-      "x_center": 0.514,
-      "y_center": 0.408,
-      "width": 0.156,
-      "height": 0.117
+      "x_center": 0.4639,
+      "y_center": 0.6471,
+      "width": 0.3333,
+      "height": 0.2245
     },
     {
       "class": "plate",
-      "x_center": 0.403,
-      "y_center": 0.402,
-      "width": 0.081,
-      "height": 0.106
+      "x_center": 0.4806,
+      "y_center": 0.8237,
+      "width": 0.2847,
+      "height": 0.2047
     },
     {
       "class": "plate",
-      "x_center": 0.544,
-      "y_center": 0.578,
-      "width": 0.156,
-      "height": 0.111
+      "x_center": 0.4688,
+      "y_center": 0.4643,
+      "width": 0.2972,
+      "height": 0.1891
     },
     {
       "class": "plate",
-      "x_center": 0.559,
-      "y_center": 0.756,
-      "width": 0.156,
-      "height": 0.111
+      "x_center": 0.1858,
+      "y_center": 0.9487,
+      "width": 0.2632,
+      "height": 0.1016
     },
     {
       "class": "plate",
-      "x_center": 0.896,
-      "y_center": 0.606,
-      "width": 0.104,
-      "height": 0.056
+      "x_center": 0.1076,
+      "y_center": 0.5768,
+      "width": 0.1514,
+      "height": 0.1089
     },
     {
       "class": "plate",
-      "x_center": 0.274,
-      "y_center": 0.572,
-      "width": 0.133,
-      "height": 0.1
+      "x_center": 0.9347,
+      "y_center": 0.6888,
+      "width": 0.1222,
+      "height": 0.0484
     },
     {
-      "class": "barbell",
-      "x_center": 0.215,
-      "y_center": 0.561,
-      "width": 0.252,
-      "height": 0.056
+      "class": "plate",
+      "x_center": 0.041,
+      "y_center": 0.5201,
+      "width": 0.0528,
+      "height": 0.0766
     },
     {
-      "class": "barbell",
-      "x_center": 0.756,
-      "y_center": 0.761,
-      "width": 0.207,
-      "height": 0.344
+      "class": "plate",
+      "x_center": 0.3111,
+      "y_center": 0.4693,
+      "width": 0.0194,
+      "height": 0.0531
+    },
+    {
+      "class": "plate",
+      "x_center": 0.9885,
+      "y_center": 0.7169,
+      "width": 0.0215,
+      "height": 0.0391
     }
   ]
 }

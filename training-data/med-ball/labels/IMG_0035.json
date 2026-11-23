@@ -3,52 +3,94 @@
   "boxes": [
     {
       "class": "med_ball",
-      "x_center": 0.289,
-      "y_center": 0.367,
-      "width": 0.163,
-      "height": 0.156
+      "x_center": 0.4833,
+      "y_center": 0.3722,
+      "width": 0.3289,
+      "height": 0.2623
     },
     {
       "class": "med_ball",
-      "x_center": 0.44,
-      "y_center": 0.339,
-      "width": 0.304,
-      "height": 0.233
+      "x_center": 0.4994,
+      "y_center": 0.6592,
+      "width": 0.3303,
+      "height": 0.2474
     },
     {
       "class": "med_ball",
-      "x_center": 0.326,
-      "y_center": 0.589,
-      "width": 0.163,
-      "height": 0.178
+      "x_center": 0.5012,
+      "y_center": 0.8927,
+      "width": 0.3086,
+      "height": 0.2139
     },
     {
       "class": "med_ball",
-      "x_center": 0.484,
-      "y_center": 0.65,
-      "width": 0.274,
-      "height": 0.211
+      "x_center": 0.2891,
+      "y_center": 0.3897,
+      "width": 0.172,
+      "height": 0.1926
     },
     {
       "class": "med_ball",
-      "x_center": 0.307,
-      "y_center": 0.772,
-      "width": 0.185,
-      "height": 0.167
+      "x_center": 0.3016,
+      "y_center": 0.5902,
+      "width": 0.1681,
+      "height": 0.1829
     },
     {
       "class": "med_ball",
-      "x_center": 0.474,
-      "y_center": 0.85,
-      "width": 0.237,
-      "height": 0.167
+      "x_center": 0.3072,
+      "y_center": 0.7946,
+      "width": 0.1713,
+      "height": 0.1773
     },
     {
       "class": "med_ball",
-      "x_center": 0.166,
-      "y_center": 0.978,
-      "width": 0.111,
-      "height": 0.044
+      "x_center": 0.3166,
+      "y_center": 0.9552,
+      "width": 0.1263,
+      "height": 0.0889
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.223,
+      "y_center": 0.9561,
+      "width": 0.1188,
+      "height": 0.0872
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.0539,
+      "y_center": 0.9651,
+      "width": 0.1078,
+      "height": 0.0692
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.1424,
+      "y_center": 0.9656,
+      "width": 0.099,
+      "height": 0.0681
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.288,
+      "y_center": 0.8951,
+      "width": 0.0453,
+      "height": 0.0606
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.334,
+      "y_center": 0.8908,
+      "width": 0.0308,
+      "height": 0.021
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.4247,
+      "y_center": 0.5229,
+      "width": 0.0058,
+      "height": 0.0049
     }
   ]
 }

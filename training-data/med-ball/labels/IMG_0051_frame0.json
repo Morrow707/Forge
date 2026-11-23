@@ -3,24 +3,24 @@
   "boxes": [
     {
       "class": "baseball",
-      "x_center": 0.07,
-      "y_center": 0.508,
-      "width": 0.111,
-      "height": 0.083
+      "x_center": 0.0594,
+      "y_center": 0.525,
+      "width": 0.1187,
+      "height": 0.0854
     },
     {
       "class": "golf_ball",
-      "x_center": 0.444,
-      "y_center": 0.506,
-      "width": 0.059,
-      "height": 0.044
+      "x_center": 0.4368,
+      "y_center": 0.5122,
+      "width": 0.0625,
+      "height": 0.0495
     },
     {
       "class": "golf_ball",
-      "x_center": 0.637,
-      "y_center": 0.5,
-      "width": 0.059,
-      "height": 0.044
+      "x_center": 0.6292,
+      "y_center": 0.5055,
+      "width": 0.0611,
+      "height": 0.0495
     }
   ]
 }

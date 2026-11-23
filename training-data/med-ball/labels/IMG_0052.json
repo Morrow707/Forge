@@ -1,7 +1,33 @@
 {
   "image": "IMG_0052.jpg",
   "boxes": [
-    { "class": "baseball", "x_center": 0.1157, "y_center": 0.5344, "width": 0.0901, "height": 0.0676 },
-    { "class": "baseball", "x_center": 0.3517, "y_center": 0.5296, "width": 0.0883, "height": 0.0662 }
+    {
+      "class": "baseball",
+      "x_center": 0.1102,
+      "y_center": 0.5356,
+      "width": 0.099,
+      "height": 0.0706
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.8449,
+      "y_center": 0.5181,
+      "width": 0.0964,
+      "height": 0.0681
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.6285,
+      "y_center": 0.5235,
+      "width": 0.0903,
+      "height": 0.0697
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.3511,
+      "y_center": 0.5299,
+      "width": 0.0906,
+      "height": 0.0693
+    }
   ]
 }

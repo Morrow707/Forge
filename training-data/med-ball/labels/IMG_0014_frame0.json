@@ -3,17 +3,122 @@
   "boxes": [
     {
       "class": "plate",
-      "x_center": 0.496,
-      "y_center": 0.689,
-      "width": 0.874,
-      "height": 0.556
+      "x_center": 0.4774,
+      "y_center": 0.5805,
+      "width": 0.8229,
+      "height": 0.3214
     },
     {
-      "class": "barbell",
-      "x_center": 0.444,
-      "y_center": 0.811,
-      "width": 0.148,
-      "height": 0.178
+      "class": "plate",
+      "x_center": 0.474,
+      "y_center": 0.8352,
+      "width": 0.8132,
+      "height": 0.2766
+    },
+    {
+      "class": "plate",
+      "x_center": 0.6569,
+      "y_center": 0.4927,
+      "width": 0.3097,
+      "height": 0.1437
+    },
+    {
+      "class": "plate",
+      "x_center": 0.2146,
+      "y_center": 0.9289,
+      "width": 0.4292,
+      "height": 0.0984
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.8917,
+      "y_center": 0.4544,
+      "width": 0.1361,
+      "height": 0.1589
+    },
+    {
+      "class": "plate",
+      "x_center": 0.3705,
+      "y_center": 0.4497,
+      "width": 0.2715,
+      "height": 0.0661
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.901,
+      "y_center": 0.5883,
+      "width": 0.1715,
+      "height": 0.1047
+    },
+    {
+      "class": "plate",
+      "x_center": 0.5198,
+      "y_center": 0.3555,
+      "width": 0.1187,
+      "height": 0.1255
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.7507,
+      "y_center": 0.4497,
+      "width": 0.075,
+      "height": 0.1255
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4524,
+      "y_center": 0.882,
+      "width": 0.0424,
+      "height": 0.0401
+    },
+    {
+      "class": "plate",
+      "x_center": 0.375,
+      "y_center": 0.8737,
+      "width": 0.025,
+      "height": 0.0224
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4958,
+      "y_center": 0.876,
+      "width": 0.0167,
+      "height": 0.0312
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4604,
+      "y_center": 0.8526,
+      "width": 0.0278,
+      "height": 0.0156
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4243,
+      "y_center": 0.862,
+      "width": 0.0125,
+      "height": 0.025
+    },
+    {
+      "class": "plate",
+      "x_center": 0.5076,
+      "y_center": 0.7448,
+      "width": 0.0194,
+      "height": 0.0146
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4392,
+      "y_center": 0.8398,
+      "width": 0.0146,
+      "height": 0.0109
+    },
+    {
+      "class": "plate",
+      "x_center": 0.6101,
+      "y_center": 0.313,
+      "width": 0.0118,
+      "height": 0.0125
     }
   ]
 }

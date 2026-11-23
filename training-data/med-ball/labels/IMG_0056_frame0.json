@@ -2,67 +2,67 @@
   "image": "IMG_0056_frame0.jpg",
   "boxes": [
     {
-      "class": "tennis_ball",
-      "x_center": 0.292,
-      "y_center": 0.424,
-      "width": 0.052,
-      "height": 0.039
-    },
-    {
-      "class": "golf_ball",
-      "x_center": 0.422,
-      "y_center": 0.428,
-      "width": 0.044,
-      "height": 0.033
-    },
-    {
-      "class": "golf_ball",
-      "x_center": 0.521,
-      "y_center": 0.43,
-      "width": 0.037,
-      "height": 0.028
-    },
-    {
-      "class": "golf_ball",
-      "x_center": 0.573,
-      "y_center": 0.43,
-      "width": 0.037,
-      "height": 0.028
-    },
-    {
-      "class": "golf_ball",
-      "x_center": 0.633,
-      "y_center": 0.43,
-      "width": 0.037,
-      "height": 0.028
+      "class": "baseball",
+      "x_center": 0.2972,
+      "y_center": 0.4526,
+      "width": 0.0431,
+      "height": 0.0396
     },
     {
       "class": "baseball",
-      "x_center": 0.696,
-      "y_center": 0.428,
-      "width": 0.044,
-      "height": 0.033
-    },
-    {
-      "class": "tennis_ball",
-      "x_center": 0.778,
-      "y_center": 0.428,
-      "width": 0.044,
-      "height": 0.033
-    },
-    {
-      "class": "tennis_ball",
-      "x_center": 0.837,
-      "y_center": 0.428,
-      "width": 0.044,
-      "height": 0.033
+      "x_center": 0.4219,
+      "y_center": 0.4565,
+      "width": 0.0368,
+      "height": 0.0349
     },
     {
       "class": "baseball",
-      "x_center": 0.941,
-      "y_center": 0.428,
-      "width": 0.044,
-      "height": 0.033
+      "x_center": 0.709,
+      "y_center": 0.4591,
+      "width": 0.0361,
+      "height": 0.0318
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.5851,
+      "y_center": 0.4596,
+      "width": 0.0312,
+      "height": 0.0286
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.9455,
+      "y_center": 0.4625,
+      "width": 0.0326,
+      "height": 0.026
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.6413,
+      "y_center": 0.4615,
+      "width": 0.0285,
+      "height": 0.0271
+    },
+    {
+      "class": "tennis_ball",
+      "x_center": 0.8531,
+      "y_center": 0.4615,
+      "width": 0.0299,
+      "height": 0.025
+    },
+    {
+      "class": "tennis_ball",
+      "x_center": 0.7799,
+      "y_center": 0.4622,
+      "width": 0.0292,
+      "height": 0.0255
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.5163,
+      "y_center": 0.4599,
+      "width": 0.0271,
+      "height": 0.0271
     }
   ]
 }

@@ -1,4 +1,68 @@
 {
   "image": "IMG_0046_frame2.jpg",
-  "boxes": []
+  "boxes": [
+    {
+      "class": "med_ball",
+      "x_center": 0.9767,
+      "y_center": 0.2195,
+      "width": 0.0451,
+      "height": 0.0641
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.9236,
+      "y_center": 0.2365,
+      "width": 0.0597,
+      "height": 0.0458
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.9812,
+      "y_center": 0.1557,
+      "width": 0.0361,
+      "height": 0.0573
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.792,
+      "y_center": 0.2508,
+      "width": 0.0549,
+      "height": 0.037
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.8681,
+      "y_center": 0.2495,
+      "width": 0.0458,
+      "height": 0.0396
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.8274,
+      "y_center": 0.2526,
+      "width": 0.0479,
+      "height": 0.0375
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.7434,
+      "y_center": 0.2562,
+      "width": 0.041,
+      "height": 0.0344
+    },
+    {
+      "class": "med_ball",
+      "x_center": 0.934,
+      "y_center": 0.1987,
+      "width": 0.0389,
+      "height": 0.0339
+    },
+    {
+      "class": "kettlebell",
+      "x_center": 0.9003,
+      "y_center": 0.2542,
+      "width": 0.0312,
+      "height": 0.0302
+    }
+  ]
 }

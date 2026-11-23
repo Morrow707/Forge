@@ -3,10 +3,24 @@
   "boxes": [
     {
       "class": "plate",
-      "x_center": 0.4789,
-      "y_center": 0.681,
-      "width": 0.8994,
-      "height": 0.5833
+      "x_center": 0.4935,
+      "y_center": 0.6834,
+      "width": 0.915,
+      "height": 0.6325
+    },
+    {
+      "class": "barbell",
+      "x_center": 0.9481,
+      "y_center": 0.8023,
+      "width": 0.1029,
+      "height": 0.3948
+    },
+    {
+      "class": "plate",
+      "x_center": 0.4616,
+      "y_center": 0.7968,
+      "width": 0.0133,
+      "height": 0.0166
     }
   ]
 }

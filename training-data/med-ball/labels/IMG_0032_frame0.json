@@ -3,73 +3,59 @@
   "boxes": [
     {
       "class": "med_ball",
-      "x_center": 0.244,
-      "y_center": 0.467,
-      "width": 0.163,
-      "height": 0.122
+      "x_center": 0.8118,
+      "y_center": 0.4893,
+      "width": 0.2708,
+      "height": 0.212
     },
     {
       "class": "med_ball",
-      "x_center": 0.415,
-      "y_center": 0.478,
-      "width": 0.178,
-      "height": 0.133
+      "x_center": 0.3976,
+      "y_center": 0.6445,
+      "width": 0.1993,
+      "height": 0.1536
     },
     {
       "class": "med_ball",
-      "x_center": 0.6,
-      "y_center": 0.467,
-      "width": 0.163,
-      "height": 0.122
+      "x_center": 0.2153,
+      "y_center": 0.618,
+      "width": 0.1806,
+      "height": 0.137
     },
     {
       "class": "med_ball",
-      "x_center": 0.785,
-      "y_center": 0.461,
-      "width": 0.178,
-      "height": 0.144
+      "x_center": 0.5944,
+      "y_center": 0.6227,
+      "width": 0.1722,
+      "height": 0.1411
     },
     {
       "class": "med_ball",
-      "x_center": 0.937,
-      "y_center": 0.344,
-      "width": 0.126,
-      "height": 0.133
+      "x_center": 0.4278,
+      "y_center": 0.507,
+      "width": 0.1889,
+      "height": 0.1255
     },
     {
       "class": "med_ball",
-      "x_center": 0.356,
-      "y_center": 0.611,
-      "width": 0.178,
-      "height": 0.133
+      "x_center": 0.0819,
+      "y_center": 0.5456,
+      "width": 0.1639,
+      "height": 0.1318
     },
     {
       "class": "med_ball",
-      "x_center": 0.548,
-      "y_center": 0.622,
-      "width": 0.178,
-      "height": 0.133
+      "x_center": 0.5962,
+      "y_center": 0.4833,
+      "width": 0.1604,
+      "height": 0.1219
     },
     {
       "class": "med_ball",
-      "x_center": 0.719,
-      "y_center": 0.6,
-      "width": 0.163,
-      "height": 0.133
-    },
-    {
-      "class": "med_ball",
-      "x_center": 0.43,
-      "y_center": 0.717,
-      "width": 0.178,
-      "height": 0.122
-    },
-    {
-      "class": "med_ball",
-      "x_center": 0.178,
-      "y_center": 0.544,
-      "width": 0.178,
-      "height": 0.133
+      "x_center": 0.2424,
+      "y_center": 0.4971,
+      "width": 0.1583,
+      "height": 0.1057
     }
   ]
 }

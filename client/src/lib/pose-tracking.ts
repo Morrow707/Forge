@@ -2476,7 +2476,16 @@ export function computeReferenceObjectScale(
  *
  *  **If anything this is a FLOOR on the correction, not an overshoot.** MAD / 0.6745 recovers the
  *  sigma of a GAUSSIAN core; box-size ratios have a heavier tail than that (6% of val plates box
- *  past 1.25x), so the true sigma is at least this. */
+ *  past 1.25x), so the true sigma is at least this.
+ *
+ *  **2026-11-23 RETRAIN, AND WHY THIS NUMBER DID NOT MOVE.** The detector was retrained on
+ *  outline-derived boxes (`training-data/med-ball/outlines.coco.json`) and measured a plate
+ *  relative MAD of **0.030** (barbell 0.022). It is NOT written here, on purpose: every val photo
+ *  is a frame of a video that also has frames in training, so that number is flattered by
+ *  leakage, and lowering the noise would hand the plate ~3.5x the weight in the blend on evidence
+ *  that cannot be checked on an unseen video. 0.056 was measured the same leaky way and is the
+ *  larger of the two, so keeping it can only leave the plate's weight where it already was. The
+ *  first filmed take's `objectGate.plateBoxToExpectedRatio` is what earns a lower number. */
 export const COREML_BOX_LONG_EDGE_RELATIVE_MAD = 0.056;
 /** The constant the blend actually reads: the MAD above converted to the sigma an
  *  inverse-variance weighting needs. `0.6745` is the normal distribution's MAD in units of sigma;

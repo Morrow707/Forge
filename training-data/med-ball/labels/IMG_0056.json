@@ -1,4 +1,40 @@
 {
   "image": "IMG_0056.jpg",
-  "boxes": []
+  "boxes": [
+    {
+      "class": "baseball",
+      "x_center": 0.6669,
+      "y_center": 0.4737,
+      "width": 0.0313,
+      "height": 0.0235
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.9372,
+      "y_center": 0.4723,
+      "width": 0.0285,
+      "height": 0.02
+    },
+    {
+      "class": "baseball",
+      "x_center": 0.8838,
+      "y_center": 0.4732,
+      "width": 0.028,
+      "height": 0.0193
+    },
+    {
+      "class": "tennis_ball",
+      "x_center": 0.7982,
+      "y_center": 0.4739,
+      "width": 0.025,
+      "height": 0.0179
+    },
+    {
+      "class": "tennis_ball",
+      "x_center": 0.7318,
+      "y_center": 0.4757,
+      "width": 0.0243,
+      "height": 0.0179
+    }
+  ]
 }

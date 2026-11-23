@@ -96,6 +96,39 @@ at epoch 84 by its time limit, and the best checkpoint is **epoch 59**
 never beat it, so `best.pt` is the right artifact and the extra 16 would
 very likely have changed nothing. Validation numbers are in step 4.
 
+**Retrained 2026-11-23 on outline-derived boxes: 266 images / 3,673 boxes.**
+The labels are now the tight extent of each object's OUTLINE (instance
+segmentation drawn by Roboflow's AI, then cleaned and checked by eye; the
+outlines themselves are kept in `training-data/med-ball/outlines.coco.json`),
+not hand-placed rectangles. Same split, same settings (YOLOv8n, 640, batch 8,
+100 epochs, CPU, 1.1 h); best checkpoint epoch 84, mAP50 0.943 against the new
+labels. Box size on the 41 val images, against the outline ground truth:
+
+| class    | gt  | matched | recall | median | relMAD | p90  |
+|----------|----:|--------:|-------:|-------:|-------:|-----:|
+| plate    | 340 |     261 |    77% |  0.994 |  0.030 | 1.04 |
+| barbell  |  44 |      39 |    89% |  1.013 |  0.022 | 1.10 |
+| dumbbell | 120 |     113 |    94% |  1.002 |  0.012 | 1.03 |
+| all      | 577 |     485 |    84% |  0.998 |  0.021 |      |
+
+Against the OLD hand boxes (the ground truth of the table in step 4) it finds
+81% of plates (old model 80%) at median 1.008. The hand-box barbell recall
+reads 40% against 63%, and that was read box by box: the "misses" are the
+plate tree's bar-holder arm the hand labels called a barbell, partial boxes
+on the hex bar and the stored bar, and drifted frame-copy boxes. Two real
+misses: a bar lying on top of the rack, half out of frame.
+
+**Two things this retrain found in the labels, both fixed before it shipped:**
+the plate tree's pole was labelled `barbell` in 43 outlines (a first training
+run learned to box the tree, and that run was thrown away), and the yellow
+cone tops behind the plates in IMG_0043/0044 were labelled `med_ball`.
+
+**Leakage, stated:** every val image is a frame of a video that also has
+frames in train, so these numbers flatter the model -- the 2026-10-09 numbers
+were measured the same way, so the comparison is fair and neither is an
+unseen-video read. That is why `COREML_BOX_LONG_EDGE_RELATIVE_MAD` stays 0.056
+(see its comment) rather than dropping to 0.030.
+
 ### 4. `validate_box_size.py` -- the number that actually matters
 
 ```
