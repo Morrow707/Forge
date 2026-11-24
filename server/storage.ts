@@ -24994,6 +24994,16 @@ ${catalog}`;
                 writtenTracePaths.push(url);
                 frames = null;
                 tracePath = url;
+              } else if (
+                prior?.skeletonFramesPath &&
+                (s as Record<string, unknown>).barPathTrace != null &&
+                JSON.stringify((s as Record<string, unknown>).barPathTrace) === JSON.stringify(prior.barPathTrace)
+              ) {
+                // A NULL THAT CARRIES THE SAME TAKE IS NOT A CLEAR (2026-11-24). Builds up to 834
+                // reopen a day with null in place of every file-backed trace and send that null
+                // back, which deleted the file -- the press and the bench of 2026-11-24 lost
+                // theirs that way. A real retake sends a new bar path; one that sends the stored
+                // bar path unchanged is the same take, so its trace file stays.
               } else {
                 frames = null;
                 tracePath = null;

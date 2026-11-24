@@ -429,12 +429,18 @@ export async function requestAvCameraPermission(): Promise<boolean> {
 // orientation "landscape" rotates BOTH the preview and the recording connections -- see
 // AvBodyTrackingPlugin.swift's captureOrientation for why the sprint tracker is the one caller
 // that wants it, and why a portrait-locked UI is an acceptable trade only there.
+/** THE CAMERA OPENS ON 0.5x (Scott, 2026-11-24: "I want .5 to be the default view on the
+ * camera"). The athlete can still switch to any lens or zoom; every take records which one it
+ * was filmed on (captureDeviceInfo.lens, lensSwitches, zoomFactor). A phone with no ultra-wide
+ * opens on its main lens (AvBodyTrackingPlugin.pickCaptureDevice falls back). */
+export const DEFAULT_AV_LENS = "ultraWide";
+
 export async function startAvPreview(
   rect: PreviewRect,
   lens?: string,
   orientation?: "portrait" | "landscape",
 ): Promise<void> {
-  await AvBodyTracking.start({ ...plainRect(rect), lens, orientation });
+  await AvBodyTracking.start({ ...plainRect(rect), lens: lens ?? DEFAULT_AV_LENS, orientation });
 }
 
 export async function stopAvPreview(): Promise<void> {

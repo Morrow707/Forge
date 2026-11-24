@@ -124,6 +124,29 @@ describe("a set's skeleton frames live in a file on the persistent disk", () => 
     expect(fs.existsSync(diskPath(before.path!))).toBe(false);
   });
 
+  it("a null sent beside the SAME bar path is the same take, so the file stays (2026-11-24)", async () => {
+    // Builds up to 834 reopened a day with null in place of every file-backed trace and sent that
+    // null back on the next save, deleting the file: the press and the bench of 2026-11-24.
+    const { athlete, program } = await athleteWithConsent();
+    const bar = [{ t: 0, x: 1, y: 2 }, { t: 33, x: 1, y: 5 }];
+    const first = await storage.submitWorkoutLog(athlete.id, payload(program, [{ setNumber: 1, reps: "5", barPathTrace: bar, skeletonFrames: frames(10) }]));
+    const [before] = await rowsFor(athlete.id);
+    await storage.submitWorkoutLog(athlete.id, payload(program, [{ setNumber: 1, reps: "6", barPathTrace: bar, skeletonFrames: null }], first!.revision));
+    const [after] = await rowsFor(athlete.id);
+    expect(after.path).toBe(before.path);
+    expect((await readSetTraceFile(after.path))?.length).toBe(10);
+  });
+
+  it("a null beside a NEW bar path is a retake with no frames, so the file goes", async () => {
+    const { athlete, program } = await athleteWithConsent();
+    const first = await storage.submitWorkoutLog(athlete.id, payload(program, [{ setNumber: 1, reps: "5", barPathTrace: [{ t: 0, x: 1, y: 2 }], skeletonFrames: frames(10) }]));
+    const [before] = await rowsFor(athlete.id);
+    await storage.submitWorkoutLog(athlete.id, payload(program, [{ setNumber: 1, reps: "5", barPathTrace: [{ t: 0, x: 9, y: 9 }], skeletonFrames: null }], first!.revision));
+    const [after] = await rowsFor(athlete.id);
+    expect(after.path).toBeNull();
+    expect(fs.existsSync(diskPath(before.path!))).toBe(false);
+  });
+
   it("without biometric consent nothing new lands and no file is written", async () => {
     const coach = await makeLoginableUser({ role: "coach" });
     const athlete = await makeLoginableUser({ role: "athlete" });

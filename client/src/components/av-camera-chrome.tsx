@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { listAvLenses, selectAvLens, setAvZoom, setAvFocusPoint, type LensInfo } from "@/lib/native-av-preview";
+import { DEFAULT_AV_LENS, listAvLenses, selectAvLens, setAvZoom, setAvFocusPoint, type LensInfo } from "@/lib/native-av-preview";
 
 // Wires up the two "quality functions" AVFoundation gives this pipeline that ARKit's ARSession
 // never exposed a public API for at all (see AvBodyTrackingPlugin.swift's own file comment) --
@@ -59,7 +59,9 @@ export function AvCameraChrome({
         if (cancelled) return;
         const sorted = [...result].sort((a, b) => (LENS_ORDER[a.id] ?? 1) - (LENS_ORDER[b.id] ?? 1));
         setLenses(sorted);
-        const wide = sorted.find((l) => l.id === "wide") ?? sorted[0];
+        // The lens the camera opened on (DEFAULT_AV_LENS, 0.5x), else the main lens.
+        const wide =
+          sorted.find((l) => l.id === DEFAULT_AV_LENS) ?? sorted.find((l) => l.id === "wide") ?? sorted[0];
         if (wide) {
           setActiveLens(wide.id);
           setZoomFactorState(wide.minZoom);

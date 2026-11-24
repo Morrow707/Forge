@@ -603,6 +603,14 @@ type SetMetrics = {
   // demand -- see video-analysis-dialog.tsx's toggleSkeleton) and for sets logged before this
   // existed.
   skeletonFrames: PoseFrame[] | null;
+  // THE SKELETON IS ON THE SERVER, NOT HERE (2026-11-24). A trace saved since 2026-10-16 is a
+  // file on the server and the day read hands back `skeletonFrames: null` beside its path, so a
+  // reopened day held null for every earlier set -- and the next save sent that null, which the
+  // server reads as "clear it" and deleted the file. That is why the press and the bench of
+  // 2026-11-24 reached the export with no body trace. True only for a set hydrated with a
+  // server-held trace and not retaken since; buildLogPayload then omits the key ("keep what you
+  // have") instead of sending null.
+  skeletonHeldOnServer?: boolean;
 };
 
 type LogEntry = {
@@ -795,6 +803,9 @@ function buildItem(
       captureDeviceInfo: existingSet?.captureDeviceInfo ?? null,
       trackingDiagnostics: existingSet?.trackingDiagnostics ?? null,
       skeletonFrames: existingSet?.skeletonFrames ?? null,
+      skeletonHeldOnServer:
+        !Array.isArray(existingSet?.skeletonFrames) &&
+        typeof (existingSet as { skeletonFramesPath?: unknown } | undefined)?.skeletonFramesPath === "string",
     };
   });
   const materials = materialsFrom(prescribed.exercise);
@@ -1455,7 +1466,9 @@ export function WorkoutPage({
             : {
                 barPathTrace: s.barPathTrace,
                 armPathTrace: s.armPathTrace,
-                skeletonFrames: s.skeletonFrames,
+                // Omitted while the server holds this set's trace file and nothing replaced it --
+                // see SetRow.skeletonHeldOnServer. A null here would delete that file.
+                ...(s.skeletonFrames == null && s.skeletonHeldOnServer ? {} : { skeletonFrames: s.skeletonFrames }),
               };
           return {
           setNumber: s.setNumber,
@@ -2345,6 +2358,8 @@ export function WorkoutPage({
             if (s.setNumber !== setNumber) return s;
             const wasComplete = isSetComplete(it, s);
             const updated = { ...s, ...patch };
+            // A new take (or a deliberate clear) replaces whatever the server held.
+            if ("skeletonFrames" in patch) updated.skeletonHeldOnServer = false;
             if (!wasComplete && isSetComplete(it, updated)) {
               becameComplete = true;
               if (shouldRestAfterSet(prev, it)) restOnComplete = it.restSeconds;

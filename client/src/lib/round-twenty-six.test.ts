@@ -19,6 +19,16 @@ function stripComments(src: string): string {
 const dialog = stripComments(readFileSync(join(__dirname, "../components/av-bar-tracker-dialog.tsx"), "utf8"));
 
 describe("round twenty-six", () => {
+  it("never sends null over a skeleton the server holds as a file", () => {
+    const workout = stripComments(readFileSync(join(__dirname, "../pages/workout.tsx"), "utf8"));
+    // Hydration marks a set whose trace is a file on the server...
+    expect(workout).toMatch(/skeletonHeldOnServer:\s*\n?\s*!Array\.isArray\(existingSet\?\.skeletonFrames\)/);
+    // ...a new take clears the mark...
+    expect(workout).toMatch(/if \("skeletonFrames" in patch\) updated\.skeletonHeldOnServer = false;/);
+    // ...and the payload omits the key rather than sending the null that deletes the file.
+    expect(workout).toMatch(/s\.skeletonFrames == null && s\.skeletonHeldOnServer \? \{\} : \{ skeletonFrames: s\.skeletonFrames \}/);
+  });
+
   it("keeps a one-arm lift's working shoulder out of the torso-stillness anchor", () => {
     const at = dialog.indexOf("const torsoAnchor = torsoAnchorFrom(");
     expect(at).toBeGreaterThan(-1);
