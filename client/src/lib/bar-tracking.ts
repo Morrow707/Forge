@@ -579,17 +579,27 @@ export function movingAverage(values: number[], window: number, weights?: number
 // Forward-pass only (not a two-pass RTS smoother) -- still applied as a
 // full post-hoc pass over the whole captured trace, same as
 // movingAverage, just processed in time order.
-export function kalmanSmooth(values: number[], times: number[], weights?: number[]): number[] {
+export function kalmanSmooth(
+  values: number[],
+  times: number[],
+  weights?: number[],
+  /** The athlete's size over the calibration athlete's (statureRatioToCalibrationAthlete).
+   *  Every variance below is a squared distance, so scaling them all by its square leaves the
+   *  filter's gains -- and so its output, in proportion -- the same for a body of any size.
+   *  1 (the default, and every take on file) is the filter exactly as it was. */
+  distanceScale = 1,
+): number[] {
   if (values.length === 0) return [];
+  const variance = distanceScale * distanceScale;
   const out: number[] = new Array(values.length);
   let pos = values[0];
   let vel = 0;
   // Covariance for state [pos, vel] -- starts wide (the first sample is a
   // guess with no velocity information yet) and converges within a few
   // frames once real measurements start arriving.
-  let pPos = 1;
+  let pPos = variance;
   let pPosVel = 0;
-  let pVel = 1;
+  let pVel = variance;
   out[0] = pos;
 
   // How much the bar's velocity is allowed to drift per second ((m/s)^2 per
@@ -599,14 +609,14 @@ export function kalmanSmooth(values: number[], times: number[], weights?: number
   // smoothed away. Same qualitative trade-off TARGET_SMOOTHING_MS's window
   // duration makes for movingAverage, just expressed as an acceleration
   // variance instead of a window size.
-  const processNoise = 4;
+  const processNoise = 4 * variance;
   // Position measurement noise (m^2) at full confidence -- roughly a 2cm
   // standard deviation, in line with typical pose-landmark position noise
   // in world-space meters. Scaled up (never down) as confidence drops, so a
   // barely-trusted frame pulls the filtered position only a little rather
   // than snapping to a misdetection the way an unweighted measurement
   // update would.
-  const baseMeasurementNoise = 0.0004;
+  const baseMeasurementNoise = 0.0004 * variance;
 
   for (let i = 1; i < values.length; i++) {
     const dt = Math.max((times[i] - times[i - 1]) / 1000, 1e-3);
@@ -1726,6 +1736,16 @@ export function heightScaledAmplitudeCm(baseCm: number, heightIn?: number | null
 
 const BASE_MIN_REP_AMPLITUDE_CM = 20;
 
+/** The athlete every distance in this file was fitted on (Scott, 75in). A fixed-metre threshold
+ *  fitted on him is scaled by stature over this, so his own takes are untouched and a shorter
+ *  or taller athlete's threshold covers the same share of their lift. */
+export const CALIBRATION_ATHLETE_HEIGHT_IN = 75;
+
+export function statureRatioToCalibrationAthlete(heightIn?: number | null): number {
+  if (!heightIn || heightIn <= 0) return 1;
+  return Math.min(MAX_HEIGHT_SCALE, Math.max(MIN_HEIGHT_SCALE, heightIn / CALIBRATION_ATHLETE_HEIGHT_IN));
+}
+
 // Never let a movement-derived gate fall so low that ordinary tracking wobble reads as a rep.
 // The fractions below are "physically impossible under this" floors, and for the smallest
 // movements (a calf raise at 0.01 of height) that is under 2cm, which is noise.
@@ -1935,6 +1955,14 @@ export function summarizeTrackedSet(
 ): RepMetrics | null {
   if (rawPoints.length < 6) return null;
   const tune = tunables.values;
+  // DISTANCES FITTED ON ONE BODY, SCALED TO THIS ONE (2026-11-24). The travel margin and the 8cm
+  // rep floor are written in metres and were fitted on the calibration athlete, 75 inches. A
+  // 5'1" athlete's whole lift is 19% shorter, so the same margin cuts a bigger share of every
+  // rep; replaying every stored take as a 61in and a 78in athlete (synthetic-body.test.ts) is
+  // what showed it. Scaled by stature over 75in, so every take on file is bit-identical.
+  const stature = statureRatioToCalibrationAthlete(heightIn);
+  const travelOnsetMarginM = tune.travelOnsetMarginM * stature;
+  const relativeRepFloorM = (MIN_REP_AMPLITUDE_FLOOR_CM / 100) * stature;
   const minRepAmplitudeCm = repAmplitudeGateCm(romKind, heightIn);
 
   // Repair single-frame implausible-acceleration glitches before anything
@@ -1967,6 +1995,7 @@ export function summarizeTrackedSet(
     points.map((p) => p.y),
     points.map((p) => p.t),
     points.map((p) => p.confidence ?? 1),
+    stature,
   );
   const speedsMps = computeSpeeds(points, ySmoothed);
   // The same trace differenced over a smoothed position -- see computeSpeeds. Read ONLY where a
@@ -2004,7 +2033,7 @@ export function summarizeTrackedSet(
   // charge and bring its failure -- an arched bench whose real reps sit under it, merged into
   // their neighbours -- back with it.
   const defaultPhases =
-    segmentPhasesRelative(ySmoothed, MIN_REP_AMPLITUDE_FLOOR_CM / 100) ??
+    segmentPhasesRelative(ySmoothed, relativeRepFloorM) ??
     segmentPhases(ySmoothed, minAmplitudeM);
 
   const summarizePhases = (rawPhases: { startIdx: number; endIdx: number }[]): RepMetrics | null => {
@@ -2071,9 +2100,9 @@ export function summarizeTrackedSet(
     // `reportEndIdx` is the rep-REPORTING end, and only the drive window reads it. That is where
     // the short rest belongs: a lockout the athlete stands in for a third of a second is not part
     // of the lift, and the reported mean is the number that says so.
-    const restIdx = restArrivalAfterPeak(rawY, rawT, restPeak.peakIdx, phase.endIdx, tune.travelOnsetMarginM, REST_AT_TOP_SECONDS, REST_AT_TOP_SECONDS);
+    const restIdx = restArrivalAfterPeak(rawY, rawT, restPeak.peakIdx, phase.endIdx, travelOnsetMarginM, REST_AT_TOP_SECONDS, REST_AT_TOP_SECONDS);
     const repEndIdx = restIdx ?? phase.endIdx;
-    const reportEndIdx = restArrivalAfterPeak(rawY, rawT, restPeak.peakIdx, phase.endIdx, tune.travelOnsetMarginM, REST_AT_TOP_SECONDS, REST_AT_TOP_MIN_SECONDS, true) ?? repEndIdx;
+    const reportEndIdx = restArrivalAfterPeak(rawY, rawT, restPeak.peakIdx, phase.endIdx, travelOnsetMarginM, REST_AT_TOP_SECONDS, REST_AT_TOP_MIN_SECONDS, true) ?? repEndIdx;
     const heldAtTopSeconds = restIdx == null ? 0 : (points[phase.endIdx].t - points[restIdx].t) / 1000;
     /** Seconds the REPORTED window would otherwise have spent standing at the top -- the short
      *  rest above, which `heldAtTopSeconds` cannot show because it only ever counts the confirmed
@@ -2110,7 +2139,7 @@ export function summarizeTrackedSet(
     // the sensor's definition of the concentric, fitted to the sensor. Same split as speedsMps
     // against speedsReportedMps, and for the same reason: changing what a number is read over
     // must not change which reps exist.
-    const moving = trimPhaseToTravel(ySmoothed, phase.startIdx, repEndIdx, wholePhasePeak.peakIdx, tune.travelOnsetMarginM);
+    const moving = trimPhaseToTravel(ySmoothed, phase.startIdx, repEndIdx, wholePhasePeak.peakIdx, travelOnsetMarginM);
     const duration = (points[moving.endIdx].t - points[moving.startIdx].t) / 1000;
     // THE DRIVE WINDOW IS THE ONE THAT READS THE SHORT REST (reportEndIdx above). Its peak and
     // its travel fallback are re-found over that window rather than reused from the wider one:
@@ -2121,7 +2150,7 @@ export function summarizeTrackedSet(
       : robustPeakSpeed(speedsReportedMps, phase.startIdx, reportEndIdx, confidences, tune.maxPlausibleSpeedMps, tune.minTrackingConfidence);
     const movingReport = reportEndIdx === repEndIdx
       ? moving
-      : trimPhaseToTravel(ySmoothed, phase.startIdx, reportEndIdx, reportPeak.peakIdx, tune.travelOnsetMarginM);
+      : trimPhaseToTravel(ySmoothed, phase.startIdx, reportEndIdx, reportPeak.peakIdx, travelOnsetMarginM);
     const drive = trimPhaseToDrive(speedsMps, phase.startIdx, reportEndIdx, reportPeak.peakIdx, tune.driveOnsetFraction) ?? movingReport;
     // Where an edge of the drive window IS a turning point of the bar (the phase's own start, or
     // its own end when no rest cut it), its time is read between frames -- turning-point.ts.
@@ -3104,7 +3133,7 @@ export function summarizeTrackedSet(
   // not its rep count once a walk-in and a re-rack have been split off.
   if (expectedReps != null && expectedReps > 0) {
     let best: { metrics: RepMetrics | null; error: number } | null = null;
-    for (const gate of relativeGateCandidates(ySmoothed, MIN_REP_AMPLITUDE_FLOOR_CM / 100)) {
+    for (const gate of relativeGateCandidates(ySmoothed, relativeRepFloorM)) {
       const metrics = summarizePhases(segmentPhases(ySmoothed, gate));
       const error = metrics ? Math.abs(metrics.repBreakdown.length - expectedReps) : Infinity;
       // The replay harness reads this to show which gate the athlete's count chose; nothing in
@@ -3121,7 +3150,7 @@ export function summarizeTrackedSet(
     // trimOversizedLeadIn. Only when the count is BELOW the athlete's, so the 2026-10-02 pickup
     // (one too many) still goes, and only adopted when it lands strictly nearer the count.
     if (best && best.metrics && best.metrics.repBreakdown.length < expectedReps) {
-      for (const gate of relativeGateCandidates(ySmoothed, MIN_REP_AMPLITUDE_FLOOR_CM / 100)) {
+      for (const gate of relativeGateCandidates(ySmoothed, relativeRepFloorM)) {
         const metrics = summarizePhases(
           trimOversizedLeadIn(segmentPhases(ySmoothed, gate), ySmoothed, tune.edgeOversizedAmplitudeRatio),
         );

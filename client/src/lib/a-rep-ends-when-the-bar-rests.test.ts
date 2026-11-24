@@ -260,7 +260,7 @@ describe("the source states the three rules where they are applied", () => {
     // stand inside the rep, and it is also the form that would let a short rest change a count
     expect(bar).not.toContain("trimPhaseToDrive(speedsMps, phase.startIdx, repEndIdx,");
     // the deciding end takes the FULL second on both arguments, so a short rest cannot reach it
-    expect(bar).toContain("tune.travelOnsetMarginM, REST_AT_TOP_SECONDS, REST_AT_TOP_SECONDS);");
+    expect(bar).toContain("travelOnsetMarginM, REST_AT_TOP_SECONDS, REST_AT_TOP_SECONDS);");
     // the rest is found on the RAW series, never the smoothed one (the Kalman overshoot at lockout
     // read as movement inside the 2026-10-19 hold on the smoothed series)
     expect(bar).toContain("const rawY = points.map((p) => p.y);");

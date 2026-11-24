@@ -127,7 +127,7 @@ describe("the LiDAR vote under overwatch (Rule #2)", () => {
       { source: "lidar", scale: AGREEING, uncertaintyFraction: LIDAR_FLOOR_RULER_UNCERTAINTY },
     ]);
     expect(verdict.agreedSources).toContain("lidar");
-    expect(verdict.blendTrace.lidarSteppedOut).toBe(false);
+    expect(verdict.blendTrace?.lidarSteppedOut).toBe(false);
   });
 
   it("is outvoted when two body readings agree against it", async () => {
@@ -152,7 +152,7 @@ describe("the LiDAR vote under overwatch (Rule #2)", () => {
       { source: "lidar", scale: FAR_OFF, uncertaintyFraction: LIDAR_FLOOR_RULER_UNCERTAINTY },
     ]);
     expect(verdict.agreedSources).not.toContain("lidar");
-    expect(verdict.blendTrace.lidarSteppedOut).toBe(true);
-    expect(verdict.blendTrace.plateSteppedOut).toBe(false);
+    expect(verdict.blendTrace?.lidarSteppedOut).toBe(true);
+    expect(verdict.blendTrace?.plateSteppedOut).toBe(false);
   });
 });
