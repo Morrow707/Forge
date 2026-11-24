@@ -4109,8 +4109,11 @@ halves before splitting anything else:
   one-arm lift's working shoulder is no longer in the torso-stillness anchor (it deleted the top of
   every left-row pull); the export records the lens actually filmed on (a 0.5x tap was recorded as
   "wide"); the rep-count toast is gone; overwatch's learning replay follows the phone and learns from
-  every recorded take. 0.5x has never been filmed beside the OVR: do not make it the default until it
-  has. See docs/camera-tracking-notes.md, STATUS BOARD.
+  every recorded take. **The camera opens on 0.5x since
+  `6a1b57f7` (Scott's call, `DEFAULT_AV_LENS`); every lens still works and each take records its lens
+  and zoom.** Same commit: reopening a day sent null over every earlier set's trace FILE and deleted
+  it (the 11-24 press and bench); the screen omits it now and the server keeps a file when the null
+  arrives beside the same bar path. See docs/camera-tracking-notes.md, STATUS BOARD.
 - **ROUND TWENTY-FIVE, 2026-11-23: SQUAT, RDL, BOX JUMP ON BUILD 827, FILMED FROM BEHIND.** Bugs
   first: a squat rep that stood a whole second at lockout counted the stand (rep 5 read 0.43 vs
   0.73; `restArrivalAfterPeak` now cuts it on the reporting end); a box-jump step-down read as a
