@@ -14,7 +14,30 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-24, round twenty-eight)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-24, round twenty-nine)
+
+**ROUND TWENTY-NINE, 2026-11-24 (set 4 on build 840, 0.5x).** OVR truths (Scott): press 12 reps, the
+first 4 set-up, so reps 5-12 (53.47cm, 1.03, 1.57); rows 16 reps, no set-up rep, right 1-8 (53.63cm,
+1.02, 1.62) and left 9-16 (49.59cm, 0.91, 1.56); bench 135x8 (37.59cm, 0.78, 1.12).
+
+| Lift | Range as filmed | Mean | Peak | Live after this round |
+|---|---|---|---|---|
+| Row right | +0.1% | 1.07 vs 1.02 | 2.04 vs 1.62 | -1.45% |
+| Row left | +2.6% | 1.23 vs 0.91 | 1.95 vs 1.56 | +0.83% |
+| Dumbbell press | **+22.7%** (8 of 8) | 1.32 vs 1.03 | 1.96 vs 1.57 | +22.30% |
+| Bench | +32.5% (**4 of 8**) | 0.78 vs 0.78 | 1.12 vs 1.12 | not a ledger row |
+
+- **The press is all scale.** Its concentric lasts 0.52s on the phone and 53.47/1.03 = 0.52s on the
+  sensor, so the window is right; every ruler read above the 2.641e-3 the sensor needs (bones 3.18,
+  shoulder 4.37, height 4.49, depth 5.60, body memory 3.27). Step: 3D 0.055 -> 0.05. The press now
+  reads +2% to +22% on the same build and lens across sets 2-4 (Rule #5 scatter).
+- **The bench loses the BODY, not the wrist, at the chest at 0.5x.** File path, 644 of 902 frames
+  tracked, 15 dropouts, 7.3s in dropouts, a 0.7-1.3s hole at the bottom of every press; only 13
+  frames lacked a wrist, so the wrist floor (0.1) does not reach it. Three bench takes at 0.5x, three
+  broken traces. No bench number moved. Next: whether Vision returns no observation or every joint
+  under the 0.1 confidence guard on those frames (per-frame body confidence is not in the export).
+- **The left row's impossible depth did not repeat** (0.871m, 0.357m on set 3). Step: shoulder floor
+  0.24 -> 0.25 (left +2.64% -> +0.83%, right +0.13% -> -1.45%, eighteen-set average 8.94% -> 8.93%).
 
 **ROUND TWENTY-EIGHT, 2026-11-24 (set 3 on build 838, the first build with the 3D pose told its
 lens).** OVR truths (Scott): press reps 3-10 (53.76cm, 1.01, 1.53); rows 16 reps with no set-up rep,

@@ -391,12 +391,12 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
     biacromialToleranceFraction: 0.4,
     heightRulerUncertainty: 0.4,
     depthRulerUncertainty: 0.6,
-    body3DCorrectedUncertainty: 0.055,
+    body3DCorrectedUncertainty: 0.05,
     driveOnsetFraction: 0,
     maxPeakToMeanRatio: 1.5,
   },
   "Bench Press": { body3DCorrectedUncertainty: 0.3, depthRulerUncertainty: 0.105, driveOnsetFraction: 0.03, lowVisibilityWristFloor: 0.1 },
-  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.55, driveOnsetFraction: 0.01, biacromialToleranceFraction: 0.24 },
+  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.55, driveOnsetFraction: 0.01, biacromialToleranceFraction: 0.25 },
 };
 
 /** THE VELOCITY OVERRIDES REMOVED ON 2026-11-05, AND WHY -- kept as data so the next reader does
@@ -677,6 +677,11 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
     "moves, since each reads its own record.",
   "Dumbbell Shoulder Press":
+    "2026-11-24, round twenty-nine, set 4 on build 840 at 0.5x (30lb x12, OVR reps 5-12 after 4 set-up reps: 53.47cm, mean 1.03, " +
+    "peak 1.57). Forge 65.6cm (+22.7%), 1.32, 1.96, 8 of 8, file path, 2 dropouts. The rep timing matches the sensor (0.52s against " +
+    "53.47/1.03 = 0.52s), so the whole error is scale: every ruler read above the 2.641e-3 the sensor needs (bones 3.18, height 4.49, " +
+    "shoulder 4.37, depth 5.60, body memory 3.27). Step: body3DCorrectedUncertainty 0.055 -> 0.05, set 4 +22.68% -> +22.30%, the ten " +
+    "press sets' average 9.46% -> 9.27%. " +
     "2026-11-24, round twenty-eight, set 3 on build 838 at 0.5x with the lens fix in (30lb x10, OVR reps 3-10 after 2 setup reps: " +
     "53.76cm, mean 1.01, peak 1.53). Forge 60.1cm (+11.8%), 1.16, 1.73, 7 of 8. Every ruler read above the scale the sensor needs " +
     "(the bones +10%, depth +75%, height +41%, shoulder +37%), so no weighting reaches it; the depth ruler now reads 1.59x the bones " +
@@ -802,6 +807,10 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "0.04, and +33.1% and +4.6% at 0.03; both takes move toward the sensor, no rep count moves, and " +
     "the peak does not move. 0.02 is the next step.",
   "Single-Arm Dumbbell Row":
+    "2026-11-24, round twenty-nine, set 4 on build 840 at 0.5x (70lb x8 a side, right first; OVR 16 reps, no set-up rep: right 1-8 " +
+    "53.63cm, left 9-16 49.59cm). Right 53.7cm (+0.1%), left 50.9cm (+2.6%), both 8 of 8; the left wrist depth read 0.871m, so set 3's " +
+    "impossible 0.357m did not repeat. Step: biacromialToleranceFraction 0.24 -> 0.25, left +2.64% -> +0.83%, right +0.13% -> -1.45% " +
+    "(the pair 2.77 -> 2.28 points), the eighteen row sets' average 8.94% -> 8.93%. " +
     "2026-11-24, round twenty-eight, set 3 on build 838 at 0.5x (70lb x8 a side, right first; OVR 16 reps with no set-up rep, so the " +
     "right arm is reps 1-8 52.20cm and the left 9-16 50.29cm). Right 51.4cm (-1.5%), left 40.7cm (-19.1%), both 8 of 8. The left " +
     "side's median wrist depth read 0.357m (0.331m on set 2), a depth ruler 3.0x under the bones; dropping a depth reading that far " +

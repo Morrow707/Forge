@@ -20,11 +20,11 @@
     "meanAbsPct": 4.14
   },
   "Dumbbell Shoulder Press": {
-    "sets": 9,
-    "meanAbsPct": 7.99
+    "sets": 10,
+    "meanAbsPct": 9.27
   },
   "Single-Arm Dumbbell Row": {
-    "sets": 16,
-    "meanAbsPct": 9.89
+    "sets": 18,
+    "meanAbsPct": 8.93
   }
 }

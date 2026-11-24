@@ -22,8 +22,8 @@ const WHOLE_POINTS = 0;
 const ONE_DECIMAL = 1;
 const PERCENT = 100;
 const BENCH_3D_STEP = 0.3;
-/** Round twenty-seven set 0.06; round twenty-eight took it to 0.055, and the evidence keeps both. */
-const PRESS_3D_STEP = 0.055;
+/** Round twenty-seven set 0.06; twenty-eight took it to 0.055 and twenty-nine to 0.05; the evidence keeps all three. */
+const PRESS_3D_STEP = 0.05;
 const ROW_DEPTH_STEP = 0.55;
 const ROUND_27_EVIDENCE_HEAD = "2026-11-24, round twenty-seven";
 
