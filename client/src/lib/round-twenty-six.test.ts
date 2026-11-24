@@ -48,7 +48,8 @@ describe("round twenty-six", () => {
   });
 
   it("takes one step per lift", () => {
-    expect(FITTED_OVERRIDES["Single-Arm Dumbbell Row"]?.biacromialToleranceFraction).toBe(0.25);
+    // Round twenty-eight took the row back one step (0.25 -> 0.24); twenty-six's step is in the evidence.
+    expect(FITTED_OVERRIDE_EVIDENCE["Single-Arm Dumbbell Row"]).toMatch(/round twenty-six[\s\S]*0\.24 -> 0\.25/);
     expect(FITTED_OVERRIDES["Bench Press"]?.depthRulerUncertainty).toBe(0.105);
     // Round twenty-seven took the press one more step (0.065 -> 0.06); twenty-six's step is in the evidence.
     expect(FITTED_OVERRIDE_EVIDENCE["Dumbbell Shoulder Press"]).toMatch(/round twenty-six[\s\S]*0\.06 -> 0\.065/);

@@ -22,7 +22,8 @@ const WHOLE_POINTS = 0;
 const ONE_DECIMAL = 1;
 const PERCENT = 100;
 const BENCH_3D_STEP = 0.3;
-const PRESS_3D_STEP = 0.06;
+/** Round twenty-seven set 0.06; round twenty-eight took it to 0.055, and the evidence keeps both. */
+const PRESS_3D_STEP = 0.055;
 const ROW_DEPTH_STEP = 0.55;
 const ROUND_27_EVIDENCE_HEAD = "2026-11-24, round twenty-seven";
 
@@ -58,7 +59,7 @@ describe("round twenty-seven", () => {
     expect(FITTED_OVERRIDES["Dumbbell Shoulder Press"]?.body3DCorrectedUncertainty).toBe(PRESS_3D_STEP);
     expect(FITTED_OVERRIDES["Single-Arm Dumbbell Row"]?.depthRulerUncertainty).toBe(ROW_DEPTH_STEP);
     ["Bench Press", "Dumbbell Shoulder Press", "Single-Arm Dumbbell Row"].forEach((lift) =>
-      expect(FITTED_OVERRIDE_EVIDENCE[lift]?.startsWith(ROUND_27_EVIDENCE_HEAD), lift).toBe(true),
+      expect(FITTED_OVERRIDE_EVIDENCE[lift]?.includes(ROUND_27_EVIDENCE_HEAD), lift).toBe(true),
     );
   });
 });

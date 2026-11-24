@@ -14,7 +14,33 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-24, round twenty-seven)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-24, round twenty-eight)
+
+**ROUND TWENTY-EIGHT, 2026-11-24 (set 3 on build 838, the first build with the 3D pose told its
+lens).** OVR truths (Scott): press reps 3-10 (53.76cm, 1.01, 1.53); rows 16 reps with no set-up rep,
+right 1-8 (52.20cm, 1.02, 1.65) and left 9-16 (50.29cm, 0.99, 1.61); bench 135x8 (37.08cm, 0.72, 1.01).
+
+| Lift | Range as filmed | Mean | Peak | Live after this round |
+|---|---|---|---|---|
+| Row right | -1.5% | 1.03 vs 1.02 | 1.86 vs 1.65 | -0.07% |
+| Row left | **-19.1%** | 0.95 vs 0.99 | 1.65 vs 1.61 | -17.96% |
+| Dumbbell press | +11.8% (7 of 8) | 1.16 vs 1.01 | 1.73 vs 1.53 | +11.53% |
+| Bench | **-28.5%** (6 of 8) | 0.63 vs 0.72 | 0.94 vs 1.01 | not a ledger row |
+
+- **The lens fix works.** Depth over bones: bench 1.09x (2.0x on set 2), press 1.59x (1.88x).
+- **The bench is a short trace, not a scale.** Its grip measured 162.5 units on sets 2 and 3 alike;
+  the shipped scale puts the shoulder landmarks at 0.37m (0.1934 of stature, the 3D skeleton's own
+  ratio) and the grip at 0.80m; the scale the sensor "needs" would make the grip 1.12m. The wrists
+  sat at a median confidence of 0.23 (0.35 on set 2): the hands are small at 0.5x and the travel
+  under-reads. The plate (box 0.425 of the grip) was correctly refused by round 27's rule. No bench
+  number moved: a scale step would push the wrong way. Next: the bar point at low wrist confidence.
+- **The left row's depth is impossible.** Median wrist depth 0.357m (0.331m on set 2), the ruler
+  3.0x under the bones. Dropping a depth reading past 2.5x of its own bones was built and costed: the
+  left set 2 went +3.5% -> +9.3% and three older as-filmed replays moved, so it was reverted. Not
+  tried again without per-wrist depth in the export.
+- Steps: row `biacromialToleranceFraction` 0.25 -> 0.24 (16 sets 9.90 -> 9.89%), press
+  `body3DCorrectedUncertainty` 0.06 -> 0.055 (9 sets 8.17 -> 7.99%). Peak velocity still reads 10-15%
+  high on the rows and the press.
 
 **ROUND TWENTY-SEVEN, 2026-11-24 (set 2 of the rows, the dumbbell press and the bench on build 836,
 the first round at 0.5x).** OVR truths (Scott): press reps 3-10 (53.45cm, 1.01, 1.53); row rep 9 is

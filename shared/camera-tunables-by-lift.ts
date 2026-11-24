@@ -391,12 +391,12 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
     biacromialToleranceFraction: 0.4,
     heightRulerUncertainty: 0.4,
     depthRulerUncertainty: 0.6,
-    body3DCorrectedUncertainty: 0.06,
+    body3DCorrectedUncertainty: 0.055,
     driveOnsetFraction: 0,
     maxPeakToMeanRatio: 1.5,
   },
   "Bench Press": { body3DCorrectedUncertainty: 0.3, depthRulerUncertainty: 0.105, driveOnsetFraction: 0.03, lowVisibilityWristFloor: 0.1 },
-  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.55, driveOnsetFraction: 0.01, biacromialToleranceFraction: 0.25 },
+  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.55, driveOnsetFraction: 0.01, biacromialToleranceFraction: 0.24 },
 };
 
 /** THE VELOCITY OVERRIDES REMOVED ON 2026-11-05, AND WHY -- kept as data so the next reader does
@@ -677,6 +677,11 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
     "moves, since each reads its own record.",
   "Dumbbell Shoulder Press":
+    "2026-11-24, round twenty-eight, set 3 on build 838 at 0.5x with the lens fix in (30lb x10, OVR reps 3-10 after 2 setup reps: " +
+    "53.76cm, mean 1.01, peak 1.53). Forge 60.1cm (+11.8%), 1.16, 1.73, 7 of 8. Every ruler read above the scale the sensor needs " +
+    "(the bones +10%, depth +75%, height +41%, shoulder +37%), so no weighting reaches it; the depth ruler now reads 1.59x the bones " +
+    "where it read 1.88x before the lens fix. body3DCorrectedUncertainty 0.06 -> 0.055: this take +11.79 -> +11.53%, all nine press " +
+    "sets closer, average 8.17 -> 7.99%. " +
     "2026-11-24, round twenty-seven, set 2 on build 836 at 0.5x (30lb x8; OVR reps 3-10 after 2 setup reps: 53.45cm, mean 1.01, " +
     "peak 1.53). Forge 54.6cm (+2.2% as filmed), 1.06, 1.60, 8 of 8, no dropouts: the jacket take's hand fault did not repeat. " +
     "body3DCorrectedUncertainty 0.065 -> 0.06: this take +2.15 -> +2.02% live (its depth ruler was refused on the phone by the stature yardstick at 1.9x high, the 0.5x intrinsics bug), all eight press sets closer, average 7.89 -> 7.71%. " +
@@ -797,6 +802,11 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "0.04, and +33.1% and +4.6% at 0.03; both takes move toward the sensor, no rep count moves, and " +
     "the peak does not move. 0.02 is the next step.",
   "Single-Arm Dumbbell Row":
+    "2026-11-24, round twenty-eight, set 3 on build 838 at 0.5x (70lb x8 a side, right first; OVR 16 reps with no set-up rep, so the " +
+    "right arm is reps 1-8 52.20cm and the left 9-16 50.29cm). Right 51.4cm (-1.5%), left 40.7cm (-19.1%), both 8 of 8. The left " +
+    "side's median wrist depth read 0.357m (0.331m on set 2), a depth ruler 3.0x under the bones; dropping a depth reading that far " +
+    "from its own bones was tried and costed: it moved the left set 2 from +3.5% to +9.3%, so it was not shipped. " +
+    "biacromialToleranceFraction 0.25 -> 0.24: right -1.53 -> -0.07%, left -19.07 -> -17.96%, sixteen sets 9.90 -> 9.89%. " +
     "2026-11-24, round twenty-seven, set 2 on build 836 at 0.5x (70lb x8 a side; OVR rep 9 the set-up, truth reps 1-8 44.04cm and " +
     "10-17 42.67cm). Right -0.54%, left +4.29% as filmed. depthRulerUncertainty 0.6 -> 0.55: left +4.29 -> +3.51%, right -0.55 -> " +
     "-0.61% (0.06 away; the other steps cost the right 2 points), fourteen-set average 9.87 -> 9.85%. " +
