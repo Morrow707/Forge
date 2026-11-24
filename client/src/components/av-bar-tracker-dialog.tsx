@@ -21,6 +21,7 @@ import {
   type LimbKey,
 } from "@shared/athlete-body-model";
 import { measureLegVisibility, measureLimbsInMetres, measureLimbSpansInUnits, type LegVisibility } from "@/lib/measure-limbs";
+import { LIDAR_FLOOR_RULER_UNCERTAINTY, lidarFloorScale, type LidarFloorScan } from "@/lib/lidar-floor-ruler";
 import { DEPTH_RULER_BIAS, DEPTH_RULER_UNCERTAINTY, body3DScaleFromFrames, depthRulerScale, fovDegFromActiveFormat } from "@/lib/body-3d-ruler";
 import { measureAxisForeshortening } from "@/lib/axis-foreshortening";
 import { body3DCandidate } from "@/lib/body-scale-fallback";
@@ -1147,6 +1148,9 @@ export function AvBarTrackerDialog({
       // this is how the analysis knows the image vertical is gravity. See reconcileMovementAxis.
       cameraRollDeg?: number;
       cameraPitchDeg?: number;
+      // The fourth camera system's reading, taken at Record (AvLidarFloorScan).
+      lidarFloor?: LidarFloorScan;
+      lidarFloorUnavailableBecause?: string;
     },
     uploadPromise: Promise<{ status: "uploaded"; url: string } | { status: "queued" }> | null,
     forSetNumber: number,
@@ -1467,6 +1471,23 @@ export function AvBarTrackerDialog({
           }
         : null;
 
+    // THE FOURTH CAMERA SYSTEM: LiDAR's floor height before the take, turned into the athlete's
+    // distance from the lens at their feet -- see lidar-floor-ruler.ts. A peer in the vote like
+    // every ruler here; a lone LiDAR read that nothing agrees with steps out (isSingleWitnessRuler)
+    // and a take with no scan, no floor or no feet reads exactly as it did before (Rule #1).
+    const lidarFovDeg = fovDegFromActiveFormat(extractCaptureDeviceInfo(diagLog).activeFormat);
+    const lidarRuler = lidarFloorScale({
+      scan: recordingStats.lidarFloor ?? null,
+      pitchDeg: recordingStats.cameraPitchDeg ?? null,
+      rollDeg: recordingStats.cameraRollDeg ?? null,
+      fovDeg: lidarFovDeg,
+      frames: rawFrames,
+      heightIn,
+    });
+    const lidarEstimate: ScaleEstimate | null = lidarRuler.reading
+      ? { source: "lidar", scale: lidarRuler.reading.scale, uncertaintyFraction: LIDAR_FLOOR_RULER_UNCERTAINTY }
+      : null;
+
     // Every candidate is checked against the athlete's own height before any of them is ranked --
     // see rejectImplausibleScales. A scale that puts a 5'10" lifter at sixteen inches tall is
     // measuring something other than what it thinks it is, and that is knowable from the footage
@@ -1500,6 +1521,7 @@ export function AvBarTrackerDialog({
             },
           ]
         : []),
+      ...(lidarEstimate ? [lidarEstimate] : []),
       // THE ONE RULER THE ATHLETE SIMPLY TOLD US. See gripWidthScaleFromFrames.
       ...(body3DEstimate ? [body3DEstimate] : []),
       ...(depthEstimate ? [depthEstimate] : []),
@@ -1546,7 +1568,7 @@ export function AvBarTrackerDialog({
     // new and its training data is thin, so a number built on one has to be identifiable as such
     // rather than indistinguishable from a height-derived one.
     // Names what actually decided the number, including whether anything corroborated it.
-    const scaleSource: "height" | "plate" | "box" | "both" | "shoulder_width" | "grip_width" | "body_model" | "body_3d" | "depth" | null =
+    const scaleSource: "height" | "plate" | "box" | "lidar" | "both" | "shoulder_width" | "grip_width" | "body_model" | "body_3d" | "depth" | null =
       scaleVerdict.agreedSources.length > 1
         ? "both"
         : (scaleVerdict.agreedSources[0] ?? null);
@@ -1625,6 +1647,7 @@ export function AvBarTrackerDialog({
       objectGate?: NonNullable<TrackingDiagnostics["calibration"]>["objectGate"];
       scaleBlend?: NonNullable<TrackingDiagnostics["calibration"]>["scaleBlend"];
       scaleWitnesses?: NonNullable<TrackingDiagnostics["calibration"]>["scaleWitnesses"];
+      lidarFloor?: NonNullable<TrackingDiagnostics["calibration"]>["lidarFloor"];
       scalesRejectedAsImplausible?: { source: string; impliedHeightIn: number; impliedGripIn?: number }[];
       // A yardstick that would have convicted most of the rulers stood down instead (the 10-30
       // Pendlay row's grip read 52.7 units against a 70-unit shoulder span). Recorded so an
@@ -2415,6 +2438,25 @@ export function AvBarTrackerDialog({
         : null;
       calibrationDiagnostics.positionScaleCorrection = positionScaleCorrection ?? null;
       calibrationDiagnostics.body3DRuler = body3DRulerDiagnostics;
+      // The LiDAR reading beside every other ruler, as ratios, so overwatch's cross-check (does
+      // the body agree with the floor? does the plate?) is in the export on every take.
+      calibrationDiagnostics.lidarFloor = {
+        scan: recordingStats.lidarFloor ?? null,
+        unavailableBecause: recordingStats.lidarFloorUnavailableBecause ?? null,
+        scale: lidarRuler.reading?.scale ?? null,
+        distanceM: lidarRuler.reading ? Math.round(lidarRuler.reading.distanceM * 1000) / 1000 : null,
+        framesUsed: lidarRuler.reading?.framesUsed ?? null,
+        ankleHeightM: lidarRuler.reading ? Math.round(lidarRuler.reading.ankleHeightM * 1000) / 1000 : null,
+        refusedBecause: lidarRuler.refusedBecause,
+        fovDeg: lidarFovDeg ?? null,
+        ratioTo: lidarRuler.reading
+          ? Object.fromEntries(
+              scaleCandidatesRaw
+                .filter((c) => c.source !== "lidar")
+                .map((c) => [c.source, Math.round((c.scale / lidarRuler.reading!.scale) * 1000) / 1000]),
+            )
+          : {},
+      };
       // What the athlete's remembered bones read on this take, whether or not they voted, so
       // every take scores the model against the blend (and the sensor, when one is beside it).
       calibrationDiagnostics.bodyModel = bodyModelReading
@@ -3123,6 +3165,8 @@ export function AvBarTrackerDialog({
                   setError(null);
                   startRecording({
                     trackingMode: coreMlTrackingMode,
+                    // The fourth camera system: a second of LiDAR on the floor before recording.
+                    lidarFloorScan: true,
                     arbiterTunables,
                     unilateralLift: laterality === "unilateral",
                     ...BAR_SENSOR_STRIDES,

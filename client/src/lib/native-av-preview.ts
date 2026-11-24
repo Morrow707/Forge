@@ -183,6 +183,8 @@ export type AvAnalysisResult = {
   cameraPitchDeg?: number;
   cameraRollDeg?: number;
   cameraTiltSamples?: number;
+  lidarFloor?: { cameraHeightM: number; floorShare: number; spreadM: number; frames: number };
+  lidarFloorUnavailableBecause?: string;
   liveFallbackReason?: string;
   liveCoverage?: number;
   liveDropRate?: number;
@@ -344,6 +346,9 @@ interface AvBodyTrackingPlugin {
     body3DStride?: number;
     handPoseStride?: number;
     unilateralLift?: boolean;
+    /** The fourth camera system: measure the lens's height above the floor with LiDAR before
+     *  recording (AvLidarFloorScan). Ignored on a phone with no LiDAR; never blocks a take. */
+    lidarFloorScan?: boolean;
   }): Promise<void>;
   /** `uploadPath` is the 720p copy the native side wrote WHILE recording (see the plugin's
    *  AvUploadCopyWriter). Absent on an older build or when the copy could not be made, in which
@@ -355,6 +360,8 @@ interface AvBodyTrackingPlugin {
     cameraPitchDeg?: number;
     cameraRollDeg?: number;
     cameraTiltSamples?: number;
+    lidarFloor?: { cameraHeightM: number; floorShare: number; spreadM: number; frames: number };
+    lidarFloorUnavailableBecause?: string;
   }>;
   /** A smaller copy for upload -- see stopAvRecording. Resolves the ORIGINAL path with
    *  compressed:false when it could not run, so a caller never has to branch on failure. */
@@ -490,6 +497,8 @@ export async function startAvRecording(options?: {
   };
   /** A one-arm lift: the live gate reads the working wrist's unseen time. See wristGaps. */
   unilateralLift?: boolean;
+  /** Measure the floor with LiDAR before recording -- see lidar-floor-ruler.ts. */
+  lidarFloorScan?: boolean;
 }): Promise<void> {
   await AvBodyTracking.startRecording(options);
 }
@@ -520,11 +529,19 @@ export async function startAvRecording(options?: {
  *  ... the camera should instantly close and go back to the workout screen."
  *
  *  The caller closes the camera on THIS resolving, then does the blob work behind it. */
-export type AvCameraTilt = { cameraPitchDeg?: number; cameraRollDeg?: number; cameraTiltSamples?: number };
+export type AvCameraTilt = {
+  cameraPitchDeg?: number;
+  cameraRollDeg?: number;
+  cameraTiltSamples?: number;
+  /** The LiDAR floor reading taken before this take, or why there was none. */
+  lidarFloor?: { cameraHeightM: number; floorShare: number; spreadM: number; frames: number };
+  lidarFloorUnavailableBecause?: string;
+};
 
 export async function stopAvRecordingToPath(): Promise<{ path: string; uploadPath?: string; tilt: AvCameraTilt }> {
-  const { path, uploadPath, cameraPitchDeg, cameraRollDeg, cameraTiltSamples } = await AvBodyTracking.stopRecording();
-  return { path, uploadPath, tilt: { cameraPitchDeg, cameraRollDeg, cameraTiltSamples } };
+  const { path, uploadPath, cameraPitchDeg, cameraRollDeg, cameraTiltSamples, lidarFloor, lidarFloorUnavailableBecause } =
+    await AvBodyTracking.stopRecording();
+  return { path, uploadPath, tilt: { cameraPitchDeg, cameraRollDeg, cameraTiltSamples, lidarFloor, lidarFloorUnavailableBecause } };
 }
 
 /** Turns a stopped recording's path into the Blob a coach watches.

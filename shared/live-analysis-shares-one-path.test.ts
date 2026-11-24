@@ -102,8 +102,16 @@ describe("live analysis and file analysis are one implementation", () => {
     // Silence means no: a context with no tracking mode has no object detector and no
     // real-world scale, which is a WORSE measurement than the file path would have produced.
     // Degrading a measurement silently is worth more than the wait it saves.
-    const fn = source.slice(source.indexOf("@objc func startRecording"));
-    expect(fn.slice(0, 4000)).toMatch(/call\.getBool\("liveAnalysis"\) \?\? false/);
+    // Bounded by the recording path itself -- startRecording through the beginRecording it hands
+    // to (the LiDAR floor scan runs between them, 2026-11-24) -- and ending at stopRecording.
+    // Never a character window: the scan moved past one the day a step was added in front of it.
+    const start = source.indexOf("@objc func startRecording");
+    const end = source.indexOf("@objc func stopRecording", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const recordingPath = source.slice(start, end);
+    expect(recordingPath).toMatch(/private func beginRecording/);
+    expect(recordingPath).toMatch(/call\.getBool\("liveAnalysis"\) \?\? false/);
   });
 });
 

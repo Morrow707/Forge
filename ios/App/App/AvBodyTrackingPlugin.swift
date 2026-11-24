@@ -1406,6 +1406,16 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         return max(1, Int((Double(max(1, baseline)) * rateRatio).rounded()))
     }
 
+    /// What the LiDAR floor scan found before this take, carried into the recording result.
+    /// Nil until a scan ran; reset at every Record so one take's floor is never another's.
+    private var lastLidarScan: (result: AvLidarFloorScan.Result?, note: String)?
+    private var activeLidarScan: AvLidarFloorScan?
+    /// The longest Record may wait on the floor scan before recording starts anyway (Rule #1).
+    private static let lidarScanTimeoutSeconds: TimeInterval = 1.5
+    /// A floor reading that worked, kept for the life of this camera session: the tripod has not
+    /// moved between sets of one open camera, so only the first take of a session pays for the scan.
+    private var cachedLidarScan: (session: AVCaptureSession, result: AvLidarFloorScan.Result)?
+
     @objc func startRecording(_ call: CAPPluginCall) {
         guard let movieOutput = self.movieOutput else {
             call.reject("Recording not available")
@@ -1413,6 +1423,82 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         }
         guard !movieOutput.isRecording else {
             call.reject("Already recording")
+            return
+        }
+        lastLidarScan = nil
+        if call.getBool("lidarFloorScan") == true, let cached = cachedLidarScan, cached.session === self.session {
+            lastLidarScan = (cached.result, "reused from this camera session")
+            beginRecording(call)
+            return
+        }
+        // THE FOURTH SYSTEM'S ONE READING -- see AvLidarFloorScan. Only when the caller asks and
+        // the phone has LiDAR; the main session pauses for the scan (two sessions cannot hold the
+        // camera at once) and starts again whatever the scan found. Nothing here can stop the
+        // recording: every path below ends in beginRecording.
+        guard call.getBool("lidarFloorScan") == true, AvLidarFloorScan.isAvailable,
+              let session = self.session, activeLidarScan == nil else {
+            if call.getBool("lidarFloorScan") == true && !AvLidarFloorScan.isAvailable {
+                lastLidarScan = (nil, "no LiDAR on this phone")
+            }
+            beginRecording(call)
+            return
+        }
+        let device = currentInput?.device
+        let savedFormat = device?.activeFormat
+        let savedZoom = device?.videoZoomFactor
+        let savedMinDuration = device?.activeVideoMinFrameDuration
+        let savedMaxDuration = device?.activeVideoMaxFrameDuration
+        let scan = AvLidarFloorScan(motion: motionManager)
+        activeLidarScan = scan
+        logDiag("lidar: measuring the floor before recording")
+        Self.sessionQueue.async {
+            session.stopRunning()
+            scan.run(timeout: Self.lidarScanTimeoutSeconds) { result, note in
+                Self.sessionQueue.async {
+                    // The dialog may have closed during the scan: never restart a session that
+                    // stop() has already torn down.
+                    let stillCurrent = DispatchQueue.main.sync { self.session === session }
+                    if stillCurrent { session.startRunning() }
+                    DispatchQueue.main.async {
+                        self.activeLidarScan = nil
+                        guard stillCurrent else {
+                            call.reject("Camera closed")
+                            return
+                        }
+                        // The LiDAR camera shares the wide sensor; put the filming lens back
+                        // exactly as the athlete framed it if the scan moved it.
+                        if let device = device, let savedFormat = savedFormat, device.activeFormat !== savedFormat {
+                            do {
+                                try device.lockForConfiguration()
+                                device.activeFormat = savedFormat
+                                if let d = savedMinDuration { device.activeVideoMinFrameDuration = d }
+                                if let d = savedMaxDuration { device.activeVideoMaxFrameDuration = d }
+                                if let z = savedZoom { device.videoZoomFactor = z }
+                                device.unlockForConfiguration()
+                            } catch {
+                                self.logDiag("lidar: could not restore the filming format: \(error.localizedDescription)")
+                            }
+                        }
+                        if let r = result {
+                            self.lastLidarScan = (r, note)
+                            self.cachedLidarScan = (session, r)
+                            self.logDiag(String(
+                                format: "lidar: camera %.3fm above the floor (floor %.0f%% of view, spread %.3fm, %d readings)",
+                                r.cameraHeightM, r.floorShare * 100, r.spreadM, r.frames))
+                        } else {
+                            self.lastLidarScan = (nil, note)
+                            self.logDiag("lidar: no floor reading -- \(note)")
+                        }
+                        self.beginRecording(call)
+                    }
+                }
+            }
+        }
+    }
+
+    private func beginRecording(_ call: CAPPluginCall) {
+        guard let movieOutput = self.movieOutput, !movieOutput.isRecording else {
+            call.reject("Recording not available")
             return
         }
         let outputURL = FileManager.default.temporaryDirectory
@@ -1663,6 +1749,18 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 result["cameraRollDeg"] = (tilt.roll * 10).rounded() / 10
                 result["cameraTiltSamples"] = tilt.samples
                 self.logDiag(String(format: "camera tilt: pitch %.1f roll %.1f (%d samples)", tilt.pitch, tilt.roll, tilt.samples))
+            }
+            if let scan = self.lastLidarScan {
+                if let r = scan.result {
+                    result["lidarFloor"] = [
+                        "cameraHeightM": (r.cameraHeightM * 1000).rounded() / 1000,
+                        "floorShare": (r.floorShare * 1000).rounded() / 1000,
+                        "spreadM": (r.spreadM * 1000).rounded() / 1000,
+                        "frames": r.frames,
+                    ]
+                } else {
+                    result["lidarFloorUnavailableBecause"] = scan.note
+                }
             }
             call.resolve(result)
         }
@@ -6028,5 +6126,222 @@ private final class AvImplementTracker {
         }
         guard count > 0 else { return nil }
         return ColorSignature(r: r / Double(count), g: g / Double(count), b: b / Double(count))
+    }
+}
+
+// THE FOURTH CAMERA SYSTEM: LIDAR, READ AS THE FLOOR (2026-11-24).
+//
+// Scott: "lets add the 4th camera system, let ai overwatch make sure its not 'taking control' and
+// not blocking anything, rule one." The camera opens on 0.5x and Apple's LiDAR depth camera pairs
+// with the 1x camera only, so LiDAR does not watch the set. It answers ONE question the moment
+// Record is pressed, with the phone already on its tripod: how high is the lens above the floor?
+// About a second of depth frames, each turned into 3D points with the depth camera's own
+// intrinsics, each point projected onto gravity; the floor is the far end of that distribution.
+// The client (lidar-floor-ruler.ts) then turns that height plus the tilt and the athlete's ankles
+// into a distance and a ruler on whatever lens filmed the take.
+//
+// NEVER A BLOCK (Rule #1): no LiDAR, no depth frames, no floor in view, or the scan running past
+// its timeout all end the same way -- the completion fires with nil and a reason, the main
+// session starts again, and the take records exactly as it would have without this class.
+// NEVER A LEADER (Rule #2): the height it reports is one input to one ruler that votes as a peer.
+//
+// Native-sensor frame for the BACK camera, which delivers buffers in its native landscape-right
+// orientation: image x right = device -y, image y down = device +x, lens forward = device -z.
+// So gravity in the camera frame is (-g.y, g.x, -g.z).
+private final class AvLidarFloorScan: NSObject, AVCaptureDepthDataOutputDelegate {
+    struct Result {
+        let cameraHeightM: Double
+        let floorShare: Double
+        let spreadM: Double
+        let frames: Int
+    }
+
+    static var isAvailable: Bool {
+        if #available(iOS 15.4, *) {
+            return AVCaptureDevice.default(.builtInLiDARDepthCamera, for: .video, position: .back) != nil
+        }
+        return false
+    }
+
+    private let session = AVCaptureSession()
+    private let depthOutput = AVCaptureDepthDataOutput()
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let queue = DispatchQueue(label: "forge.lidarFloorScan")
+    private let motion: CMMotionManager
+    private var heights: [Double] = []
+    private var shares: [Double] = []
+    private var spreads: [Double] = []
+    private var finished = false
+    private var completion: ((Result?, String) -> Void)?
+    private var fallbackFovDeg: Double?
+
+    /// Readings needed before the scan stops early; the timeout ends it otherwise.
+    private static let wantedFrames = 8
+    /// Every Nth depth pixel along each axis -- a 256x192 map at 4 is ~3,000 points a frame.
+    private static let pixelStride = 4
+    private static let minDepthM: Float = 0.2
+    private static let maxDepthM: Float = 5.5
+    private static let minFloorShare = 0.05
+    private static let minCameraHeightM = 0.1
+    private static let maxCameraHeightM = 3.0
+
+    init(motion: CMMotionManager) {
+        self.motion = motion
+        super.init()
+    }
+
+    /// Runs the scan and calls `completion` exactly once, on the scan's own queue, after its
+    /// session has stopped -- so the caller may start the main session from the callback.
+    func run(timeout: TimeInterval, completion: @escaping (Result?, String) -> Void) {
+        queue.async {
+            self.completion = completion
+            guard #available(iOS 15.4, *),
+                  let device = AVCaptureDevice.default(.builtInLiDARDepthCamera, for: .video, position: .back) else {
+                self.finish(nil, "no LiDAR on this phone")
+                return
+            }
+            let format = device.formats.last(where: { fmt in
+                fmt.supportedDepthDataFormats.contains(where: {
+                    CMFormatDescriptionGetMediaSubType($0.formatDescription) == kCVPixelFormatType_DepthFloat32
+                })
+            })
+            guard let format = format,
+                  let depthFormat = format.supportedDepthDataFormats.first(where: {
+                      CMFormatDescriptionGetMediaSubType($0.formatDescription) == kCVPixelFormatType_DepthFloat32
+                  }) else {
+                self.finish(nil, "no float depth format")
+                return
+            }
+            self.fallbackFovDeg = Double(format.videoFieldOfView)
+            do {
+                self.session.beginConfiguration()
+                let input = try AVCaptureDeviceInput(device: device)
+                guard self.session.canAddInput(input) else {
+                    self.session.commitConfiguration()
+                    self.finish(nil, "cannot add LiDAR input")
+                    return
+                }
+                self.session.addInput(input)
+                if self.session.canAddOutput(self.videoOutput) { self.session.addOutput(self.videoOutput) }
+                guard self.session.canAddOutput(self.depthOutput) else {
+                    self.session.commitConfiguration()
+                    self.finish(nil, "cannot add depth output")
+                    return
+                }
+                self.session.addOutput(self.depthOutput)
+                self.depthOutput.isFilteringEnabled = true
+                self.depthOutput.setDelegate(self, callbackQueue: self.queue)
+                try device.lockForConfiguration()
+                device.activeFormat = format
+                device.activeDepthDataFormat = depthFormat
+                device.unlockForConfiguration()
+                self.session.commitConfiguration()
+            } catch {
+                self.session.commitConfiguration()
+                self.finish(nil, "LiDAR setup failed: \(error.localizedDescription)")
+                return
+            }
+            if self.motion.isDeviceMotionAvailable && !self.motion.isDeviceMotionActive {
+                self.motion.deviceMotionUpdateInterval = 0.05
+                self.motion.startDeviceMotionUpdates()
+            }
+            self.session.startRunning()
+            self.queue.asyncAfter(deadline: .now() + timeout) {
+                self.finish(nil, "timed out after \(self.heights.count) floor reading(s)")
+            }
+        }
+    }
+
+    func depthDataOutput(
+        _ output: AVCaptureDepthDataOutput,
+        didOutput depthData: AVDepthData,
+        timestamp: CMTime,
+        connection: AVCaptureConnection
+    ) {
+        guard !finished, let g = motion.deviceMotion?.gravity else { return }
+        let gx = -g.y, gy = g.x, gz = -g.z
+        let gNorm = (gx * gx + gy * gy + gz * gz).squareRoot()
+        guard gNorm > 0.5 else { return }
+        let depth = depthData.depthDataType == kCVPixelFormatType_DepthFloat32
+            ? depthData : depthData.converting(toDepthDataType: kCVPixelFormatType_DepthFloat32)
+        let map = depth.depthDataMap
+        CVPixelBufferLockBaseAddress(map, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(map, .readOnly) }
+        let width = CVPixelBufferGetWidth(map)
+        let height = CVPixelBufferGetHeight(map)
+        let rowBytes = CVPixelBufferGetBytesPerRow(map)
+        guard let base = CVPixelBufferGetBaseAddress(map), width > 0, height > 0 else { return }
+        // Intrinsics in the depth map's own pixels: the calibration's matrix rescaled from its
+        // reference size, or a pinhole from the format's field of view when there is none.
+        var fx: Double, fy: Double, cx: Double, cy: Double
+        if let cal = depth.cameraCalibrationData {
+            let k = cal.intrinsicMatrix
+            let ref = cal.intrinsicMatrixReferenceDimensions
+            let sx = Double(width) / Double(ref.width), sy = Double(height) / Double(ref.height)
+            fx = Double(k.columns.0.x) * sx; fy = Double(k.columns.1.y) * sy
+            cx = Double(k.columns.2.x) * sx; cy = Double(k.columns.2.y) * sy
+        } else if let fov = fallbackFovDeg, fov > 1 {
+            fx = (Double(width) / 2) / tan(fov * .pi / 360); fy = fx
+            cx = Double(width) / 2; cy = Double(height) / 2
+        } else {
+            return
+        }
+        var below: [Double] = []
+        below.reserveCapacity((width / Self.pixelStride) * (height / Self.pixelStride))
+        for v in stride(from: 0, to: height, by: Self.pixelStride) {
+            let row = base.advanced(by: v * rowBytes).assumingMemoryBound(to: Float32.self)
+            for u in stride(from: 0, to: width, by: Self.pixelStride) {
+                let z = row[u]
+                guard z.isFinite, z >= Self.minDepthM, z <= Self.maxDepthM else { continue }
+                let zd = Double(z)
+                let x = (Double(u) - cx) * zd / fx
+                let y = (Double(v) - cy) * zd / fy
+                below.append((x * gx + y * gy + zd * gz) / gNorm)
+            }
+        }
+        guard below.count > 100 else { return }
+        below.sort()
+        // The floor is the lowest flat surface in view: the far end of "how far below the lens".
+        let candidate = below[Int(Double(below.count - 1) * 0.98)]
+        let floorPts = below.filter { $0 >= candidate - 0.06 && $0 <= candidate + 0.03 }
+        let share = Double(floorPts.count) / Double(below.count)
+        guard share >= Self.minFloorShare, !floorPts.isEmpty else { return }
+        let mid = floorPts[floorPts.count / 2]
+        guard mid >= Self.minCameraHeightM, mid <= Self.maxCameraHeightM else { return }
+        let q1 = floorPts[floorPts.count / 4], q3 = floorPts[(floorPts.count * 3) / 4]
+        heights.append(mid)
+        shares.append(share)
+        spreads.append(q3 - q1)
+        if heights.count >= Self.wantedFrames { finishWithReadings() }
+    }
+
+    private func finishWithReadings() {
+        guard !heights.isEmpty else {
+            finish(nil, "no floor seen")
+            return
+        }
+        func median(_ a: [Double]) -> Double { let s = a.sorted(); return s[s.count / 2] }
+        finish(Result(
+            cameraHeightM: median(heights),
+            floorShare: median(shares),
+            spreadM: median(spreads),
+            frames: heights.count
+        ), "ok")
+    }
+
+    /// Always on `queue`. Stops the scan's session BEFORE handing back, so the camera is free.
+    private func finish(_ result: Result?, _ note: String) {
+        guard !finished else { return }
+        // A timeout with some readings still has an answer: use what was seen.
+        if result == nil && !heights.isEmpty && note.hasPrefix("timed out") {
+            finishWithReadings()
+            return
+        }
+        finished = true
+        depthOutput.setDelegate(nil, callbackQueue: nil)
+        if session.isRunning { session.stopRunning() }
+        let done = completion
+        completion = nil
+        done?(result, note)
     }
 }

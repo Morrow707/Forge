@@ -840,7 +840,7 @@ export const MAX_SHOULDER_SPAN_SPREAD = 0.4;
  * the old refusal that was right.
  */
 export type ScaleEstimate = {
-  source: "plate" | "box" | "grip_width" | "depth" | "body_3d" | "body_model" | "height" | "shoulder_width";
+  source: "plate" | "box" | "lidar" | "grip_width" | "depth" | "body_3d" | "body_model" | "height" | "shoulder_width";
   scale: number;
   /** How wrong this source can be even when it is working correctly. */
   uncertaintyFraction: number;
@@ -885,6 +885,8 @@ export type ScaleBlendTrace = {
   pairwise: { anchor: string; other: string; ratio: number; tolerance: number; agrees: boolean }[];
   blended: boolean;
   plateSteppedOut: boolean;
+  /** The LiDAR floor reading agreed with nothing and stepped out of the vote (see isSingleWitnessRuler). */
+  lidarSteppedOut?: boolean;
 };
 
 export type ScaleVerdict = {
@@ -1001,9 +1003,19 @@ export function isKnownSizeObjectRuler(source: ScaleEstimate["source"]): boolean
   return source === "plate" || source === "box";
 }
 
+/** A ruler that is ONE instrument with nothing inside the scene to check it: a known-size object
+ *  or the LiDAR floor reading. Overwatch's guard on these is the same: one that agrees with no
+ *  other ruler, while two or more independent readings stand against it, steps out of the vote
+ *  (Rule #2 -- a tight-stated witness may boost the cluster it joins, never decide alone). */
+export function isSingleWitnessRuler(source: ScaleEstimate["source"]): boolean {
+  return isKnownSizeObjectRuler(source) || source === "lidar";
+}
+
 function scalesAgree(anchor: ScaleEstimate, other: ScaleEstimate, tolerance: number): boolean {
   const fromAnchor = Math.abs(other.scale / anchor.scale - 1) <= tolerance;
-  if (!isKnownSizeObjectRuler(other.source)) return fromAnchor;
+  // The LiDAR ruler is held to the plate's two-ended test for the plate's reason: it is stated
+  // tight enough that a one-sided "agreement" hands it most of the blend.
+  if (!isSingleWitnessRuler(other.source)) return fromAnchor;
   return fromAnchor && Math.abs(anchor.scale / other.scale - 1) <= tolerance;
 }
 
@@ -1233,6 +1245,12 @@ export function reconcileScaleEstimates(
     // It is the first ruler in this pipeline that is neither a population average nor dependent
     // on the camera being somewhere particular.
     grip_width: 1,
+    // THE FOURTH CAMERA SYSTEM: LiDAR's floor height, turned into the athlete's distance from the
+    // lens (lidar-floor-ruler.ts). A measured distance with no body proportion in it, ranked with
+    // the measured grip. Rank only breaks a tie between singleton clusters, and a LiDAR reading
+    // that agrees with nothing steps out of the vote exactly as a lone plate does (see
+    // isSingleWitnessRuler), so it can boost a cluster it agrees with and can never take a take.
+    lidar: 1,
     // THE WRISTS' DISTANCE FROM THE LENS, TIMES THE LENS'S FIELD OF VIEW. No bone proportion
     // and no population fraction in it -- see depthRulerScale in body-3d-ruler.ts. Read 8% low
     // on both sensor-paired takes it has been held against, at two distances, which is the
@@ -1379,10 +1397,18 @@ export function reconcileScaleEstimates(
   // plate by 2.5x are not "one against one, a tie rank may break". So the count is taken on the
   // independent non-plate READINGS, before the collapse. One non-plate ruler still leaves the
   // plate its rank, which is the tie the original comment meant to protect.
-  const nonPlateReadings = usable.filter((e) => !isKnownSizeObjectRuler(e.source)).length;
+  // THE LIDAR READING IS HELD TO THE SAME RULE (2026-11-24): a single instrument stated tight
+  // enough to out-weigh every body ruler, so a lone LiDAR read that nothing corroborates steps
+  // out exactly as a lone plate does, and the step-out is reported the same way.
+  const singleWitness = best.length === 1 && isSingleWitnessRuler(best[0].source) ? best[0].source : null;
+  // A plate steps out with every known-size object (they are one class); LiDAR steps out alone.
+  const stepsOutWithIt = (e: ScaleEstimate) =>
+    singleWitness === "lidar" ? e.source === "lidar" : isKnownSizeObjectRuler(e.source);
+  const nonPlateReadings = usable.filter((e) => !stepsOutWithIt(e)).length;
   let plateSteppedOut = false;
-  if (best.length === 1 && isKnownSizeObjectRuler(best[0].source) && nonPlateReadings >= 2) {
-    const withoutPlate = voters.filter((e) => !isKnownSizeObjectRuler(e.source));
+  let lidarSteppedOut = false;
+  if (singleWitness != null && nonPlateReadings >= 2) {
+    const withoutPlate = voters.filter((e) => !stepsOutWithIt(e));
     const rerankedWithoutPlate = [...withoutPlate].sort((a, b) => rank(a) - rank(b));
     let bestWithoutPlate: ScaleEstimate[] = [rerankedWithoutPlate[0]];
     for (const anchor of rerankedWithoutPlate) {
@@ -1394,7 +1420,8 @@ export function reconcileScaleEstimates(
     }
     best = bestWithoutPlate;
     voters = withoutPlate;
-    plateSteppedOut = true;
+    if (singleWitness === "lidar") lidarSteppedOut = true;
+    else plateSteppedOut = true;
   }
 
   const onlyBodyRulers = voters.every((e) => BODY_RULERS.includes(e.source));
@@ -1462,6 +1489,7 @@ export function reconcileScaleEstimates(
     pairwise,
     blended,
     plateSteppedOut,
+    lidarSteppedOut,
   };
   return {
     scale,

@@ -281,6 +281,8 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
     handPoseStride?: number;
     /** A one-arm lift; forwarded so the live gate reads the working wrist. */
     unilateralLift?: boolean;
+    /** The fourth camera system's floor reading (LiDAR phones only). */
+    lidarFloorScan?: boolean;
     // Overwatch's thresholds for this lift, forwarded to the native arbiter. See
     // shared/camera-tunables-by-lift.ts and AvTrackerArbiter.reset.
     arbiterTunables?: {
@@ -314,6 +316,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
       // defaults; the Stop call carried them). The wrist gate needs the second.
       arbiterTunables: options?.arbiterTunables,
       unilateralLift: options?.unilateralLift,
+      lidarFloorScan: options?.lidarFloorScan,
     }).catch((err) => {
       setError(err instanceof Error ? err.message : "Could not start recording");
       setRecording(false);
@@ -508,7 +511,7 @@ export function useAvBodyTracking(active: boolean, orientation?: "portrait" | "l
         path, ANALYSIS_SAMPLE_STRIDE, options?.detectBox, options?.trackingMode, options?.body3DStride, options?.handPoseStride
       );
       // The recorder's own facts about the take, carried beside the analysis pass's.
-      if (tilt.cameraTiltSamples) recordingStats = { ...recordingStats, ...tilt };
+      if (tilt.cameraTiltSamples || tilt.lidarFloor || tilt.lidarFloorUnavailableBecause) recordingStats = { ...recordingStats, ...tilt };
     } catch (err) {
       unsubscribe();
       // AFTER the blob read, never before: deleting the original out from under an in-flight

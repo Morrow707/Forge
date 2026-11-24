@@ -360,7 +360,7 @@ export type TrackingDiagnostics = {
     // is a handful of instances from three photos, so the first numbers it produces need to be
     // attributable to it rather than blended anonymously into everything else -- that is exactly
     // what the replay harness needs to tell a good plate read from a bad one.
-    scaleSource?: "height" | "plate" | "box" | "both" | "shoulder_width" | "grip_width" | "body_model" | "body_3d" | "depth" | null;
+    scaleSource?: "height" | "plate" | "box" | "lidar" | "both" | "shoulder_width" | "grip_width" | "body_model" | "body_3d" | "depth" | null;
     // WHAT EACH SOURCE ACTUALLY MEASURED, REPORTED WHETHER IT WON OR NOT.
     //
     // Three takes in a row came back with a range of motion several times too short, and every
@@ -638,6 +638,7 @@ export type TrackingDiagnostics = {
       pairwise: { anchor: string; other: string; ratio: number; tolerance: number; agrees: boolean }[];
       blended: boolean;
       plateSteppedOut: boolean;
+      lidarSteppedOut?: boolean;
       /** Which of the 54 filmable identities this capture is, and the numbers it was handed. */
       identity: string;
       romBucket: string | null;
@@ -646,6 +647,19 @@ export type TrackingDiagnostics = {
     /** How many rulers actually carried weight. One is the state every badly-wrong take of the
      *  2026-10-06 session was in, so it is a number here rather than something counted by hand. */
     scaleWitnesses?: { votingCount: number; sources: string[] };
+    /** THE FOURTH CAMERA SYSTEM: the LiDAR floor scan taken before the take, the ruler it made
+     *  (or why none), and each other ruler's scale over it -- the cross-check overwatch reads. */
+    lidarFloor?: {
+      scan: { cameraHeightM: number; floorShare: number; spreadM: number; frames: number } | null;
+      unavailableBecause: string | null;
+      scale: number | null;
+      distanceM: number | null;
+      framesUsed: number | null;
+      ankleHeightM: number | null;
+      refusedBecause: string | null;
+      fovDeg: number | null;
+      ratioTo: Record<string, number>;
+    } | null;
   } | null;
   // WHAT THE TRACE ITSELF CAME OUT AS, AND WHAT THE SEGMENTER MADE OF IT.
   //

@@ -10545,7 +10545,7 @@ export const trackingDiagnosticsSchema = z.object({
     .object({
       scaleFactor: z.number().optional().nullable(),
       scaleSource: z
-        .enum(["height", "plate", "box", "both", "shoulder_width", "grip_width", "body_model", "body_3d", "depth"])
+        .enum(["height", "plate", "box", "lidar", "both", "shoulder_width", "grip_width", "body_model", "body_3d", "depth"])
         .optional()
         .nullable(),
       /* WHAT THE EXERCISE CLAIMED AND WHAT THE BODY LOOKED LIKE, 2026-10-06.
@@ -10739,9 +10739,28 @@ export const trackingDiagnosticsSchema = z.object({
           })).max(64),
           blended: z.boolean(),
           plateSteppedOut: z.boolean(),
+          lidarSteppedOut: z.boolean().optional(),
           identity: z.string().max(120),
           romBucket: z.string().max(60).nullable(),
           rulerUncertainties: z.record(z.string().max(40), z.number()),
+        })
+        .optional()
+        .nullable(),
+      // THE FOURTH CAMERA SYSTEM (2026-11-24): what LiDAR measured before the take, the ruler it
+      // made, or why it made none, and how it sat against the other rulers. See lidar-floor-ruler.ts.
+      lidarFloor: z
+        .object({
+          scan: z
+            .object({ cameraHeightM: z.number(), floorShare: z.number(), spreadM: z.number(), frames: z.number() })
+            .nullable(),
+          unavailableBecause: z.string().max(200).nullable(),
+          scale: z.number().nullable(),
+          distanceM: z.number().nullable(),
+          framesUsed: z.number().nullable(),
+          ankleHeightM: z.number().nullable(),
+          refusedBecause: z.string().max(60).nullable(),
+          fovDeg: z.number().nullable(),
+          ratioTo: z.record(z.string().max(40), z.number()),
         })
         .optional()
         .nullable(),
