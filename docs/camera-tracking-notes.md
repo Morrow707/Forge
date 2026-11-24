@@ -14,7 +14,37 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-24, round twenty-six)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-24, round twenty-seven)
+
+**ROUND TWENTY-SEVEN, 2026-11-24 (set 2 of the rows, the dumbbell press and the bench on build 836,
+the first round at 0.5x).** OVR truths (Scott): press reps 3-10 (53.45cm, 1.01, 1.53); row rep 9 is
+setup, so reps 1-8 right (44.04cm) and 10-17 left (42.67cm); bench 135x8 (36.58cm, 0.73, 1.05).
+Every take carried its skeleton (the round-26 trace-file fix held).
+
+| Lift | Range as filmed | Mean | Peak | Live after this round |
+|---|---|---|---|---|
+| Row right | -0.5% | 0.90 vs 0.88 | 1.66 vs 1.39 | -0.61% |
+| Row left | +4.3% | 0.97 vs 0.84 | 1.65 vs 1.37 | +3.51% |
+| Dumbbell press | +2.2% | 1.06 vs 1.01 | 1.60 vs 1.53 | +2.02% |
+| Bench | **+75%** (6 of 8, 18 dropouts) | 1.44 | 2.15 | +17.84% |
+
+- **BUG, fixed (native): the 3D pose was never told the lens.** `VNDetectHumanBodyPose3DRequest` ran
+  on a handler with `options: [:]`, so Vision assumed a lens. At 0.5x the depth ruler (wrist depth x
+  2 tan(fov/2)) read 1.94x on the bench and 1.90x on the press while the 3D bones stayed within 3%.
+  The 3D request now gets its own handler with `.cameraIntrinsics` from the format's field of view
+  (live path: the active format; file path: the field of view remembered by recording path).
+  `the-3d-pose-is-told-the-lens.test.ts`. Read `depthRulerScale` against `body_3d` on the next 0.5x
+  take: they should agree within ~10%. No depth uncertainty is refit until that take exists.
+- **BUG, fixed (shared rule): the disc bypass let an undersized plate in.** A near-square plate box
+  skipped the plate-to-grip check entirely; the bench's was 0.333 of the grip (floor 0.45), boxed at
+  0.55 of its true size, so the scale doubled. The bypass now excuses a disc for reading too BIG,
+  never too small (`plateTooSmallForItsGrip`). Ledger rows carry `plateToGripRatio` and the replay
+  re-judges it. Bench +75% -> about +19.7% before the step. Likely mechanism: perspective (the plate
+  sits nearer or further than the hands at 0.5x).
+- Steps: bench `body3DCorrectedUncertainty` 0.35 -> 0.3 (8-set average 7.98 -> 7.76%), press 0.065 ->
+  0.06 (7.89 -> 7.71%), row `depthRulerUncertainty` 0.6 -> 0.55 (14 sets 9.87 -> 9.85%).
+- Open: the bench's 2 lost reps and 18 dropouts at 0.5x; peak velocity reads 15-20% high on every
+  lift this round.
 
 **ROUND TWENTY-SIX, 2026-11-24 (upper body on build 834, not shipped). Shorts on, and a jacket on
 purpose to hide the wrists and elbows.** Row 70lb x8 a side (right first: OVR reps 1-8 right, 9-16

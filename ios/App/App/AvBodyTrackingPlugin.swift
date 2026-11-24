@@ -1421,6 +1421,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         // Registered before the write starts, not after -- purgeStaleRecordings runs off a
         // start() call this plugin doesn't control the timing of.
         Self.markPathActive(outputURL.path)
+        Self.rememberFieldOfView(activeFieldOfViewDeg, forPath: outputURL.path)
         startGravitySampling()
 
         // LIVE ANALYSIS IS OPT-IN PER TAKE, AND SILENCE MEANS NO.
@@ -1467,6 +1468,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                 handPoseStride: call.getInt("handPoseStride") ?? 1
             )
         }()
+        liveContext?.fieldOfViewDeg = activeFieldOfViewDeg
         if liveContext != nil {
             // The same resets analyzeRecording does before a file read -- the detectors and
             // overwatch carry lock state across frames, and last take's lock is not this take's.
@@ -1490,7 +1492,10 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
                     log: { [weak self] in self?.logDiag($0) })
                 : nil
         }
-        if copyAvailable { Self.markPathActive(copyURL.path) }
+        if copyAvailable {
+            Self.markPathActive(copyURL.path)
+            Self.rememberFieldOfView(activeFieldOfViewDeg, forPath: copyURL.path)
+        }
 
         DispatchQueue.main.async {
             movieOutput.startRecording(to: outputURL, recordingDelegate: self)
@@ -2254,6 +2259,7 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
             body3DStride: body3DStride,
             handPoseStride: handPoseStride
         )
+        ctx.fieldOfViewDeg = Self.recordedFieldOfView(forPath: url.path) ?? activeFieldOfViewDeg
         let state = AvFrameRunState()
         let startTime = Date()
 
@@ -2521,6 +2527,31 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
     ///
     /// `progress` is the watchdog counter the file path's own stall check reads; the live path
     /// has no watchdog (there is no reader to get stuck) and passes nil.
+    /// THE 3D REQUEST, TOLD WHICH LENS FILMED THE FRAME (round twenty-seven). A pinhole camera's
+    /// focal length in pixels is half the frame's long side over tan(fov / 2), the principal point
+    /// is the frame's centre, and the field of view is stated for the sensor's long axis. Only the
+    /// 3D request reads intrinsics, so it gets its own handler and the 2D pose keeps the one it
+    /// always had. With no field of view known it shares the 2D handler exactly as before.
+    private static func body3DHandler(
+        pixelBuffer: CVPixelBuffer,
+        orientation: CGImagePropertyOrientation,
+        fieldOfViewDeg: Double?,
+        fallback: VNImageRequestHandler
+    ) -> VNImageRequestHandler {
+        guard let fov = fieldOfViewDeg, fov > 1, fov < 179 else { return fallback }
+        let width = Float(CVPixelBufferGetWidth(pixelBuffer))
+        let height = Float(CVPixelBufferGetHeight(pixelBuffer))
+        guard width > 0, height > 0 else { return fallback }
+        let focal = (max(width, height) / 2) / Float(tan(fov * Double.pi / 360))
+        var intrinsics = matrix_float3x3(columns: (
+            SIMD3<Float>(focal, 0, 0),
+            SIMD3<Float>(0, focal, 0),
+            SIMD3<Float>(width / 2, height / 2, 1)
+        ))
+        let data = Data(bytes: &intrinsics, count: MemoryLayout<matrix_float3x3>.size) as CFData
+        return VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [.cameraIntrinsics: data])
+    }
+
     private func processFrame(
         sampleBuffer: CMSampleBuffer,
         ctx: AvFrameContext,
@@ -2733,7 +2764,8 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         if let body3DRequest = ctx.body3DRequest, strideIndex % ctx.body3DDetectionStride == ctx.body3DPhaseOffset {
             let body3DStart = Date()
             do {
-                try handler.perform([body3DRequest])
+                try Self.body3DHandler(pixelBuffer: pixelBuffer, orientation: ctx.orientation, fieldOfViewDeg: ctx.fieldOfViewDeg, fallback: handler)
+                    .perform([body3DRequest])
                 if #available(iOS 17.0, *), let observation = body3DRequest.results?.first as? VNHumanBodyPose3DObservation {
                     body3DHeightM = Double(observation.bodyHeight)
                     body3DHeightSource = observation.heightEstimation == .measured ? "measured" : "reference"
@@ -3157,6 +3189,27 @@ public class AvBodyTrackingPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureFileOut
         activePathsQueue.sync { _ = activePaths.insert(path) }
     }
 
+    // THE LENS A FILE WAS FILMED ON, SO VISION CAN BE TOLD (2026-11-24, round twenty-seven).
+    // VNDetectHumanBodyPose3DRequest estimates depth from the image and, with no camera
+    // intrinsics, from a lens it has to assume. At 0.5x (106 degrees) the wrist depths it returned
+    // put the depth ruler 1.8-1.9x high on the bench and the press, where the 3D bone lengths --
+    // which do not depend on depth -- stayed within 3% of the sensor. The field of view of the
+    // format a file was recorded on is kept here by path, so the file path can hand the request
+    // the same intrinsics the live path does. A file not recorded in this session gets none, as
+    // before.
+    private static var recordedFieldOfViewDeg: [String: Double] = [:]
+    private static func rememberFieldOfView(_ fov: Double?, forPath path: String) {
+        guard let fov, fov > 0 else { return }
+        activePathsQueue.sync { recordedFieldOfViewDeg[path] = fov }
+    }
+    private static func recordedFieldOfView(forPath path: String) -> Double? {
+        activePathsQueue.sync { recordedFieldOfViewDeg[path] }
+    }
+    private var activeFieldOfViewDeg: Double? {
+        guard let fov = currentInput?.device.activeFormat.videoFieldOfView, fov > 0 else { return nil }
+        return Double(fov)
+    }
+
     private static func markPathInactive(_ path: String) {
         activePathsQueue.sync { _ = activePaths.remove(path) }
     }
@@ -3548,6 +3601,9 @@ private final class AvFrameContext {
     // downstream as "not available", the same omit-rather-than-fail convention every other
     // optional signal in this file uses.
     let body3DRequest: VNRequest?
+    // The horizontal field of view of the format the frames were filmed on, or nil when unknown.
+    // When set, the 3D request is handed camera intrinsics built from it (see processFrame).
+    var fieldOfViewDeg: Double?
     // NOW A MEASURED VALUE, AND IT WAS COSTING MORE THAN IT RETURNED.
     //
     // This said "placeholder, not a measured value ... once real on-device timing exists". That

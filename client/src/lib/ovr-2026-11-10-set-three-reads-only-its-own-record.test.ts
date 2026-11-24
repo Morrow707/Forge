@@ -45,9 +45,9 @@ const ROW_RIGHT = "2026-11-10 Single-Arm Dumbbell Row set 6";
 /** Round sixteen's numbers were 0.15 and 0.12; round nineteen (2026-11-17) took them to 0.10 and
  *  0.08 -- the record holds the newest, and the ledger rows below what it reads. */
 const BENCH_DEPTH = 0.105; // 0.105 since round twenty-six
-const PRESS_3D = 0.065; // 0.12 round sixteen, 0.08 nineteen, 0.06 twenty, 0.065 twenty-six
+const PRESS_3D = 0.06; // 0.12 round sixteen, 0.08 nineteen, 0.06 twenty, 0.065 twenty-six, 0.06 twenty-seven
 const PRESS_DRIVE = 0;
-const ROW_DEPTH = 0.6;
+const ROW_DEPTH = 0.55; // 0.6 round sixteen, 0.55 round twenty-seven
 const PRESS_DRIVE_BEFORE = 0.01;
 /** What the phone found on the left row, and what the trace-hole rule returns -- plus, since round
  *  nineteen (2026-11-17), the first pull trimmed out of the pickup (trimOversizedLeadIn). */
@@ -55,9 +55,9 @@ const LEFT_ROW_REPS_ON_PHONE = 4;
 const LEFT_ROW_REPS_NOW = 6;
 const REPS_PER_SIDE = 8;
 /** 10.25 at round sixteen's record; 7.25 at round nineteen's press 3D 0.08. */
-const PRESS_SET3_LIVE = 6.34; // 6.34 after round twenty-six; 7.25 after round nineteen
-const ROW_LEFT_LIVE = -35.4;
-const ROW_RIGHT_LIVE = -28.31;
+const PRESS_SET3_LIVE = 6.06; // 6.06 after round twenty-seven; 6.34 after round twenty-six; 7.25 after round nineteen
+const ROW_LEFT_LIVE = -35.86; // -35.4 before round twenty-seven
+const ROW_RIGHT_LIVE = -28.68; // -28.31 before round twenty-seven
 /** A bench rep on this take is cut off at the chest: the shortest the phone wrote, against the
  *  sensor's shortest press. */
 const BENCH_SHORT_REP_CEILING_CM = 15;

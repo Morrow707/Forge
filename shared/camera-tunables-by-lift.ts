@@ -391,12 +391,12 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
     biacromialToleranceFraction: 0.4,
     heightRulerUncertainty: 0.4,
     depthRulerUncertainty: 0.6,
-    body3DCorrectedUncertainty: 0.065,
+    body3DCorrectedUncertainty: 0.06,
     driveOnsetFraction: 0,
     maxPeakToMeanRatio: 1.5,
   },
-  "Bench Press": { body3DCorrectedUncertainty: 0.35, depthRulerUncertainty: 0.105, driveOnsetFraction: 0.03, lowVisibilityWristFloor: 0.1 },
-  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0.01, biacromialToleranceFraction: 0.25 },
+  "Bench Press": { body3DCorrectedUncertainty: 0.3, depthRulerUncertainty: 0.105, driveOnsetFraction: 0.03, lowVisibilityWristFloor: 0.1 },
+  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.55, driveOnsetFraction: 0.01, biacromialToleranceFraction: 0.25 },
 };
 
 /** THE VELOCITY OVERRIDES REMOVED ON 2026-11-05, AND WHY -- kept as data so the next reader does
@@ -677,6 +677,9 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
     "moves, since each reads its own record.",
   "Dumbbell Shoulder Press":
+    "2026-11-24, round twenty-seven, set 2 on build 836 at 0.5x (30lb x8; OVR reps 3-10 after 2 setup reps: 53.45cm, mean 1.01, " +
+    "peak 1.53). Forge 54.6cm (+2.2% as filmed), 1.06, 1.60, 8 of 8, no dropouts: the jacket take's hand fault did not repeat. " +
+    "body3DCorrectedUncertainty 0.065 -> 0.06: this take +2.15 -> +2.02% live (its depth ruler was refused on the phone by the stature yardstick at 1.9x high, the 0.5x intrinsics bug), all eight press sets closer, average 7.89 -> 7.71%. " +
     "2026-11-24, round twenty-six, set 1 on build 834 (30lb x8, a jacket on purpose to hide the wrists; OVR reps 3-10 after 2 setup " +
     "reps: 52.93cm, mean 0.97, peak 1.41). Forge read 18.2cm, 0.27, 0.40: the hand point travelled about a third of the bar's path " +
     "(mostly sideways in the image) with 133 of 449 frames under the wrist floor, so a hand-tracking fault, not a scale one, and it is " +
@@ -746,6 +749,11 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
   // ROUND FOURTEEN, 2026-11-10, build 728 beside the OVR. Costed by
   // client/src/lib/ovr-2026-11-10-every-lift-reads-only-its-own-record.test.ts.
   "Bench Press":
+    "2026-11-24, round twenty-seven, set 2 on build 836 at 0.5x (135x8; OVR 36.58cm, 0.73, 1.05). Forge read 64.0cm (+75%): the " +
+    "plate was boxed at 0.55 of its size, read as a disc and so skipped the grip check at 0.333 grips (a bug, fixed: a disc is excused " +
+    "for reading too big beside the hands, never too small), which replays the take at +19.7%. Then body3DCorrectedUncertainty " +
+    "0.35 -> 0.3 (the 3D torso read -3.4%, the shoulder +27%): this take +19.73 -> +17.84%, eight-set average 7.98 -> 7.76%; the " +
+    "11-10 set 2 and 11-17 benches read about 0.4-0.7 points lower. " +
     "2026-11-24, round twenty-six, set 1 on build 834 (135x8, a jacket on purpose; OVR 36.07cm, 0.74, 1.07): range -1.86% through " +
     "the live record, so depthRulerUncertainty 0.1 -> 0.105: this take -1.86 -> -0.73%, seven-set average 6.58 -> 6.31%. Velocities " +
     "(mean -26%, peak +21%) are the trace: wrists under the floor on 229 of 409 frames, 29 dropouts. " +
@@ -789,6 +797,9 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "0.04, and +33.1% and +4.6% at 0.03; both takes move toward the sensor, no rep count moves, and " +
     "the peak does not move. 0.02 is the next step.",
   "Single-Arm Dumbbell Row":
+    "2026-11-24, round twenty-seven, set 2 on build 836 at 0.5x (70lb x8 a side; OVR rep 9 the set-up, truth reps 1-8 44.04cm and " +
+    "10-17 42.67cm). Right -0.54%, left +4.29% as filmed. depthRulerUncertainty 0.6 -> 0.55: left +4.29 -> +3.51%, right -0.55 -> " +
+    "-0.61% (0.06 away; the other steps cost the right 2 points), fourteen-set average 9.87 -> 9.85%. " +
     "2026-11-24, round twenty-six, set 1 on build 834 (70lb x8 a side, right first; truth OVR reps 2-8 45.65cm and 10-16 41.08cm): " +
     "biacromialToleranceFraction 0.24 -> 0.25. Right +1.20 -> -0.30%, left +10.03 -> +7.98%, twelve-set average 11.34 -> 11.11%. " +
     "The left read 44% fast because the torso check dropped 126 of 259 hand points (the working shoulder was in its anchor; fixed). " +

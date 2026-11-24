@@ -158,30 +158,30 @@
     }
   },
   "Bench Press": {
-    "takes": 7,
+    "takes": 8,
     "rulers": {
       "body_3d": {
-        "takes": 7,
-        "leanPct": -22,
-        "rmsPct": 26.6,
+        "takes": 8,
+        "leanPct": -21.7,
+        "rmsPct": 24.9,
         "timesWorst": 6
       },
       "depth": {
-        "takes": 7,
+        "takes": 8,
         "leanPct": -7.4,
-        "rmsPct": 16.7,
-        "timesWorst": 0
+        "rmsPct": 36.8,
+        "timesWorst": 1
       },
       "plate": {
-        "takes": 3,
-        "leanPct": 7.8,
-        "rmsPct": 12.9,
+        "takes": 4,
+        "leanPct": 14.2,
+        "rmsPct": 43.2,
         "timesWorst": 0
       },
       "shoulder_width": {
-        "takes": 7,
-        "leanPct": -7.7,
-        "rmsPct": 18.2,
+        "takes": 8,
+        "leanPct": -5.2,
+        "rmsPct": 19.6,
         "timesWorst": 1
       }
     },
@@ -230,35 +230,35 @@
       ],
       "takesSeen": 3,
       "takesLocked": 2,
-      "takesVoted": 3,
+      "takesVoted": 4,
       "medianLockShare": 0.05
     }
   },
   "Dumbbell Shoulder Press": {
-    "takes": 7,
+    "takes": 8,
     "rulers": {
       "body_3d": {
-        "takes": 7,
-        "leanPct": 4.7,
-        "rmsPct": 9.9,
+        "takes": 8,
+        "leanPct": 4.6,
+        "rmsPct": 9.3,
         "timesWorst": 0
       },
       "depth": {
-        "takes": 7,
-        "leanPct": 43.8,
-        "rmsPct": 44.3,
-        "timesWorst": 6
+        "takes": 8,
+        "leanPct": 44.9,
+        "rmsPct": 52.3,
+        "timesWorst": 7
       },
       "height": {
-        "takes": 7,
-        "leanPct": 29.1,
-        "rmsPct": 31.7,
+        "takes": 8,
+        "leanPct": 27,
+        "rmsPct": 29.6,
         "timesWorst": 0
       },
       "shoulder_width": {
-        "takes": 7,
-        "leanPct": 30.7,
-        "rmsPct": 43.3,
+        "takes": 8,
+        "leanPct": 32.9,
+        "rmsPct": 42.8,
         "timesWorst": 1
       }
     },
@@ -470,25 +470,25 @@
     }
   },
   "Single-Arm Dumbbell Row": {
-    "takes": 12,
+    "takes": 14,
     "rulers": {
       "body_3d": {
-        "takes": 12,
+        "takes": 14,
         "leanPct": -30.1,
-        "rmsPct": 28.2,
+        "rmsPct": 28.9,
         "timesWorst": 0
       },
       "depth": {
-        "takes": 12,
+        "takes": 14,
         "leanPct": -54.7,
-        "rmsPct": 51.2,
+        "rmsPct": 53.1,
         "timesWorst": 7
       },
       "shoulder_width": {
-        "takes": 11,
-        "leanPct": 42.8,
-        "rmsPct": 51.7,
-        "timesWorst": 5
+        "takes": 13,
+        "leanPct": 43.9,
+        "rmsPct": 58,
+        "timesWorst": 7
       }
     },
     "bones": {

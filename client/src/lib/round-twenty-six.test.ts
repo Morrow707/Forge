@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { FITTED_OVERRIDES } from "@shared/camera-tunables-by-lift";
+import { FITTED_OVERRIDES, FITTED_OVERRIDE_EVIDENCE } from "@shared/camera-tunables-by-lift";
 import { implausibleRangeOfMotion } from "./bar-tracking";
 
 function stripComments(src: string): string {
@@ -50,6 +50,7 @@ describe("round twenty-six", () => {
   it("takes one step per lift", () => {
     expect(FITTED_OVERRIDES["Single-Arm Dumbbell Row"]?.biacromialToleranceFraction).toBe(0.25);
     expect(FITTED_OVERRIDES["Bench Press"]?.depthRulerUncertainty).toBe(0.105);
-    expect(FITTED_OVERRIDES["Dumbbell Shoulder Press"]?.body3DCorrectedUncertainty).toBe(0.065);
+    // Round twenty-seven took the press one more step (0.065 -> 0.06); twenty-six's step is in the evidence.
+    expect(FITTED_OVERRIDE_EVIDENCE["Dumbbell Shoulder Press"]).toMatch(/round twenty-six[\s\S]*0\.06 -> 0\.065/);
   });
 });

@@ -4104,6 +4104,13 @@ halves before splitting anything else:
   choice). And a one-arm lift's live take is re-read from the file when its working wrist was unseen
   past 1.0s (`wristGaps`, `maxLiveWorkingWristGapSeconds`); the hook also stopped dropping
   `arbiterTunables` at Record (inert: every lift holds the defaults). Native: `verify_build`, beta.
+- **ROUND TWENTY-SEVEN, 2026-11-24: SET 2 OF ROWS, DUMBBELL PRESS, BENCH ON BUILD 836, THE FIRST AT 0.5x.**
+  Row right -0.5%, left +4.3%, press +2.2% as filmed; bench +75%. Two bugs: the 3D pose request was
+  never handed camera intrinsics, so at 0.5x its depths put the depth ruler ~1.9x high (native fix:
+  `.cameraIntrinsics` from the format's field of view, both paths); and the disc bypass let a plate
+  boxed at 0.55 of its size skip the plate-to-grip check (now a disc is excused for reading too big,
+  never too small). Steps: bench 3D 0.3, press 3D 0.06, row depth 0.55. OVR rules: press skips reps
+  1-2, row rep 9 is setup. See docs/camera-tracking-notes.md, STATUS BOARD.
 - **ROUND TWENTY-SIX, 2026-11-24: ROWS, DUMBBELL PRESS, BENCH ON BUILD 834, IN A JACKET ON PURPOSE.**
   Not shipped. Steps: row shoulder floor 0.25, bench depth 0.105, press 3D pose 0.065. Bugs fixed: a
   one-arm lift's working shoulder is no longer in the torso-stillness anchor (it deleted the top of

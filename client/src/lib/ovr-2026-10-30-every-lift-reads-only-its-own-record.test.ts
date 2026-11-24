@@ -94,8 +94,8 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     expect(VELOCITY_OVERRIDES_REMOVED_2026_11_05["Barbell Shoulder Press"]).toEqual(["driveOnsetFraction"]);
     // Round fourteen (2026-11-10) gave the bench a window again, fitted on the corrected labels and
     // dated after the fix; the smoothing and the cap stay gone.
-    expect(FITTED_OVERRIDES["Bench Press"]).toEqual({ body3DCorrectedUncertainty: 0.35, depthRulerUncertainty: 0.105, driveOnsetFraction: 0.03, lowVisibilityWristFloor: 0.1 });
-    expect(FITTED_OVERRIDE_EVIDENCE["Bench Press"]).toMatch(/^2026-11-24, round twenty-six[\s\S]*2026-11-17, round twenty-one[\s\S]*2026-11-17, round nineteen[\s\S]*2026-11-10, round sixteen[\s\S]*2026-11-10, round fifteen[\s\S]*2026-11-10, round fourteen/);
+    expect(FITTED_OVERRIDES["Bench Press"]).toEqual({ body3DCorrectedUncertainty: 0.3, depthRulerUncertainty: 0.105, driveOnsetFraction: 0.03, lowVisibilityWristFloor: 0.1 });
+    expect(FITTED_OVERRIDE_EVIDENCE["Bench Press"]).toMatch(/^2026-11-24, round twenty-seven[\s\S]*2026-11-24, round twenty-six[\s\S]*2026-11-17, round twenty-one[\s\S]*2026-11-17, round nineteen[\s\S]*2026-11-10, round sixteen[\s\S]*2026-11-10, round fifteen[\s\S]*2026-11-10, round fourteen/);
     expect(FITTED_OVERRIDES["Barbell Shoulder Press"]).toBeUndefined();
     expect(Object.keys(FITTED_OVERRIDES["Pendlay Row"])).toEqual(["depthRulerUncertainty"]);
     for (const [name, bucket] of [["Pendlay Row", "horizontal_press_or_row"], ["Barbell Shoulder Press", "overhead_press"]]) {
@@ -282,8 +282,9 @@ describe("the 2026-10-30 export replays through each lift's own record", () => {
     // and +3.91% since round fourteen's bench 3D-pose uncertainty 0.25 (2026-11-10), which moves the
     // two plate-led bench rows 0.1-0.3 points the wrong way and the two without a plate 0.4-1.6 the right way;
     // +3.77% after round fifteen's bench depth uncertainty 0.18 and +3.56% after round sixteen's 0.15 (same day);
-    // +3.80% after round nineteen's depth 0.10 and 3D pose 0.35 (2026-11-17)
-    expect(row.liveErrorPct).toBeCloseTo(3.8, 1);
+    // +3.80% after round nineteen's depth 0.10 and 3D pose 0.35 (2026-11-17); +3.60% after round
+    // twenty-seven's 3D pose 0.3 (2026-11-24)
+    expect(row.liveErrorPct).toBeCloseTo(3.6, 1);
     expect(f.shipped.reps).toBe(8);
     const m = replay(f);
     expect(m.repBreakdown.length).toBe(7);

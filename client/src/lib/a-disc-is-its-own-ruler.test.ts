@@ -23,7 +23,10 @@ const dialog = readFileSync(
 describe("a plate that reads as a disc is trusted on its own evidence", () => {
   it("skips the grip cross-check only when the box is near-square", () => {
     expect(dialog).toContain("const plateReadsAsADisc =");
-    expect(dialog).toContain("&& !plateReadsAsADisc");
+    // Round twenty-seven (2026-11-24): the bypass excuses a disc for reading too BIG beside the
+    // hands, never too small -- a near-square box at 0.333 of the grip was 0.55 of its true size.
+    expect(dialog).toContain("&& (!plateReadsAsADisc || plateTooSmallForItsGrip)");
+    expect(dialog).toContain("plateToGripRatio < PLATE_TO_GRIP_RATIO_LOW");
     expect(dialog).toContain("PLATE_DISC_ASPECT_LOW = 0.8");
     expect(dialog).toContain("PLATE_DISC_ASPECT_HIGH = 1.25");
   });

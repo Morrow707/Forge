@@ -53,6 +53,7 @@ import {
   HEIGHT_RULER_UNCERTAINTY,
   rejectImplausibleScales,
   plateReadIsPlausibleAgainstGrip,
+  PLATE_TO_GRIP_RATIO_LOW,
   impliedBodyLengthUnits,
   tiltDegreesFromPoints,
   usesSharedBarEquipment,
@@ -1245,9 +1246,17 @@ export function AvBarTrackerDialog({
       // See PLATE_DISC_MAX_GRIP_RATIO. Unmeasurable grip means nothing to bound against, and the
       // shape is then the only evidence there is, so the bypass stands.
       && (plateToGripRatio == null || plateToGripRatio <= PLATE_DISC_MAX_GRIP_RATIO);
+    // A DISC IS EXCUSED FOR READING TOO BIG BESIDE THE HANDS, NEVER TOO SMALL (2026-11-24, round
+    // twenty-seven). The bypass above exists because a foreshortened grip line SHRINKS the
+    // denominator, which can only push the ratio UP. Nothing about the camera angle makes a
+    // plate read smaller than the hands holding its bar: a plate under PLATE_TO_GRIP_RATIO_LOW is
+    // boxed small or is a different plate further from the lens. The bench at 0.5x, set 2: a disc
+    // (aspect 0.94) at 0.333 grips, boxed at 0.55 of its real size, waved through by the bypass,
+    // carried 85% of the scale and read the set +75%.
+    const plateTooSmallForItsGrip = plateToGripRatio != null && plateToGripRatio < PLATE_TO_GRIP_RATIO_LOW;
     const plateFailedGripCheck =
       plateScaleRaw != null
-      && !plateReadsAsADisc
+      && (!plateReadsAsADisc || plateTooSmallForItsGrip)
       && !plateReadIsPlausibleAgainstGrip(plateScaleRaw.measured, gripWidthPx);
 
     // IS IT THE RIGHT SHAPE, AND IS IT ANYWHERE NEAR THE ATHLETE.

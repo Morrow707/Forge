@@ -8,6 +8,7 @@ import {
   reconcileScaleEstimates,
   coreMlBoxUncertaintyForConfidence,
   CALIBRATION_REFERENCES,
+  PLATE_TO_GRIP_RATIO_LOW,
 } from "./pose-tracking";
 import { postureForExercise, postureAllowsHeightCalibration, romBucketForExercise } from "./exercise-camera-profile";
 import { cameraTunablesFor } from "@shared/camera-tunables-by-lift";
@@ -113,7 +114,10 @@ export function liveX1000(row: LedgerRow, patch: LedgerSettingsPatch = {}): numb
   const candidates = (heightVotesToday
     ? row.candidates
     : row.candidates.filter((c) => c.source !== "height")
-  ).filter((c) => !stillRefused.has(c.source));
+  ).filter((c) => !stillRefused.has(c.source))
+    // A disc under the grip floor is refused today (round twenty-seven); a row that recorded its
+    // plate-to-grip ratio is re-judged against it. See LedgerRow.plateToGripRatio.
+    .filter((c) => !(c.source === "plate" && row.plateToGripRatio != null && row.plateToGripRatio < PLATE_TO_GRIP_RATIO_LOW));
   // The remembered bones vote where the phone lets them (LIFTS_WHERE_THE_BODY_MODEL_VOTES), at
   // the uncertainty they stated on the take.
   const bodyModel = row.bodyModel && LIFTS_WHERE_THE_BODY_MODEL_VOTES.includes(row.exercise) ? row.bodyModel : null;

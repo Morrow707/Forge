@@ -1195,7 +1195,7 @@ export const IMPLAUSIBLE_GRIP_HIGH_M = 1.4;
  *  can divide by it rather than restating it. See WIDEST_PLAUSIBLE_GRIP_TO_BIACROMIAL. */
 export const WIDEST_BARBELL_GRIP_M = 0.81;
 
-const PLATE_TO_GRIP_RATIO_LOW = 0.45;
+export const PLATE_TO_GRIP_RATIO_LOW = 0.45;
 const PLATE_TO_GRIP_RATIO_HIGH = 2.0;
 
 export function plateReadIsPlausibleAgainstGrip(
