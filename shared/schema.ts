@@ -9867,6 +9867,8 @@ export const captureDeviceInfoSchema = z.object({
   telemetrySamples: z.number().optional().nullable(),
   adjustingFocusSampleCount: z.number().optional().nullable(),
   adjustingExposureSampleCount: z.number().optional().nullable(),
+  lensSwitches: z.number().optional().nullable(),
+  zoomFactor: z.number().optional().nullable(),
 });
 
 // Pipeline-level diagnostics for a single tracked set -- why tracking succeeded or failed, and

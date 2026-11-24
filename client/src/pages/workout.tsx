@@ -444,6 +444,8 @@ type CaptureDeviceInfo = {
   telemetrySamples: number;
   adjustingFocusSampleCount: number;
   adjustingExposureSampleCount: number;
+  lensSwitches?: number;
+  zoomFactor?: number | null;
 };
 
 // Same shape as tracking-diagnostics.ts's TrackingDiagnostics -- see buildTrackingDiagnostics

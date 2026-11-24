@@ -13,7 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { nextVersion, OVERWATCH_VERSIONS, type OverwatchVersion } from "../shared/overwatch-learning";
-import { learnableTakes, overwatchLearnings } from "../client/src/lib/overwatch-learning-score";
+import { learnableTakes, overwatchLearnings, unreproducibleTakes } from "../client/src/lib/overwatch-learning-score";
 
 const RECORD = path.join(process.cwd(), "shared/overwatch-versions-on-record.json");
 const INDENT = 2;
@@ -22,6 +22,12 @@ const NAME = 26;
 const takes = learnableTakes();
 const learnings = overwatchLearnings(takes);
 console.log(`OVERWATCH LEARNING: ${takes.length} sensor-paired takes carry overwatch's per-frame record\n`);
+for (const u of unreproducibleTakes()) {
+  console.log(
+    `  not learned from: ${u.id} (replay ${u.replayPct == null ? "no plate" : u.replayPct.toFixed(2) + "%"} against the ledger's ${u.ledgerPct}%)`,
+  );
+}
+
 learnings.forEach((l) => {
   console.log(`  ${l.exercise.padEnd(NAME)} ${l.status.toUpperCase()}: ${l.why}`);
   if (l.proposed) console.log(`  ${"".padEnd(NAME)} proposed ${JSON.stringify(l.proposed)}`);

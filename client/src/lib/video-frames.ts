@@ -4,9 +4,36 @@
  * few evenly-spaced points, and grab each as a downscaled JPEG. Runs
  * entirely in the browser; nothing here touches the network beyond
  * re-fetching the already-uploaded clip at `url`. */
+/** What the athlete reads when the clip cannot be read for the AI form check. The old sentence,
+ *  "Could not load video", read as the VIDEO being lost (Scott, 2026-11-24, right after a row's
+ *  clip uploaded 201 and the next GET of it returned the whole file); the clip is saved either
+ *  way, and only the frame grab for the AI check failed. */
+export const FRAME_GRAB_FAILED_MESSAGE =
+  "The AI form check couldn't read this clip. The video itself is saved on the set.";
+
+/** One retry, a moment later: a clip fetched the instant its upload finished has been seen to
+ *  fail a first load on the phone and load the next time (2026-11-24, row set 1, left side). */
+const RETRY_DELAY_MS = 1500;
+
 export async function extractVideoFrames(
   url: string,
   count = 3,
+): Promise<{ mediaType: "image/jpeg"; data: string }[]> {
+  try {
+    return await extractVideoFramesOnce(url, count);
+  } catch {
+    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    try {
+      return await extractVideoFramesOnce(url, count);
+    } catch {
+      throw new Error(FRAME_GRAB_FAILED_MESSAGE);
+    }
+  }
+}
+
+async function extractVideoFramesOnce(
+  url: string,
+  count: number,
 ): Promise<{ mediaType: "image/jpeg"; data: string }[]> {
   const video = document.createElement("video");
   // Every attribute is set BEFORE src, deliberately. Assigning src queues WebKit's

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { ACCURACY_LEDGER, errorPctAgainstSensor, type LedgerRow } from "@shared/accuracy-ledger";
+import { ACCURACY_LEDGER, type LedgerRow } from "@shared/accuracy-ledger";
 import { cameraTunablesFor } from "@shared/camera-tunables-by-lift";
 import {
   learnLift,
@@ -11,7 +11,7 @@ import {
   type OverwatchFrameLog,
   type OverwatchSettings,
 } from "@shared/overwatch-learning";
-import { blendX1000, liveUncertainty } from "./ledger-replay";
+import { errorPctFor } from "./ledger-replay";
 import { romBucketForExercise } from "./exercise-camera-profile";
 import { CALIBRATION_REFERENCES } from "./pose-tracking";
 
@@ -93,26 +93,79 @@ function plateDiameterM(): number {
 }
 
 /** This take's error against the OVR, in per cent, with the plate rebuilt at these settings. Null
- *  when the plate keeps too few boxes at these settings to state a scale. */
+ *  when the plate keeps too few boxes at these settings to state a scale.
+ *
+ *  THE REPLAY DOES WHAT THE PHONE DID, EXCEPT FOR THE ONE THING BEING LEARNED (round twenty-six).
+ *  The first version put the plate into the vote on every take and blended through its own
+ *  uncertainty table, so it ran a different pipeline from the ledger: it admitted plates the phone
+ *  had refused for reasons outside overwatch's three checks (the 11-23 RDL set 2: +102% where the
+ *  phone read about -6%), and it left out the remembered bones' vote (the RDL set 4). Now the plate
+ *  is rebuilt only where the phone let a plate reach the blend, and the rest of the take goes
+ *  through the ledger's own live replay (ledger-replay.ts: posture gate, refusals, the bones, the
+ *  take's grip floor), so at the settings the phone ran the replay lands where the ledger does. */
 export function errorPctWithOverwatch(row: LedgerRow, log: OverwatchFrameLog, settings: OverwatchSettings): number | null {
+  const shippedPlate = row.candidates.find((c) => c.source === PLATE);
+  if (!shippedPlate) return errorPctFor(row);
   const replay = replayFrameLog(log, settings, true);
   if (replay.medianEdgePx == null) return null;
-  const plateX1000 = (plateDiameterM() / replay.medianEdgePx) * X1000;
-  const candidates = [
-    ...row.candidates.filter((c) => c.source !== PLATE),
-    { source: PLATE, scaleX1000: plateX1000 },
-  ];
-  const blended = blendX1000(candidates, (s) => liveUncertainty(s, row.exercise, row));
-  return errorPctAgainstSensor(blended, row);
+  // THE REPLAY'S OWN MISS IS MEASURED AND CARRIED, NOT A REASON TO DROP THE TAKE. The frame log
+  // keeps every box overwatch judged, and the phone's plate median also leaves out boxes for
+  // reasons the log does not record, so on the 11-24 bench the plate rebuilt at the phone's own
+  // settings read 5.2% away from the plate that shipped. That ratio is how wrong the replay is
+  // about THIS take; scaling every setting's plate by it makes the current settings reproduce the
+  // phone exactly, and leaves what a setting CHANGES -- which boxes overwatch keeps -- to move it.
+  const atCurrent = replayFrameLog(log, currentOverwatchSettings(row.exercise), true);
+  const correction =
+    atCurrent.medianEdgePx != null ? shippedPlate.scaleX1000 / ((plateDiameterM() / atCurrent.medianEdgePx) * X1000) : 1;
+  const plateX1000 = (plateDiameterM() / replay.medianEdgePx) * X1000 * correction;
+  return errorPctFor({
+    ...row,
+    candidates: [...row.candidates.filter((c) => c.source !== PLATE), { source: PLATE, scaleX1000: plateX1000 }],
+  });
 }
 
-export function learnableTakes(rows: readonly LedgerRow[] = ACCURACY_LEDGER): LearnableTake[] {
+/** HOW FAR THE REPLAY AT TODAY'S SETTINGS MAY SIT FROM THE LEDGER'S OWN LIVE ERROR, in points.
+ *
+ *  A REPLAY THAT CANNOT REPRODUCE THE TAKE MAY NOT TEACH FROM IT (round twenty-six, 2026-11-24).
+ *  The replay re-judges only overwatch's three checks and then puts the plate into the vote; the
+ *  phone also refuses a plate for reasons the frame log does not carry (size against the grip, a
+ *  plate nobody agrees with stepping out). On the 11-23 RDL set 2 the phone refused its plate and
+ *  read about -6%; the replay admitted it and read +102% at the very settings the phone ran, so
+ *  every "better" setting the learner found was better than a take that never happened, and it
+ *  proposed a new RDL version on that. At the settings a take was filmed with, its replay has to
+ *  land where the ledger says that take lands today, or the take is recorded and not learned from. */
+export const MAX_REPLAY_DISAGREEMENT_PCT = 0.5;
+
+export type UnreproducibleTake = { id: string; exercise: string; replayPct: number | null; ledgerPct: number };
+
+function takesWithLogs(rows: readonly LedgerRow[]): { row: LedgerRow; log: OverwatchFrameLog }[] {
   const captures = fixtureCaptures();
   return rows.flatMap((row) => {
     const capture = captureForRow(row, captures);
     const log = capture ? plateFrameLog(capture) : null;
-    if (!log) return [];
-    return [{ id: row.id, exercise: row.exercise, errorPct: (s: OverwatchSettings) => errorPctWithOverwatch(row, log, s) }];
+    return log ? [{ row, log }] : [];
+  });
+}
+
+function reproduces(row: LedgerRow, log: OverwatchFrameLog): { ok: boolean; replayPct: number | null } {
+  const replayPct = errorPctWithOverwatch(row, log, currentOverwatchSettings(row.exercise));
+  return { ok: replayPct != null && Math.abs(replayPct - row.liveErrorPct) <= MAX_REPLAY_DISAGREEMENT_PCT, replayPct };
+}
+
+export function learnableTakes(rows: readonly LedgerRow[] = ACCURACY_LEDGER): LearnableTake[] {
+  return takesWithLogs(rows).flatMap(({ row, log }) =>
+    reproduces(row, log).ok
+      ? [{ id: row.id, exercise: row.exercise, errorPct: (s: OverwatchSettings) => errorPctWithOverwatch(row, log, s) }]
+      : [],
+  );
+}
+
+/** The takes that carry overwatch's record and that the replay cannot reproduce: named in the
+ *  learner's output so a take left out is a stated fact, never a silent one. */
+export function unreproducibleTakes(rows: readonly LedgerRow[] = ACCURACY_LEDGER): UnreproducibleTake[] {
+  return takesWithLogs(rows).flatMap(({ row, log }) => {
+    const r = reproduces(row, log);
+    return r.ok ? [] : [{ id: row.id, exercise: row.exercise, replayPct: r.replayPct, ledgerPct: row.liveErrorPct }];
   });
 }
 

@@ -14,7 +14,42 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-23, round twenty-five)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-24, round twenty-six)
+
+**ROUND TWENTY-SIX, 2026-11-24 (upper body on build 834, not shipped). Shorts on, and a jacket on
+purpose to hide the wrists and elbows.** Row 70lb x8 a side (right first: OVR reps 1-8 right, 9-16
+left), dumbbell shoulder press 30lb x8 (the OVR's 10 reps: skip the first 2, setup), bench 135x8.
+
+| lift | Forge as filmed | OVR | error | step |
+|---|---|---|---|---|
+| Row right range / mean / peak | 46.2 / 1.07 / 1.86 | reps 2-8: 45.65 / 0.95 / 1.56 | +1.2% / +13% / +19% | shoulder floor 0.24 -> 0.25 (right +1.20 -> -0.30%) |
+| Row left range / mean / peak | 45.2 / 1.29 / 2.18 (7 of 8) | reps 10-16: 41.08 / 0.89 / 1.40 | +10.0% / +44% / +56% | same step (left +10.03 -> +7.98%); row average 11.34 -> 11.11% |
+| Press range / mean / peak | 18.2 / 0.27 / 0.40 | reps 3-10: 52.93 / 0.97 / 1.41 | -66% / -72% / -72% | 3D pose 0.06 -> 0.065 (18.20 -> 18.28cm); press average 8.53 -> 8.71% (reported per Rule #6) |
+| Bench range / mean / peak | 35.4 / 0.55 / 1.29 (7 of 8) | 36.07 / 0.74 / 1.07 | -1.9% / -26% / +21% | depth ruler 0.10 -> 0.105 (-1.86 -> -0.73%); bench average 6.58 -> 6.31% |
+
+- **Bugs fixed:** (1) on a one-arm lift the torso-stillness anchor no longer includes the working
+  shoulder: the left row lost 126 of 259 hand points to it (hips unseen, anchor = two shoulders), which
+  is the +44% mean. (2) `captureDeviceInfo.lens` read only the opening lens, so a 0.5x tapped after
+  opening recorded as "wide"; it reads the last lens, with `lensSwitches` and `zoomFactor`. (3) The
+  "Tracked N reps on a set prescribed at M" toast is gone (Rule #1: a plausibility finding stays in the
+  report). (4) "about 1x SHORTER" reads as a percentage under 1.5x. (5) The AI form check's frame grab
+  retries once and its failure says the clip is saved ("Could not load video" read as a lost video).
+  (6) Overwatch's learning replay now follows the phone (plate only where the phone admitted one, the
+  bones' vote, the ledger's own replay) and carries its measured plate miss per take, so all 8 recorded
+  takes teach; the 11-23 RDL "adopt" was an artifact of the old replay and is gone.
+- **The press is a hand-tracking fault, not a scale one.** Under the jacket 133 of 449 frames had
+  wrists under the floor; the hand point moved about a third of the real path, mostly sideways in the
+  image. The dumbbell detector never held a lock (41 breaks on low confidence). Not a ledger row.
+  Next: one frame of the press to see what Vision called a wrist.
+- **The bench plate did not stand in for the hidden hands** (`barPointFromEquipment` 0 with the plate
+  locked 344 frames), because its offset to the hand point spread 0.43 grips against the 0.25 gate --
+  the hand points themselves were the jacket's guesses. The plate box is 0.60 of its size (squat 0.52,
+  RDL 0.51 yesterday): one screenshot of a plate frame is what decides whether that is the detector.
+- **Body memory:** the press taught plausible bones (upper arm 0.43m, femur 0.45, shin 0.48); the bench
+  taught bones about twice too long (shin 1.12m, torso 1.30m, supine). Recorded, not tuned.
+- **Open:** the export carries no body skeleton (`bodyWitnessTrace`) for the press, the bench, and most
+  of 11-23's sets; only the first set of each lift has one. Not yet traced.
+
 
 **ROUND TWENTY-FIVE SET 4, 2026-11-23 (filmed on build 834, from behind; not shipped).** OVR reps
 2-6 on the box jump. All three counted right (squat 5/5, RDL 8/8, box jump 5/5 with the setup jump

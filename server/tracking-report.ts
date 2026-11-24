@@ -28,6 +28,8 @@ type CaptureDeviceInfo = {
   telemetrySamples?: number | null;
   adjustingFocusSampleCount?: number | null;
   adjustingExposureSampleCount?: number | null;
+  lensSwitches?: number | null;
+  zoomFactor?: number | null;
 };
 // Mirrors client/src/lib/tracking-diagnostics.ts's TrackingDiagnostics -- kept in sync by hand,
 // same pattern CaptureDeviceInfo above already uses.
@@ -425,6 +427,8 @@ function formatCaptureDeviceInfo(r: TrackedSetRow): ReportField[] {
     label: "Device",
     value: `${info.deviceModel ?? "unknown"}${info.systemVersion ? `, iOS ${info.systemVersion}` : ""}${
       info.lens ? `, ${info.lens} lens` : ""
+    }${info.lensSwitches ? ` (switched ${info.lensSwitches}x after opening)` : ""}${
+      info.zoomFactor != null && info.zoomFactor !== 1 ? `, zoom ${info.zoomFactor}` : ""
     }`,
   });
   if (info.activeFormat) lines.push({ label: "Camera format negotiated", value: info.activeFormat });

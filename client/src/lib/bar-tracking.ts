@@ -3558,7 +3558,10 @@ export function implausibleRangeOfMotion(
   const ceilingCm = heightCm * tunables.values.maxRomFractionOfHeight;
   const floorCm = heightCm * tunables.values.minRomFractionOfHeight;
   if (romCm < floorCm) {
-    const underBy = Math.round((floorCm / romCm) * 10) / 10;
+    // "about 1x SHORTER" (2026-11-24, a press at 18cm against a 19cm floor) says nothing: a
+    // factor under 1.5 reads as a percentage instead.
+    const ratio = floorCm / romCm;
+    const underBy = ratio < 1.5 ? `${Math.round((ratio - 1) * 100)}%` : `${Math.round(ratio * 10) / 10}x`;
     // A range of motion under the floor has two causes that look identical in this number alone,
     // and telling the athlete the wrong one sends them to do the wrong thing about it.
     //
@@ -3586,7 +3589,7 @@ export function implausibleRangeOfMotion(
     // how a confident wrong diagnosis gets shipped a second time.
     if (traceSpanCm != null && Number.isFinite(traceSpanCm) && traceSpanCm >= floorCm) {
       return (
-        `Range of motion came out as ${Math.round(romCm)}cm per rep, about ${underBy}x SHORTER ` +
+        `Range of motion came out as ${Math.round(romCm)}cm per rep, about ${underBy} SHORTER ` +
         `than this movement can travel for your height, but the bar covered ` +
         `${Math.round(traceSpanCm)}cm across the whole set, which is a plausible distance for ` +
         `it. That points at the reps being split rather than the camera's scale being wrong, so ` +
@@ -3595,7 +3598,7 @@ export function implausibleRangeOfMotion(
       );
     }
     return (
-      `Range of motion came out as ${Math.round(romCm)}cm, about ${underBy}x SHORTER than this ` +
+      `Range of motion came out as ${Math.round(romCm)}cm, about ${underBy} SHORTER than this ` +
       `movement can travel for your height. That means the camera's real-world scale was ` +
       `misread, so every number from this take would be wrong by the same factor.`
     );

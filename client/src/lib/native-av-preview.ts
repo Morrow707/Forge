@@ -702,6 +702,10 @@ export type CaptureDeviceInfo = {
   telemetrySamples: number;
   adjustingFocusSampleCount: number;
   adjustingExposureSampleCount: number;
+  /** How many times the lens changed after the session opened (0.5x / 1x / telephoto taps). */
+  lensSwitches?: number;
+  /** The digital zoom on that lens at the last telemetry sample (1 = no zoom). */
+  zoomFactor?: number | null;
 };
 
 const FOCUS_EXPOSURE_MODE_LABELS: Record<string, string> = {
@@ -715,8 +719,14 @@ export function extractCaptureDeviceInfo(diagLog: string[]): CaptureDeviceInfo {
   const deviceModel = deviceLine?.match(/device model=(\S+)/)?.[1] ?? null;
   const systemVersion = deviceLine?.match(/systemVersion=(\S+)/)?.[1] ?? null;
 
-  const lensLine = diagLog.find((l) => l.startsWith("using lens:"));
-  const lens = lensLine?.match(/using lens:\s*(\S+)/)?.[1] ?? null;
+  // The lens the take was FILMED on is the last one the session moved to, not the one it opened
+  // on: a 0.5x tapped after the camera opened logs "switched lens to ultraWide" and nothing else.
+  // Reading only the opening line recorded every 0.5x take as "wide" (2026-11-24).
+  const lensEvents = diagLog
+    .map((l) => l.match(/^(?:using lens:|switched lens to)\s*(\S+)/)?.[1] ?? null)
+    .filter((x): x is string => x != null);
+  const lens = lensEvents.length > 0 ? lensEvents[lensEvents.length - 1] : null;
+  const lensSwitches = Math.max(0, lensEvents.length - 1);
 
   const formatLine = diagLog.find((l) => l.startsWith("activeFormat set:"));
   const activeFormat = formatLine ? formatLine.replace("activeFormat set:", "").trim() : null;
@@ -730,6 +740,8 @@ export function extractCaptureDeviceInfo(diagLog: string[]): CaptureDeviceInfo {
   const adjustingFocusSampleCount = camLines.filter((l) => l.includes("adjustingFocus=true")).length;
   const adjustingExposureSampleCount = camLines.filter((l) => l.includes("adjustingExposure=true")).length;
   const lastCamLine = camLines[camLines.length - 1];
+  const zoomText = lastCamLine?.match(/zoom=([\d.]+)/)?.[1];
+  const zoomFactor = zoomText != null ? Number(zoomText) : null;
   const focusSettled = lastCamLine ? !lastCamLine.includes("adjustingFocus=true") : null;
   const exposureSettled = lastCamLine ? !lastCamLine.includes("adjustingExposure=true") : null;
 
@@ -746,6 +758,8 @@ export function extractCaptureDeviceInfo(diagLog: string[]): CaptureDeviceInfo {
     telemetrySamples: camLines.length,
     adjustingFocusSampleCount,
     adjustingExposureSampleCount,
+    lensSwitches,
+    zoomFactor: zoomFactor != null && Number.isFinite(zoomFactor) ? zoomFactor : null,
   };
 }
 

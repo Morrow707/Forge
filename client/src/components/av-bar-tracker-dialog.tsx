@@ -1930,9 +1930,15 @@ export function AvBarTrackerDialog({
         const p = worldLm[i];
         return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? { x: p.x, y: p.y } : null;
       };
+      // ON A ONE-ARM LIFT THE WORKING SHOULDER IS PART OF THE LIFT, NOT THE STILL TORSO (round
+      // twenty-six, 2026-11-24). A single-arm row pulls that shoulder back on every rep, so an
+      // anchor built from it "jumps" at the top of every pull and the check above drops exactly
+      // the frames the rep is measured from: the left row lost 126 of 259 hand points that way
+      // (hips unseen, so the anchor was the two shoulders alone) and read 44% fast. The braced
+      // shoulder and the hips are what holds still, so they are the anchor.
       const torsoAnchor = torsoAnchorFrom(
-        lm(POSE_LANDMARKS.LEFT_SHOULDER),
-        lm(POSE_LANDMARKS.RIGHT_SHOULDER),
+        unilateralWorkingHand === "left" ? null : lm(POSE_LANDMARKS.LEFT_SHOULDER),
+        unilateralWorkingHand === "right" ? null : lm(POSE_LANDMARKS.RIGHT_SHOULDER),
         lm(POSE_LANDMARKS.LEFT_HIP),
         lm(POSE_LANDMARKS.RIGHT_HIP),
       );
@@ -2916,30 +2922,12 @@ export function AvBarTrackerDialog({
       toast.warning(t("Analysis was cut short partway through this set, numbers below may not cover every rep."));
     }
 
-    // SAY SO WHEN THE COUNT DOES NOT MATCH.
-    //
-    // targetReps has been a prop on this dialog the whole time and nothing ever read it. Scott
-    // squatted five and the set came back with six, which then set the set's mean velocity, its
-    // range of motion and its velocity loss -- and the only place that was visible was counting
-    // the entries in the rep list yourself. The extra one has its own fix (see the rack-artifact
-    // filter in bar-tracking.ts), but no filter catches every case, and the athlete is the only
-    // one here who knows how many reps they actually did.
-    //
-    // Deliberately not an error and deliberately does not change a number. A set genuinely taken
-    // to two past the prescription is a normal thing to do, so this says what was found and
-    // leaves the judgement where it belongs.
-    if (targetReps && targetReps > 0 && metrics.repBreakdown.length !== targetReps) {
-      const found = metrics.repBreakdown.length;
-      toast.info(
-        t.plural(
-          found,
-          "Tracked {count} rep on a set prescribed at {targetReps}. Check the rep list below if that isn't what you did, the set's averages are built from it.",
-          "Tracked {count} reps on a set prescribed at {targetReps}. Check the rep list below if that isn't what you did, the set's averages are built from it.",
-          { targetReps },
-        ),
-        { duration: 10000 },
-      );
-    }
+    // THE COUNT IS NOT A POPUP (Scott, 2026-11-24, "two weird popups/errors"). This was a toast,
+    // "Tracked N reps on a set prescribed at M", after every take that miscounted. The count the
+    // camera found is on
+    // screen already, as the rep-by-rep chips under the set, and a toast that fires after every
+    // take that miscounts is a plausibility finding raised at the athlete, which Rule #1 keeps in
+    // the report. It is recorded there (repConsistency, trace.repsFound against loggedReps).
 
     if (!recordVideo) {
       // No video saved this set -- skeleton replay has nothing to overlay, so there's nothing

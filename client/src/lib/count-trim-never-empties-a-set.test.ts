@@ -129,6 +129,11 @@ describe("the count-trim removes surplus and never a set", () => {
     // file read was interrupted when the app left the screen -- so two reps are all it holds.
     // Not the segmenter: the three missing reps were never read. The reader resumes now.
     "ovr-2026-11-16-export.json:2026-11-16 Back Squat set 1": 2,
+    // Round twenty-six (2026-11-24, a jacket over the wrists): the left row lost hand points to the
+    // torso check that had the working shoulder in its anchor (fixed the same day; the stored trace
+    // is the damaged one), and the bench's wrists sat under the floor on 229 of 409 frames.
+    "ovr-2026-11-24-export.json:2026-11-24-single-arm-dumbbell-row-left": 7,
+    "ovr-2026-11-24-export.json:2026-11-24-bench-press": 7,
   };
 
   it.each(

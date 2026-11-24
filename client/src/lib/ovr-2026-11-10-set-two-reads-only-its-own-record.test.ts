@@ -52,8 +52,8 @@ const PRESS_DRIVE_BEFORE = 0.02;
 const ROW_DRIVE_BEFORE = 0.02;
 
 /** liveErrorPct on the two new ledger rows (as filmed: bench -14.8, press +10.1). */
-const BENCH_SET2_LIVE = -9.97; // -14.2 after round fifteen, -13.12 after round sixteen
-const PRESS_SET2_LIVE = 0.77; // +6.46 after round fifteen, +4.32 after round sixteen, +1.78 after nineteen
+const BENCH_SET2_LIVE = -10.18; // -10.18 after round twenty-six; -14.2 after round fifteen, -13.12 after round sixteen
+const PRESS_SET2_LIVE = 1.0; // +1.0 after round twenty-six; +6.46 after round fifteen, +4.32 after round sixteen, +1.78 after nineteen
 
 const TRACE_UNITS_PER_UNIT = 100;
 const CM_PER_IN = 2.54;

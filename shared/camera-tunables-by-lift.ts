@@ -391,12 +391,12 @@ export const FITTED_OVERRIDES: Record<string, Partial<CameraTunables>> = {
     biacromialToleranceFraction: 0.4,
     heightRulerUncertainty: 0.4,
     depthRulerUncertainty: 0.6,
-    body3DCorrectedUncertainty: 0.06,
+    body3DCorrectedUncertainty: 0.065,
     driveOnsetFraction: 0,
     maxPeakToMeanRatio: 1.5,
   },
-  "Bench Press": { body3DCorrectedUncertainty: 0.35, depthRulerUncertainty: 0.1, driveOnsetFraction: 0.03, lowVisibilityWristFloor: 0.1 },
-  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0.01, biacromialToleranceFraction: 0.24 },
+  "Bench Press": { body3DCorrectedUncertainty: 0.35, depthRulerUncertainty: 0.105, driveOnsetFraction: 0.03, lowVisibilityWristFloor: 0.1 },
+  "Single-Arm Dumbbell Row": { depthRulerUncertainty: 0.6, driveOnsetFraction: 0.01, biacromialToleranceFraction: 0.25 },
 };
 
 /** THE VELOCITY OVERRIDES REMOVED ON 2026-11-05, AND WHY -- kept as data so the next reader does
@@ -677,6 +677,11 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "correction. Replayed through reconcileScaleEstimates on all four; no squat, RDL or bench row " +
     "moves, since each reads its own record.",
   "Dumbbell Shoulder Press":
+    "2026-11-24, round twenty-six, set 1 on build 834 (30lb x8, a jacket on purpose to hide the wrists; OVR reps 3-10 after 2 setup " +
+    "reps: 52.93cm, mean 0.97, peak 1.41). Forge read 18.2cm, 0.27, 0.40: the hand point travelled about a third of the bar's path " +
+    "(mostly sideways in the image) with 133 of 449 frames under the wrist floor, so a hand-tracking fault, not a scale one, and it is " +
+    "not a ledger row. The one step that moves THIS take toward the OVR: body3DCorrectedUncertainty 0.06 -> 0.065, range 18.20 -> " +
+    "18.28cm. Reported, not a veto: the seven sealed press sets read high and their average goes 8.53% -> 8.71%. " +
     "2026-11-17, round twenty-one, set 3 on build 781 (30lb x8, OVR reps 4-11 after 3 warm-ups: 51.16cm, mean 0.94, " +
     "peak 1.40): range of motion -0.8% through the live record, so this round's fix is the peak: maxPeakToMeanRatio " +
     "1.6 -> 1.5, the sensor's own peak over mean on set 3 (1.49) and set 2 (1.50). Peak set 3 +10.0 -> +7.9%, set 2 " +
@@ -741,6 +746,9 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
   // ROUND FOURTEEN, 2026-11-10, build 728 beside the OVR. Costed by
   // client/src/lib/ovr-2026-11-10-every-lift-reads-only-its-own-record.test.ts.
   "Bench Press":
+    "2026-11-24, round twenty-six, set 1 on build 834 (135x8, a jacket on purpose; OVR 36.07cm, 0.74, 1.07): range -1.86% through " +
+    "the live record, so depthRulerUncertainty 0.1 -> 0.105: this take -1.86 -> -0.73%, seven-set average 6.58 -> 6.31%. Velocities " +
+    "(mean -26%, peak +21%) are the trace: wrists under the floor on 229 of 409 frames, 29 dropouts. " +
     "2026-11-17, round twenty-one, set 3 on build 781: 6 of 8 reps, range 20.8cm against the sensor's 36.3, mean 0.29 " +
     "-- a tracking hole, not a scale. 32 dropouts, 7.6s missing, a 0.4-0.6s gap at the bottom of every press: the " +
     "wrists at the chest read 0.12-0.20 visibility from the side and the shared LOW_VISIBILITY_WRIST_FLOOR (0.2) threw " +
@@ -781,6 +789,9 @@ export const FITTED_OVERRIDE_EVIDENCE: Record<string, string> = {
     "0.04, and +33.1% and +4.6% at 0.03; both takes move toward the sensor, no rep count moves, and " +
     "the peak does not move. 0.02 is the next step.",
   "Single-Arm Dumbbell Row":
+    "2026-11-24, round twenty-six, set 1 on build 834 (70lb x8 a side, right first; truth OVR reps 2-8 45.65cm and 10-16 41.08cm): " +
+    "biacromialToleranceFraction 0.24 -> 0.25. Right +1.20 -> -0.30%, left +10.03 -> +7.98%, twelve-set average 11.34 -> 11.11%. " +
+    "The left read 44% fast because the torso check dropped 126 of 259 hand points (the working shoulder was in its anchor; fixed). " +
     "2026-11-17, round twenty-one, set 3 on build 781 (no setup rep: OVR reps 1-8 right, 9-16 left; truth reps 2-8 " +
     "46.55cm and 10-16 46.04cm): biacromialToleranceFraction 0.23 -> 0.24. Right -15.02 -> -15.92, left +8.70 -> +7.77, " +
     "this take's mean error 11.86 -> 11.85; ten-set average 12.45 -> 12.48. Third take running where the left arm reads " +

@@ -158,80 +158,80 @@
     }
   },
   "Bench Press": {
-    "takes": 6,
+    "takes": 7,
     "rulers": {
       "body_3d": {
-        "takes": 6,
-        "leanPct": -21.7,
-        "rmsPct": 24.3,
-        "timesWorst": 5
+        "takes": 7,
+        "leanPct": -22,
+        "rmsPct": 26.6,
+        "timesWorst": 6
       },
       "depth": {
-        "takes": 6,
+        "takes": 7,
         "leanPct": -7.4,
-        "rmsPct": 12,
+        "rmsPct": 16.7,
         "timesWorst": 0
       },
       "plate": {
-        "takes": 2,
-        "leanPct": 6.1,
-        "rmsPct": 6.4,
+        "takes": 3,
+        "leanPct": 7.8,
+        "rmsPct": 12.9,
         "timesWorst": 0
       },
       "shoulder_width": {
-        "takes": 6,
-        "leanPct": -10.3,
-        "rmsPct": 19.7,
+        "takes": 7,
+        "leanPct": -7.7,
+        "rmsPct": 18.2,
         "timesWorst": 1
       }
     },
     "bones": {
       "femur": {
-        "takes": 5,
-        "leanPct": -28.7,
-        "rmsPct": 34.2,
+        "takes": 6,
+        "leanPct": -33.4,
+        "rmsPct": 35.3,
         "timesWorst": 1
       },
       "forearm": {
-        "takes": 6,
-        "leanPct": -18.1,
-        "rmsPct": 20.7,
-        "timesWorst": 1
+        "takes": 7,
+        "leanPct": -24.7,
+        "rmsPct": 27.3,
+        "timesWorst": 2
       },
       "shin": {
-        "takes": 6,
-        "leanPct": -25.9,
-        "rmsPct": 28.9,
+        "takes": 7,
+        "leanPct": -28.1,
+        "rmsPct": 31,
         "timesWorst": 0
       },
       "shoulderWidth": {
-        "takes": 4,
-        "leanPct": -38.4,
-        "rmsPct": 37.3,
+        "takes": 5,
+        "leanPct": -36,
+        "rmsPct": 36.8,
         "timesWorst": 3
       },
       "torso": {
-        "takes": 6,
-        "leanPct": -19.7,
-        "rmsPct": 21.4,
+        "takes": 7,
+        "leanPct": -14.8,
+        "rmsPct": 20.1,
         "timesWorst": 0
       },
       "upperArm": {
-        "takes": 6,
-        "leanPct": -16.3,
-        "rmsPct": 24.9,
+        "takes": 7,
+        "leanPct": -16.4,
+        "rmsPct": 24.6,
         "timesWorst": 1
       }
     },
     "object": {
-      "takesWithTelemetry": 4,
+      "takesWithTelemetry": 5,
       "asked": [
         "plate"
       ],
-      "takesSeen": 2,
-      "takesLocked": 1,
-      "takesVoted": 2,
-      "medianLockShare": 0.02
+      "takesSeen": 3,
+      "takesLocked": 2,
+      "takesVoted": 3,
+      "medianLockShare": 0.05
     }
   },
   "Dumbbell Shoulder Press": {
@@ -470,71 +470,71 @@
     }
   },
   "Single-Arm Dumbbell Row": {
-    "takes": 10,
+    "takes": 12,
     "rulers": {
       "body_3d": {
-        "takes": 10,
-        "leanPct": -30.7,
-        "rmsPct": 27.8,
+        "takes": 12,
+        "leanPct": -30.1,
+        "rmsPct": 28.2,
         "timesWorst": 0
       },
       "depth": {
-        "takes": 10,
-        "leanPct": -56.1,
-        "rmsPct": 52.1,
+        "takes": 12,
+        "leanPct": -54.7,
+        "rmsPct": 51.2,
         "timesWorst": 7
       },
       "shoulder_width": {
-        "takes": 9,
-        "leanPct": 41,
-        "rmsPct": 49.5,
-        "timesWorst": 3
+        "takes": 11,
+        "leanPct": 42.8,
+        "rmsPct": 51.7,
+        "timesWorst": 5
       }
     },
     "bones": {
       "femur": {
-        "takes": 3,
-        "leanPct": -24.3,
-        "rmsPct": 20.3,
+        "takes": 4,
+        "leanPct": -24.7,
+        "rmsPct": 23.6,
         "timesWorst": 0
       },
       "forearm": {
-        "takes": 6,
+        "takes": 8,
         "leanPct": -32.7,
-        "rmsPct": 33.1,
-        "timesWorst": 1
+        "rmsPct": 33.6,
+        "timesWorst": 2
       },
       "shin": {
-        "takes": 6,
-        "leanPct": -10.3,
-        "rmsPct": 17.3,
+        "takes": 7,
+        "leanPct": -11.6,
+        "rmsPct": 16.8,
         "timesWorst": 0
       },
       "shoulderWidth": {
-        "takes": 2,
-        "leanPct": -5,
-        "rmsPct": 10.2,
+        "takes": 3,
+        "leanPct": -13.9,
+        "rmsPct": 13.1,
         "timesWorst": 0
       },
       "torso": {
-        "takes": 3,
-        "leanPct": -41.8,
-        "rmsPct": 42,
-        "timesWorst": 2
+        "takes": 4,
+        "leanPct": -40.7,
+        "rmsPct": 41.4,
+        "timesWorst": 3
       },
       "upperArm": {
-        "takes": 6,
-        "leanPct": -33.4,
-        "rmsPct": 33.7,
+        "takes": 8,
+        "leanPct": -31.7,
+        "rmsPct": 32.4,
         "timesWorst": 3
       }
     },
     "object": {
-      "takesWithTelemetry": 6,
+      "takesWithTelemetry": 8,
       "asked": [
         "dumbbell"
       ],
-      "takesSeen": 6,
+      "takesSeen": 8,
       "takesLocked": 1,
       "takesVoted": 0,
       "medianLockShare": 0
