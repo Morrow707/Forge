@@ -6836,5 +6836,6 @@
   "…and {count} more": "…y {count} más",
   "← Movement library": "← Biblioteca de movimientos",
   "🏆 New trophy: {name}": "🏆 Nuevo trofeo: {name}",
-  "🏆 New trophy: {trophy}": "🏆 Nuevo trofeo: {trophy}"
+  "🏆 New trophy: {trophy}": "🏆 Nuevo trofeo: {trophy}",
+  "Email updated. We sent a confirmation link to {email}. If it isn't there in a few minutes, check junk or spam.": "Correo actualizado. Enviamos un enlace de confirmación a {email}. Si no llega en unos minutos, revisa la carpeta de correo no deseado o spam."
 }

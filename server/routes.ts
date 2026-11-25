@@ -84,6 +84,7 @@ import { registerNumericParamGuards } from "./numeric-route-params";
 import { apnsEnabled } from "./apns";
 import { scheduleRestOverPush, cancelRestOverPush } from "./rest-timer-push";
 import { sendEmail, emailEnabled, isEmailConfigured } from "./email";
+import { buildVerifyEmailEmail } from "./verify-email-email";
 import { KNOWLEDGE_DOMAIN_KEYS } from "@shared/knowledge-domains";
 import { CLASS_READING_LEVELS } from "@shared/class-reading-level";
 import { classCategoryMatchesSport } from "@shared/class-sport-match";
@@ -15433,7 +15434,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(409).json({ message: "That email is already in use" });
     }
     const updated = await storage.updateUserEmail(user.id, parsed.data.newEmail);
-    res.json(updated);
+    // A NEW ADDRESS GETS ITS CONFIRMATION LINK RIGHT AWAY (2026-11-25). updateUserEmail clears
+    // emailVerified and deletes the old link, and nothing sent a new one: the person had to find
+    // the banner's Resend button, and an athlete who corrected a typo at signup read the silence
+    // as "the email never came". Awaited so the response can say whether it went; a mail problem
+    // never undoes the change of address.
+    let confirmationSent = false;
+    try {
+      const token = await storage.createEmailVerificationToken(user.id);
+      const result = await sendEmail({
+        to: updated.email,
+        subject: "Confirm your Forge email",
+        html: buildVerifyEmailEmail(`${sharedPublicOrigin(req)}/verify-email?token=${token}`),
+        brandForUserId: user.id,
+      });
+      confirmationSent = result.sent;
+    } catch (err) {
+      console.error("email change: confirmation link failed to send:", (err as Error)?.message);
+    }
+    res.json({ ...updated, confirmationSent });
   });
 
   // Removed: a second, weaker way to change a password.

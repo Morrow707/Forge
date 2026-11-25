@@ -127,11 +127,16 @@ export function AccountSettingsDialog({
   const [newEmail, setNewEmail] = useState("");
   const emailMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("PATCH", "/api/account/email", { password: emailPassword, newEmail });
+      const res = await apiRequest("PATCH", "/api/account/email", { password: emailPassword, newEmail });
+      return (await res.json()) as { email: string; confirmationSent?: boolean };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast.success(t("Email updated"));
+      toast.success(
+        data.confirmationSent
+          ? t("Email updated. We sent a confirmation link to {email}. If it isn't there in a few minutes, check junk or spam.", { email: data.email })
+          : t("Email updated"),
+      );
       setEmailPassword("");
       setNewEmail("");
     },
