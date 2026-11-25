@@ -4104,6 +4104,19 @@ halves before splitting anything else:
   choice). And a one-arm lift's live take is re-read from the file when its working wrist was unseen
   past 1.0s (`wristGaps`, `maxLiveWorkingWristGapSeconds`); the hook also stopped dropping
   `arbiterTunables` at Record (inert: every lift holds the defaults). Native: `verify_build`, beta.
+- **2026-11-25: THE "95% FOR ANYONE, FIRST TRY" BUILD (no filming).** Scott: point and shoot, no
+  second phone, nothing placed on the floor, 5'1" to 6'6", 0.5x stays. (1) **LiDAR is the fourth
+  camera system**: `AvLidarFloorScan` reads the floor for up to 1.5s at Record (first take of an open
+  camera only), `lidar-floor-ruler.ts` turns lens height + gravity + ankles into a distance and a
+  ruler, voting as `source: "lidar"`. Overwatch holds it to the plate's rules: two-ended agreement,
+  and a lone read steps out (`isSingleWitnessRuler`). `calibration.lidarFloor` records it; its 0.06
+  uncertainty is unmeasured. (2) **`synthetic-body.test.ts`** replays every take as 61in and 78in; the
+  metre thresholds now scale with `statureRatioToCalibrationAthlete` (1 at 75in, so nothing on file
+  moved). (3) **Detector retrained with cheap-phone copies** (`degrade_for_phones.py`, a `val_phone`
+  split); ultra-wide distortion correction set explicitly and logged. (4) **Sprint "Phone at: The
+  finish line"** (`sprint-finish-view.ts`): chest crosses the tapped line, start by hinge fit, with
+  `startConfidence` in `trackingDiagnostics.sprintFinishView`. From 40 yards at 0.5x the athlete is
+  about 5px tall, so the start is the weak part. Native: `verify_build`, then `beta`. See the status board.
 - **ROUND TWENTY-NINE, 2026-11-24: SET 4 ON BUILD 840.** Row right +0.1%, left +2.6%, press +22.7%
   (all scale: its rep timing matches the sensor), bench 4 of 8 reps because Vision lost the whole body
   for ~1s at the bottom of every press at 0.5x (no bench number moved; not the wrist floor). Steps:

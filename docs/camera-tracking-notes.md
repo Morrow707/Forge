@@ -14,7 +14,41 @@ check that withholds a number the pipeline already computed is wrong as written:
 
 See the RULE #1 section at the top of CLAUDE.md for the full statement.
 
-## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-24, round twenty-nine)
+## STATUS BOARD -- READ THIS FIRST ON ANY CALIBRATION DAY (updated 2026-11-24, round twenty-nine; the 95% build 2026-11-25)
+
+**THE "95% FOR ANYONE, FIRST TRY" BUILD, 2026-11-25 (no filming).** Scott: point and shoot, no
+second phone, no square on the floor, a 5'1" or a 6'6" athlete, 0.5x stays the default. Five
+pieces, in order:
+
+1. **LiDAR is the fourth camera system** (`AvLidarFloorScan`, `client/src/lib/lidar-floor-ruler.ts`).
+   At Record, on a LiDAR phone, about a second of depth on the floor gives the lens's height above
+   it. Then gravity and the ankles give the athlete's distance, and that distance gives a ruler on any
+   lens. It votes as `source: "lidar"`. Overwatch holds it to the plate's rules: it must agree from both
+   ends, and a lone LiDAR read steps out (`blendTrace.lidarSteppedOut`). The first take of an open
+   camera pays for the scan; later sets reuse it. No LiDAR, no floor or a timeout leaves the take as
+   before. **Read `calibration.lidarFloor` first on the next take**: `scan.cameraHeightM` (tape the
+   tripod's lens height once to check it), `refusedBecause`, `distanceM` and `ratioTo` (every other
+   ruler over LiDAR's). **Its uncertainty 0.06 is unmeasured**, and the first sensor-paired takes set it.
+   Unproven on a phone: the depth camera's frame orientation (native landscape assumed) and whether
+   the filming format comes back unchanged after the scan.
+2. **Every stored take replayed as a 5'1" and a 6'6" athlete** (`synthetic-body.test.ts`). The travel
+   margin, the 8cm relative rep floor and the smoother's noise were in metres fitted at 75in; they
+   scale with `statureRatioToCalibrationAthlete` now (1 at 75in, so nothing on file moved). Worst
+   range-of-motion error 23% -> 10%; median 0.07%. Four takes with already-broken tracking stay on a
+   shrink-only list. **What it cannot see:** real bodies are not scaled copies, and Vision's error on
+   a smaller figure in frame is not modelled.
+3. **The detector shown cheap-phone frames** (`scripts/med-ball-detector/degrade_for_phones.py`):
+   a softer, noisier, more compressed copy of every training image, and a held-out `val_phone`
+   split. Results are in the README under the 2026-11-25 retrain. Distortion correction on the
+   ultra-wide is now set explicitly and logged ("distortion correction: on").
+4. **A 40 from the finish line** (`client/src/lib/sprint-finish-view.ts`, "Phone at: The finish
+   line"). The phone stands on the finish line, off to the side, angled back up the lane, and the
+   athlete taps both ends of the line. Finish: the chest crosses the tapped line, which is exact at
+   any distance because the lens is in the finish plane. Start: the drive out of the set, by a hinge
+   fit. Synthetic, both heights: 3-4ms; with 1.5px noise, 14ms and 95ms, both inside the stated
+   uncertainty. **From 40 yards at 0.5x the athlete is about 5px tall**, so `sprintFinishView.startConfidence`
+   reads about 0.1. The start is where a real take will be weakest; compare against a stopwatch or
+   timing gates first.
 
 **ROUND TWENTY-NINE, 2026-11-24 (set 4 on build 840, 0.5x).** OVR truths (Scott): press 12 reps, the
 first 4 set-up, so reps 5-12 (53.47cm, 1.03, 1.57); rows 16 reps, no set-up rep, right 1-8 (53.63cm,
